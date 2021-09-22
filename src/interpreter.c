@@ -37,7 +37,7 @@ typedef struct {
   JL_GCC_IGNORE_STOP
 #endif
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 
 extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 
@@ -93,7 +93,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
         }
         jl_value_t *bp_owner = (jl_value_t*)modu;
         jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
-        jl_value_t **bp = &b->value;
+        _Atomic(jl_value_t*) *bp = &b->value;
         jl_value_t *gf = jl_generic_function_def(b->name, b->owner, bp, bp_owner, b);
         return gf;
     }
@@ -217,6 +217,9 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == invoke_sym) {
         return do_invoke(args, nargs, s);
     }
+    else if (head == invoke_modify_sym) {
+        return do_call(args + 1, nargs - 1, s);
+    }
     else if (head == isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
@@ -312,7 +315,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_true;
     }
     else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym ||
-             head == aliasscope_sym || head == popaliasscope_sym) {
+             head == aliasscope_sym || head == popaliasscope_sym || head == inline_sym || head == noinline_sym) {
         return jl_nothing;
     }
     else if (head == gc_preserve_begin_sym || head == gc_preserve_end_sym) {

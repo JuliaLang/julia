@@ -28,6 +28,7 @@ extern "C" {
 
 // head symbols for each expression type
 jl_sym_t *call_sym;    jl_sym_t *invoke_sym;
+jl_sym_t *invoke_modify_sym;
 jl_sym_t *empty_sym;   jl_sym_t *top_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
@@ -58,7 +59,7 @@ jl_sym_t *static_parameter_sym; jl_sym_t *inline_sym;
 jl_sym_t *noinline_sym; jl_sym_t *generated_sym;
 jl_sym_t *generated_only_sym; jl_sym_t *isdefined_sym;
 jl_sym_t *propagate_inbounds_sym; jl_sym_t *specialize_sym;
-jl_sym_t *aggressive_constprop_sym;
+jl_sym_t *aggressive_constprop_sym; jl_sym_t *no_constprop_sym;
 jl_sym_t *nospecialize_sym; jl_sym_t *macrocall_sym;
 jl_sym_t *colon_sym; jl_sym_t *hygienicscope_sym;
 jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
@@ -124,7 +125,7 @@ typedef struct _jl_ast_context_t {
 
 static jl_ast_context_t jl_ast_main_ctx;
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #else
 #define jl_ast_ctx(fl_ctx) container_of(fl_ctx, jl_ast_context_t, fl)
@@ -345,6 +346,7 @@ void jl_init_common_symbols(void)
     empty_sym = jl_symbol("");
     call_sym = jl_symbol("call");
     invoke_sym = jl_symbol("invoke");
+    invoke_modify_sym = jl_symbol("invoke_modify");
     foreigncall_sym = jl_symbol("foreigncall");
     cfunction_sym = jl_symbol("cfunction");
     quote_sym = jl_symbol("quote");
@@ -397,6 +399,7 @@ void jl_init_common_symbols(void)
     polly_sym = jl_symbol("polly");
     propagate_inbounds_sym = jl_symbol("propagate_inbounds");
     aggressive_constprop_sym = jl_symbol("aggressive_constprop");
+    no_constprop_sym = jl_symbol("no_constprop");
     isdefined_sym = jl_symbol("isdefined");
     nospecialize_sym = jl_symbol("nospecialize");
     specialize_sym = jl_symbol("specialize");

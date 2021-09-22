@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 15 # do not make changes without bumping the version #!
+const ser_version = 16 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -418,7 +418,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
     serialize(s, meth.is_for_opaque_closure)
-    serialize(s, meth.aggressive_constprop)
+    serialize(s, meth.constprop)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
@@ -1014,12 +1014,12 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
-    aggressive_constprop = false
+    constprop = 0x00
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
         if format_version(s) >= 14
-            aggressive_constprop = deserialize(s)::Bool
+            constprop = deserialize(s)::UInt8
         end
         template = deserialize(s)
     else
@@ -1039,7 +1039,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.nargs = nargs
         meth.isva = isva
         meth.is_for_opaque_closure = is_for_opaque_closure
-        meth.aggressive_constprop = aggressive_constprop
+        meth.constprop = constprop
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
@@ -1135,7 +1135,13 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.ssavaluetypes = deserialize(s)
         ci.linetable = deserialize(s)
     end
-    ci.ssaflags = deserialize(s)
+    ssaflags = deserialize(s)
+    if length(ssaflags) ≠ length(code)
+        # make sure the length of `ssaflags` matches that of `code`
+        # so that the latest inference doesn't throw on IRs serialized from old versions
+        ssaflags = UInt8[0x00 for _ in 1:length(code)]
+    end
+    ci.ssaflags = ssaflags
     if pre_12
         ci.slotflags = deserialize(s)
     else
@@ -1163,7 +1169,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
     if format_version(s) >= 14
-        ci.aggressive_constprop = deserialize(s)::Bool
+        ci.constprop = deserialize(s)::UInt8
     end
     return ci
 end

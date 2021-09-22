@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Profile, Serialization
+using Test, Profile, Serialization, Logging
 
 Profile.clear()
 Profile.init()
@@ -59,6 +59,28 @@ let iobuf = IOBuffer()
     truncate(iobuf, 0)
 end
 
+@testset "Profile.print() groupby options" begin
+    iobuf = IOBuffer()
+    with_logger(NullLogger()) do
+        @testset for format in [:flat, :tree]
+            @testset for threads in [1:Threads.nthreads(), 1, 1:1, 1:2, [1,2]]
+                @testset for groupby in [:none, :thread, :task, [:thread, :task], [:task, :thread]]
+                    Profile.print(iobuf; groupby, threads, format)
+                    @test !isempty(String(take!(iobuf)))
+                end
+            end
+        end
+    end
+end
+
+@testset "Profile.fetch() with and without meta" begin
+    data_without = Profile.fetch()
+    data_with = Profile.fetch(include_meta = true)
+    @test data_without[1] == data_with[1]
+    @test data_without[end] == data_with[end]
+    @test length(data_without) < length(data_with)
+end
+
 Profile.clear()
 @test isempty(Profile.fetch())
 
@@ -84,15 +106,27 @@ end
 
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
+    n_original = n_
+    nthreads = Sys.iswindows() ? 1 : Threads.nthreads()
+    sample_size_bytes = sizeof(Ptr)
     def_n = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 1_000_000 : 10_000_000
-    @test n_ == def_n
+    if Sys.WORD_SIZE == 32 && (def_n * nthreads * sample_size_bytes) > 2^29
+        @test n_ * nthreads * sample_size_bytes <= 2^29
+    else
+        @test n_ == def_n
+    end
+
     def_delay = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 0.01 : 0.001
     @test delay_ == def_delay
     Profile.init(n=1_000_001, delay=0.0005)
     n_, delay_ = Profile.init()
-    @test n_ == 1_000_001
+    if Sys.WORD_SIZE == 32 && (1_000_001 * nthreads * sample_size_bytes) > 2^29
+        @test n_ * nthreads * sample_size_bytes <= 2^29
+    else
+        @test n_ == 1_000_001
+    end
     @test delay_ == 0.0005
-    Profile.init(n=def_n, delay=def_delay)
+    Profile.init(n=n_original, delay=def_delay)
 end
 
 @testset "warning for buffer full" begin

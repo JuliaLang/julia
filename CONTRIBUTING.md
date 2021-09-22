@@ -158,7 +158,9 @@ Examples written within docstrings can be used as testcases known as "doctests" 
     "DOCSTRING TEST"
     ```
 
-A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you need to run `make -C doc doctest=true` from the root directory. It is recommended to add the header `# Examples` above the doctests.
+A doctest needs to match an interactive REPL including the `julia>` prompt. It is recommended to add the header `# Examples` above the doctests.
+
+To run doctests you need to run `make -C doc doctest=true` from the root directory. You can use `make -C doc doctest=true revise=true` if you are modifying the doctests and don't want to rebuild Julia after each change (see details below about the Revise.jl workflow).
 
 #### News-worthy changes
 

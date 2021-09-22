@@ -1,4 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // This defines a bare-bones loader that opens `libjulia` and immediately invokes its `load_repl()` function.
 #include "loader.h"
 

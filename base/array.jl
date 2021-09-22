@@ -643,23 +643,38 @@ julia> collect(Float64, 1:2:5)
 """
 collect(::Type{T}, itr) where {T} = _collect(T, itr, IteratorSize(itr))
 
-_collect(::Type{T}, itr, isz::HasLength) where {T} = copyto!(Vector{T}(undef, Int(length(itr)::Integer)), itr)
-_collect(::Type{T}, itr, isz::HasShape) where {T}  = copyto!(similar(Array{T}, axes(itr)), itr)
+_collect(::Type{T}, itr, isz::Union{HasLength,HasShape}) where {T} =
+    copyto!(_array_for(T, isz, _similar_shape(itr, isz)), itr)
 function _collect(::Type{T}, itr, isz::SizeUnknown) where T
     a = Vector{T}()
     for x in itr
-        push!(a,x)
+        push!(a, x)
     end
     return a
 end
 
 # make a collection similar to `c` and appropriate for collecting `itr`
-_similar_for(c::AbstractArray, ::Type{T}, itr, ::SizeUnknown) where {T} = similar(c, T, 0)
-_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasLength) where {T} =
-    similar(c, T, Int(length(itr)::Integer))
-_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasShape) where {T} =
-    similar(c, T, axes(itr))
-_similar_for(c, ::Type{T}, itr, isz) where {T} = similar(c, T)
+_similar_for(c, ::Type{T}, itr, isz, shp) where {T} = similar(c, T)
+
+_similar_shape(itr, ::SizeUnknown) = nothing
+_similar_shape(itr, ::HasLength) = length(itr)::Integer
+_similar_shape(itr, ::HasShape) = axes(itr)
+
+_similar_for(c::AbstractArray, ::Type{T}, itr, ::SizeUnknown, ::Nothing) where {T} =
+    similar(c, T, 0)
+_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasLength, len::Integer) where {T} =
+    similar(c, T, len)
+_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasShape, axs) where {T} =
+    similar(c, T, axs)
+
+# make a collection appropriate for collecting `itr::Generator`
+_array_for(::Type{T}, ::SizeUnknown, ::Nothing) where {T} = Vector{T}(undef, 0)
+_array_for(::Type{T}, ::HasLength, len::Integer) where {T} = Vector{T}(undef, Int(len))
+_array_for(::Type{T}, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
+
+# used by syntax lowering for simple typed comprehensions
+_array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(itr, isz))
+
 
 """
     collect(collection)
@@ -698,10 +713,10 @@ collect(A::AbstractArray) = _collect_indices(axes(A), A)
 collect_similar(cont, itr) = _collect(cont, itr, IteratorEltype(itr), IteratorSize(itr))
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
-    copyto!(_similar_for(cont, eltype(itr), itr, isz), itr)
+    copyto!(_similar_for(cont, eltype(itr), itr, isz, _similar_shape(itr, isz)), itr)
 
 function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
-    a = _similar_for(cont, eltype(itr), itr, isz)
+    a = _similar_for(cont, eltype(itr), itr, isz, nothing)
     for x in itr
         push!(a,x)
     end
@@ -739,10 +754,11 @@ if isdefined(Core, :Compiler)
         I = esc(itr)
         return quote
             if $I isa Generator && ($I).f isa Type
-                ($I).f
+                T = ($I).f
             else
-                Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
+                T = Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
             end
+            promote_typejoin_union(T)
         end
     end
 else
@@ -750,7 +766,7 @@ else
         I = esc(itr)
         return quote
             if $I isa Generator && ($I).f isa Type
-                ($I).f
+                promote_typejoin_union($I.f)
             else
                 Any
             end
@@ -758,38 +774,44 @@ else
     end
 end
 
-_array_for(::Type{T}, itr, isz::HasLength) where {T} = _array_for(T, itr, isz, length(itr))
-_array_for(::Type{T}, itr, isz::HasShape{N}) where {T,N} = _array_for(T, itr, isz, axes(itr))
-_array_for(::Type{T}, itr, ::HasLength, len) where {T} = Vector{T}(undef, len)
-_array_for(::Type{T}, itr, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
-
 function collect(itr::Generator)
     isz = IteratorSize(itr.iter)
     et = @default_eltype(itr)
     if isa(isz, SizeUnknown)
         return grow_to!(Vector{et}(), itr)
     else
-        shape = isz isa HasLength ? length(itr) : axes(itr)
+        shp = _similar_shape(itr, isz)
         y = iterate(itr)
         if y === nothing
-            return _array_for(et, itr.iter, isz)
+            return _array_for(et, isz, shp)
         end
         v1, st = y
-        arr = _array_for(typeof(v1), itr.iter, isz, shape)
-        return collect_to_with_first!(arr, v1, itr, st)
+        dest = _array_for(typeof(v1), isz, shp)
+        # The typeassert gives inference a helping hand on the element type and dimensionality
+        # (work-around for #28382)
+        et′ = et <: Type ? Type : et
+        RT = dest isa AbstractArray ? AbstractArray{<:et′, ndims(dest)} : Any
+        collect_to_with_first!(dest, v1, itr, st)::RT
     end
 end
 
 _collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) =
-    grow_to!(_similar_for(c, @default_eltype(itr), itr, isz), itr)
+    grow_to!(_similar_for(c, @default_eltype(itr), itr, isz, nothing), itr)
 
 function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
+    et = @default_eltype(itr)
+    shp = _similar_shape(itr, isz)
     y = iterate(itr)
     if y === nothing
-        return _similar_for(c, @default_eltype(itr), itr, isz)
+        return _similar_for(c, et, itr, isz, shp)
     end
     v1, st = y
-    collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
+    dest = _similar_for(c, typeof(v1), itr, isz, shp)
+    # The typeassert gives inference a helping hand on the element type and dimensionality
+    # (work-around for #28382)
+    et′ = et <: Type ? Type : et
+    RT = dest isa AbstractArray ? AbstractArray{<:et′, ndims(dest)} : Any
+    collect_to_with_first!(dest, v1, itr, st)::RT
 end
 
 function collect_to_with_first!(dest::AbstractArray, v1, itr, st)
@@ -2603,19 +2625,27 @@ function _shrink!(shrinker!, v::AbstractVector, itrs)
     seen = Set{eltype(v)}()
     filter!(_grow_filter!(seen), v)
     shrinker!(seen, itrs...)
-    filter!(_in(seen), v)
+    filter!(in(seen), v)
 end
 
 intersect!(v::AbstractVector, itrs...) = _shrink!(intersect!, v, itrs)
 setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
 
-vectorfilter(f, v::AbstractVector) = filter(f, v) # TODO: do we want this special case?
-vectorfilter(f, v) = [x for x in v if f(x)]
+vectorfilter(T::Type, f, v) = T[x for x in v if f(x)]
 
 function _shrink(shrinker!, itr, itrs)
-    keep = shrinker!(Set(itr), itrs...)
-    vectorfilter(_shrink_filter!(keep), itr)
+    T = promote_eltype(itr, itrs...)
+    keep = shrinker!(Set{T}(itr), itrs...)
+    vectorfilter(T, _shrink_filter!(keep), itr)
 end
 
 intersect(itr, itrs...) = _shrink(intersect!, itr, itrs)
 setdiff(  itr, itrs...) = _shrink(setdiff!, itr, itrs)
+
+function intersect(v::AbstractVector, r::AbstractRange)
+    T = promote_eltype(v, r)
+    common = Iterators.filter(in(r), v)
+    seen = Set{T}(common)
+    return vectorfilter(T, _shrink_filter!(seen), common)
+end
+intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)

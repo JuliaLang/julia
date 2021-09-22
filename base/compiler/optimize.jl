@@ -21,23 +21,38 @@ function push!(et::EdgeTracker, ci::CodeInstance)
     push!(et, ci.def)
 end
 
-struct InliningState{S <: Union{EdgeTracker, Nothing}, T, P}
+struct InliningState{S <: Union{EdgeTracker, Nothing}, T, I<:AbstractInterpreter}
     params::OptimizationParams
     et::S
     mi_cache::T
-    policy::P
+    interp::I
 end
 
-function default_inlining_policy(@nospecialize(src))
+function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8,
+                         mi::MethodInstance, argtypes::Vector{Any})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
-        src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
+        src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
         return src_inferred && src_inlineable ? src : nothing
+    elseif isa(src, OptimizationState) && isdefined(src, :ir)
+        return (is_stmt_inline(stmt_flag) || src.src.inlineable) ? src.ir : nothing
+    elseif src === nothing && is_stmt_inline(stmt_flag)
+        # if this statement is forced to be inlined, make an additional effort to find the
+        # inferred source in the local cache
+        # we still won't find a source for recursive call because the "single-level" inlining
+        # seems to be more trouble and complex than it's worth
+        inf_result = cache_lookup(mi, argtypes, get_inference_cache(interp))
+        inf_result === nothing && return nothing
+        src = inf_result.src
+        if isa(src, CodeInfo)
+            src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+            return src_inferred ? src : nothing
+        elseif isa(src, OptimizationState)
+            return isdefined(src, :ir) ? src.ir : nothing
+        else
+            return nothing
+        end
     end
-    if isa(src, OptimizationState) && isdefined(src, :ir)
-        return src.src.inlineable ? src.ir : nothing
-    end
-    return nothing
 end
 
 include("compiler/ssair/driver.jl")
@@ -57,7 +72,7 @@ mutable struct OptimizationState
         inlining = InliningState(params,
             EdgeTracker(s_edges, frame.valid_worlds),
             WorldView(code_cache(interp), frame.world),
-            inlining_policy(interp))
+            interp)
         return new(frame.linfo,
                    frame.src, nothing, frame.stmt_info, frame.mod,
                    frame.sptypes, frame.slottypes, false,
@@ -70,7 +85,7 @@ mutable struct OptimizationState
         if nssavalues isa Int
             src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
         else
-            nssavalues = length(src.ssavaluetypes)
+            nssavalues = length(src.ssavaluetypes::Vector{Any})
         end
         nslots = length(src.slotflags)
         slottypes = src.slottypes
@@ -86,7 +101,7 @@ mutable struct OptimizationState
         inlining = InliningState(params,
             nothing,
             WorldView(code_cache(interp), get_world_counter()),
-            inlining_policy(interp))
+            interp)
         return new(linfo,
                    src, nothing, stmt_info, mod,
                    sptypes_from_meth_instance(linfo), slottypes, false,
@@ -125,12 +140,20 @@ const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
 const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # const SLOT_CALLED      = 64
 
-# This statement was marked as @inbounds by the user. If replaced by inlining,
-# any contained boundschecks may be removed
-const IR_FLAG_INBOUNDS       = 0x01
+# NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
+
+const IR_FLAG_NULL        = 0x00
+# This statement is marked as @inbounds by user.
+# Ff replaced by inlining, any contained boundschecks may be removed.
+const IR_FLAG_INBOUNDS    = 0x01 << 0
+# This statement is marked as @inline by user
+const IR_FLAG_INLINE      = 0x01 << 1
+# This statement is marked as @noinline by user
+const IR_FLAG_NOINLINE    = 0x01 << 2
+const IR_FLAG_THROW_BLOCK = 0x01 << 3
 # This statement may be removed if its result is unused. In particular it must
 # thus be both pure and effect free.
-const IR_FLAG_EFFECT_FREE    = 0x01 << 4
+const IR_FLAG_EFFECT_FREE = 0x01 << 4
 
 # known to be always effect-free (in particular nothrow)
 const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
@@ -172,6 +195,10 @@ function isinlineable(m::Method, me::OptimizationState, params::OptimizationPara
     end
     return inlineable
 end
+
+is_stmt_inline(stmt_flag::UInt8)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
+is_stmt_noinline(stmt_flag::UInt8)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
+is_stmt_throw_block(stmt_flag::UInt8) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
 
 # These affect control flow within the function (so may not be removed
 # if there is no usage within the function), but don't affect the purity
@@ -323,15 +350,18 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
     labelmap = coverage ? fill(0, length(code)) : changemap
     prevloc = zero(eltype(ci.codelocs))
     stmtinfo = sv.stmt_info
+    codelocs = ci.codelocs
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    ssaflags = ci.ssaflags
     while idx <= length(code)
-        codeloc = ci.codelocs[idx]
+        codeloc = codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
             # insert a side-effect instruction before the current instruction in the same basic block
             insert!(code, idx, Expr(:code_coverage_effect))
-            insert!(ci.codelocs, idx, codeloc)
+            insert!(codelocs, idx, codeloc)
             insert!(ssavaluetypes, idx, Nothing)
             insert!(stmtinfo, idx, nothing)
+            insert!(ssaflags, idx, IR_FLAG_NULL)
             changemap[oldidx] += 1
             if oldidx < length(labelmap)
                 labelmap[oldidx + 1] += 1
@@ -343,9 +373,10 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
             if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
                 # insert unreachable in the same basic block after the current instruction (splitting it)
                 insert!(code, idx + 1, ReturnNode())
-                insert!(ci.codelocs, idx + 1, ci.codelocs[idx])
+                insert!(codelocs, idx + 1, codelocs[idx])
                 insert!(ssavaluetypes, idx + 1, Union{})
                 insert!(stmtinfo, idx + 1, nothing)
+                insert!(ssaflags, idx + 1, ssaflags[idx])
                 if oldidx < length(changemap)
                     changemap[oldidx + 1] += 1
                     coverage && (labelmap[oldidx + 1] += 1)
@@ -358,42 +389,22 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
     end
     renumber_ir_elements!(code, changemap, labelmap)
 
-    inbounds_depth = 0 # Number of stacked inbounds
     meta = Any[]
-    flags = fill(0x00, length(code))
     for i = 1:length(code)
-        stmt = code[i]
-        if isexpr(stmt, :inbounds)
-            arg1 = stmt.args[1]
-            if arg1 === true # push
-                inbounds_depth += 1
-            elseif arg1 === false # clear
-                inbounds_depth = 0
-            elseif inbounds_depth > 0 # pop
-                inbounds_depth -= 1
-            end
-            stmt = nothing
-        else
-            stmt = normalize(stmt, meta)
-        end
-        code[i] = stmt
-        if !(stmt === nothing)
-            if inbounds_depth > 0
-                flags[i] |= IR_FLAG_INBOUNDS
-            end
-        end
+        code[i] = remove_meta!(code[i], meta)
     end
-    strip_trailing_junk!(ci, code, stmtinfo, flags)
+    strip_trailing_junk!(ci, code, stmtinfo)
     cfg = compute_basic_blocks(code)
     types = Any[]
-    stmts = InstructionStream(code, types, stmtinfo, ci.codelocs, flags)
+    stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
     ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable::Union{Vector{LineInfoNode},Vector{Any}}), sv.slottypes, meta, sv.sptypes)
     return ir
 end
 
-function normalize(@nospecialize(stmt), meta::Vector{Any})
+function remove_meta!(@nospecialize(stmt), meta::Vector{Any})
     if isa(stmt, Expr)
-        if stmt.head === :meta
+        head = stmt.head
+        if head === :meta
             args = stmt.args
             if length(args) > 0
                 push!(meta, stmt)
@@ -497,7 +508,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             return 0
         end
         return error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
-    elseif head === :foreigncall || head === :invoke
+    elseif head === :foreigncall || head === :invoke || head == :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
         # run-time of the function, we omit them from
@@ -529,13 +540,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
 end
 
 function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any},
-                                  slottypes::Vector{Any}, union_penalties::Bool, params::OptimizationParams,
-                                  throw_blocks::Union{Nothing,BitSet})
+                                  slottypes::Vector{Any}, union_penalties::Bool, params::OptimizationParams)
     thiscost = 0
     dst(tgt) = isa(src, IRCode) ? first(src.cfg.blocks[tgt].stmts) : tgt
     if stmt isa Expr
         thiscost = statement_cost(stmt, line, src, sptypes, slottypes, union_penalties, params,
-                                  throw_blocks !== nothing && line in throw_blocks)::Int
+                                  is_stmt_throw_block(isa(src, IRCode) ? src.stmts.flag[line] : src.ssaflags[line]))::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
         # but assume that forward jumps are already counted for from
@@ -550,10 +560,9 @@ end
 function inline_worthy(ir::IRCode,
                        params::OptimizationParams, union_penalties::Bool=false, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
-    throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(ir.stmts.inst, RefValue(ir)) : nothing
     for line = 1:length(ir.stmts)
         stmt = ir.stmts[line][:inst]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, ir.argtypes, union_penalties, params, throw_blocks)
+        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, ir.argtypes, union_penalties, params)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return false
     end
@@ -561,13 +570,12 @@ function inline_worthy(ir::IRCode,
 end
 
 function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)
-    throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(body) : nothing
     maxcost = 0
     for line = 1:length(body)
         stmt = body[line]
         thiscost = statement_or_branch_cost(stmt, line, src, sptypes,
                                             src isa CodeInfo ? src.slottypes : src.argtypes,
-                                            unionpenalties, params, throw_blocks)
+                                            unionpenalties, params)
         cost[line] = thiscost
         if thiscost > maxcost
             maxcost = thiscost

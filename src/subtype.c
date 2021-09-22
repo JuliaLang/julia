@@ -107,7 +107,7 @@ typedef struct jl_stenv_t {
 // state manipulation utilities
 
 // look up a type variable in an environment
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 static jl_varbinding_t *lookup(jl_stenv_t *e, jl_tvar_t *v) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #else
 static jl_varbinding_t *lookup(jl_stenv_t *e, jl_tvar_t *v) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
@@ -171,7 +171,7 @@ static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
     if (root)
         *root = (jl_value_t*)jl_alloc_svec(len * 3);
     se->buf = (int8_t*)(len > 8 ? malloc_s(len * 2) : &se->_space);
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
     memset(se->buf, 0, len * 2);
 #endif
     int i=0, j=0; v = e->vars;

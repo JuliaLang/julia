@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
+_Atomic(jl_value_t*) cmpswap_names JL_GLOBALLY_ROOTED;
 
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
@@ -625,7 +625,7 @@ static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t
     if (sz == 0)
         return NULL;
     size_t maxprobe = max_probe(sz);
-    jl_datatype_t **tab = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *tab = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t index = h2index(hv, sz);
     size_t orig = index;
     size_t iter = 0;
@@ -648,7 +648,7 @@ static jl_datatype_t *lookup_type_setvalue(jl_svec_t *cache, jl_value_t *key1, j
     if (sz == 0)
         return NULL;
     size_t maxprobe = max_probe(sz);
-    jl_datatype_t **tab = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *tab = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t index = h2index(hv, sz);
     size_t orig = index;
     size_t iter = 0;
@@ -671,7 +671,7 @@ static ssize_t lookup_type_idx_linear(jl_svec_t *cache, jl_value_t **key, size_t
 {
     if (n == 0)
         return -1;
-    jl_datatype_t **data = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *data = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t cl = jl_svec_len(cache);
     ssize_t i;
     for (i = 0; i < cl; i++) {
@@ -688,7 +688,7 @@ static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, j
 {
     if (n == 0)
         return -1;
-    jl_datatype_t **data = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *data = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t cl = jl_svec_len(cache);
     ssize_t i;
     for (i = 0; i < cl; i++) {
@@ -734,7 +734,7 @@ static jl_value_t *lookup_typevalue(jl_typename_t *tn, jl_value_t *key1, jl_valu
 
 static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv)
 {
-    jl_datatype_t **tab = (jl_datatype_t**)jl_svec_data(a);
+    _Atomic(jl_datatype_t*) *tab = (_Atomic(jl_datatype_t*)*)jl_svec_data(a);
     size_t sz = jl_svec_len(a);
     if (sz <= 1)
         return 0;
@@ -1326,8 +1326,15 @@ jl_value_t *normalize_unionalls(jl_value_t *t)
             u = (jl_unionall_t*)t;
         }
 
-        if (u->var->lb == u->var->ub || may_substitute_ub(body, u->var))
-            t = jl_instantiate_unionall(u, u->var->ub);
+        if (u->var->lb == u->var->ub || may_substitute_ub(body, u->var)) {
+            JL_TRY {
+                t = jl_instantiate_unionall(u, u->var->ub);
+            }
+            JL_CATCH {
+                // just skip normalization
+                // (may happen for bounds inconsistent with the wrapper's bounds)
+            }
+        }
     }
     JL_GC_POP();
     return t;
@@ -1547,9 +1554,8 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     // leading to incorrect layouts and data races (#40050: the A{T} should be
     // an isbitstype singleton of size 0)
     if (cacheable) {
-        if (dt->layout == NULL && !jl_is_primitivetype(dt) && ndt->types != NULL && ndt->isconcretetype) {
+        if (ndt->layout == NULL && ndt->types != NULL && ndt->isconcretetype)
             jl_compute_field_offsets(ndt);
-        }
         jl_cache_type_(ndt);
         JL_UNLOCK(&typecache_lock); // Might GC
     }
@@ -2342,7 +2348,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "inlineable",
                             "propagate_inbounds",
                             "pure",
-                            "aggressive_constprop"),
+                            "constprop"),
                         jl_svec(19,
                             jl_array_any_type,
                             jl_array_int32_type,
@@ -2362,7 +2368,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
-                            jl_bool_type),
+                            jl_uint8_type),
                         jl_emptysvec,
                         0, 1, 19);
 
@@ -2395,7 +2401,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "isva",
                             "pure",
                             "is_for_opaque_closure",
-                            "aggressive_constprop"),
+                            "constprop"),
                         jl_svec(26,
                             jl_symbol_type,
                             jl_module_type,
@@ -2422,7 +2428,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
-                            jl_bool_type),
+                            jl_uint8_type),
                         jl_emptysvec,
                         0, 1, 10);
 

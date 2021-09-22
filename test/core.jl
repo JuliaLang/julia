@@ -7586,3 +7586,6 @@ let S = Tuple{Tuple{Tuple{K, UInt128} where K<:Tuple{Int64}, Int64}},
     @test pointer_from_objref(T) === pointer_from_objref(S)
     @test isbitstype(T)
 end
+
+# avoid impossible normalization (don't try to form Tuple{Complex{String}} here)
+@test Tuple{Complex{T} where String<:T<:String} == Tuple{Complex{T} where String<:T<:String}

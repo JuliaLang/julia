@@ -151,22 +151,22 @@ Scalar and array methods for `Die` now work as expected:
 
 ```jldoctest Die; setup = :(Random.seed!(1))
 julia> rand(Die)
-Die(6)
+Die(7)
 
 julia> rand(MersenneTwister(0), Die)
 Die(11)
 
 julia> rand(Die, 3)
 3-element Vector{Die}:
- Die(15)
- Die(19)
- Die(4)
+ Die(13)
+ Die(8)
+ Die(20)
 
 julia> a = Vector{Die}(undef, 3); rand!(a)
 3-element Vector{Die}:
- Die(17)
- Die(20)
- Die(15)
+ Die(4)
+ Die(14)
+ Die(10)
 ```
 
 #### A simple sampler without pre-computed data
@@ -184,8 +184,8 @@ julia> rand(Die(4))
 julia> rand(Die(4), 3)
 3-element Vector{Any}:
  3
+ 2
  4
- 1
 ```
 
 Given a collection type `S`, it's currently assumed that if `rand(::S)` is defined, an object of type `eltype(S)` will be produced. In the last example, a `Vector{Any}` is produced; the reason is that `eltype(Die) == Any`. The remedy is to define `Base.eltype(::Type{Die}) = Int`.

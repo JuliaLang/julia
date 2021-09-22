@@ -271,7 +271,7 @@ JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, jl_pgcstack_key_t 
 
 JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void) JL_GLOBALLY_ROOTED
 {
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
     return jl_get_pgcstack_cb();
 #endif
 }
@@ -287,8 +287,8 @@ void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
 #endif
 
 jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
-uint8_t jl_measure_compile_time_enabled = 0;
-uint64_t jl_cumulative_compile_time = 0;
+_Atomic(uint8_t) jl_measure_compile_time_enabled = 0;
+_Atomic(uint64_t) jl_cumulative_compile_time = 0;
 
 // return calling thread's ID
 // Also update the suspended_threads list in signals-mach when changing the
@@ -467,7 +467,7 @@ void jl_init_threading(void)
     }
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
     jl_all_tls_states = (jl_ptls_t*)calloc(jl_n_threads, sizeof(void*));
 #endif
 }

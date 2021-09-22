@@ -7,6 +7,8 @@ module Profile
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 
+const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
+
 # deprecated functions: use `getdict` instead
 lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
 
@@ -37,30 +39,31 @@ end
 ####
 
 """
-    init(; n::Integer, delay::Real))
+    init(; n::Integer, delay::Real)
 
-Configure the `delay` between backtraces (measured in seconds), and the number `n` of
-instruction pointers that may be stored per thread. Each instruction pointer corresponds to a single
-line of code; backtraces generally consist of a long list of instruction pointers. Current
-settings can be obtained by calling this function with no arguments, and each can be set
-independently using keywords or in the order `(n, delay)`.
+Configure the `delay` between backtraces (measured in seconds), and the number `n` of instruction pointers that may be
+stored per thread. Each instruction pointer corresponds to a single line of code; backtraces generally consist of a long
+list of instruction pointers. Note that 6 spaces for instruction pointers per backtrace are used to store metadata and two
+NULL end markers. Current settings can be obtained by calling this function with no arguments, and each can be set independently
+using keywords or in the order `(n, delay)`.
 
 !!! compat "Julia 1.8"
     As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
     Previously this was `n` total.
 """
-function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, limitwarn::Bool = true)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
-        return Int(n_cur), delay_cur
+        nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
+        return round(Int, n_cur / nthreads), delay_cur
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
-    init(nnew, delaynew)
+    init(nnew, delaynew; limitwarn)
 end
 
-function init(n::Integer, delay::Real)
+function init(n::Integer, delay::Real; limitwarn::Bool = true)
     nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
     buffer_samples = n * nthreads
@@ -70,7 +73,7 @@ function init(n::Integer, delay::Real)
         buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
         buffer_samples = buffer_samples_per_thread * nthreads
         buffer_size_bytes = buffer_samples * sample_size_bytes
-        @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
     end
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
     if status == -1
@@ -84,9 +87,9 @@ end
 if Sys.iswindows() && Sys.WORD_SIZE == 32
     # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
     # so we don't want to slow the program down by quite that much
-    __init__() = init(1_000_000, 0.01)
+    __init__() = init(1_000_000, 0.01, limitwarn = false)
 else
-    __init__() = init(10_000_000, 0.001)
+    __init__() = init(10_000_000, 0.001, limitwarn = false)
 end
 
 """
@@ -141,6 +144,9 @@ The keyword arguments can be any combination of:
     line, `:count` sorts in order of number of collected samples, and `:overhead` sorts by the number of samples
     incurred by each function by itself.
 
+ - `groupby` -- Controls grouping over tasks and threads, or no grouping. Options are `:none` (default), `:threads`, `:tasks`,
+    `[:threads, :tasks]`, or `[:tasks, :threads]` where the last two provide nested grouping.
+
  - `noisefloor` -- Limits frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
     A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
     where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
@@ -150,9 +156,15 @@ The keyword arguments can be any combination of:
  - `recur` -- Controls the recursion handling in `:tree` format. `:off` (default) prints the tree as normal. `:flat` instead
     compresses any recursion (by ip), showing the approximate effect of converting any self-recursion into an iterator.
     `:flatc` does the same but also includes collapsing of C frames (may do odd things around `jl_apply`).
+
+ - `threads::Union{Int,AbstractVector{Int}}` -- Specify which threads to include snapshots from in the report. Note that
+    this does not control which threads samples are collected on.
+
+ - `tasks::Union{Int,AbstractVector{Int}}` -- Specify which tasks to include snapshots from in the report. Note that this
+    does not control which tasks samples are collected within.
 """
 function print(io::IO,
-        data::Vector{<:Unsigned} = fetch(),
+        data::Vector{<:Unsigned} = fetch(include_meta = true),
         lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)
         ;
         format = :tree,
@@ -162,30 +174,129 @@ function print(io::IO,
         mincount::Int = 0,
         noisefloor = 0,
         sortedby::Symbol = :filefuncline,
-        recur::Symbol = :off)
-    print(io, data, lidict, ProfileFormat(
-            C = C,
-            combine = combine,
-            maxdepth = maxdepth,
-            mincount = mincount,
-            noisefloor = noisefloor,
-            sortedby = sortedby,
-            recur = recur),
-        format)
+        groupby::Union{Symbol,AbstractVector{Symbol}} = :none,
+        recur::Symbol = :off,
+        threads::Union{Int,AbstractVector{Int}} = 1:Threads.nthreads(),
+        tasks::Union{UInt,AbstractVector{UInt}} = typemin(UInt):typemax(UInt))
+
+    pf = ProfileFormat(;C, combine, maxdepth, mincount, noisefloor, sortedby, recur)
+    if groupby == :none
+        print(io, data, lidict, pf, format, threads, tasks, false)
+    else
+        if !in(groupby, [:thread, :task, [:task, :thread], [:thread, :task]])
+            error(ArgumentError("Unrecognized groupby option: $groupby. Options are :none (default), :task, :thread, [:task, :thread], or [:thread, :task]"))
+        elseif Sys.iswindows() && in(groupby, [:thread, [:task, :thread], [:thread, :task]])
+            @warn "Profiling on windows is limited to the main thread. Other threads have not been sampled and will not show in the report"
+        end
+        any_nosamples = false
+        println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
+        println(io, "=========================================================")
+        if groupby == [:task, :thread]
+            for taskid in intersect(get_task_ids(data), tasks)
+                threadids = intersect(get_thread_ids(data, taskid), threads)
+                if length(threadids) == 0
+                    any_nosamples = true
+                else
+                    nl = length(threadids) > 1 ? "\n" : ""
+                    printstyled(io, "Task $(Base.repr(taskid))$nl"; bold=true, color=Base.debug_color())
+                    for threadid in threadids
+                        printstyled(io, " Thread $threadid\n"; bold=true, color=Base.info_color())
+                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        nosamples && (any_nosamples = true)
+                        println(io)
+                    end
+                end
+            end
+        elseif groupby == [:thread, :task]
+            for threadid in intersect(get_thread_ids(data), threads)
+                taskids = intersect(get_task_ids(data, threadid), tasks)
+                if length(taskids) == 0
+                    any_nosamples = true
+                else
+                    nl = length(taskids) > 1 ? "\n" : ""
+                    printstyled(io, "Thread $threadid$nl"; bold=true, color=Base.info_color())
+                    for taskid in taskids
+                        printstyled(io, " Task $(Base.repr(taskid))\n"; bold=true, color=Base.debug_color())
+                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        nosamples && (any_nosamples = true)
+                        println(io)
+                    end
+                end
+            end
+        elseif groupby == :task
+            threads = 1:typemax(Int)
+            for taskid in intersect(get_task_ids(data), tasks)
+                printstyled(io, "Task $(Base.repr(taskid))\n"; bold=true, color=Base.debug_color())
+                nosamples = print(io, data, lidict, pf, format, threads, taskid, true)
+                nosamples && (any_nosamples = true)
+                println(io)
+            end
+        elseif groupby == :thread
+            tasks = 1:typemax(UInt)
+            for threadid in intersect(get_thread_ids(data), threads)
+                printstyled(io, "Thread $threadid\n"; bold=true, color=Base.info_color())
+                nosamples = print(io, data, lidict, pf, format, threadid, tasks, true)
+                nosamples && (any_nosamples = true)
+                println(io)
+            end
+        end
+        any_nosamples && warning_empty(summary = true)
+    end
+    return
 end
 
-function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat, format::Symbol)
+function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
+                format::Symbol, threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}},
+                is_subsection::Bool = false)
     cols::Int = Base.displaysize(io)[2]
     data = convert(Vector{UInt64}, data)
     fmt.recur ∈ (:off, :flat, :flatc) || throw(ArgumentError("recur value not recognized"))
     if format === :tree
-        tree(io, data, lidict, cols, fmt)
+        nosamples = tree(io, data, lidict, cols, fmt, threads, tasks, is_subsection)
+        return nosamples
     elseif format === :flat
         fmt.recur === :off || throw(ArgumentError("format flat only implements recur=:off"))
-        flat(io, data, lidict, cols, fmt)
+        nosamples = flat(io, data, lidict, cols, fmt, threads, tasks, is_subsection)
+        return nosamples
     else
         throw(ArgumentError("output format $(repr(format)) not recognized"))
     end
+end
+
+function get_task_ids(data::Vector{<:Unsigned}, threadid = nothing)
+    taskids = UInt[]
+    for i in length(data):-1:1
+        if is_block_end(data, i)
+            if isnothing(threadid) || data[i - 5] == threadid
+                taskid = data[i - 4]
+                !in(taskid, taskids) && push!(taskids, taskid)
+            end
+        end
+    end
+    return taskids
+end
+
+function get_thread_ids(data::Vector{<:Unsigned}, taskid = nothing)
+    threadids = Int[]
+    for i in length(data):-1:1
+        if is_block_end(data, i)
+            if isnothing(taskid) || data[i - 4] == taskid
+                threadid = data[i - 5]
+                !in(threadid, threadids) && push!(threadids, threadid)
+            end
+        end
+    end
+    return sort(threadids)
+end
+
+function is_block_end(data, i)
+    i < nmeta + 1 && return false
+    # 32-bit linux has been seen to have rogue NULL ips, so we use two to
+    # indicate block end, where the 2nd is the actual end index.
+    # and we could have (though very unlikely):
+    # 1:<stack><metadata><null><null><NULL><metadata><null><null>:end
+    # and we want to ignore the triple NULL (which is an ip).
+    return data[i] == 0 && data[i - 1] == 0 && data[i - 2] != 0
 end
 
 """
@@ -197,27 +308,31 @@ a dictionary `lidict` of line information.
 
 See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
 """
-print(data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
+print(data::Vector{<:Unsigned} = fetch(include_meta = true), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
     print(stdout, data, lidict; kwargs...)
 
 """
-    retrieve() -> data, lidict
+    retrieve(; kwargs...) -> data, lidict
 
 "Exports" profiling results in a portable format, returning the set of all backtraces
 (`data`) and a dictionary that maps the (session-specific) instruction pointers in `data` to
 `LineInfo` values that store the file name, function name, and line number. This function
 allows you to save profiling results for future analysis.
 """
-function retrieve()
-    data = fetch()
+function retrieve(; kwargs...)
+    data = fetch(; kwargs...)
     return (data, getdict(data))
 end
 
 function getdict(data::Vector{UInt})
-    # Lookup is expensive, so do it only once per ip.
-    udata = unique(data)
     dict = LineInfoDict()
-    for ip in udata
+    return getdict!(dict, data)
+end
+
+function getdict!(dict::LineInfoDict, data::Vector{UInt})
+    for ip in data
+        # Lookup is expensive, so do it only once per ip.
+        haskey(dict, UInt64(ip)) && continue
         st = lookup(convert(Ptr{Cvoid}, ip))
         # To correct line numbers for moving code, put it in the form expected by
         # Base.update_stackframes_callback[]
@@ -384,14 +499,15 @@ error_codes = Dict(
 
 
 """
-    fetch() -> data
+    fetch(;include_meta = false) -> data
 
 Returns a copy of the buffer of profile backtraces. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
+By default metadata such as threadid and taskid will be stripped. Set `include_meta` to `true` to include metadata.
 """
-function fetch()
+function fetch(;include_meta = false)
     maxlen = maxlen_data()
     len = len_data()
     if is_buffer_full()
@@ -401,14 +517,37 @@ function fetch()
     end
     data = Vector{UInt}(undef, len)
     GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
-    return data
+    if include_meta || isempty(data)
+        return data
+    else
+        nblocks = 0
+        for i = 2:length(data)
+            if is_block_end(data, i) # detect block ends and count them
+                nblocks += 1
+            end
+        end
+        data_stripped = Vector{UInt}(undef, length(data) - (nblocks * (nmeta + 1)))
+        j = length(data_stripped)
+        i = length(data)
+        while i > 0 && j > 0
+            data_stripped[j] = data[i]
+            if is_block_end(data, i)
+                i -= (nmeta + 1) # metadata fields and the extra NULL IP
+            end
+            i -= 1
+            j -= 1
+        end
+        @assert i == j == 0 "metadata stripping failed i=$i j=$j data[1:i]=$(data[1:i])"
+        return data_stripped
+    end
 end
 
 
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level and at the topmost level
 # Merging multiple equivalent entries and recursive calls
-function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool) where {T}
+function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool,
+                    threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}) where {T}
     lilist = StackFrame[]
     n = Int[]
     m = Int[]
@@ -416,44 +555,71 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     recursive = Set{T}()
     first = true
     totalshots = 0
-    for ip in data
-        if ip == 0
+    startframe = length(data)
+    skip = false
+    nsleeping = 0
+    for i in startframe:-1:1
+        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
+        ip = data[i]
+        if is_block_end(data, i)
+            # read metadata
+            thread_sleeping = data[i - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = data[i - 3]
+            taskid = data[i - 4]
+            threadid = data[i - 5]
+            if !in(threadid, threads) || !in(taskid, tasks)
+                skip = true
+                continue
+            end
+            if thread_sleeping == 1
+                nsleeping += 1
+            end
+            skip = false
             totalshots += 1
             empty!(recursive)
             first = true
-            continue
-        end
-        frames = lidict[ip]
-        nframes = (frames isa Vector ? length(frames) : 1)
-        for i = 1:nframes
-            frame = (frames isa Vector ? frames[i] : frames)
-            !C && frame.from_c && continue
-            key = (T === UInt64 ? ip : frame)
-            idx = get!(lilist_idx, key, length(lilist) + 1)
-            if idx > length(lilist)
-                push!(recursive, key)
-                push!(lilist, frame)
-                push!(n, 1)
-                push!(m, 0)
-            elseif !(key in recursive)
-                push!(recursive, key)
-                n[idx] += 1
-            end
-            if first
-                m[idx] += 1
-                first = false
+            startframe = i
+        elseif !skip
+            frames = lidict[ip]
+            nframes = (frames isa Vector ? length(frames) : 1)
+            for j = 1:nframes
+                frame = (frames isa Vector ? frames[j] : frames)
+                !C && frame.from_c && continue
+                key = (T === UInt64 ? ip : frame)
+                idx = get!(lilist_idx, key, length(lilist) + 1)
+                if idx > length(lilist)
+                    push!(recursive, key)
+                    push!(lilist, frame)
+                    push!(n, 1)
+                    push!(m, 0)
+                elseif !(key in recursive)
+                    push!(recursive, key)
+                    n[idx] += 1
+                end
+                if first
+                    m[idx] += 1
+                    first = false
+                end
             end
         end
     end
     @assert length(lilist) == length(n) == length(m) == length(lilist_idx)
-    return (lilist, n, m, totalshots)
+    return (lilist, n, m, totalshots, nsleeping)
 end
 
-function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat)
-    lilist, n, m, totalshots = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C)
+function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat,
+                threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
+    lilist, n, m, totalshots, nsleeping = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
+    util_perc = (1 - (nsleeping / totalshots)) * 100
     if isempty(lilist)
-        warning_empty()
-        return
+        if is_subsection
+            Base.print(io, "Total snapshots: ")
+            printstyled(io, "$(totalshots)", color=Base.warn_color())
+            Base.println(io, " (", round(Int, util_perc), "% utilization)")
+        else
+            warning_empty()
+        end
+        return true
     end
     if false # optional: drop the "non-interpretable" ones
         keep = map(frame -> frame != UNKNOWN && frame.line != 0, lilist)
@@ -463,8 +629,13 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
     end
     filenamemap = Dict{Symbol,String}()
     print_flat(io, lilist, n, m, cols, filenamemap, fmt)
-    Base.println(io, "Total snapshots: ", totalshots)
-    nothing
+    Base.print(io, "Total snapshots: ", totalshots, " (", round(Int, util_perc), "% utilization")
+    if is_subsection
+        println(io, ")")
+    else
+        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task)")
+    end
+    return false
 end
 
 function print_flat(io::IO, lilist::Vector{StackFrame},
@@ -627,14 +798,32 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
 end
 
 # turn a list of backtraces into a tree (implicitly separated by NULL markers)
-function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool, recur::Symbol) where {T}
+function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool, recur::Symbol,
+                threads::Union{Int,AbstractVector{Int},Nothing}=nothing, tasks::Union{UInt,AbstractVector{UInt},Nothing}=nothing) where {T}
     parent = root
     tops = Vector{StackFrameTree{T}}()
     build = Vector{StackFrameTree{T}}()
     startframe = length(all)
+    skip = false
+    nsleeping = 0
     for i in startframe:-1:1
+        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
         ip = all[i]
-        if ip == 0
+        if is_block_end(all, i)
+            # read metadata
+            thread_sleeping = all[i - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = all[i - 3]
+            taskid = all[i - 4]
+            threadid = all[i - 5]
+            if (threads !== nothing && !in(threadid, threads)) ||
+               (tasks !== nothing && !in(taskid, tasks))
+                skip = true
+                continue
+            end
+            if thread_sleeping == 1
+                nsleeping += 1
+            end
+            skip = false
             # sentinel value indicates the start of a new backtrace
             empty!(build)
             root.recur = 0
@@ -661,7 +850,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             parent = root
             root.count += 1
             startframe = i
-        else
+        elseif !skip
             pushfirst!(build, parent)
             if recur === :flat || recur === :flatc
                 # Rewind the `parent` tree back, if this exact ip was already present *higher* in the current tree
@@ -702,6 +891,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 parent = this
                 continue
             end
+
             frames = lidict[ip]
             nframes = (frames isa Vector ? length(frames) : 1)
             this = parent
@@ -736,7 +926,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         nothing
     end
     cleanup!(root)
-    return root
+    return root, nsleeping
 end
 
 function maxstats(root::StackFrameTree)
@@ -758,12 +948,14 @@ end
 
 # Print the stack frame tree starting at a particular root. Uses a worklist to
 # avoid stack overflows.
-function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat) where T
+function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat, is_subsection::Bool) where T
     maxes = maxstats(bt)
     filenamemap = Dict{Symbol,String}()
     worklist = [(bt, 0, 0, "")]
-    println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
-    println(io, "=========================================================")
+    if !is_subsection
+        println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
+        println(io, "=========================================================")
+    end
     while !isempty(worklist)
         (bt, level, noisefloor, str) = popfirst!(worklist)
         isempty(str) || println(io, str)
@@ -797,21 +989,35 @@ function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat
             pushfirst!(worklist, (down, level + 1, noisefloor_down, str))
         end
     end
+    return
 end
 
-function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, cols::Int, fmt::ProfileFormat)
+function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, cols::Int, fmt::ProfileFormat,
+                threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
     if fmt.combine
-        root = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C, fmt.recur)
+        root, nsleeping = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     else
-        root = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur)
+        root, nsleeping = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     end
+    util_perc = (1 - (nsleeping / root.count)) * 100
     if isempty(root.down)
-        warning_empty()
-        return
+        if is_subsection
+            Base.print(io, "Total snapshots: ")
+            printstyled(io, "$(root.count)", color=Base.warn_color())
+            Base.println(io, " (", round(Int, util_perc), "% utilization)")
+        else
+            warning_empty()
+        end
+        return true
     end
-    print_tree(io, root, cols, fmt)
-    Base.println(io, "Total snapshots: ", root.count)
-    nothing
+    print_tree(io, root, cols, fmt, is_subsection)
+    Base.print(io, "Total snapshots: ", root.count, " (", round(Int, util_perc), "% utilization")
+    if is_subsection
+        println(io, ")")
+    else
+        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task)")
+    end
+    return false
 end
 
 function callersf(matchfunc::Function, bt::Vector, lidict::LineInfoFlatDict)
@@ -875,9 +1081,19 @@ function liperm(lilist::Vector{StackFrame})
     return sortperm(lilist, lt = lt)
 end
 
-warning_empty() = @warn """
-            There were no samples collected. Run your program longer (perhaps by
-            running it multiple times), or adjust the delay between samples with
-            `Profile.init()`."""
+function warning_empty(;summary = false)
+    if summary
+        @warn """
+        There were no samples collected in one or more groups.
+        This may be due to idle threads, or you may need to run your
+        program longer (perhaps by running it multiple times),
+        or adjust the delay between samples with `Profile.init()`."""
+    else
+        @warn """
+        There were no samples collected.
+        Run your program longer (perhaps by running it multiple times),
+        or adjust the delay between samples with `Profile.init()`."""
+    end
+end
 
 end # module
