@@ -232,11 +232,6 @@ function (*)(D::Diagonal, V::AbstractVector)
     return D.diag .* V
 end
 
-(*)(A::AbstractTriangular, D::Diagonal) =
-    rmul!(copy_oftype(A, promote_op(*, eltype(A), eltype(D.diag))), D)
-(*)(D::Diagonal, B::AbstractTriangular) =
-    lmul!(D, copy_oftype(B, promote_op(*, eltype(B), eltype(D.diag))))
-
 (*)(A::AbstractMatrix, D::Diagonal) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
 (*)(D::Diagonal, A::AbstractMatrix) =
@@ -244,37 +239,6 @@ end
 
 rmul!(A::AbstractMatrix, D::Diagonal) = mul!(A, A, D)
 lmul!(D::Diagonal, B::AbstractVecOrMat) = mul!(B, D, B)
-
-rmul!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) = typeof(A)(rmul!(A.data, D))
-function rmul!(A::UnitLowerTriangular, D::Diagonal)
-    rmul!(A.data, D)
-    for i = 1:size(A, 1)
-        A.data[i,i] = D.diag[i]
-    end
-    LowerTriangular(A.data)
-end
-function rmul!(A::UnitUpperTriangular, D::Diagonal)
-    rmul!(A.data, D)
-    for i = 1:size(A, 1)
-        A.data[i,i] = D.diag[i]
-    end
-    UpperTriangular(A.data)
-end
-
-function lmul!(D::Diagonal, B::UnitLowerTriangular)
-    lmul!(D, B.data)
-    for i = 1:size(B, 1)
-        B.data[i,i] = D.diag[i]
-    end
-    LowerTriangular(B.data)
-end
-function lmul!(D::Diagonal, B::UnitUpperTriangular)
-    lmul!(D, B.data)
-    for i = 1:size(B, 1)
-        B.data[i,i] = D.diag[i]
-    end
-    UpperTriangular(B.data)
-end
 
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
     A = adjA.parent
@@ -386,11 +350,6 @@ end
 
 ldiv!(x::AbstractArray, A::Diagonal, b::AbstractArray) = (x .= A.diag .\ b)
 
-function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
-    broadcast!(\, parent(A), D.diag, parent(A))
-    A
-end
-
 function rdiv!(A::AbstractMatrix, D::Diagonal)
     require_one_based_indexing(A)
     dd = D.diag
@@ -410,13 +369,37 @@ function rdiv!(A::AbstractMatrix, D::Diagonal)
     A
 end
 
-function rdiv!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal)
-    broadcast!(/, parent(A), parent(A), permutedims(D.diag))
-    A
-end
-
-(/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
+(/)(A::AbstractArray, D::Diagonal) =
     rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
+
+# (l/r)mul!, l/rdiv!, *, / and \ Optimization for AbstractTriangular.
+# These functions are generally more efficient if we calculate the whole data field.
+# The following code implements them in a unified patten to avoid missing.
+@inline function _set_diag!(data, diag, f = identity)
+    for i in 1:length(diag)
+        @inbounds data[i,i] = f(diag[i])
+    end
+    data
+end
+for Tri in (:UpperTriangular, :LowerTriangular)
+    UTri = Symbol(:Unit, Tri)
+    # 2 args
+    for (fun, f) in zip((:*, :rmul!, :rdiv!, :/), (:identity, :identity, :inv, :inv))
+        @eval $fun(A::$Tri, D::Diagonal) = $Tri($fun(A.data, D))
+        @eval $fun(A::$UTri, D::Diagonal) = $Tri(_set_diag!($fun(A.data, D), D.diag, $f))
+    end
+    for (fun, f) in zip((:*, :lmul!, :ldiv!, :\), (:identity, :identity, :inv, :inv))
+        @eval $fun(D::Diagonal, A::$Tri) = $Tri($fun(D, A.data))
+        @eval $fun(D::Diagonal, A::$UTri) = $Tri(_set_diag!($fun(D, A.data), D.diag, $f))
+    end
+    # 3 args
+    @eval ldiv!(out::$Tri, D::Diagonal, A::$Tri) = $Tri(ldiv!(out.data, D, A.Data))
+    @eval ldiv!(out::$Tri, D::Diagonal, A::$UTri) = $Tri(_set_diag!(ldiv!(out.data, D, A.Data), D.diag, inv))
+    @eval mul!(out::$Tri, D::Diagonal, A::$Tri) = $Tri(mul!(out.data, D, A.Data))
+    @eval mul!(out::$Tri, D::Diagonal, A::$UTri) = $Tri(_set_diag!(mul!(out.data, D, A.Data), D.diag))
+    @eval mul!(out::$Tri, A::$Tri, D::Diagonal) = $Tri(mul!(out.data, A.Data, D))
+    @eval mul!(out::$Tri, A::$UTri, D::Diagonal) = $Tri(_set_diag!(mul!(out.data, A.Data, D), D.diag))
+end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
     valA = A.diag; nA = length(valA)
