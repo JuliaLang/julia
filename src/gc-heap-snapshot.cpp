@@ -25,6 +25,8 @@ using std::unordered_set;
 //   - string sizes
 
 
+int gc_heap_snapshot_enabled = 0;
+
 static inline void _record_gc_edge(const char *node_type, const char *edge_type,
                                    jl_value_t *a, jl_value_t *b, size_t name_or_index);
 
@@ -161,11 +163,13 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
     // Enable snapshotting
     HeapSnapshot snapshot;
     g_snapshot = &snapshot;
+    gc_heap_snapshot_enabled = true;
 
     // Do GC, which will callback into record_edge_to_gc_snapshot()...
     jl_gc_collect(JL_GC_FULL);
 
     // Disable snapshotting
+    gc_heap_snapshot_enabled = false;
     g_snapshot = nullptr;
 
     // When we return, the snapshot is full
@@ -246,24 +250,15 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
     g_snapshot->nodes.push_back(from_node);
 }
 
-void gc_heap_snapshot_record_array_edge(jl_value_t *from , jl_value_t *to , size_t index) JL_NOTSAFEPOINT {
-    if (!g_snapshot) {
-        return;
-    }
+void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT {
     _record_gc_edge("array", "element", from, to, index);
 }
-void gc_heap_snapshot_record_module_edge(jl_module_t *from , jl_value_t *to , char *name) JL_NOTSAFEPOINT {
-    if (!g_snapshot) {
-        return;
-    }
+void _gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) JL_NOTSAFEPOINT {
     //jl_printf(JL_STDERR, "module: %p  binding:%p  name:%s\n", from, to, name);
     _record_gc_edge("object", "property", (jl_value_t *)from, to,
                     g_snapshot->names.find_or_create_string_id(name));
 }
-void gc_heap_snapshot_record_object_edge(jl_value_t *from , jl_value_t *to , size_t field_index) JL_NOTSAFEPOINT {
-    if (!g_snapshot) {
-        return;
-    }
+void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) JL_NOTSAFEPOINT {
     jl_datatype_t *type = (jl_datatype_t*)jl_typeof(from);
     // TODO: It seems like NamedTuples should have field names? Maybe there's another way to get them?
     if (jl_is_tuple_type(type) || jl_is_namedtuple_type(type)) {
@@ -273,8 +268,8 @@ void gc_heap_snapshot_record_object_edge(jl_value_t *from , jl_value_t *to , siz
     }
     if (field_index < 0 || jl_datatype_nfields(type) <= field_index) {
         // TODO: We're getting -1 in some cases
-        jl_printf(JL_STDERR, "WARNING - incorrect field index (%zu) for type\n", field_index);
-        jl_(type);
+        //jl_printf(JL_STDERR, "WARNING - incorrect field index (%zu) for type\n", field_index);
+        //jl_(type);
         _record_gc_edge("object", "element", from, to, field_index);
         return;
     }
@@ -285,18 +280,12 @@ void gc_heap_snapshot_record_object_edge(jl_value_t *from , jl_value_t *to , siz
     _record_gc_edge("object", "property", from, to,
                     g_snapshot->names.find_or_create_string_id(field_name));
 }
-void gc_heap_snapshot_record_internal_edge(jl_value_t *from , jl_value_t *to ) JL_NOTSAFEPOINT {
-    if (!g_snapshot) {
-        return;
-    }
+void _gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT {
     // TODO: probably need to inline this here and make some changes
     _record_gc_edge("object", "internal", from, to,
                     g_snapshot->names.find_or_create_string_id("<internal>"));
 }
-void gc_heap_snapshot_record_hidden_edge(jl_value_t *from , size_t bytes ) JL_NOTSAFEPOINT {
-    if (!g_snapshot) {
-        return;
-    }
+void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) JL_NOTSAFEPOINT {
     // TODO: probably need to inline this here and make some changes
     _record_gc_edge("native", "hidden", from, (jl_value_t *)jl_malloc_tag,
                     g_snapshot->names.find_or_create_string_id("<native>"));
