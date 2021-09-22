@@ -29,9 +29,10 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
             code[i] = stmt
         end
     end
-    ssavaluetypes = ci.ssavaluetypes
     nstmts = length(code)
-    ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:(ci.ssavaluetypes::Int) ]
+    ssavaluetypes = let ssavaluetypes = ci.ssavaluetypes
+        ssavaluetypes isa Vector{Any} ? copy(ssavaluetypes) : Any[ Any for i = 1:(ssavaluetypes::Int) ]
+    end
     stmts = InstructionStream(code, ssavaluetypes, Any[nothing for i = 1:nstmts], copy(ci.codelocs), copy(ci.ssaflags))
     ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), argtypes, Any[], sptypes)
     return ir

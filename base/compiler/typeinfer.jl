@@ -475,6 +475,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = me.bestguess
+    validate_code_in_debug_mode(me.linfo, me.src, "inferred")
     nothing
 end
 
@@ -666,6 +667,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
                 deleteat!(ssavaluetypes, i)
                 deleteat!(src.codelocs, i)
                 deleteat!(sv.stmt_info, i)
+                deleteat!(src.ssaflags, i)
                 nexpr -= 1
                 changemap[oldidx] = -1
                 continue
