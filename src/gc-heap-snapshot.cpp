@@ -27,10 +27,6 @@ using std::unordered_set;
 
 int gc_heap_snapshot_enabled = 0;
 
-static inline void _record_gc_edge(const char *node_type, const char *edge_type,
-                                   jl_value_t *a, jl_value_t *b, size_t name_or_index);
-
-
 // https://stackoverflow.com/a/33799784/751061
 void print_str_escape_json(JL_STREAM *stream, const std::string &s) {
     jl_printf(stream, "\"");
@@ -56,6 +52,9 @@ void print_str_escape_json(JL_STREAM *stream, const std::string &s) {
 
 struct HeapSnapshot;
 void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot);
+static inline void _record_gc_edge(const char *node_type, const char *edge_type,
+                                   jl_value_t *a, jl_value_t *b, size_t name_or_index);
+void _add_uber_root(HeapSnapshot *snapshot);
 
 // Edges
 // "edge_fields":
@@ -275,18 +274,28 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
 }
 
 JL_DLLEXPORT void gc_heap_snapshot_record_root(jl_value_t *root) {
-    auto &from_node = g_snapshot->uber_root;
+    auto &uber_root = g_snapshot->uber_root;
     record_node_to_gc_snapshot(root);
     
-    // add synthetic edge from 0 to it
-    XXX
+    // add synthetic edge from uber root to it
+    record_node_to_gc_snapshot(root);
 
-    from_node.edges.push_back(Edge{
+    uber_root->edges.push_back(Edge{
         g_snapshot->edge_types.find_or_create_string_id("synthetic"),
     });
+    uber_root->edge_count++;
 }
 
-void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT {
+
+void gc_heap_snapshot_record_root(jl_value_t *root, jl_value_t *to) JL_NOTSAFEPOINT {
+    if (!g_snapshot) {
+        return;
+    }
+    _record_gc_edge("synthetic", "element", (jl_value_t*)nullptr, root, 0 /* array index */);
+}
+
+
+void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT {
     if (!g_snapshot) {
         return;
     }
