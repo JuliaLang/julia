@@ -141,9 +141,10 @@ public:
     // edges are stored on each from_node
 
     StringTable names;
-    StringTable node_types = {"object", "string", "symbol"};
+    StringTable node_types = {"object", "string", "symbol", "synthetic"};
     StringTable edge_types = {"property"};
     unordered_map<void*, size_t> node_ptr_to_index_map;
+    Node *uber_root;
 
     size_t num_edges = 0; // For metadata, updated as you add each edge. Needed because edges owned by nodes.
 };
@@ -165,6 +166,8 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
     g_snapshot = &snapshot;
     gc_heap_snapshot_enabled = true;
 
+    _add_uber_root(&snapshot);
+
     // Do GC, which will callback into record_edge_to_gc_snapshot()...
     jl_gc_collect(JL_GC_FULL);
 
@@ -179,6 +182,27 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
     // Debugging
     //jl_printf(JL_STDERR, "nodes: %d\n", count_nodes);
     //jl_printf(JL_STDERR, "edges: %d\n", count_edges);
+}
+
+// adds a node at id 0 which is the "uber root":
+// a synthetic node which points to all the GC roots.
+void _add_uber_root(HeapSnapshot *snapshot) {
+    // TODO: DRY this up with node construction in record_node_to_gc_snapshot?
+    Node uber_root{
+        snapshot->node_types.find_or_create_string_id("synthetic"),
+        "(uber root)", // name
+        0, // id: uber root must have id 0
+        0, // size
+        
+        0, // int edge_count, will be incremented on every outgoing edge
+        0, // size_t trace_node_id (unused)
+        0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+
+        // outgoing edges
+        vector<Edge>(),
+    };
+    snapshot->nodes.push_back(uber_root);
+    snapshot->uber_root = &uber_root;
 }
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
@@ -242,15 +266,30 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
 
         0, // int edge_count, will be incremented on every outgoing edge
         0, // size_t trace_node_id (unused)
-        0,  // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+        0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
 
-        // Book-keeping: todo
+        // outgoing edges
         vector<Edge>(),
     };
     g_snapshot->nodes.push_back(from_node);
 }
 
-void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT {
+JL_DLLEXPORT void gc_heap_snapshot_record_root(jl_value_t *root) {
+    auto &from_node = g_snapshot->uber_root;
+    record_node_to_gc_snapshot(root);
+    
+    // add synthetic edge from 0 to it
+    XXX
+
+    from_node.edges.push_back(Edge{
+        g_snapshot->edge_types.find_or_create_string_id("synthetic"),
+    });
+}
+
+void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT {
+    if (!g_snapshot) {
+        return;
+    }
     _record_gc_edge("array", "element", from, to, index);
 }
 void _gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) JL_NOTSAFEPOINT {
