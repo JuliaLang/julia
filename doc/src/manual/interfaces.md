@@ -5,7 +5,9 @@ A lot of the power and extensibility in Julia comes from a collection of informa
 receive those functionalities, but they are also able to be used in other methods that are written
 to generically build upon those behaviors.
 
-## [Type Properties](@id man-type-properties)
+## [Instance Properties](@id man-instance-properties)
+
+### [Overloading `object.field`](@id overloading-object-field)
 
 | Methods to implement              | Default definition           | Brief description                                                                     |
 |:--------------------------------- |:---------------------------- |:------------------------------------------------------------------------------------- |
@@ -68,7 +70,7 @@ Point(7.0, 1.5707963267948966)
 julia> propertynames(p)
 (:x, :y)
 
-julia> p.x = 3.0 # This translates to setproperty!(p, :x, 7)
+julia> p.x = 3.0 # This translates to setproperty!(p, :x, 3.0)
 3.0
 
 julia> p.y = 4.0
