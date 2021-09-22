@@ -295,7 +295,7 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     one = oneunit(arg2)
     neg = arg2 < 0
     if typeof(arg2) <: Signed && !(typeof(arg2) <: BigInt)
-        x = neg ? unsigned(-(arg2+one))+one : unsigned(arg2)
+        x = neg ? unsigned(-(arg2+one))+unsigned(one) : unsigned(arg2)
     else
         x = neg ? -arg2 : arg2
     end
