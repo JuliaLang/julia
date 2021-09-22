@@ -596,8 +596,8 @@ function fetch(r::Future)
     else
         v = call_on_owner(fetch_ref, r)
         r.v = Some(v)
+        send_del_client(r)
     end
-    send_del_client(r)
     v
 end
 
@@ -627,6 +627,7 @@ function put!(rr::Future, v)
     if rr.where == myid()
         lock(rr.local_lock)
         try
+            call_on_owner(put_future, rr, v, myid())
             rr.v = Some(v)
             notify(rr.local_lock)
         finally
