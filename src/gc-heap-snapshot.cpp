@@ -54,7 +54,7 @@ struct HeapSnapshot;
 void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot);
 static inline void _record_gc_edge(const char *node_type, const char *edge_type,
                                    jl_value_t *a, jl_value_t *b, size_t name_or_index);
-void _add_uber_root(HeapSnapshot *snapshot);
+void _add_internal_root(HeapSnapshot *snapshot);
 
 // Edges
 // "edge_fields":
@@ -143,7 +143,6 @@ public:
     StringTable node_types = {"object", "string", "symbol", "synthetic"};
     StringTable edge_types = {"property"};
     unordered_map<void*, size_t> node_ptr_to_index_map;
-    size_t gc_subroots_node_idx; // all gc roots hang off of this
 
     size_t num_edges = 0; // For metadata, updated as you add each edge. Needed because edges owned by nodes.
 };
@@ -165,7 +164,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
     g_snapshot = &snapshot;
     gc_heap_snapshot_enabled = true;
 
-    _add_uber_root(&snapshot);
+    _add_internal_root(&snapshot);
 
     // Do GC, which will callback into record_edge_to_gc_snapshot()...
     jl_gc_collect(JL_GC_FULL);
@@ -185,13 +184,13 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
 
 // adds a node at id 0 which is the "uber root":
 // a synthetic node which points to all the GC roots.
-void _add_uber_root(HeapSnapshot *snapshot) {
+void _add_internal_root(HeapSnapshot *snapshot) {
     Node internal_root{
         snapshot->node_types.find_or_create_string_id("synthetic"),
         "(internal root)", // name
-        1, // id: uber root must have id 1
+        1, // id: internal root must have id 1
         0, // size
-        
+
         0, // int edge_count, will be incremented on every outgoing edge
         0, // size_t trace_node_id (unused)
         0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
@@ -200,53 +199,6 @@ void _add_uber_root(HeapSnapshot *snapshot) {
         vector<Edge>(),
     };
     snapshot->nodes.push_back(internal_root);
-
-    Node root_node{
-        snapshot->node_types.find_or_create_string_id("synthetic"),
-        "(GC root)", // name
-        3, // id: GC root 2 higher than internal root
-        0, // size
-        
-        0, // int edge_count, will be incremented on every outgoing edge
-        0, // size_t trace_node_id (unused)
-        0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
-
-        // outgoing edges
-        vector<Edge>(),
-    };
-    snapshot->nodes.push_back(root_node);
-
-    // add edge from uber root to gc roots node
-    internal_root.edges.push_back(Edge{
-        snapshot->names.find_or_create_string_id("internal"),
-        snapshot->names.find_or_create_string_id("internal_root to gc_root_node"),
-        1,
-    });
-    internal_root.edge_count++;
-
-    Node subroot_node{
-        snapshot->node_types.find_or_create_string_id("synthetic"),
-        "(GC subroot)", // name
-        5, // id: GC subroot 2 higher than root
-        0, // size
-        
-        0, // int edge_count, will be incremented on every outgoing edge
-        0, // size_t trace_node_id (unused)
-        0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
-
-        // outgoing edges
-        vector<Edge>(),
-    };
-    snapshot->nodes.push_back(subroot_node);
-    snapshot->gc_subroots_node_idx = 2;
-
-    // add edge from uber root to gc roots node
-    root_node.edges.push_back(Edge{
-        snapshot->names.find_or_create_string_id("internal"),
-        snapshot->names.find_or_create_string_id("root_node to sub_root_node"),
-        2,
-    });
-    root_node.edge_count++;
 }
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
@@ -319,21 +271,21 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
 }
 
 void _gc_heap_snapshot_record_root(jl_value_t *root) {
-    auto &gc_subroots_node = g_snapshot->nodes[g_snapshot->gc_subroots_node_idx];
-    
-    // add synthetic edge from uber root to it
+    auto &internal_root = g_snapshot->nodes.front();
+
+    // add synthetic edge from internal root to our root
+    // TODO: We could label these with a root type
     record_node_to_gc_snapshot(root);
-    
+
     // TODO: just make record_node_to_gc_snapshot return this
     auto to_node_idx = g_snapshot->node_ptr_to_index_map[root];
-    auto name_or_index = g_snapshot->names.find_or_create_string_id("root");
 
-    gc_subroots_node.edges.push_back(Edge{
+    internal_root.edges.push_back(Edge{
         g_snapshot->edge_types.find_or_create_string_id("internal"),
-        name_or_index,
+        internal_root.edge_count,
         to_node_idx,
     });
-    gc_subroots_node.edge_count++;
+    internal_root.edge_count++;
 }
 
 void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT {
