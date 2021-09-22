@@ -102,6 +102,13 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
                 // But sometimes the external unwinder doesn't check that.
                 have_more_frames = 0;
             }
+            if (return_ip == 0) {
+                // The return address is clearly wrong, and while the unwinder
+                // might try to continue (by popping another stack frame), that
+                // likely won't work well, and it'll confuse the stack frame
+                // separator detection logic (double-NULL).
+                have_more_frames = 0;
+            }
             if (skip > 0) {
                 skip--;
                 from_signal_handler = 0;
@@ -141,8 +148,9 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             if (!from_signal_handler)
                 call_ip -= 1; // normal frame
             from_signal_handler = 0;
-            if (call_ip == JL_BT_NON_PTR_ENTRY) {
+            if (call_ip == JL_BT_NON_PTR_ENTRY || call_ip == 0) {
                 // Never leave special marker in the bt data as it can corrupt the GC.
+                have_more_frames = 0;
                 call_ip = 0;
             }
             jl_bt_element_t *bt_entry = bt_data + n;

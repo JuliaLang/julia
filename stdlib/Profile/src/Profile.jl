@@ -291,9 +291,12 @@ end
 
 function is_block_end(data, i)
     i < nmeta + 1 && return false
-    # 32-bit linux has been seen to have rogue NULL ips, so we use two to indicate block end, where the 2nd is the
-    # actual end index
-    return data[i] == 0 && data[i - 1] == 0
+    # 32-bit linux has been seen to have rogue NULL ips, so we use two to
+    # indicate block end, where the 2nd is the actual end index.
+    # and we could have (though very unlikely):
+    # 1:<stack><metadata><null><null><NULL><metadata><null><null>:end
+    # and we want to ignore the triple NULL (which is an ip).
+    return data[i] == 0 && data[i - 1] == 0 && data[i - 2] != 0
 end
 
 """
