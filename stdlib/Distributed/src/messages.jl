@@ -132,7 +132,7 @@ function flush_gc_msgs(w::Worker)
         if !w.gcflag # No work needed for this worker
             return
         end
-        w.gcflag = false
+        @atomic w.gcflag = false
         if !isempty(w.add_msgs)
             add_msgs = w.add_msgs
             w.add_msgs = Any[]
@@ -181,7 +181,7 @@ function send_msg_(w::Worker, header, msg, now::Bool)
         invokelatest(serialize_msg, w.w_serializer, msg)  # io is wrapped in w_serializer
         write(io, MSG_BOUNDARY)
 
-        if !now && w.gcflag # XXX: `w.gcflag` is used outside lock
+        if !now && w.gcflag
             flush_gc_msgs(w)
         else
             flush(io)
@@ -194,8 +194,8 @@ end
 function flush_gc_msgs()
     try
         for w in (PGRP::ProcessGroup).workers
-            if isa(w,Worker) && (w.state == W_CONNECTED)
-                flush_gc_msgs(w) # checks w.gcflag after acquiring w.msg_lock
+            if isa(w,Worker) && (w.state == W_CONNECTED) && w.gcflag
+                flush_gc_msgs(w)
             end
         end
     catch e

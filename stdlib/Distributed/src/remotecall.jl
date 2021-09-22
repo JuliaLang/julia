@@ -297,7 +297,7 @@ end
 function publish_del_msg!(w::Worker, msg)
     lock(w.msg_lock) do
         push!(w.del_msgs, msg)
-        w.gcflag = true
+        @atomic w.gcflag = true
     end
     lock(any_gc_flag) do
         notify(any_gc_flag)
@@ -341,7 +341,7 @@ function send_add_client(rr::AbstractRemoteRef, i)
         w = worker_from_id(rr.where)
         lock(w.msg_lock) do
             push!(w.add_msgs, (remoteref_id(rr), i))
-            w.gcflag = true
+            @atomic w.gcflag = true
         end
         lock(any_gc_flag) do
             notify(any_gc_flag)

@@ -98,7 +98,7 @@ mutable struct Worker
     msg_lock::Threads.ReentrantLock # Lock for del_msgs, add_msgs, and gcflag
     del_msgs::Array{Any,1} # XXX: Could del_msgs and add_msgs be Channels?
     add_msgs::Array{Any,1}
-    gcflag::Bool           # XXX: Make this atomic?
+    @atomic gcflag::Bool
     state::WorkerState
     c_state::Condition      # wait for state changes
     ct_time::Float64        # creation time
