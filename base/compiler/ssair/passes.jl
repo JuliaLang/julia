@@ -19,11 +19,27 @@ struct SSADefUse
 end
 SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
-try_compute_fieldidx_expr(typ::DataType, expr::Expr) = try_compute_fieldidx_args(typ, expr.args)
-function try_compute_fieldidx_args(typ::DataType, args::Vector{Any})
-    field = args[3]
-    isa(field, QuoteNode) && (field = field.value)
+function try_compute_field_stmt(compact::IncrementalCompact, stmt::Expr)
+    field = stmt.args[3]
+    # fields are usually literals, handle them manually
+    if isa(field, QuoteNode)
+        field = field.value
+    elseif isa(field, Int)
+    # try to resolve other constants, e.g. global reference
+    else
+        field = compact_exprtype(compact, field)
+        if isa(field, Const)
+            field = field.val
+        else
+            return nothing
+        end
+    end
     isa(field, Union{Int, Symbol}) || return nothing
+    return field
+end
+
+function try_compute_fieldidx_stmt(compact::IncrementalCompact, stmt::Expr, typ::DataType)
+    field = try_compute_field_stmt(compact, stmt)
     return try_compute_fieldidx(typ, field)
 end
 
@@ -636,10 +652,8 @@ function getfield_elim_pass!(ir::IRCode)
         else
             continue
         end
-        ## Normalize the field argument to getfield/setfield
-        field = stmt.args[3]
-        isa(field, QuoteNode) && (field = field.value)
-        isa(field, Union{Int, Symbol}) || continue
+        field = try_compute_field_stmt(compact, stmt)
+        field === nothing && continue
 
         struct_typ = unwrap_unionall(widenconst(compact_exprtype(compact, stmt.args[2])))
         if isa(struct_typ, Union) && struct_typ <: Tuple
@@ -779,13 +793,13 @@ function getfield_elim_pass!(ir::IRCode)
             # it would have been deleted. That's fine, just ignore
             # the use in that case.
             stmt === nothing && continue
-            field = try_compute_fieldidx_expr(typ, stmt)
+            field = try_compute_fieldidx_stmt(compact, stmt::Expr, typ)
             field === nothing && (ok = false; break)
             push!(fielddefuse[field].uses, use)
         end
         ok || continue
         for use in defuse.defs
-            field = try_compute_fieldidx_expr(typ, ir[SSAValue(use)])
+            field = try_compute_fieldidx_stmt(compact, ir[SSAValue(use)]::Expr, typ)
             field === nothing && (ok = false; break)
             push!(fielddefuse[field].defs, use)
         end
