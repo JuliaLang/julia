@@ -717,15 +717,6 @@ function rewrite_invoke_exprargs!(argexprs::Vector{Any})
     return argexprs
 end
 
-function singleton_type(@nospecialize(ft))
-    if isa(ft, Const)
-        return ft.val
-    elseif ft isa DataType && isdefined(ft, :instance)
-        return ft.instance
-    end
-    return nothing
-end
-
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch)
     mi = specialize_method(match; compilesig=true)
     mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
