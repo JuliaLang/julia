@@ -271,8 +271,6 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
 }
 
 void _gc_heap_snapshot_record_root(jl_value_t *root) {
-    auto &internal_root = g_snapshot->nodes.front();
-
     // add synthetic edge from internal root to our root
     // TODO: We could label these with a root type
     record_node_to_gc_snapshot(root);
@@ -280,6 +278,7 @@ void _gc_heap_snapshot_record_root(jl_value_t *root) {
     // TODO: just make record_node_to_gc_snapshot return this
     auto to_node_idx = g_snapshot->node_ptr_to_index_map[root];
 
+    auto &internal_root = g_snapshot->nodes.front();
     internal_root.edges.push_back(Edge{
         g_snapshot->edge_types.find_or_create_string_id("internal"),
         internal_root.edge_count,
