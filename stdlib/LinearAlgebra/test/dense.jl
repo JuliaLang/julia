@@ -18,26 +18,38 @@ n2 = 2*n1
 Random.seed!(1234323)
 
 @testset "Matrix condition number" begin
-    ainit = rand(n,n)
+    ainit = rand(n, n)
     @testset "for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         ainit = convert(Matrix{elty}, ainit)
         for a in (copy(ainit), view(ainit, 1:n, 1:n))
-            @test cond(a,1) ≈ 198.3324294531168 atol=0.5
-            @test cond(a,2) ≈ 85.93920079319506 atol=0.5
-            @test cond(a,Inf) ≈ 149.7523084803039 atol=0.4
-            @test cond(a[:,1:5]) ≈ 8.319279144493297 atol=0.01
+            ainv = inv(a)
+            @test cond(a, 1)   == opnorm(a, 1)  *opnorm(ainv, 1)
+            @test cond(a, Inf) == opnorm(a, Inf)*opnorm(ainv, Inf)
+            @test cond(a[:, 1:5]) == (\)(extrema(svdvals(a[:, 1:5]))...)
             @test_throws ArgumentError cond(a,3)
         end
     end
     @testset "Singular matrices" for p in (1, 2, Inf)
         @test cond(zeros(Int, 2, 2), p) == Inf
-        @test cond(zeros(2, 2), p) == Inf
-        @test cond([0 0; 1 1], p) == Inf
-        @test cond([0. 0.; 1. 1.], p) == Inf
+        @test cond(zeros(2, 2), p)      == Inf
+        @test cond([0 0; 1 1], p)       == Inf
+        @test cond([0. 0.; 1. 1.], p)   == Inf
     end
     @testset "Issue #33547, condition number of 2x2 matrix" begin
-        M = [1.0 -2.0; -2.0 -1.5]
+        M = [1.0 -2.0
+            -2.0 -1.5]
         @test cond(M, 1) ≈ 2.227272727272727
+    end
+    @testset "Condition numbers of a non-random matrix" begin
+        # To ensure that we detect any regressions in the underlying functions
+        Mars= [11  24   7  20   3
+                4  12  25   8  16
+               17   5  13  21   9
+               10  18   1  14  22
+               23   6  19   2  15]
+        @test cond(Mars, 1)   ≈ 7.1
+        @test cond(Mars, 2)   ≈ 6.181867355918493
+        @test cond(Mars, Inf) ≈ 7.1
     end
 end
 
