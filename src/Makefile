@@ -180,6 +180,10 @@ $(BUILDDIR)/%.h.gen : $(SRCDIR)/%.d
 	mv $@.tmp $@
 
 $(BUILDDIR)/jl_internal_funcs.inc: $(SRCDIR)/jl_exported_funcs.inc
+	# Generate `.inc` file that contains a list of `#define` macros to rename functions defined in `libjulia-internal`
+	# to have a `ijl_` prefix instead of `jl_`, to denote that they are coming from `libjulia-internal`.  This avoids
+	# potential confusion with debugging tools, when inspecting a process that has both `libjulia` and `libjulia-internal`
+	# loaded at the same time.
 	grep 'XX(.\+)' $< | sed -E 's/.*XX\((.+)\).*/#define \1 i\1/g' >$@
 
 # source file rules
