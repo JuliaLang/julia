@@ -331,3 +331,11 @@ struct NonIsBitsDimsUndef
 end
 @test Core.Compiler.is_inlineable_constant(NonIsBitsDimsUndef())
 @test !Core.Compiler.is_inlineable_constant((("a"^1000, "b"^1000), nothing))
+
+# Issue #42264 - crash on certain union splits
+let f(x) = (x...,)
+    # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
+    # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
+    # the the original apply call is not union-split, but the inserted `iterate` call is.
+    @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
+end
