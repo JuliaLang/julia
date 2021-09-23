@@ -1019,6 +1019,9 @@ function deleteat!(B::BitVector, inds)
     return B
 end
 
+keepat!(B::BitVector, inds) = _keepat!(B, inds)
+keepat!(B::BitVector, inds::AbstractVector{Bool}) = _keepat!(B, inds)
+
 function splice!(B::BitVector, i::Integer)
     i = Int(i)
     n = length(B)
