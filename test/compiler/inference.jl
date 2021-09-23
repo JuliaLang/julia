@@ -3171,15 +3171,18 @@ f_inf_error_bottom(x::Vector) = isempty(x) ? error(x[1]) : x
 
 # @aggressive_constprop
 @noinline g_nonaggressive(y, x) = Val{x}()
-@noinline @Base.aggressive_constprop g_aggressive(y, x) = Val{x}()
+@noinline @Base.constprop :aggressive g_aggressive(y, x) = Val{x}()
+@noinline @Base.constprop :none g_nonaggressive2(y, x) = Val{x}()
 
 f_nonaggressive(x) = g_nonaggressive(x, 1)
 f_aggressive(x) = g_aggressive(x, 1)
+f_nonaggressive2(x) = g_nonaggressive2(x, 1)
 
 # The first test just makes sure that improvements to the compiler don't
 # render the annotation effectless.
 @test Base.return_types(f_nonaggressive, Tuple{Int})[1] == Val
 @test Base.return_types(f_aggressive, Tuple{Int})[1] == Val{1}
+@test Base.return_types(f_nonaggressive2, Tuple{Int})[1] == Val
 
 function splat_lotta_unions()
     a = Union{Tuple{Int},Tuple{String,Vararg{Int}},Tuple{Int,Vararg{Int}}}[(2,)][1]

@@ -120,3 +120,15 @@ global_logger(prev_logger)
 end
 
 # END 0.7 deprecations
+
+# @aggressive_constprop
+@noinline g_nonaggressive(y, x) = Val{x}()
+@noinline @Base.aggressive_constprop g_aggressive(y, x) = Val{x}()
+
+f_nonaggressive(x) = g_nonaggressive(x, 1)
+f_aggressive(x) = g_aggressive(x, 1)
+
+# The first test just makes sure that improvements to the compiler don't
+# render the annotation effectless.
+@test Base.return_types(f_nonaggressive, Tuple{Int})[1] == Val
+@test Base.return_types(f_aggressive, Tuple{Int})[1] == Val{1}
