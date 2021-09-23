@@ -384,7 +384,7 @@ end
 
 seed!(rng::_GLOBAL_RNG, ::Nothing) = seed!(rng)  # to resolve ambiguity
 
-seed!(seed::Union{Nothing,Integer,Vector{UInt32},Vector{UInt64},NTuple{4,UInt64}}=nothing) =
+seed!(seed::Union{Nothing,Integer,Vector{UInt32},Vector{UInt64}}=nothing) =
     seed!(GLOBAL_RNG, seed)
 
 rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
