@@ -587,7 +587,7 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-int num_threads_bound(void) JL_NOTSAFEPOINT
+static int num_threads_bound(void) JL_NOTSAFEPOINT
 {
 #ifdef _OS_DARWIN_
     return INT_MAX;
@@ -609,16 +609,6 @@ int num_threads_bound(void) JL_NOTSAFEPOINT
     free(cpumask);
     return n;
 #endif
-}
-
-int intmin(int a, int b) JL_NOTSAFEPOINT
-{
-    if (a < b) {
-        return a;
-    }
-    else {
-        return b;
-    }
 }
 
 // Apple's M1 processor is a big.LITTLE style processor, with 4x "performance"
@@ -656,22 +646,24 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
         }
     }
 #endif
-    return intmin(upper_bound, count);
+    return upper_bound < count ? upper_bound : count;
 #elif defined(_SC_NPROCESSORS_ONLN)
     long count = sysconf(_SC_NPROCESSORS_ONLN);
     if (count < 1)
         return 1;
-    return intmin(upper_bound, count);
+    return upper_bound < count ? upper_bound : count;
 #elif defined(_OS_WINDOWS_)
     //Try to get WIN7 API method
     GAPC gapc;
     if (jl_dlsym(jl_kernel32_handle, "GetActiveProcessorCount", (void **)&gapc, 0)) {
-        return intmin(upper_bound, gapc(ALL_PROCESSOR_GROUPS));
+        DWORD count = gapc(ALL_PROCESSOR_GROUPS);
+        return upper_bound < count ? upper_bound : count;
     }
     else { //fall back on GetSystemInfo
         SYSTEM_INFO info;
         GetSystemInfo(&info);
-        return intmin(upper_bound, info.dwNumberOfProcessors);
+        DWORD count = info.dwNumberOfProcessors;
+        return upper_bound < count ? upper_bound : count;
     }
 #else
 #warning "cpu core detection not defined for this platform"
