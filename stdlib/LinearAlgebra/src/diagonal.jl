@@ -347,15 +347,14 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
     return C
 end
 
-#TODO: many of /, \ related function has no singular check
 (/)(A::AbstractVecOrMat, D::Diagonal) =
-    rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
-(/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
+    rdiv!(copy_similar(A, promote_op(/, eltype(A), eltype(D))), D)
+(/)(Da::Diagonal, Db::Diagonal) = Diagonal(Db \ Da.diag)
 
-function rdiv!(A::AbstractMatrix, D::Diagonal)
+function rdiv!(A::AbstractVecOrMat, D::Diagonal)
     require_one_based_indexing(A)
     dd = D.diag
-    m, n = size(A)
+    m, n = size(A, 1), size(A, 2)
     if (k = length(dd)) ≠ n
         throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
     end
@@ -371,31 +370,20 @@ function rdiv!(A::AbstractMatrix, D::Diagonal)
     A
 end
 
-(\)(D::Diagonal, A::AbstractMatrix) =
-    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
-(\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
-(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
+(\)(D::Diagonal, B::AbstractVecOrMat) = 
+    ldiv!(similar(B, promote_op(\, eltype(D), eltype(B)), size(B)), D, B)
+(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da \ Db.diag)
 
-#TODO: we should check size(x,2) == size(b,2)
-ldiv!(x::AbstractVecOrMat, A::Diagonal, b::AbstractVecOrMat) = (x .= A.diag .\ b)
-
-function ldiv!(D::Diagonal, B::AbstractVecOrMat)
-    require_one_based_indexing(B)
-    m, n = size(B, 1), size(B, 2)
-    if m != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
-    end
-    (m == 0 || n == 0) && return B
-    for j = 1:n
-        for i = 1:m
-            di = D.diag[i]
-            if di == 0
-                throw(SingularException(i))
-            end
-            B[i,j] = di \ B[i,j]
-        end
-    end
-    return B
+ldiv!(D::Diagonal, B::AbstractVecOrMat) = ldiv!(B, D, B)
+function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
+    require_one_based_indexing(A, B)
+    d = length(D.diag)
+    m, n = size(A, 1), size(A, 2)
+    m′, n′ = size(B, 1), size(B, 2)
+    m == d || throw(DimensionMismatch("right hand side has $m rows but D is $d by $d"))
+    (m, n) == (m′, n′) || throw(DimensionMismatch("expect output to be $m by $n, but got $m′ by $m′"))
+    0 in D.diag && throw(SingularException(findfirst(iszero, D.diag)))
+    B .= D.diag .\ A
 end
 
 # (l/r)mul!, l/rdiv!, *, / and \ Optimization for AbstractTriangular.
