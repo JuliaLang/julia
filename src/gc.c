@@ -537,7 +537,7 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
     // still holding a reference to the object
     for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        finalize_object(&ptls2->finalizers, o, &copied_list, ct->tid != i);
+        finalize_object(&ptls2->finalizers, o, &copied_list, jl_atomic_load_relaxed(&ct->tid) != i);
     }
     finalize_object(&finalizer_list_marked, o, &copied_list, 0);
     if (copied_list.len > 0) {
@@ -2648,9 +2648,10 @@ mark: {
             void *stkbuf = ta->stkbuf;
             if (gc_cblist_task_scanner) {
                 export_gc_state(ptls, &sp);
+                int16_t tid = jl_atomic_load_relaxed(&ta->tid);
                 gc_invoke_callbacks(jl_gc_cb_task_scanner_t,
                     gc_cblist_task_scanner,
-                    (ta, ta->tid != -1 && ta == jl_all_tls_states[ta->tid]->root_task));
+                    (ta, tid != -1 && ta == jl_all_tls_states[tid]->root_task));
                 import_gc_state(ptls, &sp);
             }
 #ifdef COPY_STACKS
@@ -2664,8 +2665,9 @@ mark: {
             uintptr_t ub = (uintptr_t)-1;
 #ifdef COPY_STACKS
             if (stkbuf && ta->copy_stack && ta->ptls == NULL) {
-                assert(ta->tid >= 0);
-                jl_ptls_t ptls2 = jl_all_tls_states[ta->tid];
+                int16_t tid = jl_atomic_load_relaxed(&ta->tid);
+                assert(tid >= 0);
+                jl_ptls_t ptls2 = jl_all_tls_states[tid];
                 ub = (uintptr_t)ptls2->stackbase;
                 lb = ub - ta->copy_stack;
                 offset = (uintptr_t)stkbuf - lb;

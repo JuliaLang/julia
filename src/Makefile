@@ -355,7 +355,7 @@ clean-support:
 
 cleanall: clean clean-flisp clean-support clean-analyzegc
 
-$(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/GCChecker.cpp $(LLVM_CONFIG_ABSOLUTE)
+$(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) -L$(build_libdir) \
 		$(LLVM_CXXFLAGS) $(CLANG_LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(CXXLDFLAGS) $<)
 
@@ -374,26 +374,36 @@ ifneq ($(BUILD_LLVM_CLANG),1)
 endif
 endif
 
-clangsa: $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
+clangsa: $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
 
 clang-sagc-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
-	@$(call PRINT_ANALYZE, $(build_bindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS)  -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $<)
+	@$(call PRINT_ANALYZE, $(build_bindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
+		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		$(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -Werror -x c $<)
 clang-sagc-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
-	@$(call PRINT_ANALYZE, $(build_bindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c++ $<)
+	@$(call PRINT_ANALYZE, $(build_bindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
+		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		$(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -Werror -x c++ $<)
 
  # optarg is a required_argument for these
 SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-disable-checker=core.NonNullParamChecker,unix.cstring.NullArg
  # clang doesn't understand that e->vars has the same value in save_env (NULL) and restore_env (assumed non-NULL)
 SA_EXCEPTIONS-subtype.c                     := -Xanalyzer -analyzer-disable-checker=core.uninitialized.Assign,core.UndefinedBinaryOperatorResult
+ # these need to be annotated (and possibly fixed)
+SKIP_IMPLICIT_ATOMICS := dump.c gf.c jitlayers.cpp module.c precompile.c rtutils.c staticdata.c toplevel.c codegen.cpp
 
-clang-sa-%: $(SRCDIR)/%.c .FORCE | analyzegc-deps-check
+clang-sa-%: $(SRCDIR)/%.c $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
+		$(if $(findstring $(notdir $<),$(SKIP_IMPLICIT_ATOMICS)),,-Xclang -load -Xclang $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=julia.ImplicitAtomics) \
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
+		 --analyzer-no-default-checks  \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -Werror -x c $<)
-clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
+clang-sa-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
+		$(if $(findstring $(notdir $<),$(SKIP_IMPLICIT_ATOMICS)),,-Xclang -load -Xclang $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=julia.ImplicitAtomics) \
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
+		 --analyzer-no-default-checks  \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -Werror -x c++ $<)
 
@@ -404,6 +414,7 @@ analyzegc: analyzesrc $(addprefix clang-sagc-,$(RUNTIME_SRCS))
 
 clean-analyzegc:
 	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
+	rm -f $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
 
 .FORCE:
 .PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc analyzesrc .FORCE

@@ -195,7 +195,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *t)
 {
     jl_task_t *ct = jl_current_task;
     JL_SIGATOMIC_BEGIN();
-    if (t->_isexception)
+    if (jl_atomic_load_relaxed(&t->_isexception))
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
     else
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_DONE);
@@ -240,7 +240,7 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *ptid
     jl_ptls_t ptls2 = task->ptls;
     *ptid = -1;
     if (ptls2) {
-        *ptid = task->tid;
+        *ptid = jl_atomic_load_relaxed(&task->tid);
 #ifdef COPY_STACKS
         if (task->copy_stack) {
             *size = ptls2->stacksize;
@@ -345,7 +345,7 @@ static void ctx_switch(jl_task_t *lastt)
     }
 #endif
 
-    int killed = lastt->_state != JL_TASK_STATE_RUNNABLE;
+    int killed = jl_atomic_load_relaxed(&lastt->_state) != JL_TASK_STATE_RUNNABLE;
     if (!t->started && !t->copy_stack) {
         // may need to allocate the stack
         if (t->stkbuf == NULL) {
@@ -482,7 +482,7 @@ JL_DLLEXPORT void jl_switch(void)
         jl_error("task switch not allowed from inside gc finalizer");
     if (ptls->in_pure_callback)
         jl_error("task switch not allowed from inside staged nor pure functions");
-    if (!jl_set_task_tid(t, ptls->tid)) // manually yielding to a task
+    if (!jl_set_task_tid(t, jl_atomic_load_relaxed(&ct->tid))) // manually yielding to a task
         jl_error("cannot switch to task running on another thread");
 
     // Store old values on the stack and reset
@@ -505,7 +505,7 @@ JL_DLLEXPORT void jl_switch(void)
     t = ptls->previous_task;
     ptls->previous_task = NULL;
     assert(t != ct);
-    assert(t->tid == ptls->tid);
+    assert(jl_atomic_load_relaxed(&t->tid) == ptls->tid);
     if (!t->sticky && !t->copy_stack)
         jl_atomic_store_release(&t->tid, -1);
 #else
@@ -734,7 +734,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = completion_future;
-    t->_isexception = 0;
+    jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit logger state from parent task
     t->logstate = ct->logstate;
     // Fork task-local random state from parent
@@ -746,7 +746,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->excstack = NULL;
     t->started = 0;
     t->prio = -1;
-    jl_atomic_store_relaxed(&t->tid, t->copy_stack ? ct->tid : -1); // copy_stacks are always pinned since they can't be moved
+    jl_atomic_store_relaxed(&t->tid, t->copy_stack ? jl_atomic_load_relaxed(&ct->tid) : -1); // copy_stacks are always pinned since they can't be moved
     t->ptls = NULL;
     t->world_age = ct->world_age;
 
@@ -861,7 +861,7 @@ CFI_NORETURN
 #endif
 
     ct->started = 1;
-    if (ct->_isexception) {
+    if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
         jl_push_excstack(&ct->excstack, ct->result,
                          ptls->bt_data, ptls->bt_size);
@@ -878,7 +878,7 @@ CFI_NORETURN
         }
         JL_CATCH {
             res = jl_current_exception();
-            ct->_isexception = 1;
+            jl_atomic_store_relaxed(&ct->_isexception, 1);
             goto skip_pop_exception;
         }
 skip_pop_exception:;
@@ -1295,7 +1295,7 @@ void jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->start = NULL;
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
-    ct->_isexception = 0;
+    jl_atomic_store_relaxed(&ct->_isexception, 0);
     ct->logstate = jl_nothing;
     ct->eh = NULL;
     ct->gcstack = NULL;
@@ -1343,7 +1343,7 @@ JL_DLLEXPORT int jl_is_task_started(jl_task_t *t) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int16_t jl_get_task_tid(jl_task_t *t) JL_NOTSAFEPOINT
 {
-    return t->tid;
+    return jl_atomic_load_relaxed(&t->tid);
 }
 
 

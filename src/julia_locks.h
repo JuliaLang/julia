@@ -115,7 +115,7 @@ static inline int jl_mutex_trylock(jl_mutex_t *lock)
 static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
 #ifndef __clang_gcanalyzer__
-    assert(lock->owner == jl_thread_self() &&
+    assert(jl_atomic_load_relaxed(&lock->owner) == jl_thread_self() &&
            "Unlocking a lock in a different thread.");
     if (--lock->count == 0) {
         jl_atomic_store_release(&lock->owner, (jl_thread_t)0);
@@ -136,7 +136,7 @@ static inline void jl_mutex_unlock(jl_mutex_t *lock)
 
 static inline void jl_mutex_init(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
-    lock->owner = (jl_thread_t)0;
+    jl_atomic_store_relaxed(&lock->owner, (jl_thread_t)0);
     lock->count = 0;
 }
 
