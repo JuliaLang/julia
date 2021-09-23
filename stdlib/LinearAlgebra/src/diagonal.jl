@@ -370,7 +370,7 @@ function rdiv!(A::AbstractVecOrMat, D::Diagonal)
     A
 end
 
-(\)(D::Diagonal, B::AbstractVecOrMat) = 
+(\)(D::Diagonal, B::AbstractVecOrMat) =
     ldiv!(similar(B, promote_op(\, eltype(D), eltype(B)), size(B)), D, B)
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da \ Db.diag)
 
