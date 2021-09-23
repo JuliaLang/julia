@@ -78,7 +78,6 @@ struct Node {
     string name;
     size_t id; // (vilterp) the memory address, right?
     size_t self_size;
-    size_t edge_count;
     size_t trace_node_id;  // This is ALWAYS 0 in Javascript heap-snapshots.
     // whether the from_node is attached or dettached from the main application state
     // TODO: .... meaning not yet understood.
@@ -140,8 +139,8 @@ public:
     // edges are stored on each from_node
 
     StringTable names;
-    StringTable node_types = {"object", "string", "symbol", "synthetic"};
-    StringTable edge_types = {"property"};
+    StringTable node_types;
+    StringTable edge_types;
     unordered_map<void*, size_t> node_ptr_to_index_map;
 
     size_t num_edges = 0; // For metadata, updated as you add each edge. Needed because edges owned by nodes.
@@ -188,10 +187,9 @@ void _add_internal_root(HeapSnapshot *snapshot) {
     Node internal_root{
         snapshot->node_types.find_or_create_string_id("synthetic"),
         "(internal root)", // name
-        1, // id: internal root must have id 1
-        0, // size
+        0, // id
+        1, // size
 
-        0, // int edge_count, will be incremented on every outgoing edge
         0, // size_t trace_node_id (unused)
         0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
 
@@ -260,7 +258,6 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
         // Also because the Chrome Snapshot viewer ignores size-0 leaves!
         self_size + 1, // size_t self_size;
 
-        0, // int edge_count, will be incremented on every outgoing edge
         0, // size_t trace_node_id (unused)
         0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
 
@@ -271,20 +268,22 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
 }
 
 void _gc_heap_snapshot_record_root(jl_value_t *root) {
-    // add synthetic edge from internal root to our root
-    // TODO: We could label these with a root type
     record_node_to_gc_snapshot(root);
 
     // TODO: just make record_node_to_gc_snapshot return this
     auto to_node_idx = g_snapshot->node_ptr_to_index_map[root];
 
     auto &internal_root = g_snapshot->nodes.front();
+    auto edge_type = g_snapshot->edge_types.find_or_create_string_id("internal");
+    auto edge_label = g_snapshot->names.find_or_create_string_id("internal_root to root");
+
     internal_root.edges.push_back(Edge{
-        g_snapshot->edge_types.find_or_create_string_id("internal"),
-        internal_root.edge_count,
+        edge_type,
+        edge_label,
         to_node_idx,
     });
-    internal_root.edge_count++;
+
+    g_snapshot->num_edges++;
 }
 
 void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT {
@@ -346,7 +345,6 @@ static inline void _record_gc_edge(const char *node_type, const char *edge_type,
     auto &from_node = g_snapshot->nodes[from_node_idx];
     // TODO: can these ever disagree?:
     from_node.type = g_snapshot->node_types.find_or_create_string_id(node_type);
-    from_node.edge_count += 1;
 
     from_node.edges.push_back(Edge{
         g_snapshot->edge_types.find_or_create_string_id(edge_type),
@@ -390,7 +388,7 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
         jl_printf(stream, ",%zu", snapshot.names.find_or_create_string_id(from_node.name));
         jl_printf(stream, ",%zu", from_node.id);
         jl_printf(stream, ",%zu", from_node.self_size);
-        jl_printf(stream, ",%zu", from_node.edge_count);
+        jl_printf(stream, ",%zu", from_node.edges.size());
         jl_printf(stream, ",%zu", from_node.trace_node_id);
         jl_printf(stream, ",%d", from_node.detachedness);
         jl_printf(stream, "\n");
