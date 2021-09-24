@@ -372,21 +372,21 @@ end
 @inline _muldiag!(out, A::Diagonal, B::Diagonal, alpha, beta) = _muldiag!(out, A, B, alpha, beta)
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
-@inline mul!(out::AbstractVector, A::Diagonal, in::AbstractVector, alpha::Number, beta::Number) =
-    _muldiag!(out, A, in, alpha, beta)
-@inline mul!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix, alpha::Number, beta::Number) =
-    _muldiag!(out, A, in, alpha, beta)
-@inline mul!(out::AbstractMatrix, A::Diagonal, in::Adjoint{<:Any,<:AbstractVecOrMat},
-             alpha::Number, beta::Number) = _muldiag!(out, A, in, alpha, beta)
-@inline mul!(out::AbstractMatrix, A::Diagonal, in::Transpose{<:Any,<:AbstractVecOrMat},
-             alpha::Number, beta::Number) = _muldiag!(out, A, in, alpha, beta)
+@inline mul!(out::AbstractVector, D::Diagonal, V::AbstractVector, alpha::Number, beta::Number) =
+    _muldiag!(out, D, V, alpha, beta)
+@inline mul!(out::AbstractMatrix, D::Diagonal, B::AbstractMatrix, alpha::Number, beta::Number) =
+    _muldiag!(out, D, B, alpha, beta)
+@inline mul!(out::AbstractMatrix, D::Diagonal, B::Adjoint{<:Any,<:AbstractVecOrMat},
+             alpha::Number, beta::Number) = _muldiag!(out, D, B, alpha, beta)
+@inline mul!(out::AbstractMatrix, D::Diagonal, B::Transpose{<:Any,<:AbstractVecOrMat},
+             alpha::Number, beta::Number) = _muldiag!(out, D, B, alpha, beta)
 
-@inline mul!(out::AbstractMatrix, in::AbstractMatrix, A::Diagonal, alpha::Number, beta::Number) =
-    _muldiag!(out, in, A, alpha, beta)
-@inline mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:AbstractVecOrMat}, A::Diagonal,
-             alpha::Number, beta::Number) = _muldiag!(out, in, A, alpha, beta)
-@inline mul!(out::AbstractMatrix, in::Transpose{<:Any,<:AbstractVecOrMat}, A::Diagonal,
-             alpha::Number, beta::Number) = _muldiag!(out, in, A, alpha, beta)
+@inline mul!(out::AbstractMatrix, A::AbstractMatrix, D::Diagonal, alpha::Number, beta::Number) =
+    _muldiag!(out, A, D, alpha, beta)
+@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, D::Diagonal,
+             alpha::Number, beta::Number) = _muldiag!(out, A, D, alpha, beta)
+@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, D::Diagonal,
+             alpha::Number, beta::Number) = _muldiag!(out, A, D, alpha, beta)
 
 function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number)
     mA = size(Da, 1)
