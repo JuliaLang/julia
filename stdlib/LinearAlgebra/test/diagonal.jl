@@ -703,12 +703,35 @@ end
     xt = transpose(x)
     A = reshape([[1 2; 3 4], zeros(Int,2,2), zeros(Int, 2, 2), [5 6; 7 8]], 2, 2)
     D = Diagonal(A)
-    @test x'*D == x'*A == copy(x')*D == copy(x')*A
-    @test xt*D == xt*A == copy(xt)*D == copy(xt)*A
+    @test x'*D == x'*A == collect(x')*D == collect(x')*A
+    @test xt*D == xt*A == collect(xt)*D == collect(xt)*A
+    outadjxD = similar(x'*D); outtrxD = similar(xt*D);
+    mul!(outadjxD, x', D)
+    @test outadjxD == x'*D
+    mul!(outtrxD, xt, D)
+    @test outtrxD == xt*D
+
+    D1 = Diagonal([[1 2; 3 4]])
+    @test D1 * x' == D1 * collect(x') == collect(D1) * collect(x')
+    @test D1 * xt == D1 * collect(xt) == collect(D1) * collect(xt)
+    outD1adjx = similar(D1 * x'); outD1trx = similar(D1 * xt);
+    mul!(outadjxD, D1, x')
+    @test outadjxD == D1*x'
+    mul!(outtrxD, D1, xt)
+    @test outtrxD == D1*xt
+
     y = [x, x]
     yt = transpose(y)
     @test y'*D*y == (y'*D)*y == (y'*A)*y
     @test yt*D*y == (yt*D)*y == (yt*A)*y
+    outadjyD = similar(y'*D); outtryD = similar(yt*D);
+    outadjyD2 = similar(collect(y'*D)); outtryD2 = similar(collect(yt*D));
+    mul!(outadjyD, y', D)
+    mul!(outadjyD2, y', D)
+    @test outadjyD == outadjyD2 == y'*D
+    mul!(outtryD, yt, D)
+    mul!(outtryD2, yt, D)
+    @test outtryD == outtryD2 == yt*D
 end
 
 @testset "Multiplication of single element Diagonal (#36746, #40726)" begin
