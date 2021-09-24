@@ -593,6 +593,10 @@ end
     D = Diagonal([collect(reshape(1:4, 2, 2)), collect(reshape(5:8, 2, 2))])
     @test A * D == collect(A) * collect(D)
     @test D * A == collect(D) * collect(A)
+
+    AS = similar(A)
+    mul!(AS, A, D, true, false)
+    @test AS == A * D
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
