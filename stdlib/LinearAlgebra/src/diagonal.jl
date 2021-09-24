@@ -348,10 +348,12 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
 end
 
 (/)(A::AbstractVecOrMat, D::Diagonal) =
-    rdiv!(copy_similar(A, promote_op(/, eltype(A), eltype(D))), D)
-(/)(Da::Diagonal, Db::Diagonal) = Diagonal(Db \ Da.diag)
+    _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D)), size(A)), A, D)
+(/)(Da::Diagonal, Db::Diagonal) = Diagonal(vec(permutedims(Da.diag) / Db))
 
-function rdiv!(A::AbstractVecOrMat, D::Diagonal)
+rdiv!(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(A, A, D)
+# avoid copy when possible via internal 3-arg backend
+function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     require_one_based_indexing(A)
     dd = D.diag
     m, n = size(A, 1), size(A, 2)
@@ -364,10 +366,10 @@ function rdiv!(A::AbstractVecOrMat, D::Diagonal)
             throw(SingularException(j))
         end
         for i in 1:m
-            A[i, j] /= ddj
+            B[i, j] = A[i, j] / ddj
         end
     end
-    A
+    B
 end
 
 (\)(D::Diagonal, B::AbstractVecOrMat) =
@@ -381,8 +383,9 @@ function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
     m, n = size(A, 1), size(A, 2)
     m′, n′ = size(B, 1), size(B, 2)
     m == d || throw(DimensionMismatch("right hand side has $m rows but D is $d by $d"))
-    (m, n) == (m′, n′) || throw(DimensionMismatch("expect output to be $m by $n, but got $m′ by $m′"))
-    0 in D.diag && throw(SingularException(findfirst(iszero, D.diag)))
+    (m, n) == (m′, n′) || throw(DimensionMismatch("expect output to be $m by $n, but got $m′ by $n′"))
+    j = findfirst(iszero, D.diag)
+    isnothing(j) || throw(SingularException(j))
     B .= D.diag .\ A
 end
 
