@@ -2822,7 +2822,7 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
     // modules
     gc_mark_queue_obj(gc_cache, sp, jl_main_module);
-    gc_heap_snapshot_record_root(jl_main_module);
+    gc_heap_snapshot_record_root(jl_main_module, "main_module");
 
     // tasks
     // TODO: add tasks as roots
@@ -2836,7 +2836,7 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
         if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
             gc_mark_queue_obj(gc_cache, sp, jl_current_modules.table[i]);
-            gc_heap_snapshot_record_root(jl_current_modules.table[i]);
+            gc_heap_snapshot_record_root(jl_current_modules.table[i], "current_module");
         }
     }
     gc_mark_queue_obj(gc_cache, sp, jl_anytuple_type_type);
@@ -2844,12 +2844,12 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
         jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
         if (v != NULL) {
             gc_mark_queue_obj(gc_cache, sp, v);
-            gc_heap_snapshot_record_root(v);
+            gc_heap_snapshot_record_root(v, "type_map");
         }
     }
     if (jl_all_methods != NULL) {
         gc_mark_queue_obj(gc_cache, sp, jl_all_methods);
-        gc_heap_snapshot_record_root(jl_all_methods);
+        gc_heap_snapshot_record_root(jl_all_methods, "all_methods");
     }
     if (_jl_debug_method_invalidation != NULL)
         gc_mark_queue_obj(gc_cache, sp, _jl_debug_method_invalidation);
