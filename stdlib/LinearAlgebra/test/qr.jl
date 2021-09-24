@@ -415,4 +415,15 @@ end
     @test A.Q' * B ≈ A.Q
 end
 
+@testset "convert between eltypes" begin
+    a = rand(Float64, 10, 5)
+    qra = qr(a)
+    @test Array(LinearAlgebra.QRCompactWY{Float32}(qra.factors, qra.T)) ≈ Array(qr(Float32.(a)))
+    qra = qr(a, ColumnNorm())
+    @test Array(QRPivoted{Float32}(qra.factors, qra.τ, qra.jpvt)) ≈ Array(qr(Float32.(a), ColumnNorm()))
+    a = rand(Float16, 10, 5)
+    qra = qr(a)
+    @test Array(QR{ComplexF16}(qra.factors, qra.τ)) ≈ Array(qr(ComplexF16.(a)))
+end
+
 end # module TestQR
