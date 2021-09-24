@@ -1576,6 +1576,12 @@ end
     @test reverse!(Any[]) == Any[]
 end
 
+@testset "reverseind" begin
+    @test reverseind([1, 2, 3], 2) == 2
+    @test reverseind([1, 2, 3], 0) == 4
+    @test reverseind([1, 2, 3], 3) == 1
+end
+
 @testset "reverse dim" begin
     @test isequal(reverse([2,3,1], dims=1), [1,3,2])
     @test_throws ArgumentError reverse([2,3,1], dims=2)
