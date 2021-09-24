@@ -232,32 +232,11 @@ function (*)(D::Diagonal, V::AbstractVector)
     return D.diag .* V
 end
 
-# Optimized multiplication between Triangular and Diagonal matrices
-@inline function _copy_diag!(data, diag)
-    data[diagind(data)] .= diag
-    return data
-end
-for Tri in (:UpperTriangular, :LowerTriangular)
-    UTri = Symbol(:Unit, Tri)
-    for fun in (:*, :rmul!)
-        @eval $fun(A::$Tri, D::Diagonal) = $Tri($fun(A.data, D))
-        @eval $fun(A::$UTri, D::Diagonal) = $Tri(_copy_diag!($fun(A.data, D), D.diag))
-    end
-    for fun in (:*, :lmul!)
-        @eval $fun(D::Diagonal, A::$Tri) = $Tri($fun(D, A.data))
-        @eval $fun(D::Diagonal, A::$UTri) = $Tri(_copy_diag!($fun(D, A.data), D.diag))
-    end
-    @eval mul!(out::$Tri, D::Diagonal, A::$Tri) = $Tri(mul!(out.data, D, A.Data))
-    @eval mul!(out::$Tri, D::Diagonal, A::$UTri) = $Tri(_copy_diag!(mul!(out.data, D, A.Data), D.diag))
-    @eval mul!(out::$Tri, A::$Tri, D::Diagonal) = $Tri(mul!(out.data, A.Data, D))
-    @eval mul!(out::$Tri, A::$UTri, D::Diagonal) = $Tri(_copy_diag!(mul!(out.data, A.Data, D), D.diag))
-end
-
 # These methods are needed for ambiguity resolution
 (*)(A::AbstractTriangular, D::Diagonal) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
-(*)(D::Diagonal, A::AbstractTriangular) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
+    rmul!(copy_oftype(A, promote_op(*, eltype(A), eltype(D.diag))), D)
+(*)(D::Diagonal, B::AbstractTriangular) =
+    lmul!(D, copy_oftype(B, promote_op(*, eltype(B), eltype(D.diag))))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
@@ -282,6 +261,37 @@ function lmul!(D::Diagonal, B::AbstractVecOrMat)
     end
     B .= D.diag .* B
     return B
+end
+
+rmul!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) = typeof(A)(rmul!(A.data, D))
+function rmul!(A::UnitLowerTriangular, D::Diagonal)
+    rmul!(A.data, D)
+    for i = 1:size(A, 1)
+        A.data[i,i] = D.diag[i]
+    end
+    LowerTriangular(A.data)
+end
+function rmul!(A::UnitUpperTriangular, D::Diagonal)
+    rmul!(A.data, D)
+    for i = 1:size(A, 1)
+        A.data[i,i] = D.diag[i]
+    end
+    UpperTriangular(A.data)
+end
+
+function lmul!(D::Diagonal, B::UnitLowerTriangular)
+    lmul!(D, B.data)
+    for i = 1:size(B, 1)
+        B.data[i,i] = D.diag[i]
+    end
+    LowerTriangular(B.data)
+end
+function lmul!(D::Diagonal, B::UnitUpperTriangular)
+    lmul!(D, B.data)
+    for i = 1:size(B, 1)
+        B.data[i,i] = D.diag[i]
+    end
+    UpperTriangular(B.data)
 end
 
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
