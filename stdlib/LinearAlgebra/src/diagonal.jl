@@ -208,15 +208,15 @@ function _muldiag_size_check(A, B)
 end
 function _muldiag_size_check(C, A, B)
     _muldiag_size_check(A, B)
-    @noinline throw_dimerr(::AbstractMatrix, szC, szA) = throw(DimensionMismatch("output matrix has size: $szC, but should have size $szA"))
-    @noinline throw_dimerr(::AbstractVector, szC, szA) = throw(DimensionMismatch("output matrix has size: $szC, but should have size $szA"))
+    # the output matrix should have the same size as the non-diagonal input matrix or vector
+    @noinline throw_dimerr(szC, szA) = throw(DimensionMismatch("output matrix has size: $szC, but should have size $szA"))
     _size_check_out(C, ::Diagonal, A) = _size_check_out(C, A)
     _size_check_out(C, A, ::Diagonal) = _size_check_out(C, A)
     _size_check_out(C, A::Diagonal, ::Diagonal) = _size_check_out(C, A)
     function _size_check_out(C, A)
         szA = size(A)
         szC = size(C)
-        szA == szC || throw_dimerr(B, szC, szA)
+        szA == szC || throw_dimerr(szC, szA)
         return nothing
     end
     _size_check_out(C, A, B)
@@ -345,7 +345,7 @@ end
     end
     return out
 end
-
+# only needed for ambiguity resolution, as mul! is explicitly defined for these arguments
 @inline __muldiag!(out, D1::Diagonal, D2::Diagonal, alpha, beta) =
     mul!(out, D1, D2, alpha, beta)
 
@@ -354,7 +354,6 @@ end
     __muldiag!(out, A, B, alpha, beta)
     return out
 end
-@inline _muldiag!(out, A::Diagonal, B::Diagonal, alpha, beta) = _muldiag!(out, A, B, alpha, beta)
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
 @inline mul!(out::AbstractVector, D::Diagonal, V::AbstractVector, alpha::Number, beta::Number) =
