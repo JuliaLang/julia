@@ -328,38 +328,23 @@ end
 rmul!(A::Diagonal, B::Diagonal) = Diagonal(A.diag .*= B.diag)
 lmul!(A::Diagonal, B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
 
-@inline __muldiag!(out, D::Diagonal, B) = out .= D.diag .* B
-@inline __muldiag!(out, A, D::Diagonal) = out .= A .* permutedims(D.diag)
-@inline __muldiag!(out, D1::Diagonal, D2::Diagonal) = mul!(out, D1, D2, true, false)
-@inline function _muldiag!(out, A, B)
-    _muldiag_size_check(out, A, B)
-    __muldiag!(out, A, B)
+@inline function __muldiag!(out, D::Diagonal, B, alpha, beta)
+    if iszero(beta)
+        out .= D.diag .* B .* alpha
+    else
+        out .= D.diag .* B .* alpha .+ out .* beta
+    end
     return out
 end
-@inline _muldiag!(out, D1::Diagonal, D2::Diagonal) = __muldiag!(out, D1, D2)
 
-@inline mul!(out::AbstractMatrix, Da::Diagonal, Db::Diagonal) = _muldiag!(out, Da, Db)
-
-@inline mul!(out::AbstractVector, A::Diagonal, B::AbstractVector) = _muldiag!(out, A, B)
-@inline mul!(out::AbstractMatrix, A::Diagonal, B::AbstractMatrix) = _muldiag!(out, A, B)
-@inline mul!(out::AbstractMatrix, A::Diagonal, B::Adjoint{<:Any,<:AbstractVecOrMat}) =
-    _muldiag!(out, A, B)
-@inline mul!(out::AbstractMatrix, A::Diagonal, B::Transpose{<:Any,<:AbstractVecOrMat}) =
-    _muldiag!(out, A, B)
-
-@inline mul!(out::AbstractMatrix, B::AbstractTriangular, D::Diagonal) =
-    _muldiag!(out, B, D)
-@inline mul!(out::AbstractMatrix, B::AbstractMatrix, D::Diagonal) = _muldiag!(out, B, D)
-@inline mul!(out::AbstractMatrix, B::Adjoint{<:Any,<:AbstractVecOrMat}, D::Diagonal) =
-    _muldiag!(out, B, D)
-@inline mul!(out::AbstractMatrix, B::Transpose{<:Any,<:AbstractVecOrMat}, D::Diagonal) =
-    _muldiag!(out, B, D)
-
-@inline __muldiag!(out, D::Diagonal, B, alpha, beta) =
-    out .= (D.diag .* B) .*ₛ alpha .+ out .*ₛ beta
-
-@inline __muldiag!(out, A, D::Diagonal, alpha, beta) =
-    out .= (A .* permutedims(D.diag)) .*ₛ alpha .+ out .*ₛ beta
+@inline function __muldiag!(out, A, D::Diagonal, alpha, beta)
+    if iszero(beta)
+        out .= A .* permutedims(D.diag) .* alpha
+    else
+        out .= A .* permutedims(D.diag) .* alpha .+ out .* beta
+    end
+    return out
+end
 
 @inline __muldiag!(out, D1::Diagonal, D2::Diagonal, alpha, beta) =
     mul!(out, D1, D2, alpha, beta)
