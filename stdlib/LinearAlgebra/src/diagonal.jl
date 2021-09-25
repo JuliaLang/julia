@@ -349,8 +349,7 @@ end
 
 _promote_dotop(f, args...) = promote_op(f, eltype.(args)...)
 
-(/)(A::AbstractVecOrMat, D::Diagonal) =
-    _rdiv!(similar(A, _promote_dotop(/, A, D), size(A)), A, D)
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, _promote_dotop(/, A, D), size(A)), A, D)
 
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
@@ -371,8 +370,7 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     B
 end
 
-(\)(D::Diagonal, B::AbstractVecOrMat) =
-    ldiv!(similar(B, _promote_dotop(\, D, B), size(B)), D, B)
+\(D::Diagonal, B::AbstractVecOrMat) = ldiv!(similar(B, _promote_dotop(\, D, B), size(B)), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -387,7 +385,7 @@ function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
     B .= D.diag .\ A
 end
 
-#Optimizations for \ / between Diagonals
+# Optimizations for \, / between Diagonals
 \(D::Diagonal, B::Diagonal) = ldiv!(similar(B, _promote_dotop(\, D, B)), D, B)
 /(A::Diagonal, D::Diagonal) = _rdiv!(similar(A, _promote_dotop(/, A, D)), A, D)
 function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
