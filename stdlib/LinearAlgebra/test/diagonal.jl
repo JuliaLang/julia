@@ -204,8 +204,8 @@ Random.seed!(1)
         @test D2*D' ≈ Array(D2)*Array(D)'
 
         #division of two Diagonals
-        @test D/D2 ≈ Diagonal(D.diag./D2.diag)
-        @test D\D2 ≈ Diagonal(D2.diag./D.diag)
+        @test (D/D2)::Diagonal ≈ Diagonal(D.diag./D2.diag)
+        @test (D\D2)::Diagonal ≈ Diagonal(D2.diag./D.diag)
 
         # QR \ Diagonal
         A = rand(elty, n, n)
