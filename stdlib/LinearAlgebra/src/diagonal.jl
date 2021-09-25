@@ -368,12 +368,14 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     end
     B
 end
+# Optimization for Diagonal / Diagonal
 function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
     n, k = length(Db.diag), length(Db.diag)
     n == k || throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
-    j = findfirst(iszero, D.diag)
+    j = findfirst(iszero, Da.diag)
     isnothing(j) || throw(SingularException(j))
     Dc.diag .= Db.diag ./ Da.diag
+    Dc
 end
 
 (\)(D::Diagonal, B::AbstractVecOrMat) =
