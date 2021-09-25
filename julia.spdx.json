@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-01fb18d8-38a0-42f5-b134-75f2c081757e",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-31839ae0-c94d-4f18-ba27-6aa6aa013d87",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-25T04:04:32Z"
+        "created": "2021-09-25T04:35:55Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -189,6 +189,18 @@
             "summary": "The LLVM Project is a collection of modular and reusable compiler and toolchain technologies."
         },
         {
+            "name": "utf8proc",
+            "SPDXID": "SPDXRef-utf8proc",
+            "downloadLocation": "git+https://github.com/JuliaLang/utf8proc.git",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/JuliaStrings/utf8proc",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/utf8proc.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright © 2014-2019 by Steven G. Johnson, Jiahao Chen, Tony Kelman, Jonas Fonseca, and other contributors listed in the git history.",
+            "summary": "utf8proc is a small, clean C library that provides Unicode normalization, case-folding, and other operations for data in the UTF-8 encoding."
+        },
+        {
             "name": "zlib",
             "SPDXID": "SPDXRef-zlib",
             "downloadLocation": "git+https://github.com/madler/zlib.git",
@@ -277,6 +289,11 @@
         },
         {
             "spdxElementId": "SPDXRef-llvm",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-utf8proc",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
