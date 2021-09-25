@@ -348,8 +348,7 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
 end
 
 (/)(A::AbstractVecOrMat, D::Diagonal) =
-    _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D)), size(A)), A, D)
-(/)(Da::Diagonal, Db::Diagonal) = Diagonal(vec(permutedims(Da.diag) / Db))
+    _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D))), A, D)
 
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
@@ -362,21 +361,26 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     end
     @inbounds for j in 1:n
         ddj = dd[j]
-        if iszero(ddj)
-            throw(SingularException(j))
-        end
+        iszero(ddj) && throw(SingularException(j))
         for i in 1:m
             B[i, j] = A[i, j] / ddj
         end
     end
     B
 end
+function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
+    n, k = length(Db.diag), length(Db.diag)
+    n == k || throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
+    j = findfirst(iszero, D.diag)
+    isnothing(j) || throw(SingularException(j))
+    Dc.diag .= Db.diag ./ Da.diag
+end
 
 (\)(D::Diagonal, B::AbstractVecOrMat) =
-    ldiv!(similar(B, promote_op(\, eltype(D), eltype(B)), size(B)), D, B)
-(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da \ Db.diag)
+    ldiv!(similar(B, promote_op(\, eltype(D), eltype(B))), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = ldiv!(B, D, B)
+ldiv!(Dc::Diagonal, Da::Diagonal, Db::Diagonal) = Diagonal(ldiv!(Dc.diag, Da, Db.diag))
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
     require_one_based_indexing(A, B)
     d = length(D.diag)
