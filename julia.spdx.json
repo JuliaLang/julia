@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-357ee816-b115-4a3f-8a3d-73ec4e75b3ee",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-01fb18d8-38a0-42f5-b134-75f2c081757e",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-21T03:57:34Z"
+        "created": "2021-09-25T04:04:32Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -177,6 +177,18 @@
             "comment": "The Julia project has forked libuv and maintains their own repository of the code"
         },
         {
+            "name": "llvm",
+            "SPDXID": "SPDXRef-llvm",
+            "downloadLocation": "git+https://github.com/llvm/llvm-project.git",
+            "filesAnalyzed": false,
+            "homepage": "https://llvm.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "Apache-2.0 WITH LLVM-exception",
+            "licenseDeclared": "Apache-2.0 WITH LLVM-exception",
+            "copyrightText": "The LLVM project does not collect copyright assignments, which means that the copyright for the code in the project is held by the respective contributors",
+            "summary": "The LLVM Project is a collection of modular and reusable compiler and toolchain technologies."
+        },
+        {
             "name": "zlib",
             "SPDXID": "SPDXRef-zlib",
             "downloadLocation": "git+https://github.com/madler/zlib.git",
@@ -260,6 +272,11 @@
         },
         {
             "spdxElementId": "SPDXRef-libuv",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-llvm",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
