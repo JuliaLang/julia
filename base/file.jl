@@ -8,6 +8,7 @@ export
     chown,
     cp,
     cptree,
+    diskstat,
     hardlink,
     mkdir,
     mkpath,
@@ -1195,30 +1196,16 @@ struct StatFS
     fspare2::UInt128
 end
 
-struct DiskStats
+"""
+    DiskStat
+
+Stores the total size, available space, and currently used space of the disk in bytes.
+Populate by calling `diskstat`.
+"""
+struct DiskStat
     total::Int
     available::Int
-end
-
-function DiskStats(path::AbstractString)
-    ispath(path) || throw(ArgumentError("'$path' is not a file or directory."))
-
-    # Call libuv's cross-platform statfs implementation
-    req = Ref{NTuple{Int(_sizeof_uv_fs), UInt8}}()
-    err = ccall(:uv_fs_statfs, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
-                C_NULL, req, path, C_NULL)
-    err < 0 && uv_error("statfs($(repr(path)))", err)
-    statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
-
-    stats = unsafe_load(reinterpret(Ptr{StatFS}, statfs_ptr))
-    total = Int(stats.bsize * stats.blocks)
-    available = Int(stats.bsize * stats.bavail)
-    disk_stats = DiskStats(total, available)
-
-    # Cleanup
-    uv_fs_req_cleanup(req)
-
-    return disk_stats
+    used::Int
 end
 
 """
@@ -1231,43 +1218,23 @@ working directory are returned.
 !!! compat "Julia 1.8"
     This method was added in Julia 1.8.
 """
-diskstat(path::AbstractString=pwd()) = DiskStats(path)
+function diskstat(path::AbstractString=pwd())
+    ispath(path) || throw(ArgumentError("'$path' is not a file or directory."))
 
-"""
-    disk_total(path=pwd())
+    # Call libuv's cross-platform statfs implementation
+    req = Ref{NTuple{Int(_sizeof_uv_fs), UInt8}}()
+    err = ccall(:uv_fs_statfs, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                C_NULL, req, path, C_NULL)
+    err < 0 && uv_error("statfs($(repr(path)))", err)
+    statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
 
-Returns the size in bytes of the disk that contains the file or directory pointed at by
-`path`. If no argument is passed, the size of the disk that contains the current working
-directory is returned.
+    stats = unsafe_load(reinterpret(Ptr{StatFS}, statfs_ptr))
+    total = Int(stats.bsize * stats.blocks)
+    available = Int(stats.bsize * stats.bavail)
+    disk_stats = DiskStat(total, available, total - available)
 
-!!! compat "Julia 1.8"
-    This method was added in Julia 1.8.
-"""
-disk_total(path::AbstractString=pwd()) = diskstat(path).total
+    # Cleanup
+    uv_fs_req_cleanup(req)
 
-"""
-    disk_available(path=pwd())
-
-Returns the available space in bytes on the disk that contains the file or directory pointed
-at by `path`. If no argument is passed, the available space on the disk that contains the
-current working directory is returned.
-
-!!! compat "Julia 1.8"
-    This method was added in Julia 1.8.
-"""
-disk_available(path::AbstractString=pwd()) = diskstat(path).available
-
-"""
-    disk_used(path=pwd())
-
-Returns the used space in bytes of the disk that contains the file or directory pointed
-at by `path`. If no argument is passed, the used space of the disk that contains the
-current working directory is returned.
-
-!!! compat "Julia 1.8"
-    This method was added in Julia 1.8.
-"""
-function disk_used(path::AbstractString=pwd())
-    disk_stats = diskstat(path)
-    return disk_stats.total - disk_stats.available
+    return disk_stats
 end

@@ -1693,19 +1693,11 @@ end
     end
 end
 
-@testset "Disk stats work" begin
-    @test disk_total() == disk_total(pwd())
-    @test disk_used() == disk_used(pwd())
-    @test disk_available() == disk_available(pwd())
+@testset "diskstat() works" begin
+    dstat = diskstat()
 
-    # Sanity check assuming disk is smaller than 16TB
-    TB = 2^40
-    @test disk_total() < 16TB
-
-    @test disk_used() < disk_total()
-    @test disk_available() < disk_total()
-    @test disk_used() + disk_available() <= disk_total()
-
-    stats = diskstat()
-    @test stats.available < stats.total
+    # Sanity check assuming disk is smaller than 32TB
+    TB = 2^41
+    @test dstat.total < 32TB
+    @test dstat.used + dstat.available == dstat.total
 end
