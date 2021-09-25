@@ -347,8 +347,10 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
     return C
 end
 
+_promote_dotop(f, args...) = promote_op(f, eltype.(args)...)
+
 (/)(A::AbstractVecOrMat, D::Diagonal) =
-    _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D))), A, D)
+    _rdiv!(similar(A, _promote_dotop(/, A, D), size(A)), A, D)
 
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
@@ -368,21 +370,11 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     end
     B
 end
-# Optimization for Diagonal / Diagonal
-function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
-    n, k = length(Db.diag), length(Db.diag)
-    n == k || throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
-    j = findfirst(iszero, Da.diag)
-    isnothing(j) || throw(SingularException(j))
-    Dc.diag .= Db.diag ./ Da.diag
-    Dc
-end
 
 (\)(D::Diagonal, B::AbstractVecOrMat) =
-    ldiv!(similar(B, promote_op(\, eltype(D), eltype(B))), D, B)
+    ldiv!(similar(B, _promote_dotop(\, D, B), size(B)), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = ldiv!(B, D, B)
-ldiv!(Dc::Diagonal, Da::Diagonal, Db::Diagonal) = Diagonal(ldiv!(Dc.diag, Da, Db.diag))
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
     require_one_based_indexing(A, B)
     d = length(D.diag)
@@ -394,6 +386,19 @@ function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
     isnothing(j) || throw(SingularException(j))
     B .= D.diag .\ A
 end
+
+#Optimizations for \ / between Diagonals
+\(D::Diagonal, B::Diagonal) = ldiv!(similar(B, _promote_dotop(\, D, B)), D, B)
+/(A::Diagonal, D::Diagonal) = _rdiv!(similar(A, _promote_dotop(/, A, D)), A, D)
+function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
+    n, k = length(Db.diag), length(Db.diag)
+    n == k || throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
+    j = findfirst(iszero, Da.diag)
+    isnothing(j) || throw(SingularException(j))
+    Dc.diag .= Db.diag ./ Da.diag
+    Dc
+end
+ldiv!(Dc::Diagonal, Da::Diagonal, Db::Diagonal) = Diagonal(ldiv!(Dc.diag, Da, Db.diag))
 
 # (l/r)mul!, l/rdiv!, *, / and \ Optimization for AbstractTriangular.
 # These functions are generally more efficient if we calculate the whole data field.
