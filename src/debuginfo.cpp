@@ -1477,6 +1477,13 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     jl_profile_atomic([&]() {
         __register_frame(Addr);
     });
+
+    // Now first count the number of FDEs
+    size_t nentries = 0;
+    processFDEs((char*)Addr, Size, [&](const char*){ nentries++; });
+    if (nentries == 0)
+        return;
+
     // Our unwinder
     unw_dyn_info_t *di = new unw_dyn_info_t;
     // In a shared library, this is set to the address of the PLT.
@@ -1484,13 +1491,10 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     // not seem to be used on our supported architectures.
     di->gp = 0;
     // I'm not a great fan of the naming of this constant, but it means the
-    // right thing, which is a table of FDEs and ips.
+    // right thing, which is a table of FDEs and IPs.
     di->format = UNW_INFO_FORMAT_IP_OFFSET;
     di->u.rti.name_ptr = 0;
     di->u.rti.segbase = (unw_word_t)Addr;
-    // Now first count the number of FDEs
-    size_t nentries = 0;
-    processFDEs((char*)Addr, Size, [&](const char*){ nentries++; });
 
     uintptr_t start_ip = (uintptr_t)-1;
     uintptr_t end_ip = 0;

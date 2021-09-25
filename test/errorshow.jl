@@ -728,7 +728,7 @@ end
 
 # Test that implementation detail of include() is hidden from the user by default
 let bt = try
-        include("testhelpers/include_error.jl")
+        @noinline include("testhelpers/include_error.jl")
     catch
         catch_backtrace()
     end
@@ -740,7 +740,7 @@ end
 # Test backtrace printing
 module B
     module C
-        f(x; y=2.0) = error()
+        @noinline f(x; y=2.0) = error()
     end
     module D
         import ..C: f
@@ -749,7 +749,8 @@ module B
 end
 
 @testset "backtrace" begin
-    bt = try B.D.g()
+    bt = try
+        B.D.g()
     catch
         catch_backtrace()
     end
@@ -777,7 +778,8 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
     pair_repeater_b() = pair_repeater_a()
 
     @testset "repeated stack frames" begin
-        let bt = try single_repeater()
+        let bt = try
+                single_repeater()
             catch
                 catch_backtrace()
             end
@@ -785,7 +787,8 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
             @test occursin(r"repeats \d+ times", bt_str)
         end
 
-        let bt = try pair_repeater_a()
+        let bt = try
+                pair_repeater_a()
             catch
                 catch_backtrace()
             end

@@ -205,8 +205,10 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 if (fe_mod->istopmod && !strcmp(jl_symbol_name(fe_sym), "getproperty") && jl_is_symbol(s)) {
                     if (eager_resolve || jl_binding_resolved_p(me_mod, me_sym)) {
                         jl_binding_t *b = jl_get_binding(me_mod, me_sym);
-                        if (b && b->constp && b->value && jl_is_module(b->value)) {
-                            return jl_module_globalref((jl_module_t*)b->value, (jl_sym_t*)s);
+                        if (b && b->constp) {
+                            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
+                            if (v && jl_is_module(v))
+                                return jl_module_globalref((jl_module_t*)v, (jl_sym_t*)s);
                         }
                     }
                 }
@@ -220,7 +222,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 if (jl_binding_resolved_p(fe_mod, fe_sym)) {
                     // look at some known called functions
                     jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
-                    if (b && b->constp && b->value == jl_builtin_tuple) {
+                    if (b && b->constp && jl_atomic_load_relaxed(&b->value) == jl_builtin_tuple) {
                         size_t j;
                         for (j = 1; j < nargs; j++) {
                             if (!jl_is_quotenode(jl_exprarg(e, j)))
@@ -416,7 +418,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->uninferred = NULL;
     li->backedges = NULL;
     li->callbacks = NULL;
-    li->cache = NULL;
+    jl_atomic_store_relaxed(&li->cache, NULL);
     li->inInference = 0;
     return li;
 }
@@ -724,8 +726,8 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     jl_task_t *ct = jl_current_task;
     jl_method_t *m =
         (jl_method_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_t), jl_method_type);
-    m->specializations = jl_emptysvec;
-    m->speckeyset = (jl_array_t*)jl_an_empty_vec_any;
+    jl_atomic_store_relaxed(&m->specializations, jl_emptysvec);
+    jl_atomic_store_relaxed(&m->speckeyset, (jl_array_t*)jl_an_empty_vec_any);
     m->sig = NULL;
     m->slot_syms = NULL;
     m->roots = NULL;
@@ -733,7 +735,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->module = module;
     m->external_mt = NULL;
     m->source = NULL;
-    m->unspecialized = NULL;
+    jl_atomic_store_relaxed(&m->unspecialized, NULL);
     m->generator = NULL;
     m->name = NULL;
     m->file = empty_sym;
@@ -741,7 +743,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->called = 0xff;
     m->nospecialize = module->nospecialize;
     m->nkw = 0;
-    m->invokes = NULL;
+    jl_atomic_store_relaxed(&m->invokes, NULL);
     m->recursion_relation = NULL;
     m->isva = 0;
     m->nargs = 0;
@@ -784,24 +786,25 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
 // empty generic function def
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_module_t *module,
-                                                 jl_value_t **bp, jl_value_t *bp_owner,
+                                                 _Atomic(jl_value_t*) *bp,
+                                                 jl_value_t *bp_owner,
                                                  jl_binding_t *bnd)
 {
     jl_value_t *gf = NULL;
 
     assert(name && bp);
-    if (bnd && bnd->value != NULL && !bnd->constp)
+    if (bnd && jl_atomic_load_relaxed(&bnd->value) != NULL && !bnd->constp)
         jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(bnd->name));
-    if (*bp != NULL) {
-        gf = *bp;
+    gf = jl_atomic_load_relaxed(bp);
+    if (gf != NULL) {
         if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)) && !jl_is_type(gf))
             jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
     }
     if (bnd)
         bnd->constp = 1;
-    if (*bp == NULL) {
+    if (gf == NULL) {
         gf = (jl_value_t*)jl_new_generic_function(name, module);
-        *bp = gf;
+        jl_atomic_store(bp, gf); // TODO: fix constp assignment data race
         if (bp_owner) jl_gc_wb(bp_owner, gf);
     }
     return gf;

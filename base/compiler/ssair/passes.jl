@@ -19,37 +19,28 @@ struct SSADefUse
 end
 SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
-try_compute_fieldidx_expr(typ::DataType, expr::Expr) = try_compute_fieldidx_args(typ, expr.args)
-function try_compute_fieldidx_args(typ::DataType, args::Vector{Any})
-    field = args[3]
-    isa(field, QuoteNode) && (field = field.value)
+function try_compute_field_stmt(compact::IncrementalCompact, stmt::Expr)
+    field = stmt.args[3]
+    # fields are usually literals, handle them manually
+    if isa(field, QuoteNode)
+        field = field.value
+    elseif isa(field, Int)
+    # try to resolve other constants, e.g. global reference
+    else
+        field = compact_exprtype(compact, field)
+        if isa(field, Const)
+            field = field.val
+        else
+            return nothing
+        end
+    end
     isa(field, Union{Int, Symbol}) || return nothing
-    return try_compute_fieldidx(typ, field)
+    return field
 end
 
-function lift_defuse(cfg::CFG, ssa::SSADefUse)
-    # We remove from `uses` any block where all uses are dominated
-    # by a def. This prevents insertion of dead phi nodes at the top
-    # of such a block if that block happens to be in a loop
-    ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in ssa.uses]
-    for x in ssa.defs
-        push!(ordered, (x, block_for_inst(cfg, x), false))
-    end
-    ordered = sort(ordered, by=x->x[1])
-    bb_defs = Int[]
-    bb_uses = Int[]
-    last_bb = last_def_bb = 0
-    for (_, bb, is_use) in ordered
-        if bb != last_bb && is_use
-            push!(bb_uses, bb)
-        end
-        last_bb = bb
-        if last_def_bb != bb && !is_use
-            push!(bb_defs, bb)
-            last_def_bb = bb
-        end
-    end
-    SSADefUse(bb_uses, bb_defs, Int[])
+function try_compute_fieldidx_stmt(compact::IncrementalCompact, stmt::Expr, typ::DataType)
+    field = try_compute_field_stmt(compact, stmt)
+    return try_compute_fieldidx(typ, field)
 end
 
 function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
@@ -661,10 +652,8 @@ function getfield_elim_pass!(ir::IRCode)
         else
             continue
         end
-        ## Normalize the field argument to getfield/setfield
-        field = stmt.args[3]
-        isa(field, QuoteNode) && (field = field.value)
-        isa(field, Union{Int, Symbol}) || continue
+        field = try_compute_field_stmt(compact, stmt)
+        field === nothing && continue
 
         struct_typ = unwrap_unionall(widenconst(compact_exprtype(compact, stmt.args[2])))
         if isa(struct_typ, Union) && struct_typ <: Tuple
@@ -804,13 +793,13 @@ function getfield_elim_pass!(ir::IRCode)
             # it would have been deleted. That's fine, just ignore
             # the use in that case.
             stmt === nothing && continue
-            field = try_compute_fieldidx_expr(typ, stmt)
+            field = try_compute_fieldidx_stmt(compact, stmt::Expr, typ)
             field === nothing && (ok = false; break)
             push!(fielddefuse[field].uses, use)
         end
         ok || continue
         for use in defuse.defs
-            field = try_compute_fieldidx_expr(typ, ir[SSAValue(use)])
+            field = try_compute_fieldidx_stmt(compact, ir[SSAValue(use)]::Expr, typ)
             field === nothing && (ok = false; break)
             push!(fielddefuse[field].defs, use)
         end
@@ -1209,12 +1198,12 @@ function cfg_simplify!(ir::IRCode)
         # Compute (renamed) successors and predecessors given (renamed) block
         function compute_succs(i)
             orig_bb = follow_merged_succ(result_bbs[i])
-            return map(i -> bb_rename_succ[i], bbs[orig_bb].succs)
+            return Int[bb_rename_succ[i] for i in bbs[orig_bb].succs]
         end
         function compute_preds(i)
             orig_bb = result_bbs[i]
             preds = bbs[orig_bb].preds
-            return map(pred -> bb_rename_pred[pred], preds)
+            return Int[bb_rename_pred[pred] for pred in preds]
         end
 
         BasicBlock[

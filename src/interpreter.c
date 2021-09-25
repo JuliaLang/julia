@@ -37,7 +37,7 @@ typedef struct {
   JL_GCC_IGNORE_STOP
 #endif
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 
 extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 
@@ -93,7 +93,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
         }
         jl_value_t *bp_owner = (jl_value_t*)modu;
         jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
-        jl_value_t **bp = &b->value;
+        _Atomic(jl_value_t*) *bp = &b->value;
         jl_value_t *gf = jl_generic_function_def(b->name, b->owner, bp, bp_owner, b);
         return gf;
     }

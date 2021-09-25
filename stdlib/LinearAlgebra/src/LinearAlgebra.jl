@@ -586,9 +586,6 @@ function __init__()
             BLAS.lbt_forward(liblapack_path)
         end
         BLAS.check()
-        Threads.resize_nthreads!(Abuf)
-        Threads.resize_nthreads!(Bbuf)
-        Threads.resize_nthreads!(Cbuf)
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")
     end

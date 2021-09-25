@@ -5,7 +5,7 @@ Julia v1.8 Release Notes
 New language features
 ---------------------
 
-* `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
+* `Module(:name, false, false)` can be used to create a `module` that contains no names (it does not import `Base` or `Core` and does not contain a reference to itself). ([#40110, #42154])
 * `@inline` and `@noinline` annotations can be used within a function body to give an extra
   hint about the inlining cost to the compiler. ([#41312])
 * `@inline` and `@noinline` annotations can now be applied to a function callsite or block
@@ -16,6 +16,9 @@ New language features
 Language changes
 ----------------
 
+* Newly created Task objects (`@spawn`, `@async`, etc.) now adopt the world-age for methods from their parent
+  Task upon creation, instead of using the global latest world at start. This is done to enable inference to
+  eventually optimize these calls. Places that wish for the old behavior may use `Base.invokelatest`. ([#41449])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -78,7 +81,7 @@ Standard library changes
 #### Random
 
 #### REPL
-
+* `RadioMenu` now supports optional `keybindings` to directly select options ([#41576]).
 * ` ?(x, y` followed by TAB displays all methods that can be called
   with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
   `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one

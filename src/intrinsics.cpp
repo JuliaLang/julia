@@ -304,9 +304,10 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
         unboxed = emit_bitcast(ctx, unboxed, to);
     }
     else if (!ty->isIntOrPtrTy() && !ty->isFloatingPointTy()) {
+#ifndef JL_NDEBUG
         const DataLayout &DL = jl_data_layout;
-        unsigned nb = DL.getTypeSizeInBits(ty);
-        assert(nb == DL.getTypeSizeInBits(to));
+#endif
+        assert(DL.getTypeSizeInBits(ty) == DL.getTypeSizeInBits(to));
         AllocaInst *cast = ctx.builder.CreateAlloca(ty);
         ctx.builder.CreateStore(unboxed, cast);
         unboxed = ctx.builder.CreateLoad(to, ctx.builder.CreateBitCast(cast, to->getPointerTo()));
@@ -1075,6 +1076,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     switch (f) {
     case arraylen: {
+        assert(nargs == 1);
         const jl_cgval_t &x = argv[0];
         jl_value_t *typ = jl_unwrap_unionall(x.typ);
         if (!jl_is_datatype(typ) || ((jl_datatype_t*)typ)->name != jl_array_typename)
@@ -1082,12 +1084,16 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return mark_julia_type(ctx, emit_arraylen(ctx, x), false, jl_long_type);
     }
     case pointerref:
+        assert(nargs == 3);
         return emit_pointerref(ctx, argv);
     case pointerset:
+        assert(nargs == 4);
         return emit_pointerset(ctx, argv);
     case atomic_fence:
+        assert(nargs == 1);
         return emit_atomicfence(ctx, argv);
     case atomic_pointerref:
+        assert(nargs == 2);
         return emit_atomic_pointerref(ctx, argv);
     case atomic_pointerset:
     case atomic_pointerswap:
@@ -1095,27 +1101,38 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     case atomic_pointerreplace:
         return emit_atomic_pointerop(ctx, f, argv, nargs, nullptr);
     case bitcast:
+        assert(nargs == 2);
         return generic_bitcast(ctx, argv);
     case trunc_int:
+        assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::Trunc, argv, true, true);
     case sext_int:
+        assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::SExt, argv, true, true);
     case zext_int:
+        assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::ZExt, argv, true, true);
     case uitofp:
+        assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::UIToFP, argv, false, true);
     case sitofp:
+        assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::SIToFP, argv, false, true);
     case fptoui:
+        assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPToUI, argv, true, false);
     case fptosi:
+        assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPToSI, argv, true, false);
     case fptrunc:
+        assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPTrunc, argv, false, false);
     case fpext:
+        assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPExt, argv, false, false);
 
     case not_int: {
+        assert(nargs == 1);
         const jl_cgval_t &x = argv[0];
         if (!jl_is_primitivetype(x.typ))
             return emit_runtime_call(ctx, f, argv, nargs);

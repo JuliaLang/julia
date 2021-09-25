@@ -883,6 +883,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         return Bottom # can't index fields with Bool
     end
     if !isa(name, Const)
+        name = widenconst(name)
         if !(Int <: name || Symbol <: name)
             return Bottom
         end

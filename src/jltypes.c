@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
+_Atomic(jl_value_t*) cmpswap_names JL_GLOBALLY_ROOTED;
 
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
@@ -625,7 +625,7 @@ static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t
     if (sz == 0)
         return NULL;
     size_t maxprobe = max_probe(sz);
-    jl_datatype_t **tab = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *tab = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t index = h2index(hv, sz);
     size_t orig = index;
     size_t iter = 0;
@@ -648,7 +648,7 @@ static jl_datatype_t *lookup_type_setvalue(jl_svec_t *cache, jl_value_t *key1, j
     if (sz == 0)
         return NULL;
     size_t maxprobe = max_probe(sz);
-    jl_datatype_t **tab = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *tab = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t index = h2index(hv, sz);
     size_t orig = index;
     size_t iter = 0;
@@ -671,7 +671,7 @@ static ssize_t lookup_type_idx_linear(jl_svec_t *cache, jl_value_t **key, size_t
 {
     if (n == 0)
         return -1;
-    jl_datatype_t **data = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *data = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t cl = jl_svec_len(cache);
     ssize_t i;
     for (i = 0; i < cl; i++) {
@@ -688,7 +688,7 @@ static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, j
 {
     if (n == 0)
         return -1;
-    jl_datatype_t **data = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *data = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t cl = jl_svec_len(cache);
     ssize_t i;
     for (i = 0; i < cl; i++) {
@@ -732,9 +732,9 @@ static jl_value_t *lookup_typevalue(jl_typename_t *tn, jl_value_t *key1, jl_valu
     }
 }
 
-static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv)
+static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, int atomic)
 {
-    jl_datatype_t **tab = (jl_datatype_t**)jl_svec_data(a);
+    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)jl_svec_data(a);
     size_t sz = jl_svec_len(a);
     if (sz <= 1)
         return 0;
@@ -744,9 +744,12 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv)
     orig = index;
     size_t maxprobe = max_probe(sz);
     do {
-        jl_value_t *tab_i = (jl_value_t*)tab[index];
+        jl_value_t *tab_i = jl_atomic_load_relaxed(&tab[index]);
         if (tab_i == NULL || tab_i == jl_nothing) {
-            jl_atomic_store_release(&tab[index], val);
+            if (atomic)
+                jl_atomic_store_release(&tab[index], (jl_value_t*)val);
+            else
+                jl_atomic_store_relaxed(&tab[index], (jl_value_t*)val);
             jl_gc_wb(a, val);
             return 1;
         }
@@ -761,10 +764,10 @@ static jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz);
 
 static void cache_insert_type_set(jl_datatype_t *val, uint_t hv)
 {
-    jl_svec_t *a = val->name->cache;
+    jl_svec_t *a = jl_atomic_load_relaxed(&val->name->cache);
     while (1) {
         JL_GC_PROMISE_ROOTED(a);
-        if (cache_insert_type_set_(a, val, hv))
+        if (cache_insert_type_set_(a, val, hv, 1))
             return;
 
         /* table full */
@@ -787,17 +790,17 @@ static void cache_insert_type_set(jl_datatype_t *val, uint_t hv)
 
 static jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz)
 {
-    jl_datatype_t **ol = (jl_datatype_t**)jl_svec_data(a);
+    jl_value_t **ol = jl_svec_data(a);
     size_t sz = jl_svec_len(a);
     while (1) {
         size_t i;
         jl_svec_t *newa = jl_alloc_svec(newsz);
         JL_GC_PUSH1(&newa);
         for (i = 0; i < sz; i += 1) {
-            jl_datatype_t *val = ol[i];
-            if (val != NULL && (jl_value_t*)val != jl_nothing) {
-                uint_t hv = val->hash;
-                if (!cache_insert_type_set_(newa, val, hv)) {
+            jl_value_t *val = ol[i];
+            if (val != NULL && val != jl_nothing) {
+                uint_t hv = ((jl_datatype_t*)val)->hash;
+                if (!cache_insert_type_set_(newa, (jl_datatype_t*)val, hv, 0)) {
                     break;
                 }
             }
@@ -811,7 +814,7 @@ static jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz)
 
 static void cache_insert_type_linear(jl_datatype_t *type, ssize_t insert_at)
 {
-    jl_svec_t *cache = type->name->linearcache;
+    jl_svec_t *cache = jl_atomic_load_relaxed(&type->name->linearcache);
     assert(jl_is_svec(cache));
     size_t n = jl_svec_len(cache);
     if (n == 0 || jl_svecref(cache, n - 1) != NULL) {
@@ -848,7 +851,7 @@ void jl_cache_type_(jl_datatype_t *type)
         cache_insert_type_set(type, hv);
     }
     else {
-        ssize_t idx = lookup_type_idx_linear(type->name->linearcache, key, n);
+        ssize_t idx = lookup_type_idx_linear(jl_atomic_load_relaxed(&type->name->linearcache), key, n);
         assert(idx < 0);
         cache_insert_type_linear(type, ~idx);
     }
@@ -2237,8 +2240,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_array_uint8_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint8_type, jl_box_long(1));
     jl_array_int32_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_int32_type, jl_box_long(1));
     jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
-    jl_nonfunction_mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
-    jl_type_type_mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
+    jl_atomic_store_relaxed(&jl_nonfunction_mt->leafcache, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&jl_type_type_mt->leafcache, (jl_array_t*)jl_an_empty_vec_any);
 
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"), core,

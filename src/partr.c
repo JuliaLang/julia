@@ -60,7 +60,7 @@ typedef struct taskheap_tag {
     jl_mutex_t lock;
     jl_task_t **tasks;
     int32_t ntasks;
-    int16_t prio;
+    _Atomic(int16_t) prio;
 } taskheap_t;
 
 /* multiqueue parameters */
@@ -86,7 +86,7 @@ static inline void multiq_init(void)
         jl_mutex_init(&heaps[i].lock);
         heaps[i].tasks = (jl_task_t **)calloc(tasks_per_heap, sizeof(jl_task_t*));
         heaps[i].ntasks = 0;
-        heaps[i].prio = INT16_MAX;
+        jl_atomic_store_relaxed(&heaps[i].prio, INT16_MAX);
     }
     unbias_cong(heap_p, &cong_unbias);
 }
@@ -113,7 +113,7 @@ static inline void sift_down(taskheap_t *heap, int32_t idx)
                 child < tasks_per_heap && child <= heap_d*idx + heap_d;
                 ++child) {
             if (heap->tasks[child]
-                    &&  heap->tasks[child]->prio < heap->tasks[idx]->prio) {
+                    && heap->tasks[child]->prio < heap->tasks[idx]->prio) {
                 jl_task_t *t = heap->tasks[idx];
                 heap->tasks[idx] = heap->tasks[child];
                 heap->tasks[child] = t;
@@ -142,9 +142,9 @@ static inline int multiq_insert(jl_task_t *task, int16_t priority)
 
     heaps[rn].tasks[heaps[rn].ntasks++] = task;
     sift_up(&heaps[rn], heaps[rn].ntasks-1);
-    int16_t prio = jl_atomic_load(&heaps[rn].prio);
+    int16_t prio = jl_atomic_load_relaxed(&heaps[rn].prio);
     if (task->prio < prio)
-        jl_atomic_store(&heaps[rn].prio, task->prio);
+        jl_atomic_store_relaxed(&heaps[rn].prio, task->prio);
     jl_mutex_unlock_nogc(&heaps[rn].lock);
 
     return 0;
@@ -163,8 +163,8 @@ static inline jl_task_t *multiq_deletemin(void)
     for (i = 0; i < heap_p; ++i) {
         rn1 = cong(heap_p, cong_unbias, &ptls->rngseed);
         rn2 = cong(heap_p, cong_unbias, &ptls->rngseed);
-        prio1 = jl_atomic_load(&heaps[rn1].prio);
-        prio2 = jl_atomic_load(&heaps[rn2].prio);
+        prio1 = jl_atomic_load_relaxed(&heaps[rn1].prio);
+        prio2 = jl_atomic_load_relaxed(&heaps[rn2].prio);
         if (prio1 > prio2) {
             prio1 = prio2;
             rn1 = rn2;
@@ -172,7 +172,7 @@ static inline jl_task_t *multiq_deletemin(void)
         else if (prio1 == prio2 && prio1 == INT16_MAX)
             continue;
         if (jl_mutex_trylock_nogc(&heaps[rn1].lock)) {
-            if (prio1 == heaps[rn1].prio)
+            if (prio1 == jl_atomic_load_relaxed(&heaps[rn1].prio))
                 break;
             jl_mutex_unlock_nogc(&heaps[rn1].lock);
         }
@@ -192,7 +192,7 @@ static inline jl_task_t *multiq_deletemin(void)
         sift_down(&heaps[rn1], 0);
         prio1 = heaps[rn1].tasks[0]->prio;
     }
-    jl_atomic_store(&heaps[rn1].prio, prio1);
+    jl_atomic_store_relaxed(&heaps[rn1].prio, prio1);
     jl_mutex_unlock_nogc(&heaps[rn1].lock);
 
     return task;
@@ -330,7 +330,7 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
 static void wake_thread(int16_t tid)
 {
     jl_ptls_t other = jl_all_tls_states[tid];
-    uint8_t state = sleeping;
+    int8_t state = sleeping;
     jl_atomic_cmpswap(&other->sleep_check_state, &state, not_sleeping);
     if (state == sleeping) {
         uv_mutex_lock(&other->sleep_lock);
@@ -394,7 +394,7 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
     jl_value_t *args[2] = { trypoptask, q };
     jl_task_t *task = (jl_task_t*)jl_apply(args, 2);
     if (jl_typeis(task, jl_task_type)) {
-        int self = jl_current_task->tid;
+        int self = jl_atomic_load_relaxed(&jl_current_task->tid);
         jl_set_task_tid(task, self);
         return task;
     }
@@ -479,7 +479,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
                     JL_UV_UNLOCK();
                     // optimization: check again first if we may have work to do
                     if (!may_sleep(ptls)) {
-                        assert(ptls->sleep_check_state == not_sleeping);
+                        assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
                         start_cycles = 0;
                         continue;
                     }
@@ -512,7 +512,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
                 // TODO: help with gc work here, if applicable
             }
-            assert(ptls->sleep_check_state == not_sleeping);
+            assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             uv_mutex_unlock(&ptls->sleep_lock);
             JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
             jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint

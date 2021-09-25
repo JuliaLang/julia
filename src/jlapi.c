@@ -433,7 +433,7 @@ JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
 }
 
 
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
 JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)
 {
     jl_task_t *ct = jl_current_task;

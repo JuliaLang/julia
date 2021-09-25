@@ -223,7 +223,7 @@ private:
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer;
 
-    DenseMap<void*, StringRef> ReverseLocalSymbolTable;
+    DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 

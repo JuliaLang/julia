@@ -241,6 +241,15 @@ barTuple2() = fooTuple{tuple(:y)}()
           Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
           Core.Compiler.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
 
+# assert robustness of `getfield_tfunc`
+struct GetfieldRobustness
+    field::String
+end
+@test Base.return_types((GetfieldRobustness,String,)) do obj, s
+    t = (10, s) # to form `PartialStruct`
+    getfield(obj, t)
+end |> only === Union{}
+
 # issue #12476
 function f12476(a)
     (k, v) = a
@@ -2888,6 +2897,21 @@ function symcmp36230(vec)
     return false
 end
 @test Base.return_types(symcmp36230, (Vector{Any},)) == Any[Bool]
+
+function foo42190(r::Union{Nothing,Int}, n::Int)
+    while r !== nothing && r < n
+        return r # `r::Int`
+    end
+    return n
+end
+@test Base.return_types(foo42190, (Union{Nothing, Int}, Int)) == Any[Int]
+function bar42190(r::Union{Nothing,Int}, n::Int)
+    while r === nothing || r < n
+        return n
+    end
+    return r # `r::Int`
+end
+@test Base.return_types(bar42190, (Union{Nothing, Int}, Int)) == Any[Int]
 
 # Issue #36531, double varargs in abstract_iteration
 f36531(args...) = tuple((args...)...)

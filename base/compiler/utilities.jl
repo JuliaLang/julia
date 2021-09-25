@@ -222,6 +222,10 @@ function method_for_inference_heuristics(method::Method, @nospecialize(sig), spa
     return nothing
 end
 
+#########
+# types #
+#########
+
 argextype(@nospecialize(x), state) = argextype(x, state.src, state.sptypes, state.slottypes)
 
 const empty_slottypes = Any[]
@@ -257,6 +261,17 @@ function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vecto
     else
         return Const(x)
     end
+end
+
+function singleton_type(@nospecialize(ft))
+    if isa(ft, Const)
+        return ft.val
+    elseif isconstType(ft)
+        return ft.parameters[1]
+    elseif ft isa DataType && isdefined(ft, :instance)
+        return ft.instance
+    end
+    return nothing
 end
 
 ###################

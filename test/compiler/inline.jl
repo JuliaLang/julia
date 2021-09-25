@@ -650,3 +650,33 @@ let
         @test ninlined == length(code)
     end
 end
+
+# https://github.com/JuliaLang/julia/issues/42246
+@test mktempdir() do dir
+    cd(dir) do
+        code = quote
+            issue42246() = @noinline IOBuffer("a")
+            let
+                ci, rt = only(code_typed(issue42246))
+                if any(ci.code) do stmt
+                       Meta.isexpr(stmt, :invoke) &&
+                       stmt.args[1].def.name === nameof(IOBuffer)
+                   end
+                    exit(0)
+                else
+                    exit(1)
+               end
+            end
+        end |> string
+        cmd = `$(Base.julia_cmd()) --code-coverage=tmp.info -e $code`
+        success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr))
+    end
+end
+
+# Issue #42264 - crash on certain union splits
+let f(x) = (x...,)
+    # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
+    # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
+    # the the original apply call is not union-split, but the inserted `iterate` call is.
+    @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
+end

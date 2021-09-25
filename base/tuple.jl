@@ -356,10 +356,10 @@ end
 
 ## filter ##
 
-filter(f, xs::Tuple) = afoldl((ys, x) -> f(x) ? (ys..., x) : ys, (), xs...)
+filter_rec(f, xs::Tuple) = afoldl((ys, x) -> f(x) ? (ys..., x) : ys, (), xs...)
 
 # use Array for long tuples
-filter(f, t::Any32) = Tuple(filter(f, collect(t)))
+filter(f, t::Tuple) = length(t) < 32 ? filter_rec(f, t) : Tuple(filter(f, collect(t)))
 
 ## comparison ##
 

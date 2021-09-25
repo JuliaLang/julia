@@ -854,7 +854,7 @@ static void post_boot_hooks(void)
     for (i = 1; i < jl_core_module->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            jl_value_t *v = b->value;
+            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
             if (v) {
                 if (jl_is_unionall(v))
                     v = jl_unwrap_unionall(v);

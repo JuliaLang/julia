@@ -43,7 +43,7 @@ static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_
         *pa = a;
     }
     size_t maxprobe = max_probe(sz);
-    void **tab = (void **)a->data;
+    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)a->data;
 
     hv = keyhash(key);
     while (1) {
@@ -54,7 +54,7 @@ static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_
         empty_slot = -1;
 
         do {
-            jl_value_t *k2 = (jl_value_t*)tab[index];
+            jl_value_t *k2 = tab[index];
             if (k2 == NULL) {
                 if (empty_slot == -1)
                     empty_slot = index;
@@ -102,20 +102,20 @@ static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_
         *pa = jl_idtable_rehash(*pa, newsz);
 
         a = *pa;
-        tab = (void **)a->data;
+        tab = (_Atomic(jl_value_t*)*)a->data;
         sz = hash_size(a);
         maxprobe = max_probe(sz);
     }
 }
 
 /* returns bp if key is in hash, otherwise NULL */
-inline jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
+inline _Atomic(jl_value_t*) *jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
 {
     size_t sz = hash_size(a);
     if (sz == 0)
         return NULL;
     size_t maxprobe = max_probe(sz);
-    void **tab = (void **)a->data;
+    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)a->data;
     uint_t hv = keyhash(key);
     size_t index = h2index(hv, sz);
     sz *= 2;
@@ -123,12 +123,12 @@ inline jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEP
     size_t iter = 0;
 
     do {
-        jl_value_t *k2 = (jl_value_t*)jl_atomic_load_relaxed(&tab[index]); // just to ensure the load doesn't get duplicated
+        jl_value_t *k2 = jl_atomic_load_relaxed(&tab[index]); // just to ensure the load doesn't get duplicated
         if (k2 == NULL)
             return NULL;
         if (jl_egal(key, k2)) {
             if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL)
-                return (jl_value_t**)&tab[index + 1];
+                return &tab[index + 1];
             // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
             if (key != jl_nothing)
                 return NULL; // concurrent insertion hasn't completed yet
@@ -155,21 +155,21 @@ jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int 
 JL_DLLEXPORT
 jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
 {
-    jl_value_t **bp = jl_table_peek_bp(h, key);
+    _Atomic(jl_value_t*) *bp = jl_table_peek_bp(h, key);
     return (bp == NULL) ? deflt : jl_atomic_load_relaxed(bp);
 }
 
 JL_DLLEXPORT
 jl_value_t *jl_eqtable_pop(jl_array_t *h, jl_value_t *key, jl_value_t *deflt, int *found)
 {
-    jl_value_t **bp = jl_table_peek_bp(h, key);
+    _Atomic(jl_value_t*) *bp = jl_table_peek_bp(h, key);
     if (found)
         *found = (bp != NULL);
     if (bp == NULL)
         return deflt;
-    jl_value_t *val = *bp;
-    *(bp - 1) = jl_nothing; // clear the key
-    *bp = NULL;
+    jl_value_t *val = jl_atomic_load_relaxed(bp);
+    jl_atomic_store_relaxed(bp - 1, jl_nothing); // clear the key
+    jl_atomic_store_relaxed(bp, NULL); // and the value (briefly corrupting the table)
     return val;
 }
 

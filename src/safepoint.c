@@ -19,7 +19,7 @@ extern "C" {
 // 1: at least one sigint is pending, only the sigint page is enabled.
 // 2: at least one sigint is pending, both safepoint pages are enabled.
 JL_DLLEXPORT sig_atomic_t jl_signal_pending = 0;
-uint32_t jl_gc_running = 0;
+_Atomic(uint32_t) jl_gc_running = 0;
 char *jl_safepoint_pages = NULL;
 // The number of safepoints enabled on the three pages.
 // The first page, is the SIGINT page, only used by the master thread.
@@ -111,11 +111,11 @@ void jl_safepoint_init(void)
 int jl_safepoint_start_gc(void)
 {
     if (jl_n_threads == 1) {
-        jl_gc_running = 1;
+        jl_atomic_store_relaxed(&jl_gc_running, 1);
         return 1;
     }
     // The thread should have set this already
-    assert(jl_current_task->ptls->gc_state == JL_GC_STATE_WAITING);
+    assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) == JL_GC_STATE_WAITING);
     jl_mutex_lock_nogc(&safepoint_lock);
     // In case multiple threads enter the GC at the same time, only allow
     // one of them to actually run the collection. We can't just let the
@@ -135,9 +135,9 @@ int jl_safepoint_start_gc(void)
 
 void jl_safepoint_end_gc(void)
 {
-    assert(jl_gc_running);
+    assert(jl_atomic_load_relaxed(&jl_gc_running));
     if (jl_n_threads == 1) {
-        jl_gc_running = 0;
+        jl_atomic_store_relaxed(&jl_gc_running, 0);
         return;
     }
     jl_mutex_lock_nogc(&safepoint_lock);
@@ -157,7 +157,7 @@ void jl_safepoint_end_gc(void)
 void jl_safepoint_wait_gc(void)
 {
     // The thread should have set this is already
-    assert(jl_current_task->ptls->gc_state != 0);
+    assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) != 0);
     // Use normal volatile load in the loop for speed until GC finishes.
     // Then use an acquire load to make sure the GC result is visible on this thread.
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
