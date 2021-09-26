@@ -3,7 +3,6 @@ agents:
   # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
   sandbox.jl: "true"
   os: "linux"
-
 steps:
   - label: ":unlock: :coverage: Run coverage test"
     plugins:

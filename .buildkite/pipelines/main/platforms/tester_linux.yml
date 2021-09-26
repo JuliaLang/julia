@@ -1,0 +1,72 @@
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+steps:
+  - label: "tester_linux${ARCH_LABEL?}"
+    key: tester_linux${ARCH_LABEL?}
+    depends_on: package_linux${ARCH?}
+    plugins:
+      - JuliaCI/julia#v1:
+          # Drop default "registries" directory, so it is not persisted from execution to execution
+          persist_depot_dirs: packages,artifacts,compiled
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/${ROOTFS_TAG?}/package_linux.${ROOTFS_ARCH?}.tar.gz
+          rootfs_treehash: "${ROOTFS_TREE?}"
+          uid: 1000
+          gid: 1000
+          workspaces:
+            # Include `/cache/repos` so that our `git` version introspection works.
+            - "/cache/repos:/cache/repos"
+    env:
+      JULIA_SHELL: "/bin/bash"
+    timeout_in_minutes: ${TIMEOUT?}
+    commands: |
+      echo "--- Print the full and short commit hashes"
+      SHORT_COMMIT_LENGTH=10
+      SHORT_COMMIT=`echo $${BUILDKITE_COMMIT:?} | cut -c1-$${SHORT_COMMIT_LENGTH:?}`
+      JULIA_DIR="julia-$${SHORT_COMMIT:?}"
+      JULIA_BINARY="$${JULIA_DIR:?}/bin/julia"
+      ARTIFACT_FILE_EXTENSION="tar.gz"
+      ARTIFACT_FILENAME="julia-$${SHORT_COMMIT:?}-linux${ARCH?}.$${ARTIFACT_FILE_EXTENSION:?}"
+      echo "The full commit is:                     $${BUILDKITE_COMMIT:?}"
+      echo "The short commit is:                    $${SHORT_COMMIT:?}"
+      echo "The artifact filename will be:    $${ARTIFACT_FILENAME:?}"
+      echo "The Julia directory name will be: $${JULIA_DIR:?}"
+      echo "The Julia binary will be:         $${JULIA_BINARY:?}"
+
+      echo "--- Download build artifacts"
+      rm -rf $${ARTIFACT_FILENAME:?}
+      buildkite-agent artifact download $${ARTIFACT_FILENAME:?} .
+
+      echo "--- Extract build artifacts"
+      rm -rf $${JULIA_DIR:?}/
+      tar xzf $${ARTIFACT_FILENAME:?} $${JULIA_DIR:?}/
+
+      echo "--- Print Julia version info"
+      $${JULIA_BINARY:?} -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
+      echo "JULIA_CPU_THREADS is: $${JULIA_CPU_THREADS:?}"
+      $${JULIA_BINARY:?} -e '@info "" Sys.CPU_THREADS'
+
+      echo "--- Run the Julia test suite"
+      unset JULIA_DEPOT_PATH
+      export JULIA_UNDER_RR="$${JULIA_BINARY:?} .buildkite/utilities/rr/rr_capture.jl $${JULIA_BINARY:?}"
+
+      if [[ "$${BUILDKITE_STEP_KEY:?}"   == "tester_linux64_rr" ]]; then
+        # For the `rr` job, we disable multi-threading.
+        export JULIA_NUM_THREADS=1
+        $${JULIA_UNDER_RR:?} -e 'Base.runtests(["all"]; ncores = parse(Int, ENV["JULIA_RRCAPTURE_NUM_CORES"]))'
+      elif [[ "$${BUILDKITE_STEP_KEY:?}" == "tester_linux64_st" ]]; then
+        # "_st" = single-threaded
+        export JULIA_NUM_THREADS=1
+        $${JULIA_BINARY:?} -e 'Base.runtests(["all"]; ncores = Sys.CPU_THREADS)'
+      elif [[ "$${BUILDKITE_STEP_KEY:?}" == "tester_linux64_mt" ]]; then
+        # "_mt" = multi-threaded
+        export JULIA_NUM_THREADS=16
+        # TODO: don't skip any tests
+        $${JULIA_BINARY:?} -e 'Base.runtests(["all", "--skip", "Distributed"]; ncores = Sys.CPU_THREADS)'
+      else
+        $${JULIA_BINARY:?} -e 'Base.runtests(["all"]; ncores = Sys.CPU_THREADS)'
+      fi

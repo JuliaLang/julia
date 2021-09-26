@@ -3,7 +3,6 @@ agents:
   # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
   sandbox.jl: "true"
   os: "linux"
-
 steps:
   - label: "embedding"
     key: "embedding"
@@ -20,15 +19,11 @@ steps:
             - "/cache/repos:/cache/repos"
     commands: |
       prefix="/tmp/prefix"
-      echo "+++ Build julia, deploy to $${prefix}"
-      make -j$${JULIA_NUM_CORES} JULIA_PRECOMPILE=0 prefix=$${prefix} install
+      echo "+++ Build julia, deploy to $${prefix:?}"
+      make -j$${JULIA_CPU_THREADS:?} JULIA_PRECOMPILE=0 prefix=$${prefix:?} install
 
       embedding_output="/tmp/embedding-test"
-      echo "+++ Run embedding tests, deploy to $${embedding_output}"
-      mkdir -p "$${embedding_output}"
-      make -j$${JULIA_NUM_CORES} -C test/embedding JULIA="$${prefix}/bin/julia" BIN="$${embedding_output}"
-
+      echo "+++ Run embedding tests, deploy to $${embedding_output:?}"
+      mkdir -p "$${embedding_output:?}"
+      make -j$${JULIA_CPU_THREADS:?} -C test/embedding JULIA="$${prefix:?}/bin/julia" BIN="$${embedding_output:?}"
     timeout_in_minutes: 60
-    notify:
-      - github_commit_status:
-          context: "embedding"

@@ -15,15 +15,16 @@
 steps:
   - label: ":buildkite: Launch unsigned builders"
     commands: |
-      # First, we launch the `whitespace` builder, because we want that builder to finish as quickly as possible.
+      # Launch the `whitespace` builder first, because we want that builder to finish as quickly as possible.
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/whitespace.yml
 
-      # Next, we launch the miscellaneous builders in alphabetical order.
+      # Launch the miscellaneous builders in alphabetical order.
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/doctest.yml
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/embedding.yml
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/llvmpasses.yml
 
-      # Finally, we launch the platform builders (`package_*`) and (`tester_*`) in alphabetical order.
-      buildkite-agent pipeline upload .buildkite/pipelines/main/platforms/linux64.yml
+      # Launch all of the platform builders.
+      bash .buildkite/pipelines/main/platforms/platforms.sh package_linux
+      bash .buildkite/pipelines/main/platforms/platforms.sh tester_linux
     agents:
       queue: julia

@@ -3,7 +3,6 @@ agents:
   # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
   sandbox.jl: "true"
   os: "linux"
-
 steps:
   - label: "analyzegc"
     key: "analyzegc"
@@ -18,15 +17,11 @@ steps:
             - "/cache/repos:/cache/repos"
     commands: |
       echo "--- Install in-tree LLVM dependencies"
-      make -j$${JULIA_NUM_CORES} -C deps install-llvm install-clang install-llvm-tools install-libuv install-utf8proc install-unwind
+      make -j$${JULIA_CPU_THREADS:?} -C deps install-llvm install-clang install-llvm-tools install-libuv install-utf8proc install-unwind
       echo "+++ run clangsa/analyzegc"
-      make -j$${JULIA_NUM_CORES} -C test/clangsa
-      make -j$${JULIA_NUM_CORES} -C src analyzegc
+      make -j$${JULIA_CPU_THREADS:?} -C test/clangsa
+      make -j$${JULIA_CPU_THREADS:?} -C src analyzegc
     timeout_in_minutes: 60
-    notify:
-      - github_commit_status:
-          context: "analyzegc"
-
   - label: "llvmpasses"
     key: "llvmpasses"
     plugins:
@@ -41,12 +36,9 @@ steps:
             - "/cache/repos:/cache/repos"
     commands: |
       echo "--- make release"
-      make -j$${JULIA_NUM_CORES} release JULIA_PRECOMPILE=0
+      make -j$${JULIA_CPU_THREADS:?} release JULIA_PRECOMPILE=0
       echo "--- make src/install-analysis-deps"
-      make -j$${JULIA_NUM_CORES} -C src install-analysis-deps
+      make -j$${JULIA_CPU_THREADS:?} -C src install-analysis-deps
       echo "+++ make test/llvmpasses"
-      make -j$${JULIA_NUM_CORES} -C test/llvmpasses
+      make -j$${JULIA_CPU_THREADS:?} -C test/llvmpasses
     timeout_in_minutes: 60
-    notify:
-      - github_commit_status:
-          context: "llvmpasses"
