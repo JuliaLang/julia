@@ -20,6 +20,7 @@ on:
   # write permissions, even if the PR is from a fork.
   # Therefore, for security reasons, we do not checkout any code in this workflow.
   pull_request_target:
+    types: [opened, synchronize]
     branches:
       - 'master'
       - 'release-*'
