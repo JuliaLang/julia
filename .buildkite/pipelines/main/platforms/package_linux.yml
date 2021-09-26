@@ -1,0 +1,49 @@
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+steps:
+  - label: "package_linux${ARCH_LABEL?}"
+    key: package_linux${ARCH_LABEL?}
+    plugins:
+      - JuliaCI/julia#v1:
+          # Drop default "registries" directory, so it is not persisted from execution to execution
+          persist_depot_dirs: packages,artifacts,compiled
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/${ROOTFS_TAG?}/package_linux.${ROOTFS_ARCH?}.tar.gz
+          rootfs_treehash: "${ROOTFS_TREE?}"
+          uid: 1000
+          gid: 1000
+          workspaces:
+            # Include `/cache/repos` so that our `git` version introspection works.
+            - "/cache/repos:/cache/repos"
+    timeout_in_minutes: ${TIMEOUT?}
+    commands: |
+      echo "--- Print the full and short commit hashes"
+      SHORT_COMMIT_LENGTH=10
+      SHORT_COMMIT=`echo $${BUILDKITE_COMMIT:?} | cut -c1-$${SHORT_COMMIT_LENGTH:?}`
+      JULIA_BINARYDIST_FILENAME=`make print-JULIA_BINARYDIST_FILENAME | cut -c27-`
+      ARTIFACT_FILE_EXTENSION="tar.gz"
+      ARTIFACT_FILENAME="$${JULIA_BINARYDIST_FILENAME:?}.$${ARTIFACT_FILE_EXTENSION:?}"
+      echo "The full commit is:                     $${BUILDKITE_COMMIT:?}"
+      echo "The short commit is:                    $${SHORT_COMMIT:?}"
+      echo "The artifact filename will be:    $${ARTIFACT_FILENAME:?}"
+
+      echo "--- Build Julia from source"
+      rm -rf $${ARTIFACT_FILENAME:?}
+      make -j 8
+
+      echo "--- Make sure that the working directory is clean"
+      if [ -z "$(git status --short)" ]; then echo "INFO: The working directory is clean."; else echo "ERROR: The working directory is dirty."; echo "Output of git status:"; git status; exit 1; fi
+
+      echo "--- Print Julia version info"
+      ./julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
+
+      echo "--- Create build artifacts"
+      make -j 8 binary-dist
+      ls -l $${ARTIFACT_FILENAME:?}
+
+      echo "--- Upload build artifacts"
+      buildkite-agent artifact upload $${ARTIFACT_FILENAME:?}
