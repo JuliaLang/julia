@@ -51,7 +51,7 @@ jobs:
 
     steps:
       # For security reasons, we do not checkout any code in this workflow.
-      - uses: JuliaLang/retry-buildkite@24e8341f74e0d6760717235eac936db639d7e9eb
+      - uses: JuliaLang/retry-buildkite@057f6f2d37aa29a57b7679fd2af0df1d9f9188b4
         with:
           buildkite_api_token: ${{ secrets.BUILDKITE_API_TOKEN_RETRY }}
           buildkite_organization_slug: 'julialang'
