@@ -232,7 +232,6 @@ function (*)(D::Diagonal, V::AbstractVector)
     return D.diag .* V
 end
 
-# These methods are needed for ambiguity resolution
 (*)(A::AbstractTriangular, D::Diagonal) =
     rmul!(copy_oftype(A, promote_op(*, eltype(A), eltype(D.diag))), D)
 (*)(D::Diagonal, B::AbstractTriangular) =
@@ -330,18 +329,18 @@ lmul!(A::Diagonal, B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
 
 @inline function __muldiag!(out, D::Diagonal, B, alpha, beta)
     if iszero(beta)
-        out .= D.diag .* B .* alpha
+        out .= (D.diag .* B) .*ₛ alpha
     else
-        out .= D.diag .* B .* alpha .+ out .* beta
+        out .= (D.diag .* B) .*ₛ alpha .+ out .* beta
     end
     return out
 end
 
 @inline function __muldiag!(out, A, D::Diagonal, alpha, beta)
     if iszero(beta)
-        out .= A .* permutedims(D.diag) .* alpha
+        out .= (A .* permutedims(D.diag)) .*ₛ alpha
     else
-        out .= A .* permutedims(D.diag) .* alpha .+ out .* beta
+        out .= (A .* permutedims(D.diag)) .*ₛ alpha .+ out .* beta
     end
     return out
 end
