@@ -27,12 +27,14 @@ on:
   # the PR is from a fork. Therefore, for security reasons, we do not checkout any code in
   # this workflow.
   pull_request_target:
+    types: [ reopened ]
 
-    # TODO: delete the following line (once we have completely transitioned from Buildbot to Buildkite)
-    types: [ reopened, labeled ]
-
-    # TODO: uncomment the following line (once we have completely transitioned from Buildbot to Buildkite)
-    # types: [ reopened ]
+  # TODO: delete the following `workflow_dispatch` section (once we have completely transitioned from Buildbot to Buildkite)
+  workflow_dispatch:
+    inputs:
+      PULL_REQUEST_NUMBER:
+        description: 'The number of the pull request:'
+        required: true
 
 # We do not give the `GITHUB_TOKEN` any permissions.
 permissions:
@@ -42,18 +44,23 @@ jobs:
   retry:
     name: retry
     runs-on: ubuntu-latest
-
-    # TODO: delete the following line (once we have completely transitioned from Buildbot to Buildkite)
-    if: github.repository == 'JuliaLang/julia' && (github.event.label.name == 'Buildkite - retry failed jobs' || github.event.action == 'reopened')
-
-    # TODO: uncomment the following line (once we have completely transitioned from Buildbot to Buildkite)
-    # if: github.repository == 'JuliaLang/julia'
-
+    if: github.repository == 'JuliaLang/julia'
     steps:
       # For security reasons, we do not checkout any code in this workflow.
+      - if: github.event_name == 'pull_request_target'
+        run: |
+          echo "pr_number=${{ github.event.number }}" >> $GITHUB_ENV
+
+      # TODO: delete the following three lines (once we have completely transitioned from Buildbot to Buildkite)
+      - if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "pr_number=${{ github.event.inputs.PULL_REQUEST_NUMBER }}" >> $GITHUB_ENV
+
+      - run: |
+          echo "The pull request number is: ${{ env.pr_number }}"
       - uses: JuliaLang/retry-buildkite@057f6f2d37aa29a57b7679fd2af0df1d9f9188b4
         with:
           buildkite_api_token: ${{ secrets.BUILDKITE_API_TOKEN_RETRY }}
           buildkite_organization_slug: 'julialang'
           buildkite_pipeline_slug: 'julia-master'
-          pr_number: ${{github.event.number}}
+          pr_number: ${{ env.pr_number }}
