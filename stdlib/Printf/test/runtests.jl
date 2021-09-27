@@ -762,6 +762,17 @@ end
     @test Printf.@sprintf("%20.0X",  UInt(3989525555)) == "            EDCB5433"
     @test Printf.@sprintf("%20.X",  UInt(0)) == "                   0"
 
+    # issue #41971
+    @test Printf.@sprintf("%4d", typemin(Int8)) == "-128"
+    @test Printf.@sprintf("%4d", typemax(Int8)) == " 127"
+    @test Printf.@sprintf("%6d", typemin(Int16)) == "-32768"
+    @test Printf.@sprintf("%6d", typemax(Int16)) == " 32767"
+    @test Printf.@sprintf("%11d", typemin(Int32)) == "-2147483648"
+    @test Printf.@sprintf("%11d", typemax(Int32)) == " 2147483647"
+    @test Printf.@sprintf("%20d", typemin(Int64)) == "-9223372036854775808"
+    @test Printf.@sprintf("%20d", typemax(Int64)) == " 9223372036854775807"
+    @test Printf.@sprintf("%40d", typemin(Int128)) == "-170141183460469231731687303715884105728"
+    @test Printf.@sprintf("%40d", typemax(Int128)) == " 170141183460469231731687303715884105727"
 end
 
 @testset "%n" begin
