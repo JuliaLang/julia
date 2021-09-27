@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #ifndef JL_GC_HEAP_SNAPSHOT_H
 #define JL_GC_HEAP_SNAPSHOT_H
 

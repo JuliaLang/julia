@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #include "gc-heap-snapshot.h"
 
 #include "julia_internal.h"
@@ -81,8 +83,8 @@ struct Node {
     size_t trace_node_id;  // This is ALWAYS 0 in Javascript heap-snapshots.
     // whether the from_node is attached or dettached from the main application state
     // TODO: .... meaning not yet understood.
-    // https://github.com/nodejs/from_node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/include/v8-profiler.h#L739-L745
-    int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+    // https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/include/v8-profiler.h#L739-L745
+    int detachedness;  // 0 - unknown, 1 - attached, 2 - detached
 
     // Book-keeping fields (not used for serialization)
     vector<Edge> edges; // For asserting that we built the edges in the right order
@@ -118,10 +120,7 @@ struct StringTable {
             if (first) {
                 first = false;
             } else {
-                jl_printf(stream, ",");
-                if (newlines) {
-                    jl_printf(stream, "\n");
-                }
+                jl_printf(stream, newlines ? ",\n" : ",");
             }
             // Escape strings for JSON
             // TODO
@@ -357,7 +356,7 @@ static inline void _record_gc_edge(const char *node_type, const char *edge_type,
 }
 
 void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
-    // mimicking https://github.com/nodejs/from_node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2567-L2567
+    // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2567-L2567
     jl_printf(stream, "{\"snapshot\":{");
     jl_printf(stream, "\"meta\":{");
     jl_printf(stream, "\"node_fields\":[\"type\",\"name\",\"id\",\"self_size\",\"edge_count\",\"trace_node_id\",\"detachedness\"],");
