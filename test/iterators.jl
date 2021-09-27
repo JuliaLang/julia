@@ -3,6 +3,7 @@
 using Base.Iterators
 using Random
 using Base: IdentityUnitRange
+using Dates: Date, Day
 
 @test Base.IteratorSize(Any) isa Base.SizeUnknown
 
@@ -134,12 +135,15 @@ let i = 0, k = 1, l = 0
         k += 1
         k <= 10 || break
     end
-    for j = countfrom(Int[0,0], Float64[1.0,2.0])
+    # test that `start` promotes to `typeof(start+step)`
+    for j = countfrom(Int[0, 0], Float64[1.0, 2.0])
         @test j isa Vector{Float64}
-        @test j == l*[1,2]
+        @test j == l*[1, 2]
         l += 1
         l <= 10 || break
     end
+    # test with `start` and `step` having different types
+    @test collect(take(countfrom(Date(2020,12,25), Day(1)), 12)) == range(Date(2020,12,25), step=Day(1), length=12)
 end
 
 # take
