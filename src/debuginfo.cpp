@@ -299,8 +299,8 @@ public:
 
 #if defined(_OS_WINDOWS_)
         uint64_t SectionAddrCheck = 0;
-        uint64_t SectionLoadCheck = 0;
-        uint64_t SectionWriteCheck = 0;
+        uint64_t SectionLoadCheck = 0; (void)SectionLoadCheck;
+        uint64_t SectionWriteCheck = 0; (void)SectionWriteCheck;
         uint8_t *UnwindData = NULL;
 #if defined(_CPU_X86_64_)
         uint8_t *catchjmp = NULL;
@@ -426,6 +426,7 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
     ((JuliaJITEventListener*)Listener)->_NotifyObjectEmitted(Object, L, memmgr);
 }
 
+// TODO: convert the safe names from aotcomile.cpp:makeSafeName back into symbols
 static std::pair<char *, bool> jl_demangle(const char *name) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables since
@@ -782,10 +783,30 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
             if (needs_name) {
                 if (auto name_or_err = sym_found.getName()) {
                     auto nameref = name_or_err.get();
+                    const char globalPrefix = // == DataLayout::getGlobalPrefix
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+                        '_';
+#elif defined(_OS_DARWIN_)
+                        '_';
+#else
+                        '\0';
+#endif
+                    if (globalPrefix) {
+                        if (nameref[0] == globalPrefix)
+                          nameref = nameref.drop_front();
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+                        else if (nameref[0] == '@') // X86_VectorCall
+                          nameref = nameref.drop_front();
+#endif
+                        // else VectorCall, Assembly, Internal, etc.
+                    }
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+                    nameref = nameref.split('@').first;
+#endif
                     size_t len = nameref.size();
                     *name = (char*)realloc_s(*name, len + 1);
-                    (*name)[len] = 0;
                     memcpy(*name, nameref.data(), len);
+                    (*name)[len] = 0;
                     needs_name = false;
                 }
             }

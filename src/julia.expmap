@@ -15,6 +15,7 @@
     ios_*;
     iswprint;
     jl_*;
+    ijl_*;
     rec_backtrace;
     julia_*;
     libsupport_init;

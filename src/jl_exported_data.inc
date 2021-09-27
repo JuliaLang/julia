@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // Pointers that are exposed through the public libjulia
 #define JL_EXPORTED_DATA_POINTERS(XX) \
     XX(jl_abstractarray_type) \

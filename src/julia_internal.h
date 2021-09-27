@@ -418,6 +418,16 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
                 "Number of passed arguments does not match expected number"); \
             n;                                                                \
         }), __VA_ARGS__)
+#ifdef jl_svec
+#undef jl_svec
+#define jl_svec(n, ...) \
+    (ijl_svec)(__extension__({                                                \
+            static_assert(                                                    \
+                n == sizeof((void *[]){ __VA_ARGS__ })/sizeof(void *),        \
+                "Number of passed arguments does not match expected number"); \
+            n;                                                                \
+        }), __VA_ARGS__)
+#else
 #define jl_svec(n, ...) \
     (jl_svec)(__extension__({                                                 \
             static_assert(                                                    \
@@ -425,6 +435,7 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
                 "Number of passed arguments does not match expected number"); \
             n;                                                                \
         }), __VA_ARGS__)
+#endif
 #endif
 #endif
 

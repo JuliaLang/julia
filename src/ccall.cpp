@@ -1264,13 +1264,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         return args[6 + i];
     };
 
-    auto _is_libjulia_func = [&] (uintptr_t ptr, const char *name) {
+    auto _is_libjulia_func = [&] (uintptr_t ptr, StringRef name) {
         if ((uintptr_t)fptr == ptr)
             return true;
         if (f_lib) {
 #ifdef _OS_WINDOWS_
             if ((f_lib == JL_EXE_LIBNAME) || // preventing invalid pointer access
                 (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
+                (!strcmp(f_lib, JL_LIBJULIA_DL_LIBNAME)) ||
                 (!strcmp(f_lib, jl_crtdll_basename))) {
                 // libjulia-like
             }
@@ -1280,9 +1281,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             return false;
 #endif
         }
-        return f_name && !strcmp(f_name, name);
+        return f_name && f_name == name;
     };
-#define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
+#define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), StringRef(#name))
 
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);

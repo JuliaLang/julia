@@ -2,7 +2,7 @@
 
 attributes #1 = { returns_twice }
 declare i32 @julia.except_enter() #1
-declare void @jl_pop_handler(i32)
+declare void @ijl_pop_handler(i32)
 declare i8**** @julia.ptls_states()
 declare i8**** @julia.get_pgcstack()
 
@@ -10,7 +10,7 @@ define void @simple() {
 top:
     %pgcstack = call i8**** @julia.get_pgcstack()
 ; CHECK: call void @llvm.lifetime.start
-; CHECK: call void @jl_enter_handler
+; CHECK: call void @ijl_enter_handler
 ; CHECK: setjmp
     %r = call i32 @julia.except_enter()
     %cmp = icmp eq i32 %r, 0
@@ -20,7 +20,7 @@ try:
 catch:
     br label %after
 after:
-    call void @jl_pop_handler(i32 1)
+    call void @ijl_pop_handler(i32 1)
 ; CHECK: llvm.lifetime.end
     ret void
 }
