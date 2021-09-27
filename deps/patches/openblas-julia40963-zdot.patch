@@ -1,0 +1,26 @@
+From b2053239fc36f9ca8c29286d8fc553d0200907b0 Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Sun, 23 Aug 2020 15:08:16 +0200
+Subject: [PATCH] Fix mssing dummy parameter (imag part of alpha) of
+ zdot_thread_function
+
+---
+ kernel/x86_64/zdot.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/x86_64/zdot.c b/kernel/x86_64/zdot.c
+index 90fd86da..1bc785ac 100644
+--- a/kernel/x86_64/zdot.c
++++ b/kernel/x86_64/zdot.c
+@@ -168,7 +168,7 @@ static void zdot_compute (BLASLONG n, FLOAT *x, BLASLONG inc_x, FLOAT *y, BLASLO
+ 
+ #if defined(SMP)
+ static int zdot_thread_function(BLASLONG n, BLASLONG dummy0,
+-BLASLONG dummy1, FLOAT dummy2, FLOAT *x, BLASLONG inc_x, FLOAT *y,
++BLASLONG dummy1, FLOAT dummy2r, FLOAT dummy2i, FLOAT *x, BLASLONG inc_x, FLOAT *y,
+ BLASLONG inc_y, FLOAT *result, BLASLONG dummy3)
+ {
+         zdot_compute(n, x, inc_x, y, inc_y, (void *)result);
+-- 
+2.33.0
+
