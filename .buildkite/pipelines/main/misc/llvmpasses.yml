@@ -16,6 +16,9 @@ steps:
             # Include `/cache/repos` so that our `git` version introspection works.
             - "/cache/repos:/cache/repos"
     commands: |
+      echo "--- Checkout the merge commit (if this is a pull request build)"
+      MCSH=.buildkite/utilities/merge_commit/merge_commit.sh && test -f $${MCSH:?} && bash $${MCSH:?}
+
       echo "--- Install in-tree LLVM dependencies"
       make -j$${JULIA_CPU_THREADS:?} -C deps install-llvm install-clang install-llvm-tools install-libuv install-utf8proc install-unwind
       echo "+++ run clangsa/analyzegc"
@@ -35,6 +38,9 @@ steps:
           workspaces:
             - "/cache/repos:/cache/repos"
     commands: |
+      echo "--- Checkout the merge commit (if this is a pull request build)"
+      MCSH=.buildkite/utilities/merge_commit/merge_commit.sh && test -f $${MCSH:?} && bash $${MCSH:?}
+
       echo "--- make release"
       make -j$${JULIA_CPU_THREADS:?} release JULIA_PRECOMPILE=0
       echo "--- make src/install-analysis-deps"

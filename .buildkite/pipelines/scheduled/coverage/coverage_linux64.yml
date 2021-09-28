@@ -18,6 +18,9 @@ steps:
           uid: 1000
           gid: 1000
     commands: |
+      echo "--- Checkout the merge commit (if this is a pull request build)"
+      MCSH=.buildkite/utilities/merge_commit/merge_commit.sh && test -f $${MCSH:?} && bash $${MCSH:?}
+
       echo "--- Build Julia from source"
       make -j 6
 

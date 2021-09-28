@@ -24,6 +24,9 @@ steps:
       JULIA_SHELL: "/bin/bash"
     timeout_in_minutes: ${TIMEOUT?}
     commands: |
+      echo "--- Checkout the merge commit (if this is a pull request build)"
+      MCSH=.buildkite/utilities/merge_commit/merge_commit.sh && test -f $${MCSH:?} && bash $${MCSH:?}
+
       echo "--- Print the full and short commit hashes"
       SHORT_COMMIT_LENGTH=10
       SHORT_COMMIT=`echo $${BUILDKITE_COMMIT:?} | cut -c1-$${SHORT_COMMIT_LENGTH:?}`

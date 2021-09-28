@@ -19,4 +19,8 @@ steps:
       - github_commit_status:
           context: "whitespace"
     commands: |
+      echo "--- Checkout the merge commit (if this is a pull request build)"
+      MCSH=.buildkite/utilities/merge_commit/merge_commit.sh && test -f $${MCSH:?} && bash $${MCSH:?}
+
+      echo "--- Run the whitespace check"
       make -j$${JULIA_CPU_THREADS:?} check-whitespace

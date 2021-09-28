@@ -1,6 +1,10 @@
 steps:
   - label: ":buildkite: Launch unsigned pipelines"
     commands: |
+      echo "--- Checkout the merge commit (if this is a pull request build)"
+      MCSH=.buildkite/utilities/merge_commit/merge_commit.sh && test -f $${MCSH:?} && bash $${MCSH:?}
+
+      echo "--- Launch unsigned pipelines"
       buildkite-agent pipeline upload .buildkite/pipelines/experimental/misc/sanitizers.yml
     agents:
       queue: julia

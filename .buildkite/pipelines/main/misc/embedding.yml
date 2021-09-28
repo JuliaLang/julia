@@ -18,12 +18,15 @@ steps:
             # Include `/cache/repos` so that our `git` version introspection works.
             - "/cache/repos:/cache/repos"
     commands: |
+      echo "--- Checkout the merge commit (if this is a pull request build)"
+      MCSH=.buildkite/utilities/merge_commit/merge_commit.sh && test -f $${MCSH:?} && bash $${MCSH:?}
+
       prefix="/tmp/prefix"
-      echo "+++ Build julia, deploy to $${prefix:?}"
+      echo "--- Build julia, deploy to $${prefix:?}"
       make -j$${JULIA_CPU_THREADS:?} JULIA_PRECOMPILE=0 prefix=$${prefix:?} install
 
       embedding_output="/tmp/embedding-test"
-      echo "+++ Run embedding tests, deploy to $${embedding_output:?}"
+      echo "--- Run embedding tests, deploy to $${embedding_output:?}"
       mkdir -p "$${embedding_output:?}"
       make -j$${JULIA_CPU_THREADS:?} -C test/embedding JULIA="$${prefix:?}/bin/julia" BIN="$${embedding_output:?}"
     timeout_in_minutes: 60

@@ -15,6 +15,11 @@
 steps:
   - label: ":buildkite: Launch unsigned builders"
     commands: |
+      echo "--- Checkout the merge commit (if this is a pull request build)"
+      MCSH=.buildkite/utilities/merge_commit/merge_commit.sh && test -f $${MCSH:?} && bash $${MCSH:?}
+
+      echo "--- Launch unsigned builders"
+
       # Launch the `whitespace` builder first, because we want that builder to finish as quickly as possible.
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/whitespace.yml
 

@@ -21,5 +21,8 @@ steps:
           version: 1.6
     timeout_in_minutes: 120
     commands: |
+      echo "--- Checkout the merge commit (if this is a pull request build)"
+      MCSH=.buildkite/utilities/merge_commit/merge_commit.sh && test -f $${MCSH:?} && bash $${MCSH:?}
+
       echo "--- Build julia-debug with ASAN"
       contrib/asan/build.sh ./tmp/test-asan -j$${JULIA_CPU_THREADS:?} debug
