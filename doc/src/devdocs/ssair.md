@@ -93,7 +93,7 @@ call (which in Julia is every statement) throws. This would have several negativ
 On the one hand, it would essentially reduce the scope of every basic block to a single call,
 defeating the purpose of having operations be performed at the basic block level. On the other
 hand, every catch basic block would have `n*m` phi node arguments (`n`, the number of statements
-in the critical region, `m` the number of live values through the catch block). 
+in the critical region, `m` the number of live values through the catch block).
 
 To work around this, we use a combination of `Upsilon` and `PhiC` nodes (the C standing for `catch`,
 written `φᶜ` in the IR pretty printer, because unicode subscript c is not available). There are several ways to think of these nodes, but
