@@ -17,16 +17,6 @@ using std::string;
 using std::unordered_map;
 using std::unordered_set;
 
-// TODOs:
-// Roots
-//   - Correctly reporting the roots to JS somehow..?
-//   - Making sure we're actually encoding all the roots.
-// Field Names & node types
-//   - Bug fixing
-// Sizes
-//   - string sizes
-
-
 int gc_heap_snapshot_enabled = 0;
 
 // https://stackoverflow.com/a/33799784/751061
@@ -61,6 +51,7 @@ void _add_internal_root(HeapSnapshot *snapshot);
 // Edges
 // "edge_fields":
 //   [ "type", "name_or_index", "to_node" ]
+// mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2598-L2601
 
 struct Edge {
     size_t type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
@@ -73,6 +64,7 @@ struct Edge {
 // Nodes
 // "node_fields":
 //   [ "type", "name", "id", "self_size", "edge_count", "trace_node_id", "detachedness" ]
+// mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2568-L2575
 
 const int k_node_number_of_fields = 7;
 struct Node {
