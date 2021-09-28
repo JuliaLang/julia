@@ -520,6 +520,36 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
         The additional objects that may need to be gc-rooted for the duration of the call.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
 
+  * `new_opaque_closure`
+
+    Constructs a new opaque closure. The fields are:
+
+      * `args[1]` : signature
+
+        The function signature of the opaque closure. Opaque closures don't participate in dispatch, but the input types can be restricted.
+
+      * `args[2]` : isva
+
+        Indicates whether the closure accepts varargs.
+        
+      * `args[3]` : lb
+
+        Lower bound on the output type. (Defaults to `Union{}`)
+
+      * `args[4]` : ub
+
+        Lower bound on the output type. (Defaults to `Any`)
+
+      * `args[5]` : method
+
+        The actual method as an `opaque_closure_method` expression.
+
+      * `args[6:end]` : captures
+
+        The values captured by the opaque closure.
+
+    !!! compat "Julia 1.7"
+        Opaque closures were added in Julia 1.7
 
 ### [Method](@id ast-lowered-method)
 
