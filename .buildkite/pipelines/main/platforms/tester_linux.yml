@@ -29,14 +29,16 @@ steps:
 
       echo "--- Print the full and short commit hashes"
       SHORT_COMMIT_LENGTH=10
-      SHORT_COMMIT=`echo $${BUILDKITE_COMMIT:?} | cut -c1-$${SHORT_COMMIT_LENGTH:?}`
-      JULIA_DIR="julia-$${SHORT_COMMIT:?}"
+      CHECKED_OUT_COMMIT_FULL=`git rev-parse HEAD`
+      CHECKED_OUT_COMMIT_SHORT=`echo $${CHECKED_OUT_COMMIT_FULL:?} | cut -c1-$${SHORT_COMMIT_LENGTH:?}`
+      JULIA_DIR="julia-$${CHECKED_OUT_COMMIT_SHORT:?}"
       JULIA_BINARY="$${JULIA_DIR:?}/bin/julia"
       ARTIFACT_FILE_EXTENSION="tar.gz"
       ARTIFACT_FILENAME="julia-$${SHORT_COMMIT:?}-linux${ARCH?}.$${ARTIFACT_FILE_EXTENSION:?}"
-      echo "The full commit is:                     $${BUILDKITE_COMMIT:?}"
-      echo "The short commit is:                    $${SHORT_COMMIT:?}"
-      echo "The artifact filename will be:    $${ARTIFACT_FILENAME:?}"
+      echo "The original Buildkite commit is:       $${BUILDKITE_COMMIT:?}"
+      echo "The full checked-out commit is:         $${CHECKED_OUT_COMMIT_FULL:?}"
+      echo "The short checked-out commit is:        $${CHECKED_OUT_COMMIT_SHORT:?}"
+      echo "The artifact filename will be:          $${ARTIFACT_FILENAME:?}"
       echo "The Julia directory name will be: $${JULIA_DIR:?}"
       echo "The Julia binary will be:         $${JULIA_BINARY:?}"
 
