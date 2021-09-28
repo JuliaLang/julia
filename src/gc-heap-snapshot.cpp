@@ -11,7 +11,6 @@
 #include <unordered_set>
 #include <iostream>
 
-using std::cout; using std::endl;
 using std::vector;
 using std::string;
 using std::unordered_map;
@@ -20,30 +19,30 @@ using std::unordered_set;
 int gc_heap_snapshot_enabled = 0;
 
 // https://stackoverflow.com/a/33799784/751061
-void print_str_escape_json(JL_STREAM *stream, const std::string &s) {
-    jl_printf(stream, "\"");
+void print_str_escape_json(ios_t *stream, const std::string &s) {
+    ios_printf(stream, "\"");
     for (auto c = s.cbegin(); c != s.cend(); c++) {
         switch (*c) {
-        case '"': jl_printf(stream, "\\\""); break;
-        case '\\': jl_printf(stream, "\\\\"); break;
-        case '\b': jl_printf(stream, "\\b"); break;
-        case '\f': jl_printf(stream, "\\f"); break;
-        case '\n': jl_printf(stream, "\\n"); break;
-        case '\r': jl_printf(stream, "\\r"); break;
-        case '\t': jl_printf(stream, "\\t"); break;
+        case '"': ios_printf(stream, "\\\""); break;
+        case '\\': ios_printf(stream, "\\\\"); break;
+        case '\b': ios_printf(stream, "\\b"); break;
+        case '\f': ios_printf(stream, "\\f"); break;
+        case '\n': ios_printf(stream, "\\n"); break;
+        case '\r': ios_printf(stream, "\\r"); break;
+        case '\t': ios_printf(stream, "\\t"); break;
         default:
             if ('\x00' <= *c && *c <= '\x1f') {
-                jl_printf(stream, "\\u%04x", (int)*c);
+                ios_printf(stream, "\\u%04x", (int)*c);
             } else {
-                jl_printf(stream, "%c", *c);
+                ios_printf(stream, "%c", *c);
             }
         }
     }
-    jl_printf(stream, "\"");
+    ios_printf(stream, "\"");
 }
 
 struct HeapSnapshot;
-void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot);
+void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot);
 static inline void _record_gc_edge(const char *node_type, const char *edge_type,
                                    jl_value_t *a, jl_value_t *b, size_t name_or_index);
 void _add_internal_root(HeapSnapshot *snapshot);
@@ -105,18 +104,18 @@ struct StringTable {
         return val->second;
     }
 
-    void print_json_array(JL_STREAM *stream, bool newlines) {
-        jl_printf(stream, "[");
+    void print_json_array(ios_t *stream, bool newlines) {
+        ios_printf(stream, "[");
         bool first = true;
         for (const auto &str : strings) {
             if (first) {
                 first = false;
             } else {
-                jl_printf(stream, newlines ? ",\n" : ",");
+                ios_printf(stream, newlines ? ",\n" : ",");
             }
             print_str_escape_json(stream, str);
         }
-        jl_printf(stream, "]");
+        ios_printf(stream, "]");
     }
 };
 
@@ -140,7 +139,7 @@ public:
 HeapSnapshot *g_snapshot = nullptr;
 
 
-JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
+JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream) {
     // Enable snapshotting
     HeapSnapshot snapshot;
     g_snapshot = &snapshot;
@@ -157,7 +156,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
 
     // When we return, the snapshot is full
     // Dump the snapshot
-    serialize_heap_snapshot(stream, snapshot);
+    serialize_heap_snapshot((ios_t*)stream, snapshot);
 }
 
 // adds a node at id 0 which is the "uber root":
@@ -333,65 +332,65 @@ static inline void _record_gc_edge(const char *node_type, const char *edge_type,
     g_snapshot->num_edges += 1;
 }
 
-void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
+void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot) {
     // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2567-L2567
-    jl_printf(stream, "{\"snapshot\":{");
-    jl_printf(stream, "\"meta\":{");
-    jl_printf(stream, "\"node_fields\":[\"type\",\"name\",\"id\",\"self_size\",\"edge_count\",\"trace_node_id\",\"detachedness\"],");
-    jl_printf(stream, "\"node_types\":[");
+    ios_printf(stream, "{\"snapshot\":{");
+    ios_printf(stream, "\"meta\":{");
+    ios_printf(stream, "\"node_fields\":[\"type\",\"name\",\"id\",\"self_size\",\"edge_count\",\"trace_node_id\",\"detachedness\"],");
+    ios_printf(stream, "\"node_types\":[");
     snapshot.node_types.print_json_array(stream, false);
-    jl_printf(stream, ",");
-    jl_printf(stream, "\"string\", \"number\", \"number\", \"number\", \"number\", \"number\"],");
-    jl_printf(stream, "\"edge_fields\":[\"type\",\"name_or_index\",\"to_node\"],");
-    jl_printf(stream, "\"edge_types\":[");
+    ios_printf(stream, ",");
+    ios_printf(stream, "\"string\", \"number\", \"number\", \"number\", \"number\", \"number\"],");
+    ios_printf(stream, "\"edge_fields\":[\"type\",\"name_or_index\",\"to_node\"],");
+    ios_printf(stream, "\"edge_types\":[");
     snapshot.edge_types.print_json_array(stream, false);
-    jl_printf(stream, ",");
-    jl_printf(stream, "\"string_or_number\",\"from_node\"]");
-    jl_printf(stream, "},\n"); // end "meta"
-    jl_printf(stream, "\"node_count\":%zu,", snapshot.nodes.size());
-    jl_printf(stream, "\"edge_count\":%zu", snapshot.num_edges);
-    jl_printf(stream, "},\n"); // end "snapshot"
+    ios_printf(stream, ",");
+    ios_printf(stream, "\"string_or_number\",\"from_node\"]");
+    ios_printf(stream, "},\n"); // end "meta"
+    ios_printf(stream, "\"node_count\":%zu,", snapshot.nodes.size());
+    ios_printf(stream, "\"edge_count\":%zu", snapshot.num_edges);
+    ios_printf(stream, "},\n"); // end "snapshot"
 
-    jl_printf(stream, "\"nodes\":[");
+    ios_printf(stream, "\"nodes\":[");
     bool first_node = true;
     for (const auto &from_node : snapshot.nodes) {
         if (first_node) {
             first_node = false;
         } else {
-            jl_printf(stream, ",");
+            ios_printf(stream, ",");
         }
         // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
-        jl_printf(stream, "%zu", from_node.type);
-        jl_printf(stream, ",%zu", snapshot.names.find_or_create_string_id(from_node.name));
-        jl_printf(stream, ",%zu", from_node.id);
-        jl_printf(stream, ",%zu", from_node.self_size);
-        jl_printf(stream, ",%zu", from_node.edges.size());
-        jl_printf(stream, ",%zu", from_node.trace_node_id);
-        jl_printf(stream, ",%d", from_node.detachedness);
-        jl_printf(stream, "\n");
+        ios_printf(stream, "%zu", from_node.type);
+        ios_printf(stream, ",%zu", snapshot.names.find_or_create_string_id(from_node.name));
+        ios_printf(stream, ",%zu", from_node.id);
+        ios_printf(stream, ",%zu", from_node.self_size);
+        ios_printf(stream, ",%zu", from_node.edges.size());
+        ios_printf(stream, ",%zu", from_node.trace_node_id);
+        ios_printf(stream, ",%d", from_node.detachedness);
+        ios_printf(stream, "\n");
     }
-    jl_printf(stream, "],\n");
+    ios_printf(stream, "],\n");
 
-    jl_printf(stream, "\"edges\":[");
+    ios_printf(stream, "\"edges\":[");
     bool first_edge = true;
     for (const auto &from_node : snapshot.nodes) {
         for (const auto &edge : from_node.edges) {
             if (first_edge) {
                 first_edge = false;
             } else {
-                jl_printf(stream, ",");
+                ios_printf(stream, ",");
             }
-            jl_printf(stream, "%zu", edge.type);
-            jl_printf(stream, ",%zu", edge.name_or_index);
-            jl_printf(stream, ",%zu", edge.to_node * k_node_number_of_fields);
-            jl_printf(stream, "\n");
+            ios_printf(stream, "%zu", edge.type);
+            ios_printf(stream, ",%zu", edge.name_or_index);
+            ios_printf(stream, ",%zu", edge.to_node * k_node_number_of_fields);
+            ios_printf(stream, "\n");
         }
     }
-    jl_printf(stream, "],\n"); // end "edges"
+    ios_printf(stream, "],\n"); // end "edges"
 
-    jl_printf(stream, "\"strings\":");
+    ios_printf(stream, "\"strings\":");
 
     snapshot.names.print_json_array(stream, true);
 
-    jl_printf(stream, "}");
+    ios_printf(stream, "}");
 }
