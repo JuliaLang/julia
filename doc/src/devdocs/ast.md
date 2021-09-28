@@ -531,7 +531,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
       * `args[2]` : isva
 
         Indicates whether the closure accepts varargs.
-        
+
       * `args[3]` : lb
 
         Lower bound on the output type. (Defaults to `Union{}`)
@@ -550,6 +550,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     !!! compat "Julia 1.7"
         Opaque closures were added in Julia 1.7
+
 
 ### [Method](@id ast-lowered-method)
 
