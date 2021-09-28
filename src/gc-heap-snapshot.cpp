@@ -78,7 +78,7 @@ const int k_node_number_of_fields = 7;
 struct Node {
     size_t type; // TODO: point at actual type here?
     string name;
-    size_t id; // (vilterp) the memory address, right?
+    size_t id; // This should be a globally-unique counter, but we use the memory address
     size_t self_size;
     size_t trace_node_id;  // This is ALWAYS 0 in Javascript heap-snapshots.
     // whether the from_node is attached or dettached from the main application state
@@ -122,8 +122,6 @@ struct StringTable {
             } else {
                 jl_printf(stream, newlines ? ",\n" : ",");
             }
-            // Escape strings for JSON
-            // TODO
             print_str_escape_json(stream, str);
         }
         jl_printf(stream, "]");
@@ -145,16 +143,10 @@ public:
     size_t num_edges = 0; // For metadata, updated as you add each edge. Needed because edges owned by nodes.
 };
 
-
-// TODO: Do we need to refer to nodes by their index in the from_node array?
-//size_t find_or_create_node_id(HeapSnapshot& snapshot, string key) {
-//    return find_or_insert_iter(snapshot.nodes_map, key)->second;
-//}
-
+// global heap snapshot, mutated by garbage collector
+// when snapshotting is on.
 HeapSnapshot *g_snapshot = nullptr;
 
-JL_DLLEXPORT int count_nodes = 0;
-JL_DLLEXPORT int count_edges = 0;
 
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
     // Enable snapshotting
@@ -164,8 +156,8 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
 
     _add_internal_root(&snapshot);
 
-    // Do GC, which will callback into record_edge_to_gc_snapshot()...
-    jl_gc_collect(JL_GC_FULL);
+    // Do a full GC mark (and incremental sweep), which will invoke our callbacks on `g_snapshot`
+    jl_gc_collect(JL_GC_INCREMENTAL);
 
     // Disable snapshotting
     gc_heap_snapshot_enabled = false;
@@ -174,10 +166,6 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
     // When we return, the snapshot is full
     // Dump the snapshot
     serialize_heap_snapshot(stream, snapshot);
-
-    // Debugging
-    //jl_printf(JL_STDERR, "nodes: %d\n", count_nodes);
-    //jl_printf(JL_STDERR, "edges: %d\n", count_edges);
 }
 
 // adds a node at id 0 which is the "uber root":
@@ -217,7 +205,7 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
         jl_datatype_t* type = (jl_datatype_t*)jl_typeof(a);
 
         if ((uintptr_t)type < 4096U) {
-            name = "<unkown>";
+            name = "<corrupt>";
         } else if (type == (jl_datatype_t*)jl_buff_tag) {
             name = "<buffer>";
         } else if (type == (jl_datatype_t*)jl_malloc_tag) {
@@ -245,7 +233,6 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
     }
 
     g_snapshot->node_ptr_to_index_map.insert(val, {a, g_snapshot->nodes.size()});
-    count_nodes += 1;
 
     Node from_node{
         // We pick a default type here, which will be set for the _targets_ of edges.
@@ -352,7 +339,6 @@ static inline void _record_gc_edge(const char *node_type, const char *edge_type,
     });
 
     g_snapshot->num_edges += 1;
-    count_edges += 1;  // debugging
 }
 
 void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
