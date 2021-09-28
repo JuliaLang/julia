@@ -34,7 +34,7 @@ steps:
       JULIA_DIR="julia-$${CHECKED_OUT_COMMIT_SHORT:?}"
       JULIA_BINARY="$${JULIA_DIR:?}/bin/julia"
       ARTIFACT_FILE_EXTENSION="tar.gz"
-      ARTIFACT_FILENAME="julia-$${SHORT_COMMIT:?}-linux${ARCH?}.$${ARTIFACT_FILE_EXTENSION:?}"
+      ARTIFACT_FILENAME="julia-$${CHECKED_OUT_COMMIT_SHORT:?}-linux${ARCH?}.$${ARTIFACT_FILE_EXTENSION:?}"
       echo "The original Buildkite commit is:       $${BUILDKITE_COMMIT:?}"
       echo "The full checked-out commit is:         $${CHECKED_OUT_COMMIT_FULL:?}"
       echo "The short checked-out commit is:        $${CHECKED_OUT_COMMIT_SHORT:?}"
