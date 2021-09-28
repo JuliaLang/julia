@@ -304,7 +304,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, int *has_opaque)
+static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, int *has_opaque, int *has_forcedcompile)
 {
     if (!jl_is_expr(v))
         return;
@@ -339,6 +339,12 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, i
         *has_opaque = 1;
         return;
     }
+    else if (head == meta_sym && jl_expr_nargs(e) == 2 &&
+             jl_exprarg(e, 0) == (jl_value_t*)compile_sym &&
+             jl_exprarg(e, 1) == (jl_value_t*)force_sym) {
+        *has_forcedcompile = 1;
+        return;
+    }
     else if (head == call_sym && jl_expr_nargs(e) > 0) {
         jl_value_t *called = NULL;
         jl_value_t *f = jl_exprarg(e, 0);
@@ -368,7 +374,7 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, i
     for (i = 0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e, i);
         if (jl_is_expr(a))
-            expr_attributes(a, has_intrinsics, has_defs, has_opaque);
+            expr_attributes(a, has_intrinsics, has_defs, has_opaque, has_forcedcompile);
     }
 }
 
@@ -377,19 +383,17 @@ int jl_code_requires_compiler(jl_code_info_t *src)
     jl_array_t *body = src->code;
     assert(jl_typeis(body, jl_array_any_type));
     size_t i;
-    int has_intrinsics = 0, has_defs = 0, has_opaque = 0;
-    if (jl_has_meta(body, compile_sym))
-        return 1;
+    int has_intrinsics = 0, has_defs = 0, has_opaque = 0, has_forcedcompile = 0;
     for(i=0; i < jl_array_len(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        expr_attributes(stmt, &has_intrinsics, &has_defs, &has_opaque);
-        if (has_intrinsics)
+        expr_attributes(stmt, &has_intrinsics, &has_defs, &has_opaque, &has_forcedcompile);
+        if (has_intrinsics || has_forcedcompile)
             return 1;
     }
     return 0;
 }
 
-static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs, int *has_loops, int *has_opaque, int *has_compile)
+static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs, int *has_loops, int *has_opaque, int *has_forcedcompile)
 {
     size_t i;
     *has_loops = 0;
@@ -405,9 +409,8 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
                     *has_loops = 1;
             }
         }
-        expr_attributes(stmt, has_intrinsics, has_defs, has_opaque);
+        expr_attributes(stmt, has_intrinsics, has_defs, has_opaque, has_forcedcompile);
     }
-    *has_compile = jl_has_meta(body, compile_sym);
 }
 
 static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
@@ -851,20 +854,20 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return (jl_value_t*)ex;
     }
 
-    int has_intrinsics = 0, has_defs = 0, has_loops = 0, has_opaque = 0, has_compile = 0;
+    int has_intrinsics = 0, has_defs = 0, has_loops = 0, has_opaque = 0, has_forcedcompile = 0;
     assert(head == thunk_sym);
     thk = (jl_code_info_t*)jl_exprarg(ex, 0);
     assert(jl_is_code_info(thk));
     assert(jl_typeis(thk->code, jl_array_any_type));
-    body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops, &has_opaque, &has_compile);
+    body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops, &has_opaque, &has_forcedcompile);
 
     jl_value_t *result;
-    if (has_intrinsics || (!has_defs && fast && has_loops &&
-                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
-                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN &&
-                           jl_get_module_compile(m) != JL_OPTIONS_COMPILE_OFF &&
-                           jl_get_module_compile(m) != JL_OPTIONS_COMPILE_MIN) ||
-                           has_compile) {
+    if (has_intrinsics || has_forcedcompile ||
+        (!has_defs && fast && has_loops &&
+         jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
+         jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN &&
+         jl_get_module_compile(m) != JL_OPTIONS_COMPILE_OFF &&
+         jl_get_module_compile(m) != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
         mfunc = method_instance_for_thunk(thk, m);
         jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);

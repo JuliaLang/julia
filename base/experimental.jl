@@ -162,6 +162,30 @@ macro compiler_options(args...)
     return opts
 end
 
+"""
+    Experimental.@compile
+
+Force compilation of the block or function (Julia's built-in interpreter is blocked from executing it).
+
+# Examples
+
+```
+module WithPrecompiles
+#=
+    code definitions
+=#
+
+if Sys.iswindows()
+    Experimental.@compile
+    compile_me()  # `compile_me` will be compiled before execution (not run in the interpreter)
+end
+
+end
+```
+"""
+macro compile() Expr(:meta, :compile, :force) end
+
+
 # UI features for errors
 
 """
