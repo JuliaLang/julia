@@ -4,6 +4,7 @@
 #define JL_GC_HEAP_SNAPSHOT_H
 
 #include "julia.h"
+#include "ios.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,7 +63,7 @@ static inline void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t 
 // ---------------------------------------------------------------------
 // Functions to call from Julia to take heap snapshot
 // ---------------------------------------------------------------------
-JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream);
+JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream);
 
 
 #ifdef __cplusplus
