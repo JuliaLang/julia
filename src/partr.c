@@ -247,7 +247,9 @@ void jl_threadfun(void *arg)
     jl_ptls_t ptls = jl_init_threadtls(targ->tid);
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(0, &stack_lo, &stack_hi);
-    jl_init_root_task(ptls, stack_lo, stack_hi);
+    // warning: this changes `jl_current_task`, so be careful not to call that from this function
+    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+    JL_GC_PROMISE_ROOTED(ct);
     jl_install_thread_signal_handler(ptls);
 
     // set up sleep mechanism for this thread
@@ -262,7 +264,7 @@ void jl_threadfun(void *arg)
     free(targ);
 
     (void)jl_gc_unsafe_enter(ptls);
-    jl_finish_task(jl_current_task); // noreturn
+    jl_finish_task(ct); // noreturn
 }
 
 

@@ -628,6 +628,8 @@ static void restore_fp_env(void)
     }
 }
 
+static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct);
+
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
@@ -722,9 +724,14 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_init_threading();
 
     jl_ptls_t ptls = jl_init_threadtls(0);
-    jl_init_root_task(ptls, stack_lo, stack_hi);
-    jl_task_t *ct = jl_current_task;
+    // warning: this changes `jl_current_task`, so be careful not to call that from this function
+    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+    JL_GC_PROMISE_ROOTED(ct);
+    _finish_julia_init(rel, ptls, ct);
+}
 
+static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
+{
     jl_init_threadinginfra();
 
     jl_resolve_sysimg_location(rel);
