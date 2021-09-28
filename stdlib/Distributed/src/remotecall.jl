@@ -27,12 +27,11 @@ mutable struct Future <: AbstractRemoteRef
     whence::Int
     id::Int
     v::Union{Some{Any}, Nothing}
-    local_lock::Threads.Condition
 
     Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing) =
-        (r = new(w, rrid.whence, rrid.id, v, Threads.Condition()); return test_existing_ref(r))
+        (r = new(w, rrid.whence, rrid.id, v); return test_existing_ref(r))
 
-    Future(t::NTuple{4, Any}) = new(t[1], t[2], t[3], t[4], Threads.Condition())  # Useful for creating dummy, zeroed-out instances
+    Future(t::NTuple{4, Any}) = new(t[1], t[2], t[3], t[4])  # Useful for creating dummy, zeroed-out instances
 end
 
 """
@@ -584,15 +583,14 @@ is an exception, throws a [`RemoteException`](@ref) which captures the remote ex
 function fetch(r::Future)
     r.v !== nothing && return something(r.v)
     if r.where == myid()
-        lock(r.local_lock)
-        try
-            while r.v === nothing
-                wait(r.local_lock)
-            end
-        finally
-            unlock(r.local_lock)
+        rv = lookup_ref(remoteref_id(r))
+        @debug "fet; rid=$(objectid(rid)); rv=$(objectid(rv))"
+
+        if r.v !== nothing
+            send_del_client(r)
+            return something(r.v)
         end
-        return something(r.v)
+        v = fetch(rv.c)
     else
         v = call_on_owner(fetch_ref, r)
         r.v = Some(v)
@@ -601,7 +599,11 @@ function fetch(r::Future)
     v
 end
 
-fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
+fetch_ref(rid, args...) = begin
+    rv=lookup_ref(rid)
+    @debug "fet; rid=$(objectid(rid)); rv=$(objectid(rv))"
+    fetch(rv.c, args...)
+end
 
 """
     fetch(c::RemoteChannel)
@@ -624,23 +626,13 @@ value to the return value of the call upon completion.
 """
 function put!(rr::Future, v)
     rr.v !== nothing && error("Future can be set only once")
-    if rr.where == myid()
-        lock(rr.local_lock)
-        try
-            call_on_owner(put_future, rr, v, myid())
-            rr.v = Some(v)
-            notify(rr.local_lock)
-        finally
-            unlock(rr.local_lock)
-        end
-    else
-        call_on_owner(put_future, rr, v, myid())
-        rr.v = Some(v)
-    end
+    rr.v = Some(v)
+    call_on_owner(put_future, rr, v, myid())
     rr
 end
 function put_future(rid, v, caller)
     rv = lookup_ref(rid)
+    @debug "put; rid=$(objectid(rid)); rv=$(objectid(rv))"
     isready(rv) && error("Future can be set only once")
     put!(rv, v)
     # The caller has the value and hence can be removed from the remote store.
