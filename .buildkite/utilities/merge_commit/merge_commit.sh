@@ -2,6 +2,7 @@
 
 if [[ "${BUILDKITE_PULL_REQUEST:?}" != "false" ]]; then
     git log -n 1
+    echo ""
     echo "This is a pull request build."
     echo "Pull request: ${BUILDKITE_PULL_REQUEST:?}"
     echo "Fetching the pull request merge commit..."
@@ -14,3 +15,4 @@ else
 fi
 
 git log -n 1
+echo ""
