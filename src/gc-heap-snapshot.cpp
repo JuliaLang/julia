@@ -211,15 +211,16 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
             self_size = name.length();
         } else if (jl_is_datatype(type)) {
             self_size = (size_t)jl_datatype_size(type);
-            // TODO: get the entire type, including type parameters
-            // - option 1: jl_static_show it here:
-            //   crashes because it might do GC, and we are already inside GC.
-            //
-            // - option 2: put type jl_datatype_t* directly in the Node struct:
-            //   bad because the jl_datatype_t might be freed before we serialize
-            //   the snapshot. Maybe we should allocate some gc-rooted object
-            //   and attach all the jl_datatype_t*'s we need to it?
-            name = jl_symbol_name(type->name->name);
+            
+            // print full type
+            ios_t str_;
+            ios_mem(&str_, 1024);
+            JL_STREAM* str = (JL_STREAM*)&str_;
+
+            jl_static_show(str, (jl_value_t*)type);
+
+            name = string((const char*)str_.buf, str_.size);
+            ios_close(&str_);
         }
     }
 
