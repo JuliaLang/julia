@@ -908,7 +908,7 @@ function modf(x::T) where T<:IEEEFloat
     isnan(x) && return (x, x)
     isinf(x) && return (copysign(zero(T), x), copysign(T(Inf), x))
     ix = trunc(x)
-    rx = x - ix
+    rx = copysign(x - ix, x)
     return (rx, ix)
 end
 
