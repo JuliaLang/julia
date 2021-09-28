@@ -538,7 +538,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[4]` : ub
 
-        Lower bound on the output type. (Defaults to `Any`)
+        Upper bound on the output type. (Defaults to `Any`)
 
       * `args[5]` : method
 
