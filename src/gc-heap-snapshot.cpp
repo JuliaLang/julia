@@ -141,6 +141,9 @@ HeapSnapshot *g_snapshot = nullptr;
 
 
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
+    // Do a full GC sweep, which will reset all of the mark bits
+    jl_gc_collect(JL_GC_FULL);
+
     // Enable snapshotting
     HeapSnapshot snapshot;
     g_snapshot = &snapshot;
