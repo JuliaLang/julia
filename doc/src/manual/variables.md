@@ -94,9 +94,9 @@ ERROR: cannot assign a value to variable Base.sqrt from module Main
 
 Variable names must begin with a letter (A-Z or a-z), underscore, or a subset of Unicode code
 points greater than 00A0; in particular, [Unicode character categories](http://www.fileformat.info/info/unicode/category/index.htm)
-Lu/Ll/Lt/Lm/Lo/Nl (letters), Sc/So (currency and other symbols), and a few other letter-like characters
+Lu/Ll/Lt/Lm/Lo/Nl/No (letters and certain numeric symbols), Sc/So (currency and other symbols), and a few other letter-like characters
 (e.g. a subset of the Sm math symbols) are allowed. Subsequent characters may also include ! and
-digits (0-9 and other characters in categories Nd/No), as well as other Unicode code points: diacritics
+digits (0-9 and other decimal digits in category Nd), as well as other Unicode code points: diacritics
 and other modifying marks (categories Mn/Mc/Me/Sk), some punctuation connectors (category Pc),
 primes, and a few other characters.
 

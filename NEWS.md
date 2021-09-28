@@ -13,6 +13,10 @@ New language features
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
 
+  * Identifiers can now start with numeric symbols in category
+    [No: Number, other](http://www.fileformat.info/info/unicode/category/No/list.htm),
+    allowing you to have variables with names like `⅓x` or `¹x₂` ([#20278]).
+
 Language changes
 ----------------
 
