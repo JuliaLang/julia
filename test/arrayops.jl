@@ -2956,3 +2956,23 @@ end
         @test c + zero(c) == c
     end
 end
+
+struct T22208 <: DenseMatrix{Float64}
+    A::Matrix{Float64}
+end
+Base.size(A::T22208) = size(A.A)
+Base.map(f, A::T22208)            = T22208(map(f, A.A))
+Base.map(f, A::T22208, B::T22208) = T22208(map(f, A.A, B.A))
+@testset "test that binary ops for custom arrays call map" begin
+    A = T22208(randn(3,3))
+    x = randn()
+
+    @test (x * A).A == x * A.A
+    @test (x \ A).A == x \ A.A
+
+    @test (A * x).A == A.A * x
+    @test (A / x).A == A.A / x
+
+    @test (A + A).A == A.A + A.A
+    @test (A - A).A == A.A - A.A
+end
