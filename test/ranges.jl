@@ -655,14 +655,14 @@ end
 end
 @testset "broadcasted operations with scalars" for T in (Int, UInt, Int128)
     @test broadcast(-, T(1):3, 2) === T(1)-2:1
-    @test broadcast(-, T(1):3, 0.25) === T(1)-0.25:3-0.25
+    @test broadcast(-, T(1):3, 0.25) === range(T(1)-0.25, length=T(3)) == T(1)-0.25:3-0.25
     @test broadcast(+, T(1):3) === T(1):3
     @test broadcast(+, T(1):3, 2) === T(3):5
-    @test broadcast(+, T(1):3, 0.25) === T(1)+0.25:3+0.25
+    @test broadcast(+, T(1):3, 0.25) === range(T(1)+0.25, length=T(3)) == T(1)+0.25:3+0.25
     @test broadcast(+, T(1):2:6, 1) === T(2):2:6
-    @test broadcast(+, T(1):2:6, 0.3) === T(1)+0.3:2:5+0.3
+    @test broadcast(+, T(1):2:6, 0.3) === range(T(1)+0.3, step=2, length=T(3)) == T(1)+0.3:2:5+0.3
     @test broadcast(-, T(1):2:6, 1) === T(0):2:4
-    @test broadcast(-, T(1):2:6, 0.3) === T(1)-0.3:2:5-0.3
+    @test broadcast(-, T(1):2:6, 0.3) === range(T(1)-0.3, step=2, length=T(3)) == T(1)-0.3:2:5-0.3
     is_unsigned = T <: Unsigned
     is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
     @test broadcast(-, T(1):3) == -T(1):-T(1):-T(3)
@@ -1502,6 +1502,11 @@ end
     @test @inferred(x .\ r) === 0.5:0.5:2.5
 
     @test @inferred(2 .* (r .+ 1) .+ 2) == 6:2:14
+
+    # issue #42291
+    @test length((1:5) .- 1/7) == 5
+    @test length((1:5) .+ -1/7) == 5
+    @test length(-1/7 .+ (1:5)) == 5
 end
 
 @testset "Bad range calls" begin
