@@ -8209,42 +8209,20 @@ extern "C" void jl_init_llvm(void)
 #endif
 
     // Parse command line flags after initialization
-    const char *const argv_tailmerge[] = {"", "-enable-tail-merge=0"}; // NOO TOUCHIE; NO TOUCH! See #922
-    cl::ParseCommandLineOptions(sizeof(argv_tailmerge)/sizeof(argv_tailmerge[0]), argv_tailmerge, "disable-tail-merge\n");
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-    const char *const argv_copyprop[] = {"", "-disable-copyprop"}; // llvm bug 21743
-    cl::ParseCommandLineOptions(sizeof(argv_copyprop)/sizeof(argv_copyprop[0]), argv_copyprop, "disable-copyprop\n");
-#endif
-#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
-    const char *const argv_avoidsfb[] = {"", "-x86-disable-avoid-SFB"}; // llvm bug 41629, see https://gist.github.com/vtjnash/192cab72a6cfc00256ff118238163b55
-    cl::ParseCommandLineOptions(sizeof(argv_avoidsfb)/sizeof(argv_avoidsfb[0]), argv_avoidsfb, "disable-avoidsfb\n");
-#endif
-#if JL_LLVM_VERSION >= 120000
-    // https://reviews.llvm.org/rGc068e9c8c123e7f8c8f3feb57245a012ccd09ccf
-    Optional<std::string> envValue = sys::Process::GetEnv("JULIA_LLVM_ARGS");
-    if (envValue) {
-        SmallVector<const char *, 20> newArgv;
-        BumpPtrAllocator A;
-        StringSaver Saver(A);
-        newArgv.push_back(Saver.save("Julia").data());
+    StringMap<cl::Option*> &llvmopts = cl::getRegisteredOptions();
+    const char *const argv[1] = {"julia"};
+    cl::ParseCommandLineOptions(1, argv, "", nullptr, "JULIA_LLVM_ARGS");
 
-        // Parse the value of the environment variable into a "command line"
-        // and hand it off to ParseCommandLineOptions().
-        cl::TokenizeGNUCommandLine(*envValue, Saver, newArgv);
-        int newArgc = static_cast<int>(newArgv.size());
-        cl::ParseCommandLineOptions(newArgc, &newArgv[0]);
-    }
-#else
-    cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
-#endif
-
+    // Set preferred non-default options
+    cl::Option *clopt;
+    clopt = llvmopts.lookup("enable-tail-merge"); // NOO TOUCHIE; NO TOUCH! See #922
+    if (clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "0", 1);
     // if the patch adding this option has been applied, lower its limit to provide
     // better DAGCombiner performance.
-    auto &clOptions = cl::getRegisteredOptions();
-    if (clOptions.find("combiner-store-merge-dependence-limit") != clOptions.end()) {
-        const char *const argv_smdl[] = {"", "-combiner-store-merge-dependence-limit=4"};
-        cl::ParseCommandLineOptions(sizeof(argv_smdl)/sizeof(argv_smdl[0]), argv_smdl);
-    }
+    clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
+    if (clopt && clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "4", 1);
 
     TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
@@ -8346,6 +8324,8 @@ extern "C" void jl_init_llvm(void)
     if (jl_using_perf_jitevents)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
 #endif
+
+    cl::PrintOptionValues();
 }
 
 extern "C" void jl_init_codegen(void)
