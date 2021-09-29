@@ -592,8 +592,8 @@ IteratorSize(::Type{<:Rest{I}}) where {I} = rest_iteratorsize(IteratorSize(I))
 
 # Count -- infinite counting
 
-struct Count{T,S}
-    start::T
+struct Count{S<:Number}
+    start::S
     step::S
 end
 
@@ -613,13 +613,11 @@ julia> for v in Iterators.countfrom(5, 2)
 9
 ```
 """
-countfrom(start::T, step::S) where {T,S} = Count{typeof(start+step),S}(start, step)
-countfrom(start::Number, step::Number)   = Count(promote(start, step)...)
-countfrom(start)                         = Count(start, oneunit(start))
-countfrom()                              = Count(1, 1)
+countfrom(start::Number, step::Number) = Count(promote(start, step)...)
+countfrom(start::Number)               = Count(start, oneunit(start))
+countfrom()                            = Count(1, 1)
 
-
-eltype(::Type{Count{T,S}}) where {T,S} = T
+eltype(::Type{Count{S}}) where {S} = S
 
 iterate(it::Count, state=it.start) = (state, state + it.step)
 
