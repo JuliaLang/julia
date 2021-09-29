@@ -396,12 +396,12 @@ function Float64(x::BigInt, ::RoundingMode{:Nearest})
         y1 = unsafe_load(x.d, xsize) % UInt64
         n = 64 - leading_zeros(y1)
         # load first 54(1 + 52 bits of fraction + 1 for rounding)
-        y = y1 >> (n - (_precision(Float64)+1))
+        y = y1 >> (n - (precision(Float64)+1))
         if Limb == UInt64
-            y += n > _precision(Float64) ? 0 : (unsafe_load(x.d, xsize-1) >> (10+n))
+            y += n > precision(Float64) ? 0 : (unsafe_load(x.d, xsize-1) >> (10+n))
         else
             y += (unsafe_load(x.d, xsize-1) % UInt64) >> (n-22)
-            y += n > (_precision(Float64) - 32) ? 0 : (unsafe_load(x.d, xsize-2) >> (10+n))
+            y += n > (precision(Float64) - 32) ? 0 : (unsafe_load(x.d, xsize-2) >> (10+n))
         end
         y = (y + 1) >> 1 # round, ties up
         y &= ~UInt64(trailing_zeros(x) == (n-54 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
@@ -423,8 +423,8 @@ function Float32(x::BigInt, ::RoundingMode{:Nearest})
         y1 = unsafe_load(x.d, xsize)
         n = BITS_PER_LIMB - leading_zeros(y1)
         # load first 25(1 + 23 bits of fraction + 1 for rounding)
-        y = (y1 >> (n - (_precision(Float32)+1))) % UInt32
-        y += (n > _precision(Float32) ? 0 : unsafe_load(x.d, xsize-1) >> (BITS_PER_LIMB - (25-n))) % UInt32
+        y = (y1 >> (n - (precision(Float32)+1))) % UInt32
+        y += (n > precision(Float32) ? 0 : unsafe_load(x.d, xsize-1) >> (BITS_PER_LIMB - (25-n))) % UInt32
         y = (y + one(UInt32)) >> 1 # round, ties up
         y &= ~UInt32(trailing_zeros(x) == (n-25 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
         d = ((n+125) % UInt32) << 23
@@ -442,7 +442,7 @@ function Float16(x::BigInt, ::RoundingMode{:Nearest})
         z = Inf16
     else
         # load first 12(1 + 10 bits for fraction + 1 for rounding)
-        y = (y1 >> (n - (_precision(Float16)+1))) % UInt16
+        y = (y1 >> (n - (precision(Float16)+1))) % UInt16
         y = (y + one(UInt16)) >> 1 # round, ties up
         y &= ~UInt16(trailing_zeros(x) == (n-12)) # fix last bit to round to even
         d = ((n+13) % UInt16) << 10

@@ -49,7 +49,7 @@ Float16(x::AbstractIrrational) = Float16(Float32(x)::Float32)
 Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
 @pure function Rational{T}(x::AbstractIrrational) where T<:Integer
-    o = _precision(BigFloat)
+    o = precision(BigFloat)
     p = 256
     while true
         setprecision(BigFloat, p)
@@ -95,10 +95,10 @@ end
 <(x::Float32, y::AbstractIrrational) = x <= Float32(y,RoundDown)
 <(x::AbstractIrrational, y::Float16) = Float32(x,RoundUp) <= y
 <(x::Float16, y::AbstractIrrational) = x <= Float32(y,RoundDown)
-<(x::AbstractIrrational, y::BigFloat) = setprecision(_precision(y)+32) do
+<(x::AbstractIrrational, y::BigFloat) = setprecision(precision(y)+32) do
     big(x) < y
 end
-<(x::BigFloat, y::AbstractIrrational) = setprecision(_precision(x)+32) do
+<(x::BigFloat, y::AbstractIrrational) = setprecision(precision(x)+32) do
     x < big(y)
 end
 
@@ -172,14 +172,14 @@ macro irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
     bigconvert = isa(def,Symbol) ? quote
-        function Base.BigFloat(::Irrational{$qsym}, r::MPFR.MPFRRoundingMode=MPFR.ROUNDING_MODE[]; precision=_precision(BigFloat))
+        function Base.BigFloat(::Irrational{$qsym}, r::MPFR.MPFRRoundingMode=MPFR.ROUNDING_MODE[]; precision=precision(BigFloat))
             c = BigFloat(;precision=precision)
             ccall(($(string("mpfr_const_", def)), :libmpfr),
                   Cint, (Ref{BigFloat}, MPFR.MPFRRoundingMode), c, r)
             return c
         end
     end : quote
-        function Base.BigFloat(::Irrational{$qsym}; precision=_precision(BigFloat))
+        function Base.BigFloat(::Irrational{$qsym}; precision=precision(BigFloat))
             setprecision(BigFloat, precision) do
                 $(esc(def))
             end
