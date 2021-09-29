@@ -422,17 +422,17 @@ for Tri in (:UpperTriangular, :LowerTriangular)
     # 3-arg mul!: invoke 5-arg mul! rather than lmul!
     @eval mul!(out::$Tri, A::Union{$Tri,$UTri}, D::Diagonal) = mul!(out, A, D, true, false)
     # 5-arg mul!
-    @eval @inline mul!(out::$Tri, D::Diagonal, A::$Tri, α::Number, β::Number) = 
+    @eval @inline mul!(out::$Tri, D::Diagonal, A::$Tri, α::Number, β::Number) =
         $Tri(mul!(out.data, D, A.data, α, β))
     @eval @inline function mul!(out::$Tri, D::Diagonal, A::$UTri, α::Number, β::Number)
         diag′ = iszero(β) ? D.diag : diag(out)
         data = mul!(out.data, D, A.data, α, β)
         $Tri(_setdiag!(data, MulAddMul(α, β), D.diag, diag′))
     end
-    @eval @inline mul!(out::$Tri, A::$Tri, D::Diagonal, α::Number, β::Number) = 
+    @eval @inline mul!(out::$Tri, A::$Tri, D::Diagonal, α::Number, β::Number) =
         $Tri(mul!(out.data, A.data, D, α, β))
     @eval @inline function mul!(out::$Tri, A::$UTri, D::Diagonal, α::Number, β::Number)
-        diag′ = iszero(β) ? D.diag : diag(out) 
+        diag′ = iszero(β) ? D.diag : diag(out)
         data = mul!(out.data, A.data, D, α, β)
         $Tri(_setdiag!(data, MulAddMul(α, β), D.diag, diag′))
     end
