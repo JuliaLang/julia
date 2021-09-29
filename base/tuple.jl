@@ -354,7 +354,8 @@ _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
 
 end
 
-## findfirst ##
+## find ##
+
 _findfirst_rec(f, i::Int, ::Tuple{}) = nothing
 _findfirst_rec(f, i::Int, t::Tuple) = (@inline; f(first(t)) ? i : _findfirst_rec(f, i+1, tail(t)))
 function _findfirst_loop(f::Function, t)
