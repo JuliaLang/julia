@@ -366,7 +366,6 @@ julia> normpath("/home/myuser/../example.jl")
                                             
 julia> normpath("Documents/Julia") == joinpath("Documents", "Julia")
 true
-
 ```
 """
 function normpath(path::String)
