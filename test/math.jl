@@ -659,6 +659,7 @@ end
         @test modf(T(Inf))  === (T(0.0), T(Inf))
         @test modf(T(NaN))  === (T(NaN), T(NaN))
         @test modf(T(-0.0)) === (T(-0.0), T(-0.0))
+        @test modf(T(-1.0)) === (T(-0.0), T(-1.0))
     end
 end
 
