@@ -524,6 +524,10 @@ end
         @test findnext(isequal(1), (1, 1), UInt(2)) isa Int
         @test findprev(isequal(1), (1, 1), UInt(1)) isa Int
     end
+
+    @test Base.return_types() do
+        findfirst(==(2), (1.0,2,3f0))
+    end == Any[Int]
 end
 
 @testset "properties" begin

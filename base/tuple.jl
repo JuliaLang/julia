@@ -355,13 +355,18 @@ _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
 end
 
 ## findfirst ##
-_findfirst(f, i::Int, ::Tuple{}) = nothing
-_findfirst(f, i::Int, x::Tuple) = (@inline; f(first(x)) ? i : _findfirst(f, i+1, tail(x)))
-findfirst(f::Function, x::Tuple) = _findfirst(f, 1, x)
-function findfirst(f::Function, x::Any32)
-  for i in 1:length(x)
-    f(x[i]) && return i
-  end
+_findfirst_rec(f, i::Int, ::Tuple{}) = nothing
+_findfirst_rec(f, i::Int, t::Tuple) = (@inline; f(first(t)) ? i : _findfirst(f, i+1, tail(t)))
+function _findfirst_loop(f::Function, t)
+    for i in 1:length(t)
+        f(t[i]) && return i
+    end
+end
+findfirst(f::Function, t::Tuple) = length(t) < 32 ? _findfirst_rec(f, 1, t) : _findfirst_loop(f, t)
+
+function findlast(f::Function, x::Tuple)
+    r = findfirst(f, reverse(x))
+    return isnothing(r) ? r : length(x) - r + 1
 end
 
 ## filter ##
