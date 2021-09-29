@@ -34,6 +34,8 @@ New library features
 Standard library changes
 ------------------------
 
+* `pmap` now defaults to using a `CachingPool` ([#33892]).
+
 #### Package Manager
 
 #### LinearAlgebra
