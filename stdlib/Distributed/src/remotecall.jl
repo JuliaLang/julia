@@ -589,7 +589,7 @@ function fetch(r::Future)
         # for the case of the wrong rv we should check r.v again and return without waiting on rv
         # r.v will be populated at that time if the rv is wrong, because caching is done before del_client
         # in case of a correct rv it's safe to fetch on it and we do it after the additional check
-        rv = lookup_ref(remoteref_id(r)) 
+        rv = lookup_ref(remoteref_id(r))
 
         @debug "fet; rid=$(objectid(rid)); rv=$(objectid(rv))"
 
