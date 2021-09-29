@@ -921,12 +921,17 @@ end
         @test fun(D, copy(UTriA))::Tri == fun(D, Matrix(UTriA))
     end
     # 3 args
-    @test outTri === ldiv!(outTri, D, TriA::Tri == ldiv!(out, D, Matrix(TriA))
+    @test outTri === ldiv!(outTri, D, TriA)::Tri == ldiv!(out, D, Matrix(TriA))
     @test outTri === ldiv!(outTri, D, UTriA)::Tri == ldiv!(out, D, Matrix(UTriA))
     @test outTri === mul!(outTri, D, TriA)::Tri == mul!(out, D, Matrix(TriA))
     @test outTri === mul!(outTri, D, UTriA)::Tri == mul!(out, D, Matrix(UTriA))
     @test outTri === mul!(outTri, TriA, D)::Tri == mul!(out, Matrix(TriA), D)
     @test outTri === mul!(outTri, UTriA, D)::Tri == mul!(out, Matrix(UTriA), D)
+    # 5 args
+    @test outTri === mul!(outTri, D, TriA, 2, 1)::Tri == mul!(out, D, Matrix(TriA), 2, 1)
+    @test outTri === mul!(outTri, D, UTriA, 2, 1)::Tri == mul!(out, D, Matrix(UTriA), 2, 1)
+    @test outTri === mul!(outTri, TriA, D, 2, 1)::Tri == mul!(out, Matrix(TriA), D, 2, 1)
+    @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
 end
 
 end # module TestDiagonal
