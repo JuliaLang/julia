@@ -54,6 +54,7 @@ DECLARE_BUILTIN(_typevar);
 DECLARE_BUILTIN(arrayfreeze);
 DECLARE_BUILTIN(arraythaw);
 DECLARE_BUILTIN(mutating_arrayfreeze);
+DECLARE_BUILTIN(maybecopy);
 
 JL_CALLABLE(jl_f_invoke_kwsorter);
 JL_CALLABLE(jl_f__structtype);

@@ -663,12 +663,13 @@ static const auto jl_newbits_func = new JuliaFunction{
 // `julia.typeof` does read memory, but it is effectively readnone before we lower
 // the allocation function. This is OK as long as we lower `julia.typeof` no later than
 // `julia.gc_alloc_obj`.
+// Updated to argmemonly due to C++ deconstructor style usage in jl_f_arrayfreeze / mutating_arrayfreeze
 static const auto jl_typeof_func = new JuliaFunction{
     "julia.typeof",
     [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
                 {T_prjlvalue}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
-            Attributes(C, {Attribute::ReadNone, Attribute::NoUnwind, Attribute::NoRecurse}),
+            Attributes(C, {Attribute::ArgMemOnly, Attribute::NoUnwind, Attribute::NoRecurse}),
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
@@ -906,6 +907,7 @@ static const std::map<jl_fptr_args_t, JuliaFunction*> builtin_func_map = {
     { &jl_f_arrayfreeze,        new JuliaFunction{"jl_f_arrayfreeze", get_func_sig, get_func_attrs} },
     { &jl_f_arraythaw,          new JuliaFunction{"jl_f_arraythaw", get_func_sig, get_func_attrs} },
     { &jl_f_mutating_arrayfreeze,new JuliaFunction{"jl_f_mutating_arrayfreeze", get_func_sig, get_func_attrs} },
+    { &jl_f_maybecopy,          new JuliaFunction{"jl_f_maybecopy", get_func_sig, get_func_attrs} },
 };
 
 static const auto jl_new_opaque_closure_jlcall_func = new JuliaFunction{"jl_new_opaque_closure_jlcall", get_func_sig, get_func_attrs};

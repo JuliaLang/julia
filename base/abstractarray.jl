@@ -1073,6 +1073,10 @@ function copy(a::AbstractArray)
     copymutable(a)
 end
 
+function copy(a::Core.ImmutableArray)
+    a
+end
+
 function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
                A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
     if length(ir_dest) != length(ir_src)

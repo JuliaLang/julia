@@ -1395,6 +1395,19 @@ JL_CALLABLE(jl_f_arrayset)
     return args[1];
 }
 
+JL_CALLABLE(jl_f_maybecopy)
+{
+    // maybecopy --- this builtin is never actually supposed to be executed
+    // instead, calls to it are analyzed and replaced with either a call to copy
+    // or directly replaced with the object itself that is the target of the maybecopy
+    // therefore, we just check that there is one argument and do a no-op
+    JL_NARGSV(maybecopy, 1);
+    JL_TYPECHK(maybecopy, array, args[0]);
+    jl_array_t *a = (jl_array_t*)args[0];
+    jl_array_t *na = jl_array_copy(a);
+    return (jl_value_t*)na;
+}
+
 // type definition ------------------------------------------------------------
 
 JL_CALLABLE(jl_f__structtype)
@@ -1877,6 +1890,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_setsuper!", jl_f__setsuper);
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
+    jl_builtin_maybecopy = add_builtin_func("maybecopy", jl_f_maybecopy);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

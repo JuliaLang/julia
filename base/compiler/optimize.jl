@@ -307,6 +307,7 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     ir = adce_pass!(ir)
     #@Base.show ("after_adce", ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
+    #@timeit "compact 3" ir = compact!(ir)
     ir = memory_opt!(ir)
     #@Base.show ir
     if JLOptions().debug_level == 2

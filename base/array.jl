@@ -118,6 +118,35 @@ Union type of [`DenseVector{T}`](@ref) and [`DenseMatrix{T}`](@ref).
 """
 const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
+"""
+    ImmutableArray
+
+Dynamically allocated, immutable array.
+
+"""
+const ImmutableArray = Core.ImmutableArray
+
+"""
+    IMArray{T,N}
+
+Union type of [`Array{T,N}`](@ref) and [`ImmutableArray{T,N}`](@ref)
+"""
+const IMArray{T,N} = Union{Array{T, N}, ImmutableArray{T,N}}
+
+"""
+    IMVector{T}
+
+One-dimensional [`ImmutableArray`](@ref) or [`Array`](@ref) with elements of type `T`. Alias for `IMArray{T, 1}`.
+"""
+const IMVector{T} = IMArray{T, 1}
+
+"""
+    IMMatrix{T}
+
+Two-dimensional [`ImmutableArray`](@ref) or [`Array`](@ref) with elements of type `T`. Alias for `IMArray{T,2}`.
+"""
+const IMMatrix{T} = IMArray{T, 2}
+
 ## Basic functions ##
 
 import Core: arraysize, arrayset, arrayref, const_arrayref
@@ -147,14 +176,13 @@ function vect(X...)
     return copyto!(Vector{T}(undef, length(X)), X)
 end
 
-const ImmutableArray = Core.ImmutableArray
-const IMArray{T,N} = Union{Array{T, N}, ImmutableArray{T,N}}
-const IMVector{T} = IMArray{T, 1}
-const IMMatrix{T} = IMArray{T, 2}
-
+# Freeze and thaw constructors
 ImmutableArray(a::Array) = Core.arrayfreeze(a)
 Array(a::ImmutableArray) = Core.arraythaw(a)
 
+ImmutableArray(a::AbstractArray{T,N}) where {T,N} = ImmutableArray{T,N}(a)
+
+# Size functions for arrays, both mutable and immutable
 size(a::IMArray, d::Integer) = arraysize(a, convert(Int, d))
 size(a::IMVector) = (arraysize(a,1),)
 size(a::IMMatrix) = (arraysize(a,1), arraysize(a,2))
@@ -393,6 +421,18 @@ similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
 
+ImmutableArray{T}(undef::UndefInitializer, m::Int) where T = ImmutableArray(Array{T}(undef, m))
+ImmutableArray{T}(undef::UndefInitializer, dims::Dims) where T = ImmutableArray(Array{T}(undef, dims))
+
+"""
+    maybecopy(x)
+
+`maybecopy` provides access to `x` while ensuring it does not escape.
+To do so, the optimizer decides whether to create a copy of `x` or not based on the implementation
+That is, `maybecopy` will either be a call to [`copy`](@ref) or just a reference to x.
+"""
+maybecopy = Core.maybecopy
+
 # T[x...] constructs Array{T,1}
 """
     getindex(type[, elements...])
@@ -626,8 +666,8 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
-convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
 convert(::Type{Union{}}, a::AbstractArray) = throw(MethodError(convert, (Union{}, a)))
+convert(T::Union{Type{<:Array},Type{<:Core.ImmutableArray}}, a::AbstractArray) = a isa T ? a : T(a)
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -637,6 +677,7 @@ if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
 Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto_axcheck!(Array{T,N}(undef, size(x)), x)
 AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto_axcheck!(similar(A,T), A)
+ImmutableArray{T,N}(Ar::AbstractArray{S,N}) where {T,N,S} = Core.arrayfreeze(copyto_axcheck!(Array{T,N}(undef, size(Ar)), Ar))
 end
 
 ## copying iterators to containers

@@ -279,8 +279,17 @@ struct BoundsError <: Exception
     a::Any
     i::Any
     BoundsError() = new()
-    BoundsError(@nospecialize(a)) = (@_noinline_meta; new(a))
-    BoundsError(@nospecialize(a), i) = (@_noinline_meta; new(a,i))
+    # For now, always copy arrays to avoid escaping them
+    # Eventually, we want to figure out if the copy is needed to save the performance of copying
+    # (i.e., if a escapes elsewhere, don't bother to make a copy)
+
+    BoundsError(@nospecialize(a)) = a isa Array ?
+                                    (@_noinline_meta; new(Core.maybecopy(a))) :
+                                    (@_noinline_meta; new(a))
+
+    BoundsError(@nospecialize(a), i) = a isa Array ?
+                                       (@_noinline_meta; new(Core.maybecopy(a), i)) :
+                                       (@_noinline_meta; new(a, i))
 end
 struct DivideError         <: Exception end
 struct OutOfMemoryError    <: Exception end
