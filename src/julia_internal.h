@@ -1113,12 +1113,11 @@ STATIC_INLINE uint64_t cong(uint64_t max, uint64_t unbias, uint64_t *seed)
     return *seed % max;
 }
 
-// libuv stuff:
-JL_DLLEXPORT extern void *jl_libjulia_handle;
 JL_DLLEXPORT extern void *jl_libjulia_internal_handle;
 JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
 #if defined(_OS_WINDOWS_)
 JL_DLLEXPORT extern void *jl_exe_handle;
+JL_DLLEXPORT extern void *jl_libjulia_handle;
 extern void *jl_ntdll_handle;
 extern void *jl_kernel32_handle;
 extern void *jl_crtdll_handle;
@@ -1137,12 +1136,8 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
 
 // Windows only
 #define JL_EXE_LIBNAME                  ((const char*)1)
-#define JL_LIBJULIA_INTERNAL_DL_LIBNAME ((const char*)2)
-#if defined(JL_DEBUG_BUILD)
-#define JL_LIBJULIA_DL_LIBNAME          "libjulia-debug"
-#else
-#define JL_LIBJULIA_DL_LIBNAME          "libjulia"
-#endif
+#define JL_LIBJULIA_DL_LIBNAME          ((const char*)2)
+#define JL_LIBJULIA_INTERNAL_DL_LIBNAME ((const char*)3)
 const char *jl_dlfind_win32(const char *name);
 
 // libuv wrappers:

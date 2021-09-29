@@ -28,8 +28,12 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f
         symMap = &emission_context.symMapExe;
     }
     else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_INTERNAL_DL_LIBNAME) {
+        libptrgv = prepare_global_in(M, jldlli_var);
+        symMap = &emission_context.symMapDlli;
+    }
+    else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_DL_LIBNAME) {
         libptrgv = prepare_global_in(M, jldll_var);
-        symMap = &emission_context.symMapDl;
+        symMap = &emission_context.symMapDll;
     }
     else
 #endif
@@ -570,10 +574,22 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
             // will look in process symbol table
+            if (!llvmcall) {
+                void *symaddr;
+                std::string iname("i");
+                iname += f_name;
+                if (jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0)) {
 #ifdef _OS_WINDOWS_
-            if (!llvmcall)
-                f_lib = jl_dlfind_win32(f_name);
+                    f_lib = JL_LIBJULIA_INTERNAL_DL_LIBNAME;
 #endif
+                    f_name = jl_symbol_name(jl_symbol(iname.c_str()));
+                }
+#ifdef _OS_WINDOWS_
+                else {
+                    f_lib = jl_dlfind_win32(f_name);
+                }
+#endif
+            }
         }
         else if (jl_is_cpointer_type(jl_typeof(ptr))) {
             fptr = *(void(**)(void))jl_data_ptr(ptr);
@@ -1271,7 +1287,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 #ifdef _OS_WINDOWS_
             if ((f_lib == JL_EXE_LIBNAME) || // preventing invalid pointer access
                 (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
-                (!strcmp(f_lib, JL_LIBJULIA_DL_LIBNAME)) ||
+                (f_lib == JL_LIBJULIA_DL_LIBNAME) ||
                 (!strcmp(f_lib, jl_crtdll_basename))) {
                 // libjulia-like
             }
@@ -1283,7 +1299,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         }
         return f_name && f_name == name;
     };
-#define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), StringRef(#name))
+#define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), StringRef(XSTR(name)))
 
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);

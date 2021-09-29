@@ -63,7 +63,8 @@ typedef struct {
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
 #ifdef _OS_WINDOWS_
     SymMapGV symMapExe;
-    SymMapGV symMapDl;
+    SymMapGV symMapDll;
+    SymMapGV symMapDlli;
 #endif
     SymMapGV symMapDefault;
     // Map from distinct callee's to its GOT entry.

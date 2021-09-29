@@ -402,6 +402,11 @@ static const auto jlexe_var = new JuliaVariable{
     [](LLVMContext &C) { return T_pint8; },
 };
 static const auto jldll_var = new JuliaVariable{
+    XSTR(jl_libjulia_handle),
+    true,
+    [](LLVMContext &C) { return T_pint8; },
+};
+static const auto jldlli_var = new JuliaVariable{
     XSTR(jl_libjulia_internal_handle),
     true,
     [](LLVMContext &C) { return T_pint8; },
@@ -8089,7 +8094,8 @@ static void init_jit_functions(void)
     add_named_global(jlRTLD_DEFAULT_var, &jl_RTLD_DEFAULT_handle);
 #ifdef _OS_WINDOWS_
     add_named_global(jlexe_var, &jl_exe_handle);
-    add_named_global(jldll_var, &jl_libjulia_internal_handle);
+    add_named_global(jldll_var, &jl_libjulia_handle);
+    add_named_global(jldlli_var, &jl_libjulia_internal_handle);
 #endif
     global_jlvalue_to_llvm(new JuliaVariable{"jl_true", true, get_pjlvalue}, &jl_true);
     global_jlvalue_to_llvm(new JuliaVariable{"jl_false", true, get_pjlvalue}, &jl_false);
