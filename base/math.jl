@@ -892,21 +892,18 @@ end
 function rem(x::T, p::T, ::RoundingMode{:Nearest}) where T<:IEEEFloat
     (iszero(p) || !isfinite(x) || isnan(p)) && return T(NaN)
     x == p && return copysign(zero(T), x)
-    sx = sign(x)
-    if p <= floatmax(T) / 2  # Ensure p+p won't overflow
-        x = rem(x, p + p)  # now x < 2p
-    end
-    x = abs(x)
+    oldx = x
+    x = abs(rem(x, 2p))  # 2p may overflow but that's okay
     p = abs(p)
     if p < 2 * floatmin(T)  # Check whether dividing p by 2 will underflow
-        if x + x > p
+        if 2x > p
             x -= p
-            if x + x >= p
+            if 2x >= p
                 x -= p
             end
         end
     else
-        p_half = T(0.5) * p
+        p_half = p / 2
         if x > p_half
             x -= p
             if x >= p_half
@@ -914,7 +911,7 @@ function rem(x::T, p::T, ::RoundingMode{:Nearest}) where T<:IEEEFloat
             end
         end
     end
-    return flipsign(x, sx)
+    return flipsign(x, oldx)
 end
 
 

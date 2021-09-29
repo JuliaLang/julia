@@ -2527,14 +2527,13 @@ end
         @test isnan(rem(T(1), T(0), mode))
         @test isnan(rem(T(Inf), T(2), mode))
         @test isnan(rem(T(1), T(NaN), mode))
-        if !(T == BigFloat && mode == RoundUp)  # FIXME: Erroneously returns -Inf
-            @test rem(T(4), floatmin(T) * 2, mode) == 0
-        end
+        # FIXME: The broken case erroneously returns -Inf
+        @test rem(T(4), floatmin(T) * 2, mode) == 0 broken=(T == BigFloat && mode == RoundUp)
     end
-    @test rem(nextfloat(typemin(T)), T(2), RoundToZero)  == -0.0
-    @test rem(nextfloat(typemin(T)), T(2), RoundNearest) == -0.0
-    @test rem(nextfloat(typemin(T)), T(2), RoundDown)    == 0.0
-    @test rem(nextfloat(typemin(T)), T(2), RoundUp)      == 0.0
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundToZero),  -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearest), -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundDown),    0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),      0.0)
 end
 
 @testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
