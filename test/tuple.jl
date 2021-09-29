@@ -525,9 +525,19 @@ end
         @test findprev(isequal(1), (1, 1), UInt(1)) isa Int
     end
 
+    # recursive implementation should allow constant-folding for small tuples
     @test Base.return_types() do
         findfirst(==(2), (1.0,2,3f0))
     end == Any[Int]
+    @test Base.return_types() do
+        findfirst(==(0), (1.0,2,3f0))
+    end == Any[Nothing]
+    @test Base.return_types() do
+        findlast(==(2), (1.0,2,3f0))
+    end == Any[Int]
+    @test Base.return_types() do
+        findlast(==(0), (1.0,2,3f0))
+    end == Any[Nothing]
 end
 
 @testset "properties" begin
