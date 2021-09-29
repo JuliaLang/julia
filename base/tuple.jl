@@ -362,6 +362,7 @@ function _findfirst_loop(f::Function, t)
     for i in 1:length(t)
         f(t[i]) && return i
     end
+    return nothing
 end
 findfirst(f::Function, t::Tuple) = length(t) < 32 ? _findfirst_rec(f, 1, t) : _findfirst_loop(f, t)
 
