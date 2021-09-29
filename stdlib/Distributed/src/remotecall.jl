@@ -26,7 +26,7 @@ mutable struct Future <: AbstractRemoteRef
     where::Int
     whence::Int
     id::Int
-    v::Union{Some{Any}, Nothing}
+    @atomic v::Union{Some{Any}, Nothing}
 
     Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing) =
         (r = new(w, rrid.whence, rrid.id, v); return test_existing_ref(r))
@@ -72,7 +72,7 @@ function test_existing_ref(r::AbstractRemoteRef)
         if isa(r, Future) && found.v === nothing && r.v !== nothing
             # we have recd the value from another source, probably a deserialized ref, send a del_client message
             send_del_client(r)
-            found.v = r.v
+            @atomic :sequentially_consistent found.v = r.v
         end
         return found::typeof(r)
     end
@@ -92,7 +92,7 @@ function finalize_ref(r::AbstractRemoteRef)
                 else
                     # send_del_client only if the reference has not been set
                     r.v === nothing && send_del_client_no_lock(r)
-                    r.v = nothing
+                    @atomic :sequentially_consistent r.v = nothing
                 end
                 r.where = 0
             finally
@@ -581,26 +581,28 @@ Further calls to `fetch` on the same reference return the cached value. If the r
 is an exception, throws a [`RemoteException`](@ref) which captures the remote exception and backtrace.
 """
 function fetch(r::Future)
-    r.v !== nothing && return something(r.v)
-    if r.where == myid()
-        # this lookup_ref serves as a synchronization point (lock on client_refs)
-        # will either return the correct rv (if done before del_client in put!)
-        # or a wrong rv (if done after del_client)
-        # for the case of the wrong rv we should check r.v again and return without waiting on rv
-        # r.v will be populated at that time if the rv is wrong, because caching is done before del_client
-        # in case of a correct rv it's safe to fetch on it and we do it after the additional check
+
+    v = @atomic :sequentially_consistent r.v
+
+    v !== nothing && return something(v)
+    if r.where ==myid()
         rv = lookup_ref(remoteref_id(r))
-
-        @debug "fet; rid=$(objectid(rid)); rv=$(objectid(rv))"
-
-        if r.v !== nothing # check again, because the put! might have already cached
-            send_del_client(r)
-            return something(r.v)
+        v = @atomic :sequentially_consistent r.v
+        if v !== nothing
+            return something(v)
+        else
+            fetch(rv.c)
         end
-        v = fetch(rv.c) # fetch on channel, because at this point we know we have the correct rv, which will eventually be put!
     else
         v = call_on_owner(fetch_ref, r)
-        r.v = Some(v)
+    end
+    if r.where == myid()
+        lock(client_refs) do
+            @atomic :sequentially_consistent r.v = Some(v)
+            del_client(r)
+        end
+    else
+        @atomic :sequentially_consistent r.v = Some(v)
         send_del_client(r)
     end
     v
@@ -609,7 +611,9 @@ end
 fetch_ref(rid, args...) = begin
     rv=lookup_ref(rid)
     @debug "fet; rid=$(objectid(rid)); rv=$(objectid(rv))"
-    fetch(rv.c, args...)
+    f = fetch(rv.c, args...)
+    @debug "endfet; rid=$(objectid(rid)); rv=$(objectid(rv))"
+    f
 end
 
 """
@@ -632,8 +636,8 @@ All asynchronous remote calls return `Future`s and set the
 value to the return value of the call upon completion.
 """
 function put!(rr::Future, v)
-    rr.v !== nothing && error("Future can be set only once")
-    rr.v = Some(v) # cache before put_future
+    _, ok = @atomicreplace rr.v nothing => Some(v)
+    ok || error("Future can be set only once")
     call_on_owner(put_future, rr, v, myid())
     rr
 end
@@ -644,7 +648,6 @@ function put_future(rid, v, caller)
     isready(rv) && error("Future can be set only once")
     put!(rv, v)
     # The caller has the value and hence can be removed from the remote store.
-    del_client(rid, caller)
     nothing
 end
 
