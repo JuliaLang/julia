@@ -186,7 +186,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
 
     // jl_options must be initialized very early, in case an embedder sets some
     // values there before calling jl_init
-    ((void (*)())jl_init_options_addr)();
+    ((void (*)(void))jl_init_options_addr)();
 }
 
 // Load libjulia and run the REPL with the given arguments (in UTF-8 format)
