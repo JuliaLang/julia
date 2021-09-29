@@ -619,7 +619,7 @@ countfrom(start)                         = Count(start, oneunit(start))
 countfrom()                              = Count(1, 1)
 
 
-eltype(::Type{Count{T,S}}) where {T,S} = T
+eltype(::Type{<:Count{T}}) where {T} = T
 
 iterate(it::Count, state=it.start) = (state, state + it.step)
 
