@@ -347,9 +347,7 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
     return C
 end
 
-_promote_dotop(f, args...) = promote_op(f, eltype.(args)...)
-
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, _promote_dotop(/, A, D), size(A)), A, D)
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D)), size(A)), A, D)
 
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
@@ -370,7 +368,7 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     B
 end
 
-\(D::Diagonal, B::AbstractVecOrMat) = ldiv!(similar(B, _promote_dotop(\, D, B), size(B)), D, B)
+\(D::Diagonal, B::AbstractVecOrMat) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B)), size(B)), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -386,8 +384,8 @@ function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
 end
 
 # Optimizations for \, / between Diagonals
-\(D::Diagonal, B::Diagonal) = ldiv!(similar(B, _promote_dotop(\, D, B)), D, B)
-/(A::Diagonal, D::Diagonal) = _rdiv!(similar(A, _promote_dotop(/, A, D)), A, D)
+\(D::Diagonal, B::Diagonal) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B))), D, B)
+/(A::Diagonal, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D))), A, D)
 function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
     n, k = length(Db.diag), length(Db.diag)
     n == k || throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
@@ -401,9 +399,9 @@ ldiv!(Dc::Diagonal, Da::Diagonal, Db::Diagonal) = Diagonal(ldiv!(Dc.diag, Da, Db
 # (l/r)mul!, l/rdiv!, *, / and \ Optimization for AbstractTriangular.
 # These functions are generally more efficient if we calculate the whole data field.
 # The following code implements them in a unified patten to avoid missing.
-@inline function _set_diag!(data, diag, f = identity)
-    for i in 1:length(diag)
-        @inbounds data[i,i] = f(diag[i])
+function _setdiag!(data, f, x, ys...)
+    for i in 1:length(x)
+        data[i,i] = f(map(arg -> arg[i], (x, ys...))...)
     end
     data
 end
@@ -412,19 +410,32 @@ for Tri in (:UpperTriangular, :LowerTriangular)
     # 2 args
     for (fun, f) in zip((:*, :rmul!, :rdiv!, :/), (:identity, :identity, :inv, :inv))
         @eval $fun(A::$Tri, D::Diagonal) = $Tri($fun(A.data, D))
-        @eval $fun(A::$UTri, D::Diagonal) = $Tri(_set_diag!($fun(A.data, D), D.diag, $f))
+        @eval $fun(A::$UTri, D::Diagonal) = $Tri(_setdiag!($fun(A.data, D), $f, D.diag))
     end
     for (fun, f) in zip((:*, :lmul!, :ldiv!, :\), (:identity, :identity, :inv, :inv))
         @eval $fun(D::Diagonal, A::$Tri) = $Tri($fun(D, A.data))
-        @eval $fun(D::Diagonal, A::$UTri) = $Tri(_set_diag!($fun(D, A.data), D.diag, $f))
+        @eval $fun(D::Diagonal, A::$UTri) = $Tri(_setdiag!($fun(D, A.data), $f, D.diag))
     end
-    # 3 args
+    # 3-arg ldiv!
     @eval ldiv!(out::$Tri, D::Diagonal, A::$Tri) = $Tri(ldiv!(out.data, D, A.data))
-    @eval ldiv!(out::$Tri, D::Diagonal, A::$UTri) = $Tri(_set_diag!(ldiv!(out.data, D, A.data), D.diag, inv))
-    @eval mul!(out::$Tri, D::Diagonal, A::$Tri) = $Tri(mul!(out.data, D, A.data))
-    @eval mul!(out::$Tri, D::Diagonal, A::$UTri) = $Tri(_set_diag!(mul!(out.data, D, A.data), D.diag))
-    @eval mul!(out::$Tri, A::$Tri, D::Diagonal) = $Tri(mul!(out.data, A.data, D))
-    @eval mul!(out::$Tri, A::$UTri, D::Diagonal) = $Tri(_set_diag!(mul!(out.data, A.data, D), D.diag))
+    @eval ldiv!(out::$Tri, D::Diagonal, A::$UTri) = $Tri(_setdiag!(ldiv!(out.data, D, A.data), inv, D.diag))
+    # 3-arg mul!: invoke 5-arg mul! rather than lmul!
+    @eval mul!(out::$Tri, A::Union{$Tri,$UTri}, D::Diagonal) = mul!(out, A, D, true, false)
+    # 5-arg mul!
+    @eval @inline mul!(out::$Tri, D::Diagonal, A::$Tri, α::Number, β::Number) = 
+        $Tri(mul!(out.data, D, A.data, α, β))
+    @eval @inline function mul!(out::$Tri, D::Diagonal, A::$UTri, α::Number, β::Number)
+        diag′ = iszero(β) ? D.diag : diag(out)
+        data = mul!(out.data, D, A.data, α, β)
+        $Tri(_setdiag!(data, MulAddMul(α, β), D.diag, diag′))
+    end
+    @eval @inline mul!(out::$Tri, A::$Tri, D::Diagonal, α::Number, β::Number) = 
+        $Tri(mul!(out.data, A.data, D, α, β))
+    @eval @inline function mul!(out::$Tri, A::$UTri, D::Diagonal, α::Number, β::Number)
+        diag′ = iszero(β) ? D.diag : diag(out) 
+        data = mul!(out.data, A.data, D, α, β)
+        $Tri(_setdiag!(data, MulAddMul(α, β), D.diag, diag′))
+    end
 end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
