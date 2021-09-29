@@ -204,8 +204,8 @@ Random.seed!(1)
         @test D2*D' ≈ Array(D2)*Array(D)'
 
         #division of two Diagonals
-        @test (D/D2)::Diagonal ≈ Diagonal(D.diag./D2.diag)
-        @test (D\D2)::Diagonal ≈ Diagonal(D2.diag./D.diag)
+        @test D/D2 ≈ Diagonal(D.diag./D2.diag)
+        @test D\D2 ≈ Diagonal(D2.diag./D.diag)
 
         # QR \ Diagonal
         A = rand(elty, n, n)
@@ -921,7 +921,7 @@ end
         @test fun(D, copy(UTriA))::Tri == fun(D, Matrix(UTriA))
     end
     # 3 args
-    @test outTri === ldiv!(outTri, D, TriA)::Tri == ldiv!(out, D, Matrix(TriA))
+    @test outTri === ldiv!(outTri, D, TriA::Tri == ldiv!(out, D, Matrix(TriA))
     @test outTri === ldiv!(outTri, D, UTriA)::Tri == ldiv!(out, D, Matrix(UTriA))
     @test outTri === mul!(outTri, D, TriA)::Tri == mul!(out, D, Matrix(TriA))
     @test outTri === mul!(outTri, D, UTriA)::Tri == mul!(out, D, Matrix(UTriA))
