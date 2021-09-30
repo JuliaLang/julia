@@ -581,30 +581,25 @@ Further calls to `fetch` on the same reference return the cached value. If the r
 is an exception, throws a [`RemoteException`](@ref) which captures the remote exception and backtrace.
 """
 function fetch(r::Future)
-
     v = @atomic :sequentially_consistent r.v
-
     v !== nothing && return something(v)
+
     if r.where ==myid()
-        rv = lookup_ref(remoteref_id(r))
-        v = @atomic :sequentially_consistent r.v
+        (rv, v) = lock(client_refs) do
+            v = @atomic :sequentially_consistent r.v
+            rv = v === nothing ? lookup_ref(remoteref_id(r)) : nothing
+            rv, v
+        end
         if v !== nothing
             return something(v)
         else
-            fetch(rv.c)
+            v = fetch(rv.c)
         end
     else
         v = call_on_owner(fetch_ref, r)
     end
-    if r.where == myid()
-        lock(client_refs) do
-            @atomic :sequentially_consistent r.v = Some(v)
-            del_client(r)
-        end
-    else
-        @atomic :sequentially_consistent r.v = Some(v)
-        send_del_client(r)
-    end
+    @atomic :sequentially_consistent r.v = Some(v)
+    send_del_client(r)
     v
 end
 
@@ -648,6 +643,7 @@ function put_future(rid, v, caller)
     isready(rv) && error("Future can be set only once")
     put!(rv, v)
     # The caller has the value and hence can be removed from the remote store.
+    del_client(rid, caller)
     nothing
 end
 
