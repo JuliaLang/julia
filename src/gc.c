@@ -2198,6 +2198,9 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
     uint16_t *obj16_begin;
     uint16_t *obj16_end;
 
+    // TODO: don't know if this is safe w/r/t the search order
+    jl_task_t *latest_task = NULL;
+
 pop:
     if (sp.pc == sp.pc_start) {
         // TODO: stealing form another thread
@@ -2321,6 +2324,7 @@ stack: {
                 }
                 if (!gc_try_setmark(new_obj, &nptr, &tag, &bits))
                     continue;
+                gc_heap_snapshot_record_internal_edge(latest_task, new_obj);
                 i++;
                 if (i < nr) {
                     // Haven't done with this one yet. Update the content and push it back
@@ -2671,6 +2675,8 @@ mark: {
             else if (foreign_alloc)
                 objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_task_t));
             jl_task_t *ta = (jl_task_t*)new_obj;
+            latest_task = ta; // TODO: correct??
+            gc_heap_snapshot_record_root(ta, "task");
             gc_scrub_record_task(ta);
             if (gc_cblist_task_scanner) {
                 export_gc_state(ptls, &sp);
