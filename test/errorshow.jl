@@ -815,6 +815,19 @@ end  # Sys.isapple()
 
     m = Module()
     expr = :(module Foo
+        Bar = 3
+
+        using Bar
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
         using Bar
     end)
     try
@@ -836,6 +849,20 @@ end  # Sys.isapple()
     catch err
         err_str = sprint(showerror, err)
         @test contains(err_str, "maybe you meant `import/using ..Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        Bar = 3
+        module Buzz
+            using Bar
+        end
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !contains(err_str, "maybe you meant `import/using ..Bar`")
     end
 
     m = Module()

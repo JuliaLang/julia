@@ -976,9 +976,9 @@ function require(into::Module, mod::Symbol)
             where = PkgId(into)
             if where.uuid === nothing
                 hint, dots = begin
-                    if isdefined(into, mod)
+                    if isdefined(into, mod) && getfield(into, mod) isa Module
                         true, "."
-                    elseif isdefined(parentmodule(into), mod)
+                    elseif isdefined(parentmodule(into), mod) && getfield(parentmodule(into), mod) isa Module
                         true, ".."
                     else
                         false, ""
@@ -987,7 +987,8 @@ function require(into::Module, mod::Symbol)
                 hint_message = hint ? ", maybe you meant `import/using $(dots)$(mod)`" : ""
                 start_sentence = hint ? "Otherwise, run" : "Run"
                 throw(ArgumentError("""
-                    Package $mod not found in current path$hint_message. $start_sentence `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package."""))
+                    Package $mod not found in current path$hint_message.
+                    - $start_sentence `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package."""))
             else
                 s = """
                 Package $(where.name) does not have $mod in its dependencies:
