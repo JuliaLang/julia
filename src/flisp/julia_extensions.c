@@ -85,7 +85,7 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
               (wc >= 0x2200 && wc <= 0x2233 &&
                (wc == 0x2202 || wc == 0x2205 || wc == 0x2206 || // ∂, ∅, ∆
                 wc == 0x2207 || wc == 0x220e || wc == 0x220f || // ∇, ∎, ∏
-                wc == 0x2200 || wc == 0x2203 || // ∀, ∃
+                wc == 0x2200 || wc == 0x2203 || wc == 0x2204 || // ∀, ∃, ∄
                 wc == 0x2210 || wc == 0x2211 || // ∐, ∑
                 wc == 0x221e || wc == 0x221f || // ∞, ∟
                 wc >= 0x222b)) || // ∫, ∬, ∭, ∮, ∯, ∰, ∱, ∲, ∳
