@@ -846,7 +846,8 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
             }
             // if this is a wrapper, let check_datatype_parameters give the error
             if (!iswrapper)
-                jl_type_error_rt("Type", jl_symbol_name(ua->var->name), (jl_value_t*)ua->var, pi);
+                jl_type_error_rt(jl_is_datatype(inner) ? jl_symbol_name(inner->name->name) : "Type",
+                                 jl_symbol_name(ua->var->name), (jl_value_t*)ua->var, pi);
         }
 
         tc = jl_instantiate_unionall(ua, pi);
@@ -1063,16 +1064,19 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
     }
     assert(i == np*2);
     wrapper = tn->wrapper;
-    for(i=0; i < np; i++) {
+    for (i = 0; i < np; i++) {
         assert(jl_is_unionall(wrapper));
         jl_tvar_t *tv = ((jl_unionall_t*)wrapper)->var;
         if (!within_typevar(params[i], bounds[2*i], bounds[2*i+1])) {
-            // TODO: pass a new version of `tv` containing the instantiated bounds
+            if (tv->lb != bounds[2*i] || tv->ub != bounds[2*i+1])
+                // pass a new version of `tv` containing the instantiated bounds
+                tv = jl_new_typevar(tv->name, bounds[2*i], bounds[2*i+1]);
+            JL_GC_PUSH1(&tv);
             jl_type_error_rt(jl_symbol_name(tn->name), jl_symbol_name(tv->name), (jl_value_t*)tv, params[i]);
         }
         int j;
-        for(j=2*i+2; j < 2*np; j++) {
-            jl_value_t*bj = bounds[j];
+        for (j = 2*i + 2; j < 2*np; j++) {
+            jl_value_t *bj = bounds[j];
             if (bj != (jl_value_t*)jl_any_type && bj != jl_bottom_type)
                 bounds[j] = jl_substitute_var(bj, tv, params[i]);
         }
