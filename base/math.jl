@@ -911,7 +911,7 @@ function modf(x::Float64)
 end
 
 @inline function ^(x::Float64, y::Float64)
-    yint = unsafe_trunc(Int, y)
+    yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
     z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
     if isnan(z) & !isnan(x+y)
@@ -920,7 +920,7 @@ end
     z
 end
 @inline function ^(x::Float32, y::Float32)
-    yint = unsafe_trunc(Int, y)
+    yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
     z = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y)
     if isnan(z) & !isnan(x+y)
@@ -932,25 +932,30 @@ end
 
 # compensated power by squaring
 @inline function ^(x::Float64, n::Integer)
-    if n > 0
-        y = 1.0
-        xnlo = ynlo = 0.0
-        while n > 1
-            if n&1 > 0
-                yn = x*y
-                ynlo = fma(x, y , -yn) + muladd(y, xnlo, x*ynlo)
-                y = yn
-            end
-            xn = x * x
-            xnlo = muladd(x, 2*xnlo, fma(x, x, -xn))
-            x = xn
-            n >>>= 1
-        end
-        !isfinite(x) && return x*y
-        return muladd(x, y, muladd(y, xnlo, x*ynlo))
+    n == 0 && return one(x)
+    y = 1.0
+    xnlo = ynlo = 0.0
+    
+    if n < 0
+        rx = inv(x)
+        x = rx
+        xnlo = fma(x, rx, -1.) * rx
+        n = -n
     end
-    n < 0 && return inv(x)^(-n)
-    return one(x) # n == 0
+    n==3 && return x*x*x #keep compatability with literal_pow
+    while n > 1
+        if n&1 > 0
+            yn = x*y
+            ynlo = fma(x, y , -yn) + muladd(y, xnlo, x*ynlo)
+            y = yn
+        end
+        xn = x * x
+        xnlo = muladd(x, 2*xnlo, fma(x, x, -xn))
+        x = xn
+        n >>>= 1
+    end
+    !isfinite(x) && return x*y
+    return muladd(x, y, muladd(y, xnlo, x*ynlo))
 end
 @inline function ^(x::Float32, y::Integer)
     y < 0 && return inv(x^(-y))
