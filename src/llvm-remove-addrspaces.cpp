@@ -325,7 +325,7 @@ bool RemoveAddrspacesPass::runOnModule(Module &M)
 
         Function *NF = Function::Create(
                 NFTy, F->getLinkage(), F->getAddressSpace(), Name, &M);
-        NF->copyAttributesFrom(F);
+        // no need to copy attributes here, that's done by CloneFunctionInto
         VMap[F] = NF;
     }
 
@@ -378,6 +378,22 @@ bool RemoveAddrspacesPass::runOnModule(Module &M)
                 nullptr,
                 &TypeRemapper,
                 &Materializer);
+
+        // CloneFunctionInto unconditionally copies the attributes from F to NF,
+        // without considering e.g. the byval attribute type.
+        AttributeList Attrs = F->getAttributes();
+        LLVMContext &C = F->getContext();
+        for (unsigned i = 0; i < Attrs.getNumAttrSets(); ++i) {
+            for (Attribute::AttrKind TypedAttr :
+                 {Attribute::ByVal, Attribute::StructRet, Attribute::ByRef}) {
+                if (Type *Ty = Attrs.getAttribute(i, TypedAttr).getValueAsType()) {
+                    Attrs = Attrs.replaceAttributeType(C, i, TypedAttr,
+                                                       TypeRemapper.remapType(Ty));
+                    break;
+                }
+            }
+        }
+        NF->setAttributes(Attrs);
 
         if (F->hasPersonalityFn())
             NF->setPersonalityFn(MapValue(F->getPersonalityFn(), VMap));
