@@ -276,7 +276,7 @@ let
     @test occursin("column vector", err_str)
 end
 
-struct TypeWithIntParam{T <: Integer} end
+struct TypeWithIntParam{T<:Integer, Vector{T}<:A<:AbstractArray{T}} end
 struct Bounded  # not an AbstractArray
     bound::Int
 end
@@ -322,7 +322,13 @@ let undefvar
     @test err_str == "TypeError: in Type, in parameter, expected Type, got a value of type String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
+    err_str = @except_str TypeWithIntParam{Int64,Vector{Float64}} TypeError
+    @test err_str == "TypeError: in TypeWithIntParam, in A, expected Vector{Int64}<:A<:(AbstractArray{Int64}), got Type{Vector{Float64}}"
+    err_str = @except_str TypeWithIntParam{Int64}{Vector{Float64}} TypeError
+    @test err_str == "TypeError: in TypeWithIntParam, in A, expected Vector{Int64}<:A<:(AbstractArray{Int64}), got Type{Vector{Float64}}"
     err_str = @except_str Type{Vararg} TypeError
+    @test err_str == "TypeError: in Type, in parameter, expected Type, got Vararg"
+    err_str = @except_str Ref{Vararg} TypeError
     @test err_str == "TypeError: in Type, in parameter, expected Type, got Vararg"
 
     err_str = @except_str mod(1,0) DivideError
