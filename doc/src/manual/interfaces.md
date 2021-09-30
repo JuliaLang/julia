@@ -13,7 +13,7 @@ to generically build upon those behaviors.
 |:--------------------------------- |:---------------------------- |:------------------------------------------------------------------------------------- |
 | `propertynames(x::ObjType, private::Bool=false)` | `fieldnames(typeof((x))`     | Returns a tuple of the properties (`x.property`) of an object `x`. `private=true` returns fieldnames intended to be kept as private |
 | `getproperty(x::ObjType, s::Symbol)`       | `getfield(x, s)`     | Returns property `s` of `x`. `x.s` calls `getproperty`.  |
-| `setproperty!(x::ObjType, s::Symbol, v)`   | `setfield!(x, s, v)` | Sets property `s` of `x` to `v`. `x.s = v` calls `setproperty!`. |
+| `setproperty!(x::ObjType, s::Symbol, v)`   | `setfield!(x, s, v)` | Sets property `s` of `x` to `v`. `x.s = v` calls `setproperty!`. Should return `v` if successful, error otherwise.|
 
 Sometimes, it is desirable to change how end-user interacts with the fields of an object. 
 Instead of granting direct access to type fields, an extra layer of abstraction between 
@@ -54,10 +54,12 @@ julia> function Base.setproperty!(p::Point, s::Symbol, f)
         y = p.y
         setfield!(p, :r, sqrt(f^2 + y^2))
         setfield!(p, :ϕ, atan(y, f))
+        return f
     elseif s == :y
         x = p.x
         setfield!(p, :r, sqrt(x^2 + f^2))
         setfield!(p, :ϕ, atan(f, x))
+        return f
     else
         # This allow modifying fields with p.r and p.ϕ
         return setfield!(p, s, f) 
