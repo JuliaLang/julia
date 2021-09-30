@@ -210,7 +210,9 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
             name = jl_symbol_name((jl_sym_t*)a);
             self_size = name.length();
         } else if (jl_is_datatype(type)) {
-            self_size = (size_t)jl_datatype_size(type);
+            self_size = jl_is_array_type(type)
+                ? jl_array_nbytes((jl_array_t*)a)
+                : (size_t)jl_datatype_size(type);
             
             // print full type
             ios_t str_;
