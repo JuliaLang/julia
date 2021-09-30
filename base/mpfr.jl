@@ -11,7 +11,7 @@ import
         inv, exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
-        sum, sqrt, string, print, trunc, _precision, exp10, expm1, log1p,
+        sum, sqrt, string, print, trunc, precision, _precision, exp10, expm1, log1p,
         eps, signbit, sign, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
@@ -795,6 +795,7 @@ end
 function _precision(x::BigFloat)  # precision of an object of type BigFloat
     return ccall((:mpfr_get_prec, :libmpfr), Clong, (Ref{BigFloat},), x)
 end
+precision(x::BigFloat; base::Integer=2) = _precision(x, base)
 
 _precision(::Type{BigFloat}) = Int(DEFAULT_PRECISION[]) # default precision of the type BigFloat itself
 
