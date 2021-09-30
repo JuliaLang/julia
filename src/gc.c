@@ -2825,7 +2825,6 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     gc_heap_snapshot_record_root(jl_main_module, "main_module");
 
     // tasks
-    // TODO: add tasks as roots
     jl_gc_mark_enqueued_tasks(gc_cache, sp);
 
     // invisible builtin values
