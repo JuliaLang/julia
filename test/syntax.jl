@@ -2971,6 +2971,7 @@ end
 @test Meta.parse("\U2200", raise=false) == Symbol("∀")
 @test Meta.parse("\U2203", raise=false) == Symbol("∃")
 @test Meta.parse("a\U2203", raise=false) == Symbol("a∃")
+@test Meta.parse("\U2204", raise=false) == Symbol("∄")
 
 # issue 42220
 macro m42220()

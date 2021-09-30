@@ -12,7 +12,7 @@ New language features
   to enforce the involved function calls to be (or not to be) inlined. ([#41312])
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
-* `∀` and `∃` are now allowed as identifier characters.
+* `∀`, `∃`, and `∄` are now allowed as identifier characters.
 
 Language changes
 ----------------
