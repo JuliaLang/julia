@@ -55,11 +55,11 @@ static inline void sanitizer_finish_switch_fiber(void) {}
 #endif
 
 #if defined(_COMPILER_TSAN_ENABLED_)
-static inline void tsan_destroy_ctx(jl_ptls_t ptls, void *state) {
-    if (state != &ptls->root_task->state) {
-        __tsan_destroy_fiber(ctx->state);
+static inline void tsan_destroy_ctx(jl_ptls_t ptls, void **state) {
+    if (state != &ptls->root_task->tsan_state) {
+        __tsan_destroy_fiber(*state);
     }
-    ctx->state = NULL;
+    *state = NULL;
 }
 static inline void tsan_switch_to_ctx(void *state)  {
     __tsan_switch_to_fiber(state, 0);
@@ -336,7 +336,7 @@ static void ctx_switch(jl_task_t *lastt)
     assert(ptls->locks.len == 0);
 
 #ifdef _COMPILER_TSAN_ENABLED_
-    if (lastt->ctx.tsan_state != __tsan_get_current_fiber()) {
+    if (lastt->tsan_state != __tsan_get_current_fiber()) {
         // Something went really wrong - don't even assume that we can
         // use assert/abort which involve lots of signal handling that
         // looks at the tsan state.
@@ -402,7 +402,7 @@ static void ctx_switch(jl_task_t *lastt)
     jl_set_pgcstack(&t->gcstack);
 
 #if defined(_COMPILER_TSAN_ENABLED_)
-    tsan_switch_to_ctx(&t->tsan_state);
+    tsan_switch_to_ctx(t->tsan_state);
     if (killed)
         tsan_destroy_ctx(ptls, &lastt->tsan_state);
 #endif
