@@ -304,7 +304,7 @@ runtest harness).
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia
-  - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/research/julia-fresh-approach-BEKS.pdf)
+  - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/assets/research/julia-fresh-approach-BEKS.pdf)
   - [Julia: Dynamism and Performance Reconciled by Design](http://janvitek.org/pubs/oopsla18b.pdf)
   - [All Julia Publications](https://julialang.org/research)
 
