@@ -201,16 +201,11 @@ static inline jl_task_t *multiq_deletemin(void)
 
 void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
-    jl_printf(JL_STDERR, "jl_gc_mark_enqueued_tasks\n");
     int32_t i, j;
     for (i = 0; i < heap_p; ++i) {
-        jl_printf(JL_STDERR, "jl_gc_mark_enqueued_tasks loop %d\n", i);
         for (j = 0; j < heaps[i].ntasks; ++j) {
-            jl_printf(JL_STDERR, "jl_gc_mark_enqueued_tasks loop %d.%d\n", i, j);
             jl_value_t *task = (jl_value_t *)heaps[i].tasks[j];
-            jl_printf(JL_STDERR, "task");
             jl_gc_mark_queue_obj_explicit(gc_cache, sp, task);
-            gc_heap_snapshot_record_root(task, "task");
         }
     }
 }
