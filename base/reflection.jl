@@ -453,7 +453,7 @@ end
 """
     ismutable(v) -> Bool
 
-Return `true` iff value `v` is mutable.  See [Mutable Composite Types](@ref)
+Return `true` if value `v` is mutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 
