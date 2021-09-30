@@ -568,11 +568,10 @@ size(Q::AbstractQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : di
 size(Q::AbstractQ) = size(Q, 1), size(Q, 2)
 
 function getindex(Q::AbstractQ, i::Integer, j::Integer)
-    x = zeros(eltype(Q), size(Q, 1))
-    x[i] = 1
     y = zeros(eltype(Q), size(Q, 2))
     y[j] = 1
-    return dot(x, lmul!(Q, y))
+    lmul!(Q, y)
+    return y[i]
 end
 
 # specialization avoiding the fallback using slow `getindex`
