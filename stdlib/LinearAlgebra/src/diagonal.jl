@@ -396,12 +396,12 @@ function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
 end
 ldiv!(Dc::Diagonal, Da::Diagonal, Db::Diagonal) = Diagonal(ldiv!(Dc.diag, Da, Db.diag))
 
-# (l/r)mul!, l/rdiv!, *, / and \ Optimization for AbstractTriangular.
+# Optimizations for [l/r]mul!, l/rdiv!, *, / and \  between AbstractTriangular and Diagonal.
 # These functions are generally more efficient if we calculate the whole data field.
-# The following code implements them in a unified patten to avoid missing.
-function _setdiag!(data, f, x, ys...)
-    for i in 1:length(x)
-        data[i,i] = f(map(arg -> arg[i], (x, ys...))...)
+# The following code implements them in a unified pattern to avoid missing.
+function _setdiag!(data, f, diag, diag′...)
+    for i in 1:length(diag)
+        data[i,i] = f(map(x -> x[i], (diag, diag′...))...)
     end
     data
 end
@@ -417,23 +417,23 @@ for Tri in (:UpperTriangular, :LowerTriangular)
         @eval $fun(D::Diagonal, A::$UTri) = $Tri(_setdiag!($fun(D, A.data), $f, D.diag))
     end
     # 3-arg ldiv!
-    @eval ldiv!(out::$Tri, D::Diagonal, A::$Tri) = $Tri(ldiv!(out.data, D, A.data))
-    @eval ldiv!(out::$Tri, D::Diagonal, A::$UTri) = $Tri(_setdiag!(ldiv!(out.data, D, A.data), inv, D.diag))
-    # 3-arg mul!: invoke 5-arg mul! rather than lmul!
-    @eval mul!(out::$Tri, A::Union{$Tri,$UTri}, D::Diagonal) = mul!(out, A, D, true, false)
+    @eval ldiv!(C::$Tri, D::Diagonal, A::$Tri) = $Tri(ldiv!(C.data, D, A.data))
+    @eval ldiv!(C::$Tri, D::Diagonal, A::$UTri) = $Tri(_setdiag!(ldiv!(C.data, D, A.data), inv, D.diag))
+    # 3-arg mul!: fallback to 5-arg mul! rather than lmul!
+    @eval mul!(C::$Tri, A::Union{$Tri,$UTri}, D::Diagonal) = mul!(C, A, D, true, false)
     # 5-arg mul!
-    @eval @inline mul!(out::$Tri, D::Diagonal, A::$Tri, α::Number, β::Number) =
-        $Tri(mul!(out.data, D, A.data, α, β))
-    @eval @inline function mul!(out::$Tri, D::Diagonal, A::$UTri, α::Number, β::Number)
-        diag′ = iszero(β) ? D.diag : diag(out)
-        data = mul!(out.data, D, A.data, α, β)
+    @eval @inline mul!(C::$Tri, D::Diagonal, A::$Tri, α::Number, β::Number) = $Tri(mul!(C.data, D, A.data, α, β))
+    @eval @inline function mul!(C::$Tri, D::Diagonal, A::$UTri, α::Number, β::Number)
+        iszero(α) && return _rmul_or_fill!(C, β)
+        diag′ = iszero(β) ? D.diag : diag(C)
+        data = mul!(C.data, D, A.data, α, β)
         $Tri(_setdiag!(data, MulAddMul(α, β), D.diag, diag′))
     end
-    @eval @inline mul!(out::$Tri, A::$Tri, D::Diagonal, α::Number, β::Number) =
-        $Tri(mul!(out.data, A.data, D, α, β))
-    @eval @inline function mul!(out::$Tri, A::$UTri, D::Diagonal, α::Number, β::Number)
-        diag′ = iszero(β) ? D.diag : diag(out)
-        data = mul!(out.data, A.data, D, α, β)
+    @eval @inline mul!(C::$Tri, A::$Tri, D::Diagonal, α::Number, β::Number) = $Tri(mul!(C.data, A.data, D, α, β))
+    @eval @inline function mul!(C::$Tri, A::$UTri, D::Diagonal, α::Number, β::Number)
+        iszero(α) && return rmul!(C, β)
+        diag′ = iszero(β) ? D.diag : diag(C) 
+        data = mul!(C.data, A.data, D, α, β)
         $Tri(_setdiag!(data, MulAddMul(α, β), D.diag, diag′))
     end
 end
