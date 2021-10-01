@@ -1079,7 +1079,7 @@ function iterate(r::Iterators.Reverse{<:EachLine})
             inewline = something(findprev(==(UInt8('\n')), chunk, inewline-1), 0)
         end
     end
-    return iterate(r, (p0, p, chunks, 1, inewline, length(chunks), jnewline == 0 && !isempty(chunks) ? length(chunks[end]) : jnewline))
+    return iterate(r, (; p0, p, chunks, ichunk=1, inewline, jchunk=length(chunks), jnewline = jnewline == 0 && !isempty(chunks) ? length(chunks[end]) : jnewline))
 end
 function iterate(r::Iterators.Reverse{<:EachLine}, state)
     function _stripnewline(keep, pos, data)
@@ -1159,9 +1159,9 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             end
         end
     end
-    return (s, (p0, p, chunks, ichunk, inewline, jchunk, jnewline))
+    return (s, (; p0, p, chunks, ichunk, inewline, jchunk, jnewline))
 end
-isdone(r::Iterators.Reverse{<:EachLine}, state) = isempty(state[3]) # isempty(chunks)
+isdone(r::Iterators.Reverse{<:EachLine}, state) = isempty(state.chunks)
 isdone(r::Iterators.Reverse{<:EachLine}) = isdone(r.itr)
 
 # use reverse iteration to get end of EachLines (if possible)
