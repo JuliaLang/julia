@@ -71,13 +71,11 @@ function test_existing_ref(r::AbstractRemoteRef)
         @assert r.where > 0
         if isa(r, Future) && found.v === nothing && r.v !== nothing
             # we have recd the value from another source, probably a deserialized ref, send a del_client message
+            @atomic found.v = r.v
             send_del_client(r)
-            @atomic :sequentially_consistent found.v = r.v
         end
         return found::typeof(r)
     end
-
-    client_refs[r] = nothing
     finalizer(finalize_ref, r)
     return r
 end
@@ -91,8 +89,9 @@ function finalize_ref(r::AbstractRemoteRef)
                     send_del_client_no_lock(r)
                 else
                     # send_del_client only if the reference has not been set
+
                     r.v === nothing && send_del_client_no_lock(r)
-                    @atomic :sequentially_consistent r.v = nothing
+                    @atomic r.v = nothing
                 end
                 r.where = 0
             finally
@@ -581,35 +580,25 @@ Further calls to `fetch` on the same reference return the cached value. If the r
 is an exception, throws a [`RemoteException`](@ref) which captures the remote exception and backtrace.
 """
 function fetch(r::Future)
-    v = @atomic :sequentially_consistent r.v
-    v !== nothing && return something(v)
-
-    if r.where ==myid()
-        (rv, v) = lock(client_refs) do
-            v = @atomic :sequentially_consistent r.v
-            rv = v === nothing ? lookup_ref(remoteref_id(r)) : nothing
-            rv, v
+    r.v !== nothing && return something(r.v)
+    if r.where == myid()
+        rv = lock(client_refs) do
+            r.v === nothing ? lookup_ref(remoteref_id(r)) : nothing
         end
-        if v !== nothing
-            return something(v)
+        if r.v !== nothing
+            return something(r.v)
         else
             v = fetch(rv.c)
         end
     else
         v = call_on_owner(fetch_ref, r)
     end
-    @atomic :sequentially_consistent r.v = Some(v)
+    @atomic r.v = Some(v)
     send_del_client(r)
-    v
+    r.v
 end
 
-fetch_ref(rid, args...) = begin
-    rv=lookup_ref(rid)
-    @debug "fet; rid=$(objectid(rid)); rv=$(objectid(rv))"
-    f = fetch(rv.c, args...)
-    @debug "endfet; rid=$(objectid(rid)); rv=$(objectid(rv))"
-    f
-end
+fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
 
 """
     fetch(c::RemoteChannel)
@@ -639,7 +628,6 @@ end
 
 function put_future(rid, v, caller)
     rv = lookup_ref(rid)
-    @debug "put; rid=$(objectid(rid)); rv=$(objectid(rv))"
     isready(rv) && error("Future can be set only once")
     put!(rv, v)
     # The caller has the value and hence can be removed from the remote store.
