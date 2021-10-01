@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-a3fb084c-3f9b-427d-b6b0-04cf2d08437a",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-50f0af56-4238-4ea0-aa87-7e4b68830578",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-01T05:12:30Z"
+        "created": "2021-10-01T05:44:59Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -150,6 +150,18 @@
             "summary": "Double precision SIMD-oriented Fast Mersenne Twister"
         },
         {
+            "name": "OpenLibm",
+            "SPDXID": "SPDXRef-OpenLibm",
+            "downloadLocation": "git+https://github.com/JuliaMath/openlibm.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/openlibm.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT AND BSD-2-Clause-FreeBSD AND ISC",
+            "copyrightText": "Copyright (c) 2011-14 The Julia Project.  Copyright (c) 2008 Stephen L. Moshier steve@moshier.net  Copyright 1992-2011 The FreeBSD Project. All rights reserved.  Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.",
+            "summary": "High quality system independent, portable, open source libm implementation"
+        },
+        {
             "name": "OpenBLAS",
             "SPDXID": "SPDXRef-OpenBLAS",
             "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
@@ -286,6 +298,11 @@
         },
         {
             "spdxElementId": "SPDXRef-dSFMT",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-OpenLibm",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
