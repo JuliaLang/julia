@@ -418,7 +418,7 @@ end
                                 0.117754809412463995466069, 0.103239680901072952701192,
                                 0.116255524079935043668677))
     res_hi = hi_order * x_hi
-    res_lo = fma(x_lo, estr, fma(hi_order, x_hi, -res_hi))
+    res_lo = fma(x_lo, hi_order, fma(hi_order, x_hi, -res_hi))
     ans_hi = c1hi + res_hi
     ans_lo = ((c1hi - ans_hi) + res_hi) + (res_lo + 3.80554962542412056336616e-17)
     return ans_hi, ans_lo
@@ -441,7 +441,7 @@ function _log_ext(d::Float64)
   xlo = fma(-xhi, mp1lo, fma(-xhi, mp1hi, m - 1.0)) * invy
   x2hi = xhi * xhi
   x2lo = muladd(xhi, xlo * 2.0, fma(xhi, xhi, -x2hi))
-  thi, tlo  = logk_kernel(x2hi, x2lo)
+  thi, tlo  = log_ext_kernel(x2hi, x2lo)
 
   shi = 0.6931471805582987 * e
   xhi2 = xhi * 2.0

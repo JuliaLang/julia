@@ -913,11 +913,20 @@ end
 @inline function ^(x::Float64, y::Float64)
     yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
+<<<<<<< HEAD
     z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
     end
     z
+=======
+    x<0 && !isinteger(y) && throw_exp_domainerror(x)
+    logxhi,logxlo = Base.Math._log_ext(x)
+    xyhi = logxhi*y
+    xylo = logxlo*y
+    hi = xyhi+xylo
+    return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
+>>>>>>> less broken
 end
 @inline function ^(x::T, y::T) where T <: Union{Float16, Float32}
     yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
