@@ -1037,6 +1037,9 @@ JuliaLang is a GitHub organization. It has many members.
 
 julia> rm("my_file.txt");
 ```
+
+!!! compat "Julia 1.8"
+       Julia 1.8 is required to use `Iterators.reverse` or `last` with `eachline` iterators.
 """
 function eachline(stream::IO=stdin; keep::Bool=false)
     EachLine(stream, keep=keep)::EachLine
