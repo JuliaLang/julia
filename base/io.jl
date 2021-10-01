@@ -1079,9 +1079,17 @@ function iterate(r::Iterators.Reverse{<:EachLine})
             inewline = something(findprev(==(UInt8('\n')), chunk, inewline-1), 0)
         end
     end
-    return iterate(r, (p0, p, chunks, 1, inewline, length(chunks), jnewline == 0 && !isempty(chunks) ? length(chunks[end])+1 : jnewline))
+    return iterate(r, (p0, p, chunks, 1, inewline, length(chunks), jnewline == 0 && !isempty(chunks) ? length(chunks[end]) : jnewline))
 end
 function iterate(r::Iterators.Reverse{<:EachLine}, state)
+    function _stripnewline(keep, pos, data)
+        # strip \n or \r\n from data[pos] by decrementing pos
+        if !keep && pos > 0 && data[pos] == UInt8('\n')
+            pos -= 1
+            pos -= pos > 0 && data[pos] == UInt8('\r')
+        end
+        return pos
+    end
     # state tuple: p0 = initial file position, p = current position,
     #              chunks = circular array of chunk buffers,
     #              current line is from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
@@ -1094,15 +1102,16 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             ichunk = ichunk == length(chunks) ? 1 : ichunk + 1
         end
         chunk = chunks[jchunk]
-        write(buf, view(chunk, 1:min(length(chunk), jnewline - 1 + r.itr.keep)))
+        write(buf, view(chunk, 1:jnewline))
+        buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
         empty!(chunks) # will cause next iteration to terminate
         seekend(r.itr.stream) # reposition to end of stream for isdone
         s = String(take!(buf))
     else
         # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
-        jnewline = min(length(chunks[jchunk]), jnewline - 1 + r.itr.keep)
         if ichunk == jchunk # common case: current and previous newline in same chunk
-            s = String(view(chunks[ichunk], inewline+1:jnewline))
+            chunk = chunks[ichunk]
+            s = String(view(chunk, inewline+1:_stripnewline(r.itr.keep, jnewline, chunk)))
         else
             buf = IOBuffer(sizehint=max(128, length(chunks[ichunk])-inewline+jnewline))
             write(buf, view(chunks[ichunk], inewline+1:length(chunks[ichunk])))
@@ -1113,6 +1122,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
                 write(buf, chunks[i])
             end
             write(buf, view(chunks[jchunk], 1:jnewline))
+            buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
             s = String(take!(buf))
 
             # overwrite obsolete chunks (ichunk+1:jchunk)

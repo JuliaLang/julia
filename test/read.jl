@@ -633,13 +633,13 @@ end
 # more tests for reverse(eachline)
 @testset "reverse(eachline)" begin
     lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
-    for lines in (lines, reverse(lines)), finalnewline in (true, false)
-        buf = IOBuffer(join(lines, '\n') * (finalnewline ? "\n" : ""))
+    for lines in (lines, reverse(lines)), finalnewline in (true, false), eol in ("\n", "\r\n")
+        buf = IOBuffer(join(lines, eol) * (finalnewline ? eol : ""))
         @test reverse!(collect(Iterators.reverse(eachline(seekstart(buf))))) == lines
         @test last(eachline(seekstart(buf))) == last(lines)
         @test last(eachline(seekstart(buf)),10^4) == last(lines,10^4)
         @test last(eachline(seekstart(buf)),length(lines)*2) == lines
-        @test reverse!(collect(Iterators.reverse(eachline(seek(buf, sum(sizeof, lines[1:100]) + 100))))) == lines[101:end]
+        @test reverse!(collect(Iterators.reverse(eachline(seek(buf, sum(sizeof, lines[1:100]) + 100*sizeof(eol)))))) == lines[101:end]
         @test isempty(Iterators.reverse(eachline(buf)))
     end
 
