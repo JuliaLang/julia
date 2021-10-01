@@ -922,6 +922,7 @@ end
 =======
     x<0 && !isinteger(y) && throw_exp_domainerror(x)
     !isfinite(x) && return x*(y>0)
+    x==0 && return Inf*(y<0)
     logxhi,logxlo = Base.Math._log_ext(x)
     xyhi = logxhi*y
     xylo = logxlo*y
