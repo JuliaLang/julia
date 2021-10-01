@@ -567,12 +567,23 @@ size(F::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(F, :factors))
 size(Q::AbstractQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
 size(Q::AbstractQ) = size(Q, 1), size(Q, 2)
 
-function getindex(Q::AbstractQ, i::Integer, j::Integer)
+getindex(Q::AbstractQ, C::Colon...) = Matrix(Q)[C...]
+getindex(Q::AbstractQ, ::Colon, ::Colon) = Matrix(Q)
+
+function getindex(Q::AbstractQ, ::Colon, j::Int)
     y = zeros(eltype(Q), size(Q, 2))
     y[j] = 1
     lmul!(Q, y)
-    return y[i]
 end
+
+function getindex(Q::AbstractQ, i::Int, ::Colon)
+    x = zeros(eltype(Q), size(Q, 1))
+    x[i] = 1
+    lmul!(Q', x)
+    vec(x')
+end
+
+getindex(Q::AbstractQ, i::Int, j::Int) = Q[:, j][i]
 
 # specialization avoiding the fallback using slow `getindex`
 function copyto!(dest::AbstractMatrix, src::AbstractQ)
