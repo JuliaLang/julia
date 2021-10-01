@@ -576,13 +576,6 @@ function getindex(Q::AbstractQ, ::Colon, j::Int)
     lmul!(Q, y)
 end
 
-function getindex(Q::AbstractQ, i::Int, ::Colon)
-    x = zeros(eltype(Q), size(Q, 1))
-    x[i] = 1
-    lmul!(Q', x)
-    vec(x')
-end
-
 getindex(Q::AbstractQ, i::Int, j::Int) = Q[:, j][i]
 
 # specialization avoiding the fallback using slow `getindex`
