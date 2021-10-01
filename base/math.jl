@@ -937,7 +937,7 @@ end
     xnlo = ynlo = 0.0
     if n < 0
         rx = inv(x)
-        xnlo = fma(x, rx, -1.) * rx
+        isfinite(x) && (xnlo = fma(x, rx, -1.) * rx)
         x = rx
         n = -n
     end
