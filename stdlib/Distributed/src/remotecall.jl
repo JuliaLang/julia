@@ -595,7 +595,7 @@ function fetch(r::Future)
     end
     @atomic r.v = Some(v)
     send_del_client(r)
-    r.v
+    something(r.v)
 end
 
 fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
