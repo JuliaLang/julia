@@ -59,7 +59,6 @@ static void jl_try_throw_sigint(void)
 
 void __cdecl crt_sig_handler(int sig, int num)
 {
-    jl_task_t *ct = jl_current_task;
     CONTEXT Context;
     switch (sig) {
     case SIGFPE:
@@ -100,8 +99,8 @@ void __cdecl crt_sig_handler(int sig, int num)
 // StackOverflowException needs extra stack space to record the backtrace
 // so we keep one around, shared by all threads
 static jl_mutex_t backtrace_lock;
-static jl_ucontext_t collect_backtrace_fiber;
-static jl_ucontext_t error_return_fiber;
+static win32_ucontext_t collect_backtrace_fiber;
+static win32_ucontext_t error_return_fiber;
 static PCONTEXT stkerror_ctx;
 static jl_ptls_t stkerror_ptls;
 static int have_backtrace_fiber;

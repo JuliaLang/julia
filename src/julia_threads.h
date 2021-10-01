@@ -32,8 +32,12 @@ JL_DLLEXPORT void jl_threading_profile(void);
 
 #ifdef _OS_WINDOWS_
 #define JL_HAVE_UCONTEXT
-typedef win32_ucontext_t jl_ucontext_t;
+typedef win32_ucontext_t jl_stack_context_t;
+typedef jl_stack_context_t _jl_ucontext_t;
 #else
+typedef struct {
+    jl_jmp_buf uc_mcontext;
+} jl_stack_context_t;
 #if !defined(JL_HAVE_UCONTEXT) && \
     !defined(JL_HAVE_ASM) && \
     !defined(JL_HAVE_UNW_CONTEXT) && \
@@ -56,13 +60,8 @@ typedef win32_ucontext_t jl_ucontext_t;
 #endif
 #endif
 
-
-struct jl_stack_context_t {
-    jl_jmp_buf uc_mcontext;
-};
-
 #if (!defined(JL_HAVE_UNW_CONTEXT) && defined(JL_HAVE_ASM)) || defined(JL_HAVE_SIGALTSTACK)
-typedef struct jl_stack_context_t jl_ucontext_t;
+typedef jl_stack_context_t _jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_ASYNCIFY)
 #if defined(_COMPILER_TSAN_ENABLED_)
@@ -75,18 +74,29 @@ typedef struct {
     // __asyncify_data struct.
     void *stackbottom;
     void *stacktop;
-} jl_ucontext_t;
+} _jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_UNW_CONTEXT)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
-typedef unw_context_t jl_ucontext_t;
+typedef unw_context_t _jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_UCONTEXT)
 #include <ucontext.h>
-typedef ucontext_t jl_ucontext_t;
+typedef ucontext_t _jl_ucontext_t;
 #endif
 #endif
+
+typedef struct {
+    union {
+        _jl_ucontext_t ctx;
+        jl_stack_context_t copy_ctx;
+    };
+#if defined(_COMPILER_TSAN_ENABLED_)
+    void *tsan_state;
+#endif
+} jl_ucontext_t;
+
 
 // handle to reference an OS thread
 #ifdef _OS_WINDOWS_
@@ -225,13 +235,9 @@ typedef struct _jl_tls_states_t {
     void *stackbase;
     size_t stacksize;
     union {
-        jl_ucontext_t base_ctx; // base context of stack
+        _jl_ucontext_t base_ctx; // base context of stack
         // This hack is needed to support always_copy_stacks:
-#ifdef _OS_WINDOWS_
-        jl_ucontext_t copy_stack_ctx;
-#else
-        struct jl_stack_context_t copy_stack_ctx;
-#endif
+        jl_stack_context_t copy_stack_ctx;
     };
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;

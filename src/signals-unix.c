@@ -44,7 +44,8 @@
 #include "julia_assert.h"
 
 // helper function for returning the unw_context_t inside a ucontext_t
-static bt_context_t *jl_to_bt_context(void *sigctx)
+// (also used by stackwalk.c)
+bt_context_t *jl_to_bt_context(void *sigctx)
 {
 #ifdef __APPLE__
     return (bt_context_t*)&((ucontext64_t*)sigctx)->uc_mcontext64->__ss;

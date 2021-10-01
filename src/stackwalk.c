@@ -717,7 +717,7 @@ void jl_rec_backtrace(jl_task_t *t)
 #if defined(_OS_WINDOWS_)
     bt_context_t c;
     memset(&c, 0, sizeof(c));
-    _JUMP_BUFFER *mctx = (_JUMP_BUFFER*)&t->ctx.uc_mcontext;
+    _JUMP_BUFFER *mctx = (_JUMP_BUFFER*)&t->ctx.ctx.uc_mcontext;
 #if defined(_CPU_X86_64_)
     c.Rbx = mctx->Rbx;
     c.Rsp = mctx->Rsp;
@@ -737,9 +737,9 @@ void jl_rec_backtrace(jl_task_t *t)
 #endif
     context = &c;
 #elif defined(JL_HAVE_UNW_CONTEXT)
-    context = &t->ctx;
+    context = &t->ctx.ctx;
 #elif defined(JL_HAVE_UCONTEXT)
-    context = jl_to_bt_context(&t->ctx);
+    context = jl_to_bt_context(&t->ctx.ctx);
 #else
 #endif
     if (context)
