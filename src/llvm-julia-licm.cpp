@@ -11,6 +11,7 @@
 
 #include "llvm-pass-helpers.h"
 #include "julia.h"
+#include "llvm-alloc-helpers.h"
 
 #define DEBUG_TYPE "julia-licm"
 
@@ -37,11 +38,13 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
         if (!preheader)
             return false;
         BasicBlock *header = L->getHeader();
+        const llvm::DataLayout &DL = header->getModule()->getDataLayout();
         initFunctions(*header->getModule());
         // Also require `gc_preserve_begin_func` whereas
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
-        if (!gc_preserve_begin_func)
+        // We also hoist write barriers here, so we don't exit if write_barrier_func exists
+        if (!gc_preserve_begin_func && !write_barrier_func && !alloc_obj_func)
             return false;
         auto LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
         auto DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
@@ -111,6 +114,26 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                         // Clone exit
                         CallInst::Create(call, {}, exit_pts[i]);
                     }
+                }
+                else if (callee == write_barrier_func) {
+                    if (!L->hasLoopInvariantOperands(call)) {
+                        continue;
+                    }
+                    changed = true;
+                    call->moveBefore(preheader->getTerminator());
+                }
+                else if (callee == alloc_obj_func) {
+                    if (!L->hasLoopInvariantOperands(call)) {
+                        continue;
+                    }
+                    jl_alloc::AllocUseInfo use_info;
+                    jl_alloc::CheckInst::Stack check_stack;
+                    jl_alloc::checkInst(use_info, call, check_stack, *this, DL, &L->getBlocksSet());
+                    if (use_info.escaped || use_info.addrescaped || use_info.hasunknownmem) {
+                        continue;
+                    }
+                    changed = true;
+                    call->moveBefore(preheader->getTerminator());
                 }
             }
         }
