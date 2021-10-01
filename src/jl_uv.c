@@ -290,7 +290,8 @@ JL_DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
 JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_loop_t *loop, uv_process_t *proc,
                           uv_stdio_container_t *stdio, int nstdio,
-                          uint32_t flags, char **env, char *cwd, uv_exit_cb cb)
+                          uint32_t flags, char **env, char *cwd, char* cpumask,
+                          size_t cpumask_size, uv_exit_cb cb)
 {
     uv_process_options_t opts = {0};
     opts.stdio = stdio;
@@ -300,8 +301,8 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
     // unused fields:
     //opts.uid = 0;
     //opts.gid = 0;
-    //opts.cpumask = NULL;
-    //opts.cpumask_size = 0;
+    opts.cpumask = cpumask;
+    opts.cpumask_size = cpumask_size;
     opts.cwd = cwd;
     opts.args = argv;
     opts.stdio_count = nstdio;

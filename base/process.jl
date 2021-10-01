@@ -89,12 +89,14 @@ const SpawnIOs = Vector{Any} # convenience name for readability
         err = ccall(:jl_spawn, Int32,
                   (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                    Ptr{Tuple{Cint, UInt}}, Int,
-                   UInt32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
+                   UInt32, Ptr{Cstring}, Cstring, Ptr{Cchar}, Csize_t, Ptr{Cvoid}),
             file, exec, loop, handle,
             iohandles, length(iohandles),
             flags,
             env === nothing ? C_NULL : env,
             isempty(dir) ? C_NULL : dir,
+            cmd.cpumask === nothing ? C_NULL : cmd.cpumask,
+            cmd.cpumask === nothing ? 0 : length(cmd.cpumask),
             @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
     end
     if err != 0

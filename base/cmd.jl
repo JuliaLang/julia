@@ -7,18 +7,22 @@ const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS = UInt8(1 << 2)
 const UV_PROCESS_DETACHED = UInt8(1 << 3)
 const UV_PROCESS_WINDOWS_HIDE = UInt8(1 << 4)
 
+const RawCPUMask = Union{Nothing,Vector{Cchar}}
+
 struct Cmd <: AbstractCmd
     exec::Vector{String}
     ignorestatus::Bool
     flags::UInt32 # libuv process flags
     env::Union{Vector{String},Nothing}
     dir::String
+    cpumask::RawCPUMask
     Cmd(exec::Vector{String}) =
-        new(exec, false, 0x00, nothing, "")
-    Cmd(cmd::Cmd, ignorestatus, flags, env, dir) =
+        new(exec, false, 0x00, nothing, "", nothing)
+    Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpumask = nothing) =
         new(cmd.exec, ignorestatus, flags, env,
-            dir === cmd.dir ? dir : cstr(dir))
+            dir === cmd.dir ? dir : cstr(dir), cpumask)
     function Cmd(cmd::Cmd; ignorestatus::Bool=cmd.ignorestatus, env=cmd.env, dir::AbstractString=cmd.dir,
+                 cpumask::RawCPUMask = cmd.cpumask,
                  detach::Bool = 0 != cmd.flags & UV_PROCESS_DETACHED,
                  windows_verbatim::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS,
                  windows_hide::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_HIDE)
@@ -26,7 +30,7 @@ struct Cmd <: AbstractCmd
                 windows_verbatim * UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS |
                 windows_hide * UV_PROCESS_WINDOWS_HIDE
         new(cmd.exec, ignorestatus, flags, byteenv(env),
-            dir === cmd.dir ? dir : cstr(dir))
+            dir === cmd.dir ? dir : cstr(dir), cpumask)
     end
 end
 
@@ -285,6 +289,25 @@ end
 
 function addenv(cmd::Cmd, env::Vector{<:AbstractString}; inherit::Bool = true)
     return addenv(cmd, Dict(k => v for (k, v) in eachsplit.(env, "=")); inherit)
+end
+
+"""
+    setcpus(original_command::Cmd, cpus) -> command::Cmd
+
+Set the CPU affinity of the `command` by a list of CPU IDs (1-based) `cpus`.  Passing
+`cpus = nothing` means to unset the CPU affinity if the `original_command` has any.
+
+This is supported on Unix and Windows but not in macOS.
+"""
+function setcpus end
+setcpus(cmd::Cmd, ::Nothing) = Cmd(cmd; cpumask = nothing)
+function setcpus(cmd::Cmd, cpus::AbstractVector{<:Integer})
+    n = max(maximum(cpus), ccall(:uv_cpumask_size, Cint, ()))
+    cpumask = zeros(Cchar, n)
+    for i in cpus
+        cpumask[i] = true
+    end
+    return Cmd(cmd; cpumask)
 end
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
