@@ -140,7 +140,9 @@ real(D::Diagonal) = Diagonal(real(D.diag))
 imag(D::Diagonal) = Diagonal(imag(D.diag))
 
 iszero(D::Diagonal) = all(iszero, D.diag)
+zero(D::Diagonal) = Diagonal(zero.(D.diag))
 isone(D::Diagonal) = all(isone, D.diag)
+one(D::Diagonal) = Diagonal(one.(D.diag))
 isdiag(D::Diagonal) = all(isdiag, D.diag)
 isdiag(D::Diagonal{<:Number}) = true
 istriu(D::Diagonal, k::Integer=0) = k <= 0 || iszero(D.diag) ? true : false
@@ -206,19 +208,19 @@ function _muldiag_size_check(A, B)
     nA == mB || throw_dimerr(B, nA, mB)
     return nothing
 end
+# the output matrix should have the same size as the non-diagonal input matrix or vector
+@noinline throw_dimerr(szC, szA) = throw(DimensionMismatch("output matrix has size: $szC, but should have size $szA"))
+_size_check_out(C, ::Diagonal, A) = _size_check_out(C, A)
+_size_check_out(C, A, ::Diagonal) = _size_check_out(C, A)
+_size_check_out(C, A::Diagonal, ::Diagonal) = _size_check_out(C, A)
+function _size_check_out(C, A)
+    szA = size(A)
+    szC = size(C)
+    szA == szC || throw_dimerr(szC, szA)
+    return nothing
+end
 function _muldiag_size_check(C, A, B)
     _muldiag_size_check(A, B)
-    # the output matrix should have the same size as the non-diagonal input matrix or vector
-    @noinline throw_dimerr(szC, szA) = throw(DimensionMismatch("output matrix has size: $szC, but should have size $szA"))
-    _size_check_out(C, ::Diagonal, A) = _size_check_out(C, A)
-    _size_check_out(C, A, ::Diagonal) = _size_check_out(C, A)
-    _size_check_out(C, A::Diagonal, ::Diagonal) = _size_check_out(C, A)
-    function _size_check_out(C, A)
-        szA = size(A)
-        szC = size(C)
-        szA == szC || throw_dimerr(szC, szA)
-        return nothing
-    end
     _size_check_out(C, A, B)
 end
 
@@ -242,25 +244,8 @@ end
 (*)(D::Diagonal, A::AbstractMatrix) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
 
-function rmul!(A::AbstractMatrix, D::Diagonal)
-    require_one_based_indexing(A)
-    nA, nD = size(A, 2), length(D.diag)
-    if nA != nD
-        throw(DimensionMismatch("second dimension of A, $nA, does not match the first of D, $nD"))
-    end
-    A .= A .* permutedims(D.diag)
-    return A
-end
-
-function lmul!(D::Diagonal, B::AbstractVecOrMat)
-    require_one_based_indexing(B)
-    nB, nD = size(B, 1), length(D.diag)
-    if nB != nD
-        throw(DimensionMismatch("second dimension of D, $nD, does not match the first of B, $nB"))
-    end
-    B .= D.diag .* B
-    return B
-end
+rmul!(A::AbstractMatrix, D::Diagonal) = mul!(A, A, D)
+lmul!(D::Diagonal, B::AbstractVecOrMat) = mul!(B, D, B)
 
 rmul!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) = typeof(A)(rmul!(A.data, D))
 function rmul!(A::UnitLowerTriangular, D::Diagonal)
@@ -324,9 +309,6 @@ function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
     lmul!(D, At)
 end
 
-rmul!(A::Diagonal, B::Diagonal) = Diagonal(A.diag .*= B.diag)
-lmul!(A::Diagonal, B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
-
 @inline function __muldiag!(out, D::Diagonal, B, alpha, beta)
     if iszero(beta)
         out .= (D.diag .* B) .*ₛ alpha
@@ -344,6 +326,16 @@ end
     end
     return out
 end
+
+@inline function __muldiag!(out::Diagonal, D1::Diagonal, D2::Diagonal, alpha, beta)
+    if iszero(beta)
+        out.diag .= (D1.diag .* D2.diag) .*ₛ alpha
+    else
+        out.diag .= (D1.diag .* D2.diag) .*ₛ alpha .+ out .* beta
+    end
+    return out
+end
+
 # only needed for ambiguity resolution, as mul! is explicitly defined for these arguments
 @inline __muldiag!(out, D1::Diagonal, D2::Diagonal, alpha, beta) =
     mul!(out, D1, D2, alpha, beta)
@@ -370,14 +362,13 @@ end
              alpha::Number, beta::Number) = _muldiag!(out, A, D, alpha, beta)
 @inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, D::Diagonal,
              alpha::Number, beta::Number) = _muldiag!(out, A, D, alpha, beta)
+@inline mul!(C::Diagonal, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number) =
+    _muldiag!(C, Da, Db, alpha, beta)
 
 function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number)
-    mA = size(Da, 1)
-    mB = size(Db, 1)
-    mA == mB || throw(DimensionMismatch("A has dimensions ($mA,$mA) but B has dimensions ($mB,$mB)"))
-    mC, nC = size(C)
-    mC == nC == mA || throw(DimensionMismatch("output matrix has size: ($mC,$nC), but should have size ($mA,$mA)"))
+    _muldiag_size_check(C, Da, Db)
     require_one_based_indexing(C)
+    mA = size(Da, 1)
     da = Da.diag
     db = Db.diag
     _rmul_or_fill!(C, beta)

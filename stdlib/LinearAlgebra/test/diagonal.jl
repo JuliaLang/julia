@@ -590,13 +590,27 @@ end
     @test B * DR == B * collect(DR)
 
     A = reshape([ones(2,2), ones(2,2)*2, ones(2,2)*3, ones(2,2)*4], 2, 2)
+    Ac = collect(A)
     D = Diagonal([collect(reshape(1:4, 2, 2)), collect(reshape(5:8, 2, 2))])
-    @test A * D == collect(A) * collect(D)
-    @test D * A == collect(D) * collect(A)
+    Dc = collect(D)
+    @test A * D == Ac * Dc
+    @test D * A == Dc * Ac
+    @test D * D == Dc * Dc
 
     AS = similar(A)
     mul!(AS, A, D, true, false)
     @test AS == A * D
+
+    D2 = similar(D)
+    mul!(D2, D, D)
+    @test D2 == D * D
+
+    D2[diagind(D2)] .= D[diagind(D)]
+    lmul!(D, D2)
+    @test D2 == D * D
+    D2[diagind(D2)] .= D[diagind(D)]
+    rmul!(D2, D)
+    @test D2 == D * D
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
@@ -868,6 +882,18 @@ end
     B = Diagonal(rand(elty,5,5))
     x = rand(elty)
     @test \(x, B) == /(B, x)
+end
+
+@testset "zero and one" begin
+    D1 = Diagonal(rand(3))
+    @test D1 + zero(D1) == D1
+    @test D1 * one(D1) == D1
+    D2 = Diagonal([collect(reshape(1:4, 2, 2)), collect(reshape(5:8, 2, 2))])
+    @test D2 + zero(D2) == D2
+    @test D2 * one(D2) == D2
+    D3 = Diagonal([D2, D2]);
+    @test D3 + zero(D3) == D3
+    @test D3 * one(D3) == D3
 end
 
 end # module TestDiagonal
