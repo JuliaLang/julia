@@ -39,5 +39,3 @@ steps:
     commands: |
       echo "--- Build julia-debug runtime with TSAN"
       contrib/tsan/build.sh ./tmp/test-tsan -j$${JULIA_CPU_THREADS:?} -C src debug
-      echo "--- BROKEN: Build julia-debug with TSAN"
-      ! make -C ./tmp/test-tsan/tsan -j$${JULIA_CPU_THREADS:?} debug
