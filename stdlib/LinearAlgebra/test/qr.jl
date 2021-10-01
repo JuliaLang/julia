@@ -444,6 +444,9 @@ end
                 @test Q2[i, j] == M[i, j]
             end
         end
+        @test Q2[:] == M[:]
+        @test Q2[:, :] == M[:, :]
+        @test Q2[:, :, :] == M[:, :, :]
     end
 end
 

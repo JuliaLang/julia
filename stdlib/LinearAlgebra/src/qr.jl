@@ -567,7 +567,7 @@ size(F::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(F, :factors))
 size(Q::AbstractQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
 size(Q::AbstractQ) = size(Q, 1), size(Q, 2)
 
-getindex(Q::AbstractQ, C::Colon...) = Matrix(Q)[C...]
+getindex(Q::AbstractQ, inds...) = Matrix(Q)[inds...]
 getindex(Q::AbstractQ, ::Colon, ::Colon) = Matrix(Q)
 
 function getindex(Q::AbstractQ, ::Colon, j::Int)
