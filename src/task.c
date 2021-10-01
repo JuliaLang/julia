@@ -55,15 +55,29 @@ static inline void sanitizer_finish_switch_fiber(void) {}
 #endif
 
 #if defined(_COMPILER_TSAN_ENABLED_)
-static inline void tsan_destroy_ctx(jl_ptls_t ptls, void *state) {
-    if (state != &ptls->root_task->state) {
-        __tsan_destroy_fiber(ctx->state);
+static inline void tsan_destroy_ctx(jl_ptls_t ptls, jl_ucontext_t *ctx) {
+    if (ctx != &ptls->root_task->ctx) {
+        __tsan_destroy_fiber(ctx->tsan_state);
     }
-    ctx->state = NULL;
+    ctx->tsan_state = NULL;
 }
-static inline void tsan_switch_to_ctx(void *state)  {
-    __tsan_switch_to_fiber(state, 0);
+static inline void tsan_destroy_copyctx(jl_ptls_t ptls, struct jl_stack_context_t *ctx) {
+    if (ctx != &ptls->root_task->copy_stack_ctx) {
+        __tsan_destroy_fiber(ctx->tsan_state);
+    }
+    ctx->tsan_state = NULL;
 }
+static inline void tsan_switch_to_ctx(jl_ucontext_t *ctx)  {
+    __tsan_switch_to_fiber(ctx->tsan_state, 0);
+}
+static inline void tsan_switch_to_copyctx(struct jl_stack_context_t *ctx)  {
+    __tsan_switch_to_fiber(ctx->tsan_state, 0);
+}
+#else
+static inline void tsan_destroy_ctx(jl_ptls_t ptls, jl_ucontext_t *ctx) {}
+static inline void tsan_destroy_copyctx(jl_ptls_t ptls, struct jl_stack_context_t *ctx) {}
+static inline void tsan_switch_to_ctx(jl_ucontext_t *ctx) {}
+static inline void tsan_switch_to_copyctx(struct jl_stack_context_t *ctx)  {}
 #endif
 
 // empirically, jl_finish_task needs about 64k stack space to infer/run
@@ -180,6 +194,7 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
 #error COPY_STACKS is incompatible with this platform
 #endif
     sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
+    tsan_switch_to_copyctx(&t->copy_stack_ctx);
 #if defined(_OS_WINDOWS_)
     jl_setcontext(&t->ctx);
 #else
@@ -357,9 +372,9 @@ static void ctx_switch(jl_task_t *lastt)
                 t->sticky = 1;
                 t->bufsz = 0;
                 if (always_copy_stacks)
-                    memcpy(&t->copy_stack_ctx, &ptls->copy_stack_ctx, sizeof(t->copy_stack_ctx));
+                    memcpy(&t->copy_stack_ctx, &ptls->copy_stack_ctx, sizeof(t->copy_stack_ctx) - sizeof(t->copy_stack_ctx.tsan_state));
                 else
-                    memcpy(&t->ctx, &ptls->base_ctx, sizeof(t->ctx));
+                    memcpy(&t->ctx, &ptls->base_ctx, sizeof(t->ctx) - sizeof(t->ctx.tsan_state));
 #else
                 jl_throw(jl_memory_exception);
 #endif
@@ -401,21 +416,22 @@ static void ctx_switch(jl_task_t *lastt)
 #endif
     jl_set_pgcstack(&t->gcstack);
 
-#if defined(_COMPILER_TSAN_ENABLED_)
-    tsan_switch_to_ctx(&t->tsan_state);
-    if (killed)
-        tsan_destroy_ctx(ptls, &lastt->tsan_state);
-#endif
     if (t->started) {
 #ifdef COPY_STACKS
         if (t->copy_stack) {
             if (!killed && !lastt->copy_stack)
                 restore_stack2(t, ptls, lastt);
-            else if (lastt->copy_stack) {
-                restore_stack(t, ptls, NULL); // (doesn't return)
-            }
             else {
-                restore_stack(t, ptls, (char*)1); // (doesn't return)
+                tsan_switch_to_copyctx(&t->copy_stack_ctx);
+                if (killed)
+                    tsan_destroy_copyctx(ptls, &lastt->copy_stack_ctx);
+
+                if (lastt->copy_stack) {
+                    restore_stack(t, ptls, NULL); // (doesn't return)
+                }
+                else {
+                    restore_stack(t, ptls, (char*)1); // (doesn't return)
+                }
             }
         }
         else
@@ -423,6 +439,8 @@ static void ctx_switch(jl_task_t *lastt)
         {
             sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
             if (killed) {
+                tsan_switch_to_ctx(&t->ctx);
+                tsan_destroy_ctx(ptls, &lastt->ctx);
                 jl_set_fiber(&t->ctx); // (doesn't return)
                 abort(); // unreachable
             }
@@ -430,6 +448,7 @@ static void ctx_switch(jl_task_t *lastt)
                 if (lastt->copy_stack) {
                     // Resume at the jl_setjmp earlier in this function,
                     // don't do a full task swap
+                    tsan_switch_to_ctx(&t->ctx);
                     jl_set_fiber(&t->ctx); // (doesn't return)
                 }
                 else {
@@ -441,6 +460,10 @@ static void ctx_switch(jl_task_t *lastt)
     else {
         sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
         if (t->copy_stack && always_copy_stacks) {
+            tsan_switch_to_ctx(&t->ctx);
+            if (killed) {
+                tsan_destroy_ctx(ptls, &lastt->ctx);
+            }
 #ifdef COPY_STACKS
 #if defined(_OS_WINDOWS_)
             jl_setcontext(&t->ctx);
@@ -452,11 +475,14 @@ static void ctx_switch(jl_task_t *lastt)
         }
         else {
             if (killed) {
+                tsan_switch_to_ctx(&t->ctx);
+                tsan_destroy_ctx(ptls, &lastt->ctx);
                 jl_start_fiber_set(&t->ctx); // (doesn't return)
                 abort();
             }
             else if (lastt->copy_stack) {
                 // Resume at the jl_setjmp earlier in this function
+                tsan_switch_to_ctx(&t->ctx);
                 jl_start_fiber_set(&t->ctx); // (doesn't return)
                 abort();
             }
@@ -764,7 +790,10 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     }
 #endif
 #ifdef _COMPILER_TSAN_ENABLED_
-    t->tsan_state = __tsan_create_fiber(0);
+    if (always_copy_stacks)
+        t->copy_stack_ctx.tsan_state = __tsan_create_fiber(0);
+    else
+        t->ctx.tsan_state = __tsan_create_fiber(0);
 #endif
     return t;
 }
@@ -924,10 +953,12 @@ static void jl_start_fiber_set(jl_ucontext_t *t)
 static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     assert(lastt);
+    tsan_switch_to_ctx(t);
     swapcontext(lastt, t);
 }
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
+    tsan_switch_to_ctx(t);
     swapcontext(lastt, t);
 }
 static void jl_set_fiber(jl_ucontext_t *t)
@@ -982,6 +1013,7 @@ static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (jl_setjmp(lastt->uc_mcontext, 0))
         return;
+    tsan_switch_to_ctx(t);
     jl_set_fiber(t); // doesn't return
 }
 static void jl_set_fiber(jl_ucontext_t *t)
@@ -1069,6 +1101,7 @@ static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
     if (jl_setjmp(lastt->uc_mcontext, 0))
         return;
 #endif
+    tsan_switch_to_ctx(t);
     jl_start_fiber_set(t); // doesn't return
 }
 static void jl_start_fiber_set(jl_ucontext_t *t)
@@ -1219,12 +1252,14 @@ static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
     assert(lastt);
     if (lastt && jl_setjmp(lastt->uc_mcontext, 0))
         return;
+    tsan_switch_to_ctx(t);
     jl_start_fiber_set(t);
 }
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (jl_setjmp(lastt->uc_mcontext, 0))
         return;
+    tsan_switch_to_ctx(t);
     jl_start_fiber_set(t); // doesn't return
 }
 static void jl_set_fiber(jl_ucontext_t *t)
@@ -1311,7 +1346,10 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     assert(jl_current_task == ct);
 
 #ifdef _COMPILER_TSAN_ENABLED_
-    ct->tsan_state = __tsan_get_current_fiber();
+    if (always_copy_stacks)
+        ct->copy_stack_ctx.tsan_state = __tsan_get_current_fiber();
+    else
+        ct->ctx.tsan_state = __tsan_get_current_fiber();
 #endif
 
 #ifdef COPY_STACKS

@@ -59,6 +59,9 @@ typedef win32_ucontext_t jl_ucontext_t;
 
 struct jl_stack_context_t {
     jl_jmp_buf uc_mcontext;
+#if defined(_COMPILER_TSAN_ENABLED_)
+    void *tsan_state;
+#endif
 };
 
 #if (!defined(JL_HAVE_UNW_CONTEXT) && defined(JL_HAVE_ASM)) || defined(JL_HAVE_SIGALTSTACK)
@@ -84,7 +87,14 @@ typedef unw_context_t jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_UCONTEXT)
 #include <ucontext.h>
-typedef ucontext_t jl_ucontext_t;
+typedef struct {
+    ucontext_t ctx;
+#if defined(_COMPILER_TSAN_ENABLED_)
+    void *tsan_state;
+#else
+    uint8_t tsan_state[0]
+#endif
+} jl_ucontext_t;
 #endif
 #endif
 
