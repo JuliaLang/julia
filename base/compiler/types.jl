@@ -19,7 +19,7 @@ abstract type AbstractInterpreter end
 
 struct ArgInfo
     fargs::Union{Nothing,Vector{Any}}
-    argtypes::Vector{Any}
+    argtypes::Vector{AbstractLattice}
 end
 
 """
@@ -29,7 +29,7 @@ A type that represents the result of running type inference on a chunk of code.
 """
 mutable struct InferenceResult
     linfo::MethodInstance
-    argtypes::Vector{Any}
+    argtypes::Vector{AbstractLattice}
     overridden_by_const::BitVector
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
@@ -232,10 +232,10 @@ but `AbstractInterpreter` doesn't provide a specific interface for configuring i
 """
 bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv#=::InferenceState=#) =
     return isa(sv.linfo.def, Module) && !isdispatchtuple(callsig)
-bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
-    return rt === Any
-bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
-    return rt === Any
+@latticeop args bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
+    return rt === ⊤
+@latticeop args bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
+    return rt === ⊤
 
 """
     infer_compilation_signature(::AbstractInterpreter)::Bool

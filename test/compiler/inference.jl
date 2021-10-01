@@ -7,6 +7,10 @@ isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
+# HACK
+Base.:(==)(a::Core.Compiler.TypeLattice, b::Type) = Core.Compiler.unwraptype(a) == b
+Base.:(==)(a::Type, b::Core.Compiler.TypeLattice) = a == Core.Compiler.unwraptype(b)
+
 f39082(x::Vararg{T}) where {T <: Number} = x[1]
 let ast = only(code_typed(f39082, Tuple{Vararg{Rational}}))[1]
     @test ast.slottypes == Any[Const(f39082), Tuple{Vararg{Rational}}]
@@ -111,7 +115,6 @@ end
 @test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}) == 2
 @test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 3
 
-
 # PR 22120
 function tmerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
@@ -159,8 +162,8 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) ==
     Union{Vector{Bool}, Vector{Int}, Vector{String}}
 @test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Union{Vector{Bool}, Vector{Symbol}})) == Vector
-@test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
-@test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
+@test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) == Base.BitIntegerType
+@test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) == Base.BitIntegerType
 @test Core.Compiler.tmerge(Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
 
 struct SomethingBits
@@ -851,7 +854,7 @@ function g20343()
     i = ntuple(i -> n == i ? "" : 0, 2n)::T
     f20343(i...)
 end
-@test Base.return_types(g20343, ()) == [Int]
+@test Base.return_types(g20343, ()) == Any[Int]
 function h20343()
     n = rand(1:3)
     T = Union{Tuple{String, Int, Int}, Tuple{Int, String, Int}, Tuple{Int, Int, String}}
@@ -1602,7 +1605,7 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
-    @test opt.src.ssavaluetypes isa Vector{Any}
+    @test opt.src.ssavaluetypes isa Vector{Core.Compiler.AbstractLattice}
     @test !opt.src.inferred
     @test opt.mod === Base
 end
@@ -1933,7 +1936,7 @@ i = 1
 while !isa(opt25261[i], GotoIfNot); global i += 1; end
 foundslot = false
 for expr25261 in opt25261[i:end]
-    if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
+    if expr25261 isa TypedSlot && expr25261.typ == Tuple{Int, Int}
         # This should be the assignment to the SSAValue into the getfield
         # call - make sure it's a TypedSlot
         global foundslot = true
@@ -2521,7 +2524,7 @@ struct Foo28079 end
 test28079(p, n, m) = h28079(Foo28079(), Base.pointerref, p, n, m)
 cinfo_unoptimized = code_typed(test28079, (Ptr{Float32}, Int, Int); optimize=false)[].first
 cinfo_optimized = code_typed(test28079, (Ptr{Float32}, Int, Int); optimize=true)[].first
-@test cinfo_unoptimized.ssavaluetypes[end-1] === cinfo_optimized.ssavaluetypes[end-1] === Float32
+@test cinfo_unoptimized.ssavaluetypes[end-1] == cinfo_optimized.ssavaluetypes[end-1] == Float32
 
 # issue #27907
 ig27907(T::Type, N::Integer, offsets...) = ig27907(T, T, N, offsets...)
@@ -2583,11 +2586,12 @@ end
 # issue #28356
 # unit test to make sure countunionsplit overflows gracefully
 # we don't care what number is returned as long as it's large
-@test Core.Compiler.unionsplitcost(Any[Union{Int32, Int64} for i=1:80]) > 100000
-@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}]) == 2
-@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32, Int64}, Int8]) == 8
-@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32}, Int8]) == 6
-@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32}, Union{Int8, Int16, Int32, Int64}, Int8]) == 6
+import Core.Compiler: unionsplitcost, AbstractLattice, NativeType
+@test unionsplitcost(AbstractLattice[NativeType(Union{Int32, Int64}) for i=1:80]) > 100000
+@test unionsplitcost(AbstractLattice[NativeType(Union{Int8, Int16, Int32, Int64})]) == 2
+@test unionsplitcost(AbstractLattice[NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Int8)]) == 8
+@test unionsplitcost(AbstractLattice[NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Union{Int8, Int16, Int32}), NativeType(Int8)]) == 6
+@test unionsplitcost(AbstractLattice[NativeType(Union{Int8, Int16, Int32}), NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Int8)]) == 6
 
 # make sure compiler doesn't hang in union splitting
 
@@ -3540,14 +3544,16 @@ let f() = Val(fieldnames(Complex{Int}))
 end
 
 @testset "switchtupleunion" begin
+    import Core.Compiler: AbstractLattice, NativeType, switchtupleunion
+
     # signature tuple
     let
-        tunion = Core.Compiler.switchtupleunion(Tuple{Union{Int32,Int64}, Nothing})
+        tunion = switchtupleunion(Tuple{Union{Int32,Int64}, Nothing})
         @test Tuple{Int32, Nothing} in tunion
         @test Tuple{Int64, Nothing} in tunion
     end
     let
-        tunion = Core.Compiler.switchtupleunion(Tuple{Union{Int32,Int64}, Union{Float32,Float64}, Nothing})
+        tunion = switchtupleunion(Tuple{Union{Int32,Int64}, Union{Float32,Float64}, Nothing})
         @test Tuple{Int32, Float32, Nothing} in tunion
         @test Tuple{Int32, Float64, Nothing} in tunion
         @test Tuple{Int64, Float32, Nothing} in tunion
@@ -3556,18 +3562,18 @@ end
 
     # argtypes
     let
-        tunion = Core.Compiler.switchtupleunion(Any[Union{Int32,Int64}, Core.Const(nothing)])
+        tunion = switchtupleunion(AbstractLattice[NativeType(Union{Int32,Int64}), Core.Const(nothing)])
         @test length(tunion) == 2
         @test Any[Int32, Core.Const(nothing)] in tunion
         @test Any[Int64, Core.Const(nothing)] in tunion
     end
     let
-        tunion = Core.Compiler.switchtupleunion(Any[Union{Int32,Int64}, Union{Float32,Float64}, Core.Const(nothing)])
+        tunion = switchtupleunion(AbstractLattice[NativeType(Union{Int32,Int64}), NativeType(Union{Float32,Float64}), Core.Const(nothing)])
         @test length(tunion) == 4
-        @test Any[Int32, Float32, Core.Const(nothing)] in tunion
-        @test Any[Int32, Float64, Core.Const(nothing)] in tunion
-        @test Any[Int64, Float32, Core.Const(nothing)] in tunion
-        @test Any[Int64, Float64, Core.Const(nothing)] in tunion
+        @test AbstractLattice[NativeType(Int32), NativeType(Float32), Core.Const(nothing)] in tunion
+        @test AbstractLattice[NativeType(Int32), NativeType(Float64), Core.Const(nothing)] in tunion
+        @test AbstractLattice[NativeType(Int64), NativeType(Float32), Core.Const(nothing)] in tunion
+        @test AbstractLattice[NativeType(Int64), NativeType(Float64), Core.Const(nothing)] in tunion
     end
 end
 
@@ -3711,7 +3717,7 @@ let
     mi = Core.Compiler.specialize_method(first(methods(f_convert_me_to_ir)),
         Tuple{Bool, Float64}, Core.svec())
     ci = Base.uncompressed_ast(mi.def)
-    ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
+    ci.ssavaluetypes = Core.Compiler.AbstractLattice[Core.Compiler.NativeType(Any) for i = 1:ci.ssavaluetypes]
     sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
         Core.Compiler.NativeInterpreter())
     ir = Core.Compiler.convert_to_ircode(ci, sv)

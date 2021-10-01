@@ -1635,7 +1635,7 @@ function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
 end
 
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
-    typ = isa(ex, TypedSlot) ? ex.typ : Any
+    typ = isa(ex, TypedSlot) ? Core.Compiler.unwraptype(ex.typ) : Any
     slotid = ex.id
     slotnames = get(io, :SOURCE_SLOTNAMES, false)
     if (isa(slotnames, Vector{String}) &&
@@ -2486,7 +2486,8 @@ module IRShow
     const Compiler = Core.Compiler
     using Core.IR
     import ..Base
-    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr, compute_basic_blocks, block_for_inst
+    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr,
+                      compute_basic_blocks, block_for_inst, AbstractLattice, unwraptype
     Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)

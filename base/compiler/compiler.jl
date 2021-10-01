@@ -114,6 +114,36 @@ something(x::Any, y...) = x
 # compiler #
 ############
 
+# TODO remove me in the future, this is just to check the coverage of the overhaul
+import Core: Const, PartialStruct, InterConditional, PartialOpaque, TypeofVararg
+abstract type _AbstractLattice end
+const AbstractLattice = Union{
+    Const, PartialStruct, InterConditional, PartialOpaque, TypeofVararg,
+    _AbstractLattice}
+const Argtypes = Vector{AbstractLattice}
+
+macro latticeop(mode, def)
+    @assert is_function_def(def)
+    sig, body = def.args
+    if mode === :args || mode === :op
+        nospecs = Symbol[]
+        for arg in sig.args
+            if isexpr(arg, :macrocall) && arg.args[1] === Symbol("@nospecialize")
+                push!(nospecs, arg.args[3])
+            end
+        end
+        idx = findfirst(x->!isa(x, LineNumberNode), body.args)
+        for var in nospecs
+            insert!(body.args, idx, Expr(:(=), var, Expr(:(::), var, :AbstractLattice)))
+        end
+    end
+    if mode === :ret || mode === :op
+        sig = Expr(:(::), sig, :AbstractLattice)
+    end
+    return esc(Expr(def.head, sig, body))
+end
+anymap(f::Function, a::Vector{AbstractLattice}) = Any[ f(a[i]) for i in 1:length(a) ]
+
 include("compiler/cicache.jl")
 include("compiler/types.jl")
 include("compiler/utilities.jl")

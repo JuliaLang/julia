@@ -19,14 +19,14 @@ being used for this purpose alone.
 module Timings
 
 using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
-    @inbounds, copy, backtrace
+    @inbounds, copy, backtrace, AbstractLattice
 
 # What we record for any given frame we infer during type inference.
 struct InferenceFrameInfo
     mi::Core.MethodInstance
     world::UInt64
-    sptypes::Vector{Any}
-    slottypes::Vector{Any}
+    sptypes::Vector{AbstractLattice}
+    slottypes::Vector{AbstractLattice}
     nargs::Int
 end
 
@@ -83,7 +83,7 @@ function reset_timings()
     empty!(_timings)
     push!(_timings, Timing(
         # The MethodInstance for ROOT(), and default empty values for other fields.
-        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1),
+        InferenceFrameInfo(ROOTmi, 0x0, AbstractLattice[], AbstractLattice[Core.Const(ROOT)], 1),
         _time_ns()))
     return nothing
 end
@@ -338,7 +338,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
     if cache_the_tree
         if may_compress(interp)
             nslots = length(ci.slotflags)
-            resize!(ci.slottypes::Vector{Any}, nslots)
+            resize!(ci.slottypes::Vector{AbstractLattice}, nslots)
             resize!(ci.slotnames, nslots)
             return ccall(:jl_compress_ir, Vector{UInt8}, (Any, Any), def, ci)
         else
@@ -438,7 +438,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     limited_ret = me.bestguess isa LimitedAccuracy
     limited_src = false
     if !limited_ret
-        gt = me.src.ssavaluetypes::Vector{Any}
+        gt = me.src.ssavaluetypes::Vector{AbstractLattice}
         for j = 1:length(gt)
             gt[j] = gtj = cycle_fix_limited(gt[j], me)
             if gtj isa LimitedAccuracy && me.parent !== nothing
@@ -503,10 +503,11 @@ end
 
 # widen all Const elements in type annotations
 function widen_all_consts!(src::CodeInfo)
-    ssavaluetypes = src.ssavaluetypes::Vector{Any}
-    for i = 1:length(ssavaluetypes)
-        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
-    end
+    # ssavaluetypes = src.ssavaluetypes::Vector{AbstractLattice}
+    # for i = 1:length(ssavaluetypes)
+    #     ssavaluetypes[i] = NativeType(widenconst(ssavaluetypes[i]))
+    # end
+    src.ssavaluetypes = anymap(widenconst, src.ssavaluetypes::Vector{AbstractLattice})
 
     for i = 1:length(src.code)
         x = src.code[i]
@@ -569,8 +570,8 @@ function record_slot_assign!(sv::InferenceState)
     # to compute a lower bound on the storage required
     states = sv.stmt_types
     body = sv.src.code::Vector{Any}
-    slottypes = sv.slottypes::Vector{Any}
-    ssavaluetypes = sv.src.ssavaluetypes::Vector{Any}
+    slottypes = sv.slottypes::Vector{AbstractLattice}
+    ssavaluetypes = sv.src.ssavaluetypes::Vector{AbstractLattice}
     for i = 1:length(body)
         expr = body[i]
         st_i = states[i]
@@ -583,10 +584,10 @@ function record_slot_assign!(sv::InferenceState)
                 if vt !== Bottom
                     id = slot_id(lhs)
                     otherTy = slottypes[id]
-                    if otherTy === Bottom
-                        slottypes[id] = vt
-                    elseif otherTy === Any
-                        slottypes[id] = Any
+                    if otherTy === ⊥
+                        slottypes[id] = TypeLattice(vt)
+                    elseif otherTy === ⊤
+                        slottypes[id] = ⊤
                     else
                         slottypes[id] = tmerge(otherTy, vt)
                     end
@@ -603,10 +604,10 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
 
     # remove all unused ssa values
     src = sv.src
-    ssavaluetypes = src.ssavaluetypes::Vector{Any}
+    ssavaluetypes = src.ssavaluetypes::Vector{AbstractLattice}
     for j = 1:length(ssavaluetypes)
         t = ssavaluetypes[j]
-        ssavaluetypes[j] = t === NOT_FOUND ? Union{} : widenconditional(t)
+        ssavaluetypes[j] = t === NOT_FOUND ? ⊥ : widenconditional(t)
     end
 
     # compute the required type for each slot
@@ -968,14 +969,15 @@ _return_type(@nospecialize(f), @nospecialize(t), world) = _return_type(NativeInt
 function _return_type(interp::AbstractInterpreter, @nospecialize(f), @nospecialize(t))
     rt = Union{}
     if isa(f, Builtin)
-        rt = builtin_tfunction(interp, f, Any[t.parameters...], nothing)
+        argtypes = AbstractLattice[NativeType(ty) for ty in t.parameters]
+        rt = builtin_tfunction(interp, f, argtypes, nothing)
         rt = widenconst(rt)
     else
         for match in _methods(f, t, -1, get_world_counter(interp))::Vector
             match = match::MethodMatch
             ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
             ty === nothing && return Any
-            rt = tmerge(rt, ty)
+            rt = unwraptype(tmerge(rt, ty))
             rt === Any && break
         end
     end

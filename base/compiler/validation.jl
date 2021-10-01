@@ -185,7 +185,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     !is_top_level && nslotnames == 0 && push!(errors, InvalidCodeError(EMPTY_SLOTNAMES))
     nslotnames < nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
     ssavaluetypes = c.ssavaluetypes
-    if isa(ssavaluetypes, Vector{Any})
+    if isa(ssavaluetypes, Vector)
         nssavaluetypes = length(ssavaluetypes)
         nssavaluetypes < nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH, (nssavals, nssavaluetypes)))
     else

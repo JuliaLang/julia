@@ -120,8 +120,8 @@ let cfg = CFG(BasicBlock[
     make_bb([0, 1, 2] , [5]   ), # 0 predecessor should be preserved
     make_bb([2, 3]    , []    ),
 ], Int[])
-    insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
-    code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], [], [])
+    insts = Compiler.InstructionStream(0)
+    code = Compiler.IRCode(insts, cfg, LineInfoNode[], Core.Compiler.AbstractLattice[], [], Core.Compiler.AbstractLattice[])
     compact = Compiler.IncrementalCompact(code, true)
     @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
 end

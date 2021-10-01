@@ -5,9 +5,9 @@
 struct Signature
     f::Any
     ft::Any
-    argtypes::Vector{Any}
+    argtypes::Vector{AbstractLattice}
     atype #::Type
-    Signature(f, ft, argtypes, atype = nothing) = new(f, ft, argtypes, atype)
+    Signature(f, ft, argtypes::Vector{AbstractLattice}, atype = nothing) = new(f, ft, argtypes, atype)
 end
 with_atype(sig::Signature) = Signature(sig.f, sig.ft, sig.argtypes, argtypes_to_type(sig.argtypes))
 
@@ -26,7 +26,7 @@ pass to apply its own inlining policy decisions.
 """
 struct DelayedInliningSpec
     match::Union{MethodMatch, InferenceResult}
-    argtypes::Vector{Any}
+    argtypes::Vector{AbstractLattice}
 end
 
 struct InliningTodo
@@ -35,10 +35,10 @@ struct InliningTodo
     spec::Union{ResolvedInliningSpec, DelayedInliningSpec}
 end
 
-InliningTodo(mi::MethodInstance, match::MethodMatch, argtypes::Vector{Any}) =
+InliningTodo(mi::MethodInstance, match::MethodMatch, argtypes::Vector{AbstractLattice}) =
     InliningTodo(mi, DelayedInliningSpec(match, argtypes))
 
-InliningTodo(result::InferenceResult, argtypes::Vector{Any}) =
+InliningTodo(result::InferenceResult, argtypes::Vector{AbstractLattice}) =
     InliningTodo(result.linfo, DelayedInliningSpec(result, argtypes))
 
 struct ConstantCase
@@ -447,7 +447,7 @@ function fix_va_argexprs!(compact::IncrementalCompact,
     for i in nargs_def:length(argexprs)
         arg = argexprs[i]
         push!(tuple_call.args, arg)
-        push!(tuple_typs, argextype(arg, compact))
+        push!(tuple_typs, unwraptype(argextype(arg, compact)))
     end
     tuple_typ = tuple_tfunc(tuple_typs)
     push!(newargexprs, insert_node_here!(compact, NewInstruction(tuple_call, tuple_typ, line_idx)))
@@ -628,12 +628,12 @@ end
 
 # This assumes the caller has verified that all arguments to the _apply_iterate call are Tuples.
 function rewrite_apply_exprargs!(
-    ir::IRCode, idx::Int, stmt::Expr, argtypes::Vector{Any},
+    ir::IRCode, idx::Int, stmt::Expr, argtypes::Vector{AbstractLattice},
     arginfos::Vector{MaybeAbstractIterationInfo}, arg_start::Int, istate::InliningState, todo::Vector{Pair{Int, Any}})
     flag = ir.stmts[idx][:flag]
     argexprs = stmt.args
     new_argexprs = Any[argexprs[arg_start]]
-    new_argtypes = Any[argtypes[arg_start]]
+    new_argtypes = AbstractLattice[argtypes[arg_start]]
     # loop over original arguments and flatten any known iterators
     for i in (arg_start+1):length(argexprs)
         def = argexprs[i]
@@ -642,9 +642,9 @@ function rewrite_apply_exprargs!(
         if thisarginfo === nothing
             if def_type isa PartialStruct
                 # def_type.typ <: Tuple is assumed
-                def_argtypes = def_type.fields
+                def_argtypes = AbstractLattice[TypeLattice(t) for t in def_type.fields]
             else
-                def_argtypes = Any[]
+                def_argtypes = AbstractLattice[]
                 if isa(def_type, Const) # && isa(def_type.val, Union{Tuple, SimpleVector}) is implied
                     for p in def_type.val
                         push!(def_argtypes, Const(p))
@@ -660,6 +660,8 @@ function rewrite_apply_exprargs!(
                             p = Const(p.instance)
                         elseif isconstType(p)
                             p = Const(p.parameters[1])
+                        else
+                            p = NativeType(p)
                         end
                         push!(def_argtypes, p)
                     end
@@ -697,15 +699,15 @@ function rewrite_apply_exprargs!(
                         new_sig, istate, todo)
                 end
                 if i != length(thisarginfo.each)
-                    valT = getfield_tfunc(call.rt, Const(1))
+                    valT = getfield_tfunc(unwraptype(call.rt), Const(1))
                     val_extracted = insert_node!(ir, idx, NewInstruction(
                         Expr(:call, GlobalRef(Core, :getfield), state1, 1),
                         valT))
                     push!(new_argexprs, val_extracted)
-                    push!(new_argtypes, valT)
+                    push!(new_argtypes, TypeLattice(valT))
                     state_extracted = insert_node!(ir, idx, NewInstruction(
                         Expr(:call, GlobalRef(Core, :getfield), state1, 2),
-                        getfield_tfunc(call.rt, Const(2))))
+                        getfield_tfunc(unwraptype(call.rt), Const(2))))
                     state = Core.svec(state_extracted)
                 end
             end
@@ -795,7 +797,7 @@ function validate_sparams(sparams::SimpleVector)
     return true
 end
 
-function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
+function analyze_method!(match::MethodMatch, argtypes::Vector{AbstractLattice},
                          flag::UInt8, state::InliningState)
     method = match.method
     methsig = method.sig
@@ -865,7 +867,7 @@ end
 
 rewrite_invoke_exprargs!(expr::Expr) = (expr.args = invoke_rewrite(expr.args); expr)
 
-function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::OptimizationParams)
+@latticeop args function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::OptimizationParams)
     if isa(typ, Const) && isa(typ.val, SimpleVector)
         length(typ.val) > params.MAX_TUPLE_SPLAT && return false
         for p in typ.val
@@ -887,19 +889,19 @@ function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::Optimizatio
 end
 
 function inline_splatnew!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(rt))
-    nf = nfields_tfunc(rt)
+    nf = nfields_tfunc(unwraptype(rt))
     if nf isa Const
         eargs = stmt.args
         tup = eargs[2]
         tt = argextype(tup, ir)
-        tnf = nfields_tfunc(tt)
+        tnf = nfields_tfunc(unwraptype(tt))
         # TODO: hoisting this tnf.val === nf.val check into codegen
         # would enable us to almost always do this transform
         if tnf isa Const && tnf.val === nf.val
             n = tnf.val::Int
             new_argexprs = Any[eargs[1]]
             for j = 1:n
-                atype = getfield_tfunc(tt, Const(j))
+                atype = getfield_tfunc(unwraptype(tt), Const(j))
                 new_call = Expr(:call, Core.getfield, tup, j)
                 new_argexpr = insert_node!(ir, idx, NewInstruction(new_call, atype))
                 push!(new_argexprs, new_argexpr)
@@ -918,11 +920,11 @@ function call_sig(ir::IRCode, stmt::Expr)
     f = singleton_type(ft)
     f === Core.Intrinsics.llvmcall && return nothing
     f === Core.Intrinsics.cglobal && return nothing
-    argtypes = Vector{Any}(undef, length(stmt.args))
+    argtypes = Vector{AbstractLattice}(undef, length(stmt.args))
     argtypes[1] = ft
     for i = 2:length(stmt.args)
         a = argextype(stmt.args[i], ir)
-        (a === Bottom || isvarargtype(a)) && return nothing
+        (a === ⊥ || isvarargtype(widenconst(a))) && return nothing
         argtypes[i] = a
     end
     return Signature(f, ft, argtypes)
@@ -1031,10 +1033,10 @@ end
 function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), state::InliningState)
     if isa(info, OpaqueClosureCreateInfo)
         lbt = argextype(stmt.args[3], ir)
-        lb, exact = instanceof_tfunc(lbt)
+        lb, exact = instanceof_tfunc(unwraptype(lbt))
         exact || return
         ubt = argextype(stmt.args[4], ir)
-        ub, exact = instanceof_tfunc(ubt)
+        ub, exact = instanceof_tfunc(unwraptype(ubt))
         exact || return
         # Narrow opaque closure type
         newT = widenconst(tmeet(tmerge(lb, info.unspec.rt), ub))
@@ -1435,7 +1437,7 @@ function late_inline_special_case!(
     elseif isinlining && length(argtypes) == 3 && istopfunction(f, :(>:))
         # special-case inliner for issupertype
         # that works, even though inference generally avoids inferring the `>:` Method
-        if isa(type, Const) && _builtin_nothrow(<:, Any[argtypes[3], argtypes[2]], type)
+        if isa(type, Const) && _builtin_nothrow(<:, AbstractLattice[argtypes[3], argtypes[2]], type)
             return SomeCase(quoted(type.val))
         end
         subtype_call = Expr(:call, GlobalRef(Core, :(<:)), stmt.args[3], stmt.args[2])

@@ -225,10 +225,12 @@ end
 # types #
 #########
 
-function singleton_type(@nospecialize(ft))
+@latticeop args function singleton_type(@nospecialize(ft))
     if isa(ft, Const)
         return ft.val
-    elseif isconstType(ft)
+    end
+    ft = unwraptype(ft)
+    if isconstType(ft)
         return ft.parameters[1]
     elseif ft isa DataType && isdefined(ft, :instance)
         return ft.instance

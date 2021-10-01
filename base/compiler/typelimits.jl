@@ -298,16 +298,24 @@ union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstrac
 union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
 function issimpleenoughtype(@nospecialize t)
-    t = ignorelimited(t)
+    t = unwraptype(ignorelimited(t))
     return unionlen(t) + union_count_abstract(t) <= MAX_TYPEUNION_LENGTH &&
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
+end
+
+# TODO tmerge(typea::TypeLattice, typeb::TypeLattice)
+function tmerge(@nospecialize(typea), @nospecialize(typeb))
+    typea = unwraptype(typea)
+    typeb = unwraptype(typeb)
+    typ = _tmerge(typea, typeb)
+    return TypeLattice(typ) # rewrap
 end
 
 # pick a wider type that contains both typea and typeb,
 # with some limits on how "large" it can get,
 # but without losing too much precision in common cases
 # and also trying to be mostly associative and commutative
-function tmerge(@nospecialize(typea), @nospecialize(typeb))
+function _tmerge(@nospecialize(typea), @nospecialize(typeb))
     typea === Union{} && return typeb
     typeb === Union{} && return typea
     suba = typea ⊑ typeb

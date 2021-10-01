@@ -416,19 +416,20 @@ add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, (@nospecialize args...)->Expr, 100)
 add_tfunc(svec, 0, INT_INF, (@nospecialize args...)->SimpleVector, 20)
 function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub_arg))
+    n, lb_arg, ub_arg = unwraptype(n), unwraptype(lb_arg), unwraptype(ub_arg)
     lb = Union{}
     ub = Any
     ub_certain = lb_certain = true
     if isa(n, Const)
         nval = n.val
-        isa(nval, Symbol) || return Union{}
+        isa(nval, Symbol) || return ⊥
         if isa(lb_arg, Const)
             lb = lb_arg.val
         elseif isType(lb_arg)
             lb = lb_arg.parameters[1]
             lb_certain = false
         else
-            return TypeVar
+            return NativeType(TypeVar)
         end
         if isa(ub_arg, Const)
             ub = ub_arg.val
@@ -436,12 +437,12 @@ function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub
             ub = ub_arg.parameters[1]
             ub_certain = false
         else
-            return TypeVar
+            return NativeType(TypeVar)
         end
         tv = TypeVar(nval, lb, ub)
         return PartialTypeVar(tv, lb_certain, ub_certain)
     end
-    return TypeVar
+    return NativeType(TypeVar)
 end
 function typebound_nothrow(b)
     b = widenconst(b)
@@ -996,13 +997,13 @@ function modifyfield!_tfunc(o, f, op, v)
     PT = Const(Pair)
     return instanceof_tfunc(apply_type_tfunc(PT, T, T))[1]
 end
-function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{AbstractLattice}, sv::InferenceState)
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
-        nargs - 1 <= 6 || return CallMeta(Bottom, false)
-        nargs > 3 || return CallMeta(Any, false)
+        nargs - 1 <= 6 || return CallMeta(⊥, false)
+        nargs > 3 || return CallMeta(⊤, false)
     else
-        5 <= nargs <= 6 || return CallMeta(Bottom, false)
+        5 <= nargs <= 6 || return CallMeta(⊥, false)
     end
     o = unwrapva(argtypes[2])
     f = unwrapva(argtypes[3])
@@ -1011,11 +1012,11 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
     if nargs >= 5 && RT !== Bottom
         # we may be able to refine this to a PartialStruct by analyzing `op(o.f, v)::T`
         # as well as compute the info for the method matches
-        op = unwrapva(argtypes[4])
-        v = unwrapva(argtypes[5])
-        TF = getfield_tfunc(o, f)
+        op = TypeLattice(unwrapva(argtypes[4]))
+        v = TypeLattice(unwrapva(argtypes[5]))
+        TF = TypeLattice(getfield_tfunc(o, f))
         push!(sv.ssavalue_uses[sv.currpc], sv.currpc) # temporarily disable `call_result_unused` check for this call
-        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), sv, #=max_methods=# 1)
+        callinfo = abstract_call(interp, ArgInfo(nothing, AbstractLattice[op, TF, v]), sv, #=max_methods=# 1)
         pop!(sv.ssavalue_uses[sv.currpc], sv.currpc)
         TF2 = tmeet(callinfo.rt, widenconst(TF))
         if TF2 === Bottom
@@ -1025,7 +1026,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         end
         info = callinfo.info
     end
-    return CallMeta(RT, info)
+    return CallMeta(TypeLattice(RT), info)
 end
 replacefield!_tfunc(o, f, x, v, success_order, failure_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
 replacefield!_tfunc(o, f, x, v, success_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
@@ -1468,7 +1469,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
 end
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
-function has_struct_const_info(x)
+function has_struct_const_info(@nospecialize x)
     isa(x, PartialTypeVar) && return true
     isa(x, Conditional) && return true
     return has_nontrivial_const_info(x)
@@ -1569,7 +1570,7 @@ function array_elmtype(@nospecialize ary)
     return Any
 end
 
-function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
+@latticeop op function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
         @nospecialize(lb), @nospecialize(ub), @nospecialize(source), env::Vector{Any},
         linfo::MethodInstance)
 
@@ -1584,8 +1585,8 @@ function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
     t = (argt_exact ? Core.OpaqueClosure{argt, T} : Core.OpaqueClosure{<:argt, T}) where T
     t = lbt == ubt ? t{ubt} : (t{T} where lbt <: T <: ubt)
 
-    (isa(source, Const) && isa(source.val, Method)) || return t
-    (isa(isva, Const) && isa(isva.val, Bool)) || return t
+    (isa(source, Const) && isa(source.val, Method)) || return NativeType(t)
+    (isa(isva, Const) && isa(isva.val, Bool)) || return NativeType(t)
 
     return PartialOpaque(t, tuple_tfunc(env), isva.val, linfo, source.val)
 end
@@ -1643,7 +1644,10 @@ function arrayset_typecheck(@nospecialize(arytype), @nospecialize(elmtype))
 end
 
 # Query whether the given builtin is guaranteed not to throw given the argtypes
-function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
+# FIXME, all nothrow tfuncs should work on `TypeLattice`s
+_builtin_nothrow(@nospecialize(f), argtypes::Vector{AbstractLattice}, @nospecialize(rt)) =
+    _builtin_nothrow(f, anymap(a->unwraptype(a), argtypes), unwraptype(rt))
+function _builtin_nothrow(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(rt))
     if f === arrayset
         array_builtin_common_nothrow(argtypes, 4) || return true
         # Additionally check element type compatibility
@@ -1705,8 +1709,10 @@ function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecializ
     return _builtin_nothrow(f, argtypes, rt)
 end
 
-function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Array{Any,1},
+function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{AbstractLattice},
                            sv::Union{InferenceState,Nothing})
+    # FIXME, all inference tfuncs should work on `TypeLattice`s
+    argtypes = anymap(a->unwraptype(a), argtypes)
     if f === tuple
         return tuple_tfunc(argtypes)
     end
@@ -1763,7 +1769,9 @@ _iszero(x) = x === Intrinsics.xor_int(x, x)
 _isneg1(x) = _iszero(Intrinsics.not_int(x))
 _istypemin(x) = !_iszero(x) && Intrinsics.neg_int(x) === x
 
-function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
+intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{AbstractLattice}) =
+    intrinsic_nothrow(f, anymap(unwraptype, argtypes))
+function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{Any})
     # First check that we have the correct number of arguments
     iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
     if iidx < 1 || iidx > length(T_IFUNC)
@@ -1844,20 +1852,23 @@ end
 # TODO: this function is a very buggy and poor model of the return_type function
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
-function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{AbstractLattice}, sv::InferenceState)
     if length(argtypes) == 3
-        tt = argtypes[3]
+        tt = unwraptype(argtypes[3])
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
-            aft = argtypes[2]
+            aft = unwraptype(argtypes[2])
             if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
                    (isconcretetype(aft) && !(aft <: Builtin))
                 af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
-                    argtypes_vec = Any[aft, af_argtype.parameters...]
-                    if contains_is(argtypes_vec, Union{})
-                        return CallMeta(Const(Union{}), false)
+                    argtypes = AbstractLattice[TypeLattice(aft)]
+                    for ty in af_argtype.parameters
+                        push!(argtypes, NativeType(ty))
                     end
-                    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
+                    if contains_is(argtypes, ⊥)
+                        return CallMeta(Const(Bottom), false)
+                    end
+                    call = abstract_call(interp, ArgInfo(nothing, argtypes), sv, -1)
                     info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)
@@ -1872,30 +1883,22 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                         # conservatively express uncertainty of this result
                         # in two ways: both as being a subtype of this, and
                         # because of LimitedAccuracy causes
-                        return CallMeta(Type{<:rt}, info)
+                        return CallMeta(NativeType(Type{<:rt}), info)
                     elseif (isa(tt, Const) || isconstType(tt)) &&
                         (isa(aft, Const) || isconstType(aft))
                         # input arguments were known for certain
                         # XXX: this doesn't imply we know anything about rt
                         return CallMeta(Const(rt), info)
                     elseif isType(rt)
-                        return CallMeta(Type{rt}, info)
+                        return CallMeta(NativeType(Type{rt}), info)
                     else
-                        return CallMeta(Type{<:rt}, info)
+                        return CallMeta(NativeType(Type{<:rt}), info)
                     end
                 end
             end
         end
     end
-    return CallMeta(Type, false)
-end
-
-# N.B.: typename maps type equivalence classes to a single value
-function typename_static(@nospecialize(t))
-    t isa Const && return _typename(t.val)
-    t isa Conditional && return Bool.name
-    t = unwrap_unionall(widenconst(t))
-    return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
+    return CallMeta(NativeType(Type), false)
 end
 
 @specialize

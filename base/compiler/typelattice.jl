@@ -4,6 +4,25 @@
 # structs/constants #
 #####################
 
+struct TypeLattice <: _AbstractLattice
+    typ #::Type
+    function TypeLattice(@nospecialize typ)
+        if isa(typ, TypeLattice)
+            return typ
+        elseif isa(typ, CompilerTypes)
+            return typ
+        end
+        return new(widenconst(typ)#=::Type=#)
+    end
+end
+
+NativeType(@nospecialize typ) = TypeLattice(typ#=::Type=#)
+
+# NOTE once we pack all extended lattice types into `TypeLattice`, we don't need this `unwraptype`:
+# - `unwraptype`: unwrap `NativeType` to Julia type
+# - `widenconst`: unwrap any extended type lattice to Julia type
+@inline unwraptype(@nospecialize t) = isa(t, TypeLattice) ? t.typ : t
+
 # N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
 # inside the global code cache.
 #
@@ -32,7 +51,7 @@ import Core: Const, PartialStruct
 #    # May assume x is `Float` now
 # end
 # ```
-struct Conditional
+struct Conditional <: _AbstractLattice
     var::SlotNumber
     vtype
     elsetype
@@ -56,7 +75,7 @@ end
 import Core: InterConditional
 const AnyConditional = Union{Conditional,InterConditional}
 
-struct PartialTypeVar
+struct PartialTypeVar <: _AbstractLattice
     tv::TypeVar
     # N.B.: Currently unused, but would allow turning something back
     # into Const, if the bounds are pulled out of this TypeVar
@@ -68,7 +87,7 @@ end
 # Wraps a type and represents that the value may also be undef at this point.
 # (only used in optimize, not abstractinterpret)
 # N.B. in the lattice, this is epsilon bigger than `typ` (even Any)
-struct MaybeUndef
+struct MaybeUndef <: _AbstractLattice
     typ
     MaybeUndef(@nospecialize(typ)) = new(typ)
 end
@@ -83,10 +102,10 @@ end
 # Represent that the type estimate has been approximated, due to "causes"
 # (only used in abstract interpretion, doesn't appear in optimization)
 # N.B. in the lattice, this is epsilon smaller than `typ` (except Union{})
-struct LimitedAccuracy
-    typ
+struct LimitedAccuracy <: _AbstractLattice
+    typ::AbstractLattice
     causes::IdSet{InferenceState}
-    function LimitedAccuracy(@nospecialize(typ), causes::IdSet{InferenceState})
+    @latticeop args function LimitedAccuracy(@nospecialize(typ), causes::IdSet{InferenceState})
         @assert !isa(typ, LimitedAccuracy) "malformed LimitedAccuracy"
         return new(typ, causes)
     end
@@ -101,14 +120,32 @@ Particularly, all SSA value types are initialized as `NOT_FOUND` when creating a
 Note that this is only used for `smerge`, which updates abstract state `VarTable`,
 and thus we don't define the lattice for this.
 """
-struct NotFound end
+struct NotFound <: _AbstractLattice end
 
 const NOT_FOUND = NotFound()
 
-const CompilerTypes = Union{MaybeUndef, Const, Conditional, NotFound, PartialStruct}
-==(x::CompilerTypes, y::CompilerTypes) = x === y
-==(x::Type, y::CompilerTypes) = false
-==(x::CompilerTypes, y::Type) = false
+const CompilerTypes = Union{
+    MaybeUndef,
+    Const,
+    Conditional,
+    InterConditional,
+    NotFound,
+    PartialStruct,
+    PartialTypeVar,
+    PartialOpaque,
+    LimitedAccuracy,
+    TypeofVararg,
+}
+x::CompilerTypes == y::CompilerTypes = x === y
+x::Type == y::CompilerTypes = false
+x::CompilerTypes == y::Type = false
+
+x::TypeLattice == y::TypeLattice = x.typ == y.typ
+x::TypeLattice == y::CompilerTypes = false
+x::CompilerTypes == y::TypeLattice = false
+# allow comparison with unwrapped types (TODO remove me, this is just for prototyping)
+x::Type == y::TypeLattice = x === unwraptype(y)
+x::TypeLattice == y::Type = unwraptype(x) === y
 
 #################
 # lattice logic #
@@ -130,13 +167,13 @@ end
 is_same_conditionals(a::Conditional,      b::Conditional)      = slot_id(a.var) === slot_id(b.var)
 is_same_conditionals(a::InterConditional, b::InterConditional) = a.slot === b.slot
 
-is_lattice_bool(@nospecialize(typ)) = typ !== Bottom && typ ⊑ Bool
+@latticeop args is_lattice_bool(@nospecialize(typ)) = typ !== ⊥ && typ ⊑ Bool
 
 maybe_extract_const_bool(c::Const) = (val = c.val; isa(val, Bool)) ? val : nothing
 function maybe_extract_const_bool(c::AnyConditional)
     (c.vtype === Bottom && !(c.elsetype === Bottom)) && return false
     (c.elsetype === Bottom && !(c.vtype === Bottom)) && return true
-    nothing
+    return nothing
 end
 maybe_extract_const_bool(@nospecialize c) = nothing
 
@@ -146,6 +183,8 @@ maybe_extract_const_bool(@nospecialize c) = nothing
 The non-strict partial order over the type inference lattice.
 """
 @nospecialize(a) ⊑ @nospecialize(b) = begin
+    a = unwraptype(a)
+    b = unwraptype(b)
     if isa(b, LimitedAccuracy)
         if !isa(a, LimitedAccuracy)
             return false
@@ -289,6 +328,7 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
     return a ⊑ b && b ⊑ a
 end
 
+widenconst(x::TypeLattice) = x.typ
 widenconst(c::AnyConditional) = Bool
 widenconst((; val)::Const) = isa(val, Type) ? Type{val} : typeof(val)
 widenconst(m::MaybeUndef) = widenconst(m.typ)
@@ -321,7 +361,7 @@ function widenconditional(typ::AnyConditional)
     elseif typ.elsetype === Union{}
         return Const(true)
     else
-        return Bool
+        return NativeType(Bool)
     end
 end
 widenconditional(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")

@@ -176,7 +176,7 @@ end
 function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any})
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
-    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    ssavaluetypes = ci.ssavaluetypes::Vector{AbstractLattice}
     (; codelocs, ssaflags) = ci
     for i = length(code):-1:1
         if code[i] !== nothing
@@ -193,7 +193,7 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
     term = code[end]
     if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
         push!(code, ReturnNode())
-        push!(ssavaluetypes, Union{})
+        push!(ssavaluetypes, ⊥)
         push!(codelocs, 0)
         push!(info, nothing)
         push!(ssaflags, IR_FLAG_NULL)
@@ -201,24 +201,24 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
     nothing
 end
 
-struct DelayedTyp
+struct DelayedTyp <: _AbstractLattice
     phi::NewSSAValue
 end
 
 # maybe use expr_type?
-function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{Any}, idx::Int, slottypes::Vector{Any})
+function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{AbstractLattice}, idx::Int, slottypes::Vector{AbstractLattice})
     if isa(x, Expr)
         if x.head === :static_parameter
             return sptypes[x.args[1]::Int]
         elseif x.head === :boundscheck
-            return Bool
+            return NativeType(Bool)
         elseif x.head === :copyast
             return typ_for_val(x.args[1], ci, sptypes, idx, slottypes)
         end
-        return (ci.ssavaluetypes::Vector{Any})[idx]
+        return (ci.ssavaluetypes::Vector{AbstractLattice})[idx]
     end
     isa(x, GlobalRef) && return abstract_eval_global(x.mod, x.name)
-    isa(x, SSAValue) && return (ci.ssavaluetypes::Vector{Any})[x.id]
+    isa(x, SSAValue) && return (ci.ssavaluetypes::Vector{AbstractLattice})[x.id]
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return DelayedTyp(x)
     isa(x, QuoteNode) && return Const(x.value)
@@ -477,7 +477,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 # Add an explicit goto node in the next basic block (we accounted for this above)
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), NativeType(Any), 0
             end
             result[inst_range[end]][:inst] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
@@ -490,7 +490,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 # Add an explicit goto node
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), NativeType(Any), 0
                 inst_range = first(inst_range):(last(inst_range) + 1)
             end
         end
@@ -563,8 +563,8 @@ function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
     BlockLiveness(bb_defs, bb_uses)
 end
 
-function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode, sptypes::Vector{Any}, slottypes::Vector{Any})
-    new_typ = Union{}
+function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode, sptypes::Vector{AbstractLattice}, slottypes::Vector{AbstractLattice})
+    new_typ = ⊥
     for i = 1:length(node.values)
         if isa(node, PhiNode) && !isassigned(node.values, i)
             if !isa(new_typ, MaybeUndef)
@@ -588,7 +588,7 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
 end
 
 function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
-                        defuses::Vector{SlotInfo}, slottypes::Vector{Any})
+                        defuses::Vector{SlotInfo}, slottypes::Vector{AbstractLattice})
     code = ir.stmts.inst
     cfg = ir.cfg
     catch_entry_blocks = Tuple{Int, Int}[]
@@ -725,7 +725,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             if isa(typ, DelayedTyp)
                 push!(type_refine_phi, ssaval.id)
             end
-            new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(old_entry[:type], typ)
+            new_typ = isa(typ, DelayedTyp) ? ⊥ : tmerge(old_entry[:type], typ)
             old_entry[:type] = new_typ
             old_entry[:inst] = node
             incoming_vals[slot] = ssaval
@@ -809,11 +809,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         end
     end
     # Convert into IRCode form
-    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    ssavaluetypes = ci.ssavaluetypes::Vector{AbstractLattice}
     nstmts = length(ir.stmts)
     new_code = Vector{Any}(undef, nstmts)
     ssavalmap = fill(SSAValue(-1), length(ssavaluetypes) + 1)
-    result_types = Any[Any for _ in 1:nstmts]
+    result_types = AbstractLattice[NativeType(Any) for _ in 1:nstmts]
     # Detect statement positions for assignments and construct array
     for (bb, idx) in bbidxiter(ir)
         stmt = code[idx]
@@ -847,7 +847,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
     end
     for (_, nodes) in phicnodes
         for (_, ssa, node) in nodes
-            new_typ = Union{}
+            new_typ = ⊥
             # TODO: This could just be the ones that depend on other phis
             push!(type_refine_phi, ssa.id)
             new_idx = ssa.id
