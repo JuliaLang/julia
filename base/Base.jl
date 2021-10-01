@@ -280,25 +280,38 @@ include("binaryplatforms.jl")
 function rand end
 function randn end
 
+# enums
+include("Enums.jl")
+using .Enums
+
+# metaprogramming
+include("meta.jl")
+
 # I/O
 include("libuv.jl")
 include("asyncevent.jl")
 include("iostream.jl")
 include("stream.jl")
-include("filesystem.jl")
-using .Filesystem
 include("cmd.jl")
 include("process.jl")
 include("ttyhascolor.jl")
 include("secretbuffer.jl")
 
-# core math functions
-include("floatfuncs.jl")
-include("math.jl")
-using .Math
-const (√)=sqrt
-const (∛)=cbrt
+# code loading
+include("uuid.jl")
+include("pkgid.jl")
+include("toml_parser.jl")
+include("loading.jl")
 
+# mimic calling `using FS as Filesystem`
+# (before we have the filesystem module definitions)
+let uuid = UUID("5ced1c9f-5be2-431c-86bc-18f6fd327a93")
+    old_uuid = ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), __toplevel__)
+    ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
+    global const Filesystem = include(__toplevel__, "filesystem.jl")
+    ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
+end
+using .Filesystem
 # now switch to a simple, race-y TLS, relative include for the rest of Base
 delete_method(which(include, (Module, String)))
 let SOURCE_PATH = ""
@@ -314,6 +327,13 @@ let SOURCE_PATH = ""
         return result
     end
 end
+
+# core math functions
+include("floatfuncs.jl")
+include("math.jl")
+using .Math
+const (√)=sqrt
+const (∛)=cbrt
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
@@ -336,10 +356,6 @@ using .FastMath
 
 function deepcopy_internal end
 
-# enums
-include("Enums.jl")
-using .Enums
-
 # BigInts
 include("gmp.jl")
 using .GMP
@@ -359,9 +375,6 @@ include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
-# metaprogramming
-include("meta.jl")
-
 # Stack frames and traces
 include("stacktraces.jl")
 using .StackTraces
@@ -379,12 +392,6 @@ include("initdefs.jl")
 
 # worker threads
 include("threadcall.jl")
-
-# code loading
-include("uuid.jl")
-include("pkgid.jl")
-include("toml_parser.jl")
-include("loading.jl")
 
 # misc useful functions & macros
 include("timing.jl")

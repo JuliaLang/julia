@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## File Operations (Libuv-based) ##
+## File Operations ##
 
-module Filesystem
+module FS
 
 const S_IFDIR  = 0o040000  # directory
 const S_IFCHR  = 0o020000  # character device

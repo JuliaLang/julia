@@ -29,11 +29,15 @@ uuid = "$UUID"
 EOF
 
 cat >"$ROOT/$NAME/src/$NAME.jl" <<EOF
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module $NAME
 end
 EOF
 
 cat >"$ROOT/$NAME/test/runtests.jl" <<EOF
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using $NAME
 using Test
 @test "your tests here"
