@@ -71,10 +71,8 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 va = linfo_argtypes[linfo_argtypes_length]
                 if isvarargtype(va)
                     new_va = rewrap_unionall(unconstrain_vararg_length(va), specTypes)
-                    vargtype_elements = Any[new_va]
                     vargtype = Tuple{new_va}
                 else
-                    vargtype_elements = Any[]
                     vargtype = Tuple{}
                 end
             else
