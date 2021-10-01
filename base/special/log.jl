@@ -428,31 +428,37 @@ end
 # Implimentation adapted from SLEEFPirates.jl
 # Does not normalize results.
 function _log_ext(d::Float64)
-  m, e = significand(d), exponent(d)
-  if m > 1.5
-    m *= 0.5
-    e += 1.0
-  end
-  # x = (m-1)/(m+1)
-  mp1hi = m + 1.0
-  mp1lo = m + (1.0 - mp1hi)
-  invy = inv(mp1hi)
-  xhi = (m - 1.0) * invy
-  xlo = fma(-xhi, mp1lo, fma(-xhi, mp1hi, m - 1.0)) * invy
-  x2hi = xhi * xhi
-  x2lo = muladd(xhi, xlo * 2.0, fma(xhi, xhi, -x2hi))
-  thi, tlo  = log_ext_kernel(x2hi, x2lo)
+    if d<=0
+        d == 0 && return -Inf, 0.0
+        throw_complex_domainerror(:log1p, x)
+    elseif d == Inf
+        return d, 0.0
+    end
+    m, e = significand(d), exponent(d)
+    if m > 1.5
+        m *= 0.5
+        e += 1.0
+    end
+    # x = (m-1)/(m+1)
+    mp1hi = m + 1.0
+    mp1lo = m + (1.0 - mp1hi)
+    invy = inv(mp1hi)
+    xhi = (m - 1.0) * invy
+    xlo = fma(-xhi, mp1lo, fma(-xhi, mp1hi, m - 1.0)) * invy
+    x2hi = xhi * xhi
+    x2lo = muladd(xhi, xlo * 2.0, fma(xhi, xhi, -x2hi))
+    thi, tlo  = log_ext_kernel(x2hi, x2lo)
 
-  shi = 0.6931471805582987 * e
-  xhi2 = xhi * 2.0
-  shinew = muladd(xhi, 2.0, shi)
-  slo = muladd(1.6465949582897082e-12, e, muladd(xlo, 2.0, (((shi - shinew) + xhi2))))
-  shi = shinew
-  x3hi = x2hi * xhi
-  x3lo = muladd(x2hi, xlo, muladd(xhi, x2lo,fma(x2hi, xhi, -x3hi)))
-  x3thi = x3hi * thi
-  x3tlo = muladd(x3hi, tlo, muladd(x3lo, thi, fma(x3hi, thi, -x3thi)))
-  anshi = x3thi + shi
-  anslo = slo + x3tlo - ((anshi - shi) - x3thi)
-  return anshi, anslo
+    shi = 0.6931471805582987 * e
+    xhi2 = xhi * 2.0
+    shinew = muladd(xhi, 2.0, shi)
+    slo = muladd(1.6465949582897082e-12, e, muladd(xlo, 2.0, (((shi - shinew) + xhi2))))
+    shi = shinew
+    x3hi = x2hi * xhi
+    x3lo = muladd(x2hi, xlo, muladd(xhi, x2lo,fma(x2hi, xhi, -x3hi)))
+    x3thi = x3hi * thi
+    x3tlo = muladd(x3hi, tlo, muladd(x3lo, thi, fma(x3hi, thi, -x3thi)))
+    anshi = x3thi + shi
+    anslo = slo + x3tlo - ((anshi - shi) - x3thi)
+    return anshi, anslo
 end
