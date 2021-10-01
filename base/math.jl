@@ -935,11 +935,10 @@ end
     n == 0 && return one(x)
     y = 1.0
     xnlo = ynlo = 0.0
-    
     if n < 0
         rx = inv(x)
-        x = rx
         xnlo = fma(x, rx, -1.) * rx
+        x = rx
         n = -n
     end
     n==3 && return x*x*x #keep compatability with literal_pow
@@ -957,9 +956,10 @@ end
     !isfinite(x) && return x*y
     return muladd(x, y, muladd(y, xnlo, x*ynlo))
 end
-@inline function ^(x::Float32, y::Integer)
-    y < 0 && return inv(x^(-y))
-    Float32(Base.power_by_squaring(Float64(x),y))
+@inline function ^(x::Float32, n::Integer)
+    n < 0 && return inv(x)^(-n)
+    n==3 && return x*x*x #keep compatability with literal_pow
+    Float32(Base.power_by_squaring(Float64(x),n))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
