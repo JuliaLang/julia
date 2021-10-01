@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-31839ae0-c94d-4f18-ba27-6aa6aa013d87",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-a3fb084c-3f9b-427d-b6b0-04cf2d08437a",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-25T04:35:55Z"
+        "created": "2021-10-01T05:12:30Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -136,6 +136,18 @@
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2014: Elliot Saba",
             "summary": "A performant, 100% native-julia SHA1, SHA2, and SHA3 implementation"
+        },
+        {
+            "name": "dSFMT",
+            "SPDXID": "SPDXRef-dSFMT",
+            "downloadLocation": "git+https://github.com/MersenneTwister-Lab/dSFMT.git",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/MersenneTwister-Lab/dSFMT",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 2007, 2008, 2009 Mutsuo Saito, Makoto Matsumoto and Hiroshima University. Copyright (c) 2011, 2002 Mutsuo Saito, Makoto Matsumoto, Hiroshima University and The University of Tokyo.",
+            "summary": "Double precision SIMD-oriented Fast Mersenne Twister"
         },
         {
             "name": "OpenBLAS",
@@ -269,6 +281,11 @@
         },
         {
             "spdxElementId": "SPDXRef-JuliaSHA",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-dSFMT",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
