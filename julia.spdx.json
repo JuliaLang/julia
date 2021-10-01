@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-50f0af56-4238-4ea0-aa87-7e4b68830578",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-2639fdfd-160f-49c9-9cf3-8cee02e7305f",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-01T05:44:59Z"
+        "created": "2021-10-01T06:06:33Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -162,6 +162,18 @@
             "summary": "High quality system independent, portable, open source libm implementation"
         },
         {
+            "name": "GMP",
+            "SPDXID": "SPDXRef-GMP",
+            "downloadLocation": "https://gmplib.org/download/gmp/",
+            "filesAnalyzed": false,
+            "homepage": "https://gmplib.org/",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "LGPL-3.0-or-later",
+            "licenseDeclared": "LGPL-3.0-or-later OR GPL-2.0-or-later",
+            "copyrightText": "Copyright 1991, 1996, 1999, 2000, 2007 Free Software Foundation, Inc.",
+            "summary": "GNU MP is a portable library written in C for arbitrary precision arithmetic on integers, rational numbers, and floating-point numbers."
+        },
+        {
             "name": "OpenBLAS",
             "SPDXID": "SPDXRef-OpenBLAS",
             "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
@@ -303,6 +315,11 @@
         },
         {
             "spdxElementId": "SPDXRef-OpenLibm",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-GMP",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
