@@ -14,7 +14,7 @@ The functions should take arguments, instead of operating directly on global var
 ## Avoid global variables
 
 A global variable might have its value, and therefore possibly its type, changed at any point. This makes
-it difficult for the compiler to optimize code using global variables. Variables should be local,change
+it difficult for the compiler to optimize code using global variables. Variables should be local, 
 or passed as arguments to functions, whenever possible.
 
 
