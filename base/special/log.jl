@@ -427,13 +427,8 @@ end
 # Log implementation that returns 2 numbers which sum to give true value with about 68 bits of precision
 # Implimentation adapted from SLEEFPirates.jl
 # Does not normalize results.
+# Must be caused with positive finite arguments
 function _log_ext(d::Float64)
-    if d<=0
-        d == 0 && return -Inf, 0.0
-        throw_complex_domainerror(:log1p, x)
-    elseif d == Inf
-        return d, 0.0
-    end
     m, e = significand(d), exponent(d)
     if m > 1.5
         m *= 0.5
