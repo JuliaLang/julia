@@ -53,6 +53,7 @@ steps:
       echo "--- Run the Julia test suite"
       unset JULIA_DEPOT_PATH
       export JULIA_UNDER_RR="$${JULIA_BINARY:?} .buildkite/utilities/rr/rr_capture.jl $${JULIA_BINARY:?}"
+      export OPENBLAS_NUM_THREADS=8
 
       if [[ "$${BUILDKITE_STEP_KEY:?}"   == "tester_linux64_rr" ]]; then
         # For the `rr` job, we disable multi-threading.
