@@ -37,6 +37,6 @@ function print_process_affinity()
     println()
 end
 
-if abspath(PROGRAM_FILE) == @__FILE__
+if Base.Filesystem.samefile(PROGRAM_FILE, @__FILE__)
     print_process_affinity()
 end

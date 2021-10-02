@@ -21,6 +21,10 @@ if Sys.islinux()
     global running_under_rr() = 0 == ccall(:syscall, Int,
         (Int, Int, Int, Int, Int, Int, Int),
         SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
+else
+    global running_under_rr() = false
+end
+if Sys.islinux() || Sys.iswindows() || Sys.isfreebsd()
     if Sys.CPU_THREADS > 1 && !running_under_rr()
         @test run_with_affinity([2]) == "2"
         @test run_with_affinity([1, 2]) == "1,2"

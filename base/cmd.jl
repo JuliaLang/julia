@@ -300,7 +300,7 @@ Set the CPU affinity of the `command` by a list of CPU IDs (1-based) `cpus`.  Pa
 This is supported on Unix and Windows but not in macOS.
 """
 function setcpus end
-setcpus(cmd::Cmd, ::Nothing) = Cmd(cmd; cpumask = nothing)
+setcpuaffinity(cmd::Cmd, ::Nothing) = Cmd(cmd; cpumask = nothing)
 function setcpus(cmd::Cmd, cpus::AbstractVector{<:Integer})
     n = max(maximum(cpus), ccall(:uv_cpumask_size, Cint, ()))
     cpumask = zeros(Cchar, n)
