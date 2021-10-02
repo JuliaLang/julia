@@ -60,10 +60,10 @@ function Symmetric(A::AbstractMatrix, uplo::Char)
 end
 
 """
-    symmetric(A, uplo=:U)
+    symmetric(A, uplo)
 
 Construct a symmetric view of `A`. If `A` is a matrix, `uplo` controls whether the upper
-(if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A` is used to implicitly fill the
+(if `uplo = :U`/`'U'`) or lower (if `uplo = :L`/`'L'`) triangle of `A` is used to implicitly fill the
 other one. If `A` is a `Number`, it is returned as is.
 
 If a symmetric view of a matrix is to be constructed of which the elements are neither
@@ -72,6 +72,8 @@ case, `symmetric_type` has to be implemented, too.
 """
 symmetric(A::AbstractMatrix, uplo::Symbol) = Symmetric(A, uplo)
 symmetric(A::Number, ::Symbol) = A
+symmetric(A::AbstractMatrix, uplo::Char) = Symmetric(A, uplo)
+symmetric(A::Number, ::Char) = A
 
 """
     symmetric_type(T::Type)
@@ -150,10 +152,10 @@ function Hermitian(A::AbstractMatrix, uplo::Char)
 end
 
 """
-    hermitian(A, uplo=:U)
+    hermitian(A, uplo)
 
 Construct a hermitian view of `A`. If `A` is a matrix, `uplo` controls whether the upper
-(if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A` is used to implicitly fill the
+(if `uplo = :U`/`'U'`) or lower (if `uplo = :L`/`'L'``) triangle of `A` is used to implicitly fill the
 other one. If `A` is a `Number`, its real part is returned converted back to the input
 type.
 
@@ -163,6 +165,8 @@ case, `hermitian_type` has to be implemented, too.
 """
 hermitian(A::AbstractMatrix, uplo::Symbol) = Hermitian(A, uplo)
 hermitian(A::Number, ::Symbol) = convert(typeof(A), real(A))
+hermitian(A::AbstractMatrix, uplo::Char) = Hermitian(A, uplo)
+hermitian(A::Number, ::Char) = convert(typeof(A), real(A))
 
 """
     hermitian_type(T::Type)
