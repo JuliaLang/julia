@@ -331,7 +331,7 @@ end
     if iszero(beta)
         out.diag .= (D1.diag .* D2.diag) .*ₛ alpha
     else
-        out.diag .= (D1.diag .* D2.diag) .*ₛ alpha .+ out .* beta
+        out.diag .= (D1.diag .* D2.diag) .*ₛ alpha .+ out.diag .* beta
     end
     return out
 end
