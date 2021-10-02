@@ -76,10 +76,10 @@ function LinearAlgebra.Bidiagonal(dv::Vector{T}, ev::Vector{S}, uplo::Symbol) wh
 end
 
 """
-    Bidiagonal(A, uplo::Symbol)
+    Bidiagonal(A, uplo::Union{Symbol, Char})
 
 Construct a `Bidiagonal` matrix from the main diagonal of `A` and
-its first super- (if `uplo=:U`) or sub-diagonal (if `uplo=:L`).
+its first super- (if `uplo=:U` or `'U'`) or sub-diagonal (if `uplo=:L` or `'L'`).
 
 # Examples
 ```jldoctest
@@ -97,7 +97,7 @@ julia> Bidiagonal(A, :U) # contains the main diagonal and first superdiagonal of
  ⋅  ⋅  3  3
  ⋅  ⋅  ⋅  4
 
-julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
+julia> Bidiagonal(A, 'L') # contains the main diagonal and first subdiagonal of A
 4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  2  2  ⋅  ⋅
@@ -107,6 +107,10 @@ julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
 """
 function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
     Bidiagonal(diag(A, 0), diag(A, uplo === :U ? 1 : -1), uplo)
+end
+
+function Bidiagonal(A::AbstractMatrix, uplo::Char)
+    Bidiagonal(diag(A, 0), diag(A, uplo == 'U' ? 1 : -1), uplo)
 end
 
 Bidiagonal(A::Bidiagonal) = A

@@ -48,6 +48,10 @@ Random.seed!(1)
             # from matrix
             @test Bidiagonal(ubd, :U) == Bidiagonal(Matrix(ubd), :U) == ubd
             @test Bidiagonal(lbd, :L) == Bidiagonal(Matrix(lbd), :L) == lbd
+
+            z = rand(elty, 3, 3)
+            @test Bidiagonal(z, 'U') === Bidiagonal(z, :U)
+            @test Bidiagonal(z, 'L') === Bidiagonal(z, :L)
         end
         @test eltype(Bidiagonal{elty}([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == elty
         @test eltype(Bidiagonal([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == Float32 # promotion test

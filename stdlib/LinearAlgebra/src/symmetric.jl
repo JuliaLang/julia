@@ -45,9 +45,18 @@ julia> Slower = Symmetric(A, :L)
 
 Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == transpose(A)`).
 """
-function Symmetric(A::AbstractMatrix, uplo::Symbol=:U)
+function Symmetric(A::AbstractMatrix, uplo::Symbol)
     checksquare(A)
     return symmetric_type(typeof(A))(A, char_uplo(uplo))
+end
+
+# suppress method overwritten warning while preserving
+# the historical default argument `uplo=:U`
+Symmetric(A::AbstractArray) = Symmetric(A, :U)
+
+function Symmetric(A::AbstractMatrix, uplo::Char)
+    checksquare(A)
+    return symmetric_type(typeof(A))(A, uplo)
 end
 
 """
@@ -92,9 +101,9 @@ struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     end
 end
 """
-    Hermitian(A, uplo=:U)
+    Hermitian(A, uplo::Union{Symbol, Char})
 
-Construct a `Hermitian` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
+Construct a `Hermitian` view of the upper (if `uplo = :U` or `'U'`) or lower (if `uplo = :L` or `'L'`)
 triangle of the matrix `A`.
 
 # Examples
@@ -126,9 +135,18 @@ All non-real parts of the diagonal will be ignored.
 Hermitian(fill(complex(1,1), 1, 1)) == fill(1, 1, 1)
 ```
 """
-function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
+function Hermitian(A::AbstractMatrix, uplo::Symbol)
     n = checksquare(A)
     return hermitian_type(typeof(A))(A, char_uplo(uplo))
+end
+
+# suppress method overwritten warning while preserving
+# the historical default argument `uplo=:U`
+Hermitian(A::AbstractMatrix) = Hermitian(A, :U)
+
+function Hermitian(A::AbstractMatrix, uplo::Char)
+    n = checksquare(A)
+    return hermitian_type(typeof(A))(A, uplo)
 end
 
 """

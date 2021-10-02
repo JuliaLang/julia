@@ -60,6 +60,12 @@ end
                 @test Hermitian(Hermitian(aherm, :U), :U) === Hermitian(aherm, :U)
                 @test_throws ArgumentError Symmetric(Symmetric(asym, :U), :L)
                 @test_throws ArgumentError Hermitian(Hermitian(aherm, :U), :L)
+
+                @test Symmetric(asym, 'U') === Symmetric(asym, :U)
+                @test Symmetric(asym, 'L') === Symmetric(asym, :L)
+                @test Hermitian(aherm, 'U') === Hermitian(aherm, :U)
+                @test Hermitian(aherm, 'L') === Hermitian(aherm, :L)
+
                 # mixed cases with Hermitian/Symmetric
                 if eltya <: Real
                     @test Symmetric(Hermitian(aherm, :U))     === Symmetric(aherm, :U)
