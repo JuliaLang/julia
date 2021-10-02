@@ -177,11 +177,18 @@ LLVM_CFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
-else
+endif
+ifeq ($(SANITIZE_ADDRESS),1)
 LLVM_CFLAGS += -fsanitize=address
 LLVM_LDFLAGS += -fsanitize=address
 LLVM_CXXFLAGS += -fsanitize=address
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="Address"
+endif
+ifeq ($(SANITIZE_THREAD),1)
+LLVM_CFLAGS += -fsanitize=thread
+LLVM_LDFLAGS += -fsanitize=thread
+LLVM_CXXFLAGS += -fsanitize=thread
+LLVM_CMAKE += -DLLVM_USE_SANITIZER="Thread"
 endif
 endif # LLVM_SANITIZE
 
