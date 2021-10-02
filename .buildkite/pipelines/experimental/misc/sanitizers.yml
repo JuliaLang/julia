@@ -8,7 +8,9 @@ steps:
     key: "asan"
     plugins:
       - JuliaCI/julia#v1:
-          version: 1.6
+          # Drop default "registries" directory, so it is not persisted from execution to execution
+          persist_depot_dirs: packages,artifacts,compiled
+          version: '1.6'
       - staticfloat/sandbox#v1:
           rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/llvm_passes.x86_64.tar.gz
           rootfs_treehash: "9dd715500b117a16fcfa419ea0bca0c0ca902cee"
@@ -18,7 +20,9 @@ steps:
             - "/cache/repos:/cache/repos"
       # `contrib/check-asan.jl` needs a `julia` binary inside the inner sandbox:
       - JuliaCI/julia#v1:
-          version: 1.6
+          # Drop default "registries" directory, so it is not persisted from execution to execution
+          persist_depot_dirs: packages,artifacts,compiled
+          version: '1.6'
     timeout_in_minutes: 120
     commands: |
       echo "--- Build julia-debug with ASAN"
