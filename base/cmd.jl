@@ -298,6 +298,15 @@ Set the CPU affinity of the `command` by a list of CPU IDs (1-based) `cpus`.  Pa
 `cpus = nothing` means to unset the CPU affinity if the `original_command` has any.
 
 This is supported on Unix and Windows but not in macOS.
+
+# Examples
+```julia
+julia> run(setcpuaffinity(`sh -c 'taskset -p \$\$'`, [1, 2, 5]));
+pid 2273's current affinity mask: 13
+
+julia> 0b010011
+0x13
+```
 """
 function setcpuaffinity end
 setcpuaffinity(cmd::Cmd, ::Nothing) = Cmd(cmd; cpumask = nothing)
