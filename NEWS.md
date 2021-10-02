@@ -40,6 +40,7 @@ New library functions
 ---------------------
 
 * `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `setcpuaffinity(cmd, cpus)` can be used to set CPU affinity of sub-processes. ([#42469])
 
 New library features
 --------------------
