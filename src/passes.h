@@ -16,6 +16,10 @@ struct CombineMulAdd : PassInfoMixin<CombineMulAdd> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
 
+struct LateLowerGC : PassInfoMixin<LateLowerGC> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+};
+
 // Module Passes
 struct CPUFeatures : PassInfoMixin<CPUFeatures> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);

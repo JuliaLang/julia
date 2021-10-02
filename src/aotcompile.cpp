@@ -879,33 +879,37 @@ static void registerCallbacks(PassBuilder &PB) {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, FunctionPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-          if (Name == "DemoteFloat16") {
-            PM.addPass(DemoteFloat16());
-            return true;
-          }
-          if (Name == "CombineMulAdd") {
-            PM.addPass(CombineMulAdd());
-            return true;
-          }
-          return false;
+            if (Name == "DemoteFloat16") {
+                PM.addPass(DemoteFloat16());
+                return true;
+            }
+            if (Name == "CombineMulAdd") {
+              PM.addPass(CombineMulAdd());
+              return true;
+            }
+            if (Name == "LateLowerGCFrame") {
+                PM.addPass(LateLowerGC());
+                return true;
+            }
+            return false;
         });
 
     PB.registerPipelineParsingCallback(
         [](StringRef Name, ModulePassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-          if (Name == "CPUFeatures") {
-            PM.addPass(CPUFeatures());
-            return true;
-          }
-          if (Name == "RemoveNI") {
-            PM.addPass(RemoveNI());
-            return true;
-          }
-          if (Name == "LowerSIMDLoop") {
-            PM.addPass(LowerSIMDLoop());
-            return true;
-          }
-          return false;
+            if (Name == "CPUFeatures") {
+              PM.addPass(CPUFeatures());
+              return true;
+            }
+            if (Name == "RemoveNI") {
+              PM.addPass(RemoveNI());
+              return true;
+            }
+            if (Name == "LowerSIMDLoop") {
+              PM.addPass(LowerSIMDLoop());
+              return true;
+            }
+            return false;
         });
 }
 
