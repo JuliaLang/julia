@@ -844,6 +844,17 @@ Optional keyword arguments:
      The file won't be deleted until 25x longer than this if the pid in the file appears that it may be valid.
      By default this is disabled (`stale_age` = 0), but a typical recommended value would be about 3-5x an
      estimated normal completion time.
+
+For instance multiple julia processes could use the following to simultaneously append to the same file safely:
+
+```julia
+file = "/path/to/file"
+mkpidlock(file) do
+    open(file, write = true, append = true) do io
+        write(io, "new text")
+    end
+end
+```
 """
 function mkpidlock end
 

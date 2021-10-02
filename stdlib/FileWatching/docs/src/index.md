@@ -13,7 +13,6 @@ FileWatching.unwatch_folder
 
 ```@docs
 FileWatching.mkpidlock
-FileWatching.close
 ```
 
 ### Helper Functions
