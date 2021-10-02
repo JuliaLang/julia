@@ -947,6 +947,7 @@ end
 @inline function ^(x::Float64, y::Float64)
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
 =======
@@ -955,6 +956,8 @@ end
 =======
     x == 0 && return Float64(y == 0)
 >>>>>>> Update base/math.jl
+=======
+>>>>>>> remove incorrect change to Float64 behavior
     z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
