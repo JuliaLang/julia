@@ -968,12 +968,21 @@ end
     x==0 && return T(y==0)
 =======
 @inline function ^(x::T, y::T) where T <: Union{Float16, Float32}
+<<<<<<< HEAD
     x == 0 && return T(y == 0)
 >>>>>>> Update base/math.jl
     x = widen(x) # convert Float16/Float32 to Float32/Float64
     x < 0 && !isinteger(y) && throw_exp_domainerror(x)
     ans = T(exp2(log2(abs(x)) * y))
     return (x < 0 && isodd(y)) ? -ans : ans
+=======
+    yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
+    y == yint && return x^yint
+    x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    !isfinite(x) && return x*(y>0)
+    x==0 && return Inf32*(y<0)
+    return T(exp2(log2(abs(widen(x))) * y))
+>>>>>>> maybe working
 end
 
 # compensated power by squaring
