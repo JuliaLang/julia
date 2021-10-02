@@ -1,2 +1,4 @@
 DOWNLOADS_BRANCH = release-1.5
 DOWNLOADS_SHA1 = 26d79afcde9cf837a331fce023b31f1d3699700c
+DOWNLOADS_GIT_URL := git://github.com/JuliaLang/Downloads.jl.git
+DOWNLOADS_TAR_URL = https://api.github.com/repos/JuliaLang/Downloads.jl/tarball/$1
