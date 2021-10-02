@@ -888,12 +888,18 @@ end
     D1 = Diagonal(rand(3))
     @test D1 + zero(D1) == D1
     @test D1 * one(D1) == D1
+    @test D1 * oneunit(D1) == D1
+    @test oneunit(D1) isa typeof(D1)
     D2 = Diagonal([collect(reshape(1:4, 2, 2)), collect(reshape(5:8, 2, 2))])
     @test D2 + zero(D2) == D2
     @test D2 * one(D2) == D2
+    @test D2 * oneunit(D2) == D2
+    @test oneunit(D2) isa typeof(D2)
     D3 = Diagonal([D2, D2]);
     @test D3 + zero(D3) == D3
     @test D3 * one(D3) == D3
+    @test D3 * oneunit(D3) == D3
+    @test oneunit(D3) isa typeof(D3)
 end
 
 end # module TestDiagonal
