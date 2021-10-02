@@ -622,7 +622,7 @@ value to the return value of the call upon completion.
 function put!(rr::Future, v)
     _, ok = @atomicreplace rr.v nothing => Some(v)
     ok || error("Future can be set only once")
-    call_on_owner(put_future, rr, v, myid())
+    call_on_owner(put_future, rr, something(rr.v), myid())
     rr
 end
 
