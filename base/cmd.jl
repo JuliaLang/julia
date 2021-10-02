@@ -7,22 +7,20 @@ const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS = UInt8(1 << 2)
 const UV_PROCESS_DETACHED = UInt8(1 << 3)
 const UV_PROCESS_WINDOWS_HIDE = UInt8(1 << 4)
 
-const RawCPUMask = Union{Nothing,Vector{Cchar}}
-
 struct Cmd <: AbstractCmd
     exec::Vector{String}
     ignorestatus::Bool
     flags::UInt32 # libuv process flags
     env::Union{Vector{String},Nothing}
     dir::String
-    cpumask::RawCPUMask
+    cpus::Union{Nothing,Vector{Int}}
     Cmd(exec::Vector{String}) =
         new(exec, false, 0x00, nothing, "", nothing)
-    Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpumask = nothing) =
+    Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing) =
         new(cmd.exec, ignorestatus, flags, env,
-            dir === cmd.dir ? dir : cstr(dir), cpumask)
+            dir === cmd.dir ? dir : cstr(dir), cpus)
     function Cmd(cmd::Cmd; ignorestatus::Bool=cmd.ignorestatus, env=cmd.env, dir::AbstractString=cmd.dir,
-                 cpumask::RawCPUMask = cmd.cpumask,
+                 cpus::Union{Nothing,Vector{Int}} = cmd.cpus,
                  detach::Bool = 0 != cmd.flags & UV_PROCESS_DETACHED,
                  windows_verbatim::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS,
                  windows_hide::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_HIDE)
@@ -30,7 +28,7 @@ struct Cmd <: AbstractCmd
                 windows_verbatim * UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS |
                 windows_hide * UV_PROCESS_WINDOWS_HIDE
         new(cmd.exec, ignorestatus, flags, byteenv(env),
-            dir === cmd.dir ? dir : cstr(dir), cpumask)
+            dir === cmd.dir ? dir : cstr(dir), cpus)
     end
 end
 
@@ -38,7 +36,8 @@ has_nondefault_cmd_flags(c::Cmd) =
     c.ignorestatus ||
     c.flags != 0x00 ||
     c.env !== nothing ||
-    c.dir !== ""
+    c.dir !== "" ||
+    c.cpus !== nothing
 
 """
     Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide, env, dir)
@@ -118,6 +117,8 @@ function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
     print_dir = !isempty(cmd.dir)
     (print_env || print_dir) && print(io, "setenv(")
+    print_cpus = cmd.cpus !== nothing
+    print_cpus && print(io, "setcpuaffinity(")
     print(io, '`')
     join(io, map(cmd.exec) do arg
         replace(sprint(context=io) do io
@@ -127,6 +128,11 @@ function show(io::IO, cmd::Cmd)
         end, '`' => "\\`")
     end, ' ')
     print(io, '`')
+    if print_cpus
+        print(io, ',')
+        show(io, cmd.cpus)
+        print(io, ')')
+    end
     print_env && (print(io, ","); show(io, cmd.env))
     print_dir && (print(io, "; dir="); show(io, cmd.dir))
     (print_dir || print_env) && print(io, ")")
@@ -309,15 +315,8 @@ julia> 0b010011
 ```
 """
 function setcpuaffinity end
-setcpuaffinity(cmd::Cmd, ::Nothing) = Cmd(cmd; cpumask = nothing)
-function setcpuaffinity(cmd::Cmd, cpus::AbstractVector{<:Integer})
-    n = max(maximum(cpus), ccall(:uv_cpumask_size, Cint, ()))
-    cpumask = zeros(Cchar, n)
-    for i in cpus
-        cpumask[i] = true
-    end
-    return Cmd(cmd; cpumask)
-end
+setcpuaffinity(cmd::Cmd, ::Nothing) = Cmd(cmd; cpus = nothing)
+setcpuaffinity(cmd::Cmd, cpus) = Cmd(cmd; cpus = collect(Int, cpus))
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
