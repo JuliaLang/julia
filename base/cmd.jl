@@ -292,16 +292,16 @@ function addenv(cmd::Cmd, env::Vector{<:AbstractString}; inherit::Bool = true)
 end
 
 """
-    setcpus(original_command::Cmd, cpus) -> command::Cmd
+    setcpuaffinity(original_command::Cmd, cpus) -> command::Cmd
 
 Set the CPU affinity of the `command` by a list of CPU IDs (1-based) `cpus`.  Passing
 `cpus = nothing` means to unset the CPU affinity if the `original_command` has any.
 
 This is supported on Unix and Windows but not in macOS.
 """
-function setcpus end
+function setcpuaffinity end
 setcpuaffinity(cmd::Cmd, ::Nothing) = Cmd(cmd; cpumask = nothing)
-function setcpus(cmd::Cmd, cpus::AbstractVector{<:Integer})
+function setcpuaffinity(cmd::Cmd, cpus::AbstractVector{<:Integer})
     n = max(maximum(cpus), ccall(:uv_cpumask_size, Cint, ()))
     cpumask = zeros(Cchar, n)
     for i in cpus

@@ -12,7 +12,7 @@ end
 
 function run_with_affinity(cpus)
     script = joinpath(@__DIR__, "print_process_affinity.jl")
-    return readchomp(setcpus(`$(Base.julia_cmd()) $script`, cpus))
+    return readchomp(setcpuaffinity(`$(Base.julia_cmd()) $script`, cpus))
 end
 
 # issue #34415 - make sure external affinity settings work

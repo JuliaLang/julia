@@ -941,7 +941,7 @@ export
     run,
     setenv,
     addenv,
-    setcpus,
+    setcpuaffinity,
     success,
     withenv,
 
