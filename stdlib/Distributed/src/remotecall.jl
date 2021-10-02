@@ -76,6 +76,8 @@ function test_existing_ref(r::AbstractRemoteRef)
         end
         return found::typeof(r)
     end
+
+    client_refs[r] = nothing
     finalizer(finalize_ref, r)
     return r
 end
