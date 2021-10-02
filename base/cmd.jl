@@ -306,10 +306,18 @@ Set the CPU affinity of the `command` by a list of CPU IDs (1-based) `cpus`.  Pa
 This is supported on Unix and Windows but not in macOS.
 
 # Examples
+
+In Linux, the `taskset` command line program can be used to see how `setcpuaffinity` works.
+
 ```julia
 julia> run(setcpuaffinity(`sh -c 'taskset -p \$\$'`, [1, 2, 5]));
 pid 2273's current affinity mask: 13
+```
 
+Note that the mask value `13` reflects that the first, second, and the fifth bits (counting
+from the least significant position) are turned on:
+
+```julia
 julia> 0b010011
 0x13
 ```
