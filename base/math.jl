@@ -985,6 +985,7 @@ end
 >>>>>>> maybe working
 end
 
+<<<<<<< HEAD
 # compensated power by squaring
 @inline function ^(x::Float64, n::Integer)
     n == 0 && return one(x)
@@ -1015,6 +1016,23 @@ end
     n < 0 && return inv(x)^(-n)
     n==3 && return x*x*x #keep compatability with literal_pow
     Float32(Base.power_by_squaring(Float64(x),n))
+=======
+@inline function ^(x::Float64, y::Integer)
+    y == -1 && return inv(x)
+    y == 0 && return one(x)
+    y == 1 && return x
+    y == 2 && return x*x
+    y == 3 && return x*x*x
+    ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+end
+@inline function ^(x::Float32, y::Integer)
+    y == -1 && return inv(x)
+    y == 0 && return one(x)
+    y == 1 && return x
+    y == 2 && return x*x
+    y == 3 && return x*x*x
+    ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+>>>>>>> revert float^integer changes
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
