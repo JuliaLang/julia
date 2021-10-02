@@ -984,7 +984,7 @@ end
     x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     x == 1 && return one(T)
     !isfinite(x) && return x*(y>0)
-    x==0 && return T(Inf)*(y<0)
+    x==0 && return abs(y)*T(Inf)*(!(y>0))
     return T(exp2(log2(abs(widen(x))) * y))
 >>>>>>> maybe working
 end
