@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Base.require is the implementation for the `import` statement
+const require_lock = ReentrantLock()
 
 # Cross-platform case-sensitive path canonicalization
 
@@ -129,6 +130,7 @@ end
 const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
 function dummy_uuid(project_file::String)
+    @lock require_lock begin
     cache = LOADING_CACHE[]
     if cache !== nothing
         uuid = get(cache.dummy_uuid, project_file, nothing)
@@ -144,6 +146,7 @@ function dummy_uuid(project_file::String)
         cache.dummy_uuid[project_file] = uuid
     end
     return uuid
+    end
 end
 
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
@@ -236,8 +239,7 @@ struct TOMLCache
 end
 const TOML_CACHE = TOMLCache(TOML.Parser(), Dict{String, Dict{String, Any}}())
 
-const TOML_LOCK = ReentrantLock()
-parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, TOML_LOCK)
+parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
         cache = LOADING_CACHE[]
@@ -263,7 +265,6 @@ function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_l
 end
 
 ## package identification: determine unique identity of package to be loaded ##
-const require_lock = ReentrantLock()
 
 # Used by Pkg but not used in loading itself
 function find_package(arg)
@@ -338,13 +339,15 @@ Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
 to get the file name part of the path.
 """
 function pathof(m::Module)
-    pkgid = get(Base.module_keys, m, nothing)
+    @lock require_lock begin
+    pkgid = get(module_keys, m, nothing)
     pkgid === nothing && return nothing
-    origin = get(Base.pkgorigins, pkgid, nothing)
+    origin = get(pkgorigins, pkgid, nothing)
     origin === nothing && return nothing
     path = origin.path
     path === nothing && return nothing
     return fixup_stdlib_path(path)
+    end
 end
 
 """
@@ -367,7 +370,7 @@ julia> pkgdir(Foo, "src", "file.jl")
     The optional argument `paths` requires at least Julia 1.7.
 """
 function pkgdir(m::Module, paths::String...)
-    rootmodule = Base.moduleroot(m)
+    rootmodule = moduleroot(m)
     path = pathof(rootmodule)
     path === nothing && return nothing
     return joinpath(dirname(dirname(path)), paths...)
@@ -384,6 +387,7 @@ const preferences_names = ("JuliaLocalPreferences.toml", "LocalPreferences.toml"
 #  - `true`: `env` is an implicit environment
 #  - `path`: the path of an explicit project file
 function env_project_file(env::String)::Union{Bool,String}
+    @lock require_lock begin
     cache = LOADING_CACHE[]
     if cache !== nothing
         project_file = get(cache.env_project_file, env, nothing)
@@ -407,6 +411,7 @@ function env_project_file(env::String)::Union{Bool,String}
         cache.env_project_file[env] = project_file
     end
     return project_file
+    end
 end
 
 function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
@@ -474,6 +479,7 @@ end
 
 # find project file's corresponding manifest file
 function project_file_manifest_path(project_file::String)::Union{Nothing,String}
+    @lock require_lock begin
     cache = LOADING_CACHE[]
     if cache !== nothing
         manifest_path = get(cache.project_file_manifest_path, project_file, missing)
@@ -502,6 +508,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         cache.project_file_manifest_path[project_file] = manifest_path
     end
     return manifest_path
+    end
 end
 
 # given a directory (implicit env from LOAD_PATH) and a name,
@@ -689,7 +696,7 @@ function implicit_manifest_deps_get(dir::String, where::PkgId, name::String)::Un
     @assert where.uuid !== nothing
     project_file = entry_point_and_project_file(dir, where.name)[2]
     project_file === nothing && return nothing # a project file is mandatory for a package with a uuid
-    proj = project_file_name_uuid(project_file, where.name, )
+    proj = project_file_name_uuid(project_file, where.name)
     proj == where || return nothing # verify that this is the correct project file
     # this is the correct project, so stop searching here
     pkg_uuid = explicit_project_deps_get(project_file, name)
@@ -754,19 +761,26 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
     if isa(sv, Exception)
         return sv
     end
-    restored = sv[1]
-    if !isa(restored, Exception)
-        for M in restored::Vector{Any}
-            M = M::Module
-            if isdefined(M, Base.Docs.META)
-                push!(Base.Docs.modules, M)
-            end
-            if parentmodule(M) === M
-                register_root_module(M)
-            end
+    sv = sv::SimpleVector
+    restored = sv[1]::Vector{Any}
+    for M in restored
+        M = M::Module
+        if isdefined(M, Base.Docs.META)
+            push!(Base.Docs.modules, M)
+        end
+        if parentmodule(M) === M
+            register_root_module(M)
         end
     end
-    isassigned(sv, 2) && ccall(:jl_init_restored_modules, Cvoid, (Any,), sv[2])
+    inits = sv[2]::Vector{Any}
+    if !isempty(inits)
+        unlock(require_lock) # temporarily _unlock_ during these callbacks
+        try
+            ccall(:jl_init_restored_modules, Cvoid, (Any,), inits)
+        finally
+            lock(require_lock)
+        end
+    end
     return restored
 end
 
@@ -897,7 +911,9 @@ function _include_dependency(mod::Module, _path::AbstractString)
         path = normpath(joinpath(dirname(prev), _path))
     end
     if _track_dependencies[]
+        @lock require_lock begin
         push!(_require_dependencies, (mod, path, mtime(path)))
+        end
     end
     return path, prev
 end
@@ -1055,6 +1071,9 @@ is_root_module(m::Module) = @lock require_lock haskey(module_keys, m)
 root_module_key(m::Module) = @lock require_lock module_keys[m]
 
 function register_root_module(m::Module)
+    # n.b. This is called from C after creating a new module in `Base.__toplevel__`,
+    # instead of adding them to the binding table there.
+    @lock require_lock begin
     key = PkgId(m, String(nameof(m)))
     if haskey(loaded_modules, key)
         oldm = loaded_modules[key]
@@ -1064,6 +1083,7 @@ function register_root_module(m::Module)
     end
     loaded_modules[key] = m
     module_keys[m] = key
+    end
     nothing
 end
 
@@ -1172,10 +1192,12 @@ function _require(pkg::PkgId)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
         end
+        unlock(require_lock)
         try
             include(__toplevel__, path)
             return
         finally
+            lock(require_lock)
             if uuid !== old_uuid
                 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
             end
