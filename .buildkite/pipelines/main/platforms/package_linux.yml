@@ -4,15 +4,15 @@ agents:
   sandbox.jl: "true"
   os: "linux"
 steps:
-  - label: "package_linux${ARCH_LABEL?}"
-    key: package_linux${ARCH_LABEL?}
+  - label: "package_${PLATFORM?}${ARCH_LABEL?}"
+    key: package_${PLATFORM?}${ARCH_LABEL?}
     plugins:
       - JuliaCI/julia#v1:
           # Drop default "registries" directory, so it is not persisted from execution to execution
           persist_depot_dirs: packages,artifacts,compiled
           version: '1.6'
       - staticfloat/sandbox#v1:
-          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/${ROOTFS_TAG?}/package_linux.${ROOTFS_ARCH?}.tar.gz
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/${ROOTFS_TAG?}/package_${PLATFORM?}.${ROOTFS_ARCH?}.tar.gz
           rootfs_treehash: "${ROOTFS_TREE?}"
           uid: 1000
           gid: 1000
@@ -24,9 +24,11 @@ steps:
       echo "--- Print the full and short commit hashes"
       SHORT_COMMIT_LENGTH=10
       SHORT_COMMIT=`echo $${BUILDKITE_COMMIT:?} | cut -c1-$${SHORT_COMMIT_LENGTH:?}`
-      JULIA_BINARYDIST_FILENAME=`make print-JULIA_BINARYDIST_FILENAME | cut -c27-`
       ARTIFACT_FILE_EXTENSION="tar.gz"
-      ARTIFACT_FILENAME="$${JULIA_BINARYDIST_FILENAME:?}.$${ARTIFACT_FILE_EXTENSION:?}"
+      ARTIFACT_FILENAME="julia-$${SHORT_COMMIT:?}-${PLATFORM?}${ARCH?}.$${ARTIFACT_FILE_EXTENSION:?}"
+      JULIA_BINARYDIST_FILENAME=`make print-JULIA_BINARYDIST_FILENAME | cut -c27-`
+      JULIA_BINARYDIST="$${JULIA_BINARYDIST_FILENAME:?}.$${ARTIFACT_FILE_EXTENSION:?}"
+
       echo "The full commit is:                     $${BUILDKITE_COMMIT:?}"
       echo "The short commit is:                    $${SHORT_COMMIT:?}"
       echo "The artifact filename will be:    $${ARTIFACT_FILENAME:?}"
@@ -43,7 +45,10 @@ steps:
 
       echo "--- Create build artifacts"
       make -j 8 binary-dist
+      ls -l $${JULIA_BINARYDIST:?}
+      if [[ "$${JULIA_BINARYDIST:?}" != "$${ARTIFACT_FILENAME:?}" ]]; then
+          mv $${JULIA_BINARYDIST:?} $${ARTIFACT_FILENAME:?}
+      fi
       ls -l $${ARTIFACT_FILENAME:?}
-
       echo "--- Upload build artifacts"
       buildkite-agent artifact upload $${ARTIFACT_FILENAME:?}
