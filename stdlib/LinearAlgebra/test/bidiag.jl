@@ -43,6 +43,7 @@ Random.seed!(1)
             @test ubd.dv === x
             @test lbd.ev === y
             @test_throws ArgumentError Bidiagonal(x, y, :R)
+            @test_throws ArgumentError Bidiagonal(x, y, 'R')
             x == dv0 || @test_throws DimensionMismatch Bidiagonal(x, x, :U)
             @test_throws MethodError Bidiagonal(x, y)
             # from matrix
