@@ -29,9 +29,9 @@ mutable struct Future <: AbstractRemoteRef
     @atomic v::Union{Some{Any}, Nothing}
 
     Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing) =
-        (r = new(w, rrid.whence, rrid.id, v); return test_existing_ref(r))
+        (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
 
-    Future(t::NTuple{4, Any}) = new(t[1], t[2], t[3], t[4])  # Useful for creating dummy, zeroed-out instances
+    Future(t::NTuple{4, Any}) = new(t[1],t[2],t[3],t[4])  # Useful for creating dummy, zeroed-out instances
 end
 
 """
@@ -91,7 +91,6 @@ function finalize_ref(r::AbstractRemoteRef)
                     send_del_client_no_lock(r)
                 else
                     # send_del_client only if the reference has not been set
-
                     r.v === nothing && send_del_client_no_lock(r)
                     @atomic r.v = nothing
                 end
