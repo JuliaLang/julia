@@ -8,7 +8,9 @@ steps:
     key: "analyzegc"
     plugins:
       - JuliaCI/julia#v1:
-          version: 1.6
+          # Drop default "registries" directory, so it is not persisted from execution to execution
+          persist_depot_dirs: packages,artifacts,compiled
+          version: '1.6'
       - staticfloat/sandbox#v1:
           rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/llvm_passes.x86_64.tar.gz
           rootfs_treehash: "9dd715500b117a16fcfa419ea0bca0c0ca902cee"
@@ -26,7 +28,9 @@ steps:
     key: "llvmpasses"
     plugins:
       - JuliaCI/julia#v1:
-          version: 1.6
+          # Drop default "registries" directory, so it is not persisted from execution to execution
+          persist_depot_dirs: packages,artifacts,compiled
+          version: '1.6'
       - staticfloat/sandbox#v1:
           rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.8/package_linux.x86_64.tar.gz
           rootfs_treehash: "84a323ae8fcc724f8ea5aca5901bbbf4bda3e519"
