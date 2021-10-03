@@ -22,6 +22,7 @@ steps:
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/doctest.yml
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/embedding.yml
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/llvmpasses.yml
+      buildkite-agent pipeline upload .buildkite/pipelines/main/misc/sanitizers.yml
 
       # Launch all of the platform builders.
       bash .buildkite/pipelines/main/platforms/platforms.sh package_linux
