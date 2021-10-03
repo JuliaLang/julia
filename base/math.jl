@@ -905,8 +905,7 @@ julia> modf(-3.5)
 modf(x) = isinf(x) ? (flipsign(zero(x), x), x) : (rem(x, one(x)), trunc(x))
 
 function modf(x::T) where T<:IEEEFloat
-    isnan(x) && return (x, x)
-    isinf(x) && return (copysign(zero(T), x), copysign(T(Inf), x))
+    isinf(x) && return (copysign(zero(T), x), x)
     ix = trunc(x)
     rx = copysign(x - ix, x)
     return (rx, ix)
