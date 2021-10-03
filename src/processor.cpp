@@ -401,6 +401,8 @@ static inline std::vector<uint8_t> serialize_target_data(llvm::StringRef name,
 {
     std::vector<uint8_t> res;
     auto add_data = [&] (const void *data, size_t sz) {
+        if (sz == 0)
+            return;
         size_t old_sz = res.size();
         res.resize(old_sz + sz);
         memcpy(&res[old_sz], data, sz);

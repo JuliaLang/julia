@@ -1510,7 +1510,7 @@ let ex = Meta.parse("@test27521(2) do y; y; end")
 end
 
 # issue #27129
-f27129(x = 1) = (@Base._inline_meta; x)
+f27129(x = 1) = (@inline; x)
 for meth in methods(f27129)
     @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end
@@ -2830,3 +2830,150 @@ end
     x[3], x[1:2]... = x
     @test x == [2, 3, 1]
 end
+
+@testset "escaping newlines inside strings" begin
+    c = "c"
+
+    @test "a\
+b" == "ab"
+    @test "a\
+    b" == "ab"
+    @test raw"a\
+b" == "a\\\nb"
+    @test "a$c\
+b" == "acb"
+    @test "\\
+" == "\\\n"
+
+
+    @test """
+          a\
+          b""" == "ab"
+    @test """
+          a\
+            b""" == "ab"
+    @test """
+            a\
+          b""" == "ab"
+    @test raw"""
+          a\
+          b""" == "a\\\nb"
+    @test """
+          a$c\
+          b""" == "acb"
+
+    @test """
+          \
+          """ == ""
+    @test """
+          \\
+          """ == "\\\n"
+    @test """
+          \\\
+          """ == "\\"
+    @test """
+          \\\\
+          """ == "\\\\\n"
+    @test """
+          \\\\\
+          """ == "\\\\"
+    @test """
+          \
+          \
+          """ == ""
+    @test """
+          \\
+          \
+          """ == "\\\n"
+    @test """
+          \\\
+          \
+          """ == "\\"
+
+
+    @test `a\
+b` == `ab`
+    @test `a\
+    b` == `ab`
+    @test `a$c\
+b` == `acb`
+    @test `"a\
+b"` == `ab`
+    @test `'a\
+b'` == `$("a\\\nb")`
+    @test `\\
+` == `'\'`
+
+
+    @test ```
+          a\
+          b``` == `ab`
+    @test ```
+          a\
+            b``` == `ab`
+    @test ```
+            a\
+          b``` == `  ab`
+    @test ```
+          a$c\
+          b``` == `acb`
+    @test ```
+          "a\
+          b"``` == `ab`
+    @test ```
+          'a\
+          b'``` == `$("a\\\nb")`
+    @test ```
+          \\
+          ``` == `'\'`
+end
+
+# issue #41253
+@test (function (::Dict{}); end)(Dict()) === nothing
+
+@testset "issue #41330" begin
+    @test Meta.parse("\"a\\\r\nb\"") == "ab"
+    @test Meta.parse("\"a\\\rb\"") == "ab"
+    @test eval(Meta.parse("`a\\\r\nb`")) == `ab`
+    @test eval(Meta.parse("`a\\\rb`")) == `ab`
+end
+
+@testset "slurping into function def" begin
+    x, f()... = [1, 2, 3]
+    @test x == 1
+    @test f() == [2, 3]
+    # test that call to `Base.rest` is outside the definition of `f`
+    @test f() === f()
+
+    x, f()... = 1, 2, 3
+    @test x == 1
+    @test f() == (2, 3)
+end
+
+@testset "long function bodies" begin
+    ex = Expr(:block)
+    ex.args = fill!(Vector{Any}(undef, 700000), 1)
+    f = eval(Expr(:function, :(), ex))
+    @test f() == 1
+    ex = Expr(:vcat)
+    ex.args = fill!(Vector{Any}(undef, 600000), 1)
+    @test_throws ErrorException("syntax: expression too large") eval(ex)
+end
+
+# issue 25678
+@generated f25678(x::T) where {T} = code_lowered(sin, Tuple{x})[]
+@test f25678(pi/6) === sin(pi/6)
+
+@generated g25678(x) = return :x
+@test g25678(7) === 7
+
+# issue 42220
+macro m42220()
+    return quote
+        function foo(::Type{T}=Float64) where {T}
+            return Vector{T}(undef, 10)
+        end
+    end
+end
+@test @m42220()() isa Vector{Float64}
+@test @m42220()(Bool) isa Vector{Bool}

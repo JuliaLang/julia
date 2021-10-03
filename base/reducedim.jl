@@ -193,7 +193,7 @@ end
 
 has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = false
 has_fast_linear_indexing(a::Array) = true
-has_fast_linear_indexing(::Number) = true  # for Broadcasted
+has_fast_linear_indexing(::Union{Number,Ref,AbstractChar}) = true  # 0d objects, for Broadcasted
 has_fast_linear_indexing(bc::Broadcast.Broadcasted) =
     all(has_fast_linear_indexing, bc.args)
 

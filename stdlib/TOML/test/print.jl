@@ -60,3 +60,14 @@ end
     d = TOML.parse(s)
     @test toml_str(d) == "user = \"me\"\n\n[julia]\n\n[option]\n"
 end
+
+@testset "special characters" begin
+    s = """
+    "\U1f355 \0 \x0 \x1 \t \b" = "\U1f355 \0 \x0 \x1 \t \b"
+    "\x7f" = "\x7f"
+    """
+    @test roundtrip(s)
+
+    d = Dict("str" => string(Char(0xd800)))
+    @test_throws ErrorException TOML.print(devnull, d)
+end

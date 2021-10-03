@@ -353,8 +353,38 @@ module IteratorsMD
     # AbstractArray implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
-    @propagate_inbounds function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
-        CartesianIndex(getindex.(iter.indices, I))
+    # getindex for a 0D CartesianIndices is necessary for disambiguation
+    @propagate_inbounds function Base.getindex(iter::CartesianIndices{0,R}) where {R}
+        CartesianIndex()
+    end
+    @inline function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
+        # Eagerly do boundscheck before calculating each item of the CartesianIndex so that
+        # we can pass `@inbounds` hint to inside the map and generates more efficient SIMD codes (#42115)
+        @boundscheck checkbounds(iter, I...)
+        index = map(iter.indices, I) do r, i
+            @inbounds getindex(r, i)
+        end
+        CartesianIndex(index)
+    end
+
+    # CartesianIndices act as a multidimensional range, so cartesian indexing of CartesianIndices
+    # with compatible dimensions may be seen as indexing into the component ranges.
+    # This may use the special indexing behavior implemented for ranges to return another CartesianIndices
+    @propagate_inbounds function Base.getindex(iter::CartesianIndices{N,R},
+        I::Vararg{Union{OrdinalRange{<:Integer, <:Integer}, Colon}, N}) where {N,R}
+        CartesianIndices(getindex.(iter.indices, I))
+    end
+    @propagate_inbounds function Base.getindex(iter::CartesianIndices{N},
+        C::CartesianIndices{N}) where {N}
+        CartesianIndices(getindex.(iter.indices, C.indices))
+    end
+
+    # If dimensions permit, we may index into a CartesianIndices directly instead of constructing a SubArray wrapper
+    @propagate_inbounds function Base.view(c::CartesianIndices{N}, r::Vararg{Union{OrdinalRange{<:Integer, <:Integer}, Colon},N}) where {N}
+        getindex(c, r...)
+    end
+    @propagate_inbounds function Base.view(c::CartesianIndices{N}, C::CartesianIndices{N}) where {N}
+        getindex(c, C)
     end
 
     ndims(R::CartesianIndices) = ndims(typeof(R))
@@ -627,7 +657,7 @@ using .IteratorsMD
 ## Bounds-checking with CartesianIndex
 # Disallow linear indexing with CartesianIndex
 function checkbounds(::Type{Bool}, A::AbstractArray, i::Union{CartesianIndex, AbstractArray{<:CartesianIndex}})
-    @_inline_meta
+    @inline
     checkbounds_indices(Bool, axes(A), (i,))
 end
 
@@ -828,7 +858,7 @@ uncolon(inds::Tuple{},    I::Tuple{Colon, Vararg{Any}}) = Slice(OneTo(1))
 uncolon(inds::Tuple,      I::Tuple{Colon, Vararg{Any}}) = Slice(inds[1])
 
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
-getindex(x::Union{Number,Char}, ::CartesianIndex{0}) = x
+getindex(x::Union{Number,AbstractChar}, ::CartesianIndex{0}) = x
 getindex(t::Tuple,  i::CartesianIndex{1}) = getindex(t, i.I[1])
 
 # These are not defined on directly on getindex to avoid
@@ -849,14 +879,14 @@ function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Vararg{Union{Real, 
     # This is specifically not inlined to prevent excessive allocations in type unstable code
     shape = index_shape(I...)
     dest = similar(A, shape)
-    map(unsafe_length, axes(dest)) == map(unsafe_length, shape) || throw_checksize_error(dest, shape)
+    map(length, axes(dest)) == map(length, shape) || throw_checksize_error(dest, shape)
     _unsafe_getindex!(dest, A, I...) # usually a generated function, don't allow it to impact inference result
     return dest
 end
 
 function _generate_unsafe_getindex!_body(N::Int)
     quote
-        @_inline_meta
+        @inline
         D = eachindex(dest)
         Dy = iterate(D)
         @inbounds @nloops $N j d->I[d] begin
@@ -889,7 +919,7 @@ end
 
 ## setindex! ##
 function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(A, I...)
     _unsafe_setindex!(l, _maybe_reshape(l, A, I...), x, I...)
     A
@@ -970,7 +1000,7 @@ function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
 end
 function diff(r::AbstractRange{T}; dims::Integer=1) where {T}
     dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
-    return T[@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
+    return [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
 end
 
 ### from abstractarray.jl
@@ -1097,6 +1127,25 @@ end
 
 Copy the block of `src` in the range of `Rsrc` to the block of `dest`
 in the range of `Rdest`. The sizes of the two regions must match.
+
+# Examples
+```jldoctest
+julia> A = zeros(5, 5);
+
+julia> B = [1 2; 3 4];
+
+julia> Ainds = CartesianIndices((2:3, 2:3));
+
+julia> Binds = CartesianIndices(B);
+
+julia> copyto!(A, Ainds, B, Binds)
+5×5 Matrix{Float64}:
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  1.0  2.0  0.0  0.0
+ 0.0  3.0  4.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+```
 """
 copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 
@@ -1117,6 +1166,7 @@ See also [`circshift`](@ref).
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
     inds = axes(src)
     axes(dest) == inds || throw(ArgumentError("indices of src and dest must match (got $inds and $(axes(dest)))"))
+    isempty(src) && return dest
     _circshift!(dest, (), src, (), inds, fill_to_length(shiftamt, 0, Val(N)))
 end
 
@@ -1227,14 +1277,14 @@ end
 
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
-@inline function _unsafe_getindex!(X::BitArray, B::BitArray, I0::Union{UnitRange{Int},Slice})
+@inline function _unsafe_getindex!(X::BitArray, B::BitArray, I0::Union{AbstractUnitRange{Int},Slice})
     copy_chunks!(X.chunks, 1, B.chunks, indexoffset(I0)+1, length(I0))
     return X
 end
 
 # Optimization where the inner dimension is contiguous improves perf dramatically
 @generated function _unsafe_getindex!(X::BitArray, B::BitArray,
-        I0::Union{Slice,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Slice}...)
+        I0::Union{Slice,UnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Slice}...)
     N = length(I)
     quote
         $(Expr(:meta, :inline))
@@ -1369,7 +1419,7 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::Union{Colon,UnitRange{Int}})
+@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::Union{Colon,AbstractUnitRange{Int}})
     I0 = to_indices(B, (J0,))[1]
     @boundscheck checkbounds(B, I0)
     l0 = length(I0)
@@ -1381,13 +1431,13 @@ end
 end
 
 @inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray},
-        I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
+        I0::Union{Colon,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Colon}...)
     J = to_indices(B, (I0, I...))
     @boundscheck checkbounds(B, J...)
     _unsafe_setindex!(B, X, J...)
 end
 @generated function _unsafe_setindex!(B::BitArray, X::Union{StridedArray,BitArray},
-        I0::Union{Slice,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Slice}...)
+        I0::Union{Slice,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Slice}...)
     N = length(I)
     quote
         idxlens = @ncall $N index_lengths I0 d->I[d]
@@ -1422,7 +1472,7 @@ end
 end
 
 @propagate_inbounds function setindex!(B::BitArray, X::AbstractArray,
-        I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
+        I0::Union{Colon,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Colon}...)
     _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
 end
 

@@ -130,7 +130,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     elseif isa(t, DataType)
         if isa(c, Core.TypeofVararg)
             # Tuple{Vararg{T}} --> Tuple{T} is OK
-            return _limit_type_size(t, c.T, sources, depth, 0)
+            return _limit_type_size(t, unwrapva(c), sources, depth, 0)
         elseif isType(t) # allow taking typeof as Type{...}, but ensure it doesn't start nesting
             tt = unwrap_unionall(t.parameters[1])
             (!isa(tt, DataType) || isType(tt)) && (depth += 1)
@@ -256,7 +256,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
                     let tPi = unwrap_unionall(tPi),
                         cPi = unwrap_unionall(cPi)
                         if isa(tPi, DataType) && isa(cPi, DataType) &&
-                                !tPi.name.abstract && !cPi.name.abstract &&
+                            !isabstracttype(tPi) && !isabstracttype(cPi) &&
                                 sym_isless(cPi.name.name, tPi.name.name)
                             # allow collect on (anonymous) Generators to nest, provided that their functions are appropriately ordered
                             # TODO: is there a better way?
@@ -377,26 +377,25 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         return Bool
     end
     # type-lattice for Const and PartialStruct wrappers
-    if (isa(typea, PartialStruct) || isa(typea, Const)) &&
-       (isa(typeb, PartialStruct) || isa(typeb, Const)) &&
-        widenconst(typea) === widenconst(typeb)
+    if ((isa(typea, PartialStruct) || isa(typea, Const)) &&
+        (isa(typeb, PartialStruct) || isa(typeb, Const)) &&
+        widenconst(typea) === widenconst(typeb))
 
-       typea_nfields = nfields_tfunc(typea)
-       typeb_nfields = nfields_tfunc(typeb)
-       if !isa(typea_nfields, Const) || !isa(typeb_nfields, Const) || typea_nfields.val !== typeb_nfields.val
+        typea_nfields = nfields_tfunc(typea)
+        typeb_nfields = nfields_tfunc(typeb)
+        if !isa(typea_nfields, Const) || !isa(typeb_nfields, Const) || typea_nfields.val !== typeb_nfields.val
             return widenconst(typea)
-       end
+        end
 
-       type_nfields = typea_nfields.val::Int
-       fields = Vector{Any}(undef, type_nfields)
-       anyconst = false
-       for i = 1:type_nfields
+        type_nfields = typea_nfields.val::Int
+        fields = Vector{Any}(undef, type_nfields)
+        anyconst = false
+        for i = 1:type_nfields
             fields[i] = tmerge(getfield_tfunc(typea, Const(i)),
                                getfield_tfunc(typeb, Const(i)))
             anyconst |= has_nontrivial_const_info(fields[i])
-       end
-       return anyconst ? PartialStruct(widenconst(typea), fields) :
-            widenconst(typea)
+        end
+        return anyconst ? PartialStruct(widenconst(typea), fields) : widenconst(typea)
     end
     if isa(typea, PartialOpaque) && isa(typeb, PartialOpaque) && widenconst(typea) == widenconst(typeb)
         if !(typea.source === typeb.source &&

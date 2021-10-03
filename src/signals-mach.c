@@ -524,7 +524,6 @@ static kern_return_t profiler_segv_handler
 void *mach_profile_listener(void *arg)
 {
     (void)arg;
-    int i;
     const int max_size = 512;
     attach_exception_port(mach_thread_self(), 1);
 #ifdef LLVMLIBUNWIND
@@ -541,7 +540,10 @@ void *mach_profile_listener(void *arg)
         jl_lock_profile();
         void *unused = NULL;
         int keymgr_locked = _keymgr_get_and_lock_processwide_ptr_2(KEYMGR_GCC3_DW2_OBJ_LIST, &unused) == 0;
-        for (i = jl_n_threads; i-- > 0; ) {
+        jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
+        for (int idx = jl_n_threads; idx-- > 0; ) {
+            // Stop the threads in the random round-robin order.
+            int i = profile_round_robin_thread_order[idx];
             // if there is no space left, break early
             if (jl_profile_is_buffer_full()) {
                 jl_profile_stop_timer();
@@ -586,8 +588,22 @@ void *mach_profile_listener(void *arg)
 #else
                 bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
 #endif
+                jl_ptls_t ptls = jl_all_tls_states[i];
 
-                // Mark the end of this block with 0
+                // store threadid but add 1 as 0 is preserved to indicate end of block
+                bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+
+                // store task id
+                bt_data_prof[bt_size_cur++].uintptr = (uintptr_t)ptls->current_task;
+
+                // store cpu cycle clock
+                bt_data_prof[bt_size_cur++].uintptr = cycleclock();
+
+                // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
+                bt_data_prof[bt_size_cur++].uintptr = ptls->sleep_check_state + 1;
+
+                // Mark the end of this block with two 0's
+                bt_data_prof[bt_size_cur++].uintptr = 0;
                 bt_data_prof[bt_size_cur++].uintptr = 0;
             }
             // We're done! Resume the thread.

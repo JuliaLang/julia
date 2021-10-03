@@ -390,18 +390,15 @@ const BiTri = Union{Bidiagonal,Tridiagonal}
 @inline mul!(C::AbstractMatrix,   A::AbstractTriangular, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix,   A::AbstractMatrix,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix,   A::Diagonal,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractVector,   A::BiTriSym,              B::AbstractVector, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix,   A::BiTriSym,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractVecOrMat, A::BiTriSym,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::BiTriSym, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta)) # around bidiag line 330
+@inline mul!(C::AbstractVector, A::BiTriSym, B::AbstractVector, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::BiTriSym, B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::BiTriSym, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix, A::BiTriSym, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractVector, A::BiTriSym, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = throw(MethodError(mul!, (C, A, B)), MulAddMul(alpha, beta))
+@inline mul!(C::AbstractVector, A::BiTriSym, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = throw(MethodError(mul!, (C, A, B)), MulAddMul(alpha, beta))
 
 function check_A_mul_B!_sizes(C, A, B)
     require_one_based_indexing(C)
@@ -728,97 +725,62 @@ function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
 end
 
 #Linear solvers
-ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
-ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
-ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
-function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
-    require_one_based_indexing(A, B)
-    nA,mA = size(A)
-    tmp = similar(B,size(B,1))
-    n = size(B, 1)
-    if nA != n
-        throw(DimensionMismatch("size of A is ($nA,$mA), corresponding dimension of B is $n"))
-    end
-    for i = 1:size(B,2)
-        copyto!(tmp, 1, B, (i - 1)*n + 1, n)
-        ldiv!(A, tmp)
-        copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
-    end
-    B
-end
-function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
-    require_one_based_indexing(adjA, B)
-    A = adjA.parent
-    nA,mA = size(A)
-    tmp = similar(B,size(B,1))
-    n = size(B, 1)
-    if mA != n
-        throw(DimensionMismatch("size of adjoint of A is ($mA,$nA), corresponding dimension of B is $n"))
-    end
-    for i = 1:size(B,2)
-        copyto!(tmp, 1, B, (i - 1)*n + 1, n)
-        ldiv!(adjoint(A), tmp)
-        copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
-    end
-    B
-end
-function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
-    require_one_based_indexing(transA, B)
-    A = transA.parent
-    nA,mA = size(A)
-    tmp = similar(B,size(B,1))
-    n = size(B, 1)
-    if mA != n
-        throw(DimensionMismatch("size of transpose of A is ($mA,$nA), corresponding dimension of B is $n"))
-    end
-    for i = 1:size(B,2)
-        copyto!(tmp, 1, B, (i - 1)*n + 1, n)
-        ldiv!(transpose(A), tmp)
-        copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
-    end
-    B
-end
 #Generic solver using naive substitution
-function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) where T
-    require_one_based_indexing(A, b, x)
+function ldiv!(A::Bidiagonal, b::AbstractVector)
+    require_one_based_indexing(A, b)
     N = size(A, 2)
-    if N != length(b) || N != length(x)
-        throw(DimensionMismatch("second dimension of A, $N, does not match one of the lengths of x, $(length(x)), or b, $(length(b))"))
+    mb = length(b)
+    if N != mb
+        throw(DimensionMismatch("second dimension of A, $N, does not match the length of b, $mb"))
     end
 
     if N == 0
-        return x
+        return b
     end
 
     @inbounds begin
         if A.uplo == 'L' #do forward substitution
-            x[1] = xj1 = A.dv[1]\b[1]
-            for j = 2:N
-                xj  = b[j]
-                xj -= A.ev[j - 1] * xj1
+            b[1] = bj1 = A.dv[1]\b[1]
+            for j in 2:N
+                bj  = b[j]
+                bj -= A.ev[j - 1] * bj1
                 dvj = A.dv[j]
                 if iszero(dvj)
                     throw(SingularException(j))
                 end
-                xj   = dvj\xj
-                x[j] = xj1 = xj
+                bj   = dvj\bj
+                b[j] = bj1 = bj
             end
         else #do backward substitution
-            x[N] = xj1 = A.dv[N]\b[N]
+            b[N] = bj1 = A.dv[N]\b[N]
             for j = (N - 1):-1:1
-                xj  = b[j]
-                xj -= A.ev[j] * xj1
+                bj  = b[j]
+                bj -= A.ev[j] * bj1
                 dvj = A.dv[j]
                 if iszero(dvj)
                     throw(SingularException(j))
                 end
-                xj   = dvj\xj
-                x[j] = xj1 = xj
+                bj   = dvj\bj
+                b[j] = bj1 = bj
             end
         end
     end
-    return x
+    return b
 end
+function ldiv!(A::Bidiagonal, B::AbstractMatrix)
+    require_one_based_indexing(A, B)
+    mA, nA = size(A)
+    n = size(B, 1)
+    if mA != n
+        throw(DimensionMismatch("first dimension of A, $mA, does not match the first dimension of B, $n"))
+    end
+    for b in eachcol(B)
+        ldiv!(A, b)
+    end
+    B
+end
+ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(copy(A), b)
+ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(copy(A), b)
 
 ### Generic promotion methods and fallbacks
 function \(A::Bidiagonal{<:Number}, B::AbstractVecOrMat{<:Number})
@@ -827,20 +789,20 @@ function \(A::Bidiagonal{<:Number}, B::AbstractVecOrMat{<:Number})
     ldiv!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
 end
 \(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(A, copy(B))
-function \(transA::Transpose{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
-    A = transA.parent
+function \(tA::Transpose{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
+    A = tA.parent
     TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
     ldiv!(transpose(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
 end
-\(transA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(transpose(transA.parent), copy(B))
+\(tA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(tA, copy(B))
 function \(adjA::Adjoint{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
     A = adjA.parent
     TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
     ldiv!(adjoint(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
 end
-\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(adjoint(adjA.parent), copy(B))
+\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(adjA, copy(B))
 
 factorize(A::Bidiagonal) = A
 

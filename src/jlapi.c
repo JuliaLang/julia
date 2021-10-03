@@ -433,7 +433,7 @@ JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
 }
 
 
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
 JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -500,17 +500,6 @@ JL_DLLEXPORT int jl_set_fenv_rounding(int i)
 {
     return fesetround(i);
 }
-
-
-#ifdef JL_ASAN_ENABLED
-JL_DLLEXPORT const char* __asan_default_options()
-{
-    return "allow_user_segv_handler=1:detect_leaks=0";
-    // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
-    //        or defining __lsan_default_options = exitcode=0 once publicly available
-    //        (here and in flisp/flmain.c)
-}
-#endif
 
 static int exec_program(char *program)
 {

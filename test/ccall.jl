@@ -906,7 +906,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         global function $fname(s::$t)
             verbose && println("B: ", s)
             @test s == $v
-            if $(t).name.mutable
+            if ismutable(s)
                 @test !(s === $a)
             end
             global c = s
@@ -934,7 +934,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         end
         verbose && println("C: ",b)
         @test b == $v
-        if $(t).name.mutable
+        if ismutable($v)
             @test !(b === c)
             @test !(b === a)
         end
@@ -943,7 +943,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         end
         verbose && println("C: ",b)
         @test b == $v
-        if $(t).name.mutable
+        if ismutable($v)
             @test !(b === c)
             @test !(b === a)
         end
@@ -953,7 +953,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         verbose && println("C: ",b)
         @test b == $v
         @test b === c
-        if $(t).name.mutable
+        if ismutable($v)
             @test !(b === a)
         end
         let cf = @cfunction($fname, Any, (Ref{$t},))
@@ -962,7 +962,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         verbose && println("C: ",b)
         @test b == $v
         @test b === c
-        if $(t).name.mutable
+        if ismutable($v)
             @test !(b === a)
         end
         let cf = @cfunction($fname, Any, (Ref{Any},))
@@ -970,7 +970,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         end
         @test b == $v
         @test b === c
-        if $(t).name.mutable
+        if ismutable($v)
             @test !(b === a)
         end
         let cf = @cfunction($fname, Ref{AbstractString}, (Ref{Any},))
@@ -980,6 +980,26 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
             @test_throws TypeError ccall(cf, Any, (Ref{Any},), $v)
         end
     end
+end
+
+
+#issue 40164
+@testset "llvm parameter attributes on cfunction closures" begin
+    struct Struct40164
+        x::Cdouble
+        y::Cdouble
+        z::Cdouble
+    end
+
+    function test_40164()
+        ret = Struct40164[]
+        f = x::Struct40164 -> (push!(ret, x); nothing)
+        f_c = @cfunction($f, Cvoid, (Struct40164,))
+        ccall(f_c.ptr, Ptr{Cvoid}, (Struct40164,), Struct40164(0, 1, 2))
+        ret
+    end
+
+    @test test_40164() == [Struct40164(0, 1, 2)]
 end
 
 else

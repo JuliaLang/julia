@@ -7,7 +7,7 @@ export BigInt
 import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
              binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
-             sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
+             sum, prod, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              sign, hastypemax, isodd, iseven, digits!, hash, hash_integer
@@ -94,10 +94,10 @@ const ALLOC_OVERFLOW_FUNCTION = Ref(false)
 function __init__()
     try
         if version().major != VERSION.major || bits_per_limb() != BITS_PER_LIMB
-            msg = bits_per_limb() != BITS_PER_LIMB ? error : warn
-            msg("The dynamically loaded GMP library (v\"$(version())\" with __gmp_bits_per_limb == $(bits_per_limb()))\n",
-                "does not correspond to the compile time version (v\"$VERSION\" with __gmp_bits_per_limb == $BITS_PER_LIMB).\n",
-                "Please rebuild Julia.")
+            msg = """The dynamically loaded GMP library (v\"$(version())\" with __gmp_bits_per_limb == $(bits_per_limb()))
+                     does not correspond to the compile time version (v\"$VERSION\" with __gmp_bits_per_limb == $BITS_PER_LIMB).
+                     Please rebuild Julia."""
+            bits_per_limb() != BITS_PER_LIMB ? @error(msg) : @warn(msg)
         end
 
         ccall((:__gmp_set_memory_functions, :libgmp), Cvoid,
@@ -635,12 +635,23 @@ end
 +(x::BigInt, y::BigInt, rest::BigInt...) = sum(tuple(x, y, rest...))
 sum(arr::Union{AbstractArray{BigInt}, Tuple{BigInt, Vararg{BigInt}}}) =
     foldl(MPZ.add!, arr; init=BigInt(0))
-# Note: a similar implementation for `prod` won't be efficient:
-# 1) the time complexity of the allocations is negligible compared to the multiplications
-# 2) assuming arr contains similarly sized BigInts, the multiplications are much more
-# performant when doing e.g. ((a1*a2)*(a3*a4))*(...) rather than a1*(a2*(a3*(...))),
-# which is exactly what the default implementation of `prod` does, via `mapreduce`
-# (which maybe could be slightly optimized for BigInt).
+
+function prod(arr::AbstractArray{BigInt})
+    # compute first the needed number of bits for the result,
+    # to avoid re-allocations;
+    # GMP will always request n+m limbs for the result in MPZ.mul!,
+    # if the arguments have n and m limbs; so we add all the bits
+    # taken by the array elements, and add BITS_PER_LIMB to that,
+    # to account for the rounding to limbs in MPZ.mul!
+    # (BITS_PER_LIMB-1 would typically be enough, to which we add
+    # 1 for the initial multiplication by init=1 in foldl)
+    nbits = GC.@preserve arr sum(arr; init=BITS_PER_LIMB) do x
+        abs(x.size) * BITS_PER_LIMB - leading_zeros(unsafe_load(x.d))
+    end
+    init = BigInt(; nbits)
+    MPZ.set_si!(init, 1)
+    foldl(MPZ.mul!, arr; init)
+end
 
 factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
 
@@ -758,14 +769,7 @@ Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
 Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
 Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
-function Base.deepcopy_internal(x::BigInt, stackdict::IdDict)
-    if haskey(stackdict, x)
-        return stackdict[x]
-    end
-    y = MPZ.set(x)
-    stackdict[x] = y
-    return y
-end
+Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)
 
 ## streamlined hashing for BigInt, by avoiding allocation from shifts ##
 

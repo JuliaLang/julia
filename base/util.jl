@@ -97,7 +97,7 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
                            (bold ? disable_text_style[:bold] : "") *
                                get(disable_text_style, color, text_colors[:default])
             first = true
-            for line in split(str, '\n')
+            for line in eachsplit(str, '\n')
                 first || print(buf, '\n')
                 first = false
                 isempty(line) && continue
@@ -174,7 +174,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                   elseif opts.check_bounds == 2
                       "no" # off
                   else
-                      "" # "default"
+                      "" # default = "auto"
                   end
         isempty(check_bounds) || push!(addflags, "--check-bounds=$check_bounds")
     end
@@ -207,6 +207,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     end
     if opts.startupfile == 2
         push!(addflags, "--startup-file=no")
+    end
+    if opts.use_sysimage_native_code == 0
+        push!(addflags, "--sysimage-native-code=no")
     end
     return `$julia -C$cpu_target -J$image_file $addflags`
 end
@@ -536,54 +539,6 @@ function _kwdef!(blk, params_args, call_args)
     blk
 end
 
-"""
-    @invoke f(arg::T, ...; kwargs...)
-
-Provides a convenient way to call [`invoke`](@ref);
-`@invoke f(arg1::T1, arg2::T2; kwargs...)` will be expanded into `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
-When an argument's type annotation is omitted, it's specified as `Any` argument, e.g.
-`@invoke f(arg1::T, arg2)` will be expanded into `invoke(f, Tuple{T,Any}, arg1, arg2)`.
-"""
-macro invoke(ex)
-    f, args, kwargs = destructure_callex(ex)
-    arg2typs = map(args) do x
-        is_expr(x, :(::)) ? (x.args...,) : (x, GlobalRef(Core, :Any))
-    end
-    args, argtypes = first.(arg2typs), last.(arg2typs)
-    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(argtypes...)}, $(args...); $(kwargs...))))
-end
-
-"""
-    @invokelatest f(args...; kwargs...)
-
-Provides a convenient way to call [`Base.invokelatest`](@ref).
-`@invokelatest f(args...; kwargs...)` will simply be expanded into
-`Base.invokelatest(f, args...; kwargs...)`.
-"""
-macro invokelatest(ex)
-    f, args, kwargs = destructure_callex(ex)
-    return esc(:($(GlobalRef(Base, :invokelatest))($(f), $(args...); $(kwargs...))))
-end
-
-function destructure_callex(ex)
-    is_expr(ex, :call) || throw(ArgumentError("a call expression f(args...; kwargs...) should be given"))
-
-    f = first(ex.args)
-    args = []
-    kwargs = []
-    for x in ex.args[2:end]
-        if is_expr(x, :parameters)
-            append!(kwargs, x.args)
-        elseif is_expr(x, :kw)
-            push!(kwargs, x)
-        else
-            push!(args, x)
-        end
-    end
-
-    return f, args, kwargs
-end
-
 # testing
 
 """
@@ -611,6 +566,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
     seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
+    ENV2["JULIA_DEPOT_PATH"] = mktempdir(; cleanup = true)
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))

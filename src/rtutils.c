@@ -132,6 +132,14 @@ JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_atomicerror_type, "%s", str)
+{
+    jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
+    JL_GC_PUSH1(&msg);
+    jl_throw(jl_new_struct(jl_atomicerror_type, msg));
+}
+
+
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t)
 {
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
@@ -214,7 +222,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     // Must have no safepoint
     eh->prev = ct->eh;
     eh->gcstack = ct->gcstack;
-    eh->gc_state = ct->ptls->gc_state;
+    eh->gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     eh->locks_len = ct->ptls->locks.len;
     eh->defer_signal = ct->ptls->defer_signal;
     eh->world_age = ct->world_age;
@@ -242,7 +250,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     // This function should **NOT** have any safepoint before the ones at the
     // end.
     sig_atomic_t old_defer_signal = ct->ptls->defer_signal;
-    int8_t old_gc_state = ct->ptls->gc_state;
+    int8_t old_gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
     small_arraylist_t *locks = &ct->ptls->locks;
@@ -354,14 +362,16 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     if (!st->name->mutabl)
-        jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
+        jl_errorf("setfield!: immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
     if (idx0 >= jl_datatype_nfields(st))
         jl_bounds_error_int(v, idx0 + 1);
     //jl_value_t *ft = jl_field_type(st, idx0);
     //if (!jl_isa(rhs, ft)) {
     //    jl_type_error("setfield!", ft, rhs);
     //}
-    set_nth_field(st, (void*)v, idx0, rhs);
+    //int isatomic = jl_field_isatomic(st, idx0);
+    //if (isatomic) ...
+    set_nth_field(st, v, idx0, rhs, 0);
 }
 
 
@@ -1090,10 +1100,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             size_t i = 0;
             if (vt == jl_typemap_entry_type)
                 i = 1;
+            jl_value_t *names = isnamedtuple ? jl_tparam0(vt) : (jl_value_t*)jl_field_names(vt);
             for (; i < tlen; i++) {
                 if (!istuple) {
-                    n += jl_printf(out, "%s", jl_symbol_name(jl_field_name(vt, i)));
-                    n += jl_printf(out, "=");
+                    jl_value_t *fname = isnamedtuple ? jl_fieldref_noalloc(names, i) : jl_svecref(names, i);
+                    n += jl_printf(out, "%s=", jl_symbol_name((jl_sym_t*)fname));
                 }
                 size_t offs = jl_field_offset(vt, i);
                 char *fld_ptr = (char*)v + offs;

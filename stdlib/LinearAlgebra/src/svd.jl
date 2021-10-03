@@ -175,6 +175,10 @@ true
 function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T}
     svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
 end
+function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T <: Union{Float16,Complex{Float16}}}
+    A = svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
+    return SVD{T}(A)
+end
 function svd(x::Number; full::Bool = false, alg::Algorithm = default_svd_alg(x))
     SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
 end
@@ -244,7 +248,8 @@ svdvals(S::SVD{<:Any,T}) where {T} = (S.S)::Vector{T}
 function ldiv!(A::SVD{T}, B::StridedVecOrMat) where T
     m, n = size(A)
     k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
-    return mul!(view(B, 1:n, :), view(A.Vt, 1:k, :)', view(A.S, 1:k) .\ (view(A.U, :, 1:k)' * _cut_B(B, 1:m)))
+    mul!(view(B, 1:n, :), view(A.Vt, 1:k, :)', view(A.S, 1:k) .\ (view(A.U, :, 1:k)' * _cut_B(B, 1:m)))
+    return B
 end
 
 function inv(F::SVD{T}) where T

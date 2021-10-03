@@ -54,7 +54,7 @@
 #include <intrin.h>
 #endif
 
-#ifdef JL_MSAN_ENABLED
+#ifdef _COMPILER_MSAN_ENABLED_
 #include <sanitizer/msan_interface.h>
 #endif
 
@@ -587,6 +587,15 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
+// Apple's M1 processor is a big.LITTLE style processor, with 4x "performance"
+// cores, and 4x "efficiency" cores.  Because Julia expects to be able to run
+// things like heavy linear algebra workloads on all cores, it's best for us
+// to only spawn as many threads as there are performance cores.  Once macOS
+// 12 is released, we'll be able to query the multiple "perf levels" of the
+// cores of a CPU (see this PR [0] to pytorch/cpuinfo for an example) but
+// until it's released, we will just recognize the M1 by its CPU family
+// identifier, then subtract how many efficiency cores we know it has.
+
 JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
@@ -599,6 +608,19 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
         sysctl(nm, 2, &count, &len, NULL, 0);
         if (count < 1) { count = 1; }
     }
+
+#if defined(__APPLE__) && defined(_CPU_AARCH64_)
+    // Manually subtract efficiency cores for Apple's big.LITTLE cores
+    int32_t family = 0;
+    len = 4;
+    sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
+    if (family >= 1 && count > 1) {
+        if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
+            // We know the Apple M1 has 4 efficiency cores, so subtract them out.
+            count -= 4;
+        }
+    }
+#endif
     return count;
 #elif defined(_SC_NPROCESSORS_ONLN)
     long count = sysconf(_SC_NPROCESSORS_ONLN);
@@ -796,7 +818,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
     struct link_map *map;
     dlinfo(handle, RTLD_DI_LINKMAP, &map);
-#ifdef JL_MSAN_ENABLED
+#ifdef _COMPILER_MSAN_ENABLED_
     __msan_unpoison(&map,sizeof(struct link_map*));
     if (map) {
         __msan_unpoison(map, sizeof(struct link_map));

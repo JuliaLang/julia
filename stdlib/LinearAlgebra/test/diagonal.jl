@@ -229,14 +229,14 @@ Random.seed!(1)
                 @test Array(op(Dr, Aherm)) ≈ Array(Hermitian(op(Array(Dr), Array(Aherm))))
             end
         end
-        @test Array(D*Transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
-        @test Array(D*Adjoint(Asym)) ≈ Array(D) * Array(adjoint(Asym))
-        @test Array(D*Transpose(Aherm)) ≈ Array(D) * Array(transpose(Aherm))
-        @test Array(D*Adjoint(Aherm)) ≈ Array(D) * Array(adjoint(Aherm))
-        @test Array(Transpose(Asym)*Transpose(D)) ≈ Array(transpose(Asym)) * Array(transpose(D))
-        @test Array(Transpose(D)*Transpose(Asym)) ≈ Array(transpose(D)) * Array(transpose(Asym))
-        @test Array(Adjoint(Aherm)*Adjoint(D)) ≈ Array(adjoint(Aherm)) * Array(adjoint(D))
-        @test Array(Adjoint(D)*Adjoint(Aherm)) ≈ Array(adjoint(D)) * Array(adjoint(Aherm))
+        @test Array(D*transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
+        @test Array(D*adjoint(Asym)) ≈ Array(D) * Array(adjoint(Asym))
+        @test Array(D*transpose(Aherm)) ≈ Array(D) * Array(transpose(Aherm))
+        @test Array(D*adjoint(Aherm)) ≈ Array(D) * Array(adjoint(Aherm))
+        @test Array(transpose(Asym)*transpose(D)) ≈ Array(transpose(Asym)) * Array(transpose(D))
+        @test Array(transpose(D)*transpose(Asym)) ≈ Array(transpose(D)) * Array(transpose(Asym))
+        @test Array(adjoint(Aherm)*adjoint(D)) ≈ Array(adjoint(Aherm)) * Array(adjoint(D))
+        @test Array(adjoint(D)*adjoint(Aherm)) ≈ Array(adjoint(D)) * Array(adjoint(Aherm))
 
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
@@ -246,7 +246,7 @@ Random.seed!(1)
 
         UUU = similar(UU)
         for transformA in (identity, adjoint, transpose)
-            for transformD in (identity, Adjoint, Transpose, adjoint, transpose)
+            for transformD in (identity, adjoint, transpose)
                 @test mul!(UUU, transformA(UU), transformD(D)) ≈  transformA(UU) * Matrix(transformD(D))
                 @test mul!(UUU, transformD(D), transformA(UU)) ≈  Matrix(transformD(D)) * transformA(UU)
             end
@@ -661,15 +661,13 @@ end
         fullBB = copyto!(Matrix{Matrix{T}}(undef, 2, 2), BB)
         for (transform1, transform2) in ((identity,  identity),
                 (identity,  adjoint  ), (adjoint,   identity ), (adjoint,   adjoint  ),
-                (identity,  transpose), (transpose, identity ), (transpose, transpose),
-                (identity,  Adjoint  ), (Adjoint,   identity ), (Adjoint,   Adjoint  ),
-                (identity,  Transpose), (Transpose, identity ), (Transpose, Transpose))
+                (identity,  transpose), (transpose, identity ), (transpose, transpose))
             @test *(transform1(D), transform2(B))::typeof(D) ≈ *(transform1(Matrix(D)), transform2(Matrix(B))) atol=2 * eps()
             @test *(transform1(DD), transform2(BB))::typeof(DD) == *(transform1(fullDD), transform2(fullBB))
         end
         M = randn(T, 5, 5)
         MM = [randn(T, 2, 2) for _ in 1:2, _ in 1:2]
-        for transform in (identity, adjoint, transpose, Adjoint, Transpose)
+        for transform in (identity, adjoint, transpose)
             @test lmul!(transform(D), copy(M)) ≈ *(transform(Matrix(D)), M)
             @test rmul!(copy(M), transform(D)) ≈ *(M, transform(Matrix(D)))
             @test lmul!(transform(DD), copy(MM)) ≈ *(transform(fullDD), MM)
@@ -683,7 +681,7 @@ end
     @test Diagonal(transpose([1, 2, 3])) == Diagonal([1 2 3])
 end
 
-@testset "Multiplication with Adjoint and Transpose vectors (#26863)" begin
+@testset "Multiplication with adjoint and transpose vectors (#26863)" begin
     x = collect(1:2)
     xt = transpose(x)
     A = reshape([[1 2; 3 4], zeros(Int,2,2), zeros(Int, 2, 2), [5 6; 7 8]], 2, 2)
@@ -803,9 +801,29 @@ end
 
 @testset "eltype relaxation(#41015)" begin
     A = rand(3,3)
-    for trans in (identity, Adjoint, Transpose)
+    for trans in (identity, adjoint, transpose)
         @test ldiv!(trans(I(3)), A) == A
         @test rdiv!(A, trans(I(3))) == A
     end
 end
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    d = ImmutableArray([1, 2, 3, 4])
+    D = Diagonal(d)
+
+    @test convert(AbstractArray{Float64}, D)::Diagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == D
+    @test convert(AbstractMatrix{Float64}, D)::Diagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == D
+end
+
+@testset "divisions functionality" for elty in (Int, Float64, ComplexF64)
+    B = Diagonal(rand(elty,5,5))
+    x = rand(elty)
+    @test \(x, B) == /(B, x)
+end
+
 end # module TestDiagonal

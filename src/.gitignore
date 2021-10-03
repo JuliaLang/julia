@@ -10,6 +10,7 @@
 /julia_flisp.boot
 /julia_flisp.boot.inc
 /flisp.boot.inc
+/jl_internal_funcs.inc
 
 /libjulia-debug.a
 /libjulia-debug.so

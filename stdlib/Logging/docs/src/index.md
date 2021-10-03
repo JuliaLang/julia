@@ -1,4 +1,4 @@
-# Logging
+# [Logging](@id man-logging)
 
 The [`Logging`](@ref Logging.Logging) module provides a way to record the history and progress of a
 computation as a log of events.  Events are created by inserting a logging
@@ -216,6 +216,9 @@ julia> foo()
 └ @ Main REPL[1]:1
 
 ```
+
+Use a comma separator to enable debug for multiple
+modules: `JULIA_DEBUG=loading,Main`.
 
 ## Examples
 

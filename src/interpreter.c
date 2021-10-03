@@ -37,7 +37,7 @@ typedef struct {
   JL_GCC_IGNORE_STOP
 #endif
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 
 extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 
@@ -78,28 +78,37 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
-    jl_sym_t *fname = (jl_sym_t*)args[0];
-    jl_module_t *modu = s->module;
-    if (jl_is_globalref(fname)) {
-        modu = jl_globalref_mod(fname);
-        fname = jl_globalref_name(fname);
-    }
-    assert(jl_expr_nargs(ex) != 1 || jl_is_symbol(fname));
 
-    if (jl_is_symbol(fname)) {
+    // generic function definition
+    if (jl_expr_nargs(ex) == 1) {
+        jl_value_t **args = jl_array_ptr_data(ex->args);
+        jl_sym_t *fname = (jl_sym_t*)args[0];
+        jl_module_t *modu = s->module;
+        if (jl_is_globalref(fname)) {
+            modu = jl_globalref_mod(fname);
+            fname = jl_globalref_name(fname);
+        }
+        if (!jl_is_symbol(fname)) {
+            jl_error("method: invalid declaration");
+        }
         jl_value_t *bp_owner = (jl_value_t*)modu;
         jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
-        jl_value_t **bp = &b->value;
+        _Atomic(jl_value_t*) *bp = &b->value;
         jl_value_t *gf = jl_generic_function_def(b->name, b->owner, bp, bp_owner, b);
-        if (jl_expr_nargs(ex) == 1)
-            return gf;
+        return gf;
     }
 
-    jl_value_t *atypes = NULL, *meth = NULL;
-    JL_GC_PUSH2(&atypes, &meth);
+    jl_value_t *atypes = NULL, *meth = NULL, *fname = NULL;
+    JL_GC_PUSH3(&atypes, &meth, &fname);
+
+    fname = eval_value(args[0], s);
+    jl_methtable_t *mt = NULL;
+    if (jl_typeis(fname, jl_methtable_type)) {
+        mt = (jl_methtable_t*)fname;
+    }
     atypes = eval_value(args[1], s);
     meth = eval_value(args[2], s);
-    jl_method_def((jl_svec_t*)atypes, (jl_code_info_t*)meth, s->module);
+    jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, s->module);
     JL_GC_POP();
     return jl_nothing;
 }
@@ -208,6 +217,9 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == invoke_sym) {
         return do_invoke(args, nargs, s);
     }
+    else if (head == invoke_modify_sym) {
+        return do_call(args + 1, nargs - 1, s);
+    }
     else if (head == isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
@@ -303,7 +315,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_true;
     }
     else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym ||
-             head == aliasscope_sym || head == popaliasscope_sym) {
+             head == aliasscope_sym || head == popaliasscope_sym || head == inline_sym || head == noinline_sym) {
         return jl_nothing;
     }
     else if (head == gc_preserve_begin_sym || head == gc_preserve_end_sym) {
@@ -508,7 +520,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     s->continue_at = 0;
                     continue;
                 }
-                else { // a real exeception
+                else { // a real exception
                     ip = catch_ip;
                     continue;
                 }

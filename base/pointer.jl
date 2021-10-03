@@ -142,8 +142,8 @@ stable memory addresses.
 See also [`unsafe_pointer_to_objref`](@ref).
 """
 function pointer_from_objref(@nospecialize(x))
-    @_inline_meta
-    typeof(x).name.mutable || error("pointer_from_objref cannot be used on immutable objects")
+    @inline
+    ismutable(x) || error("pointer_from_objref cannot be used on immutable objects")
     ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
 end
 

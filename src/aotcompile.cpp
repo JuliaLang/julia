@@ -5,11 +5,11 @@
 
 // target support
 #include <llvm/ADT/Triple.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
+#include <llvm/Analysis/TargetTransformInfo.h>
+#include <llvm/IR/DataLayout.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Target/TargetMachine.h>
-#include <llvm/IR/DataLayout.h>
-#include <llvm/Analysis/TargetTransformInfo.h>
-#include <llvm/Analysis/TargetLibraryInfo.h>
 
 // analysis passes
 #include <llvm/Analysis/Passes.h>
@@ -36,19 +36,11 @@
 #endif
 #endif
 
-// for outputting assembly
+// for outputting code
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/Bitcode/BitcodeWriterPass.h>
 #include "llvm/Object/ArchiveWriter.h"
 #include <llvm/IR/IRPrintingPasses.h>
-#include <llvm/CodeGen/AsmPrinter.h>
-#include <llvm/CodeGen/MachineModuleInfo.h>
-#include <llvm/CodeGen/TargetPassConfig.h>
-#include <llvm/MC/MCAsmInfo.h>
-#include <llvm/MC/MCStreamer.h>
-#include <llvm/MC/MCAsmBackend.h>
-#include <llvm/MC/MCCodeEmitter.h>
-#include <llvm/Support/CodeGen.h>
 
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -286,8 +278,8 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     JL_GC_PUSH1(&src);
     JL_LOCK(&codegen_lock);
     uint64_t compiler_start_time = 0;
-    int tid = jl_threadid();
-    if (jl_measure_compile_time[tid])
+    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
 
     CompilationPolicy policy = (CompilationPolicy) _policy;
@@ -415,8 +407,8 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     }
 
     data->M = std::move(clone);
-    if (jl_measure_compile_time[tid])
-        jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
+    if (measure_compile_time_enabled)
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     if (policy == CompilationPolicy::ImagingMode)
         imaging_mode = 0;
     JL_UNLOCK(&codegen_lock); // Might GC
@@ -494,10 +486,10 @@ void jl_dump_native(void *native_code,
     addTargetPasses(&PM, TM.get());
 
     // set up optimization passes
-    SmallVector<char, 128> bc_Buffer;
-    SmallVector<char, 128> obj_Buffer;
-    SmallVector<char, 128> asm_Buffer;
-    SmallVector<char, 128> unopt_bc_Buffer;
+    SmallVector<char, 0> bc_Buffer;
+    SmallVector<char, 0> obj_Buffer;
+    SmallVector<char, 0> asm_Buffer;
+    SmallVector<char, 0> unopt_bc_Buffer;
     raw_svector_ostream bc_OS(bc_Buffer);
     raw_svector_ostream obj_OS(obj_Buffer);
     raw_svector_ostream asm_OS(asm_Buffer);
@@ -664,13 +656,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
-#if defined(JL_ASAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
-#if defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_MSAN_ENABLED_)
         PM->add(createMemorySanitizerPass(true));
 #endif
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
         PM->add(createThreadSanitizerLegacyPassPass());
 #endif
         return;
@@ -813,13 +805,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
-#if defined(JL_ASAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_)
     PM->add(createAddressSanitizerFunctionPass());
 #endif
-#if defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_MSAN_ENABLED_)
     PM->add(createMemorySanitizerPass(true));
 #endif
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
     PM->add(createThreadSanitizerLegacyPassPass());
 #endif
 }
@@ -864,7 +856,7 @@ void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level, int lower_
 // --- native code info, and dump function to IR and ASM ---
 // Get pointer to llvm::Function instance, compiling if necessary
 // for use in reflection from Julia.
-// this is paired with jl_dump_function_ir, jl_dump_method_asm, jl_dump_llvm_asm in particular ways:
+// this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
 void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
@@ -916,8 +908,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         jl_llvm_functions_t decls;
         JL_LOCK(&codegen_lock);
         uint64_t compiler_start_time = 0;
-        int tid = jl_threadid();
-        if (jl_measure_compile_time[tid])
+        uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+        if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
         std::tie(m, decls) = jl_emit_code(mi, src, jlrettype, output);
 
@@ -942,8 +934,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
             m.release(); // the return object `llvmf` will be the owning pointer
         }
         JL_GC_POP();
-        if (jl_measure_compile_time[tid])
-            jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
+        if (measure_compile_time_enabled)
+            jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         JL_UNLOCK(&codegen_lock); // Might GC
         if (F)
             return F;
@@ -951,75 +943,4 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
 
     const char *mname = name_from_method_instance(mi);
     jl_errorf("unable to compile source for function %s", mname);
-}
-
-/// addPassesToX helper drives creation and initialization of TargetPassConfig.
-static MCContext *
-addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
-    TargetPassConfig *PassConfig = TM->createPassConfig(PM);
-    PassConfig->setDisableVerify(false);
-    PM.add(PassConfig);
-    MachineModuleInfoWrapperPass *MMIWP =
-        new MachineModuleInfoWrapperPass(TM);
-    PM.add(MMIWP);
-    if (PassConfig->addISelPasses())
-        return NULL;
-    PassConfig->addMachinePasses();
-    PassConfig->setInitialized();
-    return &MMIWP->getMMI().getContext();
-}
-
-void jl_strip_llvm_debug(Module *m);
-
-
-// get a native assembly for llvm::Function
-// TODO: implement debuginfo handling
-extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_llvm_asm(void *F, const char* asm_variant, const char *debuginfo)
-{
-    // precise printing via IR assembler
-    SmallVector<char, 4096> ObjBufferSV;
-    { // scope block
-        Function *f = (Function*)F;
-        llvm::raw_svector_ostream asmfile(ObjBufferSV);
-        assert(!f->isDeclaration());
-        std::unique_ptr<Module> m(f->getParent());
-        for (auto &f2 : m->functions()) {
-            if (f != &f2 && !f->isDeclaration())
-                f2.deleteBody();
-        }
-        jl_strip_llvm_debug(m.get());
-        legacy::PassManager PM;
-        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(jl_TargetMachine);
-        MCContext *Context = addPassesToGenerateCode(TM, PM);
-        if (Context) {
-            const MCSubtargetInfo &STI = *TM->getMCSubtargetInfo();
-            const MCAsmInfo &MAI = *TM->getMCAsmInfo();
-            const MCRegisterInfo &MRI = *TM->getMCRegisterInfo();
-            const MCInstrInfo &MII = *TM->getMCInstrInfo();
-            unsigned OutputAsmDialect = MAI.getAssemblerDialect();
-            if (!strcmp(asm_variant, "att"))
-                OutputAsmDialect = 0;
-            if (!strcmp(asm_variant, "intel"))
-                OutputAsmDialect = 1;
-            MCInstPrinter *InstPrinter = TM->getTarget().createMCInstPrinter(
-                TM->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
-             std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
-                STI, MRI, TM->Options.MCOptions));
-            std::unique_ptr<MCCodeEmitter> MCE;
-            auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
-            std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
-                *Context, std::move(FOut), true,
-                true, InstPrinter,
-                std::move(MCE), std::move(MAB),
-                false));
-            std::unique_ptr<AsmPrinter> Printer(
-                TM->getTarget().createAsmPrinter(*TM, std::move(S)));
-            if (Printer) {
-                PM.add(Printer.release());
-                PM.run(*m);
-            }
-        }
-    }
-    return jl_pchar_to_string(ObjBufferSV.data(), ObjBufferSV.size());
 }

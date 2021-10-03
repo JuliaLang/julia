@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 15 # do not make changes without bumping the version #!
+const ser_version = 16 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -418,7 +418,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
     serialize(s, meth.is_for_opaque_closure)
-    serialize(s, meth.aggressive_constprop)
+    serialize(s, meth.constprop)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
@@ -433,6 +433,9 @@ function serialize(s::AbstractSerializer, meth::Method)
         serialize(s, method.recursion_relation)
     else
         serialize(s, nothing)
+    end
+    if isdefined(meth, :external_mt)
+        error("cannot serialize Method objects with external method tables")
     end
     nothing
 end
@@ -507,9 +510,9 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, primary.parameters)
     serialize(s, primary.types)
     serialize(s, isdefined(primary, :instance))
-    serialize(s, t.abstract)
-    serialize(s, t.mutable)
-    serialize(s, primary.ninitialized)
+    serialize(s, t.flags & 0x1 == 0x1) # .abstract
+    serialize(s, t.flags & 0x2 == 0x2) # .mutable
+    serialize(s, Int32(length(primary.types) - t.n_uninitialized))
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
@@ -660,7 +663,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         serialize_type(s, t)
         write(s.io, x)
     else
-        if t.name.mutable
+        if ismutable(x)
             serialize_cycle(s, x) && return
             serialize_type(s, t, true)
         else
@@ -937,7 +940,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_dict(s, t)
     end
     t = desertag(b)::DataType
-    if t.name.mutable && length(t.types) > 0  # manual specialization of fieldcount
+    if ismutabletype(t) && length(t.types) > 0  # manual specialization of fieldcount
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
     end
@@ -1011,12 +1014,12 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
-    aggressive_constprop = false
+    constprop = 0x00
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
         if format_version(s) >= 14
-            aggressive_constprop = deserialize(s)::Bool
+            constprop = deserialize(s)::UInt8
         end
         template = deserialize(s)
     else
@@ -1036,7 +1039,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.nargs = nargs
         meth.isva = isva
         meth.is_for_opaque_closure = is_for_opaque_closure
-        meth.aggressive_constprop = aggressive_constprop
+        meth.constprop = constprop
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
@@ -1132,7 +1135,13 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.ssavaluetypes = deserialize(s)
         ci.linetable = deserialize(s)
     end
-    ci.ssaflags = deserialize(s)
+    ssaflags = deserialize(s)
+    if length(ssaflags) ≠ length(code)
+        # make sure the length of `ssaflags` matches that of `code`
+        # so that the latest inference doesn't throw on IRs serialized from old versions
+        ssaflags = UInt8[0x00 for _ in 1:length(code)]
+    end
+    ci.ssaflags = ssaflags
     if pre_12
         ci.slotflags = deserialize(s)
     else
@@ -1160,7 +1169,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
     if format_version(s) >= 14
-        ci.aggressive_constprop = deserialize(s)::Bool
+        ci.constprop = deserialize(s)::UInt8
     end
     return ci
 end
@@ -1264,6 +1273,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     super = deserialize(s)::Type
     parameters = deserialize(s)::SimpleVector
     types = deserialize(s)::SimpleVector
+    attrs = Core.svec()
     has_instance = deserialize(s)::Bool
     abstr = deserialize(s)::Bool
     mutabl = deserialize(s)::Bool
@@ -1274,8 +1284,8 @@ function deserialize_typename(s::AbstractSerializer, number)
         # TODO: there's an unhanded cycle in the dependency graph at this point:
         # while deserializing super and/or types, we may have encountered
         # tn.wrapper and throw UndefRefException before we get to this point
-        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
-                    tn, tn.module, super, parameters, names, types,
+        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
+                    tn, tn.module, super, parameters, names, types, attrs,
                     abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
@@ -1422,7 +1432,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
     if nf == 0 && t.size > 0
         # bits type
         return read(s.io, t)
-    elseif t.name.mutable
+    elseif ismutabletype(t)
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
         deserialize_cycle(s, x)
         for i in 1:nf

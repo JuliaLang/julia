@@ -43,7 +43,7 @@ The 10,000 foot view of the whole process is as follows:
    interpreter.
 9. `jl_toplevel_eval_flex()` then [expands](@ref dev-macro-expansion) the code to eliminate any macros and to "lower"
    the AST to make it simpler to execute.
-10. `jl_toplevel_eval_flex()` then uses some simple heuristics to decide whether to JIT compiler the
+10. `jl_toplevel_eval_flex()` then uses some simple heuristics to decide whether to JIT compile the
     AST or to interpret it directly.
 11. The bulk of the work to interpret code is handled by [`eval` in `interpreter.c`](https://github.com/JuliaLang/julia/blob/master/src/interpreter.c).
 12. If instead, the code is compiled, the bulk of the work is handled by `codegen.cpp`. Whenever a

@@ -163,7 +163,7 @@ function fully_eliminated(f, args, retval)
 end
 
 # check that ismutabletype(type) can be fully eliminated
-f_mutable_nothrow(s::String) = Val{typeof(s).name.mutable}
+f_mutable_nothrow(s::String) = Val{typeof(s).name.flags}
 @test fully_eliminated(f_mutable_nothrow, (String,))
 
 # check that ifelse can be fully eliminated
@@ -172,8 +172,7 @@ function f_ifelse(x)
     b = ifelse(a, true, false)
     return b ? x + 1 : x
 end
-# 2 for now because the compiler leaves a GotoNode around
-@test_broken length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
+@test length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
 
 # Test that inlining of _apply_iterate properly hits the inference cache
 @noinline cprop_inline_foo1() = (1, 1)
@@ -380,3 +379,304 @@ end
 using Base.Experimental: @opaque
 f_oc_getfield(x) = (@opaque ()->x)()
 @test fully_eliminated(f_oc_getfield, Tuple{Int})
+
+# check if `x` is a statically-resolved call of a function whose name is `sym`
+isinvoke(@nospecialize(x), sym::Symbol) = isinvoke(x, mi->mi.def.name===sym)
+function isinvoke(@nospecialize(x), pred)
+    if Meta.isexpr(x, :invoke)
+        return pred(x.args[1]::Core.MethodInstance)
+    end
+    return false
+end
+code_typed1(args...; kwargs...) = (first(only(code_typed(args...; kwargs...)))::Core.CodeInfo).code
+
+@testset "@inline/@noinline annotation before definition" begin
+    M = Module()
+    @eval M begin
+        @inline function _def_inline(x)
+            # this call won't be resolved and thus will prevent inlining to happen if we don't
+            # annotate `@inline` at the top of this function body
+            return unresolved_call(x)
+        end
+        def_inline(x) = _def_inline(x)
+        @noinline _def_noinline(x) = x # obviously will be inlined otherwise
+        def_noinline(x) = _def_noinline(x)
+
+        # test that they don't conflict with other "before-definition" macros
+        @inline Base.@constprop :aggressive function _def_inline_noconflict(x)
+            # this call won't be resolved and thus will prevent inlining to happen if we don't
+            # annotate `@inline` at the top of this function body
+            return unresolved_call(x)
+        end
+        def_inline_noconflict(x) = _def_inline_noconflict(x)
+        @noinline Base.@constprop :aggressive _def_noinline_noconflict(x) = x # obviously will be inlined otherwise
+        def_noinline_noconflict(x) = _def_noinline_noconflict(x)
+    end
+
+    let code = code_typed1(M.def_inline, (Int,))
+        @test all(code) do x
+            !isinvoke(x, :_def_inline)
+        end
+    end
+    let code = code_typed1(M.def_noinline, (Int,))
+        @test any(code) do x
+            isinvoke(x, :_def_noinline)
+        end
+    end
+    # test that they don't conflict with other "before-definition" macros
+    let code = code_typed1(M.def_inline_noconflict, (Int,))
+        @test all(code) do x
+            !isinvoke(x, :_def_inline_noconflict)
+        end
+    end
+    let code = code_typed1(M.def_noinline_noconflict, (Int,))
+        @test any(code) do x
+            isinvoke(x, :_def_noinline_noconflict)
+        end
+    end
+end
+
+@testset "@inline/@noinline annotation within a function body" begin
+    M = Module()
+    @eval M begin
+        function _body_inline(x)
+            @inline
+            # this call won't be resolved and thus will prevent inlining to happen if we don't
+            # annotate `@inline` at the top of this function body
+            return unresolved_call(x)
+        end
+        body_inline(x) = _body_inline(x)
+        function _body_noinline(x)
+            @noinline
+            return x # obviously will be inlined otherwise
+        end
+        body_noinline(x) = _body_noinline(x)
+
+        # test annotations for `do` blocks
+        @inline simple_caller(a) = a()
+        function do_inline(x)
+            simple_caller() do
+                @inline
+                # this call won't be resolved and thus will prevent inlining to happen if we don't
+                # annotate `@inline` at the top of this anonymous function body
+                return unresolved_call(x)
+            end
+        end
+        function do_noinline(x)
+            simple_caller() do
+                @noinline
+                return x # obviously will be inlined otherwise
+            end
+        end
+    end
+
+    let code = code_typed1(M.body_inline, (Int,))
+        @test all(code) do x
+            !isinvoke(x, :_body_inline)
+        end
+    end
+    let code = code_typed1(M.body_noinline, (Int,))
+        @test any(code) do x
+            isinvoke(x, :_body_noinline)
+        end
+    end
+    # test annotations for `do` blocks
+    let code = code_typed1(M.do_inline, (Int,))
+        # what we test here is that both `simple_caller` and the anonymous function that the
+        # `do` block creates should inlined away, and as a result there is only the unresolved call
+        @test all(code) do x
+            !isinvoke(x, :simple_caller) &&
+            !isinvoke(x, mi->startswith(string(mi.def.name), '#'))
+        end
+    end
+    let code = code_typed1(M.do_noinline, (Int,))
+        # the anonymous function that the `do` block created shouldn't be inlined here
+        @test any(code) do x
+            isinvoke(x, mi->startswith(string(mi.def.name), '#'))
+        end
+    end
+end
+
+@testset "callsite @inline/@noinline annotations" begin
+    M = Module()
+    @eval M begin
+        # this global variable prevents inference to fold everything as constant, and/or the optimizer to inline the call accessing to this
+        g = 0
+
+        @noinline noinlined_explicit(x) = x
+        force_inline_explicit(x)        = @inline noinlined_explicit(x)
+        force_inline_block_explicit(x)  = @inline noinlined_explicit(x) + noinlined_explicit(x)
+        noinlined_implicit(x)          = g
+        force_inline_implicit(x)       = @inline noinlined_implicit(x)
+        force_inline_block_implicit(x) = @inline noinlined_implicit(x) + noinlined_implicit(x)
+
+        @inline inlined_explicit(x)      = x
+        force_noinline_explicit(x)       = @noinline inlined_explicit(x)
+        force_noinline_block_explicit(x) = @noinline inlined_explicit(x) + inlined_explicit(x)
+        inlined_implicit(x)              = x
+        force_noinline_implicit(x)       = @noinline inlined_implicit(x)
+        force_noinline_block_implicit(x) = @noinline inlined_implicit(x) + inlined_implicit(x)
+
+        # test callsite annotations for constant-prop'ed calls
+
+        @noinline Base.@constprop :aggressive noinlined_constprop_explicit(a) = a+g
+        force_inline_constprop_explicit()                                    = @inline noinlined_constprop_explicit(0)
+        Base.@constprop :aggressive noinlined_constprop_implicit(a) = a+g
+        force_inline_constprop_implicit()                          = @inline noinlined_constprop_implicit(0)
+
+        @inline Base.@constprop :aggressive inlined_constprop_explicit(a) = a+g
+        force_noinline_constprop_explicit()                              = @noinline inlined_constprop_explicit(0)
+        @inline Base.@constprop :aggressive inlined_constprop_implicit(a) = a+g
+        force_noinline_constprop_implicit()                              = @noinline inlined_constprop_implicit(0)
+
+        @noinline notinlined(a) = a
+        function nested(a0, b0)
+            @noinline begin
+                a = @inline notinlined(a0) # this call should be inlined
+                b = notinlined(b0) # this call should NOT be inlined
+                return a, b
+            end
+        end
+    end
+
+    let code = code_typed1(M.force_inline_explicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_explicit), code)
+    end
+    let code = code_typed1(M.force_inline_block_explicit, (Int,))
+        @test all(code) do x
+            !isinvoke(x, :noinlined_explicit) &&
+            !isinvoke(x, :(+))
+        end
+    end
+    let code = code_typed1(M.force_inline_implicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_implicit), code)
+    end
+    let code = code_typed1(M.force_inline_block_implicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_explicit), code)
+    end
+
+    let code = code_typed1(M.force_noinline_explicit, (Int,))
+        @test any(x->isinvoke(x, :inlined_explicit), code)
+    end
+    let code = code_typed1(M.force_noinline_block_explicit, (Int,))
+        @test count(x->isinvoke(x, :inlined_explicit), code) == 2
+    end
+    let code = code_typed1(M.force_noinline_implicit, (Int,))
+        @test any(x->isinvoke(x, :inlined_implicit), code)
+    end
+    let code = code_typed1(M.force_noinline_block_implicit, (Int,))
+        @test count(x->isinvoke(x, :inlined_implicit), code) == 2
+    end
+
+    let code = code_typed1(M.force_inline_constprop_explicit)
+        @test all(x->!isinvoke(x, :noinlined_constprop_explicit), code)
+    end
+    let code = code_typed1(M.force_inline_constprop_implicit)
+        @test all(x->!isinvoke(x, :noinlined_constprop_implicit), code)
+    end
+
+    let code = code_typed1(M.force_noinline_constprop_explicit)
+        @test any(x->isinvoke(x, :inlined_constprop_explicit), code)
+    end
+    let code = code_typed1(M.force_noinline_constprop_implicit)
+        @test any(x->isinvoke(x, :inlined_constprop_implicit), code)
+    end
+
+    let code = code_typed1(M.nested, (Int,Int))
+        @test count(x->isinvoke(x, :notinlined), code) == 1
+    end
+end
+
+# force constant-prop' for `setproperty!`
+# https://github.com/JuliaLang/julia/pull/41882
+let code = @eval Module() begin
+        # if we don't force constant-prop', `T = fieldtype(Foo, ::Symbol)` will be union-split to
+        # `Union{Type{Any},Type{Int}` and it will make `convert(T, nothing)` too costly
+        # and it leads to inlining failure
+        mutable struct Foo
+            val
+            _::Int
+        end
+
+        function setter(xs)
+            for x in xs
+                x.val = nothing
+            end
+        end
+
+        $code_typed1(setter, (Vector{Foo},))
+    end
+
+    @test !any(x->isinvoke(x, :setproperty!), code)
+end
+
+# Issue #41299 - inlining deletes error check in :>
+g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
+@test_throws TypeError g41299(>:, 1, 2)
+
+# https://github.com/JuliaLang/julia/issues/42078
+# idempotency of callsite inling
+function getcache(mi::Core.MethodInstance)
+    cache = Core.Compiler.code_cache(Core.Compiler.NativeInterpreter())
+    codeinf = Core.Compiler.get(cache, mi, nothing)
+    return isnothing(codeinf) ? nothing : codeinf
+end
+@noinline f42078(a) = sum(sincos(a))
+let
+    ninlined = let
+        code = code_typed1((Int,)) do a
+            @inline f42078(a)
+        end
+        @test all(x->!isinvoke(x, :f42078), code)
+        length(code)
+    end
+
+    let # codegen will discard the source because it's not supposed to be inlined in general context
+        a = 42
+        f42078(a)
+    end
+    let # make sure to discard the inferred source
+        specs = collect(only(methods(f42078)).specializations)
+        mi = specs[findfirst(!isnothing, specs)]::Core.MethodInstance
+        codeinf = getcache(mi)::Core.CodeInstance
+        codeinf.inferred = nothing
+    end
+
+    let # inference should re-infer `f42078(::Int)` and we should get the same code
+        code = code_typed1((Int,)) do a
+            @inline f42078(a)
+        end
+        @test all(x->!isinvoke(x, :f42078), code)
+        @test ninlined == length(code)
+    end
+end
+
+# https://github.com/JuliaLang/julia/issues/42246
+@test mktempdir() do dir
+    cd(dir) do
+        code = quote
+            issue42246() = @noinline IOBuffer("a")
+            let
+                ci, rt = only(code_typed(issue42246))
+                if any(ci.code) do stmt
+                       Meta.isexpr(stmt, :invoke) &&
+                       stmt.args[1].def.name === nameof(IOBuffer)
+                   end
+                    exit(0)
+                else
+                    exit(1)
+               end
+            end
+        end |> string
+        cmd = `$(Base.julia_cmd()) --code-coverage=tmp.info -e $code`
+        success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr))
+    end
+end
+
+# Issue #42264 - crash on certain union splits
+let f(x) = (x...,)
+    # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
+    # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
+    # the the original apply call is not union-split, but the inserted `iterate` call is.
+    @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
+end

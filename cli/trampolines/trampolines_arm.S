@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #include "common.h"
 #include "../../src/jl_exported_funcs.inc"
 
@@ -15,4 +17,7 @@ CONCAT(.L,CNAMEADDR(name))##: ; \
 .cfi_endproc; \
 
 JL_EXPORTED_FUNCS(XX)
+#ifdef _OS_WINDOWS_
+JL_EXPORTED_FUNCS_WIN(XX)
+#endif
 #undef XX

@@ -914,6 +914,12 @@ end
     # hit the `foldl` branch:
     @test IndexStyle(bcraw) == IndexCartesian()
     @test reduce(paren, bcraw) == foldl(paren, xs)
+
+    # issue #41055
+    bc = Broadcast.instantiate(Broadcast.broadcasted(Base.literal_pow, Ref(^), [1,2], Ref(Val(2))))
+    @test sum(bc, dims=1, init=0) == [5]
+    bc = Broadcast.instantiate(Broadcast.broadcasted(*, ['a','b'], 'c'))
+    @test prod(bc, dims=1, init="") == ["acbc"]
 end
 
 # treat Pair as scalar:
@@ -985,10 +991,6 @@ end
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
         Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
-    @test isequal([1, 2] + [3.0, missing], [4.0, missing])
-    @test Core.Compiler.return_type(+, Tuple{Vector{Int},
-                                             Vector{Union{Float64, Missing}}}) ==
-        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
         Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
@@ -1049,4 +1051,10 @@ end
     @test Base.broadcasted_kwsyntax(+, [1], [2]) isa Broadcast.Broadcasted{<:Any, <:Any, typeof(+)}
     @test Broadcast.BroadcastFunction(+)(2:3, 2:3) == 4:2:6
     @test Broadcast.BroadcastFunction(+)(2:3, 2:3) isa AbstractRange
+end
+
+@testset "#42063" begin
+    buf = IOBuffer()
+    @test println.(buf, [1,2,3]) == [nothing, nothing, nothing]
+    @test String(take!(buf)) == "1\n2\n3\n"
 end

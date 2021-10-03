@@ -13,6 +13,7 @@ include("DSFMT.jl")
 using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
+import SHA
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
@@ -27,7 +28,7 @@ export rand!, randn!,
        shuffle, shuffle!,
        randperm, randperm!,
        randcycle, randcycle!,
-       AbstractRNG, MersenneTwister, RandomDevice
+       AbstractRNG, MersenneTwister, RandomDevice, TaskLocalRNG, Xoshiro
 
 ## general definitions
 
@@ -291,11 +292,17 @@ rand(                ::Type{X}, dims::Dims) where {X} = rand(default_rng(), X, d
 rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
 rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
 
+# SamplerUnion(X, Y, ...}) == Union{SamplerType{X}, SamplerType{Y}, ...}
+SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
+const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
 
+
+include("Xoshiro.jl")
 include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
 include("misc.jl")
+include("XoshiroSimd.jl")
 
 ## rand & rand! & seed! docstrings
 
@@ -386,7 +393,7 @@ After the call to `seed!`, `rng` is equivalent to a newly created
 object initialized with the same seed.
 
 If `rng` is not specified, it defaults to seeding the state of the
-shared thread-local generator.
+shared task-local generator.
 
 # Examples
 ```julia-repl

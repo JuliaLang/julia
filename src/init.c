@@ -115,7 +115,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 static void jl_prep_sanitizers(void)
 {
 #if !defined(_OS_WINDOWS_)
-#if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
     struct rlimit rl;
 
     // When using the sanitizers, increase stack size because they bloat
@@ -628,6 +628,8 @@ static void restore_fp_env(void)
     }
 }
 
+static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct);
+
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
@@ -647,27 +649,23 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_init_intrinsic_properties();
 
     jl_page_size = jl_getpagesize();
-    uint64_t total_mem = uv_get_total_memory();
-    uint64_t constrained_mem = uv_get_constrained_memory();
-    if (constrained_mem > 0 && constrained_mem < total_mem)
-        total_mem = constrained_mem;
-    if (total_mem >= (size_t)-1) {
-        total_mem = (size_t)-1;
-    }
-    jl_arr_xtralloc_limit = total_mem / 100;  // Extra allocation limited to 1% of total RAM
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
 
-    // Load libjulia-internal (which contains this function), and libjulia, explicitly.
     jl_libjulia_internal_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
-    jl_libjulia_handle = jl_load_dynamic_library(JL_LIBJULIA_SONAME, JL_RTLD_DEFAULT, 1);
 #ifdef _OS_WINDOWS_
+    jl_exe_handle = GetModuleHandleA(NULL);
+    jl_RTLD_DEFAULT_handle = jl_libjulia_internal_handle;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCWSTR)&jl_any_type,
+                            (HMODULE*)&jl_libjulia_handle)) {
+        jl_error("could not load base module");
+    }
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
     jl_crtdll_handle = jl_dlopen(jl_crtdll_name, 0);
     jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
-    jl_exe_handle = GetModuleHandleA(NULL);
     JL_MUTEX_INIT(&jl_in_stackwalk);
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
     if (!SymInitialize(GetCurrentProcess(), "", 1)) {
@@ -686,8 +684,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #endif
 #endif
 
-#if \
-    defined(JL_USE_INTEL_JITEVENTS) || \
+#if defined(JL_USE_INTEL_JITEVENTS) || \
     defined(JL_USE_OPROFILE_JITEVENTS) || \
     defined(JL_USE_PERF_JITEVENTS)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
@@ -730,9 +727,14 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_init_threading();
 
     jl_ptls_t ptls = jl_init_threadtls(0);
-    jl_init_root_task(ptls, stack_lo, stack_hi);
-    jl_task_t *ct = jl_current_task;
+    // warning: this changes `jl_current_task`, so be careful not to call that from this function
+    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+    JL_GC_PROMISE_ROOTED(ct);
+    _finish_julia_init(rel, ptls, ct);
+}
 
+static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
+{
     jl_init_threadinginfra();
 
     jl_resolve_sysimg_location(rel);
@@ -742,12 +744,13 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
-    if (jl_options.image_file)
+    if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
-    else
+    } else {
         jl_init_types();
+        jl_init_codegen();
+    }
 
-    jl_init_codegen();
     jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();
@@ -835,6 +838,7 @@ static void post_boot_hooks(void)
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
     jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
+    jl_atomicerror_type    = (jl_datatype_t*)core("ConcurrencyViolationError");
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
@@ -847,6 +851,7 @@ static void post_boot_hooks(void)
     jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
     jl_initerror_type      = (jl_datatype_t*)core("InitError");
+    jl_pair_type           = core("Pair");
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
@@ -859,7 +864,7 @@ static void post_boot_hooks(void)
     for (i = 1; i < jl_core_module->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            jl_value_t *v = b->value;
+            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
             if (v) {
                 if (jl_is_unionall(v))
                     v = jl_unwrap_unionall(v);

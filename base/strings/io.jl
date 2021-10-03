@@ -15,7 +15,7 @@ avoid Julia-specific details.
 For example, `show` displays strings with quotes, and `print` displays strings
 without quotes.
 
-[`string`](@ref) returns the output of `print` as a string.
+See also [`println`](@ref), [`string`](@ref).
 
 # Examples
 ```jldoctest
@@ -54,8 +54,8 @@ end
 """
     println([io::IO], xs...)
 
-Print (using [`print`](@ref)) `xs` followed by a newline.
-If `io` is not supplied, prints to [`stdout`](@ref).
+Print (using [`print`](@ref)) `xs` to `io` followed by a newline.
+If `io` is not supplied, prints to the default output stream [`stdout`](@ref).
 
 # Examples
 ```jldoctest
@@ -249,13 +249,17 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 Create a string from any value using the [`show`](@ref) function.
 You should not add methods to `repr`; define a `show` method instead.
 
-The optional keyword argument `context` can be set to an `IO` or [`IOContext`](@ref)
-object whose attributes are used for the I/O stream passed to `show`.
+The optional keyword argument `context` can be set to a `:key=>value` pair, a
+tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
+attributes are used for the I/O stream passed to `show`.
 
 Note that `repr(x)` is usually similar to how the value of `x` would
 be entered in Julia.  See also [`repr(MIME("text/plain"), x)`](@ref) to instead
 return a "pretty-printed" version of `x` designed more for human consumption,
 equivalent to the REPL display of `x`.
+
+!!! compat "Julia 1.7"
+    Passing a tuple to keyword `context` requires Julia 1.7 or later.
 
 # Examples
 ```jldoctest

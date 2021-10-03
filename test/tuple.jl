@@ -99,11 +99,13 @@ end
         @test BitPerm_19352(0,2,4,6,1,3,5,7).p[2] == 0x02
     end
 
-    @testset "ninitialized" begin
-        @test Tuple{Int,Any}.ninitialized == 2
-        @test Tuple.ninitialized == 0
-        @test Tuple{Int,Vararg{Any}}.ninitialized == 1
-        @test Tuple{Any,Any,Vararg{Any}}.ninitialized == 2
+    @testset "n_uninitialized" begin
+        @test Tuple.name.n_uninitialized == 0
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Int,Any}) == 2
+        @test Core.Compiler.datatype_min_ninitialized(Tuple) == 0
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Int,Vararg{Any}}) == 1
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Any,Any,Vararg{Any}}) == 2
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Any,Any,Vararg{Any,3}}) == 5
     end
 
     @test empty((1, 2.0, "c")) === ()
@@ -281,7 +283,7 @@ end
     @test mapfoldl(abs, =>, (-1,-2,-3,-4), init=-10) == ((((-10=>1)=>2)=>3)=>4)
     @test mapfoldl(abs, =>, (), init=-10) == -10
     @test mapfoldl(abs, Pair{Any,Any}, (-30:-1...,)) == mapfoldl(abs, Pair{Any,Any}, [-30:-1...,])
-    @test_throws ArgumentError mapfoldl(abs, =>, ())
+    @test_throws "reducing over an empty collection" mapfoldl(abs, =>, ())
 end
 
 @testset "filter" begin
@@ -358,6 +360,24 @@ end
 
     @test prod(()) === 1
     @test prod((1,2,3)) === 6
+
+    # issue 39182
+    @test sum((0xe1, 0x1f)) === sum([0xe1, 0x1f])
+    @test sum((Int8(3),)) === Int(3)
+    @test sum((UInt8(3),)) === UInt(3)
+    @test sum((3,)) === Int(3)
+    @test sum((3.0,)) === 3.0
+    @test sum(("a",)) == sum(["a"])
+    @test sum((0xe1, 0x1f), init=0x0) == sum([0xe1, 0x1f], init=0x0)
+
+    # issue 39183
+    @test prod((Int8(100), Int8(100))) === 10000
+    @test prod((Int8(3),)) === Int(3)
+    @test prod((UInt8(3),)) === UInt(3)
+    @test prod((3,)) === Int(3)
+    @test prod((3.0,)) === 3.0
+    @test prod(("a",)) == prod(["a"])
+    @test prod((0xe1, 0x1f), init=0x1) == prod([0xe1, 0x1f], init=0x1)
 
     @testset "all" begin
         @test all(()) === true
@@ -504,6 +524,20 @@ end
         @test findnext(isequal(1), (1, 1), UInt(2)) isa Int
         @test findprev(isequal(1), (1, 1), UInt(1)) isa Int
     end
+
+    # recursive implementation should allow constant-folding for small tuples
+    @test Base.return_types() do
+        findfirst(==(2), (1.0,2,3f0))
+    end == Any[Int]
+    @test Base.return_types() do
+        findfirst(==(0), (1.0,2,3f0))
+    end == Any[Nothing]
+    @test Base.return_types() do
+        findlast(==(2), (1.0,2,3f0))
+    end == Any[Int]
+    @test Base.return_types() do
+        findlast(==(0), (1.0,2,3f0))
+    end == Any[Nothing]
 end
 
 @testset "properties" begin
@@ -531,6 +565,9 @@ end
 
     @test Base.setindex((1, 2, 4), 4, true) === (4, 2, 4)
     @test_throws BoundsError Base.setindex((1, 2), 2, false)
+
+    f() = Base.setindex((1:1, 2:2, 3:3), 9, 1)
+    @test @inferred(f()) == (9, 2:2, 3:3)
 end
 
 @testset "inferrable range indexing with constant values" begin
@@ -631,3 +668,6 @@ f38837(xs) = map((F,x)->F(x), (Float32, Float64), xs)
     @test_throws BoundsError (1, 2)[0:2]
     @test_throws ArgumentError (1, 2)[OffsetArrays.IdOffsetRange(1:2, -1)]
 end
+
+# https://github.com/JuliaLang/julia/issues/40814
+@test Base.return_types(NTuple{3,Int}, (Vector{Int},)) == Any[NTuple{3,Int}]

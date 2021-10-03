@@ -66,6 +66,8 @@ function iterate(v::Union{KeySet,ValueIterator}, state...)
     return (y[1][isa(v, KeySet) ? 1 : 2], y[2])
 end
 
+copy(v::KeySet) = copymutable(v)
+
 in(k, v::KeySet) = get(v.dict, k, secret_table_token) !== secret_table_token
 
 """
@@ -234,12 +236,14 @@ Dict{Int64, Int64} with 3 entries:
 ```
 """
 function mergewith!(combine, d::AbstractDict, others::AbstractDict...)
-    for other in others
-        for (k,v) in other
-            d[k] = haskey(d, k) ? combine(d[k], v) : v
-        end
+    foldl(mergewith!(combine), others; init = d)
+end
+
+function mergewith!(combine, d1::AbstractDict, d2::AbstractDict)
+    for (k, v) in d2
+        d1[k] = haskey(d1, k) ? combine(d1[k], v) : v
     end
-    return d
+    return d1
 end
 
 mergewith!(combine) = (args...) -> mergewith!(combine, args...)

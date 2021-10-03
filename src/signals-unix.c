@@ -83,8 +83,11 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
     const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
     return ctx->uc_mcontext64->__ss.__sp;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return ctx->uc_mcontext.mc_rsp;
 #else
-    // TODO Add support for FreeBSD and PowerPC(64)?
+    // TODO Add support for PowerPC(64)?
     return 0;
 #endif
 }
@@ -745,7 +748,10 @@ static void *signal_listener(void *arg)
         // (so that thread zero gets notified last)
         if (critical || profile)
             jl_lock_profile();
-        for (int i = jl_n_threads; i-- > 0; ) {
+        jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
+        for (int idx = jl_n_threads; idx-- > 0; ) {
+            // Stop the threads in the random round-robin order.
+            int i = profile_round_robin_thread_order[idx];
             // notify thread to stop
             jl_thread_suspend_and_get_state(i, &signal_context);
 
@@ -780,7 +786,22 @@ static void *signal_listener(void *arg)
                     }
                     jl_set_safe_restore(old_buf);
 
-                    // Mark the end of this block with 0
+                    jl_ptls_t ptls = jl_all_tls_states[i];
+
+                    // store threadid but add 1 as 0 is preserved to indicate end of block
+                    bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+
+                    // store task id
+                    bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)ptls->current_task;
+
+                    // store cpu cycle clock
+                    bt_data_prof[bt_size_cur++].uintptr = cycleclock();
+
+                    // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
+                    bt_data_prof[bt_size_cur++].uintptr = ptls->sleep_check_state + 1;
+
+                    // Mark the end of this block with two 0's
+                    bt_data_prof[bt_size_cur++].uintptr = 0;
                     bt_data_prof[bt_size_cur++].uintptr = 0;
                 }
             }

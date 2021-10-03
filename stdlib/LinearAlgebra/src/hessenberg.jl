@@ -60,6 +60,8 @@ parent(H::UpperHessenberg) = H.data
 similar(H::UpperHessenberg, ::Type{T}) where {T} = UpperHessenberg(similar(H.data, T))
 similar(H::UpperHessenberg, ::Type{T}, dims::Dims{N}) where {T,N} = similar(H.data, T, dims)
 
+AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg(AbstractMatrix{T}(H.data))
+
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
 real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
@@ -481,9 +483,9 @@ Q factor:
  0.0  -0.707107   0.707107
 H factor:
 3×3 UpperHessenberg{Float64, Matrix{Float64}}:
-  4.0      -11.3137      -1.41421
- -5.65685    5.0          2.0
-   ⋅        -1.0444e-15   1.0
+  4.0      -11.3137       -1.41421
+ -5.65685    5.0           2.0
+   ⋅        -8.88178e-16   1.0
 
 julia> F.Q * F.H * F.Q'
 3×3 Matrix{Float64}:

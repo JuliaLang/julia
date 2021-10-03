@@ -199,6 +199,10 @@ end
 let v = repr(varinfo(_test_varinfo_, all = true, recursive = true))
     @test occursin("inner_x", v)
 end
+let v = repr(varinfo(_test_varinfo_, all = true, minsize = 9))
+    @test !occursin("x_exported", v) # excluded: 8 bytes
+    @test occursin("a_smaller", v)
+end
 
 # Issue 14173
 module Tmp14173
@@ -331,7 +335,7 @@ let err = tempname(),
         redirect_stderr(new_stderr)
         println(new_stderr, "start")
         flush(new_stderr)
-        @eval @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
+        @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
         Libc.flush_cstdio()
         println(new_stderr, "end")
         flush(new_stderr)
@@ -341,10 +345,11 @@ let err = tempname(),
         close(new_stderr)
         let errstr = read(err, String)
             @test startswith(errstr, """start
+                end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
                 """) || errstr
-            @test endswith(errstr, "\nend\n") || errstr
+            @test !endswith(errstr, "\nend\n") || errstr
         end
         rm(err)
     end
@@ -444,12 +449,12 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     buf = IOBuffer()
     #test that the string output is at&t syntax by checking for occurrences of '%'s
     code_native(buf, linear_foo, (), syntax = :att, debuginfo = :none)
-    output = String(take!(buf))
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test occursin(rgx, output)
 
     #test that the code output is intel syntax by checking it has no occurrences of '%'
     code_native(buf, linear_foo, (), syntax = :intel, debuginfo = :none)
-    output = String(take!(buf))
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test !occursin(rgx, output)
 
     code_native(buf, linear_foo, ())
@@ -461,13 +466,13 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
         ret = r"^; [0-9a-f]{4}: c3$"m
 
         # without binary flag (default)
-        code_native(buf, linear_foo, ())
+        code_native(buf, linear_foo, (), dump_module=false)
         output = String(take!(buf))
         @test !occursin(ret, output)
 
         # with binary flag
         for binary in false:true
-            code_native(buf, linear_foo, (), binary = binary)
+            code_native(buf, linear_foo, (); binary, dump_module=false)
             output = String(take!(buf))
             @test occursin(ret, output) == binary
         end
@@ -585,4 +590,37 @@ end
 let
     opt = false
     @test !(first(@code_typed optimize=opt sum(1:10)).inferred)
+end
+
+@testset "@time_imports" begin
+    mktempdir() do dir
+        cd(dir) do
+            try
+                pushfirst!(LOAD_PATH, dir)
+                foo_file = joinpath(dir, "Foo3242.jl")
+                write(foo_file,
+                    """
+                    module Foo3242
+                    foo() = 1
+                    end
+                    """)
+
+                Base.compilecache(Base.PkgId("Foo3242"))
+
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stdout(f) do
+                    @eval @time_imports using Foo3242
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("ms  Foo3242\n", String(buf))
+
+            finally
+                filter!((≠)(dir), LOAD_PATH)
+            end
+        end
+    end
 end

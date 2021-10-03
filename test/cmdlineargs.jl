@@ -93,6 +93,26 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test v[2] == "1"
         @test isempty(v[3])
     end
+
+    let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options", "HOME" => homedir()))
+        @test v[1]
+        @test contains(v[2], r"print-options + = 1")
+        @test contains(v[2], r"combiner-store-merge-dependence-limit + = 4")
+        @test contains(v[2], r"enable-tail-merge + = 2")
+        @test isempty(v[3])
+    end
+    let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -combiner-store-merge-dependence-limit=6", "HOME" => homedir()))
+        @test v[1]
+        @test contains(v[2], r"print-options + = 1")
+        @test contains(v[2], r"combiner-store-merge-dependence-limit + = 6")
+        @test contains(v[2], r"enable-tail-merge + = 1")
+        @test isempty(v[3])
+    end
+    let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
+        @test !v[1]
+        @test isempty(v[2])
+        @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
+    end
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
@@ -119,7 +139,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # handling of @projectname in --project and JULIA_PROJECT
     let expanded = abspath(Base.load_path_expand("@foo"))
         @test expanded == readchomp(`$exename --project='@foo' -e 'println(Base.active_project())'`)
-        @test expanded == readchomp(setenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
+        @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
     end
 
     # --quiet, --banner
@@ -324,7 +344,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         rm(memfile)
         @test popfirst!(got) == "        0 g(x) = x + 123456"
         @test popfirst!(got) == "        - function f(x)"
-        @test popfirst!(got) == "       80     []"
+        if Sys.WORD_SIZE == 64
+            @test popfirst!(got) == "       48     []"
+        else
+            @test popfirst!(got) == "       32     []"
+        end
         if Sys.WORD_SIZE == 64
             # P64 pools with 64 bit tags
             @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
@@ -337,7 +361,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test popfirst!(got) == "        8     Base.invokelatest(g, 0)"
             @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         end
-        @test popfirst!(got) == "       80     []"
+        if Sys.WORD_SIZE == 64
+            @test popfirst!(got) == "       48     []"
+        else
+            @test popfirst!(got) == "       32     []"
+        end
         @test popfirst!(got) == "        - end"
         @test popfirst!(got) == "        - f(1.23)"
         @test isempty(got) || got
@@ -388,6 +416,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         filter!(a -> !startswith(a, "--check-bounds="), exename_default_checkbounds.exec)
         @test parse(Int, readchomp(`$exename_default_checkbounds -E "Int(Base.JLOptions().check_bounds)"`)) ==
             JL_OPTIONS_CHECK_BOUNDS_DEFAULT
+        @test parse(Int, readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
+            --check-bounds=auto`)) == JL_OPTIONS_CHECK_BOUNDS_DEFAULT
         @test parse(Int, readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
             --check-bounds=yes`)) == JL_OPTIONS_CHECK_BOUNDS_ON
         @test parse(Int, readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
@@ -589,7 +619,7 @@ end
 
 
 # test error handling code paths of running --sysimage
-let exename = Base.julia_cmd()
+let exename = `$(Base.julia_cmd().exec[1]) -t 1`
     sysname = unsafe_string(Base.JLOptions().image_file)
     for nonexist_image in (
             joinpath(@__DIR__, "nonexistent"),

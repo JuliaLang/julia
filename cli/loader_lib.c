@@ -1,4 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // This file defines an RPATH-style relative path loader for all platforms
 #include "loader.h"
 
@@ -31,12 +32,27 @@ void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * 
 
 /* Wrapper around dlopen(), with extra relative pathing thrown in*/
 static void * load_library(const char * rel_path, const char * src_dir) {
+    void * handle = NULL;
+
+    // See if a handle is already open to the basename
+    const char *basename = rel_path + strlen(rel_path);
+    while (basename-- > rel_path)
+        if (*basename == PATHSEPSTRING[0] || *basename == '/')
+            break;
+    basename++;
+#if defined(_OS_WINDOWS_)
+    if ((handle = GetModuleHandleW(basename)))
+        return handle;
+#else
+    if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | RTLD_GLOBAL)))
+        return handle;
+#endif
+
     char path[2*PATH_MAX + 1] = {0};
     strncat(path, src_dir, sizeof(path) - 1);
     strncat(path, PATHSEPSTRING, sizeof(path) - 1);
     strncat(path, rel_path, sizeof(path) - 1);
 
-    void * handle = NULL;
 #if defined(_OS_WINDOWS_)
     wchar_t wpath[2*PATH_MAX + 1] = {0};
     if (!utf8_to_wchar(path, wpath, 2*PATH_MAX)) {
@@ -161,12 +177,16 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     // Once we have libjulia-internal loaded, re-export its symbols:
     for (unsigned int symbol_idx=0; jl_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
         void *addr = lookup_symbol(libjulia_internal, jl_exported_func_names[symbol_idx]);
-        if (addr == NULL || addr == *jl_exported_func_addrs[symbol_idx]) {
-            jl_loader_print_stderr3("ERROR: Unable to load ", jl_exported_func_names[symbol_idx], " from libjulia-internal");
+        if (addr == NULL) {
+            jl_loader_print_stderr3("ERROR: Unable to load ", jl_exported_func_names[symbol_idx], " from libjulia-internal\n");
             exit(1);
         }
         (*jl_exported_func_addrs[symbol_idx]) = addr;
     }
+
+    // jl_options must be initialized very early, in case an embedder sets some
+    // values there before calling jl_init
+    ((void (*)(void))jl_init_options_addr)();
 }
 
 // Load libjulia and run the REPL with the given arguments (in UTF-8 format)

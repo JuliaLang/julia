@@ -815,8 +815,8 @@ Set the precision (in bits) to be used for `T` arithmetic.
     setting.
 """
 function setprecision(::Type{BigFloat}, precision::Integer)
-    if precision < 2
-        throw(DomainError(precision, "`precision` cannot be less than 2."))
+    if precision < 1
+        throw(DomainError(precision, "`precision` cannot be less than 1."))
     end
     DEFAULT_PRECISION[] = precision
     return precision
@@ -962,7 +962,7 @@ function string_mpfr(x::BigFloat, fmt::String)
 end
 
 function _prettify_bigfloat(s::String)::String
-    mantissa, exponent = split(s, 'e')
+    mantissa, exponent = eachsplit(s, 'e')
     if !occursin('.', mantissa)
         mantissa = string(mantissa, '.')
     end
@@ -973,7 +973,7 @@ function _prettify_bigfloat(s::String)::String
     expo = parse(Int, exponent)
     if -5 < expo < 6
         expo == 0 && return mantissa
-        int, frac = split(mantissa, '.')
+        int, frac = eachsplit(mantissa, '.')
         if expo > 0
             expo < length(frac) ?
                 string(int, frac[1:expo], '.', frac[expo+1:end]) :
@@ -1021,14 +1021,14 @@ set_emax!(x) = check_exponent_err(ccall((:mpfr_set_emax, :libmpfr), Cint, (Clong
 set_emin!(x) = check_exponent_err(ccall((:mpfr_set_emin, :libmpfr), Cint, (Clong,), x))
 
 function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
-    haskey(stackdict, x) && return stackdict[x]
-    # d = copy(x._d)
-    d = x._d
-    d′ = GC.@preserve d unsafe_string(pointer(d), sizeof(d)) # creates a definitely-new String
-    y = _BigFloat(x.prec, x.sign, x.exp, d′)
-    #ccall((:mpfr_custom_move,:libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
-    stackdict[x] = y
-    return y
+    get!(stackdict, x) do
+        # d = copy(x._d)
+        d = x._d
+        d′ = GC.@preserve d unsafe_string(pointer(d), sizeof(d)) # creates a definitely-new String
+        y = _BigFloat(x.prec, x.sign, x.exp, d′)
+        #ccall((:mpfr_custom_move,:libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
+        return y
+    end
 end
 
 function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}

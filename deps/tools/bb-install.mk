@@ -51,7 +51,7 @@ ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 	@# work-around a gtar bug: they do some complicated work to avoid the mkdir
 	@# syscall, which is buggy when working with Tar.jl files so we manually do
 	@# the mkdir calls first in a pre-pass
-	$(TAR) -tzf $$< | xargs -L 1 dirname | sort -u | (cd $$(build_prefix) && xargs -t mkdir -p)
+	$(TAR) -tzf $$< | xargs -n 1 dirname | sort -u | (cd $$(build_prefix) && xargs -t mkdir -p)
 endif
 	$(UNTAR) $$< -C $$(build_prefix)
 	echo '$$(UNINSTALL_$(strip $1))' > $$@

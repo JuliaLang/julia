@@ -853,6 +853,13 @@ end
         return :OK
     end, id_other, rc_unbuffered) == :OK
 
+# github issue 33972
+rc_unbuffered_other = RemoteChannel(()->Channel{Int}(0), id_other)
+close(rc_unbuffered_other)
+try; take!(rc_unbuffered_other); catch; end
+@test !remotecall_fetch(rc -> islocked(Distributed.lookup_ref(remoteref_id(rc)).synctake),
+                        id_other, rc_unbuffered_other)
+
 # github PR #14456
 n = DoFullTest ? 6 : 5
 for i = 1:10^n
@@ -1024,7 +1031,6 @@ function test_add_procs_threaded_blas()
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    @test master_blas_thread_count <= 8 # check that Base set the environment variable in __init__ before LinearAlgebra dlopen'd it
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)

@@ -94,6 +94,9 @@ end
 
     # no domain error is thrown for negative values
     @test cbrt(Float16(-1.0)) == -1.0
+    # test zero and Inf
+    @test cbrt(Float16(0.0)) == Float16(0.0)
+    @test cbrt(Inf16) == Inf16
 end
 @testset "binary ops" begin
     @test f+g === Float16(3f0)

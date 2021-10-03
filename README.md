@@ -5,17 +5,39 @@
 </a>
 </div>
 
-Code coverage:
-[![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
-[![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
-
 Documentation:
-[![version 1][docs-img]](https://docs.julialang.org)
+[![Documentation][docs-img]][docs-url]
 
-[appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
-[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls
-[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
-[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
+[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg "Documentation (version 1)"
+[docs-url]: https://docs.julialang.org
+
+Continuous integration:
+[![Continuous integration (master)][buildkite-master-img]][buildkite-master-url]
+[![Continuous integration (master->scheduled)][buildkite-master-scheduled-img]][buildkite-master-scheduled-url]
+
+<!--
+To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
+You need to go to the Buildkite website and get the SVG URL for the correct pipeline.
+-->
+[buildkite-master-img]: https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master "Continuous integration (master)"
+[buildkite-master-url]: https://buildkite.com/julialang/julia-master
+
+<!--
+To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
+You need to go to the Buildkite website and get the SVG URL for the correct pipeline.
+-->
+[buildkite-master-scheduled-img]: https://badge.buildkite.com/d5ae34dbbf6fefe615300c4f3118bf63cb4a5ae7fd962263c1.svg?branch=master "Continuous integration (master->scheduled)"
+[buildkite-master-scheduled-url]: https://buildkite.com/julialang/julia-master-scheduled
+
+Code coverage:
+[![Code coverage (Coveralls)][coveralls-img]][coveralls-url]
+[![Code coverage (Codecov)][codecov-img]][codecov-url]
+
+[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls "Code coverage (Coveralls)"
+[coveralls-url]: https://coveralls.io/r/JuliaLang/julia?branch=master
+
+[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov "Code coverage (Codecov)"
+[codecov-url]: https://codecov.io/github/JuliaLang/julia?branch=master
 
 ## The Julia Language
 
@@ -75,11 +97,11 @@ Then, acquire the source code by cloning the git repository:
     git clone https://github.com/JuliaLang/julia.git
 
 By default you will be building the latest unstable version of
-Julia. However, most users should use the most recent stable version
+Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.6.1
+    git checkout v1.6.2
 
 Now run `make` to build the `julia` executable.
 

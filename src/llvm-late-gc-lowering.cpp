@@ -396,8 +396,14 @@ CountTrackedPointers::CountTrackedPointers(Type *T) {
         }
         if (isa<ArrayType>(T))
             count *= cast<ArrayType>(T)->getNumElements();
-        else if (isa<VectorType>(T))
+        else if (isa<VectorType>(T)) {
+#if JL_LLVM_VERSION >= 120000
+            ElementCount EC = cast<VectorType>(T)->getElementCount();
+            count *= EC.getKnownMinValue();
+#else
             count *= cast<VectorType>(T)->getNumElements();
+#endif
+        }
     }
     if (count == 0)
         all = false;
@@ -408,8 +414,14 @@ unsigned getCompositeNumElements(Type *T) {
         return ST->getNumElements();
     else if (auto *AT = dyn_cast<ArrayType>(T))
         return AT->getNumElements();
-    else
+    else {
+#if JL_LLVM_VERSION >= 120000
+        ElementCount EC = cast<VectorType>(T)->getElementCount();
+        return EC.getKnownMinValue();
+#else
         return cast<VectorType>(T)->getNumElements();
+#endif
+    }
 }
 
 // Walk through a Type, and record the element path to every tracked value inside
@@ -496,6 +508,16 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             // In general a load terminates a walk
             break;
         }
+        else if (auto LI = dyn_cast<AtomicCmpXchgInst>(CurrentV)) {
+            // In general a load terminates a walk
+            (void)LI;
+            break;
+        }
+        else if (auto LI = dyn_cast<AtomicRMWInst>(CurrentV)) {
+            // In general a load terminates a walk
+            (void)LI;
+            break;
+        }
         else if (auto II = dyn_cast<IntrinsicInst>(CurrentV)) {
             // Some intrinsics behave like LoadInst followed by a SelectInst
             // This should never happen in a derived addrspace (since those cannot be stored to memory)
@@ -538,6 +560,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
         }
     }
     assert(isa<LoadInst>(CurrentV) || isa<CallInst>(CurrentV) ||
+           isa<AtomicCmpXchgInst>(CurrentV) || isa<AtomicRMWInst>(CurrentV) ||
            isa<Argument>(CurrentV) || isa<SelectInst>(CurrentV) ||
            isa<PHINode>(CurrentV) || isa<AddrSpaceCastInst>(CurrentV) ||
            isa<Constant>(CurrentV) || isa<AllocaInst>(CurrentV) ||
@@ -625,8 +648,14 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
     }
     std::vector<int> Numbers;
     unsigned NumRoots = 1;
-    if (auto VTy = dyn_cast<VectorType>(SI->getType()))
+    if (auto VTy = dyn_cast<VectorType>(SI->getType())) {
+#if JL_LLVM_VERSION >= 120000
+        ElementCount EC = VTy->getElementCount();
+        Numbers.resize(EC.getKnownMinValue(), -1);
+#else
         Numbers.resize(VTy->getNumElements(), -1);
+#endif
+    }
     else
         assert(isa<PointerType>(SI->getType()) && "unimplemented");
     assert(!isTrackedValue(SI));
@@ -680,13 +709,18 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
         else
             Numbers[i] = Number;
     }
-    if (auto VTy = dyn_cast<VectorType>(SI->getType())) {
+    if (auto VTy = dyn_cast<FixedVectorType>(SI->getType())) {
         if (NumRoots != Numbers.size()) {
             // broadcast the scalar root number to fill the vector
             assert(NumRoots == 1);
             int Number = Numbers[0];
             Numbers.resize(0);
+#if JL_LLVM_VERSION >= 120000
+            ElementCount EC = VTy->getElementCount();
+            Numbers.resize(EC.getKnownMinValue(), Number);
+#else
             Numbers.resize(VTy->getNumElements(), Number);
+#endif
         }
     }
     if (!isa<PointerType>(SI->getType()))
@@ -702,11 +736,12 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
     SmallVector<PHINode *, 2> lifted;
     std::vector<int> Numbers;
     unsigned NumRoots = 1;
-    if (auto VTy = dyn_cast<VectorType>(Phi->getType())) {
+    if (auto VTy = dyn_cast<FixedVectorType>(Phi->getType())) {
         NumRoots = VTy->getNumElements();
         Numbers.resize(NumRoots);
     }
     else {
+        // TODO: SVE
         assert(isa<PointerType>(Phi->getType()) && "unimplemented");
     }
     for (unsigned i = 0; i < NumRoots; ++i) {
@@ -883,7 +918,8 @@ std::vector<int> LateLowerGCFrame::NumberAllBase(State &S, Value *CurrentV) {
             Numbers = S.AllCompositeNumbering.at(CurrentV);
         }
     } else {
-        assert((isa<LoadInst>(CurrentV) || isa<CallInst>(CurrentV) || isa<PHINode>(CurrentV) || isa<SelectInst>(CurrentV))
+        assert((isa<LoadInst>(CurrentV) || isa<CallInst>(CurrentV) || isa<PHINode>(CurrentV) || isa<SelectInst>(CurrentV) ||
+                isa<AtomicCmpXchgInst>(CurrentV) || isa<AtomicRMWInst>(CurrentV))
                 && "unexpected def expression");
         // This is simple, we can just number them sequentially
         for (unsigned i = 0; i < tracked.count; ++i) {
@@ -1042,7 +1078,8 @@ void RecursivelyVisit(callback f, Value *V) {
             f(VU);
         if (isa<CallInst>(TheUser) || isa<LoadInst>(TheUser) ||
             isa<SelectInst>(TheUser) || isa<PHINode>(TheUser) ||
-            isa<StoreInst>(TheUser) || isa<PtrToIntInst>(TheUser))
+            isa<StoreInst>(TheUser) || isa<PtrToIntInst>(TheUser) ||
+            isa<AtomicCmpXchgInst>(TheUser) || isa<AtomicRMWInst>(TheUser))
             continue;
         if (isa<GetElementPtrInst>(TheUser) || isa<BitCastInst>(TheUser) || isa<AddrSpaceCastInst>(TheUser)) {
             RecursivelyVisit<VisitInst, callback>(f, TheUser);
@@ -1116,12 +1153,14 @@ static bool isConstGV(GlobalVariable *gv)
     return gv->isConstant() || gv->getMetadata("julia.constgv");
 }
 
-static bool isLoadFromConstGV(LoadInst *LI, bool &task_local);
-static bool isLoadFromConstGV(Value *v, bool &task_local)
+typedef llvm::SmallPtrSet<PHINode*, 1> PhiSet;
+
+static bool isLoadFromConstGV(LoadInst *LI, bool &task_local, PhiSet *seen = nullptr);
+static bool isLoadFromConstGV(Value *v, bool &task_local, PhiSet *seen = nullptr)
 {
     v = v->stripInBoundsOffsets();
     if (auto LI = dyn_cast<LoadInst>(v))
-        return isLoadFromConstGV(LI, task_local);
+        return isLoadFromConstGV(LI, task_local, seen);
     if (auto gv = dyn_cast<GlobalVariable>(v))
         return isConstGV(gv);
     // null pointer
@@ -1132,12 +1171,19 @@ static bool isLoadFromConstGV(Value *v, bool &task_local)
         return (CE->getOpcode() == Instruction::IntToPtr &&
                 isa<ConstantData>(CE->getOperand(0)));
     if (auto SL = dyn_cast<SelectInst>(v))
-        return (isLoadFromConstGV(SL->getTrueValue(), task_local) &&
-                isLoadFromConstGV(SL->getFalseValue(), task_local));
+        return (isLoadFromConstGV(SL->getTrueValue(), task_local, seen) &&
+                isLoadFromConstGV(SL->getFalseValue(), task_local, seen));
     if (auto Phi = dyn_cast<PHINode>(v)) {
+        PhiSet ThisSet(&Phi, &Phi);
+        if (!seen)
+            seen = &ThisSet;
+        else if (seen->count(Phi))
+            return true;
+        else
+            seen->insert(Phi);
         auto n = Phi->getNumIncomingValues();
         for (unsigned i = 0; i < n; ++i) {
-            if (!isLoadFromConstGV(Phi->getIncomingValue(i), task_local)) {
+            if (!isLoadFromConstGV(Phi->getIncomingValue(i), task_local, seen)) {
                 return false;
             }
         }
@@ -1169,7 +1215,7 @@ static bool isLoadFromConstGV(Value *v, bool &task_local)
 //
 // The white list implemented here and above in `isLoadFromConstGV(Value*)` should
 // cover all the cases we and LLVM generates.
-static bool isLoadFromConstGV(LoadInst *LI, bool &task_local)
+static bool isLoadFromConstGV(LoadInst *LI, bool &task_local, PhiSet *seen)
 {
     // We only emit single slot GV in codegen
     // but LLVM global merging can change the pointer operands to GEPs/bitcasts
@@ -1179,7 +1225,7 @@ static bool isLoadFromConstGV(LoadInst *LI, bool &task_local)
                {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"})) {
         if (gv)
             return true;
-        return isLoadFromConstGV(load_base, task_local);
+        return isLoadFromConstGV(load_base, task_local, seen);
     }
     if (gv)
         return isConstGV(gv);
@@ -1514,7 +1560,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // Known functions emitted in codegen that are not safepoints
                     if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                         callee == gc_preserve_end_func || callee == typeof_func ||
-                        callee == pgcstack_getter ||
+                        callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
+                        callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                         callee == write_barrier_func || callee->getName() == "memcmp") {
                         continue;
                     }
@@ -1536,7 +1583,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 for (Use &U : CI->arg_operands()) {
                     // Find all callee rooted arguments.
                     // Record them instead of simply remove them from live values here
-                    // since they can be useful during refinment
+                    // since they can be useful during refinement
                     // (e.g. to remove roots of objects that are refined to these)
                     Value *V = U;
                     if (isa<Constant>(V) || !isa<PointerType>(V->getType()) ||
@@ -1582,6 +1629,20 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     MaybeNoteDef(S, BBS, LI, BBS.Safepoints, std::move(RefinedPtr));
                 }
                 NoteOperandUses(S, BBS, I);
+            } else if (auto *LI = dyn_cast<AtomicCmpXchgInst>(&I)) {
+                Type *Ty = LI->getNewValOperand()->getType()->getScalarType();
+                if (!Ty->isPointerTy() || Ty->getPointerAddressSpace() != AddressSpace::Loaded) {
+                    MaybeNoteDef(S, BBS, LI, BBS.Safepoints);
+                }
+                NoteOperandUses(S, BBS, I);
+                // TODO: do we need MaybeTrackStore(S, LI);
+            } else if (auto *LI = dyn_cast<AtomicRMWInst>(&I)) {
+                Type *Ty = LI->getType()->getScalarType();
+                if (!Ty->isPointerTy() || Ty->getPointerAddressSpace() != AddressSpace::Loaded) {
+                    MaybeNoteDef(S, BBS, LI, BBS.Safepoints);
+                }
+                NoteOperandUses(S, BBS, I);
+                // TODO: do we need MaybeTrackStore(S, LI);
             } else if (SelectInst *SI = dyn_cast<SelectInst>(&I)) {
                 auto tracked = CountTrackedPointers(SI->getType());
                 if (tracked.count && !tracked.derived) {

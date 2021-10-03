@@ -28,6 +28,7 @@ extern "C" {
 
 // head symbols for each expression type
 jl_sym_t *call_sym;    jl_sym_t *invoke_sym;
+jl_sym_t *invoke_modify_sym;
 jl_sym_t *empty_sym;   jl_sym_t *top_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
@@ -42,7 +43,7 @@ jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *pop_exception_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
-jl_sym_t *splatnew_sym;
+jl_sym_t *splatnew_sym; jl_sym_t *block_sym;
 jl_sym_t *new_opaque_closure_sym;
 jl_sym_t *opaque_closure_method_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
@@ -58,7 +59,7 @@ jl_sym_t *static_parameter_sym; jl_sym_t *inline_sym;
 jl_sym_t *noinline_sym; jl_sym_t *generated_sym;
 jl_sym_t *generated_only_sym; jl_sym_t *isdefined_sym;
 jl_sym_t *propagate_inbounds_sym; jl_sym_t *specialize_sym;
-jl_sym_t *aggressive_constprop_sym;
+jl_sym_t *aggressive_constprop_sym; jl_sym_t *no_constprop_sym;
 jl_sym_t *nospecialize_sym; jl_sym_t *macrocall_sym;
 jl_sym_t *colon_sym; jl_sym_t *hygienicscope_sym;
 jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
@@ -68,6 +69,16 @@ jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
 jl_sym_t *optlevel_sym; jl_sym_t *thismodule_sym;
 jl_sym_t *atom_sym; jl_sym_t *statement_sym; jl_sym_t *all_sym;
 jl_sym_t *compile_sym; jl_sym_t *infer_sym;
+
+jl_sym_t *atomic_sym;
+jl_sym_t *not_atomic_sym;
+jl_sym_t *unordered_sym;
+jl_sym_t *monotonic_sym;
+jl_sym_t *acquire_sym;
+jl_sym_t *release_sym;
+jl_sym_t *acquire_release_sym;
+jl_sym_t *sequentially_consistent_sym;
+
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -114,7 +125,7 @@ typedef struct _jl_ast_context_t {
 
 static jl_ast_context_t jl_ast_main_ctx;
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #else
 #define jl_ast_ctx(fl_ctx) container_of(fl_ctx, jl_ast_context_t, fl)
@@ -335,6 +346,7 @@ void jl_init_common_symbols(void)
     empty_sym = jl_symbol("");
     call_sym = jl_symbol("call");
     invoke_sym = jl_symbol("invoke");
+    invoke_modify_sym = jl_symbol("invoke_modify");
     foreigncall_sym = jl_symbol("foreigncall");
     cfunction_sym = jl_symbol("cfunction");
     quote_sym = jl_symbol("quote");
@@ -387,6 +399,7 @@ void jl_init_common_symbols(void)
     polly_sym = jl_symbol("polly");
     propagate_inbounds_sym = jl_symbol("propagate_inbounds");
     aggressive_constprop_sym = jl_symbol("aggressive_constprop");
+    no_constprop_sym = jl_symbol("no_constprop");
     isdefined_sym = jl_symbol("isdefined");
     nospecialize_sym = jl_symbol("nospecialize");
     specialize_sym = jl_symbol("specialize");
@@ -407,9 +420,18 @@ void jl_init_common_symbols(void)
     aliasscope_sym = jl_symbol("aliasscope");
     popaliasscope_sym = jl_symbol("popaliasscope");
     thismodule_sym = jl_symbol("thismodule");
+    block_sym = jl_symbol("block");
     atom_sym = jl_symbol("atom");
     statement_sym = jl_symbol("statement");
     all_sym = jl_symbol("all");
+    atomic_sym = jl_symbol("atomic");
+    not_atomic_sym = jl_symbol("not_atomic");
+    unordered_sym = jl_symbol("unordered");
+    monotonic_sym = jl_symbol("monotonic");
+    acquire_sym = jl_symbol("acquire");
+    release_sym = jl_symbol("release");
+    acquire_release_sym = jl_symbol("acquire_release");
+    sequentially_consistent_sym = jl_symbol("sequentially_consistent");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -675,8 +697,6 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
 
 static void array_to_list(fl_context_t *fl_ctx, jl_array_t *a, value_t *pv, int check_valid)
 {
-    if (jl_array_len(a) > 650000)
-        lerror(fl_ctx, symbol(fl_ctx, "error"), "expression too large");
     value_t temp;
     for(long i=jl_array_len(a)-1; i >= 0; i--) {
         *pv = fl_cons(fl_ctx, fl_ctx->NIL, *pv);
@@ -761,6 +781,8 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_vali
         jl_expr_t *ex = (jl_expr_t*)v;
         value_t args = fl_ctx->NIL;
         fl_gc_handle(fl_ctx, &args);
+        if (jl_expr_nargs(ex) > 520000 && ex->head != block_sym)
+            lerror(fl_ctx, symbol(fl_ctx, "error"), "expression too large");
         array_to_list(fl_ctx, ex->args, &args, check_valid);
         value_t hd = julia_to_scm_(fl_ctx, (jl_value_t*)ex->head, check_valid);
         if (ex->head == lambda_sym && jl_expr_nargs(ex)>0 && jl_is_array(jl_exprarg(ex,0))) {
@@ -915,6 +937,8 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
                 jl_array_ptr_ref(new_code, i)
             ));
         }
+        new_ci->code = new_code;
+        jl_gc_wb(new_ci, new_code);
         new_ci->slotnames = jl_array_copy(new_ci->slotnames);
         jl_gc_wb(new_ci, new_ci->slotnames);
         new_ci->slotflags = jl_array_copy(new_ci->slotflags);

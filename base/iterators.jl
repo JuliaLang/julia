@@ -554,6 +554,11 @@ rest(itr) = itr
 
 Returns the first element and an iterator over the remaining elements.
 
+If the iterator is empty return `nothing` (like `iterate`).
+
+!!! compat "Julia 1.7"
+    Prior versions throw a BoundsError if the iterator is empty.
+
 See also: [`Iterators.drop`](@ref), [`Iterators.take`](@ref).
 
 # Examples
@@ -571,7 +576,7 @@ julia> collect(rest)
 """
 function peel(itr)
     y = iterate(itr)
-    y === nothing && throw(BoundsError())
+    y === nothing && return y
     val, s = y
     val, rest(itr, s)
 end
@@ -587,8 +592,8 @@ IteratorSize(::Type{<:Rest{I}}) where {I} = rest_iteratorsize(IteratorSize(I))
 
 # Count -- infinite counting
 
-struct Count{S<:Number}
-    start::S
+struct Count{T,S}
+    start::T
     step::S
 end
 
@@ -608,11 +613,13 @@ julia> for v in Iterators.countfrom(5, 2)
 9
 ```
 """
-countfrom(start::Number, step::Number) = Count(promote(start, step)...)
-countfrom(start::Number)               = Count(start, oneunit(start))
-countfrom()                            = Count(1, 1)
+countfrom(start::T, step::S) where {T,S} = Count{typeof(start+step),S}(start, step)
+countfrom(start::Number, step::Number)   = Count(promote(start, step)...)
+countfrom(start)                         = Count(start, oneunit(start))
+countfrom()                              = Count(1, 1)
 
-eltype(::Type{Count{S}}) where {S} = S
+
+eltype(::Type{<:Count{T}}) where {T} = T
 
 iterate(it::Count, state=it.start) = (state, state + it.step)
 
@@ -1186,11 +1193,11 @@ end
 struct IterationCutShort; end
 
 function iterate(itr::PartitionIterator, state...)
-    v = Vector{eltype(itr.c)}(undef, itr.n)
     # This is necessary to remember whether we cut the
     # last element short. In such cases, we do return that
     # element, but not the next one
     state === (IterationCutShort(),) && return nothing
+    v = Vector{eltype(itr.c)}(undef, itr.n)
     i = 0
     y = iterate(itr.c, state...)
     while y !== nothing

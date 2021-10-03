@@ -130,7 +130,7 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
 #ifdef RTLD_NOLOAD
                   | JL_RTLD(flags, NOLOAD)
 #endif
-#if defined(RTLD_DEEPBIND) && !(defined(JL_ASAN_ENABLED) || defined(JL_TSAN_ENABLED) || defined(JL_MSAN_ENABLED))
+#if defined(RTLD_DEEPBIND) && !(defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_))
                   | JL_RTLD(flags, DEEPBIND)
 #endif
 #ifdef RTLD_FIRST
@@ -202,7 +202,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     */
     if (!abspath && jl_base_module != NULL) {
         jl_binding_t *b = jl_get_module_binding(jl_base_module, jl_symbol("DL_LOAD_PATH"));
-        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? b->value : NULL);
+        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? jl_atomic_load_relaxed(&b->value) : NULL);
         if (DL_LOAD_PATH != NULL) {
             size_t j;
             for (j = 0; j < jl_array_len(DL_LOAD_PATH); j++) {
@@ -309,7 +309,7 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
         char err[256];
         win32_formatmessage(GetLastError(), err, sizeof(err));
 #endif
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
         // Hide the error throwing from the analyser since there isn't a way to express
         // "safepoint only when throwing error" currently.
         jl_errorf("could not load symbol \"%s\":\n%s", symbol, err);
