@@ -11,7 +11,7 @@ steps:
       - JuliaCI/julia#v1:
           # Drop default "registries" directory, so it is not persisted from execution to execution
           persist_depot_dirs: packages,artifacts,compiled
-          version: 1.6
+          version: '1.6'
       - staticfloat/sandbox#v1:
           rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/${ROOTFS_TAG?}/package_linux.${ROOTFS_ARCH?}.tar.gz
           rootfs_treehash: "${ROOTFS_TREE?}"
@@ -53,6 +53,7 @@ steps:
       echo "--- Run the Julia test suite"
       unset JULIA_DEPOT_PATH
       export JULIA_UNDER_RR="$${JULIA_BINARY:?} .buildkite/utilities/rr/rr_capture.jl $${JULIA_BINARY:?}"
+      export OPENBLAS_NUM_THREADS=8
 
       if [[ "$${BUILDKITE_STEP_KEY:?}"   == "tester_linux64_rr" ]]; then
         # For the `rr` job, we disable multi-threading.

@@ -842,51 +842,6 @@ function InliningTodo(mi::MethodInstance, src::Union{CodeInfo, Array{UInt8, 1}})
     end
 end
 
-# Neither the product iterator not CartesianIndices are available
-# here, so use this poor man's version
-struct SimpleCartesian
-    ranges::Vector{UnitRange{Int}}
-end
-function iterate(s::SimpleCartesian, state::Vector{Int}=Int[1 for _ in 1:length(s.ranges)])
-    state[end] > last(s.ranges[end]) && return nothing
-    vals = copy(state)
-    any = false
-    for i = 1:length(s.ranges)
-        if state[i] < last(s.ranges[i])
-            for j = 1:(i-1)
-                state[j] = first(s.ranges[j])
-            end
-            state[i] += 1
-            any = true
-            break
-        end
-    end
-    if !any
-        state[end] += 1
-    end
-    (vals, state)
-end
-
-# Given a signure, iterate over the signatures to union split over
-struct UnionSplitSignature
-    it::SimpleCartesian
-    typs::Vector{Any}
-end
-
-function UnionSplitSignature(atypes::Vector{Any})
-    typs = Any[uniontypes(widenconst(atypes[i])) for i = 1:length(atypes)]
-    ranges = UnitRange{Int}[1:length(typs[i]) for i = 1:length(typs)]
-    return UnionSplitSignature(SimpleCartesian(ranges), typs)
-end
-
-function iterate(split::UnionSplitSignature, state::Vector{Int}...)
-    y = iterate(split.it, state...)
-    y === nothing && return nothing
-    idxs, state = y
-    sig = Any[split.typs[i][j] for (i, j) in enumerate(idxs)]
-    return (sig, state)
-end
-
 function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(case), isinvoke::Bool, todo::Vector{Pair{Int, Any}})
     if isa(case, ConstantCase)
         ir[SSAValue(idx)] = case.val
