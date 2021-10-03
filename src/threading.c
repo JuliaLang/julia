@@ -527,21 +527,22 @@ void jl_start_threads(void)
     uv_barrier_wait(&thread_init_done);
 }
 
-unsigned volatile _threadedregion; // HACK: keep track of whether it is safe to do IO
+_Atomic(unsigned) _threadedregion; // HACK: keep track of whether to prioritize IO or threading
 
 JL_DLLEXPORT int jl_in_threaded_region(void)
 {
-    return _threadedregion != 0;
+    return jl_atomic_load_relaxed(&jl_current_task->tid) != 0 ||
+        jl_atomic_load_relaxed(&_threadedregion) != 0;
 }
 
 JL_DLLEXPORT void jl_enter_threaded_region(void)
 {
-    _threadedregion += 1;
+    jl_atomic_fetch_add(&_threadedregion, 1);
 }
 
 JL_DLLEXPORT void jl_exit_threaded_region(void)
 {
-    _threadedregion -= 1;
+    jl_atomic_fetch_add(&_threadedregion, -1);
     jl_wake_libuv();
     // make sure no more callbacks will run while user code continues
     // outside thread region and might touch an I/O object.

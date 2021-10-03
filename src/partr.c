@@ -59,7 +59,7 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 typedef struct taskheap_tag {
     jl_mutex_t lock;
     jl_task_t **tasks;
-    int32_t ntasks;
+    _Atomic(int32_t) ntasks;
     _Atomic(int16_t) prio;
 } taskheap_t;
 
@@ -85,7 +85,7 @@ static inline void multiq_init(void)
     for (int32_t i = 0; i < heap_p; ++i) {
         jl_mutex_init(&heaps[i].lock);
         heaps[i].tasks = (jl_task_t **)calloc(tasks_per_heap, sizeof(jl_task_t*));
-        heaps[i].ntasks = 0;
+        jl_atomic_store_relaxed(&heaps[i].ntasks, 0);
         jl_atomic_store_relaxed(&heaps[i].prio, INT16_MAX);
     }
     unbias_cong(heap_p, &cong_unbias);
@@ -108,7 +108,7 @@ static inline void sift_up(taskheap_t *heap, int32_t idx)
 
 static inline void sift_down(taskheap_t *heap, int32_t idx)
 {
-    if (idx < heap->ntasks) {
+    if (idx < jl_atomic_load_relaxed(&heap->ntasks)) {
         for (int32_t child = heap_d*idx + 1;
                 child < tasks_per_heap && child <= heap_d*idx + heap_d;
                 ++child) {
@@ -134,14 +134,16 @@ static inline int multiq_insert(jl_task_t *task, int16_t priority)
         rn = cong(heap_p, cong_unbias, &ptls->rngseed);
     } while (!jl_mutex_trylock_nogc(&heaps[rn].lock));
 
-    if (heaps[rn].ntasks >= tasks_per_heap) {
+    if (jl_atomic_load_relaxed(&heaps[rn].ntasks) >= tasks_per_heap) {
         jl_mutex_unlock_nogc(&heaps[rn].lock);
         // multiq insertion failed, increase #tasks per heap
         return -1;
     }
 
-    heaps[rn].tasks[heaps[rn].ntasks++] = task;
-    sift_up(&heaps[rn], heaps[rn].ntasks-1);
+    int32_t ntasks = jl_atomic_load_relaxed(&heaps[rn].ntasks);
+    jl_atomic_store_relaxed(&heaps[rn].ntasks, ntasks + 1);
+    heaps[rn].tasks[ntasks] = task;
+    sift_up(&heaps[rn], ntasks);
     int16_t prio = jl_atomic_load_relaxed(&heaps[rn].prio);
     if (task->prio < prio)
         jl_atomic_store_relaxed(&heaps[rn].prio, task->prio);
@@ -185,10 +187,12 @@ static inline jl_task_t *multiq_deletemin(void)
         jl_mutex_unlock_nogc(&heaps[rn1].lock);
         goto retry;
     }
-    heaps[rn1].tasks[0] = heaps[rn1].tasks[--heaps[rn1].ntasks];
-    heaps[rn1].tasks[heaps[rn1].ntasks] = NULL;
+    int32_t ntasks = jl_atomic_load_relaxed(&heaps[rn1].ntasks) - 1;
+    jl_atomic_store_relaxed(&heaps[rn1].ntasks, ntasks);
+    heaps[rn1].tasks[0] = heaps[rn1].tasks[ntasks];
+    heaps[rn1].tasks[ntasks] = NULL;
     prio1 = INT16_MAX;
-    if (heaps[rn1].ntasks > 0) {
+    if (ntasks > 0) {
         sift_down(&heaps[rn1], 0);
         prio1 = heaps[rn1].tasks[0]->prio;
     }
@@ -203,7 +207,7 @@ void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
 {
     int32_t i, j;
     for (i = 0; i < heap_p; ++i)
-        for (j = 0; j < heaps[i].ntasks; ++j)
+        for (j = 0; j < jl_atomic_load_relaxed(&heaps[i].ntasks); ++j)
             jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)heaps[i].tasks[j]);
 }
 
@@ -212,7 +216,7 @@ static int multiq_check_empty(void)
 {
     int32_t i;
     for (i = 0; i < heap_p; ++i) {
-        if (heaps[i].ntasks != 0)
+        if (jl_atomic_load_relaxed(&heaps[i].ntasks) != 0)
             return 0;
     }
     return 1;
@@ -282,22 +286,20 @@ int jl_running_under_rr(int recheck)
 #ifdef _OS_LINUX_
 #define RR_CALL_BASE 1000
 #define SYS_rrcall_check_presence (RR_CALL_BASE + 8)
-    static int checked_running_under_rr = 0;
-    static int is_running_under_rr = 0;
-    if (!checked_running_under_rr || recheck) {
+    static _Atomic(int) is_running_under_rr = 0;
+    int rr = jl_atomic_load_relaxed(&is_running_under_rr);
+    if (rr == 0 || recheck) {
         int ret = syscall(SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0);
-        if (ret == -1) {
+        if (ret == -1)
             // Should always be ENOSYS, but who knows what people do for
             // unknown syscalls with their seccomp filters, so just say
             // that we don't have rr.
-            is_running_under_rr = 0;
-        }
-        else {
-            is_running_under_rr = 1;
-        }
-        checked_running_under_rr = 1;
+            rr = 2;
+        else
+            rr = 1;
+        jl_atomic_store_relaxed(&is_running_under_rr, rr);
     }
-    return is_running_under_rr;
+    return rr == 1;
 #else
     return 0;
 #endif
@@ -411,7 +413,7 @@ static int may_sleep(jl_ptls_t ptls)
     return jl_atomic_load_relaxed(&ptls->sleep_check_state) == sleeping;
 }
 
-extern volatile unsigned _threadedregion;
+extern _Atomic(unsigned) _threadedregion;
 
 JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
 {
@@ -432,7 +434,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
 
         jl_cpu_pause();
         jl_ptls_t ptls = ct->ptls;
-        if (sleep_check_after_threshold(&start_cycles) || (!_threadedregion && ptls->tid == 0)) {
+        if (sleep_check_after_threshold(&start_cycles) || (!jl_atomic_load_relaxed(&_threadedregion) && ptls->tid == 0)) {
             jl_atomic_store(&ptls->sleep_check_state, sleeping); // acquire sleep-check lock
             if (!multiq_check_empty()) {
                 if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)
@@ -441,7 +443,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             }
             task = get_next_task(trypoptask, q); // WARNING: this should not yield
             if (ptls != ct->ptls)
-                continue;
+                continue; // oops, get_next_task did yield--start over
             if (task) {
                 if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)
                     jl_atomic_store(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
@@ -454,7 +456,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             // outside of threaded regions, all IO is permitted,
             // but only on thread 1
             int uvlock = 0;
-            if (_threadedregion) {
+            if (jl_atomic_load_relaxed(&_threadedregion)) {
                 uvlock = jl_mutex_trylock(&jl_uv_mutex);
             }
             else if (ptls->tid == 0) {
@@ -496,7 +498,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
                         continue;
                     }
                 }
-                if (!_threadedregion && active && ptls->tid == 0) {
+                if (!jl_atomic_load_relaxed(&_threadedregion) && active && ptls->tid == 0) {
                     // thread 0 is the only thread permitted to run the event loop
                     // so it needs to stay alive
                     if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)

@@ -129,7 +129,7 @@ static inline void jl_mutex_unlock(jl_mutex_t *lock)
     jl_mutex_unlock_nogc(lock);
     jl_lock_frame_pop();
     JL_SIGATOMIC_END();
-    if (jl_gc_have_pending_finalizers) {
+    if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers)) {
         jl_gc_run_pending_finalizers(jl_current_task); // may GC
     }
 }

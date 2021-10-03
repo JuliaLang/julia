@@ -210,7 +210,7 @@ static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOT
 // useful constants
 extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
 extern jl_methtable_t *jl_nonfunction_mt JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT size_t jl_world_counter;
+extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
 
 typedef void (*tracer_cb)(jl_value_t *tracee);
 extern tracer_cb jl_newmeth_tracer;
@@ -850,7 +850,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_method_instance_t *caller);
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *typ, jl_value_t *caller);
 
-uint32_t jl_module_next_counter(jl_module_t *m);
+uint32_t jl_module_next_counter(jl_module_t *m) JL_NOTSAFEPOINT;
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs);
 
 JL_DLLEXPORT int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT;

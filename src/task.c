@@ -240,7 +240,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *t)
     // ensure that state is cleared
     ct->ptls->in_finalizer = 0;
     ct->ptls->in_pure_callback = 0;
-    ct->world_age = jl_world_counter;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     // let the runtime know this task is dead and find a new task to run
     jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
     if (done == NULL) {

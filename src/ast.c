@@ -197,19 +197,19 @@ static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     return (b != NULL && b->owner == ctx->module) ? fl_ctx->T : fl_ctx->F;
 }
 
-static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
 {
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     assert(ctx->module);
     return fixnum(jl_module_next_counter(ctx->module));
 }
 
-static value_t fl_julia_current_file(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+static value_t fl_julia_current_file(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
 {
     return symbol(fl_ctx, jl_filename);
 }
 
-static value_t fl_julia_current_line(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+static value_t fl_julia_current_line(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
 {
     return fixnum(jl_lineno);
 }
@@ -273,10 +273,10 @@ static value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nar
 }
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
-    { "defined-julia-global", fl_defined_julia_global },
+    { "defined-julia-global", fl_defined_julia_global }, // TODO: can we kill this safepoint
     { "current-julia-module-counter", fl_current_module_counter },
-    { "julia-scalar?", fl_julia_scalar },
-    { "julia-logmsg", fl_julia_logmsg },
+    { "julia-scalar?", fl_julia_scalar }, // TODO: can we kill this safepoint? (from jl_isa)
+    { "julia-logmsg", fl_julia_logmsg }, // TODO: kill this safepoint
     { "julia-current-file", fl_julia_current_file },
     { "julia-current-line", fl_julia_current_line },
     { NULL, NULL }
@@ -1114,7 +1114,9 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
         margs[i] = jl_array_ptr_ref(args, i - 1);
 
     size_t last_age = ct->world_age;
-    ct->world_age = world < jl_world_counter ? world : jl_world_counter;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    if (ct->world_age > world)
+        ct->world_age = world;
     jl_value_t *result;
     JL_TRY {
         margs[0] = jl_toplevel_eval(*ctx, margs[0]);
@@ -1236,7 +1238,7 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0, jl_world_counter, 0);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0, jl_atomic_load_acquire(&jl_world_counter), 0);
     expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
     JL_GC_POP();
     return expr;
@@ -1247,7 +1249,7 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 1, jl_world_counter, 0);
+    expr = jl_expand_macros(expr, inmodule, NULL, 1, jl_atomic_load_acquire(&jl_world_counter), 0);
     expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
     JL_GC_POP();
     return expr;
@@ -1348,7 +1350,7 @@ JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t 
     args[4] = options;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
-    ct->world_age = jl_world_counter;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     jl_value_t *result = jl_apply(args, 5);
     ct->world_age = last_age;
     args[0] = result; // root during error checks below

@@ -1055,7 +1055,7 @@ static void jl_collect_backedges(jl_array_t *s, jl_array_t *t)
                         size_t min_valid = 0;
                         size_t max_valid = ~(size_t)0;
                         int ambig = 0;
-                        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_world_counter, &min_valid, &max_valid, &ambig);
+                        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
                         if (matches == jl_false) {
                             valid = 0;
                             break;
@@ -1171,7 +1171,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *
     jl_value_t *uniqargs[2] = {unique_func, (jl_value_t*)deps};
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
-    ct->world_age = jl_world_counter;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     jl_array_t *udeps = (*udepsp = deps && unique_func ? (jl_array_t*)jl_apply(uniqargs, 2) : NULL);
     ct->world_age = last_age;
 
@@ -1222,7 +1222,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *
             if (toplevel && prefs_hash_func && get_compiletime_prefs_func) {
                 // Temporary invoke in newest world age
                 size_t last_age = ct->world_age;
-                ct->world_age = jl_world_counter;
+                ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
 
                 // call get_compiletime_prefs(__toplevel__)
                 jl_value_t *args[3] = {get_compiletime_prefs_func, (jl_value_t*)toplevel, NULL};
@@ -1517,7 +1517,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     jl_gc_wb(m, m->name);
     m->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
     m->line = read_int32(s->s);
-    m->primary_world = jl_world_counter;
+    m->primary_world = jl_atomic_load_acquire(&jl_world_counter);
     m->deleted_world = ~(size_t)0;
     m->called = read_int32(s->s);
     m->nargs = read_int32(s->s);
@@ -1619,7 +1619,7 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
     codeinst->next = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->next);
     jl_gc_wb(codeinst, codeinst->next);
     if (validate) {
-        codeinst->min_world = jl_world_counter;
+        codeinst->min_world = jl_atomic_load_acquire(&jl_world_counter);
         ptrhash_put(&new_code_instance_validate, codeinst, (void*)(~(uintptr_t)HT_NOTFOUND));   // "HT_FOUND"
     }
     return (jl_value_t*)codeinst;
@@ -1682,7 +1682,7 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
     m->optlevel = read_int8(s->s);
     m->compile = read_int8(s->s);
     m->infer = read_int8(s->s);
-    m->primary_world = jl_world_counter;
+    m->primary_world = jl_atomic_load_acquire(&jl_world_counter);
     return (jl_value_t*)m;
 }
 
@@ -1732,7 +1732,7 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v) JL_GC_D
         if (entry->max_world == ~(size_t)0) {
             if (entry->min_world > 1) {
                 // update world validity to reflect current state of the counter
-                entry->min_world = jl_world_counter;
+                entry->min_world = jl_atomic_load_acquire(&jl_world_counter);
             }
         }
         else {
@@ -1989,7 +1989,7 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         size_t max_valid = ~(size_t)0;
         int ambig = 0;
         // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
-        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_world_counter, &min_valid, &max_valid, &ambig);
+        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
         if (matches == jl_false || jl_array_len(matches) != jl_array_len(expected)) {
             valid = 0;
         }
@@ -2032,7 +2032,7 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
     for (i = 0; i < l; i += 2) {
         jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
         assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
-        assert(caller->def.method->primary_world == jl_world_counter); // caller should be new
+        assert(caller->def.method->primary_world == jl_atomic_load_acquire(&jl_world_counter)); // caller should be new
         jl_array_t *idxs_array = (jl_array_t*)jl_array_ptr_ref(list, i + 1);
         assert(jl_isa((jl_value_t*)idxs_array, jl_array_int32_type));
         int32_t *idxs = (int32_t*)jl_array_data(idxs_array);
@@ -2652,7 +2652,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     // prepare to deserialize
     int en = jl_gc_enable(0);
     jl_gc_enable_finalizers(ct, 0);
-    ++jl_world_counter; // reserve a world age for the deserialization
+    jl_atomic_fetch_add(&jl_world_counter, 1); // reserve a world age for the deserialization
 
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);

@@ -353,7 +353,7 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
 JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);
 JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
-extern JL_DLLEXPORT int jl_gc_have_pending_finalizers;
+extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
 

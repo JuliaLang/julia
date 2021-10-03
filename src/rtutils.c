@@ -283,7 +283,8 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     if (old_defer_signal && !eh->defer_signal) {
         jl_sigint_safepoint(ct->ptls);
     }
-    if (jl_gc_have_pending_finalizers && unlocks && eh->locks_len == 0) {
+    if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers) &&
+            unlocks && eh->locks_len == 0) {
         jl_gc_run_pending_finalizers(ct);
     }
 }
