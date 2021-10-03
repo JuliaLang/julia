@@ -795,19 +795,13 @@ function permutation_free(p::Ref{gsl_permutation})
 end
 ```
 
-Here, the input `p` is declared to be of type `Ref{gsl_permutation}`, meaning that the memory
-that `p` points to may be managed by Julia or by C. A pointer to memory allocated by C should
-be of type `Ptr{gsl_permutation}`, but it is convertible using [`Base.cconvert`](@ref) and therefore
-
-Now if you look closely enough at this example, you may notice that it is incorrect, given our explanation
-above of preferred declaration types. Do you see it? The function we are calling is going to free the
-memory. This type of operation cannot be given a Julia object (it will crash or cause memory corruption).
-Therefore, it may be preferable to declare the `p` type as `Ptr{gsl_permutation }`, to make it harder for the
-user to mistakenly pass another sort of object there than one obtained via `gsl_permutation_alloc`.
-
-If the C wrapper never expects the user to pass pointers to memory managed by Julia, then using
-`p::Ptr{gsl_permutation}` for the method signature of the wrapper and similarly in the [`ccall`](@ref)
-is also acceptable.
+Now, if you look closely at the method signature, you may notice an issue. Do you see it?
+The deconstructor wrapper is going to free the memory pointed to by the input `p`, which
+may be managed by Julia or by C since `p` is of type `Ref{gsl_permutation}`. However,
+providing a Julia owned a reference of `gsl_permutation` as input to
+`perumatation_free` will result in a segmentation fault or memory corruption. Therefore,
+it is preferable to use `p::Ptr{gsl_permutation}` in both the method signature of the wrapper
+and the following [`ccall`](@ref) to prevent the user from unintended consequences.
 
 Here is a third example passing Julia arrays:
 
