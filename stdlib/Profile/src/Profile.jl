@@ -144,8 +144,8 @@ The keyword arguments can be any combination of:
     line, `:count` sorts in order of number of collected samples, and `:overhead` sorts by the number of samples
     incurred by each function by itself.
 
- - `groupby` -- Controls grouping over tasks and threads, or no grouping. Options are `:none` (default), `:threads`, `:tasks`,
-    `[:threads, :tasks]`, or `[:tasks, :threads]` where the last two provide nested grouping.
+ - `groupby` -- Controls grouping over tasks and threads, or no grouping. Options are `:none` (default), `:thread`, `:task`,
+    `[:thread, :task]`, or `[:task, :thread]` where the last two provide nested grouping.
 
  - `noisefloor` -- Limits frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
     A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
@@ -519,29 +519,54 @@ function fetch(;include_meta = false)
     GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
     if include_meta || isempty(data)
         return data
-    else
-        nblocks = 0
-        for i = 2:length(data)
-            if is_block_end(data, i) # detect block ends and count them
-                nblocks += 1
-            end
-        end
-        data_stripped = Vector{UInt}(undef, length(data) - (nblocks * (nmeta + 1)))
-        j = length(data_stripped)
-        i = length(data)
-        while i > 0 && j > 0
-            data_stripped[j] = data[i]
-            if is_block_end(data, i)
-                i -= (nmeta + 1) # metadata fields and the extra NULL IP
-            end
-            i -= 1
-            j -= 1
-        end
-        @assert i == j == 0 "metadata stripping failed i=$i j=$j data[1:i]=$(data[1:i])"
-        return data_stripped
     end
+    return strip_meta(data)
 end
 
+function strip_meta(data)
+    nblocks = 0
+    for i = 2:length(data)
+        if is_block_end(data, i) # detect block ends and count them
+            nblocks += 1
+        end
+    end
+    data_stripped = Vector{UInt}(undef, length(data) - (nblocks * (nmeta + 1)))
+    j = length(data_stripped)
+    i = length(data)
+    while i > 0 && j > 0
+        data_stripped[j] = data[i]
+        if is_block_end(data, i)
+            i -= (nmeta + 1) # metadata fields and the extra NULL IP
+        end
+        i -= 1
+        j -= 1
+    end
+    @assert i == j == 0 "metadata stripping failed i=$i j=$j data[1:i]=$(data[1:i])"
+    return data_stripped
+end
+
+"""
+    Profile.add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0f0f0f0f0) -> data_with_meta
+
+The converse of `Profile.fetch(;include_meta = false)`; this will add fake metadata, and can be used
+for compatibility and by packages (e.g., FlameGraphs.jl) that would rather not depend on the internal
+details of the metadata format.
+"""
+function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0f0f0f0f0)
+    any(Base.Fix1(is_block_end, data), eachindex(data)) && error("input already has metadata")
+    cpu_clock_cycle = UInt64(99)
+    data_with_meta = similar(data, 0)
+    for i = 1:length(data)
+        val = data[i]
+        if iszero(val)
+            # (threadid, taskid, cpu_cycle_clock, thread_sleeping)
+            push!(data_with_meta, threadid, taskid, cpu_clock_cycle+=1, false+1, 0, 0)
+        else
+            push!(data_with_meta, val)
+        end
+    end
+    return data_with_meta
+end
 
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level and at the topmost level
@@ -807,7 +832,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     skip = false
     nsleeping = 0
     for i in startframe:-1:1
-        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
+        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (it's read ahead below) and extra block end NULL IP
         ip = all[i]
         if is_block_end(all, i)
             # read metadata
