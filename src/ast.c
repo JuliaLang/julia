@@ -118,7 +118,7 @@ JL_DLLEXPORT jl_sym_t *jl_acquire_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
 
 
-static uint8_t flisp_system_image[] = {
+static const uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
 };
 
