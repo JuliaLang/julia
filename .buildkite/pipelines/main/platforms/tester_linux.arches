@@ -6,4 +6,4 @@ linux           32          32              i686             false           60 
 linux           64          64_rr           x86_64           false           180          v3.2            474bf61a926b2d7fcf202284d59d4b11a04601d7
 linux           64          64_st           x86_64           false           60           v3.2            474bf61a926b2d7fcf202284d59d4b11a04601d7
 linux           64          64_mt           x86_64           false           60           v3.2            474bf61a926b2d7fcf202284d59d4b11a04601d7
-musl            64          64              x86_64           false           60           v3.19           e6a2730e37c386c46915b2650d6aaaa398195152
+musl            64          64              x86_64           true            60           v3.19           e6a2730e37c386c46915b2650d6aaaa398195152
