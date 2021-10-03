@@ -8,7 +8,9 @@ steps:
     key: doctest
     plugins:
       - JuliaCI/julia#v1:
-          version: 1.6
+          # Drop default "registries" directory, so it is not persisted from execution to execution
+          persist_depot_dirs: packages,artifacts,compiled
+          version: '1.6'
       - staticfloat/sandbox#v1:
           rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
           rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
