@@ -1579,7 +1579,6 @@ for (V, PT, BT) in Any[((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArra
 
             sumc = 0
             ind = 1
-            @nexprs 1 d->(counts_{$N+1} = strides_{$N+1}) # a trick to set counts_($N+1)
             @nloops($N, i, P,
                     d->(sumc += i_d*strides_{d+1}), # PRE
                     d->(sumc -= i_d*strides_{d+1}), # POST
