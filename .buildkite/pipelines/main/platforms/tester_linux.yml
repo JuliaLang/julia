@@ -4,16 +4,17 @@ agents:
   sandbox.jl: "true"
   os: "linux"
 steps:
-  - label: "tester_linux${ARCH_LABEL?}"
-    key: tester_linux${ARCH_LABEL?}
-    depends_on: package_linux${ARCH?}
+  - label: "tester_${PLATFORM?}${ARCH_LABEL?}"
+    key: tester_${PLATFORM?}${ARCH_LABEL?}
+    depends_on: package_${PLATFORM?}${ARCH?}
     plugins:
       - JuliaCI/julia#v1:
           # Drop default "registries" directory, so it is not persisted from execution to execution
           persist_depot_dirs: packages,artifacts,compiled
           version: '1.6'
       - staticfloat/sandbox#v1:
-          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/${ROOTFS_TAG?}/package_linux.${ROOTFS_ARCH?}.tar.gz
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/${ROOTFS_TAG?}/package_${PLATFORM?}.${ROOTFS_ARCH?}.tar.gz
+          # rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/${ROOTFS_TAG?}/tester${PLATFORM?}.${ROOTFS_ARCH?}.tar.gz
           rootfs_treehash: "${ROOTFS_TREE?}"
           uid: 1000
           gid: 1000
@@ -23,6 +24,7 @@ steps:
     env:
       JULIA_SHELL: "/bin/bash"
     timeout_in_minutes: ${TIMEOUT?}
+    soft_fail: ${ALLOW_FAIL?}
     commands: |
       echo "--- Print the full and short commit hashes"
       SHORT_COMMIT_LENGTH=10
@@ -30,7 +32,7 @@ steps:
       JULIA_DIR="julia-$${SHORT_COMMIT:?}"
       JULIA_BINARY="$${JULIA_DIR:?}/bin/julia"
       ARTIFACT_FILE_EXTENSION="tar.gz"
-      ARTIFACT_FILENAME="julia-$${SHORT_COMMIT:?}-linux${ARCH?}.$${ARTIFACT_FILE_EXTENSION:?}"
+      ARTIFACT_FILENAME="julia-$${SHORT_COMMIT:?}-${PLATFORM?}${ARCH?}.$${ARTIFACT_FILE_EXTENSION:?}"
       echo "The full commit is:                     $${BUILDKITE_COMMIT:?}"
       echo "The short commit is:                    $${SHORT_COMMIT:?}"
       echo "The artifact filename will be:    $${ARTIFACT_FILENAME:?}"

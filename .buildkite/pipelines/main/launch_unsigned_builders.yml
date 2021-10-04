@@ -13,19 +13,21 @@
 # something about the privileged steps.
 
 steps:
-  - label: ":buildkite: Launch unsigned builders"
+  - label: ":buildkite: Launch unsigned jobs"
     commands: |
-      # Launch the `whitespace` builder first, because we want that builder to finish as quickly as possible.
-      buildkite-agent pipeline upload .buildkite/pipelines/main/misc/whitespace.yml
-
-      # Launch the miscellaneous builders in alphabetical order.
+      # Launch the miscellaneous jobs in alphabetical order.
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/doctest.yml
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/embedding.yml
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/llvmpasses.yml
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/sanitizers.yml
 
-      # Launch all of the platform builders.
+      # Launch all of the platform jobs.
       bash .buildkite/pipelines/main/platforms/platforms.sh package_linux
       bash .buildkite/pipelines/main/platforms/platforms.sh tester_linux
+
+      # Launch the `whitespace` job last. Uploading it last actually causes it to start
+      # first. We want this job to start first because we want it to finish as quickly
+      # as possible.
+      buildkite-agent pipeline upload .buildkite/pipelines/main/misc/whitespace.yml
     agents:
       queue: julia
