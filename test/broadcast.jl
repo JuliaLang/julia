@@ -1058,3 +1058,13 @@ end
     @test println.(buf, [1,2,3]) == [nothing, nothing, nothing]
     @test String(take!(buf)) == "1\n2\n3\n"
 end
+
+@testset "Memory allocation inconsistency in broadcasting #41565" begin
+    function test(y)
+        y .= 0 .- y ./ (y.^2) # extra allocation
+        return y
+    end
+    arr = rand(1000)
+    @allocated test(arr)
+    @test (@allocated test(arr)) == 0
+end
