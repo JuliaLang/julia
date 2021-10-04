@@ -113,6 +113,9 @@ Standard library changes
 * The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
   and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
 
+#### Unicode
+* Added function `isequivalent` to check for Unicode equivalence without
+  explicitly constructing normalized strings ([#42493]).
 
 Deprecated or removed
 ---------------------
