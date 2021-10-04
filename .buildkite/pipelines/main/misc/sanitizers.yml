@@ -24,3 +24,23 @@ steps:
     commands: |
       echo "--- Build julia-debug with ASAN"
       contrib/asan/build.sh ./tmp/test-asan -j$${JULIA_CPU_THREADS:?} debug
+  - label: "tsan"
+    key: "tsan"
+    plugins:
+      - JuliaCI/julia#v1:
+          # Drop default "registries" directory, so it is not persisted from execution to execution
+          persist_depot_dirs: packages,artifacts,compiled
+          version: '1.6'
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/llvm_passes.x86_64.tar.gz
+          rootfs_treehash: "9dd715500b117a16fcfa419ea0bca0c0ca902cee"
+          uid: 1000
+          gid: 1000
+          workspaces:
+            - "/cache/repos:/cache/repos"
+    timeout_in_minutes: 120
+    if: | # We only run the `tsan` job on Julia 1.8 and later.
+      (pipeline.slug != "julia-release-1-dot-6") && (pipeline.slug != "julia-release-1-dot-7")
+    commands: |
+      echo "--- Build julia-debug runtime with TSAN"
+      contrib/tsan/build.sh ./tmp/test-tsan -j$${JULIA_CPU_THREADS:?} julia-src-debug
