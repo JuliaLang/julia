@@ -945,6 +945,8 @@ function modf(x::Float64)
 end
 
 @inline function ^(x::Float64, y::Float64)
+    yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
+    y == yint && return x^yint
     z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
@@ -952,6 +954,8 @@ end
     z
 end
 @inline function ^(x::Float32, y::Float32)
+    yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
+    y == yint && return x^yint
     z = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
@@ -960,21 +964,36 @@ end
 end
 @inline ^(x::Float16, y::Float16) = Float16(Float32(x)^Float32(y))  # TODO: optimize
 
-@inline function ^(x::Float64, y::Integer)
-    y == -1 && return inv(x)
-    y == 0 && return one(x)
-    y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+# compensated power by squaring
+@inline function ^(x::Float64, n::Integer)
+    n == 0 && return one(x)
+    y = 1.0
+    xnlo = ynlo = 0.0
+    if n < 0
+        rx = inv(x)
+        isfinite(x) && (xnlo = fma(x, rx, -1.) * rx)
+        x = rx
+        n = -n
+    end
+    n==3 && return x*x*x #keep compatability with literal_pow
+    while n > 1
+        if n&1 > 0
+            yn = x*y
+            ynlo = fma(x, y , -yn) + muladd(y, xnlo, x*ynlo)
+            y = yn
+        end
+        xn = x * x
+        xnlo = muladd(x, 2*xnlo, fma(x, x, -xn))
+        x = xn
+        n >>>= 1
+    end
+    !isfinite(x) && return x*y
+    return muladd(x, y, muladd(y, xnlo, x*ynlo))
 end
-@inline function ^(x::Float32, y::Integer)
-    y == -1 && return inv(x)
-    y == 0 && return one(x)
-    y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+@inline function ^(x::Float32, n::Integer)
+    n < 0 && return inv(x)^(-n)
+    n==3 && return x*x*x #keep compatability with literal_pow
+    Float32(Base.power_by_squaring(Float64(x),n))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
