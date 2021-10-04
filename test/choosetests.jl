@@ -23,13 +23,15 @@ Upon return:
   - `seed` is a seed which will be used to initialize the global RNG for each
     test to be run.
 
-Three options can be passed to `choosetests` by including a special token
+Several options can be passed to `choosetests` by including a special token
 in the `choices` argument:
    - "--skip", which makes all tests coming after be skipped,
    - "--exit-on-error" which sets the value of `exit_on_error`,
    - "--seed=SEED", which sets the value of `seed` to `SEED`
      (parsed as an `UInt128`); `seed` is otherwise initialized randomly.
      This option can be used to reproduce failed tests.
+   - "--help", which prints a help message and then skips all tests.
+   - "--help-list", which prints the options computed without running them.
 """
 function choosetests(choices = [])
     testnames = [
@@ -59,14 +61,15 @@ function choosetests(choices = [])
     ]
 
     tests = []
-    skip_tests = []
+    skip_tests = Set()
     exit_on_error = false
     use_revise = false
     seed = rand(RandomDevice(), UInt128)
+    dryrun = false
 
     for (i, t) in enumerate(choices)
         if t == "--skip"
-            skip_tests = choices[i + 1:end]
+            union!(skip_tests, choices[i + 1:end])
             break
         elseif t == "--exit-on-error"
             exit_on_error = true
@@ -74,10 +77,35 @@ function choosetests(choices = [])
             use_revise = true
         elseif startswith(t, "--seed=")
             seed = parse(UInt128, t[8:end])
+        elseif t == "--help-list"
+            dryrun = true
+        elseif t == "--help"
+            println("""
+                USAGE: ./julia runtests.jl [options] [tests]
+                OPTIONS:
+                  --exit-on-error      : stop tests immediately when a test group fails
+                  --help               : prints this help message
+                  --help-list          : prints the options computed without running them
+                  --revise             : load Revise
+                  --seed=<SEED>        : set the initial seed for all testgroups (parsed as a UInt128)
+                  --skip <NAMES>...    : skip test or collection tagged with <NAMES>
+                TESTS:
+                  Can be special tokens, such as "all", "unicode", "stdlib", the names of stdlib \
+                  modules, or the names of any file in the TESTNAMES array (defaults to "all").
+
+                  Or prefix a name with `-` (such as `-core`) to skip a particular test.
+                """)
+            return [], false, false, false, UInt128(0)
+        elseif startswith(t, "--")
+            error("unknown option: $t")
+        elseif startswith(t, "-")
+            push!(skip_tests, t[2:end])
         else
             push!(tests, t)
         end
     end
+
+    unhandled = copy(skip_tests)
 
     if tests == ["all"] || isempty(tests)
         tests = testnames
@@ -87,6 +115,7 @@ function choosetests(choices = [])
        flt = x -> (x != name && !(x in files))
        if name in skip_tests
            filter!(flt, tests)
+           pop!(unhandled, name)
        elseif name in tests
            filter!(flt, tests)
            prepend!(tests, files)
@@ -133,6 +162,7 @@ function choosetests(choices = [])
         filter!(x -> x != "rounding", tests)
     end
 
+    filter!(!in(tests), unhandled)
     filter!(!in(skip_tests), tests)
 
     new_tests = String[]
@@ -154,7 +184,26 @@ function choosetests(choices = [])
     explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
 
     # Filter out tests from the test groups in the stdlibs
+    filter!(!in(tests), unhandled)
     filter!(!in(skip_tests), tests)
+
+    if !isempty(unhandled)
+        @warn "Not skipping tests: $(join(unhandled, ", "))"
+    end
+
+    if dryrun
+        print("Tests enabled to run:")
+        foreach(t -> print("\n  ", t), tests)
+        if !isempty(skip_tests)
+            print("\n\nTests skipped:")
+            foreach(t -> print("\n  ", t), skip_tests)
+        end
+        print("\n")
+        exit_on_error && (print("\nwith option "); printstyled("exit_on_error", bold=true))
+        use_revise && (print("\nwith option "); printstyled("use_revise", bold=true); print(" (Revise.jl)"))
+        print("\n\n")
+        empty!(tests)
+    end
 
     tests, net_on, exit_on_error, use_revise, seed
 end
