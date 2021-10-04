@@ -1,0 +1,43 @@
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+
+steps:
+  - label: "upload_s3_musl64"
+    key: upload_s3_musl64
+    depends_on: package_musl64
+    if: |
+      (pipeline.slug == "julia-master") && (build.branch == "master") && (build.pull_request.id == null)
+    commands: |
+      echo "--- Print the full and short commit hashes"
+      SHORT_COMMIT_LENGTH=10
+      SHORT_COMMIT=`echo $${BUILDKITE_COMMIT:?} | cut -c1-$${SHORT_COMMIT_LENGTH:?}`
+      ARTIFACT_FILENAME="julia-$${SHORT_COMMIT:?}-musl64.tar.gz"
+
+      echo "--- Download build artifacts"
+      rm -rf $${ARTIFACT_FILENAME:?}
+      buildkite-agent artifact download $${ARTIFACT_FILENAME:?} .
+
+      echo "--- Upload build artifacts to S3"
+      # Upload to the following URL:
+      # https://julialangnightlies-s3.julialang.org/bin/linux/x64/julia-latest-musl64.tar.gz
+      export NEW_ARTIFACT_FILENAME="julia-latest-musl64.tar.gz"
+      export BUILDKITE_ARTIFACT_UPLOAD_DESTINATION="s3://julialangnightlies-s3/bin/linux/x64"
+      export BUILDKITE_S3_DEFAULT_REGION="us-east-1"
+      if [[ "$${ARTIFACT_FILENAME:?}" != "$${NEW_ARTIFACT_FILENAME:?}" ]]; then
+        mv $${ARTIFACT_FILENAME:?} $${NEW_ARTIFACT_FILENAME:?}
+      fi
+
+      # From the Buildkite documentation:
+      # > By default the agent will create objects with public-read permissions, so that
+      # > clicking on an artifact link in the Buildkite web interface can go directly to the
+      # > S3 object to be viewed in the browser.
+
+      buildkite-agent artifact upload $${ARTIFACT_FILENAME:?}
+    timeout_in_minutes: 60
+
+# We must accept the signed job id secret in order to propagate secrets
+env:
+  BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET: ${BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET?}

@@ -19,5 +19,7 @@ steps:
           # Our signed pipelines must have a `signature` or `signature_file` parameter that
           # verifies the treehash of the pipeline itself and the inputs listed in `inputs`
           signed_pipelines:
-            - pipeline: .buildkite/pipelines/main/misc/signed_pipeline_test.yml
+            - pipeline:       .buildkite/pipelines/main/misc/signed_pipeline_test.yml
               signature_file: .buildkite/pipelines/main/misc/signed_pipeline_test.yml.signature
+            - pipeline:       .buildkite/pipelines/main/upload_s3/musl.yml
+              signature_file: .buildkite/pipelines/main/upload_s3/musl.yml.signature
