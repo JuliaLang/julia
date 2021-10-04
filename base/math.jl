@@ -945,40 +945,15 @@ function modf(x::Float64)
 end
 
 @inline function ^(x::Float64, y::Float64)
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
     yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
-=======
-    x==0 && return Float64(y==0)
->>>>>>> make Float64 correct for 0^negative, 0^NaN
-=======
-    x == 0 && return Float64(y == 0)
->>>>>>> Update base/math.jl
-=======
->>>>>>> remove incorrect change to Float64 behavior
     z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
     end
     z
 end
-<<<<<<< HEAD
-@inline function ^(x::Float32, y::Float32)
-    yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
-    y == yint && return x^yint
-    x==0 && return T(y==0)
-=======
 @inline function ^(x::T, y::T) where T <: Union{Float16, Float32}
-<<<<<<< HEAD
-    x == 0 && return T(y == 0)
->>>>>>> Update base/math.jl
-    x = widen(x) # convert Float16/Float32 to Float32/Float64
-    x < 0 && !isinteger(y) && throw_exp_domainerror(x)
-    ans = T(exp2(log2(abs(x)) * y))
-    return (x < 0 && isodd(y)) ? -ans : ans
-=======
     yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
     x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
@@ -986,10 +961,8 @@ end
     !isfinite(x) && return x*(y>0)
     x==0 && return abs(y)*T(Inf)*(!(y>0))
     return T(exp2(log2(abs(widen(x))) * y))
->>>>>>> maybe working
 end
 
-<<<<<<< HEAD
 # compensated power by squaring
 @inline function ^(x::Float64, n::Integer)
     n == 0 && return one(x)
@@ -1020,23 +993,6 @@ end
     n < 0 && return inv(x)^(-n)
     n==3 && return x*x*x #keep compatability with literal_pow
     Float32(Base.power_by_squaring(Float64(x),n))
-=======
-@inline function ^(x::Float64, y::Integer)
-    y == -1 && return inv(x)
-    y == 0 && return one(x)
-    y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
-end
-@inline function ^(x::Float32, y::Integer)
-    y == -1 && return inv(x)
-    y == 0 && return one(x)
-    y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
->>>>>>> revert float^integer changes
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
