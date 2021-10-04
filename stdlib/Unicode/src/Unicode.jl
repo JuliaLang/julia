@@ -91,7 +91,7 @@ graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
 
 using Base.Unicode: utf8proc_error, UTF8PROC_DECOMPOSE, UTF8PROC_CASEFOLD, UTF8PROC_STRIPMARK
 
-function decompose_char!(codepoint::Union{Integer,Char}, dest::Vector{UInt32}, options::Integer)
+function _decompose_char!(codepoint::Union{Integer,Char}, dest::Vector{UInt32}, options::Integer)
   ret = @ccall utf8proc_decompose_char(codepoint::UInt32, dest::Ptr{UInt32}, length(dest)::Int, options::Cint, C_NULL::Ptr{Cint})::Int
   ret < 0 && utf8proc_error(ret)
   return ret
@@ -132,9 +132,9 @@ true
 """
 function isequivalent(s1::AbstractString, s2::AbstractString; casefold::Bool=false, stripmark::Bool=false)
   function decompose_next_char!(c, state, d, options, s)
-      n = decompose_char!(c, d, options)
+      n = _decompose_char!(c, d, options)
       if n > length(d) # may be possible in future Unicode versions?
-          n = decompose_char!(c, resize!(d, n), options)
+          n = _decompose_char!(c, resize!(d, n), options)
       end
       return 1, n, iterate(s, state)
   end
