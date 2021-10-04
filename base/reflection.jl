@@ -1218,7 +1218,7 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure), @nospecialize(types=Tuple);
+function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure), @nospecialize(types=Tuple{});
         optimize=true,
         debuginfo::Symbol=:default,
         interp = Core.Compiler.NativeInterpreter(closure.world))

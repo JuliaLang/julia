@@ -624,3 +624,12 @@ end
         end
     end
 end
+
+let # default arg types should work for no-arg functions
+    @test (code_llvm() do
+        sin(42)
+    end; true)
+    @test (code_native() do
+        sin(42)
+    end; true)
+end
