@@ -420,6 +420,9 @@ end
 
 @testset "Unicode equivalence" begin
     @test isequivalent("no\u00EBl", "noe\u0308l")
+    @test !isequivalent("no\u00EBl", "noe\u0308l ")
+    @test isequivalent("", "")
+    @test !isequivalent("", " ")
     @test !isequivalent("no\u00EBl", "NOËL")
     @test isequivalent("no\u00EBl", "NOËL", casefold=true)
     @test !isequivalent("no\u00EBl", "noel")
