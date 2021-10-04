@@ -100,7 +100,7 @@ function init_depot_path()
     if haskey(ENV, "JULIA_DEPOT_PATH")
         str = ENV["JULIA_DEPOT_PATH"]
         isempty(str) && return
-        for path in split(str, Sys.iswindows() ? ';' : ':')
+        for path in eachsplit(str, Sys.iswindows() ? ';' : ':')
             if isempty(path)
                 append_default_depot_path!(DEPOT_PATH)
             else
@@ -198,7 +198,7 @@ end
 function parse_load_path(str::String)
     envs = String[]
     isempty(str) && return envs
-    for env in split(str, Sys.iswindows() ? ';' : ':')
+    for env in eachsplit(str, Sys.iswindows() ? ';' : ':')
         if isempty(env)
             for env′ in DEFAULT_LOAD_PATH
                 env′ in envs || push!(envs, env′)

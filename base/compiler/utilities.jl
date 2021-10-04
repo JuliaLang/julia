@@ -59,7 +59,7 @@ end
 
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
+is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -156,7 +156,15 @@ function subst_trivial_bounds(@nospecialize(atypes))
     end
     v = atypes.var
     if isconcretetype(v.ub) || v.lb === v.ub
-        return subst_trivial_bounds(atypes{v.ub})
+        subst = try
+            atypes{v.ub}
+        catch
+            # Note in rare cases a var bound might not be valid to substitute.
+            nothing
+        end
+        if subst !== nothing
+            return subst_trivial_bounds(subst)
+        end
     end
     return UnionAll(v, subst_trivial_bounds(atypes.body))
 end
@@ -188,7 +196,7 @@ function specialize_method(method::Method, @nospecialize(atypes), sparams::Simpl
     if preexisting
         # check cached specializations
         # for an existing result stored there
-        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
+        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)::Union{Nothing,MethodInstance}
     end
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
 end
@@ -213,6 +221,10 @@ function method_for_inference_heuristics(method::Method, @nospecialize(sig), spa
     end
     return nothing
 end
+
+#########
+# types #
+#########
 
 argextype(@nospecialize(x), state) = argextype(x, state.src, state.sptypes, state.slottypes)
 
@@ -249,6 +261,17 @@ function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vecto
     else
         return Const(x)
     end
+end
+
+function singleton_type(@nospecialize(ft))
+    if isa(ft, Const)
+        return ft.val
+    elseif isconstType(ft)
+        return ft.parameters[1]
+    elseif ft isa DataType && isdefined(ft, :instance)
+        return ft.instance
+    end
+    return nothing
 end
 
 ###################
@@ -311,25 +334,27 @@ function is_throw_call(e::Expr)
     return false
 end
 
-function find_throw_blocks(code::Vector{Any}, ir = RefValue{IRCode}())
+function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Int})
+    for stmt in find_throw_blocks(src.code, handler_at)
+        src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
+    end
+    return nothing
+end
+
+function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
     stmts = BitSet()
     n = length(code)
-    try_depth = 0
     for i in n:-1:1
         s = code[i]
         if isa(s, Expr)
-            if s.head === :enter
-                try_depth -= 1
-            elseif s.head === :leave
-                try_depth += (s.args[1]::Int)
-            elseif s.head === :gotoifnot
-                tgt = s.args[2]::Int
-                if i+1 in stmts && tgt in stmts
+            if s.head === :gotoifnot
+                if i+1 in stmts && s.args[2]::Int in stmts
                     push!(stmts, i)
                 end
             elseif s.head === :return
+                # see `ReturnNode` handling
             elseif is_throw_call(s)
-                if try_depth == 0
+                if handler_at[i] == 0
                     push!(stmts, i)
                 end
             elseif i+1 in stmts
@@ -340,22 +365,12 @@ function find_throw_blocks(code::Vector{Any}, ir = RefValue{IRCode}())
             # (where !isdefined(s, :val)) as `throw` points, but that can cause
             # worse codegen around the call site (issue #37558)
         elseif isa(s, GotoNode)
-            tgt = s.label
-            if isassigned(ir)
-                tgt = first(ir[].cfg.blocks[tgt].stmts)
-            end
-            if tgt in stmts
+            if s.label in stmts
                 push!(stmts, i)
             end
         elseif isa(s, GotoIfNot)
-            if i+1 in stmts
-                tgt = s.dest::Int
-                if isassigned(ir)
-                    tgt = first(ir[].cfg.blocks[tgt].stmts)
-                end
-                if tgt in stmts
-                    push!(stmts, i)
-                end
+            if i+1 in stmts && s.dest in stmts
+                push!(stmts, i)
             end
         elseif i+1 in stmts
             push!(stmts, i)

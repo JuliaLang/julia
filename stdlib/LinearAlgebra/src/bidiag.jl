@@ -735,7 +735,7 @@ function ldiv!(A::Bidiagonal, b::AbstractVector)
     end
 
     if N == 0
-        return x
+        return b
     end
 
     @inbounds begin

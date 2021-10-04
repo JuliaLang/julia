@@ -6,6 +6,9 @@
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/IRBuilder.h>
 
+#define STR(csym)           #csym
+#define XSTR(csym)          STR(csym)
+
 enum AddressSpace {
     Generic = 0,
     Tracked = 10,

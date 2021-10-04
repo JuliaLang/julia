@@ -5,13 +5,20 @@ Julia v1.8 Release Notes
 New language features
 ---------------------
 
-* `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
-* `@inline` and `@noinline` annotations may now be used in function bodies. ([#41312])
+* `Module(:name, false, false)` can be used to create a `module` that contains no names (it does not import `Base` or `Core` and does not contain a reference to itself). ([#40110, #42154])
+* `@inline` and `@noinline` annotations can be used within a function body to give an extra
+  hint about the inlining cost to the compiler. ([#41312])
+* `@inline` and `@noinline` annotations can now be applied to a function callsite or block
+  to enforce the involved function calls to be (or not to be) inlined. ([#41312])
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
+* New function `eachsplit(str)` for iteratively performing `split(str)`.
 
 Language changes
 ----------------
 
+* Newly created Task objects (`@spawn`, `@async`, etc.) now adopt the world-age for methods from their parent
+  Task upon creation, instead of using the global latest world at start. This is done to enable inference to
+  eventually optimize these calls. Places that wish for the old behavior may use `Base.invokelatest`. ([#41449])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -39,7 +46,7 @@ New library features
 
 * `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
   contains "some message" regardless of the specific exception type.
-  Regular expressions, lists of strings, and matching functions are also supported. ([#41888)
+  Regular expressions, lists of strings, and matching functions are also supported. ([#41888])
 
 Standard library changes
 ------------------------
@@ -49,7 +56,9 @@ Standard library changes
   overflow in most cases. The new function `checked_length` is now available, which will try to use checked
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
   constructing the range. ([#40382])
-* TCP socket objects now expose `shutdown` functionality and support half-open mode usage ([#40783]).
+* TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
+* Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
+* `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
 
 #### InteractiveUtils
 * A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
@@ -63,10 +72,17 @@ Standard library changes
 #### Printf
 * Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
 
+#### Profile
+* Profiling now records sample metadata including thread and task. `Profile.print()` has a new `groupby` kwarg that allows
+  grouping by thread, task, or nested thread/task, task/thread, and `threads` and `tasks` kwargs to allow filtering.
+  Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
+  each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
+  profiling data consumers, but can be included with the `include_meta` kwarg. ([#41742])
+
 #### Random
 
 #### REPL
-
+* `RadioMenu` now supports optional `keybindings` to directly select options ([#41576]).
 * ` ?(x, y` followed by TAB displays all methods that can be called
   with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
   `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one

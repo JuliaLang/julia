@@ -49,6 +49,9 @@ are promoted to a common type.
 
 See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
 
+!!! compat "Julia 1.3"
+    `missing` as the first argument requires at least Julia 1.3.
+
 # Examples
 ```jldoctest
 julia> clamp.([pi, 1.0, big(10)], 2.0, 9.0)
@@ -97,6 +100,9 @@ clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
 
 Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` entries in `array` require at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -874,11 +880,39 @@ function frexp(x::T) where T<:IEEEFloat
     return reinterpret(T, xu), k
 end
 
-rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
-    ccall((:remainder, libm),Float64,(Float64,Float64),x,y)
-rem(x::Float32, y::Float32, ::RoundingMode{:Nearest}) =
-    ccall((:remainderf, libm),Float32,(Float32,Float32),x,y)
-rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) = Float16(rem(Float32(x), Float32(y), r))
+# NOTE: This `rem` method is adapted from the msun `remainder` and `remainderf`
+# functions, which are under the following license:
+#
+# Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+#
+# Developed at SunSoft, a Sun Microsystems, Inc. business.
+# Permission to use, copy, modify, and distribute this
+# software is freely granted, provided that this notice
+# is preserved.
+function rem(x::T, p::T, ::RoundingMode{:Nearest}) where T<:IEEEFloat
+    (iszero(p) || !isfinite(x) || isnan(p)) && return T(NaN)
+    x == p && return copysign(zero(T), x)
+    oldx = x
+    x = abs(rem(x, 2p))  # 2p may overflow but that's okay
+    p = abs(p)
+    if p < 2 * floatmin(T)  # Check whether dividing p by 2 will underflow
+        if 2x > p
+            x -= p
+            if 2x >= p
+                x -= p
+            end
+        end
+    else
+        p_half = p / 2
+        if x > p_half
+            x -= p
+            if x >= p_half
+                x -= p
+            end
+        end
+    end
+    return flipsign(x, oldx)
+end
 
 
 """

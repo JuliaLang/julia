@@ -271,7 +271,7 @@ JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, jl_pgcstack_key_t 
 
 JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void) JL_GLOBALLY_ROOTED
 {
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
     return jl_get_pgcstack_cb();
 #endif
 }
@@ -287,15 +287,15 @@ void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
 #endif
 
 jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
-uint8_t *jl_measure_compile_time = NULL;
-uint64_t *jl_cumulative_compile_time = NULL;
+_Atomic(uint8_t) jl_measure_compile_time_enabled = 0;
+_Atomic(uint64_t) jl_cumulative_compile_time = 0;
 
 // return calling thread's ID
 // Also update the suspended_threads list in signals-mach when changing the
 // type of the thread id.
 JL_DLLEXPORT int16_t jl_threadid(void)
 {
-    return jl_current_task->tid;
+    return jl_atomic_load_relaxed(&jl_current_task->tid);
 }
 
 jl_ptls_t jl_init_threadtls(int16_t tid)
@@ -314,7 +314,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     }
 #endif
     ptls->tid = tid;
-    ptls->gc_state = 0; // GC unsafe
+    jl_atomic_store_relaxed(&ptls->gc_state, 0); // GC unsafe
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {
@@ -467,9 +467,7 @@ void jl_init_threading(void)
     }
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
-    jl_measure_compile_time = (uint8_t*)calloc(jl_n_threads, sizeof(*jl_measure_compile_time));
-    jl_cumulative_compile_time = (uint64_t*)calloc(jl_n_threads, sizeof(*jl_cumulative_compile_time));
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
     jl_all_tls_states = (jl_ptls_t*)calloc(jl_n_threads, sizeof(void*));
 #endif
 }

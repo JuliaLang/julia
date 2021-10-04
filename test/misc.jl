@@ -263,6 +263,22 @@ function timev_macro_scope()
 end
 @test timev_macro_scope() == 1
 
+before = Base.cumulative_compile_time_ns_before();
+
+# exercise concurrent calls to `@time` for reentrant compilation time measurement.
+t1 = @async @time begin
+    sleep(2)
+    @eval module M ; f(x,y) = x+y ; end
+    @eval M.f(2,3)
+end
+t2 = @async begin
+    sleep(1)
+    @time 2 + 2
+end
+
+after = Base.cumulative_compile_time_ns_after();
+@test after >= before;
+
 # interactive utilities
 
 struct ambigconvert; end # inject a problematic `convert` method to ensure it still works

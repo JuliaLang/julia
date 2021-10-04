@@ -454,29 +454,35 @@ end
         c_di = Diagonal(rand(m)); c = sparse(c_di); c_d = Array(c_di)
         d_di = Diagonal(rand(n)); d = sparse(d_di); d_d = Array(d_di)
         # mat ⊗ mat
-        @test Array(kron(a, b)) == kron(a_d, b_d)
-        @test Array(kron(a_d, b)) == kron(a_d, b_d)
-        @test Array(kron(a, b_d)) == kron(a_d, b_d)
-        @test issparse(kron(c, d_di))
-        @test Array(kron(c, d_di)) == kron(c_d, d_d)
-        @test issparse(kron(c_di, d))
-        @test Array(kron(c_di, d)) == kron(c_d, d_d)
-        @test issparse(kron(c_di, y))
-        @test Array(kron(c_di, y)) == kron(c_di, y_d)
-        @test issparse(kron(x, d_di))
-        @test Array(kron(x, d_di)) == kron(x_d, d_di)
+        for t in (identity, adjoint, transpose)
+            @test Array(kron(t(a), b)::SparseMatrixCSC) == kron(t(a_d), b_d)
+            @test Array(kron(a, t(b))::SparseMatrixCSC) == kron(a_d, t(b_d))
+            @test Array(kron(t(a), t(b))::SparseMatrixCSC) == kron(t(a_d), t(b_d))
+            @test Array(kron(a_d, t(b))::SparseMatrixCSC) == kron(a_d, t(b_d))
+            @test Array(kron(t(a), b_d)::SparseMatrixCSC) == kron(t(a_d), b_d)
+            @test issparse(kron(c, d_di))
+            @test Array(kron(c, d_di)) == kron(c_d, d_d)
+            @test issparse(kron(c_di, d))
+            @test Array(kron(c_di, d)) == kron(c_d, d_d)
+            @test issparse(kron(c_di, y))
+            @test Array(kron(c_di, y)) == kron(c_di, y_d)
+            @test issparse(kron(x, d_di))
+            @test Array(kron(x, d_di)) == kron(x_d, d_di)
+        end
         # vec ⊗ vec
         @test Vector(kron(x, y)) == kron(x_d, y_d)
         @test Vector(kron(x_d, y)) == kron(x_d, y_d)
         @test Vector(kron(x, y_d)) == kron(x_d, y_d)
-        # mat ⊗ vec
-        @test Array(kron(a, y)) == kron(a_d, y_d)
-        @test Array(kron(a_d, y)) == kron(a_d, y_d)
-        @test Array(kron(a, y_d)) == kron(a_d, y_d)
-        # vec ⊗ mat
-        @test Array(kron(x, b)) == kron(x_d, b_d)
-        @test Array(kron(x_d, b)) == kron(x_d, b_d)
-        @test Array(kron(x, b_d)) == kron(x_d, b_d)
+        for t in (identity, adjoint, transpose)
+            # mat ⊗ vec
+            @test Array(kron(t(a), y)::SparseMatrixCSC) == kron(t(a_d), y_d)
+            @test Array(kron(t(a_d), y)) == kron(t(a_d), y_d)
+            @test Array(kron(t(a), y_d)::SparseMatrixCSC) == kron(t(a_d), y_d)
+            # vec ⊗ mat
+            @test Array(kron(x, t(b))::SparseMatrixCSC) == kron(x_d, t(b_d))
+            @test Array(kron(x_d, t(b))::SparseMatrixCSC) == kron(x_d, t(b_d))
+            @test Array(kron(x, t(b_d))) == kron(x_d, t(b_d))
+        end
         # vec ⊗ vec'
         @test issparse(kron(v, y'))
         @test issparse(kron(x, y'))
@@ -786,6 +792,8 @@ end
     end
 
     @testset "empty cases" begin
+        errchecker(str) = occursin("reducing over an empty collection is not allowed", str) ||
+                          occursin("collection slices must be non-empty", str)
         @test sum(sparse(Int[])) === 0
         @test prod(sparse(Int[])) === 1
         @test_throws ArgumentError minimum(sparse(Int[]))
@@ -798,9 +806,9 @@ end
             @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
         end
         for f in (minimum, maximum, findmin, findmax)
-            @test_throws ArgumentError f(spzeros(0, 1), dims=1)
+            @test_throws errchecker f(spzeros(0, 1), dims=1)
             @test isequal(f(spzeros(0, 1), dims=2), f(Matrix{Int}(I, 0, 1), dims=2))
-            @test_throws ArgumentError f(spzeros(0, 1), dims=(1, 2))
+            @test_throws errchecker f(spzeros(0, 1), dims=(1, 2))
             @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
         end
     end
@@ -1739,10 +1747,10 @@ end
 end
 
 @testset "droptol" begin
-    local A = guardseed(1234321) do
+    A = guardseed(1234321) do
         triu(sprand(10, 10, 0.2))
     end
-    @test getcolptr(SparseArrays.droptol!(A, 0.01)) == [1, 1, 1, 1, 3, 3, 5, 6, 8, 11, 12]
+    @test getcolptr(SparseArrays.droptol!(A, 0.01)) == [1, 1, 1, 1, 2, 2, 2, 4, 4, 5, 5]
     @test isequal(SparseArrays.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1, 1, Int[1, 1], Int[], Int[]))
 end
 
@@ -2074,7 +2082,7 @@ end
 end
 
 @testset "sparse matrix opnormestinv" begin
-    Random.seed!(1234)
+    Random.seed!(1235)
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
     Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)

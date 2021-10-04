@@ -81,6 +81,14 @@ import Base.<
 @test isequal(minmax(TO23094(2), TO23094(1))[1], TO23094(1))
 @test isequal(minmax(TO23094(2), TO23094(1))[2], TO23094(2))
 
+let m = Module()
+    @eval m begin
+        struct Foo end
+        foo(xs) = isequal(xs[1], Foo())
+    end
+    @test !(@inferred m.foo(Any[42]))
+end
+
 @test isless('a','b')
 
 @testset "isgreater" begin

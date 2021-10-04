@@ -10,6 +10,9 @@
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
+#if JL_LLVM_VERSION >= 130000
+#include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
+#endif
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
@@ -76,16 +79,16 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
 extern "C" JL_DLLEXPORT
 uint64_t jl_cumulative_compile_time_ns_before()
 {
-    int tid = jl_threadid();
-    jl_measure_compile_time[tid] = 1;
-    return jl_cumulative_compile_time[tid];
+    // Increment the flag to allow reentrant callers to `@time`.
+    jl_atomic_fetch_add(&jl_measure_compile_time_enabled, 1);
+    return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
 }
 extern "C" JL_DLLEXPORT
 uint64_t jl_cumulative_compile_time_ns_after()
 {
-    int tid = jl_threadid();
-    jl_measure_compile_time[tid] = 0;
-    return jl_cumulative_compile_time[tid];
+    // Decrement the flag when done measuring, allowing other callers to continue measuring.
+    jl_atomic_fetch_add(&jl_measure_compile_time_enabled, -1);
+    return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
 }
 
 // this generates llvm code for the lambda info
@@ -173,14 +176,14 @@ static jl_callptr_t _jl_compile_codeinst(
             // once set, don't change invoke-ptr, as that leads to race conditions
             // with the (not) simultaneous updates to invoke and specptr
             if (!decls.specFunctionObject.empty()) {
-                this_code->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
+                jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
                 this_code->isspecsig = isspecsig;
             }
             jl_atomic_store_release(&this_code->invoke, addr);
         }
         else if (this_code->invoke == jl_fptr_const_return && !decls.specFunctionObject.empty()) {
             // hack to export this pointer value to jl_dump_method_disasm
-            this_code->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
+            jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
         }
         if (this_code== codeinst)
             fptr = addr;
@@ -231,8 +234,8 @@ int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt
 {
     JL_LOCK(&codegen_lock);
     uint64_t compiler_start_time = 0;
-    int tid = jl_threadid();
-    if (jl_measure_compile_time[tid])
+    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     jl_codegen_params_t params;
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
@@ -256,8 +259,8 @@ int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt
         if (success && llvmmod == NULL)
             jl_add_to_ee(std::unique_ptr<Module>(into));
     }
-    if (codegen_lock.count == 1 && jl_measure_compile_time[tid])
-        jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
+    if (codegen_lock.count == 1 && measure_compile_time_enabled)
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     JL_UNLOCK(&codegen_lock);
     return success;
 }
@@ -313,8 +316,8 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
 {
     JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
     uint64_t compiler_start_time = 0;
-    int tid = jl_threadid();
-    if (jl_measure_compile_time[tid])
+    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     // if we don't have any decls already, try to generate it now
     jl_code_info_t *src = NULL;
@@ -352,8 +355,8 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
     else {
         codeinst = NULL;
     }
-    if (codegen_lock.count == 1 && jl_measure_compile_time[tid])
-        jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
+    if (codegen_lock.count == 1 && measure_compile_time_enabled)
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     JL_UNLOCK(&codegen_lock);
     JL_GC_POP();
     return codeinst;
@@ -367,8 +370,8 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
     }
     JL_LOCK(&codegen_lock);
     uint64_t compiler_start_time = 0;
-    int tid = jl_threadid();
-    if (jl_measure_compile_time[tid])
+    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     if (unspec->invoke == NULL) {
         jl_code_info_t *src = NULL;
@@ -396,8 +399,8 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
         }
         JL_GC_POP();
     }
-    if (codegen_lock.count == 1 && jl_measure_compile_time[tid])
-        jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
+    if (codegen_lock.count == 1 && measure_compile_time_enabled)
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     JL_UNLOCK(&codegen_lock); // Might GC
 }
 
@@ -410,20 +413,20 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
     // printing via disassembly
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
     if (codeinst) {
-        uintptr_t fptr = (uintptr_t)codeinst->invoke;
+        uintptr_t fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
         if (getwrapper)
             return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
-        uintptr_t specfptr = (uintptr_t)codeinst->specptr.fptr;
+        uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
             uint64_t compiler_start_time = 0;
-            int tid = jl_threadid();
-            if (jl_measure_compile_time[tid])
+            uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+            if (measure_compile_time_enabled)
                 compiler_start_time = jl_hrtime();
-            specfptr = (uintptr_t)codeinst->specptr.fptr;
+            specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
             if (specfptr == 0) {
                 jl_code_info_t *src = jl_type_infer(mi, world, 0);
                 JL_GC_PUSH1(&src);
@@ -436,18 +439,18 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
                     if (src && (jl_value_t*)src != jl_nothing)
                         src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
                 }
-                fptr = (uintptr_t)codeinst->invoke;
-                specfptr = (uintptr_t)codeinst->specptr.fptr;
+                fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
+                specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
                         fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world);
-                        specfptr = (uintptr_t)codeinst->specptr.fptr;
+                        specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }
                 JL_GC_POP();
             }
-            if (jl_measure_compile_time[tid])
-                jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
+            if (measure_compile_time_enabled)
+                jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
             JL_UNLOCK(&codegen_lock);
         }
         if (specfptr != 0)
@@ -654,7 +657,11 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
     MemMgr(createRTDyldMemoryManager()),
     JuliaListener(CreateJuliaJITEventListener()),
     TSCtx(std::unique_ptr<LLVMContext>(LLVMCtx)),
+#if JL_LLVM_VERSION >= 130000
+    ES(cantFail(orc::SelfExecutorProcessControl::Create())),
+#else
     ES(),
+#endif
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ObjectLayer(
@@ -824,18 +831,19 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 static int globalUniqueGeneratedNames;
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
-    auto &fname = ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
-    if (fname.empty()) {
+    std::string *fname = &ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
+    if (fname->empty()) {
         std::string string_fname;
         raw_string_ostream stream_fname(string_fname);
         // try to pick an appropriate name that describes it
-        if (Addr == (uintptr_t)codeinst->invoke) {
+        jl_callptr_t invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+        if (Addr == (uintptr_t)invoke) {
             stream_fname << "jsysw_";
         }
-        else if (codeinst->invoke == &jl_fptr_args) {
+        else if (invoke == &jl_fptr_args) {
             stream_fname << "jsys1_";
         }
-        else if (codeinst->invoke == &jl_fptr_sparam) {
+        else if (invoke == &jl_fptr_sparam) {
             stream_fname << "jsys3_";
         }
         else {
@@ -843,10 +851,10 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
         stream_fname << unadorned_name << "_" << globalUniqueGeneratedNames++;
-        fname = strdup(stream_fname.str().c_str());
-        addGlobalMapping(fname, Addr);
+        *fname = std::move(stream_fname.str()); // store to ReverseLocalSymbolTable
+        addGlobalMapping(*fname, Addr);
     }
-    return fname;
+    return *fname;
 }
 
 

@@ -144,7 +144,7 @@ function complete_symbol(sym::String, ffunc, context_module::Module=Main)
             if isa(b, Module)
                 mod = b
                 lookup_module = true
-            elseif Base.isstructtype(typeof(b))
+            else
                 lookup_module = false
                 t = typeof(b)
             end

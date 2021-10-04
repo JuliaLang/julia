@@ -62,7 +62,7 @@ Close an I/O stream. Performs a [`flush`](@ref) first.
 function close end
 
 """
-    shutdown(stream)
+    closewrite(stream)
 
 Shutdown the write half of a full-duplex I/O stream. Performs a [`flush`](@ref)
 first. Notify the other end that no more data will be written to the underlying
@@ -76,12 +76,13 @@ julia> write(io, "request");
 
 julia> # calling `read(io)` here would block forever
 
-julia> shutdown(io);
+julia> closewrite(io);
 
 julia> read(io, String)
 "request"
+```
 """
-function shutdown end
+function closewrite end
 
 """
     flush(stream)
@@ -410,7 +411,7 @@ end
 function pipe_reader end
 function pipe_writer end
 
-for f in (:flush, :shutdown, :iswritable)
+for f in (:flush, :closewrite, :iswritable)
     @eval $(f)(io::AbstractPipe) = $(f)(pipe_writer(io)::IO)
 end
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
@@ -548,7 +549,8 @@ end
 
 Read all lines of an I/O stream or a file as a vector of strings. Behavior is
 equivalent to saving the result of reading [`readline`](@ref) repeatedly with the same
-arguments and saving the resulting lines as a vector of strings.
+arguments and saving the resulting lines as a vector of strings.  See also
+[`eachline`](@ref) to iterate over the lines without reading them all at once.
 
 # Examples
 ```jldoctest

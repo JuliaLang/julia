@@ -205,7 +205,13 @@ end
     return n
 end
 
-function string(a::Union{Char, String, SubString{String}}...)
+@inline function __unsafe_string!(out, s::Symbol, offs::Integer)
+    n = sizeof(s)
+    GC.@preserve s out unsafe_copyto!(pointer(out, offs), unsafe_convert(Ptr{UInt8},s), n)
+    return n
+end
+
+function string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
     for v in a
         if v isa Char

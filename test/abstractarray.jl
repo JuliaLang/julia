@@ -514,6 +514,9 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test convert(Matrix, Y) == Y
     @test convert(Matrix, view(Y, 1:2, 1:2)) == Y
     @test_throws MethodError convert(Matrix, X)
+
+    # convert(::Type{Union{}}, A::AbstractMatrix)
+    @test_throws MethodError convert(Union{}, X)
 end
 
 mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
@@ -1433,7 +1436,8 @@ using Base: typed_hvncat
             v1 == v2 == 1 && continue
             for v3 ∈ ((), (1,), ([1],), (1, [1]), ([1], 1), ([1], [1]))
                 @test_throws ArgumentError hvncat((v1, v2), true, v3...)
-                @test_throws ArgumentError hvncat(((v1,), (v2,)), true, v3...)
+                @test_throws str->(occursin("`shape` argument must consist of positive integers", str) ||
+                                   occursin("reducing over an empty collection is not allowed", str)) hvncat(((v1,), (v2,)), true, v3...)
             end
         end
     end

@@ -463,7 +463,7 @@ end
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
 function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer) where T
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
-    @_inline_meta
+    @inline
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     u = i - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
@@ -766,7 +766,7 @@ narrow(::Type{Float32}) = Float16
 narrow(::Type{Float16}) = Float16
 
 function _tp_prod(t::TwicePrecision, x, y...)
-    @_inline_meta
+    @inline
     _tp_prod(t * x, y...)
 end
 _tp_prod(t::TwicePrecision) = t

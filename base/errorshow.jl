@@ -199,19 +199,20 @@ function print_with_compare(io::IO, @nospecialize(a), @nospecialize(b), color::S
     end
 end
 
-function show_convert_error(io::IO, ex::MethodError, @nospecialize(arg_types_param))
+function show_convert_error(io::IO, ex::MethodError, arg_types_param)
     # See #13033
     T = striptype(ex.args[1])
     if T === nothing
         print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
     else
-        print_one_line = isa(T, DataType) && isa(arg_types_param[2], DataType) && T.name != arg_types_param[2].name
+        p2 = arg_types_param[2]
+        print_one_line = isa(T, DataType) && isa(p2, DataType) && T.name != p2.name
         printstyled(io, "Cannot `convert` an object of type ")
         print_one_line || printstyled(io, "\n  ")
-        print_with_compare(io, arg_types_param[2], T, :light_green)
+        print_with_compare(io, p2, T, :light_green)
         printstyled(io, " to an object of type ")
         print_one_line || printstyled(io, "\n  ")
-        print_with_compare(io, T, arg_types_param[2], :light_red)
+        print_with_compare(io, T, p2, :light_red)
     end
 end
 
@@ -226,6 +227,7 @@ function showerror(io::IO, ex::MethodError)
         return showerror_ambiguous(io, meth, f, arg_types)
     end
     arg_types_param::SimpleVector = arg_types.parameters
+    show_candidates = true
     print(io, "MethodError: ")
     ft = typeof(f)
     name = ft.name.mt.name
@@ -242,6 +244,9 @@ function showerror(io::IO, ex::MethodError)
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
+    elseif f === mapreduce_empty || f === reduce_empty
+        print(io, "reducing over an empty collection is not allowed; consider supplying `init` to the reducer")
+        show_candidates = false
     elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
@@ -314,7 +319,7 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
-    try
+    show_candidates && try
         show_method_candidates(io, ex, kwargs)
     catch ex
         @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
@@ -414,7 +419,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
-                    sigstr = (unwrap_unionall(sig[i]).T, "...")
+                    sigstr = (unwrapva(unwrap_unionall(sig[i])), "...")
                     j = length(t_i)
                 else
                     sigstr = (sig[i],)
@@ -451,7 +456,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
                 for t in arg_types_param[length(sig):end]
-                    if t <: rewrap_unionall(unwrap_unionall(sig[end]).T, method.sig)
+                    if t <: rewrap_unionall(unwrapva(unwrap_unionall(sig[end])), method.sig)
                         right_matches += 1
                     end
                 end
@@ -464,7 +469,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
                         sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
-                            sigstr = ((sigtype::Core.TypeofVararg).T, "...")
+                            sigstr = (unwrapva(sigtype::Core.TypeofVararg), "...")
                         else
                             sigstr = (sigtype,)
                         end

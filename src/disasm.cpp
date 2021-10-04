@@ -229,17 +229,21 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
             // if so, drop all existing calls to it from the top of the context
             // AND check if instead the context was previously printed that way
             // but now has removed the recursive frames
-            StringRef method = StringRef(context.at(nctx - 1).FunctionName).rtrim(';');
+            StringRef method = StringRef(context.at(nctx - 1).FunctionName).rtrim(';'); // last matching frame
             if ((nctx < nframes && StringRef(DI.at(nframes - nctx - 1).FunctionName).rtrim(';') == method) ||
                 (nctx < context.size() && StringRef(context.at(nctx).FunctionName).rtrim(';') == method)) {
                 update_line_only = true;
-                while (nctx > 0 && StringRef(context.at(nctx - 1).FunctionName).rtrim(';') == method) {
+                // transform nctx to exclude the combined frames
+                while (nctx > 0 && StringRef(context.at(nctx - 1).FunctionName).rtrim(';') == method)
                     nctx -= 1;
-                }
             }
         }
-        else if (context.size() > 0) {
-            update_line_only = true;
+        if (!update_line_only && nctx < context.size() && nctx < nframes) {
+            // look at the first non-matching element to see if we are only changing the line number
+            const DILineInfo &CtxLine = context.at(nctx);
+            const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
+            if (StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';'))
+                update_line_only = true;
         }
     }
     else if (nctx < context.size() && nctx < nframes) {
@@ -857,8 +861,16 @@ static void jl_dump_asm_internal(
     assert(MRI && "Unable to create target register info!");
 
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
+#if JL_LLVM_VERSION >= 130000
+    MCSubtargetInfo *MSTI = TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features);
+    assert(MSTI && "Unable to create subtarget info!");
+
+    MCContext Ctx(TheTriple, MAI.get(), MRI.get(), MSTI, &SrcMgr);
+    MOFI->initMCObjectFileInfo(Ctx, /* PIC */ false, /* LargeCodeModel */ false);
+#else
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
     MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, Ctx);
+#endif
 
     // Set up Subtarget and Disassembler
     std::unique_ptr<MCSubtargetInfo>

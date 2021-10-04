@@ -46,6 +46,7 @@ module MiniCassette
         # Insert one SSAValue for every argument statement
         prepend!(code, [Expr(:call, getfield, SlotNumber(4), i) for i = 1:nargs])
         prepend!(ci.codelocs, [0 for i = 1:nargs])
+        prepend!(ci.ssaflags, [0x00 for i = 1:nargs])
         ci.ssavaluetypes += nargs
         function map_slot_number(slot)
             if slot == 1

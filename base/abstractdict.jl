@@ -66,6 +66,8 @@ function iterate(v::Union{KeySet,ValueIterator}, state...)
     return (y[1][isa(v, KeySet) ? 1 : 2], y[2])
 end
 
+copy(v::KeySet) = copymutable(v)
+
 in(k, v::KeySet) = get(v.dict, k, secret_table_token) !== secret_table_token
 
 """

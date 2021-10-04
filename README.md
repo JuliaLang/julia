@@ -97,11 +97,11 @@ Then, acquire the source code by cloning the git repository:
     git clone https://github.com/JuliaLang/julia.git
 
 By default you will be building the latest unstable version of
-Julia. However, most users should use the most recent stable version
+Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.6.1
+    git checkout v1.6.2
 
 Now run `make` to build the `julia` executable.
 

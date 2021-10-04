@@ -88,23 +88,23 @@ ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
-getindex(x::UniformScaling, n::Integer, m::AbstractRange{<:Integer}) = getindex(x, m, n)
-function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::Integer) where T
+getindex(J::UniformScaling, n::Integer, m::AbstractVector{<:Integer}) = getindex(J, m, n)
+function getindex(J::UniformScaling{T}, n::AbstractVector{<:Integer}, m::Integer) where T
     v = zeros(T, length(n))
     @inbounds for (i,ii) in enumerate(n)
         if ii == m
-            v[i] = x.λ
+            v[i] = J.λ
         end
     end
     return v
 end
 
 
-function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::AbstractRange{<:Integer}) where T
+function getindex(J::UniformScaling{T}, n::AbstractVector{<:Integer}, m::AbstractVector{<:Integer}) where T
     A = zeros(T, length(n), length(m))
     @inbounds for (j,jj) in enumerate(m), (i,ii) in enumerate(n)
         if ii == jj
-            A[i,j] = x.λ
+            A[i,j] = J.λ
         end
     end
     return A

@@ -267,20 +267,15 @@ struct ErrorException <: Exception
     msg::AbstractString
 end
 
-macro _inline_meta()
-    Expr(:meta, :inline)
-end
-
-macro _noinline_meta()
-    Expr(:meta, :noinline)
-end
+macro inline()   Expr(:meta, :inline)   end
+macro noinline() Expr(:meta, :noinline) end
 
 struct BoundsError <: Exception
     a::Any
     i::Any
     BoundsError() = new()
-    BoundsError(@nospecialize(a)) = (@_noinline_meta; new(a))
-    BoundsError(@nospecialize(a), i) = (@_noinline_meta; new(a,i))
+    BoundsError(@nospecialize(a)) = (@noinline; new(a))
+    BoundsError(@nospecialize(a), i) = (@noinline; new(a,i))
 end
 struct DivideError         <: Exception end
 struct OutOfMemoryError    <: Exception end
@@ -298,8 +293,8 @@ struct InterruptException <: Exception end
 struct DomainError <: Exception
     val
     msg::AbstractString
-    DomainError(@nospecialize(val)) = (@_noinline_meta; new(val, ""))
-    DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
+    DomainError(@nospecialize(val)) = (@noinline; new(val, ""))
+    DomainError(@nospecialize(val), @nospecialize(msg)) = (@noinline; new(val, msg))
 end
 struct TypeError <: Exception
     # `func` is the name of the builtin function that encountered a type error,
@@ -320,7 +315,7 @@ struct InexactError <: Exception
     func::Symbol
     T  # Type
     val
-    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
+    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@noinline; new(f, T, val))
 end
 struct OverflowError <: Exception
     msg::AbstractString
@@ -433,7 +428,7 @@ eval(Core, :(InterConditional(slot::Int, @nospecialize(vtype), @nospecialize(els
 eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
     $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
 
-Module(name::Symbol=:anonymous, std_imports::Bool=true, using_core::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, using_core)
+Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
 
 function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
     return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
@@ -609,26 +604,26 @@ eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
 
 import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
 
-throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = (@_noinline_meta; throw(InexactError(f, T, val)))
+throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = (@noinline; throw(InexactError(f, T, val)))
 
 function is_top_bit_set(x)
-    @_inline_meta
+    @inline
     eq_int(trunc_int(UInt8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(UInt8, 1))
 end
 
 function is_top_bit_set(x::Union{Int8,UInt8})
-    @_inline_meta
+    @inline
     eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
 end
 
 function check_top_bit(::Type{To}, x) where {To}
-    @_inline_meta
+    @inline
     is_top_bit_set(x) && throw_inexacterror(:check_top_bit, To, x)
     x
 end
 
 function checked_trunc_sint(::Type{To}, x::From) where {To,From}
-    @_inline_meta
+    @inline
     y = trunc_int(To, x)
     back = sext_int(From, y)
     eq_int(x, back) || throw_inexacterror(:trunc, To, x)
@@ -636,7 +631,7 @@ function checked_trunc_sint(::Type{To}, x::From) where {To,From}
 end
 
 function checked_trunc_uint(::Type{To}, x::From) where {To,From}
-    @_inline_meta
+    @inline
     y = trunc_int(To, x)
     back = zext_int(From, y)
     eq_int(x, back) || throw_inexacterror(:trunc, To, x)
