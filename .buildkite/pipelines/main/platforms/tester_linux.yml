@@ -58,6 +58,7 @@ steps:
       export OPENBLAS_NUM_THREADS=8
 
       if [[ "$${BUILDKITE_STEP_KEY:?}"   == "tester_linux64_rr" ]]; then
+        exit 1
         # For the `rr` job, we disable multi-threading.
         export JULIA_NUM_THREADS=1
         $${JULIA_UNDER_RR:?} -e 'Base.runtests(["all"]; ncores = parse(Int, ENV["JULIA_RRCAPTURE_NUM_CORES"]))'
