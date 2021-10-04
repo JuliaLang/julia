@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-2639fdfd-160f-49c9-9cf3-8cee02e7305f",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-8065d066-7f80-48ad-8675-d4c0e61a2e84",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-01T06:06:33Z"
+        "created": "2021-10-04T20:18:04Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -174,6 +174,18 @@
             "summary": "GNU MP is a portable library written in C for arbitrary precision arithmetic on integers, rational numbers, and floating-point numbers."
         },
         {
+            "name": "libgit2",
+            "SPDXID": "SPDXRef-libgit2",
+            "downloadLocation": "git+https://github.com/libgit2/libgit2.git",
+            "filesAnalyzed": false,
+            "homepage": "https://libgit2.org",
+            "sourceInfo": "The version in use can be found in the file deps/libgit2.version",
+            "licenseConcluded": "GPL-2.0-only WITH LicenseRef-libgit2-exception",
+            "licenseDeclared": "GPL-2.0-only WITH LicenseRef-libgit2-exception",
+            "copyrightText": "libgit2 is Copyright (C) the libgit2 contributors, unless otherwise stated. See the AUTHORS file for details.",
+            "summary": "A cross-platform, linkable library implementation of Git that you can use in your application."
+        },
+        {
             "name": "OpenBLAS",
             "SPDXID": "SPDXRef-OpenBLAS",
             "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
@@ -324,6 +336,11 @@
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
+            "spdxElementId": "SPDXRef-libgit2",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
             "spdxElementId": "SPDXRef-OpenBLAS",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
@@ -357,6 +374,13 @@
             "spdxElementId": "SPDXRef-patchelf",
             "relationshipType": "BUILD_TOOL_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
+        }
+    ],
+    "hasExtractedLicensingInfos": [
+        {
+            "licenseId": "LicenseRef-libgit2-exception",
+            "extractedText": "In addition to the permissions in the GNU General Public License, the authors give you unlimited permission to link the compiled version of this library into combinations with other programs, and to distribute those combinations without any restriction coming from the use of this file.  (The General Public License restrictions do apply in other respects; for example, they cover modification of the file, and distribution when not linked into a combined executable.)",
+            "name": "libgit2-exception"
         }
     ]
 }
