@@ -27,7 +27,6 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
     return &system_image_path[1];
 }
 
-
 static int jl_options_initialized = 0;
 
 JL_DLLEXPORT void jl_init_options(void)

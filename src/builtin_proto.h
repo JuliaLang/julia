@@ -12,11 +12,13 @@ extern "C" {
 #ifdef DEFINE_BUILTIN_GLOBALS
 #define DECLARE_BUILTIN(name) \
     JL_CALLABLE(jl_f_##name); \
-    jl_value_t *jl_builtin_##name
+    JL_DLLEXPORT jl_value_t *jl_builtin_##name; \
+    JL_DLLEXPORT jl_fptr_args_t jl_f_##name##_addr = &jl_f_##name
 #else
 #define DECLARE_BUILTIN(name) \
     JL_CALLABLE(jl_f_##name); \
-    extern jl_value_t *jl_builtin_##name
+    JL_DLLEXPORT extern jl_value_t *jl_builtin_##name; \
+    JL_DLLEXPORT extern jl_fptr_args_t jl_f_##name##_addr
 #endif
 
 DECLARE_BUILTIN(applicable);
@@ -53,6 +55,11 @@ DECLARE_BUILTIN(typeof);
 DECLARE_BUILTIN(_typevar);
 
 JL_CALLABLE(jl_f_invoke_kwsorter);
+#ifdef DEFINE_BUILTIN_GLOBALS
+JL_DLLEXPORT jl_fptr_args_t jl_f_invoke_kwsorter_addr = &jl_f_invoke_kwsorter;
+#else
+JL_DLLEXPORT extern jl_fptr_args_t jl_f_invoke_kwsorter_addr;
+#endif
 JL_CALLABLE(jl_f__structtype);
 JL_CALLABLE(jl_f__abstracttype);
 JL_CALLABLE(jl_f__primitivetype);

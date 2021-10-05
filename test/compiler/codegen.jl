@@ -637,3 +637,10 @@ t41096 = Term41096{:t}(Modulate41096(:t, false))
 U41096 = Term41096{:U}(Modulate41096(:U, false))
 
 @test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)
+
+# test that we can start julia with libjulia-codegen removed; PR #41936
+mktempdir() do pfx
+    run(`cp -r $(Sys.BINDIR)/.. $pfx`)
+    run(`rm -rf $pfx/lib/julia/libjulia-codegen\*`)
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'println("no codegen!")'`) == "no codegen!"
+end
