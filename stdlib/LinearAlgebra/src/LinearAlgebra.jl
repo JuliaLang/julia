@@ -262,8 +262,7 @@ function sym_uplo(uplo::Char)
     end
 end
 
-
-@noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
+@noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U/'U' (upper) or :L/'L' (lower)"))
 
 
 """
