@@ -20,4 +20,4 @@ override WITH_GC_DEBUG_ENV=1
 override JULIA_BUILD_MODE=debug
 
 # make ASAN consume less memory
-export ASAN_OPTIONS=detect_leaks=0:fast_unwind_on_malloc=0:allow_user_segv_handler=1:malloc_context_size=2
+export ASAN_OPTIONS=detect_leaks=0:allow_user_segv_handler=1
