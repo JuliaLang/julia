@@ -52,7 +52,7 @@ julia> 2 >= missing
 missing
 ```
 
-In particular, note `missing == missing` returns `missing`, so `==` cannot be used to test whether a value is missing. To test whether `x` is `missing`,
+In particular, note that `missing == missing` returns `missing`, so `==` cannot be used to test whether a value is missing. To test whether `x` is `missing`,
 use [`ismissing(x)`](@ref).
 
 Special comparison operators [`isequal`](@ref) and [`===`](@ref) are exceptions to the propagation rule. They will always return a `Bool` value, even in the presence
@@ -87,17 +87,10 @@ false
 
 ## Logical operators
 
-Logical (or boolean) operators [`|`](@ref), [`&`](@ref) and [`xor`](@ref) are another special case, as they only propagate `missing` values when it is logically required. For these operators, whether or not the result is uncertain depends
-on the particular operation, following the well-established rules of
-[*three-valued logic*](https://en.wikipedia.org/wiki/Three-valued_logic) which are
-also implemented by `NULL` in SQL and `NA` in R. This abstract definition actually
-corresponds to a relatively natural behavior which is best explained
-via concrete examples.
+Logical (or boolean) operators [`|`](@ref), [`&`](@ref) and [`xor`](@ref) are another special case. These cases only propagate `missing` values when it is logically required. For these operators, whether or not the result is uncertain, depends on the particular operation. This follows the well-established rules of [*three-valued logic*](https://en.wikipedia.org/wiki/Three-valued_logic) which are implemented by `NULL` in SQL and `NA` in R. This abstract definition corresponds to a relatively natural behavior which is best explained via concrete examples.
 
-Let us illustrate this principle with the logical "or" operator [`|`](@ref).
-Following the rules of boolean logic, if one of the operands is `true`,
-the value of the other operand does not have an influence on the result,
-which will always be `true`
+Let us illustrate this principle with the logical "or" operator [`|`](@ref). Following the rules of boolean logic, if one of the operands is `true`, the value of the other operand does not have an influence on the result, which will always be `true`:
+
 ```jldoctest
 julia> true | true
 true
@@ -109,12 +102,8 @@ julia> false | true
 true
 ```
 
-Based on this observation, we can conclude that if one of the operands is `true`
-and the other `missing`, we know that the result is `true` in spite of the
-uncertainty about the actual value of one of the operands. If we had
-been able to observe the actual value of the second operand, it could only be
-`true` or `false`, and in both cases the result would be `true`. Therefore,
-in this particular case, missingness does *not* propagate
+Based on this observation, we can conclude if one of the operands is `true` and the other `missing`, we know that the result is `true` in spite of the uncertainty about the actual value of one of the operands. If we had been able to observe the actual value of the second operand, it could only be `true` or `false`, and in both cases the result would be `true`. Therefore, in this particular case, missingness does *not* propagate:
+
 ```jldoctest
 julia> true | missing
 true
@@ -123,9 +112,8 @@ julia> missing | true
 true
 ```
 
-On the contrary, if one of the operands is `false`, the result could be either
-`true` or `false` depending on the value of the other operand. Therefore,
-if that operand is `missing`, the result has to be `missing` too
+On the contrary, if one of the operands is `false`, the result could be either `true` or `false` depending on the value of the other operand. Therefore, if that operand is `missing`, the result has to be `missing` too:
+
 ```jldoctest
 julia> false | true
 true
@@ -143,10 +131,8 @@ julia> missing | false
 missing
 ```
 
-The behavior of the logical "and" operator [`&`](@ref) is similar to that of the
-`|` operator, with the difference that missingness does not propagate when
-one of the operands is `false`. For example, when that is the case of the first
-operand
+The behavior of the logical "and" operator [`&`](@ref) is similar to that of the `|` operator, with the difference that missingness does not propagate when one of the operands is `false`. For example, when that is the case of the first operand:
+
 ```jldoctest
 julia> false & false
 false
@@ -158,8 +144,7 @@ julia> false & missing
 false
 ```
 
-On the other hand, missingness propagates when one of the operands is `true`,
-for example the first one
+On the other hand, missingness propagates when one of the operands is `true`, for example the first one:
 ```jldoctest
 julia> true & true
 true
@@ -171,19 +156,12 @@ julia> true & missing
 missing
 ```
 
-Finally, the "exclusive or" logical operator [`xor`](@ref) always propagates
-`missing` values, since both operands always have an effect on the result.
-Also note that the negation operator [`!`](@ref) returns `missing` when the
-operand is `missing` just like other unary operators.
+Finally, the "exclusive or" logical operator [`xor`](@ref) always propagates `missing` values, since both operands always have an effect on the result. Also note that the negation operator [`!`](@ref) returns `missing` when the operand is `missing`, just like other unary operators.
 
 ## Control Flow and Short-Circuiting Operators
 
-Control flow operators including [`if`](@ref), [`while`](@ref) and the
-[ternary operator](@ref man-conditional-evaluation) `x ? y : z`
-do not allow for missing values. This is because of the uncertainty about whether
-the actual value would be `true` or `false` if we could observe it,
-which implies that we do not know how the program should behave. A [`TypeError`](@ref)
-is thrown as soon as a `missing` value is encountered in this context
+Control flow operators including [`if`](@ref), [`while`](@ref) and the [ternary operator](@ref man-conditional-evaluation) `x ? y : z` do not allow for missing values. This is because of the uncertainty about whether the actual value would be `true` or `false` if we could observe it. This implies we do not know how the program should behave. Thus, a [`TypeError`](@ref) is thrown as soon as a `missing` value is encountered in this context:
+
 ```jldoctest
 julia> if missing
            println("here")
@@ -191,10 +169,8 @@ julia> if missing
 ERROR: TypeError: non-boolean (Missing) used in boolean context
 ```
 
-For the same reason, contrary to logical operators presented above,
-the short-circuiting boolean operators [`&&`](@ref) and [`||`](@ref) do not
-allow for `missing` values in situations where the value of the operand
-determines whether the next operand is evaluated or not. For example
+For the same reason, contrary to logical operators presented above, the short-circuiting boolean operators [`&&`](@ref) and [`||`](@ref) do not allow for `missing` values in situations where the value of the operand determines whether the next operand is evaluated or not. For example:
+
 ```jldoctest
 julia> missing || false
 ERROR: TypeError: non-boolean (Missing) used in boolean context
@@ -206,10 +182,7 @@ julia> true && missing && false
 ERROR: TypeError: non-boolean (Missing) used in boolean context
 ```
 
-On the other hand, no error is thrown when the result can be determined without
-the `missing` values. This is the case when the code short-circuits
-before evaluating the `missing` operand, and when the `missing` operand is the
-last one
+In contrast, there no error thrown when the result can be determined without the `missing` values. This is the case when the code short-circuits before evaluating the `missing` operand, and when the `missing` operand is the last value:
 ```jldoctest
 julia> true && missing
 missing
@@ -220,7 +193,8 @@ false
 
 ## Arrays With Missing Values
 
-Arrays containing missing values can be created like other arrays
+Arrays containing missing values can be created like other arrays:
+
 ```jldoctest
 julia> [1, missing]
 2-element Vector{Union{Missing, Int64}}:
@@ -228,16 +202,11 @@ julia> [1, missing]
   missing
 ```
 
-As this example shows, the element type of such arrays is `Union{Missing, T}`,
-with `T` the type of the non-missing values. This simply reflects the fact that
-array entries can be either of type `T` (here, `Int64`) or of type `Missing`.
-This kind of array uses an efficient memory storage equivalent to an `Array{T}`
-holding the actual values combined with an `Array{UInt8}` indicating the type
-of the entry (i.e. whether it is `Missing` or `T`).
+As this example shows, the element type of such arrays is `Union{Missing, T}`, with `T` the type of the non-missing values. This reflects the fact that array entries can be either of type `T` (here, `Int64`) or of type `Missing`. This kind of array uses an efficient memory storage equivalent to an `Array{T}` holding the actual values combined with an `Array{UInt8}` indicating the type of the entry (i.e. whether it is `Missing` or `T`).
 
-Arrays allowing for missing values can be constructed with the standard syntax.
-Use `Array{Union{Missing, T}}(missing, dims)` to create arrays filled with
+Arrays allowing for missing values can be constructed with the standard syntax. Use `Array{Union{Missing, T}}(missing, dims)` to create arrays filled with
 missing values:
+
 ```jldoctest
 julia> Array{Union{Missing, String}}(missing, 2, 3)
 2×3 Matrix{Union{Missing, String}}:
@@ -245,15 +214,12 @@ julia> Array{Union{Missing, String}}(missing, 2, 3)
  missing  missing  missing
 ```
 
-!!! note
-    Using `undef` or `similar` may currently give an array filled with
-    `missing`, but this is not the correct way to obtain such an array.
+**Note:***
+    Using `undef` or `similar` may currently give an array filled with `missing`, but this is not the correct way to obtain such an array.
     Use a `missing` constructor as shown above instead.
 
-An array allowing for `missing` values but which does not contain any such value
-can be converted back to an array which does not allow for missing values using
-[`convert`](@ref). If the array contains `missing` values, a `MethodError` is thrown
-during conversion
+An array allowing for `missing` values but does not contain a value that could be converted back to an array, does not allow for missing values using [`convert`](@ref). If the array contains `missing` values, a `MethodError` is thrown during conversion:
+
 ```jldoctest
 julia> x = Union{Missing, String}["a", "b"]
 2-element Vector{Union{Missing, String}}:
