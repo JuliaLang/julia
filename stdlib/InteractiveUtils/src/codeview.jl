@@ -57,7 +57,7 @@ Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to sp
 
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
-function code_warntype(io::IO, @nospecialize(f), @nospecialize(t);
+function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt(f));
                        debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
@@ -134,7 +134,7 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t);
     end
     nothing
 end
-code_warntype(@nospecialize(f), @nospecialize(t); kwargs...) =
+code_warntype(@nospecialize(f), @nospecialize(t=Base.default_tt(f)); kwargs...) =
     code_warntype(stdout, f, t; kwargs...)
 
 import Base.CodegenParams
@@ -224,9 +224,9 @@ function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
         print(io, d)
     end
 end
-code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple{}); raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default) =
+code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default) =
     code_llvm(io, f, types, raw, dump_module, optimize, debuginfo)
-code_llvm(@nospecialize(f), @nospecialize(types=Tuple{}); raw=false, dump_module=false, optimize=true, debuginfo::Symbol=:default) =
+code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw=false, dump_module=false, optimize=true, debuginfo::Symbol=:default) =
     code_llvm(stdout, f, types; raw, dump_module, optimize, debuginfo)
 
 """
@@ -238,7 +238,7 @@ Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T sy
 Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
 If `binary` is `true`, it also prints the binary machine code for each instruction precedented by an abbreviated address.
 """
-function code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple{});
+function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                      dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false)
     d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary)
     if highlighting[:native] && get(io, :color, false)
@@ -247,7 +247,7 @@ function code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple{});
         print(io, d)
     end
 end
-code_native(@nospecialize(f), @nospecialize(types=Tuple{}); dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false) =
+code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false) =
     code_native(stdout, f, types; dump_module, syntax, debuginfo, binary)
 code_native(::IO, ::Any, ::Symbol) = error("invalid code_native call") # resolve ambiguous call
 
