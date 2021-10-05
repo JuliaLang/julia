@@ -112,10 +112,10 @@ from the ASCII character `'o'` followed by the U+0308 combining-diaeresis charac
 
 ```jldoctest
 julia> s1 = "no\u00EBl"
-"nöel"
+"noël"
 
 julia> s2 = "noe\u0308l"
-"nöel"
+"noël"
 
 julia> s1 == s2
 false
