@@ -55,7 +55,7 @@ namespace jl_alloc {
         {
         }
     };
-    
+
     struct AllocUseInfo {
         llvm::SmallSet<llvm::Instruction*,16> uses;
         llvm::SmallSet<llvm::CallInst*,4> preserves;
