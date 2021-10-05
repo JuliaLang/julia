@@ -300,8 +300,7 @@ function exec_options(opts)
             end
         end
     end
-    repl |= is_interactive::Bool
-    if repl
+    if repl || is_interactive::Bool
         if interactiveinput
             banner = (opts.banner != 0) # --banner!=no
         else
