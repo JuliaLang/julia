@@ -241,21 +241,22 @@ ERROR: MethodError: Cannot `convert` an object of type Missing to an object of t
 ```
 ## Skipping Missing Values
 
-Since `missing` values propagate with standard mathematical operators, reduction
-functions return `missing` when called on arrays which contain missing values
+Since `missing` values propagate with standard mathematical operators, reduction functions return `missing` when called on arrays which contain missing values:
+
 ```jldoctest
 julia> sum([1, missing])
 missing
 ```
 
-In this situation, use the [`skipmissing`](@ref) function to skip missing values
+In this situation, use the [`skipmissing`](@ref) function to skip missing values:
+
 ```jldoctest
 julia> sum(skipmissing([1, missing]))
 1
 ```
 
-This convenience function returns an iterator which filters out `missing` values
-efficiently. It can therefore be used with any function which supports iterators
+This convenience function returns an iterator which filters out `missing` values efficiently. It can therefore be used with any function which supports iterators:
+
 ```jldoctest skipmissing; setup = :(using Statistics)
 julia> x = skipmissing([3, missing, 2, 1])
 skipmissing(Union{Missing, Int64}[3, missing, 2, 1])
@@ -270,10 +271,9 @@ julia> mapreduce(sqrt, +, x)
 4.146264369941973
 ```
 
-Objects created by calling `skipmissing` on an array can be indexed using indices
-from the parent array. Indices corresponding to missing values are not valid for
-these objects and an error is thrown when trying to use them (they are also skipped
-by `keys` and `eachindex`)
+Objects created by calling `skipmissing` on an array can be indexed using indices from the parent array. Indices corresponding to missing values are not valid for
+these objects, and an error is thrown when trying to use them (they are also skipped by `keys` and `eachindex`):
+
 ```jldoctest skipmissing
 julia> x[1]
 3
@@ -283,10 +283,9 @@ ERROR: MissingException: the value at index (2,) is missing
 [...]
 ```
 
-This allows functions which operate on indices to work in combination with `skipmissing`.
-This is notably the case for search and find functions, which return indices
-valid for the object returned by `skipmissing` which are also the indices of the
-matching entries *in the parent array*
+This allows functions which operate on indices to work in combination with `skipmissing`. This is notably the case for search and find functions. These functions return indices
+valid for the object returned by `skipmissing`, and are also the indices of the matching entries *in the parent array*:
+
 ```jldoctest skipmissing
 julia> findall(==(1), x)
 1-element Vector{Int64}:
@@ -299,7 +298,8 @@ julia> argmax(x)
 1
 ```
 
-Use [`collect`](@ref) to extract non-`missing` values and store them in an array
+Use [`collect`](@ref) to extract non-`missing` values and store them in an array:
+
 ```jldoctest skipmissing
 julia> collect(x)
 3-element Vector{Int64}:
@@ -310,13 +310,8 @@ julia> collect(x)
 
 ## Logical Operations on Arrays
 
-The three-valued logic described above for logical operators is also used
-by logical functions applied to arrays. Thus, array equality tests using
-the [`==`](@ref) operator return `missing` whenever the result cannot be
-determined without knowing the actual value of the `missing` entry. In practice,
-this means that `missing` is returned if all non-missing values of the compared
-arrays are equal, but one or both arrays contain missing values (possibly at
-different positions)
+The three-valued logic described above for logical operators is also used by logical functions applied to arrays. Thus, array equality tests using the [`==`](@ref) operator return `missing` whenever the result cannot be determined without knowing the actual value of the `missing` entry. In practice, this means `missing` is returned if all non-missing values of the compared arrays are equal, but one or both arrays contain missing values (possibly at different positions):
+
 ```jldoctest
 julia> [1, missing] == [2, missing]
 false
@@ -328,8 +323,8 @@ julia> [1, 2, missing] == [1, missing, 2]
 missing
 ```
 
-As for single values, use [`isequal`](@ref) to treat `missing` values as equal
-to other `missing` values but different from non-missing values
+As for single values, use [`isequal`](@ref) to treat `missing` values as equal to other `missing` values, but different from non-missing values:
+
 ```jldoctest
 julia> isequal([1, missing], [1, missing])
 true
@@ -338,8 +333,8 @@ julia> isequal([1, 2, missing], [1, missing, 2])
 false
 ```
 
-Functions [`any`](@ref) and [`all`](@ref) also follow the rules of
-three-valued logic, returning `missing` when the result cannot be determined
+Functions [`any`](@ref) and [`all`](@ref) also follow the rules of three-valued logic. Thus, returning `missing` when the result cannot be determined:
+
 ```jldoctest
 julia> all([true, missing])
 missing
