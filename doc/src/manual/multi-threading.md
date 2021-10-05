@@ -18,7 +18,8 @@ The number of execution threads is controlled either by using the
 [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) environment variable. When both are
 specified, then `-t`/`--threads` takes precedence.
 
-!!! compat "Julia 1.5"
+--threads {N\|auto`} Enable N threads; `auto` currently sets N to the number of local CPU threads but this might change in the future.
+
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
     In older versions you must use the environment variable instead.
 
