@@ -572,11 +572,6 @@ function find_library_path(name)
 end
 
 function __init__()
-    # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
-    if !haskey(ENV, "OPENBLAS_MAIN_FREE")
-        ENV["OPENBLAS_MAIN_FREE"] = "1"
-    end
-
     try
         libblas_path = find_library_path(Base.libblas_name)
         liblapack_path = find_library_path(Base.liblapack_name)
