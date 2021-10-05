@@ -252,7 +252,7 @@ function exec_options(opts)
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
-    interactiveinput = (repl || is_interactive) && isa(stdin, TTY)
+    interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
     is_interactive |= interactiveinput
 
     # load ~/.julia/config/startup.jl file
