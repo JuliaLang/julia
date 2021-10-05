@@ -2,7 +2,7 @@
 
 // utility procedures used in code generation
 
-static Instruction *tbaa_decorate(MDNode *md, Instruction *inst)
+Instruction *tbaa_decorate(MDNode *md, Instruction *inst)
 {
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, md);
     if (isa<LoadInst>(inst) && md == tbaa_const)
@@ -3215,9 +3215,10 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const std
 // allocation for known size object
 static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
 {
-    Value *ptls_ptr = emit_bitcast(ctx, get_current_ptls(ctx), T_pint8);
+    // Value *ptls_ptr = emit_bitcast(ctx, get_current_ptls(ctx), T_pint8);
+    Value *current_task = get_current_task(ctx);
     Function *F = prepare_call(jl_alloc_obj_func);
-    auto call = ctx.builder.CreateCall(F, {ptls_ptr, ConstantInt::get(T_size, static_size), maybe_decay_untracked(ctx, jt)});
+    auto call = ctx.builder.CreateCall(F, {current_task, ConstantInt::get(T_size, static_size), maybe_decay_untracked(ctx, jt)});
     call->setAttributes(F->getAttributes());
     return call;
 }

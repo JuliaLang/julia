@@ -8,6 +8,7 @@
 
 #define STR(csym)           #csym
 #define XSTR(csym)          STR(csym)
+#include "julia.h"
 
 enum AddressSpace {
     Generic = 0,
@@ -18,6 +19,24 @@ enum AddressSpace {
     FirstSpecial = Tracked,
     LastSpecial = Loaded,
 };
+
+namespace JuliaType {
+    static inline llvm::StructType* get_jlvalue_ty(llvm::LLVMContext &C) {
+        return llvm::StructType::get(C);
+    }
+
+    static inline llvm::PointerType* get_pjlvalue_ty(llvm::LLVMContext &C) {
+        return llvm::PointerType::get(get_jlvalue_ty(C), 0);
+    }
+
+    static inline llvm::PointerType* get_prjlvalue_ty(llvm::LLVMContext &C) {
+        return llvm::PointerType::get(get_jlvalue_ty(C), AddressSpace::Tracked);
+    }
+
+    static inline llvm::PointerType* get_ppjlvalue_ty(llvm::LLVMContext &C) {
+        return llvm::PointerType::get(get_pjlvalue_ty(C), 0);
+    }
+}
 
 // JLCALL with API arguments ([extra], arg0, arg1, arg2, ...) has the following ABI calling conventions defined:
 #define JLCALL_F_CC (CallingConv::ID)37     // (jl_value_t *arg0, jl_value_t **argv, uint32_t nargv)
@@ -67,4 +86,45 @@ static inline void llvm_dump(llvm::DebugLoc *dbg)
 {
     dbg->print(llvm::dbgs());
     llvm::dbgs() << "\n";
+}
+
+llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instruction *inst);
+llvm::MDNode *get_tbaa_gcframe();
+
+// bitcast a value, but preserve its address space when dealing with pointer types
+static inline llvm::Value *emit_bitcast_with_builder(llvm::IRBuilder<> &builder, llvm::Value *v, llvm::Type *jl_value)
+{
+    using namespace llvm;
+    if (isa<PointerType>(jl_value) &&
+        v->getType()->getPointerAddressSpace() != jl_value->getPointerAddressSpace()) {
+        // Cast to the proper address space
+        Type *jl_value_addr =
+                PointerType::get(cast<PointerType>(jl_value)->getElementType(),
+                                 v->getType()->getPointerAddressSpace());
+        return builder.CreateBitCast(v, jl_value_addr);
+    }
+    else {
+        return builder.CreateBitCast(v, jl_value);
+    }
+}
+
+// Get PTLS through current task.
+static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder, llvm::Value *current_task)
+{
+    using namespace llvm;
+    auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(builder.getContext());
+    auto T_size = builder.GetInsertBlock()->getModule()->getDataLayout().getIntPtrType(builder.getContext());
+    const int ptls_offset = offsetof(jl_task_t, ptls);
+    llvm::Value *pptls = builder.CreateInBoundsGEP(
+        JuliaType::get_pjlvalue_ty(builder.getContext()), current_task,
+        ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
+        "ptls_field");
+    LoadInst *ptls_load = builder.CreateAlignedLoad(
+        emit_bitcast_with_builder(builder, pptls, T_ppjlvalue), Align(sizeof(void *)), "ptls_load");
+    // Note: Corresponding store (`t->ptls = ptls`) happens in `ctx_switch` of tasks.c.
+    tbaa_decorate(get_tbaa_gcframe(), ptls_load);
+    // Using `CastInst::Create` to get an `Instruction*` without explicit cast:
+    auto ptls = CastInst::Create(Instruction::BitCast, ptls_load, T_ppjlvalue, "ptls");
+    builder.Insert(ptls);
+    return ptls;
 }
