@@ -134,7 +134,7 @@ testf(id_other)
 
 function poll_while(f::Function; timeout_seconds::Integer = 60)
     start_time = time_ns()
-    while f() != false
+    while f()
         sleep(1)
         if ( ( time_ns() - start_time )/1e9 ) > timeout_seconds
             @error "Timed out" timeout_seconds
