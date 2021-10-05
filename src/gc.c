@@ -2195,9 +2195,6 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
     uint16_t *obj16_begin;
     uint16_t *obj16_end;
 
-    // TODO: don't know if this is safe w/r/t the search order
-    jl_task_t *latest_task = NULL;
-
 pop:
     if (sp.pc == sp.pc_start) {
         // TODO: stealing form another thread
@@ -2321,7 +2318,7 @@ stack: {
                 }
                 if (!gc_try_setmark(new_obj, &nptr, &tag, &bits))
                     continue;
-                gc_heap_snapshot_record_internal_edge(latest_task, new_obj);
+                gc_heap_snapshot_record_frame_to_object_edge(s, new_obj);
                 i++;
                 if (i < nr) {
                     // Haven't done with this one yet. Update the content and push it back
@@ -2339,7 +2336,9 @@ stack: {
                 goto mark;
             }
             s = (jl_gcframe_t*)gc_read_stack(&s->prev, offset, lb, ub);
+            // walk up one stack frame
             if (s != 0) {
+                gc_heap_snapshot_record_frame_to_frame_edge(stack->s, s);
                 stack->s = s;
                 i = 0;
                 uintptr_t new_nroots = gc_read_stack(&s->nroots, offset, lb, ub);
@@ -2672,8 +2671,6 @@ mark: {
             else if (foreign_alloc)
                 objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_task_t));
             jl_task_t *ta = (jl_task_t*)new_obj;
-            latest_task = ta; // TODO: correct??
-            gc_heap_snapshot_record_root(ta, "task");
             gc_scrub_record_task(ta);
             if (gc_cblist_task_scanner) {
                 export_gc_state(ptls, &sp);
@@ -2685,8 +2682,12 @@ mark: {
             }
 #ifdef COPY_STACKS
             void *stkbuf = ta->stkbuf;
-            if (stkbuf && ta->copy_stack)
+            if (stkbuf && ta->copy_stack) {
                 gc_setmark_buf_(ptls, stkbuf, bits, ta->bufsz);
+                // TODO: attribute size of stack
+                // TODO: edge to stack data
+                // TODO: synthetic node for stack data (how big is it?)
+            }
 #endif
             jl_gcframe_t *s = ta->gcstack;
             size_t nroots;
@@ -2705,6 +2706,8 @@ mark: {
 #endif
             if (s) {
                 nroots = gc_read_stack(&s->nroots, offset, lb, ub);
+                gc_heap_snapshot_record_task_to_frame_edge(ta, s);
+
                 assert(nroots <= UINT32_MAX);
                 gc_mark_stackframe_t stackdata = {s, 0, (uint32_t)nroots, offset, lb, ub};
                 gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(stack),
@@ -2808,13 +2811,21 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
                                      jl_ptls_t ptls2)
 {
     gc_mark_queue_obj(gc_cache, sp, jl_atomic_load_relaxed(&ptls2->current_task));
+    gc_heap_snapshot_record_root(ptls2->current_task, "current task");
     gc_mark_queue_obj(gc_cache, sp, ptls2->root_task);
-    if (ptls2->next_task)
+    gc_heap_snapshot_record_root(ptls2->current_task, "root task");
+    if (ptls2->next_task) {
         gc_mark_queue_obj(gc_cache, sp, ptls2->next_task);
-    if (ptls2->previous_task) // shouldn't be necessary, but no reason not to
+        gc_heap_snapshot_record_root(ptls2->current_task, "next task");
+    }
+    if (ptls2->previous_task) { // shouldn't be necessary, but no reason not to
         gc_mark_queue_obj(gc_cache, sp, ptls2->previous_task);
-    if (ptls2->previous_exception)
+        gc_heap_snapshot_record_root(ptls2->current_task, "previous task");
+    }
+    if (ptls2->previous_exception) {
         gc_mark_queue_obj(gc_cache, sp, ptls2->previous_exception);
+        gc_heap_snapshot_record_root(ptls2->current_task, "previous exception");
+    }
 }
 
 void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp);
@@ -2828,6 +2839,7 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     gc_heap_snapshot_record_root(jl_main_module, "main_module");
 
     // tasks
+    // TODO: is this dead code?
     jl_gc_mark_enqueued_tasks(gc_cache, sp);
 
     // invisible builtin values
@@ -3064,8 +3076,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         // 2.1. mark every object in the `last_remsets` and `rem_binding`
         jl_gc_queue_remset(gc_cache, &sp, ptls2);
         // 2.2. mark every thread local root
+        // TODO: treat these as roots
         jl_gc_queue_thread_local(gc_cache, &sp, ptls2);
         // 2.3. mark any managed objects in the backtrace buffer
+        // TODO: treat these as roots
         jl_gc_queue_bt_buf(gc_cache, &sp, ptls2);
     }
 

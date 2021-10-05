@@ -43,11 +43,6 @@ void print_str_escape_json(ios_t *stream, const std::string &s) {
     ios_printf(stream, "\"");
 }
 
-struct HeapSnapshot;
-void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot);
-static inline void _record_gc_edge(const char *node_type, const char *edge_type,
-                                   jl_value_t *a, jl_value_t *b, size_t name_or_index);
-void _add_internal_root(HeapSnapshot *snapshot);
 
 // Edges
 // "edge_fields":
@@ -82,7 +77,6 @@ struct Node {
     // Book-keeping fields (not used for serialization)
     vector<Edge> edges; // For asserting that we built the edges in the right order
 };
-
 
 struct StringTable {
     typedef unordered_map<string, size_t> MapType;
@@ -141,6 +135,13 @@ public:
 HeapSnapshot *g_snapshot = nullptr;
 
 
+void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot);
+static inline void _record_gc_edge(const char *node_type, const char *edge_type,
+                                   jl_value_t *a, jl_value_t *b, size_t name_or_index);
+void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx, size_t name_or_idx);
+void _add_internal_root(HeapSnapshot *snapshot);
+
+
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream) {
     // Enable snapshotting
     HeapSnapshot snapshot;
@@ -180,11 +181,11 @@ void _add_internal_root(HeapSnapshot *snapshot) {
 }
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
-void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
+// returns the index of the new node
+size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
     auto val = g_snapshot->node_ptr_to_index_map.find((void*)a);
     if (val != g_snapshot->node_ptr_to_index_map.end()) {
-        return;
-        //return &g_snapshot->nodes[val->second];
+        return val->second;
     }
 
     // Insert a new Node
@@ -228,7 +229,8 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
         }
     }
 
-    g_snapshot->node_ptr_to_index_map.insert(val, {a, g_snapshot->nodes.size()});
+    auto node_idx = g_snapshot->nodes.size();
+    g_snapshot->node_ptr_to_index_map.insert(val, {a, node_idx});
 
     Node from_node{
         // We pick a default type here, which will be set for the _targets_ of edges.
@@ -247,6 +249,8 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
         vector<Edge>(),
     };
     g_snapshot->nodes.push_back(from_node);
+
+    return node_idx;
 }
 
 typedef pair<jl_datatype_t*, const char*> inlineallocd_field_type_t;
@@ -320,20 +324,70 @@ vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, void *slo
 void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) {
     record_node_to_gc_snapshot(root);
 
-    // TODO: just make record_node_to_gc_snapshot return this
-    auto to_node_idx = g_snapshot->node_ptr_to_index_map[root];
-
     auto &internal_root = g_snapshot->nodes.front();
-    auto edge_type = g_snapshot->edge_types.find_or_create_string_id("internal");
+    auto to_node_idx = g_snapshot->node_ptr_to_index_map[root];
     auto edge_label = g_snapshot->names.find_or_create_string_id(name);
 
-    internal_root.edges.push_back(Edge{
-        edge_type,
-        edge_label,
-        to_node_idx,
-    });
+    _record_gc_just_edge("internal", internal_root, to_node_idx, edge_label);
+}
 
-    g_snapshot->num_edges++;
+// Add a node to the heap snapshot representing a Julia stack frame.
+// Each task points at a stack frame, which points at the stack frame of
+// the function it's currently calling, forming a linked list.
+// Stack frame nodes point at the objects they have as local variables.
+size_t _record_stack_frame_node(HeapSnapshot *snapshot, jl_gcframe_t *frame) {
+    auto val = g_snapshot->node_ptr_to_index_map.find((void*)frame);
+    if (val != g_snapshot->node_ptr_to_index_map.end()) {
+        return val->second;
+    }
+
+    Node frame_node{
+        snapshot->node_types.find_or_create_string_id("synthetic"),
+        "(stack frame)", // name
+        (size_t)frame, // id
+        1, // size
+
+        0, // size_t trace_node_id (unused)
+        0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+
+        // outgoing edges
+        vector<Edge>(),
+    };
+    
+    auto node_idx = snapshot->nodes.size();
+    snapshot->node_ptr_to_index_map.insert(val, {frame, node_idx});
+    snapshot->nodes.push_back(frame_node);
+
+    return node_idx;
+}
+
+void _gc_heap_snapshot_record_frame_to_object_edge(jl_gcframe_t *from, jl_value_t *to) JL_NOTSAFEPOINT {
+    auto from_node_idx = _record_stack_frame_node(g_snapshot, from);
+    Node &from_node = g_snapshot->nodes[from_node_idx];
+    auto to_idx = record_node_to_gc_snapshot(to);
+
+    // TODO: would be cool to get the name of the local var
+    auto name_idx = g_snapshot->names.find_or_create_string_id("local var");
+    _record_gc_just_edge("internal", from_node, to_idx, name_idx);
+}
+
+void _gc_heap_snapshot_record_task_to_frame_edge(jl_task_t *from, jl_gcframe_t *to) JL_NOTSAFEPOINT {
+    auto from_node_idx = record_node_to_gc_snapshot((jl_value_t*)from);
+    Node &from_node = g_snapshot->nodes[from_node_idx];
+    _record_stack_frame_node(g_snapshot, to);
+    auto to_node_idx = g_snapshot->node_ptr_to_index_map[to];
+
+    auto name_idx = g_snapshot->names.find_or_create_string_id("stack");
+    _record_gc_just_edge("internal", from_node, to_node_idx, name_idx);
+}
+
+void _gc_heap_snapshot_record_frame_to_frame_edge(jl_gcframe_t *from, jl_gcframe_t *to) JL_NOTSAFEPOINT {
+    auto from_node_idx = _record_stack_frame_node(g_snapshot, from);
+    Node &from_node = g_snapshot->nodes[from_node_idx];
+    auto to_node_idx = _record_stack_frame_node(g_snapshot, to);
+
+    auto name_idx = g_snapshot->names.find_or_create_string_id("next frame");
+    _record_gc_just_edge("internal", from_node, to_node_idx, name_idx);
 }
 
 void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT {
@@ -342,13 +396,23 @@ void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_
     }
     _record_gc_edge("array", "element", from, to, index);
 }
+
 void _gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) JL_NOTSAFEPOINT {
     //jl_printf(JL_STDERR, "module: %p  binding:%p  name:%s\n", from, to, name);
     _record_gc_edge("object", "property", (jl_value_t *)from, to,
                     g_snapshot->names.find_or_create_string_id(name));
 }
-void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void* slot) JL_NOTSAFEPOINT {
+
+void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) JL_NOTSAFEPOINT {
     jl_datatype_t *type = (jl_datatype_t*)jl_typeof(from);
+
+    if (field_index < 0 || field_index > jl_datatype_nfields(type)) {
+        // TODO: We're getting -1 in some cases
+        jl_printf(JL_STDERR, "WARNING - incorrect field index (%d) for type\n", field_index);
+        jl_(type);
+        return;
+    }
+
     // TODO: It seems like NamedTuples should have field names? Maybe there's another way to get them?
     if (jl_is_tuple_type(type) || jl_is_namedtuple_type(type)) {
         // TODO: Maybe not okay to match element and object
@@ -372,11 +436,13 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void
     _record_gc_edge("object", "property", from, to,
                     g_snapshot->names.find_or_create_string_id(path));
 }
+
 void _gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT {
     // TODO: probably need to inline this here and make some changes
     _record_gc_edge("object", "internal", from, to,
                     g_snapshot->names.find_or_create_string_id("<internal>"));
 }
+
 void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) JL_NOTSAFEPOINT {
     // TODO: probably need to inline this here and make some changes
     _record_gc_edge("native", "hidden", from, (jl_value_t *)jl_malloc_tag,
@@ -387,22 +453,22 @@ void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) JL_NOT
 }
 
 static inline void _record_gc_edge(const char *node_type, const char *edge_type,
-                                   jl_value_t *a, jl_value_t *b, size_t name_or_index) JL_NOTSAFEPOINT
+                                   jl_value_t *a, jl_value_t *b, size_t name_or_idx) JL_NOTSAFEPOINT
 {
-    record_node_to_gc_snapshot(a);
-    record_node_to_gc_snapshot(b);
-
-    // Have to look this up because it might not be created for this edge
-    auto from_node_idx = g_snapshot->node_ptr_to_index_map[a];
+    auto from_node_idx = record_node_to_gc_snapshot(a);
+    auto to_node_idx = record_node_to_gc_snapshot(b);
 
     auto &from_node = g_snapshot->nodes[from_node_idx];
-    // TODO: can these ever disagree?:
     from_node.type = g_snapshot->node_types.find_or_create_string_id(node_type);
 
+    _record_gc_just_edge(edge_type, from_node, to_node_idx, name_or_idx);
+}
+
+void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx, size_t name_or_idx) {
     from_node.edges.push_back(Edge{
         g_snapshot->edge_types.find_or_create_string_id(edge_type),
-        name_or_index,
-        g_snapshot->node_ptr_to_index_map[b], // to
+        name_or_idx, // edge label
+        to_idx, // to
     });
 
     g_snapshot->num_edges += 1;

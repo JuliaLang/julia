@@ -14,7 +14,10 @@ extern "C" {
 // ---------------------------------------------------------------------
 // Functions to call from GC when heap snapshot is enabled
 // ---------------------------------------------------------------------
-void _gc_heap_snapshot_record_root(jl_value_t *root, char *name);
+void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) JL_NOTSAFEPOINT;
+void _gc_heap_snapshot_record_frame_to_object_edge(jl_gcframe_t *from, jl_value_t *to) JL_NOTSAFEPOINT;
+void _gc_heap_snapshot_record_task_to_frame_edge(jl_task_t *from, jl_gcframe_t *to) JL_NOTSAFEPOINT;
+void _gc_heap_snapshot_record_frame_to_frame_edge(jl_gcframe_t *from, jl_gcframe_t *to) JL_NOTSAFEPOINT;
 void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT;
 void _gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) JL_NOTSAFEPOINT;
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void* slot) JL_NOTSAFEPOINT;
@@ -29,6 +32,21 @@ void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) JL_NOT
 
 extern int gc_heap_snapshot_enabled;
 
+static inline void gc_heap_snapshot_record_frame_to_object_edge(jl_gcframe_t *from, jl_value_t *to) {
+    if (__unlikely(gc_heap_snapshot_enabled)) {
+        _gc_heap_snapshot_record_frame_to_object_edge(from, to);
+    }
+}
+static inline void gc_heap_snapshot_record_task_to_frame_edge(jl_task_t *from, jl_gcframe_t *to) {
+    if (__unlikely(gc_heap_snapshot_enabled)) {
+        _gc_heap_snapshot_record_task_to_frame_edge(from, to);
+    }
+}
+static inline void gc_heap_snapshot_record_frame_to_frame_edge(jl_gcframe_t *from, jl_gcframe_t *to) {
+    if (__unlikely(gc_heap_snapshot_enabled)) {
+        _gc_heap_snapshot_record_frame_to_frame_edge(from, to);
+    }
+}
 static inline void gc_heap_snapshot_record_root(jl_value_t *root, char *name) JL_NOTSAFEPOINT {
     if (__unlikely(gc_heap_snapshot_enabled)) {
         _gc_heap_snapshot_record_root(root, name);
