@@ -1342,7 +1342,7 @@ length(s::Stateful) = length(s.itr) - s.taken
 """
     only(x)
 
-Returns the one and only element of collection `x`, and throws an [`ArgumentError`](@ref) if the
+Return the one and only element of collection `x`, or throw an [`ArgumentError`](@ref) if the
 collection has zero or multiple elements.
 
 See also [`first`](@ref), [`last`](@ref).
