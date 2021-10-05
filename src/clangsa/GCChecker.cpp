@@ -708,6 +708,10 @@ bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD) {
   return declHasAnnotation(FD, "julia_not_safepoint");
 }
 
+#if LLVM_VERSION_MAJOR >= 13
+#define endswith_lower endswith_insensitive
+#endif
+
 bool GCChecker::isGCTrackedType(QualType QT) {
   return isValueCollection(QT) ||
          isJuliaType(

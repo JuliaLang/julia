@@ -659,7 +659,7 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(a, bb->ub, e)))
         return 0;
     jl_value_t *lb = simple_join(bb->lb, a);
-    if (!e->intersection || !subtype_by_bounds(lb, b, e))
+    if (!e->intersection || !subtype_by_bounds(lb, (jl_value_t*)b, e))
         bb->lb = lb;
     // this bound should not be directly circular
     assert(bb->lb != (jl_value_t*)b);
