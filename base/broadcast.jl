@@ -941,8 +941,8 @@ broadcast_unalias(::Nothing, src) = src
 preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
 
 @inline preprocess_args(dest, args::Tuple) = (preprocess(dest, args[1]), preprocess_args(dest, tail(args))...)
-preprocess_args(dest, args::Tuple{Any}) = (preprocess(dest, args[1]),)
-preprocess_args(dest, args::Tuple{}) = ()
+@inline preprocess_args(dest, args::Tuple{Any}) = (preprocess(dest, args[1]),)
+@inline preprocess_args(dest, args::Tuple{}) = ()
 
 # Specialize this method if all you want to do is specialize on typeof(dest)
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{Nothing})
