@@ -261,7 +261,7 @@ function exec_options(opts)
             load_julia_startup()
         catch
             invokelatest(display_error, current_exceptions())
-            !(repl || is_interactive) && exit(1)
+            !(repl || is_interactive::Bool) && exit(1)
         end
     end
 
