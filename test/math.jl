@@ -141,7 +141,7 @@ end
 # We compare to BigFloat instead of hard-coding
 # values, assuming that BigFloat has an independently tested implementation.
 @testset "basic math functions" begin
-    @testset "$T" for T in (Float32, Float64)
+    @testset "$T" for T in (Float16, Float32, Float64)
         x = T(1//3)
         y = T(1//2)
         yi = 4
@@ -149,6 +149,8 @@ end
             @test x^y ≈ big(x)^big(y)
             @test x^1 === x
             @test x^yi ≈ big(x)^yi
+            @test (-x)^yi == x^yi
+            @test (-x)^(yi+1) == -(x^(yi+1))
             @test acos(x) ≈ acos(big(x))
             @test acosh(1+x) ≈ acosh(big(1+x))
             @test asin(x) ≈ asin(big(x))
@@ -192,7 +194,7 @@ end
             @test atan(T(1),T(1)) ≈ T(pi)/4 atol=eps(T)
             @test isequal(cbrt(T(0)), T(0))
             @test isequal(cbrt(T(1)), T(1))
-            @test isequal(cbrt(T(1000000000)), T(1000))
+            @test isequal(cbrt(T(1000000000))^3, T(1000)^3)
             @test isequal(cos(T(0)), T(1))
             @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
@@ -221,7 +223,7 @@ end
             @test sin(T(pi)) ≈ T(0) atol=eps(T)
             @test isequal(sqrt(T(0)), T(0))
             @test isequal(sqrt(T(1)), T(1))
-            @test isequal(sqrt(T(100000000)), T(10000))
+            @test isequal(sqrt(T(100000000))^2, T(10000)^2)
             @test isequal(tan(T(0)), T(0))
             @test tan(T(pi)/4) ≈ T(1) atol=eps(T)
             @test isequal(sec(T(pi)), -one(T))
@@ -230,6 +232,13 @@ end
             @test isequal(cscd(T(90)), one(T))
             @test isequal(sech(log(one(T))), one(T))
             @test isequal(csch(zero(T)), T(Inf))
+            @test zero(T)^y === zero(T)
+            @test zero(T)^zero(T) === one(T)
+            @test zero(T)^(-y) === T(Inf)
+            @test zero(T)^T(NaN) === T(NaN)
+            @test one(T)^y === one(T)
+            @test one(T)^zero(T) === one(T)
+            @test one(T)^T(NaN) === one(T)
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x

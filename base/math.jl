@@ -953,16 +953,15 @@ end
     end
     z
 end
-@inline function ^(x::Float32, y::Float32)
-    yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
+@inline function ^(x::T, y::T) where T <: Union{Float16, Float32}
+    yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
-    z = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y)
-    if isnan(z) & !isnan(x+y)
-        throw_exp_domainerror(x)
-    end
-    z
+    x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    x == 1 && return one(T)
+    !isfinite(x) && return x*(y>0)
+    x==0 && return abs(y)*T(Inf)*(!(y>0))
+    return T(exp2(log2(abs(widen(x))) * y))
 end
-@inline ^(x::Float16, y::Float16) = Float16(Float32(x)^Float32(y))  # TODO: optimize
 
 # compensated power by squaring
 @inline function ^(x::Float64, n::Integer)
