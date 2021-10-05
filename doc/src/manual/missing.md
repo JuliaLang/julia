@@ -1,21 +1,16 @@
 # [Missing Values](@id missing)
 
-Julia provides support for representing missing values in the statistical sense,
-that is for situations where no value is available for a variable in an observation,
+Julia provides support for representing missing values in the statistical sense. This is for situations where no value is available for a variable in an observation,
 but a valid value theoretically exists.
-Missing values are represented via the [`missing`](@ref) object, which is the
-singleton instance of the type [`Missing`](@ref). `missing` is equivalent to
-[`NULL` in SQL](https://en.wikipedia.org/wiki/NULL_(SQL)) and
-[`NA` in R](https://cran.r-project.org/doc/manuals/r-release/R-lang.html#NA-handling),
-and behaves like them in most situations.
+
+Missing values are represented via the [`missing`](@ref) object, which is the singleton instance of the type [`Missing`](@ref). `missing` is equivalent to
+[`NULL` in SQL](https://en.wikipedia.org/wiki/NULL_(SQL)) and [`NA` in R](https://cran.r-project.org/doc/manuals/r-release/R-lang.html#NA-handling), and behaves like them in most situations.
 
 ## Propagation of Missing Values
 
-`missing` values *propagate* automatically when passed to standard mathematical
-operators and functions.
-For these functions, uncertainty about the value of one of the operands
-induces uncertainty about the result. In practice, this means a math operation
-involving a `missing` value generally returns `missing`
+`missing` values *propagate* automatically when passed to standard mathematical operators and functions.
+
+For these functions, uncertainty about the value of one of the operands induces uncertainty about the result. In practice, this means a math operation involving a `missing` value generally returns `missing`:
 ```jldoctest
 julia> missing + 1
 missing
@@ -27,26 +22,22 @@ julia> abs(missing)
 missing
 ```
 
-As `missing` is a normal Julia object, this propagation rule only works
-for functions which have opted in to implement this behavior. This can be
-achieved either via a specific method defined for arguments of type `Missing`,
-or simply by accepting arguments of this type, and passing them to functions
-which propagate them (like standard math operators). Packages should consider
-whether it makes sense to propagate missing values when defining new functions,
-and define methods appropriately if that is the case. Passing a `missing` value
-to a function for which no method accepting arguments of type `Missing` is defined
-throws a [`MethodError`](@ref), just like for any other type.
+Since `missing` is a normal Julia object, this propagation rule only works for functions which have opted in to implement this behavior. This can be achieved by:
+- a specific method defined for arguments of type `Missing`
+- accepting arguments of this type, and passing them to functions which propagate them (like standard math operators).
+ 
+Packages should consider whether it makes sense to propagate missing values when defining new functions, and define methods appropriately if this is the case. Passing a `missing` value to a function that is defined, but there are no method accepting arguments of type `Missing` throws a [`MethodError`](@ref), just like for any other type.
 
-Functions that do not propagate `missing` values can be made to do so by wrapping
-them in the `passmissing` function provided by the
-[Missings.jl](https://github.com/JuliaData/Missings.jl) package.
+Functions that do not propagate `missing` values can be made to do so by wrapping them in the `passmissing` function provided by the [Missings.jl](https://github.com/JuliaData/Missings.jl) package.
+
 For example, `f(x)` becomes `passmissing(f)(x)`.
 
 ## Equality and Comparison Operators
 
-Standard equality and comparison operators follow the propagation rule presented
-above: if any of the operands is `missing`, the result is `missing`.
-Here are a few examples
+Standard equality and comparison operators follow the propagation rule presented above: if any of the operands is `missing`, the result is `missing`.
+
+Here are a few examples:
+
 ```jldoctest
 julia> missing == 1
 missing
@@ -61,14 +52,12 @@ julia> 2 >= missing
 missing
 ```
 
-In particular, note that `missing == missing` returns `missing`, so `==` cannot
-be used to test whether a value is missing. To test whether `x` is `missing`,
+In particular, note `missing == missing` returns `missing`, so `==` cannot be used to test whether a value is missing. To test whether `x` is `missing`,
 use [`ismissing(x)`](@ref).
 
-Special comparison operators [`isequal`](@ref) and [`===`](@ref) are exceptions
-to the propagation rule: they always return a `Bool` value, even in the presence
-of `missing` values, considering `missing` as equal to `missing` and as different
-from any other value. They can therefore be used to test whether a value is `missing`
+Special comparison operators [`isequal`](@ref) and [`===`](@ref) are exceptions to the propagation rule. They will always return a `Bool` value, even in the presence
+of `missing` values, considering `missing` as equal to `missing` and as different from any other value. They can therefore be used to test whether a value is `missing`:
+
 ```jldoctest
 julia> missing === 1
 false
@@ -83,9 +72,8 @@ julia> isequal(missing, missing)
 true
 ```
 
-The [`isless`](@ref) operator is another exception: `missing` is considered
-as greater than any other value. This operator is used by [`sort`](@ref),
-which therefore places `missing` values after all other values.
+The [`isless`](@ref) operator is another exception: `missing` is considered as greater than any other value. This operator is used by [`sort`](@ref), which therefore places `missing` values after all other values:
+
 ```jldoctest
 julia> isless(1, missing)
 true
@@ -99,9 +87,7 @@ false
 
 ## Logical operators
 
-Logical (or boolean) operators [`|`](@ref), [`&`](@ref) and [`xor`](@ref) are
-another special case, as they only propagate `missing` values when it is logically
-required. For these operators, whether or not the result is uncertain depends
+Logical (or boolean) operators [`|`](@ref), [`&`](@ref) and [`xor`](@ref) are another special case, as they only propagate `missing` values when it is logically required. For these operators, whether or not the result is uncertain depends
 on the particular operation, following the well-established rules of
 [*three-valued logic*](https://en.wikipedia.org/wiki/Three-valued_logic) which are
 also implemented by `NULL` in SQL and `NA` in R. This abstract definition actually
