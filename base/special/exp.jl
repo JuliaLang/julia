@@ -228,7 +228,7 @@ end
     return reinterpret(T, twopk + reinterpret(Int64, small_part))
 end
 # Computes base^(x+xlo). Used for pow.
-@inline function exp_impl(x::Float64,xlo::Float64, base)
+@inline function exp_impl(x::Float64, xlo::Float64, base)
     T = Float64
     N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
     N = reinterpret(UInt64, N_float) % Int32
