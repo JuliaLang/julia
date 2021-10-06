@@ -147,8 +147,8 @@ f (generic function with 1 method)
 
 julia> @testset f(1)
 Test Summary: | Pass  Total
-test set      |    1      1
-Test.DefaultTestSet("test set", Any[], 1, false, false)
+f             |    1      1
+Test.DefaultTestSet("f", Any[], 1, false, false)
 ```
 
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
