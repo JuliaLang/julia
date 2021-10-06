@@ -253,7 +253,7 @@ function exec_options(opts)
     end
 
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
-    is_interactive |= interactiveinput
+    is_interactive::Bool |= interactiveinput
 
     # load ~/.julia/config/startup.jl file
     if startup
