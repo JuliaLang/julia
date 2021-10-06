@@ -38,8 +38,8 @@ code further up the stack.
 
 ### Caution!
 
-It is easy to accidentally expose unsafe operations with `@inbounds`. In a previous version of the
-documentation, the example above was written:
+It is easy to accidentally expose unsafe operations with `@inbounds`. You might be tempted
+to write the above example as
 
 ```julia
 function sum(A::AbstractArray)
