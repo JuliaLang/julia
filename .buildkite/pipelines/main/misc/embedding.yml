@@ -22,10 +22,10 @@ steps:
     commands: |
       prefix="/tmp/prefix"
       echo "+++ Build julia, deploy to $${prefix:?}"
-      make -j$${JULIA_CPU_THREADS:?} JULIA_PRECOMPILE=0 prefix=$${prefix:?} install
+      make --output-sync -j$${JULIA_CPU_THREADS:?} JULIA_PRECOMPILE=0 prefix=$${prefix:?} install
 
       embedding_output="/tmp/embedding-test"
       echo "+++ Run embedding tests, deploy to $${embedding_output:?}"
       mkdir -p "$${embedding_output:?}"
-      make -j$${JULIA_CPU_THREADS:?} -C test/embedding JULIA="$${prefix:?}/bin/julia" BIN="$${embedding_output:?}"
+      make --output-sync -j$${JULIA_CPU_THREADS:?} -C test/embedding JULIA="$${prefix:?}/bin/julia" BIN="$${embedding_output:?}"
     timeout_in_minutes: 60
