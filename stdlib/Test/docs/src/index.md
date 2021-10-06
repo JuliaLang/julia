@@ -139,6 +139,18 @@ Test Summary: | Pass  Total
 Foo Tests     |    8      8
 ```
 
+As well as call functions:
+
+```jldoctest testfoo
+julia> f(x) = @test isone(x)
+f (generic function with 1 method)
+
+julia> @testset f(1)
+Test Summary: | Pass  Total
+test set      |    1      1
+Test.DefaultTestSet("test set", Any[], 1, false, false)
+```
+
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
 summary, unless the `verbose=true` option is passed:
 
