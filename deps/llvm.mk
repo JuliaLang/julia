@@ -83,7 +83,7 @@ LLVM_CXXFLAGS += $(CXXFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
-LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
+LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=ON -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
 LLVM_CMAKE += -DCOMPILER_RT_ENABLE_IOS=OFF -DCOMPILER_RT_ENABLE_WATCHOS=OFF -DCOMPILER_RT_ENABLE_TVOS=OFF
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
@@ -276,7 +276,7 @@ $(eval $(call LLVM_PATCH,llvm7-symver-jlprefix))
 endif
 
 # declare that all patches must be applied before running ./configure
-$(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV) $(build_prefix)/manifest/zlib
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround)
 	mkdir -p $(dir $@)

@@ -105,7 +105,8 @@ LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)
 #       https://github.com/JuliaLang/julia/issues/29981
 else
 ifneq ($(USE_LLVM_SHLIB),1)
-LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $($(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
+LLVM_LINK_ARGS := $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS) --system-libs)
+LLVMLINK += $(LLVM_LDFLAGS) $(LLVM_LINK_ARGS)
 else
 LLVMLINK += $(LLVM_LDFLAGS) -lLLVM
 endif
