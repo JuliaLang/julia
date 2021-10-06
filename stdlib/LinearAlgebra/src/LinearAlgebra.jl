@@ -262,7 +262,7 @@ function sym_uplo(uplo::Char)
     end
 end
 
-@noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U/'U' (upper) or :L/'L' (lower)"))
+@noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
 
 
 """
@@ -397,7 +397,7 @@ The resulting array is mutable. It can be used, for example, to pass the data of
 `A` to an efficient in-place method for a matrix factorization such as `lu!`, in
 cases where a more specific implementation of `lu!` (or `lu`) is not available.
 
-See also: `copy_oftype`, `copy_similar`
+See also: `copy_oftype`, `copy_similar`.
 """
 copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)...), A)
 
