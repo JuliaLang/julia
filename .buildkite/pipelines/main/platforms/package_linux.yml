@@ -35,7 +35,7 @@ steps:
 
       echo "--- Build Julia from source"
       rm -rf $${ARTIFACT_FILENAME:?}
-      make -j 8
+      make --output-sync -j 8
 
       echo "--- Make sure that the working directory is clean"
       if [ -z "$(git status --short)" ]; then echo "INFO: The working directory is clean."; else echo "ERROR: The working directory is dirty."; echo "Output of git status:"; git status; exit 1; fi
@@ -44,7 +44,7 @@ steps:
       ./julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
 
       echo "--- Create build artifacts"
-      make -j 8 binary-dist
+      make --output-sync -j 8 binary-dist
       ls -l $${JULIA_BINARYDIST:?}
       if [[ "$${JULIA_BINARYDIST:?}" != "$${ARTIFACT_FILENAME:?}" ]]; then
           mv $${JULIA_BINARYDIST:?} $${ARTIFACT_FILENAME:?}
