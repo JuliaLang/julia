@@ -12,7 +12,7 @@ target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 
 # CHECK-LABEL: @return_obj
 # CHECK-NOT: @julia.gc_alloc_obj
-# CHECK: %v = call noalias nonnull {} addrspace(10)* @jl_gc_pool_alloc
+# CHECK: %v = call noalias nonnull {} addrspace(10)* @ijl_gc_pool_alloc
 # CHECK: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define {} addrspace(10)* @return_obj() {
@@ -52,7 +52,7 @@ define i64 @return_load(i64 %i) {
 # CHECK: call {}*** @julia.get_pgcstack()
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
-# CHECK: @jl_gc_pool_alloc
+# CHECK: @ijl_gc_pool_alloc
 # CHECK: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define void @ccall_obj(i8* %fptr) {
@@ -98,7 +98,7 @@ define void @ccall_ptr(i8* %fptr) {
 # CHECK: call {}*** @julia.get_pgcstack()
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
-# CHECK: @jl_gc_pool_alloc
+# CHECK: @ijl_gc_pool_alloc
 # CHECK: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define void @ccall_unknown_bundle(i8* %fptr) {
@@ -262,8 +262,8 @@ L3:
 """)
 # CHECK-LABEL: }{{$}}
 
-# CHECK: declare noalias nonnull {} addrspace(10)* @jl_gc_pool_alloc(i8*,
-# CHECK: declare noalias nonnull {} addrspace(10)* @jl_gc_big_alloc(i8*,
+# CHECK: declare noalias nonnull {} addrspace(10)* @ijl_gc_pool_alloc(i8*,
+# CHECK: declare noalias nonnull {} addrspace(10)* @ijl_gc_big_alloc(i8*,
 println("""
 declare void @external_function()
 declare {}*** @julia.ptls_states()

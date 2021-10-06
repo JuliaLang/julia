@@ -55,11 +55,11 @@ static inline void sanitizer_finish_switch_fiber(void) {}
 #endif
 
 #if defined(_COMPILER_TSAN_ENABLED_)
-static inline void tsan_destroy_ctx(jl_ptls_t ptls, void *state) {
-    if (state != &ptls->root_task->state) {
-        __tsan_destroy_fiber(ctx->state);
+static inline void tsan_destroy_ctx(jl_ptls_t ptls, void **state) {
+    if (state != &ptls->root_task->tsan_state) {
+        __tsan_destroy_fiber(*state);
     }
-    ctx->state = NULL;
+    *state = NULL;
 }
 static inline void tsan_switch_to_ctx(void *state)  {
     __tsan_switch_to_fiber(state, 0);
@@ -83,7 +83,6 @@ static inline void tsan_switch_to_ctx(void *state)  {
 #define STATIC_OR_JS static
 #endif
 
-extern size_t jl_page_size;
 static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT;
 STATIC_OR_JS void jl_set_fiber(jl_ucontext_t *t);
 STATIC_OR_JS void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
@@ -221,7 +220,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *t)
             jl_no_exc_handler(jl_current_exception());
         }
     }
-    gc_debug_critical_error();
+    jl_gc_debug_critical_error();
     abort();
 }
 
@@ -336,7 +335,7 @@ static void ctx_switch(jl_task_t *lastt)
     assert(ptls->locks.len == 0);
 
 #ifdef _COMPILER_TSAN_ENABLED_
-    if (lastt->ctx.tsan_state != __tsan_get_current_fiber()) {
+    if (lastt->tsan_state != __tsan_get_current_fiber()) {
         // Something went really wrong - don't even assume that we can
         // use assert/abort which involve lots of signal handling that
         // looks at the tsan state.
@@ -402,7 +401,7 @@ static void ctx_switch(jl_task_t *lastt)
     jl_set_pgcstack(&t->gcstack);
 
 #if defined(_COMPILER_TSAN_ENABLED_)
-    tsan_switch_to_ctx(&t->tsan_state);
+    tsan_switch_to_ctx(t->tsan_state);
     if (killed)
         tsan_destroy_ctx(ptls, &lastt->tsan_state);
 #endif
@@ -886,7 +885,7 @@ skip_pop_exception:;
     ct->result = res;
     jl_gc_wb(ct, ct->result);
     jl_finish_task(ct);
-    gc_debug_critical_error();
+    jl_gc_debug_critical_error();
     abort();
 }
 
@@ -1251,7 +1250,7 @@ static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) J
 #endif
 
 // Initialize a root task using the given stack.
-void jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
+jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 {
     assert(ptls->root_task == NULL);
     // We need `gcstack` in `Task` to allocate Julia objects; *including* the `Task` type.
@@ -1327,13 +1326,14 @@ void jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 #endif
         if (jl_setjmp(ptls->copy_stack_ctx.uc_mcontext, 0))
             start_task(); // sanitizer_finish_switch_fiber is part of start_task
-        return;
+        return ct;
     }
     ssize = JL_STACK_SIZE;
     char *stkbuf = jl_alloc_fiber(&ptls->base_ctx, &ssize, NULL);
     ptls->stackbase = stkbuf + ssize;
     ptls->stacksize = ssize;
 #endif
+    return ct;
 }
 
 JL_DLLEXPORT int jl_is_task_started(jl_task_t *t) JL_NOTSAFEPOINT

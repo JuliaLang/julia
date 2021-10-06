@@ -36,8 +36,8 @@ int main(int argc, char * argv[])
 {
 #endif
 
-#ifdef _COMPILER_ASAN_ENABLED_
-    // ASAN does not support RTLD_DEEPBIND
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
+    // ASAN/TSAN do not support RTLD_DEEPBIND
     // https://github.com/google/sanitizers/issues/611
     putenv("LBT_USE_RTLD_DEEPBIND=0");
 #endif

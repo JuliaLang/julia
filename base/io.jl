@@ -80,6 +80,7 @@ julia> closewrite(io);
 
 julia> read(io, String)
 "request"
+```
 """
 function closewrite end
 

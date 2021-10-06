@@ -285,8 +285,8 @@ void jl_critical_error(int sig, bt_context_t *context)
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
         jl_print_bt_entry_codeloc(bt_data + i);
     }
-    gc_debug_print_status();
-    gc_debug_critical_error();
+    jl_gc_debug_print_status();
+    jl_gc_debug_critical_error();
 }
 
 ///////////////////////

@@ -1086,16 +1086,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
         end
     end
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
-    if f === getfield && isa(fargs, Vector{Any}) && la == 3 &&
-       (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
-       (a2 = argtypes[2]; a2 ⊑ Tuple)
-        # TODO: why doesn't this use the getfield_tfunc?
-        cti_info = precise_container_type(interp, iterate, a2, sv)
-        cti = cti_info[1]::Vector{Any}
-        if 1 <= idx <= length(cti)
-            rt = unwrapva(cti[idx])
-        end
-    elseif (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
+    if (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
         # perform very limited back-propagation of type information for `is` and `isa`
         if f === isa
             a = ssa_def_slot(fargs[2], sv)

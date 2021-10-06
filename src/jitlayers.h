@@ -16,6 +16,8 @@
 
 using namespace llvm;
 
+extern "C" jl_cgparams_t jl_default_cgparams;
+
 extern TargetMachine *jl_TargetMachine;
 extern bool imaging_mode;
 
@@ -63,7 +65,8 @@ typedef struct {
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
 #ifdef _OS_WINDOWS_
     SymMapGV symMapExe;
-    SymMapGV symMapDl;
+    SymMapGV symMapDll;
+    SymMapGV symMapDlli;
 #endif
     SymMapGV symMapDefault;
     // Map from distinct callee's to its GOT entry.

@@ -218,10 +218,11 @@ bool FinalLowerGC::doInitialization(Module &M) {
 
 bool FinalLowerGC::doFinalization(Module &M)
 {
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
+    queueRootFunc = poolAllocFunc = bigAllocFunc = nullptr;
     auto used = M.getGlobalVariable("llvm.compiler.used");
     if (!used)
         return false;
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
     SmallPtrSet<Constant*, 16> InitAsSet(
         functionList,
         functionList + sizeof(functionList) / sizeof(void*));

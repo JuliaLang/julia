@@ -12,6 +12,7 @@ New language features
   to enforce the involved function calls to be (or not to be) inlined. ([#41312])
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
+* `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 
 Language changes
 ----------------
@@ -23,6 +24,10 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* The LLVM-based compiler has been separated from the run-time library into a new library,
+  `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
+  In deployments that do not need the compiler (e.g. system images where all needed code
+  is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
 
 Command-line option changes
 ---------------------------
@@ -58,6 +63,7 @@ Standard library changes
   constructing the range. ([#40382])
 * TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
 * Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
+* `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
 
 #### InteractiveUtils
 * A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])

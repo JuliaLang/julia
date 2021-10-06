@@ -785,11 +785,13 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             rettype = code.rettype
             if isdefined(code, :rettype_const)
                 rettype_const = code.rettype_const
+                # the second subtyping conditions are necessary to distinguish usual cases
+                # from rare cases when `Const` wrapped those extended lattice type objects
                 if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
                     return PartialStruct(rettype, rettype_const), mi
-                elseif rettype <: Core.OpaqueClosure && isa(rettype_const, PartialOpaque)
+                elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
                     return rettype_const, mi
-                elseif isa(rettype_const, InterConditional)
+                elseif isa(rettype_const, InterConditional) && !(InterConditional <: rettype)
                     return rettype_const, mi
                 else
                     return Const(rettype_const), mi

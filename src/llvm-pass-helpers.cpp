@@ -15,6 +15,7 @@
 #include "codegen_shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
+#include "jl_internal_funcs.inc"
 
 using namespace llvm;
 
@@ -209,9 +210,9 @@ namespace jl_intrinsics {
 }
 
 namespace jl_well_known {
-    static const char *GC_BIG_ALLOC_NAME = "jl_gc_big_alloc";
-    static const char *GC_POOL_ALLOC_NAME = "jl_gc_pool_alloc";
-    static const char *GC_QUEUE_ROOT_NAME = "jl_gc_queue_root";
+    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
+    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc);
+    static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
 
     using jl_intrinsics::addGCAllocAttributes;
 
