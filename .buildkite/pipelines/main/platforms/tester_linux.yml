@@ -88,4 +88,4 @@ steps:
       echo "TESTS is:                  $${TESTS:?}"
 
       echo "--- Run the Julia test suite"
-      $${JULIA_BINARY_FOR_TESTS:?} -e 'Base.runtests($${TESTS:?}; ncores = $${NCORES_FOR_TESTS:?})'
+      $${JULIA_BINARY_FOR_TESTS:?} -e "Base.runtests($${TESTS:?}; ncores = $${NCORES_FOR_TESTS:?})"
