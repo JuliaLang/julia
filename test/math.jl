@@ -146,9 +146,11 @@ end
         y = T(1//2)
         yi = 4
         @testset "Random values" begin
-            @test x^y ≈ big(x)^big(y)
+            @test x^y === T(big(x)^big(y))
             @test x^1 === x
-            @test x^yi ≈ big(x)^yi
+            @test x^yi === T(big(x)^yi)
+            # test for large negative exponent where error compensation matters
+            @test 0.9999999955206014)^-1.0e8 == 1.565084574870928
             @test (-x)^yi == x^yi
             @test (-x)^(yi+1) == -(x^(yi+1))
             @test acos(x) ≈ acos(big(x))
