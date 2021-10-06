@@ -913,11 +913,6 @@ function rem(x::T, p::T, ::RoundingMode{:Nearest}) where T<:IEEEFloat
     end
     return flipsign(x, oldx)
 end
-rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
-    ccall((:remainder, libm),Float64,(Float64,Float64),x,y)
-rem(x::Float32, y::Float32, ::RoundingMode{:Nearest}) =
-    ccall((:remainderf, libm),Float32,(Float32,Float32),x,y)
-rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) = Float16(rem(Float32(x), Float32(y), r))
 
 
 """
