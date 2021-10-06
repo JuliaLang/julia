@@ -18,6 +18,3 @@ override WITH_GC_DEBUG_ENV=1
 
 # default to a debug build for better line number reporting
 override JULIA_BUILD_MODE=debug
-
-# make ASAN consume less memory
-export ASAN_OPTIONS=detect_leaks=0:allow_user_segv_handler=1
