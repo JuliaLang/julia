@@ -102,7 +102,7 @@ Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
 
 !!! compat "Julia 1.3"
-    `missing` as the first argument requires at least Julia 1.3.
+   `missing` as the first argument requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
