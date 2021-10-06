@@ -58,14 +58,14 @@ end
         return Slices(A, slicemap, ax)
     end
 end
-@inline function _eachslice(A::AbstractArray{T,N}, dim::Integer, drop::Bool) where {T,N}
+@inline function _eachslice(A::AbstractArray, dim::Integer, drop::Bool)
     _eachslice(A, (dim,), drop)
 end
 
 """
     eachslice(A::AbstractArray; dims, drop=true)
 
-Create a [`Slices`](@ref) that is indexed over dimensions `dims` of `A`, returning
+Create a [`Slices`](@ref) object that is an array of slices over dimensions `dims` of `A`, returning
 views that select all the data from the other dimensions in `A`. `dims` can either by an
 integer or a tuple of integers.
 
@@ -91,7 +91,7 @@ julia> M = [1 2 3; 4 5 6; 7 8 9]
  4  5  6
  7  8  9
 
-julia> S = eachslice(M,dims=1)
+julia> S = eachslice(M, dims=1)
 3-element Rows{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2, 3]
  [4, 5, 6]
@@ -103,7 +103,7 @@ julia> S[1]
  2
  3
 
-julia> T = eachslice(M,dims=1,drop=false)
+julia> T = eachslice(M, dims=1, drop=false)
 3×1 Slices{Matrix{Int64}, Tuple{Int64, Colon}, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}, 2}:
  [1, 2, 3]
  [4, 5, 6]
@@ -115,9 +115,10 @@ julia> T = eachslice(M,dims=1,drop=false)
 end
 
 """
-    eachrow(A::AbstractVecOrMat)
+    eachrow(A::AbstractVecOrMat) <: AbstractVector
 
-Create a [`Rows`](@ref) that indexes over the rows of a vector or matrix `A`.
+Create a [`Rows`](@ref) object that is a vector of rows of matrix or vector `A`.
+Row slices are returned as `AbstractVector` views of `A`.
 
 See also [`eachcol`](@ref) and [`eachslice`](@ref).
 
@@ -150,10 +151,10 @@ eachrow(A::AbstractMatrix) = _eachslice(A, (1,), true)
 eachrow(A::AbstractVector) = eachrow(reshape(A, size(A,1), 1))
 
 """
-    eachcol(A::AbstractVecOrMat)
+    eachcol(A::AbstractVecOrMat) <: AbstractVector
 
-Create a [`Columns`](@ref) that iterates over the second dimension of matrix `A`, returning the
-columns as `AbstractVector` views.
+Create a [`Columns`](@ref) object that is a vector of columns of matrix or vector `A`.
+Column slices are returned as `AbstractVector` views of `A`.
 
 See also [`eachrow`](@ref) and [`eachslice`](@ref).
 
@@ -183,7 +184,7 @@ julia> S[1]
 ```
 """
 eachcol(A::AbstractMatrix) = _eachslice(A, (2,), true)
-eachcol(A::AbstractVector) = eachcol(reshape(A, size(A,1), 1))
+eachcol(A::AbstractVector) = eachcol(reshape(A, size(A, 1), 1))
 
 """
     Rows{M,AX,S}
