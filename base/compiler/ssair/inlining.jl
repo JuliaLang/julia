@@ -529,9 +529,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
     end
 
     # We're now in the join block.
-    compact.ssa_rename[compact.idx-1] = insert_node_here!(compact,
-        NewInstruction(pn, typ, line))
-    nothing
+    return insert_node_here!(compact, NewInstruction(pn, typ, line))
 end
 
 function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vector{LineInfoNode}, propagate_inbounds::Bool)
@@ -592,7 +590,7 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
                 if isa(item, InliningTodo)
                     compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
-                    ir_inline_unionsplit!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
+                    compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
                 end
                 compact[idx] = nothing
                 refinish && finish_current_bb!(compact, 0)
@@ -715,15 +713,6 @@ function rewrite_invoke_exprargs!(argexprs::Vector{Any})
     argexprs = argexprs[4:end]
     pushfirst!(argexprs, argexpr0)
     return argexprs
-end
-
-function singleton_type(@nospecialize(ft))
-    if isa(ft, Const)
-        return ft.val
-    elseif ft isa DataType && isdefined(ft, :instance)
-        return ft.instance
-    end
-    return nothing
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch)
@@ -851,51 +840,6 @@ function InliningTodo(mi::MethodInstance, src::Union{CodeInfo, Array{UInt8, 1}})
     @timeit "inline IR inflation" begin
         return InliningTodo(mi, inflate_ir(src, mi)::IRCode)
     end
-end
-
-# Neither the product iterator not CartesianIndices are available
-# here, so use this poor man's version
-struct SimpleCartesian
-    ranges::Vector{UnitRange{Int}}
-end
-function iterate(s::SimpleCartesian, state::Vector{Int}=Int[1 for _ in 1:length(s.ranges)])
-    state[end] > last(s.ranges[end]) && return nothing
-    vals = copy(state)
-    any = false
-    for i = 1:length(s.ranges)
-        if state[i] < last(s.ranges[i])
-            for j = 1:(i-1)
-                state[j] = first(s.ranges[j])
-            end
-            state[i] += 1
-            any = true
-            break
-        end
-    end
-    if !any
-        state[end] += 1
-    end
-    (vals, state)
-end
-
-# Given a signure, iterate over the signatures to union split over
-struct UnionSplitSignature
-    it::SimpleCartesian
-    typs::Vector{Any}
-end
-
-function UnionSplitSignature(atypes::Vector{Any})
-    typs = Any[uniontypes(widenconst(atypes[i])) for i = 1:length(atypes)]
-    ranges = UnitRange{Int}[1:length(typs[i]) for i = 1:length(typs)]
-    return UnionSplitSignature(SimpleCartesian(ranges), typs)
-end
-
-function iterate(split::UnionSplitSignature, state::Vector{Int}...)
-    y = iterate(split.it, state...)
-    y === nothing && return nothing
-    idxs, state = y
-    sig = Any[split.typs[i][j] for (i, j) in enumerate(idxs)]
-    return (sig, state)
 end
 
 function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(case), isinvoke::Bool, todo::Vector{Pair{Int, Any}})

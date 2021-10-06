@@ -706,7 +706,7 @@ static jl_value_t *do_apply( jl_value_t **args, uint32_t nargs, jl_value_t *iter
     }
     if (arg_heap) {
         // optimization: keep only the first root, free the others
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
         ((void**)roots)[-2] = (void*)JL_GC_ENCODE_PUSHARGS(1);
 #endif
     }
@@ -810,19 +810,19 @@ JL_CALLABLE(jl_f_svec)
 
 enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char storing)
 {
-    if (order == not_atomic_sym)
+    if (order == jl_not_atomic_sym)
         return jl_memory_order_notatomic;
-    if (order == unordered_sym && (loading ^ storing))
+    if (order == jl_unordered_sym && (loading ^ storing))
         return jl_memory_order_unordered;
-    if (order == monotonic_sym && (loading || storing))
+    if (order == jl_monotonic_sym && (loading || storing))
         return jl_memory_order_monotonic;
-    if (order == acquire_sym && loading)
+    if (order == jl_acquire_sym && loading)
         return jl_memory_order_acquire;
-    if (order == release_sym && storing)
+    if (order == jl_release_sym && storing)
         return jl_memory_order_release;
-    if (order == acquire_release_sym && loading && storing)
+    if (order == jl_acquire_release_sym && loading && storing)
         return jl_memory_order_acq_rel;
-    if (order == sequentially_consistent_sym)
+    if (order == jl_sequentially_consistent_sym)
         return jl_memory_order_seq_cst;
     return jl_memory_order_invalid;
 }
@@ -1658,7 +1658,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         f = cglobal_auto;
     unsigned fargs = intrinsic_nargs[f];
     if (!fargs)
-        jl_error("this intrinsic must be compiled to be called");
+        jl_errorf("`%s` must be compiled to be called", jl_intrinsic_name(f));
     JL_NARGS(intrinsic_call, fargs, fargs);
 
     union {
@@ -1684,7 +1684,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         default:
             assert(0 && "unexpected number of arguments to an intrinsic function");
     }
-    gc_debug_critical_error();
+    jl_gc_debug_critical_error();
     abort();
 }
 
@@ -1761,7 +1761,9 @@ static void add_builtin(const char *name, jl_value_t *v)
 jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    return ((jl_typemap_entry_t*)jl_gf_mtable(b)->cache)->func.linfo->cache->specptr.fptr1;
+    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_atomic_load_relaxed(&jl_gf_mtable(b)->cache);
+    jl_code_instance_t *ci = jl_atomic_load_relaxed(&entry->func.linfo->cache);
+    return jl_atomic_load_relaxed(&ci->specptr.fptr1);
 }
 
 static jl_value_t *add_builtin_func(const char *name, jl_fptr_args_t fptr)

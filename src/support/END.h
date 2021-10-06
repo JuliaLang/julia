@@ -47,7 +47,6 @@ CNAME endp
 
 
 #undef CNAME
-#undef HIDENAME
 #undef STR
 #undef XSTR
 #undef _START_ENTRY

@@ -49,6 +49,9 @@ are promoted to a common type.
 
 See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
 
+!!! compat "Julia 1.3"
+    `missing` as the first argument requires at least Julia 1.3.
+
 # Examples
 ```jldoctest
 julia> clamp.([pi, 1.0, big(10)], 2.0, 9.0)
@@ -97,6 +100,9 @@ clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
 
 Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` entries in `array` require at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -874,11 +880,39 @@ function frexp(x::T) where T<:IEEEFloat
     return reinterpret(T, xu), k
 end
 
-rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
-    ccall((:remainder, libm),Float64,(Float64,Float64),x,y)
-rem(x::Float32, y::Float32, ::RoundingMode{:Nearest}) =
-    ccall((:remainderf, libm),Float32,(Float32,Float32),x,y)
-rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) = Float16(rem(Float32(x), Float32(y), r))
+# NOTE: This `rem` method is adapted from the msun `remainder` and `remainderf`
+# functions, which are under the following license:
+#
+# Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+#
+# Developed at SunSoft, a Sun Microsystems, Inc. business.
+# Permission to use, copy, modify, and distribute this
+# software is freely granted, provided that this notice
+# is preserved.
+function rem(x::T, p::T, ::RoundingMode{:Nearest}) where T<:IEEEFloat
+    (iszero(p) || !isfinite(x) || isnan(p)) && return T(NaN)
+    x == p && return copysign(zero(T), x)
+    oldx = x
+    x = abs(rem(x, 2p))  # 2p may overflow but that's okay
+    p = abs(p)
+    if p < 2 * floatmin(T)  # Check whether dividing p by 2 will underflow
+        if 2x > p
+            x -= p
+            if 2x >= p
+                x -= p
+            end
+        end
+    else
+        p_half = p / 2
+        if x > p_half
+            x -= p
+            if x >= p_half
+                x -= p
+            end
+        end
+    end
+    return flipsign(x, oldx)
+end
 
 
 """
@@ -911,36 +945,54 @@ function modf(x::Float64)
 end
 
 @inline function ^(x::Float64, y::Float64)
+    yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
+    y == yint && return x^yint
     z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
     end
     z
 end
-@inline function ^(x::Float32, y::Float32)
-    z = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y)
-    if isnan(z) & !isnan(x+y)
-        throw_exp_domainerror(x)
-    end
-    z
+@inline function ^(x::T, y::T) where T <: Union{Float16, Float32}
+    yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
+    y == yint && return x^yint
+    x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    x == 1 && return one(T)
+    !isfinite(x) && return x*(y>0)
+    x==0 && return abs(y)*T(Inf)*(!(y>0))
+    return T(exp2(log2(abs(widen(x))) * y))
 end
-@inline ^(x::Float16, y::Float16) = Float16(Float32(x)^Float32(y))  # TODO: optimize
 
-@inline function ^(x::Float64, y::Integer)
-    y == -1 && return inv(x)
-    y == 0 && return one(x)
-    y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+# compensated power by squaring
+@inline function ^(x::Float64, n::Integer)
+    n == 0 && return one(x)
+    y = 1.0
+    xnlo = ynlo = 0.0
+    if n < 0
+        rx = inv(x)
+        isfinite(x) && (xnlo = fma(x, rx, -1.) * rx)
+        x = rx
+        n = -n
+    end
+    n==3 && return x*x*x #keep compatability with literal_pow
+    while n > 1
+        if n&1 > 0
+            yn = x*y
+            ynlo = fma(x, y , -yn) + muladd(y, xnlo, x*ynlo)
+            y = yn
+        end
+        xn = x * x
+        xnlo = muladd(x, 2*xnlo, fma(x, x, -xn))
+        x = xn
+        n >>>= 1
+    end
+    !isfinite(x) && return x*y
+    return muladd(x, y, muladd(y, xnlo, x*ynlo))
 end
-@inline function ^(x::Float32, y::Integer)
-    y == -1 && return inv(x)
-    y == 0 && return one(x)
-    y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+@inline function ^(x::Float32, n::Integer)
+    n < 0 && return inv(x)^(-n)
+    n==3 && return x*x*x #keep compatability with literal_pow
+    Float32(Base.power_by_squaring(Float64(x),n))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))

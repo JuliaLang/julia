@@ -433,7 +433,7 @@ JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
 }
 
 
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
 JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -473,6 +473,20 @@ JL_DLLEXPORT void (jl_cpu_pause)(void)
 JL_DLLEXPORT void (jl_cpu_wake)(void)
 {
     jl_cpu_wake();
+}
+
+JL_DLLEXPORT uint64_t jl_cumulative_compile_time_ns_before(void)
+{
+    // Increment the flag to allow reentrant callers to `@time`.
+    jl_atomic_fetch_add(&jl_measure_compile_time_enabled, 1);
+    return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
+}
+
+JL_DLLEXPORT uint64_t jl_cumulative_compile_time_ns_after(void)
+{
+    // Decrement the flag when done measuring, allowing other callers to continue measuring.
+    jl_atomic_fetch_add(&jl_measure_compile_time_enabled, -1);
+    return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
 }
 
 JL_DLLEXPORT void jl_get_fenv_consts(int *ret)

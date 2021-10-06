@@ -43,6 +43,7 @@ Random.seed!(1)
             @test ubd.dv === x
             @test lbd.ev === y
             @test_throws ArgumentError Bidiagonal(x, y, :R)
+            @test_throws ArgumentError Bidiagonal(x, y, 'R')
             x == dv0 || @test_throws DimensionMismatch Bidiagonal(x, x, :U)
             @test_throws MethodError Bidiagonal(x, y)
             # from matrix
@@ -269,6 +270,11 @@ Random.seed!(1)
                     end
                 end
             end
+            zdv = Vector{elty}(undef, 0)
+            zev = Vector{elty}(undef, 0)
+            zA  = Bidiagonal(zdv, zev, :U)
+            zb  = Vector{elty}(undef, 0)
+            @test ldiv!(zA, zb) === zb
         end
 
         if elty <: BlasReal
@@ -548,6 +554,14 @@ end
         for uplo in (:U, :L)
             B = Bidiagonal(dv, ev, uplo)
             @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
+        end
+        dv = Vector{elty}(undef, 0)
+        ev = Vector{elty}(undef, 0)
+        x = Vector{elty}(undef, 0)
+        y = Vector{elty}(undef, 0)
+        for uplo in (:U, :L)
+            B = Bidiagonal(dv, ev, uplo)
+            @test dot(x, B, y) ≈ dot(zero(elty), zero(elty), zero(elty))
         end
     end
 end

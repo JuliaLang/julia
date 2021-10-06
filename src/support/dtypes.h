@@ -76,17 +76,6 @@
 #define JL_DLLIMPORT
 #endif
 
-/*
- * Debug builds include `-fstack-protector`, which adds a bit of extra prologue to
- * functions, even naked ones.  We don't want that, but we also don't want the
- * compiler warnings when `no_stack_protector` has no effect.
- */
-#ifdef JL_DEBUG_BUILD
-#define JL_NAKED __attribute__ ((naked,no_stack_protector))
-#else
-#define JL_NAKED __attribute__ ((naked))
-#endif
-
 #ifdef _OS_LINUX_
 #include <endian.h>
 #define LITTLE_ENDIAN  __LITTLE_ENDIAN
@@ -369,7 +358,7 @@ STATIC_INLINE void *malloc_s(size_t sz) JL_NOTSAFEPOINT {
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    void *p = malloc(sz);
+    void *p = malloc(sz == 0 ? 1 : sz);
     if (p == NULL) {
         perror("(julia) malloc");
         abort();
@@ -386,7 +375,7 @@ STATIC_INLINE void *realloc_s(void *p, size_t sz) JL_NOTSAFEPOINT {
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    p = realloc(p, sz);
+    p = realloc(p, sz == 0 ? 1 : sz);
     if (p == NULL) {
         perror("(julia) realloc");
         abort();

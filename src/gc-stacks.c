@@ -23,7 +23,7 @@
 #define MIN_STACK_MAPPINGS_PER_POOL 5
 
 const size_t jl_guard_size = (4096 * 8);
-static uint32_t num_stack_mappings = 0;
+static _Atomic(uint32_t) num_stack_mappings = 0;
 
 #ifdef _OS_WINDOWS_
 #define MAP_FAILED NULL
@@ -234,9 +234,9 @@ void sweep_stack_pools(void)
                     _jl_free_stack(ptls2, stkbuf, bufsz);
                 }
 #ifdef _COMPILER_TSAN_ENABLED_
-                if (t->ctx.tsan_state) {
-                    __tsan_destroy_fiber(t->ctx.tsan_state);
-                    t->ctx.tsan_state = NULL;
+                if (t->tsan_state) {
+                    __tsan_destroy_fiber(t->tsan_state);
+                    t->tsan_state = NULL;
                 }
 #endif
             }

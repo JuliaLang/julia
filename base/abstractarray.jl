@@ -3067,29 +3067,9 @@ end
 
 ## keepat! ##
 
-"""
-    keepat!(a::AbstractVector, inds)
+# NOTE: since these use `@inbounds`, they are actually only intended for Vector and BitVector
 
-Remove the items at all the indices which are not given by `inds`,
-and return the modified `a`.
-Items which are kept are shifted to fill the resulting gaps.
-
-`inds` must be an iterator of sorted and unique integer indices.
-See also [`deleteat!`](@ref).
-
-!!! compat "Julia 1.7"
-    This function is available as of Julia 1.7.
-
-# Examples
-```jldoctest
-julia> keepat!([6, 5, 4, 3, 2, 1], 1:2:5)
-3-element Vector{Int64}:
- 6
- 4
- 2
-```
-"""
-function keepat!(a::AbstractVector, inds)
+function _keepat!(a::AbstractVector, inds)
     local prev
     i = firstindex(a)
     for k in inds
@@ -3104,5 +3084,20 @@ function keepat!(a::AbstractVector, inds)
         i = nextind(a, i)
     end
     deleteat!(a, i:lastindex(a))
+    return a
+end
+
+function _keepat!(a::AbstractVector, m::AbstractVector{Bool})
+    length(m) == length(a) || throw(BoundsError(a, m))
+    j = firstindex(a)
+    for i in eachindex(a, m)
+        @inbounds begin
+            if m[i]
+                i == j || (a[j] = a[i])
+                j = nextind(a, j)
+            end
+        end
+    end
+    deleteat!(a, j:lastindex(a))
     return a
 end

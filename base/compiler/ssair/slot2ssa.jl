@@ -177,13 +177,14 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    (; codelocs, ssaflags) = ci
     for i = length(code):-1:1
         if code[i] !== nothing
             resize!(code, i)
             resize!(ssavaluetypes, i)
-            resize!(ci.codelocs, i)
+            resize!(codelocs, i)
             resize!(info, i)
-            resize!(ci.ssaflags, i)
+            resize!(ssaflags, i)
             break
         end
     end
@@ -193,9 +194,9 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
     if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
         push!(code, ReturnNode())
         push!(ssavaluetypes, Union{})
-        push!(ci.codelocs, 0)
+        push!(codelocs, 0)
         push!(info, nothing)
-        push!(ci.ssaflags, 0x00)
+        push!(ssaflags, IR_FLAG_NULL)
     end
     nothing
 end

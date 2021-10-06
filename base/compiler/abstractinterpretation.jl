@@ -1086,16 +1086,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
         end
     end
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
-    if f === getfield && isa(fargs, Vector{Any}) && la == 3 &&
-       (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
-       (a2 = argtypes[2]; a2 ⊑ Tuple)
-        # TODO: why doesn't this use the getfield_tfunc?
-        cti_info = precise_container_type(interp, iterate, a2, sv)
-        cti = cti_info[1]::Vector{Any}
-        if 1 <= idx <= length(cti)
-            rt = unwrapva(cti[idx])
-        end
-    elseif (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
+    if (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
         # perform very limited back-propagation of type information for `is` and `isa`
         if f === isa
             a = ssa_def_slot(fargs[2], sv)
@@ -1235,7 +1226,7 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     #     t, a = ti.parameters[i], argtypes′[i]
     #     argtypes′[i] = t ⊑ a ? t : a
     # end
-    const_result = abstract_call_method_with_const_args(interp, result, argtype_to_function(ft′), argtypes′, match, sv, false)
+    const_result = abstract_call_method_with_const_args(interp, result, singleton_type(ft′), argtypes′, match, sv, false)
     if const_result !== nothing
         const_rt, const_result = const_result
         if const_rt !== rt && const_rt ⊑ rt
@@ -1379,7 +1370,7 @@ function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{
                        sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
     #print("call ", e.args[1], argtypes, "\n\n")
     ft = argtypes[1]
-    f = argtype_to_function(ft)
+    f = singleton_type(ft)
     if isa(ft, PartialOpaque)
         return abstract_call_opaque_closure(interp, ft, argtypes[2:end], sv)
     elseif (uft = unwrap_unionall(ft); isa(uft, DataType) && uft.name === typename(Core.OpaqueClosure))
@@ -1394,18 +1385,6 @@ function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{
         return abstract_call_gf_by_type(interp, nothing, fargs, argtypes, argtypes_to_type(argtypes), sv, max_methods)
     end
     return abstract_call_known(interp, f, fargs, argtypes, sv, max_methods)
-end
-
-function argtype_to_function(@nospecialize(ft))
-    if isa(ft, Const)
-        return ft.val
-    elseif isconstType(ft)
-        return ft.parameters[1]
-    elseif isa(ft, DataType) && isdefined(ft, :instance)
-        return ft.instance
-    else
-        return nothing
-    end
 end
 
 function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)

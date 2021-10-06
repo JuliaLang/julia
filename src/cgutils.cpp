@@ -517,7 +517,7 @@ static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed
 }
 
 extern "C" JL_DLLEXPORT
-Type *jl_type_to_llvm(jl_value_t *jt, bool *isboxed)
+Type *jl_type_to_llvm_impl(jl_value_t *jt, bool *isboxed)
 {
     return _julia_type_to_llvm(NULL, jt, isboxed);
 }
@@ -1407,7 +1407,11 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
     return im1;
 }
 
-static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, MDNode *tbaa_dest = nullptr, bool isVolatile = false);
+static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest, MDNode *tbaa_dest, bool isVolatile = false);
+static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt)
+{
+    return emit_unbox(ctx, to, x, jt, nullptr, nullptr, false);
+}
 static void emit_write_barrier(jl_codectx_t&, Value*, ArrayRef<Value*>);
 static void emit_write_barrier(jl_codectx_t&, Value*, Value*);
 static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*);
@@ -1560,7 +1564,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ret = mark_julia_type(ctx, callval, true, jl_any_type);
         }
         if (!jl_subtype(ret.typ, jltype)) {
-            emit_typecheck(ctx, ret, jltype, fname + "typed_store");
+            emit_typecheck(ctx, ret, jltype, fname);
             ret = update_julia_type(ctx, ret, jltype);
         }
         return ret;
@@ -3075,7 +3079,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
     if (jt == (jl_value_t*)jl_nothing_type)
         return track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
     if (vinfo.isboxed) {
-        assert(vinfo.V == vinfo.Vboxed);
+        assert(vinfo.V == vinfo.Vboxed && vinfo.V != nullptr);
         assert(vinfo.V->getType() == T_prjlvalue);
         return vinfo.V;
     }
@@ -3589,7 +3593,7 @@ static Value *emit_defer_signal(jl_codectx_t &ctx)
     return ctx.builder.CreateInBoundsGEP(T_sigatomic, ptls, ArrayRef<Value*>(offset), "jl_defer_signal");
 }
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
 static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 {
     return

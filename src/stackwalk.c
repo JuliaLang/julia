@@ -102,6 +102,13 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
                 // But sometimes the external unwinder doesn't check that.
                 have_more_frames = 0;
             }
+            if (return_ip == 0) {
+                // The return address is clearly wrong, and while the unwinder
+                // might try to continue (by popping another stack frame), that
+                // likely won't work well, and it'll confuse the stack frame
+                // separator detection logic (double-NULL).
+                have_more_frames = 0;
+            }
             if (skip > 0) {
                 skip--;
                 from_signal_handler = 0;
@@ -141,8 +148,9 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             if (!from_signal_handler)
                 call_ip -= 1; // normal frame
             from_signal_handler = 0;
-            if (call_ip == JL_BT_NON_PTR_ENTRY) {
+            if (call_ip == JL_BT_NON_PTR_ENTRY || call_ip == 0) {
                 // Never leave special marker in the bt data as it can corrupt the GC.
+                have_more_frames = 0;
                 call_ip = 0;
             }
             jl_bt_element_t *bt_entry = bt_data + n;
@@ -336,7 +344,7 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
 {
     JL_TYPECHK(current_exceptions, task, (jl_value_t*)task);
     jl_task_t *ct = jl_current_task;
-    if (task != ct && task->_state == JL_TASK_STATE_RUNNABLE) {
+    if (task != ct && jl_atomic_load_relaxed(&task->_state) == JL_TASK_STATE_RUNNABLE) {
         jl_error("Inspecting the exception stack of a task which might "
                  "be running concurrently isn't allowed.");
     }
@@ -423,7 +431,7 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
 volatile int needsSymRefreshModuleList;
 BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 
-void jl_refresh_dbg_module_list(void)
+JL_DLLEXPORT void jl_refresh_dbg_module_list(void)
 {
     if (needsSymRefreshModuleList && hSymRefreshModuleList != NULL) {
         hSymRefreshModuleList(GetCurrentProcess());
@@ -587,12 +595,12 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
         if (frame.func_name)
             jl_svecset(r, 0, jl_symbol(frame.func_name));
         else
-            jl_svecset(r, 0, empty_sym);
+            jl_svecset(r, 0, jl_empty_sym);
         free(frame.func_name);
         if (frame.file_name)
             jl_svecset(r, 1, jl_symbol(frame.file_name));
         else
-            jl_svecset(r, 1, empty_sym);
+            jl_svecset(r, 1, jl_empty_sym);
         free(frame.file_name);
         jl_svecset(r, 2, jl_box_long(frame.line));
         jl_svecset(r, 3, frame.linfo != NULL ? (jl_value_t*)frame.linfo : jl_nothing);

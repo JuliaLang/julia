@@ -98,7 +98,7 @@ all: checksum-doc-unicodedata
 
 # Special LLVM source hashes for optional targets
 checksum-llvm-special-src:
-	-+$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/deps" USE_BINARYBUILDER_LLVM=0 DEPS_GIT=0 BUILD_LLDB=1 BUILD_LLVM_CLANG=1 BUILD_CUSTOM_LIBCXX=1 USECLANG=1 checksum-llvm
+	-+$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/deps" USE_BINARYBUILDER_LLVM=0 DEPS_GIT=0 checksum-llvm
 all: checksum-llvm-special-src
 .PHONY: checksum-llvm-special-src
 

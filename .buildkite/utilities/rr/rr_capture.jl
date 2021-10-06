@@ -1,44 +1,94 @@
-using Dates
-using Pkg
-using Tar
+import Dates
+import Pkg
+import Tar
+
+function get_bool_from_env(name::AbstractString, default_value::Bool)
+    value = get(ENV, name, "$(default_value)") |> strip |> lowercase
+    result = parse(Bool, value)::Bool
+    return result
+end
+
+const is_buildkite         = get_bool_from_env("BUILDKITE",                  false)
+const always_save_rr_trace = get_bool_from_env("JULIA_ALWAYS_SAVE_RR_TRACE", false)
+
+function get_from_env(name::AbstractString)
+    if is_buildkite
+        value = ENV[name]
+    else
+        value = get(ENV, name, "")
+    end
+    result = convert(String, strip(value))::String
+    return result
+end
+
+function my_exit(process::Base.Process)
+    wait(process)
+
+    @info(
+        "",
+        process.exitcode,
+        process.termsignal,
+    )
+
+    # Pass the exit code back up
+    if process.termsignal != 0
+        ccall(:raise, Cvoid, (Cint,), process.termsignal)
+
+        # If for some reason the signal did not cause an exit, we'll exit manually.
+        # We need to make sure that we exit with a non-zero exit code.
+        if process.exitcode != 0
+            exit(process.exitcode)
+        else
+            exit(1)
+        end
+    end
+    exit(process.exitcode)
+end
 
 if Base.VERSION < v"1.6"
-    throw(ErrorException("The `rr_capture.jl` script requires Julia 1.6 or greater"))
+    throw(ErrorException("The `$(basename(@__FILE__))` script requires Julia 1.6 or greater"))
 end
 
 if length(ARGS) < 1
-    throw(ErrorException("Usage: rr_capture.jl [command...]"))
+    throw(ErrorException("Usage: julia $(basename(@__FILE__)) [command...]"))
 end
 
-const TIMEOUT = 2 * 60 * 60 # timeout in seconds
+@info "We will run the command under rr"
 
-# We only use `rr` on the `tester_linux64` builder
-const use_rr_if_builder_is = "tester_linux64"
+const build_number             = get_from_env("BUILDKITE_BUILD_NUMBER")
+const job_name                 = get_from_env("BUILDKITE_STEP_KEY")
+const commit_full              = get_from_env("BUILDKITE_COMMIT")
+const commit_short             = first(commit_full, 10)
+const timeout_minutes          = 120
+const JULIA_TEST_NUM_CORES     = get(ENV, "JULIA_TEST_NUM_CORES", "8")
+const julia_test_num_cores_int = parse(Int, JULIA_TEST_NUM_CORES)
+const num_cores = min(
+    8,
+    Sys.CPU_THREADS,
+    julia_test_num_cores_int + 1,
+)
 
-const run_id = get(ENV, "BUILDKITE_JOB_ID", "unknown")
-const shortcommit = get(ENV, "BUILDKITE_COMMIT", "unknown")
-const builder = get(ENV, "BUILDKITE_STEP_KEY", use_rr_if_builder_is)
-const use_rr = builder == use_rr_if_builder_is
+ENV["JULIA_RRCAPTURE_NUM_CORES"] = "$(num_cores)"
 
-@info "" run_id shortcommit builder use_rr
-@info "" ARGS
+@info(
+    "",
+    build_number,
+    job_name,
+    commit_full,
+    commit_short,
+    timeout_minutes,
+    num_cores,
+)
 
-# if !use_rr # TODO: uncomment this line
-if true # TODO: delete this line
-    @info "We will not run the tests under rr"
-    p = run(`$ARGS`)
-    exit(p.exitcode)
-end
+const dumps_dir       = joinpath(pwd(), "dumps")
+const temp_parent_dir = joinpath(pwd(), "temp_for_rr")
 
-@info "We will run the tests under rr"
-
-const num_cores = min(Sys.CPU_THREADS, 8, parse(Int, get(ENV, "JULIA_TEST_NUM_CORES", "8")) + 1)
-@info "" num_cores
+mkpath(dumps_dir)
+mkpath(temp_parent_dir)
 
 proc = nothing
 
-new_env = copy(ENV)
-mktempdir() do dir
+mktempdir(temp_parent_dir) do dir
     Pkg.activate(dir)
     Pkg.add("rr_jll")
     Pkg.add("Zstd_jll")
@@ -68,18 +118,22 @@ mktempdir() do dir
 
         # Start asynchronous timer that will kill `rr`
         @async begin
-            sleep(TIMEOUT)
+            sleep(timeout_minutes * 60)
 
             # If we've exceeded the timeout and `rr` is still running, kill it.
             if isopen(proc)
-                println(stderr, "\n\nProcess timed out. Signalling `rr` for force-cleanup!")
+                println(stderr, "\n\nProcess timed out (with a timeout of $(timeout_minutes) minutes). Signalling `rr` for force-cleanup!")
                 kill(proc, Base.SIGTERM)
 
-                # Give `rr` a chance to cleanup
-                sleep(60)
+                # Give `rr` a chance to cleanup and upload.
+                # Note: this time period includes the time to upload the `rr` trace files
+                # as Buildkite artifacts, so make sure it is long enough to allow the
+                # uploads to finish.
+                cleanup_minutes = 30
+                sleep(cleanup_minutes * 60)
 
                 if isopen(proc)
-                    println(stderr, "\n\n`rr` failed to cleanup within one minute, killing and exiting immediately!")
+                    println(stderr, "\n\n`rr` failed to cleanup and upload within $(cleanup_minutes) minutes, killing and exiting immediately!")
                     kill(proc, Base.SIGKILL)
                     exit(1)
                 end
@@ -87,11 +141,10 @@ mktempdir() do dir
         end
 
         # Wait for `rr` to finish, either through naturally finishing its run, or `SIGTERM`.
-        # If we have to `SIGKILL`
         wait(proc)
+        process_failed = !success(proc)
 
-        # On a non-zero exit code, upload the `rr` trace
-        if !success(proc)
+        if process_failed || always_save_rr_trace || is_buildkite
             println(stderr, "`rr` returned $(proc.exitcode), packing and uploading traces...")
 
             if !isdir(joinpath(dir, "rr_traces"))
@@ -113,22 +166,34 @@ mktempdir() do dir
             run(ignorestatus(`$(rr_path) pack --pack-dir=$pack_dir $(trace_dirs)`))
 
             # Tar it up
-            mkpath("dumps")
-            datestr = Dates.format(now(), dateformat"yyyy-mm-dd_HH_MM_SS")
-            dst_path = "dumps/rr-run_$(run_id)-gitsha_$(shortcommit)-$(datestr).tar.zst"
+            mkpath(dumps_dir)
+            date_str = Dates.format(Dates.now(), Dates.dateformat"yyyy_mm_dd_HH_MM_SS")
+            dst_file_name = string(
+                "rr",
+                "--build_$(build_number)",
+                "--$(job_name)",
+                "--commit_$(commit_short)",
+                "--$(date_str)",
+                ".tar.zst",
+            )
+            dst_full_path = joinpath(dumps_dir, dst_file_name)
             zstd_jll.zstdmt() do zstdp
-                tarproc = open(`$zstdp -o $dst_path`, "w")
+                tarproc = open(`$(zstdp) -o $(dst_full_path)`, "w")
                 Tar.create(dir, tarproc)
                 close(tarproc.in)
             end
+
+            @info "The `rr` trace file has been saved to: $(dst_full_path)"
+            if is_buildkite
+                @info "Since this is a Buildkite run, we will upload the `rr` trace file."
+                cd(dumps_dir) do
+                    run(`buildkite-agent artifact upload $(dst_file_name)`)
+                end
+            end
         end
+
     end
 end
 
-# Pass the exit code back up to Buildkite
-if proc.termsignal != 0
-    ccall(:raise, Cvoid, (Cint,), proc.termsignal)
-    exit(1) # Just in case the signal did not cause an exit
-else
-    exit(proc.exitcode)
-end
+@info "Finished running the command under rr"
+my_exit(proc)

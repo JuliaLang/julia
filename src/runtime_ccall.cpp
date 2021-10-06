@@ -36,7 +36,7 @@ void *jl_get_library_(const char *f_lib, int throw_err)
         return jl_exe_handle;
     if (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
         return jl_libjulia_internal_handle;
-    if (strcmp(f_lib, JL_LIBJULIA_DL_LIBNAME) == 0)
+    if (f_lib == JL_LIBJULIA_DL_LIBNAME)
         return jl_libjulia_handle;
 #endif
     JL_LOCK(&libmap_lock);
@@ -54,7 +54,7 @@ void *jl_get_library_(const char *f_lib, int throw_err)
 }
 
 extern "C" JL_DLLEXPORT
-void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
+void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd)
 {
     void *handle = jl_atomic_load_acquire(hnd);
     if (!handle)

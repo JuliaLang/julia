@@ -1711,3 +1711,40 @@ end
     @test typeof([a a ;;; a a]) <: BitArray
     @test typeof([a a ;;; [a a]]) <: BitArray
 end
+
+@testset "deleteat! additional tests" begin
+    for v in ([1, 2, 3], [true, true, true], trues(3))
+        @test_throws BoundsError deleteat!(v, true:true)
+    end
+
+    for v in ([1], [true], trues(1))
+        @test length(deleteat!(v, false:false)) == 1
+        @test isempty(deleteat!(v, true:true))
+    end
+
+    x = trues(3)
+    x[3] = false
+    @test deleteat!(x, [UInt8(2)]) == [true, false]
+    @test_throws ArgumentError deleteat!(x, Any[true])
+    @test_throws ArgumentError deleteat!(x, Any[1, true])
+    @test_throws ArgumentError deleteat!(x, Any[2, 1])
+    @test_throws BoundsError deleteat!(x, Any[4])
+    @test_throws BoundsError deleteat!(x, Any[2, 4])
+
+    function test_equivalence(n::Int)
+        x1 = rand(Bool, n)
+        x2 = BitVector(x1)
+        inds1 = rand(Bool, n)
+        inds2 = BitVector(inds1)
+        return deleteat!(copy(x1), findall(inds1)) ==
+               deleteat!(copy(x1), inds1) ==
+               deleteat!(copy(x2), inds1) ==
+               deleteat!(copy(x1), inds2) ==
+               deleteat!(copy(x2), inds2)
+    end
+
+    Random.seed!(1234)
+    for n in 1:20, _ in 1:100
+        @test test_equivalence(n)
+    end
+end

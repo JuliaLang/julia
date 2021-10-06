@@ -85,7 +85,7 @@ mutable struct OptimizationState
         if nssavalues isa Int
             src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
         else
-            nssavalues = length(src.ssavaluetypes)
+            nssavalues = length(src.ssavaluetypes::Vector{Any})
         end
         nslots = length(src.slotflags)
         slottypes = src.slottypes
@@ -142,6 +142,7 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 # NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
 
+const IR_FLAG_NULL        = 0x00
 # This statement is marked as @inbounds by user.
 # Ff replaced by inlining, any contained boundschecks may be removed.
 const IR_FLAG_INBOUNDS    = 0x01 << 0
@@ -349,15 +350,18 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
     labelmap = coverage ? fill(0, length(code)) : changemap
     prevloc = zero(eltype(ci.codelocs))
     stmtinfo = sv.stmt_info
+    codelocs = ci.codelocs
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    ssaflags = ci.ssaflags
     while idx <= length(code)
-        codeloc = ci.codelocs[idx]
+        codeloc = codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
             # insert a side-effect instruction before the current instruction in the same basic block
             insert!(code, idx, Expr(:code_coverage_effect))
-            insert!(ci.codelocs, idx, codeloc)
+            insert!(codelocs, idx, codeloc)
             insert!(ssavaluetypes, idx, Nothing)
             insert!(stmtinfo, idx, nothing)
+            insert!(ssaflags, idx, IR_FLAG_NULL)
             changemap[oldidx] += 1
             if oldidx < length(labelmap)
                 labelmap[oldidx + 1] += 1
@@ -369,9 +373,10 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
             if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
                 # insert unreachable in the same basic block after the current instruction (splitting it)
                 insert!(code, idx + 1, ReturnNode())
-                insert!(ci.codelocs, idx + 1, ci.codelocs[idx])
+                insert!(codelocs, idx + 1, codelocs[idx])
                 insert!(ssavaluetypes, idx + 1, Union{})
                 insert!(stmtinfo, idx + 1, nothing)
+                insert!(ssaflags, idx + 1, ssaflags[idx])
                 if oldidx < length(changemap)
                     changemap[oldidx + 1] += 1
                     coverage && (labelmap[oldidx + 1] += 1)
@@ -391,7 +396,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
     strip_trailing_junk!(ci, code, stmtinfo)
     cfg = compute_basic_blocks(code)
     types = Any[]
-    stmts = InstructionStream(code, types, stmtinfo, ci.codelocs, ci.ssaflags)
+    stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
     ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable::Union{Vector{LineInfoNode},Vector{Any}}), sv.slottypes, meta, sv.sptypes)
     return ir
 end

@@ -1479,12 +1479,22 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
  1
 ```
 """
-deleteat!(a::Vector, i::Integer) = (_deleteat!(a, i, 1); a)
+function deleteat!(a::Vector, i::Integer)
+    i isa Bool && depwarn("passing Bool as an index is deprecated", :deleteat!)
+    _deleteat!(a, i, 1)
+    return a
+end
 
 function deleteat!(a::Vector, r::AbstractUnitRange{<:Integer})
-    n = length(a)
-    isempty(r) || _deleteat!(a, first(r), length(r))
-    return a
+    if eltype(r) === Bool
+        return invoke(deleteat!, Tuple{Vector, AbstractVector{Bool}}, a, r)
+    else
+        n = length(a)
+        f = first(r)
+        f isa Bool && depwarn("passing Bool as an index is deprecated", :deleteat!)
+        isempty(r) || _deleteat!(a, f, length(r))
+        return a
+    end
 end
 
 """
@@ -2591,6 +2601,54 @@ function filter!(f, a::AbstractVector)
     end
     return a
 end
+
+"""
+    keepat!(a::Vector, inds)
+
+Remove the items at all the indices which are not given by `inds`,
+and return the modified `a`.
+Items which are kept are shifted to fill the resulting gaps.
+
+`inds` must be an iterator of sorted and unique integer indices.
+See also [`deleteat!`](@ref).
+
+!!! compat "Julia 1.7"
+    This function is available as of Julia 1.7.
+
+# Examples
+```jldoctest
+julia> keepat!([6, 5, 4, 3, 2, 1], 1:2:5)
+3-element Vector{Int64}:
+ 6
+ 4
+ 2
+```
+"""
+keepat!(a::Vector, inds) = _keepat!(a, inds)
+
+"""
+    keepat!(a::Vector, m::AbstractVector{Bool})
+
+The in-place version of logical indexing `a = a[m]`. That is, `keepat!(a, m)` on
+vectors of equal length `a` and `m` will remove all elements from `a` for which
+`m` at the corresponding index is `false`.
+
+# Examples
+```jldoctest
+julia> a = [:a, :b, :c];
+
+julia> keepat!(a, [true, false, true])
+2-element Vector{Symbol}:
+ :a
+ :c
+
+julia> a
+2-element Vector{Symbol}:
+ :a
+ :c
+```
+"""
+keepat!(a::Vector, m::AbstractVector{Bool}) = _keepat!(a, m)
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.

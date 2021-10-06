@@ -325,7 +325,7 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
                                            "`src` refers to: $(abs_src)\n  ",
                                            "`dst` refers to: $(abs_dst)\n")))
             end
-            rm(dst; recursive=true)
+            rm(dst; recursive=true, force=true)
         else
             throw(ArgumentError(string("'$dst' exists. `force=true` ",
                                        "is required to remove '$dst' before $(txt).")))

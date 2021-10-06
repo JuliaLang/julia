@@ -578,6 +578,41 @@ let D1 = Diagonal(rand(5)), D2 = Diagonal(rand(5))
     @test LinearAlgebra.lmul!(adjoint(D1),copy(D2)) == adjoint(D1)*D2
 end
 
+@testset "multiplication of a Diagonal with a Matrix" begin
+    A = collect(reshape(1:8, 4, 2));
+    B = BigFloat.(A);
+    DL = Diagonal(collect(axes(A, 1)));
+    DR = Diagonal(Float16.(collect(axes(A, 2))));
+
+    @test DL * A == collect(DL) * A
+    @test A * DR == A * collect(DR)
+    @test DL * B == collect(DL) * B
+    @test B * DR == B * collect(DR)
+
+    A = reshape([ones(2,2), ones(2,2)*2, ones(2,2)*3, ones(2,2)*4], 2, 2)
+    Ac = collect(A)
+    D = Diagonal([collect(reshape(1:4, 2, 2)), collect(reshape(5:8, 2, 2))])
+    Dc = collect(D)
+    @test A * D == Ac * Dc
+    @test D * A == Dc * Ac
+    @test D * D == Dc * Dc
+
+    AS = similar(A)
+    mul!(AS, A, D, true, false)
+    @test AS == A * D
+
+    D2 = similar(D)
+    mul!(D2, D, D)
+    @test D2 == D * D
+
+    D2[diagind(D2)] .= D[diagind(D)]
+    lmul!(D, D2)
+    @test D2 == D * D
+    D2[diagind(D2)] .= D[diagind(D)]
+    rmul!(D2, D)
+    @test D2 == D * D
+end
+
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
     D = Diagonal(randn(5))
     Q = qr(randn(5, 5)).Q
@@ -686,12 +721,35 @@ end
     xt = transpose(x)
     A = reshape([[1 2; 3 4], zeros(Int,2,2), zeros(Int, 2, 2), [5 6; 7 8]], 2, 2)
     D = Diagonal(A)
-    @test x'*D == x'*A == copy(x')*D == copy(x')*A
-    @test xt*D == xt*A == copy(xt)*D == copy(xt)*A
+    @test x'*D == x'*A == collect(x')*D == collect(x')*A
+    @test xt*D == xt*A == collect(xt)*D == collect(xt)*A
+    outadjxD = similar(x'*D); outtrxD = similar(xt*D);
+    mul!(outadjxD, x', D)
+    @test outadjxD == x'*D
+    mul!(outtrxD, xt, D)
+    @test outtrxD == xt*D
+
+    D1 = Diagonal([[1 2; 3 4]])
+    @test D1 * x' == D1 * collect(x') == collect(D1) * collect(x')
+    @test D1 * xt == D1 * collect(xt) == collect(D1) * collect(xt)
+    outD1adjx = similar(D1 * x'); outD1trx = similar(D1 * xt);
+    mul!(outadjxD, D1, x')
+    @test outadjxD == D1*x'
+    mul!(outtrxD, D1, xt)
+    @test outtrxD == D1*xt
+
     y = [x, x]
     yt = transpose(y)
     @test y'*D*y == (y'*D)*y == (y'*A)*y
     @test yt*D*y == (yt*D)*y == (yt*A)*y
+    outadjyD = similar(y'*D); outtryD = similar(yt*D);
+    outadjyD2 = similar(collect(y'*D)); outtryD2 = similar(collect(yt*D));
+    mul!(outadjyD, y', D)
+    mul!(outadjyD2, y', D)
+    @test outadjyD == outadjyD2 == y'*D
+    mul!(outtryD, yt, D)
+    mul!(outtryD2, yt, D)
+    @test outtryD == outtryD2 == yt*D
 end
 
 @testset "Multiplication of single element Diagonal (#36746, #40726)" begin
@@ -824,6 +882,24 @@ end
     B = Diagonal(rand(elty,5,5))
     x = rand(elty)
     @test \(x, B) == /(B, x)
+end
+
+@testset "zero and one" begin
+    D1 = Diagonal(rand(3))
+    @test D1 + zero(D1) == D1
+    @test D1 * one(D1) == D1
+    @test D1 * oneunit(D1) == D1
+    @test oneunit(D1) isa typeof(D1)
+    D2 = Diagonal([collect(reshape(1:4, 2, 2)), collect(reshape(5:8, 2, 2))])
+    @test D2 + zero(D2) == D2
+    @test D2 * one(D2) == D2
+    @test D2 * oneunit(D2) == D2
+    @test oneunit(D2) isa typeof(D2)
+    D3 = Diagonal([D2, D2]);
+    @test D3 + zero(D3) == D3
+    @test D3 * one(D3) == D3
+    @test D3 * oneunit(D3) == D3
+    @test oneunit(D3) isa typeof(D3)
 end
 
 end # module TestDiagonal

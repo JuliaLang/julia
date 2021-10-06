@@ -975,10 +975,20 @@ function require(into::Module, mod::Symbol)
         if uuidkey === nothing
             where = PkgId(into)
             if where.uuid === nothing
+                hint, dots = begin
+                    if isdefined(into, mod) && getfield(into, mod) isa Module
+                        true, "."
+                    elseif isdefined(parentmodule(into), mod) && getfield(parentmodule(into), mod) isa Module
+                        true, ".."
+                    else
+                        false, ""
+                    end
+                end
+                hint_message = hint ? ", maybe you meant `import/using $(dots)$(mod)`" : ""
+                start_sentence = hint ? "Otherwise, run" : "Run"
                 throw(ArgumentError("""
-                    Package $mod not found in current path:
-                    - Run `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package.
-                    """))
+                    Package $mod not found in current path$hint_message.
+                    - $start_sentence `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package."""))
             else
                 s = """
                 Package $(where.name) does not have $mod in its dependencies:
@@ -1356,8 +1366,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     for (pkg, build_id) in concrete_deps
         push!(deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
     end
-    deps = repr(eltype(concrete_deps)) * "[" * join(deps_strs, ",") * "]"
-
+    deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
+    deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
     io = open(pipeline(`$(julia_cmd()::Cmd) -O0
                        --output-ji $output --output-incremental=yes

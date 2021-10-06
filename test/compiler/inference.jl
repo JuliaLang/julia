@@ -241,6 +241,15 @@ barTuple2() = fooTuple{tuple(:y)}()
           Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
           Core.Compiler.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
 
+# assert robustness of `getfield_tfunc`
+struct GetfieldRobustness
+    field::String
+end
+@test Base.return_types((GetfieldRobustness,String,)) do obj, s
+    t = (10, s) # to form `PartialStruct`
+    getfield(obj, t)
+end |> only === Union{}
+
 # issue #12476
 function f12476(a)
     (k, v) = a
@@ -1810,6 +1819,18 @@ end
         Meta.isexpr(x, :call) && return x # x::Expr
         return nothing
     end == Any[Union{Nothing,Expr}]
+
+    # handle the edge case
+    let ts = @eval Module() begin
+            edgecase(_) = $(Core.Compiler.InterConditional(2, Int, Any))
+            # create cache
+            Base.return_types(edgecase, (Any,))
+            Base.return_types((Any,)) do x
+                edgecase(x) ? x : nothing # ::Any
+            end
+        end
+        @test ts == Any[Any]
+    end
 end
 
 @testset "branching on conditional object" begin

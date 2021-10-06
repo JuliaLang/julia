@@ -239,7 +239,7 @@ PreservedAnalyses LowerSIMDLoop::run(Module &M, ModuleAnalysisManager &AM)
 
 namespace {
 class LowerSIMDLoopLegacy : public ModulePass {
-    LowerSIMDLoop Impl;
+    //LowerSIMDLoop Impl;
 
 public:
   static char ID;
