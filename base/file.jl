@@ -1192,8 +1192,17 @@ struct StatFS
     bavail::UInt64
     files::UInt64
     ffree::UInt64
-    fspare1::UInt128
-    fspare2::UInt128
+    fspare::NTuple{4, UInt64} # reserved
+end
+
+function statfs(path::AbstractString)
+    req = Ref{NTuple{Int(_sizeof_uv_fs), UInt8}}()
+    err = ccall(:uv_fs_statfs, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                C_NULL, req, path, C_NULL)
+    err < 0 && uv_error("statfs($(repr(path)))", err)
+    statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
+
+    return unsafe_load(reinterpret(Ptr{StatFS}, statfs_ptr))
 end
 
 """
@@ -1203,9 +1212,9 @@ Stores the total size, available space, and currently used space of the disk in 
 Populate by calling `diskstat`.
 """
 struct DiskStat
-    total::Int
-    available::Int
-    used::Int
+    total::UInt64
+    available::UInt64
+    used::UInt64
 end
 
 """
@@ -1219,18 +1228,10 @@ working directory are returned.
     This method was added in Julia 1.8.
 """
 function diskstat(path::AbstractString=pwd())
-    ispath(path) || throw(ArgumentError("'$path' is not a file or directory."))
+    stats = statfs(path)
 
-    # Call libuv's cross-platform statfs implementation
-    req = Ref{NTuple{Int(_sizeof_uv_fs), UInt8}}()
-    err = ccall(:uv_fs_statfs, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
-                C_NULL, req, path, C_NULL)
-    err < 0 && uv_error("statfs($(repr(path)))", err)
-    statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
-
-    stats = unsafe_load(reinterpret(Ptr{StatFS}, statfs_ptr))
-    total = Int(stats.bsize * stats.blocks)
-    available = Int(stats.bsize * stats.bavail)
+    total = stats.bsize * stats.blocks
+    available = stats.bsize * stats.bavail
     disk_stats = DiskStat(total, available, total - available)
 
     # Cleanup

@@ -1696,8 +1696,8 @@ end
 @testset "diskstat() works" begin
     dstat = diskstat()
 
-    # Sanity check assuming disk is smaller than 32TB
-    TB = 2^41
-    @test dstat.total < 32TB
+    # Sanity check assuming disk is smaller than 32PB
+    PB = 2^44
+    @test dstat.total < 32PB
     @test dstat.used + dstat.available == dstat.total
 end
