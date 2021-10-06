@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-0d878bc6-f4cc-4075-9f6b-d5cff6d3f6bd",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-bbc63c92-5a7a-42a1-a131-70c5ae14b834",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-06T05:32:19Z"
+        "created": "2021-10-06T05:39:17Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -239,14 +239,17 @@
         {
             "name": "llvm",
             "SPDXID": "SPDXRef-llvm",
-            "downloadLocation": "git+https://github.com/llvm/llvm-project.git",
+            "supplier": "Organization: julialang.org ()",
+            "originator": "Organization: llvm.org ()",
+            "downloadLocation": "git+https://github.com/JuliaLang/llvm-project.git",
             "filesAnalyzed": false,
             "homepage": "https://llvm.org",
-            "sourceInfo": "The git hash of the version in use can be found in the file deps/Versions.make",
+            "sourceInfo": "The version in use can be found in the file deps/llvm.version",
             "licenseConcluded": "Apache-2.0 WITH LLVM-exception",
             "licenseDeclared": "Apache-2.0 WITH LLVM-exception",
             "copyrightText": "The LLVM project does not collect copyright assignments, which means that the copyright for the code in the project is held by the respective contributors",
-            "summary": "The LLVM Project is a collection of modular and reusable compiler and toolchain technologies."
+            "summary": "The LLVM Project is a collection of modular and reusable compiler and toolchain technologies.",
+            "comment": "The Julia project has forked llvm and maintains their own repository of the code"
         },
         {
             "name": "utf8proc",
