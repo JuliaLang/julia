@@ -151,7 +151,7 @@ f             |    1      1
 Test.DefaultTestSet("f", Any[], 1, false, false)
 ```
 
-In the event that a nested test set has no failures, as happened here, it will be hidden in the
+Note that in the case of functions, the test set will be given the name of the called function. In the event that a nested test set has no failures, as happened here, it will be hidden in the
 summary, unless the `verbose=true` option is passed:
 
 ```jldoctest testfoo
