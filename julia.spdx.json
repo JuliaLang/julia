@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-8065d066-7f80-48ad-8675-d4c0e61a2e84",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-0d878bc6-f4cc-4075-9f6b-d5cff6d3f6bd",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-04T20:18:04Z"
+        "created": "2021-10-06T05:32:19Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -186,6 +186,18 @@
             "summary": "A cross-platform, linkable library implementation of Git that you can use in your application."
         },
         {
+            "name": "curl",
+            "SPDXID": "SPDXRef-curl",
+            "downloadLocation": "git+https://github.com/curl/curl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://curl.se",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "curl",
+            "licenseDeclared": "curl",
+            "copyrightText": "Copyright (c) 1996 - 2021, Daniel Stenberg, daniel@haxx.se, and many contributors, see the THANKS file.",
+            "summary": "A command line tool and library for transferring data with URL syntax, supporting DICT, FILE, FTP, FTPS, GOPHER, GOPHERS, HTTP, HTTPS, IMAP, IMAPS, LDAP, LDAPS, MQTT, POP3, POP3S, RTMP, RTMPS, RTSP, SCP, SFTP, SMB, SMBS, SMTP, SMTPS, TELNET and TFTP. libcurl offers a myriad of powerful features"
+        },
+        {
             "name": "OpenBLAS",
             "SPDXID": "SPDXRef-OpenBLAS",
             "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
@@ -337,6 +349,11 @@
         },
         {
             "spdxElementId": "SPDXRef-libgit2",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-curl",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
