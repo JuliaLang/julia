@@ -2623,13 +2623,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 4, jl_long_type);
     jl_svecset(jl_methtable_type->types, 6, jl_module_type);
     jl_svecset(jl_methtable_type->types, 7, jl_array_any_type);
-#ifdef __LP64__
-    jl_svecset(jl_methtable_type->types, 8, jl_int64_type); // unsigned long
-    jl_svecset(jl_methtable_type->types, 9, jl_int64_type); // uint32_t plus alignment
-#else
-    jl_svecset(jl_methtable_type->types, 8, jl_int32_type); // DWORD
-    jl_svecset(jl_methtable_type->types, 9, jl_int32_type); // uint32_t
-#endif
+    jl_svecset(jl_methtable_type->types, 8, jl_long_type); // jl_task_t*
+    jl_svecset(jl_methtable_type->types, 9, jl_long_type); // uint32_t plus alignment
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 11, jl_uint8_type);
     jl_svecset(jl_method_type->types, 12, jl_method_instance_type);

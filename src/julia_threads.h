@@ -97,7 +97,7 @@ typedef pthread_t jl_thread_t;
 
 // Recursive spin lock
 typedef struct {
-    volatile jl_thread_t owner;
+    struct _jl_task_t *owner;
     uint32_t count;
 } jl_mutex_t;
 
