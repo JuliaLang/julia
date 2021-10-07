@@ -232,7 +232,25 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
     return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
 }
 
-JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, size_t uid)
+JL_DLLEXPORT unsigned long jl_getuid(void)
+{
+#ifdef _OS_WINDOWS_
+    return -1;
+#else
+    return getuid();
+#endif
+}
+
+JL_DLLEXPORT unsigned long jl_geteuid(void)
+{
+#ifdef _OS_WINDOWS_
+    return -1;
+#else
+    return geteuid();
+#endif
+}
+
+JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, unsigned long uid)
 {
 #ifdef _OS_WINDOWS_
   return UV_ENOTSUP;
@@ -345,11 +363,11 @@ JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, size_t uid)
 
 typedef struct jl_group_s {
     char* groupname;
-    long gid;
+    unsigned long gid;
     char** members;
 } jl_group_t;
 
-JL_DLLEXPORT int jl_os_get_group(jl_group_t *grp, size_t gid)
+JL_DLLEXPORT int jl_os_get_group(jl_group_t *grp, unsigned long gid)
 {
 #ifdef _OS_WINDOWS_
   return UV_ENOTSUP;
