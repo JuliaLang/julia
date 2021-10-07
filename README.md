@@ -13,7 +13,6 @@ Documentation:
 
 Continuous integration:
 [![Continuous integration (master)][buildkite-master-img]][buildkite-master-url]
-[![Continuous integration (master->scheduled)][buildkite-master-scheduled-img]][buildkite-master-scheduled-url]
 
 <!--
 To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
@@ -21,13 +20,6 @@ You need to go to the Buildkite website and get the SVG URL for the correct pipe
 -->
 [buildkite-master-img]: https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master "Continuous integration (master)"
 [buildkite-master-url]: https://buildkite.com/julialang/julia-master
-
-<!--
-To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
-You need to go to the Buildkite website and get the SVG URL for the correct pipeline.
--->
-[buildkite-master-scheduled-img]: https://badge.buildkite.com/d5ae34dbbf6fefe615300c4f3118bf63cb4a5ae7fd962263c1.svg?branch=master "Continuous integration (master->scheduled)"
-[buildkite-master-scheduled-url]: https://buildkite.com/julialang/julia-master-scheduled
 
 Code coverage:
 [![Code coverage (Coveralls)][coveralls-img]][coveralls-url]

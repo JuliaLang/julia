@@ -628,7 +628,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
             if (fldn < 1 || fldn > jl_svec_len(fnames))
                 jl_errorf("invalid field attribute %lld", (long long)fldn);
             fldn--;
-            if (attr == atomic_sym) {
+            if (attr == jl_atomic_sym) {
                 if (!mutabl)
                     jl_errorf("invalid field attribute atomic for immutable struct");
                 if (atomicfields == NULL) {

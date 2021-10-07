@@ -13,6 +13,7 @@
     int64hash;
     int64to32hash;
     ios_*;
+    small_arraylist_grow;
     iswprint;
     jl_*;
     ijl_*;
@@ -34,7 +35,6 @@
     utf8proc_*;
     jlbacktrace;
     jlbacktracet;
-    julia_type_to_llvm;
     _IO_stdin_used;
     __ZN4llvm23createLowerSimdLoopPassEv;
     LLVMExtra*;

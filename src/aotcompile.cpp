@@ -96,7 +96,7 @@ typedef struct {
 } jl_native_code_desc_t;
 
 extern "C" JL_DLLEXPORT
-void jl_get_function_id(void *native_code, jl_code_instance_t *codeinst,
+void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
         int32_t *func_idx, int32_t *specfunc_idx)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -109,8 +109,8 @@ void jl_get_function_id(void *native_code, jl_code_instance_t *codeinst,
     }
 }
 
-extern "C"
-int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p)
+extern "C" JL_DLLEXPORT
+int32_t jl_get_llvm_gv_impl(void *native_code, jl_value_t *p)
 {
     // map a jl_value_t memory location to a GlobalVariable
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -124,7 +124,7 @@ int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p)
 }
 
 extern "C" JL_DLLEXPORT
-Module* jl_get_llvm_module(void *native_code)
+Module* jl_get_llvm_module_impl(void *native_code)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
@@ -134,7 +134,7 @@ Module* jl_get_llvm_module(void *native_code)
 }
 
 extern "C" JL_DLLEXPORT
-GlobalValue* jl_get_llvm_function(void *native_code, uint32_t idx)
+GlobalValue* jl_get_llvm_function_impl(void *native_code, uint32_t idx)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
@@ -144,7 +144,7 @@ GlobalValue* jl_get_llvm_function(void *native_code, uint32_t idx)
 }
 
 extern "C" JL_DLLEXPORT
-LLVMContext* jl_get_llvm_context(void *native_code)
+LLVMContext* jl_get_llvm_context_impl(void *native_code)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
@@ -267,16 +267,18 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // all reachable & inferrrable functions. The `policy` flag switches between the default
 // mode `0`, the extern mode `1`, and imaging mode `2`.
 extern "C" JL_DLLEXPORT
-void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _policy)
+void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy)
 {
+    if (cgparams == NULL)
+        cgparams = &jl_default_cgparams;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     jl_codegen_params_t params;
-    params.params = &cgparams;
+    params.params = cgparams;
     std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
-    JL_LOCK(&codegen_lock);
+    JL_LOCK(&jl_codegen_lock);
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -314,7 +316,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
             if (mi->def.method->primary_world <= params.world && params.world <= mi->def.method->deleted_world) {
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = NULL;
-                jl_ci_cache_lookup(cgparams, mi, params.world, &codeinst, &src);
+                jl_ci_cache_lookup(*cgparams, mi, params.world, &codeinst, &src);
                 if (src && !emitted.count(codeinst)) {
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
@@ -411,7 +413,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     if (policy == CompilationPolicy::ImagingMode)
         imaging_mode = 0;
-    JL_UNLOCK(&codegen_lock); // Might GC
+    JL_UNLOCK(&jl_codegen_lock); // Might GC
     return (void*)data;
 }
 
@@ -441,8 +443,8 @@ static void reportWriterError(const ErrorInfoBase &E)
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
-extern "C"
-void jl_dump_native(void *native_code,
+extern "C" JL_DLLEXPORT
+void jl_dump_native_impl(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
         const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len)
@@ -859,7 +861,7 @@ void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level, int lower_
 // this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
+void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
             mi->def.method->generator == NULL) {
@@ -906,7 +908,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         output.params = &params;
         std::unique_ptr<Module> m;
         jl_llvm_functions_t decls;
-        JL_LOCK(&codegen_lock);
+        JL_LOCK(&jl_codegen_lock);
         uint64_t compiler_start_time = 0;
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)
@@ -936,7 +938,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         JL_GC_POP();
         if (measure_compile_time_enabled)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-        JL_UNLOCK(&codegen_lock); // Might GC
+        JL_UNLOCK(&jl_codegen_lock); // Might GC
         if (F)
             return F;
     }

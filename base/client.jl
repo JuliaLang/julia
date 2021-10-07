@@ -252,13 +252,16 @@ function exec_options(opts)
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
+    interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
+    is_interactive::Bool |= interactiveinput
+
     # load ~/.julia/config/startup.jl file
     if startup
         try
             load_julia_startup()
         catch
             invokelatest(display_error, current_exceptions())
-            !(repl || is_interactive) && exit(1)
+            !(repl || is_interactive::Bool) && exit(1)
         end
     end
 
@@ -297,11 +300,8 @@ function exec_options(opts)
             end
         end
     end
-    repl |= is_interactive::Bool
-    if repl
-        interactiveinput = isa(stdin, TTY)
+    if repl || is_interactive::Bool
         if interactiveinput
-            global is_interactive = true
             banner = (opts.banner != 0) # --banner!=no
         else
             banner = (opts.banner == 1) # --banner=yes

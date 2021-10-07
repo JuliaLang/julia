@@ -225,15 +225,19 @@ typedef jl_call_t *jl_callptr_t;
 
 // "speccall" calling convention signatures.
 // This describes some of the special ABI used by compiled julia functions.
-JL_DLLEXPORT extern jl_call_t jl_fptr_args;
+extern jl_call_t jl_fptr_args;
+JL_DLLEXPORT extern jl_callptr_t jl_fptr_args_addr;
 typedef jl_value_t *(*jl_fptr_args_t)(jl_value_t*, jl_value_t**, uint32_t);
 
-JL_DLLEXPORT extern jl_call_t jl_fptr_const_return;
+extern jl_call_t jl_fptr_const_return;
+JL_DLLEXPORT extern jl_callptr_t jl_fptr_const_return_addr;
 
-JL_DLLEXPORT extern jl_call_t jl_fptr_sparam;
+extern jl_call_t jl_fptr_sparam;
+JL_DLLEXPORT extern jl_callptr_t jl_fptr_sparam_addr;
 typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*);
 
-JL_DLLEXPORT extern jl_call_t jl_fptr_interpret_call;
+extern jl_call_t jl_fptr_interpret_call;
+JL_DLLEXPORT extern jl_callptr_t jl_fptr_interpret_call_addr;
 
 typedef struct _jl_method_instance_t jl_method_instance_t;
 
@@ -674,7 +678,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_initerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_typeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_methoderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_undefvarerror_type JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_exception JL_GLOBALLY_ROOTED;
@@ -2134,7 +2138,6 @@ typedef struct {
     // generic_context(f, args...) instead of f(args...).
     jl_value_t *generic_context;
 } jl_cgparams_t;
-extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
 #ifdef __cplusplus

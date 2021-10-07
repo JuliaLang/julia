@@ -13,7 +13,6 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#include "llvm-version.h"
 
 #ifdef _OS_WINDOWS_
 #include <psapi.h>
@@ -59,8 +58,6 @@
 #endif
 
 #include "julia_assert.h"
-
-#include <llvm-c/Core.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -232,7 +229,25 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
     return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
 }
 
-JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, size_t uid)
+JL_DLLEXPORT unsigned long jl_getuid(void)
+{
+#ifdef _OS_WINDOWS_
+    return -1;
+#else
+    return getuid();
+#endif
+}
+
+JL_DLLEXPORT unsigned long jl_geteuid(void)
+{
+#ifdef _OS_WINDOWS_
+    return -1;
+#else
+    return geteuid();
+#endif
+}
+
+JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, unsigned long uid)
 {
 #ifdef _OS_WINDOWS_
   return UV_ENOTSUP;
@@ -345,11 +360,11 @@ JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, size_t uid)
 
 typedef struct jl_group_s {
     char* groupname;
-    long gid;
+    unsigned long gid;
     char** members;
 } jl_group_t;
 
-JL_DLLEXPORT int jl_os_get_group(jl_group_t *grp, size_t gid)
+JL_DLLEXPORT int jl_os_get_group(jl_group_t *grp, unsigned long gid)
 {
 #ifdef _OS_WINDOWS_
   return UV_ENOTSUP;
@@ -910,32 +925,6 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 JL_DLLEXPORT int jl_threading_enabled(void)
 {
     return 1;
-}
-
-JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT {
-#if defined(_OS_WINDOWS_)
-    HMODULE mod;
-    // FIXME: GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS on LLVMContextCreate,
-    //        but that just points to libjulia.dll
-#if JL_LLVM_VERSION <= 110000
-    const char* libLLVM = "LLVM";
-#else
-    const char* libLLVM = "libLLVM";
-#endif
-
-    if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, libLLVM, &mod))
-        return jl_nothing;
-
-    char path[MAX_PATH];
-    if (!GetModuleFileNameA(mod, path, sizeof(path)))
-        return jl_nothing;
-    return (jl_value_t*) jl_symbol(path);
-#else
-    Dl_info dli;
-    if (!dladdr(LLVMContextCreate, &dli))
-        return jl_nothing;
-    return (jl_value_t*) jl_symbol(dli.dli_fname);
-#endif
 }
 
 #ifdef __cplusplus

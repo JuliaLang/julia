@@ -1,15 +1,4 @@
-//===-- ImplicitAtomicsChecker.cpp - Null dereference checker -----------------===//
-//
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//===----------------------------------------------------------------------===//
-//
-// This defines NullDerefChecker, a builtin check in ExprEngine that performs
-// checks for null pointers at loads and stores.
-//
-//===----------------------------------------------------------------------===//
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "clang/AST/ExprObjC.h"
 #include "clang/AST/ExprOpenMP.h"
