@@ -64,7 +64,7 @@ struct Edge {
 
 const int k_node_number_of_fields = 7;
 struct Node {
-    size_t type; // TODO: point at actual type here?
+    size_t type; // index into snapshot->node_types 
     string name;
     size_t id; // This should be a globally-unique counter, but we use the memory address
     size_t self_size;
