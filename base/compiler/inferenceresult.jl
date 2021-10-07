@@ -3,7 +3,8 @@
 function is_argtype_match(@nospecialize(given_argtype),
                           @nospecialize(cache_argtype),
                           overridden_by_const::Bool)
-    if isa(given_argtype, Const) || isa(given_argtype, PartialStruct) || isa(given_argtype, PartialOpaque)
+    if isa(given_argtype, Const) || isa(given_argtype, PartialStruct) ||
+       isa(given_argtype, PartialOpaque) || isa(given_argtype, Conditional)
         return is_lattice_equal(given_argtype, cache_argtype)
     end
     return !overridden_by_const
@@ -13,10 +14,40 @@ end
 # for the provided `linfo` and `given_argtypes`. The purpose of this function is
 # to return a valid value for `cache_lookup(linfo, argtypes, cache).argtypes`,
 # so that we can construct cache-correct `InferenceResult`s in the first place.
-function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector, va_override::Bool)
+function matching_cache_argtypes(
+    linfo::MethodInstance, (; fargs, argtypes)::ArgInfo, va_override::Bool)
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
-    given_argtypes = anymap(widenconditional, given_argtypes)
+    given_argtypes = Vector{Any}(undef, length(argtypes))
+    local condargs = nothing
+    for i in 1:length(argtypes)
+        argtype = argtypes[i]
+        # forward `Conditional` if it conveys a constraint on any other argument
+        if isa(argtype, Conditional) && fargs !== nothing
+            cnd = argtype
+            slotid = find_constrained_arg(cnd, fargs)
+            if slotid !== nothing
+                if condargs === nothing
+                    condargs = Tuple{Int,Int}[]
+                end
+                # using union-split signature, we may be able to narrow down `Conditional` to `Const`
+                (; vtype, elsetype) = cnd
+                if tmeet(vtype, widenconst(argtypes[slotid])) === Bottom
+                    given_argtypes[i] = Const(false)
+                    # union-split should never find a more precise information about `fargs[slotid]` than `Conditional`,
+                    # otherwise there should have been a bug around `Conditional` construction or maintainance
+                    @assert tmeet(elsetype, widenconst(argtypes[slotid])) !== Bottom "invalid Conditional element"
+                elseif tmeet(elsetype, widenconst(argtypes[slotid])) === Bottom
+                    given_argtypes[i] = Const(true)
+                else
+                    push!(condargs, (slotid, i))
+                    given_argtypes[i] = Conditional(SlotNumber(slotid), vtype, elsetype)
+                end
+                continue
+            end
+        end
+        given_argtypes[i] = widenconditional(argtype)
+    end
     isva = va_override || linfo.def.isva
     if isva || isvarargtype(given_argtypes[end])
         isva_given_argtypes = Vector{Any}(undef, nargs)
@@ -30,6 +61,14 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector, 
                 last = nargs
             end
             isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[last:end])
+            # invalidate `Conditional` imposed on varargs
+            if condargs !== nothing
+                for (slotid, i) in condargs
+                    if slotid ≥ last
+                        isva_given_argtypes[i] = widenconditional(isva_given_argtypes[i])
+                    end
+                end
+            end
         end
         given_argtypes = isva_given_argtypes
     end

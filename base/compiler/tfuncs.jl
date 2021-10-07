@@ -964,7 +964,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         v = unwrapva(argtypes[5])
         TF = getfield_tfunc(o, f)
         push!(sv.ssavalue_uses[sv.currpc], sv.currpc) # temporarily disable `call_result_unused` check for this call
-        callinfo = abstract_call(interp, nothing, Any[op, TF, v], sv, #=max_methods=# 1)
+        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), sv, #=max_methods=# 1)
         pop!(sv.ssavalue_uses[sv.currpc], sv.currpc)
         TF2 = tmeet(callinfo.rt, widenconst(TF))
         if TF2 === Bottom
@@ -1747,7 +1747,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     if contains_is(argtypes_vec, Union{})
                         return CallMeta(Const(Union{}), false)
                     end
-                    call = abstract_call(interp, nothing, argtypes_vec, sv, -1)
+                    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
                     info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)
