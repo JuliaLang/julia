@@ -10,9 +10,11 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <iostream>
+#include <utility>
 
 using std::vector;
 using std::string;
+using std::pair;
 using std::unordered_map;
 using std::unordered_set;
 
@@ -213,7 +215,7 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
             self_size = jl_is_array_type(type)
                 ? jl_array_nbytes((jl_array_t*)a)
                 : (size_t)jl_datatype_size(type);
-            
+
             // print full type
             ios_t str_;
             ios_mem(&str_, 1024);
@@ -246,6 +248,49 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
     };
     g_snapshot->nodes.push_back(from_node);
 }
+
+typedef pair<jl_datatype_t*, const char*> inlineallocd_field_type_t;
+vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, jl_value_t *slot) {
+    jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
+
+    vector<inlineallocd_field_type_t> result;
+    bool found = _fieldpath_for_slot_helper(result, "", vt, obj, slot);
+    // jl_datatype_t* final_type;
+    // if (!found) {
+    //     final_type = vt;
+    // } else {
+    //     final_type = result.back().first;
+    // }
+    // NOTE THE RETURNED VECTOR IS REVERSED
+    return result;
+}
+
+bool _fieldpath_for_slot_helper(
+    vector<inlineallocd_field_type_t>& out, const char *fieldname, jl_datatype_t *objtype,
+    void *obj, jl_value_t *slot)
+{
+    int nf = (int)jl_datatype_nfields(objtype);
+    jl_svec_t *field_names = jl_field_names(objtype);
+    for (int i = 0; i < nf; i++) {
+        jl_datatype_t *field_type = (jl_datatype_t*)jl_field_type(objtype, i);
+        void *fieldaddr = (char*)obj + jl_field_offset(objtype, i);
+        jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, i);
+        const char *field_name = jl_symbol_name(name);
+        if (fieldaddr >= slot) {
+            out.push_back(inlineallocd_field_type_t(objtype, field_name));
+            return true;
+        }
+        if (jl_stored_inline((jl_value_t*)field_type)) {
+            bool found = _fieldpath_for_slot_helper(out, field_name, field_type, fieldaddr, slot);
+            if (found) {
+                out.push_back(inlineallocd_field_type_t(field_type, field_name));
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 
 void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) {
     record_node_to_gc_snapshot(root);
@@ -285,16 +330,16 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size
         _record_gc_edge("object", "element", from, to, field_index);
         return;
     }
-    if (field_index < 0 || jl_datatype_nfields(type) <= field_index) {
-        // TODO: We're getting -1 in some cases
-        //jl_printf(JL_STDERR, "WARNING - incorrect field index (%zu) for type\n", field_index);
-        //jl_(type);
-        _record_gc_edge("object", "element", from, to, field_index);
-        return;
-    }
-    jl_svec_t *field_names = jl_field_names(type);
-    jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, field_index);
-    const char *field_name = jl_symbol_name(name);
+    // if (field_index < 0 || jl_datatype_nfields(type) <= field_index) {
+    //     // TODO: We're getting -1 in some cases
+    //     //jl_printf(JL_STDERR, "WARNING - incorrect field index (%zu) for type\n", field_index);
+    //     //jl_(type);
+    //     _record_gc_edge("object", "element", from, to, field_index);
+    //     return;
+    // }
+    // jl_svec_t *field_names = jl_field_names(type);
+    // jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, field_index);
+    // const char *field_name = jl_symbol_name(name);
 
     _record_gc_edge("object", "property", from, to,
                     g_snapshot->names.find_or_create_string_id(field_name));
