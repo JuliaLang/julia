@@ -429,7 +429,7 @@ static void ctx_switch(jl_task_t *lastt)
 
     // set up global state for new task and clear global state for old task
     t->ptls = ptls;
-    ptls->current_task = t;
+    jl_atomic_store_relaxed(&ptls->current_task, t);
     JL_GC_PROMISE_ROOTED(t);
     lastt->ptls = NULL;
 #ifdef MIGRATE_TASKS
@@ -1358,7 +1358,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ptls->root_task = ct;
-    ptls->current_task = ct;
+    jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);
     jl_set_pgcstack(&ct->gcstack);
     assert(jl_current_task == ct);

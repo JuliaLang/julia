@@ -54,12 +54,12 @@ void jl_mach_gc_end(void)
 static int jl_mach_gc_wait(jl_ptls_t ptls2,
                            mach_port_t thread, int16_t tid)
 {
-    jl_mutex_lock_nogc(&safepoint_lock);
+    uv_mutex_lock(&safepoint_lock);
     if (!jl_atomic_load_relaxed(&jl_gc_running)) {
         // relaxed, since gets set to zero only while the safepoint_lock was held
         // this means we can tell if GC is done before we got the message or
         // the safepoint was enabled for SIGINT.
-        jl_mutex_unlock_nogc(&safepoint_lock);
+        uv_mutex_unlock(&safepoint_lock);
         return 0;
     }
     // Otherwise, set the gc state of the thread, suspend and record it
@@ -68,7 +68,7 @@ static int jl_mach_gc_wait(jl_ptls_t ptls2,
     uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
     arraylist_push(&suspended_threads, (void*)item);
     thread_suspend(thread);
-    jl_mutex_unlock_nogc(&safepoint_lock);
+    uv_mutex_unlock(&safepoint_lock);
     return 1;
 }
 
@@ -302,7 +302,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) == 0) { // check if this was a valid address
 #endif
         jl_value_t *excpt;
-        if (is_addr_on_stack(ptls2->current_task, (void*)fault_addr)) {
+        if (is_addr_on_stack(jl_atomic_load_relaxed(&ptls2->current_task), (void*)fault_addr)) {
             excpt = jl_stackovf_exception;
         }
 #ifdef SEGV_EXCEPTION
@@ -594,13 +594,13 @@ void *mach_profile_listener(void *arg)
                 bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
 
                 // store task id
-                bt_data_prof[bt_size_cur++].uintptr = (uintptr_t)ptls->current_task;
+                bt_data_prof[bt_size_cur++].uintptr = (uintptr_t)jl_atomic_load_relaxed(&ptls->current_task);
 
                 // store cpu cycle clock
                 bt_data_prof[bt_size_cur++].uintptr = cycleclock();
 
                 // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                bt_data_prof[bt_size_cur++].uintptr = ptls->sleep_check_state + 1;
+                bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
 
                 // Mark the end of this block with two 0's
                 bt_data_prof[bt_size_cur++].uintptr = 0;

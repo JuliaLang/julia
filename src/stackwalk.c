@@ -13,7 +13,7 @@
 // define `jl_unw_get` as a macro, since (like setjmp)
 // returning from the callee function will invalidate the context
 #ifdef _OS_WINDOWS_
-jl_mutex_t jl_in_stackwalk;
+uv_mutex_t jl_in_stackwalk;
 #define jl_unw_get(context) (RtlCaptureContext(context), 0)
 #elif !defined(JL_DISABLE_LIBUNWIND)
 #define jl_unw_get(context) unw_getcontext(context)
@@ -75,7 +75,7 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     uintptr_t return_ip = 0;
     uintptr_t thesp = 0;
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    JL_LOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_lock(&jl_in_stackwalk);
     if (!from_signal_handler) {
         // Workaround 32-bit windows bug missing top frame
         // See for example https://bugs.chromium.org/p/crashpad/issues/detail?id=53
@@ -185,7 +185,7 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     jl_set_safe_restore(old_buf);
 #endif
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    JL_UNLOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_unlock(&jl_in_stackwalk);
 #endif
     *bt_size = n;
     return need_more_space;
@@ -392,9 +392,9 @@ static PVOID CALLBACK JuliaFunctionTableAccess64(
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
     if (fn)
         return fn;
-    JL_LOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_lock(&jl_in_stackwalk);
     PVOID ftable = SymFunctionTableAccess64(hProcess, AddrBase);
-    JL_UNLOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_unlock(&jl_in_stackwalk);
     return ftable;
 #else
     return SymFunctionTableAccess64(hProcess, AddrBase);
@@ -410,9 +410,9 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
     if (fn)
         return ImageBase;
-    JL_LOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_lock(&jl_in_stackwalk);
     DWORD64 fbase = SymGetModuleBase64(hProcess, dwAddr);
-    JL_UNLOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_unlock(&jl_in_stackwalk);
     return fbase;
 #else
     if (dwAddr == HistoryTable.dwAddr)
@@ -441,7 +441,7 @@ JL_DLLEXPORT void jl_refresh_dbg_module_list(void)
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 {
     int result;
-    JL_LOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_lock(&jl_in_stackwalk);
     jl_refresh_dbg_module_list();
 #if !defined(_CPU_X86_64_)
     memset(&cursor->stackframe, 0, sizeof(cursor->stackframe));
@@ -459,7 +459,7 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
     *cursor = *Context;
     result = 1;
 #endif
-    JL_UNLOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_unlock(&jl_in_stackwalk);
     return result;
 }
 

@@ -11,29 +11,27 @@ extern "C" {
 
 // Lock acquire and release primitives
 
-// JL_LOCK and jl_mutex_lock are GC safe points while JL_LOCK_NOGC
-// and jl_mutex_lock_nogc are not.
+// JL_LOCK and jl_mutex_lock are GC safe points, use uv_mutex_t if that is not desired.
 // Always use JL_LOCK unless no one holding the lock can trigger a GC or GC
-// safepoint. JL_LOCK_NOGC should only be needed for GC internal locks.
+// safepoint. uv_mutex_t should only be needed for GC internal locks.
 // The JL_LOCK* and JL_UNLOCK* macros are no-op for non-threading build
 // while the jl_mutex_* functions are always locking and unlocking the locks.
 
 static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
 {
-    jl_thread_t self = jl_thread_self();
-    jl_thread_t owner = jl_atomic_load_relaxed(&lock->owner);
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *self = jl_current_task;
+    jl_task_t *owner = jl_atomic_load_relaxed(&lock->owner);
     if (owner == self) {
         lock->count++;
         return;
     }
     while (1) {
-        if (owner == (jl_thread_t)0 && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
+        if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
             lock->count = 1;
             return;
         }
         if (safepoint) {
-            jl_gc_safepoint_(ct->ptls);
+            jl_gc_safepoint_(self->ptls);
         }
         jl_cpu_pause();
         owner = jl_atomic_load_relaxed(&lock->owner);
@@ -90,13 +88,13 @@ static inline void jl_mutex_lock(jl_mutex_t *lock)
 
 static inline int jl_mutex_trylock_nogc(jl_mutex_t *lock)
 {
-    jl_thread_t self = jl_thread_self();
-    jl_thread_t owner = jl_atomic_load_acquire(&lock->owner);
+    jl_task_t *self = jl_current_task;
+    jl_task_t *owner = jl_atomic_load_acquire(&lock->owner);
     if (owner == self) {
         lock->count++;
         return 1;
     }
-    if (owner == (jl_thread_t)0 && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
+    if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
         lock->count = 1;
         return 1;
     }
@@ -115,10 +113,10 @@ static inline int jl_mutex_trylock(jl_mutex_t *lock)
 static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
 #ifndef __clang_gcanalyzer__
-    assert(jl_atomic_load_relaxed(&lock->owner) == jl_thread_self() &&
+    assert(jl_atomic_load_relaxed(&lock->owner) == jl_current_task &&
            "Unlocking a lock in a different thread.");
     if (--lock->count == 0) {
-        jl_atomic_store_release(&lock->owner, (jl_thread_t)0);
+        jl_atomic_store_release(&lock->owner, (jl_task_t*)NULL);
         jl_cpu_wake();
     }
 #endif
@@ -136,7 +134,7 @@ static inline void jl_mutex_unlock(jl_mutex_t *lock)
 
 static inline void jl_mutex_init(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
-    jl_atomic_store_relaxed(&lock->owner, (jl_thread_t)0);
+    jl_atomic_store_relaxed(&lock->owner, (jl_task_t*)NULL);
     lock->count = 0;
 }
 

@@ -105,9 +105,11 @@ typedef DWORD jl_thread_t;
 typedef pthread_t jl_thread_t;
 #endif
 
+struct _jl_task_t;
+
 // Recursive spin lock
 typedef struct {
-    _Atomic(jl_thread_t) owner;
+    _Atomic(struct _jl_task_t*) owner;
     uint32_t count;
 } jl_mutex_t;
 
@@ -190,7 +192,7 @@ typedef struct {
     // this makes sure that a single objects can only appear once in
     // the lists (the mark bit cannot be flipped to `0` without sweeping)
     void *big_obj[1024];
-    jl_mutex_t stack_lock;
+    uv_mutex_t stack_lock;
     void **pc_stack;
     void **pc_stack_end;
     jl_gc_mark_data_t *data_stack;
@@ -227,7 +229,7 @@ typedef struct _jl_tls_states_t {
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
     volatile sig_atomic_t defer_signal;
-    struct _jl_task_t *current_task;
+    _Atomic(struct _jl_task_t*) current_task;
     struct _jl_task_t *next_task;
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;

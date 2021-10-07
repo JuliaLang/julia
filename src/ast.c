@@ -310,7 +310,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx) JL_NOTSAFEPOINT
 }
 
 // There should be no GC allocation while holding this lock
-static jl_mutex_t flisp_lock;
+static uv_mutex_t flisp_lock;
 static jl_ast_context_list_t *jl_ast_ctx_using = NULL;
 static jl_ast_context_list_t *jl_ast_ctx_freed = NULL;
 
@@ -318,7 +318,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOI
 {
     jl_task_t *ct = jl_current_task;
     JL_SIGATOMIC_BEGIN();
-    JL_LOCK_NOGC(&flisp_lock);
+    uv_mutex_lock(&flisp_lock);
     jl_ast_context_list_t *node;
     jl_ast_context_t *ctx;
     // First check if the current task is using one of the contexts
@@ -326,7 +326,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOI
         ctx = jl_ast_context_list_item(node);
         if (ctx->task == ct) {
             ctx->ref++;
-            JL_UNLOCK_NOGC(&flisp_lock);
+            uv_mutex_unlock(&flisp_lock);
             return ctx;
         }
     }
@@ -338,7 +338,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOI
         ctx->ref = 1;
         ctx->task = ct;
         ctx->module = NULL;
-        JL_UNLOCK_NOGC(&flisp_lock);
+        uv_mutex_unlock(&flisp_lock);
         return ctx;
     }
     // Construct a new one if we can't find any
@@ -347,7 +347,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOI
     ctx->task = ct;
     node = &ctx->list;
     jl_ast_context_list_insert(&jl_ast_ctx_using, node);
-    JL_UNLOCK_NOGC(&flisp_lock);
+    uv_mutex_unlock(&flisp_lock);
     jl_init_ast_ctx(ctx);
     return ctx;
 }
@@ -357,12 +357,12 @@ static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
     JL_SIGATOMIC_END();
     if (--ctx->ref)
         return;
-    JL_LOCK_NOGC(&flisp_lock);
+    uv_mutex_lock(&flisp_lock);
     ctx->task = NULL;
     jl_ast_context_list_t *node = &ctx->list;
     jl_ast_context_list_delete(node);
     jl_ast_context_list_insert(&jl_ast_ctx_freed, node);
-    JL_UNLOCK_NOGC(&flisp_lock);
+    uv_mutex_unlock(&flisp_lock);
 }
 
 void jl_init_flisp(void)
@@ -370,6 +370,7 @@ void jl_init_flisp(void)
     jl_task_t *ct = jl_current_task;
     if (jl_ast_ctx_using || jl_ast_ctx_freed)
         return;
+    uv_mutex_init(&flisp_lock);
     jl_ast_main_ctx.ref = 1;
     jl_ast_main_ctx.task = ct;
     jl_ast_context_list_insert(&jl_ast_ctx_using, &jl_ast_main_ctx.list);

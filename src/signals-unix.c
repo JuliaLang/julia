@@ -793,7 +793,7 @@ static void *signal_listener(void *arg)
                     bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
 
                     // store task id
-                    bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)ptls->current_task;
+                    bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
 
                     // store cpu cycle clock
                     bt_data_prof[bt_size_cur++].uintptr = cycleclock();
