@@ -39,10 +39,10 @@ $(SRCCACHE)/gmp-$(GMP_VER)/gmp_alloc_overflow_func.patch-applied: $(SRCCACHE)/gm
 		patch -p1 < $(SRCDIR)/patches/gmp_alloc_overflow_func.patch
 	echo 1 > $@
 
-$(SRCCACHE)/gmp-$(GMP_VER)/build-patched:
-	$(SRCCACHE)/gmp-$(GMP_VER)/gmp-HG-changeset.patch-applied
-	$(SRCCACHE)/gmp-$(GMP_VER)/gmp-exception.patch-applied
-	$(SRCCACHE)/gmp-$(GMP_VER)/gmp_alloc_overflow_func.patch-applied	
+$(SRCCACHE)/gmp-$(GMP_VER)/build-patched: \
+	$(SRCCACHE)/gmp-$(GMP_VER)/gmp-HG-changeset.patch-applied \
+	$(SRCCACHE)/gmp-$(GMP_VER)/gmp-exception.patch-applied \
+	$(SRCCACHE)/gmp-$(GMP_VER)/gmp_alloc_overflow_func.patch-applied
 
 $(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted $(SRCCACHE)/gmp-$(GMP_VER)/build-patched
 	mkdir -p $(dir $@)
