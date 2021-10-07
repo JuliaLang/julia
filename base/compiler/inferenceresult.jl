@@ -3,11 +3,17 @@
 function is_argtype_match(@nospecialize(given_argtype),
                           @nospecialize(cache_argtype),
                           overridden_by_const::Bool)
-    if isa(given_argtype, Const) || isa(given_argtype, PartialStruct) ||
-       isa(given_argtype, PartialOpaque) || isa(given_argtype, Conditional)
+    if is_forwardable_argtype(given_argtype)
         return is_lattice_equal(given_argtype, cache_argtype)
     end
     return !overridden_by_const
+end
+
+function is_forwardable_argtype(@nospecialize x)
+    return isa(x, Const) ||
+           isa(x, Conditional) ||
+           isa(x, PartialStruct) ||
+           isa(x, PartialOpaque)
 end
 
 # In theory, there could be a `cache` containing a matching `InferenceResult`
@@ -77,7 +83,7 @@ function matching_cache_argtypes(
     for i in 1:nargs
         given_argtype = given_argtypes[i]
         cache_argtype = cache_argtypes[i]
-        if !is_argtype_match(given_argtype, cache_argtype, overridden_by_const[i])
+        if !is_argtype_match(given_argtype, cache_argtype, false)
             # prefer the argtype we were given over the one computed from `linfo`
             cache_argtypes[i] = given_argtype
             overridden_by_const[i] = true

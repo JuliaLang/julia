@@ -583,18 +583,16 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
     length(arginfo.argtypes) < nargs && return nothing
-    if !(const_prop_argument_heuristic(interp, arginfo) || const_prop_rettype_heuristic(interp, result.rt))
+    if !const_prop_argument_heuristic(interp, arginfo, sv)
         add_remark!(interp, sv, "[constprop] Disabled by argument and rettype heuristics")
         return nothing
     end
-    allconst = is_allconst(arginfo)
-    if !force
-        if !const_prop_function_heuristic(interp, f, arginfo, nargs, allconst)
-            add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
-            return nothing
-        end
+    all_overridden = is_all_overridden(arginfo)
+    if !force && !const_prop_function_heuristic(interp, f, arginfo, nargs, all_overridden, sv)
+        add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
+        return nothing
     end
-    force |= allconst
+    force |= all_overridden
     mi = specialize_method(match; preexisting=!force)
     if mi === nothing
         add_remark!(interp, sv, "[constprop] Failed to specialize")
@@ -618,15 +616,16 @@ function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodC
     return false
 end
 
-# see if propagating constants may be worthwhile
-function const_prop_argument_heuristic(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo)
-    for a in argtypes
+# determines heuristically whether if constant propagation can be worthwhile
+# by checking if any of given `argtypes` is "interesting" enough to be propagated
+function const_prop_argument_heuristic(_::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, _::InferenceState)
+    for i in 1:length(argtypes)
+        a = argtypes[i]
         if isa(a, Conditional) && fargs !== nothing
-            return is_const_prop_profitable_conditional(a, fargs)
-        end
-        a = widenconditional(a)
-        if has_nontrivial_const_info(a) && is_const_prop_profitable_arg(a)
-            return true
+            is_const_prop_profitable_conditional(a, fargs) && return true
+        else
+            a = widenconditional(a)
+            has_nontrivial_const_info(a) && is_const_prop_profitable_arg(a) && return true
         end
     end
     return false
@@ -652,7 +651,10 @@ function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{An
     if slotid !== nothing
         return true
     end
-    return is_const_prop_profitable_arg(widenconditional(cnd))
+    # as a minor optimization, we just check the result is a constant or not,
+    # since both `has_nontrivial_const_info`/`is_const_prop_profitable_arg` return `true`
+    # for `Const(::Bool)`
+    return isa(widenconditional(cnd), Const)
 end
 
 function find_constrained_arg(cnd::Conditional, fargs::Vector{Any})
@@ -662,21 +664,14 @@ function find_constrained_arg(cnd::Conditional, fargs::Vector{Any})
     end
 end
 
-function const_prop_rettype_heuristic(interp::AbstractInterpreter, @nospecialize(rettype))
-    return improvable_via_constant_propagation(rettype)
-end
-
-function is_allconst((; fargs, argtypes)::ArgInfo)
+# checks if all argtypes has additional information other than what `Type` can provide
+function is_all_overridden((; fargs, argtypes)::ArgInfo)
     for a in argtypes
         if isa(a, Conditional) && fargs !== nothing
-            if is_const_prop_profitable_conditional(a, fargs)
-                continue
-            end
-        end
-        a = widenconditional(a)
-        # TODO unify these condition with `has_nontrivial_const_info`
-        if !isa(a, Const) && !isconstType(a) && !isa(a, PartialStruct) && !isa(a, PartialOpaque)
-            return false
+            is_const_prop_profitable_conditional(a, fargs) || return false
+        else
+            a = widenconditional(a)
+            is_forwardable_argtype(a) || return false
         end
     end
     return true
@@ -691,7 +686,7 @@ end
 
 function const_prop_function_heuristic(
     interp::AbstractInterpreter, @nospecialize(f), (; argtypes)::ArgInfo,
-    nargs::Int, allconst::Bool)
+    nargs::Int, all_overridden::Bool, _::InferenceState)
     if nargs > 1
         if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
             arrty = argtypes[2]
@@ -708,7 +703,7 @@ function const_prop_function_heuristic(
             end
         end
     end
-    if !allconst && (istopfunction(f, :+) || istopfunction(f, :-) || istopfunction(f, :*) ||
+    if !all_overridden && (istopfunction(f, :+) || istopfunction(f, :-) || istopfunction(f, :*) ||
                      istopfunction(f, :(==)) || istopfunction(f, :!=) ||
                      istopfunction(f, :<=) || istopfunction(f, :>=) || istopfunction(f, :<) || istopfunction(f, :>) ||
                      istopfunction(f, :<<) || istopfunction(f, :>>))
@@ -1248,7 +1243,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     fargs′ = fargs[4:end]
     pushfirst!(fargs′, fargs[1])
     arginfo = ArgInfo(fargs′, argtypes′)
-    const_prop_argument_heuristic(interp, arginfo) || const_prop_rettype_heuristic(interp, rt) || return CallMeta(rt, InvokeCallInfo(match, nothing))
+    const_prop_argument_heuristic(interp, arginfo, sv) || return CallMeta(rt, InvokeCallInfo(match, nothing))
     # # typeintersect might have narrowed signature, but the accuracy gain doesn't seem worth the cost involved with the lattice comparisons
     # for i in 1:length(argtypes′)
     #     t, a = ti.parameters[i], argtypes′[i]
