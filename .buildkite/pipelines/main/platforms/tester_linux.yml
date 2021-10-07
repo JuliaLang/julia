@@ -52,24 +52,40 @@ steps:
       echo "JULIA_CPU_THREADS is: $${JULIA_CPU_THREADS:?}"
       $${JULIA_BINARY:?} -e '@info "" Sys.CPU_THREADS'
 
-      echo "--- Run the Julia test suite"
+      echo "--- Set some environment variables in preparation for running the Julia test suite"
       unset JULIA_DEPOT_PATH
-      export JULIA_UNDER_RR="$${JULIA_BINARY:?} .buildkite/utilities/rr/rr_capture.jl $${JULIA_BINARY:?}"
       export OPENBLAS_NUM_THREADS=8
+      export TESTS="[\"all\"]"
 
-      if [[ "$${BUILDKITE_STEP_KEY:?}"   == "tester_linux64_rr" ]]; then
+      if [[ "$${BUILDKITE_STEP_KEY:?}" == "tester_linux64_rr" ]]; then
+        export JULIA_BINARY_UNDER_RR="$${JULIA_BINARY:?} .buildkite/utilities/rr/rr_capture.jl $${JULIA_BINARY:?}"
+
+        export JULIA_BINARY_FOR_TESTS="$${JULIA_BINARY_UNDER_RR:?}"
+        export NCORES_FOR_TESTS="parse(Int, ENV[\"JULIA_RRCAPTURE_NUM_CORES\"])"
+
         # For the `rr` job, we disable multi-threading.
         export JULIA_NUM_THREADS=1
-        $${JULIA_UNDER_RR:?} -e 'Base.runtests(["all"]; ncores = parse(Int, ENV["JULIA_RRCAPTURE_NUM_CORES"]))'
-      elif [[ "$${BUILDKITE_STEP_KEY:?}" == "tester_linux64_st" ]]; then
-        # "_st" = single-threaded
-        export JULIA_NUM_THREADS=1
-        $${JULIA_BINARY:?} -e 'Base.runtests(["all"]; ncores = Sys.CPU_THREADS)'
-      elif [[ "$${BUILDKITE_STEP_KEY:?}" == "tester_linux64_mt" ]]; then
-        # "_mt" = multi-threaded
-        export JULIA_NUM_THREADS=16
-        # TODO: don't skip any tests
-        $${JULIA_BINARY:?} -e 'Base.runtests(["all", "--skip", "Distributed"]; ncores = Sys.CPU_THREADS)'
       else
-        $${JULIA_BINARY:?} -e 'Base.runtests(["all"]; ncores = Sys.CPU_THREADS)'
+        export JULIA_BINARY_FOR_TESTS="$${JULIA_BINARY:?}"
+        export NCORES_FOR_TESTS="Sys.CPU_THREADS"
+
+        if [[ "$${BUILDKITE_STEP_KEY:?}"   == "tester_linux64_st" ]]; then
+          # "_st" = single-threaded
+          export JULIA_NUM_THREADS=1
+        elif [[ "$${BUILDKITE_STEP_KEY:?}" == "tester_linux64_mt" ]]; then
+          # "_mt" = multi-threaded
+          export JULIA_NUM_THREADS=16
+
+          # We do not run the Distributed test suite when multithreading is enabled.
+          export TESTS="[\"all\", \"--skip\", \"Distributed\"]"
+        fi
       fi
+
+      echo "JULIA_BINARY_FOR_TESTS is: $${JULIA_BINARY_FOR_TESTS:?}"
+      echo "JULIA_NUM_THREADS is:      $${JULIA_NUM_THREADS}" # this variable might not be set
+      echo "NCORES_FOR_TESTS is:       $${NCORES_FOR_TESTS:?}"
+      echo "OPENBLAS_NUM_THREADS is:   $${OPENBLAS_NUM_THREADS:?}"
+      echo "TESTS is:                  $${TESTS:?}"
+
+      echo "--- Run the Julia test suite"
+      $${JULIA_BINARY_FOR_TESTS:?} -e "Base.runtests($${TESTS:?}; ncores = $${NCORES_FOR_TESTS:?})"
