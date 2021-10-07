@@ -105,6 +105,14 @@ Control whether garbage collection is enabled using a boolean argument (`true` f
 """
 enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
 
+function start_alloc_profile(skip_every::Int=0)
+    ccall(:jl_start_alloc_profile, Cvoid, (Cint,), skip_every)
+end
+
+function stop_and_write_alloc_profile(io)
+    ccall(:jl_stop_and_write_alloc_profile, Cvoid, (Ptr{Cvoid},), io.handle)
+end
+
 """
     GC.enable_finalizers(on::Bool)
 
