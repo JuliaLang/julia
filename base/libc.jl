@@ -402,6 +402,9 @@ Interface to the C `srand(seed)` function.
 """
 srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
 
+getuid() = ccall(:jl_getuid, Culong, ())
+geteuid() = ccall(:jl_geteuid, Culong, ())
+
 # Include dlopen()/dlpath() code
 include("libdl.jl")
 using .Libdl
