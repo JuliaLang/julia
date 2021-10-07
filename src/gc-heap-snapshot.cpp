@@ -254,19 +254,13 @@ vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, jl_value_
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
 
     vector<inlineallocd_field_type_t> result;
-    bool found = _fieldpath_for_slot_helper(result, "", vt, obj, slot);
-    // jl_datatype_t* final_type;
-    // if (!found) {
-    //     final_type = vt;
-    // } else {
-    //     final_type = result.back().first;
-    // }
+    bool found = _fieldpath_for_slot_helper(result, vt, obj, slot);
     // NOTE THE RETURNED VECTOR IS REVERSED
     return result;
 }
 
 bool _fieldpath_for_slot_helper(
-    vector<inlineallocd_field_type_t>& out, const char *fieldname, jl_datatype_t *objtype,
+    vector<inlineallocd_field_type_t>& out, jl_datatype_t *objtype,
     void *obj, jl_value_t *slot)
 {
     int nf = (int)jl_datatype_nfields(objtype);
@@ -340,6 +334,13 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size
     // jl_svec_t *field_names = jl_field_names(type);
     // jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, field_index);
     // const char *field_name = jl_symbol_name(name);
+    auto field_paths = _fieldpath_for_slot(from, to);
+    // Build the new field name by joining the strings, and/or use the struct + field names
+    // to create a bunch of edges + nodes
+    // (iterate the vector in reverse - the last element is the first path)
+    for (auto it = field_paths.rbegin(); it != field_paths.rend(); ++it) {
+        // ...
+    }
 
     _record_gc_edge("object", "property", from, to,
                     g_snapshot->names.find_or_create_string_id(field_name));
