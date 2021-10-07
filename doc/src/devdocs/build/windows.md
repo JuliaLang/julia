@@ -1,4 +1,4 @@
-# Julia on Windows
+# Windows
 
 This file describes how to install, or build, and use Julia on Windows.
 
