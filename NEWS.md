@@ -13,6 +13,7 @@ New language features
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
+* `keys` and `eachindex` can be applied to instances of `Ref` ([#42544])
 
 Language changes
 ----------------
