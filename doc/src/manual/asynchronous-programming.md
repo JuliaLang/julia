@@ -16,7 +16,7 @@ or one-shot continuations).
 When a piece of computing work (in practice, executing a particular function) is designated as
 a [`Task`](@ref), it becomes possible to interrupt it by switching to another [`Task`](@ref).
 The original [`Task`](@ref) can later be resumed, at which point it will pick up right where it
-left off. At first, this may seem similar to a function call. However there are two key differences.
+left off. At first, this may seem similar to a function call. However, there are two key differences.
 First, switching tasks does not use any space, so any number of task switches can occur without
 consuming the call stack. Second, switching among tasks can occur in any order, unlike function
 calls, where the called function must finish executing before control returns to the calling function.
@@ -46,7 +46,7 @@ If you try this in the REPL, you will see that `schedule` returns immediately.
 That is because it simply adds `t` to an internal queue of tasks to run.
 Then, the REPL will print the next prompt and wait for more input.
 Waiting for keyboard input provides an opportunity for other tasks to run,
-so at that point `t` will start.
+so at that point, `t` will start.
 `t` calls [`sleep`](@ref), which sets a timer and stops execution.
 If other tasks have been scheduled, they could run then.
 After five seconds, the timer fires and restarts `t`, and you will see `done`
@@ -78,7 +78,7 @@ may have more values to generate and so might not yet be ready to return. With t
 and consumer can both run as long as they need to, passing values back and forth as necessary.
 
 Julia provides a [`Channel`](@ref) mechanism for solving this problem.
-A [`Channel`](@ref) is a waitable first-in first-out queue which can have
+A [`Channel`](@ref) is a waitable first-in-first-out queue which can have
 multiple tasks reading from and writing to it.
 
 Let's define a producer task, which produces values via the [`put!`](@ref) call.
@@ -319,8 +319,8 @@ In addition to [`yieldto`](@ref), a few other basic functions are needed to use 
 
 ## Tasks and events
 
-Most task switches occur as a result of waiting for events such as I/O requests, and are performed
-by a scheduler included in Julia Base. The scheduler maintains a queue of runnable tasks,
+Most task switches occur as a result of waiting for events such as I/O requests and are performed
+by a scheduler included in Julia Base. The scheduler maintains a queue of runnable tasks
 and executes an event loop that restarts tasks based on external events such as message arrival.
 
 The basic function for waiting for an event is [`wait`](@ref). Several objects implement [`wait`](@ref);
@@ -332,7 +332,7 @@ In all of these cases, [`wait`](@ref) ultimately operates on a [`Condition`](@re
 is in charge of queueing and restarting tasks. When a task calls [`wait`](@ref) on a [`Condition`](@ref),
 the task is marked as non-runnable, added to the condition's queue, and switches to the scheduler.
 The scheduler will then pick another task to run, or block waiting for external events. If all
-goes well, eventually an event handler will call [`notify`](@ref) on the condition, which causes
+goes well, eventually, an event handler will call [`notify`](@ref) on the condition, which causes
 tasks waiting for that condition to become runnable again.
 
 A task created explicitly by calling [`Task`](@ref) is initially not known to the scheduler. This
