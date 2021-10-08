@@ -59,8 +59,8 @@ julia> sum(OffsetArray([1,2,3], -10))
 9164911648 # inconsistent results or segfault
 ```
 
-Unless performance improvements outweigh the risk of segfaults and silent misbehavior, 
-prefer to avoid `@inbounds`, especially in public facing APIs.
+Weigh the benefits of performance improvements against the risk of segfaults 
+and silent misbehavior when using `@inbounds`, especially in public facing APIs.
 
 ## Propagating inbounds
 
