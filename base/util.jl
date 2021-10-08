@@ -124,7 +124,7 @@ These properties can be used in any combination.
 See also [`print`](@ref), [`println`](@ref), [`show`](@ref). 
 
 !!! compat "Julia 1.7"
-    Keywords except `color` were added in Julia 1.7.
+    Keywords except `color` and `bold` were added in Julia 1.7.
 """
 printstyled(io::IO, msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
     with_output_color(print, color, io, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
