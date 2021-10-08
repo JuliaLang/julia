@@ -51,7 +51,8 @@ function sum(A::AbstractArray)
 end
 ```
 
-Which exposes unsafe memory access when used with [`OffsetArrays`](@ref):
+Which quietly assumes 1-based indexing and therefore exposes unsafe memory access when used
+with [`OffsetArrays`](@ref):
 
 ```julia
 julia> using OffsetArrays
@@ -59,8 +60,11 @@ julia> sum(OffsetArray([1,2,3], -10))
 9164911648 # inconsistent results or segfault
 ```
 
-Weigh the benefits of performance improvements against the risk of segfaults 
-and silent misbehavior when using `@inbounds`, especially in public facing APIs.
+While the original source of the error here is `1:length(A)`, the use of `@inbounds`
+increases the consequences from a bounds error to a less easily caught and debugged unsafe
+memory access. It is often difficult or impossible to prove that a method which uses
+`@inbounds` is safe, so one must weigh the benefits of performance improvements against the
+risk of segfaults and silent misbehavior, especially in public facing APIs.
 
 ## Propagating inbounds
 
