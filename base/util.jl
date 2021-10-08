@@ -113,14 +113,13 @@ end
 
 Print `xs` in a color specified as a symbol or integer, optionally in bold.
 
-`color` may take any of the values $(Base.available_text_colors_docstring)
+Keyword `color` may take any of the values $(Base.available_text_colors_docstring)
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
-If the keyword `bold` is given as `true`, the result will be printed in bold.
-If the keyword `underline` is given as `true`, the result will be printed underlined.
-If the keyword `blink` is given as `true`, the result will blink.
-If the keyword `reverse` is given as `true`, the result will have foreground and background colors inversed.
-If the keyword `hidden` is given as `true`, the result will be hidden.
-Keywords can be given in any combination.
+
+Keywords `bold=true`, `underline=true`, `blink=true` are self-explanatory.
+Keyword `reverse=true` prints with foreground and background colors exchanged,
+and `hidden=true` should be invisibe in the terminal but can still be copied.
+These properties can be used in any combination.
 
 !!! compat "Julia 1.7"
     Keywords except `color` were added in Julia 1.7.
