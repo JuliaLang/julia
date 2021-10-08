@@ -313,7 +313,7 @@ end
         X = map(T, vcat(-10:0.0002:10, -80:0.001:80, 2.0^-27, 2.0^-28, 2.0^-14, 2.0^-13))
         for x in X
             y, yb = exp(x), exp(big(x))
-            @test abs(y-yb) <= 1.0*eps(T(yb))
+            @test y===T(yb) || abs(y-yb) <= 1.0*eps(T(yb))
         end
     end
     @testset "$T edge cases" begin
@@ -332,12 +332,12 @@ end
         X = map(Float64, vcat(-10:0.00021:10, -35:0.0023:100, -300:0.001:300))
         for x in X
             y, yb = exp10(x), exp10(big(x))
-            @test abs(y-yb) <= 1.2*eps(Float64(yb))
+            @test y===T(yb) || abs(y-yb) <= 1.2*eps(Float64(yb))
         end
         X = map(Float32, vcat(-10:0.00021:10, -35:0.0023:35, -35:0.001:35))
         for x in X
             y, yb = exp10(x), exp10(big(x))
-            @test abs(y-yb) <= 1.2*eps(Float32(yb))
+            @test y===T(yb) || abs(y-yb) <= 1.2*eps(Float32(yb))
         end
     end
     @testset "$T edge cases" for T in (Float64, Float32, Float16)
