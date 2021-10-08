@@ -2070,7 +2070,7 @@ _mapreducerows!(pred::P, ::typeof(&), R::AbstractMatrix{Bool},
 # non-structural zeros are identified by x == 0 in line with the sparse constructors.
 function _findz(A::AbstractSparseMatrixCSC{Tv,Ti}, rows=1:size(A, 1), cols=1:size(A, 2)) where {Tv,Ti}
     colptr = getcolptr(A); rowval = rowvals(A); nzval = nonzeros(A)
-    zval = 0
+    zval = zero(Tv)
     row = 0
     rowmin = rows[1]; rowmax = rows[end]
     allrows = (rows == 1:size(A, 1))
@@ -2686,7 +2686,7 @@ function Base.fill!(V::SubArray{Tv, <:Any, <:AbstractSparseMatrixCSC{Tv}, <:Tupl
     if (I[1] < 1 || I[end] > size(A, 1)) || (J[1] < 1 || J[end] > size(A, 2))
         throw(BoundsError(A, (I, J)))
     end
-    if x == 0
+    if iszero(x)
         _spsetz_setindex!(A, I, J)
     else
         _spsetnz_setindex!(A, convert(Tv, x), I, J)
@@ -3508,7 +3508,7 @@ function is_hermsym(A::AbstractSparseMatrixCSC, check::Function)
             row = rowval[p]
 
             # Ignore stored zeros
-            if val == 0
+            if iszero(val)
                 continue
             end
 
