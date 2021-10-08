@@ -51,7 +51,7 @@ function sum(A::AbstractArray)
 end
 ```
 
-Which exposes unsafe memory access when used with `OffsetArrays`:
+Which exposes unsafe memory access when used with [`OffsetArrays`](@ref):
 
 ```julia
 julia> using OffsetArrays
