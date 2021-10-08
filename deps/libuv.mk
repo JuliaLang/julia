@@ -7,9 +7,7 @@ $(eval $(call git-external,libuv,LIBUV,configure,,$(SRCCACHE)))
 UV_CFLAGS := -O2
 
 UV_FLAGS := LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
-ifneq ($(UV_CFLAGS),)
-UV_FLAGS += CFLAGS="$(CFLAGS) $(UV_CFLAGS)"
-endif
+UV_FLAGS += CFLAGS="$(CFLAGS) $(UV_CFLAGS) $(SANITIZE_OPTS)"
 
 ifneq ($(VERBOSE), 0)
 UV_MFLAGS += V=1
@@ -17,6 +15,9 @@ endif
 
 LIBUV_BUILDDIR := $(BUILDDIR)/$(LIBUV_SRC_DIR)
 
+ifneq ($(CLDFLAGS)$(SANITIZE_LDFLAGS),)
+$(LIBUV_BUILDDIR)/build-configured: LDFLAGS:=$(LDFLAGS) $(CLDFLAGS) $(SANITIZE_LDFLAGS)
+endif
 $(LIBUV_BUILDDIR)/build-configured: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted
 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/aclocal.m4 # touch a few files to prevent autogen from getting called
 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/Makefile.in
