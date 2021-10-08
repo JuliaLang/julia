@@ -121,6 +121,9 @@ If the keyword `blink` is given as `true`, the result will blink.
 If the keyword `reverse` is given as `true`, the result will have foreground and background colors inversed.
 If the keyword `hidden` is given as `true`, the result will be hidden.
 Keywords can be given in any combination.
+
+!!! compat "Julia 1.7"
+    Keywords except `color` were added in Julia 1.7.
 """
 printstyled(io::IO, msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
     with_output_color(print, color, io, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
