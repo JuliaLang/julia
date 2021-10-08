@@ -121,6 +121,8 @@ Keyword `reverse=true` prints with foreground and background colors exchanged,
 and `hidden=true` should be invisibe in the terminal but can still be copied.
 These properties can be used in any combination.
 
+See also [`print`](@ref), [`println`](@ref), [`show`](@ref). 
+
 !!! compat "Julia 1.7"
     Keywords except `color` were added in Julia 1.7.
 """
