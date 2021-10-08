@@ -13,7 +13,6 @@ New language features
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
-* `keys` and `eachindex` can be applied to instances of `Ref` ([#42544])
 
 Language changes
 ----------------
@@ -65,6 +64,7 @@ Standard library changes
 * TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
 * Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
 * `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
+* `keys`, `keytype`, and `eachindex` can be applied to instances of `Ref` ([#42544])
 
 #### InteractiveUtils
 * A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
