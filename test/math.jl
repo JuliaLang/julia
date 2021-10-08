@@ -308,7 +308,7 @@ end
     end
 end
 
-@testset "exp function" for T in (Float64, Float32)
+@testset "exp function" for T in (Float64, Float32, Float16)
     @testset "$T accuracy" begin
         X = map(T, vcat(-10:0.0002:10, -80:0.001:80, 2.0^-27, 2.0^-28, 2.0^-14, 2.0^-13))
         for x in X
@@ -320,6 +320,7 @@ end
         @test isnan_type(T, exp(T(NaN)))
         @test exp(T(-Inf)) === T(0.0)
         @test exp(T(Inf)) === T(Inf)
+        @test exp(T(NaN)) === T(NaN)
         @test exp(T(0.0)) === T(1.0) # exact
         @test exp(T(5000.0)) === T(Inf)
         @test exp(T(-5000.0)) === T(0.0)
@@ -339,10 +340,11 @@ end
             @test abs(y-yb) <= 1.2*eps(Float32(yb))
         end
     end
-    @testset "$T edge cases" for T in (Float64, Float32)
+    @testset "$T edge cases" for T in (Float64, Float32, Float16)
         @test isnan_type(T, exp10(T(NaN)))
         @test exp10(T(-Inf)) === T(0.0)
         @test exp10(T(Inf)) === T(Inf)
+        @test exp(T(NaN)) === T(NaN)
         @test exp10(T(0.0)) === T(1.0) # exact
         @test exp10(T(1.0)) === T(10.0)
         @test exp10(T(3.0)) === T(1000.0)
