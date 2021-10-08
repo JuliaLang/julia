@@ -62,7 +62,7 @@ function renumber_ssa!(@nospecialize(stmt), ssanums::Vector{SSAValue}, new_ssa::
     return ssamap(val->renumber_ssa(val, ssanums, new_ssa), stmt)
 end
 
-function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx, slot, @nospecialize(typ))
+function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx, slot, typ::LatticeElement)
     (idx == 0) && return Argument(slot)
     stmt = code[idx]
     @assert isexpr(stmt, :(=))
@@ -176,7 +176,7 @@ end
 function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any})
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
-    ssavaluetypes = ci.ssavaluetypes::Vector{AbstractLattice}
+    ssavaluetypes = ci.ssavaluetypes::SSAValueTypes
     (; codelocs, ssaflags) = ci
     for i = length(code):-1:1
         if code[i] !== nothing
@@ -201,26 +201,36 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
     nothing
 end
 
-struct DelayedTyp <: _AbstractLattice
+# while this is conceptually equivalent to `LatticeElement`, but it is only used for this
+# SSA construction and thus we don't need to define lattice for `DelayedTyp`
+# HACK since we want to keep `(InstructionStream|NewInstruction).type::Vector{LatticeElement}`,
+# we will temporarily manage very special `LatticeElement`s that wrap `DelayedTyp` object
+# in their `.constant` field: they should never spill into the other parts of code and
+# so we make their `.typ` field as `Bottom` to indicate it is very special and allow us
+# to catch logic errors easily hopefully
+struct DelayedTyp
     phi::NewSSAValue
 end
+mkDelayedTyp(phi::NewSSAValue) = LatticeElement(Bottom, DelayedTyp(phi))
+isDelayedTyp(typ::LatticeElement) = typ.typ === Bottom && isConst(typ) && isa(constant(typ), DelayedTyp)
+getDelayedTyp(typ::LatticeElement) = constant(typ)::DelayedTyp
 
 # maybe use expr_type?
-function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{AbstractLattice}, idx::Int, slottypes::Vector{AbstractLattice})
+function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Argtypes, idx::Int, slottypes::Argtypes)
     if isa(x, Expr)
         if x.head === :static_parameter
             return sptypes[x.args[1]::Int]
         elseif x.head === :boundscheck
             return NativeType(Bool)
         elseif x.head === :copyast
-            return typ_for_val(x.args[1], ci, sptypes, idx, slottypes)
+            return typ_for_val(x.args[1], ci, sptypes, idx, slottypes)#::LatticeElement
         end
-        return (ci.ssavaluetypes::Vector{AbstractLattice})[idx]
+        return (ci.ssavaluetypes::SSAValueTypes)[idx]::LatticeElement
     end
     isa(x, GlobalRef) && return abstract_eval_global(x.mod, x.name)
-    isa(x, SSAValue) && return (ci.ssavaluetypes::Vector{AbstractLattice})[x.id]
+    isa(x, SSAValue) && return (ci.ssavaluetypes::SSAValueTypes)[x.id]::LatticeElement
     isa(x, Argument) && return slottypes[x.n]
-    isa(x, NewSSAValue) && return DelayedTyp(x)
+    isa(x, NewSSAValue) && return mkDelayedTyp(x)
     isa(x, QuoteNode) && return Const(x.value)
     isa(x, Union{Symbol, PiNode, PhiNode, SlotNumber, TypedSlot}) && error("unexpected val type")
     return Const(x)
@@ -563,24 +573,24 @@ function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
     BlockLiveness(bb_defs, bb_uses)
 end
 
-function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode, sptypes::Vector{AbstractLattice}, slottypes::Vector{AbstractLattice})
+function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode, sptypes::Argtypes, slottypes::Argtypes)
     new_typ = ⊥
     for i = 1:length(node.values)
         if isa(node, PhiNode) && !isassigned(node.values, i)
-            if !isa(new_typ, MaybeUndef)
+            if !isMaybeUndef(new_typ)
                 new_typ = MaybeUndef(new_typ)
             end
             continue
         end
         typ = typ_for_val(node.values[i], ci, sptypes, -1, slottypes)
         was_maybe_undef = false
-        if isa(typ, MaybeUndef)
-            typ = typ.typ
+        if isMaybeUndef(typ)
+            typ = ignoremaybeundef(typ)
             was_maybe_undef = true
         end
-        @assert !isa(typ, MaybeUndef)
-        while isa(typ, DelayedTyp)
-            typ = types(ir)[typ.phi::NewSSAValue]
+        @assert !isMaybeUndef(typ)
+        while isDelayedTyp(typ)
+            typ = types(ir)[getDelayedTyp(typ).phi::NewSSAValue]
         end
         new_typ = tmerge(new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
     end
@@ -588,7 +598,7 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
 end
 
 function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
-                        defuses::Vector{SlotInfo}, slottypes::Vector{AbstractLattice})
+                        defuses::Vector{SlotInfo}, slottypes::Argtypes)
     code = ir.stmts.inst
     cfg = ir.cfg
     catch_entry_blocks = Tuple{Int, Int}[]
@@ -626,7 +636,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 ssaval = Argument(idx)
                 fixup_uses!(ir, ci, code, slot.uses, idx, ssaval)
             elseif isa(code[slot.defs[]], NewvarNode)
-                typ = MaybeUndef(Union{})
+                typ = MaybeUndef(⊥)
                 ssaval = nothing
                 for use in slot.uses[]
                     insert_node!(ir, use,
@@ -720,12 +730,12 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             if isa(incoming_val, NewSSAValue)
                 push!(type_refine_phi, ssaval.id)
             end
-            typ = incoming_val === UNDEF_TOKEN ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci, ir.sptypes, -1, slottypes)
+            typ = incoming_val === UNDEF_TOKEN ? MaybeUndef(⊥) : typ_for_val(incoming_val, ci, ir.sptypes, -1, slottypes)
             old_entry = new_nodes.stmts[ssaval.id]
-            if isa(typ, DelayedTyp)
+            if isDelayedTyp(typ)
                 push!(type_refine_phi, ssaval.id)
             end
-            new_typ = isa(typ, DelayedTyp) ? ⊥ : tmerge(old_entry[:type], typ)
+            new_typ = isDelayedTyp(typ) ? ⊥ : tmerge(old_entry[:type], typ)
             old_entry[:type] = new_typ
             old_entry[:inst] = node
             incoming_vals[slot] = ssaval
@@ -744,7 +754,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 ival = incoming_vals[slot_id(slot)]
                 ivalundef = ival === UNDEF_TOKEN
                 unode = ivalundef ? UpsilonNode() : UpsilonNode(ival)
-                typ = ivalundef ? MaybeUndef(Union{}) : typ_for_val(ival, ci, ir.sptypes, -1, slottypes)
+                typ = ivalundef ? MaybeUndef(⊥) : typ_for_val(ival, ci, ir.sptypes, -1, slottypes)
                 push!(node.values,
                     NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item),
                                  NewInstruction(unode, typ), true).id - length(ir.stmts)))
@@ -785,7 +795,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                             node = UpsilonNode(incoming_vals[id])
                             if incoming_vals[id] === UNDEF_TOKEN
                                 node = UpsilonNode()
-                                typ = MaybeUndef(Union{})
+                                typ = MaybeUndef(⊥)
                             end
                             push!(phicnodes[exc][cidx][3].values,
                                 NewSSAValue(insert_node!(ir, idx, NewInstruction(node, typ), true).id - length(ir.stmts)))
@@ -809,11 +819,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         end
     end
     # Convert into IRCode form
-    ssavaluetypes = ci.ssavaluetypes::Vector{AbstractLattice}
+    ssavaluetypes = ci.ssavaluetypes::SSAValueTypes
     nstmts = length(ir.stmts)
     new_code = Vector{Any}(undef, nstmts)
     ssavalmap = fill(SSAValue(-1), length(ssavaluetypes) + 1)
-    result_types = AbstractLattice[NativeType(Any) for _ in 1:nstmts]
+    result_types = LatticeElement[⊤ for _ in 1:nstmts]
     # Detect statement positions for assignments and construct array
     for (bb, idx) in bbidxiter(ir)
         stmt = code[idx]
@@ -836,7 +846,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             new_code[idx] = stmt
         else
             ssavalmap[idx] = SSAValue(idx)
-            result_types[idx] = ssavaluetypes[idx]
+            result_types[idx] = ssavaluetypes[idx]::LatticeElement
             if isa(stmt, PhiNode)
                 edges = Int32[edge == 0 ? 0 : block_for_inst(cfg, Int(edge)) for edge in stmt.edges]
                 new_code[idx] = PhiNode(edges, stmt.values)
@@ -854,10 +864,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             node = new_nodes.stmts[new_idx]
             phic_values = (node[:inst]::PhiCNode).values
             for i = 1:length(phic_values)
-                orig_typ = typ = typ_for_val(phic_values[i], ci, ir.sptypes, -1, slottypes)
-                @assert !isa(typ, MaybeUndef)
-                while isa(typ, DelayedTyp)
-                    typ = types(ir)[typ.phi::NewSSAValue]
+                typ = typ_for_val(phic_values[i], ci, ir.sptypes, -1, slottypes)
+                @assert !isMaybeUndef(typ)
+                while isDelayedTyp(typ)
+                    typ = types(ir)[getDelayedTyp(typ).phi::NewSSAValue]
                 end
                 new_typ = tmerge(new_typ, typ)
             end
@@ -881,15 +891,15 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
     end
     for i in 1:length(result_types)
         rt_i = result_types[i]
-        if rt_i isa DelayedTyp
-            result_types[i] = types(ir)[rt_i.phi::NewSSAValue]
+        if isDelayedTyp(rt_i)
+            result_types[i] = types(ir)[(constant(rt_i)::DelayedTyp).phi::NewSSAValue]
         end
     end
     for i = 1:length(new_nodes)
         local node = new_nodes.stmts[i]
         local typ = node[:type]
-        if isa(typ, DelayedTyp)
-            node[:type] = types(ir)[typ.phi::NewSSAValue]
+        if isDelayedTyp(typ)
+            node[:type] = types(ir)[(constant(typ)::DelayedTyp).phi::NewSSAValue]
         end
     end
     # Renumber SSA values

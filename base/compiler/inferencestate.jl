@@ -2,30 +2,12 @@
 
 const LineNum = Int
 
-# The type of a variable load is either a value or an UndefVarError
-# (only used in abstractinterpret, doesn't appear in optimize)
-struct VarState
-    typ::AbstractLattice
-    undef::Bool
-    @latticeop args VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
-end
-
-"""
-    const VarTable = Vector{VarState}
-
-The extended lattice that maps local variables to inferred type represented as `AbstractLattice`.
-Each index corresponds to the `id` of `SlotNumber` which identifies each local variable.
-Note that `InferenceState` will maintain multiple `VarTable`s at each SSA statement
-to enable flow-sensitive analysis.
-"""
-const VarTable = Vector{VarState}
-
 mutable struct InferenceState
     params::InferenceParams
     result::InferenceResult # remember where to put the result
     linfo::MethodInstance
-    sptypes::Vector{AbstractLattice}    # types of static parameter
-    slottypes::Vector{AbstractLattice}
+    sptypes::Argtypes    # types of static parameter
+    slottypes::Argtypes
     mod::Module
     currpc::LineNum
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
@@ -40,7 +22,7 @@ mutable struct InferenceState
     stmt_edges::Vector{Union{Nothing, Vector{Any}}}
     stmt_info::Vector{Any}
     # return type
-    bestguess::AbstractLattice
+    bestguess::LatticeElement
     # current active instruction pointers
     ip::BitSet
     pc´´::LineNum
@@ -79,7 +61,9 @@ mutable struct InferenceState
         sp = sptypes_from_meth_instance(linfo::MethodInstance)
 
         nssavalues = src.ssavaluetypes::Int
-        src.ssavaluetypes = AbstractLattice[ NOT_FOUND for i = 1:nssavalues ]
+        # NOTE we can't initialize `src.ssavaluetypes` as `Argtypes` to avoid
+        # an allocation within `ir_to_codeinf!(src)` where we widen all ssavaluetypes to native Julia types
+        src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
         stmt_info = Any[ nothing for i = 1:length(code) ]
 
         n = length(code)
@@ -91,9 +75,9 @@ mutable struct InferenceState
         argtypes = result.argtypes
         nargs = length(argtypes)
         s_argtypes = VarTable(undef, nslots)
-        slottypes = Vector{AbstractLattice}(undef, nslots)
+        slottypes = Vector{LatticeElement}(undef, nslots)
         for i in 1:nslots
-            at = (i > nargs) ? ⊥ : TypeLattice(argtypes[i])
+            at = (i > nargs) ? ⊥ : LatticeElement(argtypes[i])
             s_argtypes[i] = VarState(at, i > nargs)
             slottypes[i] = at
         end
@@ -316,9 +300,9 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
         else
             ty = Const(v)
         end
-        sp[i] = TypeLattice(ty)
+        sp[i] = LatticeElement(ty)
     end
-    return collect(AbstractLattice, sp)
+    return collect(LatticeElement, sp)
 end
 
 _topmod(sv::InferenceState) = _topmod(sv.mod)
@@ -332,9 +316,9 @@ end
 
 update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
-@latticeop args function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)
-    ssavaluetypes = frame.src.ssavaluetypes::Vector{AbstractLattice}
-    old = ssavaluetypes[ssa_id]
+function record_ssa_assign(ssa_id::Int, new::LatticeElement, frame::InferenceState)
+    ssavaluetypes = frame.src.ssavaluetypes::SSAValueTypes
+    old = ssavaluetypes[ssa_id]::SSAValueType
     if old === NOT_FOUND || !(new ⊑ old)
         # typically, we expect that old ⊑ new (that output information only
         # gets less precise with worse input information), but to actually

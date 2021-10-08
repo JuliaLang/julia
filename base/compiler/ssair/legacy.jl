@@ -5,12 +5,12 @@ function inflate_ir(ci::CodeInfo, linfo::MethodInstance)
     if ci.inferred
         argtypes, _ = matching_cache_argtypes(linfo, nothing, false)
     else
-        argtypes = AbstractLattice[ NativeType(Any) for i = 1:length(ci.slotflags) ]
+        argtypes = LatticeElement[ ⊤ for i = 1:length(ci.slotflags) ]
     end
     return inflate_ir(ci, sptypes, argtypes)
 end
 
-function inflate_ir(ci::CodeInfo, sptypes::Vector{AbstractLattice}, argtypes::Vector{AbstractLattice})
+function inflate_ir(ci::CodeInfo, sptypes::Argtypes, argtypes::Argtypes)
     code = copy_exprargs(ci.code) # TODO: this is a huge hot-spot
     cfg = compute_basic_blocks(code)
     for i = 1:length(code)
@@ -29,10 +29,11 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{AbstractLattice}, argtypes::Ve
     end
     nstmts = length(code)
     ssavaluetypes = let ssavaluetypes = ci.ssavaluetypes
-        if isa(ssavaluetypes, Vector{Any})
-            AbstractLattice[ NativeType(ssavaluetypes[i]) for i in 1:length(ssavaluetypes) ]
+        if isa(ssavaluetypes, SSAValueTypes)
+            # NOTE thes `ssavaluetypes` have been widened
+            LatticeElement[ NativeType(ssavaluetypes[i]) for i in 1:length(ssavaluetypes) ]
         else
-            AbstractLattice[ NativeType(Any) for _ in 1:(ssavaluetypes::Int) ]
+            LatticeElement[ ⊤ for _ in 1:(ssavaluetypes::Int) ]
         end
     end
     stmts = InstructionStream(code, ssavaluetypes, Any[nothing for i = 1:nstmts], copy(ci.codelocs), copy(ci.ssaflags))
@@ -45,12 +46,14 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     # All but the first `nargs` slots will now be unused
     resize!(ci.slotflags, nargs)
     stmts = ir.stmts
-    ci.code, ci.ssavaluetypes, ci.codelocs, ci.ssaflags, ci.linetable =
-        stmts.inst, stmts.type, stmts.line, stmts.flag, ir.linetable
+    ci.code, ci.codelocs, ci.ssaflags, ci.linetable =
+        stmts.inst, stmts.line, stmts.flag, ir.linetable
+    resize!(ci.ssavaluetypes::SSAValueTypes, length(stmts.type))
+    copy!(ci.ssavaluetypes::SSAValueTypes, stmts.type)
     for metanode in ir.meta
         push!(ci.code, metanode)
         push!(ci.codelocs, 1)
-        push!(ci.ssavaluetypes::Vector{AbstractLattice}, NativeType(Any))
+        push!(ci.ssavaluetypes::SSAValueTypes, ⊤)
         push!(ci.ssaflags, IR_FLAG_NULL)
     end
     # Translate BB Edges to statement edges
@@ -71,4 +74,4 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
 end
 
 # used by some tests
-inflate_ir(ci::CodeInfo) = inflate_ir(ci, AbstractLattice[], AbstractLattice[ NativeType(Any) for i = 1:length(ci.slotflags) ])
+inflate_ir(ci::CodeInfo) = inflate_ir(ci, Argtypes(), LatticeElement[ ⊤ for i = 1:length(ci.slotflags) ])

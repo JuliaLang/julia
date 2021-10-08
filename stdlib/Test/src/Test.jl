@@ -1568,7 +1568,7 @@ julia> @code_warntype f(2)
 MethodInstance for f(::Int64)
   from f(a) in Main at none:1
 Arguments
-  #self#::Core.Const(f)
+  #self#::Const(f)
   a::Int64
 Body::UNION{FLOAT64, INT64}
 1 ─ %1 = (a > 1)::Bool

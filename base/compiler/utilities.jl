@@ -225,9 +225,9 @@ end
 # types #
 #########
 
-@latticeop args function singleton_type(@nospecialize(ft))
-    if isa(ft, Const)
-        return ft.val
+function singleton_type(ft::LatticeElement)
+    if isConst(ft)
+        return constant(ft)
     end
     ft = unwraptype(ft)
     if isconstType(ft)
@@ -290,7 +290,7 @@ function is_throw_call(e::Expr)
         f = e.args[1]
         if isa(f, GlobalRef)
             ff = abstract_eval_global(f.mod, f.name)
-            if isa(ff, Const) && ff.val === Core.throw
+            if isConst(ff) && constant(ff) === Core.throw
                 return true
             end
         end

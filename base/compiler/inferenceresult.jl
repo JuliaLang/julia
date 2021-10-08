@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-@latticeop args function is_argtype_match(@nospecialize(given_argtype),
-                          @nospecialize(cache_argtype),
+function is_argtype_match(given_argtype::LatticeElement,
+                          cache_argtype::LatticeElement,
                           overridden_by_const::Bool)
     if is_forwardable_argtype(given_argtype)
         return is_lattice_equal(given_argtype, cache_argtype)
@@ -10,10 +10,10 @@
 end
 
 function is_forwardable_argtype(@nospecialize x)
-    return isa(x, Const) ||
-           isa(x, Conditional) ||
-           isa(x, PartialStruct) ||
-           isa(x, PartialOpaque)
+    return isConst(x) ||
+           isConditional(x) ||
+           isPartialStruct(x) ||
+           isPartialOpaque(x)
 end
 
 # In theory, there could be a `cache` containing a matching `InferenceResult`
@@ -26,13 +26,13 @@ function matching_cache_argtypes(
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
     cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing, va_override)
-    given_argtypes = Vector{AbstractLattice}(undef, length(argtypes))
+    given_argtypes = Vector{LatticeElement}(undef, length(argtypes))
     local condargs = nothing
     for i in 1:length(argtypes)
         argtype = argtypes[i]
         # forward `Conditional` if it conveys a constraint on any other argument
-        if isa(argtype, Conditional) && fargs !== nothing
-            cnd = argtype
+        if isConditional(argtype) && fargs !== nothing
+            cnd = conditional(argtype)
             slotid = find_constrained_arg(cnd, fargs, sv)
             if slotid !== nothing
                 # using union-split signature, we may be able to narrow down `Conditional`
@@ -48,7 +48,7 @@ function matching_cache_argtypes(
                         condargs = Tuple{Int,Int}[]
                     end
                     push!(condargs, (slotid, i))
-                    given_argtypes[i] = Conditional(SlotNumber(slotid), vtype, elsetype)
+                    given_argtypes[i] = Conditional(slotid, vtype, elsetype)
                 end
                 continue
             end
@@ -56,18 +56,18 @@ function matching_cache_argtypes(
         given_argtypes[i] = widenconditional(argtype)
     end
     isva = va_override || linfo.def.isva
-    if isva || isvarargtype(unwraptype(given_argtypes[end]))
-        isva_given_argtypes = Vector{Any}(undef, nargs)
+    if isva || isVararg(given_argtypes[end])
+        isva_given_argtypes = Vector{LatticeElement}(undef, nargs)
         for i = 1:(nargs - isva)
             isva_given_argtypes[i] = argtype_by_index(given_argtypes, i)
         end
         if isva
-            if length(given_argtypes) < nargs && isvarargtype(unwraptype(given_argtypes[end]))
+            if length(given_argtypes) < nargs && isVararg(given_argtypes[end])
                 last = length(given_argtypes)
             else
                 last = nargs
             end
-            isva_given_argtypes[nargs] = TypeLattice(tuple_tfunc(anymap(unwraptype, given_argtypes[last:end])))
+            isva_given_argtypes[nargs] = LatticeElement(tuple_tfunc(given_argtypes[last:end]))
             # invalidate `Conditional` imposed on varargs
             if condargs !== nothing
                 for (slotid, i) in condargs
@@ -101,7 +101,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
         # For opaque closure, the closure environment is processed elsewhere
         nargs -= 1
     end
-    cache_argtypes = Vector{AbstractLattice}(undef, nargs)
+    cache_argtypes = Vector{LatticeElement}(undef, nargs)
     # First, if we're dealing with a varargs method, then we set the last element of `args`
     # to the appropriate `Tuple` type or `PartialStruct` instance.
     if !toplevel && isva
@@ -110,23 +110,24 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 linfo_argtypes = Any[Any for i = 1:nargs]
                 linfo_argtypes[end] = Vararg{Any}
             end
-            vargtype = Tuple
+            vargtype = NativeType(Tuple)
         else
             linfo_argtypes_length = length(linfo_argtypes)
             if nargs > linfo_argtypes_length
                 va = linfo_argtypes[linfo_argtypes_length]
                 if isvarargtype(va)
                     new_va = rewrap_unionall(unconstrain_vararg_length(va), specTypes)
-                    vargtype = Tuple{new_va}
+                    vargtype = NativeType(Tuple{new_va})
                 else
-                    vargtype = Tuple{}
+                    vargtype = NativeType(Tuple{})
                 end
             else
-                vargtype_elements = Any[]
+                vargtype_elements = LatticeElement[]
                 for i in nargs:linfo_argtypes_length
                     p = linfo_argtypes[i]
                     p = unwraptv(isvarargtype(p) ? unconstrain_vararg_length(p) : p)
-                    push!(vargtype_elements, elim_free_typevars(rewrap_unionall(p, specTypes)))
+                    p = elim_free_typevars(rewrap_unionall(p, specTypes))
+                    push!(vargtype_elements, NativeType(p))
                 end
                 for i in 1:length(vargtype_elements)
                     atyp = vargtype_elements[i]
@@ -140,7 +141,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 vargtype = tuple_tfunc(vargtype_elements)
             end
         end
-        cache_argtypes[nargs] = TypeLattice(vargtype)
+        cache_argtypes[nargs] = vargtype
         nargs -= 1
     end
     # Now, we propagate type info from `linfo_argtypes` into `cache_argtypes`, improving some
@@ -168,10 +169,10 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 atyp = elim_free_typevars(rewrap_unionall(atyp, specTypes))
             end
             i == n && (lastatype = atyp)
-            cache_argtypes[i] = TypeLattice(atyp)
+            cache_argtypes[i] = LatticeElement(atyp)
         end
         for i = (tail_index + 1):nargs
-            cache_argtypes[i] = TypeLattice(lastatype)
+            cache_argtypes[i] = LatticeElement(lastatype)
         end
     else
         @assert nargs == 0 "invalid specialization of method" # wrong number of arguments
@@ -199,7 +200,7 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing, va_override::
     return cache_argtypes, falses(length(cache_argtypes))
 end
 
-function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{AbstractLattice}, cache::Vector{InferenceResult})
+function cache_lookup(linfo::MethodInstance, given_argtypes::Argtypes, cache::Vector{InferenceResult})
     method = linfo.def::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
@@ -218,7 +219,7 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{AbstractLatt
             end
         end
         if method.isva && cache_match
-            cache_match = is_argtype_match(TypeLattice(tuple_tfunc(anymap(unwraptype, given_argtypes[(nargs + 1):end]))),
+            cache_match = is_argtype_match(LatticeElement(tuple_tfunc(anymap(unwraptype, given_argtypes[(nargs + 1):end]))),
                                            cache_argtypes[end],
                                            cache_overridden_by_const[end])
         end

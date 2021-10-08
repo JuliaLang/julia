@@ -153,7 +153,7 @@ end
 
 struct NewInstruction
     stmt::Any
-    type::AbstractLattice
+    type::LatticeElement
     info::Any
     # If nothing, copy the line from previous statement
     # in the insertion location
@@ -168,7 +168,7 @@ struct NewInstruction
 
     function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info),
             line::Union{Int32, Nothing}, flag::UInt8, effect_free_computed::Bool)
-        if !isa(type, AbstractLattice)
+        if isa(type, Type)
             type = NativeType(type)
         end
         return new(stmt, type, info, line, flag, effect_free_computed)
@@ -187,14 +187,14 @@ non_effect_free(inst::NewInstruction) =
 
 struct InstructionStream
     inst::Vector{Any}
-    type::Vector{AbstractLattice}
+    type::Vector{LatticeElement}
     info::Vector{Any}
     line::Vector{Int32}
     flag::Vector{UInt8}
 end
 function InstructionStream(len::Int)
     insts = Array{Any}(undef, len)
-    types = Array{AbstractLattice}(undef, len)
+    types = Array{LatticeElement}(undef, len)
     info = Array{Any}(undef, len)
     fill!(info, nothing)
     lines = fill(Int32(0), len)
@@ -282,14 +282,14 @@ copy(nns::NewNodeStream) = NewNodeStream(copy(nns.stmts), copy(nns.info))
 
 struct IRCode
     stmts::InstructionStream
-    argtypes::Vector{AbstractLattice}
-    sptypes::Vector{AbstractLattice}
+    argtypes::Argtypes
+    sptypes::Argtypes
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::NewNodeStream
     meta::Vector{Any}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{AbstractLattice}, meta::Vector{Any}, sptypes::Vector{AbstractLattice})
+    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Argtypes, meta::Vector{Any}, sptypes::Argtypes)
         return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
@@ -1014,9 +1014,9 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         cond = stmt.cond
         if compact.fold_constant_branches
             if !isa(cond, Bool)
-                condT = widenconditional(argextype(cond, compact))
-                isa(condT, Const) || @goto bail
-                cond = condT.val
+                condT = argextype(cond, compact)
+                isConst(condT) || @goto bail
+                cond = constant(condT)
                 isa(cond, Bool) || @goto bail
             end
             if cond

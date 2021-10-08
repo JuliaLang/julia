@@ -114,35 +114,11 @@ something(x::Any, y...) = x
 # compiler #
 ############
 
-# TODO remove me in the future, this is just to check the coverage of the overhaul
-import Core: Const, PartialStruct, InterConditional, PartialOpaque, TypeofVararg
-abstract type _AbstractLattice end
-const AbstractLattice = Union{
-    Const, PartialStruct, InterConditional, PartialOpaque, TypeofVararg,
-    _AbstractLattice}
-const Argtypes = Vector{AbstractLattice}
+include("compiler/typelattice.jl")
 
-macro latticeop(mode, def)
-    @assert is_function_def(def)
-    sig, body = def.args
-    if mode === :args || mode === :op
-        nospecs = Symbol[]
-        for arg in sig.args
-            if isexpr(arg, :macrocall) && arg.args[1] === Symbol("@nospecialize")
-                push!(nospecs, arg.args[3])
-            end
-        end
-        idx = findfirst(x->!isa(x, LineNumberNode), body.args)
-        for var in nospecs
-            insert!(body.args, idx, Expr(:(=), var, Expr(:(::), var, :AbstractLattice)))
-        end
-    end
-    if mode === :ret || mode === :op
-        sig = Expr(:(::), sig, :AbstractLattice)
-    end
-    return esc(Expr(def.head, sig, body))
-end
-anymap(f::Function, a::Vector{AbstractLattice}) = Any[ f(a[i]) for i in 1:length(a) ]
+const Argtypes = Vector{LatticeElement}
+const EMPTY_SLOTTYPES = Argtypes()
+anymap(f::Function, a::Argtypes) = Any[ f(a[i]) for i in 1:length(a) ]
 
 include("compiler/cicache.jl")
 include("compiler/types.jl")
@@ -155,7 +131,6 @@ include("compiler/inferencestate.jl")
 
 include("compiler/typeutils.jl")
 include("compiler/typelimits.jl")
-include("compiler/typelattice.jl")
 include("compiler/tfuncs.jl")
 include("compiler/stmtinfo.jl")
 
@@ -175,6 +150,65 @@ function extrema(x::Array)
     end
     return vmin, vmax
 end
+
+# function show(io::IO, xs::Vector)
+#     print(io, eltype(xs), '[')
+#     show_itr(io, xs)
+#     print(io, ']')
+# end
+# function show(io::IO, xs::Tuple)
+#     print(io, '(')
+#     show_itr(io, xs)
+#     print(io, ')')
+# end
+# function show_itr(io::IO, xs)
+#     n = length(xs)
+#     for i in 1:n
+#         show(io, xs[i])
+#         i == n || print(io, ", ")
+#     end
+# end
+# function show(io::IO, typ′::LatticeElement)
+#     function name(x)
+#         if isLimitedAccuracy(typ′)
+#             return (nameof(x), '′',)
+#         else
+#             return (nameof(x),)
+#         end
+#     end
+#     typ = ignorelimited(typ′)
+#     if isConditional(typ)
+#         show(io, conditional(typ))
+#     elseif isConst(typ)
+#         print(io, name(Const)..., '(', constant(typ), ')')
+#     elseif isPartialStruct(typ)
+#         print(io, name(PartialStruct)..., '(', widenconst(typ), ", [")
+#         n = length(partialfields(typ))
+#         for i in 1:n
+#             show(io, partialfields(typ)[i])
+#             i == n || print(io, ", ")
+#         end
+#         print(io, "])")
+#     elseif isPartialTypeVar(typ)
+#         print(io, name(PartialTypeVar)..., '(')
+#         show(io, typ.partialtypevar.tv)
+#         print(io, ')')
+#     else
+#         print(io, name(NativeType)..., '(', widenconst(typ), ')')
+#     end
+# end
+# function show(io::IO, typ::ConditionalInfo)
+#     if typ === __NULL_CONDITIONAL__
+#         return print(io, "__NULL_CONDITIONAL__")
+#     end
+#     print(io, nameof(Conditional), '(')
+#     show(io, typ.var)
+#     print(io, ", ")
+#     show(io, typ.vtype)
+#     print(io, ", ")
+#     show(io, typ.elsetype)
+#     print(io, ')')
+# end
 
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)

@@ -121,7 +121,7 @@ let cfg = CFG(BasicBlock[
     make_bb([2, 3]    , []    ),
 ], Int[])
     insts = Compiler.InstructionStream(0)
-    code = Compiler.IRCode(insts, cfg, LineInfoNode[], Core.Compiler.AbstractLattice[], [], Core.Compiler.AbstractLattice[])
+    code = Compiler.IRCode(insts, cfg, LineInfoNode[], Core.Compiler.Argtypes(), [], Core.Compiler.Argtypes())
     compact = Compiler.IncrementalCompact(code, true)
     @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
 end

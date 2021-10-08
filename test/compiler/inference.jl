@@ -1,15 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: Const, Conditional, ⊑, ReturnNode, GotoIfNot
+import Core.Compiler: LatticeElement, Const, Conditional, InterConditional, NativeType,
+                      ⊑, tmerge, Bottom, is_lattice_equal, ReturnNode, GotoIfNot
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
 # HACK
-Base.:(==)(a::Core.Compiler.TypeLattice, b::Type) = Core.Compiler.unwraptype(a) == b
-Base.:(==)(a::Type, b::Core.Compiler.TypeLattice) = a == Core.Compiler.unwraptype(b)
+Base.:(==)(a::LatticeElement, b::Type) = Core.Compiler.unwraptype(a) == b
+Base.:(==)(a::Type, b::LatticeElement) = a == Core.Compiler.unwraptype(b)
 
 f39082(x::Vararg{T}) where {T <: Number} = x[1]
 let ast = only(code_typed(f39082, Tuple{Vararg{Rational}}))[1]
@@ -151,20 +152,22 @@ tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{Comple
     Tuple{Vararg{Complex}}, false)
 tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}})
-@test Core.Compiler.tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+@test tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{}, Tuple{ComplexF32, ComplexF32}}
-@test Core.Compiler.tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF32}}) ==
+@test tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
-@test Core.Compiler.tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+@test tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF32}}
-@test Core.Compiler.tmerge(Union{Nothing, Tuple{}, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+@test tmerge(Union{Nothing, Tuple{}, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
-@test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) ==
+@test tmerge(Vector{Int}, tmerge(Vector{String}, Vector{Bool})) ==
     Union{Vector{Bool}, Vector{Int}, Vector{String}}
-@test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Union{Vector{Bool}, Vector{Symbol}})) == Vector
-@test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) == Base.BitIntegerType
-@test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) == Base.BitIntegerType
-@test Core.Compiler.tmerge(Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
+@test tmerge(Vector{Int}, tmerge(Vector{String}, Union{Vector{Bool}, Vector{Symbol}})) == Vector
+@test tmerge(Base.BitIntegerType, Bottom) == Base.BitIntegerType
+@test tmerge(Bottom, Base.BitIntegerType) == Base.BitIntegerType
+@test is_lattice_equal(tmerge(InterConditional(1, Int, Bottom), InterConditional(1, String, Bottom)), InterConditional(1, Union{Int,String}, Bottom))
+@test tmerge(InterConditional(1, Int, Bottom), InterConditional(2, String, Bottom)) === Const(true)
+@test tmerge(InterConditional(1, Int, Bottom), Const(false)) ⊑ InterConditional(1, Int, Any)
 
 struct SomethingBits
     x::Base.BitIntegerType
@@ -276,7 +279,7 @@ barTuple2() = fooTuple{tuple(:y)}()
 # issue #6050
 @test Core.Compiler.getfield_tfunc(
           Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
-          Core.Compiler.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
+          Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
 
 # assert robustness of `getfield_tfunc`
 struct GetfieldRobustness
@@ -667,8 +670,7 @@ for (codetype, all_ssa) in Any[
         e = code.code[i]
         notconst(e)
         typ = code.ssavaluetypes[i]
-        typ isa Core.Compiler.MaybeUndef && (typ = typ.typ)
-        @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
+        @test isa(typ, Type) || isa(typ, LatticeElement)
     end
     test_inferred_static(codetype, all_ssa)
 end
@@ -1160,7 +1162,7 @@ struct UnionIsdefinedA; x; end
 struct UnionIsdefinedB; x; end
 @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
 @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
-@test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Bool
+@test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === NativeType(Bool)
 
 @noinline map3_22347(f, t::Tuple{}) = ()
 @noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)
@@ -1351,7 +1353,7 @@ let isa_tfunc = Core.Compiler.isa_tfunc
     @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
+    let c = Conditional(0, Const(Union{}), Const(Union{}))
         @test isa_tfunc(c, Const(Bool)) === Const(true)
         @test isa_tfunc(c, Type{Bool}) === Const(true)
         @test isa_tfunc(c, Const(Real)) === Const(true)
@@ -1402,7 +1404,7 @@ let subtype_tfunc = Core.Compiler.subtype_tfunc
     @test subtype_tfunc(Type{Union{}}, Any) === Const(true) # Union{} <: Any
     @test subtype_tfunc(Type{Union{}}, Union{Type{Int64}, Type{Float64}}) === Const(true)
     @test subtype_tfunc(Type{Union{}}, Union{Type{T}, Type{Float64}} where T) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
+    let c = Conditional(0, Const(Union{}), Const(Union{}))
         @test subtype_tfunc(c, Const(Bool)) === Const(true) # any result is ok
     end
     @test subtype_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
@@ -1445,7 +1447,7 @@ let egal_tfunc
     @test egal_tfunc(Type{Union{Float32, Float64}}, Type{Union{Float32, Float64}}) === Bool
     @test egal_tfunc(typeof(Union{}), typeof(Union{})) === Bool # could be improved
     @test egal_tfunc(Const(typeof(Union{})), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
+    let c = Conditional(1, Const(Union{}), Const(Union{}))
         @test egal_tfunc(c, Const(Bool)) === Const(false)
         @test egal_tfunc(c, Type{Bool}) === Const(false)
         @test egal_tfunc(c, Const(Real)) === Const(false)
@@ -1456,17 +1458,19 @@ let egal_tfunc
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(Core.SlotNumber(0), Union{}, Const(Union{})) # === Const(false)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.var, c.elsetype, Union{})
-        @test egal_tfunc(c, Const(true)) === Conditional(c.var, Union{}, c.elsetype)
+    let c = Conditional(1, Union{}, Const(Union{})) # === Const(false)
+        cnd = c.conditional
+        @test egal_tfunc(c, Const(false)) === Conditional(cnd.slot_id, cnd.elsetype, Union{})
+        @test egal_tfunc(c, Const(true)) === Conditional(cnd.slot_id, Union{}, cnd.elsetype)
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Union{}) # === Const(true)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.var, Union{}, c.vtype)
-        @test egal_tfunc(c, Const(true)) === Conditional(c.var, c.vtype, Union{})
+    let c = Conditional(1, Const(Union{}), Union{}) # === Const(true)
+        cnd = c.conditional
+        @test egal_tfunc(c, Const(false)) === Conditional(cnd.slot_id, Union{}, cnd.vtype)
+        @test egal_tfunc(c, Const(true)) === Conditional(cnd.slot_id, cnd.vtype, Union{})
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
@@ -1605,7 +1609,7 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
-    @test opt.src.ssavaluetypes isa Vector{Core.Compiler.AbstractLattice}
+    @test opt.src.ssavaluetypes isa Core.Compiler.SSAValueTypes
     @test !opt.src.inferred
     @test opt.mod === Base
 end
@@ -2026,7 +2030,7 @@ end
 
     # handle the edge case
     let ts = @eval Module() begin
-            edgecase(_) = $(Core.Compiler.InterConditional(2, Int, Any))
+            edgecase(_) = $(InterConditional(2, Int, Any))
             # create cache
             Base.return_types(edgecase, (Any,))
             Base.return_types((Any,)) do x
@@ -2586,12 +2590,12 @@ end
 # issue #28356
 # unit test to make sure countunionsplit overflows gracefully
 # we don't care what number is returned as long as it's large
-import Core.Compiler: unionsplitcost, AbstractLattice, NativeType
-@test unionsplitcost(AbstractLattice[NativeType(Union{Int32, Int64}) for i=1:80]) > 100000
-@test unionsplitcost(AbstractLattice[NativeType(Union{Int8, Int16, Int32, Int64})]) == 2
-@test unionsplitcost(AbstractLattice[NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Int8)]) == 8
-@test unionsplitcost(AbstractLattice[NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Union{Int8, Int16, Int32}), NativeType(Int8)]) == 6
-@test unionsplitcost(AbstractLattice[NativeType(Union{Int8, Int16, Int32}), NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Int8)]) == 6
+import Core.Compiler: unionsplitcost
+@test unionsplitcost(LatticeElement[NativeType(Union{Int32, Int64}) for i=1:80]) > 100000
+@test unionsplitcost(LatticeElement[NativeType(Union{Int8, Int16, Int32, Int64})]) == 2
+@test unionsplitcost(LatticeElement[NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Int8)]) == 8
+@test unionsplitcost(LatticeElement[NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Union{Int8, Int16, Int32}), NativeType(Int8)]) == 6
+@test unionsplitcost(LatticeElement[NativeType(Union{Int8, Int16, Int32}), NativeType(Union{Int8, Int16, Int32, Int64}), NativeType(Int8)]) == 6
 
 # make sure compiler doesn't hang in union splitting
 
@@ -3016,9 +3020,9 @@ const DenseIdx = Union{IntRange,Integer}
 # Non uniformity in expressions with PartialTypeVar
 @test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
 let N = TypeVar(:N)
-    @test Core.Compiler.apply_type_nothrow([Core.Compiler.Const(NTuple),
+    @test Core.Compiler.apply_type_nothrow(Any[Const(NTuple),
         Core.Compiler.PartialTypeVar(N, true, true),
-        Core.Compiler.Const(Any)], Type{Tuple{Vararg{Any,N}}})
+        Const(Any)], Type{Tuple{Vararg{Any,N}}})
 end
 
 # issue #33768
@@ -3544,7 +3548,7 @@ let f() = Val(fieldnames(Complex{Int}))
 end
 
 @testset "switchtupleunion" begin
-    import Core.Compiler: AbstractLattice, NativeType, switchtupleunion
+    import Core.Compiler: switchtupleunion
 
     # signature tuple
     let
@@ -3562,18 +3566,18 @@ end
 
     # argtypes
     let
-        tunion = switchtupleunion(AbstractLattice[NativeType(Union{Int32,Int64}), Core.Const(nothing)])
+        tunion = switchtupleunion(LatticeElement[NativeType(Union{Int32,Int64}), Const(nothing)])
         @test length(tunion) == 2
-        @test Any[Int32, Core.Const(nothing)] in tunion
-        @test Any[Int64, Core.Const(nothing)] in tunion
+        @test Any[Int32, Const(nothing)] in tunion
+        @test Any[Int64, Const(nothing)] in tunion
     end
     let
-        tunion = switchtupleunion(AbstractLattice[NativeType(Union{Int32,Int64}), NativeType(Union{Float32,Float64}), Core.Const(nothing)])
+        tunion = switchtupleunion(LatticeElement[NativeType(Union{Int32,Int64}), NativeType(Union{Float32,Float64}), Const(nothing)])
         @test length(tunion) == 4
-        @test AbstractLattice[NativeType(Int32), NativeType(Float32), Core.Const(nothing)] in tunion
-        @test AbstractLattice[NativeType(Int32), NativeType(Float64), Core.Const(nothing)] in tunion
-        @test AbstractLattice[NativeType(Int64), NativeType(Float32), Core.Const(nothing)] in tunion
-        @test AbstractLattice[NativeType(Int64), NativeType(Float64), Core.Const(nothing)] in tunion
+        @test LatticeElement[NativeType(Int32), NativeType(Float32), Const(nothing)] in tunion
+        @test LatticeElement[NativeType(Int32), NativeType(Float64), Const(nothing)] in tunion
+        @test LatticeElement[NativeType(Int64), NativeType(Float32), Const(nothing)] in tunion
+        @test LatticeElement[NativeType(Int64), NativeType(Float64), Const(nothing)] in tunion
     end
 end
 
@@ -3717,7 +3721,7 @@ let
     mi = Core.Compiler.specialize_method(first(methods(f_convert_me_to_ir)),
         Tuple{Bool, Float64}, Core.svec())
     ci = Base.uncompressed_ast(mi.def)
-    ci.ssavaluetypes = Core.Compiler.AbstractLattice[Core.Compiler.NativeType(Any) for i = 1:ci.ssavaluetypes]
+    ci.ssavaluetypes = Any[Core.Compiler.⊤ for i = 1:ci.ssavaluetypes]
     sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
         Core.Compiler.NativeInterpreter())
     ir = Core.Compiler.convert_to_ircode(ci, sv)

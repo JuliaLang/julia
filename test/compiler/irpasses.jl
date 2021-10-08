@@ -523,8 +523,8 @@ let m = Meta.@lower 1 + 1
     src.codelocs = fill(Int32(1), nstmts)
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src,
-        Core.Compiler.AbstractLattice[],
-        Core.Compiler.AbstractLattice[Core.Compiler.NativeType(Any), Core.Compiler.NativeType(Any)])
+        Argtypes(),
+        Core.Compiler.LatticeElement[Core.Compiler.NativeType(Any), Core.Compiler.NativeType(Any)])
     @test Core.Compiler.verify_ir(ir) === nothing
     ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing

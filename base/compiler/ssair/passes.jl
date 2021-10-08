@@ -41,8 +41,8 @@ function try_compute_field(ir::Union{IncrementalCompact,IRCode}, @nospecialize(f
     else
         # try to resolve other constants, e.g. global reference
         field = argextype(field, ir)
-        if isa(field, Const)
-            field = field.val
+        if isConst(field)
+            field = constant(field)
         else
             return nothing
         end
@@ -325,8 +325,8 @@ function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
     length(def.args) >= 3 || return false
     is_known_call(def, getfield, compact) || return false
     which = argextype(def.args[3], compact)
-    isa(which, Const) || return false
-    which.val === :captures || return false
+    isConst(which) || return false
+    constant(which) === :captures || return false
     oc = argextype(def.args[2], compact)
     return oc ⊑ Core.OpaqueClosure
 end
@@ -397,7 +397,7 @@ function lift_leaves(compact::IncrementalCompact,
                 return nothing
             else
                 typ = argextype(leaf, compact)
-                if !isa(typ, Const)
+                if !isConst(typ)
                     # TODO: (disabled since #27126)
                     # If the leaf is an old ssa value, insert a getfield here
                     # We will revisit this getfield later when compaction gets
@@ -407,7 +407,7 @@ function lift_leaves(compact::IncrementalCompact,
                     # of where we are
                     return nothing
                 end
-                leaf = typ.val
+                leaf = constant(typ)
                 # Fall through to below
             end
         elseif isa(leaf, QuoteNode)
@@ -493,11 +493,11 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     lhs, rhs = args[2], args[3]
     vl = argextype(lhs, compact)
     vr = argextype(rhs, compact)
-    if isa(vl, Const)
-        isa(vr, Const) && return
+    if isConst(vl)
+        isConst(vr) && return
         val = rhs
         target = lhs
-    elseif isa(vr, Const)
+    elseif isConst(vr)
         val = lhs
         target = rhs
     else
@@ -537,11 +537,11 @@ function lift_comparison_leaves!(@specialize(tfunc),
     lifted_leaves = nothing
     for leaf in leaves
         result = tfunc(unwraptype(argextype(leaf, compact)), cmp)
-        if isa(result, Const)
+        if isConst(result)
             if lifted_leaves === nothing
                 lifted_leaves = LiftedLeaves()
             end
-            lifted_leaves[leaf] = LiftedValue(result.val)
+            lifted_leaves[leaf] = LiftedValue(constant(result))
         else
             return # TODO In some cases it might be profitable to hoist the comparison here
         end
@@ -765,7 +765,7 @@ function sroa_pass!(ir::IRCode)
         isa(struct_typ, DataType) || continue
 
         struct_typ.name.atomicfields == C_NULL || continue # TODO: handle more
-        if !(field_ordering === :unspecified || (field_ordering isa Const && field_ordering.val === :not_atomic))
+        if !(field_ordering === :unspecified || (isConst(field_ordering) && constant(field_ordering) === :not_atomic))
             continue
         end
 
@@ -810,7 +810,7 @@ function sroa_pass!(ir::IRCode)
         lifted_leaves, any_undef = lifted_result
 
         if any_undef
-            result_t = make_MaybeUndef(result_t)
+            result_t = MaybeUndef(result_t)
         end
 
         val = perform_lifting!(compact,
@@ -1209,7 +1209,7 @@ function type_lift_pass!(ir::IRCode)
                         else
                             up_id = id = (def.values[i]::SSAValue).id
                             @label restart
-                            if !isa(ir.stmts[id][:type], MaybeUndef)
+                            if !isMaybeUndef(ir.stmts[id][:type])
                                 val = true
                             else
                                 node = insts[id][:inst]

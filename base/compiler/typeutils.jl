@@ -19,23 +19,23 @@ function hasuniquerep(@nospecialize t)
     isa(t, TypeVar) && return false # TypeVars are identified by address, not equality
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
-    if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
+    if isa(t, DataType) && t.name !== Tuple.name # invariant DataTypes
         return _all(hasuniquerep, t.parameters)
     end
     return false
 end
 
-#= TODO @latticeop args =# function has_nontrivial_const_info(@nospecialize t)
-    isa(t, PartialStruct) && return true
-    isa(t, PartialOpaque) && return true
-    isa(t, Const) || return false
-    val = t.val
+function has_nontrivial_const_info(@nospecialize t #=TODO (lattice overhaul) ::LatticeElement=#)
+    isPartialStruct(t) && return true
+    isPartialOpaque(t) && return true
+    isConst(t) || return false
+    val = constant(t)
     return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
 end
 
-@latticeop args function has_const_info(@nospecialize x)
+function has_const_info(x::LatticeElement)
     x = unwraptype(x)
-    return (!isa(x, Type) && !isvarargtype(x)) || isType(x)
+    return (!isa(x, Type) && !isVararg(x)) || isType(x)
 end
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
@@ -44,7 +44,7 @@ end
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
 isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]) || b <: a)
 
-argtypes_to_type(argtypes::Vector{AbstractLattice}) = Tuple{anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)...}
+argtypes_to_type(argtypes::Argtypes) = Tuple{anymap(a::LatticeElement -> isVararg(a) ? vararg(a) : widenconst(a), argtypes)...}
 
 function isknownlength(t::DataType)
     isvatuple(t) || return true
@@ -188,9 +188,9 @@ function tvar_extent(@nospecialize t)
 end
 
 # N.B.: typename maps type equivalence classes to a single value
-@latticeop args function typename_static(@nospecialize(t))::AbstractLattice
-    t isa Const && return _typename(t.val)
-    t isa Conditional && return NativeType(Bool.name)
+function typename_static(t::LatticeElement)
+    isConditional(t) && return NativeType(Bool.name)
+    isConst(t) && return _typename(constant(t))
     t = unwrap_unionall(widenconst(t))
     return isType(t) ? _typename(t.parameters[1]) : NativeType(Core.TypeName)
 end
@@ -202,11 +202,21 @@ function _typename(a::Union)
     tb = _typename(a.b)
     ta === tb && return ta # same type-name
     (ta === ⊥ || tb === ⊥) && return ⊥ # threw an error
-    (ta isa Const && tb isa Const) && return ⊥ # will throw an error (different type-names)
+    (isConst(ta) && isConst(tb)) && return ⊥ # will throw an error (different type-names)
     return NativeType(Core.TypeName) # uncertain result
 end
 _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
+
+# assume `isVararg(init)`
+function tuple_tail_elem(init::LatticeElement, ct::Vector{LatticeElement})
+    ct′ = Any[]
+    for i = 1:length(ct)
+        cti = ct[i]
+        push!(ct′, isVararg(cti) ? vararg(cti) : widenconst(cti))
+    end
+    return NativeType(tuple_tail_elem(unwrapva(vararg(init)), ct′))
+end
 
 function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
     t = init
@@ -223,7 +233,7 @@ end
 # or outside of the Tuple/Union nesting, though somewhat more expensive to be
 # outside than inside because the representation is larger (because and it
 # informs the callee whether any splitting is possible).
-function unionsplitcost(argtypes::Union{SimpleVector,Vector{AbstractLattice}})
+function unionsplitcost(argtypes::Union{SimpleVector,Argtypes})
     nu = 1
     max = 2
     for ti in argtypes
@@ -266,8 +276,8 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
     return tunion
 end
 
-switchtupleunion(argtypes::Vector{AbstractLattice}) = _switchtupleunion(argtypes, length(argtypes), Vector{AbstractLattice}[])
-function _switchtupleunion(t::Vector{AbstractLattice}, i::Int, tunion::Vector{Vector{AbstractLattice}})
+switchtupleunion(argtypes::Argtypes) = _switchtupleunion(argtypes, length(argtypes), Argtypes[])
+function _switchtupleunion(t::Argtypes, i::Int, tunion::Vector{Argtypes})
     if i == 0
         push!(tunion, copy(t))
     else

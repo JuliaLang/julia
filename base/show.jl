@@ -1167,33 +1167,6 @@ function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
     end
 end
 
-# These sometimes show up as Const-values in InferenceFrameInfo signatures
-show(io::IO, r::Core.Compiler.UnitRange) = show(io, r.start : r.stop)
-show(io::IO, mime::MIME{Symbol("text/plain")}, r::Core.Compiler.UnitRange) = show(io, mime, r.start : r.stop)
-
-function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
-    mi = mi_info.mi
-    def = mi.def
-    if isa(def, Method)
-        if isdefined(def, :generator) && mi === def.generator
-            print(io, "InferenceFrameInfo generator for ")
-            show(io, def)
-        else
-            print(io, "InferenceFrameInfo for ")
-            argnames = [isa(a, Core.Const) ? (isa(a.val, Type) ? "" : a.val) : "" for a in mi_info.slottypes[1:mi_info.nargs]]
-            show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
-        end
-    else
-        linetable = mi.uninferred.linetable
-        line = isempty(linetable) ? "" : (lt = linetable[1]; string(lt.file, ':', lt.line))
-        print(io, "Toplevel InferenceFrameInfo thunk from ", def, " starting at ", line)
-    end
-end
-
-function show(io::IO, tinf::Core.Compiler.Timings.Timing)
-    print(io, "Core.Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
-end
-
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
                           delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
     print(io, op)
@@ -1635,7 +1608,7 @@ function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
 end
 
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
-    typ = isa(ex, TypedSlot) ? Core.Compiler.unwraptype(ex.typ) : Any
+    typ = isa(ex, TypedSlot) ? Core.Compiler.widenconst(ex.typ) : Any
     slotid = ex.id
     slotnames = get(io, :SOURCE_SLOTNAMES, false)
     if (isa(slotnames, Vector{String}) &&
@@ -2487,7 +2460,7 @@ module IRShow
     using Core.IR
     import ..Base
     import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr,
-                      compute_basic_blocks, block_for_inst, AbstractLattice, unwraptype
+                      compute_basic_blocks, block_for_inst, unwraptype, SSAValueTypes
     Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)
@@ -2530,20 +2503,118 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     print(io, ")")
 end
 
-function show(io::IO, inferred::Core.Compiler.InferenceResult)
+# `Core.Compiler` data structures
+
+module CompilerShow
+
+import Base: show
+
+const CC = Core.Compiler
+
+function show(io::IO, inferred::CC.InferenceResult)
     tt = inferred.linfo.specTypes.parameters[2:end]
     tts = join(["::$(t)" for t in tt], ", ")
     rettype = inferred.result
-    if isa(rettype, Core.Compiler.InferenceState)
+    if isa(rettype, CC.InferenceState)
         rettype = rettype.bestguess
     end
     print(io, "$(inferred.linfo.def.name)($(tts)) => $(rettype)")
 end
 
-function show(io::IO, ::Core.Compiler.NativeInterpreter)
+function show(io::IO, ::CC.NativeInterpreter)
     print(io, "Core.Compiler.NativeInterpreter(...)")
 end
 
+# inference lattice
+# =================
+
+function show(io::IO, typ::CC.LatticeElement)
+    if CC.isLimitedAccuracy(typ)
+        print(io, nameof(CC.LimitedAccuracy), '(')
+        show(io, CC.ignorelimited(typ))
+        print(io, ')')
+    elseif CC.isMaybeUndef(typ)
+        print(io, nameof(CC.MaybeUndef), '(')
+        show(io, CC.ignoremaybeundef(typ))
+        print(io, ')')
+    else
+        if CC.isConditional(typ)
+            show(io, CC.conditional(typ))
+        elseif CC.isConst(typ)
+            print(io, nameof(CC.Const), '(', CC.constant(typ), ')')
+        elseif CC.isPartialStruct(typ)
+            print(io, nameof(CC.PartialStruct), '(', CC.widenconst(typ), ", [")
+            n = length(CC.partialfields(typ))
+            for i in 1:n
+                show(io, CC.partialfields(typ)[i])
+                i == n || print(io, ", ")
+            end
+            print(io, "])")
+        elseif CC.isPartialTypeVar(typ)
+            print(io, nameof(CC.PartialTypeVar), '(')
+            show(io, CC.partialtypevar(typ).tv)
+            print(io, ')')
+        elseif CC.isPartialOpaque(typ)
+            print(io, nameof(CC.PartialOpaque), '(')
+            show(io, CC.partialopaque(typ))
+            print(io, ')')
+        elseif CC.isVararg(typ)
+            print(io, CC.vararg(typ))
+        else
+            print(io, nameof(CC.NativeType), '(', CC.widenconst(typ), ')')
+        end
+    end
+end
+
+function show(io::IO, typ::CC.ConditionalInfo)
+    if typ === CC.__NULL_CONDITIONAL__
+        return print(io, "$CC.__NULL_CONDITIONAL__")
+    end
+    print(io, nameof(CC.Conditional), '(')
+    show(io, Core.SlotNumber(typ.slot_id))
+    print(io, ", ")
+    show(io, typ.vtype)
+    print(io, ", ")
+    show(io, typ.elsetype)
+    print(io, ')')
+end
+
+# timings
+# =======
+
+import .CC: Timings
+import ..show_tuple_as_call
+
+# These sometimes show up as Const-values in InferenceFrameInfo signatures
+show(io::IO, r::CC.UnitRange) = show(io, r.start : r.stop)
+show(io::IO, mime::MIME{Symbol("text/plain")}, r::CC.UnitRange) = show(io, mime, r.start : r.stop)
+
+function show(io::IO, mi_info::Timings.InferenceFrameInfo)
+    mi = mi_info.mi
+    def = mi.def
+    if isa(def, Method)
+        if isdefined(def, :generator) && mi === def.generator
+            print(io, "InferenceFrameInfo generator for ")
+            show(io, def)
+        else
+            print(io, "InferenceFrameInfo for ")
+            argnames = Any[
+                CC.isConst(a) && !isa(CC.constant(a), Type) ? CC.constant(a) : ""
+                for a in mi_info.slottypes[1:mi_info.nargs]]
+            show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
+        end
+    else
+        linetable = mi.uninferred.linetable
+        line = isempty(linetable) ? "" : (lt = linetable[1]; string(lt.file, ':', lt.line))
+        print(io, "Toplevel InferenceFrameInfo thunk from ", def, " starting at ", line)
+    end
+end
+
+function show(io::IO, tinf::Timings.Timing)
+    print(io, "$Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
+end
+
+end # CompilerShow
 
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     if isempty(x)
