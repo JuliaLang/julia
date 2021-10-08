@@ -52,7 +52,7 @@ end
 ```
 
 Which quietly assumes 1-based indexing and therefore exposes unsafe memory access when used
-with [`OffsetArrays`](@ref):
+with [`OffsetArrays`](@ref man-custom-indice):
 
 ```julia
 julia> using OffsetArrays
