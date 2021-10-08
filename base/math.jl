@@ -932,16 +932,11 @@ julia> modf(-3.5)
 """
 modf(x) = isinf(x) ? (flipsign(zero(x), x), x) : (rem(x, one(x)), trunc(x))
 
-function modf(x::Float32)
-    temp = Ref{Float32}()
-    f = ccall((:modff, libm), Float32, (Float32, Ptr{Float32}), x, temp)
-    f, temp[]
-end
-
-function modf(x::Float64)
-    temp = Ref{Float64}()
-    f = ccall((:modf, libm), Float64, (Float64, Ptr{Float64}), x, temp)
-    f, temp[]
+function modf(x::T) where T<:IEEEFloat
+    isinf(x) && return (copysign(zero(T), x), x)
+    ix = trunc(x)
+    rx = copysign(x - ix, x)
+    return (rx, ix)
 end
 
 @inline function ^(x::Float64, y::Float64)

@@ -663,14 +663,14 @@ end
 end
 
 @testset "modf" begin
-    @testset "$elty" for elty in (Float16, Float32, Float64)
-        @test modf( convert(elty,1.2) )[1] ≈ convert(elty,0.2)
-        @test modf( convert(elty,1.2) )[2] ≈ convert(elty,1.0)
-        @test modf( convert(elty,1.0) )[1] ≈ convert(elty,0.0)
-        @test modf( convert(elty,1.0) )[2] ≈ convert(elty,1.0)
-        @test isequal(modf( convert(elty,-Inf) ), (-0.0, -Inf))
-        @test isequal(modf( convert(elty,Inf) ), (0.0, Inf))
-        @test isequal(modf( convert(elty,NaN) ), (NaN, NaN))
+    @testset "$T" for T in (Float16, Float32, Float64)
+        @test modf(T(1.25)) === (T(0.25), T(1.0))
+        @test modf(T(1.0))  === (T(0.0), T(1.0))
+        @test modf(T(-Inf)) === (T(-0.0), T(-Inf))
+        @test modf(T(Inf))  === (T(0.0), T(Inf))
+        @test modf(T(NaN))  === (T(NaN), T(NaN))
+        @test modf(T(-0.0)) === (T(-0.0), T(-0.0))
+        @test modf(T(-1.0)) === (T(-0.0), T(-1.0))
     end
 end
 
