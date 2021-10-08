@@ -2,7 +2,7 @@
 
 using Test
 using Unicode
-using Unicode: normalize, isassigned
+using Unicode: normalize, isassigned, julia_charmap
 
 @testset "string normalization" begin
     # normalize (Unicode normalization etc.):
@@ -25,6 +25,10 @@ using Unicode: normalize, isassigned
     @test normalize("\t\r", stripcc=true) == "  "
     @test normalize("\t\r", stripcc=true, newline2ls=true) == " \u2028"
     @test normalize("\u0072\u0307\u0323", :NFC) == "\u1E5B\u0307" #26917
+
+    # julia_charmap identifier normalization
+    @test normalize("julia\u025B\u00B5\u00B7\u0387\u2212", charmap=julia_charmap) == "julia\u03B5\u03BC\u22C5\u22C5\u002D"
+    @test julia_charmap('\u00B5') === '\u03BC'
 end
 
 @testset "unicode sa#15" begin
