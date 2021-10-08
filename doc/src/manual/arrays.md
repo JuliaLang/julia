@@ -16,7 +16,7 @@ objects of a more specific type, such as [`Float64`](@ref) or [`Int32`](@ref).
 In general, unlike many other technical computing languages, Julia does not expect programs to
 be written in a vectorized style for performance. Julia's compiler uses type inference and generates
 optimized code for scalar array indexing, allowing programs to be written in a style that is convenient
-and readable, without sacrificing performance, and using less memory at times.
+and readable, without sacrificing performance and using less memory at times.
 
 In Julia, all arguments to functions are [passed by
 sharing](https://en.wikipedia.org/wiki/Evaluation_strategy#Call_by_sharing)
@@ -28,7 +28,7 @@ value of one or more of its arguments (compare, for example, [`sort`](@ref) and 
 Callees must make explicit copies to ensure that they don't modify inputs that
 they don't intend to change. Many non- mutating functions are implemented by
 calling a function of the same name with an added `!` at the end on an explicit
-copy of the input, and returning that copy.
+copy of the input and returning that copy.
 
 ## Basic Functions
 
@@ -98,7 +98,7 @@ Here, `(2, 3)` is a [`Tuple`](@ref) and the first argument — the element type 
 Arrays can also be directly constructed with square braces; the syntax `[A, B, C, ...]`
 creates a one-dimensional array (i.e., a vector) containing the comma-separated arguments as
 its elements. The element type ([`eltype`](@ref)) of the resulting array is automatically
-determined by the types of the arguments inside the braces. If all the arguments are the
+determined by the types of arguments inside the braces. If all the arguments are the
 same type, then that is its `eltype`. If they all have a common
 [promotion type](@ref conversion-and-promotion) then they get converted to that type using
 [`convert`](@ref) and that type is the array's `eltype`. Otherwise, a heterogeneous array
@@ -202,7 +202,7 @@ julia> [[1 1]; 2 3; [4 4]]
  4  4
 ```
 
-Spaces (and tabs) have a higher precedence than semicolons, performing any horizontal
+Spaces (and tabs) have higher precedence than semicolons, performing any horizontal
 concatenations first and then concatenating the result. Using double semicolons for the
 horizontal concatenation, on the other hand, performs any vertical concatenations before
 horizontally concatenating the result.
@@ -223,7 +223,7 @@ julia> [1:2; 4;; 1; 3:4]
 
 Just as `;` and `;;` concatenate in the first and second dimension, using more semicolons
 extends this same general scheme. The number of semicolons in the separator specifies the
-particular dimension, so `;;;` concetenates in the third dimension, `;;;;` in the 4th, and
+particular dimension, so `;;;` concatenates in the third dimension, `;;;;` in the 4th, and
 so on. Fewer semicolons take precedence, so the lower dimensions are generally concatenated
 first.
 
@@ -240,7 +240,7 @@ julia> [1; 2;; 3; 4;; 5; 6;;;
  8  10  12
 ```
 
-Like before, spaces (and tabs) for horizontal concatenation have a higher precedence than
+Like before, spaces (and tabs) for horizontal concatenation have higher precedence than
 any number of semicolons. Thus, higher-dimensional arrays can also be written by specifying
 their rows first, with their elements textually arranged in a manner similar to their layout:
 
@@ -383,7 +383,7 @@ julia> [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
  0.656511
 ```
 
-The resulting array type depends on the types of the computed elements just like [array literals](@ref man-array-literals) do. In order to control the
+The resulting array type depends on the types of the computed elements just like [array literals](@ref man-array-literals) do. To control the
 type explicitly, a type can be prepended to the comprehension. For example, we could have requested
 the result in single precision by writing:
 
@@ -393,7 +393,7 @@ Float32[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 
 ## Generator Expressions
 
-Comprehensions can also be written without the enclosing square brackets, producing an object
+Comprehensions can also be written without enclosing square brackets, producing an object
 known as a generator. This object can be iterated to produce values on demand, instead of allocating
 an array and storing them in advance (see [Iteration](@ref)). For example, the following expression
 sums a series without allocating memory:
@@ -593,7 +593,7 @@ overwritten with the value of `X`, [`convert`](@ref)ing to the
 [`eltype`](@ref) of `A` if necessary.
 
 
-If any index `I_k` is itself an array, then the right hand side `X` must also be an
+If any index `I_k` is itself an array, then the right-hand side `X` must also be an
 array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
 the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
 `A` is overwritten with the value `X[I_1, I_2, ..., I_n]`, converting if necessary. The
@@ -784,7 +784,7 @@ Often referred to as logical indexing or indexing with a logical mask, indexing
 by a boolean array selects elements at the indices where its values are `true`.
 Indexing by a boolean vector `B` is effectively the same as indexing by the
 vector of integers that is returned by [`findall(B)`](@ref). Similarly, indexing
-by a `N`-dimensional boolean array is effectively the same as indexing by the
+by an `N`-dimensional boolean array is effectively the same as indexing by the
 vector of `CartesianIndex{N}`s where its values are `true`. A logical index
 must be a vector of the same length as the dimension it indexes into, or it
 must be the only index provided and match the size and dimensionality of the
