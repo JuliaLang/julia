@@ -318,12 +318,12 @@ one(A::SymTridiagonal{T}) where T = SymTridiagonal(fill!(similar(A.dv, typeof(on
 
 zero(D::Diagonal) = Diagonal(zero.(D.diag))
 oneunit(D::Diagonal) = Diagonal(oneunit.(D.diag))
-    
+
 # equals and approx equals methods for structured matrices
 # SymTridiagonal == Tridiagonal is already defined in tridiag.jl
 
 ==(A::Diagonal, B::Bidiagonal) = iszero(B.ev) && A.diag == B.dv
-==(A::Diagonal, B::SymTridiagonal) = iszero(_evview(B)) && A.diag == B.dv    
+==(A::Diagonal, B::SymTridiagonal) = iszero(_evview(B)) && A.diag == B.dv
 ==(B::Bidiagonal, A::Diagonal) = A == B
 ==(A::Diagonal, B::Tridiagonal) = iszero(B.dl) && iszero(B.du) && A.diag == B.d
 ==(B::Tridiagonal, A::Diagonal) = A == B
