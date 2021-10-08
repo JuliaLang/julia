@@ -160,7 +160,7 @@ similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T
 # similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 copyto!(dest::SymTridiagonal, src::SymTridiagonal) =
-    (copyto!(dest.dv, src.dv); copyto!(dest.ev, src.ev); dest)
+    (copyto!(dest.dv, src.dv); copyto!(dest.ev, _evview(src)); dest)
 
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
@@ -172,7 +172,7 @@ adjoint(S::SymTridiagonal{<:Real}) = S
 adjoint(S::SymTridiagonal) = Adjoint(S)
 Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
 
-ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(@view S.ev[begin:length(S.dv) - 1])
+ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(_evview(S))
 issymmetric(S::SymTridiagonal) = true
 
 function diag(M::SymTridiagonal{<:Number}, n::Integer=0)
@@ -182,7 +182,7 @@ function diag(M::SymTridiagonal{<:Number}, n::Integer=0)
     if absn == 0
         return copyto!(similar(M.dv, length(M.dv)), M.dv)
     elseif absn == 1
-        return copyto!(similar(M.ev, length(M.ev)), M.ev)
+        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
     elseif absn <= size(M,1)
         return fill!(similar(M.dv, size(M,1)-absn), 0)
     else
@@ -196,9 +196,9 @@ function diag(M::SymTridiagonal, n::Integer=0)
     if n == 0
         return copyto!(similar(M.dv, length(M.dv)), symmetric.(M.dv, :U))
     elseif n == 1
-        return copyto!(similar(M.ev, length(M.ev)), M.ev)
+        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
     elseif n == -1
-        return copyto!(similar(M.ev, length(M.ev)), transpose.(M.ev))
+        return copyto!(similar(M.ev, length(M.dv)-1), transpose.(_evview(M)))
     elseif n <= size(M,1)
         throw(ArgumentError("requested diagonal contains undefined zeros of an array type"))
     else
@@ -207,14 +207,14 @@ function diag(M::SymTridiagonal, n::Integer=0)
     end
 end
 
-+(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, A.ev+B.ev)
--(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv-B.dv, A.ev-B.ev)
++(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, _evview(A)+_evview(B))
+-(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv-B.dv, _evview(A)-_evview(B))
 -(A::SymTridiagonal) = SymTridiagonal(-A.dv, -A.ev)
 *(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv*B, A.ev*B)
 *(B::Number, A::SymTridiagonal) = SymTridiagonal(B*A.dv, B*A.ev)
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 \(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
-==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
+==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (_evview(A)==_evview(B))
 
 @inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
              alpha::Number, beta::Number) =
@@ -359,21 +359,22 @@ function svdvals!(A::SymTridiagonal)
     return sort!(map!(abs, vals, vals); rev=true)
 end
 
-#tril and triu
+# tril and triu
 
 function istriu(M::SymTridiagonal, k::Integer=0)
     if k <= -1
         return true
     elseif k == 0
-        return iszero(M.ev)
+        return iszero(_evview(M))
     else # k >= 1
-        return iszero(M.ev) && iszero(M.dv)
+        return iszero(_evview(M)) && iszero(M.dv)
     end
 end
 istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
-iszero(M::SymTridiagonal) = iszero(M.ev) && iszero(M.dv)
-isone(M::SymTridiagonal) = iszero(M.ev) && all(isone, M.dv)
-isdiag(M::SymTridiagonal) = iszero(M.ev)
+iszero(M::SymTridiagonal) =  iszero(_evview(M)) && iszero(M.dv)
+isone(M::SymTridiagonal) =  iszero(_evview(M)) && all(isone, M.dv)
+isdiag(M::SymTridiagonal) =  iszero(_evview(M))
+
 
 function tril!(M::SymTridiagonal, k::Integer=0)
     n = length(M.dv)

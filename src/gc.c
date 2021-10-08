@@ -3075,7 +3075,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_mark_sp_init(gc_cache, &sp);
     // Conservative marking relies on age to tell allocated objects
     // and freelist entries apart.
-    mark_reset_age = !support_conservative_marking;
+    mark_reset_age = !jl_gc_conservative_gc_support_enabled();
     // Reset the age and old bit for any unmarked objects referenced by the
     // `to_finalize` list. These objects are only reachable from this list
     // and should not be referenced by any old objects so this won't break

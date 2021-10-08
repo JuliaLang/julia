@@ -324,7 +324,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
     if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
         jl_set_gc_and_wait();
         // Do not raise sigint on worker thread
-        if (ct->tid != 0)
+        if (jl_atomic_load_relaxed(&ct->tid) != 0)
             return;
         if (ct->ptls->defer_signal) {
             jl_safepoint_defer_sigint();
@@ -798,7 +798,7 @@ static void *signal_listener(void *arg)
                     bt_data_prof[bt_size_cur++].uintptr = cycleclock();
 
                     // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                    bt_data_prof[bt_size_cur++].uintptr = ptls->sleep_check_state + 1;
+                    bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
 
                     // Mark the end of this block with two 0's
                     bt_data_prof[bt_size_cur++].uintptr = 0;

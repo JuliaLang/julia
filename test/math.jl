@@ -146,9 +146,11 @@ end
         y = T(1//2)
         yi = 4
         @testset "Random values" begin
-            @test x^y ≈ big(x)^big(y)
+            @test x^y === T(big(x)^big(y))
             @test x^1 === x
-            @test x^yi ≈ big(x)^yi
+            @test x^yi === T(big(x)^yi)
+            # test for large negative exponent where error compensation matters
+            @test 0.9999999955206014^-1.0e8 == 1.565084574870928
             @test (-x)^yi == x^yi
             @test (-x)^(yi+1) == -(x^(yi+1))
             @test acos(x) ≈ acos(big(x))
@@ -661,14 +663,14 @@ end
 end
 
 @testset "modf" begin
-    @testset "$elty" for elty in (Float16, Float32, Float64)
-        @test modf( convert(elty,1.2) )[1] ≈ convert(elty,0.2)
-        @test modf( convert(elty,1.2) )[2] ≈ convert(elty,1.0)
-        @test modf( convert(elty,1.0) )[1] ≈ convert(elty,0.0)
-        @test modf( convert(elty,1.0) )[2] ≈ convert(elty,1.0)
-        @test isequal(modf( convert(elty,-Inf) ), (-0.0, -Inf))
-        @test isequal(modf( convert(elty,Inf) ), (0.0, Inf))
-        @test isequal(modf( convert(elty,NaN) ), (NaN, NaN))
+    @testset "$T" for T in (Float16, Float32, Float64)
+        @test modf(T(1.25)) === (T(0.25), T(1.0))
+        @test modf(T(1.0))  === (T(0.0), T(1.0))
+        @test modf(T(-Inf)) === (T(-0.0), T(-Inf))
+        @test modf(T(Inf))  === (T(0.0), T(Inf))
+        @test modf(T(NaN))  === (T(NaN), T(NaN))
+        @test modf(T(-0.0)) === (T(-0.0), T(-0.0))
+        @test modf(T(-1.0)) === (T(-0.0), T(-1.0))
     end
 end
 

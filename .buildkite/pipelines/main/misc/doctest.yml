@@ -21,7 +21,7 @@ steps:
             - "/cache/repos:/cache/repos"
     commands: |
       echo "--- Build Julia from source"
-      make -j 6
+      make --output-sync -j 6
 
       echo "--- Print Julia version info"
       ./julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
