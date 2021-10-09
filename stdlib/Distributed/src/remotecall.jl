@@ -69,10 +69,14 @@ function test_existing_ref(r::AbstractRemoteRef)
     found = getkey(client_refs, r, nothing)
     if found !== nothing
         @assert r.where > 0
-        if isa(r, Future) && found.v === nothing && r.v !== nothing
-            # we have recd the value from another source, probably a deserialized ref, send a del_client message
-            @atomic found.v = r.v
-            send_del_client(r)
+        if isa(r, Future)
+            fv_cache = @atomic :acquire found.v
+            rv_cache = @atomic :acquire r.v
+            if fv_cache === nothing && rv_cache !== nothing
+                # we have recd the value from another source, probably a deserialized ref, send a del_client message
+                @atomic :release found.v = rv_cache
+                send_del_client(r)
+            end
         end
         return found::typeof(r)
     end
@@ -91,8 +95,9 @@ function finalize_ref(r::AbstractRemoteRef)
                     send_del_client_no_lock(r)
                 else
                     # send_del_client only if the reference has not been set
-                    r.v === nothing && send_del_client_no_lock(r)
-                    @atomic r.v = nothing
+                    v_cache = @atomic :acquire r.v
+                    v_cache === nothing && send_del_client_no_lock(r)
+                    @atomic :release r.v = nothing
                 end
                 r.where = 0
             finally
@@ -201,7 +206,8 @@ isready(f)  # will not block
 ```
 """
 function isready(rr::Future)
-    rr.v === nothing || return true
+    v_cache = @atomic :acquire rr.v
+    v_cache === nothing || return true
 
     rid = remoteref_id(rr)
     return if rr.where == myid()
@@ -564,7 +570,7 @@ end
 
 Wait for a value to become available for the specified [`Future`](@ref).
 """
-wait(r::Future) = (r.v !== nothing && return r; call_on_owner(wait_ref, r, myid()); r)
+wait(r::Future) = (v_cache = @atomic :acquire r.v; v_cache !== nothing && return r; call_on_owner(wait_ref, r, myid()); r)
 
 """
     wait(r::RemoteChannel, args...)
@@ -581,22 +587,28 @@ Further calls to `fetch` on the same reference return the cached value. If the r
 is an exception, throws a [`RemoteException`](@ref) which captures the remote exception and backtrace.
 """
 function fetch(r::Future)
-    r.v !== nothing && return something(r.v)
+    v_cache = @atomic :acquire r.v
+    v_cache !== nothing && return something(v_cache)
+    
     if r.where == myid()
-        rv = lock(client_refs) do
-            r.v === nothing ? lookup_ref(remoteref_id(r)) : nothing
+        v_cache, rv = lock(client_refs) do
+            v_cache = @atomic :acquire r.v
+            v_cache, v_cache === nothing ? lookup_ref(remoteref_id(r)) : nothing
         end
-        if r.v !== nothing
-            return something(r.v)
+
+        if v_cache !== nothing
+            return something(v_cache)
         else
-            v = fetch(rv.c)
+            v_local = fetch(rv.c)
         end
     else
-        v = call_on_owner(fetch_ref, r)
+        v_local = call_on_owner(fetch_ref, r)
     end
-    @atomic r.v = Some(v)
+
+    @atomic :release r.v = Some(v_local)
     send_del_client(r)
-    something(r.v)
+    v_cache = @atomic :acquire r.v
+    something(v_cache)
 end
 
 fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
@@ -621,10 +633,15 @@ All asynchronous remote calls return `Future`s and set the
 value to the return value of the call upon completion.
 """
 function put!(rr::Future, v)
+    rr.where == myid() && set_future_cache(rr, v)
+    call_on_owner(put_future, rr, v, myid())
+    rr.where != myid() && set_future_cache(rr, v)
+    rr
+end
+
+function set_future_cache(rr::Future, v)
     _, ok = @atomicreplace rr.v nothing => Some(v)
     ok || error("Future can be set only once")
-    call_on_owner(put_future, rr, something(rr.v), myid())
-    rr
 end
 
 function put_future(rid, v, caller)
