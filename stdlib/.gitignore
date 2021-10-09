@@ -13,6 +13,8 @@
 /Tar
 /NetworkOptions-*
 /NetworkOptions
+/Pidfile-*
+/Pidfile
 /SuiteSparse-*
 /SuiteSparse
 /SHA-*
