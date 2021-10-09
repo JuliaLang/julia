@@ -589,7 +589,7 @@ is an exception, throws a [`RemoteException`](@ref) which captures the remote ex
 function fetch(r::Future)
     v_cache = @atomic :acquire r.v
     v_cache !== nothing && return something(v_cache)
-    
+
     if r.where == myid()
         v_cache, rv = lock(client_refs) do
             v_cache = @atomic :acquire r.v
