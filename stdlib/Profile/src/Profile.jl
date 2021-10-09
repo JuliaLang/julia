@@ -546,13 +546,13 @@ function strip_meta(data)
 end
 
 """
-    Profile.add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0f0f0f0f0) -> data_with_meta
+    Profile.add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0) -> data_with_meta
 
 The converse of `Profile.fetch(;include_meta = false)`; this will add fake metadata, and can be used
 for compatibility and by packages (e.g., FlameGraphs.jl) that would rather not depend on the internal
 details of the metadata format.
 """
-function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0f0f0f0f0)
+function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
     any(Base.Fix1(is_block_end, data), eachindex(data)) && error("input already has metadata")
     cpu_clock_cycle = UInt64(99)
     data_with_meta = similar(data, 0)
