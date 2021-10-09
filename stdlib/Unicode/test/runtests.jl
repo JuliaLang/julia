@@ -27,7 +27,8 @@ using Unicode: normalize, isassigned, julia_chartransform
     @test normalize("\u0072\u0307\u0323", :NFC) == "\u1E5B\u0307" #26917
 
     # julia_chartransform identifier normalization
-    @test normalize("julia\u025B\u00B5\u00B7\u0387\u2212", chartransform=julia_chartransform) == "julia\u03B5\u03BC\u22C5\u22C5\u002D"
+    @test normalize("julia\u025B\u00B5\u00B7\u0387\u2212", chartransform=julia_chartransform) ==
+        "julia\u03B5\u03BC\u22C5\u22C5\u002D"
     @test julia_chartransform('\u00B5') === '\u03BC'
 end
 
