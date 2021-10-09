@@ -83,7 +83,7 @@ recommend you use the official Julia binaries instead.
 ## Building Julia
 
 First, make sure you have all the [required
-dependencies](https://github.com/JuliaLang/julia/blob/master/doc/build/build.md#required-build-tools-and-external-libraries) installed.
+dependencies](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/build.md#required-build-tools-and-external-libraries) installed.
 Then, acquire the source code by cloning the git repository:
 
     git clone https://github.com/JuliaLang/julia.git
@@ -116,7 +116,7 @@ started](https://docs.julialang.org/en/v1/manual/getting-started/)
 in the manual.
 
 In case this default build path did not work, detailed build instructions
-are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/build).
+are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/).
 
 ### Uninstalling Julia
 
