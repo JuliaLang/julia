@@ -146,7 +146,8 @@ const UTF8PROC_STRIPMARK = (1<<13)
 utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (Cssize_t,), result)))
 
 # static wrapper around user callback function
-utf8proc_custom_func(codepoint::UInt32, callback::Ptr{Cvoid}) = UInt32(unsafe_pointer_to_objref(callback)(codepoint))::UInt32
+utf8proc_custom_func(codepoint::UInt32, callback::Ptr{Cvoid}) =
+    UInt32(unsafe_pointer_to_objref(callback)(codepoint))::UInt32
 
 function utf8proc_decompose(str, options, buffer, nwords, chartransform)
     if chartransform === identity
