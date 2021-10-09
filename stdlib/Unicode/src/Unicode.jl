@@ -73,7 +73,7 @@ You can also use the `chartransform` keyword (which defaults to `identity`) to p
 character as it is processed, in order to perform arbitrary additional normalizations.
 For example, by passing `chartransform=Unicode.julia_custom_map`, you can apply a few Julia-specific
 character normalizations that are performed by Julia when parsing identifiers (in addition to
-NFC normalization: `compase=true, stable=true`).
+NFC normalization: `compose=true, stable=true`).
 
 For example, NFKC corresponds to the options `compose=true, compat=true, stable=true`.
 
