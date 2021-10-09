@@ -148,29 +148,29 @@ utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (C
 # static wrapper around user callback function
 utf8proc_custom_func(codepoint::UInt32, callback::Ptr{Cvoid}) = UInt32(unsafe_pointer_to_objref(callback)(codepoint))::UInt32
 
-function utf8proc_decompose(str, options, buffer, nwords, charmap)
-    if charmap === identity
+function utf8proc_decompose(str, options, buffer, nwords, chartransform)
+    if chartransform === identity
         ret = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                     str, sizeof(str), buffer, nwords, options)
     else
         ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Any),
                     str, sizeof(str), buffer, nwords, options,
-                    @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ptr{Cvoid})), charmap)
+                    @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ptr{Cvoid})), chartransform)
     end
     ret < 0 && utf8proc_error(ret)
     return ret
 end
 
-function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, charmap=identity)
-    nwords = utf8proc_decompose(str, options, C_NULL, 0, charmap)
+function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform=identity)
+    nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
     buffer = Base.StringVector(nwords*4)
-    nwords = utf8proc_decompose(str, options, buffer, nwords, charmap)
+    nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)
     nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
     nbytes < 0 && utf8proc_error(nbytes)
     return String(resize!(buffer, nbytes))
 end
 
-# from julia_charmap.h, used by julia_charmap in the Unicode stdlib
+# from julia_charmap.h, used by julia_chartransform in the Unicode stdlib
 const _julia_charmap = Dict{UInt32,UInt32}(
     0x025B => 0x03B5,
     0x00B5 => 0x03BC,
@@ -179,7 +179,7 @@ const _julia_charmap = Dict{UInt32,UInt32}(
     0x2212 => 0x002D,
 )
 
-utf8proc_map(s::AbstractString, flags::Integer, charmap=identity) = utf8proc_map(String(s), flags, charmap)
+utf8proc_map(s::AbstractString, flags::Integer, chartransform=identity) = utf8proc_map(String(s), flags, chartransform)
 
 # Documented in Unicode module
 function normalize(
@@ -197,7 +197,7 @@ function normalize(
     casefold::Bool=false,
     lump::Bool=false,
     stripmark::Bool=false,
-    charmap=identity,
+    chartransform=identity,
 )
     flags = 0
     stable && (flags = flags | UTF8PROC_STABLE)
@@ -220,7 +220,7 @@ function normalize(
     casefold && (flags = flags | UTF8PROC_CASEFOLD)
     lump && (flags = flags | UTF8PROC_LUMP)
     stripmark && (flags = flags | UTF8PROC_STRIPMARK)
-    utf8proc_map(s, flags, charmap)
+    utf8proc_map(s, flags, chartransform)
 end
 
 function normalize(s::AbstractString, nf::Symbol)

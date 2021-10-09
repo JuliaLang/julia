@@ -5,30 +5,30 @@ module Unicode
 export graphemes, isequal_normalized
 
 """
-    julia_charmap(c::Union{Char,Integer})
+    julia_chartransform(c::Union{Char,Integer})
 
 Map the Unicode character (`Char`) or codepoint (`Integer`) `c` to the corresponding
 "equivalent" character or codepoint, respectively, according to the custom equivalence
 used within the Julia parser (in addition to NFC normalization).
 
 For example, `'µ'` (U+00B5 micro) is treated as equivalent to `'μ'` (U+03BC mu) by
-Julia's parser, so `julia_charmap` performs this transformation while leaving
+Julia's parser, so `julia_chartransform` performs this transformation while leaving
 other characters unchanged:
 ```jldoctest
-julia> julia_charmap('\u00B5')
+julia> julia_chartransform('\u00B5')
 'μ': Unicode U+03BC (category Ll: Letter, lowercase)
 
-julia> julia_charmap('x')
+julia> julia_chartransform('x')
 'x': ASCII/Unicode U+0078 (category Ll: Letter, lowercase)
 ```
 
 !!! compat "Julia 1.8"
     This function was introduced in Julia 1.8.
 """
-function julia_charmap end;
-julia_charmap(codepoint::UInt32) = get(Base.Unicode._julia_charmap, codepoint, codepoint)
-julia_charmap(codepoint::Integer) = julia_charmap(UInt32(codepoint))
-julia_charmap(char::Char) = Char(julia_charmap(UInt32(char)))
+function julia_chartransform end;
+julia_chartransform(codepoint::UInt32) = get(Base.Unicode._julia_charmap, codepoint, codepoint)
+julia_chartransform(codepoint::Integer) = julia_chartransform(UInt32(codepoint))
+julia_chartransform(char::Char) = Char(julia_chartransform(UInt32(char)))
 
 """
     Unicode.normalize(s::AbstractString; keywords...)
@@ -68,10 +68,10 @@ options (which all default to `false` except for `compose`) are specified:
 * `rejectna=true`: throw an error if unassigned code points are found
 * `stable=true`: enforce Unicode versioning stability (never introduce characters missing from earlier Unicode versions)
 
-You can also use the `charmap` keyword (which defaults to `identity`) to pass an arbitrary
+You can also use the `chartransform` keyword (which defaults to `identity`) to pass an arbitrary
 *function* mapping codepoints (integers) to codepoints, which is is called on each decomposed
 character as it is processed, in order to perform arbitrary additional normalizations.
-For example, by passing `charmap=Unicode.julia_custom_map`, you can apply a few Julia-specific
+For example, by passing `chartransform=Unicode.julia_custom_map`, you can apply a few Julia-specific
 character normalizations that are performed by Julia when parsing identifiers (in addition to
 NFC normalization: `compase=true, stable=true`).
 
@@ -93,7 +93,7 @@ julia> Unicode.normalize("JúLiA", stripmark=true)
 ```
 
 !!! compat "Julia 1.8"
-    The `charmap` keyword argument requires Julia 1.8.
+    The `chartransform` keyword argument requires Julia 1.8.
 """
 function normalize end
 normalize(s::AbstractString, nf::Symbol) = Base.Unicode.normalize(s, nf)
