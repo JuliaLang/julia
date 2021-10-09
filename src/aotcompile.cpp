@@ -593,7 +593,6 @@ void jl_dump_native(void *native_code,
     delete data;
 }
 
-
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 {
     PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
@@ -722,6 +721,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createLoopUnswitchPass());
     PM->add(createLICMPass());
     PM->add(createJuliaLICMPass());
+    PM->add(createInductiveRangeCheckEliminationPass());
     // Subsequent passes not stripping metadata from terminator
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createIndVarSimplifyPass());
