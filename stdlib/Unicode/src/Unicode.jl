@@ -71,7 +71,7 @@ options (which all default to `false` except for `compose`) are specified:
 You can also use the `chartransform` keyword (which defaults to `identity`) to pass an arbitrary
 *function* mapping `Integer` codepoints to codepoints, which is is called on each decomposed
 character as it is processed, in order to perform arbitrary additional normalizations.
-For example, by passing `chartransform=Unicode.julia_custom_map`, you can apply a few Julia-specific
+For example, by passing `chartransform=Unicode.julia_chartransform`, you can apply a few Julia-specific
 character normalizations that are performed by Julia when parsing identifiers (in addition to
 NFC normalization: `compose=true, stable=true`).
 
