@@ -1793,7 +1793,7 @@ get_compiletime_preferences(::Nothing) = String[]
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl"
 # otherwise returns the list of dependencies to also check
-function stale_cachefile(modpath::String, cachefile::String)
+function stale_cachefile(modpath::String, cachefile::String; ignore_loaded = false)
     io = open(cachefile, "r")
     try
         if !isvalid_cache_header(io)
@@ -1814,11 +1814,15 @@ function stale_cachefile(modpath::String, cachefile::String)
                 M = root_module(req_key)
                 if PkgId(M) == req_key && module_build_id(M) === req_build_id
                     depmods[i] = M
+                elseif ignore_loaded
+                    # Used by Pkg.precompile given that there it's ok to precompile different versions of loaded packages
+                    @goto locate_branch
                 else
                     @debug "Rejecting cache file $cachefile because module $req_key is already loaded and incompatible."
                     return true # Won't be able to fulfill dependency
                 end
             else
+                @label locate_branch
                 path = locate_package(req_key)
                 get!(PkgOrigin, pkgorigins, req_key).path = path
                 if path === nothing
