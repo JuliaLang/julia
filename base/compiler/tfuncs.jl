@@ -549,11 +549,9 @@ function typeof_tfunc(@nospecialize(t))
             return Type{<:t}
         end
     elseif isa(t, Union)
-        a = widenconst(typeof_tfunc(t.a))
-        b = widenconst(typeof_tfunc(t.b))
+        a = widenconst(_typeof_tfunc(t.a))
+        b = widenconst(_typeof_tfunc(t.b))
         return Union{a, b}
-    elseif isa(t, TypeVar) && !(Any === t.ub)
-        return typeof_tfunc(t.ub)
     elseif isa(t, UnionAll)
         u = unwrap_unionall(t)
         if isa(u, DataType) && !isabstracttype(u)
@@ -569,6 +567,13 @@ function typeof_tfunc(@nospecialize(t))
         return rewrap_unionall(widenconst(typeof_tfunc(u)), t)
     end
     return DataType # typeof(anything)::DataType
+end
+# helper function of `typeof_tfunc`, which accepts `TypeVar`
+function _typeof_tfunc(@nospecialize(t))
+    if isa(t, TypeVar)
+        return t.ub !== Any ? _typeof_tfunc(t.ub) : DataType
+    end
+    return typeof_tfunc(t)
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 1)
 
@@ -1439,12 +1444,16 @@ function tuple_tfunc(atypes::Vector{Any})
         if has_struct_const_info(x)
             anyinfo = true
         else
-            atypes[i] = x = widenconst(x)
+            if isvarargtype(x)
+                atypes[i] = x
+            else
+                atypes[i] = x = widenconst(x)
+            end
         end
         if isa(x, Const)
             params[i] = typeof(x.val)
         else
-            x = widenconst(x)
+            x = isvarargtype(x) ? x : widenconst(x)
             if isType(x)
                 anyinfo = true
                 xparam = x.parameters[1]

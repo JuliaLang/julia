@@ -1717,7 +1717,8 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
         fields = copy(rt.fields)
         haveconst = false
         for i in 1:length(fields)
-            a = widenreturn(fields[i], bestguess, nslots, slottypes, changes)
+            a = fields[i]
+            a = isvarargtype(a) ? a : widenreturn(a, bestguess, nslots, slottypes, changes)
             if !haveconst && has_const_info(a)
                 # TODO: consider adding && const_prop_profitable(a) here?
                 haveconst = true

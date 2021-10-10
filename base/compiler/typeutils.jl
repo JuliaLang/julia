@@ -50,7 +50,7 @@ has_concrete_subtype(d::DataType) = d.flags & 0x20 == 0x20
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
 isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]) || b <: a)
 
-argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
+argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(a -> isvarargtype(a) ? a : widenconst(a), argtypes)...}
 
 function isknownlength(t::DataType)
     isvatuple(t) || return true
