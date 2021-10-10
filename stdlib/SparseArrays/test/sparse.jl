@@ -1704,7 +1704,7 @@ end
     d = Diagonal(x)
     s = sparse(d)
     @test s == d
-    @test length(s.nzval) == 2
+    @test nnz(s) == 2
 end
 
 @testset "error conditions for reshape, and dropdims" begin
