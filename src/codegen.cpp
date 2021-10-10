@@ -4972,7 +4972,7 @@ static Value *get_current_task(jl_codectx_t &ctx)
     const int ptls_offset = offsetof(jl_task_t, gcstack);
     return ctx.builder.CreateInBoundsGEP(
         T_pjlvalue, emit_bitcast(ctx, ctx.pgcstack, T_ppjlvalue),
-        ConstantInt::get(T_size, -ptls_offset / sizeof(void *)),
+        ConstantInt::get(T_size, -(ptls_offset / sizeof(void *))),
         "current_task");
 }
 
