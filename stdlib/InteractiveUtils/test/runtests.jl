@@ -583,7 +583,7 @@ file, ln = functionloc(versioninfo, Tuple{})
     println(s)
     println(m)
     println(m.captures[1])
-    println(expandusers(m.captures[1]))
+    println(expanduser(m.captures[1]))
     @info "DEBUG END"
 
     @test isfile(expanduser(m.captures[1]))
