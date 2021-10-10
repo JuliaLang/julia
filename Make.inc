@@ -553,7 +553,7 @@ LD := $(CROSS_COMPILE)ld
 RANLIB := $(CROSS_COMPILE)ranlib
 OBJCOPY := $(CROSS_COMPILE)objcopy
 
-CPP_STDOUT := $(CPP) -E
+CPP_STDOUT := $(CPP) -P
 
 # file extensions
 ifeq ($(OS), WINNT)
@@ -1263,6 +1263,9 @@ OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.e
 JLDFLAGS := -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
+endif
+JCPPFLAGS += -D_WIN32_WINNT=0x0502
+UNTRUSTED_SYSTEM_LIBM := 1
 endif
 
 # Threads
