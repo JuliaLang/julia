@@ -88,8 +88,16 @@ static inline void llvm_dump(llvm::DebugLoc *dbg)
     llvm::dbgs() << "\n";
 }
 
-llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instruction *inst);
 llvm::MDNode *get_tbaa_gcframe();
+llvm::MDNode *get_tbaa_const();
+
+static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instruction *inst)
+{
+    inst->setMetadata(llvm::LLVMContext::MD_tbaa, md);
+    if (llvm::isa<llvm::LoadInst>(inst) && md == get_tbaa_const())
+        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), llvm::None));
+    return inst;
+}
 
 // bitcast a value, but preserve its address space when dealing with pointer types
 static inline llvm::Value *emit_bitcast_with_builder(llvm::IRBuilder<> &builder, llvm::Value *v, llvm::Type *jl_value)

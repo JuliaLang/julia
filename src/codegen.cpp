@@ -4801,24 +4801,15 @@ static Value *get_current_task(jl_codectx_t &ctx)
 // Get PTLS through current task.
 static Value *get_current_ptls(jl_codectx_t &ctx)
 {
-    // const int ptls_offset = offsetof(jl_task_t, ptls);
-    // Value *pptls = ctx.builder.CreateInBoundsGEP(
-    //     T_pjlvalue, get_current_task(ctx),
-    //     ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
-    //     "ptls_field");
-    // LoadInst *ptls_load = ctx.builder.CreateAlignedLoad(
-    //     emit_bitcast(ctx, pptls, T_ppjlvalue), Align(sizeof(void *)), "ptls_load");
-    // // Note: Corresponding store (`t->ptls = ptls`) happens in `ctx_switch` of tasks.c.
-    // tbaa_decorate(tbaa_gcframe, ptls_load);
-    // // Using `CastInst::Create` to get an `Instruction*` without explicit cast:
-    // auto ptls = CastInst::Create(Instruction::BitCast, ptls_load, T_ppjlvalue, "ptls");
-    // ctx.builder.Insert(ptls);
-    // return ptls;
     return get_current_ptls_from_task(ctx.builder, get_current_task(ctx));
 }
 
 llvm::MDNode *get_tbaa_gcframe() {
     return tbaa_gcframe;
+}
+
+llvm::MDNode *get_tbaa_const() {
+    return tbaa_const;
 }
 
 // Store world age at the entry block of the function. This function should be
