@@ -553,13 +553,7 @@ for compatibility and by packages (e.g., FlameGraphs.jl) that would rather not d
 details of the metadata format.
 """
 function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
-    if any(Base.Fix1(is_block_end, data), eachindex(data))
-        n_meta_blockends = count(Base.Fix1(is_block_end, data), eachindex(data))
-        n_zeros = count(iszero, data)
-        @show n_meta_blockends n_zeros
-        println.(data)
-        error("input already has metadata")
-    end
+    any(Base.Fix1(is_block_end, data), eachindex(data)) && error("input already has metadata")
     cpu_clock_cycle = UInt64(99)
     data_with_meta = similar(data, 0)
     for i = 1:length(data)
