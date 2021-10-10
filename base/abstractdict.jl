@@ -141,17 +141,15 @@ This includes arrays, where the keys are the array indices.
 ```jldoctest
 julia> a = Dict(zip(["a", "b", "c"], [1, 2, 3]))
 Dict{String, Int64} with 3 entries:
- "c" => 3
- "b" => 2
- "a" => 1
+  "c" => 3
+  "b" => 2
+  "a" => 1
 
 julia> pairs(a)
 Dict{String, Int64} with 3 entries:
- "c" => 3
- "b" => 2
- "a" => 1
-
-julia> b = ["a", "b", "c"];
+  "c" => 3
+  "b" => 2
+  "a" => 1
 
 julia> foreach(println, pairs(["a", "b", "c"]))
 1 => "a"
@@ -166,9 +164,9 @@ julia> (;a=1, b=2, c=3) |> pairs |> collect
 
 julia> (;a=1, b=2, c=3) |> collect
 3-element Vector{Int64}:
-  1
-  2
-  3
+ 1
+ 2
+ 3
 ```
 """
 pairs(collection) = Generator(=>, keys(collection), values(collection))
