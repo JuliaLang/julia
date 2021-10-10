@@ -266,31 +266,32 @@ stack-allocated memory region.
 
 NOTE: `f` and all functions reachable from `f` must not contain a yield point.
 """
-function withalloca(f, nbytes)
+function withalloca end
+@eval function withalloca(f, nbytes)
     function wrapper(int)
-        f(Ptr{Cvoid}(UInt(int)))
+        f(Ptr{Cvoid}(int))
         nothing
     end
-    closure = @cfunction($wrapper, Cvoid, (UInt64,))
+    closure = @cfunction($(Expr(:$, :wrapper)), Cvoid, (UInt,))
     GC.@preserve closure begin
         Base.llvmcall(
             (
-                """
-                define void @entry(i64 %0, i64 %1) {
+                $"""
+                define void @entry(i$(Sys.WORD_SIZE) %0, i$(Sys.WORD_SIZE) %1) {
                 top:
-                    %aptr = alloca i64, i64 %1
-                    %aint = ptrtoint i64* %aptr to i64
-                    %fptr = inttoptr i64 %0 to void (i64)*
-                    call void %fptr(i64 %aint)
+                    %aptr = alloca i64, i$(Sys.WORD_SIZE) %1
+                    %aint = ptrtoint i64* %aptr to i$(Sys.WORD_SIZE)
+                    %fptr = inttoptr i$(Sys.WORD_SIZE) %0 to void (i$(Sys.WORD_SIZE))*
+                    call void %fptr(i$(Sys.WORD_SIZE) %aint)
                     ret void
                 }
                 """,
                 "entry",
             ),
             Cvoid,
-            Tuple{UInt64,UInt64},
-            UInt64(UInt(Base.unsafe_convert(Ptr{Cvoid}, closure))),
-            UInt64(nbytes),
+            Tuple{Ptr{Cvoid},Int},
+            Base.unsafe_convert(Ptr{Cvoid}, closure),
+            nbytes,
         )
     end
 end
