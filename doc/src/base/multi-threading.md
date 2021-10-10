@@ -8,6 +8,7 @@ Base.Threads.threadid
 Base.Threads.nthreads
 ```
 
+See also [Multi-Threading](@ref man-multithreading).
 ## Synchronization
 
 ```@docs
