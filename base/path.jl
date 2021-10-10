@@ -363,6 +363,7 @@ for the system.
 ```jldoctest
 julia> normpath("/home/myuser/../example.jl")
 "/home/example.jl"
+
 julia> normpath("Documents/Julia") == joinpath("Documents", "Julia")
 true
 ```
