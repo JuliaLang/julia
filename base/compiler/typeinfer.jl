@@ -291,7 +291,7 @@ function CodeInstance(result::InferenceResult, @nospecialize(inferred_result::An
     @assert !(result_type isa LimitedAccuracy)
     if inferred_result isa Const
         # use constant calling convention
-        rettype_const = (result.src::Const).val
+        rettype_const = inferred_result.val
         const_flags = 0x3
         inferred_result = nothing
     else

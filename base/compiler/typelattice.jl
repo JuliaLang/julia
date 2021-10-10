@@ -73,16 +73,6 @@ struct MaybeUndef
     MaybeUndef(@nospecialize(typ)) = new(typ)
 end
 
-# The type of a variable load is either a value or an UndefVarError
-# (only used in abstractinterpret, doesn't appear in optimize)
-struct VarState
-    typ
-    undef::Bool
-    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
-end
-
-const VarTable = Array{Any,1}
-
 struct StateUpdate
     var::SlotNumber
     vtype::VarState
@@ -110,6 +100,15 @@ end
     return typ
 end
 
+"""
+    struct NotFound end
+    const NOT_FOUND = NotFound()
+
+A special sigleton that represents a variable has not been analyzed yet.
+Particularly, all SSA value types are initialized as `NOT_FOUND` when creating a new `InferenceState`.
+Note that this is only used for `smerge`, which updates abstract state `VarTable`,
+and thus we don't define the lattice for this.
+"""
 struct NotFound end
 
 const NOT_FOUND = NotFound()
@@ -278,16 +277,7 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
 end
 
 widenconst(c::AnyConditional) = Bool
-function widenconst(c::Const)
-    if isa(c.val, Type)
-        if isvarargtype(c.val)
-            return Type
-        end
-        return Type{c.val}
-    else
-        return typeof(c.val)
-    end
-end
+widenconst((; val)::Const) = isa(val, Type) ? Type{val} : typeof(val)
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
