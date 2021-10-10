@@ -259,8 +259,8 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
             jl_array_grow_end(ip, maxincr);
             uintptr_t *sp_ptr = NULL;
             if (returnsp) {
-                sp_ptr = (uintptr_t*)jl_array_data(sp) + offset;
                 jl_array_grow_end(sp, maxincr);
+                sp_ptr = (uintptr_t*)jl_array_data(sp) + offset;
             }
             size_t size_incr = 0;
             have_more_frames = jl_unw_stepn(&cursor, (jl_bt_element_t*)jl_array_data(ip) + offset,
