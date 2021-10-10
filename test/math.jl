@@ -308,17 +308,21 @@ end
     end
 end
 
-@testset "exp function" for T in (Float64, Float32, Float16)
-    for func in (exp2,exp,exp10)
+@testset "exponential functions" for T in (Float64, Float32, Float16)
+    for (func, invfunc) in ((exp2, log2), (exp, log), (exp10, log10))
         @testset "$T $func accuracy" begin
-            X = map(T, vcat(-10:0.00021:10, -300:0.001:300, 2.0^-27, 2.0^-28, 2.0^-14, 2.0^-13))
+            minval, maxval = invfunc(floatmin(T)),prevfloat(invfunc(floatmax(T)))
+            # Test range and extensively test numbers near 0.
+            X = Iterators.flatten((minval:T(.1):maxval,
+                                   minval/100:T(.0021):maxval/100,
+                                   minval/10000:T(.000021):maxval/10000,
+                                   nextfloat(zero(T)) ))
             for x in X
-                y, yb = func(x), func(big(x))
-                @test y===T(yb) || abs(y-yb) <= 1.2*eps(T(yb))
+                y, yb = func(x), func(widen(x))
+                @test abs(y-yb) <= 1.2*eps(T(yb))
             end
         end
         @testset "$T $func edge cases" begin
-            @test isnan_type(T, exp(T(NaN)))
             @test func(T(-Inf)) === T(0.0)
             @test func(T(Inf)) === T(Inf)
             @test func(T(NaN)) === T(NaN)
