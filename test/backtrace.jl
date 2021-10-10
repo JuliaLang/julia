@@ -258,3 +258,58 @@ let code = """
     @test occursin("InterpreterIP in top-level CodeInfo for Main.A", bt_str)
 end
 
+"""
+    withalloca(f, nbytes)
+
+Call function `f` with a `ptr::Ptr{Cvoid}` pointing to `nbytes` bytes of a
+stack-allocated memory region.
+
+NOTE: `f` and all functions reachable from `f` must not contain a yield point.
+"""
+function withalloca(f, nbytes)
+    function wrapper(int)
+        f(Ptr{Cvoid}(int))
+        nothing
+    end
+    closure = @cfunction($wrapper, Cvoid, (UInt64,))
+    GC.@preserve closure begin
+        Base.llvmcall(
+            (
+                """
+                define void @entry(i64 %0, i64 %1) {
+                top:
+                    %aptr = alloca i64, i64 %1
+                    %aint = ptrtoint i64* %aptr to i64
+                    %fptr = inttoptr i64 %0 to void (i64)*
+                    call void %fptr(i64 %aint)
+                    ret void
+                }
+                """,
+                "entry",
+            ),
+            Cvoid,
+            Tuple{Ptr{Cvoid},Int64},
+            Base.unsafe_convert(Ptr{Cvoid}, closure),
+            nbytes,
+        )
+    end
+end
+
+function sandwiched_backtrace()
+    local ptr1, ptr2, bt
+    withalloca(16) do p1
+        ptr1 = p1
+        bt = ccall(:jl_backtrace_from_here, Ref{Base.SimpleVector}, (Cint, Cint), true, 0)
+        withalloca(16) do p2
+            ptr2 = p2
+        end
+    end
+    return ptr1, ptr2, bt
+end
+
+@testset "stack pointers" begin
+    ptr1, ptr2, bt_data = sandwiched_backtrace()
+    sp = Base._reformat_sp(bt_data...)
+    @test ptr2 < sp[1] < ptr1
+    @test all(diff(Int128.(UInt.(sp))) .> 0)
+end

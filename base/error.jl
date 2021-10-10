@@ -100,6 +100,50 @@ function _reformat_bt(bt::Array{Ptr{Cvoid},1}, bt2::Array{Any,1})
 end
 
 """
+    _reformat_sp(bt_data...) -> sp::Vector{Ptr{Cvoid}}
+
+Convert the output `bt_data` of `jl_backtrace_from_here` with `returnsp` flag set to a
+vector of valid stack pointers `sp`; i.e., `sp` is a subset of `bt_data[3]`.
+
+This function is used only in test.
+"""
+function _reformat_sp(
+    bt_raw::Array{Ptr{Cvoid},1},
+    bt2::Array{Any,1},
+    sp_raw::Array{Ptr{Cvoid},1},
+)
+    bt = _reformat_bt(bt_raw, bt2)
+    sp = empty!(similar(sp_raw))
+    i = j = 0
+    while true
+        # Advacne `i` such that `bt[i] isa Ptr{Cvoid}` (native poitner).
+        local ip
+        while true
+            if i == lastindex(bt)
+                return sp
+            end
+            i += 1
+            x = bt[i]
+            if x isa Ptr{Cvoid}
+                ip = x
+                break
+            end
+        end
+        # Advance `j` such that `bt_raw[j] == bt[i]` to find a valid stack pointer.
+        while true
+            if j == lastindex(bt_raw)
+                return sp
+            end
+            j += 1
+            if bt_raw[j] == ip
+                push!(sp, sp_raw[j])
+                break
+            end
+        end
+    end
+end
+
+"""
     backtrace()
 
 Get a backtrace object for the current program point.

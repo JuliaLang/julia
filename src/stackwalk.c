@@ -114,8 +114,6 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
                 from_signal_handler = 0;
                 continue;
             }
-            if (sp)
-                sp[n] = thesp;
             // For the purposes of looking up debug info for functions, we want
             // to harvest addresses for the *call* instruction `call_ip` during
             // stack walking.  However, this information isn't directly
@@ -168,6 +166,8 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
                 }
             }
             bt_entry->uintptr = call_ip;
+            if (sp)
+                sp[n] = thesp;
             n++;
         }
         // NOTE: if we have some pgcstack entries remaining (because the
