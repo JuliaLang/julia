@@ -8,7 +8,7 @@ Base.Threads.threadid
 Base.Threads.nthreads
 ```
 
-Check out [multi-threading](https://docs.julialang.org/en/v1/manual/multi-threading/#Starting-Julia-with-multiple-threads).
+See also [Multi-Threading](@ref man-multithreading).
 ## Synchronization
 
 ```@docs
