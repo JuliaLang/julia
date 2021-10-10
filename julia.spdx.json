@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-bbc63c92-5a7a-42a1-a131-70c5ae14b834",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-98f9e2da-45ea-4829-a215-2b9a32585be6",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-06T05:39:17Z"
+        "created": "2021-10-10T04:59:30Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -180,8 +180,8 @@
             "filesAnalyzed": false,
             "homepage": "https://libgit2.org",
             "sourceInfo": "The version in use can be found in the file deps/libgit2.version",
-            "licenseConcluded": "GPL-2.0-only WITH LicenseRef-libgit2-exception",
-            "licenseDeclared": "GPL-2.0-only WITH LicenseRef-libgit2-exception",
+            "licenseConcluded": "LicenseRef-GPL-2.0-only-with-libgit2-exception",
+            "licenseDeclared": "LicenseRef-GPL-2.0-only-with-libgit2-exception",
             "copyrightText": "libgit2 is Copyright (C) the libgit2 contributors, unless otherwise stated. See the AUTHORS file for details.",
             "summary": "A cross-platform, linkable library implementation of Git that you can use in your application."
         },
@@ -398,9 +398,9 @@
     ],
     "hasExtractedLicensingInfos": [
         {
-            "licenseId": "LicenseRef-libgit2-exception",
-            "extractedText": "In addition to the permissions in the GNU General Public License, the authors give you unlimited permission to link the compiled version of this library into combinations with other programs, and to distribute those combinations without any restriction coming from the use of this file.  (The General Public License restrictions do apply in other respects; for example, they cover modification of the file, and distribution when not linked into a combined executable.)",
-            "name": "libgit2-exception"
+            "licenseId": "LicenseRef-GPL-2.0-only-with-libgit2-exception",
+            "extractedText": "Note that the only valid version of the GPL as far as this project is concerned is _this_ particular version of the license (ie v2, not v2.2 or v3.x or whatever), unless explicitly otherwise stated.\n----------------------------------------------------------------------\nIn addition to the permissions in the GNU General Public License, the authors give you unlimited permission to link the compiled version of this library into combinations with other programs, and to distribute those combinations without any restriction coming from the use of this file.  (The General Public License restrictions do apply in other respects; for example, they cover modification of the file, and distribution when not linked into a combined executable.)\n----------------------------------------------------------------------\nGNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n\nCopyright (C) 1989, 1991 Free Software Foundation, Inc.\n59 Temple Place, Suite 330, Boston, MA  02111-1307  USA\nEveryone is permitted to copy and distribute verbatim copies\nof this license document, but changing it is not allowed.\n... [more text]",
+            "name": "GPL-2.0-only-with-libgit2-exception"
         }
     ]
 }
