@@ -268,7 +268,7 @@ NOTE: `f` and all functions reachable from `f` must not contain a yield point.
 """
 function withalloca(f, nbytes)
     function wrapper(int)
-        f(Ptr{Cvoid}(int))
+        f(Ptr{Cvoid}(UInt(int)))
         nothing
     end
     closure = @cfunction($wrapper, Cvoid, (UInt64,))
@@ -288,9 +288,9 @@ function withalloca(f, nbytes)
                 "entry",
             ),
             Cvoid,
-            Tuple{Ptr{Cvoid},Int64},
-            Base.unsafe_convert(Ptr{Cvoid}, closure),
-            nbytes,
+            Tuple{UInt64,UInt64},
+            UInt64(UInt(Base.unsafe_convert(Ptr{Cvoid}, closure))),
+            UInt64(nbytes),
         )
     end
 end
