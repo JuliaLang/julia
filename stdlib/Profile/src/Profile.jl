@@ -530,12 +530,7 @@ function fetch(;include_meta = false)
 end
 
 function strip_meta(data)
-    nblocks = 0
-    for i = 2:length(data)
-        if is_block_end(data, i) # detect block ends and count them
-            nblocks += 1
-        end
-    end
+    nblocks = count(Base.Fix1(is_block_end, data), eachindex(data))
     data_stripped = Vector{UInt}(undef, length(data) - (nblocks * (nmeta + 1)))
     j = length(data_stripped)
     i = length(data)
