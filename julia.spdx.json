@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-98f9e2da-45ea-4829-a215-2b9a32585be6",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-70bf5a25-e9e7-44e9-aab0-e9ab956078eb",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-10T04:59:30Z"
+        "created": "2021-10-10T05:57:26Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -198,6 +198,18 @@
             "summary": "A command line tool and library for transferring data with URL syntax, supporting DICT, FILE, FTP, FTPS, GOPHER, GOPHERS, HTTP, HTTPS, IMAP, IMAPS, LDAP, LDAPS, MQTT, POP3, POP3S, RTMP, RTMPS, RTSP, SCP, SFTP, SMB, SMBS, SMTP, SMTPS, TELNET and TFTP. libcurl offers a myriad of powerful features"
         },
         {
+            "name": "libssh2",
+            "SPDXID": "SPDXRef-libssh2",
+            "downloadLocation": "git+https://github.com/libssh2/libssh2.git",
+            "filesAnalyzed": false,
+            "homepage": "https://www.libssh2.org",
+            "sourceInfo": "The version in use can be found in the file deps/libssh2.version",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 2004-2007 Sara Golemon <sarag@libssh2.org>\nCopyright (c) 2005,2006 Mikhail Gusarov <dottedmag@dottedmag.net>\nCopyright (c) 2006-2007 The Written Word, Inc.\nCopyright (c) 2007 Eli Fant <elifantu@mail.ru>\nCopyright (c) 2009-2021 Daniel Stenberg\nCopyright (C) 2008, 2009 Simon Josefsson\nCopyright (c) 2000 Markus Friedl\nCopyright (c) 2015 Microsoft Corp.\nAll rights reserved.",
+            "summary": "libssh2 is a library implementing the SSH2 protocol, available under the revised BSD license."
+        },
+        {
             "name": "OpenBLAS",
             "SPDXID": "SPDXRef-OpenBLAS",
             "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
@@ -357,6 +369,11 @@
         },
         {
             "spdxElementId": "SPDXRef-curl",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-libssh2",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
