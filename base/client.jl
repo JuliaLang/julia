@@ -472,6 +472,8 @@ Returns the result of the last evaluated expression of the input file. During in
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
+The argument `path` is normalized using [`normpath`](@ref) which will resolve
+relative path tokens such as `..` and convert `/` to the appropriate path separator.
 
 The optional first argument `mapexpr` can be used to transform the included code before
 it is evaluated: for each parsed expression `expr` in `path`, the `include` function
