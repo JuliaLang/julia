@@ -554,6 +554,8 @@ for compatibility and by packages (e.g., FlameGraphs.jl) that would rather not d
 details of the metadata format.
 """
 function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
+    threadid == 0 && error("Fake threadid cannot be 0")
+    taskid == 0 && error("Fake taskid cannot be 0")
     any(Base.Fix1(is_block_end, data), eachindex(data)) && error("input already has metadata")
     cpu_clock_cycle = UInt64(99)
     data_with_meta = similar(data, 0)

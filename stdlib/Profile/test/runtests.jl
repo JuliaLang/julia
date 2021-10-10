@@ -86,7 +86,10 @@ end
     @test_throws "input already has metadata" Profile.add_fake_meta(data_with)
     data_stripped = Profile.strip_meta(data_with_fake)
     @test data_stripped == data_without
-    @test length(data_with_fake) == length(data_with)
+    # ideally the test below would be a test for equality, but real sample ips can be nulls, and thus
+    # adding metadata back in can convert those ips to new block ends, and the length is then longer
+    @test length(data_with_fake) >= length(data_with)
+
 end
 
 Profile.clear()
