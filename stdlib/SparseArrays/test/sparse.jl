@@ -1700,7 +1700,7 @@ end
 end
 
 @testset "avoid allocation for zeros in diagonal" begin
-    x = [1 0 0 5 0]
+    x = [1, 0, 0, 5, 0]
     d = Diagonal(x)
     s = sparse(d)
     @test s == d
