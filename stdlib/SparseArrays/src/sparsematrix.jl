@@ -563,6 +563,7 @@ SparseMatrixCSC(M::Matrix) = sparse(M)
 SparseMatrixCSC(T::Tridiagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(T)
 function SparseMatrixCSC{Tv,Ti}(T::Tridiagonal) where {Tv,Ti}
     m = length(T.d)
+    m == 0 && return SparseMatrixCSC{Tv,Ti}(zeros(Tv, 0, 0))
 
     colptr = Vector{Ti}(undef, m+1)
     colptr[1] = 1
@@ -593,6 +594,7 @@ end
 SparseMatrixCSC(T::SymTridiagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(T)
 function SparseMatrixCSC{Tv,Ti}(T::SymTridiagonal) where {Tv,Ti}
     m = length(T.dv)
+    m == 0 && return SparseMatrixCSC{Tv,Ti}(zeros(Tv, 0, 0))
 
     colptr = Vector{Ti}(undef, m+1)
     colptr[1] = 1

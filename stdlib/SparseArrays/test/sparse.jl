@@ -1699,6 +1699,16 @@ end
     @test S == S2
 end
 
+@testset "Sparse construction with empty structured matrices" begin
+    empty = sparse(zeros(0, 0))
+
+    @test sparse(Diagonal(zeros(0, 0))) == empty
+    @test sparse(Bidiagonal(zeros(0, 0), :U)) == empty
+    @test sparse(Bidiagonal(zeros(0, 0), :L)) == empty
+    @test sparse(SymTridiagonal(zeros(0, 0))) == empty
+    @test sparse(Tridiagonal(zeros(0, 0))) == empty
+end
+
 @testset "error conditions for reshape, and dropdims" begin
     local A = sprand(Bool, 5, 5, 0.2)
     @test_throws DimensionMismatch reshape(A,(20, 2))
