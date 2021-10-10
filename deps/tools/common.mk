@@ -9,9 +9,7 @@ ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
-ifneq ($(USEMSVC), 1)
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -Wl,--stack,8388608"
-endif
 else
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN)"
 endif

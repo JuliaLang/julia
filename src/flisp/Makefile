@@ -50,13 +50,11 @@ endif
 FLAGS := -I$(LLTSRCDIR) $(JCFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
         -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
-ifneq ($(USEMSVC), 1)
 ifneq ($(OS), emscripten)
 FLAGS += -DUSE_COMPUTED_GOTO
 endif
 FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
 FLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
-endif
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
@@ -95,11 +93,7 @@ $(BUILDDIR)/$(LIBTARGET).a: $(OBJS) | $(BUILDDIR)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $(OBJS))
 
-ifneq ($(USEMSVC), 1)
 CCLD := $(CC)
-else
-CCLD := $(LD)
-endif
 
 $(BUILDDIR)/$(EXENAME)-debug$(EXE): $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(JLDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
@@ -130,9 +124,7 @@ endif
 endif
 
 test:
-ifneq ($(USEMSVC), 1)
 	$(call spawn,./$(EXENAME)$(EXE)) unittest.lsp
-endif
 
 clean:
 	rm -f $(BUILDDIR)/*.o
