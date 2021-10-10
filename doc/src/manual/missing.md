@@ -25,7 +25,6 @@ missing
 Since `missing` is a normal Julia object, this propagation rule only works for functions which have opted in to implement this behavior. This can be achieved by:
 - a specific method defined for arguments of type `Missing`
 - accepting arguments of this type, and passing them to functions which propagate them (like standard math operators).
- 
 Packages should consider whether it makes sense to propagate missing values when defining new functions, and define methods appropriately if this is the case. Passing a `missing` value to a function that is defined, but there are no method accepting arguments of type `Missing` throws a [`MethodError`](@ref), just like for any other type.
 
 Functions that do not propagate `missing` values can be made to do so by wrapping them in the `passmissing` function provided by the [Missings.jl](https://github.com/JuliaData/Missings.jl) package.
@@ -214,7 +213,7 @@ julia> Array{Union{Missing, String}}(missing, 2, 3)
  missing  missing  missing
 ```
 
-**Note:***
+!!! note
     Using `undef` or `similar` may currently give an array filled with `missing`, but this is not the correct way to obtain such an array.
     Use a `missing` constructor as shown above instead.
 
