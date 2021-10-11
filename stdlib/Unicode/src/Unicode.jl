@@ -15,14 +15,14 @@ For example, `'µ'` (U+00B5 micro) is treated as equivalent to `'μ'` (U+03BC mu
 Julia's parser, so `julia_chartransform` performs this transformation while leaving
 other characters unchanged:
 ```jldoctest
-julia> julia_chartransform('\u00B5')
+julia> Unicode.julia_chartransform('\u00B5')
 'μ': Unicode U+03BC (category Ll: Letter, lowercase)
 
-julia> julia_chartransform('x')
+julia> Unicode.julia_chartransform('x')
 'x': ASCII/Unicode U+0078 (category Ll: Letter, lowercase)
 ```
 
-The `julia_chartransform` is mainly useful for passing to the [`Unicode.normalize`](@ref)
+`julia_chartransform` is mainly useful for passing to the [`Unicode.normalize`](@ref)
 function in order to mimic the normalization used by the Julia parser:
 ```jl
 julia> s = "\u00B5o\u0308"
