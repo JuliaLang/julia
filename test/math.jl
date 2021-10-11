@@ -53,6 +53,11 @@ end
     @test occursin("3.14159", sprint(show, MIME"text/plain"(), π))
     @test repr(Any[pi ℯ; ℯ pi]) == "Any[π ℯ; ℯ π]"
     @test string(pi) == "π"
+
+    @test sin(π) === sinpi(1) == tan(π) == sinpi(1 // 1) == 0
+    @test cos(π) === cospi(1) == sec(π) == cospi(1 // 1) == -1
+    @test csc(π) == 1/0 && cot(π) == -1/0
+    @test sincos(π) === sincospi(1) == (0, -1)
 end
 
 @testset "frexp,ldexp,significand,exponent" begin
