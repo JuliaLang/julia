@@ -549,11 +549,9 @@ function typeof_tfunc(@nospecialize(t))
             return Type{<:t}
         end
     elseif isa(t, Union)
-        a = widenconst(typeof_tfunc(t.a))
-        b = widenconst(typeof_tfunc(t.b))
+        a = widenconst(_typeof_tfunc(t.a))
+        b = widenconst(_typeof_tfunc(t.b))
         return Union{a, b}
-    elseif isa(t, TypeVar) && !(Any === t.ub)
-        return typeof_tfunc(t.ub)
     elseif isa(t, UnionAll)
         u = unwrap_unionall(t)
         if isa(u, DataType) && !isabstracttype(u)
@@ -569,6 +567,13 @@ function typeof_tfunc(@nospecialize(t))
         return rewrap_unionall(widenconst(typeof_tfunc(u)), t)
     end
     return DataType # typeof(anything)::DataType
+end
+# helper function of `typeof_tfunc`, which accepts `TypeVar`
+function _typeof_tfunc(@nospecialize(t))
+    if isa(t, TypeVar)
+        return t.ub !== Any ? _typeof_tfunc(t.ub) : DataType
+    end
+    return typeof_tfunc(t)
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 1)
 
@@ -865,10 +870,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         elseif Symbol ⊑ name
             name = Int
         end
-        _ts = s.parameters[2]
-        while isa(_ts, TypeVar)
-            _ts = _ts.ub
-        end
+        _ts = unwraptv(s.parameters[2])
         _ts = rewrap_unionall(_ts, s00)
         if !(_ts <: Tuple)
             return Any
@@ -1268,7 +1270,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
         return Any
     end
     if !isempty(args) && isvarargtype(args[end])
-        return isvarargtype(headtype) ? Core.TypeofVararg : Type
+        return isvarargtype(headtype) ? TypeofVararg : Type
     end
     largs = length(args)
     if headtype === Union
@@ -1329,7 +1331,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
             canconst &= !has_free_typevars(aip1)
             push!(tparams, aip1)
         elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
-                                  valid_tparam(ai.val) || (istuple && isa(ai.val, Core.TypeofVararg)))
+                                  valid_tparam(ai.val) || (istuple && isvarargtype(ai.val)))
             push!(tparams, ai.val)
         elseif isa(ai, PartialTypeVar)
             canconst = false
@@ -1395,11 +1397,11 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     catch ex
         # type instantiation might fail if one of the type parameters
         # doesn't match, which could happen if a type estimate is too coarse
-        return isvarargtype(headtype) ? Core.TypeofVararg : Type{<:headtype}
+        return isvarargtype(headtype) ? TypeofVararg : Type{<:headtype}
     end
     !uncertain && canconst && return Const(appl)
     if isvarargtype(appl)
-        return Core.TypeofVararg
+        return TypeofVararg
     end
     if istuple
         return Type{<:appl}
@@ -1439,12 +1441,15 @@ function tuple_tfunc(atypes::Vector{Any})
         if has_struct_const_info(x)
             anyinfo = true
         else
-            atypes[i] = x = widenconst(x)
+            if !isvarargtype(x)
+                x = widenconst(x)
+            end
+            atypes[i] = x
         end
         if isa(x, Const)
             params[i] = typeof(x.val)
         else
-            x = widenconst(x)
+            x = isvarargtype(x) ? x : widenconst(x)
             if isType(x)
                 anyinfo = true
                 xparam = x.parameters[1]
@@ -1467,10 +1472,12 @@ end
 function arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(a), @nospecialize i...)
     a = widenconst(a)
     if a <: Array
-        if isa(a, DataType) && (isa(a.parameters[1], Type) || isa(a.parameters[1], TypeVar))
+        if isa(a, DataType) && begin
+                ap1 = a.parameters[1]
+                isa(ap1, Type) || isa(ap1, TypeVar)
+            end
             # TODO: the TypeVar case should not be needed here
-            a = a.parameters[1]
-            return isa(a, TypeVar) ? a.ub : a
+            return unwraptv(ap1)
         elseif isa(a, UnionAll) && !has_free_typevars(a)
             unw = unwrap_unionall(a)
             if isa(unw, DataType)
@@ -1632,7 +1639,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         if length(argtypes) - 1 == tf[2]
             argtypes = argtypes[1:end-1]
         else
-            vatype = argtypes[end]::Core.TypeofVararg
+            vatype = argtypes[end]::TypeofVararg
             argtypes = argtypes[1:end-1]
             while length(argtypes) < tf[1]
                 push!(argtypes, unwrapva(vatype))

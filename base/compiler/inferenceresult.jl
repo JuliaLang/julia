@@ -111,9 +111,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 atyp = unwrapva(atyp)
                 tail_index -= 1
             end
-            while isa(atyp, TypeVar)
-                atyp = atyp.ub
-            end
+            atyp = unwraptv(atyp)
             if isa(atyp, DataType) && isdefined(atyp, :instance)
                 # replace singleton types with their equivalent Const object
                 atyp = Const(atyp.instance)
