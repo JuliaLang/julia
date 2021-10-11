@@ -279,8 +279,8 @@ function withalloca end
                 $"""
                 define void @entry(i$(Sys.WORD_SIZE) %0, i$(Sys.WORD_SIZE) %1) {
                 top:
-                    %aptr = alloca i64, i$(Sys.WORD_SIZE) %1
-                    %aint = ptrtoint i64* %aptr to i$(Sys.WORD_SIZE)
+                    %aptr = alloca i8, i$(Sys.WORD_SIZE) %1
+                    %aint = ptrtoint i8* %aptr to i$(Sys.WORD_SIZE)
                     %fptr = inttoptr i$(Sys.WORD_SIZE) %0 to void (i$(Sys.WORD_SIZE))*
                     call void %fptr(i$(Sys.WORD_SIZE) %aint)
                     ret void
