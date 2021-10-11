@@ -309,8 +309,21 @@ function sandwiched_backtrace()
 end
 
 @testset "stack pointers" begin
-    ptr1, ptr2, bt_data = sandwiched_backtrace()
-    sp = Base._reformat_sp(bt_data...)
-    @test ptr2 < sp[1] < ptr1
+    y = try
+        sandwiched_backtrace()
+    catch err
+        err
+    end
+    if y isa Exception
+        msg = sprint(showerror, y)
+        @assert occursin("cfunction: closures are not supported on this platform", msg)
+        bt_data =
+            ccall(:jl_backtrace_from_here, Ref{Base.SimpleVector}, (Cint, Cint), true, 0)
+        sp = Base._reformat_sp(bt_data...)
+    else
+        ptr1, ptr2, bt_data = y
+        sp = Base._reformat_sp(bt_data...)
+        @test ptr2 < sp[1] < ptr1
+    end
     @test all(diff(Int128.(UInt.(sp))) .> 0)
 end
