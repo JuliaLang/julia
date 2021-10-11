@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-70bf5a25-e9e7-44e9-aab0-e9ab956078eb",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-1fda47e5-9232-4d3d-82b0-9f602c4afbc9",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-10T05:57:26Z"
+        "created": "2021-10-11T05:59:55Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -210,6 +210,18 @@
             "summary": "libssh2 is a library implementing the SSH2 protocol, available under the revised BSD license."
         },
         {
+            "name": "mbedtls",
+            "SPDXID": "SPDXRef-mbedtls",
+            "downloadLocation": "git+https://github.com/ARMmbed/mbedtls.git",
+            "filesAnalyzed": false,
+            "homepage": "https://tls.mbed.org",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "Apache-2.0",
+            "licenseDeclared": "Apache-2.0",
+            "copyrightText": "NOASSERTION",
+            "summary": "An open source, portable, easy to use, readable and flexible SSL library."
+        },
+        {
             "name": "OpenBLAS",
             "SPDXID": "SPDXRef-OpenBLAS",
             "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
@@ -374,6 +386,11 @@
         },
         {
             "spdxElementId": "SPDXRef-libssh2",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-mbedtls",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
