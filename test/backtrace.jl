@@ -267,30 +267,41 @@ stack-allocated memory region.
 NOTE: `f` and all functions reachable from `f` must not contain a yield point.
 """
 function withalloca end
+
+function withalloca_wrapper(fptr, int)
+    ref = unsafe_pointer_to_objref(Ptr{Cvoid}(fptr))
+    f = ref[]
+    f(Ptr{Cvoid}(int))
+    nothing
+end
+
 @eval function withalloca(f, nbytes)
-    function wrapper(int)
-        f(Ptr{Cvoid}(int))
-        nothing
-    end
-    closure = @cfunction($(Expr(:$, :wrapper)), Cvoid, (UInt,))
-    GC.@preserve closure begin
+    ref = Ref(f)
+    GC.@preserve ref begin
         Base.llvmcall(
             (
                 $"""
-                define void @entry(i$(Sys.WORD_SIZE) %0, i$(Sys.WORD_SIZE) %1) {
+                define void @entry(i$(Sys.WORD_SIZE) %0,
+                                   i$(Sys.WORD_SIZE) %1,
+                                   i$(Sys.WORD_SIZE) %2) {
                 top:
-                    %aptr = alloca i8, i$(Sys.WORD_SIZE) %1
+                    %aptr = alloca i8, i$(Sys.WORD_SIZE) %2
                     %aint = ptrtoint i8* %aptr to i$(Sys.WORD_SIZE)
-                    %fptr = inttoptr i$(Sys.WORD_SIZE) %0 to void (i$(Sys.WORD_SIZE))*
-                    call void %fptr(i$(Sys.WORD_SIZE) %aint)
+                    %fptr = inttoptr i$(Sys.WORD_SIZE) %0 to void (i$(Sys.WORD_SIZE),
+                                                                   i$(Sys.WORD_SIZE))*
+                    call void %fptr(i$(Sys.WORD_SIZE) %1, i$(Sys.WORD_SIZE) %aint)
                     ret void
                 }
                 """,
                 "entry",
             ),
             Cvoid,
-            Tuple{Ptr{Cvoid},Int},
-            Base.unsafe_convert(Ptr{Cvoid}, closure),
+            Tuple{Ptr{Cvoid},Ptr{Cvoid},Int},
+            Base.unsafe_convert(
+                Ptr{Cvoid},
+                @cfunction(withalloca_wrapper, Cvoid, (UInt,UInt)),
+            ),
+            pointer_from_objref(ref),
             nbytes,
         )
     end
@@ -309,21 +320,8 @@ function sandwiched_backtrace()
 end
 
 @testset "stack pointers" begin
-    y = try
-        sandwiched_backtrace()
-    catch err
-        err
-    end
-    if y isa Exception
-        msg = sprint(showerror, y)
-        @assert occursin("cfunction: closures are not supported on this platform", msg)
-        bt_data =
-            ccall(:jl_backtrace_from_here, Ref{Base.SimpleVector}, (Cint, Cint), true, 0)
-        sp = Base._reformat_sp(bt_data...)
-    else
-        ptr1, ptr2, bt_data = y
-        sp = Base._reformat_sp(bt_data...)
-        @test ptr2 < sp[1] < ptr1
-    end
+    ptr1, ptr2, bt_data = sandwiched_backtrace()
+    sp = Base._reformat_sp(bt_data...)
+    @test ptr2 < sp[1] < ptr1
     @test all(diff(Int128.(UInt.(sp))) .> 0)
 end
