@@ -588,8 +588,14 @@ define SONAME_FLAGS
 endef
 endif
 
+ifeq ($(OS),WINNT)
+define IMPLIB_FLAGS
+  -Wl,--out-implib,$(build_libdir)/$(notdir $1).a
+endef
+else
 define IMPLIB_FLAGS
 endef
+endif
 
 # On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
 # We also don't really have a private bindir on windows right now, due to lack of RPATH.
