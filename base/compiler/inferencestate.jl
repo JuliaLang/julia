@@ -2,6 +2,24 @@
 
 const LineNum = Int
 
+# The type of a variable load is either a value or an UndefVarError
+# (only used in abstractinterpret, doesn't appear in optimize)
+struct VarState
+    typ
+    undef::Bool
+    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
+end
+
+"""
+    const VarTable = Vector{VarState}
+
+The extended lattice that maps local variables to inferred type represented as `AbstractLattice`.
+Each index corresponds to the `id` of `SlotNumber` which identifies each local variable.
+Note that `InferenceState` will maintain multiple `VarTable`s at each SSA statement
+to enable flow-sensitive analysis.
+"""
+const VarTable = Vector{VarState}
+
 mutable struct InferenceState
     params::InferenceParams
     result::InferenceResult # remember where to put the result
@@ -18,7 +36,7 @@ mutable struct InferenceState
     world::UInt
     valid_worlds::WorldRange
     nargs::Int
-    stmt_types::Vector{Union{Nothing, Vector{Any}}} # ::Vector{Union{Nothing, VarTable}}
+    stmt_types::Vector{Union{Nothing, VarTable}}
     stmt_edges::Vector{Union{Nothing, Vector{Any}}}
     stmt_info::Vector{Any}
     # return type
@@ -65,8 +83,8 @@ mutable struct InferenceState
         stmt_info = Any[ nothing for i = 1:length(code) ]
 
         n = length(code)
+        s_types = Union{Nothing, VarTable}[ nothing for i = 1:n ]
         s_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
-        s_types = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
 
         # initial types
         nslots = length(src.slotflags)
@@ -315,12 +333,13 @@ end
 update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
 function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)
-    old = frame.src.ssavaluetypes[ssa_id]
+    ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
+    old = ssavaluetypes[ssa_id]
     if old === NOT_FOUND || !(new ⊑ old)
         # typically, we expect that old ⊑ new (that output information only
         # gets less precise with worse input information), but to actually
         # guarantee convergence we need to use tmerge here to ensure that is true
-        frame.src.ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
+        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
         W = frame.ip
         s = frame.stmt_types
         for r in frame.ssavalue_uses[ssa_id]
