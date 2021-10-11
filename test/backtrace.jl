@@ -268,8 +268,7 @@ NOTE: `f` and all functions reachable from `f` must not contain a yield point.
 """
 function withalloca end
 
-function withalloca_wrapper(fptr, int)
-    f = unsafe_pointer_to_objref(Ptr{Cvoid}(fptr))
+function withalloca_wrapper(f, int)
     f(Ptr{Cvoid}(int))
     nothing
 end
@@ -282,10 +281,8 @@ end
             top:
                 %aptr = alloca i8, i$(Sys.WORD_SIZE) %2
                 %aint = ptrtoint i8* %aptr to i$(Sys.WORD_SIZE)
-                %wptr = inttoptr i$(Sys.WORD_SIZE) %0 to void (i$(Sys.WORD_SIZE),
-                                                                i$(Sys.WORD_SIZE))*
-                %fptr = ptrtoint {}* %1 to i$(Sys.WORD_SIZE)
-                call void %wptr(i$(Sys.WORD_SIZE) %fptr, i$(Sys.WORD_SIZE) %aint)
+                %wptr = inttoptr i$(Sys.WORD_SIZE) %0 to void ({}*, i$(Sys.WORD_SIZE))*
+                call void %wptr({}* %1, i$(Sys.WORD_SIZE) %aint)
                 ret void
             }
             """,
@@ -295,7 +292,7 @@ end
         Tuple{Ptr{Cvoid},Any,Int},
         Base.unsafe_convert(
             Ptr{Cvoid},
-            @cfunction(withalloca_wrapper, Cvoid, (UInt,UInt)),
+            @cfunction(withalloca_wrapper, Cvoid, (Any,UInt)),
         ),
         f,
         nbytes,
