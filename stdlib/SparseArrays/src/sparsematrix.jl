@@ -2070,7 +2070,6 @@ _mapreducerows!(pred::P, ::typeof(&), R::AbstractMatrix{Bool},
 # non-structural zeros are identified by x == 0 in line with the sparse constructors.
 function _findz(A::AbstractSparseMatrixCSC{Tv,Ti}, rows=1:size(A, 1), cols=1:size(A, 2)) where {Tv,Ti}
     colptr = getcolptr(A); rowval = rowvals(A); nzval = nonzeros(A)
-    zval = zero(Tv)
     row = 0
     rowmin = rows[1]; rowmax = rows[end]
     allrows = (rows == 1:size(A, 1))
@@ -2082,7 +2081,7 @@ function _findz(A::AbstractSparseMatrixCSC{Tv,Ti}, rows=1:size(A, 1), cols=1:siz
             (r1 <= r2 ) && (r2 = searchsortedlast(rowval, rowmax, r1, r2, Forward))
         end
         row = rowmin
-        while (r1 <= r2) && (row == rowval[r1]) && (nzval[r1] != zval)
+        while (r1 <= r2) && (row == rowval[r1]) && !iszero(nzval[r1])
             r1 += 1
             row += 1
         end
