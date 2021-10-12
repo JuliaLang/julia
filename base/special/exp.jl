@@ -279,7 +279,7 @@ end
     small_part = expb_kernel(base, r)
     if !(abs(x) <= SUBNORM_EXP(base, T))
         x > MAX_EXP(base, T) && return Inf16
-        N<=Int32(-24) && return zero(Float16)
+        x < MIN_EXP(base, T) && return zero(Float16)
     end
     twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
     return Float16(twopk*small_part)
