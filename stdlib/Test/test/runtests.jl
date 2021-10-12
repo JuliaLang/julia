@@ -1250,8 +1250,10 @@ let
         end
     end
     tret = @testset h(1)
+    tdesc = @testset "description" h(1)
     @testset "Function calls" begin
         @test tret.description == "h"
+        @test tdesc.description == "description"
         @test length(tret.results) == 5
         @test tret.results[1].description == "f"
         @test tret.results[2].description == "success"
