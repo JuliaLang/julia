@@ -12,20 +12,7 @@ ifeq ($(OPENBLAS_USE_THREAD), 1)
 OPENBLAS_BUILD_OPTS += USE_THREAD=1
 OPENBLAS_BUILD_OPTS += GEMM_MULTITHREADING_THRESHOLD=50
 # Maximum number of threads for parallelism
-ifneq ($(ARCH),x86_64)
-# Assume we can't address much memory to spawn many threads
-# It is also unlikely that 32-bit architectures have too many cores
-OPENBLAS_BUILD_OPTS += NUM_THREADS=8
-else ifeq ($(OS),WINNT)
-# Windows seems unable to handle very many
-OPENBLAS_BUILD_OPTS += NUM_THREADS=16
-else ifeq ($(OS),Darwin)
-# This should suffice for the largest macs
-OPENBLAS_BUILD_OPTS += NUM_THREADS=16
-else
-# On linux, try to provision for the largest possible machine currently
-OPENBLAS_BUILD_OPTS += NUM_THREADS=16
-endif
+OPENBLAS_BUILD_OPTS += NUM_THREADS=512
 else
 OPENBLAS_BUILD_OPTS += USE_THREAD=0
 endif
