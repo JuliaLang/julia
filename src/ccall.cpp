@@ -288,7 +288,7 @@ class AbiLayout {
 public:
     virtual ~AbiLayout() {}
     virtual bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) = 0;
-    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx) = 0;
+    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx, Type* llvm_t) = 0;
     virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret, LLVMContext &ctx) const = 0;
 };
 
@@ -1086,7 +1086,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         // Whether or not LLVM wants us to emit a pointer to the data
-        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, jl_LLVMContext);
+        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, jl_LLVMContext, t);
 
         if (jl_is_cpointer_type(tti)) {
             pat = t;
