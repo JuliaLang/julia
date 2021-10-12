@@ -1958,5 +1958,5 @@ end
 
 getindex(b::Ref, ::CartesianIndex{0}) = getindex(b)
 setindex!(b::Ref, x, ::CartesianIndex{0}) = setindex!(b, x)
-keys(b::Ref) = CartesianIndicies(axes(b))
+keys(b::Ref) = CartesianIndices(axes(b))
 keytype(::Ref) = CartesianIndex{0}
