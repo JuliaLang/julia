@@ -152,11 +152,15 @@ function _decompose_char!(codepoint::Union{Integer,Char}, dest::Vector{UInt32}, 
 end
 
 """
-    isequal_normalized(s1::AbstractString, s2::AbstractString; casefold=false, stripmark=false)
+    isequal_normalized(s1::AbstractString, s2::AbstractString; casefold=false, stripmark=false, chartransform=identity)
 
 Return whether `s1` and `s2` are canonically equivalent Unicode strings.   If `casefold=true`,
 ignores case (performs Unicode case-folding); if `stripmark=true`, strips diacritical marks
 and other combining characters.
+
+As with [`Unicode.normalize`](@ref), you can also pass an arbitrary
+function via the `chartransform` keyword (mapping `Integer` codepoints to codepoints)
+to perform custom normalizations, such as [`Unicode.julia_chartransform`](@ref).
 
 # Examples
 
@@ -184,7 +188,7 @@ julia> isequal_normalized(s1, "NOËL", casefold=true)
 true
 ```
 """
-function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bool=false, stripmark::Bool=false)
+function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bool=false, stripmark::Bool=false, chartransform=identity)
     function decompose_next_char!(c, state, d, options, s)
         n = _decompose_char!(c, d, options)
         if n > length(d) # may be possible in future Unicode versions?
@@ -202,11 +206,11 @@ function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bo
     while true
         if j1 > n1
             i1 === nothing && return i2 === nothing && j2 > n2
-            j1, n1, i1 = decompose_next_char!(UInt32(i1[1]), i1[2], d1, options, s1)
+            j1, n1, i1 = decompose_next_char!(chartransform(UInt32(i1[1])), i1[2], d1, options, s1)
         end
         if j2 > n2
             i2 === nothing && return false
-            j2, n2, i2 = decompose_next_char!(UInt32(i2[1]), i2[2], d2, options, s2)
+            j2, n2, i2 = decompose_next_char!(chartransform(UInt32(i2[1])), i2[2], d2, options, s2)
         end
         d1[j1] == d2[j2] || return false
         j1 += 1; j2 += 1

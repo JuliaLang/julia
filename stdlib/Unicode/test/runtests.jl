@@ -433,4 +433,5 @@ end
     @test !isequal_normalized("no\u00EBl", "noel")
     @test isequal_normalized("no\u00EBl", "noel", stripmark=true)
     @test isequal_normalized("no\u00EBl", "NOEL", stripmark=true, casefold=true)
+    @test isequal_normalized("\u00B5\u0302m", "\u03BC\u0302m", chartransform=julia_chartransform)
 end
