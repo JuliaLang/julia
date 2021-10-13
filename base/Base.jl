@@ -316,7 +316,7 @@ let SOURCE_PATH = ""
 end
 
 # reduction along dims
-include("reducedim.jl")  # macros in this file relies on string.jl
+include("reducedim.jl")  # macros in this file rely on string.jl
 include("accumulate.jl")
 
 include("permuteddimsarray.jl")
