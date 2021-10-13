@@ -393,6 +393,8 @@ end
 UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
 
 unitrange_last(::Bool, stop::Bool) = stop
+unitrange_last(start::T, stop::T) where {T<:Unsigned} =
+    stop >= start ? stop : convert(T,start-oneunit(start-stop))
 unitrange_last(start::T, stop::T) where {T<:Integer} =
     stop >= start ? stop : convert(T,start-oneunit(stop-start))
 unitrange_last(start::T, stop::T) where {T} =
@@ -734,7 +736,8 @@ end
 
 function length(r::AbstractUnitRange{T}) where T
     @inline
-    a = last(r) - first(r) # even when isempty, by construction (with overflow)
+    last(r) < first(r) && return Integer(zero(first(r) - last(r)))
+    a = last(r) - first(r) # not all types overflow
     return Integer(a + oneunit(a))
 end
 

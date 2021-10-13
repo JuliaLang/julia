@@ -582,6 +582,8 @@ struct OverflowingReal <: Real
     val::UInt8
 end
 OverflowingReal(x::OverflowingReal) = x
+Base.:<(x::OverflowingReal, y::OverflowingReal) = x.val < y.val
+Base.:(==)(x::OverflowingReal, y::OverflowingReal) = x.val == y.val
 Base.:<=(x::OverflowingReal, y::OverflowingReal) = x.val <= y.val
 Base.:+(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val + y.val)
 Base.:-(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val - y.val)
@@ -2204,5 +2206,6 @@ end
     end
     Base.one(::Type{Fix42528}) = Fix42528(0x1)
     @test Fix42528(0x0):Fix42528(0x1) == [Fix42528(0x0), Fix42528(0x01)]
+    @test iszero(length(Fix42528(0x1):Fix42528(0x0)))
     @test_throws DomainError Fix42528(0x0) - Fix42528(0x1)
 end
