@@ -1027,9 +1027,11 @@ end
     setprecision(53) do
         @test precision(Float64, base=10) == precision(BigFloat, base=10) == 15
     end
-    setprecision(100, base=10) do
-        @test precision(BigFloat, base=10) == 100
-        @test precision(BigFloat, base=100) == 50
-        @test precision(BigFloat) == precision(BigFloat, base=2) == 333
+    for (p, b) in ((100,10), (50,100))
+        setprecision(p, base=b) do
+            @test precision(BigFloat, base=10) == 100
+            @test precision(BigFloat, base=100) == 50
+            @test precision(BigFloat) == precision(BigFloat, base=2) == 333
+        end
     end
 end
