@@ -295,8 +295,14 @@ function power_by_squaring(x::Bool, p::Integer)
     return (p==0) | x
 end
 
-^(x::T, p::T) where {T<:Integer} = power_by_squaring(x,p)
-^(x::Number, p::Integer)  = power_by_squaring(x,p)
+@inline function ^(x::T, p::Integer) where T <: BitInteger #check for overflow
+    ans = power_by_squaring(x,p)
+    low_bound = ((sizeof(x)<<3)-leading_zeros(x)-1)*p
+    trailing_ones(typemax(T)) < low_bound || ans < (one(T)<<low_bound) && throw(OverflowError("$x^$p overflowed"))
+    return ans
+end
+@inline ^(x::Integer, p::Integer)  = power_by_squaring(x,p)
+@inline ^(x::Number, p::Integer)  = power_by_squaring(x,p)
 
 # x^p for any literal integer p is lowered to Base.literal_pow(^, x, Val(p))
 # to enable compile-time optimizations specialized to p.
