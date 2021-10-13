@@ -1699,7 +1699,7 @@ end
     @test S == S2
 end
 
-@testset "Sparse construction with empty structured matrices" begin
+@testset "Sparse construction with empty/1x1 structured matrices" begin
     empty = spzeros(0, 0)
 
     @test sparse(Diagonal(zeros(0, 0))) == empty
@@ -1707,6 +1707,17 @@ end
     @test sparse(Bidiagonal(zeros(0, 0), :L)) == empty
     @test sparse(SymTridiagonal(zeros(0, 0))) == empty
     @test sparse(Tridiagonal(zeros(0, 0))) == empty
+
+    one_by_one = rand(1,1)
+    sp_one_by_one = sparse(one_by_one)
+
+    @test sparse(Diagonal(one_by_one)) == sp_one_by_one
+    @test sparse(Bidiagonal(one_by_one, :U)) == sp_one_by_one
+    @test sparse(Bidiagonal(one_by_one, :L)) == sp_one_by_one
+    @test sparse(Tridiagonal(one_by_one)) == sp_one_by_one
+
+    s = SymTridiagonal(rand(1), rand(0))
+    @test sparse(s) == s
 end
 
 @testset "error conditions for reshape, and dropdims" begin
