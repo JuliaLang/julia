@@ -444,6 +444,7 @@ export
     sum!,
     sum,
     to_indices,
+    undefs,
     vcat,
     vec,
     view,

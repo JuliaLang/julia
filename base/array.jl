@@ -538,7 +538,7 @@ fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
     zeros([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all zeros with size specified by `dims`.
-See also [`fill`](@ref), [`ones`](@ref), [`zero`](@ref).
+See also [`fill`](@ref), [`ones`](@ref), [`zero`](@ref), [`undefs`](@ref).
 
 # Examples
 ```jldoctest
@@ -559,7 +559,7 @@ function zeros end
     ones([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all ones with size specified by `dims`.
-See also [`fill`](@ref), [`zeros`](@ref).
+See also [`fill`](@ref), [`zeros`](@ref), [`undefs`](@ref).
 
 # Examples
 ```jldoctest
@@ -575,12 +575,31 @@ julia> ones(ComplexF64, 2, 3)
 """
 function ones end
 
-for (fname, felt) in ((:zeros, :zero), (:ones, :one))
+"""
+    undefs([T=Float64,] dims::Tuple)
+    undefs([T=Float64,] dims...)
+
+Create an `Array`, with element type `T`, with size specified by `dims`.
+The element values are undefined and are not initialized to any value.
+This is equivalent to `Array{T}(undef, dims)`.
+See also [`fill`](@ref), [`ones`](@ref), [`zeros`](@ref).
+
+!!! compat "Julia 1.8"
+    `undefs` is available as of Julia 1.8. Prior to Julia 1.8, use `Array{T}(undef, dims)`.
+
+"""
+function undefs end
+
+for fname in (:zeros, :ones, :undefs)
     @eval begin
         $fname(dims::DimOrInd...) = $fname(dims)
         $fname(::Type{T}, dims::DimOrInd...) where {T} = $fname(T, dims)
         $fname(dims::Tuple{Vararg{DimOrInd}}) = $fname(Float64, dims)
         $fname(::Type{T}, dims::NTuple{N, Union{Integer, OneTo}}) where {T,N} = $fname(T, map(to_dim, dims))
+    end
+end
+for (fname, felt) in ((:zeros, :zero), (:ones, :one))
+    @eval begin
         function $fname(::Type{T}, dims::NTuple{N, Integer}) where {T,N}
             a = Array{T,N}(undef, dims)
             fill!(a, $felt(T))
@@ -593,6 +612,9 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
         end
     end
 end
+
+undefs(::Type{T}, dims::NTuple{N, Integer}) where {T,N} = Array{T,N}(undef, dims)
+undefs(::Type{T}, dims::Tuple{}) where {T} = Array{T}(undef)
 
 function _one(unit::T, x::AbstractMatrix) where T
     require_one_based_indexing(x)
