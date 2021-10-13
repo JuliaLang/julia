@@ -393,10 +393,8 @@ end
 UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
 
 unitrange_last(::Bool, stop::Bool) = stop
-unitrange_last(start::T, stop::T) where {T<:Unsigned} =
-    stop >= start ? stop : convert(T,start-oneunit(start-stop))
 unitrange_last(start::T, stop::T) where {T<:Integer} =
-    stop >= start ? stop : convert(T,start-oneunit(stop-start))
+    stop >= start ? stop : convert(T,start-oneunit(start-stop))
 unitrange_last(start::T, stop::T) where {T} =
     stop >= start ? convert(T,start+floor(stop-start)) :
                     convert(T,start-oneunit(stop-start))
