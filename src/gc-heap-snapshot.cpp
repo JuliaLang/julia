@@ -255,7 +255,7 @@ static bool debug_log = false;
 
 bool _fieldpath_for_slot_helper(
     vector<inlineallocd_field_type_t>& out, jl_datatype_t *objtype,
-    void *obj, jl_value_t *slot)
+    void *obj, void *slot)
 {
     int nf = (int)jl_datatype_nfields(objtype);
     jl_svec_t *field_names = jl_field_names(objtype);
@@ -292,7 +292,7 @@ JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 }
 
 
-vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, jl_value_t *slot) {
+vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, void *slot) {
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
     if (vt->name->module == jl_main_module) {
         // jl_breakpoint(obj);
@@ -352,12 +352,12 @@ void _gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, cha
     _record_gc_edge("object", "property", (jl_value_t *)from, to,
                     g_snapshot->names.find_or_create_string_id(name));
 }
-void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) JL_NOTSAFEPOINT {
+void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void* slot) JL_NOTSAFEPOINT {
     jl_datatype_t *type = (jl_datatype_t*)jl_typeof(from);
     // TODO: It seems like NamedTuples should have field names? Maybe there's another way to get them?
     if (jl_is_tuple_type(type) || jl_is_namedtuple_type(type)) {
         // TODO: Maybe not okay to match element and object
-        _record_gc_edge("object", "element", from, to, field_index);
+        _record_gc_edge("object", "element", from, to, /* TODO */0);
         return;
     }
     // if (field_index < 0 || jl_datatype_nfields(type) <= field_index) {
@@ -370,7 +370,7 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size
     // jl_svec_t *field_names = jl_field_names(type);
     // jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, field_index);
     // const char *field_name = jl_symbol_name(name);
-    auto field_paths = _fieldpath_for_slot(from, to);
+    auto field_paths = _fieldpath_for_slot(from, slot);
     // Build the new field name by joining the strings, and/or use the struct + field names
     // to create a bunch of edges + nodes
     // (iterate the vector in reverse - the last element is the first path)
