@@ -303,60 +303,22 @@ function _reformat_sp(
 end
 
 """
-    withalloca(f, nbytes)
+    withframeaddress(f)
 
-Call function `f` with a `ptr::Ptr{Cvoid}` pointing to `nbytes` bytes of a
-stack-allocated memory region.
-
-NOTE: `f` and all functions reachable from `f` must not contain a yield point.
+Call function `f` with an address `ptr::Ptr{Cvoid}` of an independent frame
+immediately outer to `f`.
 """
-function withalloca end
-
-function withalloca_wrapper(fptr, int)
-    ref = unsafe_pointer_to_objref(Ptr{Cvoid}(fptr))
-    f = ref[]
-    f(Ptr{Cvoid}(int))
-    nothing
-end
-
-@eval function withalloca(f, nbytes)
-    ref = Ref(f)
-    GC.@preserve ref begin
-        Base.llvmcall(
-            (
-                $"""
-                define void @entry(i$(Sys.WORD_SIZE) %0,
-                                   i$(Sys.WORD_SIZE) %1,
-                                   i$(Sys.WORD_SIZE) %2) {
-                top:
-                    %aptr = alloca i8, i$(Sys.WORD_SIZE) %2
-                    %aint = ptrtoint i8* %aptr to i$(Sys.WORD_SIZE)
-                    %fptr = inttoptr i$(Sys.WORD_SIZE) %0 to void (i$(Sys.WORD_SIZE),
-                                                                   i$(Sys.WORD_SIZE))*
-                    call void %fptr(i$(Sys.WORD_SIZE) %1, i$(Sys.WORD_SIZE) %aint)
-                    ret void
-                }
-                """,
-                "entry",
-            ),
-            Cvoid,
-            Tuple{Ptr{Cvoid},Ptr{Cvoid},Int},
-            Base.unsafe_convert(
-                Ptr{Cvoid},
-                @cfunction(withalloca_wrapper, Cvoid, (UInt,UInt)),
-            ),
-            pointer_from_objref(ref),
-            nbytes,
-        )
-    end
+@noinline function withframeaddress(f)
+    sp = ccall("llvm.frameaddress", llvmcall, Ptr{Cvoid}, (Int,), 0)
+    @noinline f(sp)
 end
 
 function sandwiched_backtrace()
     local ptr1, ptr2, bt
-    withalloca(16) do p1
+    withframeaddress() do p1
         ptr1 = p1
         bt = ccall(:jl_backtrace_from_here, Ref{Base.SimpleVector}, (Cint, Cint), true, 0)
-        withalloca(16) do p2
+        withframeaddress() do p2
             ptr2 = p2
         end
     end
