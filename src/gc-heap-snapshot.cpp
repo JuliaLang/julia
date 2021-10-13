@@ -250,14 +250,6 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
 }
 
 typedef pair<jl_datatype_t*, const char*> inlineallocd_field_type_t;
-vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, jl_value_t *slot) {
-    jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
-
-    vector<inlineallocd_field_type_t> result;
-    bool found = _fieldpath_for_slot_helper(result, vt, obj, slot);
-    // NOTE THE RETURNED VECTOR IS REVERSED
-    return result;
-}
 
 bool _fieldpath_for_slot_helper(
     vector<inlineallocd_field_type_t>& out, jl_datatype_t *objtype,
@@ -275,7 +267,7 @@ bool _fieldpath_for_slot_helper(
             return true;
         }
         if (jl_stored_inline((jl_value_t*)field_type)) {
-            bool found = _fieldpath_for_slot_helper(out, field_name, field_type, fieldaddr, slot);
+            bool found = _fieldpath_for_slot_helper(out, field_type, fieldaddr, slot);
             if (found) {
                 out.push_back(inlineallocd_field_type_t(field_type, field_name));
                 return true;
@@ -283,6 +275,28 @@ bool _fieldpath_for_slot_helper(
         }
     }
     return false;
+}
+
+vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, jl_value_t *slot) {
+    jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
+
+    vector<inlineallocd_field_type_t> result;
+    bool found = _fieldpath_for_slot_helper(result, vt, obj, slot);
+    // TODO: maybe don't need the return value here actually...?
+    if (!found) {
+        // TODO: Debug these failures. Some of them seem really wrong, like with the slot
+        // being _kilobytes_ past the start of the object for an object with 1 pointer and 1
+        // field...
+        // jl_printf(JL_STDERR, "WARNING: No fieldpath found for obj: %p slot: %p ", (void*)obj, (void*)slot);
+        // jl_datatype_t* type = (jl_datatype_t*)jl_typeof(obj);
+        // if (jl_is_datatype(type)) {
+        //     jl_printf(JL_STDERR, "typeof: ");
+        //     jl_static_show(JL_STDERR, (jl_value_t*)type);
+        // }
+        // jl_printf(JL_STDERR, "\n");
+    }
+    // NOTE THE RETURNED VECTOR IS REVERSED
+    return result;
 }
 
 
@@ -338,12 +352,22 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size
     // Build the new field name by joining the strings, and/or use the struct + field names
     // to create a bunch of edges + nodes
     // (iterate the vector in reverse - the last element is the first path)
+    // TODO: Prefer to create intermediate edges and nodes instead of a combined string path.
+    if (field_paths.size() > 1) {
+        jl_printf(JL_STDERR, "count: %lu\n", field_paths.size());
+    }
+
+    string path;
     for (auto it = field_paths.rbegin(); it != field_paths.rend(); ++it) {
         // ...
+        path += it->second;
+        if ( it + 1 != field_paths.rend() ) {
+            path += ".";
+        }
     }
 
     _record_gc_edge("object", "property", from, to,
-                    g_snapshot->names.find_or_create_string_id(field_name));
+                    g_snapshot->names.find_or_create_string_id(path));
 }
 void _gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT {
     // TODO: probably need to inline this here and make some changes
