@@ -251,21 +251,31 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
 
 typedef pair<jl_datatype_t*, const char*> inlineallocd_field_type_t;
 
+static bool debug_log = false;
+
 bool _fieldpath_for_slot_helper(
     vector<inlineallocd_field_type_t>& out, jl_datatype_t *objtype,
     void *obj, jl_value_t *slot)
 {
     int nf = (int)jl_datatype_nfields(objtype);
     jl_svec_t *field_names = jl_field_names(objtype);
+    if (debug_log) {
+        jl_((jl_value_t*)objtype);
+        jl_printf(JL_STDERR, "obj: %p, slot: %p, nf: %d\n", obj, (void*)slot, nf);
+    }
     for (int i = 0; i < nf; i++) {
         jl_datatype_t *field_type = (jl_datatype_t*)jl_field_type(objtype, i);
         void *fieldaddr = (char*)obj + jl_field_offset(objtype, i);
         jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, i);
         const char *field_name = jl_symbol_name(name);
+        if (debug_log) {
+            jl_printf(JL_STDERR, "%d - field_name: %s fieldaddr: %p\n", i, field_name, fieldaddr);
+        }
         if (fieldaddr >= slot) {
             out.push_back(inlineallocd_field_type_t(objtype, field_name));
             return true;
         }
+        // If the field is an inline-allocated struct
         if (jl_stored_inline((jl_value_t*)field_type)) {
             bool found = _fieldpath_for_slot_helper(out, field_type, fieldaddr, slot);
             if (found) {
@@ -276,12 +286,24 @@ bool _fieldpath_for_slot_helper(
     }
     return false;
 }
+JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
+{
+    // put a breakpoint in your debugger here
+}
+
 
 vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, jl_value_t *slot) {
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
+    if (vt->name->module == jl_main_module) {
+        // jl_breakpoint(obj);
+        debug_log = true;
+    }
 
     vector<inlineallocd_field_type_t> result;
     bool found = _fieldpath_for_slot_helper(result, vt, obj, slot);
+
+    debug_log = false;
+
     // TODO: maybe don't need the return value here actually...?
     if (!found) {
         // TODO: Debug these failures. Some of them seem really wrong, like with the slot
