@@ -33,6 +33,7 @@ Base.StridedVecOrMat
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
+Base.undefs
 Base.BitArray
 Base.BitArray(::UndefInitializer, ::Integer...)
 Base.BitArray(::Any)
