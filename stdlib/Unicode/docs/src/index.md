@@ -2,7 +2,7 @@
 
 ```@docs
 Unicode.isassigned
-Unicode.isequivalent
+Unicode.isequal_normalized
 Unicode.normalize
 Unicode.graphemes
 ```

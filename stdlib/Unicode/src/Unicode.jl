@@ -2,7 +2,7 @@
 
 module Unicode
 
-export graphemes, isequivalent
+export graphemes, isequal_normalized
 
 """
     Unicode.normalize(s::AbstractString; keywords...)
@@ -98,7 +98,7 @@ function _decompose_char!(codepoint::Union{Integer,Char}, dest::Vector{UInt32}, 
 end
 
 """
-    isequivalent(s1::AbstractString, s2::AbstractString; casefold=false, stripmark=false)
+    isequal_normalized(s1::AbstractString, s2::AbstractString; casefold=false, stripmark=false)
 
 Return whether `s1` and `s2` are canonically equivalent Unicode strings.   If `casefold=true`,
 ignores case (performs Unicode case-folding); if `stripmark=true`, strips diacritical marks
@@ -120,17 +120,17 @@ julia> s2 = "noe\u0308l"
 julia> s1 == s2
 false
 
-julia> isequivalent(s1, s2)
+julia> isequal_normalized(s1, s2)
 true
 
-julia> isequivalent(s1, "noel", stripmark=true)
+julia> isequal_normalized(s1, "noel", stripmark=true)
 true
 
-julia> isequivalent(s1, "NOËL", casefold=true)
+julia> isequal_normalized(s1, "NOËL", casefold=true)
 true
 ```
 """
-function isequivalent(s1::AbstractString, s2::AbstractString; casefold::Bool=false, stripmark::Bool=false)
+function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bool=false, stripmark::Bool=false)
     function decompose_next_char!(c, state, d, options, s)
         n = _decompose_char!(c, d, options)
         if n > length(d) # may be possible in future Unicode versions?

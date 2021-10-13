@@ -114,7 +114,7 @@ Standard library changes
   and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
 
 #### Unicode
-* Added function `isequivalent` to check for Unicode equivalence without
+* Added function `isequal_normalized` to check for Unicode equivalence without
   explicitly constructing normalized strings ([#42493]).
 
 Deprecated or removed
