@@ -841,7 +841,7 @@ the Julia pointer to a Julia array data structure into a form understandable by 
 
 ## Fortran Wrapper Example
 
-The following example utilizes ccall to call a function in a common Fortran library (libBLAS) to
+The following example utilizes `ccall` to call a function in a common Fortran library (libBLAS) to
 computes a dot product. Notice that the argument mapping is a bit different here than above, as
 we need to map from Julia to Fortran.  On every argument type, we specify `Ref` or `Ptr`. This
 mangling convention may be specific to your fortran compiler and operating system, and is likely
