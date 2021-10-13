@@ -136,7 +136,9 @@ f265(::Int) = 1
 
 # test for method errors
 h265() = true
-loc_h265 = "$(@__FILE__):$(@__LINE__() - 1)"
+file = @__FILE__
+Base.stacktrace_contract_userdir() && (file = Base.contractuser(file))
+loc_h265 = "$file:$(@__LINE__() - 3)"
 @test h265()
 @test_throws TaskFailedException(t265) put_n_take!(h265, ())
 @test_throws TaskFailedException(t265) fetch(t265)

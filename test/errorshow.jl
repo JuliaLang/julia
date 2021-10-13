@@ -48,8 +48,9 @@ include("testenv.jl")
     end
 end
 
-
-cfile = " at $(@__FILE__):"
+file = @__FILE__
+Base.stacktrace_contract_userdir() && (file = Base.contractuser(file))
+cfile = " at $file:"
 c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
 
