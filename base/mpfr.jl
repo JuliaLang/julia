@@ -181,7 +181,7 @@ widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
 
 function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
-    if precision == MPFR._precision(x)
+    if precision == _precision(x)
         return x
     else
         z = BigFloat(;precision=precision)
