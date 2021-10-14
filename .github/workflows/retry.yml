@@ -39,8 +39,8 @@ permissions:
   statuses: none
 
 jobs:
-  retry:
-    name: retry
+  retry-failed-buildkite-jobs:
+    name: Retry Failed Buildkite Jobs
     runs-on: ubuntu-latest
 
     # TODO: delete the following line (once we have completely transitioned from Buildbot to Buildkite)
