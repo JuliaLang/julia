@@ -3239,6 +3239,9 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *ptr)
 
 static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*> ptrs)
 {
+    // if there are no child objects we can skip emission
+    if (ptrs.empty())
+        return;
     SmallVector<Value*, 8> decay_ptrs;
     decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, parent, T_prjlvalue)));
     for (auto ptr : ptrs) {

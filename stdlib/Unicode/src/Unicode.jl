@@ -2,7 +2,7 @@
 
 module Unicode
 
-export graphemes
+export graphemes, isequal_normalized
 
 """
     Unicode.normalize(s::AbstractString; keywords...)
@@ -88,5 +88,75 @@ single characters, even though they may contain more than one codepoint; for exa
 letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
+
+using Base.Unicode: utf8proc_error, UTF8PROC_DECOMPOSE, UTF8PROC_CASEFOLD, UTF8PROC_STRIPMARK
+
+function _decompose_char!(codepoint::Union{Integer,Char}, dest::Vector{UInt32}, options::Integer)
+    ret = @ccall utf8proc_decompose_char(codepoint::UInt32, dest::Ptr{UInt32}, length(dest)::Int, options::Cint, C_NULL::Ptr{Cint})::Int
+    ret < 0 && utf8proc_error(ret)
+    return ret
+end
+
+"""
+    isequal_normalized(s1::AbstractString, s2::AbstractString; casefold=false, stripmark=false)
+
+Return whether `s1` and `s2` are canonically equivalent Unicode strings.   If `casefold=true`,
+ignores case (performs Unicode case-folding); if `stripmark=true`, strips diacritical marks
+and other combining characters.
+
+# Examples
+
+For example, the string `"noël"` can be constructed in two canonically equivalent ways
+in Unicode, depending on whether `"ë"` is formed from a single codepoint U+00EB or
+from the ASCII character `'o'` followed by the U+0308 combining-diaeresis character.
+
+```jldoctest
+julia> s1 = "no\u00EBl"
+"noël"
+
+julia> s2 = "noe\u0308l"
+"noël"
+
+julia> s1 == s2
+false
+
+julia> isequal_normalized(s1, s2)
+true
+
+julia> isequal_normalized(s1, "noel", stripmark=true)
+true
+
+julia> isequal_normalized(s1, "NOËL", casefold=true)
+true
+```
+"""
+function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bool=false, stripmark::Bool=false)
+    function decompose_next_char!(c, state, d, options, s)
+        n = _decompose_char!(c, d, options)
+        if n > length(d) # may be possible in future Unicode versions?
+            n = _decompose_char!(c, resize!(d, n), options)
+        end
+        return 1, n, iterate(s, state)
+    end
+    options = UTF8PROC_DECOMPOSE
+    casefold && (options |= UTF8PROC_CASEFOLD)
+    stripmark && (options |= UTF8PROC_STRIPMARK)
+    i1,i2 = iterate(s1),iterate(s2)
+    d1,d2 = Vector{UInt32}(undef, 4), Vector{UInt32}(undef, 4) # codepoint buffers
+    n1 = n2 = 0 # lengths of codepoint buffers
+    j1 = j2 = 1 # indices in d1, d2
+    while true
+        if j1 > n1
+            i1 === nothing && return i2 === nothing && j2 > n2
+            j1, n1, i1 = decompose_next_char!(UInt32(i1[1]), i1[2], d1, options, s1)
+        end
+        if j2 > n2
+            i2 === nothing && return false
+            j2, n2, i2 = decompose_next_char!(UInt32(i2[1]), i2[2], d2, options, s2)
+        end
+        d1[j1] == d2[j2] || return false
+        j1 += 1; j2 += 1
+    end
+end
 
 end

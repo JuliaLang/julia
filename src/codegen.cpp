@@ -4972,7 +4972,7 @@ static Value *get_current_task(jl_codectx_t &ctx)
     const int ptls_offset = offsetof(jl_task_t, gcstack);
     return ctx.builder.CreateInBoundsGEP(
         T_pjlvalue, emit_bitcast(ctx, ctx.pgcstack, T_ppjlvalue),
-        ConstantInt::get(T_size, -ptls_offset / sizeof(void *)),
+        ConstantInt::get(T_size, -(ptls_offset / sizeof(void *))),
         "current_task");
 }
 
@@ -5243,9 +5243,11 @@ static Function* gen_cfun_wrapper(
         newAttributes.emplace_back(it, AttributeSet::get(jl_LLVMContext, attrBuilder));
 
         // Shift forward the rest of the attributes
-        for(;it < attributes.index_end(); ++it) {
-            if (attributes.hasAttributes(it)) {
-                newAttributes.emplace_back(it + 1, attributes.getAttributes(it));
+        if (attributes.getNumAttrSets() > 0) { // without this check the loop range below is invalid
+            for(;it < attributes.index_end(); ++it) {
+                if (attributes.hasAttributes(it)) {
+                    newAttributes.emplace_back(it + 1, attributes.getAttributes(it));
+                }
             }
         }
 

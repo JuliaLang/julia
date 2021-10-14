@@ -2186,3 +2186,23 @@ end
     @test ((x - 1) in StepRangeLen(x, 0, rand(1:100))) == false
     @test ((x + 1) in StepRangeLen(x, 0, rand(1:100))) == false
 end
+
+@testset "issue #42528" begin
+    struct Fix42528 <: Unsigned
+        val::UInt
+    end
+    Fix42528(a::Fix42528) = a
+    Base.:(<)(a::Fix42528, b::Fix42528) = a.val < b.val
+    Base.:(>=)(a::Fix42528, b::Fix42528) = a.val >= b.val
+    Base.:(+)(a::Fix42528, b::Fix42528) = a.val+b.val
+    Base.promote_rule(::Type{Fix42528}, ::Type{<:Unsigned}) = Fix42528
+    Base.show(io::IO, ::MIME"text/plain", a::Fix42528) = print(io, "Fix42528(", a.val, ')')
+    Base.show(io::IO, a::Fix42528) = print(io, "Fix42528(", a.val, ')')
+    function Base.:(-)(a::Fix42528, b::Fix42528)
+        a.val < b.val && throw(DomainError("Can't subtract, result outside of domain"))
+        return a.val - b.val
+    end
+    Base.one(::Type{Fix42528}) = Fix42528(0x1)
+    @test Fix42528(0x0):Fix42528(0x1) == [Fix42528(0x0), Fix42528(0x01)]
+    @test_throws DomainError Fix42528(0x0) - Fix42528(0x1)
+end

@@ -57,6 +57,7 @@ Standard library changes
 ------------------------
 
 * `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
+* `precision` and `setprecision` now accept a `base` keyword ([#42428]).
 * The `length` function on certain ranges of certain specific element types no longer checks for integer
   overflow in most cases. The new function `checked_length` is now available, which will try to use checked
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
@@ -118,6 +119,9 @@ Standard library changes
 * The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
   and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
 
+#### Unicode
+* Added function `isequal_normalized` to check for Unicode equivalence without
+  explicitly constructing normalized strings ([#42493]).
 
 Deprecated or removed
 ---------------------
