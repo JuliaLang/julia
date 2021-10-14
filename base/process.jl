@@ -71,10 +71,9 @@ end
 
 const SpawnIOs = Vector{Any} # convenience name for readability
 
-as_cpumask(::Nothing) = nothing
-function as_cpumask(cpus::Vector{Int})
-    n = max(maximum(cpus), ccall(:uv_cpumask_size, Cint, ()))
-    cpumask = zeros(Cchar, n)
+function as_cpumask(cpus::Vector{UInt16})
+    n = max(Int(maximum(cpus)), Int(ccall(:uv_cpumask_size, Cint, ())))
+    cpumask = zeros(Bool, n)
     for i in cpus
         cpumask[i] = true
     end
@@ -84,7 +83,8 @@ end
 # handle marshalling of `Cmd` arguments from Julia to C
 @noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs)
     loop = eventloop()
-    cpumask = as_cpumask(cmd.cpus)
+    cpumask = cmd.cpus
+    cpumask === nothing || (cpumask = as_cpumask(cmd.cpus))
     GC.@preserve stdio begin
         iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
             let h = rawhandle(io)
@@ -100,7 +100,7 @@ end
         err = ccall(:jl_spawn, Int32,
                   (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                    Ptr{Tuple{Cint, UInt}}, Int,
-                   UInt32, Ptr{Cstring}, Cstring, Ptr{Cchar}, Csize_t, Ptr{Cvoid}),
+                   UInt32, Ptr{Cstring}, Cstring, Ptr{Bool}, Csize_t, Ptr{Cvoid}),
             file, exec, loop, handle,
             iohandles, length(iohandles),
             flags,

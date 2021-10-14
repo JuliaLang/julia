@@ -13,14 +13,14 @@ struct Cmd <: AbstractCmd
     flags::UInt32 # libuv process flags
     env::Union{Vector{String},Nothing}
     dir::String
-    cpus::Union{Nothing,Vector{Int}}
+    cpus::Union{Nothing,Vector{UInt16}}
     Cmd(exec::Vector{String}) =
         new(exec, false, 0x00, nothing, "", nothing)
     Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing) =
         new(cmd.exec, ignorestatus, flags, env,
             dir === cmd.dir ? dir : cstr(dir), cpus)
     function Cmd(cmd::Cmd; ignorestatus::Bool=cmd.ignorestatus, env=cmd.env, dir::AbstractString=cmd.dir,
-                 cpus::Union{Nothing,Vector{Int}} = cmd.cpus,
+                 cpus::Union{Nothing,Vector{UInt16}} = cmd.cpus,
                  detach::Bool = 0 != cmd.flags & UV_PROCESS_DETACHED,
                  windows_verbatim::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS,
                  windows_hide::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_HIDE)
@@ -129,9 +129,9 @@ function show(io::IO, cmd::Cmd)
     end, ' ')
     print(io, '`')
     if print_cpus
-        print(io, ',')
+        print(io, ", ")
         show(io, cmd.cpus)
-        print(io, ')')
+        print(io, ")")
     end
     print_env && (print(io, ","); show(io, cmd.env))
     print_dir && (print(io, "; dir="); show(io, cmd.dir))

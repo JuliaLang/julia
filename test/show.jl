@@ -2329,7 +2329,7 @@ end
 @testset "Cmd" begin
     @test sprint(show, `true`) == "`true`"
     @test sprint(show, setenv(`true`, "A" => "B")) == """setenv(`true`,["A=B"])"""
-    @test sprint(show, setcpuaffinity(`true`, [1, 2])) == "setcpuaffinity(`true`,[1, 2])"
+    @test sprint(show, setcpuaffinity(`true`, [1, 2])) == "setcpuaffinity(`true`, [1, 2])"
     @test sprint(show, setenv(setcpuaffinity(`true`, [1, 2]), "A" => "B")) ==
-          """setenv(setcpuaffinity(`true`,[1, 2]),["A=B"])"""
+          """setenv(setcpuaffinity(`true`, [1, 2]),["A=B"])"""
 end

@@ -1,39 +1,29 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const pthread_t = Culong
+const pthread_t = Culong # TODO: this is wrong, but usually tolerable by the ABI
 const uv_thread_t = pthread_t
 
 function uv_thread_getaffinity()
     masksize = ccall(:uv_cpumask_size, Cint, ())
     self = ccall(:uv_thread_self, uv_thread_t, ())
-    selfref = Ref(self)
-    cpumask = zeros(Cchar, masksize)
+    ref = Ref(self)
+    cpumask = zeros(Bool, masksize)
     err = ccall(
         :uv_thread_getaffinity,
         Cint,
-        (Ptr{uv_thread_t}, Ptr{Cchar}, Cssize_t),
-        selfref,
+        (Ref{uv_thread_t}, Ptr{Bool}, Cssize_t),
+        ref
         cpumask,
         masksize,
     )
     @assert err == 0
-    n = findlast(isone, cpumask)
+    n = something(findlast(cpumask)) # we must have at least one active core
     resize!(cpumask, n)
     return cpumask
 end
 
 function print_process_affinity()
-    isfirst = true
-    for (i, m) in enumerate(uv_thread_getaffinity())
-        if m != 0
-            if isfirst
-                isfirst = false
-            else
-                print(",")
-            end
-            print(i)
-        end
-    end
+    join(stdout, findall(uv_thread_getaffinity()), ",")
     println()
 end
 
