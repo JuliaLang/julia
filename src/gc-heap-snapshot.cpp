@@ -277,7 +277,6 @@ bool _fieldpath_for_slot_helper(
         string field_name;
         // TODO: NamedTuples should maybe have field names? Maybe another way to get them?
         if (jl_is_tuple_type(objtype) || jl_is_namedtuple_type(objtype)) {
-            jl_printf(JL_STDERR, "HERE\n");
             ss << "[" << i << "]";
             field_name = ss.str().c_str();  // See scope comment, above.
         } else {
