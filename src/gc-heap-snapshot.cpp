@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <string>
+#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <iostream>
@@ -14,6 +15,7 @@
 
 using std::vector;
 using std::string;
+using std::ostringstream;
 using std::pair;
 using std::unordered_map;
 using std::unordered_set;
@@ -253,7 +255,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
     return node_idx;
 }
 
-typedef pair<jl_datatype_t*, const char*> inlineallocd_field_type_t;
+typedef pair<jl_datatype_t*, string> inlineallocd_field_type_t;
 
 static bool debug_log = false;
 
@@ -270,10 +272,19 @@ bool _fieldpath_for_slot_helper(
     for (int i = 0; i < nf; i++) {
         jl_datatype_t *field_type = (jl_datatype_t*)jl_field_type(objtype, i);
         void *fieldaddr = (char*)obj + jl_field_offset(objtype, i);
-        jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, i);
-        const char *field_name = jl_symbol_name(name);
+        ostringstream ss; // NOTE: must have same scope as field_name, below.
+        string field_name;
+        // TODO: NamedTuples should maybe have field names? Maybe another way to get them?
+        if (jl_is_tuple_type(objtype) || jl_is_namedtuple_type(objtype)) {
+            jl_printf(JL_STDERR, "HERE\n");
+            ss << "[" << i << "]";
+            field_name = ss.str().c_str();  // See scope comment, above.
+        } else {
+            jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, i);
+            field_name = jl_symbol_name(name);
+        }
         if (debug_log) {
-            jl_printf(JL_STDERR, "%d - field_name: %s fieldaddr: %p\n", i, field_name, fieldaddr);
+            jl_printf(JL_STDERR, "%d - field_name: %s fieldaddr: %p\n", i, field_name.c_str(), fieldaddr);
         }
         if (fieldaddr >= slot) {
             out.push_back(inlineallocd_field_type_t(objtype, field_name));
@@ -295,7 +306,7 @@ vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, void *slo
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
     // TODO(PR): Remove this debugging code
     if (vt->name->module == jl_main_module) {
-        debug_log = true;
+        // debug_log = true;
     }
 
     vector<inlineallocd_field_type_t> result;
@@ -406,14 +417,6 @@ void _gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, cha
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) JL_NOTSAFEPOINT {
     jl_datatype_t *type = (jl_datatype_t*)jl_typeof(from);
 
-    // TODO: It seems like NamedTuples should have field names? Maybe there's another way to get them?
-    if (jl_is_tuple_type(type) || jl_is_namedtuple_type(type)) {
-        // TODO: Maybe not okay to match element and object
-        _record_gc_edge("object", "element", from, to,
-            // TODO: Get the names for tuple elements
-            g_snapshot->names.find_or_create_string_id("<tuple element>"));
-        return;
-    }
     auto field_paths = _fieldpath_for_slot(from, slot);
     // Build the new field name by joining the strings, and/or use the struct + field names
     // to create a bunch of edges + nodes
