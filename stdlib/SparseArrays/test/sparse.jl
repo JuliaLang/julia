@@ -1697,6 +1697,12 @@ end
     S2 = SparseMatrixCSC(D)
     @test Array(D) == Array(S) == Array(S2)
     @test S == S2
+
+    # An issue discovered in #42574 where
+    # SparseMatrixCSC{Tv, Ti}(::Diagonal) ignored Ti
+    D = Diagonal(rand(3))
+    S = SparseMatrixCSC{Float64, Int8}(D)
+    @test S isa SparseMatrixCSC{Float64, Int8}
 end
 
 @testset "Sparse construction with empty/1x1 structured matrices" begin
