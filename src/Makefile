@@ -19,14 +19,12 @@ FLAGS := \
 	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
 	-I$(LIBUV_INC) -I$(build_includedir) \
 	-I$(JULIAHOME)/deps/valgrind
-ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
 		 -Wno-comment -Wpointer-arith -Wundef
 ifeq ($(USEGCC),1) # GCC bug #25509 (void)__attribute__((warn_unused_result))
 FLAGS += -Wno-unused-result
 endif
 JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
-endif
 
 ifeq ($(USECLANG),1)
 FLAGS += -Wno-return-type-c-linkage
@@ -86,10 +84,6 @@ else
 endif
 
 RT_LLVM_LIBS := support
-
-ifeq ($(USEMSVC), 1)
-SRCS += getopt
-endif
 
 SRCS += $(RUNTIME_SRCS)
 
@@ -345,11 +339,7 @@ $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
 	@echo "#endif" >> $@.$(JULIA_BUILD_MODE).tmp
 	mv $@.$(JULIA_BUILD_MODE).tmp $@
 
-ifneq ($(USEMSVC), 1)
 CXXLD = $(CXX) -shared
-else
-CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
-endif
 
 $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_LIB) -o $@ \
