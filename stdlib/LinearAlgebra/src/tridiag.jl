@@ -636,22 +636,20 @@ function diag(M::Tridiagonal, n::Integer=0)
     end
 end
 
-function getindex(A::Tridiagonal{T}, i::Integer, j::Integer) where T
-    if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
-        throw(BoundsError(A, (i,j)))
-    end
+@inline function getindex(A::Tridiagonal{T}, i::Integer, j::Integer) where T
+    @boundscheck checkbounds(A, i, j)
     if i == j
-        return A.d[i]
+        return @inbounds A.d[i]
     elseif i == j + 1
-        return A.dl[j]
+        return @inbounds A.dl[j]
     elseif i + 1 == j
-        return A.du[i]
+        return @inbounds A.du[i]
     else
         return zero(T)
     end
 end
 
-function setindex!(A::Tridiagonal, x, i::Integer, j::Integer)
+@inline function setindex!(A::Tridiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j
         @inbounds A.d[i] = x
