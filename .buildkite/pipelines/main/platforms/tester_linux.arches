@@ -1,9 +1,9 @@
-# PLATFORM      ARCH        ARCH_LABEL      ROOTFS_ARCH      ALLOW_FAIL      TIMEOUT      ROOTFS_TAG      ROOTFS_TREE
-# linux         aarch64     aarch64         aarch64          false           60           v3.2            0566841e29f0f9880541c26a6595fd5ce0beb5ff
-# linux         armv7l      armv7l          armv7l           false           60           v3.2            fb359370b052a47ce5c84cc6b4a7a03ed7053b25
-linux           32          32              i686             false           60           v3.2            209c4db679a515befd7fb50ecc6bfbecf7ec3d32
-# linux         ppc64le     ppc64le         powerpc64le      false           60           v3.2            c03a0158b19d48ac84b426834fce0d3584cdd0c7
-linux           64          64_rr           x86_64           false           180          v3.2            474bf61a926b2d7fcf202284d59d4b11a04601d7
-linux           64          64_st           x86_64           false           60           v3.2            474bf61a926b2d7fcf202284d59d4b11a04601d7
-linux           64          64_mt           x86_64           false           60           v3.2            474bf61a926b2d7fcf202284d59d4b11a04601d7
-musl            64          64              x86_64           true            60           v3.19           e6a2730e37c386c46915b2650d6aaaa398195152
+# PLATFORM    LABEL       ALLOW_FAIL    ARCH        ARCH_ROOTFS    MAKE_FLAGS     TIMEOUT    IS_RR    IS_ST    IS_MT    ROOTFS_TAG    ROOTFS_HASH
+# linux       _aarch64    false         _aarch64    aarch64        none           60         no       no       no       v3.2          0566841e29f0f9880541c26a6595fd5ce0beb5ff
+# linux       _armv7l     false         _armv7l     armv7l         none           60         no       no       no       v3.2          fb359370b052a47ce5c84cc6b4a7a03ed7053b25
+linux         32          false         32          i686           none           60         no       no       no       v3.2          209c4db679a515befd7fb50ecc6bfbecf7ec3d32
+# linux       _ppc64le    false         _ppc64le    powerpc64le    none           60         no       no       no       v3.2          c03a0158b19d48ac84b426834fce0d3584cdd0c7
+linux         64_rr       false         64          x86_64         none           60         yes      no       no       v3.2          474bf61a926b2d7fcf202284d59d4b11a04601d7
+linux         64_st       false         64          x86_64         none           60         no       yes      no       v3.2          474bf61a926b2d7fcf202284d59d4b11a04601d7
+linux         64_mt       false         64          x86_64         none           60         no       no       yes      v3.2          474bf61a926b2d7fcf202284d59d4b11a04601d7
+musl          64          true          64          x86_64         none           60         no       no       no       v3.19         e6a2730e37c386c46915b2650d6aaaa398195152
