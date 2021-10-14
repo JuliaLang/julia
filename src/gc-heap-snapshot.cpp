@@ -295,7 +295,7 @@ vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, void *slo
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
     // TODO(PR): Remove this debugging code
     if (vt->name->module == jl_main_module) {
-        // debug_log = true;
+        debug_log = true;
     }
 
     vector<inlineallocd_field_type_t> result;
@@ -405,13 +405,6 @@ void _gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, cha
 
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) JL_NOTSAFEPOINT {
     jl_datatype_t *type = (jl_datatype_t*)jl_typeof(from);
-
-    if (field_index < 0 || field_index > jl_datatype_nfields(type)) {
-        // TODO: We're getting -1 in some cases
-        jl_printf(JL_STDERR, "WARNING - incorrect field index (%d) for type\n", field_index);
-        jl_(type);
-        return;
-    }
 
     // TODO: It seems like NamedTuples should have field names? Maybe there's another way to get them?
     if (jl_is_tuple_type(type) || jl_is_namedtuple_type(type)) {
