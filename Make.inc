@@ -1396,7 +1396,7 @@ endif
 # Note: we're passing *FLAGS here computed based on your system compiler to
 # clang. If that causes you problems, you might want to build and/or run
 # specific clang-sa-* files with clang explicitly selected:
-#   make CC=~+/../usr/bin/clang CXX=~+/../usr/bin/clang USECLANG=1 analyzegc
+#   make CC=~+/../usr/tools/clang CXX=~+/../usr/tools/clang USECLANG=1 analyzegc
 #   make USECLANG=1 clang-sa-*
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
