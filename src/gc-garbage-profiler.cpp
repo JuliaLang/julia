@@ -70,10 +70,6 @@ JL_DLLEXPORT void jl_start_garbage_profile(ios_t *stream) {
     ios_printf(garbage_profile_out, "gc_epoch,type,num_freed\n");
 }
 
-bool pair_cmp(std::pair<size_t, size_t> a, std::pair<size_t, size_t> b) {
-    return a.second > b.second;
-}
-
 JL_DLLEXPORT void jl_stop_garbage_profile() {
     // TODO: flush file?
     garbage_profile_out = nullptr;
