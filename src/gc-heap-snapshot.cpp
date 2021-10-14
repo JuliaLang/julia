@@ -286,17 +286,12 @@ bool _fieldpath_for_slot_helper(
     }
     return false;
 }
-JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
-{
-    // put a breakpoint in your debugger here
-}
-
 
 vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, void *slot) {
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
+    // TODO(PR): Remove this debugging code
     if (vt->name->module == jl_main_module) {
-        // jl_breakpoint(obj);
-        debug_log = true;
+        // debug_log = true;
     }
 
     vector<inlineallocd_field_type_t> result;
@@ -309,13 +304,13 @@ vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, void *slo
         // TODO: Debug these failures. Some of them seem really wrong, like with the slot
         // being _kilobytes_ past the start of the object for an object with 1 pointer and 1
         // field...
-        // jl_printf(JL_STDERR, "WARNING: No fieldpath found for obj: %p slot: %p ", (void*)obj, (void*)slot);
-        // jl_datatype_t* type = (jl_datatype_t*)jl_typeof(obj);
-        // if (jl_is_datatype(type)) {
-        //     jl_printf(JL_STDERR, "typeof: ");
-        //     jl_static_show(JL_STDERR, (jl_value_t*)type);
-        // }
-        // jl_printf(JL_STDERR, "\n");
+        jl_printf(JL_STDERR, "WARNING: No fieldpath found for obj: %p slot: %p ", (void*)obj, (void*)slot);
+        jl_datatype_t* type = (jl_datatype_t*)jl_typeof(obj);
+        if (jl_is_datatype(type)) {
+            jl_printf(JL_STDERR, "typeof: ");
+            jl_static_show(JL_STDERR, (jl_value_t*)type);
+        }
+        jl_printf(JL_STDERR, "\n");
     }
     // NOTE THE RETURNED VECTOR IS REVERSED
     return result;
@@ -360,25 +355,11 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void
         _record_gc_edge("object", "element", from, to, /* TODO */0);
         return;
     }
-    // if (field_index < 0 || jl_datatype_nfields(type) <= field_index) {
-    //     // TODO: We're getting -1 in some cases
-    //     //jl_printf(JL_STDERR, "WARNING - incorrect field index (%zu) for type\n", field_index);
-    //     //jl_(type);
-    //     _record_gc_edge("object", "element", from, to, field_index);
-    //     return;
-    // }
-    // jl_svec_t *field_names = jl_field_names(type);
-    // jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, field_index);
-    // const char *field_name = jl_symbol_name(name);
     auto field_paths = _fieldpath_for_slot(from, slot);
     // Build the new field name by joining the strings, and/or use the struct + field names
     // to create a bunch of edges + nodes
     // (iterate the vector in reverse - the last element is the first path)
     // TODO: Prefer to create intermediate edges and nodes instead of a combined string path.
-    if (field_paths.size() > 1) {
-        jl_printf(JL_STDERR, "count: %lu\n", field_paths.size());
-    }
-
     string path;
     for (auto it = field_paths.rbegin(); it != field_paths.rend(); ++it) {
         // ...
