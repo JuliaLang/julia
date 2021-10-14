@@ -865,12 +865,11 @@ JL_DLLEXPORT int jl_dllist(jl_array_t *list)
     } while (cb < cbNeeded);
     for (i = 0; i < cbNeeded / sizeof(HMODULE); i++) {
         const char *path = jl_pathname_for_handle(hMods[i]);
-        // XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
         if (path == NULL)
             continue;
         jl_array_grow_end((jl_array_t*)list, 1);
         jl_value_t *v = jl_cstr_to_string(path);
-        free(path);
+        free((char*)path);
         jl_array_ptr_set(list, jl_array_dim0(list) - 1, v);
     }
     free(hMods);

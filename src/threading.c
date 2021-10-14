@@ -88,7 +88,7 @@ __attribute__((constructor)) void jl_init_tls(void)
 
 JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
 {
-    return pthread_getspecific(jl_pgcstack_key);
+    return (jl_gcframe_t**)pthread_getspecific(jl_pgcstack_key);
 }
 
 void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
@@ -176,7 +176,7 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
 {
     SAVE_ERRNO;
-    jl_gcframe_t **pgcstack = (jl_ptls_t)TlsGetValue(jl_pgcstack_key);
+    jl_gcframe_t **pgcstack = (jl_gcframe_t**)TlsGetValue(jl_pgcstack_key);
     LOAD_ERRNO;
     return pgcstack;
 }
