@@ -2295,13 +2295,15 @@ function getindex_I_sorted(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector,
     # Heuristics based on experiments discussed in:
     # https://github.com/JuliaLang/julia/issues/12860
     # https://github.com/JuliaLang/julia/pull/12934
-    alg = ((m > nzA) && (m > nI)) ? 0 :
-          ((nI - avgM) > 2^8) ? 1 :
-          ((avgM - nI) > 2^10) ? 0 : 2
-
-    (alg == 0) ? getindex_I_sorted_bsearch_A(A, I, J) :
-    (alg == 1) ? getindex_I_sorted_bsearch_I(A, I, J) :
-    getindex_I_sorted_linear(A, I, J)
+    alg = if m > nzA && m > nI
+        return getindex_I_sorted_bsearch_A(A, I, J)
+    elseif nI - avgM > 2 ^ 8
+        return getindex_I_sorted_bsearch_I(A, I, J)
+    elseif avgM - nI > 2 ^ 10
+        return getindex_I_sorted_bsearch_A(A, I, J)
+    else
+        return getindex_I_sorted_linear(A, I, J)
+    end
 end
 
 function getindex_I_sorted_bsearch_A(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
