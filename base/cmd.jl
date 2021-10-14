@@ -305,6 +305,9 @@ Set the CPU affinity of the `command` by a list of CPU IDs (1-based) `cpus`.  Pa
 
 This is supported on Unix and Windows but not in macOS.
 
+!!! compat "Julia 1.8"
+    This function requires at least Julia 1.8.
+
 # Examples
 
 In Linux, the `taskset` command line program can be used to see how `setcpuaffinity` works.
