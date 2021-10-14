@@ -151,6 +151,7 @@
     XX(jl_expand_with_loc_warn) \
     XX(jl_extern_c) \
     XX(jl_field_index) \
+    XX(jl_field_isdefined) \
     XX(jl_gc_add_finalizer) \
     XX(jl_gc_add_finalizer_th) \
     XX(jl_gc_add_ptr_finalizer) \
