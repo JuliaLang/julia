@@ -20,4 +20,8 @@ steps:
           # verifies the treehash of the pipeline itself and the inputs listed in `inputs`
           signed_pipelines:
             - pipeline: .buildkite/pipelines/scheduled/coverage/coverage_linux64.yml
-              signature: U2FsdGVkX1+FtqbbxyzoI/j0InDefRQ3OR06BAM2EWRhDG3SiwiPcOREudCTJ+1Z+AEVwVz5KTgw9lBVO1yjcWts3XePIy/W+arN4V+t97Dfuf4wsAr9ubpQ10GaoFnK
+              signature_file: .buildkite/pipelines/scheduled/coverage/coverage_linux64.yml.signature
+              inputs:
+                - .buildkite/pipelines/scheduled/coverage/coverage_linux64.yml
+                - .buildkite/pipelines/scheduled/coverage/run_tests_parallel.jl
+                - .buildkite/pipelines/scheduled/coverage/upload_coverage.jl

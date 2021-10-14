@@ -50,17 +50,17 @@ typedef object::SymbolRef SymRef;
 // and cannot have any interaction with the julia runtime
 static uv_rwlock_t threadsafe;
 
-extern "C" void jl_init_debuginfo(void)
+void jl_init_debuginfo(void)
 {
     uv_rwlock_init(&threadsafe);
 }
 
-extern "C" void jl_lock_profile(void)
+extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void)
 {
     uv_rwlock_rdlock(&threadsafe);
 }
 
-extern "C" void jl_unlock_profile(void)
+extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void)
 {
     uv_rwlock_rdunlock(&threadsafe);
 }
@@ -710,8 +710,9 @@ static uint64_t jl_sysimage_base;
 static jl_sysimg_fptrs_t sysimg_fptrs;
 static jl_method_instance_t **sysimg_fvars_linfo;
 static size_t sysimg_fvars_n;
-void jl_register_fptrs(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fptrs,
-                       jl_method_instance_t **linfos, size_t n)
+extern "C" JL_DLLEXPORT
+void jl_register_fptrs_impl(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fptrs,
+    jl_method_instance_t **linfos, size_t n)
 {
     jl_sysimage_base = (uintptr_t)sysimage_base;
     sysimg_fptrs = *fptrs;
@@ -1210,7 +1211,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
 }
 
 // Set *name and *filename to either NULL or malloc'd string
-int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
+extern "C" JL_DLLEXPORT int jl_getFunctionInfo_impl(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables if noInline
     // since it can be called from an unmanaged thread on OSX.
@@ -1650,8 +1651,8 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
 
 #endif
 
-extern "C"
-uint64_t jl_getUnwindInfo(uint64_t dwAddr)
+extern "C" JL_DLLEXPORT
+uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr)
 {
     // Might be called from unmanaged thread
     uv_rwlock_rdlock(&threadsafe);

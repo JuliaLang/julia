@@ -316,7 +316,7 @@ let SOURCE_PATH = ""
 end
 
 # reduction along dims
-include("reducedim.jl")  # macros in this file relies on string.jl
+include("reducedim.jl")  # macros in this file rely on string.jl
 include("accumulate.jl")
 
 include("permuteddimsarray.jl")
@@ -461,19 +461,6 @@ end
 
 if is_primary_base_module
 function __init__()
-    # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
-    if !haskey(ENV, "OPENBLAS_MAIN_FREE") && !haskey(ENV, "GOTOBLAS_MAIN_FREE")
-        ENV["OPENBLAS_MAIN_FREE"] = "1"
-    end
-    # And try to prevent openblas from starting too many threads, unless/until specifically requested
-    if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
-        cpu_threads = Sys.CPU_THREADS::Int
-        if cpu_threads > 8 # always at most 8
-            ENV["OPENBLAS_NUM_THREADS"] = "8"
-        elseif haskey(ENV, "JULIA_CPU_THREADS") # or exactly as specified
-            ENV["OPENBLAS_NUM_THREADS"] = cpu_threads
-        end # otherwise, trust that openblas will pick CPU_THREADS anyways, without any intervention
-    end
     # for the few uses of Libc.rand in Base:
     Libc.srand()
     # Base library init

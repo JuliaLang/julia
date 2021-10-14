@@ -10,6 +10,7 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         if length(ev) != max(length(dv)-1, 0)
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
+        (uplo != 'U' && uplo != 'L') && throw_uplo()
         new{T,V}(dv, ev, uplo)
     end
 end
@@ -62,7 +63,7 @@ julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
 ```
 """
 function Bidiagonal(dv::V, ev::V, uplo::Symbol) where {T,V<:AbstractVector{T}}
-    Bidiagonal{T,V}(dv, ev, char_uplo(uplo))
+    Bidiagonal{T,V}(dv, ev, uplo)
 end
 function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
     Bidiagonal{T,V}(dv, ev, uplo)
@@ -108,6 +109,7 @@ julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
 function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
     Bidiagonal(diag(A, 0), diag(A, uplo === :U ? 1 : -1), uplo)
 end
+
 
 Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A

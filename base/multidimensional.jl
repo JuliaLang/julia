@@ -1577,13 +1577,12 @@ for (V, PT, BT) in Any[((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArra
             #Creates offset, because indexing starts at 1
             offset = 1 - sum(@ntuple $N d->strides_{d+1})
 
+            sumc = 0
             ind = 1
-            @nexprs 1 d->(counts_{$N+1} = strides_{$N+1}) # a trick to set counts_($N+1)
             @nloops($N, i, P,
-                    d->(counts_d = strides_d), # PRE
-                    d->(counts_{d+1} += strides_{d+1}), # POST
+                    d->(sumc += i_d*strides_{d+1}), # PRE
+                    d->(sumc -= i_d*strides_{d+1}), # POST
                     begin # BODY
-                        sumc = sum(@ntuple $N d->counts_{d+1})
                         @inbounds P[ind] = B[sumc+offset]
                         ind += 1
                     end)

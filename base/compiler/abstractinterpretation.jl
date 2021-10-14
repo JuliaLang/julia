@@ -846,20 +846,18 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     valtype = statetype = Bottom
     ret = Any[]
     calls = CallMeta[call]
+    stateordonet_widened = widenconst(stateordonet)
 
     # Try to unroll the iteration up to MAX_TUPLE_SPLAT, which covers any finite
     # length iterators, or interesting prefix
     while true
-        stateordonet_widened = widenconst(stateordonet)
         if stateordonet_widened === Nothing
             return ret, AbstractIterationInfo(calls)
         end
         if Nothing <: stateordonet_widened || length(ret) >= InferenceParams(interp).MAX_TUPLE_SPLAT
-            stateordonet = stateordonet_widened
             break
         end
         if !isa(stateordonet_widened, DataType) || !(stateordonet_widened <: Tuple) || isvatuple(stateordonet_widened) || length(stateordonet_widened.parameters) != 2
-            stateordonet = stateordonet_widened
             break
         end
         nstatetype = getfield_tfunc(stateordonet, Const(2))
@@ -873,6 +871,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         statetype = nstatetype
         call = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], sv)
         stateordonet = call.rt
+        stateordonet_widened = widenconst(stateordonet)
         push!(calls, call)
     end
     # From here on, we start asking for results on the widened types, rather than
@@ -881,9 +880,9 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # (widened) stateordonet, which has not yet been fully analyzed in the loop above
     statetype = Bottom
     valtype = Bottom
-    may_have_terminated = Nothing <: stateordonet
+    may_have_terminated = Nothing <: stateordonet_widened
     while valtype !== Any
-        nounion = typeintersect(stateordonet, Tuple{Any,Any})
+        nounion = typeintersect(stateordonet_widened, Tuple{Any,Any})
         if nounion !== Union{} && !isa(nounion, DataType)
             # nounion is of a type we cannot handle
             valtype = Any
@@ -891,7 +890,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         end
         if nounion === Union{} || (nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype)
             # reached a fixpoint or iterator failed/gave invalid answer
-            if typeintersect(stateordonet, Nothing) === Union{}
+            if typeintersect(stateordonet_widened, Nothing) === Union{}
                 # ... but cannot terminate
                 if !may_have_terminated
                     #  ... and cannot have terminated prior to this loop
@@ -906,7 +905,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
         stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], sv).rt
-        stateordonet = widenconst(stateordonet)
+        stateordonet_widened = widenconst(stateordonet)
     end
     if valtype !== Union{}
         push!(ret, Vararg{valtype})
@@ -1086,16 +1085,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
         end
     end
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
-    if f === getfield && isa(fargs, Vector{Any}) && la == 3 &&
-       (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
-       (a2 = argtypes[2]; a2 ⊑ Tuple)
-        # TODO: why doesn't this use the getfield_tfunc?
-        cti_info = precise_container_type(interp, iterate, a2, sv)
-        cti = cti_info[1]::Vector{Any}
-        if 1 <= idx <= length(cti)
-            rt = unwrapva(cti[idx])
-        end
-    elseif (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
+    if (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
         # perform very limited back-propagation of type information for `is` and `isa`
         if f === isa
             a = ssa_def_slot(fargs[2], sv)
@@ -1468,7 +1458,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e::SSAValue, sv.src)
     elseif isa(e, SlotNumber) || isa(e, Argument)
-        return (vtypes[slot_id(e)]::VarState).typ
+        return vtypes[slot_id(e)].typ
     elseif isa(e, GlobalRef)
         return abstract_eval_global(e.mod, e.name)
     end
@@ -1481,11 +1471,7 @@ function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtyp
         return abstract_eval_value_expr(interp, e, vtypes, sv)
     else
         typ = abstract_eval_special_value(interp, e, vtypes, sv)
-        if typ isa LimitedAccuracy
-            union!(sv.pclimitations, typ.causes)
-            typ = typ.typ
-        end
-        return typ
+        return collect_limitations!(typ, sv)
     end
 end
 
@@ -1620,7 +1606,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         sym = e.args[1]
         t = Bool
         if isa(sym, SlotNumber)
-            vtyp = vtypes[slot_id(sym)]::VarState
+            vtyp = vtypes[slot_id(sym)]
             if vtyp.typ === Bottom
                 t = Const(false) # never assigned previously
             elseif !vtyp.undef
@@ -1686,7 +1672,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
         if isa(rt, Conditional)
             id = slot_id(rt.var)
             if 1 ≤ id ≤ nslots
-                old_id_type = widenconditional(slottypes[id]) # same as `((s[1]::VarTable)[id]::VarState).typ`
+                old_id_type = widenconditional(slottypes[id]) # same as `(states[1]::VarTable)[id].typ`
                 if (!(rt.vtype ⊑ old_id_type) || old_id_type ⊑ rt.vtype) &&
                    (!(rt.elsetype ⊑ old_id_type) || old_id_type ⊑ rt.elsetype)
                    # discard this `Conditional` since it imposes
@@ -1971,7 +1957,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 end
 
 function conditional_changes(changes::VarTable, @nospecialize(typ), var::SlotNumber)
-    oldtyp = (changes[slot_id(var)]::VarState).typ
+    oldtyp = changes[slot_id(var)].typ
     # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
     # since we probably formed these types with `typesubstract`, the comparison is likely simple
     if ignorelimited(typ) ⊑ ignorelimited(oldtyp)
@@ -1984,7 +1970,7 @@ end
 
 function bool_rt_to_conditional(@nospecialize(rt), slottypes::Vector{Any}, state::VarTable, slot_id::Int)
     old = slottypes[slot_id]
-    new = widenconditional((state[slot_id]::VarState).typ) # avoid nested conditional
+    new = widenconditional(state[slot_id].typ) # avoid nested conditional
     if new ⊑ old && !(old ⊑ new)
         if isa(rt, Const)
             val = rt.val

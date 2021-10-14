@@ -1132,7 +1132,7 @@ true
 
 Types of functions defined at top-level are singletons. When necessary, you can compare them with [`===`](@ref).
 
-[Closures](@id man-anonymous-functions) also have their own type, which is usually printed with names that end in `#<number>`. Names and types for functions defined at different locations are distinct, but not guaranteed to be printed the same way across sessions.
+[Closures](@ref man-anonymous-functions) also have their own type, which is usually printed with names that end in `#<number>`. Names and types for functions defined at different locations are distinct, but not guaranteed to be printed the same way across sessions.
 
 ```jldoctest; filter = r"[0-9\.]+"
 julia> typeof(x -> x + 1)

@@ -70,8 +70,8 @@ static int endswith_extension(const char *path) JL_NOTSAFEPOINT
 #define CRTDLL_BASENAME "msvcrt"
 #endif
 
-const char jl_crtdll_basename[] = CRTDLL_BASENAME;
-const char jl_crtdll_name[] = CRTDLL_BASENAME ".dll";
+JL_DLLEXPORT const char *jl_crtdll_basename = CRTDLL_BASENAME;
+const char *jl_crtdll_name = CRTDLL_BASENAME ".dll";
 
 #undef CRTDLL_BASENAME
 #endif
@@ -190,7 +190,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         goto done;
     }
 
-    abspath = isabspath(modname);
+    abspath = jl_isabspath(modname);
 
     /*
       this branch permutes all base paths in DL_LOAD_PATH with all extensions
@@ -320,7 +320,7 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
 
 #ifdef _OS_WINDOWS_
 //Look for symbols in win32 libraries
-const char *jl_dlfind_win32(const char *f_name)
+JL_DLLEXPORT const char *jl_dlfind_win32(const char *f_name)
 {
     void * dummy;
     if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))
