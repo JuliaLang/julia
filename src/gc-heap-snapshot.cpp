@@ -220,6 +220,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
                 : (size_t)jl_datatype_size(type);
 
             // print full type
+            // TODO: We _definitely_ have types longer than 1024 bytes....
             ios_t str_;
             ios_mem(&str_, 1024);
             JL_STREAM* str = (JL_STREAM*)&str_;
