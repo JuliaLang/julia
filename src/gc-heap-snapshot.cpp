@@ -416,7 +416,9 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size
     // TODO: It seems like NamedTuples should have field names? Maybe there's another way to get them?
     if (jl_is_tuple_type(type) || jl_is_namedtuple_type(type)) {
         // TODO: Maybe not okay to match element and object
-        _record_gc_edge("object", "element", from, to, /* TODO */0);
+        _record_gc_edge("object", "element", from, to,
+            // TODO: Get the names for tuple elements
+            g_snapshot->names.find_or_create_string_id("<tuple element>"));
         return;
     }
     auto field_paths = _fieldpath_for_slot(from, slot);
