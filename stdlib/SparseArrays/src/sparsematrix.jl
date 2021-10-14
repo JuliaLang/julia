@@ -2364,64 +2364,39 @@ function getindex_I_sorted_bsearch_A(A::AbstractSparseMatrixCSC{Tv,Ti}, I::Abstr
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
-function getindex_I_sorted_linear(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
-    require_one_based_indexing(A, I, J)
-    nI = length(I)
-    nJ = length(J)
+function getindex_I_sorted_linear(
+    A::AbstractSparseMatrixCSC{Tv,Ti},
+    I::AbstractVector,
+    J::AbstractVector) where {Tv,Ti}
 
-    colptrA = getcolptr(A); rowvalA = rowvals(A); nzvalA = nonzeros(A)
-    colptrS = Vector{Ti}(undef, nJ+1)
-    colptrS[1] = 1
-    cacheI = zeros(Int, size(A, 1))
+    colptr = Array{Ti}(undef, length(J) + 1)
+    rowval = Ti[]
+    nzval  = Tv[]
 
-    ptrS   = 1
-    # build the cache and determine result size
-    @inbounds for j = 1:nJ
-        col = J[j]
-        ptrI::Int = 1 # runs through I
-        ptrA::Int = colptrA[col]
-        stopA::Int = colptrA[col+1]
-        while ptrI <= nI && ptrA < stopA
-            rowA = rowvalA[ptrA]
-            rowI = I[ptrI]
+    colptr[1] = colptri = 1
 
-            if rowI > rowA
-                ptrA += 1
-            elseif rowI < rowA
-                ptrI += 1
-            else
-                (cacheI[rowA] == 0) && (cacheI[rowA] = ptrI)
-                ptrS += 1
-                ptrI += 1
-            end
-        end
-        colptrS[j+1] = ptrS
-    end
+    Acolptr = getcolptr(A)
+    Arowval = getrowval(A)
+    Anzval  = getnzval(A)
+    nI      = length(I)
 
-    rowvalS = Vector{Ti}(undef, ptrS-1)
-    nzvalS  = Vector{Tv}(undef, ptrS-1)
-
-    # fill the values
-    ptrS = 1
-    @inbounds for j = 1:nJ
-        col = J[j]
-        ptrA::Int = colptrA[col]
-        stopA::Int = colptrA[col+1]
-        while ptrA < stopA
-            rowA = rowvalA[ptrA]
-            ptrI = cacheI[rowA]
-            if ptrI > 0
-                while ptrI <= nI && I[ptrI] == rowA
-                    rowvalS[ptrS] = ptrI
-                    nzvalS[ptrS] = nzvalA[ptrA]
-                    ptrS += 1
-                    ptrI += 1
+    for (ij, j) in enumerate(J)
+        iI = 1
+        for iptr in Acolptr[j]:(Acolptr[j + 1] - 1)
+            iA = Arowval[iptr]
+            while iI <= nI && I[iI] <= iA
+                if I[iI] == iA
+                    push!(rowval, iI)
+                    push!(nzval , Anzval[iptr])
+                    colptri += 1
                 end
+                iI += 1
             end
-            ptrA += 1
         end
+        colptr[ij + 1] = colptri
     end
-    return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
+
+    return SparseMatrixCSC{Tv,Ti}(length(I), length(J), colptr, rowval, nzval)
 end
 
 function getindex_I_sorted_bsearch_I(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
