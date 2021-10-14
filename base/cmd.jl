@@ -324,7 +324,7 @@ julia> 0b010011
 """
 function setcpuaffinity end
 setcpuaffinity(cmd::Cmd, ::Nothing) = Cmd(cmd; cpus = nothing)
-setcpuaffinity(cmd::Cmd, cpus) = Cmd(cmd; cpus = collect(Int, cpus))
+setcpuaffinity(cmd::Cmd, cpus) = Cmd(cmd; cpus = collect(UInt16, cpus))
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
