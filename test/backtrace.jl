@@ -309,7 +309,6 @@ Call function `f` with an address `ptr::Ptr{Cvoid}` of an independent frame
 immediately outer to `f`.
 """
 @noinline function withframeaddress(f)
-    f = Base.inferencebarrier(f)
     sp = ccall("llvm.frameaddress", llvmcall, Ptr{Cvoid}, (Int,), 0)
     @noinline f(sp)
 end
