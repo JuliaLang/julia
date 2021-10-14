@@ -27,12 +27,7 @@ on:
   # the PR is from a fork. Therefore, for security reasons, we do not checkout any code in
   # this workflow.
   pull_request_target:
-
-    # TODO: delete the following line (once we have completely transitioned from Buildbot to Buildkite)
-    types: [ reopened, labeled ]
-
-    # TODO: uncomment the following line (once we have completely transitioned from Buildbot to Buildkite)
-    # types: [ reopened ]
+    types: [ reopened ]
 
 # We do not give the `GITHUB_TOKEN` any permissions.
 permissions:
