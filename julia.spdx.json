@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-1fda47e5-9232-4d3d-82b0-9f602c4afbc9",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-e0292c4a-308b-45b9-a77d-81e16c99229b",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-11T05:59:55Z"
+        "created": "2021-10-15T06:15:45Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -222,6 +222,18 @@
             "summary": "An open source, portable, easy to use, readable and flexible SSL library."
         },
         {
+            "name": "mpfr",
+            "SPDXID": "SPDXRef-mpfr",
+            "downloadLocation": "https://www.mpfr.org/",
+            "filesAnalyzed": false,
+            "homepage": "https://www.mpfr.org/",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "LGPL-3.0-or-later",
+            "licenseDeclared": "LGPL-3.0-or-later",
+            "copyrightText": "Copyright 2000-2020 Free Software Foundation, Inc.",
+            "summary": "The MPFR library is a C library for multiple-precision floating-point computations with correct rounding."
+        },
+        {
             "name": "OpenBLAS",
             "SPDXID": "SPDXRef-OpenBLAS",
             "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
@@ -391,6 +403,11 @@
         },
         {
             "spdxElementId": "SPDXRef-mbedtls",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-mpfr",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
