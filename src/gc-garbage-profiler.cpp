@@ -4,6 +4,7 @@
 
 #include "julia_internal.h"
 #include "gc.h"
+#include "timefuncs.h"
 
 #include <string>
 #include <algorithm>
@@ -72,7 +73,7 @@ unordered_map<size_t, size_t> g_frees_by_type_address;
 
 JL_DLLEXPORT void jl_start_logging(ios_t *stream) {
     g_gc_log_stream = stream;
-    ios_printf(g_gc_log_stream, "gc_epoch,duration_ms,bytes_freed\n");
+    ios_printf(g_gc_log_stream, "gc_epoch,start_timestamp_ms,duration_ms,bytes_freed\n");
 }
 
 JL_DLLEXPORT void jl_stop_logging() {
@@ -102,13 +103,22 @@ bool pair_cmp(std::pair<size_t, size_t> a, std::pair<size_t, size_t> b) {
     return a.second > b.second;
 }
 
+uint64_t get_timestamp_ms() {
+    jl_timeval jtv;
+    jl_gettimeofday(&jtv);
+    return jtv.sec*1e6 + jtv.usec/1e3;
+}
+
 // TODO: figure out how to pass all of these in as a struct
 void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd) {
     if (g_gc_log_stream != nullptr) {
+        auto end_timestamp_ms = get_timestamp_ms();
+        auto duration_ms = (uint64_t)(pause/1e6);
+
         ios_printf(
             g_gc_log_stream,
-            "%d,%d,%d\n",
-            gc_epoch, (int)(pause/1e6), freed
+            "%d,%lld,%d,%d\n",
+            gc_epoch, end_timestamp_ms - duration_ms, duration_ms, freed
         );
         ios_flush(g_gc_log_stream);
     }
