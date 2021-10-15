@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-e0292c4a-308b-45b9-a77d-81e16c99229b",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-f4fdadc7-ff90-4863-9612-1d266816906c",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-15T06:15:45Z"
+        "created": "2021-10-15T06:31:39Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -246,6 +246,18 @@
             "summary": "OpenBLAS is an optimized BLAS library based on GotoBLAS2 1.13 BSD version."
         },
         {
+            "name": "LAPACK",
+            "SPDXID": "SPDXRef-LAPACK",
+            "downloadLocation": "https://www.netlib.org/lapack/",
+            "filesAnalyzed": false,
+            "homepage": "https://netlib.org/",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 1992-2013 The University of Tennessee and The University of Tennessee Research Foundation.  All rights reserved.\nCopyright (c) 2000-2013 The University of California Berkeley. All rights reserved.\nCopyright (c) 2006-2013 The University of Colorado Denver.  All rights reserved.",
+            "summary": "LAPACK is written in Fortran 90 and provides routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems."
+        },
+        {
             "name": "libunwind",
             "SPDXID": "SPDXRef-libunwind",
             "downloadLocation": "git+https://github.com/libunwind/libunwind.git",
@@ -413,6 +425,11 @@
         },
         {
             "spdxElementId": "SPDXRef-OpenBLAS",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-LAPACK",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
