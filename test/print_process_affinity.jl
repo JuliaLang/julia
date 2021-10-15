@@ -12,7 +12,7 @@ function uv_thread_getaffinity()
         :uv_thread_getaffinity,
         Cint,
         (Ref{uv_thread_t}, Ptr{Bool}, Cssize_t),
-        ref
+        ref,
         cpumask,
         masksize,
     )
