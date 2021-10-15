@@ -1323,6 +1323,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         while ((char*)v <= lim) {
             int bits = v->bits.gc;
             if (!gc_marked(bits)) {
+                record_freed_value(v);
                 *pfl = v;
                 pfl = &v->next;
                 pfl_begin = pfl_begin ? pfl_begin : pfl;
@@ -3009,6 +3010,8 @@ size_t jl_maxrss(void);
 // Only one thread should be running in this function
 static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
+    _report_gc_started();
+
     combine_thread_gc_counts(&gc_num);
 
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
@@ -3195,6 +3198,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     uint64_t gc_end_t = jl_hrtime();
     uint64_t pause = gc_end_t - t0;
+
+    _report_gc_finished(pause, gc_num.freed, gc_num.allocd);
+
     gc_final_pause_end(t0, gc_end_t);
     gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
