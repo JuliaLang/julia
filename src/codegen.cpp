@@ -4463,8 +4463,8 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     else {
         if (!jl_is_method(ctx.linfo->def.method) && !ctx.is_opaque_closure) {
             // TODO: inference is invalid if this has any effect (which it often does)
-            Value *world = ctx.builder.CreateAlignedLoad(prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
-            // TODO: world->setOrdering(AtomicOrdering::Monotonic);
+            LoadInst *world = ctx.builder.CreateAlignedLoad(prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
+            world->setOrdering(AtomicOrdering::Acquire);
             ctx.builder.CreateAlignedStore(world, ctx.world_age_field, Align(sizeof(size_t)));
         }
         assert(ssaval_result != -1);
@@ -5169,7 +5169,7 @@ static Function* gen_cfun_wrapper(
     assert(into);
     size_t nargs = sig.nccallargs;
     const char *name = "cfunction";
-    size_t world = jl_world_counter;
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     jl_code_instance_t *codeinst = NULL;
     bool nest = (!ff || unionall_env);
     jl_value_t *astrt = (jl_value_t*)jl_any_type;
@@ -5290,7 +5290,7 @@ static Function* gen_cfun_wrapper(
     ctx.world_age_field = ctx.builder.CreateSelect(have_tls, ctx.world_age_field, dummy_world);
     Value *last_age = tbaa_decorate(tbaa_gcframe, ctx.builder.CreateAlignedLoad(ctx.world_age_field, Align(sizeof(size_t))));
     Value *world_v = ctx.builder.CreateAlignedLoad(prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
-    // TODO: cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Monotonic);
+    cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Acquire);
 
     Value *age_ok = NULL;
     if (calltype) {
@@ -5791,7 +5791,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         return jl_cgval_t();
     }
 #endif
-    size_t world = jl_world_counter;
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     size_t min_valid = 0;
     size_t max_valid = ~(size_t)0;
     // try to look up this function for direct invoking
@@ -5884,7 +5884,7 @@ const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t
         function_sig_t sig("cfunction", lcrt, crt, toboxed,
                            argtypes, NULL, false, CallingConv::C, false, &params);
         if (sig.err_msg.empty()) {
-            size_t world = jl_world_counter;
+            size_t world = jl_atomic_load_acquire(&jl_world_counter);
             size_t min_valid = 0;
             size_t max_valid = ~(size_t)0;
             if (sysimg_handle) {
@@ -7819,7 +7819,7 @@ void jl_compile_workqueue(
                 // method body. See #34993
                 if (policy != CompilationPolicy::Default &&
                     codeinst->inferred && codeinst->inferred == jl_nothing) {
-                    src = jl_type_infer(codeinst->def, jl_world_counter, 0);
+                    src = jl_type_infer(codeinst->def, jl_atomic_load_acquire(&jl_world_counter), 0);
                     if (src)
                         result = jl_emit_code(codeinst->def, src, src->rettype, params);
                 }

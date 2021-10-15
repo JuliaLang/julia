@@ -735,7 +735,7 @@ JL_CALLABLE(jl_f__apply_pure)
         // because, why not :)
         // and `promote` works better this way
         size_t last_age = ct->world_age;
-        ct->world_age = jl_world_counter;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         ret = do_apply(args, nargs, NULL);
         ct->world_age = last_age;
         ct->ptls->in_pure_callback = last_in;
@@ -753,14 +753,14 @@ JL_CALLABLE(jl_f__call_latest)
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     if (!ct->ptls->in_pure_callback)
-        ct->world_age = jl_world_counter;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     jl_value_t *ret = jl_apply(args, nargs);
     ct->world_age = last_age;
     return ret;
 }
 
 // Like call_in_world, but runs in the specified world.
-// If world > jl_world_counter, run in the latest world.
+// If world > jl_atomic_load_acquire(&jl_world_counter), run in the latest world.
 JL_CALLABLE(jl_f__call_in_world)
 {
     JL_NARGSV(_apply_in_world, 2);
@@ -768,9 +768,11 @@ JL_CALLABLE(jl_f__call_in_world)
     size_t last_age = ct->world_age;
     JL_TYPECHK(_apply_in_world, ulong, args[0]);
     size_t world = jl_unbox_ulong(args[0]);
-    world = world <= jl_world_counter ? world : jl_world_counter;
-    if (!ct->ptls->in_pure_callback)
-        ct->world_age = world;
+    if (!ct->ptls->in_pure_callback) {
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        if (ct->world_age > world)
+            ct->world_age = world;
+    }
     jl_value_t *ret = jl_apply(&args[1], nargs - 1);
     ct->world_age = last_age;
     return ret;

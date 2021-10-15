@@ -210,7 +210,7 @@ static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOT
 // useful constants
 extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
 extern jl_methtable_t *jl_nonfunction_mt JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT size_t jl_world_counter;
+extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
 
 typedef void (*tracer_cb)(jl_value_t *tracee);
 extern tracer_cb jl_newmeth_tracer;
@@ -231,7 +231,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
                                           int osize);
 JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
 JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize);
-extern jl_mutex_t gc_perm_lock;
+extern uv_mutex_t gc_perm_lock;
 void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
     unsigned align, unsigned offset) JL_NOTSAFEPOINT;
 void *jl_gc_perm_alloc(size_t sz, int zero,
@@ -728,6 +728,7 @@ void jl_init_common_symbols(void);
 void jl_init_primitives(void) JL_GC_DISABLED;
 void jl_init_llvm(void);
 void jl_init_codegen(void);
+void jl_init_runtime_ccall(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
 void jl_init_tasks(void) JL_GC_DISABLED;
@@ -850,7 +851,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_method_instance_t *caller);
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *typ, jl_value_t *caller);
 
-uint32_t jl_module_next_counter(jl_module_t *m);
+uint32_t jl_module_next_counter(jl_module_t *m) JL_NOTSAFEPOINT;
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs);
 
 JL_DLLEXPORT int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT;
@@ -989,7 +990,7 @@ typedef struct {
     CONTEXT context;
 } bt_cursor_t;
 #endif
-extern JL_DLLEXPORT jl_mutex_t jl_in_stackwalk;
+extern JL_DLLEXPORT uv_mutex_t jl_in_stackwalk;
 #elif !defined(JL_DISABLE_LIBUNWIND)
 // This gives unwind only local unwinding options ==> faster code
 #  define UNW_LOCAL_ONLY
@@ -1251,7 +1252,7 @@ JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 
 extern jl_mutex_t typecache_lock;
 extern JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
-extern jl_mutex_t safepoint_lock;
+extern uv_mutex_t safepoint_lock;
 
 #if defined(__APPLE__)
 void jl_mach_gc_end(void);

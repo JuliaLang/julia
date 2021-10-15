@@ -636,7 +636,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     newm->parent = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, parent)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, m->parent));
-    newm->primary_world = jl_world_counter;
+    newm->primary_world = jl_atomic_load_acquire(&jl_world_counter);
 
     // write out the bindings table as a list
     // immediately after jl_module_t
@@ -1661,7 +1661,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
         }
         jl_write_value(&s, s.ptls->root_task->tls);
         write_uint32(f, jl_get_gs_ctr());
-        write_uint32(f, jl_world_counter);
+        write_uint32(f, jl_atomic_load_acquire(&jl_world_counter));
         write_uint32(f, jl_typeinf_world);
         jl_finalize_serializer(&s, &reinit_list);
         jl_finalize_serializer(&s, &ccallable_list);
@@ -1791,7 +1791,7 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     jl_init_box_caches();
 
     uint32_t gs_ctr = read_uint32(f);
-    jl_world_counter = read_uint32(f);
+    jl_atomic_store_release(&jl_world_counter, read_uint32(f));
     jl_typeinf_world = read_uint32(f);
     jl_set_gs_ctr(gs_ctr);
     s.s = NULL;
