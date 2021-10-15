@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -euo pipefail
 if [[ "${BUILDKITE_PULL_REQUEST:?}" != "false" ]]; then
     git log -n 1
     echo ""
