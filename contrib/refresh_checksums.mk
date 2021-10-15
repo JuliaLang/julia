@@ -111,7 +111,7 @@ pack-checksum-suitesparse: | checksum-libsuitesparse
 pack-checksum-llvm pack-checksum-unwind: | pack-checksum-llvmunwind
 # and the name for LLVMLibUnwind is awkward, so handle that with a regex
 pack-checksum-llvmunwind: | pack-checksum-llvm.*unwind
-	@# nothing to do but disable the prefix rule
+	cd "$(JULIAHOME)/deps/checksums" && mv 'llvm.*unwind' llvmunwind
 
 # define how to pack parallel checksums into a single file format
 pack-checksum-%: FORCE
