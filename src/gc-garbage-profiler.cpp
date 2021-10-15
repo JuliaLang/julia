@@ -90,7 +90,7 @@ JL_DLLEXPORT void jl_stop_garbage_profile() {
     g_type_name_by_address.clear();
     g_type_address_by_value_address.clear();
     g_frees_by_type_address.clear();
-}    
+}
 
 // == callbacks called into by the outside ==
 
@@ -157,7 +157,7 @@ void _record_allocated_value(jl_value_t *val) {
 
 void _record_freed_value(jl_taggedvalue_t *tagged_val) {
     jl_value_t *val = jl_valueof(tagged_val);
-    
+
     auto value_address = (size_t)val;
     auto type_address = g_type_address_by_value_address.find(value_address);
     if (type_address == g_type_address_by_value_address.end()) {
@@ -171,4 +171,3 @@ void _record_freed_value(jl_taggedvalue_t *tagged_val) {
         g_frees_by_type_address[type_address->second] = frees->second + 1;
     }
 }
-
