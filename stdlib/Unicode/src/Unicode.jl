@@ -36,7 +36,7 @@ julia> collect(s2)
  'μ': Unicode U+03BC (category Ll: Letter, lowercase)
  'ö': Unicode U+00F6 (category Ll: Letter, lowercase)
 
- julia> s2 == string(Meta.parse(s))
+julia> s2 == string(Meta.parse(s))
 true
 ```
 
