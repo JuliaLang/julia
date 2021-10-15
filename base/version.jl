@@ -276,6 +276,7 @@ function banner(io::IO = stdout)
         c = text_colors
         tx = c[:normal] # text
         jl = c[:normal] # julia
+        ud = c[:underscore]
         d1 = c[:bold] * c[:blue]    # first dot
         d2 = c[:bold] * c[:red]     # second dot
         d3 = c[:bold] * c[:green]   # third dot
@@ -284,7 +285,7 @@ function banner(io::IO = stdout)
         print(io,"""               $(d3)_$(tx)
            $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type ? for help, ?"..." to search all doc text,
+           $(jl)_ _   _| |_  __ _$(tx)   |  Type ? for help, ?"$(ud)keyword$(tx)" to search all doc for $(ud)keyword$(tx),
           $(jl)| | | | | | |/ _` |$(tx)  |  ?help for more options, ]? for Pkg help.
           $(jl)| | |_| | | | (_| |$(tx)  |
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  Version $(VERSION)$(commit_date)
@@ -296,7 +297,7 @@ function banner(io::IO = stdout)
                        _
            _       _ _(_)_     |  Documentation: https://docs.julialang.org
           (_)     | (_) (_)    |
-           _ _   _| |_  __ _   |  Type ? for help, ?"..." to search all doc text,
+           _ _   _| |_  __ _   |  Type ? for help, ?"keyword" to search all doc for keyword,
           | | | | | | |/ _` |  |  ?help for more options, ]? for Pkg help.
           | | |_| | | | (_| |  |
          _/ |\\__'_|_|_|\\__'_|  |  Version $(VERSION)$(commit_date)
