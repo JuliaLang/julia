@@ -50,8 +50,9 @@ jobs:
   rerun-failed-buildkite-jobs:
     name: Rerun Failed Buildkite Jobs
     runs-on: ubuntu-latest
-    if: (github.repository == 'DilumAluthge/julia') && ((github.event_name == 'pull_request_target' && github.event.action == 'reopened') || (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.comment.body == '/buildkite rerun failed'))
+    if: (github.repository == 'JuliaLang/julia') && ((github.event_name == 'pull_request_target' && github.event.action == 'reopened') || (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.comment.body == '/buildkite rerun failed'))
     steps:
+      # For security reasons, we do not checkout any code in this workflow.
       - name: Check organization membership
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -60,6 +61,7 @@ jobs:
             if [[ "${{ github.event.action }}" == "reopened" ]]; then
               echo "This is a \"reopened\" event, so we do not need to check the user's organization membership."
               echo "GOOD_TO_PROCEED=yes" >> ${GITHUB_ENV:?}
+              echo "PULL_REQUEST_NUMBER=${{ github.event.number }}" >> ${GITHUB_ENV:?}
             else
               echo "ERROR: The github.event_name is \"pull_request_target\", but the github.event.action is not \"reopened\"."
               exit 1
@@ -71,17 +73,20 @@ jobs:
             if [[ "${USER_IS_ORGANIZATION_MEMBER:?}"   == "true" ]]; then
               echo "The \"${{ github.event.sender.login }}\" user is a public member of the JuliaLang organization."
               echo "GOOD_TO_PROCEED=yes" >> ${GITHUB_ENV:?}
+              echo "PULL_REQUEST_NUMBER=${{ github.event.issue.number }}" >> ${GITHUB_ENV:?}
             else
               echo "ERROR: the \"${{ github.event.sender.login }}\" user is NOT a public member of the JuliaLang organization."
               echo "If you are a member, please make sure that you have publicized your membership."
               exit 1
             fi
           fi
-      # For security reasons, we do not checkout any code in this workflow.
+      - run: |
+          echo "GOOD_TO_PROCEED: ${{ env.GOOD_TO_PROCEED }}"
+          echo "PULL_REQUEST_NUMBER: ${{ env.PULL_REQUEST_NUMBER }}"
       - uses: JuliaLang/buildkite-rerun-failed@057f6f2d37aa29a57b7679fd2af0df1d9f9188b4
         if: env.GOOD_TO_PROCEED == 'yes'
         with:
           buildkite_api_token: ${{ secrets.BUILDKITE_API_TOKEN_RETRY }}
           buildkite_organization_slug: 'julialang'
           buildkite_pipeline_slug: 'julia-master'
-          pr_number: ${{github.event.number}}
+          pr_number: ${{ env.PULL_REQUEST_NUMBER }}
