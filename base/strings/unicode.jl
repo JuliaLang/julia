@@ -149,7 +149,6 @@ utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (C
 utf8proc_custom_func(codepoint::UInt32, callback::Any) =
     UInt32(callback(codepoint))::UInt32
 
-
 function utf8proc_decompose(str, options, buffer, nwords, chartransform::typeof(identity))
     ret = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                 str, sizeof(str), buffer, nwords, options)
