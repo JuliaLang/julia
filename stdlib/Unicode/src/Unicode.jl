@@ -43,7 +43,7 @@ true
 !!! compat "Julia 1.8"
     This function was introduced in Julia 1.8.
 """
-function julia_chartransform end;
+function julia_chartransform end
 julia_chartransform(codepoint::UInt32) = get(Base.Unicode._julia_charmap, codepoint, codepoint)
 julia_chartransform(codepoint::Integer) = julia_chartransform(UInt32(codepoint))
 julia_chartransform(char::Char) = Char(julia_chartransform(UInt32(char)))
