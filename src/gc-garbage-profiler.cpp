@@ -67,12 +67,12 @@ unordered_map<size_t, size_t> g_frees_by_type_address;
 
 // == exported interface ==
 
-JL_DLLEXPORT void jl_enable_gc_logging(ios_t *stream) {
+JL_DLLEXPORT void jl_start_logging(ios_t *stream) {
     g_gc_log_stream = stream;
     ios_printf(g_gc_log_stream, "gc_epoch,duration_ms,bytes_freed\n");
 }
 
-JL_DLLEXPORT void jl_disable_gc_logging() {
+JL_DLLEXPORT void jl_stop_logging() {
     g_gc_log_stream = nullptr;
 }
 

@@ -106,6 +106,8 @@ Control whether garbage collection is enabled using a boolean argument (`true` f
 """
 enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
 
+# TODO: maybe merge profiling & logging funcions?
+
 function start_garbage_profile(io)
     ccall(:jl_start_garbage_profile, Cvoid, (Ptr{Cvoid},), io.handle)
 end
@@ -114,12 +116,12 @@ function stop_garbage_profile()
     ccall(:jl_stop_garbage_profile, Cvoid, ())
 end
 
-function enable_gc_logging(io)
-    ccall(:jl_enable_gc_logging, Cvoid, (Ptr{Cvoid},), io.handle)
+function start_logging(io)
+    ccall(:jl_start_logging, Cvoid, (Ptr{Cvoid},), io.handle)
 end
 
-function disable_gc_logging()
-    ccall(:jl_disable_gc_logging, Cvoid, ())
+function stop_logging()
+    ccall(:jl_stop_logging, Cvoid, ())
 end
 
 """

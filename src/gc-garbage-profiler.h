@@ -10,8 +10,8 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT void jl_enable_gc_logging(ios_t *stream);
-JL_DLLEXPORT void jl_disable_gc_logging();
+JL_DLLEXPORT void jl_start_logging(ios_t *stream);
+JL_DLLEXPORT void jl_stop_logging();
 
 JL_DLLEXPORT void jl_start_garbage_profile(ios_t *stream);
 JL_DLLEXPORT void jl_stop_garbage_profile(void);
