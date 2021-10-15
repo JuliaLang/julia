@@ -6,10 +6,13 @@
 #include "gc.h"
 
 #include <string>
+#include <algorithm>
+#include <vector>
 #include <unordered_map>
 
 using std::string;
 using std::unordered_map;
+using std::vector;
 
 // == utility functions ==
 
@@ -95,6 +98,10 @@ void _report_gc_started() {
     g_frees_by_type_address.clear();
 }
 
+bool pair_cmp(std::pair<size_t, size_t> a, std::pair<size_t, size_t> b) {
+    return a.second > b.second;
+}
+
 // TODO: figure out how to pass all of these in as a struct
 void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd) {
     if (g_gc_log_stream != nullptr) {
@@ -107,8 +114,15 @@ void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd) {
     }
 
     // sort frees
+    vector<std::pair<size_t, size_t>> pairs;
+    for (auto const &pair : g_frees_by_type_address) {
+        pairs.push_back(pair);
+    }
+    std::sort(pairs.begin(), pairs.end(), pair_cmp);
+
+    // print frees
     if (g_garbage_profile_stream != nullptr) {
-        for (auto const &pair : g_frees_by_type_address) {
+        for (auto const &pair : pairs) {
             auto type_str = g_type_name_by_address.find(pair.first);
             if (type_str != g_type_name_by_address.end()) {
                 ios_printf(g_garbage_profile_stream, "%d,", gc_epoch);
