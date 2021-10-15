@@ -106,6 +106,14 @@ Control whether garbage collection is enabled using a boolean argument (`true` f
 """
 enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
 
+function start_garbage_profile(io)
+    ccall(:jl_start_garbage_profile, Cvoid, (Ptr{Cvoid},), io.handle)
+end
+
+function stop_garbage_profile()
+    ccall(:jl_stop_garbage_profile, Cvoid, ())
+end
+
 """
     GC.enable_finalizers(on::Bool)
 
