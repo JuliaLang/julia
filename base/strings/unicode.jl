@@ -149,15 +149,17 @@ utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (C
 utf8proc_custom_func(codepoint::UInt32, callback::Any) =
     UInt32(callback(codepoint))::UInt32
 
+
+function utf8proc_decompose(str, options, buffer, nwords, chartransform::typeof(identity))
+    ret = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
+                str, sizeof(str), buffer, nwords, options)
+    ret < 0 && utf8proc_error(ret)
+    return ret
+end
 function utf8proc_decompose(str, options, buffer, nwords, chartransform::T) where T
-    if chartransform === identity
-        ret = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
-                    str, sizeof(str), buffer, nwords, options)
-    else
-        ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ref{T}),
-                    str, sizeof(str), buffer, nwords, options,
-                    @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ref{T})), chartransform)
-    end
+    ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ref{T}),
+                str, sizeof(str), buffer, nwords, options,
+                @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ref{T})), chartransform)
     ret < 0 && utf8proc_error(ret)
     return ret
 end
