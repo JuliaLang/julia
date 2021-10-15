@@ -103,19 +103,23 @@ void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd) {
             "%d,%d,%d\n",
             gc_epoch, pause/1e6, freed
         );
+        ios_flush(g_gc_log_stream);
     }
 
     // sort frees
-    for (auto const &pair : g_frees_by_type_address) {
-        auto type_str = g_type_name_by_address.find(pair.first);
-        if (type_str != g_type_name_by_address.end()) {
-            ios_printf(g_garbage_profile_stream, "%d,", gc_epoch);
-            print_str_escape_csv(g_garbage_profile_stream, type_str->second);
-            ios_printf(g_garbage_profile_stream, ",%d\n", pair.second);
-        } else {
-            jl_printf(JL_STDERR, "couldn't find type %p\n", pair.first);
-            // TODO: warn about missing type
+    if (g_garbage_profile_stream != nullptr) {
+        for (auto const &pair : g_frees_by_type_address) {
+            auto type_str = g_type_name_by_address.find(pair.first);
+            if (type_str != g_type_name_by_address.end()) {
+                ios_printf(g_garbage_profile_stream, "%d,", gc_epoch);
+                print_str_escape_csv(g_garbage_profile_stream, type_str->second);
+                ios_printf(g_garbage_profile_stream, ",%d\n", pair.second);
+            } else {
+                jl_printf(JL_STDERR, "couldn't find type %p\n", pair.first);
+                // TODO: warn about missing type
+            }
         }
+        ios_flush(g_garbage_profile_stream);
     }
     gc_epoch++;
 }
