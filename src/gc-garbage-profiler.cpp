@@ -101,7 +101,7 @@ void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd) {
         ios_printf(
             g_gc_log_stream,
             "%d,%d,%d\n",
-            gc_epoch, pause/1e6, freed
+            gc_epoch, (int)(pause/1e6), freed
         );
         ios_flush(g_gc_log_stream);
     }
