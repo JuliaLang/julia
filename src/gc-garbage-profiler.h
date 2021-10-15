@@ -11,13 +11,13 @@ extern "C" {
 #endif
 
 JL_DLLEXPORT void jl_start_logging(ios_t *stream);
-JL_DLLEXPORT void jl_stop_logging();
+JL_DLLEXPORT void jl_stop_logging(void);
 
 JL_DLLEXPORT void jl_start_garbage_profile(ios_t *stream);
 JL_DLLEXPORT void jl_stop_garbage_profile(void);
 
 void _report_gc_started(void);
-void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd);
+void _report_gc_finished(jl_gc_collection_t collection, uint64_t pause, uint64_t freed, uint64_t allocd);
 void _record_allocated_value(jl_value_t *val);
 void _record_freed_value(jl_taggedvalue_t *tagged_val);
 
