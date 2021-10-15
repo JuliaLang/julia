@@ -55,7 +55,9 @@ string _type_as_string(jl_datatype_t *type) {
 // == global variables manipulated by callbacks ==
 // TODO: wrap these up into a struct
 
-ios_t *garbage_profile_out = nullptr;
+ios_t *g_gc_log_stream = nullptr;
+
+ios_t *g_garbage_profile_stream = nullptr;
 int gc_epoch = 0;
 // for each type, the index in mem_event where the type
 // event appears.
@@ -65,14 +67,23 @@ unordered_map<size_t, size_t> g_frees_by_type_address;
 
 // == exported interface ==
 
+JL_DLLEXPORT void jl_enable_gc_logging(ios_t *stream) {
+    g_gc_log_stream = stream;
+    ios_printf(g_gc_log_stream, "gc_epoch,duration_ms,bytes_freed\n");
+}
+
+JL_DLLEXPORT void jl_disable_gc_logging() {
+    g_gc_log_stream = nullptr;
+}
+
 JL_DLLEXPORT void jl_start_garbage_profile(ios_t *stream) {
-    garbage_profile_out = stream;
-    ios_printf(garbage_profile_out, "gc_epoch,type,num_freed\n");
+    g_garbage_profile_stream = stream;
+    ios_printf(g_garbage_profile_stream, "gc_epoch,type,num_freed\n");
 }
 
 JL_DLLEXPORT void jl_stop_garbage_profile() {
     // TODO: flush file?
-    garbage_profile_out = nullptr;
+    g_garbage_profile_stream = nullptr;
     g_type_name_by_address.clear();
     g_type_address_by_value_address.clear();
     g_frees_by_type_address.clear();
@@ -86,20 +97,21 @@ void _report_gc_started() {
 
 // TODO: figure out how to pass all of these in as a struct
 void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd) {
-    // TODO: figure out how to put in commas
-    jl_printf(
-        JL_STDERR,
-        "GC: pause %fms. collected %fMB. %lld allocs total\n",
-        pause/1e6, freed/1e6, allocd
-    );
+    if (g_gc_log_stream != nullptr) {
+        ios_printf(
+            g_gc_log_stream,
+            "%d,%d,%d\n",
+            gc_epoch, pause/1e6, freed
+        );
+    }
 
     // sort frees
     for (auto const &pair : g_frees_by_type_address) {
         auto type_str = g_type_name_by_address.find(pair.first);
         if (type_str != g_type_name_by_address.end()) {
-            ios_printf(garbage_profile_out, "%d,", gc_epoch);
-            print_str_escape_csv(garbage_profile_out, type_str->second);
-            ios_printf(garbage_profile_out, ",%d\n", pair.second);
+            ios_printf(g_garbage_profile_stream, "%d,", gc_epoch);
+            print_str_escape_csv(g_garbage_profile_stream, type_str->second);
+            ios_printf(g_garbage_profile_stream, ",%d\n", pair.second);
         } else {
             jl_printf(JL_STDERR, "couldn't find type %p\n", pair.first);
             // TODO: warn about missing type
@@ -119,10 +131,6 @@ void register_type_string(jl_datatype_t *type) {
 }
 
 void _record_allocated_value(jl_value_t *val) {
-    if (garbage_profile_out == nullptr) {
-        return;
-    }
-
     auto type = (jl_datatype_t*)jl_typeof(val);
     register_type_string(type);
 
@@ -130,10 +138,6 @@ void _record_allocated_value(jl_value_t *val) {
 }
 
 void _record_freed_value(jl_taggedvalue_t *tagged_val) {
-    if (garbage_profile_out == nullptr) {
-        return;
-    }
-
     jl_value_t *val = jl_valueof(tagged_val);
     
     auto value_address = (size_t)val;

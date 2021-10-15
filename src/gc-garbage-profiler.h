@@ -10,6 +10,9 @@
 extern "C" {
 #endif
 
+JL_DLLEXPORT void jl_enable_gc_logging(ios_t *stream);
+JL_DLLEXPORT void jl_disable_gc_logging();
+
 JL_DLLEXPORT void jl_start_garbage_profile(ios_t *stream);
 JL_DLLEXPORT void jl_stop_garbage_profile(void);
 
@@ -22,16 +25,17 @@ void _record_freed_value(jl_taggedvalue_t *tagged_val);
 // functions to call from GC when garbage profiling is enabled
 // ---------------------------------------------------------------------
 
-extern ios_t *garbage_profile_out; // TODO: replace w/ bool?
+extern ios_t *g_garbage_profile_stream; // TODO: replace w/ bool?
+extern ios_t *g_gc_log_stream;
 
 static inline void record_allocated_value(jl_value_t *val) {
-    if (__unlikely(garbage_profile_out != 0)) {
+    if (__unlikely(g_garbage_profile_stream != 0)) {
         _record_allocated_value(val);
     }
 }
 
 static inline void record_freed_value(jl_taggedvalue_t *tagged_val) {
-    if (__unlikely(garbage_profile_out != 0)) {
+    if (__unlikely(g_garbage_profile_stream != 0)) {
         _record_freed_value(tagged_val);
     }
 }

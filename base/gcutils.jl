@@ -114,6 +114,14 @@ function stop_garbage_profile()
     ccall(:jl_stop_garbage_profile, Cvoid, ())
 end
 
+function enable_gc_logging(io)
+    ccall(:jl_enable_gc_logging, Cvoid, (Ptr{Cvoid},), io.handle)
+end
+
+function disable_gc_logging()
+    ccall(:jl_disable_gc_logging, Cvoid, ())
+end
+
 """
     GC.enable_finalizers(on::Bool)
 
