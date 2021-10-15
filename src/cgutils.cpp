@@ -136,7 +136,7 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_value_t *jt, DIBui
         size_t ntypes = jl_datatype_nfields(jdt);
         std::vector<llvm::Metadata*> Elements(ntypes);
         for (unsigned i = 0; i < ntypes; i++) {
-            jl_value_t *el = jl_svecref(jdt->types, i);
+            jl_value_t *el = jl_field_type_concrete(jdt, i);
             DIType *di;
             if (jl_field_isptr(jdt, i))
                 di = jl_pvalue_dillvmt;
@@ -2035,9 +2035,10 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
     if (!strct.ispointer()) { // unboxed
         assert(jl_is_concrete_immutable((jl_value_t*)stt));
         bool isboxed = is_datatype_all_pointers(stt);
-        bool issame = is_tupletype_homogeneous(stt->types);
+        jl_svec_t *types = stt->types;
+        bool issame = is_tupletype_homogeneous(types);
         if (issame) {
-            jl_value_t *jft = jl_svecref(stt->types, 0);
+            jl_value_t *jft = jl_svecref(types, 0);
             if (strct.isghost) {
                 (void)idx0();
                 *ret = ghostValue(jft);
@@ -2077,7 +2078,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
                         ctx.builder.CreateExtractValue(strct.V, makeArrayRef(i)),
                         fld);
             }
-            jl_value_t *jft = issame ? jl_svecref(stt->types, 0) : (jl_value_t*)jl_any_type;
+            jl_value_t *jft = issame ? jl_svecref(types, 0) : (jl_value_t*)jl_any_type;
             if (isboxed && maybe_null)
                 null_pointer_check(ctx, fld);
             *ret = mark_julia_type(ctx, fld, isboxed, jft);
@@ -2119,9 +2120,9 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
             *ret = mark_julia_type(ctx, fld, true, jl_any_type);
             return true;
         }
-        else if (is_tupletype_homogeneous(stt->types)) {
+        else if (is_tupletype_homogeneous(jl_get_fieldtypes(stt))) {
             assert(nfields > 0); // nf == 0 trapped by all_pointers case
-            jl_value_t *jft = jl_svecref(stt->types, 0);
+            jl_value_t *jft = jl_svecref(stt->types, 0); // n.b. jl_get_fieldtypes assigned stt->types for here
             assert(jl_is_concrete_type(jft));
             idx = idx0();
             Value *ptr = maybe_decay_tracked(ctx, data_pointer(ctx, strct));
@@ -3242,9 +3243,10 @@ static void find_perm_offsets(jl_datatype_t *typ, SmallVector<unsigned,4> &res, 
     // This is a inlined field at `offset`.
     if (!typ->layout || typ->layout->npointers == 0)
         return;
-    size_t nf = jl_svec_len(typ->types);
+    jl_svec_t *types = jl_get_fieldtypes(typ);
+    size_t nf = jl_svec_len(types);
     for (size_t i = 0; i < nf; i++) {
-        jl_value_t *_fld = jl_svecref(typ->types, i);
+        jl_value_t *_fld = jl_svecref(types, i);
         if (!jl_is_datatype(_fld))
             continue;
         jl_datatype_t *fld = (jl_datatype_t*)_fld;
@@ -3293,7 +3295,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
                 emit_bitcast(ctx, maybe_decay_tracked(ctx, addr), T_pint8),
                 ConstantInt::get(T_size, byte_offset)); // TODO: use emit_struct_gep
     }
-    jl_value_t *jfty = jl_svecref(sty->types, idx0);
+    jl_value_t *jfty = jl_field_type(sty, idx0);
     if (!jl_field_isptr(sty, idx0) && jl_is_uniontype(jfty)) {
         size_t fsz = 0, al = 0;
         bool isptr = !jl_islayout_inline(jfty, &fsz, &al);
@@ -3418,7 +3420,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             }
 
             for (unsigned i = 0; i < na; i++) {
-                jl_value_t *jtype = jl_svecref(sty->types, i);
+                jl_value_t *jtype = jl_svecref(sty->types, i); // n.b. ty argument must be concrete
                 jl_cgval_t fval_info = argv[i];
                 emit_typecheck(ctx, fval_info, jtype, "new");
                 fval_info = update_julia_type(ctx, fval_info, jtype);
@@ -3553,7 +3555,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 need_wb = !rhs.isboxed;
             else
                 need_wb = false;
-            emit_typecheck(ctx, rhs, jl_svecref(sty->types, i), "new");
+            emit_typecheck(ctx, rhs, jl_svecref(sty->types, i), "new"); // n.b. ty argument must be concrete
             emit_setfield(ctx, sty, strctinfo, i, rhs, jl_cgval_t(), false, need_wb, AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, false, true, false, false, false, nullptr, "");
         }
         return strctinfo;
