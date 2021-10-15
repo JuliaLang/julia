@@ -1472,12 +1472,8 @@ end
 function arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(a), @nospecialize i...)
     a = widenconst(a)
     if a <: Array
-        if isa(a, DataType) && begin
-                ap1 = a.parameters[1]
-                isa(ap1, Type) || isa(ap1, TypeVar)
-            end
-            # TODO: the TypeVar case should not be needed here
-            return unwraptv(ap1)
+        if isa(a, DataType) && isa(a.parameters[1], Type)
+            return a.parameters[1]
         elseif isa(a, UnionAll) && !has_free_typevars(a)
             unw = unwrap_unionall(a)
             if isa(unw, DataType)

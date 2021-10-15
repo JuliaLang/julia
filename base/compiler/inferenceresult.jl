@@ -50,7 +50,7 @@ end
 function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(specTypes),
     isva::Bool, withfirst::Bool = true)
     toplevel = method === nothing
-    linfo_argtypes = Any[unwrap_unionall(specTypes).parameters...]
+    linfo_argtypes = Any[(unwrap_unionall(specTypes)::DataType).parameters...]
     nargs::Int = toplevel ? 0 : method.nargs
     if !withfirst
         # For opaque closure, the closure environment is processed elsewhere
@@ -78,8 +78,8 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
             else
                 vargtype_elements = Any[]
                 for p in linfo_argtypes[nargs:linfo_argtypes_length]
-                    p = isvarargtype(p) ? unconstrain_vararg_length(p) : p
-                    push!(vargtype_elements, rewrap(p, specTypes))
+                    p = unwraptv(isvarargtype(p) ? unconstrain_vararg_length(p) : p)
+                    push!(vargtype_elements, elim_free_typevars(rewrap(p, specTypes)))
                 end
                 for i in 1:length(vargtype_elements)
                     atyp = vargtype_elements[i]
@@ -118,7 +118,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
             elseif isconstType(atyp)
                 atyp = Const(atyp.parameters[1])
             else
-                atyp = rewrap(atyp, specTypes)
+                atyp = elim_free_typevars(rewrap(atyp, specTypes))
             end
             i == n && (lastatype = atyp)
             cache_argtypes[i] = atyp
@@ -130,6 +130,19 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
         @assert nargs == 0 "invalid specialization of method" # wrong number of arguments
     end
     cache_argtypes
+end
+
+# eliminate free `TypeVar`s in order to make the life much easier down the road:
+# at runtime only `Type{...}::DataType` can contain invalid type parameters, and other
+# malformed types here are user-constructed type arguments given at an inference entry
+# so this function will replace only the malformed `Type{...}::DataType` with `Type`
+# and simply replace other possibilities with `Any`
+function elim_free_typevars(@nospecialize t)
+    if has_free_typevars(t)
+        return isType(t) ? Type : Any
+    else
+        return t
+    end
 end
 
 function matching_cache_argtypes(linfo::MethodInstance, ::Nothing, va_override::Bool)
