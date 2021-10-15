@@ -3280,7 +3280,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         const jl_cgval_t *modifyop, const std::string &fname)
 {
     if (!sty->name->mutabl && checked) {
-        std::string msg = fname + "immutable struct of type "
+        std::string msg = fname + ": immutable struct of type "
             + std::string(jl_symbol_name(sty->name->name))
             + " cannot be changed";
         emit_error(ctx, msg);
