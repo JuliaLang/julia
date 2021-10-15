@@ -146,17 +146,17 @@ const UTF8PROC_STRIPMARK = (1<<13)
 utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (Cssize_t,), result)))
 
 # static wrapper around user callback function
-utf8proc_custom_func(codepoint::UInt32, callback::Ptr{Cvoid}) =
-    UInt32(unsafe_pointer_to_objref(callback)(codepoint))::UInt32
+utf8proc_custom_func(codepoint::UInt32, callback::Any) =
+    UInt32(callback(codepoint))::UInt32
 
-function utf8proc_decompose(str, options, buffer, nwords, chartransform)
+function utf8proc_decompose(str, options, buffer, nwords, chartransform::T) where T
     if chartransform === identity
         ret = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                     str, sizeof(str), buffer, nwords, options)
     else
-        ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Any),
+        ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ref{T}),
                     str, sizeof(str), buffer, nwords, options,
-                    @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ptr{Cvoid})), chartransform)
+                    @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ref{T})), chartransform)
     end
     ret < 0 && utf8proc_error(ret)
     return ret
