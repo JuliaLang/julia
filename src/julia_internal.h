@@ -365,6 +365,9 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         v = jl_gc_big_alloc(ptls, allocsz);
     }
     jl_set_typeof(v, ty);
+
+    record_allocated_value(v);
+
     return v;
 }
 
