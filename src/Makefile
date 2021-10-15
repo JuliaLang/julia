@@ -85,7 +85,7 @@ endif
 
 RT_LLVM_LIBS := support
 
-SRCS += getopt
+SRCS += getopt getopt_long
 
 SRCS += $(RUNTIME_SRCS)
 

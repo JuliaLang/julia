@@ -2,10 +2,9 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <limits.h>
-#include <getopt.h>
 #include <stdio.h>
 #include <string.h>
-#include "stdio_impl.h"
+#include "getopt.h"
 
 extern int __optpos, __optreset;
 
