@@ -36,9 +36,7 @@ let
             # remove any TypeVars from the intersection
             typ = Any[m.spec_types.parameters...]
             for i = 1:length(typ)
-                if isa(typ[i], TypeVar)
-                    typ[i] = typ[i].ub
-                end
+                typ[i] = unwraptv(typ[i])
             end
             typeinf_type(interp, m.method, Tuple{typ...}, m.sparams)
         end

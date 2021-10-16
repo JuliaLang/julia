@@ -778,10 +778,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     if isa(tti, DataType) && tti.name === NamedTuple_typename
         # A NamedTuple iteration is the same as the iteration of its Tuple parameter:
         # compute a new `tti == unwrap_unionall(tti0)` based on that Tuple type
-        tti = tti.parameters[2]
-        while isa(tti, TypeVar)
-            tti = tti.ub
-        end
+        tti = unwraptv(tti.parameters[2])
         tti0 = rewrap_unionall(tti, tti0)
     end
     if isa(tti, Union)
@@ -1153,7 +1150,8 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
             end
         end
     end
-    return isa(rt, TypeVar) ? rt.ub : rt
+    @assert !isa(rt, TypeVar) "unhandled TypeVar"
+    return rt
 end
 
 function abstract_call_unionall(argtypes::Vector{Any})
@@ -1405,7 +1403,7 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
         spsig = linfo.def.sig
         if isa(spsig, UnionAll)
             if !isempty(linfo.sparam_vals)
-                sparam_vals = Any[isa(v, Core.TypeofVararg) ? TypeVar(:N, Union{}, Any) :
+                sparam_vals = Any[isvarargtype(v) ? TypeVar(:N, Union{}, Any) :
                                   v for v in  linfo.sparam_vals]
                 T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
@@ -1419,10 +1417,7 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
             end
         end
     end
-    while isa(T, TypeVar)
-        T = T.ub
-    end
-    return T
+    return unwraptv(T)
 end
 
 function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::VarTable, sv::InferenceState)
@@ -1632,7 +1627,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     else
         t = abstract_eval_value_expr(interp, e, vtypes, sv)
     end
-    @assert !isa(t, TypeVar)
+    @assert !isa(t, TypeVar) "unhandled TypeVar"
     if isa(t, DataType) && isdefined(t, :instance)
         # replace singleton types with their equivalent Const object
         t = Const(t.instance)
@@ -1717,7 +1712,8 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
         fields = copy(rt.fields)
         haveconst = false
         for i in 1:length(fields)
-            a = widenreturn(fields[i], bestguess, nslots, slottypes, changes)
+            a = fields[i]
+            a = isvarargtype(a) ? a : widenreturn(a, bestguess, nslots, slottypes, changes)
             if !haveconst && has_const_info(a)
                 # TODO: consider adding && const_prop_profitable(a) here?
                 haveconst = true

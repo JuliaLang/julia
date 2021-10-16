@@ -959,7 +959,6 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
     return src
 end
 
-
 function return_type(@nospecialize(f), @nospecialize(t))
     world = ccall(:jl_get_tls_world_age, UInt, ())
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), Any[_return_type, f, t, world], 4)
@@ -971,14 +970,10 @@ function _return_type(interp::AbstractInterpreter, @nospecialize(f), @nospeciali
     rt = Union{}
     if isa(f, Builtin)
         rt = builtin_tfunction(interp, f, Any[t.parameters...], nothing)
-        if isa(rt, TypeVar)
-            rt = rt.ub
-        else
-            rt = widenconst(rt)
-        end
+        rt = widenconst(rt)
     else
         for match in _methods(f, t, -1, get_world_counter(interp))::Vector
-            match = match::Core.MethodMatch
+            match = match::MethodMatch
             ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
             ty === nothing && return Any
             rt = tmerge(rt, ty)
