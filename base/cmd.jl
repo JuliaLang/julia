@@ -303,7 +303,7 @@ end
 Set the CPU affinity of the `command` by a list of CPU IDs (1-based) `cpus`.  Passing
 `cpus = nothing` means to unset the CPU affinity if the `original_command` has any.
 
-This is supported on Unix and Windows but not in macOS.
+This function is tested only on Linux.
 
 !!! compat "Julia 1.8"
     This function requires at least Julia 1.8.

@@ -27,7 +27,10 @@ end
 # The following test may work on Windows in principle. However, it is not
 # possible to call `uv_thread_getaffinity` (which calls `SetThreadAffinityMask`)
 # on our CI environment presumably due to insufficient access right.
-if Sys.islinux() || Sys.isfreebsd()
+#
+# Note also that libuv does not support affinity in macOS and it is known to
+# hang in FreeBSD. So, it's tested only in Linux:
+if Sys.islinux()
     if Sys.CPU_THREADS > 1 && !running_under_rr()
         @test run_with_affinity([2]) == "2"
         @test run_with_affinity([1, 2]) == "1,2"
