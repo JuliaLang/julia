@@ -118,12 +118,11 @@ Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 bidiagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
 function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
     Tel = eltype(eltype(A.dv))
-    if i < j <= length(A.dv) && A.uplo == 'U' #= top right zeros =#
+    if i < j && A.uplo == 'U' #= top right zeros =#
         return zeros(Tel, size(A.ev[i], 1), size(A.ev[j-1], 2))
-    elseif 1 <= j < i && A.uplo == 'L' #= bottom left zeros =#
+    elseif j < i && A.uplo == 'L' #= bottom left zeros =#
         return zeros(Tel, size(A.ev[i-1], 1), size(A.ev[j], 2))
-    elseif (j < i <= length(A.dv) && A.uplo == 'U') #= bottom left zeros =# ||
-            (1 <= i < j && A.uplo == 'L') #= top right zeros =#
+    else
         return zeros(Tel, size(A.dv[i], 1), size(A.dv[j], 2))
     end
 end
