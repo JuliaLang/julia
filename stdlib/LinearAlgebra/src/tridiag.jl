@@ -448,22 +448,20 @@ end
 det(A::SymTridiagonal; shift::Number=false) = det_usmani(A.ev, A.dv, A.ev, shift)
 logabsdet(A::SymTridiagonal; shift::Number=false) = logabsdet(ldlt(A; shift=shift))
 
-function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
-    if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
-        throw(BoundsError(A, (i,j)))
-    end
+@inline function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
+    @boundscheck checkbounds(A, i, j)
     if i == j
-        return symmetric(A.dv[i], :U)::symmetric_type(eltype(A.dv))
+        return symmetric((@inbounds A.dv[i]), :U)::symmetric_type(eltype(A.dv))
     elseif i == j + 1
-        return copy(transpose(A.ev[j])) # materialized for type stability
+        return copy(transpose(@inbounds A.ev[j])) # materialized for type stability
     elseif i + 1 == j
-        return A.ev[i]
+        return @inbounds A.ev[i]
     else
         return zero(T)
     end
 end
 
-function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
+@inline function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j
         @inbounds A.dv[i] = x
