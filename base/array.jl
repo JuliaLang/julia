@@ -2632,3 +2632,159 @@ function intersect(v::AbstractVector, r::AbstractRange)
     return vectorfilter(T, _shrink_filter!(seen), common)
 end
 intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
+
+# In place circshift
+mutable struct StackBuffer{T, N} <: AbstractVector{T}
+    # TODO: This type should go away once our compiler is good enough
+    # to automatically allocate small arrays on the stack
+    buf::Ref{NTuple{T, N}}
+    StackBuffer{T,N}() where {T,N} = new()
+end
+Base.size(buf::StackBuffer) = size(buf.buf)
+
+function Base.getindex(buf::StackBuffer, i::Integer)
+    # We expect LLVM to fold this appropriately
+    return buf.buf[i]
+end
+
+function Base.setindex!(buf::StackBuffer{T, N}, val::T, i::Integer) where {T,N}
+    # We expect LLVM to fold this appropriately
+    @boundscheck checkbounds(buf, i)
+    if isbitstype(T)
+        GC.@preserve buf unsafe_store!(Base.unsafe_convert(Ptr{T}, pointer_from_objref(buf)), val, i)
+    elseif !allocatedinline(T)
+        GC.@preserve buf unsafe_store!(Base.unsafe_convert(Ptr{Cvoid}, pointer_from_objref(buf)), pointer_from_objref(val), i)
+    else
+        # Slow, but correct fallback
+        buf.buf = ntuple(j->j == i ? val : buf.buf[i], length(buf.buf))
+    end
+    return val
+end
+
+function _circshift_gcd_plain!(arr::AbstractVector, shift::Integer, g::Integer,
+                                              o::Integer, l::Integer)
+    n = length(arr)
+    @inbounds for i = o:g
+        tmp = arr[i]
+        idx = i
+        nextidx = shift > 0 ? n + (idx - shift) : idx - shift
+        for _ = 1:l-1
+            arr[idx] = arr[nextidx]
+            idx = nextidx
+            nextidx -= shift
+            nextidx <= 0 && (nextidx += n)
+        end
+        arr[i] = tmp
+    end
+end
+
+function _circshift_gcd_bulk!(arr::AbstractVector{T}, shift::Integer, g::Integer,
+                              o::Integer, l::Integer) where {T}
+    # Allocate approx one cache line's worth of space
+    tmp = StackBuffer{T, 64}()
+    @inbounds while i < g
+        ncopy = min(64, g-i)
+        copyto!(tmp, 1, arr, i, ncopy)
+        tmp = arr[i]
+        idx = i
+        nextidx = shift > 0 ? n + (idx - shift) : idx - shift
+        for _ = 1:l-1
+            copyto!(arr, idx, arr, nextidx, ncopy)
+            idx = nextidx
+            nextidx -= shift
+            nextidx <= 0 && (nextidx += n)
+        end
+        copyto!(arr, idx, tmp_ptr, 1, ncopy)
+        i += ncopy
+    end
+end
+
+"""
+    _circshift_gcd!(arr::AbstractVector, shift)
+
+Circularly shift the array `arr` by the given `shift` amount.
+The algorithm used is the well-known GCD-based
+juggling algorithm (e.g. STL2 in [SHENE97]).
+
+[SHENE97] https://pages.mtu.edu/~shene/PUBLICATIONS/1997/Array-Rotation.pdf
+
+"""
+function _circshift_gcd!(arr::AbstractVector{T}, shift::Integer, g::Integer,
+                         o::Integer, l::Integer) where {T}
+    if !allocatedinline(T) || (isbits(T) && sizeof(T) <= 16)
+        _circshift_gcd_bulk!(arr, shift, g, o, l)
+    else
+        _circshift_gcd_plain!(arr, shift, g, o, l)
+    end
+end
+
+"""
+    _circshift_stack!(arr, shift)
+
+Out of place circshift with a stack buffer for very small arrays.
+"""
+function _circshift_stack!(arr::Vector{T}, shift) where {T}
+    n = length(arr) % UInt64
+    n == 0 && return
+    shift = mod(shift, n)
+    tmp = StackBuffer{T, 64}()
+    @GC.preserve tmp begin
+        copyto!(tmp, 1, arr, 1, n)
+        old_idx = n - shift + 1
+        @inbounds for i = 1:n
+            arr[i] = tmp[old_idx]
+            old_idx -= 1
+            old_idx < 1 && (old_idx += n)
+        end
+    end
+end
+
+"""
+    circshift_hybrid!(arr::AbstractVector, shift)
+
+Circularly shift the array `arr` using a hybrid algorithm that
+uses the first gcd-less cycle to compute the GCD and then switches
+to the GCD version.
+"""
+function circshift_hybrid!(arr::AbstractVector, shift::Integer)
+    n = length(arr)
+    shift = mod(shift, length(arr))
+    shift == 0 && return
+    l = _circshift_gcdless_iter!(arr, shift, 1)
+    l == n && return
+    g = div(n, l)
+    _circshift_gcd!(arr, shift, g, 2, l)
+end
+
+function _circshift_knuth!(a::AbstractVector, shift::Integer)
+    reverse!(a, 1, shift)
+    reverse!(a, shift+1, length(a))
+    reverse!(a)
+end
+
+function circshift!(arr::AbstractVector{T}, shift::Integer) where {T}
+    # Polyalgorithm for in-place circshift. Different algorithms are optimal
+    # for different domains, depending on the cache behavior of the
+    # underlying hardware. These are rough tuning values based on
+    # some quick benchmarking.
+    # TODO: More systematic benchmarking across multiple machines
+    # to set these cutoffs more scientifically.
+    n = length(arr)
+    n == 0 && return
+    shift = mod(shift, n)
+    shift == 0 && return
+    if n <= 64 && (isbits(T) ? n*sizeof(T) : n*sizeof(Ptr)) <= 512
+        # For small arrays (1 cache line on x86), just copy everything and do the out-of-place
+        # assignment - it's the fastest thing
+        return _circshift_stack!(arr, shift)
+    end
+    # Otherwise compute the GCD. If the GCD is large, we can do a relatively
+    # cache efficient operation by using some stack temporary memory. If
+    # not, just fall back to the knuth reversal trick, which does 3x the
+    # memory traffic, but is guaranteed to be cache efficient.
+    g = gcd(n, shift)
+    if g >= 64
+        return _circshift_gcd!(arr, shift, g, 1, div(n, g))
+    end
+    return _circshift_knuth!(arr, shift)
+end
