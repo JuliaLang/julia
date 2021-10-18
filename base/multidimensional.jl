@@ -125,11 +125,11 @@ module IteratorsMD
 
     # comparison
     @inline isless(I1::CartesianIndex{N}, I2::CartesianIndex{N}) where {N} = _isless(0, I1.I, I2.I)
-    @inline function _isless(ret, I1::Tuple{Int,Vararg{Int,N}}, I2::Tuple{Int,Vararg{Int,N}}) where {N}
+    @inline function _isless(ret, I1::Tuple{Int,Vararg{Int}}, I2::Tuple{Int,Vararg{Int}})
         newret = ifelse(ret==0, icmp(last(I1), last(I2)), ret)
         t1, t2 = Base.front(I1), Base.front(I2)
         # avoid dynamic dispatch by telling the compiler relational invariants
-        return isa(t1, Tuple{}) ? _isless(newret, (), ()) : _isless(newret, t1, t2::Tuple{Int,Vararg{Int}})
+        return isa(t1, Tuple{}) ? _isless(newret, (), t2::Tuple{}) : _isless(newret, t1, t2::Tuple{Int,Vararg{Int}})
     end
     _isless(ret, ::Tuple{}, ::Tuple{}) = ifelse(ret==1, true, false)
     icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
@@ -433,7 +433,7 @@ module IteratorsMD
         valid = __is_valid_range(I, rng) && state[1] != last(rng)
         return valid, (I, )
     end
-    @inline function __inc(state::Tuple{Int,Int,Vararg{Int,N}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt,N}}) where {N}
+    @inline function __inc(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
         I = state[1] + step(rng)
         if __is_valid_range(I, rng) && state[1] != last(rng)
@@ -546,7 +546,7 @@ module IteratorsMD
         valid = __is_valid_range(I, rng) && state[1] != first(rng)
         return valid, (I,)
     end
-    @inline function __dec(state::Tuple{Int,Int,Vararg{Int,N}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt,N}}) where {N}
+    @inline function __dec(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
         I = state[1] - step(rng)
         if __is_valid_range(I, rng) && state[1] != first(rng)
