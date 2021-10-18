@@ -115,22 +115,20 @@ Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
-function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
-    if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
-        throw(BoundsError(A,(i,j)))
-    end
+@inline function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
+    @boundscheck checkbounds(A, i, j)
     if i == j
-        return A.dv[i]
+        return @inbounds A.dv[i]
     elseif A.uplo == 'U' && (i == j - 1)
-        return A.ev[i]
+        return @inbounds A.ev[i]
     elseif A.uplo == 'L' && (i == j + 1)
-        return A.ev[j]
+        return @inbounds A.ev[j]
     else
         return zero(T)
     end
 end
 
-function setindex!(A::Bidiagonal, x, i::Integer, j::Integer)
+@inline function setindex!(A::Bidiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j
         @inbounds A.dv[i] = x
