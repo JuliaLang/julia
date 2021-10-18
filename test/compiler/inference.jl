@@ -3583,3 +3583,6 @@ let
     @test argtypes[10] == Any
     @test argtypes[11] == Tuple{Integer,Integer}
 end
+
+# issue #42646
+@test only(Base.return_types(getindex, (Array{undef}, Int))) >: Union{} # check that it does not throw

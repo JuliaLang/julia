@@ -62,7 +62,8 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
     if !toplevel && isva
         if specTypes == Tuple
             if nargs > 1
-                linfo_argtypes = svec(Any[Any for i = 1:(nargs - 1)]..., Tuple.parameters[1])
+                linfo_argtypes = Any[Any for i = 1:nargs]
+                linfo_argstypes[end] = Vararg{Any}
             end
             vargtype = Tuple
         else
@@ -77,9 +78,10 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 end
             else
                 vargtype_elements = Any[]
-                for p in linfo_argtypes[nargs:linfo_argtypes_length]
+                for i in nargs:linfo_argtypes_length
+                    p = linfo_argtypes[i]
                     p = unwraptv(isvarargtype(p) ? unconstrain_vararg_length(p) : p)
-                    push!(vargtype_elements, elim_free_typevars(rewrap(p, specTypes)))
+                    push!(vargtype_elements, elim_free_typevars(rewrap_unionall(p, specTypes)))
                 end
                 for i in 1:length(vargtype_elements)
                     atyp = vargtype_elements[i]
@@ -118,7 +120,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
             elseif isconstType(atyp)
                 atyp = Const(atyp.parameters[1])
             else
-                atyp = elim_free_typevars(rewrap(atyp, specTypes))
+                atyp = elim_free_typevars(rewrap_unionall(atyp, specTypes))
             end
             i == n && (lastatype = atyp)
             cache_argtypes[i] = atyp
