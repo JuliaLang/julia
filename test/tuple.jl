@@ -671,3 +671,11 @@ end
 
 # https://github.com/JuliaLang/julia/issues/40814
 @test Base.return_types(NTuple{3,Int}, (Vector{Int},)) == Any[NTuple{3,Int}]
+
+@testset "inference through isequal #42457" begin
+    function fluffs(a::Tuple{Int,Int,Int}, b::Tuple)::Bool
+        return Base.isequal(a, Base.inferencebarrier(b)::Tuple)
+    end
+
+    @test fluffs((1, 1, 1), (1, 1, 1))
+end
