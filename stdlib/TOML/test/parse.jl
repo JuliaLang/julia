@@ -1,5 +1,3 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
-
 using TOML, Test
 using TOML: ParserError
 
@@ -38,8 +36,6 @@ using TOML: ParserError
     @test_throws ParserError TOML.parsefile(SubString(invalid_path))
     @test_throws ParserError TOML.parsefile(p, invalid_path)
     @test_throws ParserError TOML.parsefile(p, SubString(invalid_path))
-    @test_throws ErrorException TOML.parsefile(homedir())
-    @test_throws ErrorException TOML.parsefile(p, homedir())
     # TOML.tryparsefile
     @test TOML.tryparsefile(path) == TOML.tryparsefile(SubString(path)) ==
           TOML.tryparsefile(p, path) == TOML.tryparsefile(p, SubString(path)) == dict
@@ -47,6 +43,4 @@ using TOML: ParserError
     @test TOML.tryparsefile(SubString(invalid_path)) isa ParserError
     @test TOML.tryparsefile(p, invalid_path) isa ParserError
     @test TOML.tryparsefile(p, SubString(invalid_path)) isa ParserError
-    @test_throws ErrorException TOML.tryparsefile(homedir())
-    @test_throws ErrorException TOML.tryparsefile(p, homedir())
 end

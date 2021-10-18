@@ -1,11 +1,13 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
-
 using Test
 import TOML: tryparsefile
 
 # These tests need to be updated if the error strings change
 
 tmp = tempname()
+
+if !isdefined(Base, :contains)
+    contains(x, y) = occursin(y, x)
+end
 
 @testset "error printing" begin
 

@@ -242,7 +242,7 @@ const err_message = Dict(
     ErrExpectedEqualAfterKey                => "expected equal sign after key",
     ErrNoTrailingDigitAfterDot              => "expected digit after dot",
     ErrOverflowError                        => "overflowed when parsing integer",
-    ErrInvalidUnicodeScalar                 => "invalid unicode scalar",
+    ErrInvalidUnicodeScalar                 => "invalid Unicode scalar",
     ErrInvalidEscapeCharacter               => "invalid escape character",
     ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value"
 )
@@ -484,7 +484,6 @@ end
 
 function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
-        d = d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
         if d isa Vector
@@ -933,21 +932,21 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
 accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
 function parse_datetime(l)
     # Year has already been eaten when we reach here
-    year = @try parse_int(l, false)
+    year = parse_int(l, false)::Int64
     year in 0:9999 || return ParserError(ErrParsingDateTime)
 
     # Month
     accept(l, '-') || return ParserError(ErrParsingDateTime)
     set_marker!(l)
     @try accept_two(l, isdigit)
-    month = @try parse_int(l, false)
+    month = parse_int(l, false)
     month in 1:12 || return ParserError(ErrParsingDateTime)
     accept(l, '-') || return ParserError(ErrParsingDateTime)
 
     # Day
     set_marker!(l)
     @try accept_two(l, isdigit)
-    day = @try parse_int(l, false)
+    day = parse_int(l, false)
     # Verify the real range in the constructor below
     day in 1:31 || return ParserError(ErrParsingDateTime)
 
@@ -984,10 +983,9 @@ function parse_datetime(l)
 end
 
 function try_return_datetime(p, year, month, day, h, m, s, ms)
-    Dates = p.Dates
-    if Dates !== nothing
+    if p.Dates !== nothing
         try
-            return Dates.DateTime(year, month, day, h, m, s, ms)
+            return p.Dates.DateTime(year, month, day, h, m, s, ms)
         catch
             return ParserError(ErrParsingDateTime)
         end
@@ -997,10 +995,9 @@ function try_return_datetime(p, year, month, day, h, m, s, ms)
 end
 
 function try_return_date(p, year, month, day)
-    Dates = p.Dates
-    if Dates !== nothing
+    if p.Dates !== nothing
         try
-            return Dates.Date(year, month, day)
+            return p.Dates.Date(year, month, day)
         catch
             return ParserError(ErrParsingDateTime)
         end
@@ -1010,7 +1007,7 @@ function try_return_date(p, year, month, day)
 end
 
 function parse_local_time(l::Parser)
-    h = @try parse_int(l, false)
+    h = parse_int(l, false)
     h in 0:23 || return ParserError(ErrParsingDateTime)
     _, m, s, ms = @try _parse_local_time(l, true)
     # TODO: Could potentially parse greater accuracy for the
@@ -1019,10 +1016,9 @@ function parse_local_time(l::Parser)
 end
 
 function try_return_time(p, h, m, s, ms)
-    Dates = p.Dates
-    if Dates !== nothing
+    if p.Dates !== nothing
         try
-            return Dates.Time(h, m, s, ms)
+            return p.Dates.Time(h, m, s, ms)
         catch
             return ParserError(ErrParsingDateTime)
         end
@@ -1181,4 +1177,4 @@ function take_chunks(l::Parser, unescape::Bool)::String
     return unescape ? unescape_string(str) : str
 end
 
-end
+end # module TOML

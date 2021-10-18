@@ -1,5 +1,3 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
-
 using Documenter
 import TOML
 
@@ -13,4 +11,4 @@ makedocs(
         ]
     )
 
-deploydocs(repo = "github.com/KristofferC/TOML.jl.git")
+deploydocs(repo = "github.com/JuliaLang/TOML.jl.git")

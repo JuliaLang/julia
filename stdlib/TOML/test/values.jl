@@ -1,5 +1,3 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
-
 using Test
 using TOML
 using TOML: Internals
@@ -39,8 +37,8 @@ end
     @test testval("1.0e0"       , 1.0)
     @test testval("1.0e+0"      , 1.0)
     @test testval("1.0e-0"      , 1.0)
-    @test testval("0e-3"        , 0.0)
     @test testval("1.001e-0"    , 1.001)
+    @test testval("0e-3"        , 0.0)
     @test testval("2e10"        , 2e10)
     @test testval("2e+10"       , 2e10)
     @test testval("2e-10"       , 2e-10)

@@ -3,22 +3,23 @@
 module TOML
 
 module Internals
+
     # The parser is defined in Base
     using Base.TOML: Parser, parse, tryparse, ParserError, isvalid_barekey_char, reinit!
+
     # Put the error instances in this module
     for errtype in instances(Base.TOML.ErrorType)
         @eval using Base.TOML: $(Symbol(errtype))
     end
+
     # We put the printing functionality in a separate module since It
     # defines a function `print` and we don't want that to collide with normal
     # usage of `(Base.)print` in other files
     module Printer
         include("print.jl")
-    end
-end
+    end # module TOML.Internals.Printer
 
-# https://github.com/JuliaLang/julia/issues/36605
-readstring(f::AbstractString) = isfile(f) ? read(f, String) : error(repr(f), ": No such file")
+end # module TOML.Internals
 
 """
     Parser()
@@ -38,12 +39,12 @@ const Parser = Internals.Parser
 Parse file `f` and return the resulting table (dictionary). Throw a
 [`ParserError`](@ref) upon failure.
 
-See also [`TOML.tryparsefile`](@ref).
+See also: [`TOML.tryparsefile`](@ref)
 """
 parsefile(f::AbstractString) =
-    Internals.parse(Parser(readstring(f); filepath=abspath(f)))
+    Internals.parse(Parser(read(f, String); filepath=abspath(f)))
 parsefile(p::Parser, f::AbstractString) =
-    Internals.parse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
+    Internals.parse(Internals.reinit!(p, read(f, String); filepath=abspath(f)))
 
 """
     tryparsefile(f::AbstractString)
@@ -52,12 +53,12 @@ parsefile(p::Parser, f::AbstractString) =
 Parse file `f` and return the resulting table (dictionary). Return a
 [`ParserError`](@ref) upon failure.
 
-See also [`TOML.parsefile`](@ref).
+See also: [`TOML.parsefile`](@ref)
 """
 tryparsefile(f::AbstractString) =
-    Internals.tryparse(Parser(readstring(f); filepath=abspath(f)))
+    Internals.tryparse(Parser(read(f, String); filepath=abspath(f)))
 tryparsefile(p::Parser, f::AbstractString) =
-    Internals.tryparse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
+    Internals.tryparse(Internals.reinit!(p, read(f, String); filepath=abspath(f)))
 
 """
     parse(x::Union{AbstractString, IO})
@@ -66,7 +67,7 @@ tryparsefile(p::Parser, f::AbstractString) =
 Parse the string  or stream `x`, and return the resulting table (dictionary).
 Throw a [`ParserError`](@ref) upon failure.
 
-See also [`TOML.tryparse`](@ref).
+See also: [`TOML.tryparse`](@ref)
 """
 parse(str::AbstractString) =
     Internals.parse(Parser(String(str)))
@@ -82,7 +83,7 @@ parse(p::Parser, io::IO) = parse(p, read(io, String))
 Parse the string or stream `x`, and return the resulting table (dictionary).
 Return a [`ParserError`](@ref) upon failure.
 
-See also [`TOML.parse`](@ref).
+See also: [`TOML.parse`](@ref)
 """
 tryparse(str::AbstractString) =
     Internals.tryparse(Parser(String(str)))
@@ -105,10 +106,11 @@ const ParserError = Internals.ParserError
 
 
 """
-    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sorted=false, by=identity)
+    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sort=false, by=identity)
 
-Write `data` as TOML syntax to the stream `io`. If the keyword argument `sorted` is set to `true`,
-sort tables according to the function given by the keyword argument `by`.
+Writes `data` as TOML syntax to the stream `io`. The keyword argument `sort`
+sorts the output on the keys of the tables with the top level tables are
+sorted according to the keyword argument `by`.
 
 The following data types are supported: `AbstractDict`, `Integer`, `AbstractFloat`, `Bool`,
 `Dates.DateTime`, `Dates.Time`, `Dates.Date`. Note that the integers and floats
@@ -118,4 +120,4 @@ supported type.
 """
 const print = Internals.Printer.print
 
-end
+end # module TOML
