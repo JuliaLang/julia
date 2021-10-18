@@ -11,30 +11,36 @@ copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
     union(s, itrs...)
     ∪(s, itrs...)
 
-Construct the union of sets. Maintain order with arrays.
+Construct an object containing all elements from all of the arguments.
 
-See also: [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
+The first argument controls what kind of container is returned.
+If this is an array, it maintains the order in which elements first appear.
+Elements are compared using [`==`](@ref).
+
+Unicode `∪` can be typed by writing `\cup` then pressing tab in the Julia REPL, and in many editors.
+
+See also [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
 
 # Examples
 ```jldoctest
-julia> union([1, 2], [3, 4])
-4-element Vector{Int64}:
+julia> union([1, 2], [3])
+3-element Vector{Int64}:
  1
  2
  3
- 4
 
-julia> union([1, 2], [2, 4])
-3-element Vector{Int64}:
- 1
- 2
- 4
+julia> union([4 2 3], 1:3, 3.0)
+4-element Vector{Float64}:
+ 4.0
+ 2.0
+ 3.0
+ 1.0
 
-julia> union([4, 2], 1:2)
-3-element Vector{Int64}:
- 4
- 2
- 1
+julia> (0, 0.0) ∪ (-0.0, NaN)
+3-element Vector{Real}:
+   0
+  -0.0
+ NaN
 
 julia> union(Set([1, 2]), 2:3)
 Set{Int64} with 3 elements:
@@ -53,14 +59,14 @@ const ∪ = union
 """
     union!(s::Union{AbstractSet,AbstractVector}, itrs...)
 
-Construct the union of passed in sets and overwrite `s` with the result.
+Construct the [`union`](@ref) of passed in sets and overwrite `s` with the result.
 Maintain order with arrays.
 
 # Examples
 ```jldoctest
-julia> a = Set([1, 3, 4, 5]);
+julia> a = Set([3, 4, 5]);
 
-julia> union!(a, 1:2:8);
+julia> union!(a, 1:2:7);
 
 julia> a
 Set{Int64} with 5 elements:
