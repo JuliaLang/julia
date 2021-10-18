@@ -145,24 +145,24 @@ isdiag(D::Diagonal) = all(isdiag, D.diag)
 isdiag(D::Diagonal{<:Number}) = true
 istriu(D::Diagonal, k::Integer=0) = k <= 0 || iszero(D.diag) ? true : false
 istril(D::Diagonal, k::Integer=0) = k >= 0 || iszero(D.diag) ? true : false
-function triu!(D::Diagonal,k::Integer=0)
+function triu!(D::Diagonal{T}, k::Integer=0) where T
     n = size(D,1)
     if !(-n + 1 <= k <= n + 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 0
-        fill!(D.diag,0)
+        fill!(D.diag, zero(T))
     end
     return D
 end
 
-function tril!(D::Diagonal,k::Integer=0)
+function tril!(D::Diagonal{T}, k::Integer=0) where T
     n = size(D,1)
     if !(-n - 1 <= k <= n - 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < 0
-        fill!(D.diag,0)
+        fill!(D.diag, zero(T))
     end
     return D
 end
@@ -488,13 +488,13 @@ adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 Base.permutedims(D::Diagonal) = D
 Base.permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
 
-function diag(D::Diagonal, k::Integer=0)
+function diag(D::Diagonal{T}, k::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of k
     if k == 0
         return copyto!(similar(D.diag, length(D.diag)), D.diag)
     elseif -size(D,1) <= k <= size(D,1)
-        return fill!(similar(D.diag, size(D,1)-abs(k)), 0)
+        return fill!(similar(D.diag, size(D,1)-abs(k)), zero(T))
     else
         throw(ArgumentError(string("requested diagonal, $k, must be at least $(-size(D, 1)) ",
             "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
@@ -586,12 +586,12 @@ end
 #Singular system
 svdvals(D::Diagonal{<:Number}) = sort!(abs.(D.diag), rev = true)
 svdvals(D::Diagonal) = [svdvals(v) for v in D.diag]
-function svd(D::Diagonal{<:Number})
+function svd(D::Diagonal{T}) where T<:Number
     S   = abs.(D.diag)
     piv = sortperm(S, rev = true)
     U   = Diagonal(D.diag ./ S)
     Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
-    V   = Diagonal(fill!(similar(D.diag), one(eltype(D.diag))))
+    V   = Diagonal(fill!(similar(D.diag), one(T)))
     Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
     return SVD(Up, S[piv], copy(Vp'))
 end

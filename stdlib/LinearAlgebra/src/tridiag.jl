@@ -175,7 +175,7 @@ Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(ad
 ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(_evview(S))
 issymmetric(S::SymTridiagonal) = true
 
-function diag(M::SymTridiagonal{<:Number}, n::Integer=0)
+function diag(M::SymTridiagonal{T}, n::Integer=0) where T<:Number
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     absn = abs(n)
@@ -184,7 +184,7 @@ function diag(M::SymTridiagonal{<:Number}, n::Integer=0)
     elseif absn == 1
         return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
     elseif absn <= size(M,1)
-        return fill!(similar(M.dv, size(M,1)-absn), 0)
+        return fill!(similar(M.dv, size(M,1)-absn), zero(T))
     else
         throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
             "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
@@ -376,17 +376,17 @@ isone(M::SymTridiagonal) =  iszero(_evview(M)) && all(isone, M.dv)
 isdiag(M::SymTridiagonal) =  iszero(_evview(M))
 
 
-function tril!(M::SymTridiagonal, k::Integer=0)
+function tril!(M::SymTridiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n - 1 <= k <= n - 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < -1
-        fill!(M.ev,0)
-        fill!(M.dv,0)
+        fill!(M.ev, zero(T))
+        fill!(M.dv, zero(T))
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     elseif k == -1
-        fill!(M.dv,0)
+        fill!(M.dv, zero(T))
         return Tridiagonal(M.ev,M.dv,zero(M.ev))
     elseif k == 0
         return Tridiagonal(M.ev,M.dv,zero(M.ev))
@@ -395,17 +395,17 @@ function tril!(M::SymTridiagonal, k::Integer=0)
     end
 end
 
-function triu!(M::SymTridiagonal, k::Integer=0)
+function triu!(M::SymTridiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n + 1 <= k <= n + 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 1
-        fill!(M.ev,0)
-        fill!(M.dv,0)
+        fill!(M.ev, zero(T))
+        fill!(M.dv, zero(T))
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     elseif k == 1
-        fill!(M.dv,0)
+        fill!(M.dv, zero(T))
         return Tridiagonal(zero(M.ev),M.dv,M.ev)
     elseif k == 0
         return Tridiagonal(zero(M.ev),M.dv,M.ev)
@@ -617,7 +617,7 @@ issymmetric(S::Tridiagonal) = S.du == S.dl
 
 \(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = copy(A) \ B
 
-function diag(M::Tridiagonal, n::Integer=0)
+function diag(M::Tridiagonal{T}, n::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     if n == 0
@@ -627,7 +627,7 @@ function diag(M::Tridiagonal, n::Integer=0)
     elseif n == 1
         return copyto!(similar(M.du, length(M.du)), M.du)
     elseif abs(n) <= size(M,1)
-        return fill!(similar(M.d, size(M,1)-abs(n)), 0)
+        return fill!(similar(M.d, size(M,1)-abs(n)), zero(T))
     else
         throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
             "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
@@ -696,38 +696,38 @@ function istril(M::Tridiagonal, k::Integer=0)
 end
 isdiag(M::Tridiagonal) = iszero(M.dl) && iszero(M.du)
 
-function tril!(M::Tridiagonal, k::Integer=0)
+function tril!(M::Tridiagonal{T}, k::Integer=0) where T
     n = length(M.d)
     if !(-n - 1 <= k <= n - 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < -1
-        fill!(M.dl,0)
-        fill!(M.d,0)
-        fill!(M.du,0)
+        fill!(M.dl, zero(T))
+        fill!(M.d, zero(T))
+        fill!(M.du, zero(T))
     elseif k == -1
-        fill!(M.d,0)
-        fill!(M.du,0)
+        fill!(M.d, zero(T))
+        fill!(M.du, zero(T))
     elseif k == 0
-        fill!(M.du,0)
+        fill!(M.du, zero(T))
     end
     return M
 end
 
-function triu!(M::Tridiagonal, k::Integer=0)
+function triu!(M::Tridiagonal{T}, k::Integer=0) where T
     n = length(M.d)
     if !(-n + 1 <= k <= n + 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 1
-        fill!(M.dl,0)
-        fill!(M.d,0)
-        fill!(M.du,0)
+        fill!(M.dl, zero(T))
+        fill!(M.d, zero(T))
+        fill!(M.du, zero(T))
     elseif k == 1
-        fill!(M.dl,0)
-        fill!(M.d,0)
+        fill!(M.dl, zero(T))
+        fill!(M.d, zero(T))
     elseif k == 0
-        fill!(M.dl,0)
+        fill!(M.dl, zero(T))
     end
     return M
 end
