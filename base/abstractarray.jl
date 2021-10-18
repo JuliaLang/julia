@@ -3099,5 +3099,16 @@ function _keepat!(a::AbstractVector, m::AbstractVector{Bool})
         end
     end
     deleteat!(a, j:lastindex(a))
+end
+
+## 1-d circshift ##
+function circshift!(a::AbstractVector, shift::Integer)
+    n = length(a)
+    n == 0 && return
+    shift = mod(shift, n)
+    shift == 0 && return
+    reverse!(a, 1, shift)
+    reverse!(a, shift+1, length(a))
+    reverse!(a)
     return a
 end

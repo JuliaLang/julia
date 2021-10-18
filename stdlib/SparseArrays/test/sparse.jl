@@ -3294,4 +3294,26 @@ end
     @test eval(Meta.parse(repr(m))) == m
 end
 
+using Base: swaprows!, swapcols!
+@testset "swaprows!, swapcols!" begin
+    S = sparse(
+        [ 0   0  0  0  0   0
+          0  -1  1  1  0   0
+          0   0  0  1  1   0
+          0   0  1  1  1  -1])
+
+    for (f!, i, j) in
+            ((swaprows!, 1, 2), # Test swapping rows where one row is fully sparse
+             (swaprows!, 2, 3), # Test swapping rows of unequal length
+             (swaprows!, 2, 4), # Test swapping non-adjacent rows
+             (swapcols!, 1, 2), # Test swapping columns where one column is fully sparse
+             (swapcols!, 2, 3), # Test swapping coulms of unequal length
+             (swapcols!, 2, 4)) # Test swapping non-adjacent columns
+        Scopy = copy(S)
+        Sdense = Array(S)
+        f!(Scopy, i, j); f!(Sdense, i, j)
+        @test Scopy == Sdense
+    end
+end
+
 end # module
