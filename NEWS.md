@@ -12,6 +12,8 @@ New language features
   to enforce the involved function calls to be (or not to be) inlined. ([#41312])
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
+* `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
+  no errors were thrown. ([#42211])
 
 Language changes
 ----------------
