@@ -18,8 +18,9 @@ If this is an array, it maintains the order in which elements first appear.
 Elements are compared using [`==`](@ref).
 
 Unicode `∪` can be typed by writing `\cup` then pressing tab in the Julia REPL, and in many editors.
+This is an infix operator, `s ∪ itr`.
 
-See also [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
+See also [`unique`](@ref), [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
 
 # Examples
 ```jldoctest
