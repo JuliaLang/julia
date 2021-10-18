@@ -148,8 +148,7 @@ function vect(X...)
 end
 
 size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
-size(a::Vector) = (arraylen(a),)
-# size(a::Vector) = (arraysize(a,1),)
+size(a::Vector) = (arraylen(a),) # arraylen is equivalent, but slightly nicer, to `arraysize(a, 1)`
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 size(a::Array{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::Dims)
 
