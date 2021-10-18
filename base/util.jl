@@ -572,7 +572,12 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     tempdepot = mktempdir(; cleanup = true)
     if revise
-        ENV2["JULIA_DEPOT_PATH"] = join([tempdepot; DEPOT_PATH], @static Sys.iswindows() ? ";" : ":")
+        @static if Sys.iswindows()
+            path_env_sep = ";"
+        else
+            path_env_sep = ":"
+        end
+        ENV2["JULIA_DEPOT_PATH"] = join([tempdepot; DEPOT_PATH], path_env_sep)
     else
         ENV2["JULIA_DEPOT_PATH"] = tempdepot
     end
