@@ -570,7 +570,12 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
     seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
-    ENV2["JULIA_DEPOT_PATH"] = join([mktempdir(; cleanup = true); DEPOT_PATH], @static Sys.iswindows() ? ";" : ":")
+    tempdepot = mktempdir(; cleanup = true)
+    if revise
+        ENV2["JULIA_DEPOT_PATH"] = join([tempdepot; DEPOT_PATH], @static Sys.iswindows() ? ";" : ":")
+    else
+        ENV2["JULIA_DEPOT_PATH"] = tempdepot
+    end
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
