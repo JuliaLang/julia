@@ -137,7 +137,7 @@ julia> isequal(missing, missing)
 true
 ```
 """
-isequal(x, y) = x == y
+isequal(x, y) = (x == y)::Bool # all `missing` cases are handled in missing.jl
 
 signequal(x, y) = signbit(x)::Bool == signbit(y)::Bool
 signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
@@ -717,13 +717,13 @@ julia> bitstring(Int8(12))
 See also [`>>`](@ref), [`>>>`](@ref), [`exp2`](@ref), [`ldexp`](@ref).
 """
 function <<(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
     (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
     oftype(x, -1)
 end
 function <<(x::Integer, c::Unsigned)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(<<, (x, c)))
     end
@@ -762,7 +762,7 @@ julia> bitstring(Int8(-4))
 See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(>>, (x, c)))
     end
@@ -800,11 +800,11 @@ is equivalent to [`>>`](@ref).
 See also [`>>`](@ref), [`<<`](@ref).
 """
 function >>>(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x) >>> 0
 end
 function >>>(x::Integer, c::Unsigned)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(>>>, (x, c)))
     end
@@ -875,15 +875,24 @@ const ÷ = div
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
 in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
 
-See also [`fld1`](@ref), [`fldmod1`](@ref).
+With integer arguments and positive `y`, this is equal to `mod(x, 1:y)`, and hence natural
+for 1-based indexing. By comparison, `mod(x, y) == mod(x, 0:y-1)` is natural for computations with
+offsets or strides.
+
+See also [`mod`](@ref), [`fld1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
 julia> mod1(4, 2)
 2
 
-julia> mod1(4, 3)
-1
+julia> mod1.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ 1  2  3  1  2  3  1  2  3  1  2
+
+julia> mod1.([-0.1, 0, 0.1, 1, 2, 2.9, 3, 3.1]', 3)
+1×8 Matrix{Float64}:
+ 2.9  3.0  0.1  1.0  2.0  2.9  3.0  0.1
 ```
 """
 mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
@@ -986,7 +995,7 @@ julia> f.value
 ```
 
 !!! compat "Julia 1.7"
-    Returns requires at least Julia 1.7.
+    `Returns` requires at least Julia 1.7.
 """
 struct Returns{V} <: Function
     value::V

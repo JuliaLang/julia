@@ -75,6 +75,9 @@ HAVE_SSP := 0
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
+# Enable DTrace support
+WITH_DTRACE := 0
+
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
@@ -86,6 +89,10 @@ define newline # a literal \n
 endef
 COMMA:=,
 SPACE:=$(eval) $(eval)
+
+# force a sane / stable configuration
+export LC_ALL=C
+export LANG=C
 
 # We need python for things like BB triplet recognition and relative path computation.
 # We don't really care about version, generally, so just find something that works:
@@ -328,6 +335,7 @@ BUILD_LLVM_CLANG := 0
 # set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
+BUILD_LIBCXX := 0
 
 # Options to enable Polly and its code-generation options
 USE_POLLY := 0
@@ -440,32 +448,14 @@ endif
 
 # Compiler specific stuff
 
-ifeq ($(USEMSVC), 1)
-USEGCC := 0
-USECLANG := 0
-USEICC := 0
-else
-USEMSVC := 0
 ifeq ($(USECLANG), 1)
 USEGCC := 0
-USEICC := 0
-else
-ifeq ($(USEICC), 1)
-USEGCC := 0
-USECLANG := 0
 else  # default to gcc
 USEGCC := 1
 USECLANG := 0
-USEICC := 0
-endif
-endif
 endif
 
-ifeq ($(USEIFC), 1)
-FC := ifort
-else
 FC := $(CROSS_COMPILE)gfortran
-endif
 
 ifeq ($(OS), FreeBSD)
 USEGCC := 0
@@ -521,19 +511,6 @@ JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
-ifeq ($(USEICC),1)
-ifeq ($(SANITIZE),1)
-$(error Sanitizers only supported with clang. Try setting SANITIZE=0)
-endif
-CC  := icc
-CXX := icpc
-JCFLAGS := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
-JCPPFLAGS :=
-JCXXFLAGS := -pipe $(fPIC) -fno-rtti -std=c++14
-DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector
-SHIPFLAGS := -O3 -g -falign-functions
-endif
-
 ifeq ($(USECCACHE), 1)
 # Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
 CC_ARG   := $(CC)
@@ -569,29 +546,14 @@ FC_ARG := $(shell echo $(FC) | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
-ifneq ($(USEMSVC),1)
 CPP := $(CC) -E
 AR := $(CROSS_COMPILE)ar
 AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
-else #USEMSVC
-CPP := $(CC) -EP
-AR := lib
-ifeq ($(ARCH),x86_64)
-AS := ml64
-else
-AS := ml
-endif #ARCH
-LD := link
-endif #USEMSVC
 RANLIB := $(CROSS_COMPILE)ranlib
 OBJCOPY := $(CROSS_COMPILE)objcopy
 
-ifneq ($(USEMSVC), 1)
 CPP_STDOUT := $(CPP) -P
-else
-CPP_STDOUT := $(CPP) -E
-endif
 
 # file extensions
 ifeq ($(OS), WINNT)
@@ -626,7 +588,7 @@ define SONAME_FLAGS
 endef
 endif
 
-ifeq ($(OS)$(USEMSVC),WINNT0)
+ifeq ($(OS),WINNT)
 define IMPLIB_FLAGS
   -Wl,--out-implib,$(build_libdir)/$(notdir $1).a
 endef
@@ -753,6 +715,13 @@ endif
 ifeq ($(WITH_GC_DEBUG_ENV), 1)
 JCXXFLAGS += -DGC_DEBUG_ENV
 JCFLAGS += -DGC_DEBUG_ENV
+endif
+
+ifeq ($(WITH_DTRACE), 1)
+JCXXFLAGS += -DUSE_DTRACE
+JCFLAGS += -DUSE_DTRACE
+DTRACE := dtrace
+else
 endif
 
 # ===========================================================================
@@ -920,6 +889,7 @@ OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
 USE_BLAS64:=1
 BINARY:=64
+HAVE_SSP:=1
 ifeq ($(OS),Darwin)
 # Apple Chips are all at least A12Z
 MCPU:=apple-a12
@@ -969,7 +939,6 @@ JCXXFLAGS += -D_FILE_OFFSET_BITS=64
 endif
 
 # Set some ARCH-specific flags
-ifneq ($(USEICC),1)
 ifeq ($(ISX86),1)
 CC += -m$(BINARY)
 CXX += -m$(BINARY)
@@ -977,7 +946,6 @@ FC += -m$(BINARY)
 CC_ARG += -m$(BINARY)
 CXX_ARG += -m$(BINARY)
 FC_ARG += -m$(BINARY)
-endif
 endif
 
 ifeq ($(OS),WINNT)
@@ -1168,7 +1136,10 @@ BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(s
 LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL
+# Note: we explicitly _do not_ define `CSL` here, since it requires some more
+# advanced techniques to decide whether it should be installed from a BB source
+# or not.  See `deps/csl.mk` for more detail.
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1237,7 +1208,7 @@ endif
 ifeq ($(OS), Darwin)
   WHOLE_ARCHIVE := -Xlinker -all_load
   NO_WHOLE_ARCHIVE :=
-else ifneq ($(USEMSVC), 1)
+else
   WHOLE_ARCHIVE := -Wl,--whole-archive
   NO_WHOLE_ARCHIVE := -Wl,--no-whole-archive
 endif
@@ -1292,17 +1263,12 @@ JLIBLDFLAGS := -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULI
 endif
 
 ifeq ($(OS), WINNT)
-ifneq ($(USEMSVC), 1)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic
 JLDFLAGS := -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
-endif
-else #USEMSVC
-OSLIBS += kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib shell32.lib winmm.lib userenv.lib secur32.lib
-JLDFLAGS := -stack:8388608
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0502
 UNTRUSTED_SYSTEM_LIBM := 1
@@ -1353,6 +1319,7 @@ endif
 
 # Custom libcxx
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+$(error BUILD_CUSTOM_LIBCXX is currently not supported, BUILD_LIBCXX will provide LIBCXX but not link it)
 LDFLAGS += -L$(build_libdir)
 CXXLDFLAGS += -L$(build_libdir) -lc++abi -lc++
 ifeq ($(USECLANG),1)
@@ -1363,11 +1330,6 @@ $(error BUILD_CUSTOM_LIBCXX is currently only supported with Clang. Try setting 
 endif
 endif # Clang
 CUSTOM_LD_LIBRARY_PATH := LD_LIBRARY_PATH="$(build_libdir)"
-ifeq ($(USEICC),1)
-CXXFLAGS += -cxxlib-nostd -static-intel
-CLDFLAGS += -static-intel
-LDFLAGS += -cxxlib-nostd -static-intel
-endif
 endif
 
 # Some special restrictions on BB usage:
@@ -1481,6 +1443,12 @@ LIBJULIAINTERNAL_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlib
 LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
 LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
 
+LIBJULIACODEGEN_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
+
+LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
+
 ifeq ($(OS),WINNT)
 ifeq ($(BINARY),32)
 LIBGCC_NAME := libgcc_s_sjlj-1.$(SHLIB_EXT)
@@ -1520,16 +1488,19 @@ LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBMN
 # We list:
 #  * libgcc_s, because FreeBSD needs to load ours, not the system one.
 #  * libopenlibm, because Windows has an untrustworthy libm, and we want to use ours more than theirs
-#  * libjulia, which must always come last.
+#  * libjulia-internal, which must always come second-to-last.
+#  * libjulia-codegen, which must always come last
 #
 # We need these four separate variables because:
 #  * debug builds must link against libjuliadebug, not libjulia
 #  * install time relative paths are not equal to build time relative paths (../lib vs. ../lib/julia)
 # That second point will no longer be true for most deps once they are placed within Artifacts directories.
-LOADER_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):$(LIBJULIAINTERNAL_BUILD_DEPLIB)
-LOADER_DEBUG_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB)
-LOADER_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):$(LIBJULIAINTERNAL_INSTALL_DEPLIB)
-LOADER_DEBUG_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB)
+# Note that we prefix `libjulia-codegen` and `libjulia-internal` with `@` to signify to the loader that it
+# should not automatically dlopen() it in its loading loop.
+LOADER_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):@$(LIBJULIAINTERNAL_BUILD_DEPLIB):@$(LIBJULIACODEGEN_BUILD_DEPLIB):
+LOADER_DEBUG_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):@$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB):@$(LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB):
+LOADER_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):@$(LIBJULIAINTERNAL_INSTALL_DEPLIB):@$(LIBJULIACODEGEN_INSTALL_DEPLIB):
+LOADER_DEBUG_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):@$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB):@$(LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB):
 
 # Colors for make
 ifndef VERBOSE
@@ -1548,6 +1519,7 @@ LINKCOLOR:="\033[34;1m"
 PERLCOLOR:="\033[35m"
 FLISPCOLOR:="\033[32m"
 JULIACOLOR:="\033[32;1m"
+DTRACECOLOR:="\033[32;1m"
 
 SRCCOLOR:="\033[33m"
 BINCOLOR:="\033[37;1m"
@@ -1561,6 +1533,7 @@ PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)
 PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_DTRACE = printf '    %b %b\n' $(DTRACECOLOR)DTRACE$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 
 else
 QUIET_MAKE =
@@ -1570,6 +1543,7 @@ PRINT_LINK = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_PERL = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_DTRACE = echo '$(subst ','\'',$(1))'; $(1)
 
 endif
 

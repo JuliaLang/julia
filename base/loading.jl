@@ -769,7 +769,7 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
     return restored
 end
 
-function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::Union{Nothing, String})
+function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::Union{Nothing, String}, depth::Int = 0)
     if root_module_exists(modkey)
         M = root_module(modkey)
         if PkgId(M) == modkey && module_build_id(M) === build_id
@@ -780,7 +780,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::U
             modpath = locate_package(modkey)
             modpath === nothing && return nothing
         end
-        mod = _require_search_from_serialized(modkey, String(modpath))
+        mod = _require_search_from_serialized(modkey, String(modpath), depth)
         get!(PkgOrigin, pkgorigins, modkey).path = modpath
         if !isa(mod, Bool)
             for callback in package_callbacks
@@ -821,10 +821,14 @@ function _require_from_serialized(path::String)
     return _include_from_serialized(path, depmods)
 end
 
+# use an Int counter so that nested @time_imports calls all remain open
+const TIMING_IMPORTS = Threads.Atomic{Int}(0)
+
 # returns `true` if require found a precompile cache for this sourcepath, but couldn't load it
 # returns `false` if the module isn't known to be precompilable
 # returns the set of modules restored if the cache load succeeded
-function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
+function _require_search_from_serialized(pkg::PkgId, sourcepath::String, depth::Int = 0)
+    t_before = time_ns()
     paths = find_all_in_cache_path(pkg)
     for path_to_try in paths::Vector{String}
         staledeps = stale_cachefile(sourcepath, path_to_try)
@@ -840,7 +844,7 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
             dep = staledeps[i]
             dep isa Module && continue
             modpath, modkey, build_id = dep::Tuple{String, PkgId, UInt64}
-            dep = _tryrequire_from_serialized(modkey, build_id, modpath)
+            dep = _tryrequire_from_serialized(modkey, build_id, modpath, depth + 1)
             if dep === nothing
                 @debug "Required dependency $modkey failed to load from cache file for $modpath."
                 staledeps = true
@@ -855,6 +859,13 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
         if isa(restored, Exception)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
+            if TIMING_IMPORTS[] > 0
+                elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
+                tree_prefix = depth == 0 ? "" : "$("  "^(depth-1))┌ "
+                print("$(lpad(elapsed, 9)) ms  ")
+                printstyled(tree_prefix, color = :light_black)
+                println(pkg.name)
+            end
             return restored
         end
     end
@@ -964,10 +975,20 @@ function require(into::Module, mod::Symbol)
         if uuidkey === nothing
             where = PkgId(into)
             if where.uuid === nothing
+                hint, dots = begin
+                    if isdefined(into, mod) && getfield(into, mod) isa Module
+                        true, "."
+                    elseif isdefined(parentmodule(into), mod) && getfield(parentmodule(into), mod) isa Module
+                        true, ".."
+                    else
+                        false, ""
+                    end
+                end
+                hint_message = hint ? ", maybe you meant `import/using $(dots)$(mod)`" : ""
+                start_sentence = hint ? "Otherwise, run" : "Run"
                 throw(ArgumentError("""
-                    Package $mod not found in current path:
-                    - Run `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package.
-                    """))
+                    Package $mod not found in current path$hint_message.
+                    - $start_sentence `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package."""))
             else
                 s = """
                 Package $(where.name) does not have $mod in its dependencies:
@@ -1241,7 +1262,7 @@ Base.include # defined in Base.jl
 
 # Full include() implementation which is used after bootstrap
 function _include(mapexpr::Function, mod::Module, _path::AbstractString)
-    @_noinline_meta # Workaround for module availability in _simplify_include_frames
+    @noinline # Workaround for module availability in _simplify_include_frames
     path, prev = _include_dependency(mod, _path)
     for callback in include_callbacks # to preserve order, must come before eval in include_string
         invokelatest(callback, mod, path)
@@ -1345,8 +1366,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     for (pkg, build_id) in concrete_deps
         push!(deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
     end
-    deps = repr(eltype(concrete_deps)) * "[" * join(deps_strs, ",") * "]"
-
+    deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
+    deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
     io = open(pipeline(`$(julia_cmd()::Cmd) -O0
                        --output-ji $output --output-incremental=yes
@@ -1435,8 +1456,8 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             open(tmppath, "a+") do f
                 write(f, _crc32c(seekstart(f)))
             end
-            # inherit permission from the source file
-            chmod(tmppath, filemode(path) & 0o777)
+            # inherit permission from the source file (and make them writable)
+            chmod(tmppath, filemode(path) & 0o777 | 0o200)
 
             # Read preferences hash back from .ji file (we can't precompute because
             # we don't actually know what the list of compile-time preferences are without compiling)
@@ -1793,7 +1814,7 @@ get_compiletime_preferences(::Nothing) = String[]
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl"
 # otherwise returns the list of dependencies to also check
-function stale_cachefile(modpath::String, cachefile::String)
+function stale_cachefile(modpath::String, cachefile::String; ignore_loaded = false)
     io = open(cachefile, "r")
     try
         if !isvalid_cache_header(io)
@@ -1814,11 +1835,15 @@ function stale_cachefile(modpath::String, cachefile::String)
                 M = root_module(req_key)
                 if PkgId(M) == req_key && module_build_id(M) === req_build_id
                     depmods[i] = M
+                elseif ignore_loaded
+                    # Used by Pkg.precompile given that there it's ok to precompile different versions of loaded packages
+                    @goto locate_branch
                 else
                     @debug "Rejecting cache file $cachefile because module $req_key is already loaded and incompatible."
                     return true # Won't be able to fulfill dependency
                 end
             else
+                @label locate_branch
                 path = locate_package(req_key)
                 get!(PkgOrigin, pkgorigins, req_key).path = path
                 if path === nothing
@@ -1926,11 +1951,13 @@ function precompile(@nospecialize(f), args::Tuple)
     precompile(Tuple{Core.Typeof(f), args...})
 end
 
+const ENABLE_PRECOMPILE_WARNINGS = Ref(false)
 function precompile(argt::Type)
-    if ccall(:jl_compile_hint, Int32, (Any,), argt) == 0
+    ret = ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
+    if !ret && ENABLE_PRECOMPILE_WARNINGS[]
         @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
     end
-    true
+    return ret
 end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))

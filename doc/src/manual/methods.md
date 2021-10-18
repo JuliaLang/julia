@@ -41,7 +41,7 @@ for structuring and organizing programs.
     it can be omitted altogether, writing just `meth(arg1,arg2)`, with `this` implied as the receiving
     object.
 !!! note
-    All the examples in this chapter assume that you are defining modules for a function in the *same*
+    All the examples in this chapter assume that you are defining methods for a function in the *same*
     module. If you want to add methods to a function in *another* module, you have to `import` it or
     use the name qualified with module names. See the section on [namespace management](@ref
     namespace-management).

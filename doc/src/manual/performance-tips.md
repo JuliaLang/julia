@@ -77,12 +77,12 @@ julia> function sum_global()
        end;
 
 julia> @time sum_global()
-  0.026328 seconds (9.30 k allocations: 416.747 KiB, 36.50% gc time, 99.48% compilation time)
-508.39048990953665
+  0.011539 seconds (9.08 k allocations: 373.386 KiB, 98.69% compilation time)
+523.0007221951678
 
 julia> @time sum_global()
-  0.000075 seconds (3.49 k allocations: 70.156 KiB)
-508.39048990953665
+  0.000091 seconds (3.49 k allocations: 70.156 KiB)
+523.0007221951678
 ```
 
 On the first call (`@time sum_global()`) the function gets compiled. (If you've not yet used [`@time`](@ref)
@@ -113,12 +113,12 @@ julia> function sum_arg(x)
        end;
 
 julia> @time sum_arg(x)
-  0.010298 seconds (4.23 k allocations: 226.021 KiB, 99.81% compilation time)
-508.39048990953665
+  0.007551 seconds (3.98 k allocations: 200.548 KiB, 99.77% compilation time)
+523.0007221951678
 
 julia> @time sum_arg(x)
-  0.000005 seconds (1 allocation: 16 bytes)
-508.39048990953665
+  0.000006 seconds (1 allocation: 16 bytes)
+523.0007221951678
 ```
 
 The 1 allocation seen is from running the `@time` macro itself in global scope. If we instead run
@@ -128,8 +128,8 @@ the timing in a function, we can see that indeed no allocations are performed:
 julia> time_sum(x) = @time sum_arg(x);
 
 julia> time_sum(x)
-  0.000001 seconds
-508.39048990953665
+  0.000002 seconds
+523.0007221951678
 ```
 
 In some situations, your function may need to allocate memory as part of its operation, and this
@@ -325,7 +325,7 @@ Float32
 
 For all practical purposes, such objects behave identically to those of `MyStillAmbiguousType`.
 
-It's quite instructive to compare the sheer amount code generated for a simple function
+It's quite instructive to compare the sheer amount of code generated for a simple function
 
 ```julia
 func(m::MyType) = m.a+1
@@ -342,6 +342,14 @@ For reasons of length the results are not shown here, but you may wish to try th
 the type is fully-specified in the first case, the compiler doesn't need to generate any code
 to resolve the type at run-time. This results in shorter and faster code.
 
+One should also keep in mind that not-fully-parameterized types behave like abstract types. For example, even though a fully specified `Array{T,n}` is concrete, `Array` itself with no parameters given is not concrete:
+
+```jldoctest myambig3
+julia> !isconcretetype(Array), !isabstracttype(Array), isstructtype(Array), !isconcretetype(Array{Int}), isconcretetype(Array{Int,1})
+(true, true, true, true, true)
+```
+In this case, it would be better to avoid declaring `MyType` with a field `a::Array` and instead declare the field as `a::Array{T,N}` or as `a::A`, where `{T,N}` or `A` are parameters of `MyType`.
+
 ### Avoid fields with abstract containers
 
 The same best practices also work for container types:
@@ -353,6 +361,10 @@ julia> struct MySimpleContainer{A<:AbstractVector}
 
 julia> struct MyAmbiguousContainer{T}
            a::AbstractVector{T}
+       end
+
+julia> struct MyAlsoAmbiguousContainer
+           a::Array
        end
 ```
 
@@ -378,6 +390,17 @@ julia> b = MyAmbiguousContainer([1:3;]);
 
 julia> typeof(b)
 MyAmbiguousContainer{Int64}
+
+julia> d = MyAlsoAmbiguousContainer(1:3);
+
+julia> typeof(d), typeof(d.a)
+(MyAlsoAmbiguousContainer, Vector{Int64})
+
+julia> d = MyAlsoAmbiguousContainer(1:1.0:3);
+
+julia> typeof(d), typeof(d.a)
+(MyAlsoAmbiguousContainer, Vector{Float64})
+
 ```
 
 For `MySimpleContainer`, the object is fully-specified by its type and parameters, so the compiler
@@ -648,10 +671,10 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Vector{Float64}:
- 2.0
- 2.0
- 2.0
+3-element Vector{Int64}:
+ 2
+ 2
+ 2
 ```
 
 This should be written as:
@@ -670,10 +693,10 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Vector{Float64}:
- 2.0
- 2.0
- 2.0
+3-element Vector{Int64}:
+ 2
+ 2
+ 2
 ```
 
 Julia's compiler specializes code for argument types at function boundaries, so in the original

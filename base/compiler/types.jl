@@ -6,16 +6,16 @@
 An abstract base class that allows multiple dispatch to determine the method of
 executing Julia code.  The native Julia LLVM pipeline is enabled by using the
 `NativeInterpreter` concrete instantiation of this abstract class, others can be
-swapped in as long as they follow the AbstractInterpreter API.
+swapped in as long as they follow the `AbstractInterpreter` API.
 
-All AbstractInterpreters are expected to provide at least the following methods:
-
-- InferenceParams(interp) - return an `InferenceParams` instance
-- OptimizationParams(interp) - return an `OptimizationParams` instance
-- get_world_counter(interp) - return the world age for this interpreter
-- get_inference_cache(interp) - return the runtime inference cache
+If `interp` is an `AbstractInterpreter`, it is expected to provide at least the following methods:
+- `InferenceParams(interp)` - return an `InferenceParams` instance
+- `OptimizationParams(interp)` - return an `OptimizationParams` instance
+- `get_world_counter(interp)` - return the world age for this interpreter
+- `get_inference_cache(interp)` - return the runtime inference cache
+- `code_cache(interp)` - return the global inference cache
 """
-abstract type AbstractInterpreter; end
+abstract type AbstractInterpreter end
 
 """
     InferenceResult
@@ -35,7 +35,6 @@ mutable struct InferenceResult
     end
 end
 
-
 """
     OptimizationParams
 
@@ -54,8 +53,6 @@ struct OptimizationParams
     MAX_TUPLE_SPLAT::Int
     MAX_UNION_SPLITTING::Int
 
-    unoptimize_throw_blocks::Bool
-
     function OptimizationParams(;
             inlining::Bool = inlining_enabled(),
             inline_cost_threshold::Int = 100,
@@ -65,7 +62,6 @@ struct OptimizationParams
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
-            unoptimize_throw_blocks::Bool = true,
         )
         return new(
             inlining,
@@ -76,7 +72,6 @@ struct OptimizationParams
             max_methods,
             tuple_splat,
             union_splitting,
-            unoptimize_throw_blocks,
         )
     end
 end
@@ -185,43 +180,52 @@ InferenceParams(ni::NativeInterpreter) = ni.inf_params
 OptimizationParams(ni::NativeInterpreter) = ni.opt_params
 get_world_counter(ni::NativeInterpreter) = ni.world
 get_inference_cache(ni::NativeInterpreter) = ni.cache
-
-code_cache(ni::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, ni.world)
+code_cache(ni::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, get_world_counter(ni))
 
 """
     lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance)
 
-Hint that `mi` is in inference to help accelerate bootstrapping. This helps limit the amount of wasted work we might do when inference is working on initially inferring itself by letting us detect when inference is already in progress and not running a second copy on it. This creates a data-race, but the entry point into this code from C (jl_type_infer) already includes detection and restriction on recursion, so it is hopefully mostly a benign problem (since it should really only happen during the first phase of bootstrapping that we encounter this flag).
+Hint that `mi` is in inference to help accelerate bootstrapping.
+This helps us limit the amount of wasted work we might do when inference is working on initially inferring itself
+by letting us detect when inference is already in progress and not running a second copy on it.
+This creates a data-race, but the entry point into this code from C (`jl_type_infer`) already includes detection and restriction on recursion,
+so it is hopefully mostly a benign problem (since it should really only happen during the first phase of bootstrapping that we encounter this flag).
 """
-lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance) = (mi.inInference = true; nothing)
+lock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference = true; nothing)
+lock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
 
 """
-    See lock_mi_inference
+See `lock_mi_inference`.
 """
-unlock_mi_inference(ni::NativeInterpreter, mi::MethodInstance) = (mi.inInference = false; nothing)
+unlock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference = false; nothing)
+unlock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
 
 """
-Emit an analysis remark during inference for the current line (`sv.pc`). These annotations are ignored
-by the native interpreter, but can be used by external tooling to annotate
-inference results.
+Emit an analysis remark during inference for the current line (`sv.pc`).
+These annotations are ignored by the native interpreter, but can be used by external tooling
+to annotate inference results.
 """
-add_remark!(ni::NativeInterpreter, sv, s) = nothing
+add_remark!(::AbstractInterpreter, sv#=::InferenceState=#, s) = return
 
-may_optimize(ni::NativeInterpreter) = true
-may_compress(ni::NativeInterpreter) = true
-may_discard_trees(ni::NativeInterpreter) = true
-verbose_stmt_info(ni::NativeInterpreter) = false
+may_optimize(::AbstractInterpreter) = true
+may_compress(::AbstractInterpreter) = true
+may_discard_trees(::AbstractInterpreter) = true
+verbose_stmt_info(::AbstractInterpreter) = false
 
-method_table(ai::AbstractInterpreter) = InternalMethodTable(get_world_counter(ai))
-inlining_policy(ai::AbstractInterpreter) = default_inlining_policy
+method_table(interp::AbstractInterpreter) = InternalMethodTable(get_world_counter(interp))
 
-# define inference bail out logic
-# `NativeInterpreter` bails out from inference when
-# - a lattice element grows up to `Any` (inter-procedural call, abstract apply)
-# - a lattice element gets down to `Bottom` (statement inference, local frame inference)
-# - inferring non-concrete toplevel call sites
-bail_out_call(interp::AbstractInterpreter, @nospecialize(t), sv)      = t === Any
-bail_out_apply(interp::AbstractInterpreter, @nospecialize(t), sv)     = t === Any
-function bail_out_toplevel_call(interp::AbstractInterpreter, @nospecialize(sig), sv)
-    return isa(sv.linfo.def, Module) && !isdispatchtuple(sig)
-end
+"""
+By default `AbstractInterpreter` implements the following inference bail out logic:
+- `bail_out_toplevel_call(::AbstractInterpreter, sig, ::InferenceState)`: bail out from inter-procedural inference when inferring top-level and non-concrete call site `callsig`
+- `bail_out_call(::AbstractInterpreter, rt, ::InferenceState)`: bail out from inter-procedural inference when return type `rt` grows up to `Any`
+- `bail_out_apply(::AbstractInterpreter, rt, ::InferenceState)`: bail out from `_apply_iterate` inference when return type `rt` grows up to `Any`
+
+It also bails out from local statement/frame inference when any lattice element gets down to `Bottom`,
+but `AbstractInterpreter` doesn't provide a specific interface for configuring it.
+"""
+bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv#=::InferenceState=#) =
+    return isa(sv.linfo.def, Module) && !isdispatchtuple(callsig)
+bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
+    return rt === Any
+bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
+    return rt === Any

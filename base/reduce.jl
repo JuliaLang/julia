@@ -299,6 +299,9 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 # handling empty arrays
 _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
+_empty_reduce_error(@nospecialize(f), @nospecialize(T::Type)) = throw(ArgumentError("""
+    reducing with $f over an empty collection of element type $T is not allowed.
+    You may be able to prevent this error by supplying an `init` value to the reducer."""))
 
 """
     Base.reduce_empty(op, T)
@@ -306,23 +309,32 @@ _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection i
 The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref) or [`foldr`](@ref)
 with reduction `op` over an empty array with element type of `T`.
 
-If not defined, this will throw an `ArgumentError`.
+This should only be defined in unambiguous cases; for example,
+
+```julia
+Base.reduce_empty(::typeof(+), ::Type{T}) where T = zero(T)
+```
+
+is justified (the sum of zero elements is zero), whereas
+`reduce_empty(::typeof(max), ::Type{Any})` is not (the maximum value of an empty collection
+is generally ambiguous, and especially so when the element type is unknown).
+
+As an alternative, consider supplying an `init` value to the reducer.
 """
-reduce_empty(op, ::Type{T}) where {T} = _empty_reduce_error()
-reduce_empty(::typeof(+), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(+), ::Type{Union{}}) = _empty_reduce_error(+, Union{})
 reduce_empty(::typeof(+), ::Type{T}) where {T} = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
-reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error(*, Union{})
 reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
-reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error(add_sum, Union{})
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
-reduce_empty(::typeof(mul_prod), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(mul_prod), ::Type{Union{}}) = _empty_reduce_error(mul_prod, Union{})
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T} = reduce_empty(*, T)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
@@ -337,11 +349,8 @@ reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
 
 The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an empty array with element type
-of `T`.
-
-If not defined, this will throw an `ArgumentError`.
+of `T`. See [`Base.reduce_empty`](@ref) for more information.
 """
-mapreduce_empty(f, op, T) = _empty_reduce_error()
 mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
 mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
 mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
@@ -355,7 +364,10 @@ mapreduce_empty_iter(f, op, itr, ItrEltype) =
 
 @inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
 @inline reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
-reduce_empty_iter(op, itr, ::EltypeUnknown) = _empty_reduce_error()
+reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
+    reducing over an empty collection of unknown element type is not allowed.
+    You may be able to prevent this error by supplying an `init` value to the reducer."""))
+
 
 # handling of single-element iterators
 """
@@ -726,7 +738,7 @@ julia> maximum([1,2,3])
 3
 
 julia> maximum(())
-ERROR: ArgumentError: reducing over an empty collection is not allowed
+ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
 Stacktrace:
 [...]
 
@@ -758,7 +770,7 @@ julia> minimum([1,2,3])
 1
 
 julia> minimum([])
-ERROR: ArgumentError: reducing over an empty collection is not allowed
+ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
 Stacktrace:
 [...]
 

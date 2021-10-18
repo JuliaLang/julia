@@ -45,10 +45,10 @@ represents a valid Unicode character.
 """
 Char
 
-@aggressive_constprop (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
-@aggressive_constprop AbstractChar(x::Number) = Char(x)
-@aggressive_constprop (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
-@aggressive_constprop (::Type{T})(x::AbstractChar) where {T<:Union{Int32,Int64}} = codepoint(x) % T
+@constprop :aggressive (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
+@constprop :aggressive AbstractChar(x::Number) = Char(x)
+@constprop :aggressive (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
+@constprop :aggressive (::Type{T})(x::AbstractChar) where {T<:Union{Int32,Int64}} = codepoint(x) % T
 (::Type{T})(x::T) where {T<:AbstractChar} = x
 
 """
@@ -75,7 +75,7 @@ return a different-sized integer (e.g. `UInt8`).
 """
 function codepoint end
 
-@aggressive_constprop codepoint(c::Char) = UInt32(c)
+@constprop :aggressive codepoint(c::Char) = UInt32(c)
 
 struct InvalidCharError{T<:AbstractChar} <: Exception
     char::T
@@ -124,7 +124,7 @@ See also [`decode_overlong`](@ref) and [`show_invalid`](@ref).
 """
 isoverlong(c::AbstractChar) = false
 
-@aggressive_constprop function UInt32(c::Char)
+@constprop :aggressive function UInt32(c::Char)
     # TODO: use optimized inline LLVM
     u = bitcast(UInt32, c)
     u < 0x80000000 && return u >> 24
@@ -148,7 +148,7 @@ that support overlong encodings should implement `Base.decode_overlong`.
 """
 function decode_overlong end
 
-@aggressive_constprop function decode_overlong(c::Char)
+@constprop :aggressive function decode_overlong(c::Char)
     u = bitcast(UInt32, c)
     l1 = leading_ones(u)
     t0 = trailing_zeros(u) & 56
@@ -158,7 +158,7 @@ function decode_overlong end
     ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
 end
 
-@aggressive_constprop function Char(u::UInt32)
+@constprop :aggressive function Char(u::UInt32)
     u < 0x80 && return bitcast(Char, u << 24)
     u < 0x00200000 || throw_code_point_err(u)
     c = ((u << 0) & 0x0000003f) | ((u << 2) & 0x00003f00) |
@@ -169,14 +169,14 @@ end
     bitcast(Char, c)
 end
 
-@aggressive_constprop @noinline UInt32_cold(c::Char) = UInt32(c)
-@aggressive_constprop function (T::Union{Type{Int8},Type{UInt8}})(c::Char)
+@constprop :aggressive @noinline UInt32_cold(c::Char) = UInt32(c)
+@constprop :aggressive function (T::Union{Type{Int8},Type{UInt8}})(c::Char)
     i = bitcast(Int32, c)
     i ≥ 0 ? ((i >>> 24) % T) : T(UInt32_cold(c))
 end
 
-@aggressive_constprop @noinline Char_cold(b::UInt32) = Char(b)
-@aggressive_constprop function Char(b::Union{Int8,UInt8})
+@constprop :aggressive @noinline Char_cold(b::UInt32) = Char(b)
+@constprop :aggressive function Char(b::Union{Int8,UInt8})
     0 ≤ b ≤ 0x7f ? bitcast(Char, (b % UInt32) << 24) : Char_cold(UInt32(b))
 end
 

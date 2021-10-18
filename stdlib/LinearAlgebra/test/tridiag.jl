@@ -164,6 +164,19 @@ end
         @test !isdiag(Tridiagonal(dl,d,zerosdu))
         @test !isdiag(Tridiagonal(zerosdl,d,du))
         @test !isdiag(Tridiagonal(dl,d,du))
+
+        # Test methods that could fail due to dv and ev having the same length
+        # see #41089
+
+        badev = zero(d)
+        badev[end] = 1
+        S = SymTridiagonal(d, badev)
+
+        @test istriu(S, -2)
+        @test istriu(S, 0)
+        @test !istriu(S, 2)
+
+        @test isdiag(S)
     end
 
     @testset "iszero and isone" begin
@@ -190,6 +203,12 @@ end
         @test isone(Sone)
         @test !iszero(Smix)
         @test !isone(Smix)
+
+        badev = zeros(elty, 3)
+        badev[end] = 1
+
+        @test isone(SymTridiagonal(ones(elty, 3), badev))
+        @test iszero(SymTridiagonal(zeros(elty, 3), badev))
     end
 
     @testset for mat_type in (Tridiagonal, SymTridiagonal)
@@ -664,6 +683,16 @@ using .Main.ImmutableArrays
     @test convert(AbstractMatrix{Float64}, T)::Tridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == T
     @test convert(AbstractArray{Float64}, Tsym)::SymTridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
     @test convert(AbstractMatrix{Float64}, Tsym)::SymTridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
+end
+
+@testset "dot(x,A,y) for A::Tridiagonal or SymTridiagonal" begin
+    for elty in (Float32, Float64, ComplexF32, ComplexF64, Int)
+        x = fill(convert(elty, 1), 0)
+        T = Tridiagonal(x, x, x)
+        Tsym = SymTridiagonal(x, x)
+        @test dot(x, T, x) == 0.0
+        @test dot(x, Tsym, x) == 0.0
+    end
 end
 
 end # module TestTridiagonal

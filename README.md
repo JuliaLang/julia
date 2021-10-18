@@ -6,9 +6,30 @@
 </div>
 
 Documentation:
-[![version 1][docs-img]](https://docs.julialang.org)
+[![Documentation][docs-img]][docs-url]
 
-[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
+[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg "Documentation (version 1)"
+[docs-url]: https://docs.julialang.org
+
+Continuous integration:
+[![Continuous integration (master)][buildkite-master-img]][buildkite-master-url]
+
+<!--
+To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
+You need to go to the Buildkite website and get the SVG URL for the correct pipeline.
+-->
+[buildkite-master-img]: https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master "Continuous integration (master)"
+[buildkite-master-url]: https://buildkite.com/julialang/julia-master
+
+Code coverage:
+[![Code coverage (Coveralls)][coveralls-img]][coveralls-url]
+[![Code coverage (Codecov)][codecov-img]][codecov-url]
+
+[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls "Code coverage (Coveralls)"
+[coveralls-url]: https://coveralls.io/r/JuliaLang/julia?branch=master
+
+[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov "Code coverage (Codecov)"
+[codecov-url]: https://codecov.io/github/JuliaLang/julia?branch=master
 
 ## The Julia Language
 
@@ -62,17 +83,17 @@ recommend you use the official Julia binaries instead.
 ## Building Julia
 
 First, make sure you have all the [required
-dependencies](https://github.com/JuliaLang/julia/blob/master/doc/build/build.md#required-build-tools-and-external-libraries) installed.
+dependencies](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/build.md#required-build-tools-and-external-libraries) installed.
 Then, acquire the source code by cloning the git repository:
 
     git clone https://github.com/JuliaLang/julia.git
 
 By default you will be building the latest unstable version of
-Julia. However, most users should use the most recent stable version
+Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.6.1
+    git checkout v1.6.3
 
 Now run `make` to build the `julia` executable.
 
@@ -95,7 +116,7 @@ started](https://docs.julialang.org/en/v1/manual/getting-started/)
 in the manual.
 
 In case this default build path did not work, detailed build instructions
-are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/build).
+are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/).
 
 ### Uninstalling Julia
 
@@ -115,8 +136,7 @@ The Julia source code is organized as follows:
 | `cli/`            | source for the command line interface/REPL                         |
 | `contrib/`        | editor support for Julia source, miscellaneous scripts             |
 | `deps/`           | external dependencies                                              |
-| `doc/src/manual/` | source for the user manual                                         |
-| `doc/build/`      | detailed notes for building Julia                                  |
+| `doc/src/`        | source for the user manual                                         |
 | `src/`            | source for Julia language core                                     |
 | `test/`           | test suites                                                        |
 | `usr/`            | binaries and shared libraries loaded by Julia's standard libraries |
@@ -141,19 +161,3 @@ Supported IDEs include: [julia-vscode](https://github.com/JuliaEditorSupport/jul
 Code plugin), [Juno](http://junolab.org/) (Atom plugin). [Jupyter](https://jupyter.org/)
 notebooks are available through the [IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
 [Pluto](https://github.com/fonsp/Pluto.jl) notebooks through the Pluto.jl package.
-
-## Continuous Integration (CI) Builders
-
-Code coverage:
-[![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
-[![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
-
-| Builder    | Status |
-| ---------- | ------ |
-| Overall    | [![Build status](https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master)](https://buildkite.com/julialang/julia) |
-| analyzegc  | [![Build status](https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master&step=analyzegc)](https://buildkite.com/julialang/julia) |
-| llvmpasses | [![Build status](https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master&step=llvmpasses)](https://buildkite.com/julialang/julia) |
-| coverage   | [![Build status](https://badge.buildkite.com/d5ae34dbbf6fefe615300c4f3118bf63cb4a5ae7fd962263c1.svg?branch=master)](https://buildkite.com/julialang/julia-coverage-linux64) |
-
-[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls
-[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov

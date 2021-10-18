@@ -454,29 +454,35 @@ end
         c_di = Diagonal(rand(m)); c = sparse(c_di); c_d = Array(c_di)
         d_di = Diagonal(rand(n)); d = sparse(d_di); d_d = Array(d_di)
         # mat ⊗ mat
-        @test Array(kron(a, b)) == kron(a_d, b_d)
-        @test Array(kron(a_d, b)) == kron(a_d, b_d)
-        @test Array(kron(a, b_d)) == kron(a_d, b_d)
-        @test issparse(kron(c, d_di))
-        @test Array(kron(c, d_di)) == kron(c_d, d_d)
-        @test issparse(kron(c_di, d))
-        @test Array(kron(c_di, d)) == kron(c_d, d_d)
-        @test issparse(kron(c_di, y))
-        @test Array(kron(c_di, y)) == kron(c_di, y_d)
-        @test issparse(kron(x, d_di))
-        @test Array(kron(x, d_di)) == kron(x_d, d_di)
+        for t in (identity, adjoint, transpose)
+            @test Array(kron(t(a), b)::SparseMatrixCSC) == kron(t(a_d), b_d)
+            @test Array(kron(a, t(b))::SparseMatrixCSC) == kron(a_d, t(b_d))
+            @test Array(kron(t(a), t(b))::SparseMatrixCSC) == kron(t(a_d), t(b_d))
+            @test Array(kron(a_d, t(b))::SparseMatrixCSC) == kron(a_d, t(b_d))
+            @test Array(kron(t(a), b_d)::SparseMatrixCSC) == kron(t(a_d), b_d)
+            @test issparse(kron(c, d_di))
+            @test Array(kron(c, d_di)) == kron(c_d, d_d)
+            @test issparse(kron(c_di, d))
+            @test Array(kron(c_di, d)) == kron(c_d, d_d)
+            @test issparse(kron(c_di, y))
+            @test Array(kron(c_di, y)) == kron(c_di, y_d)
+            @test issparse(kron(x, d_di))
+            @test Array(kron(x, d_di)) == kron(x_d, d_di)
+        end
         # vec ⊗ vec
         @test Vector(kron(x, y)) == kron(x_d, y_d)
         @test Vector(kron(x_d, y)) == kron(x_d, y_d)
         @test Vector(kron(x, y_d)) == kron(x_d, y_d)
-        # mat ⊗ vec
-        @test Array(kron(a, y)) == kron(a_d, y_d)
-        @test Array(kron(a_d, y)) == kron(a_d, y_d)
-        @test Array(kron(a, y_d)) == kron(a_d, y_d)
-        # vec ⊗ mat
-        @test Array(kron(x, b)) == kron(x_d, b_d)
-        @test Array(kron(x_d, b)) == kron(x_d, b_d)
-        @test Array(kron(x, b_d)) == kron(x_d, b_d)
+        for t in (identity, adjoint, transpose)
+            # mat ⊗ vec
+            @test Array(kron(t(a), y)::SparseMatrixCSC) == kron(t(a_d), y_d)
+            @test Array(kron(t(a_d), y)) == kron(t(a_d), y_d)
+            @test Array(kron(t(a), y_d)::SparseMatrixCSC) == kron(t(a_d), y_d)
+            # vec ⊗ mat
+            @test Array(kron(x, t(b))::SparseMatrixCSC) == kron(x_d, t(b_d))
+            @test Array(kron(x_d, t(b))::SparseMatrixCSC) == kron(x_d, t(b_d))
+            @test Array(kron(x, t(b_d))) == kron(x_d, t(b_d))
+        end
         # vec ⊗ vec'
         @test issparse(kron(v, y'))
         @test issparse(kron(x, y'))
@@ -786,6 +792,8 @@ end
     end
 
     @testset "empty cases" begin
+        errchecker(str) = occursin("reducing over an empty collection is not allowed", str) ||
+                          occursin("collection slices must be non-empty", str)
         @test sum(sparse(Int[])) === 0
         @test prod(sparse(Int[])) === 1
         @test_throws ArgumentError minimum(sparse(Int[]))
@@ -798,9 +806,9 @@ end
             @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
         end
         for f in (minimum, maximum, findmin, findmax)
-            @test_throws ArgumentError f(spzeros(0, 1), dims=1)
+            @test_throws errchecker f(spzeros(0, 1), dims=1)
             @test isequal(f(spzeros(0, 1), dims=2), f(Matrix{Int}(I, 0, 1), dims=2))
-            @test_throws ArgumentError f(spzeros(0, 1), dims=(1, 2))
+            @test_throws errchecker f(spzeros(0, 1), dims=(1, 2))
             @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
         end
     end
@@ -1689,6 +1697,33 @@ end
     S2 = SparseMatrixCSC(D)
     @test Array(D) == Array(S) == Array(S2)
     @test S == S2
+
+    # An issue discovered in #42574 where
+    # SparseMatrixCSC{Tv, Ti}(::Diagonal) ignored Ti
+    D = Diagonal(rand(3))
+    S = SparseMatrixCSC{Float64, Int8}(D)
+    @test S isa SparseMatrixCSC{Float64, Int8}
+end
+
+@testset "Sparse construction with empty/1x1 structured matrices" begin
+    empty = spzeros(0, 0)
+
+    @test sparse(Diagonal(zeros(0, 0))) == empty
+    @test sparse(Bidiagonal(zeros(0, 0), :U)) == empty
+    @test sparse(Bidiagonal(zeros(0, 0), :L)) == empty
+    @test sparse(SymTridiagonal(zeros(0, 0))) == empty
+    @test sparse(Tridiagonal(zeros(0, 0))) == empty
+
+    one_by_one = rand(1,1)
+    sp_one_by_one = sparse(one_by_one)
+
+    @test sparse(Diagonal(one_by_one)) == sp_one_by_one
+    @test sparse(Bidiagonal(one_by_one, :U)) == sp_one_by_one
+    @test sparse(Bidiagonal(one_by_one, :L)) == sp_one_by_one
+    @test sparse(Tridiagonal(one_by_one)) == sp_one_by_one
+
+    s = SymTridiagonal(rand(1), rand(0))
+    @test sparse(s) == s
 end
 
 @testset "error conditions for reshape, and dropdims" begin
@@ -1739,10 +1774,10 @@ end
 end
 
 @testset "droptol" begin
-    local A = guardseed(1234321) do
+    A = guardseed(1234321) do
         triu(sprand(10, 10, 0.2))
     end
-    @test getcolptr(SparseArrays.droptol!(A, 0.01)) == [1, 1, 1, 1, 3, 3, 5, 6, 8, 11, 12]
+    @test getcolptr(SparseArrays.droptol!(A, 0.01)) == [1, 1, 1, 1, 2, 2, 2, 4, 4, 5, 5]
     @test isequal(SparseArrays.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1, 1, Int[1, 1], Int[], Int[]))
 end
 
@@ -2074,7 +2109,7 @@ end
 end
 
 @testset "sparse matrix opnormestinv" begin
-    Random.seed!(1234)
+    Random.seed!(1235)
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
     Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)
@@ -2365,22 +2400,70 @@ end
     for c in unstored_indices
         @test Base.isstored(A, c[1], c[2]) == false
     end
+
+    # `isstored` for adjoint and tranposed matrices:
+    for trans in (adjoint, transpose)
+        B = trans(A)
+        stored_indices = [CartesianIndex(j, i) for (j, i) in zip(J, I)]
+        unstored_indices = [c for c in CartesianIndices((n, m)) if !(c in stored_indices)]
+        for c in stored_indices
+            @test Base.isstored(B, c[1], c[2]) == true
+        end
+        for c in unstored_indices
+            @test Base.isstored(B, c[1], c[2]) == false
+        end
+    end
 end
 
 @testset "show" begin
     io = IOBuffer()
-    show(io, MIME"text/plain"(), spzeros(Float64, Int64, 0, 0))
-    @test String(take!(io)) == "0×0 SparseArrays.SparseMatrixCSC{Float64, Int64} with 0 stored entries"
-    show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
-    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64, Int64} with 1 stored entry:\n 1.0"
-    show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
-    @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32, Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ "
+
+    A = spzeros(Float64, Int64, 0, 0)
+    for (transform, showstring) in zip(
+        (identity, adjoint, transpose), (
+        "0×0 $SparseMatrixCSC{Float64, Int64} with 0 stored entries",
+        "0×0 $Adjoint{Float64, $SparseMatrixCSC{Float64, Int64}} with 0 stored entries",
+        "0×0 $Transpose{Float64, $SparseMatrixCSC{Float64, Int64}} with 0 stored entries"
+        ))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+    end
+
+    A = sparse(Int64[1], Int64[1], [1.0])
+    for (transform, showstring) in zip(
+        (identity, adjoint, transpose), (
+        "1×1 $SparseMatrixCSC{Float64, Int64} with 1 stored entry:\n 1.0",
+        "1×1 $Adjoint{Float64, $SparseMatrixCSC{Float64, Int64}} with 1 stored entry:\n 1.0",
+        "1×1 $Transpose{Float64, $SparseMatrixCSC{Float64, Int64}} with 1 stored entry:\n 1.0",
+        ))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+    end
+
+    A = spzeros(Float32, Int64, 2, 2)
+    for (transform, showstring) in zip(
+        (identity, adjoint, transpose), (
+        "2×2 $SparseMatrixCSC{Float32, Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
+        "2×2 $Adjoint{Float32, $SparseMatrixCSC{Float32, Int64}} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
+        "2×2 $Transpose{Float32, $SparseMatrixCSC{Float32, Int64}} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
+        ))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+    end
 
     A = sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0])
-    show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:\n 1.0  2.0"
-    _show_with_braille_patterns(convert(IOContext, io), A)
-    @test String(take!(io)) == "⠉"
+    for (transform, showstring, braille) in zip(
+        (identity, adjoint, transpose), (
+        "1×2 $SparseMatrixCSC{Float64, Int64} with 2 stored entries:\n 1.0  2.0",
+        "2×1 $Adjoint{Float64, $SparseMatrixCSC{Float64, Int64}} with 2 stored entries:\n 1.0\n 2.0",
+        "2×1 $Transpose{Float64, $SparseMatrixCSC{Float64, Int64}} with 2 stored entries:\n 1.0\n 2.0",
+        ),
+        ("⠉", "⠃", "⠃"))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+        _show_with_braille_patterns(convert(IOContext, io), transform(A))
+        @test String(take!(io)) == braille
+    end
 
     # every 1-dot braille pattern
     for (i, b) in enumerate(split("⠁⠂⠄⡀⠈⠐⠠⢀", ""))
@@ -2392,28 +2475,50 @@ end
 
     # empty braille pattern Char(10240)
     A = spzeros(Int64, Int64, 4, 2)
-    _show_with_braille_patterns(convert(IOContext, io), A)
-    @test String(take!(io)) == "" * Char(10240)
+    for (transform, braille) in zip(
+        (identity, adjoint, transpose),
+        ("" * Char(10240), "" * Char(10240)^2, "" * Char(10240)^2))
+        _show_with_braille_patterns(convert(IOContext, io), transform(A))
+        @test String(take!(io)) == braille
+    end
 
     A = sparse(Int64[1, 2, 4, 2, 3], Int64[1, 1, 1, 2, 2], Int64[1, 1, 1, 1, 1], 4, 2)
-    show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "4×2 SparseArrays.SparseMatrixCSC{Int64, Int64} with 5 stored entries:\n 1  ⋅\n 1  1\n ⋅  1\n 1  ⋅"
-    _show_with_braille_patterns(convert(IOContext, io), A)
-    @test String(take!(io)) == "⡳"
+    for (transform, showstring, braille) in zip(
+        (identity, adjoint, transpose), (
+        "4×2 $SparseMatrixCSC{Int64, Int64} with 5 stored entries:\n 1  ⋅\n 1  1\n ⋅  1\n 1  ⋅",
+        "2×4 $Adjoint{Int64, $SparseMatrixCSC{Int64, Int64}} with 5 stored entries:\n 1  1  ⋅  1\n ⋅  1  1  ⋅",
+        "2×4 $Transpose{Int64, $SparseMatrixCSC{Int64, Int64}} with 5 stored entries:\n 1  1  ⋅  1\n ⋅  1  1  ⋅",
+        ),
+        ("⡳", "⠙⠊", "⠙⠊"))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+        _show_with_braille_patterns(convert(IOContext, io), transform(A))
+        @test String(take!(io)) == braille
+    end
 
     A = sparse(Int64[1, 3, 2, 4], Int64[1, 1, 2, 2], Int64[1, 1, 1, 1], 7, 3)
-    show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "7×3 SparseArrays.SparseMatrixCSC{Int64, Int64} with 4 stored entries:\n 1  ⋅  ⋅\n ⋅  1  ⋅\n 1  ⋅  ⋅\n ⋅  1  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅"
-    _show_with_braille_patterns(convert(IOContext, io), A)
-    @test String(take!(io)) == "⢕" * Char(10240) * "\n" * Char(10240)^2
+    for (transform, showstring, braille) in zip(
+        (identity, adjoint, transpose), (
+        "7×3 $SparseMatrixCSC{Int64, Int64} with 4 stored entries:\n 1  ⋅  ⋅\n ⋅  1  ⋅\n 1  ⋅  ⋅\n ⋅  1  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅",
+        "3×7 $Adjoint{Int64, $SparseMatrixCSC{Int64, Int64}} with 4 stored entries:\n 1  ⋅  1  ⋅  ⋅  ⋅  ⋅\n ⋅  1  ⋅  1  ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅  ⋅  ⋅  ⋅  ⋅",
+        "3×7 $Transpose{Int64, $SparseMatrixCSC{Int64, Int64}} with 4 stored entries:\n 1  ⋅  1  ⋅  ⋅  ⋅  ⋅\n ⋅  1  ⋅  1  ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅  ⋅  ⋅  ⋅  ⋅",
+        ),
+        ("⢕" * Char(10240) * "\n" * Char(10240)^2, "⠑⠑" * Char(10240)^2, "⠑⠑" * Char(10240)^2))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+        _show_with_braille_patterns(convert(IOContext, io), transform(A))
+        @test String(take!(io)) == braille
+    end
 
     A = sparse(Int64[1:10;], Int64[1:10;], fill(Float64(1), 10))
-    _show_with_braille_patterns(convert(IOContext, io), A)
     brailleString = "⠑⢄" * Char(10240)^3 * "\n" * Char(10240)^2 * "⠑⢄" * Char(10240) * "\n" * Char(10240)^4 * "⠑"
-    @test String(take!(io)) == brailleString
+    for transform in (identity, adjoint, transpose)
+        _show_with_braille_patterns(convert(IOContext, io), transform(A))
+        @test String(take!(io)) == brailleString
+    end
 
     # Issue #30589
-    @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool, $Int} with 2 stored entries:\n 1  1"
+    @test repr("text/plain", sparse([true true])) == "1×2 $SparseMatrixCSC{Bool, $Int} with 2 stored entries:\n 1  1"
 
     function _filled_sparse(m::Integer, n::Integer)
         C = CartesianIndices((m, n))[:]

@@ -14,6 +14,202 @@
 
 const unsigned int host_char_bit = 8;
 
+// float16 intrinsics
+// TODO: use LLVM's compiler-rt
+
+static inline float half_to_float(uint16_t ival) JL_NOTSAFEPOINT
+{
+    uint32_t sign = (ival & 0x8000) >> 15;
+    uint32_t exp = (ival & 0x7c00) >> 10;
+    uint32_t sig = (ival & 0x3ff) >> 0;
+    uint32_t ret;
+
+    if (exp == 0) {
+        if (sig == 0) {
+            sign = sign << 31;
+            ret = sign | exp | sig;
+        }
+        else {
+            int n_bit = 1;
+            uint16_t bit = 0x0200;
+            while ((bit & sig) == 0) {
+                n_bit = n_bit + 1;
+                bit = bit >> 1;
+            }
+            sign = sign << 31;
+            exp = ((-14 - n_bit + 127) << 23);
+            sig = ((sig & (~bit)) << n_bit) << (23 - 10);
+            ret = sign | exp | sig;
+        }
+    }
+    else if (exp == 0x1f) {
+        if (sig == 0) { // Inf
+            if (sign == 0)
+                ret = 0x7f800000;
+            else
+                ret = 0xff800000;
+        }
+        else // NaN
+            ret = 0x7fc00000 | (sign << 31) | (sig << (23 - 10));
+    }
+    else {
+        sign = sign << 31;
+        exp = ((exp - 15 + 127) << 23);
+        sig = sig << (23 - 10);
+        ret = sign | exp | sig;
+    }
+
+    float fret;
+    memcpy(&fret, &ret, sizeof(float));
+    return fret;
+}
+
+// float to half algorithm from:
+//   "Fast Half Float Conversion" by Jeroen van der Zijp
+//   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
+//
+// With adjustments for round-to-nearest, ties to even.
+
+static uint16_t basetable[512] = {
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0400, 0x0800, 0x0c00, 0x1000, 0x1400, 0x1800, 0x1c00, 0x2000,
+    0x2400, 0x2800, 0x2c00, 0x3000, 0x3400, 0x3800, 0x3c00, 0x4000, 0x4400, 0x4800, 0x4c00,
+    0x5000, 0x5400, 0x5800, 0x5c00, 0x6000, 0x6400, 0x6800, 0x6c00, 0x7000, 0x7400, 0x7800,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8400, 0x8800, 0x8c00, 0x9000, 0x9400,
+    0x9800, 0x9c00, 0xa000, 0xa400, 0xa800, 0xac00, 0xb000, 0xb400, 0xb800, 0xbc00, 0xc000,
+    0xc400, 0xc800, 0xcc00, 0xd000, 0xd400, 0xd800, 0xdc00, 0xe000, 0xe400, 0xe800, 0xec00,
+    0xf000, 0xf400, 0xf800, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00};
+
+static uint8_t shifttable[512] = {
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x0f,
+    0x0e, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x0d, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13,
+    0x12, 0x11, 0x10, 0x0f, 0x0e, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x0d};
+
+static inline uint16_t float_to_half(float param) JL_NOTSAFEPOINT
+{
+    uint32_t f;
+    memcpy(&f, &param, sizeof(float));
+    if (isnan(param)) {
+        uint32_t t = 0x8000 ^ (0x8000 & ((uint16_t)(f >> 0x10)));
+        return t ^ ((uint16_t)(f >> 0xd));
+    }
+    int i = ((f & ~0x007fffff) >> 23);
+    uint8_t sh = shifttable[i];
+    f &= 0x007fffff;
+    // If `val` is subnormal, the tables are set up to force the
+    // result to 0, so the significand has an implicit `1` in the
+    // cases we care about.
+    f |= 0x007fffff + 0x1;
+    uint16_t h = (uint16_t)(basetable[i] + ((f >> sh) & 0x03ff));
+    // round
+    // NOTE: we maybe should ignore NaNs here, but the payload is
+    // getting truncated anyway so "rounding" it might not matter
+    int nextbit = (f >> (sh - 1)) & 1;
+    if (nextbit != 0 && (h & 0x7C00) != 0x7C00) {
+        // Round halfway to even or check lower bits
+        if ((h & 1) == 1 || (f & ((1 << (sh - 1)) - 1)) != 0)
+            h += UINT16_C(1);
+    }
+    return h;
+}
+
+#if !defined(_OS_DARWIN_)   // xcode already links compiler-rt
+
+JL_DLLEXPORT float __gnu_h2f_ieee(uint16_t param)
+{
+    return half_to_float(param);
+}
+
+JL_DLLEXPORT float __extendhfsf2(uint16_t param)
+{
+    return half_to_float(param);
+}
+
+JL_DLLEXPORT uint16_t __gnu_f2h_ieee(float param)
+{
+    return float_to_half(param);
+}
+
+JL_DLLEXPORT uint16_t __truncdfhf2(double param)
+{
+    return float_to_half((float)param);
+}
+
+#endif
+
 // run time version of bitcast intrinsic
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 {
@@ -43,7 +239,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t 
         return *pp;
     }
     else {
-        if (!jl_is_datatype(ety))
+        if (!is_valid_intrinsic_elptr(ety))
             jl_error("pointerref: invalid pointer");
         size_t nb = LLT_ALIGN(jl_datatype_size(ety), jl_datatype_align(ety));
         char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
@@ -56,14 +252,14 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
 {
     JL_TYPECHK(pointerset, pointer, p);
     JL_TYPECHK(pointerset, long, i);
-    JL_TYPECHK(pointerref, long, align);
+    JL_TYPECHK(pointerset, long, align);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     if (ety == (jl_value_t*)jl_any_type) {
         jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
         *pp = x;
     }
     else {
-        if (!jl_is_datatype(ety))
+        if (!is_valid_intrinsic_elptr(ety))
             jl_error("pointerset: invalid pointer");
         if (jl_typeof(x) != ety)
             jl_type_error("pointerset", ety, x);
@@ -77,42 +273,42 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
 {
-    JL_TYPECHK(pointerref, pointer, p);
-    JL_TYPECHK(pointerref, symbol, order)
+    JL_TYPECHK(atomic_pointerref, pointer, p);
+    JL_TYPECHK(atomic_pointerref, symbol, order)
     (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 0);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
     if (ety == (jl_value_t*)jl_any_type) {
-        return jl_atomic_load((jl_value_t**)pp);
+        return jl_atomic_load((_Atomic(jl_value_t*)*)pp);
     }
     else {
-        if (!jl_is_datatype(ety))
-            jl_error("pointerref: invalid pointer");
+        if (!is_valid_intrinsic_elptr(ety))
+            jl_error("atomic_pointerref: invalid pointer");
         size_t nb = jl_datatype_size(ety);
         if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
-            jl_error("pointerref: invalid pointer for atomic operation");
+            jl_error("atomic_pointerref: invalid pointer for atomic operation");
         return jl_atomic_new_bits(ety, pp);
     }
 }
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order)
 {
-    JL_TYPECHK(pointerset, pointer, p);
-    JL_TYPECHK(pointerset, symbol, order);
+    JL_TYPECHK(atomic_pointerset, pointer, p);
+    JL_TYPECHK(atomic_pointerset, symbol, order);
     (void)jl_get_atomic_order_checked((jl_sym_t*)order, 0, 1);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
     if (ety == (jl_value_t*)jl_any_type) {
-        jl_atomic_store((jl_value_t**)pp, x);
+        jl_atomic_store((_Atomic(jl_value_t*)*)pp, x);
     }
     else {
-        if (!jl_is_datatype(ety))
-            jl_error("pointerset: invalid pointer");
+        if (!is_valid_intrinsic_elptr(ety))
+            jl_error("atomic_pointerset: invalid pointer");
         if (jl_typeof(x) != ety)
-            jl_type_error("pointerset", ety, x);
+            jl_type_error("atomic_pointerset", ety, x);
         size_t nb = jl_datatype_size(ety);
         if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
-            jl_error("pointerset: invalid pointer for atomic operation");
+            jl_error("atomic_pointerset: invalid pointer for atomic operation");
         jl_atomic_store_bits(pp, x, nb);
     }
     return p;
@@ -120,37 +316,47 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_v
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order)
 {
-    JL_TYPECHK(pointerswap, pointer, p);
-    JL_TYPECHK(pointerswap, symbol, order);
+    JL_TYPECHK(atomic_pointerswap, pointer, p);
+    JL_TYPECHK(atomic_pointerswap, symbol, order);
     (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 1);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     jl_value_t *y;
     char *pp = (char*)jl_unbox_long(p);
     if (ety == (jl_value_t*)jl_any_type) {
-        y = jl_atomic_exchange((jl_value_t**)pp, x);
+        y = jl_atomic_exchange((_Atomic(jl_value_t*)*)pp, x);
     }
     else {
-        if (!jl_is_datatype(ety))
-            jl_error("pointerswap: invalid pointer");
+        if (!is_valid_intrinsic_elptr(ety))
+            jl_error("atomic_pointerswap: invalid pointer");
         if (jl_typeof(x) != ety)
-            jl_type_error("pointerswap", ety, x);
+            jl_type_error("atomic_pointerswap", ety, x);
         size_t nb = jl_datatype_size(ety);
         if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
-            jl_error("pointerswap: invalid pointer for atomic operation");
+            jl_error("atomic_pointerswap: invalid pointer for atomic operation");
         y = jl_atomic_swap_bits(ety, pp, x, nb);
     }
     return y;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order_sym)
+JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order)
 {
-    // n.b. we use seq_cst always here, but need to verify the order sym
-    // against the weaker load-only that happens first
-    if (order_sym == (jl_value_t*)acquire_release_sym)
-        order_sym = (jl_value_t*)acquire_sym;
-    jl_value_t *expected = jl_atomic_pointerref(p, order_sym);
+    JL_TYPECHK(atomic_pointerref, pointer, p);
+    JL_TYPECHK(atomic_pointerref, symbol, order)
+    (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 1);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
+    jl_value_t *expected;
+    if (ety == (jl_value_t*)jl_any_type) {
+        expected = jl_atomic_load((_Atomic(jl_value_t*)*)pp);
+    }
+    else {
+        if (!is_valid_intrinsic_elptr(ety))
+            jl_error("atomic_pointermodify: invalid pointer");
+        size_t nb = jl_datatype_size(ety);
+        if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
+            jl_error("atomic_pointermodify: invalid pointer for atomic operation");
+        expected = jl_atomic_new_bits(ety, pp);
+    }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2);
     args[0] = expected;
@@ -159,12 +365,14 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
         jl_value_t *y = jl_apply_generic(f, args, 2);
         args[1] = y;
         if (ety == (jl_value_t*)jl_any_type) {
-            if (jl_atomic_cmpswap((jl_value_t**)pp, &expected, y))
+            if (jl_atomic_cmpswap((_Atomic(jl_value_t*)*)pp, &expected, y))
                 break;
         }
         else {
+            //if (!is_valid_intrinsic_elptr(ety)) // handled by jl_atomic_pointerref earlier
+            //    jl_error("atomic_pointermodify: invalid pointer");
             if (jl_typeof(y) != ety)
-                jl_type_error("pointermodify", ety, y);
+                jl_type_error("atomic_pointermodify", ety, y);
             size_t nb = jl_datatype_size(ety);
             if (jl_atomic_bool_cmpswap_bits(pp, expected, y, nb))
                 break;
@@ -173,56 +381,62 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
         args[0] = expected;
         jl_gc_safepoint();
     }
-    // args[0] == expected (old); args[1] == y (new)
-    args[0] = jl_f_tuple(NULL, args, 2);
+    // args[0] == expected (old)
+    // args[1] == y (new)
+    jl_datatype_t *rettyp = jl_apply_modify_type(ety);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    args[0] = jl_new_struct(rettyp, args[0], args[1]);
     JL_GC_POP();
     return args[0];
 }
 
+
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *expected, jl_value_t *x, jl_value_t *success_order_sym, jl_value_t *failure_order_sym)
 {
-    JL_TYPECHK(pointerreplace, pointer, p);
-    JL_TYPECHK(pointerreplace, symbol, success_order_sym);
-    JL_TYPECHK(pointerreplace, symbol, failure_order_sym);
+    JL_TYPECHK(atomic_pointerreplace, pointer, p);
+    JL_TYPECHK(atomic_pointerreplace, symbol, success_order_sym);
+    JL_TYPECHK(atomic_pointerreplace, symbol, failure_order_sym);
     enum jl_memory_order success_order = jl_get_atomic_order_checked((jl_sym_t*)success_order_sym, 1, 1);
     enum jl_memory_order failure_order = jl_get_atomic_order_checked((jl_sym_t*)failure_order_sym, 1, 0);
     if (failure_order > success_order)
-        jl_atomic_error("pointerreplace: invalid atomic ordering");
+        jl_atomic_error("atomic_pointerreplace: invalid atomic ordering");
     // TODO: filter other invalid orderings
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
+    jl_datatype_t *rettyp = jl_apply_cmpswap_type(ety);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
     if (ety == (jl_value_t*)jl_any_type) {
-        jl_value_t **result;
-        JL_GC_PUSHARGS(result, 2);
-        result[0] = expected;
+        jl_value_t *result;
+        JL_GC_PUSH1(&result);
+        result = expected;
         int success;
         while (1) {
-            success = jl_atomic_cmpswap((jl_value_t**)pp, &result[0], x);
-            if (success || !jl_egal(result[0], expected))
+            success = jl_atomic_cmpswap((_Atomic(jl_value_t*)*)pp, &result, x);
+            if (success || !jl_egal(result, expected))
                 break;
         }
-        result[1] = success ? jl_true : jl_false;
-        result[0] = jl_f_tuple(NULL, result, 2);
+        result = jl_new_struct(rettyp, result, success ? jl_true : jl_false);
         JL_GC_POP();
-        return result[0];
+        return result;
     }
     else {
-        if (!jl_is_datatype(ety))
-            jl_error("pointerreplace: invalid pointer");
+        if (!is_valid_intrinsic_elptr(ety))
+            jl_error("atomic_pointerreplace: invalid pointer");
         if (jl_typeof(x) != ety)
-            jl_type_error("pointerreplace", ety, x);
+            jl_type_error("atomic_pointerreplace", ety, x);
         size_t nb = jl_datatype_size(ety);
         if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
-            jl_error("pointerreplace: invalid pointer for atomic operation");
-        return jl_atomic_cmpswap_bits((jl_datatype_t*)ety, pp, expected, x, nb);
+            jl_error("atomic_pointerreplace: invalid pointer for atomic operation");
+        return jl_atomic_cmpswap_bits((jl_datatype_t*)ety, rettyp, pp, expected, x, nb);
     }
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order)
+JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym)
 {
-    JL_TYPECHK(fence, symbol, order);
-    (void)jl_get_atomic_order_checked((jl_sym_t*)order, 0, 0);
-    jl_fence();
+    JL_TYPECHK(fence, symbol, order_sym);
+    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 0, 0);
+    if (order > jl_memory_order_monotonic)
+        jl_fence();
     return jl_nothing;
 }
 

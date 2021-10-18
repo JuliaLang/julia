@@ -223,7 +223,7 @@ julia> [1:2; 4;; 1; 3:4]
 
 Just as `;` and `;;` concatenate in the first and second dimension, using more semicolons
 extends this same general scheme. The number of semicolons in the separator specifies the
-particular dimension, so `;;;` concetenates in the third dimension, `;;;;` in the 4th, and
+particular dimension, so `;;;` concatenates in the third dimension, `;;;;` in the 4th, and
 so on. Fewer semicolons take precedence, so the lower dimensions are generally concatenated
 first.
 
@@ -875,7 +875,7 @@ full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
 introspect which is which). As such, when iterating over an entire array, it's
 much better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
 Not only will the former be much faster in cases where `A` is `IndexCartesian`,
-but it will also support OffsetArrays, too.
+but it will also support [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl), too.
 
 #### Omitted and extra indices
 

@@ -48,9 +48,9 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
                                      jl_methtable_type);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
-    mt->defs = jl_nothing;
-    mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
-    mt->cache = jl_nothing;
+    jl_atomic_store_relaxed(&mt->defs, jl_nothing);
+    jl_atomic_store_relaxed(&mt->leafcache, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&mt->cache, jl_nothing);
     mt->max_args = 0;
     mt->kwsorter = NULL;
     mt->backedges = NULL;
@@ -69,8 +69,8 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->name = name;
     tn->module = module;
     tn->wrapper = NULL;
-    tn->cache = jl_emptysvec;
-    tn->linearcache = jl_emptysvec;
+    jl_atomic_store_relaxed(&tn->cache, jl_emptysvec);
+    jl_atomic_store_relaxed(&tn->linearcache, jl_emptysvec);
     tn->names = NULL;
     tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
     tn->abstract = abstract;
@@ -220,27 +220,36 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
     return next_power_of_two(size);
 }
 
-STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
+STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d) JL_NOTSAFEPOINT
 {
     return (!d->name->abstract && jl_datatype_size(d) == 0 && d != jl_symbol_type && d->name != jl_array_typename &&
             d->isconcretetype && !d->name->mutabl);
 }
 
-STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st)
+STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st) JL_NOTSAFEPOINT
 {
     if (jl_is_datatype_make_singleton(st)) {
         // It's possible for st to already have an ->instance if it was redefined
-        if (!st->instance) {
-            jl_task_t *ct = jl_current_task;
-            st->instance = jl_gc_alloc(ct->ptls, 0, st);
-            jl_gc_wb(st, st->instance);
-        }
+        if (!st->instance)
+            st->instance = jl_gc_permobj(0, st);
     }
+}
+
+// return whether all concrete subtypes of this type have the same layout
+int jl_struct_try_layout(jl_datatype_t *dt)
+{
+    if (dt->layout)
+        return 1;
+    else if (!jl_has_fixed_layout(dt))
+        return 0;
+    jl_compute_field_offsets(dt);
+    assert(dt->layout);
+    return 1;
 }
 
 int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree) JL_NOTSAFEPOINT
 {
-    if (ty->name->mayinlinealloc && ty->layout) {
+    if (ty->name->mayinlinealloc && (ty->isconcretetype || ((jl_datatype_t*)jl_unwrap_unionall(ty->name->wrapper))->layout)) { // TODO: use jl_struct_try_layout(dt) (but it is a safepoint)
         if (ty->layout->npointers > 0) {
             if (pointerfree)
                 return 0;
@@ -348,9 +357,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (st->name->wrapper == NULL)
         return; // we got called too early--we'll be back
     jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);
-    assert(st->types && w->types);
-    size_t i, nfields = jl_svec_len(st->types);
-    assert(st->name->n_uninitialized <= nfields);
     if (st == w && st->layout) {
         // this check allows us to force re-computation of the layout for some types during init
         st->layout = NULL;
@@ -358,6 +364,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         st->zeroinit = 0;
         st->has_concrete_subtype = 1;
     }
+    int isbitstype = st->isconcretetype && st->name->mayinlinealloc;
     // If layout doesn't depend on type parameters, it's stored in st->name->wrapper
     // and reused by all subtypes.
     if (w->layout) {
@@ -365,11 +372,16 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         st->size = w->size;
         st->zeroinit = w->zeroinit;
         st->has_concrete_subtype = w->has_concrete_subtype;
-        if (jl_is_layout_opaque(st->layout)) { // e.g. jl_array_typename
-            return;
+        if (!jl_is_layout_opaque(st->layout)) { // e.g. jl_array_typename
+            st->isbitstype = isbitstype && st->layout->npointers == 0;
+            jl_maybe_allocate_singleton_instance(st);
         }
+        return;
     }
-    else if (nfields == 0) {
+    assert(st->types && w->types);
+    size_t i, nfields = jl_svec_len(st->types);
+    assert(st->name->n_uninitialized <= nfields);
+    if (nfields == 0) {
         // if we have no fields, we can trivially skip the rest
         if (st == jl_symbol_type || st == jl_string_type) {
             // opaque layout - heap-allocated blob
@@ -404,7 +416,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
     }
 
-    int isbitstype = st->isconcretetype && st->name->mayinlinealloc;
     for (i = 0; isbitstype && i < nfields; i++) {
         jl_value_t *fld = jl_field_type(st, i);
         isbitstype = jl_isbits(fld);
@@ -617,7 +628,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
             if (fldn < 1 || fldn > jl_svec_len(fnames))
                 jl_errorf("invalid field attribute %lld", (long long)fldn);
             fldn--;
-            if (attr == atomic_sym) {
+            if (attr == jl_atomic_sym) {
                 if (!mutabl)
                     jl_errorf("invalid field attribute atomic for immutable struct");
                 if (atomicfields == NULL) {
@@ -715,11 +726,57 @@ JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt)
 #if MAX_ATOMIC_SIZE > MAX_POINTERATOMIC_SIZE
 #error MAX_ATOMIC_SIZE too large
 #endif
+#if MAX_ATOMIC_SIZE >= 16 && !defined(_P64)
+#error 12 byte GC pool size alignment unimplemented for 32-bit
+#endif
 #if MAX_POINTERATOMIC_SIZE > 16
 #error MAX_POINTERATOMIC_SIZE too large
 #endif
+#if BYTE_ORDER != LITTLE_ENDIAN
+#error using masks for atomics (instead of memcpy like nb == 16) assumes little endian
+#endif
+
 #if MAX_POINTERATOMIC_SIZE >= 16
-typedef __uint128_t uint128_t;
+typedef struct _jl_uint128_t {
+    uint64_t a;
+    uint64_t b;
+} jl_uint128_t;
+#endif
+
+static inline uint32_t zext_read32(const jl_value_t *x, size_t nb) JL_NOTSAFEPOINT
+{
+    uint32_t y = *(uint32_t*)x;
+    if (nb == 4)
+        return y;
+    else // if (nb == 3)
+        return 0xffffffu & y;
+}
+
+#if MAX_POINTERATOMIC_SIZE >= 8
+static inline uint64_t zext_read64(const jl_value_t *x, size_t nb) JL_NOTSAFEPOINT
+{
+    uint64_t y = *(uint64_t*)x;
+    if (nb == 8)
+        return y;
+    else if (nb == 7)
+        return 0xffffffffffffffu & y;
+    else if (nb == 6)
+        return 0xffffffffffffu & y;
+    else // if (nb == 5)
+        return 0xffffffffffu & y;
+}
+#endif
+
+#if MAX_POINTERATOMIC_SIZE >= 16
+static inline jl_uint128_t zext_read128(const jl_value_t *x, size_t nb) JL_NOTSAFEPOINT
+{
+    jl_uint128_t y = {0};
+    if (nb == 16)
+        y = *(jl_uint128_t*)x;
+    else
+        memcpy(&y, x, nb);
+    return y;
+}
 #endif
 
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, const void *data)
@@ -744,16 +801,7 @@ JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, const void *data)
 
     jl_task_t *ct = jl_current_task;
     jl_value_t *v = jl_gc_alloc(ct->ptls, nb, bt);
-    switch (nb) {
-    case  1: *(uint8_t*) v = *(uint8_t*)data;    break;
-    case  2: *(uint16_t*)v = jl_load_unaligned_i16(data);   break;
-    case  4: *(uint32_t*)v = jl_load_unaligned_i32(data);   break;
-    case  8: *(uint64_t*)v = jl_load_unaligned_i64(data);   break;
-    case 16:
-        memcpy(jl_assume_aligned(v, 16), data, 16);
-        break;
-    default: memcpy(v, data, nb);
-    }
+    memcpy(jl_assume_aligned(v, sizeof(void*)), data, nb);
     return v;
 }
 
@@ -765,32 +813,37 @@ JL_DLLEXPORT jl_value_t *jl_atomic_new_bits(jl_value_t *dt, const char *data)
     size_t nb = jl_datatype_size(bt);
     // some types have special pools to minimize allocations
     if (nb == 0)               return jl_new_struct_uninit(bt); // returns bt->instance
-    if (bt == jl_bool_type)    return (1 & jl_atomic_load((int8_t*)data)) ? jl_true : jl_false;
-    if (bt == jl_uint8_type)   return jl_box_uint8(jl_atomic_load((uint8_t*)data));
-    if (bt == jl_int64_type)   return jl_box_int64(jl_atomic_load((int64_t*)data));
-    if (bt == jl_int32_type)   return jl_box_int32(jl_atomic_load((int32_t*)data));
-    if (bt == jl_int8_type)    return jl_box_int8(jl_atomic_load((int8_t*)data));
-    if (bt == jl_int16_type)   return jl_box_int16(jl_atomic_load((int16_t*)data));
-    if (bt == jl_uint64_type)  return jl_box_uint64(jl_atomic_load((uint64_t*)data));
-    if (bt == jl_uint32_type)  return jl_box_uint32(jl_atomic_load((uint32_t*)data));
-    if (bt == jl_uint16_type)  return jl_box_uint16(jl_atomic_load((uint16_t*)data));
-    if (bt == jl_char_type)    return jl_box_char(jl_atomic_load((uint32_t*)data));
+    if (bt == jl_bool_type)    return (1 & jl_atomic_load((_Atomic(int8_t)*)data)) ? jl_true : jl_false;
+    if (bt == jl_uint8_type)   return jl_box_uint8(jl_atomic_load((_Atomic(uint8_t)*)data));
+    if (bt == jl_int64_type)   return jl_box_int64(jl_atomic_load((_Atomic(int64_t)*)data));
+    if (bt == jl_int32_type)   return jl_box_int32(jl_atomic_load((_Atomic(int32_t)*)data));
+    if (bt == jl_int8_type)    return jl_box_int8(jl_atomic_load((_Atomic(int8_t)*)data));
+    if (bt == jl_int16_type)   return jl_box_int16(jl_atomic_load((_Atomic(int16_t)*)data));
+    if (bt == jl_uint64_type)  return jl_box_uint64(jl_atomic_load((_Atomic(uint64_t)*)data));
+    if (bt == jl_uint32_type)  return jl_box_uint32(jl_atomic_load((_Atomic(uint32_t)*)data));
+    if (bt == jl_uint16_type)  return jl_box_uint16(jl_atomic_load((_Atomic(uint16_t)*)data));
+    if (bt == jl_char_type)    return jl_box_char(jl_atomic_load((_Atomic(uint32_t)*)data));
 
     jl_task_t *ct = jl_current_task;
     jl_value_t *v = jl_gc_alloc(ct->ptls, nb, bt);
-    switch (nb) {
-    case  1: *(uint8_t*) v = jl_atomic_load((uint8_t*)data);    break;
-    case  2: *(uint16_t*)v = jl_atomic_load((uint16_t*)data);   break;
-    case  4: *(uint32_t*)v = jl_atomic_load((uint32_t*)data);   break;
+    // data is aligned to the power of two,
+    // we will write too much of v, but the padding should exist
+    if (nb == 1)
+        *(uint8_t*) v = jl_atomic_load((_Atomic(uint8_t)*)data);
+    else if (nb <= 2)
+        *(uint16_t*)v = jl_atomic_load((_Atomic(uint16_t)*)data);
+    else if (nb <= 4)
+        *(uint32_t*)v = jl_atomic_load((_Atomic(uint32_t)*)data);
 #if MAX_POINTERATOMIC_SIZE >= 8
-    case  8: *(uint64_t*)v = jl_atomic_load((uint64_t*)data);   break;
+    else if (nb <= 8)
+        *(uint64_t*)v = jl_atomic_load((_Atomic(uint64_t)*)data);
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
-    case 16: *(uint128_t*)v = jl_atomic_load((uint128_t*)data);        break;
+    else if (nb <= 16)
+        *(jl_uint128_t*)v = jl_atomic_load((_Atomic(jl_uint128_t)*)data);
 #endif
-    default:
+    else
         abort();
-    }
     return v;
 }
 
@@ -798,20 +851,26 @@ JL_DLLEXPORT void jl_atomic_store_bits(char *dst, const jl_value_t *src, int nb)
 {
     // dst must have the required alignment for an atomic of the given size
     // src must be aligned by the GC
-    switch (nb) {
-    case  0:                                                   break;
-    case  1: jl_atomic_store((uint8_t*)dst, *(uint8_t*)src);   break;
-    case  2: jl_atomic_store((uint16_t*)dst, *(uint16_t*)src); break;
-    case  4: jl_atomic_store((uint32_t*)dst, *(uint32_t*)src); break;
+    // we may therefore read too much from src, but will zero the excess bits
+    // before the store (so that we can get faster cmpswap later)
+    if (nb == 0)
+        ;
+    else if (nb == 1)
+        jl_atomic_store((_Atomic(uint8_t)*)dst, *(uint8_t*)src);
+    else if (nb == 2)
+        jl_atomic_store((_Atomic(uint16_t)*)dst, *(uint16_t*)src);
+    else if (nb <= 4)
+        jl_atomic_store((_Atomic(uint32_t)*)dst, zext_read32(src, nb));
 #if MAX_POINTERATOMIC_SIZE >= 8
-    case  8: jl_atomic_store((uint64_t*)dst, *(uint64_t*)src); break;
+    else if (nb <= 8)
+        jl_atomic_store((_Atomic(uint64_t)*)dst, zext_read64(src, nb));
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
-    case 16: jl_atomic_store((uint128_t*)dst, *(uint128_t*)src); break;
+    else if (nb <= 16)
+        jl_atomic_store((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb));
 #endif
-    default:
+    else
         abort();
-    }
 }
 
 JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl_value_t *src, int nb)
@@ -821,32 +880,35 @@ JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl
     jl_datatype_t *bt = (jl_datatype_t*)dt;
     // some types have special pools to minimize allocations
     if (nb == 0)               return jl_new_struct_uninit(bt); // returns bt->instance
-    if (bt == jl_bool_type)    return (1 & jl_atomic_exchange((int8_t*)dst, 1 & *(int8_t*)src)) ? jl_true : jl_false;
-    if (bt == jl_uint8_type)   return jl_box_uint8(jl_atomic_exchange((uint8_t*)dst, *(int8_t*)src));
-    if (bt == jl_int64_type)   return jl_box_int64(jl_atomic_exchange((int64_t*)dst, *(int64_t*)src));
-    if (bt == jl_int32_type)   return jl_box_int32(jl_atomic_exchange((int32_t*)dst, *(int32_t*)src));
-    if (bt == jl_int8_type)    return jl_box_int8(jl_atomic_exchange((int8_t*)dst, *(int8_t*)src));
-    if (bt == jl_int16_type)   return jl_box_int16(jl_atomic_exchange((int16_t*)dst, *(int16_t*)src));
-    if (bt == jl_uint64_type)  return jl_box_uint64(jl_atomic_exchange((uint64_t*)dst, *(uint64_t*)src));
-    if (bt == jl_uint32_type)  return jl_box_uint32(jl_atomic_exchange((uint32_t*)dst, *(uint32_t*)src));
-    if (bt == jl_uint16_type)  return jl_box_uint16(jl_atomic_exchange((uint16_t*)dst, *(uint16_t*)src));
-    if (bt == jl_char_type)    return jl_box_char(jl_atomic_exchange((uint32_t*)dst, *(uint32_t*)src));
+    if (bt == jl_bool_type)    return (1 & jl_atomic_exchange((_Atomic(int8_t)*)dst, 1 & *(int8_t*)src)) ? jl_true : jl_false;
+    if (bt == jl_uint8_type)   return jl_box_uint8(jl_atomic_exchange((_Atomic(uint8_t)*)dst, *(int8_t*)src));
+    if (bt == jl_int64_type)   return jl_box_int64(jl_atomic_exchange((_Atomic(int64_t)*)dst, *(int64_t*)src));
+    if (bt == jl_int32_type)   return jl_box_int32(jl_atomic_exchange((_Atomic(int32_t)*)dst, *(int32_t*)src));
+    if (bt == jl_int8_type)    return jl_box_int8(jl_atomic_exchange((_Atomic(int8_t)*)dst, *(int8_t*)src));
+    if (bt == jl_int16_type)   return jl_box_int16(jl_atomic_exchange((_Atomic(int16_t)*)dst, *(int16_t*)src));
+    if (bt == jl_uint64_type)  return jl_box_uint64(jl_atomic_exchange((_Atomic(uint64_t)*)dst, *(uint64_t*)src));
+    if (bt == jl_uint32_type)  return jl_box_uint32(jl_atomic_exchange((_Atomic(uint32_t)*)dst, *(uint32_t*)src));
+    if (bt == jl_uint16_type)  return jl_box_uint16(jl_atomic_exchange((_Atomic(uint16_t)*)dst, *(uint16_t*)src));
+    if (bt == jl_char_type)    return jl_box_char(jl_atomic_exchange((_Atomic(uint32_t)*)dst, *(uint32_t*)src));
 
     jl_task_t *ct = jl_current_task;
     jl_value_t *v = jl_gc_alloc(ct->ptls, jl_datatype_size(bt), bt);
-    switch (nb) {
-    case  1: *(uint8_t*) v = jl_atomic_exchange((uint8_t*)dst, *(uint8_t*)src);    break;
-    case  2: *(uint16_t*)v = jl_atomic_exchange((uint16_t*)dst, *(uint16_t*)src);   break;
-    case  4: *(uint32_t*)v = jl_atomic_exchange((uint32_t*)dst, *(uint32_t*)src);   break;
+    if (nb == 1)
+        *(uint8_t*)v = jl_atomic_exchange((_Atomic(uint8_t)*)dst, *(uint8_t*)src);
+    else if (nb == 2)
+        *(uint16_t*)v = jl_atomic_exchange((_Atomic(uint16_t)*)dst, *(uint16_t*)src);
+    else if (nb <= 4)
+        *(uint32_t*)v = jl_atomic_exchange((_Atomic(uint32_t)*)dst, zext_read32(src, nb));
 #if MAX_POINTERATOMIC_SIZE >= 8
-    case  8: *(uint64_t*)v = jl_atomic_exchange((uint64_t*)dst, *(uint64_t*)src);   break;
+    else if (nb <= 8)
+        *(uint64_t*)v = jl_atomic_exchange((_Atomic(uint64_t)*)dst, zext_read64(src, nb));
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
-    case 16: *(uint128_t*)v = jl_atomic_exchange((uint128_t*)dst, *(uint128_t*)src);   break;
+    else if (nb <= 16)
+        *(jl_uint128_t*)v = jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb));
 #endif
-    default:
+    else
         abort();
-    }
     return v;
 }
 
@@ -855,151 +917,138 @@ JL_DLLEXPORT int jl_atomic_bool_cmpswap_bits(char *dst, const jl_value_t *expect
     // dst must have the required alignment for an atomic of the given size
     // n.b.: this can spuriously fail if there are padding bits, the caller should deal with that
     int success;
-    switch (nb) {
-    case  0: {
+    if (nb == 0) {
         success = 1;
-        break;
     }
-    case  1: {
+    else if (nb == 1) {
         uint8_t y = *(uint8_t*)expected;
-        success = jl_atomic_cmpswap((uint8_t*)dst, &y, *(uint8_t*)src);
-        break;
+        success = jl_atomic_cmpswap((_Atomic(uint8_t)*)dst, &y, *(uint8_t*)src);
     }
-    case  2: {
+    else if (nb == 2) {
         uint16_t y = *(uint16_t*)expected;
-        success = jl_atomic_cmpswap((uint16_t*)dst, &y, *(uint16_t*)src);
-        break;
+        success = jl_atomic_cmpswap((_Atomic(uint16_t)*)dst, &y, *(uint16_t*)src);
     }
-    case  4: {
-        uint32_t y = *(uint32_t*)expected;
-        success = jl_atomic_cmpswap((uint32_t*)dst, &y, *(uint32_t*)src);
-        break;
+    else if (nb <= 4) {
+        uint32_t y = zext_read32(expected, nb);
+        uint32_t z = zext_read32(src, nb);
+        success = jl_atomic_cmpswap((_Atomic(uint32_t)*)dst, &y, z);
     }
 #if MAX_POINTERATOMIC_SIZE >= 8
-    case  8: {
-        uint64_t y = *(uint64_t*)expected;
-        success = jl_atomic_cmpswap((uint64_t*)dst, &y, *(uint64_t*)src);
-        break;
+    else if (nb <= 8) {
+        uint64_t y = zext_read64(expected, nb);
+        uint64_t z = zext_read64(src, nb);
+        success = jl_atomic_cmpswap((_Atomic(uint64_t)*)dst, &y, z);
     }
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
-    case 16: {
-        uint128_t y = *(uint128_t*)expected;
-        success = jl_atomic_cmpswap((uint128_t*)dst, &y, *(uint128_t*)src);
-        break;
+    else if (nb <= 16) {
+        jl_uint128_t y = zext_read128(expected, nb);
+        jl_uint128_t z = zext_read128(src, nb);
+        success = jl_atomic_cmpswap((_Atomic(jl_uint128_t)*)dst, &y, z);
     }
 #endif
-    default:
+    else {
         abort();
     }
     return success;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb)
+JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_datatype_t *rettyp, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb)
 {
     // dst must have the required alignment for an atomic of the given size
     // n.b.: this does not spuriously fail if there are padding bits
-    jl_value_t *params[2];
-    params[0] = (jl_value_t*)dt;
-    params[1] = (jl_value_t*)jl_bool_type;
-    jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
-    JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
-    int isptr = jl_field_isptr(tuptyp, 0);
     jl_task_t *ct = jl_current_task;
-    jl_value_t *y = jl_gc_alloc(ct->ptls, isptr ? nb : tuptyp->size, isptr ? dt : tuptyp);
+    int isptr = jl_field_isptr(rettyp, 0);
+    jl_value_t *y = jl_gc_alloc(ct->ptls, isptr ? nb : rettyp->size, isptr ? dt : rettyp);
     int success;
     jl_datatype_t *et = (jl_datatype_t*)jl_typeof(expected);
-    switch (nb) {
-    case  0: {
+    if (nb == 0) {
         success = (dt == et);
-        break;
     }
-    case  1: {
+    else if (nb == 1) {
         uint8_t *y8 = (uint8_t*)y;
+        assert(!dt->layout->haspadding);
         if (dt == et) {
             *y8 = *(uint8_t*)expected;
-            success = jl_atomic_cmpswap((uint8_t*)dst, y8, *(uint8_t*)src);
+            uint8_t z8 = *(uint8_t*)src;
+            success = jl_atomic_cmpswap((_Atomic(uint8_t)*)dst, y8, z8);
         }
         else {
-            *y8 = jl_atomic_load((uint8_t*)dst);
+            *y8 = jl_atomic_load((_Atomic(uint8_t)*)dst);
             success = 0;
         }
-        break;
     }
-    case  2: {
+    else if (nb == 2) {
         uint16_t *y16 = (uint16_t*)y;
+        assert(!dt->layout->haspadding);
         if (dt == et) {
             *y16 = *(uint16_t*)expected;
-            while (1) {
-                success = jl_atomic_cmpswap((uint16_t*)dst, y16, *(uint16_t*)src);
-                if (success || !dt->layout->haspadding || !jl_egal__bits(y, expected, dt))
-                    break;
-            }
+            uint16_t z16 = *(uint16_t*)src;
+            success = jl_atomic_cmpswap((_Atomic(uint16_t)*)dst, y16, z16);
         }
         else {
-            *y16 = jl_atomic_load((uint16_t*)dst);
+            *y16 = jl_atomic_load((_Atomic(uint16_t)*)dst);
             success = 0;
         }
-        break;
     }
-    case  4: {
+    else if (nb <= 4) {
         uint32_t *y32 = (uint32_t*)y;
         if (dt == et) {
-            *y32 = *(uint32_t*)expected;
+            *y32 = zext_read32(expected, nb);
+            uint32_t z32 = zext_read32(src, nb);
             while (1) {
-                success = jl_atomic_cmpswap((uint32_t*)dst, y32, *(uint32_t*)src);
+                success = jl_atomic_cmpswap((_Atomic(uint32_t)*)dst, y32, z32);
                 if (success || !dt->layout->haspadding || !jl_egal__bits(y, expected, dt))
                     break;
             }
         }
         else {
-            *y32 = jl_atomic_load((uint32_t*)dst);
+            *y32 = jl_atomic_load((_Atomic(uint32_t)*)dst);
             success = 0;
         }
-        break;
     }
 #if MAX_POINTERATOMIC_SIZE >= 8
-    case  8: {
+    else if (nb <= 8) {
         uint64_t *y64 = (uint64_t*)y;
         if (dt == et) {
-            *y64 = *(uint64_t*)expected;
+            *y64 = zext_read64(expected, nb);
+            uint64_t z64 = zext_read64(src, nb);
             while (1) {
-                success = jl_atomic_cmpswap((uint64_t*)dst, y64, *(uint64_t*)src);
+                success = jl_atomic_cmpswap((_Atomic(uint64_t)*)dst, y64, z64);
                 if (success || !dt->layout->haspadding || !jl_egal__bits(y, expected, dt))
                     break;
             }
         }
         else {
-            *y64 = jl_atomic_load((uint64_t*)dst);
+            *y64 = jl_atomic_load((_Atomic(uint64_t)*)dst);
             success = 0;
         }
-        break;
     }
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
-    case 16: {
-        uint128_t *y128 = (uint128_t*)y;
+    else if (nb <= 16) {
+        jl_uint128_t *y128 = (jl_uint128_t*)y;
         if (dt == et) {
-            *y128 = *(uint128_t*)expected;
+            *y128 = zext_read128(expected, nb);
+            jl_uint128_t z128 = zext_read128(src, nb);
             while (1) {
-                success = jl_atomic_cmpswap((uint128_t*)dst, y128, *(uint128_t*)src);
+                success = jl_atomic_cmpswap((_Atomic(jl_uint128_t)*)dst, y128, z128);
                 if (success || !dt->layout->haspadding || !jl_egal__bits(y, expected, dt))
                     break;
             }
         }
         else {
-            *y128 = jl_atomic_load((uint128_t*)dst);
+            *y128 = jl_atomic_load((_Atomic(jl_uint128_t)*)dst);
             success = 0;
         }
-        break;
     }
 #endif
-    default:
+    else {
         abort();
     }
     if (isptr) {
         JL_GC_PUSH1(&y);
-        jl_value_t *z = jl_gc_alloc(ct->ptls, tuptyp->size, tuptyp);
+        jl_value_t *z = jl_gc_alloc(ct->ptls, rettyp->size, rettyp);
         *(jl_value_t**)z = y;
         JL_GC_POP();
         y = z;
@@ -1344,7 +1393,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
         jl_bounds_error_int(v, i + 1);
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
-        return jl_atomic_load_relaxed((jl_value_t**)((char*)v + offs));
+        return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs));
     }
     jl_value_t *ty = jl_field_type_concrete(st, i);
     int isatomic = jl_field_isatomic(st, i);
@@ -1381,7 +1430,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_RO
     assert(i < jl_datatype_nfields(st));
     size_t offs = jl_field_offset(st,i);
     assert(jl_field_isptr(st,i));
-    return jl_atomic_load_relaxed((jl_value_t**)((char*)v + offs));
+    return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs));
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
@@ -1406,16 +1455,12 @@ static inline void memassign_safe(int hasptr, jl_value_t *parent, char *dst, con
     else {
         // src must be a heap box.
         assert(nb == jl_datatype_size(jl_typeof(src)));
+        if (nb >= 16) {
+            memcpy(dst, jl_assume_aligned(src, 16), nb);
+            return;
+        }
     }
-    switch (nb) {
-    case  0:                                               break;
-    case  1: *(uint8_t*)dst            = *(uint8_t*)src;   break;
-    case  2: jl_store_unaligned_i16(dst, *(uint16_t*)src); break;
-    case  4: jl_store_unaligned_i32(dst, *(uint32_t*)src); break;
-    case  8: jl_store_unaligned_i64(dst, *(uint64_t*)src); break;
-    case 16: memcpy(dst, jl_assume_aligned(src, 16), 16);  break;
-    default: memcpy(dst, src, nb);                         break;
-    }
+    memcpy(dst, jl_assume_aligned(src, sizeof(void*)), nb);
 }
 
 void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT
@@ -1426,7 +1471,7 @@ void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, 
         return;
     }
     if (jl_field_isptr(st, i)) {
-        jl_atomic_store_relaxed((jl_value_t**)((char*)v + offs), rhs);
+        jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
         jl_gc_wb(v, rhs);
     }
     else {
@@ -1476,9 +1521,9 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
     jl_value_t *r;
     if (jl_field_isptr(st, i)) {
         if (isatomic)
-            r = jl_atomic_exchange((jl_value_t**)((char*)v + offs), rhs);
+            r = jl_atomic_exchange((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
         else
-            r = jl_atomic_exchange_relaxed((jl_value_t**)((char*)v + offs), rhs);
+            r = jl_atomic_exchange_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
         jl_gc_wb(v, rhs);
     }
     else {
@@ -1548,7 +1593,7 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
         if (!jl_isa(y, ty))
             jl_type_error("modifyfield!", ty, y);
         if (jl_field_isptr(st, i)) {
-            jl_value_t **p = (jl_value_t**)((char*)v + offs);
+            _Atomic(jl_value_t*) *p = (_Atomic(jl_value_t*)*)((char*)v + offs);
             if (isatomic ? jl_atomic_cmpswap(p, &r, y) : jl_atomic_cmpswap_relaxed(p, &r, y))
                 break;
         }
@@ -1608,8 +1653,11 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
         args[0] = r;
         jl_gc_safepoint();
     }
-    // args[0] == r (old); args[1] == y (new)
-    args[0] = jl_f_tuple(NULL, args, 2);
+    // args[0] == r (old)
+    // args[1] == y (new)
+    jl_datatype_t *rettyp = jl_apply_modify_type(ty);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    args[0] = jl_new_struct(rettyp, args[0], args[1]);
     JL_GC_POP();
     return args[0];
 }
@@ -1621,8 +1669,10 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
         jl_type_error("replacefield!", ty, rhs);
     size_t offs = jl_field_offset(st, i);
     jl_value_t *r = expected;
+    jl_datatype_t *rettyp = jl_apply_cmpswap_type(ty);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
     if (jl_field_isptr(st, i)) {
-        jl_value_t **p = (jl_value_t**)((char*)v + offs);
+        _Atomic(jl_value_t*) *p = (_Atomic(jl_value_t*)*)((char*)v + offs);
         int success;
         while (1) {
             success = isatomic ? jl_atomic_cmpswap(p, &r, rhs) : jl_atomic_cmpswap_relaxed(p, &r, rhs);
@@ -1633,11 +1683,8 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
             if (success || !jl_egal(r, expected))
                 break;
         }
-        jl_value_t **args;
-        JL_GC_PUSHARGS(args, 2);
-        args[0] = r;
-        args[1] = success ? jl_true : jl_false;
-        r = jl_f_tuple(NULL, args, 2);
+        JL_GC_PUSH1(&r);
+        r = jl_new_struct(rettyp, r, success ? jl_true : jl_false);
         JL_GC_POP();
     }
     else {
@@ -1645,7 +1692,7 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
         int isunion = jl_is_uniontype(ty);
         int needlock;
         jl_value_t *rty = ty;
-        size_t fsz;
+        size_t fsz = jl_field_size(st, i);
         if (isunion) {
             assert(!isatomic);
             hasptr = 0;
@@ -1658,32 +1705,26 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
             needlock = (isatomic && fsz > MAX_ATOMIC_SIZE);
         }
         if (isatomic && !needlock) {
-            r = jl_atomic_cmpswap_bits((jl_datatype_t*)rty, (char*)v + offs, r, rhs, fsz);
+            r = jl_atomic_cmpswap_bits((jl_datatype_t*)ty, rettyp, (char*)v + offs, r, rhs, fsz);
             int success = *((uint8_t*)r + fsz);
             if (success && hasptr)
                 jl_gc_multi_wb(v, rhs); // rhs is immutable
         }
         else {
             jl_task_t *ct = jl_current_task;
-            uint8_t *psel;
+            uint8_t *psel = NULL;
             if (isunion) {
-                size_t fsz = jl_field_size(st, i);
                 psel = &((uint8_t*)v)[offs + fsz - 1];
                 rty = jl_nth_union_component(rty, *psel);
             }
-            jl_value_t *params[2];
-            params[0] = rty;
-            params[1] = (jl_value_t*)jl_bool_type;
-            jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
-            JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
-            assert(!jl_field_isptr(tuptyp, 0));
-            r = jl_gc_alloc(ct->ptls, tuptyp->size, (jl_value_t*)tuptyp);
+            assert(!jl_field_isptr(rettyp, 0));
+            r = jl_gc_alloc(ct->ptls, rettyp->size, (jl_value_t*)rettyp);
             int success = (rty == jl_typeof(expected));
             if (needlock)
                 jl_lock_value(v);
-            size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
-            memcpy((char*)r, (char*)v + offs, fsz);
+            memcpy((char*)r, (char*)v + offs, fsz); // copy field, including union bits
             if (success) {
+                size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
                 if (((jl_datatype_t*)rty)->layout->haspadding)
                     success = jl_egal__bits(r, expected, (jl_datatype_t*)rty);
                 else
@@ -1717,7 +1758,7 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     size_t offs = jl_field_offset(st, i);
-    jl_value_t **fld = (jl_value_t**)((char*)v + offs);
+    _Atomic(jl_value_t*) *fld = (_Atomic(jl_value_t*)*)((char*)v + offs);
     if (!jl_field_isptr(st, i)) {
         jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(st, i);
         if (!jl_is_datatype(ft) || ft->layout->first_ptr < 0)

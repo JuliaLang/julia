@@ -578,6 +578,7 @@ export
     codeunits,
     digits,
     digits!,
+    eachsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -803,6 +804,7 @@ export
 
 # I/O and events
     close,
+    closewrite,
     countlines,
     eachline,
     readeach,
@@ -895,6 +897,7 @@ export
     filemode,
     filesize,
     gperm,
+    hardlink,
     isblockdev,
     ischardev,
     isdir,

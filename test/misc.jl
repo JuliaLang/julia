@@ -263,6 +263,22 @@ function timev_macro_scope()
 end
 @test timev_macro_scope() == 1
 
+before = Base.cumulative_compile_time_ns_before();
+
+# exercise concurrent calls to `@time` for reentrant compilation time measurement.
+t1 = @async @time begin
+    sleep(2)
+    @eval module M ; f(x,y) = x+y ; end
+    @eval M.f(2,3)
+end
+t2 = @async begin
+    sleep(1)
+    @time 2 + 2
+end
+
+after = Base.cumulative_compile_time_ns_after();
+@test after >= before;
+
 # interactive utilities
 
 struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
@@ -300,6 +316,11 @@ end
 # issue #33675
 let vec = vcat(missing, ones(100000))
     @test length(unique(summarysize(vec) for i = 1:20)) == 1
+end
+
+# issue #40773
+let s = Set(1:100)
+    @test summarysize([s]) > summarysize(s)
 end
 
 # issue #13021
@@ -995,3 +1016,5 @@ let script = :(let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
     @test !success(`$(Base.julia_cmd()) -e $script`)
 end
 
+# issue #41656
+@test success(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)

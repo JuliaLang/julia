@@ -417,3 +417,15 @@ end
     @test prod(["*" for i in 1:3]) == "***"
     @test prod(["*" for i in 1:0]) == ""
 end
+
+@testset "Unicode equivalence" begin
+    @test isequal_normalized("no\u00EBl", "noe\u0308l")
+    @test !isequal_normalized("no\u00EBl", "noe\u0308l ")
+    @test isequal_normalized("", "")
+    @test !isequal_normalized("", " ")
+    @test !isequal_normalized("no\u00EBl", "NOËL")
+    @test isequal_normalized("no\u00EBl", "NOËL", casefold=true)
+    @test !isequal_normalized("no\u00EBl", "noel")
+    @test isequal_normalized("no\u00EBl", "noel", stripmark=true)
+    @test isequal_normalized("no\u00EBl", "NOEL", stripmark=true, casefold=true)
+end

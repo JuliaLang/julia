@@ -496,4 +496,17 @@ end
     @test B.UL ≈ B32.UL
 end
 
+@testset "det and logdet" begin
+    A = [4083 3825 5876 2048 4470 5490;
+         3825 3575 5520 1920 4200 5140;
+         5876 5520 8427 2940 6410 7903;
+         2048 1920 2940 1008 2240 2740;
+         4470 4200 6410 2240 4875 6015;
+         5490 5140 7903 2740 6015 7370]
+    B = cholesky(A, Val(true), check=false)
+    @test det(B)  ==  0.0
+    @test det(B)  ≈  det(A) atol=eps()
+    @test logdet(B)  ==  -Inf
+ end
+
 end # module TestCholesky

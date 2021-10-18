@@ -25,6 +25,9 @@ findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a
 findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_search(a, pred.x, i))
 
+findfirst(::typeof(iszero), a::ByteArray) = nothing_sentinel(_search(a, zero(UInt8)))
+findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
+
 function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
     if i < 1
         throw(BoundsError(a, i))
@@ -64,6 +67,9 @@ findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a:
 
 findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_rsearch(a, pred.x, i))
+
+findlast(::typeof(iszero), a::ByteArray) = nothing_sentinel(_rsearch(a, zero(UInt8)))
+findprev(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
 
 function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
     if i < 1
@@ -635,4 +641,4 @@ The returned function is of type `Base.Fix2{typeof(occursin)}`.
 """
 occursin(haystack) = Base.Fix2(occursin, haystack)
 
-in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")
+in(::AbstractString, ::AbstractString) = error("use occursin(needle, haystack) for string containment")

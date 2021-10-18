@@ -1510,7 +1510,7 @@ let ex = Meta.parse("@test27521(2) do y; y; end")
 end
 
 # issue #27129
-f27129(x = 1) = (@Base._inline_meta; x)
+f27129(x = 1) = (@inline; x)
 for meth in methods(f27129)
     @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end
@@ -2937,3 +2937,49 @@ end
     @test eval(Meta.parse("`a\\\r\nb`")) == `ab`
     @test eval(Meta.parse("`a\\\rb`")) == `ab`
 end
+
+@testset "slurping into function def" begin
+    x, f()... = [1, 2, 3]
+    @test x == 1
+    @test f() == [2, 3]
+    # test that call to `Base.rest` is outside the definition of `f`
+    @test f() === f()
+
+    x, f()... = 1, 2, 3
+    @test x == 1
+    @test f() == (2, 3)
+end
+
+@testset "long function bodies" begin
+    ex = Expr(:block)
+    ex.args = fill!(Vector{Any}(undef, 700000), 1)
+    f = eval(Expr(:function, :(), ex))
+    @test f() == 1
+    ex = Expr(:vcat)
+    ex.args = fill!(Vector{Any}(undef, 600000), 1)
+    @test_throws ErrorException("syntax: expression too large") eval(ex)
+end
+
+# issue 25678
+@generated f25678(x::T) where {T} = code_lowered(sin, Tuple{x})[]
+@test f25678(pi/6) === sin(pi/6)
+
+@generated g25678(x) = return :x
+@test g25678(7) === 7
+
+# issue #19012
+@test Meta.parse("\U2200", raise=false) == Symbol("∀")
+@test Meta.parse("\U2203", raise=false) == Symbol("∃")
+@test Meta.parse("a\U2203", raise=false) == Symbol("a∃")
+@test Meta.parse("\U2204", raise=false) == Symbol("∄")
+
+# issue 42220
+macro m42220()
+    return quote
+        function foo(::Type{T}=Float64) where {T}
+            return Vector{T}(undef, 10)
+        end
+    end
+end
+@test @m42220()() isa Vector{Float64}
+@test @m42220()(Bool) isa Vector{Bool}

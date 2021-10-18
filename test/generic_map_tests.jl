@@ -53,6 +53,28 @@ function generic_map_tests(mapf, inplace_mapf=nothing)
         @test A == map(x->x*x*x, Float64[1:10...])
         @test A === B
     end
+
+    # Issue #28382: inferrability of map with Union eltype
+    @test isequal(map(+, [1, 2], [3.0, missing]), [4.0, missing])
+    @test Core.Compiler.return_type(map, Tuple{typeof(+), Vector{Int},
+                                               Vector{Union{Float64, Missing}}}) ==
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
+    @test isequal(map(tuple, [1, 2], [3.0, missing]), [(1, 3.0), (2, missing)])
+    @test Core.Compiler.return_type(map, Tuple{typeof(tuple), Vector{Int},
+                                               Vector{Union{Float64, Missing}}}) ==
+        Vector{<:Tuple{Int, Any}}
+    # Check that corner cases do not throw an error
+    @test isequal(map(x -> x === 1 ? nothing : x, [1, 2, missing]),
+                  [nothing, 2, missing])
+    @test isequal(map(x -> x === 1 ? nothing : x, Any[1, 2, 3.0, missing]),
+                  [nothing, 2, 3, missing])
+    @test map((x,y)->(x==1 ? 1.0 : x, y), [1, 2, 3], ["a", "b", "c"]) ==
+        [(1.0, "a"), (2, "b"), (3, "c")]
+    @test map(typeof, [iszero, isdigit]) == [typeof(iszero), typeof(isdigit)]
+    @test map(typeof, [iszero, iszero]) == [typeof(iszero), typeof(iszero)]
+    @test isequal(map(identity, Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
+                  [[1, 2],[missing, 1]])
+    @test map(x -> x < 0 ? false : x, Int[]) isa Vector{Integer}
 end
 
 function testmap_equivalence(mapf, f, c...)

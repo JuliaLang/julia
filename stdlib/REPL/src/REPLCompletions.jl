@@ -144,7 +144,7 @@ function complete_symbol(sym::String, ffunc, context_module::Module=Main)
             if isa(b, Module)
                 mod = b
                 lookup_module = true
-            elseif Base.isstructtype(typeof(b))
+            else
                 lookup_module = false
                 t = typeof(b)
             end
@@ -478,17 +478,59 @@ function get_type(sym, fn::Module)
     return found ? Core.Typeof(val) : Any, found
 end
 
+function get_type(T, found::Bool, default_any::Bool)
+    return found ? T :
+           default_any ? Any : throw(ArgumentError("argument not found"))
+end
+
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr, context_module::Module=Main)
     func, found = get_value(ex_org.args[1], context_module)::Tuple{Any,Bool}
     !found && return Completion[]
 
-    funargs = ex_org.args[2:end]
-    # handle broadcasting, but only handle number of arguments instead of
-    # argument types
+    args_ex, kwargs_ex = complete_methods_args(ex_org.args[2:end], ex_org, context_module, true, true)
+
+    out = Completion[]
+    complete_methods!(out, func, args_ex, kwargs_ex)
+    return out
+end
+
+function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool)
+    out = Completion[]
+    args_ex, kwargs_ex = try
+        complete_methods_args(ex_org.args[2:end], ex_org, context_module, false, false)
+    catch
+        return out
+    end
+
+    for name in names(callee_module; all=true)
+        if !Base.isdeprecated(callee_module, name) && isdefined(callee_module, name)
+            func = getfield(callee_module, name)
+            if !isa(func, Module)
+                complete_methods!(out, func, args_ex, kwargs_ex, moreargs)
+            elseif callee_module === Main::Module && isa(func, Module)
+                callee_module2 = func
+                for name in names(callee_module2)
+                    if isdefined(callee_module2, name)
+                        func = getfield(callee_module, name)
+                        if !isa(func, Module)
+                            complete_methods!(out, func, args_ex, kwargs_ex, moreargs)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return out
+end
+
+function complete_methods_args(funargs::Vector{Any}, ex_org::Expr, context_module::Module, default_any::Bool, allow_broadcasting::Bool)
     args_ex = Any[]
     kwargs_ex = Pair{Symbol,Any}[]
-    if ex_org.head === :. && ex_org.args[2] isa Expr
+    if allow_broadcasting && ex_org.head === :. && ex_org.args[2] isa Expr
+        # handle broadcasting, but only handle number of arguments instead of
+        # argument types
         for _ in (ex_org.args[2]::Expr).args
             push!(args_ex, Any)
         end
@@ -497,18 +539,20 @@ function complete_methods(ex_org::Expr, context_module::Module=Main)
             if isexpr(ex, :parameters)
                 for x in ex.args
                     n, v = isexpr(x, :kw) ? (x.args...,) : (x, x)
-                    push!(kwargs_ex, n => first(get_type(v, context_module)))
+                    push!(kwargs_ex, n => get_type(get_type(v, context_module)..., default_any))
                 end
             elseif isexpr(ex, :kw)
                 n, v = (ex.args...,)
-                push!(kwargs_ex, n => first(get_type(v, context_module)))
+                push!(kwargs_ex, n => get_type(get_type(v, context_module)..., default_any))
             else
-                push!(args_ex, first(get_type(ex, context_module)))
+                push!(args_ex, get_type(get_type(ex, context_module)..., default_any))
             end
         end
     end
+    return args_ex, kwargs_ex
+end
 
-    out = Completion[]
+function complete_methods!(out::Vector{Completion}, @nospecialize(func), args_ex::Vector{Any}, kwargs_ex::Vector{Pair{Symbol,Any}}, moreargs::Bool=true)
     ml = methods(func)
     # Input types and number of arguments
     if isempty(kwargs_ex)
@@ -525,6 +569,9 @@ function complete_methods(ex_org::Expr, context_module::Module=Main)
         ml = methods(kwfunc)
         func = kwfunc
     end
+    if !moreargs
+        na = typemax(Int)
+    end
 
     for (method::Method, orig_method) in zip(ml, orig_ml)
         ms = method.sig
@@ -534,7 +581,6 @@ function complete_methods(ex_org::Expr, context_module::Module=Main)
             push!(out, MethodCompletion(func, t_in, method, orig_method))
         end
     end
-    return out
 end
 
 include("latex_symbols.jl")
@@ -651,6 +697,36 @@ function completions(string::String, pos::Int, context_module::Module=Main)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
+
+    # ?(x, y)TAB lists methods you can call with these objects
+    # ?(x, y TAB lists methods that take these objects as the first two arguments
+    # MyModule.?(x, y)TAB restricts the search to names in MyModule
+    rexm = match(r"(\w+\.|)\?\((.*)$", partial)
+    if rexm !== nothing
+        # Get the module scope
+        if isempty(rexm.captures[1])
+            callee_module = context_module
+        else
+            modname = Symbol(rexm.captures[1][1:end-1])
+            if isdefined(context_module, modname)
+                callee_module = getfield(context_module, modname)
+                if !isa(callee_module, Module)
+                    callee_module = context_module
+                end
+            else
+                callee_module = context_module
+            end
+        end
+        moreargs = !endswith(rexm.captures[2], ')')
+        callstr = "_(" * rexm.captures[2]
+        if moreargs
+            callstr *= ')'
+        end
+        ex_org = Meta.parse(callstr, raise=false, depwarn=false)
+        if isa(ex_org, Expr)
+            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
+        end
+    end
 
     # if completing a key in a Dict
     identifier, partial_key, loc = dict_identifier_key(partial, inc_tag, context_module)
@@ -828,9 +904,13 @@ end
 function UndefVarError_hint(io::IO, ex::UndefVarError)
     var = ex.var
     if var === :or
-        print("\nsuggestion: Use `||` for short-circuiting boolean OR.")
+        print(io, "\nsuggestion: Use `||` for short-circuiting boolean OR.")
     elseif var === :and
-        print("\nsuggestion: Use `&&` for short-circuiting boolean AND.")
+        print(io, "\nsuggestion: Use `&&` for short-circuiting boolean AND.")
+    elseif var === :help
+        println(io)
+        # Show friendly help message when user types help or help() and help is undefined
+        show(io, MIME("text/plain"), Base.Docs.parsedoc(Base.Docs.keywords[:help]))
     end
 end
 

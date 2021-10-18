@@ -1,7 +1,7 @@
 # [Scope of Variables](@id scope-of-variables)
 
-The *scope* of a variable is the region of code within which a variable is visible. Variable scoping
-helps avoid variable naming conflicts. The concept is intuitive: two functions can both have
+The *scope* of a variable is the region of code within which a variable is accessible. Variable
+scoping helps avoid variable naming conflicts. The concept is intuitive: two functions can both have
 arguments called `x` without the two `x`'s referring to the same thing. Similarly, there are many
 other cases where different blocks of code can use the same name without referring to the same
 thing. The rules for when the same variable name does or doesn't refer to the same thing are called
@@ -130,7 +130,7 @@ _always_ updates that existing local: you can only shadow a local by explicitly
 declaring a new local in a nested scope with the `local` keyword. In particular,
 this applies to variables assigned in inner functions, which may surprise users
 coming from Python where assignment in an inner function creates a new local
-unless the variable is explictly declared to be non-local.
+unless the variable is explicitly declared to be non-local.
 
 Mostly this is pretty intuitive, but as with many things that behave
 intuitively, the details are more subtle than one might naïvely imagine.

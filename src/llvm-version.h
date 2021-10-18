@@ -21,7 +21,9 @@
 #define LLVM_ENABLE_STATS 0
 #endif
 
+#ifdef __cplusplus
 #if defined(__GNUC__) && (__GNUC__ >= 9)
 // Added in GCC 9, this warning is annoying
 #pragma GCC diagnostic ignored "-Winit-list-lifetime"
+#endif
 #endif

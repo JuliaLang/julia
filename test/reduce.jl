@@ -49,8 +49,8 @@ end
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1:5; init=1000) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+, 1) == 1
-@test_throws ArgumentError reduce(*, ())
-@test_throws ArgumentError reduce(*, Union{}[])
+@test_throws "reducing with * over an empty collection of element type Union{} is not allowed" reduce(*, ())
+@test_throws "reducing with * over an empty collection of element type Union{} is not allowed" reduce(*, Union{}[])
 
 # mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
@@ -87,8 +87,10 @@ end
 @test mapreduce(abs2, *, Float64[]) === 1.0
 @test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
-@test_throws ArgumentError mapreduce(abs2, &, Float64[])
-@test_throws ArgumentError mapreduce(abs2, |, Float64[])
+@test_throws ["reducing over an empty collection is not allowed",
+              "consider supplying `init`"] mapreduce(abs2, &, Float64[])
+@test_throws str -> !occursin("Closest candidates are", str) mapreduce(abs2, &, Float64[])
+@test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, |, Float64[])
 
 # mapreduce() type stability
 @test typeof(mapreduce(*, +, Int8[10])) ===
@@ -138,8 +140,9 @@ fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
-@test_throws ArgumentError sum(Union{}[])
-@test_throws ArgumentError sum(sin, Int[])
+@test_throws "reducing with add_sum over an empty collection of element type Union{} is not allowed" sum(Union{}[])
+@test_throws ["reducing over an empty collection is not allowed",
+              "consider supplying `init`"] sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
 a = sum(sin, z)
@@ -170,7 +173,7 @@ for f in (sum2, sum5, sum6, sum9, sum10)
 end
 for f in (sum3, sum4, sum7, sum8)
     @test sum(z) == f(z)
-    @test_throws ArgumentError f(Int[])
+    @test_throws "reducing over an empty" f(Int[])
     @test sum(Int[7]) == f(Int[7]) == 7
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
@@ -239,8 +242,8 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 # maximum & minimum & extrema
 
-@test_throws ArgumentError maximum(Int[])
-@test_throws ArgumentError minimum(Int[])
+@test_throws "reducing over an empty" maximum(Int[])
+@test_throws "reducing over an empty" minimum(Int[])
 
 @test maximum(Int[]; init=-1) == -1
 @test minimum(Int[]; init=-1) == -1
@@ -594,14 +597,22 @@ end
 # issue #18695
 test18695(r) = sum( t^2 for t in r )
 @test @inferred(test18695([1.0,2.0,3.0,4.0])) == 30.0
-@test_throws ArgumentError test18695(Any[])
+@test_throws str -> ( occursin("reducing over an empty", str) &&
+                      occursin("consider supplying `init`", str) &&
+                     !occursin("or defining", str)) test18695(Any[])
+
+# For Core.IntrinsicFunction
+@test_throws str -> ( occursin("reducing over an empty", str) &&
+                      occursin("consider supplying `init`", str) &&
+                     !occursin("or defining", str)) reduce(Base.xor_int, Int[])
 
 # issue #21107
 @test foldr(-,2:2) == 2
 
 # test neutral element not picked incorrectly for &, |
 @test @inferred(foldl(&, Int[1])) === 1
-@test_throws ArgumentError foldl(&, Int[])
+@test_throws ["reducing over an empty",
+              "consider supplying `init`"] foldl(&, Int[])
 
 # prod on Chars
 @test prod(Char[]) == ""

@@ -48,7 +48,7 @@ Base.findlast(::AbstractChar, ::AbstractString)
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
 Base.occursin
 Base.reverse(::Union{String,SubString{String}})
-Base.replace(s::AbstractString, ::Pair)
+Base.replace(s::AbstractString, ::Pair...)
 Base.split
 Base.rsplit
 Base.strip

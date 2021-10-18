@@ -55,7 +55,7 @@ function gc_alloc_count(diff::GC_Diff)
     diff.malloc + diff.realloc + diff.poolalloc + diff.bigalloc
 end
 
-# cumulative total time spent on compilation
+# cumulative total time spent on compilation, in nanoseconds
 cumulative_compile_time_ns_before() = ccall(:jl_cumulative_compile_time_ns_before, UInt64, ())
 cumulative_compile_time_ns_after() = ccall(:jl_cumulative_compile_time_ns_after, UInt64, ())
 
@@ -164,6 +164,16 @@ function timev_print(elapsedtime, diff::GC_Diff, compile_time)
     padded_nonzero_print(diff.full_sweep,   "full collections")
 end
 
+# Like a try-finally block, except without introducing the try scope
+# NOTE: This is deprecated and should not be used from user logic. A proper solution to
+# this problem will be introduced in https://github.com/JuliaLang/julia/pull/39217
+macro __tryfinally(ex, fin)
+    Expr(:tryfinally,
+       :($(esc(ex))),
+       :($(esc(fin)))
+       )
+end
+
 """
     @time
 
@@ -203,13 +213,14 @@ julia> @time begin
 """
 macro time(ex)
     quote
-        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        @compile
         local stats = gc_num()
-        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
+        local compile_elapsedtime = cumulative_compile_time_ns_before()
+        local val = @__tryfinally($(esc(ex)),
+            (elapsedtime = time_ns() - elapsedtime;
+            compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
+        )
         local diff = GC_Diff(gc_num(), stats)
         time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
         val
@@ -249,13 +260,14 @@ pool allocs:       1
 """
 macro timev(ex)
     quote
-        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        @compile
         local stats = gc_num()
-        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
+        local compile_elapsedtime = cumulative_compile_time_ns_before()
+        local val = @__tryfinally($(esc(ex)),
+            (elapsedtime = time_ns() - elapsedtime;
+            compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
+        )
         local diff = GC_Diff(gc_num(), stats)
         timev_print(elapsedtime, diff, compile_elapsedtime)
         val
@@ -282,7 +294,7 @@ julia> @elapsed sleep(0.3)
 """
 macro elapsed(ex)
     quote
-        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        @compile
         local t0 = time_ns()
         $(esc(ex))
         (time_ns() - t0) / 1e9
@@ -314,7 +326,7 @@ julia> @allocated rand(10^6)
 """
 macro allocated(ex)
     quote
-        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        @compile
         local b0 = Ref{Int64}(0)
         local b1 = Ref{Int64}(0)
         gc_bytes(b0)
@@ -362,7 +374,7 @@ julia> stats.gcstats.total_time
 """
 macro timed(ex)
     quote
-        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        @compile
         local stats = gc_num()
         local elapsedtime = time_ns()
         local val = $(esc(ex))

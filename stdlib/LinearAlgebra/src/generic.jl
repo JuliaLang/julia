@@ -8,7 +8,8 @@
 # inside this function.
 function *ₛ end
 Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
-    iszero(beta::Number) ? false : broadcasted(*, out, beta)
+    iszero(beta::Number) ? false :
+    isone(beta::Number) ? broadcasted(identity, out) : broadcasted(*, out, beta)
 
 """
     MulAddMul(alpha, beta)
