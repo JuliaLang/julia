@@ -124,6 +124,11 @@ Standard library changes
 #### Unicode
 * Added function `isequal_normalized` to check for Unicode equivalence without
   explicitly constructing normalized strings ([#42493]).
+* The `Unicode.normalize` function now accepts a `chartransform` keyword that can
+  be used to supply custom character mappings, and a `Unicode.julia_chartransform`
+  function is provided to reproduce the mapping used in identifier normalization
+  by the Julia parser ([#42561]).
+
 
 Deprecated or removed
 ---------------------
