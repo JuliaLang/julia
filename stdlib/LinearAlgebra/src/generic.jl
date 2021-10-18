@@ -1619,6 +1619,70 @@ const NumberArray{T<:Number} = AbstractArray{T}
 exactdiv(a, b) = a/b
 exactdiv(a::Integer, b::Integer) = div(a, b)
 
+# Bareiss algorithm
+function bareiss_update!(zero!, M::Matrix, k, swapto, pivot, prev_pivot)
+    for i in k+1:size(M, 2), j in k+1:size(M, 1)
+        M[j,i] = exactdiv(M[j,i]*pivot - M[j,k]*M[k,i], prev_pivot)
+    end
+    zero!(M, k+1:size(M, 1), k)
+end
+
+function bareiss_update!(zero!, M::AbstractMatrix, k, swapto, pivot, prev_pivot)
+    V = @view M[k+1:end, k+1:end]
+    V .= exactdiv.(V * pivot - M[k+1:end, k] * M[k, k+1:end]', prev_pivot)
+    zero!(M, k+1:size(M, 1), k)
+end
+
+function bareiss_update_virtual_colswap!(zero!, M::AbstractMatrix, k, swapto, pivot, prev_pivot)
+    V = @view M[k+1:end, :]
+    V .= exactdiv.(V * pivot - M[k+1:end, swapto[2]] * M[k, :]', prev_pivot)
+    zero!(M, k+1:size(M, 1), swapto[2])
+end
+
+bareiss_zero!(M, i, j) = M[i,j] .= zero(eltype(M))
+
+function find_pivot_col(M, i)
+    p = findfirst(!iszero, @view M[i,i:end])
+    p === nothing && return nothing
+    idx = CartesianIndex(i, p + i - 1)
+    (idx, M[idx])
+end
+
+function find_pivot_any(M, i)
+    p = findfirst(!iszero, @view M[i:end,i:end])
+    p === nothing && return nothing
+    idx = p + CartesianIndex(i - 1, i - 1)
+    (idx, M[idx])
+end
+
+const bareiss_colswap = (Base.swapcols!, Base.swaprows!, bareiss_update!, bareiss_zero!)
+const bareiss_virtcolswap = ((M,i,j)->nothing, Base.swaprows!, bareiss_update_virtual_colswap!, bareiss_zero!)
+
+"""
+    bareiss!(M)
+
+Perform Bareiss's fraction-free row-reduction algorithm on the matrix `M`.
+Optionally, a specific pivoting method may be specified.
+"""
+function bareiss!(M::AbstractMatrix,
+                     (swapcols!, swaprows!, update!, zero!) = bareiss_colswap;
+                  find_pivot=find_pivot_any)
+    prev = one(eltype(M))
+    n = size(M, 1)
+    for k in 1:n
+        r = find_pivot(M, k)
+        r === nothing && return k - 1
+        (swapto, pivot) = r
+        if CartesianIndex(k, k) != swapto
+            swapcols!(M, k, swapto[2])
+            swaprows!(M, k, swapto[1])
+        end
+        update!(zero!, M, k, swapto, pivot, prev)
+        prev = pivot
+    end
+    return n
+end
+
 """
     det_bareiss!(M)
 
@@ -1639,21 +1703,18 @@ julia> LinearAlgebra.det_bareiss!(M)
 """
 function det_bareiss!(M)
     n = checksquare(M)
-    sign, prev = Int8(1), one(eltype(M))
-    for i in 1:n-1
-        if iszero(M[i,i]) # swap with another col to make nonzero
-            swapto = findfirst(!iszero, @view M[i,i+1:end])
-            isnothing(swapto) && return zero(prev)
-            sign = -sign
-            Base.swapcols!(M, i, i + swapto)
-        end
-        for k in i+1:n, j in i+1:n
-            M[j,k] = exactdiv(M[j,k]*M[i,i] - M[j,i]*M[i,k], prev)
-        end
-        prev = M[i,i]
-    end
-    return sign * M[end,end]
+    parity = true
+    swaprows!(M, i, j) = (i != j && (parity = !parity); Base.swaprows!(M, i, j))
+    swapcols!(M, i, j) = (i != j && (parity = !parity); Base.swapcols!(M, i, j))
+    # We only look at the last entry, so we don't care that the sub-diagonals are
+    # garbage.
+    zero!(M, i, j) = nothing
+    rank = bareiss!(M, (swapcols!, swaprows!, bareiss_update!, zero!);
+        find_pivot=find_pivot_col)
+    rank != n && return zero(eltype(M))
+    return parity ? M[n,n] : -M[n, n]
 end
+
 """
     LinearAlgebra.det_bareiss(M)
 
@@ -1662,8 +1723,6 @@ Calculates the determinant of a matrix using the
 Also refer to [`det_bareiss!`](@ref).
 """
 det_bareiss(M) = det_bareiss!(copy(M))
-
-
 
 """
     promote_leaf_eltypes(itr)
