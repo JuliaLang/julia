@@ -32,12 +32,21 @@ jl_value_t *checked_eval_string(const char* code)
 
 int main()
 {
+    // check that setting options works
+    jl_options.opt_level = 1;
+
     jl_init();
 
     {
         // Simple running of Julia code
 
         checked_eval_string("println(sqrt(2.0))");
+    }
+
+    if (jl_options.opt_level != 1) {
+        jl_printf(jl_stderr_stream(), "setting jl_options didn't work\n");
+        jl_atexit_hook(1);
+        exit(1);
     }
 
     {

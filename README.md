@@ -13,7 +13,6 @@ Documentation:
 
 Continuous integration:
 [![Continuous integration (master)][buildkite-master-img]][buildkite-master-url]
-[![Continuous integration (master->scheduled)][buildkite-master-scheduled-img]][buildkite-master-scheduled-url]
 
 <!--
 To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
@@ -21,13 +20,6 @@ You need to go to the Buildkite website and get the SVG URL for the correct pipe
 -->
 [buildkite-master-img]: https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master "Continuous integration (master)"
 [buildkite-master-url]: https://buildkite.com/julialang/julia-master
-
-<!--
-To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
-You need to go to the Buildkite website and get the SVG URL for the correct pipeline.
--->
-[buildkite-master-scheduled-img]: https://badge.buildkite.com/d5ae34dbbf6fefe615300c4f3118bf63cb4a5ae7fd962263c1.svg?branch=master "Continuous integration (master->scheduled)"
-[buildkite-master-scheduled-url]: https://buildkite.com/julialang/julia-master-scheduled
 
 Code coverage:
 [![Code coverage (Coveralls)][coveralls-img]][coveralls-url]
@@ -91,17 +83,17 @@ recommend you use the official Julia binaries instead.
 ## Building Julia
 
 First, make sure you have all the [required
-dependencies](https://github.com/JuliaLang/julia/blob/master/doc/build/build.md#required-build-tools-and-external-libraries) installed.
+dependencies](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/build.md#required-build-tools-and-external-libraries) installed.
 Then, acquire the source code by cloning the git repository:
 
     git clone https://github.com/JuliaLang/julia.git
 
 By default you will be building the latest unstable version of
-Julia. However, most users should use the most recent stable version
+Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.6.2
+    git checkout v1.6.3
 
 Now run `make` to build the `julia` executable.
 
@@ -124,7 +116,7 @@ started](https://docs.julialang.org/en/v1/manual/getting-started/)
 in the manual.
 
 In case this default build path did not work, detailed build instructions
-are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/build).
+are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/).
 
 ### Uninstalling Julia
 
@@ -144,8 +136,7 @@ The Julia source code is organized as follows:
 | `cli/`            | source for the command line interface/REPL                         |
 | `contrib/`        | editor support for Julia source, miscellaneous scripts             |
 | `deps/`           | external dependencies                                              |
-| `doc/src/manual/` | source for the user manual                                         |
-| `doc/build/`      | detailed notes for building Julia                                  |
+| `doc/src/`        | source for the user manual                                         |
 | `src/`            | source for Julia language core                                     |
 | `test/`           | test suites                                                        |
 | `usr/`            | binaries and shared libraries loaded by Julia's standard libraries |

@@ -735,7 +735,7 @@ JL_CALLABLE(jl_f__apply_pure)
         // because, why not :)
         // and `promote` works better this way
         size_t last_age = ct->world_age;
-        ct->world_age = jl_world_counter;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         ret = do_apply(args, nargs, NULL);
         ct->world_age = last_age;
         ct->ptls->in_pure_callback = last_in;
@@ -753,14 +753,14 @@ JL_CALLABLE(jl_f__call_latest)
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     if (!ct->ptls->in_pure_callback)
-        ct->world_age = jl_world_counter;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     jl_value_t *ret = jl_apply(args, nargs);
     ct->world_age = last_age;
     return ret;
 }
 
 // Like call_in_world, but runs in the specified world.
-// If world > jl_world_counter, run in the latest world.
+// If world > jl_atomic_load_acquire(&jl_world_counter), run in the latest world.
 JL_CALLABLE(jl_f__call_in_world)
 {
     JL_NARGSV(_apply_in_world, 2);
@@ -768,9 +768,11 @@ JL_CALLABLE(jl_f__call_in_world)
     size_t last_age = ct->world_age;
     JL_TYPECHK(_apply_in_world, ulong, args[0]);
     size_t world = jl_unbox_ulong(args[0]);
-    world = world <= jl_world_counter ? world : jl_world_counter;
-    if (!ct->ptls->in_pure_callback)
-        ct->world_age = world;
+    if (!ct->ptls->in_pure_callback) {
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        if (ct->world_age > world)
+            ct->world_age = world;
+    }
     jl_value_t *ret = jl_apply(&args[1], nargs - 1);
     ct->world_age = last_age;
     return ret;
@@ -810,19 +812,19 @@ JL_CALLABLE(jl_f_svec)
 
 enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char storing)
 {
-    if (order == not_atomic_sym)
+    if (order == jl_not_atomic_sym)
         return jl_memory_order_notatomic;
-    if (order == unordered_sym && (loading ^ storing))
+    if (order == jl_unordered_sym && (loading ^ storing))
         return jl_memory_order_unordered;
-    if (order == monotonic_sym && (loading || storing))
+    if (order == jl_monotonic_sym && (loading || storing))
         return jl_memory_order_monotonic;
-    if (order == acquire_sym && loading)
+    if (order == jl_acquire_sym && loading)
         return jl_memory_order_acquire;
-    if (order == release_sym && storing)
+    if (order == jl_release_sym && storing)
         return jl_memory_order_release;
-    if (order == acquire_release_sym && loading && storing)
+    if (order == jl_acquire_release_sym && loading && storing)
         return jl_memory_order_acq_rel;
-    if (order == sequentially_consistent_sym)
+    if (order == jl_sequentially_consistent_sym)
         return jl_memory_order_seq_cst;
     return jl_memory_order_invalid;
 }
@@ -1658,7 +1660,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         f = cglobal_auto;
     unsigned fargs = intrinsic_nargs[f];
     if (!fargs)
-        jl_error("this intrinsic must be compiled to be called");
+        jl_errorf("`%s` must be compiled to be called", jl_intrinsic_name(f));
     JL_NARGS(intrinsic_call, fargs, fargs);
 
     union {
@@ -1684,7 +1686,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         default:
             assert(0 && "unexpected number of arguments to an intrinsic function");
     }
-    gc_debug_critical_error();
+    jl_gc_debug_critical_error();
     abort();
 }
 
@@ -1761,7 +1763,9 @@ static void add_builtin(const char *name, jl_value_t *v)
 jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    return ((jl_typemap_entry_t*)jl_gf_mtable(b)->cache)->func.linfo->cache->specptr.fptr1;
+    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_atomic_load_relaxed(&jl_gf_mtable(b)->cache);
+    jl_code_instance_t *ci = jl_atomic_load_relaxed(&entry->func.linfo->cache);
+    return jl_atomic_load_relaxed(&ci->specptr.fptr1);
 }
 
 static jl_value_t *add_builtin_func(const char *name, jl_fptr_args_t fptr)

@@ -164,6 +164,16 @@ function timev_print(elapsedtime, diff::GC_Diff, compile_time)
     padded_nonzero_print(diff.full_sweep,   "full collections")
 end
 
+# Like a try-finally block, except without introducing the try scope
+# NOTE: This is deprecated and should not be used from user logic. A proper solution to
+# this problem will be introduced in https://github.com/JuliaLang/julia/pull/39217
+macro __tryfinally(ex, fin)
+    Expr(:tryfinally,
+       :($(esc(ex))),
+       :($(esc(fin)))
+       )
+end
+
 """
     @time
 
@@ -207,9 +217,10 @@ macro time(ex)
         local stats = gc_num()
         local elapsedtime = time_ns()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
-        local val = $(esc(ex))
-        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
-        elapsedtime = time_ns() - elapsedtime
+        local val = @__tryfinally($(esc(ex)),
+            (elapsedtime = time_ns() - elapsedtime;
+            compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
+        )
         local diff = GC_Diff(gc_num(), stats)
         time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
         val
@@ -253,9 +264,10 @@ macro timev(ex)
         local stats = gc_num()
         local elapsedtime = time_ns()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
-        local val = $(esc(ex))
-        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
-        elapsedtime = time_ns() - elapsedtime
+        local val = @__tryfinally($(esc(ex)),
+            (elapsedtime = time_ns() - elapsedtime;
+            compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
+        )
         local diff = GC_Diff(gc_num(), stats)
         timev_print(elapsedtime, diff, compile_elapsedtime)
         val

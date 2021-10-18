@@ -975,10 +975,20 @@ function require(into::Module, mod::Symbol)
         if uuidkey === nothing
             where = PkgId(into)
             if where.uuid === nothing
+                hint, dots = begin
+                    if isdefined(into, mod) && getfield(into, mod) isa Module
+                        true, "."
+                    elseif isdefined(parentmodule(into), mod) && getfield(parentmodule(into), mod) isa Module
+                        true, ".."
+                    else
+                        false, ""
+                    end
+                end
+                hint_message = hint ? ", maybe you meant `import/using $(dots)$(mod)`" : ""
+                start_sentence = hint ? "Otherwise, run" : "Run"
                 throw(ArgumentError("""
-                    Package $mod not found in current path:
-                    - Run `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package.
-                    """))
+                    Package $mod not found in current path$hint_message.
+                    - $start_sentence `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package."""))
             else
                 s = """
                 Package $(where.name) does not have $mod in its dependencies:
@@ -1356,8 +1366,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     for (pkg, build_id) in concrete_deps
         push!(deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
     end
-    deps = repr(eltype(concrete_deps)) * "[" * join(deps_strs, ",") * "]"
-
+    deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
+    deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
     io = open(pipeline(`$(julia_cmd()::Cmd) -O0
                        --output-ji $output --output-incremental=yes
@@ -1804,7 +1814,7 @@ get_compiletime_preferences(::Nothing) = String[]
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl"
 # otherwise returns the list of dependencies to also check
-function stale_cachefile(modpath::String, cachefile::String)
+function stale_cachefile(modpath::String, cachefile::String; ignore_loaded = false)
     io = open(cachefile, "r")
     try
         if !isvalid_cache_header(io)
@@ -1825,11 +1835,15 @@ function stale_cachefile(modpath::String, cachefile::String)
                 M = root_module(req_key)
                 if PkgId(M) == req_key && module_build_id(M) === req_build_id
                     depmods[i] = M
+                elseif ignore_loaded
+                    # Used by Pkg.precompile given that there it's ok to precompile different versions of loaded packages
+                    @goto locate_branch
                 else
                     @debug "Rejecting cache file $cachefile because module $req_key is already loaded and incompatible."
                     return true # Won't be able to fulfill dependency
                 end
             else
+                @label locate_branch
                 path = locate_package(req_key)
                 get!(PkgOrigin, pkgorigins, req_key).path = path
                 if path === nothing

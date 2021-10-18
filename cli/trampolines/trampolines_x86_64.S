@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #include "common.h"
 #include "../../src/jl_exported_funcs.inc"
 
@@ -16,8 +18,9 @@ SEH_END(); \
 .cfi_endproc; \
 EXPORT(name); \
 
-JL_EXPORTED_FUNCS(XX)
+JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_
-JL_EXPORTED_FUNCS_WIN(XX)
+JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
 #endif
+JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX

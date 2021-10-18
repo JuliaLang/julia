@@ -592,8 +592,8 @@ IteratorSize(::Type{<:Rest{I}}) where {I} = rest_iteratorsize(IteratorSize(I))
 
 # Count -- infinite counting
 
-struct Count{S<:Number}
-    start::S
+struct Count{T,S}
+    start::T
     step::S
 end
 
@@ -613,11 +613,13 @@ julia> for v in Iterators.countfrom(5, 2)
 9
 ```
 """
-countfrom(start::Number, step::Number) = Count(promote(start, step)...)
-countfrom(start::Number)               = Count(start, oneunit(start))
-countfrom()                            = Count(1, 1)
+countfrom(start::T, step::S) where {T,S} = Count{typeof(start+step),S}(start, step)
+countfrom(start::Number, step::Number)   = Count(promote(start, step)...)
+countfrom(start)                         = Count(start, oneunit(start))
+countfrom()                              = Count(1, 1)
 
-eltype(::Type{Count{S}}) where {S} = S
+
+eltype(::Type{<:Count{T}}) where {T} = T
 
 iterate(it::Count, state=it.start) = (state, state + it.step)
 
@@ -1340,13 +1342,32 @@ length(s::Stateful) = length(s.itr) - s.taken
 """
     only(x)
 
-Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
+Return the one and only element of collection `x`, or throw an [`ArgumentError`](@ref) if the
 collection has zero or multiple elements.
 
 See also [`first`](@ref), [`last`](@ref).
 
 !!! compat "Julia 1.4"
     This method requires at least Julia 1.4.
+
+# Examples
+```jldoctest
+julia> only(["a"])
+"a"
+
+julia> only("a")
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+
+julia> only(())
+ERROR: ArgumentError: Tuple contains 0 elements, must contain exactly 1 element
+Stacktrace:
+[...]
+
+julia> only(('a', 'b'))
+ERROR: ArgumentError: Tuple contains 2 elements, must contain exactly 1 element
+Stacktrace:
+[...]
+```
 """
 @propagate_inbounds function only(x)
     i = iterate(x)

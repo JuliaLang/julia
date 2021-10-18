@@ -44,7 +44,8 @@
 #include "julia_assert.h"
 
 // helper function for returning the unw_context_t inside a ucontext_t
-static bt_context_t *jl_to_bt_context(void *sigctx)
+// (also used by stackwalk.c)
+bt_context_t *jl_to_bt_context(void *sigctx)
 {
 #ifdef __APPLE__
     return (bt_context_t*)&((ucontext64_t*)sigctx)->uc_mcontext64->__ss;
@@ -324,7 +325,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
     if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
         jl_set_gc_and_wait();
         // Do not raise sigint on worker thread
-        if (ct->tid != 0)
+        if (jl_atomic_load_relaxed(&ct->tid) != 0)
             return;
         if (ct->ptls->defer_signal) {
             jl_safepoint_defer_sigint();
@@ -792,13 +793,13 @@ static void *signal_listener(void *arg)
                     bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
 
                     // store task id
-                    bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)ptls->current_task;
+                    bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
 
                     // store cpu cycle clock
                     bt_data_prof[bt_size_cur++].uintptr = cycleclock();
 
                     // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                    bt_data_prof[bt_size_cur++].uintptr = ptls->sleep_check_state + 1;
+                    bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
 
                     // Mark the end of this block with two 0's
                     bt_data_prof[bt_size_cur++].uintptr = 0;

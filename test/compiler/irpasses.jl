@@ -383,3 +383,45 @@ exc39508 = ErrorException("expected")
     return err
 end
 @test test39508() === exc39508
+
+let # `getfield_elim_pass!` should work with constant globals
+    # immutable pass
+    src = @eval Module() begin
+        const REF_FLD = :x
+        struct ImmutableRef{T}
+            x::T
+        end
+
+        code_typed((Int,)) do x
+            r = ImmutableRef{Int}(x) # should be eliminated
+            x = getfield(r, REF_FLD) # should be eliminated
+            return sin(x)
+        end |> only |> first
+    end
+    @test !any(src.code) do @nospecialize(stmt)
+        Meta.isexpr(stmt, :call) || return false
+        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        return Core.Compiler.widenconst(ft) == typeof(getfield)
+    end
+    @test !any(src.code) do @nospecialize(stmt)
+        return Meta.isexpr(stmt, :new)
+    end
+
+    # mutable pass
+    src = @eval Module() begin
+        const REF_FLD = :x
+        code_typed() do
+            r = Ref{Int}(42) # should be eliminated
+            x = getfield(r, REF_FLD) # should be eliminated
+            return sin(x)
+        end |> only |> first
+    end
+    @test !any(src.code) do @nospecialize(stmt)
+        Meta.isexpr(stmt, :call) || return false
+        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        return Core.Compiler.widenconst(ft) == typeof(getfield)
+    end
+    @test !any(src.code) do @nospecialize(stmt)
+        return Meta.isexpr(stmt, :new)
+    end
+end

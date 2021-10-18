@@ -1087,7 +1087,7 @@ Pass *createMultiVersioningPass()
     return new MultiVersioning();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createMultiVersioningPass());
 }

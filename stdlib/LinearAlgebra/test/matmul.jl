@@ -152,7 +152,7 @@ end
     for vf in (copy(vvf), view(vvf, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test mul!(C, vf, transpose(vf)) == vf*vf'
         C .= C0 = rand(eltype(C), size(C))
-        @test mul!(C, vf, transpose(vf), 2, 3) == 2vf*vf' .+ 3C0
+        @test mul!(C, vf, transpose(vf), 2, 3) ≈ 2vf*vf' .+ 3C0
     end
 end
 

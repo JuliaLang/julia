@@ -130,7 +130,7 @@ kw"__init__"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base` or local definitions of
-[`eval`](@ref Base.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+[`eval`](@ref Base.MainInclude.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
 module Mod
@@ -182,8 +182,8 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
-code instead simply becomes part of the surrounding program.
+Macros are a way to run generated code without calling [`eval`](@ref Base.MainInclude.eval),
+since the generated code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
 Every macro also implicitly gets passed the arguments `__source__`, which contains the line number
@@ -1188,10 +1188,10 @@ fields of the type to be set after construction. See the manual section on
 kw"mutable struct"
 
 """
-    new
+    new, or new{A,B,...}
 
-Special function available to inner constructors which created a new object
-of the type.
+Special function available to inner constructors which creates a new object
+of the type. The form new{A,B,...} explicitly specifies values of parameters for parametric types.
 See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
 for more information.
 """
@@ -2813,6 +2813,13 @@ StridedVecOrMat
     Module
 
 A `Module` is a separate global variable workspace. See [`module`](@ref) and the [manual section about modules](@ref modules) for details.
+
+    Module(name::Symbol=:anonymous, std_imports=true, default_names=true)
+
+Return a module with the specified name. A `baremodule` corresponds to `Module(:ModuleName, false)`
+
+An empty module containing no names at all can be created with `Module(:ModuleName, false, false)`.
+This module will not import `Base` or `Core` and does not contain a reference to itself.
 """
 Module
 

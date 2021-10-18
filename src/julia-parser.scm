@@ -253,13 +253,13 @@
                                        (and (or (eq? opsym '--) (eq? opsym '.--))
                                             (read-char port)
                                             (or (begin0 (eqv? (peek-char port) #\>)
-                                                        (io.ungetc port #\-))
+                                                        (io.skip port -1)) ; unget -, leaving -
                                                 (error (string "invalid operator \"" newop "\""))))
                                        ;; <- is not an operator but <-- and <--> are
                                        (and (or (eq? opsym '<-) (eq? opsym '.<-))
                                             (read-char port)
                                             (begin0 (eqv? (peek-char port) #\-)
-                                                    (io.ungetc port #\-)))
+                                                    (io.skip port -1))) ; unget -, leaving <
                                        ;; consume suffixes after ', only if parsing a call chain
                                        ;; otherwise 'ᵀ' would parse as (|'| |'ᵀ|)
                                        (and postfix? (eqv? c0 #\') sufchar?))
@@ -278,7 +278,7 @@
                  (if (and (not (eof-object? c)) (pred c))
                      (loop str c)
                      (begin
-                       (io.ungetc port #\_)
+                       (io.skip port -1) ; unget _
                        (list->string (reverse str))))))
         (if (and (not (eof-object? c)) (pred c))
             (begin (read-char port)
@@ -328,7 +328,7 @@
       (if (eqv? (peek-char port) #\.)
           (begin (read-char port)
                  (if (dot-opchar? (peek-char port))
-                     (io.ungetc port #\.)
+                     (io.skip port -1) ; unget .
                      (error (string "invalid numeric constant \""
                                     (get-output-string str) #\. "\""))))))
     (define (read-digs lz _-digit-sep)
@@ -368,7 +368,7 @@
                                           (if (eqv? (peek-char port) #\')
                                               ""
                                               "; add space(s) to clarify")))))
-                     (io.ungetc port #\.))
+                     (io.skip port -1)) ; unget .
                    (begin (write-char #\. str)
                           (read-digs #f #t)
                           (if (eq? pred char-hex?)
@@ -393,7 +393,7 @@
                                   (write-char (read-char port) str))
                               (read-digs #t #f)
                               (disallow-dot))
-                       (io.ungetc port c)))))
+                       (io.skip port -1))))) ; unget c
       (if (and (char? c)
                (or (eq? pred char-bin?) (eq? pred char-oct?)
                    (and (eq? pred char-hex?) (not is-hex-float-literal)))

@@ -46,7 +46,7 @@ end
 
 # obtain Vararg with 2 undefined fields
 let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
-    @test Core.Compiler.limit_type_size(Tuple, va, Union{}, 2, 2) === Any
+    @test Core.Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Any
 end
 
 let # 40336
@@ -240,6 +240,15 @@ barTuple2() = fooTuple{tuple(:y)}()
 @test Core.Compiler.getfield_tfunc(
           Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
           Core.Compiler.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
+
+# assert robustness of `getfield_tfunc`
+struct GetfieldRobustness
+    field::String
+end
+@test Base.return_types((GetfieldRobustness,String,)) do obj, s
+    t = (10, s) # to form `PartialStruct`
+    getfield(obj, t)
+end |> only === Union{}
 
 # issue #12476
 function f12476(a)
@@ -1810,6 +1819,18 @@ end
         Meta.isexpr(x, :call) && return x # x::Expr
         return nothing
     end == Any[Union{Nothing,Expr}]
+
+    # handle the edge case
+    let ts = @eval Module() begin
+            edgecase(_) = $(Core.Compiler.InterConditional(2, Int, Any))
+            # create cache
+            Base.return_types(edgecase, (Any,))
+            Base.return_types((Any,)) do x
+                edgecase(x) ? x : nothing # ::Any
+            end
+        end
+        @test ts == Any[Any]
+    end
 end
 
 @testset "branching on conditional object" begin
@@ -3524,3 +3545,41 @@ Foo42097(f::F, args) where {F} = Foo42097{F}()
 Foo42097(A) = Foo42097(Base.inferencebarrier(+), Base.inferencebarrier(1)...)
 foo42097() = Foo42097([1]...)
 @test foo42097() isa Foo42097{typeof(+)}
+
+# eliminate unbound `TypeVar`s on `argtypes` construction
+let
+    a0(a01, a02, a03, a04, a05, a06, a07, a08, a09, a10, va...) = nothing
+    method = only(methods(a0))
+    unbound = TypeVar(:Unbound, Integer)
+    specTypes = Tuple{typeof(a0),
+               # TypeVar
+        #=01=# Bound,                  # => Integer
+        #=02=# unbound,                # => Integer (invalid `TypeVar` widened beforehand)
+               # DataType
+        #=03=# Type{Bound},            # => Type{Bound} where Bound<:Integer
+        #=04=# Type{unbound},          # => Type
+        #=05=# Vector{Bound},          # => Vector{Bound} where Bound<:Integer
+        #=06=# Vector{unbound},        # => Any
+               # UnionAll
+        #=07=# Type{<:Bound},          # => Type{<:Bound} where Bound<:Integer
+        #=08=# Type{<:unbound},        # => Any
+               # Union
+        #=09=# Union{Nothing,Bound},   # => Union{Nothing,Bound} where Bound<:Integer
+        #=10=# Union{Nothing,unbound}, # => Any
+               # Vararg
+        #=va=# Bound, unbound,         # => Tuple{Integer,Integer} (invalid `TypeVar` widened beforehand)
+        } where Bound<:Integer
+    argtypes = Core.Compiler.most_general_argtypes(method, specTypes, true)
+    popfirst!(argtypes)
+    @test argtypes[1] == Integer
+    @test argtypes[2] == Integer
+    @test argtypes[3] == Type{Bound} where Bound<:Integer
+    @test argtypes[4] == Type
+    @test argtypes[5] == Vector{Bound} where Bound<:Integer
+    @test argtypes[6] == Any
+    @test argtypes[7] == Type{<:Bound} where Bound<:Integer
+    @test argtypes[8] == Any
+    @test argtypes[9] == Union{Nothing,Bound} where Bound<:Integer
+    @test argtypes[10] == Any
+    @test argtypes[11] == Tuple{Integer,Integer}
+end

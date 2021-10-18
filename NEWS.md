@@ -5,13 +5,14 @@ Julia v1.8 Release Notes
 New language features
 ---------------------
 
-* `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
+* `Module(:name, false, false)` can be used to create a `module` that contains no names (it does not import `Base` or `Core` and does not contain a reference to itself). ([#40110, #42154])
 * `@inline` and `@noinline` annotations can be used within a function body to give an extra
   hint about the inlining cost to the compiler. ([#41312])
 * `@inline` and `@noinline` annotations can now be applied to a function callsite or block
   to enforce the involved function calls to be (or not to be) inlined. ([#41312])
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
+* `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
   no errors were thrown. ([#42211])
 
@@ -25,6 +26,10 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* The LLVM-based compiler has been separated from the run-time library into a new library,
+  `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
+  In deployments that do not need the compiler (e.g. system images where all needed code
+  is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
 
 Command-line option changes
 ---------------------------
@@ -54,12 +59,14 @@ Standard library changes
 ------------------------
 
 * `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
+* `precision` and `setprecision` now accept a `base` keyword ([#42428]).
 * The `length` function on certain ranges of certain specific element types no longer checks for integer
   overflow in most cases. The new function `checked_length` is now available, which will try to use checked
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
   constructing the range. ([#40382])
 * TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
 * Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
+* `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
 
 #### InteractiveUtils
 * A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
@@ -83,7 +90,7 @@ Standard library changes
 #### Random
 
 #### REPL
-
+* `RadioMenu` now supports optional `keybindings` to directly select options ([#41576]).
 * ` ?(x, y` followed by TAB displays all methods that can be called
   with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
   `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
@@ -114,6 +121,9 @@ Standard library changes
 * The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
   and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
 
+#### Unicode
+* Added function `isequal_normalized` to check for Unicode equivalence without
+  explicitly constructing normalized strings ([#42493]).
 
 Deprecated or removed
 ---------------------

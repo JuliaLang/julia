@@ -68,7 +68,7 @@ Pass *createRemoveNIPass()
     return new RemoveNILegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveNIPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveNIPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createRemoveNIPass());
 }

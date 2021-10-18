@@ -88,7 +88,7 @@ __attribute__((constructor)) void jl_init_tls(void)
 
 JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
 {
-    return pthread_getspecific(jl_pgcstack_key);
+    return (jl_gcframe_t**)pthread_getspecific(jl_pgcstack_key);
 }
 
 void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
@@ -176,7 +176,7 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
 {
     SAVE_ERRNO;
-    jl_gcframe_t **pgcstack = (jl_ptls_t)TlsGetValue(jl_pgcstack_key);
+    jl_gcframe_t **pgcstack = (jl_gcframe_t**)TlsGetValue(jl_pgcstack_key);
     LOAD_ERRNO;
     return pgcstack;
 }
@@ -287,15 +287,15 @@ void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
 #endif
 
 jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
-_Atomic(uint8_t) jl_measure_compile_time_enabled = 0;
-_Atomic(uint64_t) jl_cumulative_compile_time = 0;
+JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled = 0;
+JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time = 0;
 
 // return calling thread's ID
 // Also update the suspended_threads list in signals-mach when changing the
 // type of the thread id.
 JL_DLLEXPORT int16_t jl_threadid(void)
 {
-    return jl_current_task->tid;
+    return jl_atomic_load_relaxed(&jl_current_task->tid);
 }
 
 jl_ptls_t jl_init_threadtls(int16_t tid)
@@ -314,7 +314,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     }
 #endif
     ptls->tid = tid;
-    ptls->gc_state = 0; // GC unsafe
+    jl_atomic_store_relaxed(&ptls->gc_state, 0); // GC unsafe
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {
@@ -336,14 +336,13 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     return ptls;
 }
 
-// lock for code generation
-jl_mutex_t codegen_lock;
+JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
 jl_mutex_t typecache_lock;
 
-ssize_t jl_tls_offset = -1;
+JL_DLLEXPORT ssize_t jl_tls_offset = -1;
 
 #ifdef JL_ELF_TLS_VARIANT
-const int jl_tls_elf_support = 1;
+JL_DLLEXPORT const int jl_tls_elf_support = 1;
 // Optimize TLS access in codegen if the TLS buffer is using a IE or LE model.
 // To detect such case, we find the size of the TLS segment in the main
 // executable and the thread pointer (TP) and then see if the TLS pointer on the
@@ -439,7 +438,8 @@ static void jl_check_tls(void)
     jl_tls_offset = offset;
 }
 #else
-const int jl_tls_elf_support = 0;
+// !JL_ELF_TLS_VARIANT
+JL_DLLEXPORT const int jl_tls_elf_support = 0;
 #endif
 
 // interface to Julia; sets up to make the runtime thread-safe
@@ -527,21 +527,22 @@ void jl_start_threads(void)
     uv_barrier_wait(&thread_init_done);
 }
 
-unsigned volatile _threadedregion; // HACK: keep track of whether it is safe to do IO
+_Atomic(unsigned) _threadedregion; // HACK: keep track of whether to prioritize IO or threading
 
 JL_DLLEXPORT int jl_in_threaded_region(void)
 {
-    return _threadedregion != 0;
+    return jl_atomic_load_relaxed(&jl_current_task->tid) != 0 ||
+        jl_atomic_load_relaxed(&_threadedregion) != 0;
 }
 
 JL_DLLEXPORT void jl_enter_threaded_region(void)
 {
-    _threadedregion += 1;
+    jl_atomic_fetch_add(&_threadedregion, 1);
 }
 
 JL_DLLEXPORT void jl_exit_threaded_region(void)
 {
-    _threadedregion -= 1;
+    jl_atomic_fetch_add(&_threadedregion, -1);
     jl_wake_libuv();
     // make sure no more callbacks will run while user code continues
     // outside thread region and might touch an I/O object.
