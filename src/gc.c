@@ -3578,7 +3578,7 @@ JL_DLLEXPORT void *jl_gc_malloc_aligned(size_t sz, size_t align)
 JL_DLLEXPORT void *jl_gc_calloc_aligned(size_t nm, size_t sz, size_t align)
 {
 #if defined(__APPLE__)
-    return jl_calloc(sz);
+    return jl_calloc(nm, sz);
 #endif
     size_t offset = align - 1 + sizeof(void *) + sizeof(size_t);
     if (nm > (SIZE_MAX-offset)/sz)
