@@ -593,7 +593,7 @@ static void gc_scrub_task(jl_task_t *ta)
     else
         return;
 
-    if (ptls == ptls2 && ptls2 && ta == jl_atomic_load_relaxed(&ptls2->current_task) {
+    if (ptls == ptls2 && ptls2 && ta == jl_atomic_load_relaxed(&ptls2->current_task)) {
         // scan up to current `sp` for current thread and task
         low = (char*)jl_get_frame_addr();
     }
