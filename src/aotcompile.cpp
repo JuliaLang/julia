@@ -724,6 +724,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createLoopUnswitchPass());
     PM->add(createLICMPass());
     PM->add(createJuliaLICMPass());
+    PM->add(createInductiveRangeCheckEliminationPass()); // Must come before indvars
     // Subsequent passes not stripping metadata from terminator
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createIndVarSimplifyPass());
