@@ -671,3 +671,12 @@ end
 
 # https://github.com/JuliaLang/julia/issues/40814
 @test Base.return_types(NTuple{3,Int}, (Vector{Int},)) == Any[NTuple{3,Int}]
+
+# issue #42457
+f42457(a::NTuple{3,Int}, b::Tuple)::Bool = Base.isequal(a, Base.inferencebarrier(b)::Tuple)
+@test f42457((1, 1, 1), (1, 1, 1))
+@test !isempty(methods(Base._isequal, (NTuple{3, Int}, Tuple)))
+g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
+@test only(Base.return_types(g42457, (NTuple{3, Int}, Tuple))) === Union{Float64, Int}
+@test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple))) === Union{Float64, Int}
+@test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple{4}))) === Float64
