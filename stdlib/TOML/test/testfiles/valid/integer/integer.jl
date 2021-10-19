@@ -1,0 +1,1 @@
+Dict{String, Any}("zero" => Dict{String, Any}("value" => "0", "type" => "integer"), "posanswer" => Dict{String, Any}("value" => "42", "type" => "integer"), "answer" => Dict{String, Any}("value" => "42", "type" => "integer"), "neganswer" => Dict{String, Any}("value" => "-42", "type" => "integer"))

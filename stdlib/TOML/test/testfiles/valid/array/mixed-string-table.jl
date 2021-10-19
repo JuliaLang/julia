@@ -1,0 +1,1 @@
+Dict{String, Any}("contributors" => Any[Dict{String, Any}("value" => "Foo Bar <foo@example.com>", "type" => "string"), Dict{String, Any}("name" => Dict{String, Any}("value" => "Baz Qux", "type" => "string"), "url" => Dict{String, Any}("value" => "https://example.com/bazqux", "type" => "string"), "email" => Dict{String, Any}("value" => "bazqux@example.com", "type" => "string"))])

@@ -1,0 +1,1 @@
+Dict{String, Any}("space" => Dict{String, Any}("value" => "1987-07-05T17:45:00Z", "type" => "datetime"), "lower" => Dict{String, Any}("value" => "1987-07-05T17:45:00Z", "type" => "datetime"))

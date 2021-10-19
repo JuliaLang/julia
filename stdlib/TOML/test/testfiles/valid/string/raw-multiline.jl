@@ -1,0 +1,1 @@
+Dict{String, Any}("multiline" => Dict{String, Any}("value" => "This string\nhas ' a quote character\nand more than\none newline\nin it.", "type" => "string"), "firstnl" => Dict{String, Any}("value" => "This string has a ' quote character.", "type" => "string"), "oneline" => Dict{String, Any}("value" => "This string has a ' quote character.", "type" => "string"))

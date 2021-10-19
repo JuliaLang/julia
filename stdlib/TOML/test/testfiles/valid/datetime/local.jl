@@ -1,0 +1,1 @@
+Dict{String, Any}("local" => Dict{String, Any}("value" => "1987-07-05T17:45:00", "type" => "datetime-local"), "milli" => Dict{String, Any}("value" => "1977-12-21T10:32:00.555", "type" => "datetime-local"), "space" => Dict{String, Any}("value" => "1987-07-05T17:45:00", "type" => "datetime-local"))

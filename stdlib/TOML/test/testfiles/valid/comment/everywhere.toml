@@ -1,0 +1,27 @@
+# Top comment.
+  # Top comment.
+# Top comment.
+
+# [no-extraneous-groups-please]
+
+[group] # Comment
+answer = 42 # Comment
+# no-extraneous-keys-please = 999
+# Inbetween comment.
+more = [ # Comment
+  # What about multiple # comments?
+  # Can you handle it?
+  #
+          # Evil.
+# Evil.
+  42, 42, # Comments within arrays are fun.
+  # What about multiple # comments?
+  # Can you handle it?
+  #
+          # Evil.
+# Evil.
+# ] Did I fool you?
+] # Hopefully not.
+
+# Make sure the space between the datetime and "#" isn't lexed.
+d = 1979-05-27T07:32:12Z  # c
