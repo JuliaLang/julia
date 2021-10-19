@@ -34,11 +34,7 @@
 extern "C" {
 #endif
 
-#ifdef _MSC_VER
-JL_DLLEXPORT char *dirname(char *);
-#else
 #include <libgen.h>
-#endif
 
 #ifdef _OS_WINDOWS_
 extern int needsSymRefreshModuleList;

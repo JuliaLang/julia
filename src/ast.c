@@ -19,13 +19,6 @@
 extern "C" {
 #endif
 
-// MSVC complains about "julia_flisp.boot.inc : error C4335: Mac file format
-// detected: please convert the source file to either DOS or UNIX format"
-#ifdef _MSC_VER
-#pragma warning(disable:4335)
-#endif
-
-
 // head symbols for each expression type
 JL_DLLEXPORT jl_sym_t *jl_call_sym;
 JL_DLLEXPORT jl_sym_t *jl_invoke_sym;

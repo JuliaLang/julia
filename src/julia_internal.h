@@ -160,11 +160,7 @@ static inline uint64_t cycleclock(void)
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time;
 
-#ifdef _COMPILER_MICROSOFT_
-#  define jl_return_address() ((uintptr_t)_ReturnAddress())
-#else
-#  define jl_return_address() ((uintptr_t)__builtin_return_address(0))
-#endif
+#define jl_return_address() ((uintptr_t)__builtin_return_address(0))
 
 STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 {

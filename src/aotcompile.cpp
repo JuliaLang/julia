@@ -58,24 +58,11 @@ namespace llvm {
 #include "jitlayers.h"
 #include "julia_assert.h"
 
-// MSVC's link.exe requires each function declaration to have a Comdat section
-// So rather than litter the code with conditionals,
-// all global values that get emitted call this function
-// and it decides whether the definition needs a Comdat section and adds the appropriate declaration
 template<class T> // for GlobalObject's
 static T *addComdat(T *G)
 {
 #if defined(_OS_WINDOWS_)
     if (!G->isDeclaration()) {
-        // Add comdat information to make MSVC link.exe happy
-        // it's valid to emit this for ld.exe too,
-        // but makes it very slow to link for no benefit
-#if defined(_COMPILER_MICROSOFT_)
-        Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
-        // ELF only supports Comdat::Any
-        jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
-        G->setComdat(jl_Comdat);
-#endif
         // add __declspec(dllexport) to everything marked for export
         if (G->getLinkage() == GlobalValue::ExternalLinkage)
             G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);

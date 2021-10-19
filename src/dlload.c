@@ -58,17 +58,7 @@ static int endswith_extension(const char *path) JL_NOTSAFEPOINT
 }
 
 #ifdef _OS_WINDOWS_
-#ifdef _MSC_VER
-#if (_MSC_VER >= 1930) || (_MSC_VER < 1800)
-#error This version of MSVC has not been tested.
-#elif _MSC_VER >= 1900 // VC++ 2015 / 2017 / 2019
-#define CRTDLL_BASENAME "vcruntime140"
-#elif _MSC_VER >= 1800 // VC++ 2013
-#define CRTDLL_BASENAME "msvcr120"
-#endif
-#else
 #define CRTDLL_BASENAME "msvcrt"
-#endif
 
 JL_DLLEXPORT const char *jl_crtdll_basename = CRTDLL_BASENAME;
 const char *jl_crtdll_name = CRTDLL_BASENAME ".dll";

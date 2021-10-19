@@ -19,9 +19,6 @@
 
 #if defined(__GNUC__)
 #define USED_FUNC __attribute__((used))
-#elif defined(_COMPILER_MICROSOFT_)
-// Does MSVC have this?
-#define USED_FUNC
 #else
 #define USED_FUNC
 #endif
