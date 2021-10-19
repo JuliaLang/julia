@@ -277,9 +277,9 @@ end
     N = unsafe_trunc(Int32, N_float)
     r = muladd(N_float, LogB(base, Float16), x)
     small_part = expb_kernel(base, r)
-    if !(abs(x) <= SUBNORM_EXP(base, T))
-        x > MAX_EXP(base, T) && return Inf16
-        N<=Int32(-24) && return zero(Float16)
+    if !(abs(x) <= 25)
+        x > 16 && return Inf16
+        x < 25 && return zero(Float16)
     end
     twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
     return Float16(twopk*small_part)

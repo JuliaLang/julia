@@ -2708,7 +2708,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 idx = i - 1;
         }
         if (idx != -1) {
-            jl_value_t *ft = jl_svecref(uty->types, idx);
+            jl_value_t *ft = jl_field_type(uty, idx);
             if (!jl_has_free_typevars(ft)) {
                 if (!ismodifyfield && !jl_subtype(val.typ, ft)) {
                     emit_typecheck(ctx, val, ft, fname);
@@ -5249,9 +5249,11 @@ static Function* gen_cfun_wrapper(
         newAttributes.emplace_back(it, AttributeSet::get(jl_LLVMContext, attrBuilder));
 
         // Shift forward the rest of the attributes
-        for(;it < attributes.index_end(); ++it) {
-            if (attributes.hasAttributes(it)) {
-                newAttributes.emplace_back(it + 1, attributes.getAttributes(it));
+        if (attributes.getNumAttrSets() > 0) { // without this check the loop range below is invalid
+            for(;it < attributes.index_end(); ++it) {
+                if (attributes.hasAttributes(it)) {
+                    newAttributes.emplace_back(it + 1, attributes.getAttributes(it));
+                }
             }
         }
 

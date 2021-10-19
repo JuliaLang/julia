@@ -2734,7 +2734,7 @@
   (check-no-return expr)
   (if (has-break-or-continue? expr)
       (error "break or continue outside loop"))
-  (let ((result    (gensy))
+  (let ((result    (make-ssavalue))
         (idx       (gensy))
         (oneresult (make-ssavalue))
         (prod      (make-ssavalue))
@@ -2758,16 +2758,14 @@
     (let ((overall-itr (if (length= itrs 1) (car iv) prod)))
       `(scope-block
         (block
-         (local ,result) (local ,idx)
+         (local ,idx)
          ,.(map (lambda (v r) `(= ,v ,(caddr r))) iv itrs)
          ,.(if (length= itrs 1)
                '()
                `((= ,prod (call (top product) ,@iv))))
          (= ,isz (call (top IteratorSize) ,overall-itr))
          (= ,szunk (call (core isa) ,isz (top SizeUnknown)))
-         (if ,szunk
-             (= ,result (call (curly (core Array) ,ty 1) (core undef) 0))
-             (= ,result (call (top _array_for) ,ty ,overall-itr ,isz)))
+         (= ,result (call (top _array_for) ,ty ,overall-itr ,isz))
          (= ,idx (call (top first) (call (top LinearIndices) ,result)))
          ,(construct-loops (reverse itrs) (reverse iv))
          ,result)))))

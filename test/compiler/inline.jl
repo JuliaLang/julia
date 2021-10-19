@@ -384,3 +384,11 @@ f_oc_getfield(x) = (@opaque ()->x)()
 # Issue #41299 - inlining deletes error check in :>
 g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 @test_throws TypeError g41299(>:, 1, 2)
+
+# Issue #42264 - crash on certain union splits
+let f(x) = (x...,)
+    # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
+    # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
+    # the the original apply call is not union-split, but the inserted `iterate` call is.
+    @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
+end

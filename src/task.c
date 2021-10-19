@@ -559,12 +559,6 @@ static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_M
     assert(!jl_get_safe_restore());
     jl_ptls_t ptls = ct->ptls;
     ptls->io_wait = 0;
-    // @time needs its compile timer disabled on error,
-    // and cannot use a try-finally as it would break scope for assignments
-    // We blindly disable compilation time tracking here, for all running Tasks, even though
-    // it may cause some incorrect measurements. This is a known bug, and is being tracked
-    // here: https://github.com/JuliaLang/julia/pull/39138
-    jl_atomic_store_relaxed(&jl_measure_compile_time_enabled, 0);
     JL_GC_PUSH1(&exception);
     jl_gc_unsafe_enter(ptls);
     if (exception) {
@@ -1255,7 +1249,7 @@ static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) J
 #endif
 
 // Initialize a root task using the given stack.
-void jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
+jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 {
     assert(ptls->root_task == NULL);
     // We need `gcstack` in `Task` to allocate Julia objects; *including* the `Task` type.
@@ -1331,13 +1325,14 @@ void jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 #endif
         if (jl_setjmp(ptls->copy_stack_ctx.uc_mcontext, 0))
             start_task(); // sanitizer_finish_switch_fiber is part of start_task
-        return;
+        return ct;
     }
     ssize = JL_STACK_SIZE;
     char *stkbuf = jl_alloc_fiber(&ptls->base_ctx, &ssize, NULL);
     ptls->stackbase = stkbuf + ssize;
     ptls->stacksize = ssize;
 #endif
+    return ct;
 }
 
 JL_DLLEXPORT int jl_is_task_started(jl_task_t *t) JL_NOTSAFEPOINT

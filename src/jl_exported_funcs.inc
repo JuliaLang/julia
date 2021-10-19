@@ -151,6 +151,7 @@
     XX(jl_expand_with_loc_warn) \
     XX(jl_extern_c) \
     XX(jl_field_index) \
+    XX(jl_field_isdefined) \
     XX(jl_gc_add_finalizer) \
     XX(jl_gc_add_finalizer_th) \
     XX(jl_gc_add_ptr_finalizer) \
@@ -279,6 +280,7 @@
     XX(jl_init_with_image) \
     XX(jl_init__threading) \
     XX(jl_init_with_image__threading) \
+    XX(jl_init_options) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
@@ -545,3 +547,5 @@
     XX(jl_print_backtrace) \
     XX(jl_get_pgcstack) \
 
+#define JL_EXPORTED_FUNCS_WIN(XX) \
+    XX(jl_setjmp)

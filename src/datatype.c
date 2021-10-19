@@ -242,6 +242,7 @@ int jl_struct_try_layout(jl_datatype_t *dt)
         return 1;
     else if (!jl_has_fixed_layout(dt))
         return 0;
+    // jl_has_fixed_layout also ensured that dt->types is assigned now
     jl_compute_field_offsets(dt);
     assert(dt->layout);
     return 1;

@@ -9,7 +9,7 @@
 # 2. We do not run any external actions.
 # 3. We only give the `GITHUB_TOKEN` the minimum necessary set of permissions.
 
-name: Statuses
+name: Create Buildbot Statuses
 
 on:
   push:
@@ -20,6 +20,7 @@ on:
   # write permissions, even if the PR is from a fork.
   # Therefore, for security reasons, we do not checkout any code in this workflow.
   pull_request_target:
+    types: [opened, synchronize]
     branches:
       - 'master'
       - 'release-*'
@@ -30,8 +31,8 @@ permissions:
   statuses: write
 
 jobs:
-  statuses:
-    name: statuses
+  create-buildbot-statuses:
+    name: Create Buildbot Statuses
     runs-on: ubuntu-latest
     if: github.repository == 'JuliaLang/julia'
     steps:
