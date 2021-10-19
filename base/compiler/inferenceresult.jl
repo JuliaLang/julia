@@ -63,7 +63,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
         if specTypes == Tuple
             if nargs > 1
                 linfo_argtypes = Any[Any for i = 1:nargs]
-                linfo_argstypes[end] = Vararg{Any}
+                linfo_argtypes[end] = Vararg{Any}
             end
             vargtype = Tuple
         else
