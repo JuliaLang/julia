@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-f4fdadc7-ff90-4863-9612-1d266816906c",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-b0475c92-f7c3-4414-b7e4-65f3950faabd",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-15T06:31:39Z"
+        "created": "2021-10-19T05:42:33Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -258,6 +258,18 @@
             "summary": "LAPACK is written in Fortran 90 and provides routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems."
         },
         {
+            "name": "PCRE",
+            "SPDXID": "SPDXRef-PCRE",
+            "downloadLocation": "https://ftp.pcre.org/pub/pcre/",
+            "filesAnalyzed": false,
+            "homepage": "https://www.pcre.org",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 1997-2021 University of Cambridge All rights reserved.\nCopyright(c) 2009-2021 Zoltan Herczeg\n",
+            "summary": "PCRE2 is a library of functions to support regular expressions whose syntax and semantics are as close as possible to those of the Perl 5 language."
+        },
+        {
             "name": "libunwind",
             "SPDXID": "SPDXRef-libunwind",
             "downloadLocation": "git+https://github.com/libunwind/libunwind.git",
@@ -430,6 +442,11 @@
         },
         {
             "spdxElementId": "SPDXRef-LAPACK",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-PCRE",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
