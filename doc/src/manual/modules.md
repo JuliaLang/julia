@@ -189,7 +189,7 @@ nice(::Cat) = "nice 😸"
 ```
 
 Which one you choose is a matter of style. The first form makes it clear that you are adding a
-method to a function in another module (remember, that the imports and the method defintion may be
+method to a function in another module (remember, that the imports and the method definition may be
 in separate files), while the second one is shorter, which is especially convenient if you are
 defining multiple methods.
 

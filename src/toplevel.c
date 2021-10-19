@@ -69,7 +69,7 @@ void jl_module_run_initializer(jl_module_t *m)
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     JL_TRY {
-        ct->world_age = jl_world_counter;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         jl_apply(&f, 1);
         ct->world_age = last_age;
     }
@@ -190,12 +190,12 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     for (int i = 0; i < jl_array_len(exprs); i++) {
         // process toplevel form
-        ct->world_age = jl_world_counter;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         form = jl_expand_stmt_with_loc(jl_array_ptr_ref(exprs, i), newm, jl_filename, jl_lineno);
-        ct->world_age = jl_world_counter;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         (void)jl_toplevel_eval_flex(newm, form, 1, 1);
     }
-    newm->primary_world = jl_world_counter;
+    newm->primary_world = jl_atomic_load_acquire(&jl_world_counter);
     ct->world_age = last_age;
 
 #if 0
@@ -280,7 +280,7 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     else {
         args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"));
         size_t last_age = ct->world_age;
-        ct->world_age = jl_world_counter;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         args[0] = jl_apply(args, 3);
         ct->world_age = last_age;
     }
@@ -421,7 +421,7 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_RO
     }
     if (require_func != NULL) {
         size_t last_age = ct->world_age;
-        ct->world_age = (build_mode ? jl_base_module->primary_world : jl_world_counter);
+        ct->world_age = (build_mode ? jl_base_module->primary_world : jl_atomic_load_acquire(&jl_world_counter));
         jl_value_t *reqargs[3];
         reqargs[0] = require_func;
         reqargs[1] = (jl_value_t*)mod;
@@ -666,7 +666,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
 
     size_t last_age = ct->world_age;
     if (!expanded && jl_needs_lowering(e)) {
-        ct->world_age = jl_world_counter;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         ex = (jl_expr_t*)jl_expand_with_loc_warn(e, m, jl_filename, jl_lineno);
         ct->world_age = last_age;
     }
@@ -872,7 +872,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         // worthwhile and also unsound (see #24316).
         // TODO: This is still not correct since an `eval` can happen elsewhere, but it
         // helps in common cases.
-        size_t world = jl_world_counter;
+        size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {
             (void)jl_type_infer(mfunc, world, 0);
@@ -1019,7 +1019,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
             }
             expression = jl_expand_with_loc_warn(expression, module,
                                                  jl_string_data(filename), lineno);
-            ct->world_age = jl_world_counter;
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1);
         }
     }
