@@ -891,8 +891,13 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
 }
 
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
+JL_DLLEXPORT void *jl_gc_managed_calloc(size_t sz);
 JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
                                          int isaligned, jl_value_t *owner);
+JL_DLLEXPORT void *jl_gc_malloc_aligned(size_t sz, size_t align);
+JL_DLLEXPORT void *jl_gc_calloc_aligned(size_t nm, size_t sz, size_t align);
+JL_DLLEXPORT void *jl_gc_realloc_aligned(void *p, size_t sz, size_t oldsz, size_t align);
+JL_DLLEXPORT void  jl_gc_free_aligned(void *p);
 
 // object accessors -----------------------------------------------------------
 

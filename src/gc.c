@@ -3461,14 +3461,21 @@ JL_DLLEXPORT void *jl_malloc(size_t sz)
     return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
 }
 
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
-{
+//_unchecked_calloc does not check for potential overflow of nm*sz
+static inline void *_unchecked_calloc(size_t nm, size_t sz) {
     size_t nmsz = nm*sz;
     int64_t *p = (int64_t *)jl_gc_counted_calloc(nmsz + JL_SMALL_BYTE_ALIGNMENT, 1);
     if (p == NULL)
         return NULL;
     p[0] = nmsz;
     return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
+}
+
+JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
+{
+    if (nm > SIZE_MAX/sz)
+        return NULL;
+    return _unchecked_calloc(nm, sz);
 }
 
 JL_DLLEXPORT void jl_free(void *p)
@@ -3524,6 +3531,97 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 #endif
     errno = last_errno;
     return b;
+}
+
+JL_DLLEXPORT void *jl_gc_managed_calloc(size_t sz)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    maybe_collect(ptls);
+    size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
+    if (allocsz < sz)  // overflow in adding offs, size was "negative"
+        jl_throw(jl_memory_exception);
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    //jl_gc_calloc_aligned allocations are tracked via jl_calloc
+    void *b = jl_gc_calloc_aligned(allocsz, 1, JL_CACHE_BYTE_ALIGNMENT);
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return b;
+}
+
+// TODO add special casing for macOS, where there is guarantee of alignment
+//    - DONE, just use jl_malloc, jl_calloc, jl_realloc, jl_free since always aligned
+// TODO add special casing for 64 bit systems when 16 byte alignment is requested
+// TODO add checks on align?
+//    - Enforce posix_memalign reqs of power of 2 multiple of sizeof(void *)?
+JL_DLLEXPORT void *jl_gc_malloc_aligned(size_t sz, size_t align)
+{
+#if defined(__APPLE__)
+    return jl_malloc(sz);
+#endif
+    size_t offset = align - 1 + sizeof(void *) + sizeof(size_t);
+    void *p0 = jl_malloc(sz + offset);
+    if (!p0) return NULL;
+    void *p = (void *) (((uintptr_t) p0 + offset) & (~((uintptr_t) (align - 1))));
+    assert((uintptr_t) p >= (uintptr_t) p0 + sizeof(void *) + sizeof(size_t));
+    *((void **) p - 1) = p0;
+    *((size_t *) p - 2) = align;
+    return p;
+}
+
+JL_DLLEXPORT void *jl_gc_calloc_aligned(size_t nm, size_t sz, size_t align)
+{
+#if defined(__APPLE__)
+    return jl_calloc(sz);
+#endif
+    size_t offset = align - 1 + sizeof(void *) + sizeof(size_t);
+    if (nm > (SIZE_MAX-offset)/sz)
+        return NULL;
+    void *p0 = _unchecked_calloc(1, nm * sz + offset);
+    if (!p0) return NULL;
+    void *p = (void *) (((uintptr_t) p0 + offset) & (~((uintptr_t) (align - 1))));
+    assert((uintptr_t) p >= (uintptr_t) p0 + sizeof(void *) + sizeof(size_t));
+    *((void **) p - 1) = p0;
+    *((size_t *) p - 2) = align;
+    return p;
+}
+
+// TODO when resizing an array, you actually only need to memcpy the portion
+// that is being used, which can have some savings
+// How do we know what align is 16 bits on P64?
+// See older jl_realloc_aligned, perhaps?
+JL_DLLEXPORT void *jl_gc_realloc_aligned(void *p, size_t sz, size_t oldsz, size_t align)
+{
+#if defined(__APPLE__)
+    return jl_realloc(p, sz);
+#endif
+    void *p0 = *((void **) p - 1);
+    size_t alignparam = *((size_t *) p - 2);
+    assert(alignparam == align);
+    assert(align > 0);
+    assert(p0);
+
+    void *pnew = jl_gc_malloc_aligned(sz, align);
+    if (pnew != NULL) {
+        memcpy(pnew, p, oldsz > sz ? sz : oldsz);
+        jl_gc_free_aligned(p);
+    }
+
+    return pnew;
+}
+
+JL_DLLEXPORT void jl_gc_free_aligned(void *p)
+{
+#if defined(__APPLE__)
+    return jl_free(p);
+#endif
+    if (p) jl_free(*((void **) p - 1));
 }
 
 static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t oldsz,
