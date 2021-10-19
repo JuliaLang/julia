@@ -74,6 +74,7 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
+* `issymmetric` and `ishermitian` can now test for approximate equality
 
 #### Markdown
 

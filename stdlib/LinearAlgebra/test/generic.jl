@@ -530,4 +530,11 @@ end
     @test condskeel(A) ≈ condskeel(A, [8,8,8])
 end
 
+@testset "approximate hermitian #28885" begin
+    @test !issymmetric([1 2; 2+eps(2.0) 1])
+    @test issymmetric([1 2; 2+eps(2.0) 1], eq=isapprox)
+    @test !ishermitian([1 im; im+eps(2.0) 1])
+    @test ishermitian([1 im; -(1+eps(1.0))im 1], eq=isapprox)
+end
+
 end # module TestGeneric

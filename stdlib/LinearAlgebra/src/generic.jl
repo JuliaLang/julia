@@ -1184,9 +1184,10 @@ end
 issymmetric(A::AbstractMatrix{<:Real}) = ishermitian(A)
 
 """
-    issymmetric(A) -> Bool
+    issymmetric(A; eq=(==)) -> Bool
 
-Test whether a matrix is symmetric.
+Test whether a matrix is symmetric.  Use the optional keyword argument to
+specify a function to test element equality.
 
 # Examples
 ```jldoctest
@@ -1205,15 +1206,18 @@ julia> b = [1 im; -im 1]
 
 julia> issymmetric(b)
 false
+
+julia> issymmetric([1 2; 2.00000000000001 1], eq=isapprox)
+true
 ```
 """
-function issymmetric(A::AbstractMatrix)
+function issymmetric(A::AbstractMatrix; eq=(==))
     indsm, indsn = axes(A)
     if indsm != indsn
         return false
     end
     for i = first(indsn):last(indsn), j = (i):last(indsn)
-        if A[i,j] != transpose(A[j,i])
+        if !eq(A[i,j], transpose(A[j,i]))
             return false
         end
     end
@@ -1223,9 +1227,10 @@ end
 issymmetric(x::Number) = x == x
 
 """
-    ishermitian(A) -> Bool
+    ishermitian(A; eq=(==)) -> Bool
 
-Test whether a matrix is Hermitian.
+Test whether a matrix is Hermitian.  Use the optional keyword argument to
+specify a function to test element equality.
 
 # Examples
 ```jldoctest
@@ -1244,15 +1249,18 @@ julia> b = [1 im; -im 1]
 
 julia> ishermitian(b)
 true
+
+julia> ishermitian([1 im; -1.0000000002im 1], eq=isapprox)
+true
 ```
 """
-function ishermitian(A::AbstractMatrix)
+function ishermitian(A::AbstractMatrix; eq=(==))
     indsm, indsn = axes(A)
     if indsm != indsn
         return false
     end
     for i = indsn, j = i:last(indsn)
-        if A[i,j] != adjoint(A[j,i])
+        if !eq(A[i,j], adjoint(A[j,i]))
             return false
         end
     end
