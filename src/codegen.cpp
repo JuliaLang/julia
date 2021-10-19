@@ -137,10 +137,6 @@ extern void _chkstk(void);
 #endif
 }
 
-#if defined(_COMPILER_MICROSOFT_) && !defined(__alignof__)
-#define __alignof__ __alignof
-#endif
-
 // llvm state
 extern JITEventListener *CreateJuliaJITEventListener();
 
