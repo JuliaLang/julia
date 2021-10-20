@@ -795,7 +795,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
         result = Any[ Union{} for _ in 1:ltp ]
         for t in utis
             tps = (t::DataType).parameters
-            _any(@nospecialize(t) -> !isa(t, Type), tps) && continue
+            _all(valid_as_lattice, tps) || continue
             for j in 1:ltp
                 result[j] = tmerge(result[j], rewrap_unionall(tps[j], tti0))
             end
