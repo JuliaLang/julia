@@ -194,7 +194,7 @@ function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_de
     for jsrc in jr_src
         jdest = first(jr_dest)
         for isrc in ir_src
-            B[idest,jdest] = A[isrc,jsrc]
+            B[idest,jdest] = transpose(A[isrc,jsrc])
             jdest += step(jr_dest)
         end
         idest += step(ir_dest)
