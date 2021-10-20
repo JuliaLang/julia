@@ -46,6 +46,11 @@ end
 
 show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
 show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
+function show(io::IO, ::MIME"text/plain", s::Splat)
+    print(io, "splat(")
+    show(io, s.f)
+    print(io, ')')
+end
 
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     isempty(iter) && get(io, :compact, false) && return show(io, iter)

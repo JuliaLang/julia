@@ -1201,6 +1201,12 @@ used to implement specialized methods.
 """
 <(x) = Fix2(<, x)
 
+struct Splat{F} <: Function
+    f::F
+end
+(s::Splat)(args) = s.f(args...)
+string(s::Splat) = string("splat(", s.f, ')')
+
 """
     splat(f)
 
@@ -1222,7 +1228,7 @@ julia> map(Base.splat(+), zip(1:3,4:6))
  9
 ```
 """
-splat(f) = args->f(args...)
+splat(f) = Splat(f)
 
 ## in and related operators
 
