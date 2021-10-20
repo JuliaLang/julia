@@ -9,6 +9,7 @@ using Base: Experimental
 
 include("choosetests.jl")
 include("testenv.jl")
+include("testutils.jl")
 
 tests, net_on, exit_on_error, use_revise, seed = choosetests(ARGS)
 tests = unique(tests)
@@ -408,6 +409,7 @@ cd(@__DIR__) do
             println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.")
         println("The global RNG seed was 0x$(string(seed, base = 16)).\n")
         Test.print_test_errors(o_ts)
+        TestUtils.write_failed_testsets_if_requested(o_ts)
         throw(Test.FallbackTestSetException("Test run finished with errors"))
     end
 end
