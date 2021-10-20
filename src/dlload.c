@@ -187,8 +187,8 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     // Detect if our `modname` is something like `@rpath/libfoo.dylib`
 #ifdef _OS_DARWIN_
     size_t nameLen = strlen(modname);
-    const char * atPaths = {"@executable_path", "@loader_path", "@rpath"};
-    for (i=0; i<sizeof(atPaths)/sizeof(char *); ++i) {
+    const char *const *atPaths = {"@executable_path/", "@loader_path/", "@rpath/"};
+    for (i = 0; i < sizeof(atPaths)/sizeof(char*); ++i) {
         size_t atLen = strlen(atPaths[i]);
         if (nameLen >= atLen && 0 == strncmp(modname, atPaths[i], atLen)) {
             is_atpath = 1;
