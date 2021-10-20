@@ -734,9 +734,14 @@ end
 
 function length(r::AbstractUnitRange{T}) where T
     @inline
-    last(r) < first(r) && return Integer(zero(first(r) - last(r)))
-    a = last(r) - first(r) # not all types overflow
-    return Integer(a + oneunit(a))
+    start, stop = first(r), last(r)
+    a = oneunit(zero(stop) - zero(start))
+    if a isa Signed || stop >= start
+        a += stop - start # Signed are allowed to go negative
+    else
+        a = zero(a) # Unsigned don't necessarily underflow
+    end
+    return Integer(a)
 end
 
 length(r::OneTo) = Integer(r.stop - zero(r.stop))
