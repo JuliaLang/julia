@@ -3473,7 +3473,7 @@ static inline void *_unchecked_calloc(size_t nm, size_t sz) {
 
 JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
 {
-    if (nm > SIZE_MAX/sz)
+    if (nm > SSIZE_MAX/sz - JL_SMALL_BYTE_ALIGNMENT)
         return NULL;
     return _unchecked_calloc(nm, sz);
 }
