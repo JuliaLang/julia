@@ -1210,14 +1210,14 @@ string(s::Splat) = string("splat(", s.f, ')')
 """
     splat(f)
 
-Defined as
+Equivalent to
 ```julia
-    splat(f) = args->f(args...)
+    my_splat(f) = args->f(args...)
 ```
 i.e. given a function returns a new function that takes one argument and splats
 its argument into the original function. This is useful as an adaptor to pass
 a multi-argument function in a context that expects a single argument, but
-passes a tuple as that single argument.
+passes a tuple as that single argument. Additionally has pretty printing.
 
 # Example usage:
 ```jldoctest
@@ -1226,6 +1226,12 @@ julia> map(Base.splat(+), zip(1:3,4:6))
  5
  7
  9
+
+julia> my_add = Base.splat(+)
+splat(+)
+
+julia> my_add((1,2,3))
+6
 ```
 """
 splat(f) = Splat(f)
