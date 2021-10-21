@@ -801,7 +801,7 @@ Search available docstrings for entries containing `pattern`.
 
 When `pattern` is a string, case is ignored. Results are printed to `io`.
 
-A shorthand version `help?> "string"` can also be used.
+A shorthand version `help?> "pattern"` can also be used.
 """
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
