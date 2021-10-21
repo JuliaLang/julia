@@ -11,14 +11,13 @@ copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
     union(s, itrs...)
     ∪(s, itrs...)
 
-Construct an object containing all elements from all of the arguments.
+Construct an object containing all distinct elements from all of the arguments.
 
 The first argument controls what kind of container is returned.
 If this is an array, it maintains the order in which elements first appear.
-Elements are compared using [`==`](@ref).
 
-Unicode `∪` can be typed by writing `\cup` then pressing tab in the Julia REPL, and in many editors.
-This is an infix operator, `s ∪ itr`.
+Unicode `∪` can be typed by writing `\\cup` then pressing tab in the Julia REPL, and in many editors.
+This is an infix operator, allowing `s ∪ itr`.
 
 See also [`unique`](@ref), [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
 
@@ -113,9 +112,8 @@ Construct the set containing those elements which appear in all of the arguments
 
 The first argument controls what kind of container is returned.
 If this is an array, it maintains the order in which elements first appear.
-Elements are compared using [`isequal`](@ref).
 
-Unicode `∩` can be typed by writing `\cap` then pressing tab in the Julia REPL, and in many editors.
+Unicode `∩` can be typed by writing `\\cap` then pressing tab in the Julia REPL, and in many editors.
 This is an infix operator, allowing `s ∩ itr`.
 
 See also [`setdiff`](@ref), [`isdisjoint`](@ref), [`issubset`](@ref Base.issubset), [`issetequal`](@ref).
