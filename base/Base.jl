@@ -59,14 +59,7 @@ replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatom
 
 
 # for closures
-function _typeof_captured_variable(Core.@nospecialize x)
-    if x isa DataType
-        if x.layout === C_NULL
-            return DataType
-        end
-    end
-    return Core.Typeof(x)
-end
+const _typeof_captured_variable = Core.Typeof
 
 include("coreio.jl")
 
