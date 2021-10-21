@@ -204,6 +204,10 @@ function show_convert_error(io::IO, ex::MethodError, arg_types_param)
     T = striptype(ex.args[1])
     if T === nothing
         print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
+    elseif ex.args[1] <: Union{}
+        printstyled(io, "Converting to ")
+        printstyled(io, "Union{} "; color = :light_red)
+        printstyled(io, "is not possible, check the `convert` method.")
     else
         p2 = arg_types_param[2]
         print_one_line = isa(T, DataType) && isa(p2, DataType) && T.name != p2.name
