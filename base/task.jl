@@ -467,7 +467,7 @@ function errormonitor(t::Task)
         end
         nothing
     end
-    t.sticky = false
+    t2.sticky = false
     _wait2(t, t2)
     return t
 end
