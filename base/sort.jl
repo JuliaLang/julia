@@ -1232,7 +1232,7 @@ sort!(v::AbstractVector{<:Union{Float32, Missing}}, a::Algorithm, o::DirectOrder
 sort!(v::AbstractVector{<:Union{Float64, Missing}}, a::Algorithm, o::DirectOrdering) =
     fpsort!(v, a, o)
 
-sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{Missing}}) = 
+sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{Missing}}) =
     sort!(v, a, o.order)
 sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Union{Float32, Missing}}}) =
     fpsort!(v, a, o)
