@@ -527,7 +527,7 @@ default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
     :dir      => pwd(),
     :exename  => joinpath(Sys.BINDIR::String, julia_exename()),
-    :exeflags => "--project=$(Base.active_project())",
+    :exeflags => `--project=$(Base.active_project())`,
     :enable_threaded_blas => false,
     :lazy => true)
 
