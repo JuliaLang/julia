@@ -26,12 +26,13 @@ mutable struct Future <: AbstractRemoteRef
     where::Int
     whence::Int
     id::Int
+    lock::ReentrantLock
     @atomic v::Union{Some{Any}, Nothing}
 
     Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing) =
-        (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
+        (r = new(w,rrid.whence,rrid.id,ReentrantLock(),v); return test_existing_ref(r))
 
-    Future(t::NTuple{4, Any}) = new(t[1],t[2],t[3],t[4])  # Useful for creating dummy, zeroed-out instances
+    Future(t::NTuple{4, Any}) = new(t[1],t[2],t[3],ReentrantLock(),t[4])  # Useful for creating dummy, zeroed-out instances
 end
 
 """
@@ -71,11 +72,11 @@ function test_existing_ref(r::AbstractRemoteRef)
         @assert r.where > 0
         if isa(r, Future)
             fv_cache = @atomic :acquire found.v
-            rv_cache = @atomic :acquire r.v
+            rv_cache = @atomic :monotonic r.v
             if fv_cache === nothing && rv_cache !== nothing
                 # we have recd the value from another source, probably a deserialized ref, send a del_client message
-                @atomic :release found.v = rv_cache
                 send_del_client(r)
+                @atomic :release found.v = rv_cache
             end
         end
         return found::typeof(r)
@@ -206,7 +207,7 @@ isready(f)  # will not block
 ```
 """
 function isready(rr::Future)
-    v_cache = @atomic :acquire rr.v
+    v_cache = @atomic rr.v
     v_cache === nothing || return true
 
     rid = remoteref_id(rr)
@@ -570,7 +571,7 @@ end
 
 Wait for a value to become available for the specified [`Future`](@ref).
 """
-wait(r::Future) = (v_cache = @atomic :acquire r.v; v_cache !== nothing && return r; call_on_owner(wait_ref, r, myid()); r)
+wait(r::Future) = (v_cache = @atomic r.v; v_cache !== nothing && return r; call_on_owner(wait_ref, r, myid()); r)
 
 """
     wait(r::RemoteChannel, args...)
@@ -587,12 +588,12 @@ Further calls to `fetch` on the same reference return the cached value. If the r
 is an exception, throws a [`RemoteException`](@ref) which captures the remote exception and backtrace.
 """
 function fetch(r::Future)
-    v_cache = @atomic :acquire r.v
+    v_cache = @atomic r.v
     v_cache !== nothing && return something(v_cache)
 
     if r.where == myid()
-        v_cache, rv = lock(client_refs) do
-            v_cache = @atomic :acquire r.v
+        v_cache, rv = lock(r.lock) do
+            v_cache = @atomic :monotonic r.v
             v_cache, v_cache === nothing ? lookup_ref(remoteref_id(r)) : nothing
         end
 
@@ -605,9 +606,19 @@ function fetch(r::Future)
         v_local = call_on_owner(fetch_ref, r)
     end
 
-    @atomic :release r.v = Some(v_local)
+    v_cache = @atomic r.v
+
+    if v_cache === nothing # call_on_owner case
+        v_old, status = lock(r.lock) do
+            @atomicreplace r.v nothing => Some(v_local)
+        end
+        # status == true - when value obtained through call_on_owner
+        # status == false - other siuations replace fails, because by this time the cache will always be populated
+        # why? put! performs caching and putting into channel under r.lock
+        v_cache = status ? v_local : v_old
+    end
+
     send_del_client(r)
-    v_cache = @atomic :acquire r.v
     something(v_cache)
 end
 
@@ -632,15 +643,27 @@ A `put!` on an already set `Future` throws an `Exception`.
 All asynchronous remote calls return `Future`s and set the
 value to the return value of the call upon completion.
 """
-function put!(rr::Future, v)
-    rr.where == myid() && set_future_cache(rr, v)
-    call_on_owner(put_future, rr, v, myid())
-    rr.where != myid() && set_future_cache(rr, v)
-    rr
+function put!(r::Future, v)
+    if r.where == myid()
+        rid = remoteref_id(r)
+        rv = lookup_ref(rid)
+        isready(rv) && error("Future can be set only once")
+        lock(r.lock) do
+            put!(rv, v)
+            set_future_cache(r, v)
+        end
+        del_client(rid, myid())
+    else
+        lock(r.lock) do
+            call_on_owner(put_future, r, v, myid())
+            set_future_cache(r, v)
+        end
+    end
+    r
 end
 
-function set_future_cache(rr::Future, v)
-    _, ok = @atomicreplace rr.v nothing => Some(v)
+function set_future_cache(r::Future, v)
+    _, ok = @atomicreplace r.v nothing => Some(v)
     ok || error("Future can be set only once")
 end
 

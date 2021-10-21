@@ -325,6 +325,9 @@ function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
         v = getfield(ref2, fld)
         if isa(v, Number)
             @test v === zero(typeof(v))
+        elseif fld == :lock
+            @test v isa ReentrantLock
+            @test !islocked(v)
         elseif v !== nothing
             error(string("Add test for field ", fld))
         end
