@@ -517,7 +517,7 @@ function find_method_instance_from_sig(
     result = findsup(sig, method_table(interp))
     result === nothing && return nothing
     method, = result
-    return specialize_method(method, sig, sparams, preexisting, compilesig)
+    return specialize_method(method, sig, sparams; preexisting, compilesig)
 end
 # TODO: backedge?
 
@@ -1615,7 +1615,7 @@ function outline_child_task(task::ChildTask, ir::IRCode)
         stmts.inst[inew] = ReturnNode(nothing)
     end
 
-    blocks = map(enumerate(task.blocks)) do (i, ibb)
+    blocks = Iterators.map(enumerate(task.blocks)) do (i, ibb)
         isentry = i == 1
         bb = ir.cfg.blocks[ibb]
         start = ssachangemap[bb.stmts[begin]]
@@ -1637,6 +1637,7 @@ function outline_child_task(task::ChildTask, ir::IRCode)
 
         BasicBlock(StmtRange(start, stop), preds, succs)
     end
+    blocks = collect(BasicBlock, blocks)
     cfg = CFG(
         blocks,
         Int[ssachangemap[ir.cfg.index[task.blocks[i]]] for i in 1:length(task.blocks)-1],
@@ -1854,7 +1855,9 @@ function optimize_taskgroups!(
                 T = Any
             else
                 result = InferenceResult(mi)
-                frame = InferenceState(result, true, interp)
+                # TODO: Is it safe to use the global cache when it's called from
+                # `jl_emit_code`?
+                frame = InferenceState(result, :no, interp)
                 if frame !== nothing
                     typeinf(interp, frame)
                 end
@@ -1899,14 +1902,19 @@ function optimize_taskgroups!(
         end
         # Insert `Tapir.synctasks(...)`
         for (isync, phics) in zip(syncnodes_by_syncregion[i], taskgroup)
-            syncargs = map(phics) do phic
-                load = insert_node!(ir, isync, NewInstruction(phic, Union{Nothing,TaskType}))
-                insert_node!(
-                    ir,
-                    isync,
-                    NewInstruction(Expr(:new, MaybeTask, load), MaybeTask),
-                )
-            end
+            syncargs = Any[
+                let load = insert_node!(
+                        ir,
+                        isync,
+                        NewInstruction(phic, Union{Nothing,TaskType}),
+                    )
+                    insert_node!(
+                        ir,
+                        isync,
+                        NewInstruction(Expr(:new, MaybeTask, load), MaybeTask),
+                    )
+                end for phic in phics
+            ]
             mi = find_method_instance_from_sig(
                 interp,
                 Tuple{typeof(Tapir.synctasks),[MaybeTask for _ in syncargs]...};
@@ -2032,10 +2040,10 @@ function code_info_from_ssair(ir::IRCode)
     nargs = length(ir.argtypes)
     ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     ci.slottypes = Any[widenconst(ir.argtypes[i]) for i in 1:nargs]
-    ci.slotnames = [gensym(:arg) for _ in 1:nargs]
+    ci.slotnames = Symbol[gensym(:arg) for _ in 1:nargs]
     ci.slotnames[1] = Symbol("#self#")
     ci.slotflags = fill(0x00, nargs)
-    replace_code_newstyle!(ci, ir, nargs - 1)
+    replace_code_newstyle!(ci, ir, nargs)
     ci.inferred = true
     return ci
 end
@@ -2075,12 +2083,11 @@ function _lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::Co
     # Ref: _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     params = OptimizationParams(interp)
     opt = OptimizationState(linfo, copy(ci), params, interp)
-    nargs = Int(opt.nargs) - 1 # Ref: optimize(interp, opt, params, result)
 
     # Ref: run_passes
     preserve_coverage = coverage_enabled(opt.mod)
-    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, nargs, opt)
-    ir = slot2reg(ir, ci, nargs, opt)
+    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, opt)
+    ir = slot2reg(ir, ci, opt)
     if JLOptions().debug_level == 2
         @timeit "verify pre-tapir" (verify_ir(ir); verify_linetable(ir.linetable))
     end

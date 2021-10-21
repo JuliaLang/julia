@@ -1773,7 +1773,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 # A detach node has two edges we need to add
                 # the reattach edge to the work queue
                 l = (stmt::DetachNode).label
-                frame.handler_at[l] = frame.cur_hand
                 newstate_reattach = stupdate!(states[l], changes)
                 if newstate_reattach !== nothing
                     if l < frame.pc´´

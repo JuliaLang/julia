@@ -619,7 +619,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
     # [Tapir] Do not transform task output slots yet:
     task_outputs = task_output_slots(ci, code) # set of slot IDs to keep in IRCode
     for id in task_outputs
-        empty!(defuse[id].uses)
+        empty!(defuses[id].uses)
     end
 
     exc_handlers = IdDict{Int, Tuple{Int, Int}}()
