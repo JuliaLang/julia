@@ -317,31 +317,26 @@ function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::O
 end
 
 function run_passes(ci::CodeInfo, sv::OptimizationState)
-    preserve_coverage = coverage_enabled(sv.mod)
-    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, sv)
-    ir = slot2reg(ir, ci, sv)
-    #@Base.show ("after_construct", ir)
+    @timeit "convert"   ir = convert_to_ircode(ci, sv)
+    @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
-    @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
-    #@timeit "verify 2" verify_ir(ir)
-    ir = compact!(ir)
-    #@Base.show ("before_sroa", ir)
-    @timeit "SROA" ir = getfield_elim_pass!(ir)
-    #@Base.show ir.new_nodes
-    #@Base.show ("after_sroa", ir)
-    ir = adce_pass!(ir)
-    #@Base.show ("after_adce", ir)
+    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    # @timeit "verify 2" verify_ir(ir)
+    @timeit "compact 2" ir = compact!(ir)
+    @timeit "SROA"      ir = getfield_elim_pass!(ir)
+    @timeit "ADCE"      ir = adce_pass!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
-    #@Base.show ir
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end
     return ir
 end
 
-function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::OptimizationState)
+function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
+    code = copy_exprargs(ci.code)
+    coverage = coverage_enabled(sv.mod)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     idx = 1
