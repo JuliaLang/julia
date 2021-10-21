@@ -37,7 +37,6 @@ Base.:(>>>)
 Base.bitrotate
 Base.:(:)
 Base.range
-Base.logrange
 Base.OneTo
 Base.StepRangeLen
 Base.:(==)

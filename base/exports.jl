@@ -677,7 +677,6 @@ export
     enumerate,  # re-exported from Iterators
     zip,
     only,
-    logrange,
 
 # object identity and equality
     copy,

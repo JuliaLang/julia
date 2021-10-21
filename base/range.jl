@@ -620,7 +620,7 @@ parameters `pre` and `post` characters for each printed row,
 `sep` separator string between printed elements,
 `hdots` string for the horizontal ellipsis.
 """
-function print_range(io::IO, r::AbstractRange,
+function print_range(io::IO, r::AbstractArray,
                      pre::AbstractString = " ",
                      sep::AbstractString = ", ",
                      post::AbstractString = "",
@@ -1491,148 +1491,108 @@ mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + 
 
 
 """
-    logrange(start, stop; length, ratio)
+    LogRange(start, stop, length)
 
-Create an iterator whose elements are spaced logarithmically, rather than linearly
-as for [`range`](@ref), i.e. the ratio of successive elements is constant, not the difference.
+Construct a specialized array whose elements are spaced logarithmically
+between the given endpoints. That is, the ratio of successive elements is
+a constant, calculated from the length.
 
-One of two keywords must be provided:
+Like [`LinRange`](@ref), floating-point error may cause it to miss intermediate
+rational values, but the first and last elements should be exactly those provided.
 
-* Given the `length`, the necessary ratio is computed accurately to reach the final and
-  intermediate values rationally. To avoid this overhead, see the [`LogRange`](@ref) constructor.
+This is similar to `geomspace` in Python. Unlike `PowerRange` in Mathematica,
+you specify the number of elements not the ratio.
+Unlike `logspace` in Python and Matlab, the `start` and `stop` arguments are
+always the first and last elements of the result, not powers applied to some base.
 
-* Otherwise, given the `ratio`, the final value is the last one `<= stop`.
-
-!!! compat "Julia 1.7"
-    This function requires at least Julia 1.7.
-
-This is similar to `geomspace` in Python, and to `PowerRange` in Mathematica.
+!!! compat "Julia 1.9"
+    This function requires at least Julia 1.9.
 
 # Examples
 ```jldoctest
-julia> for x in logrange(2, 19; ratio=2)
-         println(x)
-       end
-2
-4
-8
-16
+julia> LogRange(10, 4000, 3)
+3-element LogRange{Float64}:
+ 10.0, 200.0, 4000.0
 
-julia> collect(logrange(1000, 1; length=7))
-7-element Vector{Float64}:
- 1000.0
-  316.22776601683796
-  100.0
-   31.622776601683793
-   10.0
-    3.1622776601683795
-    1.0
-
-julia> ans ≈ 10 .^ (3:-0.5:0)
+julia> ans[2] ≈ sqrt(10 * 4000)  # middle element is the geometric mean
 true
 
-julia> collect(logrange(-1, -2f0, length=3))
-3-element Vector{Float32}:
- -1.0
- -1.4142135
- -2.0
-
-julia> map(rad2deg∘angle, logrange(1, -1+0im, length=5))
+julia> LogRange(-250_000, -0.04, 5) |> collect
 5-element Vector{Float64}:
-   0.0
-  45.0
-  90.0
- 135.0
- 180.0
+ -250000.0
+   -5000.000000000003
+    -100.0
+      -1.9999999999999998
+      -0.04
+
+julia> LogRange(√2, 32, 10)
+10-element LogRange{Float64}:
+ 1.41421, 2.0, 2.82843, 4.0, 5.65685, 8.0, 11.3137, 16.0, 22.6274, 32.0
+
+julia> LogRange(1, 1000, 4) ≈ 10 .^ (0:3)
+true
+
+julia> LogRange(1, -1+0im, 5) ≈ cis.(LinRange(0, pi, 5))
+true
 ```
 """
-function logrange(start::Number, stop::Number;
-    length::Union{Nothing,Integer}=nothing, ratio::Union{Nothing,Number}=nothing)
-    if length !== nothing
-        length >= 2 || throw(ArgumentError("logrange must have length of at least 2"))
-        _start, _stop = map(float, promote(start, stop))
-        _ratio = ratio_nth_root(stop, start, Int(length)-1)
-        if ratio !== nothing
-            check = oftype(float(ratio), _ratio)
-            ratio == check || throw(ArgumentError("ratio = $ratio does not match $check computed from length = $length"))
+struct LogRange{T} <: AbstractArray{T,1}
+    start::T
+    stop::T
+    len::Int
+    function LogRange(start::T1, stop::T2, len::Integer) where {T1<:Number, T2<:Number}
+        T = float(promote_type(T1, T2))
+        lo = iszero(start) ? T(NaN) : T(start)
+        hi = iszero(stop) ? T(NaN) : T(stop)
+        if len < 0
+            throw(ArgumentError("LogRange can't have negative length"))
+        elseif len == 0
+            return new{T}(lo, hi, len)
+        elseif len == 1 && start != stop
+            throw(ArgumentError("endpoints of LogRange differ, with length = 1"))
         end
-        LogRange(_start, _ratio, Int(length))
-    elseif ratio !== nothing
-        _start, _ratio = promote(start, ratio)
-        num = trunc(Int, log(ratio, stop/_start))
-        fin = prod(_ratio for _ in 1:num; init=start)
-        _length = fin <= stop ? num+1 : num
-        LogRange(_start, _ratio, _length)
+        if T <: Real && (start<0) ⊻ (stop<0)
+            throw(DomainError((start, stop),
+                "LogRange will only return complex results if called with a complex argument"))
+        end
+        new{T}(lo, hi, len)
     end
 end
 
-ratio_nth_root(a::Number, b::Number, n::Int) = (a/b)^(1/n)
-ratio_nth_root(a::Float32, b::Float32, n::Int) = (Float64(a)/Float64(b))^(1/n)
-function ratio_nth_root(a::Real, b::Real, m::Int)
-    over = TwicePrecision(a) / TwicePrecision(b)
-    r1 = TwicePrecision((over.hi)^(1/m))
-    r1pow = prod(r1 for _ in 1:m-1)
-    r2 = (m-1)*r1/m + over / (m * r1pow)
-end
-
-"""
-    LogRange{T,S}(start::T, ratio::S, len::Int)
-
-Iterator which multiplies by `ratio` at each step, giving in total `len` objects.
-Constructing this directly instead of using [`logrange`](@ref) avoids the cost of
-computing `ratio` to high precision.
-
-Note that its output is of type `T`, so iterating for intance `LogRange(2, pi, 10)` will
-lead to an `InexactError`, since `2*pi` cannot be converted to `Int`.
-
-# Examples
-
-```jldoctest
-julia> collect(LogRange(0.1, sqrt(10), 5))  # no corrections for rounding errors
-5-element Vector{Float64}:
-  0.1
-  0.316227766016838
-  1.0000000000000002
-  3.1622776601683804
- 10.000000000000004
-
-julia> r = logrange(0.1, 10, length=5)  # type T != type S
-LogRange{Float64, Base.TwicePrecision{Float64}}(0.1, Base.TwicePrecision{Float64}(3.162277660168379, 2.0941562178568784e-16), 5)
-
-julia> collect(r)
-5-element Vector{Float64}:
-  0.1
-  0.31622776601683794
-  1.0
-  3.1622776601683795
- 10.0
-```
-"""
-struct LogRange{T,S}
-    start::T
-    ratio::S
-    len::Int
-end
-
-length(r::LogRange) = r.len
 size(r::LogRange) = (r.len,)
 
-function iterate(r::LogRange{T,S}) where {T,S}
-    y = convert(promote_type(T,S), r.start)
-    r.start, (y,1)
+first(r::LogRange) = r.start
+last(r::LogRange) = r.stop
+
+function getindex(r::LogRange, i::Integer)
+    @inline
+    @boundscheck checkbounds(r, i)
+    unsafe_getindex(r, i)
 end
 
-function iterate(r::LogRange{T}, (x,n)) where {T}
-    if n >= r.len
-        nothing
+function unsafe_getindex(r::LogRange, i::Integer)
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+    if r.len == 1
+        return r.start
+    end
+    if eltype(r) <: Real && r.start < 0  # constructor guarantees r.stop < 0 too
+        -loginterp(-r.start, -r.stop, Int(i), r.len)
     else
-        y = x * r.ratio
-        convert(T,y), (y,n+1)
+        loginterp(r.start, r.stop, Int(i), r.len)
     end
 end
 
-eltype(::Type{<:LogRange{T}}) where {T} = T
-eltype(r::LogRange{T}) where {T} = T
+function loginterp(lo::T, hi::T, j::Int, n::Int) where {T}
+    @inline
+    convert(T, lo^((n-j)/(n-1)) * hi^((j-1)/(n-1)))
+end
 
-ndims(::Type{<:LogRange}) = 1
-ndims(r::LogRange) = 1
+function show(io::IO, r::LogRange)  # compact
+    print(io, "LogRange(")
+    show(io, first(r))
+    print(io, ", ")
+    show(io, last(r))
+    print(io, ", ")
+    show(io, length(r))
+    print(io, ')')
+end

@@ -2435,7 +2435,6 @@ end
     @test ((x + 1) in StepRangeLen(x, 0, rand(1:100))) == false
 end
 
-<<<<<<< HEAD
 @testset "issue #42528" begin
     struct Fix42528 <: Unsigned
         val::UInt
@@ -2457,7 +2456,6 @@ end
     @test_throws DomainError Fix42528(0x0) - Fix42528(0x1)
 end
 
-<<<<<<< HEAD
 let r = Ptr{Cvoid}(20):-UInt(2):Ptr{Cvoid}(10)
     @test isempty(r)
     @test length(r) == 0
@@ -2494,6 +2492,7 @@ end
     @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(0)))
 end
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 @testset "PR 49516" begin
     struct PR49516 <: Signed
@@ -2607,41 +2606,58 @@ end
     @test_throws errmsg range(CartesianIndex(1), step=CartesianIndex(1), length=3)
 end
 
-@testset "logrange" begin
-    @test collect(logrange(2, 16, length=4)) == [2, 4, 8, 16]
-    @test collect(logrange(1000, 1, length=4)) == [1000, 100, 10, 1]
-    @test collect(logrange(-1, -4, length=3)) == [-1, -2, -4]
-    @test collect(logrange(1, -1+0im, length=3)) == [1, im, -1]
+@testset "LogRange" begin
+    # basic idea
+    @test LogRange(2, 16, 4) ≈ [2, 4, 8, 16]
+    @test LogRange(1/8, 8.0, 7) ≈ [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+    @test LogRange(1000, 1, 4) ≈ [1000, 100, 10, 1]
+    @test LogRange(1, 10^9, 19)[1:2:end] ≈ 10 .^ (0:9)
 
-    @test collect(logrange(1/8, 8.0, length=7)) == [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
-    @test collect(logrange(1, 10^10, length=21))[1:2:end] == 10 .^ (0:10)
-    @test collect(logrange(0.789, 123_456, length=135_790))[[begin, end]] == [0.789, 123_456]
+    # negative & complex
+    @test LogRange(-1, -4, 3) == [-1, -2, -4]
+    @test LogRange(1, -1+0.0im, 3) == [1, im, -1]
+    @test LogRange(1, -1-0.0im, 3) == [1, -im, -1]
 
-    @test collect(logrange(1, 10, length=3)) isa Vector{Float64}
-    @test collect(logrange(1, 10, length=Int32(3))) isa Vector{Float64}
-    @test collect(logrange(1, 10f0, length=3)) isa Vector{Float32}
-    @test collect(logrange(1f0, 10, length=3)) isa Vector{Float32}
-    @test collect(logrange(1f0, 10+im, length=3)) isa Vector{ComplexF32}
-    @test collect(logrange(1f0, 10.0+im, length=3)) isa Vector{ComplexF64}
-    @test collect(logrange(1, big(10), length=3)) isa Vector{BigFloat}
+    # endpoints
+    @test LogRange(0.1f0, 100, 33)[1] === 0.1f0
+    @test LogRange(0.789, 123_456, 135_790)[[begin, end]] == [0.789, 123_456]
+    @test LogRange(nextfloat(0f0), floatmax(Float32), typemax(Int))[end] === floatmax(Float32)
+    @test LogRange(nextfloat(Float16(0)), floatmax(Float16), 66_000)[end] === floatmax(Float16)
+    @test first(LogRange(pi, 2pi, 3000)) === LogRange(pi, 2pi, 3000)[1] === Float64(pi)
+    @test last(LogRange(-0.01, -0.1, 3000)) === last(LogRange(-0.01, -0.1, 3000))[end] === -0.1
+    if Int == Int64
+        @test LogRange(0.1, 1000, 2^54)[end] === 1000.0
+        @test LogRange(-0.1, -1000, 2^55)[end] === -1000.0
+    end
 
-    @test length(logrange(2, 16, length=4)) == 4
-    @test size(logrange(2, 16, length=4)) == (4,)
-    @test ndims(logrange(2, 16, length=4)) == 1
-    @test ndims(typeof(logrange(2, 16, length=4))) == 1
-    @test eltype(logrange(2, 16, length=4)) == Float64
-    @test eltype(typeof(logrange(2, 16, length=4))) == Float64
-    @test Base.IteratorSize(typeof(logrange(2=>3, length=4))) == Base.HasLength()
-    @test Base.IteratorEltype(typeof(logrange(2, 16, length=4))) == Base.HasEltype()
+    # empty, only, NaN, Inf
+    @test first(LogRange(1, 2, 0)) === 1.0
+    @test last(LogRange(1, 2, 0)) === 2.0
+    @test isnan(first(LogRange(0, 2, 0)))
+    @test only(LogRange(2pi, 2pi, 1)) === LogRange(2pi, 2pi, 1)[1] === 2pi
+    @test isnan(LogRange(1, NaN, 3)[2])
+    @test isinf(LogRange(1, Inf, 3)[2])
+    @test isnan(LogRange(0, 2, 3)[1])
 
-    @test_throws ArgumentError logrange(1, 10, length=1) # allows only length >= 2
-    @test_throws DomainError logrange(1, -1, length=3)   # needs complex numbers
+    # types
+    @test eltype(LogRange(1, 10, 3)) == Float64
+    @test eltype(LogRange(1, 10, Int32(3))) == Float64
+    @test eltype(LogRange(1, 10f0, 3)) == Float32
+    @test eltype(LogRange(1f0, 10, 3)) == Float32
+    @test eltype(LogRange(1f0, 10+im, 3)) == ComplexF32
+    @test eltype(LogRange(1f0, 10.0+im, 3)) == ComplexF64
+    @test eltype(LogRange(1, big(10), 3)) == BigFloat
+    @test LogRange(big"0.3", big(pi), 50)[1] == big"0.3"
+    @test LogRange(big"0.3", big(pi), 50)[end] == big(pi)
 
-    @test collect(logrange(2, 16, ratio=2)) == [2, 4, 8, 16]
-    @test collect(logrange(1, 10, ratio=sqrt(10))) == [1, sqrt(10)]
-    @test last(collect(logrange(1, 10, ratio=sqrt(10)))) * sqrt(10) > 10
-    @test collect(logrange(1, 10, ratio=prevfloat(sqrt(10)))) ≈ [1, sqrt(10), 10]
+    # errors
+    @test_throws ArgumentError LogRange(1, 10, -1)
+    @test_throws ArgumentError LogRange(1, 10, 1) # endpoints must differ
+    @test_throws DomainError LogRange(1, -1, 3)   # needs complex numbers
+    @test_throws ArgumentError LogRange(1, 10, 2)[true]
+    @test_throws BoundsError LogRange(1, 10, 2)[3]
 
-    @test collect(logrange(2, 16, length=4, ratio=2)) == [2, 4, 8, 16]  # over-constrained
-    @test_throws ArgumentError @test collect(logrange(2, 16, length=4, ratio=3))
+    # printing
+    @test repr(LogRange(1,2,3)) == "LogRange(1.0, 2.0, 3)"
+    @test repr("text/plain", LogRange(1,2,3)) == "3-element LogRange{Float64}:\n 1.0, 1.41421, 2.0"
 end
