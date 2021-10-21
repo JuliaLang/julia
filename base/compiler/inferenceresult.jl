@@ -37,13 +37,14 @@ function matching_cache_argtypes(
                     condargs = Tuple{Int,Int}[]
                 end
                 # using union-split signature, we may be able to narrow down `Conditional` to `Const`
-                (; vtype, elsetype) = cnd
-                if tmeet(vtype, widenconst(argtypes[slotid])) === Bottom
+                vtype = tmeet(cnd.vtype, widenconst(argtypes[slotid]))
+                elsetype = tmeet(cnd.elsetype, widenconst(argtypes[slotid]))
+                if vtype === Bottom
                     given_argtypes[i] = Const(false)
                     # union-split should never find a more precise information about `fargs[slotid]` than `Conditional`,
                     # otherwise there should have been a bug around `Conditional` construction or maintainance
-                    @assert tmeet(elsetype, widenconst(argtypes[slotid])) !== Bottom "invalid Conditional element"
-                elseif tmeet(elsetype, widenconst(argtypes[slotid])) === Bottom
+                    @assert elsetype !== Bottom "invalid Conditional element"
+                elseif elsetype === Bottom
                     given_argtypes[i] = Const(true)
                 else
                     push!(condargs, (slotid, i))

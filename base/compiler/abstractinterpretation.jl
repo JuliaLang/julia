@@ -1238,10 +1238,10 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     # try constant propagation with manual inlinings of some of the heuristics
     # since some checks within `abstract_call_method_with_const_args` seem a bit costly
     const_prop_entry_heuristic(interp, result, sv) || return CallMeta(rt, InvokeCallInfo(match, nothing))
-    argtypes′ = argtypes[4:end]
-    pushfirst!(argtypes′, ft)
-    fargs′ = fargs[4:end]
-    pushfirst!(fargs′, fargs[1])
+    argtypes′ = argtypes[3:end]
+    argtypes′[1] = ft
+    fargs′ = fargs[3:end]
+    fargs′[1] = fargs[1]
     arginfo = ArgInfo(fargs′, argtypes′)
     const_prop_argument_heuristic(interp, arginfo, sv) || return CallMeta(rt, InvokeCallInfo(match, nothing))
     # # typeintersect might have narrowed signature, but the accuracy gain doesn't seem worth the cost involved with the lattice comparisons
