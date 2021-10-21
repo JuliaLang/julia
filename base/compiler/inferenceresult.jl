@@ -24,6 +24,7 @@ function matching_cache_argtypes(
     linfo::MethodInstance, (; fargs, argtypes)::ArgInfo, va_override::Bool)
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing, va_override)
     given_argtypes = Vector{Any}(undef, length(argtypes))
     local condargs = nothing
     for i in 1:length(argtypes)
@@ -33,20 +34,18 @@ function matching_cache_argtypes(
             cnd = argtype
             slotid = find_constrained_arg(cnd, fargs)
             if slotid !== nothing
-                if condargs === nothing
-                    condargs = Tuple{Int,Int}[]
-                end
-                # using union-split signature, we may be able to narrow down `Conditional` to `Const`
-                vtype = tmeet(cnd.vtype, widenconst(argtypes[slotid]))
-                elsetype = tmeet(cnd.elsetype, widenconst(argtypes[slotid]))
-                if vtype === Bottom
-                    given_argtypes[i] = Const(false)
-                    # union-split should never find a more precise information about `fargs[slotid]` than `Conditional`,
-                    # otherwise there should have been a bug around `Conditional` construction or maintainance
-                    @assert elsetype !== Bottom "invalid Conditional element"
-                elseif elsetype === Bottom
-                    given_argtypes[i] = Const(true)
+                # using union-split signature, we may be able to narrow down `Conditional`
+                sigt = widenconst(slotid > nargs ? argtypes[slotid] : cache_argtypes[slotid])
+                vtype = tmeet(cnd.vtype, sigt)
+                elsetype = tmeet(cnd.elsetype, sigt)
+                if vtype === Bottom && elsetype === Bottom
+                    # we accidentally proved this method match is impossible
+                    # TODO bail out here immediately rather than just propagating Bottom ?
+                    given_argtypes[i] = Bottom
                 else
+                    if condargs === nothing
+                        condargs = Tuple{Int,Int}[]
+                    end
                     push!(condargs, (slotid, i))
                     given_argtypes[i] = Conditional(SlotNumber(slotid), vtype, elsetype)
                 end
@@ -80,7 +79,6 @@ function matching_cache_argtypes(
         given_argtypes = isva_given_argtypes
     end
     @assert length(given_argtypes) == nargs
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing, va_override)
     for i in 1:nargs
         given_argtype = given_argtypes[i]
         cache_argtype = cache_argtypes[i]

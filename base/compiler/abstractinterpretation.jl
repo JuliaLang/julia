@@ -547,7 +547,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
                 return nothing
             end
         end
-        inf_result = InferenceResult(mi; arginfo, va_override)
+        inf_result = InferenceResult(mi, arginfo, va_override)
         if !any(inf_result.overridden_by_const)
             add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
             return nothing

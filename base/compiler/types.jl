@@ -34,7 +34,7 @@ mutable struct InferenceResult
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     valid_worlds::WorldRange # if inference and optimization is finished
-    function InferenceResult(linfo::MethodInstance;
+    function InferenceResult(linfo::MethodInstance,
                              arginfo::Union{Nothing,ArgInfo} = nothing,
                              va_override::Bool = false)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo, va_override)
