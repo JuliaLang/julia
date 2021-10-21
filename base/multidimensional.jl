@@ -1623,7 +1623,7 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
             else
                 j_d = i_d
             end) begin
-                if (@nref $N A j) != (@nref $N A i)
+                if !isequal((@nref $N A j), (@nref $N A i))
                     collided[k] = true
                 end
             end
@@ -1653,7 +1653,7 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
                         j_d = i_d
                     end
                 end begin
-                    if (@nref $N A j) != (@nref $N A i)
+                    if !isequal((@nref $N A j), (@nref $N A i))
                         nowcollided[k] = true
                     end
                 end
