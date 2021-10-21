@@ -165,7 +165,8 @@ function show(io::IO, t::NamedTuple)
         typeinfo = get(io, :typeinfo, Any)
         print(io, "(")
         for i = 1:n
-            print(io, fieldname(typeof(t),i), " = ")
+            show_sym(io, fieldname(typeof(t), i))
+            print(io, " = ")
             show(IOContext(io, :typeinfo =>
                            t isa typeinfo <: NamedTuple ? fieldtype(typeinfo, i) : Any),
                  getfield(t, i))

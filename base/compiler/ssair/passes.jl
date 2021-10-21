@@ -449,10 +449,10 @@ function lift_comparison!(compact::IncrementalCompact, idx::Int,
     lifted_val = perform_lifting!(compact, visited_phinodes, cmp, lifting_cache, Bool, lifted_leaves, val)
     @assert lifted_val !== nothing
 
-    #global assertion_counter
-    #assertion_counter::Int += 1
-    #insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), lifted_val), nothing, 0, true)
-    #return
+    # global assertion_counter
+    # assertion_counter::Int += 1
+    # insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), lifted_val), nothing, 0, true)
+    # return
     compact[idx] = lifted_val.x
 end
 
@@ -734,17 +734,6 @@ function getfield_elim_pass!(ir::IRCode)
             result_t = make_MaybeUndef(result_t)
         end
 
-#        @Base.show result_t
-#        @Base.show stmt
-#        for (k,v) in lifted_leaves
-#            @Base.show (k, v)
-#            if isa(k, AnySSAValue)
-#                @Base.show compact[k]
-#            end
-#            if isa(v, RefValue) && isa(v.x, AnySSAValue)
-#                @Base.show compact[v.x]
-#            end
-#        end
         val = perform_lifting!(compact, visited_phinodes, field, lifting_cache, result_t, lifted_leaves, stmt.args[2])
 
         # Insert the undef check if necessary
@@ -761,8 +750,8 @@ function getfield_elim_pass!(ir::IRCode)
 
         # global assertion_counter
         # assertion_counter::Int += 1
-        #insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), val), nothing, 0, true)
-        #continue
+        # insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), val), nothing, 0, true)
+        # continue
         compact[idx] = val === nothing ? nothing : val.x
     end
 
@@ -894,7 +883,8 @@ function getfield_elim_pass!(ir::IRCode)
             ir[SSAValue(use)] = new_expr
         end
     end
-    ir
+
+    return ir
 end
 # assertion_counter = 0
 
@@ -935,7 +925,21 @@ end
 """
     adce_pass!(ir::IRCode) -> newir::IRCode
 
-Aggressive Dead Code Elimination pass to eliminate code.
+Aggressive Dead Code Elimination pass.
+
+In addition to a simple DCE for unused values and allocations,
+this pass also nullifies `typeassert` calls that can be proved to be no-op,
+in order to allow LLVM to emit simpler code down the road.
+
+Note that this pass is more effective after SROA optimization (i.e. `getfield_elim_pass!`),
+since SROA often allows this pass to:
+- eliminate allocation of object whose field references are all replaced with scalar values, and
+- nullify `typeassert` call whose first operand has been replaced with a scalar value
+  (, which may have introduced new type information that inference did not understand)
+
+Also note that currently this pass _needs_ to run after `getfield_elim_pass!`, because
+the `typeassert` elimination depends on the transformation within `getfield_elim_pass!`
+which redirects references of `typeassert`ed value to the corresponding `PiNode`.
 """
 function adce_pass!(ir::IRCode)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
@@ -944,6 +948,14 @@ function adce_pass!(ir::IRCode)
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
+        elseif isexpr(stmt, :call)
+            # nullify safe `typeassert` calls
+            if is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
+                ty, isexact = instanceof_tfunc(compact_exprtype(compact, stmt.args[3]))
+                if isexact && compact_exprtype(compact, stmt.args[2]) ⊑ ty
+                    compact[idx] = nothing
+                end
+            end
         end
     end
     non_dce_finish!(compact)
