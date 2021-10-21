@@ -7,7 +7,7 @@ const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), 
 
 """
 
-`tests, net_on, exit_on_error, seed = choosetests(choices)` selects a set of tests to be
+`(; tests, net_on, exit_on_error, seed) = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 
@@ -15,7 +15,7 @@ This function also supports "test collections": specifically, "linalg"
  refers to collections of tests in the correspondingly-named
 directories.
 
-Upon return:
+The function returns a named tuple with the following elements:
   - `tests` is a vector of fully-expanded test names,
   - `net_on` is true if networking is available (required for some tests),
   - `exit_on_error` is true if an error in one test should cancel
@@ -219,5 +219,5 @@ function choosetests(choices = [])
         empty!(tests)
     end
 
-    tests, net_on, exit_on_error, use_revise, seed
+    return (; tests, net_on, exit_on_error, use_revise, seed)
 end
