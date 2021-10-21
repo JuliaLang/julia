@@ -1226,13 +1226,18 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
 end
 
 
-fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
-    sort!(v, first(axes(v,1)), last(axes(v,1)), a, o)
+sort!(v::AbstractVector{Missing}, a::Algorithm, o::DirectOrdering) = v
+sort!(v::AbstractVector{<:Union{Float32, Missing}}, a::Algorithm, o::DirectOrdering) =
+    fpsort!(v, a, o)
+sort!(v::AbstractVector{<:Union{Float64, Missing}}, a::Algorithm, o::DirectOrdering) =
+    fpsort!(v, a, o)
 
-sort!(v::AbstractVector{<:Union{Floats, Missing}}, a::Algorithm, o::DirectOrdering) =
-    fpsort!(v,a,o)
-sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Union{Floats, Missing}}}) =
-    fpsort!(v,a,o)
+sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{Missing}}) = 
+    sort!(v, a, o.order)
+sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Union{Float32, Missing}}}) =
+    fpsort!(v, a, o)
+sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Union{Float64, Missing}}}) =
+    fpsort!(v, a, o)
 
 end # module Sort.Float
 
