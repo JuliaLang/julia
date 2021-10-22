@@ -1228,10 +1228,10 @@ end
 
 # Mixed Float32 and Float64 are not allowed.
 const VecMissingFloats = Union{
-    AbstractVector{Union{Float32, Missing}}, 
-    AbstractVector{Union{Float64, Missing}}, 
-    AbstractVector{Float32}, 
-    AbstractVector{Float64}, 
+    AbstractVector{Union{Float32, Missing}},
+    AbstractVector{Union{Float64, Missing}},
+    AbstractVector{Float32},
+    AbstractVector{Float64},
     AbstractVector{Missing}}
 sort!(v::VecMissingFloats, a::Algorithm, o::DirectOrdering) =
     fpsort!(v, a, o)
