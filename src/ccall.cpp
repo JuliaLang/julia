@@ -891,6 +891,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // copy module properties that should always match
     Mod->setTargetTriple(jl_Module->getTargetTriple());
     Mod->setDataLayout(jl_Module->getDataLayout());
+#if JL_LLVM_VERSION >= 130000
+    Mod->setOverrideStackAlignment(jl_Module->getOverrideStackAlignment());
+#endif
 
     // verify the definition
     Function *def = Mod->getFunction(ir_name);

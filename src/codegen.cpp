@@ -1707,6 +1707,14 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
             llvm::DEBUG_METADATA_VERSION);
     m->setDataLayout(jl_data_layout);
     m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
+
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION >= 130000
+    // tell Win32 to assume the stack is always 16-byte aligned,
+    // and to ensure that it is 16-byte aligned for out-going calls,
+    // to ensure compatibility with GCC codes
+    m->setOverrideStackAlignment(16);
+#endif
+
 }
 
 Module *jl_create_llvm_module(StringRef name)
@@ -8033,10 +8041,11 @@ extern "C" void jl_init_llvm(void)
 
     TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION < 130000
     // tell Win32 to assume the stack is always 16-byte aligned,
     // and to ensure that it is 16-byte aligned for out-going calls,
     // to ensure compatibility with GCC codes
+    // In LLVM 13 and onwards this has turned into a module option
     options.StackAlignmentOverride = 16;
 #endif
 #ifdef JL_DEBUG_BUILD
