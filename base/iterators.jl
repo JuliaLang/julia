@@ -22,7 +22,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition, partitionby
 
 """
     Iterators.map(f, iterators...)
@@ -1210,6 +1210,93 @@ function iterate(itr::PartitionIterator, state...)
     end
     i === 0 && return nothing
     return resize!(v, i), y === nothing ? IterationCutShort() : y[2]
+end
+
+"""
+    partitionby(collection, pred)
+
+Iterate over a collection in chunks where `pred` returns the same value.
+
+# Examples
+```jldoctest
+julia> map(collect, Iterators.partitionby([1,2,3,4,5], x->x>2))
+3-element Vector{Vector{Int64}}:
+ [1, 2]
+ [3, 4, 5]
+```
+"""
+function partitionby(c, pred)
+    return PartitionBy(c, pred)
+end
+
+# this turns an iterator and state into a new iterator
+# so you can start iterating right in the middle of it
+# this avoids repeated `dropwhile` overhead
+struct Tee{T, S}
+    it::T
+    st::S
+end
+
+IteratorSize(::Type{<:Tee{T}}) where T = SizeUnknown()
+IteratorEltype(::Type{<:Tee{T}}) where T = IteratorEltype(T)
+eltype(::Type{<:Tee{T}}) where T = eltype(T)
+
+function iterate(pb::Tee)
+    if pb.st === nothing
+        iterate(pb.it)
+    else
+        iterate(pb.it, pb.st)
+    end
+end
+
+function iterate(pb::Tee, st)
+    iterate(pb.it, st)
+end
+
+struct PartitionBy{T, F}
+    it::T
+    pred::F
+end
+
+IteratorSize(::Type{<:PartitionBy}) = SizeUnknown()
+IteratorEltype(::Type{<:PartitionBy{T}}) where T = IteratorEltype(T)
+eltype(::Type{<:PartitionBy{T}}) where T = Iterators.Take{Tee{T}}
+
+function partition_by(pb, next)
+    next === nothing && return nothing
+    (first, st) = next
+    fv = pb.pred(first)
+    state = nothing
+    len = 0
+    while next !== nothing
+        (i, newstate) = next
+        fv == pb.pred(i) || break
+        state = newstate
+        len += 1
+        next = iterate(pb.it, state)
+    end
+    state === nothing && return nothing
+    (state, len)
+end
+
+function iterate(pb::PartitionBy)
+    next = iterate(pb.it)
+    res = partition_by(pb, next)
+    res === nothing && return nothing
+    (st, len) = res
+    (Iterators.take(Tee(pb.it, nothing), len), st)
+end
+
+function iterate(pb::PartitionBy, st)
+    next = iterate(pb.it, st)
+    res = partition_by(pb, next)
+    res === nothing && return nothing
+    (ns, len) = res
+    (Iterators.take(Tee(pb.it, st), len), ns)
+end
+
+function Iterators.reverse(it::PartitionBy)
+    PartitionBy(Iterators.reverse(it.it), it.pred)
 end
 
 """

@@ -499,6 +499,33 @@ for n in [5,6]
           [(1,1),(2,2),(3,3),(4,4),(5,5)]
 end
 
+# partitionby(c, pred)
+let v = map(collect, partitionby([1,2,3,4,5], identity))
+    @test all(i->v[i][1] == i, v)
+end
+
+let v1 = map(collect, partitionby([1,2,3,4,5], x->x>2)),
+    v2 = map(collect, partitionby(flatten([[1,2],[3,4],5]), x->x>2)) # collecting partition with SizeUnkown
+    @test v1[1] == v2[1] == [1,2]
+    @test v1[2] == v2[2] == [3,4,5]
+end
+
+let v = map(collect, partitionby([1,2,3,4,5], x->x>2))
+    @test v[1] == [1,2]
+    @test v[2] == [3,4,3]
+end
+
+let v = map(collect, partitionby(enumerate([1,2,3,4,5]), ((i, x),)->i>3))
+    @test v[1] == [(1,1),(2,2),(3,3)]
+    @test v[2] == [(4,4),(5,5)]
+end
+
+for n in [5,6]
+    @test map(collect, partitionby([1,2,3,4,5], x->x>n))[1] == [1,2,3,4,5]
+    @test map(collect, partition(enumerate([1,2,3,4,5]), x->x[1]>n))[1] ==
+          [(1,1),(2,2),(3,3),(4,4),(5,5)]
+end
+
 function iterate_length(iter)
     n=0
     for i in iter
