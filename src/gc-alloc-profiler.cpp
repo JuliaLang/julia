@@ -373,7 +373,7 @@ void profile_serialize(ios_t *out, Serializer *serializer) {
 
     // print locations
     ios_printf(out, "  \"locations\":");
-    locations.print_json_array(out, "key", true);
+    locations.print_json_array(out, "loc", true);
     ios_printf(out, ",\n"); // end locations
 
     // print types
