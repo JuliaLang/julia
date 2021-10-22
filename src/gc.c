@@ -3461,14 +3461,21 @@ JL_DLLEXPORT void *jl_malloc(size_t sz)
     return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
 }
 
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
-{
+//_unchecked_calloc does not check for potential overflow of nm*sz
+STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) {
     size_t nmsz = nm*sz;
     int64_t *p = (int64_t *)jl_gc_counted_calloc(nmsz + JL_SMALL_BYTE_ALIGNMENT, 1);
     if (p == NULL)
         return NULL;
     p[0] = nmsz;
     return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
+}
+
+JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
+{
+    if (nm > SSIZE_MAX/sz - JL_SMALL_BYTE_ALIGNMENT)
+        return NULL;
+    return _unchecked_calloc(nm, sz);
 }
 
 JL_DLLEXPORT void jl_free(void *p)
