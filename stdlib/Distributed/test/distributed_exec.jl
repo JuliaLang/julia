@@ -132,7 +132,7 @@ end
 testf(id_me)
 testf(id_other)
 
-function poll_while(f::Function; timeout_seconds::Integer = 60)
+function poll_while(f::Function; timeout_seconds::Integer = 120)
     start_time = time_ns()
     while f()
         sleep(1)
