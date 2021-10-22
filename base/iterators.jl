@@ -1220,7 +1220,7 @@ Iterate over a collection in chunks where `pred` returns the same value.
 # Examples
 ```jldoctest
 julia> map(collect, Iterators.partitionby([1,2,3,4,5], x->x>2))
-3-element Vector{Vector{Int64}}:
+2-element Vector{Vector{Int64}}:
  [1, 2]
  [3, 4, 5]
 ```
