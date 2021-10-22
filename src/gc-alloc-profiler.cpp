@@ -300,9 +300,8 @@ vector<StackFrame> expand_stack(Serializer *serializer, RawBacktrace backtrace) 
             auto frame_label = frame.func_name;
             auto is_julia = ends_with(frame.file_name, ".jl") || frame.file_name == "top-level scope";
             auto actual_is_native = !is_julia;
-            auto is_stdlib = is_julia && starts_with(frame.file_name, "./");
 
-            if (actual_is_native || is_stdlib) {
+            if (actual_is_native) {
                 continue;
             }
 
