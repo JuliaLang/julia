@@ -1714,7 +1714,9 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
     // to ensure compatibility with GCC codes
     m->setOverrideStackAlignment(16);
 #endif
-
+#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION >= 130000
+    m->setStackProtectorGuard("global");
+#endif
 }
 
 Module *jl_create_llvm_module(StringRef name)
@@ -8048,7 +8050,7 @@ extern "C" void jl_init_llvm(void)
     // In LLVM 13 and onwards this has turned into a module option
     options.StackAlignmentOverride = 16;
 #endif
-#ifdef JL_DEBUG_BUILD
+#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION < 130000
     // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
     options.StackProtectorGuard = StackProtectorGuards::Global;
 #endif

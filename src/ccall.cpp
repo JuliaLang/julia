@@ -892,6 +892,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     Mod->setTargetTriple(jl_Module->getTargetTriple());
     Mod->setDataLayout(jl_Module->getDataLayout());
 #if JL_LLVM_VERSION >= 130000
+    Mod->setStackProtectorGuard(jl_Module->getStackProtectorGuard());
     Mod->setOverrideStackAlignment(jl_Module->getOverrideStackAlignment());
 #endif
 
