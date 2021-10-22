@@ -612,9 +612,11 @@ function fetch(r::Future)
         v_old, status = lock(r.lock) do
             @atomicreplace r.v nothing => Some(v_local)
         end
-        # status == true - when value obtained through call_on_owner
-        # status == false - other siuations replace fails, because by this time the cache will always be populated
+        # status == true - when value obtained through call_on_owner, put! done from a different worker
+        # status == false - any other situation: atomicreplace fails, because by the time the lock is obtained cache will be populated
         # why? put! performs caching and putting into channel under r.lock
+
+        # for local put! use the cached value, for call_on_owner cases just take the v_local as it was just cached in r.v
         v_cache = status ? v_local : v_old
     end
 
@@ -649,12 +651,12 @@ function put!(r::Future, v)
         rv = lookup_ref(rid)
         isready(rv) && error("Future can be set only once")
         lock(r.lock) do
-            put!(rv, v)
-            set_future_cache(r, v)
+            put!(rv, v) # this notifies the tasks waiting on the channel in fetch
+            set_future_cache(r, v) # set the cache before leaving the lock, so that the notified tasks already see it cached
         end
         del_client(rid, myid())
     else
-        lock(r.lock) do
+        lock(r.lock) do # same idea as above if there were any local tasks fetching on this Future
             call_on_owner(put_future, r, v, myid())
             set_future_cache(r, v)
         end
