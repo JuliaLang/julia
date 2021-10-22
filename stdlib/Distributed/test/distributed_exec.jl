@@ -267,7 +267,7 @@ let wid1 = workers()[1],
     fstore = RemoteChannel(wid2)
 
     put!(fstore, rr)
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    @test poll_while(() -> !remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid))
     finalize(rr) # finalize locally
     yield() # flush gc msgs
     @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
