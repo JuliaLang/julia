@@ -213,7 +213,7 @@ julia> @time begin
 """
 macro time(ex)
     quote
-        @compile
+        Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
@@ -260,7 +260,7 @@ pool allocs:       1
 """
 macro timev(ex)
     quote
-        @compile
+        Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
@@ -294,7 +294,7 @@ julia> @elapsed sleep(0.3)
 """
 macro elapsed(ex)
     quote
-        @compile
+        Experimental.@force_compile
         local t0 = time_ns()
         $(esc(ex))
         (time_ns() - t0) / 1e9
@@ -326,7 +326,7 @@ julia> @allocated rand(10^6)
 """
 macro allocated(ex)
     quote
-        @compile
+        Experimental.@force_compile
         local b0 = Ref{Int64}(0)
         local b1 = Ref{Int64}(0)
         gc_bytes(b0)
@@ -374,7 +374,7 @@ julia> stats.gcstats.total_time
 """
 macro timed(ex)
     quote
-        @compile
+        Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
