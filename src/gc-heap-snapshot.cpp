@@ -145,6 +145,10 @@ void _add_internal_root(HeapSnapshot *snapshot);
 
 
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream) {
+    // Do a full GC sweep, which will reset all of the mark bits
+    gc_num.pause = 0;  // Prevent a recollect here, which would cause incomplete results below.
+    jl_gc_collect(JL_GC_FULL);
+
     // Enable snapshotting
     HeapSnapshot snapshot;
     g_snapshot = &snapshot;
@@ -153,7 +157,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream) {
     _add_internal_root(&snapshot);
 
     // Do a full GC mark (and incremental sweep), which will invoke our callbacks on `g_snapshot`
-    jl_gc_collect(JL_GC_INCREMENTAL);
+    jl_gc_collect(JL_GC_FULL);
 
     // Disable snapshotting
     gc_heap_snapshot_enabled = false;
