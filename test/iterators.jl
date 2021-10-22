@@ -512,7 +512,7 @@ end
 
 let v = map(collect, partitionby([1,2,3,4,5], x->x>2))
     @test v[1] == [1,2]
-    @test v[2] == [3,4,3]
+    @test v[2] == [3,4,5]
 end
 
 let v = map(collect, partitionby(enumerate([1,2,3,4,5]), ((i, x),)->i>3))
@@ -522,7 +522,7 @@ end
 
 for n in [5,6]
     @test map(collect, partitionby([1,2,3,4,5], x->x>n))[1] == [1,2,3,4,5]
-    @test map(collect, partition(enumerate([1,2,3,4,5]), x->x[1]>n))[1] ==
+    @test map(collect, partitionby(enumerate([1,2,3,4,5]), x->x[1]>n))[1] ==
           [(1,1),(2,2),(3,3),(4,4),(5,5)]
 end
 
