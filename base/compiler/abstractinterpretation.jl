@@ -1240,8 +1240,12 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     const_prop_entry_heuristic(interp, result, sv) || return CallMeta(rt, InvokeCallInfo(match, nothing))
     argtypes′ = argtypes[3:end]
     argtypes′[1] = ft
-    fargs′ = fargs[3:end]
-    fargs′[1] = fargs[1]
+    if fargs === nothing
+        fargs′ = nothing
+    else
+        fargs′ = fargs[3:end]
+        fargs′[1] = fargs[1]
+    end
     arginfo = ArgInfo(fargs′, argtypes′)
     const_prop_argument_heuristic(interp, arginfo, sv) || return CallMeta(rt, InvokeCallInfo(match, nothing))
     # # typeintersect might have narrowed signature, but the accuracy gain doesn't seem worth the cost involved with the lattice comparisons

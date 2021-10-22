@@ -3285,6 +3285,11 @@ function splat_lotta_unions()
 end
 @test Core.Compiler.return_type(splat_lotta_unions, Tuple{}) >: Tuple{Int,Int,Int}
 
+# handle `fargs = nothing` edge cases
+@test (code_typed(; optimize=false) do
+    Core.Compiler.return_type(invoke, Tuple{typeof(sin), Type{Tuple{Integer}}, Int})
+end; true)
+
 # Bare Core.Argument in IR
 @eval f_bare_argument(x) = $(Core.Argument(2))
 @test Base.return_types(f_bare_argument, (Int,))[1] == Int
