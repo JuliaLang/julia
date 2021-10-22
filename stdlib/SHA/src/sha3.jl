@@ -71,7 +71,7 @@ function digest!(context::T) where {T<:SHA3_CTX}
         context.buffer[end] = 0x06
         transform!(context)
 
-        context.buffer[1:end-1] = 0x0
+        context.buffer[1:end-1] .= 0x0
         context.buffer[end] = 0x80
     end
 
