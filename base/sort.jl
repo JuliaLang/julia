@@ -1118,6 +1118,12 @@ import ..Sort: sort!
 import ...Order: lt, DirectOrdering
 
 const Floats = Union{Float32,Float64}
+const FPSortable = Union{ # Mixed Float32 and Float64 are not allowed.
+    AbstractVector{Union{Float32, Missing}},
+    AbstractVector{Union{Float64, Missing}},
+    AbstractVector{Float32},
+    AbstractVector{Float64},
+    AbstractVector{Missing}}
 
 struct Left <: Ordering end
 struct Right <: Ordering end
@@ -1144,7 +1150,7 @@ allowsmissing(::AbstractVector{Int},
               ::Perm{<:DirectOrdering,<:AbstractVector{T}}) where {T} =
     T >: Missing
 
-function specials2left!(testf::Function, v::AbstractVector, o::Ordering,
+function specials2left!(testf::Function, v::FPSortable, o::Ordering,
                         lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
     i = lo
     @inbounds while i <= hi && testf(o,v[i])
@@ -1160,7 +1166,7 @@ function specials2left!(testf::Function, v::AbstractVector, o::Ordering,
     end
     return i, hi
 end
-function specials2right!(testf::Function, v::AbstractVector, o::Ordering,
+function specials2right!(testf::Function, v::FPSortable, o::Ordering,
                          lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
     i = hi
     @inbounds while lo <= i && testf(o,v[i])
@@ -1177,7 +1183,7 @@ function specials2right!(testf::Function, v::AbstractVector, o::Ordering,
     return lo, i
 end
 
-function specials2left!(v::AbstractVector, a::Algorithm, o::Ordering)
+function specials2left!(v::FPSortable, a::Algorithm, o::Ordering)
     lo, hi = first(axes(v,1)), last(axes(v,1))
     if allowsmissing(v, o)
         i, _ = specials2left!((v, o) -> ismissing(v, o) || isnan(v, o), v, o, lo, hi)
@@ -1187,7 +1193,7 @@ function specials2left!(v::AbstractVector, a::Algorithm, o::Ordering)
         return specials2left!(isnan, v, o, lo, hi)
     end
 end
-function specials2right!(v::AbstractVector, a::Algorithm, o::Ordering)
+function specials2right!(v::FPSortable, a::Algorithm, o::Ordering)
     lo, hi = first(axes(v,1)), last(axes(v,1))
     if allowsmissing(v, o)
         _, i = specials2right!((v, o) -> ismissing(v, o) || isnan(v, o), v, o, lo, hi)
@@ -1198,9 +1204,9 @@ function specials2right!(v::AbstractVector, a::Algorithm, o::Ordering)
     end
 end
 
-specials2end!(v::AbstractVector, a::Algorithm, o::ForwardOrdering) =
+specials2end!(v::FPSortable, a::Algorithm, o::ForwardOrdering) =
     specials2right!(v, a, o)
-specials2end!(v::AbstractVector, a::Algorithm, o::ReverseOrdering) =
+specials2end!(v::FPSortable, a::Algorithm, o::ReverseOrdering) =
     specials2left!(v, a, o)
 specials2end!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:ForwardOrdering}) =
     specials2right!(v, a, o)
@@ -1211,7 +1217,7 @@ issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
 issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
-function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
+function fpsort!(v::FPSortable, a::Algorithm, o::Ordering)
     i, j = lo, hi = specials2end!(v,a,o)
     @inbounds while true
         while i <= j &&  issignleft(o,v[i]); i += 1; end
@@ -1225,17 +1231,9 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     return v
 end
 
-
-# Mixed Float32 and Float64 are not allowed.
-const VecMissingFloats = Union{
-    AbstractVector{Union{Float32, Missing}},
-    AbstractVector{Union{Float64, Missing}},
-    AbstractVector{Float32},
-    AbstractVector{Float64},
-    AbstractVector{Missing}}
-sort!(v::VecMissingFloats, a::Algorithm, o::DirectOrdering) =
+sort!(v::FPSortable, a::Algorithm, o::DirectOrdering) =
     fpsort!(v, a, o)
-sort!(v::AbstractVector{Integer}, a::Algorithm, o::Perm{<:DirectOrdering,<:VecMissingFloats}) =
+sort!(v::AbstractVector{Integer}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable}) =
     fpsort!(v, a, o)
 
 end # module Sort.Float
