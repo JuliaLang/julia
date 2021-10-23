@@ -334,8 +334,6 @@ string stack_frame_to_string(StackFrame frame) {
     return frame.total;
 }
 
-// === trie stuff ===
-
 void profile_serialize(ios_t *out, Serializer *serializer) {
     StringTable locations;
 
@@ -393,7 +391,24 @@ void profile_serialize(ios_t *out, Serializer *serializer) {
         print_str_escape_json(out, type.second);
         ios_printf(out, "}");
     }
-    ios_printf(out, "\n  ]\n");
+    ios_printf(out, "\n  ],\n");
+
+    // print frees
+    ios_printf(out, "  \"frees_by_type\":[\n");
+    auto first_free = true;
+    for (auto free : serializer->profile->frees_by_type_address) {
+        if (first_free) {
+            first_free = false;
+        } else {
+            ios_printf(out, ",\n");
+        }
+        
+        ios_printf(out, "    {");
+        ios_printf(out, "\"type_id\":\"%zu\"", free.first);
+        ios_printf(out, "\"count\":%zu", free.second);
+        ios_printf(out, "}");
+    }
+    ios_printf(out, "\n  ]\n"); // end frees by type
 
     ios_printf(out, "}\n");
 }
