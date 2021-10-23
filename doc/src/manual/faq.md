@@ -836,7 +836,7 @@ no values and no subtypes (except itself). You will generally not need to use th
 
 In Julia, `x += y` gets replaced during lowering by `x = x + y`. For arrays, this has the consequence
 that, rather than storing the result in the same location in memory as `x`, it allocates a new
-array to store the result. If you prefer to mutate `x`, use `x .+= y` to update each element 
+array to store the result. If you prefer to mutate `x`, use `x .+= y` to update each element
 individually.
 
 While this behavior might surprise some, the choice is deliberate. The main reason is the presence
@@ -870,7 +870,7 @@ After a call like `x = 5; y = power_by_squaring(x, 4)`, you would get the expect
     `x`, after the call you'd have (in general) `y != x`, but for mutable `x` you'd have `y == x`.
 
 Because supporting generic programming is deemed more important than potential performance optimizations
-that can be achieved by other means (e.g., using broadcasting or explicit loops), operators like `+=` and 
+that can be achieved by other means (e.g., using broadcasting or explicit loops), operators like `+=` and
 `*=` work by rebinding new values.
 
 ## [Asynchronous IO and concurrent synchronous writes](@id faq-async-io)
