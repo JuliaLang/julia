@@ -404,7 +404,7 @@ void profile_serialize(ios_t *out, Serializer *serializer) {
         }
         
         ios_printf(out, "    {");
-        ios_printf(out, "\"type_id\":\"%zu\"", free.first);
+        ios_printf(out, "\"type_id\":\"%zu\",", free.first);
         ios_printf(out, "\"count\":%zu", free.second);
         ios_printf(out, "}");
     }
@@ -472,6 +472,8 @@ void _record_allocated_value(jl_value_t *val, size_t size) {
 
     auto type = (jl_datatype_t*)jl_typeof(val);
     register_type_string(type);
+
+    profile->type_address_by_value_address[(size_t)val] = (size_t)type;
 
     // TODO: get stack, push into vector
     auto backtrace = get_raw_backtrace();
