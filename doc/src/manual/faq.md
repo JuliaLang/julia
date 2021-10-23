@@ -834,7 +834,7 @@ no values and no subtypes (except itself). You will generally not need to use th
 
 ### Why does `x += y` allocate memory when `x` and `y` are arrays?
 
-In Julia, `x += y` gets replaced during parsing by `x = x + y`. For arrays, this has the consequence
+In Julia, `x += y` gets replaced during lowering by `x = x + y`. For arrays, this has the consequence
 that, rather than storing the result in the same location in memory as `x`, it allocates a new
 array to store the result. If you prefer to mutate `x`, use `x .+= y` to update each element 
 individually.
