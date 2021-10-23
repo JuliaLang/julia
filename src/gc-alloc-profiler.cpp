@@ -37,6 +37,8 @@ struct AllocProfile {
 
     vector<Alloc> allocs;
     unordered_map<size_t, string> type_name_by_address;
+    unordered_map<size_t, size_t> type_address_by_value_address;
+    unordered_map<size_t, size_t> frees_by_type_address;
 
     size_t alloc_counter;
     size_t last_recorded_alloc;
@@ -464,6 +466,23 @@ void _record_allocated_value(jl_value_t *val, size_t size) {
         backtrace,
         size
     });
+}
+
+void _record_freed_value(jl_taggedvalue_t *tagged_val) {
+    jl_value_t *val = jl_valueof(tagged_val);
+    
+    auto value_address = (size_t)val;
+    auto type_address = g_alloc_profile->type_address_by_value_address.find(value_address);
+    if (type_address == g_alloc_profile->type_address_by_value_address.end()) {
+        return; // TODO: warn
+    }
+    auto frees = g_alloc_profile->frees_by_type_address.find(type_address->second);
+
+    if (frees == g_alloc_profile->frees_by_type_address.end()) {
+        g_alloc_profile->frees_by_type_address[type_address->second] = 1;
+    } else {
+        g_alloc_profile->frees_by_type_address[type_address->second] = frees->second + 1;
+    }
 }
 
 void _report_gc_started() {

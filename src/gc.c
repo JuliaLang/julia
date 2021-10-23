@@ -1325,6 +1325,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         while ((char*)v <= lim) {
             int bits = v->bits.gc;
             if (!gc_marked(bits)) {
+                record_freed_value(v);
                 *pfl = v;
                 pfl = &v->next;
                 pfl_begin = pfl_begin ? pfl_begin : pfl;
