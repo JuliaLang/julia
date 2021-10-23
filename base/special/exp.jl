@@ -337,7 +337,7 @@ See also [`exp2`](@ref), [`exp10`](@ref) and [`cis`](@ref).
 julia> exp(1.0)
 2.718281828459045
 
-julia> exp(im * pi) == cis(pi)
+julia> exp(im * pi) ≈ cis(pi)
 true
 ```
 """ exp(x::Real)
