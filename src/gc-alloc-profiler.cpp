@@ -53,7 +53,7 @@ struct Serializer {
 
 // https://stackoverflow.com/a/33799784/751061
 // TODO: dedup with heap snapshot, or rebase off of that branch
-void print_str_escape_json_(ios_t *stream, const string &s) {
+void print_str_escape_json(ios_t *stream, const string &s) {
     ios_printf(stream, "\"");
     for (auto c = s.cbegin(); c != s.cend(); c++) {
         switch (*c) {
@@ -110,7 +110,7 @@ struct StringTable {
             ios_printf(stream, "{\"id\":%zu", id);
             id++;
             ios_printf(stream, ",\"%s\":", key.c_str());
-            print_str_escape_json_(stream, str);
+            print_str_escape_json(stream, str);
             ios_printf(stream, "}");
         }
         ios_printf(stream, "]");
@@ -388,7 +388,7 @@ void profile_serialize(ios_t *out, Serializer *serializer) {
         ios_printf(out, "    {");
         ios_printf(out, "\"id\":\"%zu\",", type.first);
         ios_printf(out, "\"name\":");
-        print_str_escape_json_(out, type.second);
+        print_str_escape_json(out, type.second);
         ios_printf(out, "}");
     }
     ios_printf(out, "\n  ]\n");
