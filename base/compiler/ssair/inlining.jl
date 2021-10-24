@@ -1147,9 +1147,10 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
     return sig
 end
 
+# TODO inline non-`isdispatchtuple`, union-split callsites
 function analyze_single_call!(
     ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, @nospecialize(stmt),
-    sig::Signature, infos::Vector{MethodMatchInfo}, state::InliningState, flag::UInt8)
+    (; atypes, atype)::Signature, infos::Vector{MethodMatchInfo}, state::InliningState, flag::UInt8)
     cases = InliningCase[]
     local signature_union = Bottom
     local only_method = nothing  # keep track of whether there is one matching method
@@ -1181,7 +1182,7 @@ function analyze_single_call!(
                 fully_covered = false
                 continue
             end
-            item = analyze_method!(match, sig.atypes, state, flag)
+            item = analyze_method!(match, atypes, state, flag)
             if item === nothing
                 fully_covered = false
                 continue
@@ -1192,25 +1193,25 @@ function analyze_single_call!(
         end
     end
 
-    signature_fully_covered = sig.atype <: signature_union
-    # If we're fully covered and there's only one applicable method,
-    # we inline, even if the signature is not a dispatch tuple
-    if signature_fully_covered && length(cases) == 0 && only_method isa Method
-        if length(infos) > 1
-            (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any),
-                sig.atype, only_method.sig)::SimpleVector
-            match = MethodMatch(metharg, methsp, only_method, true)
-        else
-            meth = meth::MethodLookupResult
-            @assert length(meth) == 1
-            match = meth[1]
+    # if the signature is fully covered and there is only one applicable method,
+    # we can try to inline it even if the signature is not a dispatch tuple
+    if atype <: signature_union
+        if length(cases) == 0 && only_method isa Method
+            if length(infos) > 1
+                (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any),
+                    atype, only_method.sig)::SimpleVector
+                match = MethodMatch(metharg, methsp, only_method, true)
+            else
+                meth = meth::MethodLookupResult
+                @assert length(meth) == 1
+                match = meth[1]
+            end
+            item = analyze_method!(match, atypes, state, flag)
+            item === nothing && return
+            push!(cases, InliningCase(match.spec_types, item))
+            fully_covered = true
         end
-        fully_covered = true
-        item = analyze_method!(match, sig.atypes, state, flag)
-        item === nothing && return
-        push!(cases, InliningCase(match.spec_types, item))
-    end
-    if !signature_fully_covered
+    else
         fully_covered = false
     end
 
@@ -1219,36 +1220,81 @@ function analyze_single_call!(
     # onto the todo list
     if fully_covered && length(cases) == 1
         handle_single_case!(ir, stmt, idx, cases[1].item, false, todo)
-        return
+    elseif length(cases) > 0
+        push!(todo, idx=>UnionSplit(fully_covered, atype, cases))
     end
-    length(cases) == 0 && return
-    push!(todo, idx=>UnionSplit(fully_covered, sig.atype, cases))
     return nothing
 end
 
+# try to create `InliningCase`s using constant-prop'ed results
+# currently it works only when constant-prop' succeeded for all (union-split) signatures
+# TODO use any of constant-prop'ed results, and leave the other unhandled cases to later
+# TODO this function contains a lot of duplications with `analyze_single_call!`, factor them out
 function maybe_handle_const_call!(
-    ir::IRCode, idx::Int, stmt::Expr, info::ConstCallInfo, sig::Signature,
+    ir::IRCode, idx::Int, stmt::Expr, (; results)::ConstCallInfo, (; atypes, atype)::Signature,
     state::InliningState, flag::UInt8, isinvoke::Bool, todo::Vector{Pair{Int, Any}})
-    # when multiple matches are found, bail out and later inliner will union-split this signature
-    # TODO effectively use multiple constant analysis results here
-    length(info.results) == 1 || return false
-    result = info.results[1]
-    isa(result, InferenceResult) || return false
-
-    (; mi) = item = InliningTodo(result, sig.atypes)
-    validate_sparams(mi.sparam_vals) || return true
-    state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
-    if sig.atype <: mi.def.sig
-        handle_single_case!(ir, stmt, idx, item, isinvoke, todo)
-        return true
-    else
-        item === nothing && return true
-        # Union split out the error case
-        item = UnionSplit(false, sig.atype, InliningCase[InliningCase(mi.specTypes, item)])
-        isinvoke && rewrite_invoke_exprargs!(stmt)
-        push!(todo, idx=>item)
-        return true
+    cases = InliningCase[] # TODO avoid this allocation for single cases ?
+    local fully_covered = true
+    local signature_union = Bottom
+    for result in results
+        isa(result, InferenceResult) || return false
+        (; mi) = item = InliningTodo(result, atypes)
+        spec_types = mi.specTypes
+        signature_union = Union{signature_union, spec_types}
+        if !isdispatchtuple(spec_types)
+            fully_covered = false
+            continue
+        end
+        if !validate_sparams(mi.sparam_vals)
+            fully_covered = false
+            continue
+        end
+        state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
+        if item === nothing
+            fully_covered = false
+            continue
+        end
+        push!(cases, InliningCase(spec_types, item))
     end
+
+    # if the signature is fully covered and there is only one applicable method,
+    # we can try to inline it even if the signature is not a dispatch tuple
+    if atype <: signature_union
+        if length(cases) == 0 && length(results) == 1
+            (; mi) = item = InliningTodo(results[1]::InferenceResult, atypes)
+            state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
+            validate_sparams(mi.sparam_vals) || return true
+            item === nothing && return true
+            push!(cases, InliningCase(mi.specTypes, item))
+            fully_covered = true
+        end
+    else
+        fully_covered = false
+    end
+
+    # If we only have one case and that case is fully covered, we may either
+    # be able to do the inlining now (for constant cases), or push it directly
+    # onto the todo list
+    if fully_covered && length(cases) == 1
+        handle_single_case!(ir, stmt, idx, cases[1].item, isinvoke, todo)
+    elseif length(cases) > 0
+        isinvoke && rewrite_invoke_exprargs!(stmt)
+        push!(todo, idx=>UnionSplit(fully_covered, atype, cases))
+    end
+    return true
+end
+
+function handle_const_opaque_closure_call!(
+    ir::IRCode, idx::Int, stmt::Expr, (; results)::ConstCallInfo,
+    (; atypes)::Signature, state::InliningState, flag::UInt8, todo::Vector{Pair{Int, Any}})
+    @assert length(results) == 1
+    result = results[1]::InferenceResult
+    item = InliningTodo(result, atypes)
+    isdispatchtuple(item.mi.specTypes) || return
+    validate_sparams(item.mi.sparam_vals) || return
+    state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
+    handle_single_case!(ir, stmt, idx, item, false, todo)
+    return nothing
 end
 
 function assemble_inline_todo!(ir::IRCode, state::InliningState)
@@ -1283,18 +1329,25 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         # if inference arrived here with constant-prop'ed result(s),
         # we can perform a specialized analysis for just this case
         if isa(info, ConstCallInfo)
-            if !is_stmt_noinline(flag) && maybe_handle_const_call!(
-                ir, idx, stmt, info, sig,
-                state, flag, sig.f === Core.invoke, todo)
-                continue
+            if !is_stmt_noinline(flag)
+                if isa(info.call, OpaqueClosureCallInfo)
+                    handle_const_opaque_closure_call!(
+                        ir, idx, stmt, info,
+                        sig, state, flag, todo)
+                    continue
+                else
+                    maybe_handle_const_call!(
+                        ir, idx, stmt, info, sig,
+                        state, flag, sig.f === Core.invoke, todo) && continue
+                end
             else
                 info = info.call
             end
         end
 
         if isa(info, OpaqueClosureCallInfo)
-            result = analyze_method!(info.match, sig.atypes, state, flag)
-            handle_single_case!(ir, stmt, idx, result, false, todo)
+            item = analyze_method!(info.match, sig.atypes, state, flag)
+            handle_single_case!(ir, stmt, idx, item, false, todo)
             continue
         end
 
