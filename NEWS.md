@@ -22,6 +22,9 @@ Language changes
 * Newly created Task objects (`@spawn`, `@async`, etc.) now adopt the world-age for methods from their parent
   Task upon creation, instead of using the global latest world at start. This is done to enable inference to
   eventually optimize these calls. Places that wish for the old behavior may use `Base.invokelatest`. ([#41449])
+* `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
+  i.e. `@time "Evaluating foo" foo()` ([#42431])
+* New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
 
 Compiler/Runtime improvements
 -----------------------------
