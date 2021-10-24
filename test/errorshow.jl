@@ -701,6 +701,12 @@ let buf = IOBuffer()
     @test length(take!(buf)) !== 0
 end
 
+#42735
+let buf = IOBuffer()
+    Base.showerror(buf, Base.MethodError(convert, (Union{}, Float32[])))
+     @test occursin("MethodError: Converting to Union{} is not possible, check the stacktrace for more information.", String(take!(buf)))
+end
+
 # pr #32814
 let t1 = @async(error(1)),
     t2 = @async(wait(t1))
