@@ -1489,11 +1489,11 @@ For example, we can build a shorter representation in our `show` method
 when the `:compact` property is set to `true`, falling back to the long
 representation if the property is `false` or absent:
 ```jldoctest polartype
-julia> function Base.show(io::IO, z::Polar)
+julia> function Base.show(io::IO, ::MIME"text/plain", z::Polar{T}) where T
            if get(io, :compact, false)
                print(io, z.r, "ℯ", z.Θ, "im")
            else
-               print(io, z.r, " * exp(", z.Θ, "im)")
+               print(io, "Polar{$T} complex number:\n   ", z)
            end
        end
 ```
@@ -1502,7 +1502,7 @@ This new compact representation will be used when the passed IO stream is an `IO
 object with the `:compact` property set. In particular, this is the case when printing
 arrays with multiple columns (where horizontal space is limited):
 ```jldoctest polartype
-julia> show(IOContext(stdout, :compact=>true), Polar(3, 4.0))
+julia> show(IOContext(stdout, :compact=>true), MIME("text/plain"), Polar(3, 4.0))
 3.0ℯ4.0im
 
 julia> [Polar(3, 4.0) Polar(4.0,5.3)]
