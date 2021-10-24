@@ -1225,6 +1225,7 @@ end
     @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
+    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] foo()
 
 Starts a new test set, or multiple test sets if a `for` loop is provided.
 
@@ -1241,6 +1242,7 @@ nested testsets is shown even when they all pass (the default is `false`).
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
+If a function call is provided, its name will be used. Explicit description strings override this behavior.
 
 By default the `@testset` macro will return the testset object itself, though
 this behavior can be customized in other testset types. If a `for` loop is used
@@ -1275,24 +1277,29 @@ macro testset(args...)
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block)
-        error("Expected begin/end block or for loop as argument to @testset")
+    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block && tests.head != :call)
+
+        error("Expected function call, begin/end block or for loop as argument to @testset")
     end
 
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
     else
-        return testset_beginend(args, tests, __source__)
+        return testset_beginend_call(args, tests, __source__)
     end
 end
 
 """
-Generate the code for a `@testset` with a `begin`/`end` argument
+Generate the code for a `@testset` with a function call or `begin`/`end` argument
 """
-function testset_beginend(args, tests, source)
+function testset_beginend_call(args, tests, source)
     desc, testsettype, options = parse_testset_args(args[1:end-1])
     if desc === nothing
-        desc = "test set"
+        if tests.head === :call
+            desc = string(tests.args[1]) # use the function name as test name
+        else
+            desc = "test set"
+        end
     end
     # If we're at the top level we'll default to DefaultTestSet. Otherwise
     # default to the type of the parent testset
