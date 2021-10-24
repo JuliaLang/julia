@@ -7589,14 +7589,3 @@ end
 
 # avoid impossible normalization (don't try to form Tuple{Complex{String}} here)
 @test Tuple{Complex{T} where String<:T<:String} == Tuple{Complex{T} where String<:T<:String}
-
-# control over compilation/interpreter
-@test !occursin("interpreter", string(stacktrace(
-    begin
-        Base.Experimental.@force_compile
-        backtrace()
-    end, true)))
-@test  occursin("interpreter", string(stacktrace(
-    begin
-        backtrace()
-    end, true)))

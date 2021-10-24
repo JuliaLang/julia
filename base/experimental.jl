@@ -170,18 +170,17 @@ Force compilation of the block or function (Julia's built-in interpreter is bloc
 # Examples
 
 ```
-julia> occursin("interpreter", string(stacktrace(begin
-           # with forced compilation
-           Base.Experimental.@force_compile
-           backtrace()
-       end, true)))
-false
+module WithPrecompiles
+#=
+    code definitions
+=#
 
-julia> occursin("interpreter", string(stacktrace(begin
-           # without forced compilation
-           backtrace()
-       end, true)))
-true
+if Sys.iswindows()
+    Experimental.@compile
+    compile_me()  # `compile_me` will be compiled before execution
+end
+
+end
 ```
 """
 macro force_compile() Expr(:meta, :force_compile) end
