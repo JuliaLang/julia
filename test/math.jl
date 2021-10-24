@@ -1286,3 +1286,16 @@ end
         @test_throws MethodError f(x)
     end
 end
+
+@testset "fma" begin
+    @test fma(nextfloat(1.),nextfloat(1.),-1.0) === 4.440892098500626e-16
+    @test fma(nextfloat(1f0),nextfloat(1f0),-1f0) === 2.3841858f-7
+    for T in (Float32, Float64)
+        @test fma(floatmax(T), T(2), -floatmax(T)) === floatmax(T)
+        @test fma(floatmax(T), T(1), eps(floatmax((T)))) === T(Inf)
+        @test isnan_type(T, fma(T(Inf), T(1), -T(Inf)))
+        @test isnan_type(T, fma(T(Inf), T(0), -T(0)))
+    end
+    @test fma(floatmax(Float64), nextfloat(1.0), -floatmax(Float64)) === 3.991680619069439e292
+    @test fma(floatmax(Float32), nextfloat(1f0), -floatmax(Float32)) === 4.0564817f31
+end
