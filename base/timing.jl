@@ -254,6 +254,9 @@ end
 
 Like `@time` but also prints the expression being evaluated for reference.
 
+!!! compat "Julia 1.8"
+    This macro was added in Julia 1.8.
+
 See also [`@time`](@ref).
 
 ```julia-repl
