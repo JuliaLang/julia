@@ -177,37 +177,40 @@ to write "Hello World!" to `JL_STDOUT`. See [Libuv wrappers for stdio](@ref).:
 Hello World!
 ```
 
-| Stack frame                    | Source code     | Notes                                                |
-|:------------------------------ |:--------------- |:---------------------------------------------------- |
-| `jl_uv_write()`                | `jl_uv.c`       | called though [`ccall`](@ref)                        |
-| `julia_write_282942`           | `stream.jl`     | function `write!(s::IO, a::Array{T}) where T`        |
-| `julia_print_284639`           | `ascii.jl`      | `print(io::IO, s::String) = (write(io, s); nothing)` |
-| `jlcall_print_284639`          |                 |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_apply_generic()`           | `gf.c`          | `Base.print(Base.TTY, String)`                       |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_apply_generic()`           | `gf.c`          | `Base.print(Base.TTY, String, Char, Char...)`        |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_f_apply()`                 | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_apply_generic()`           | `gf.c`          | `Base.println(Base.TTY, String, String...)`          |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_apply_generic()`           | `gf.c`          | `Base.println(String,)`                              |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `do_call()`                    | `interpreter.c` |                                                      |
-| `eval_body()`                  | `interpreter.c` |                                                      |
-| `jl_interpret_toplevel_thunk`  | `interpreter.c` |                                                      |
-| `jl_toplevel_eval_flex`        | `toplevel.c`    |                                                      |
-| `jl_toplevel_eval_in`          | `toplevel.c`    |                                                      |
-| `Core.eval`                    | `boot.jl`       |                                                      |
+| Stack frame                   | Source file        | Notes                                                         |
+|:------------------------------|:-------------------|:--------------------------------------------------------------|
+| `jl_uv_write`                 | `jl_uv.c`          | called though [`ccall`](@ref)                                 |
+| `julia_uv_write_async_21396`  | `stream.jl`        | `Base.uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)` |
+| `julia_uv_write_35687`        | `stream.jl`        | `Base.uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)`       |
+| `julia_unsafe_write_20103`    | `stream.jl`        | `Base.unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)`   |
+| `write`                       | `strings/io.jl`    | `Base.write(io::IO, s::Union{String,SubString{String}})`      |
+| `print`                       | `strings/io.jl`    | `Base.print(io::IO, s::Union{String,SubString{String}})`      |
+| `japi1_print_42299`           | `strings/io.jl`    | `Base.print(io::IO, xs...)`                                   |
+| `jl_fptr_args`                | `gf.c`             |                                                               |
+| `_jl_invoke`                  | `gf.c`             |                                                               |
+| `jl_apply_generic`            | `gf.c`             | `print(::Base.TTY, ::String, ::Char)`                         |
+| `jl_apply`                    | `julia.h`          |                                                               |
+| `do_apply`                    | `builtins.c`       |                                                               |
+| `jl_f__apply_iterate`         | `builtins.c`       | `JL_CALLABLE(jl_f__apply_iterate)`                            |
+| `japi1_println_27966`         | `strings/io.jl`    | `Base.println(io::IO, xs...)`                                 |
+| `jl_fptr_args`                | `gf.c`             |                                                               |
+| `_jl_invoke`                  | `gf.c`             |                                                               |
+| `jl_apply_generic`            | `gf.c`             | `println(::Base.TTY, ::String)`                               |
+| `japi1_println_27976`         | `coreio.jl`        | `Base.println(xs...)`                                         |
+| `jl_fptr_args`                | `gf.c`             |                                                               |
+| `_jl_invoke`                  | `gf.c`             |                                                               |
+| `jl_apply_generic`            | `gf.c`             | `println(::String)`                                           |
+| `jl_apply`                    | `julia.h`          |                                                               |
+| `do_call`                     | `interpreter.c`    |                                                               |
+| `eval_value`                  | `interpreter.c`    |                                                               |
+| `eval_stmt_value`             | `interpreter.c`    |                                                               |
+| `eval_body`                   | `interpreter.c`    |                                                               |
+| `jl_interpret_toplevel_thunk` | `interpreter.c`    |                                                               |
+| `jl_toplevel_eval_flex`       | `toplevel.c`       |                                                               |
+| `jl_toplevel_eval_flex`       | `toplevel.c`       |                                                               |
+| `jl_toplevel_eval`            | `toplevel.c`       |                                                               |
+| `jl_toplevel_eval_in`         | `toplevel.c`       |                                                               |
+| `Core.eval`                   | `boot.jl`          | `Base.eval(m::Module, @nospecialize(e))`                      |
 
 Since our example has just one function call, which has done its job of printing "Hello World!",
 the stack now rapidly unwinds back to `repl_entrypoint()`.
