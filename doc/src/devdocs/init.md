@@ -57,7 +57,7 @@ object; initializes the global `jl_root_task` (`ptls->root_task`) struct; and se
 [`jl_init_flisp()`](https://github.com/JuliaLang/julia/blob/master/src/ast.c) loads and initializes
 a pre-compiled femtolisp image containing the scanner/parser.
 
-[`jl_init_serializer()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) initializes
+[`jl_init_serializer()`](https://github.com/JuliaLang/julia/blob/master/src/dump.c) initializes
 8-bit serialization tags for builtin `jl_value_t` values.
 
 If there is no sysimg file (`!jl_options.image_file`) then the `Core` and `Main` modules are
@@ -65,7 +65,7 @@ created and `boot.jl` is evaluated:
 
 `jl_core_module = jl_new_module(jl_symbol("Core"))` creates the Julia `Core` module.
 
-[`jl_init_intrinsic_functions()`](https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp)
+[`jl_init_intrinsic_functions()`](https://github.com/JuliaLang/julia/blob/master/src/builtins.cpp)
 creates a new Julia module `Intrinsics` containing constant `jl_intrinsic_type` symbols. These define
 an integer code for each [intrinsic function](https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp).
 [`emit_intrinsic()`](https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp) translates
