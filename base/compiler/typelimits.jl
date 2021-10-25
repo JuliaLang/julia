@@ -605,9 +605,7 @@ function tmeet(@nospecialize(v), @nospecialize(t))
             return v
         end
         ti = typeintersect(widev, t)
-        if ti === Bottom
-            return Bottom
-        end
+        valid_as_lattice(ti) || return Bottom
         @assert widev <: Tuple
         new_fields = Vector{Any}(undef, length(v.fields))
         for i = 1:length(new_fields)
@@ -628,5 +626,7 @@ function tmeet(@nospecialize(v), @nospecialize(t))
         end
         return v
     end
-    return typeintersect(widenconst(v), t)
+    ti = typeintersect(widenconst(v), t)
+    valid_as_lattice(ti) || return Bottom
+    return ti
 end

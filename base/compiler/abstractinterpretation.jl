@@ -806,26 +806,27 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     end
     if isa(tti, Union)
         utis = uniontypes(tti)
-        if _any(t -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
+        if _any(@nospecialize(t) -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
             return Any[Vararg{Any}], nothing
         end
-        result = Any[rewrap_unionall(p, tti0) for p in (utis[1]::DataType).parameters]
-        for t::DataType in utis[2:end]
-            if length(t.parameters) != length(result)
+        ltp = length((utis[1]::DataType).parameters)
+        for t in utis
+            if length((t::DataType).parameters) != ltp
                 return Any[Vararg{Any}], nothing
             end
-            for j in 1:length(t.parameters)
-                result[j] = tmerge(result[j], rewrap_unionall(t.parameters[j], tti0))
+        end
+        result = Any[ Union{} for _ in 1:ltp ]
+        for t in utis
+            tps = (t::DataType).parameters
+            _all(valid_as_lattice, tps) || continue
+            for j in 1:ltp
+                result[j] = tmerge(result[j], rewrap_unionall(tps[j], tti0))
             end
         end
         return result, nothing
     elseif tti0 <: Tuple
         if isa(tti0, DataType)
-            if isvatuple(tti0) && length(tti0.parameters) == 1
-                return Any[Vararg{unwrapva(tti0.parameters[1])}], nothing
-            else
-                return Any[ p for p in tti0.parameters ], nothing
-            end
+            return Any[ p for p in tti0.parameters ], nothing
         elseif !isa(tti, DataType)
             return Any[Vararg{Any}], nothing
         else
@@ -1121,6 +1122,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                     tty_lb = tty_ub # TODO: this would be wrong if !isexact_tty, but instanceof_tfunc doesn't preserve this info
                     if !has_free_typevars(tty_lb) && !has_free_typevars(tty_ub)
                         ifty = typeintersect(aty, tty_ub)
+                        valid_as_lattice(ifty) || (ifty = Union{})
                         elty = typesubtract(aty, tty_lb, InferenceParams(interp).MAX_UNION_SPLITTING)
                         return Conditional(a, ifty, elty)
                     end
