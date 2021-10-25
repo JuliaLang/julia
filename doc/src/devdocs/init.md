@@ -78,13 +78,13 @@ functions up to Julia function symbols. e.g. the symbol `Core.:(===)()` is bound
 [`jl_init_main_module()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) creates
 the global "Main" module and sets `jl_main_module->parent = jl_main_module`.
 
-[`jl_load("boot.jl", sizeof("boot.jl"))`](https://github.com/JuliaLang/julia/blob/master/src/init.c)
-calls [`jl_parse_eval_all`](https://github.com/JuliaLang/julia/blob/master/src/ast.c) which repeatedly
+[`jl_load(jl_core_module, "boot.jl")`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
+calls [`jl_parse_eval_all`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) which repeatedly
 calls [`jl_toplevel_eval_flex()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
 to execute [`boot.jl`](https://github.com/JuliaLang/julia/blob/master/base/boot.jl). <!-- TODO – drill
 down into eval? -->
 
-[`jl_get_builtin_hooks()`](https://github.com/JuliaLang/julia/blob/master/src/init.c) initializes
+[`post_boot_hooks()`](https://github.com/JuliaLang/julia/blob/master/src/init.c) initializes
 global C pointers to Julia globals defined in `boot.jl`.
 
 [`jl_init_box_caches()`](https://github.com/JuliaLang/julia/blob/master/src/datatype.c) pre-allocates
@@ -92,13 +92,13 @@ global boxed integer value objects for values up to 1024. This speeds up allocat
 later on. e.g.:
 
 ```c
-jl_value_t *jl_box_uint8(uint32_t x)
+jl_value_t *jl_box_uint8(uint8_t x)
 {
-    return boxed_uint8_cache[(uint8_t)x];
+    return jl_boxed_uint8_cache[x];
 }
 ```
 
-[`_julia_init()` iterates](https://github.com/JuliaLang/julia/blob/master/src/init.c) over the
+[`post_boot_hooks()` iterates](https://github.com/JuliaLang/julia/blob/master/src/init.c) over the
 `jl_core_module->bindings.table` looking for `jl_datatype_t` values and sets the type name's module
 prefix to `jl_core_module`.
 
@@ -115,7 +115,7 @@ hooked up to [`sigdie_handler()`](https://github.com/JuliaLang/julia/blob/master
 which prints a backtrace.
 
 [`jl_init_restored_modules()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) calls
-[`jl_module_run_initializer()`](https://github.com/JuliaLang/julia/blob/master/src/module.c) for
+[`jl_module_run_initializer()`](https://github.com/JuliaLang/julia/blob/master/src/init.c) for
 each deserialized module to run the `__init__()` function.
 
 Finally [`sigint_handler()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c)
