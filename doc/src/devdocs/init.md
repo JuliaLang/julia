@@ -51,8 +51,8 @@ jl_int32_type = jl_new_primitivetype(jl_symbol("Int32"), core,
 [`jl_init_codegen()`](https://github.com/JuliaLang/julia/blob/master/src/codegen.cpp) initializes
 the [LLVM library](http://llvm.org).
 
-[`jl_init_tasks()`](https://github.com/JuliaLang/julia/blob/master/src/task.c) creates the `jl_datatype_t* jl_task_type`
-object; initializes the global `jl_root_task` struct; and sets `jl_current_task` to the root task.
+[`jl_init_root_task()`](https://github.com/JuliaLang/julia/blob/master/src/task.c) creates the `jl_datatype_t* jl_task_type`
+object; initializes the global `jl_root_task` (`ptls->root_task`) struct; and sets `jl_current_task` (`ptls->current_task`) to the root task.
 
 [`jl_init_flisp()`](https://github.com/JuliaLang/julia/blob/master/src/ast.c) loads and initializes
 a pre-compiled femtolisp image containing the scanner/parser.
