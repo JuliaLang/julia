@@ -75,8 +75,8 @@ these symbols into LLVM instructions during code generation.
 functions up to Julia function symbols. e.g. the symbol `Core.:(===)()` is bound to C function pointer
 `jl_f_is()` by calling `add_builtin_func("===", jl_f_is)`.
 
-[`jl_new_main_module()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) creates
-the global "Main" module and sets `jl_current_task->current_module = jl_main_module`.
+[`jl_init_main_module()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) creates
+the global "Main" module and sets `jl_main_module->parent = jl_main_module`.
 
 Note: `_julia_init()` [then sets](https://github.com/JuliaLang/julia/blob/master/src/init.c) `jl_root_task->current_module = jl_core_module`.
 `jl_root_task` is an alias of `jl_current_task` at this point, so the `current_module` set by `jl_new_main_module()`
