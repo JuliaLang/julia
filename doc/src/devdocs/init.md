@@ -21,7 +21,7 @@ or early initialization. Other options are handled later by [`exec_options()` in
 ## `julia_init()`
 
 [`julia_init()` in `task.c`](https://github.com/JuliaLang/julia/blob/master/src/task.c) is called
-by `main()` and calls [`_julia_init()` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c).
+by `repl_entrypoint()` and calls [`_julia_init()` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c).
 
 `_julia_init()` begins by calling `libsupport_init()` again (it does nothing the second time).
 
@@ -77,6 +77,7 @@ functions up to Julia function symbols. e.g. the symbol `Core.:(===)()` is bound
 
 [`jl_init_main_module()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) creates
 the global "Main" module and sets `jl_main_module->parent = jl_main_module`.
+This function also does "using Base" in the "Main" module.
 
 [`jl_load(jl_core_module, "boot.jl")`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
 calls [`jl_parse_eval_all`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) which repeatedly
@@ -102,27 +103,22 @@ jl_value_t *jl_box_uint8(uint8_t x)
 `jl_core_module->bindings.table` looking for `jl_datatype_t` values and sets the type name's module
 prefix to `jl_core_module`.
 
-[`jl_add_standard_imports(jl_main_module)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
-does "using Base" in the "Main" module.
+[`jl_install_default_signal_handlers()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c)
+initialize Platform specific signal handlers for `SIGSEGV` (OSX, Linux), and `SIGFPE` (Windows).
 
-Note: `_julia_init()` now reverts to `jl_root_task->current_module = jl_main_module` as it was
-before being set to `jl_core_module` above.
-
-Platform specific signal handlers are initialized for `SIGSEGV` (OSX, Linux), and `SIGFPE` (Windows).
+[`sigint_handler()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c)
+is hooked up to `SIGINT` and calls `jl_throw(jl_interrupt_exception)`.
 
 Other signals (`SIGINFO, SIGBUS, SIGILL, SIGTERM, SIGABRT, SIGQUIT, SIGSYS` and `SIGPIPE`) are
 hooked up to [`sigdie_handler()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c)
 which prints a backtrace.
 
-[`jl_init_restored_modules()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) calls
-[`jl_module_run_initializer()`](https://github.com/JuliaLang/julia/blob/master/src/init.c) for
-each deserialized module to run the `__init__()` function.
+For each deserialized module [`jl_module_run_initializer()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
+run the `__init__()` function.
 
-Finally [`sigint_handler()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c)
-is hooked up to `SIGINT` and calls `jl_throw(jl_interrupt_exception)`.
 
-`_julia_init()` then returns [back to `main()` in `cli/loader_exe.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_exe.c)
-and `main()` calls `repl_entrypoint(argc, (char**)argv)`.
+`_julia_init()` then returns back to [`repl_entrypoint()` in `src/jlapi.c`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c)
+and `repl_entrypoint()` calls [`true_main(argc, (char**)argv)`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c).
 
 !!! sidebar "sysimg"
     If there is a sysimg file, it contains a pre-cooked image of the `Core` and `Main` modules (and
