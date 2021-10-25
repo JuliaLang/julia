@@ -992,6 +992,7 @@ export
 
     # profiling
     @time,
+    @showtime,
     @timed,
     @timev,
     @elapsed,
