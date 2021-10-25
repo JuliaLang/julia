@@ -77,7 +77,7 @@ type:
 
     Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 
-The default is [`IndexCartesian()`](@ref), unless the input's dimension is explicitly less than 2.
+The default is [`IndexCartesian()`](@ref), unless the input's dimension is explicitly 1.
 
 Julia's internal indexing machinery will automatically (and invisibly)
 recompute all indexing operations into the preferred style. This allows users
@@ -99,10 +99,8 @@ on the setting of this trait.
 """
 IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
 IndexStyle(::Type{Union{}}) = IndexLinear()
-_islinear(::Type{<:AbstractArray}) = false
-_islinear(::Type{<:AbstractArray{<:Any, 0}}) = true
-_islinear(::Type{<:AbstractArray{<:Any, 1}}) = true
-IndexStyle(::Type{T}) where {T<:AbstractArray} = _islinear(T) ? IndexLinear() : IndexCartesian()
+IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
+IndexStyle(::Type{<:AbstractArray{<:Any, 1}}) = IndexLinear()
 IndexStyle(::Type{<:Array}) = IndexLinear()
 
 IndexStyle(A::AbstractArray, B::AbstractArray) = IndexStyle(IndexStyle(A), IndexStyle(B))
