@@ -89,7 +89,7 @@ OPENLIBM_VER := 0.7.3
 OPENLIBM_JLL_NAME := OpenLibm
 
 # Patchelf (we don't ship this or even use a JLL, we just always build it)
-PATCHELF_VER := 0.9
+PATCHELF_VER := 0.13
 
 # p7zip
 P7ZIP_VER := 16.2.0
