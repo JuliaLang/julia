@@ -359,25 +359,24 @@ end
 end
 
 function fma_emulated(a::Float64, b::Float64,c::Float64)
-    abhi, ablo = twomul(a,b)
-    signab = sign(abhi)
-    if abhi == signab*Inf #rethink our life choices
-        if sign(c) == signab  || abhi == 0.0
-            return signab * Inf
-        else #compute a*b+c = a*(b+c/a)
-            inva = inv(a)
-            aochi = c * inva
-            aoclo = fma_emulated(-aochi, a, c) * inva # Yes this is recursive. Bite me
-            aocpbhi = b + aochi
-            aocpblo = (b-aocpbhi+aochi+aoclo)
-            reshi,reslo = twomul(aocpbhi, a)
-            return reshi + (reslo+a*aocpblo)
-        end
+    absab = abs(a*b)
+    if !isfinite(absab) || issubnormal(absab) || issubnormal(a) || issubnormal(b) || iszero(a)
+        !(isfinite(a) && isfinite(b) && isfinite(c)) && return a*b+c
+        iszero(a) || iszero(b) && return a*b+c
+        a_norm = reinterpret(Float64, reinterpret(UInt64, a) & 0xc00fffffffffffff)
+        b_norm = reinterpret(Float64, reinterpret(UInt64, b) & 0xc00fffffffffffff)
+        abhi, ablo = twomul(a_norm,b_norm)
+        bias = exponent(a) + exponent(b)
+        c_denorm = ldexp(c, bias)
+        isfinite(c_denorm) && return ldexp(fma_emulated(a_norm, b_norm, c_denorm), -bias)
+        c_denorm = ldexp(c, bias-54)
+        isfinite(c_denorm) && return ldexp(fma_emulated(ldexp(a_norm, -54), b_norm, c_denorm), bias+54)
+        return a*b+c
     end
+    abhi, ablo = twomul(a,b)
     r = abhi+c
     s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
-    zh = r+s
-    return zh
+    return r+s
 end
 fma_llvm(x::Float32, y::Float32, z::Float32) = fma_float(x, y, z)
 fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)

@@ -1297,7 +1297,7 @@ end
             @test fma(T(Inf), T(Inf), T(Inf)) === T(Inf)
             @test isnan_type(T, fma(T(Inf), T(1), -T(Inf)))
             @test isnan_type(T, fma(T(Inf), T(0), -T(0)))
-
+            @test fma(-zero(T), zero(T), -zero(T)) === -zero(T)
         end
         @test fma(floatmax(Float64), nextfloat(1.0), -floatmax(Float64)) === 3.991680619069439e292
         @test fma(floatmax(Float32), nextfloat(1f0), -floatmax(Float32)) === 4.0564817f31
@@ -1305,7 +1305,7 @@ end
         @test fma(-2., 1.6341681540852291e308, floatmax(Float64)) == -1.4706431733081426e308 # case where inv(b)*c*b == Inf
         for _ in 1:2^18
             a, b, c = reinterpret.(Float64, rand(-4503599627370497:9218868437227405311, 3))
-            @test Base.fma_emulated(a, b, c) === fma(a, b, c) || a,b,c
+            @test Base.fma_emulated(a, b, c) === fma(a, b, c) || (a,b,c)
         end
     end
 end
