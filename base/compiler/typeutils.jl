@@ -4,13 +4,6 @@
 # lattice utilities #
 #####################
 
-function rewrap(@nospecialize(t), @nospecialize(u))
-    if isa(t, TypeVar) || isa(t, Type) || isvarargtype(t)
-        return rewrap_unionall(t, u)
-    end
-    return t
-end
-
 isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 # true if Type{T} is inlineable as constant T
@@ -41,8 +34,6 @@ function has_nontrivial_const_info(@nospecialize t)
 end
 
 has_const_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
-
-has_concrete_subtype(d::DataType) = d.flags & 0x20 == 0x20
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
@@ -89,6 +80,30 @@ function datatype_min_ninitialized(t::DataType)
     return length(t.name.names) - t.name.n_uninitialized
 end
 
+has_concrete_subtype(d::DataType) = d.flags & 0x20 == 0x20 # n.b. often computed only after setting the type and layout fields
+
+# determine whether x is a valid lattice element tag
+# For example, Type{v} is not valid if v is a value
+# Accepts TypeVars also, since it assumes the user will rewrap it correctly
+function valid_as_lattice(@nospecialize(x))
+    x === Bottom && false
+    x isa TypeVar && return valid_as_lattice(x.ub)
+    x isa UnionAll && (x = unwrap_unionall(x))
+    if x isa Union
+        # the Union constructor ensures this (and we'll recheck after
+        # operations that might remove the Union itself)
+        return true
+    end
+    if x isa DataType
+        if isType(x)
+            p = x.parameters[1]
+            p isa Type || p isa TypeVar || return false
+        end
+        return true
+    end
+    return false
+end
+
 # test if non-Type, non-TypeVar `x` can be used to parameterize a type
 function valid_tparam(@nospecialize(x))
     if isa(x, Tuple)
@@ -119,8 +134,10 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
     end
     ua = unwrap_unionall(a)
     if isa(ua, Union)
-        return Union{typesubtract(rewrap_unionall(ua.a, a), b, MAX_UNION_SPLITTING),
-                     typesubtract(rewrap_unionall(ua.b, a), b, MAX_UNION_SPLITTING)}
+        uua = typesubtract(rewrap_unionall(ua.a, a), b, MAX_UNION_SPLITTING)
+        uub = typesubtract(rewrap_unionall(ua.b, a), b, MAX_UNION_SPLITTING)
+        return Union{valid_as_lattice(uua) ? uua : Union{},
+                     valid_as_lattice(uub) ? uub : Union{}}
     elseif a isa DataType
         ub = unwrap_unionall(b)
         if ub isa DataType
@@ -258,15 +275,6 @@ end
 unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body)::Int, unioncomplexity(u.var.ub)::Int)
 unioncomplexity(t::TypeofVararg) = isdefined(t, :T) ? unioncomplexity(t.T)::Int : 0
 unioncomplexity(@nospecialize(x)) = 0
-
-function improvable_via_constant_propagation(@nospecialize(t))
-    if isconcretetype(t) && t <: Tuple
-        for p in t.parameters
-            p === DataType && return true
-        end
-    end
-    return false
-end
 
 # convert a Union of Tuple types to a Tuple of Unions
 function unswitchtupleunion(u::Union)
