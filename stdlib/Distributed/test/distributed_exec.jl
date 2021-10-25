@@ -144,6 +144,27 @@ function poll_while(f::Function; timeout_seconds::Integer = 120)
     return true
 end
 
+function _getenv_include_thread_unsafe()
+    environment_variable_name = "JULIA_TEST_INCLUDE_THREAD_UNSAFE"
+    default_value = "false"
+    environment_variable_value = strip(get(ENV, environment_variable_name, default_value))
+    b = parse(Bool, environment_variable_value)::Bool
+    return b
+end
+const _env_include_thread_unsafe = _getenv_include_thread_unsafe()
+function include_thread_unsafe()
+    if Threads.nthreads() > 1
+        if _env_include_thread_unsafe
+            return true
+        end
+        msg = "Skipping a thread-unsafe test because `Threads.nthreads() > 1`"
+        @warn msg Threads.nthreads()
+        Test.@test_broken false
+        return false
+    end
+    return true
+end
+
 # Distributed GC tests for Futures
 function test_futures_dgc(id)
     f = remotecall(myid, id)
@@ -267,7 +288,9 @@ let wid1 = workers()[1],
     fstore = RemoteChannel(wid2)
 
     put!(fstore, rr)
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    if include_thread_unsafe()
+        @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    end
     finalize(rr) # finalize locally
     yield() # flush gc msgs
     @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
