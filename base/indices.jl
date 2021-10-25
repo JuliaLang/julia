@@ -100,7 +100,8 @@ on the setting of this trait.
 IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
 IndexStyle(::Type{Union{}}) = IndexLinear()
 _islinear(::Type{<:AbstractArray}) = false
-_islinear(::Type{<:Union{AbstractVector, AbstractZeroDimArray}}) = true
+_islinear(::Type{<:AbstractArray{<:Any, 0}}) = true
+_islinear(::Type{<:AbstractArray{<:Any, 1}}) = true
 IndexStyle(::Type{T}) where {T<:AbstractArray} = _islinear(T) ? IndexLinear() : IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
 
