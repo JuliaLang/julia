@@ -346,25 +346,22 @@ function fma_emulated(a::Float32, b::Float32, c::Float32)
     return Float32(Float64(a) * Float64(b) + Float64(c))
 end
 
-@inline function splitbits(x::Float64)
-    xhi = reinterpret(Float64, reinterpret(UInt64, x) & 0xfffffffffc000000)
-    xlo = x-xhi
-    return xhi,xlo
-end
-
 @inline function twomul(a::Float64, b::Float64)
-    ahi, alo = splitbits(a)
-    bhi, blo = splitbits(b)
-    abhi = ahi*bhi
-    ablo = alo*blo + ahi*blo + alo*bhi
-    return abhi, ablo
+    ahi = reinterpret(Float64, reinterpret(UInt64, a) & 0xffff_ffff_f800_0000)
+    alo = a-ahi
+    bhi = reinterpret(Float64, reinterpret(UInt64, b) & 0xffff_ffff_f800_0000)
+    blo = b-bhi
+    abhi = a*b
+    blohi = reinterpret(Float64, reinterpret(UInt64, blo) & 0xffff_ffff_f800_0000)
+    blolo = blo-blohi
+    ablo = alo*blohi - (((abhi - ahi*bhi) - alo*bhi) - ahi*blo) + blolo*alo
+    return abhi, ifelse(isfinite(abhi), ablo, abhi)
 end
 
 function fma_emulated(a::Float64, b::Float64,c::Float64)
     abhi, ablo = twomul(a,b)
-    abhitemp = abhi+ablo
     signab = sign(abhi)
-    if abhitemp == signab*Inf #rethink our life choices
+    if abhi == signab*Inf #rethink our life choices
         if sign(c) == signab  || abhi == 0.0
             return signab * Inf
         else #compute a*b+c = a*(b+c/a)
@@ -377,7 +374,6 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             return reshi + (reslo+a*aocpblo)
         end
     end
-    ablo = abhitemp - abhi
     r = abhi+c
     s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
     zh = r+s
