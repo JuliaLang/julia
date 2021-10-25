@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-b0475c92-f7c3-4414-b7e4-65f3950faabd",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-cc8b3e09-5f9b-4745-94da-e48e2389fa6e",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-19T05:42:33Z"
+        "created": "2021-10-25T03:39:11Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -270,6 +270,18 @@
             "summary": "PCRE2 is a library of functions to support regular expressions whose syntax and semantics are as close as possible to those of the Perl 5 language."
         },
         {
+            "name": "LibSuiteSparse",
+            "SPDXID": "SPDXRef-LibSuiteSparse",
+            "downloadLocation": "git+https://github.com/DrTimothyAldenDavis/SuiteSparse",
+            "filesAnalyzed": false,
+            "homepage": "https://people.engr.tamu.edu/davis/suitesparse.html",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "NOASSERTION",
+            "licenseDeclared": "NOASSERTION",
+            "copyrightText": "",
+            "summary": "The official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
+        },
+        {
             "name": "libunwind",
             "SPDXID": "SPDXRef-libunwind",
             "downloadLocation": "git+https://github.com/libunwind/libunwind.git",
@@ -447,6 +459,11 @@
         },
         {
             "spdxElementId": "SPDXRef-PCRE",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-LibSuiteSparse",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
