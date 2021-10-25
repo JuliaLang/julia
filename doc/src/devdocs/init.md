@@ -131,18 +131,18 @@ and `repl_entrypoint()` calls [`true_main(argc, (char**)argv)`](https://github.c
     Note: [`jl_restore_system_image()` (and `staticdata.c` in general)](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c)
     uses the [Legacy `ios.c` library](@ref).
 
-## `repl_entrypoint()`
+## `true_main()`
 
-[`repl_entrypoint()`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c) loads the contents of
+[`jl_set_ARGS`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c) loads the contents of
 `argv[]` into [`Base.ARGS`](@ref).
 
 If a `.jl` "program" file was supplied on the command line, then [`exec_program()`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c)
-calls [`jl_load(program,len)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) which
-calls [`jl_parse_eval_all`](https://github.com/JuliaLang/julia/blob/master/src/ast.c) which repeatedly
+calls [`jl_load(jl_main_module, program)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) which
+calls [`jl_parse_eval_all`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) which repeatedly
 calls [`jl_toplevel_eval_flex()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
 to execute the program.
 
-However, in our example (`julia -e 'println("Hello World!")'`), [`jl_get_global(jl_base_module, jl_symbol("_start"))`](https://github.com/JuliaLang/julia/blob/master/src/module.c)
+However, in our example (`julia -e 'println("Hello World!")'`), [`jl_get_global(jl_base_module, jl_symbol("_start"))`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c)
 looks up [`Base._start`](https://github.com/JuliaLang/julia/blob/master/base/client.jl) and [`jl_apply()`](https://github.com/JuliaLang/julia/blob/master/src/julia.h)
 executes it.
 
