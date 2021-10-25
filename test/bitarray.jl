@@ -1748,3 +1748,14 @@ end
         @test test_equivalence(n)
     end
 end
+
+@testset "fill! for BitArray with contiguous view (#42795)" begin
+    bitvector = trues(10)
+    bitarray  = trues(10, 10)
+    for range in (1:5, 5:10)
+        viewvector = view(bitvector, range)
+        viewarray  = view(bitarray, range, range)
+        @test which(fill!, (typeof(viewvector), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, Any}
+        @test which(fill!, (typeof(viewarray), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, Any}
+    end
+end
