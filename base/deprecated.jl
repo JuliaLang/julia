@@ -263,3 +263,10 @@ end
 @deprecate catch_stack(task=current_task(); include_bt=true) current_exceptions(task; backtrace=include_bt) false
 
 # END 1.7 deprecations
+
+# BEGIN 1.8 deprecations
+
+@deprecate var"@_inline_meta"   var"@inline"   false
+@deprecate var"@_noinline_meta" var"@noinline" false
+
+# END 1.8 deprecations

@@ -109,7 +109,7 @@ function eof(s::LibuvStream)
     # and that we won't return true if there's a readerror pending (it'll instead get thrown).
     # This requires some careful ordering here (TODO: atomic loads)
     bytesavailable(s) > 0 && return false
-    open = isopen(s) # must precede readerror check
+    open = isreadable(s) # must precede readerror check
     s.readerror === nothing || throw(s.readerror)
     return !open
 end
@@ -270,6 +270,7 @@ show(io::IO, stream::LibuvStream) = print(io, typeof(stream), "(",
 function isreadable(io::LibuvStream)
     bytesavailable(io) > 0 && return true
     isopen(io) || return false
+    io.status == StatusEOF && return false
     return ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), io.handle) != 0
 end
 
@@ -282,6 +283,7 @@ end
 lock(s::LibuvStream) = lock(s.lock)
 unlock(s::LibuvStream) = unlock(s.lock)
 
+setup_stdio(stream::LibuvStream, ::Bool) = (stream, false)
 rawhandle(stream::LibuvStream) = stream.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, s::Union{LibuvStream, LibuvServer}) = s.handle
 
@@ -378,7 +380,7 @@ function isopen(x::Union{LibuvStream, LibuvServer})
     if x.status == StatusUninit || x.status == StatusInit
         throw(ArgumentError("$x is not initialized"))
     end
-    return x.status != StatusClosed && x.status != StatusEOF
+    return x.status != StatusClosed
 end
 
 function check_open(x::Union{LibuvStream, LibuvServer})
@@ -390,13 +392,13 @@ end
 function wait_readnb(x::LibuvStream, nb::Int)
     # fast path before iolock acquire
     bytesavailable(x.buffer) >= nb && return
-    open = isopen(x) # must precede readerror check
+    open = isopen(x) && x.status != StatusEOF # must precede readerror check
     x.readerror === nothing || throw(x.readerror)
     open || return
     iolock_begin()
     # repeat fast path after iolock acquire, before other expensive work
     bytesavailable(x.buffer) >= nb && (iolock_end(); return)
-    open = isopen(x)
+    open = isopen(x) && x.status != StatusEOF
     x.readerror === nothing || throw(x.readerror)
     open || (iolock_end(); return)
     # now do the "real" work
@@ -407,6 +409,7 @@ function wait_readnb(x::LibuvStream, nb::Int)
         while bytesavailable(x.buffer) < nb
             x.readerror === nothing || throw(x.readerror)
             isopen(x) || break
+            x.status != StatusEOF || break
             x.throttle = max(nb, x.throttle)
             start_reading(x) # ensure we are reading
             iolock_end()
@@ -431,6 +434,52 @@ function wait_readnb(x::LibuvStream, nb::Int)
     nothing
 end
 
+function closewrite(s::LibuvStream)
+    iolock_begin()
+    check_open(s)
+    req = Libc.malloc(_sizeof_uv_shutdown)
+    uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
+    err = ccall(:uv_shutdown, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                req, s, @cfunction(uv_shutdowncb_task, Cvoid, (Ptr{Cvoid}, Cint)))
+    if err < 0
+        Libc.free(req)
+        uv_error("shutdown", err)
+    end
+    ct = current_task()
+    preserve_handle(ct)
+    sigatomic_begin()
+    uv_req_set_data(req, ct)
+    iolock_end()
+    status = try
+        sigatomic_end()
+        wait()::Cint
+    finally
+        # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
+        sigatomic_end()
+        iolock_begin()
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        if uv_req_data(req) != C_NULL
+            # req is still alive,
+            # so make sure we won't get spurious notifications later
+            uv_req_set_data(req, C_NULL)
+        else
+            # done with req
+            Libc.free(req)
+        end
+        iolock_end()
+        unpreserve_handle(ct)
+    end
+    if isopen(s)
+        if status < 0 || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
+            close(s)
+        end
+    end
+    if status < 0
+        throw(_UVError("shutdown", status))
+    end
+    nothing
+end
+
 function wait_close(x::Union{LibuvStream, LibuvServer})
     preserve_handle(x)
     lock(x.cond)
@@ -451,7 +500,7 @@ function close(stream::Union{LibuvStream, LibuvServer})
     if stream.status == StatusInit
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
         stream.status = StatusClosing
-    elseif isopen(stream) || stream.status == StatusEOF
+    elseif isopen(stream)
         should_wait = uv_handle_data(stream) != C_NULL
         if stream.status != StatusClosing
             ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
@@ -606,35 +655,33 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
     nrequested = ccall(:jl_uv_buf_len, Csize_t, (Ptr{Cvoid},), buf)
     function readcb_specialized(stream::LibuvStream, nread::Int, nrequested::UInt)
         lock(stream.cond)
-        try
-            if nread < 0
-                if nread == UV_ENOBUFS && nrequested == 0
-                    # remind the client that stream.buffer is full
-                    notify(stream.cond)
-                elseif nread == UV_EOF
-                    if isa(stream, TTY)
-                        stream.status = StatusEOF # libuv called uv_stop_reading already
+        if nread < 0
+            if nread == UV_ENOBUFS && nrequested == 0
+                # remind the client that stream.buffer is full
+                notify(stream.cond)
+            elseif nread == UV_EOF # libuv called uv_stop_reading already
+                if stream.status != StatusClosing
+                    stream.status = StatusEOF
+                    if stream isa TTY # TODO: || ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
+                        # stream can still be used either by reseteof # TODO: or write
                         notify(stream.cond)
-                    elseif stream.status != StatusClosing
-                        # begin shutdown of the stream
+                    else
+                        # underlying stream is no longer useful: begin finalization
                         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                         stream.status = StatusClosing
                     end
-                else
-                    stream.readerror = _UVError("read", nread)
-                    # This is a fatal connection error. Shutdown requests as per the usual
-                    # close function won't work and libuv will fail with an assertion failure
-                    ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), stream)
-                    stream.status = StatusClosing
-                    notify(stream.cond)
                 end
             else
-                notify_filled(stream.buffer, nread)
-                notify(stream.cond)
+                stream.readerror = _UVError("read", nread)
+                # This is a fatal connection error
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
+                stream.status = StatusClosing
             end
-        finally
-            unlock(stream.cond)
+        else
+            notify_filled(stream.buffer, nread)
+            notify(stream.cond)
         end
+        unlock(stream.cond)
 
         # Stop background reading when
         # 1) there's nobody paying attention to the data we are reading
@@ -651,6 +698,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
         nothing
     end
     readcb_specialized(stream_unknown_type, Int(nread), UInt(nrequested))
+    nothing
 end
 
 function reseteof(x::TTY)
@@ -844,6 +892,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         while bytesavailable(buf) < nb
             s.readerror === nothing || throw(s.readerror)
             isopen(s) || break
+            s.status != StatusEOF || break
             iolock_end()
             wait_readnb(s, nb)
             iolock_begin()
@@ -890,6 +939,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
         while bytesavailable(buf) < nb
             s.readerror === nothing || throw(s.readerror)
             isopen(s) || throw(EOFError())
+            s.status != StatusEOF || throw(EOFError())
             iolock_end()
             wait_readnb(s, nb)
             iolock_begin()
@@ -946,13 +996,14 @@ function readuntil(x::LibuvStream, c::UInt8; keep::Bool=false)
     @assert buf.seekable == false
     if !occursin(c, buf) # fast path checks first
         x.readerror === nothing || throw(x.readerror)
-        if isopen(x)
+        if isopen(x) && x.status != StatusEOF
             preserve_handle(x)
             lock(x.cond)
             try
                 while !occursin(c, x.buffer)
                     x.readerror === nothing || throw(x.readerror)
                     isopen(x) || break
+                    x.status != StatusEOF || break
                     start_reading(x) # ensure we are reading
                     iolock_end()
                     wait(x.cond)
@@ -1114,6 +1165,20 @@ function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
     end
     nothing
 end
+
+function uv_shutdowncb_task(req::Ptr{Cvoid}, status::Cint)
+    d = uv_req_data(req)
+    if d != C_NULL
+        uv_req_set_data(req, C_NULL) # let the Task know we got the shutdowncb
+        t = unsafe_pointer_to_objref(d)::Task
+        schedule(t, status)
+    else
+        # no owner for this req, safe to just free it
+        Libc.free(req)
+    end
+    nothing
+end
+
 
 _fd(x::IOStream) = RawFD(fd(x))
 _fd(x::Union{OS_HANDLE, RawFD}) = x
@@ -1405,23 +1470,26 @@ mutable struct BufferStream <: LibuvStream
     buffer::IOBuffer
     cond::Threads.Condition
     readerror::Any
-    is_open::Bool
     buffer_writes::Bool
     lock::ReentrantLock # advisory lock
+    status::Int
 
-    BufferStream() = new(PipeBuffer(), Threads.Condition(), nothing, true, false, ReentrantLock())
+    BufferStream() = new(PipeBuffer(), Threads.Condition(), nothing, false, ReentrantLock(), StatusActive)
 end
 
-isopen(s::BufferStream) = s.is_open
+isopen(s::BufferStream) = s.status != StatusClosed
+
+closewrite(s::BufferStream) = close(s)
 
 function close(s::BufferStream)
     lock(s.cond) do
-        s.is_open = false
+        s.status = StatusClosed
         notify(s.cond)
         nothing
     end
 end
 uvfinalize(s::BufferStream) = nothing
+setup_stdio(stream::BufferStream, child_readable::Bool) = invoke(setup_stdio, Tuple{IO, Bool}, stream, child_readable)
 
 function read(s::BufferStream, ::Type{UInt8})
     nread = lock(s.cond) do
@@ -1439,8 +1507,8 @@ function unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt)
 end
 bytesavailable(s::BufferStream) = bytesavailable(s.buffer)
 
-isreadable(s::BufferStream) = s.buffer.readable
-iswritable(s::BufferStream) = s.buffer.writable
+isreadable(s::BufferStream) = (isopen(s) || bytesavailable(s) > 0) && s.buffer.readable
+iswritable(s::BufferStream) = isopen(s) && s.buffer.writable
 
 function wait_readnb(s::BufferStream, nb::Int)
     lock(s.cond) do
@@ -1450,7 +1518,7 @@ function wait_readnb(s::BufferStream, nb::Int)
     end
 end
 
-show(io::IO, s::BufferStream) = print(io, "BufferStream() bytes waiting:", bytesavailable(s.buffer), ", isopen:", s.is_open)
+show(io::IO, s::BufferStream) = print(io, "BufferStream(bytes waiting=", bytesavailable(s.buffer), ", isopen=", isopen(s), ")")
 
 function readuntil(s::BufferStream, c::UInt8; keep::Bool=false)
     bytes = lock(s.cond) do

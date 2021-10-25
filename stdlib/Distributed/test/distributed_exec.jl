@@ -132,6 +132,18 @@ end
 testf(id_me)
 testf(id_other)
 
+function poll_while(f::Function; timeout_seconds::Integer = 60)
+    start_time = time_ns()
+    while f()
+        sleep(1)
+        if ( ( time_ns() - start_time )/1e9 ) > timeout_seconds
+            @error "Timed out" timeout_seconds
+            return false
+        end
+    end
+    return true
+end
+
 # Distributed GC tests for Futures
 function test_futures_dgc(id)
     f = remotecall(myid, id)
@@ -143,8 +155,7 @@ function test_futures_dgc(id)
     @test fetch(f) == id
     @test f.v !== nothing
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
-
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid))
 
     # if unfetched, it should be deleted after a finalize
     f = remotecall(myid, id)
@@ -153,7 +164,7 @@ function test_futures_dgc(id)
     @test f.v === nothing
     finalize(f)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid))
 end
 
 test_futures_dgc(id_me)
@@ -243,7 +254,7 @@ function test_remoteref_dgc(id)
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == false
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid))
 end
 test_remoteref_dgc(id_me)
 test_remoteref_dgc(id_other)
@@ -1031,7 +1042,6 @@ function test_add_procs_threaded_blas()
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    @test master_blas_thread_count <= 8 # check that Base set the environment variable in __init__ before LinearAlgebra dlopen'd it
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)
@@ -1696,5 +1706,4 @@ include("splitrange.jl")
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
 rmprocs(workers())
-include("threads.jl")
 include("topology.jl")

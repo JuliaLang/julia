@@ -35,7 +35,6 @@ mutable struct InferenceResult
     end
 end
 
-
 """
     OptimizationParams
 
@@ -54,8 +53,6 @@ struct OptimizationParams
     MAX_TUPLE_SPLAT::Int
     MAX_UNION_SPLITTING::Int
 
-    unoptimize_throw_blocks::Bool
-
     function OptimizationParams(;
             inlining::Bool = inlining_enabled(),
             inline_cost_threshold::Int = 100,
@@ -65,7 +62,6 @@ struct OptimizationParams
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
-            unoptimize_throw_blocks::Bool = true,
         )
         return new(
             inlining,
@@ -76,7 +72,6 @@ struct OptimizationParams
             max_methods,
             tuple_splat,
             union_splitting,
-            unoptimize_throw_blocks,
         )
     end
 end
@@ -218,7 +213,6 @@ may_discard_trees(::AbstractInterpreter) = true
 verbose_stmt_info(::AbstractInterpreter) = false
 
 method_table(interp::AbstractInterpreter) = InternalMethodTable(get_world_counter(interp))
-inlining_policy(::AbstractInterpreter) = default_inlining_policy
 
 """
 By default `AbstractInterpreter` implements the following inference bail out logic:

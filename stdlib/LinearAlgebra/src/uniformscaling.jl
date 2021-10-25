@@ -88,23 +88,23 @@ ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
-getindex(x::UniformScaling, n::Integer, m::AbstractRange{<:Integer}) = getindex(x, m, n)
-function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::Integer) where T
+getindex(J::UniformScaling, n::Integer, m::AbstractVector{<:Integer}) = getindex(J, m, n)
+function getindex(J::UniformScaling{T}, n::AbstractVector{<:Integer}, m::Integer) where T
     v = zeros(T, length(n))
     @inbounds for (i,ii) in enumerate(n)
         if ii == m
-            v[i] = x.λ
+            v[i] = J.λ
         end
     end
     return v
 end
 
 
-function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::AbstractRange{<:Integer}) where T
+function getindex(J::UniformScaling{T}, n::AbstractVector{<:Integer}, m::AbstractVector{<:Integer}) where T
     A = zeros(T, length(n), length(m))
     @inbounds for (j,jj) in enumerate(m), (i,ii) in enumerate(n)
         if ii == jj
-            A[i,j] = x.λ
+            A[i,j] = J.λ
         end
     end
     return A
@@ -404,9 +404,11 @@ promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
 promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling,Number}}}) = Matrix
 
-for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
+for (f, _f, dim, name) in ((:hcat, :_hcat, 1, "rows"), (:vcat, :_vcat, 2, "cols"))
     @eval begin
-        function $f(A::Union{AbstractVecOrMat,UniformScaling,Number}...)
+        @inline $f(A::Union{AbstractVecOrMat,UniformScaling}...) = $_f(A...)
+        @inline $f(A::Union{AbstractVecOrMat,UniformScaling,Number}...) = $_f(A...)
+        function $_f(A::Union{AbstractVecOrMat,UniformScaling,Number}...)
             n = -1
             for a in A
                 if !isa(a, UniformScaling)
@@ -424,8 +426,9 @@ for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
     end
 end
 
-
-function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling,Number}...)
+hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling}...) = _hvcat(rows, A...)
+hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling,Number}...) = _hvcat(rows, A...)
+function _hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling,Number}...)
     require_one_based_indexing(A...)
     nr = length(rows)
     sum(rows) == length(A) || throw(ArgumentError("mismatch between row sizes and number of arguments"))

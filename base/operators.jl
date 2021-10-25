@@ -137,7 +137,7 @@ julia> isequal(missing, missing)
 true
 ```
 """
-isequal(x, y) = x == y
+isequal(x, y) = (x == y)::Bool # all `missing` cases are handled in missing.jl
 
 signequal(x, y) = signbit(x)::Bool == signbit(y)::Bool
 signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
@@ -717,13 +717,13 @@ julia> bitstring(Int8(12))
 See also [`>>`](@ref), [`>>>`](@ref), [`exp2`](@ref), [`ldexp`](@ref).
 """
 function <<(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
     (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
     oftype(x, -1)
 end
 function <<(x::Integer, c::Unsigned)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(<<, (x, c)))
     end
@@ -762,7 +762,7 @@ julia> bitstring(Int8(-4))
 See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(>>, (x, c)))
     end
@@ -800,11 +800,11 @@ is equivalent to [`>>`](@ref).
 See also [`>>`](@ref), [`<<`](@ref).
 """
 function >>>(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x) >>> 0
 end
 function >>>(x::Integer, c::Unsigned)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(>>>, (x, c)))
     end
@@ -995,7 +995,7 @@ julia> f.value
 ```
 
 !!! compat "Julia 1.7"
-    Returns requires at least Julia 1.7.
+    `Returns` requires at least Julia 1.7.
 """
 struct Returns{V} <: Function
     value::V

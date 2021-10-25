@@ -461,7 +461,7 @@ rm(f)
 io = Base.Filesystem.open(f, Base.Filesystem.JL_O_WRONLY | Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL, 0o000)
 @test write(io, "abc") == 3
 close(io)
-if !Sys.iswindows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
+if !Sys.iswindows() && Libc.geteuid() != 0 # root user
     # msvcrt _wchmod documentation states that all files are readable,
     # so we don't test that it correctly set the umask on windows
     @test_throws SystemError open(f)
@@ -511,7 +511,7 @@ close(f1)
 close(f2)
 @test eof(f1)
 @test_throws Base.IOError eof(f2)
-if get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
+if Libc.geteuid() != 0 # root user
     @test_throws SystemError open(f, "r+")
     @test_throws Base.IOError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 else

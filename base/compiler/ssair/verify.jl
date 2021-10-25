@@ -252,6 +252,10 @@ function verify_ir(ir::IRCode, print::Bool=true)
                         @verify_error "SSAValue as assignment LHS"
                         error("")
                     end
+                    if stmt.args[2] isa GlobalRef
+                        # undefined GlobalRef as assignment RHS is OK
+                        continue
+                    end
                 elseif stmt.head === :gc_preserve_end
                     # We allow gc_preserve_end tokens to span across try/catch
                     # blocks, which isn't allowed for regular SSA values, so

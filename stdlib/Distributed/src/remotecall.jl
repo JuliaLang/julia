@@ -84,20 +84,24 @@ end
 
 function finalize_ref(r::AbstractRemoteRef)
     if r.where > 0 # Handle the case of the finalizer having been called manually
-        if islocked(client_refs)
-            # delay finalizer for later, when it's not already locked
+        if trylock(client_refs.lock) # trylock doesn't call wait which causes yields
+            try
+                delete!(client_refs.ht, r) # direct removal avoiding locks
+                if isa(r, RemoteChannel)
+                    send_del_client_no_lock(r)
+                else
+                    # send_del_client only if the reference has not been set
+                    r.v === nothing && send_del_client_no_lock(r)
+                    r.v = nothing
+                end
+                r.where = 0
+            finally
+                unlock(client_refs.lock)
+            end
+        else
             finalizer(finalize_ref, r)
             return nothing
         end
-        delete!(client_refs, r)
-        if isa(r, RemoteChannel)
-            send_del_client(r)
-        else
-            # send_del_client only if the reference has not been set
-            r.v === nothing && send_del_client(r)
-            r.v = nothing
-        end
-        r.where = 0
     end
     nothing
 end
@@ -229,13 +233,18 @@ del_client(rr::AbstractRemoteRef) = del_client(remoteref_id(rr), myid())
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
     lock(client_refs) do
-        rv = get(pg.refs, id, false)
-        if rv !== false
-            delete!(rv.clientset, client)
-            if isempty(rv.clientset)
-                delete!(pg.refs, id)
-                #print("$(myid()) collected $id\n")
-            end
+        _del_client(pg, id, client)
+    end
+    nothing
+end
+
+function _del_client(pg, id, client)
+    rv = get(pg.refs, id, false)
+    if rv !== false
+        delete!(rv.clientset, client)
+        if isempty(rv.clientset)
+            delete!(pg.refs, id)
+            #print("$(myid()) collected $id\n")
         end
     end
     nothing
@@ -258,9 +267,10 @@ function start_gc_msgs_task()
         Threads.@spawn begin
             while true
                 lock(any_gc_flag) do
+                    # this might miss events
                     wait(any_gc_flag)
-                    flush_gc_msgs() # handles throws internally
                 end
+                flush_gc_msgs() # handles throws internally
             end
         end
     )
@@ -271,19 +281,40 @@ function send_del_client(rr)
     if rr.where == myid()
         del_client(rr)
     elseif id_in_procs(rr.where) # process only if a valid worker
-        w = worker_from_id(rr.where)::Worker
-        msg = (remoteref_id(rr), myid())
-        # We cannot acquire locks from finalizers
-        Threads.@spawn begin
-            lock(w.msg_lock) do
-                push!(w.del_msgs, msg)
-                w.gcflag = true
-            end
-            lock(any_gc_flag) do
-                notify(any_gc_flag)
-            end
-        end
+        process_worker(rr)
     end
+end
+
+function send_del_client_no_lock(rr)
+    # for gc context to avoid yields
+    if rr.where == myid()
+        _del_client(PGRP, remoteref_id(rr), myid())
+    elseif id_in_procs(rr.where) # process only if a valid worker
+        process_worker(rr)
+    end
+end
+
+function publish_del_msg!(w::Worker, msg)
+    lock(w.msg_lock) do
+        push!(w.del_msgs, msg)
+        @atomic w.gcflag = true
+    end
+    lock(any_gc_flag) do
+        notify(any_gc_flag)
+    end
+end
+
+function process_worker(rr)
+    w = worker_from_id(rr.where)::Worker
+    msg = (remoteref_id(rr), myid())
+
+    # Needs to aquire a lock on the del_msg queue
+    T = Threads.@spawn begin
+        publish_del_msg!($w, $msg)
+    end
+    Base.errormonitor(T)
+
+    return
 end
 
 function add_client(id, client)
@@ -310,7 +341,7 @@ function send_add_client(rr::AbstractRemoteRef, i)
         w = worker_from_id(rr.where)
         lock(w.msg_lock) do
             push!(w.add_msgs, (remoteref_id(rr), i))
-            w.gcflag = true
+            @atomic w.gcflag = true
         end
         lock(any_gc_flag) do
             notify(any_gc_flag)
@@ -372,10 +403,7 @@ end
 # make a thunk to call f on args in a way that simulates what would happen if
 # the function were sent elsewhere
 function local_remotecall_thunk(f, args, kwargs)
-    if isempty(args) && isempty(kwargs)
-        return f
-    end
-    return ()->f(args...; kwargs...)
+    return ()->invokelatest(f, args...; kwargs...)
 end
 
 function remotecall(f, w::LocalProcess, args...; kwargs...)

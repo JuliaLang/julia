@@ -16,11 +16,7 @@
 #include <dlfcn.h>
 #endif
 
-#ifndef _COMPILER_MICROSOFT_
 #include "valgrind.h"
-#else
-#define RUNNING_ON_VALGRIND 0
-#endif
 #include "julia_assert.h"
 
 #ifdef __cplusplus
@@ -30,7 +26,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    154
+#define NUM_TAGS    155
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -130,6 +126,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_floatingpoint_type);
         INSERT_TAG(jl_number_type);
         INSERT_TAG(jl_signed_type);
+        INSERT_TAG(jl_pair_type);
 
         // special typenames
         INSERT_TAG(jl_tuple_typename);
@@ -406,8 +403,8 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
             jl_serialize_value(s, (jl_value_t*)table[i]);
             jl_binding_t *b = (jl_binding_t*)table[i+1];
             jl_serialize_value(s, b->name);
-            jl_serialize_value(s, b->value);
-            jl_serialize_value(s, b->globalref);
+            jl_serialize_value(s, jl_atomic_load_relaxed(&b->value));
+            jl_serialize_value(s, jl_atomic_load_relaxed(&b->globalref));
             jl_serialize_value(s, b->owner);
         }
     }
@@ -639,7 +636,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     newm->parent = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, parent)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, m->parent));
-    newm->primary_world = jl_world_counter;
+    newm->primary_world = jl_atomic_load_acquire(&jl_world_counter);
 
     // write out the bindings table as a list
     // immediately after jl_module_t
@@ -658,8 +655,8 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             record_gvar(s, jl_get_llvm_gv(native_functions, (jl_value_t*)b),
                     ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + binding_reloc_offset);
             write_pointerfield(s, (jl_value_t*)b->name);
-            write_pointerfield(s, b->value);
-            write_pointerfield(s, b->globalref);
+            write_pointerfield(s, jl_atomic_load_relaxed(&b->value));
+            write_pointerfield(s, jl_atomic_load_relaxed(&b->globalref));
             write_pointerfield(s, (jl_value_t*)b->owner);
             size_t flag_offset = offsetof(jl_binding_t, owner) + sizeof(b->owner);
             ios_write(s->s, (char*)b + flag_offset, sizeof(*b) - flag_offset);
@@ -1044,14 +1041,14 @@ static void jl_write_values(jl_serializer_state *s)
                 jl_typename_t *tn = (jl_typename_t*)v;
                 jl_typename_t *newtn = (jl_typename_t*)&s->s->buf[reloc_offset];
                 if (tn->atomicfields != NULL) {
-                    size_t nf = jl_svec_len(tn->names);
+                    size_t nb = (jl_svec_len(tn->names) + 31) / 32 * sizeof(uint32_t);
                     uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
                     write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
                     newtn->atomicfields = NULL; // relocation offset
                     layout /= sizeof(void*);
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_typename_t, atomicfields))); // relocation location
                     arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
-                    ios_write(s->const_data, (char*)tn->atomicfields, nf);
+                    ios_write(s->const_data, (char*)tn->atomicfields, nb);
                 }
             }
             else if (((jl_datatype_t*)(jl_typeof(v)))->name == jl_idtable_typename) {
@@ -1664,7 +1661,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
         }
         jl_write_value(&s, s.ptls->root_task->tls);
         write_uint32(f, jl_get_gs_ctr());
-        write_uint32(f, jl_world_counter);
+        write_uint32(f, jl_atomic_load_acquire(&jl_world_counter));
         write_uint32(f, jl_typeinf_world);
         jl_finalize_serializer(&s, &reinit_list);
         jl_finalize_serializer(&s, &ccallable_list);
@@ -1794,7 +1791,7 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     jl_init_box_caches();
 
     uint32_t gs_ctr = read_uint32(f);
-    jl_world_counter = read_uint32(f);
+    jl_atomic_store_release(&jl_world_counter, read_uint32(f));
     jl_typeinf_world = read_uint32(f);
     jl_set_gs_ctr(gs_ctr);
     s.s = NULL;
@@ -1843,6 +1840,7 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     }
 
     s.s = &sysimg;
+    jl_init_codegen();
     jl_update_all_fptrs(&s); // fptr relocs and registration
     // reinit ccallables, which require codegen to be initialized
     s.s = f;

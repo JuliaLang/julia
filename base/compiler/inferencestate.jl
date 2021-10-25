@@ -2,6 +2,24 @@
 
 const LineNum = Int
 
+# The type of a variable load is either a value or an UndefVarError
+# (only used in abstractinterpret, doesn't appear in optimize)
+struct VarState
+    typ
+    undef::Bool
+    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
+end
+
+"""
+    const VarTable = Vector{VarState}
+
+The extended lattice that maps local variables to inferred type represented as `AbstractLattice`.
+Each index corresponds to the `id` of `SlotNumber` which identifies each local variable.
+Note that `InferenceState` will maintain multiple `VarTable`s at each SSA statement
+to enable flow-sensitive analysis.
+"""
+const VarTable = Vector{VarState}
+
 mutable struct InferenceState
     params::InferenceParams
     result::InferenceResult # remember where to put the result
@@ -18,7 +36,7 @@ mutable struct InferenceState
     world::UInt
     valid_worlds::WorldRange
     nargs::Int
-    stmt_types::Vector{Union{Nothing, Vector{Any}}} # ::Vector{Union{Nothing, VarTable}}
+    stmt_types::Vector{Union{Nothing, VarTable}}
     stmt_edges::Vector{Union{Nothing, Vector{Any}}}
     stmt_info::Vector{Any}
     # return type
@@ -28,12 +46,9 @@ mutable struct InferenceState
     pc´´::LineNum
     nstmts::Int
     # current exception handler info
-    cur_hand #::Union{Nothing, Pair{LineNum, prev_handler}}
-    handler_at::Vector{Any}
-    n_handlers::Int
+    handler_at::Vector{LineNum}
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{BitSet}
-    throw_blocks::BitSet
 
     cycle_backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
@@ -55,9 +70,11 @@ mutable struct InferenceState
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo,
-                            cached::Bool, interp::AbstractInterpreter)
+                            cache::Symbol, interp::AbstractInterpreter)
         (; def) = linfo = result.linfo
-        code = src.code::Array{Any,1}
+        code = src.code::Vector{Any}
+
+        params = InferenceParams(interp)
 
         sp = sptypes_from_meth_instance(linfo::MethodInstance)
 
@@ -66,8 +83,8 @@ mutable struct InferenceState
         stmt_info = Any[ nothing for i = 1:length(code) ]
 
         n = length(code)
+        s_types = Union{Nothing, VarTable}[ nothing for i = 1:n ]
         s_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
-        s_types = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
 
         # initial types
         nslots = length(src.slotflags)
@@ -83,39 +100,122 @@ mutable struct InferenceState
         s_types[1] = s_argtypes
 
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
-        throw_blocks = find_throw_blocks(code)
 
         # exception handlers
-        cur_hand = nothing
-        handler_at = Any[ nothing for i=1:n ]
-        n_handlers = 0
+        ip = BitSet()
+        handler_at = compute_trycatch(src.code, ip)
+        push!(ip, 1)
 
-        W = BitSet()
-        push!(W, 1) #initial pc to visit
+        # `throw` block deoptimization
+        params.unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
 
         mod = isa(def, Method) ? def.module : def
-
         valid_worlds = WorldRange(src.min_world,
             src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
+
+        @assert cache === :no || cache === :local || cache === :global
         frame = new(
-            InferenceParams(interp), result, linfo,
+            params, result, linfo,
             sp, slottypes, mod, 0,
             IdSet{InferenceState}(), IdSet{InferenceState}(),
             src, get_world_counter(interp), valid_worlds,
             nargs, s_types, s_edges, stmt_info,
-            Union{}, W, 1, n,
-            cur_hand, handler_at, n_handlers,
-            ssavalue_uses, throw_blocks,
+            Union{}, ip, 1, n, handler_at,
+            ssavalue_uses,
             Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
-            cached, false, false,
+            cache === :global, false, false,
             CachedMethodTable(method_table(interp)),
             interp)
         result.result = frame
-        cached && push!(get_inference_cache(interp), result)
+        cache !== :no && push!(get_inference_cache(interp), result)
         return frame
     end
+end
+
+function compute_trycatch(code::Vector{Any}, ip::BitSet)
+    # The goal initially is to record the frame like this for the state at exit:
+    # 1: (enter 3) # == 0
+    # 3: (expr)    # == 1
+    # 3: (leave 1) # == 1
+    # 4: (expr)    # == 0
+    # then we can find all trys by walking backwards from :enter statements,
+    # and all catches by looking at the statement after the :enter
+    n = length(code)
+    empty!(ip)
+    ip.offset = 0 # for _bits_findnext
+    push!(ip, n + 1)
+    handler_at = fill(0, n)
+
+    # start from all :enter statements and record the location of the try
+    for pc = 1:n
+        stmt = code[pc]
+        if isexpr(stmt, :enter)
+            l = stmt.args[1]::Int
+            handler_at[pc + 1] = pc
+            push!(ip, pc + 1)
+            handler_at[l] = pc
+            push!(ip, l)
+        end
+    end
+
+    # now forward those marks to all :leave statements
+    pc´´ = 0
+    while true
+        # make progress on the active ip set
+        pc = _bits_findnext(ip.bits, pc´´)::Int
+        pc > n && break
+        while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
+            pc´ = pc + 1 # next program-counter (after executing instruction)
+            if pc == pc´´
+                pc´´ = pc´
+            end
+            delete!(ip, pc)
+            cur_hand = handler_at[pc]
+            @assert cur_hand != 0 "unbalanced try/catch"
+            stmt = code[pc]
+            if isa(stmt, GotoNode)
+                pc´ = stmt.label
+            elseif isa(stmt, GotoIfNot)
+                l = stmt.dest::Int
+                if handler_at[l] != cur_hand
+                    @assert handler_at[l] == 0 "unbalanced try/catch"
+                    handler_at[l] = cur_hand
+                    if l < pc´´
+                        pc´´ = l
+                    end
+                    push!(ip, l)
+                end
+            elseif isa(stmt, ReturnNode)
+                @assert !isdefined(stmt, :val) "unbalanced try/catch"
+                break
+            elseif isa(stmt, Expr)
+                head = stmt.head
+                if head === :enter
+                    cur_hand = pc
+                elseif head === :leave
+                    l = stmt.args[1]::Int
+                    for i = 1:l
+                        cur_hand = handler_at[cur_hand]
+                    end
+                    cur_hand == 0 && break
+                end
+            end
+
+            pc´ > n && break # can't proceed with the fast-path fall-through
+            if handler_at[pc´] != cur_hand
+                @assert handler_at[pc´] == 0 "unbalanced try/catch"
+                handler_at[pc´] = cur_hand
+            elseif !in(pc´, ip)
+                break  # already visited
+            end
+            pc = pc´
+        end
+    end
+
+    @assert first(ip) == n + 1
+    return handler_at
 end
 
 """
@@ -143,12 +243,12 @@ end
 
 method_table(interp::AbstractInterpreter, sv::InferenceState) = sv.method_table
 
-function InferenceState(result::InferenceResult, cached::Bool, interp::AbstractInterpreter)
+function InferenceState(result::InferenceResult, cache::Symbol, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
     src = retrieve_code_info(result.linfo)
     src === nothing && return nothing
     validate_code_in_debug_mode(result.linfo, src, "lowered")
-    return InferenceState(result, src, cached, interp)
+    return InferenceState(result, src, cache, interp)
 end
 
 function sptypes_from_meth_instance(linfo::MethodInstance)
@@ -179,7 +279,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
             while temp isa UnionAll
                 temp = temp.body
             end
-            sigtypes = temp.parameters
+            sigtypes = (temp::DataType).parameters
             for j = 1:length(sigtypes)
                 tj = sigtypes[j]
                 if isType(tj) && tj.parameters[1] === Pi
@@ -211,7 +311,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                     ty = UnionAll(tv, Type{tv})
                 end
             end
-        elseif isa(v, Core.TypeofVararg)
+        elseif isvarargtype(v)
             ty = Int
         else
             ty = Const(v)
@@ -233,12 +333,13 @@ end
 update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
 function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)
-    old = frame.src.ssavaluetypes[ssa_id]
+    ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
+    old = ssavaluetypes[ssa_id]
     if old === NOT_FOUND || !(new ⊑ old)
         # typically, we expect that old ⊑ new (that output information only
         # gets less precise with worse input information), but to actually
         # guarantee convergence we need to use tmerge here to ensure that is true
-        frame.src.ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
+        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
         W = frame.ip
         s = frame.stmt_types
         for r in frame.ssavalue_uses[ssa_id]
@@ -296,3 +397,5 @@ function print_callstack(sv::InferenceState)
         sv = sv.parent
     end
 end
+
+get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]

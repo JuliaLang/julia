@@ -13,25 +13,25 @@ The arguments may be integer and rational numbers.
 
 # Examples
 ```jldoctest
-julia> gcd(6,9)
+julia> gcd(6, 9)
 3
 
-julia> gcd(6,-9)
+julia> gcd(6, -9)
 3
 
-julia> gcd(6,0)
+julia> gcd(6, 0)
 6
 
-julia> gcd(0,0)
+julia> gcd(0, 0)
 0
 
-julia> gcd(1//3,2//3)
+julia> gcd(1//3, 2//3)
 1//3
 
-julia> gcd(1//3,-2//3)
+julia> gcd(1//3, -2//3)
 1//3
 
-julia> gcd(1//3,2)
+julia> gcd(1//3, 2)
 1//3
 
 julia> gcd(0, 0, 10, 15)
@@ -47,11 +47,22 @@ function gcd(a::T, b::T) where T<:Integer
     checked_abs(a)
 end
 
-# binary GCD (aka Stein's) algorithm
-# about 1.7x (2.1x) faster for random Int64s (Int128s)
 function gcd(a::T, b::T) where T<:BitInteger
     a == 0 && return checked_abs(b)
     b == 0 && return checked_abs(a)
+    r = _gcd(a, b)
+    signbit(r) && __throw_gcd_overflow(a, b)
+    return r
+end
+@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
+
+# binary GCD (aka Stein's) algorithm
+# about 1.7x (2.1x) faster for random Int64s (Int128s)
+# Unfortunately, we need to manually annotate this as `@pure` to work around #41694. Since
+# this is used in the Rational constructor, constant prop is something we do care about here.
+# This does call generic functions, so it might not be completely sound, but since `_gcd` is
+# restricted to BitIntegers, it is probably fine in practice.
+@pure function _gcd(a::T, b::T) where T<:BitInteger
     za = trailing_zeros(a)
     zb = trailing_zeros(b)
     k = min(za, zb)
@@ -65,11 +76,8 @@ function gcd(a::T, b::T) where T<:BitInteger
         v >>= trailing_zeros(v)
     end
     r = u << k
-    # T(r) would throw InexactError; we want OverflowError instead
-    r > typemax(T) && __throw_gcd_overflow(a, b)
-    r % T
+    return r % T
 end
-@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
 
 """
     lcm(x, y...)
@@ -82,33 +90,33 @@ The arguments may be integer and rational numbers.
 
 # Examples
 ```jldoctest
-julia> lcm(2,3)
+julia> lcm(2, 3)
 6
 
-julia> lcm(-2,3)
+julia> lcm(-2, 3)
 6
 
-julia> lcm(0,3)
+julia> lcm(0, 3)
 0
 
-julia> lcm(0,0)
+julia> lcm(0, 0)
 0
 
-julia> lcm(1//3,2//3)
+julia> lcm(1//3, 2//3)
 2//3
 
-julia> lcm(1//3,-2//3)
+julia> lcm(1//3, -2//3)
 2//3
 
-julia> lcm(1//3,2)
+julia> lcm(1//3, 2)
 2//1
 
-julia> lcm(1,3,5,7)
+julia> lcm(1, 3, 5, 7)
 105
 ```
 """
 function lcm(a::T, b::T) where T<:Integer
-    # explicit a==0 test is to handle case of lcm(0,0) correctly
+    # explicit a==0 test is to handle case of lcm(0, 0) correctly
     # explicit b==0 test is to handle case of lcm(typemin(T),0) correctly
     if a == 0 || b == 0
         return zero(a)
@@ -206,13 +214,13 @@ and ``div(y,m) = 0``. This will throw an error if ``m = 0``, or if
 
 # Examples
 ```jldoctest
-julia> invmod(2,5)
+julia> invmod(2, 5)
 3
 
-julia> invmod(2,3)
+julia> invmod(2, 3)
 2
 
-julia> invmod(5,6)
+julia> invmod(5, 6)
 5
 ```
 """
@@ -874,6 +882,7 @@ end
 Return true if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
 hastypemax(::Base.BitIntegerType) = true
+hastypemax(::Type{Bool}) = true
 hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
 
 """
@@ -885,14 +894,14 @@ the array length. If the array length is excessive, the excess portion is filled
 
 # Examples
 ```jldoctest
-julia> digits!([2,2,2,2], 10, base = 2)
+julia> digits!([2, 2, 2, 2], 10, base = 2)
 4-element Vector{Int64}:
  0
  1
  0
  1
 
-julia> digits!([2,2,2,2,2,2], 10, base = 2)
+julia> digits!([2, 2, 2, 2, 2, 2], 10, base = 2)
 6-element Vector{Int64}:
  0
  1

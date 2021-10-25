@@ -466,29 +466,51 @@ add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
 add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
+
 function pointer_eltype(@nospecialize(ptr))
     a = widenconst(ptr)
-    if a <: Ptr
-        if isa(a, DataType) && isa(a.parameters[1], Type)
-            return a.parameters[1]
-        elseif isa(a, UnionAll) && !has_free_typevars(a)
-            unw = unwrap_unionall(a)
-            if isa(unw, DataType)
-                return rewrap_unionall(unw.parameters[1], a)
-            end
+    if !has_free_typevars(a)
+        unw = unwrap_unionall(a)
+        if isa(unw, DataType) && unw.name === Ptr.body.name
+            T = unw.parameters[1]
+            T isa Type && return rewrap_unionall(T, a)
         end
     end
     return Any
 end
+function atomic_pointermodify_tfunc(ptr, op, v, order)
+    @nospecialize
+    a = widenconst(ptr)
+    if !has_free_typevars(a)
+        unw = unwrap_unionall(a)
+        if isa(unw, DataType) && unw.name === Ptr.body.name
+            T = unw.parameters[1]
+            # note: we could sometimes refine this to a PartialStruct if we analyzed `op(T, T)::T`
+            T isa Type && return rewrap_unionall(Pair{T, T}, a)
+        end
+    end
+    return Pair
+end
+function atomic_pointerreplace_tfunc(ptr, x, v, success_order, failure_order)
+    @nospecialize
+    a = widenconst(ptr)
+    if !has_free_typevars(a)
+        unw = unwrap_unionall(a)
+        if isa(unw, DataType) && unw.name === Ptr.body.name
+            T = unw.parameters[1]
+            T isa Type && return rewrap_unionall(ccall(:jl_apply_cmpswap_type, Any, (Any,), T), a)
+        end
+    end
+    return ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
+end
 add_tfunc(pointerref, 3, 3, (a, i, align) -> (@nospecialize; pointer_eltype(a)), 4)
 add_tfunc(pointerset, 4, 4, (a, v, i, align) -> (@nospecialize; a), 5)
-
 add_tfunc(atomic_fence, 1, 1, (order) -> (@nospecialize; Nothing), 4)
 add_tfunc(atomic_pointerref, 2, 2, (a, order) -> (@nospecialize; pointer_eltype(a)), 4)
 add_tfunc(atomic_pointerset, 3, 3, (a, v, order) -> (@nospecialize; a), 5)
 add_tfunc(atomic_pointerswap, 3, 3, (a, v, order) -> (@nospecialize; pointer_eltype(a)), 5)
-add_tfunc(atomic_pointermodify, 4, 4, (a, op, v, order) -> (@nospecialize; T = pointer_eltype(a); Tuple{T, T}), 5)
-add_tfunc(atomic_pointerreplace, 5, 5, (a, x, v, success_order, failure_order) -> (@nospecialize; Tuple{pointer_eltype(a), Bool}), 5)
+add_tfunc(atomic_pointermodify, 4, 4, atomic_pointermodify_tfunc, 5)
+add_tfunc(atomic_pointerreplace, 5, 5, atomic_pointerreplace_tfunc, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
 function typeof_concrete_vararg(t::DataType)
@@ -527,11 +549,9 @@ function typeof_tfunc(@nospecialize(t))
             return Type{<:t}
         end
     elseif isa(t, Union)
-        a = widenconst(typeof_tfunc(t.a))
-        b = widenconst(typeof_tfunc(t.b))
+        a = widenconst(_typeof_tfunc(t.a))
+        b = widenconst(_typeof_tfunc(t.b))
         return Union{a, b}
-    elseif isa(t, TypeVar) && !(Any === t.ub)
-        return typeof_tfunc(t.ub)
     elseif isa(t, UnionAll)
         u = unwrap_unionall(t)
         if isa(u, DataType) && !isabstracttype(u)
@@ -547,6 +567,13 @@ function typeof_tfunc(@nospecialize(t))
         return rewrap_unionall(widenconst(typeof_tfunc(u)), t)
     end
     return DataType # typeof(anything)::DataType
+end
+# helper function of `typeof_tfunc`, which accepts `TypeVar`
+function _typeof_tfunc(@nospecialize(t))
+    if isa(t, TypeVar)
+        return t.ub !== Any ? _typeof_tfunc(t.ub) : DataType
+    end
+    return typeof_tfunc(t)
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 1)
 
@@ -804,17 +831,18 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             end
         end
         s = typeof(sv)
-    elseif isa(s, PartialStruct)
+    elseif isa(s00, PartialStruct)
+        s = widenconst(s00)
+        sty = unwrap_unionall(s)::DataType
         if isa(name, Const)
             nv = name.val
             if isa(nv, Symbol)
-                nv = fieldindex(widenconst(s), nv, false)
+                nv = fieldindex(sty, nv, false)
             end
-            if isa(nv, Int) && 1 <= nv <= length(s.fields)
-                return unwrapva(s.fields[nv])
+            if isa(nv, Int) && 1 <= nv <= length(s00.fields)
+                return unwrapva(s00.fields[nv])
             end
         end
-        s = widenconst(s)
     end
     if isType(s) || !isa(s, DataType) || isabstracttype(s)
         return Any
@@ -842,10 +870,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         elseif Symbol ⊑ name
             name = Int
         end
-        _ts = s.parameters[2]
-        while isa(_ts, TypeVar)
-            _ts = _ts.ub
-        end
+        _ts = unwraptv(s.parameters[2])
         _ts = rewrap_unionall(_ts, s00)
         if !(_ts <: Tuple)
             return Any
@@ -860,6 +885,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         return Bottom # can't index fields with Bool
     end
     if !isa(name, Const)
+        name = widenconst(name)
         if !(Int <: name || Symbol <: name)
             return Bottom
         end
@@ -911,11 +937,55 @@ setfield!_tfunc(o, f, v) = (@nospecialize; v)
 
 swapfield!_tfunc(o, f, v, order) = (@nospecialize; getfield_tfunc(o, f))
 swapfield!_tfunc(o, f, v) = (@nospecialize; getfield_tfunc(o, f))
-modifyfield!_tfunc(o, f, op, v, order) = (@nospecialize; T = getfield_tfunc(o, f); T === Bottom ? T : Tuple{T, T})
-modifyfield!_tfunc(o, f, op, v) = (@nospecialize; T = getfield_tfunc(o, f); T === Bottom ? T : Tuple{T, T}) # TODO: also model op(o.f, v) call
+modifyfield!_tfunc(o, f, op, v, order) = (@nospecialize; modifyfield!_tfunc(o, f, op, v))
+function modifyfield!_tfunc(o, f, op, v)
+    @nospecialize
+    T = _fieldtype_tfunc(o, isconcretetype(o), f)
+    T === Bottom && return Bottom
+    PT = Const(Pair)
+    return instanceof_tfunc(apply_type_tfunc(PT, T, T))[1]
+end
+function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+    nargs = length(argtypes)
+    if !isempty(argtypes) && isvarargtype(argtypes[nargs])
+        nargs - 1 <= 6 || return CallMeta(Bottom, false)
+        nargs > 3 || return CallMeta(Any, false)
+    else
+        5 <= nargs <= 6 || return CallMeta(Bottom, false)
+    end
+    o = unwrapva(argtypes[2])
+    f = unwrapva(argtypes[3])
+    RT = modifyfield!_tfunc(o, f, Any, Any)
+    info = false
+    if nargs >= 5 && RT !== Bottom
+        # we may be able to refine this to a PartialStruct by analyzing `op(o.f, v)::T`
+        # as well as compute the info for the method matches
+        op = unwrapva(argtypes[4])
+        v = unwrapva(argtypes[5])
+        TF = getfield_tfunc(o, f)
+        push!(sv.ssavalue_uses[sv.currpc], sv.currpc) # temporarily disable `call_result_unused` check for this call
+        callinfo = abstract_call(interp, nothing, Any[op, TF, v], sv, #=max_methods=# 1)
+        pop!(sv.ssavalue_uses[sv.currpc], sv.currpc)
+        TF2 = tmeet(callinfo.rt, widenconst(TF))
+        if TF2 === Bottom
+            RT = Bottom
+        elseif isconcretetype(RT) && has_nontrivial_const_info(TF2) # isconcrete condition required to form a PartialStruct
+            RT = PartialStruct(RT, Any[TF, TF2])
+        end
+        info = callinfo.info
+    end
+    return CallMeta(RT, info)
+end
 replacefield!_tfunc(o, f, x, v, success_order, failure_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
 replacefield!_tfunc(o, f, x, v, success_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
-replacefield!_tfunc(o, f, x, v) = (@nospecialize; T = getfield_tfunc(o, f); T === Bottom ? T : Tuple{widenconst(T), Bool})
+function replacefield!_tfunc(o, f, x, v)
+    @nospecialize
+    T = _fieldtype_tfunc(o, isconcretetype(o), f)
+    T === Bottom && return Bottom
+    PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
+    return instanceof_tfunc(apply_type_tfunc(PT, T))[1]
+end
+
 # we could use tuple_tfunc instead of widenconst, but `o` is mutable, so that is unlikely to be beneficial
 
 add_tfunc(getfield, 2, 4, getfield_tfunc, 1)
@@ -1141,7 +1211,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     else
         return false
     end
-    # We know the apply_type is well formed. Oherwise our rt would have been
+    # We know the apply_type is well formed. Otherwise our rt would have been
     # Bottom (or Type).
     (headtype === Union) && return true
     isa(rt, Const) && return true
@@ -1200,7 +1270,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
         return Any
     end
     if !isempty(args) && isvarargtype(args[end])
-        return isvarargtype(headtype) ? Core.TypeofVararg : Type
+        return isvarargtype(headtype) ? TypeofVararg : Type
     end
     largs = length(args)
     if headtype === Union
@@ -1261,7 +1331,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
             canconst &= !has_free_typevars(aip1)
             push!(tparams, aip1)
         elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
-                                  valid_tparam(ai.val) || (istuple && isa(ai.val, Core.TypeofVararg)))
+                                  valid_tparam(ai.val) || (istuple && isvarargtype(ai.val)))
             push!(tparams, ai.val)
         elseif isa(ai, PartialTypeVar)
             canconst = false
@@ -1327,11 +1397,11 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     catch ex
         # type instantiation might fail if one of the type parameters
         # doesn't match, which could happen if a type estimate is too coarse
-        return isvarargtype(headtype) ? Core.TypeofVararg : Type{<:headtype}
+        return isvarargtype(headtype) ? TypeofVararg : Type{<:headtype}
     end
     !uncertain && canconst && return Const(appl)
     if isvarargtype(appl)
-        return Core.TypeofVararg
+        return TypeofVararg
     end
     if istuple
         return Type{<:appl}
@@ -1371,12 +1441,15 @@ function tuple_tfunc(atypes::Vector{Any})
         if has_struct_const_info(x)
             anyinfo = true
         else
-            atypes[i] = x = widenconst(x)
+            if !isvarargtype(x)
+                x = widenconst(x)
+            end
+            atypes[i] = x
         end
         if isa(x, Const)
             params[i] = typeof(x.val)
         else
-            x = widenconst(x)
+            x = isvarargtype(x) ? x : widenconst(x)
             if isType(x)
                 anyinfo = true
                 xparam = x.parameters[1]
@@ -1399,10 +1472,8 @@ end
 function arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(a), @nospecialize i...)
     a = widenconst(a)
     if a <: Array
-        if isa(a, DataType) && (isa(a.parameters[1], Type) || isa(a.parameters[1], TypeVar))
-            # TODO: the TypeVar case should not be needed here
-            a = a.parameters[1]
-            return isa(a, TypeVar) ? a.ub : a
+        if isa(a, DataType) && isa(a.parameters[1], Type)
+            return a.parameters[1]
         elseif isa(a, UnionAll) && !has_free_typevars(a)
             unw = unwrap_unionall(a)
             if isa(unw, DataType)
@@ -1564,7 +1635,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         if length(argtypes) - 1 == tf[2]
             argtypes = argtypes[1:end-1]
         else
-            vatype = argtypes[end]
+            vatype = argtypes[end]::TypeofVararg
             argtypes = argtypes[1:end-1]
             while length(argtypes) < tf[1]
                 push!(argtypes, unwrapva(vatype))
@@ -1670,7 +1741,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             aft = argtypes[2]
             if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
                    (isconcretetype(aft) && !(aft <: Builtin))
-                af_argtype = isa(tt, Const) ? tt.val : tt.parameters[1]
+                af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
                     if contains_is(argtypes_vec, Union{})

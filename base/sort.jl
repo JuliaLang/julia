@@ -1098,7 +1098,7 @@ function sort!(A::AbstractArray;
 
     1 <= k <= nd || throw(ArgumentError("dimension out of range"))
 
-    remdims = ntuple(i -> i == k ? 1 : size(A, i), nd)
+    remdims = ntuple(i -> i == k ? 1 : axes(A, i), nd)
     for idx in CartesianIndices(remdims)
         Av = view(A, ntuple(i -> i == k ? Colon() : idx[i], nd)...)
         sort!(Av, alg, ordr)

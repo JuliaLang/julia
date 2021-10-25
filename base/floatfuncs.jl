@@ -166,6 +166,16 @@ function _round_invstep(x, invstep, r::RoundingMode)
     return y
 end
 
+# round x to multiples of 1/(invstepsqrt^2)
+# Using square root of step prevents overflowing
+function _round_invstepsqrt(x, invstepsqrt, r::RoundingMode)
+    y = round((x * invstepsqrt) * invstepsqrt, r) / invstepsqrt / invstepsqrt
+    if !isfinite(y)
+        return x
+    end
+    return y
+end
+
 # round x to multiples of step
 function _round_step(x, step, r::RoundingMode)
     # TODO: use div with rounding mode
@@ -186,10 +196,15 @@ function _round_digits(x, r::RoundingMode, digits::Integer, base)
     fx = float(x)
     if digits >= 0
         invstep = oftype(fx, base)^digits
-        _round_invstep(fx, invstep, r)
+        if isfinite(invstep)
+            return _round_invstep(fx, invstep, r)
+        else
+            invstepsqrt = oftype(fx, base)^oftype(fx, digits/2)
+            return _round_invstepsqrt(fx, invstepsqrt, r)
+        end
     else
         step = oftype(fx, base)^-digits
-        _round_step(fx, step, r)
+        return _round_step(fx, step, r)
     end
 end
 
@@ -233,7 +248,7 @@ whether or not NaN values are considered equal (defaults to false).
 
 For real or complex floating-point values, if an `atol > 0` is not specified, `rtol` defaults to
 the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger (least precise).
-This corresponds to requiring equality of about half of the significand digits. Otherwise,
+This corresponds to requiring equality of about half of the significant digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
 The `norm` keyword defaults to `abs` for numeric `(x,y)` and to `LinearAlgebra.norm` for

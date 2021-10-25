@@ -209,11 +209,54 @@ end
 
 !!! compat "Julia 1.8"
     The usage within a function body requires at least Julia 1.8.
+
+---
+    @inline block
+
+Give a hint to the compiler that calls within `block` are worth inlining.
+
+```julia
+# The compiler will try to inline `f`
+@inline f(...)
+
+# The compiler will try to inline `f`, `g` and `+`
+@inline f(...) + g(...)
+```
+
+!!! note
+    A callsite annotation always has the precedence over the annotation applied to the
+    definition of the called function:
+    ```julia
+    @noinline function explicit_noinline(args...)
+        # body
+    end
+
+    let
+        @inline explicit_noinline(args...) # will be inlined
+    end
+    ```
+
+!!! note
+    When there are nested callsite annotations, the innermost annotation has the precedence:
+    ```julia
+    @noinline let a0, b0 = ...
+        a = @inline f(a0)  # the compiler will try to inline this call
+        b = f(b0)          # the compiler will NOT try to inline this call
+        return a, b
+    end
+    ```
+
+!!! warning
+    Although a callsite annotation will try to force inlining in regardless of the cost model,
+    there are still chances it can't succeed in it. Especially, recursive calls can not be
+    inlined even if they are annotated as `@inline`d.
+
+!!! compat "Julia 1.8"
+    The callsite annotation requires at least Julia 1.8.
 """
-macro inline(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
+macro inline(x)
+    return annotate_meta_def_or_block(x, :inline)
 end
-macro inline() Expr(:meta, :inline) end
 
 """
     @noinline
@@ -245,13 +288,52 @@ end
 !!! compat "Julia 1.8"
     The usage within a function body requires at least Julia 1.8.
 
+---
+    @noinline block
+
+Give a hint to the compiler that it should not inline the calls within `block`.
+
+```julia
+# The compiler will try to not inline `f`
+@noinline f(...)
+
+# The compiler will try to not inline `f`, `g` and `+`
+@noinline f(...) + g(...)
+```
+
+!!! note
+    A callsite annotation always has the precedence over the annotation applied to the
+    definition of the called function:
+    ```julia
+    @inline function explicit_inline(args...)
+        # body
+    end
+
+    let
+        @noinline explicit_inline(args...) # will not be inlined
+    end
+    ```
+
+!!! note
+    When there are nested callsite annotations, the innermost annotation has the precedence:
+    ```julia
+    @inline let a0, b0 = ...
+        a = @noinline f(a0)  # the compiler will NOT try to inline this call
+        b = f(b0)            # the compiler will try to inline this call
+        return a, b
+    end
+    ```
+
+!!! compat "Julia 1.8"
+    The callsite annotation requires at least Julia 1.8.
+
+---
 !!! note
     If the function is trivial (for example returning a constant) it might get inlined anyway.
 """
-macro noinline(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
+macro noinline(x)
+    return annotate_meta_def_or_block(x, :noinline)
 end
-macro noinline() Expr(:meta, :noinline) end
 
 """
     @pure ex
@@ -267,16 +349,26 @@ macro pure(ex)
 end
 
 """
-    @aggressive_constprop ex
-    @aggressive_constprop(ex)
+    @constprop setting ex
+    @constprop(setting, ex)
 
-`@aggressive_constprop` requests more aggressive interprocedural constant
-propagation for the annotated function. For a method where the return type
-depends on the value of the arguments, this can yield improved inference results
-at the cost of additional compile time.
+`@constprop` controls the mode of interprocedural constant propagation for the
+annotated function. Two `setting`s are supported:
+
+- `@constprop :aggressive ex`: apply constant propagation aggressively.
+  For a method where the return type depends on the value of the arguments,
+  this can yield improved inference results at the cost of additional compile time.
+- `@constprop :none ex`: disable constant propagation. This can reduce compile
+  times for functions that Julia might otherwise deem worthy of constant-propagation.
+  Common cases are for functions with `Bool`- or `Symbol`-valued arguments or keyword arguments.
 """
-macro aggressive_constprop(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
+macro constprop(setting, ex)
+    if isa(setting, QuoteNode)
+        setting = setting.value
+    end
+    setting === :aggressive && return esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
+    setting === :none && return esc(isa(ex, Expr) ? pushmeta!(ex, :no_constprop) : ex)
+    throw(ArgumentError("@constprop $setting not supported"))
 end
 
 """
@@ -293,6 +385,13 @@ macro propagate_inbounds(ex)
 end
 
 """
+    @compile
+
+Force compilation of the block or function (Julia's built-in interpreter is blocked from executing it).
+"""
+macro compile() Expr(:meta, :compile) end
+
+"""
     @polly
 
 Tells the compiler to apply the polyhedral optimizer Polly to a function.
@@ -303,6 +402,15 @@ end
 
 ## some macro utilities ##
 
+unwrap_macrocalls(@nospecialize(x)) = x
+function unwrap_macrocalls(ex::Expr)
+    inner = ex
+    while inner.head === :macrocall
+        inner = inner.args[end]::Expr
+    end
+    return inner
+end
+
 function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     if isempty(args)
         tag = sym
@@ -310,10 +418,7 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
         tag = Expr(sym, args...)::Expr
     end
 
-    inner = ex
-    while inner.head === :macrocall
-        inner = inner.args[end]::Expr
-    end
+    inner = unwrap_macrocalls(ex)
 
     idx, exargs = findmeta(inner)
     if idx != 0
@@ -363,8 +468,23 @@ function findmetaarg(metaargs, sym)
     return 0
 end
 
-function is_short_function_def(ex)
-    ex.head === :(=) || return false
+function annotate_meta_def_or_block(@nospecialize(ex), meta::Symbol)
+    inner = unwrap_macrocalls(ex)
+    if is_function_def(inner)
+        # annotation on a definition
+        return esc(pushmeta!(ex, meta))
+    else
+        # annotation on a block
+        return Expr(:block,
+                    Expr(meta, true),
+                    Expr(:local, Expr(:(=), :val, esc(ex))),
+                    Expr(meta, false),
+                    :val)
+    end
+end
+
+function is_short_function_def(@nospecialize(ex))
+    isexpr(ex, :(=)) || return false
     while length(ex.args) >= 1 && isa(ex.args[1], Expr)
         (ex.args[1].head === :call) && return true
         (ex.args[1].head === :where || ex.args[1].head === :(::)) || return false
@@ -372,9 +492,11 @@ function is_short_function_def(ex)
     end
     return false
 end
+is_function_def(@nospecialize(ex)) =
+    return isexpr(ex, :function) || is_short_function_def(ex) || isexpr(ex, :->)
 
 function findmeta(ex::Expr)
-    if ex.head === :function || is_short_function_def(ex) || ex.head === :->
+    if is_function_def(ex)
         body = ex.args[2]::Expr
         body.head === :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)
@@ -464,7 +586,10 @@ macro generated(f)
                          Expr(:block,
                               lno,
                               Expr(:if, Expr(:generated),
-                                   body,
+                                   # https://github.com/JuliaLang/julia/issues/25678
+                                   Expr(:block,
+                                        :(local tmp = $body),
+                                        :(if tmp isa Core.CodeInfo; return tmp; else tmp; end)),
                                    Expr(:block,
                                         Expr(:meta, :generated_only),
                                         Expr(:return, nothing))))))
@@ -505,7 +630,7 @@ result into the field in the first argument and return the values `(old, new)`.
 This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
 
 
-See [atomics](#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
@@ -523,17 +648,20 @@ julia> @atomic a.x += 1 # increment field x of a, with sequential consistency
 3
 
 julia> @atomic a.x + 1 # increment field x of a, with sequential consistency
-(3, 4)
+3 => 4
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 4
 
 julia> @atomic max(a.x, 10) # change field x of a to the max value, with sequential consistency
-(4, 10)
+4 => 10
 
 julia> @atomic a.x max 5 # again change field x of a to the max value, with sequential consistency
-(10, 10)
+10 => 10
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomic(ex)
     if !isa(ex, Symbol) && !is_expr(ex, :(::))
@@ -601,7 +729,7 @@ Stores `new` into `a.b.x` and returns the old value of `a.b.x`.
 
 This operation translates to a `swapproperty!(a.b, :x, new)` call.
 
-See [atomics](#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
@@ -615,6 +743,9 @@ julia> @atomicswap a.x = 2+2 # replace field x of a with 4, with sequential cons
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 4
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomicswap(order, ex)
     order isa QuoteNode || (order = esc(order))
@@ -644,7 +775,7 @@ replacement was completed.
 
 This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` call.
 
-See [atomics](#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
@@ -653,22 +784,25 @@ julia> a = Atomic(1)
 Atomic{Int64}(1)
 
 julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
-(1, true)
+(old = 1, success = true)
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 2
 
 julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
-(2, false)
+(old = 2, success = false)
 
 julia> xchg = 2 => 0; # replace field x of a with 0 if it was 1, with sequential consistency
 
 julia> @atomicreplace a.x xchg
-(2, true)
+(old = 2, success = true)
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 0
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomicreplace(success_order, fail_order, ex, old_new)
     fail_order isa QuoteNode || (fail_order = esc(fail_order))

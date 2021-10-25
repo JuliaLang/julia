@@ -350,7 +350,7 @@ struct Const{T<:Array}
 end
 
 @eval Base.getindex(A::Const, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 function foo31018!(a, b)
     @aliasscope for i in eachindex(a, b)
@@ -594,6 +594,14 @@ f41438(y) = y[].x
 @test f41438(Ref{A41438}(A41438(C_NULL))) === C_NULL
 @test f41438(Ref{B41438}(B41438(C_NULL))) === C_NULL
 
+const S41438 = Pair{Any, Ptr{T}} where T
+g41438() = Array{S41438,1}(undef,1)[1].first
+get_llvm(g41438, ()); # cause allocation of layout
+@test S41438.body.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438.body)
+@test S41438{Int}.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438{Int})
+
 # issue #41157
 f41157(a, b) = a[1] = b[1]
 @test_throws BoundsError f41157(Tuple{Int}[], Tuple{Union{}}[])
@@ -629,3 +637,31 @@ t41096 = Term41096{:t}(Modulate41096(:t, false))
 U41096 = Term41096{:U}(Modulate41096(:U, false))
 
 @test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)
+
+# test that we can start julia with libjulia-codegen removed; PR #41936
+mktempdir() do pfx
+    run(`cp -r $(Sys.BINDIR)/.. $pfx`)
+    run(`rm -rf $pfx/lib/julia/libjulia-codegen\*`)
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'println("no codegen!")'`) == "no codegen!"
+end
+
+# issue #42645
+mutable struct A42645{T}
+    x::Bool
+    function A42645(a::Vector{T}) where T
+        r = new{T}()
+        r.x = false
+        return r
+    end
+end
+mutable struct B42645{T}
+  y::A42645{T}
+end
+x42645 = 1
+function f42645()
+  res = B42645(A42645([x42645]))
+  res.y = A42645([x42645])
+  res.y.x = true
+  res
+end
+@test ((f42645()::B42645).y::A42645{Int}).x

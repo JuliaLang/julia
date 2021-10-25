@@ -73,7 +73,7 @@
 //
 //     Optimize only for size. Clang's `-Oz`.
 
-bool jl_processor_print_help = false;
+JL_DLLEXPORT bool jl_processor_print_help = false;
 
 namespace {
 

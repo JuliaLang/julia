@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // Pointers that are exposed through the public libjulia
 #define JL_EXPORTED_DATA_POINTERS(XX) \
     XX(jl_abstractarray_type) \
@@ -75,6 +77,7 @@
     XX(jl_number_type) \
     XX(jl_opaque_closure_type) \
     XX(jl_opaque_closure_typename) \
+    XX(jl_pair_type) \
     XX(jl_partial_opaque_type) \
     XX(jl_partial_struct_type) \
     XX(jl_phicnode_type) \
@@ -123,8 +126,9 @@
     XX(jl_vecelement_typename) \
     XX(jl_voidpointer_type) \
     XX(jl_void_type) \
-    XX(jl_weakref_type) \
+    XX(jl_weakref_type)
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \
-    XX(jl_n_threads, int)
+    XX(jl_n_threads, int) \
+    XX(jl_options, jl_options_t)
