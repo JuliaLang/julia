@@ -1574,3 +1574,6 @@ end
     r = Base.IdentityUnitRange(3:4)
     @test reshape(r, :) === reshape(r, (:,)) === r
 end
+
+@test haskey([1, 2, 3], 1)
+@test !haskey([1, 2, 3], 4)

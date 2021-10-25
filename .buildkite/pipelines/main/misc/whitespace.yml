@@ -21,4 +21,4 @@ steps:
       - github_commit_status:
           context: "whitespace"
     commands: |
-      make -j$${JULIA_CPU_THREADS:?} check-whitespace
+      make --output-sync -j$${JULIA_CPU_THREADS:?} check-whitespace

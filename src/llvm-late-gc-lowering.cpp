@@ -2700,7 +2700,7 @@ Pass *createLateLowerGCFramePass() {
     return new LateLowerGCFrame();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLateLowerGCFramePass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddLateLowerGCFramePass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createLateLowerGCFramePass());
 }

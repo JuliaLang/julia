@@ -14,11 +14,7 @@
 #include <dlfcn.h>
 #endif
 
-#ifndef _COMPILER_MICROSOFT_
 #include "valgrind.h"
-#else
-#define RUNNING_ON_VALGRIND 0
-#endif
 #include "julia_assert.h"
 
 #ifdef __cplusplus

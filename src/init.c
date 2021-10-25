@@ -34,11 +34,7 @@
 extern "C" {
 #endif
 
-#ifdef _MSC_VER
-JL_DLLEXPORT char *dirname(char *);
-#else
 #include <libgen.h>
-#endif
 
 #ifdef _OS_WINDOWS_
 extern int needsSymRefreshModuleList;
@@ -656,7 +652,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
     jl_crtdll_handle = jl_dlopen(jl_crtdll_name, 0);
     jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
-    JL_MUTEX_INIT(&jl_in_stackwalk);
+    uv_mutex_init(&jl_in_stackwalk);
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
     if (!SymInitialize(GetCurrentProcess(), "", 1)) {
         jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
@@ -679,6 +675,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
         jl_error("cannot generate code-coverage or track allocation information while generating a .o, .bc, or .s output file");
     }
 
+    jl_init_runtime_ccall();
     jl_gc_init();
     jl_init_tasks();
     jl_init_threading();

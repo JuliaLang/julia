@@ -3,20 +3,57 @@
 function is_argtype_match(@nospecialize(given_argtype),
                           @nospecialize(cache_argtype),
                           overridden_by_const::Bool)
-    if isa(given_argtype, Const) || isa(given_argtype, PartialStruct) || isa(given_argtype, PartialOpaque)
+    if is_forwardable_argtype(given_argtype)
         return is_lattice_equal(given_argtype, cache_argtype)
     end
     return !overridden_by_const
+end
+
+function is_forwardable_argtype(@nospecialize x)
+    return isa(x, Const) ||
+           isa(x, Conditional) ||
+           isa(x, PartialStruct) ||
+           isa(x, PartialOpaque)
 end
 
 # In theory, there could be a `cache` containing a matching `InferenceResult`
 # for the provided `linfo` and `given_argtypes`. The purpose of this function is
 # to return a valid value for `cache_lookup(linfo, argtypes, cache).argtypes`,
 # so that we can construct cache-correct `InferenceResult`s in the first place.
-function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector, va_override::Bool)
+function matching_cache_argtypes(
+    linfo::MethodInstance, (; fargs, argtypes)::ArgInfo, va_override::Bool)
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
-    given_argtypes = anymap(widenconditional, given_argtypes)
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing, va_override)
+    given_argtypes = Vector{Any}(undef, length(argtypes))
+    local condargs = nothing
+    for i in 1:length(argtypes)
+        argtype = argtypes[i]
+        # forward `Conditional` if it conveys a constraint on any other argument
+        if isa(argtype, Conditional) && fargs !== nothing
+            cnd = argtype
+            slotid = find_constrained_arg(cnd, fargs)
+            if slotid !== nothing
+                # using union-split signature, we may be able to narrow down `Conditional`
+                sigt = widenconst(slotid > nargs ? argtypes[slotid] : cache_argtypes[slotid])
+                vtype = tmeet(cnd.vtype, sigt)
+                elsetype = tmeet(cnd.elsetype, sigt)
+                if vtype === Bottom && elsetype === Bottom
+                    # we accidentally proved this method match is impossible
+                    # TODO bail out here immediately rather than just propagating Bottom ?
+                    given_argtypes[i] = Bottom
+                else
+                    if condargs === nothing
+                        condargs = Tuple{Int,Int}[]
+                    end
+                    push!(condargs, (slotid, i))
+                    given_argtypes[i] = Conditional(SlotNumber(slotid), vtype, elsetype)
+                end
+                continue
+            end
+        end
+        given_argtypes[i] = widenconditional(argtype)
+    end
     isva = va_override || linfo.def.isva
     if isva || isvarargtype(given_argtypes[end])
         isva_given_argtypes = Vector{Any}(undef, nargs)
@@ -30,15 +67,22 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector, 
                 last = nargs
             end
             isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[last:end])
+            # invalidate `Conditional` imposed on varargs
+            if condargs !== nothing
+                for (slotid, i) in condargs
+                    if slotid ≥ last
+                        isva_given_argtypes[i] = widenconditional(isva_given_argtypes[i])
+                    end
+                end
+            end
         end
         given_argtypes = isva_given_argtypes
     end
     @assert length(given_argtypes) == nargs
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing, va_override)
     for i in 1:nargs
         given_argtype = given_argtypes[i]
         cache_argtype = cache_argtypes[i]
-        if !is_argtype_match(given_argtype, cache_argtype, overridden_by_const[i])
+        if !is_argtype_match(given_argtype, cache_argtype, false)
             # prefer the argtype we were given over the one computed from `linfo`
             cache_argtypes[i] = given_argtype
             overridden_by_const[i] = true
@@ -50,7 +94,7 @@ end
 function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(specTypes),
     isva::Bool, withfirst::Bool = true)
     toplevel = method === nothing
-    linfo_argtypes = Any[unwrap_unionall(specTypes).parameters...]
+    linfo_argtypes = Any[(unwrap_unionall(specTypes)::DataType).parameters...]
     nargs::Int = toplevel ? 0 : method.nargs
     if !withfirst
         # For opaque closure, the closure environment is processed elsewhere
@@ -78,8 +122,8 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
             else
                 vargtype_elements = Any[]
                 for p in linfo_argtypes[nargs:linfo_argtypes_length]
-                    p = isvarargtype(p) ? unconstrain_vararg_length(p) : p
-                    push!(vargtype_elements, rewrap(p, specTypes))
+                    p = unwraptv(isvarargtype(p) ? unconstrain_vararg_length(p) : p)
+                    push!(vargtype_elements, elim_free_typevars(rewrap(p, specTypes)))
                 end
                 for i in 1:length(vargtype_elements)
                     atyp = vargtype_elements[i]
@@ -111,16 +155,14 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 atyp = unwrapva(atyp)
                 tail_index -= 1
             end
-            while isa(atyp, TypeVar)
-                atyp = atyp.ub
-            end
+            atyp = unwraptv(atyp)
             if isa(atyp, DataType) && isdefined(atyp, :instance)
                 # replace singleton types with their equivalent Const object
                 atyp = Const(atyp.instance)
             elseif isconstType(atyp)
                 atyp = Const(atyp.parameters[1])
             else
-                atyp = rewrap(atyp, specTypes)
+                atyp = elim_free_typevars(rewrap(atyp, specTypes))
             end
             i == n && (lastatype = atyp)
             cache_argtypes[i] = atyp
@@ -132,6 +174,19 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
         @assert nargs == 0 "invalid specialization of method" # wrong number of arguments
     end
     cache_argtypes
+end
+
+# eliminate free `TypeVar`s in order to make the life much easier down the road:
+# at runtime only `Type{...}::DataType` can contain invalid type parameters, and other
+# malformed types here are user-constructed type arguments given at an inference entry
+# so this function will replace only the malformed `Type{...}::DataType` with `Type`
+# and simply replace other possibilities with `Any`
+function elim_free_typevars(@nospecialize t)
+    if has_free_typevars(t)
+        return isType(t) ? Type : Any
+    else
+        return t
+    end
 end
 
 function matching_cache_argtypes(linfo::MethodInstance, ::Nothing, va_override::Bool)

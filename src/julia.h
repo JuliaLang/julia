@@ -63,15 +63,6 @@
 #  define JL_USED_FUNC __attribute__((used))
 #  define JL_SECTION(name) __attribute__((section(name)))
 #  define JL_THREAD_LOCAL __thread
-#elif defined(_COMPILER_MICROSOFT_)
-#  define JL_NORETURN __declspec(noreturn)
-// This is the closest I can find for __attribute__((const))
-#  define JL_CONST_FUNC __declspec(noalias)
-// Does MSVC have this?
-#  define JL_USED_FUNC
-// TODO: Figure out what to do on MSVC
-#  define JL_SECTION(x)
-#  define JL_THREAD_LOCAL __declspec(threaD)
 #else
 #  define JL_NORETURN
 #  define JL_CONST_FUNC
@@ -1846,18 +1837,8 @@ typedef struct _jl_task_t {
     jl_excstack_t *excstack;
     // current exception handler
     jl_handler_t *eh;
-
-    union {
-        jl_ucontext_t ctx; // saved thread state
-#ifdef _OS_WINDOWS_
-        jl_ucontext_t copy_stack_ctx;
-#else
-        struct jl_stack_context_t copy_stack_ctx;
-#endif
-    };
-#if defined(_COMPILER_TSAN_ENABLED_)
-    void *tsan_state;
-#endif
+    // saved thread state
+    jl_ucontext_t ctx;
     void *stkbuf; // malloc'd memory (either copybuf or stack)
     size_t bufsz; // actual sizeof stkbuf
     unsigned int copy_stack:31; // sizeof stack for copybuf

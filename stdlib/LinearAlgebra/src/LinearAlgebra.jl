@@ -262,8 +262,7 @@ function sym_uplo(uplo::Char)
     end
 end
 
-@noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U/'U' (upper) or :L/'L' (lower)"))
-
+@noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
 
 """
     ldiv!(Y, A, B) -> Y
@@ -397,7 +396,7 @@ The resulting array is mutable. It can be used, for example, to pass the data of
 `A` to an efficient in-place method for a matrix factorization such as `lu!`, in
 cases where a more specific implementation of `lu!` (or `lu`) is not available.
 
-See also: `copy_oftype`, `copy_similar`
+See also: `copy_oftype`, `copy_similar`.
 """
 copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)...), A)
 
@@ -452,6 +451,12 @@ export ⋅, ×
 ## vectors to matrices.
 _cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
 _cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+
+# SymTridiagonal ev can be the same length as dv, but the last element is
+# ignored. However, some methods can fail if they read the entired ev
+# rather than just the meaningful elements. This is a helper function
+# for getting only the meaningful elements of ev. See #41089
+_evview(S::SymTridiagonal) = @view S.ev[begin:length(S.dv) - 1]
 
 ## append right hand side with zeros if necessary
 _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))

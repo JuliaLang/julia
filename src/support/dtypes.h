@@ -10,11 +10,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
-#if defined(_COMPILER_INTEL_)
-#include <mathimf.h>
-#else
 #include <math.h>
-#endif
 
 #include "platform.h"
 #include "analyzer_annotations.h"
@@ -108,13 +104,7 @@
 #define LLT_REALLOC(p,n) realloc((p),(n))
 #define LLT_FREE(x) free(x)
 
-#if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
-#  define STATIC_INLINE static
-#elif defined(_OS_WINDOWS_) && defined(_COMPILER_MICROSOFT_)
-#  define STATIC_INLINE static __inline
-#else
-#  define STATIC_INLINE static inline
-#endif
+#define STATIC_INLINE static inline
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)
@@ -124,13 +114,7 @@
 #  define NOINLINE_DECL(f) f __attribute__((noinline))
 #endif
 
-#ifdef _COMPILER_MICROSOFT_
-# ifdef _P64
-#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(8)) x
-# else
-#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(4)) x
-# endif
-#elif defined(__GNUC__)
+#if defined(__GNUC__)
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) x __attribute__ ((aligned (sizeof(void*))))
 #else
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
@@ -146,20 +130,6 @@
 #define jl_assume(cond) (__extension__ ({               \
                 __typeof__(cond) cond_ = (cond);        \
                 __builtin_assume(!!(cond_));            \
-                cond_;                                  \
-            }))
-#elif defined(_COMPILER_MICROSOFT_) && defined(__cplusplus)
-template<typename T>
-static inline T
-jl_assume(T v)
-{
-    __assume(!!v);
-    return v;
-}
-#elif defined(_COMPILER_INTEL_)
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                __assume(!!(cond_));                    \
                 cond_;                                  \
             }))
 #elif defined(__GNUC__)
@@ -180,12 +150,6 @@ static inline void jl_assume_(int cond)
 
 #if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
 #define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
-#elif defined(_COMPILER_INTEL_)
-#define jl_assume_aligned(ptr, align) (__extension__ ({         \
-                __typeof__(ptr) ptr_ = (ptr);                   \
-                __assume_aligned(ptr_, align);                  \
-                ptr_;                                           \
-            }))
 #elif defined(__GNUC__)
 #define jl_assume_aligned(ptr, align) (__extension__ ({         \
                 __typeof__(ptr) ptr_ = (ptr);                   \

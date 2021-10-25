@@ -128,7 +128,7 @@ STATIC_INLINE void import_gc_state(jl_ptls_t ptls, jl_gc_mark_sp_t *sp) {
 // is going to realloc the buffer (of its own list) or accessing the
 // list of another thread
 static jl_mutex_t finalizers_lock;
-static jl_mutex_t gc_cache_lock;
+static uv_mutex_t gc_cache_lock;
 
 // Flag that tells us whether we need to support conservative marking
 // of objects.
@@ -181,7 +181,7 @@ bigval_t *big_objects_marked = NULL;
 // `to_finalize` should not have tagged pointers.
 arraylist_t finalizer_list_marked;
 arraylist_t to_finalize;
-JL_DLLEXPORT int jl_gc_have_pending_finalizers = 0;
+JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers = 0;
 
 NOINLINE uintptr_t gc_get_stack_ptr(void)
 {
@@ -262,7 +262,9 @@ static void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT
 {
     arraylist_push(&to_finalize, o);
     arraylist_push(&to_finalize, f);
-    jl_gc_have_pending_finalizers = 1;
+    // doesn't need release, since we'll keep checking (on the reader) until we see the work and
+    // release our lock, and that will have a release barrier by then
+    jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 1);
 }
 
 static void run_finalizer(jl_task_t *ct, jl_value_t *o, jl_value_t *ff)
@@ -274,7 +276,7 @@ static void run_finalizer(jl_task_t *ct, jl_value_t *o, jl_value_t *ff)
     jl_value_t *args[2] = {ff,o};
     JL_TRY {
         size_t last_age = ct->world_age;
-        ct->world_age = jl_world_counter;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         jl_apply(args, 2);
         ct->world_age = last_age;
     }
@@ -388,7 +390,7 @@ static void run_finalizers(jl_task_t *ct)
     if (to_finalize.items == to_finalize._space) {
         copied_list.items = copied_list._space;
     }
-    jl_gc_have_pending_finalizers = 0;
+    jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 0);
     arraylist_new(&to_finalize, 0);
     // This releases the finalizers lock.
     jl_gc_run_finalizers_in_list(ct, &copied_list);
@@ -453,7 +455,7 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(jl_task_t *ct, int on)
         return;
     }
     ptls->finalizers_inhibited = new_val;
-    if (jl_gc_have_pending_finalizers) {
+    if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers)) {
         jl_gc_run_pending_finalizers(ct);
     }
 }
@@ -683,9 +685,9 @@ static void gc_sync_cache_nolock(jl_ptls_t ptls, jl_gc_mark_cache_t *gc_cache) J
 
 static void gc_sync_cache(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
-    JL_LOCK_NOGC(&gc_cache_lock);
+    uv_mutex_lock(&gc_cache_lock);
     gc_sync_cache_nolock(ptls, &ptls->gc_cache);
-    JL_UNLOCK_NOGC(&gc_cache_lock);
+    uv_mutex_unlock(&gc_cache_lock);
 }
 
 // No other threads can be running marking at the same time
@@ -1668,14 +1670,14 @@ static void NOINLINE gc_mark_stack_resize(jl_gc_mark_cache_t *gc_cache, jl_gc_ma
     jl_gc_mark_data_t *old_data = gc_cache->data_stack;
     void **pc_stack = sp->pc_start;
     size_t stack_size = (char*)sp->pc_end - (char*)pc_stack;
-    JL_LOCK_NOGC(&gc_cache->stack_lock);
+    uv_mutex_lock(&gc_cache->stack_lock);
     gc_cache->data_stack = (jl_gc_mark_data_t *)realloc_s(old_data, stack_size * 2 * sizeof(jl_gc_mark_data_t));
     sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + (((char*)gc_cache->data_stack) - ((char*)old_data)));
 
     sp->pc_start = gc_cache->pc_stack = (void**)realloc_s(pc_stack, stack_size * 2 * sizeof(void*));
     gc_cache->pc_stack_end = sp->pc_end = sp->pc_start + stack_size * 2;
     sp->pc = sp->pc_start + (sp->pc - pc_stack);
-    JL_UNLOCK_NOGC(&gc_cache->stack_lock);
+    uv_mutex_unlock(&gc_cache->stack_lock);
 }
 
 // Push a work item to the stack. The type of the work item is marked with `pc`.
@@ -2645,7 +2647,6 @@ mark: {
                 objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_task_t));
             jl_task_t *ta = (jl_task_t*)new_obj;
             gc_scrub_record_task(ta);
-            void *stkbuf = ta->stkbuf;
             if (gc_cblist_task_scanner) {
                 export_gc_state(ptls, &sp);
                 int16_t tid = jl_atomic_load_relaxed(&ta->tid);
@@ -2655,6 +2656,7 @@ mark: {
                 import_gc_state(ptls, &sp);
             }
 #ifdef COPY_STACKS
+            void *stkbuf = ta->stkbuf;
             if (stkbuf && ta->copy_stack)
                 gc_setmark_buf_(ptls, stkbuf, bits, ta->bufsz);
 #endif
@@ -2777,7 +2779,7 @@ mark: {
 static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
                                      jl_ptls_t ptls2)
 {
-    gc_mark_queue_obj(gc_cache, sp, ptls2->current_task);
+    gc_mark_queue_obj(gc_cache, sp, jl_atomic_load_relaxed(&ptls2->current_task));
     gc_mark_queue_obj(gc_cache, sp, ptls2->root_task);
     if (ptls2->next_task)
         gc_mark_queue_obj(gc_cache, sp, ptls2->next_task);
@@ -3075,7 +3077,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_mark_sp_init(gc_cache, &sp);
     // Conservative marking relies on age to tell allocated objects
     // and freelist entries apart.
-    mark_reset_age = !support_conservative_marking;
+    mark_reset_age = !jl_gc_conservative_gc_support_enabled();
     // Reset the age and old bit for any unmarked objects referenced by the
     // `to_finalize` list. These objects are only reachable from this list
     // and should not be referenced by any old objects so this won't break
@@ -3334,7 +3336,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     gc_cache->perm_scanned_bytes = 0;
     gc_cache->scanned_bytes = 0;
     gc_cache->nbig_obj = 0;
-    JL_MUTEX_INIT(&gc_cache->stack_lock);
+    uv_mutex_init(&gc_cache->stack_lock);
     size_t init_size = 1024;
     gc_cache->pc_stack = (void**)malloc_s(init_size * sizeof(void*));
     gc_cache->pc_stack_end = gc_cache->pc_stack + init_size;
@@ -3348,6 +3350,10 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 // System-wide initializations
 void jl_gc_init(void)
 {
+    JL_MUTEX_INIT(&finalizers_lock);
+    uv_mutex_init(&gc_cache_lock);
+    uv_mutex_init(&gc_perm_lock);
+
     jl_gc_init_page();
     jl_gc_debug_init();
 
@@ -3455,14 +3461,21 @@ JL_DLLEXPORT void *jl_malloc(size_t sz)
     return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
 }
 
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
-{
+//_unchecked_calloc does not check for potential overflow of nm*sz
+STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) {
     size_t nmsz = nm*sz;
     int64_t *p = (int64_t *)jl_gc_counted_calloc(nmsz + JL_SMALL_BYTE_ALIGNMENT, 1);
     if (p == NULL)
         return NULL;
     p[0] = nmsz;
     return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
+}
+
+JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
+{
+    if (nm > SSIZE_MAX/sz - JL_SMALL_BYTE_ALIGNMENT)
+        return NULL;
+    return _unchecked_calloc(nm, sz);
 }
 
 JL_DLLEXPORT void jl_free(void *p)
@@ -3611,7 +3624,7 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
 #define GC_PERM_POOL_SIZE (2 * 1024 * 1024)
 // 20k limit for pool allocation. At most 1% fragmentation
 #define GC_PERM_POOL_LIMIT (20 * 1024)
-jl_mutex_t gc_perm_lock;
+uv_mutex_t gc_perm_lock;
 static uintptr_t gc_perm_pool = 0;
 static uintptr_t gc_perm_end = 0;
 
@@ -3688,9 +3701,9 @@ void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
     if (__unlikely(sz > GC_PERM_POOL_LIMIT))
 #endif
         return gc_perm_alloc_large(sz, zero, align, offset);
-    JL_LOCK_NOGC(&gc_perm_lock);
+    uv_mutex_lock(&gc_perm_lock);
     void *p = jl_gc_perm_alloc_nolock(sz, zero, align, offset);
-    JL_UNLOCK_NOGC(&gc_perm_lock);
+    uv_mutex_unlock(&gc_perm_lock);
     return p;
 }
 

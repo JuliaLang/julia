@@ -80,7 +80,7 @@ JL_UNUSED static inline uint32_t crc32c_shift(const uint32_t zeros[][256], uint3
         zeros[2][(crc >> 16) & 0xff] ^ zeros[3][crc >> 24];
 }
 
-#if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #  ifdef _CPU_X86_64_
 #    define CRC32_PTR "crc32q"
 #  else

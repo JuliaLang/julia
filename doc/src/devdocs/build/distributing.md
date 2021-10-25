@@ -1,4 +1,4 @@
-Notes for building binary distributions
+Binary distributions
 =======================================
 
 These notes are for those wishing to compile a binary distribution of Julia
@@ -111,7 +111,7 @@ Windows
 The best supported method of creating a Julia distribution on Windows
 is to cross-compile from a Linux distribution such as Ubuntu. In-depth
 compilation instructions [are
-available](https://github.com/JuliaLang/julia/blob/master/doc/build/windows.md).
+available](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/windows.md).
 However the important steps for redistribution are to ensure to `make
 win-extras` in between `make` and `make binary-dist`.  After that process is
 completed, the `.zip` file created in the head Julia directory will

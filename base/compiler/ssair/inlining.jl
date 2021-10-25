@@ -785,7 +785,7 @@ end
 
 function validate_sparams(sparams::SimpleVector)
     for i = 1:length(sparams)
-        (isa(sparams[i], TypeVar) || isa(sparams[i], Core.TypeofVararg)) && return false
+        (isa(sparams[i], TypeVar) || isvarargtype(sparams[i])) && return false
     end
     return true
 end
@@ -873,9 +873,7 @@ function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::Optimizatio
     typ = widenconst(typ)
     if isa(typ, DataType) && typ.name === NamedTuple_typename
         typ = typ.parameters[2]
-        while isa(typ, TypeVar)
-            typ = typ.ub
-        end
+        typ = unwraptv(typ)
     end
     isa(typ, DataType) || return false
     if typ.name === Tuple.name

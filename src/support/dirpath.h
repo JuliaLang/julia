@@ -6,7 +6,7 @@
 #ifdef _OS_WINDOWS_
 #define PATHSEPSTRING "\\"
 #define PATHLISTSEPSTRING ";"
-#if defined(_MSC_VER) || defined(_COMPILER_CLANG_)
+#if defined(_COMPILER_CLANG_)
 #define PATH_MAX MAX_PATH
 #endif
 #else

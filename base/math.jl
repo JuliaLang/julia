@@ -932,26 +932,25 @@ julia> modf(-3.5)
 """
 modf(x) = isinf(x) ? (flipsign(zero(x), x), x) : (rem(x, one(x)), trunc(x))
 
-function modf(x::Float32)
-    temp = Ref{Float32}()
-    f = ccall((:modff, libm), Float32, (Float32, Ptr{Float32}), x, temp)
-    f, temp[]
-end
-
-function modf(x::Float64)
-    temp = Ref{Float64}()
-    f = ccall((:modf, libm), Float64, (Float64, Ptr{Float64}), x, temp)
-    f, temp[]
+function modf(x::T) where T<:IEEEFloat
+    isinf(x) && return (copysign(zero(T), x), x)
+    ix = trunc(x)
+    rx = copysign(x - ix, x)
+    return (rx, ix)
 end
 
 @inline function ^(x::Float64, y::Float64)
     yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
-    z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
-    if isnan(z) & !isnan(x+y)
-        throw_exp_domainerror(x)
-    end
-    z
+    x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    x == 1 && return 1.0
+    !isfinite(x) && return x*(y>0)
+    x==0 && return abs(y)*Inf*(!(y>0))
+    logxhi,logxlo = Base.Math._log_ext(x)
+    xyhi = logxhi*y
+    xylo = logxlo*y
+    hi = xyhi+xylo
+    return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
 @inline function ^(x::T, y::T) where T <: Union{Float16, Float32}
     yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
@@ -970,7 +969,7 @@ end
     xnlo = ynlo = 0.0
     if n < 0
         rx = inv(x)
-        isfinite(x) && (xnlo = fma(x, rx, -1.) * rx)
+        isfinite(x) && (xnlo = -fma(x, rx, -1.) * rx)
         x = rx
         n = -n
     end
