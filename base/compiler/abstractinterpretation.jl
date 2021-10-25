@@ -1281,6 +1281,9 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_modifyfield!(interp, argtypes, sv)
         end
         return CallMeta(abstract_call_builtin(interp, f, arginfo, sv, max_methods), false)
+    elseif isa(f, Core.OpaqueClosure)
+        # calling an OpaqueClosure about which we have no information returns no information
+        return CallMeta(Any, false)
     elseif f === Core.kwfunc
         if la == 2
             ft = widenconst(argtypes[2])
