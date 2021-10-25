@@ -148,9 +148,12 @@ executes it.
 
 ## `Base._start`
 
-[`Base._start`](https://github.com/JuliaLang/julia/blob/master/base/client.jl) calls [`Base.exec_options`](https://github.com/JuliaLang/julia/blob/master/base/client.jl)
-which calls [`jl_parse_input_line("println("Hello World!")")`](https://github.com/JuliaLang/julia/blob/master/src/ast.c)
-to create an expression object and [`Core.eval(Main, ex)`](@ref Core.eval) to execute the parsed expression `ex` in the module context of `Main`.
+[`Base._start`][base-client_jl] calls [`Base.exec_options`][base-client_jl]
+which calls [`Base.parse_input_line("println("Hello World!")")`][base-client_jl]
+to create an expression object and [`Core.eval(Main, ex)`](@ref Core.eval)
+to execute the parsed expression `ex` in the module context of `Main`.
+
+[base-client_jl]: https://github.com/JuliaLang/julia/blob/master/base/client.jl
 
 ## `Core.eval`
 
