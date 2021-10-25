@@ -34,7 +34,7 @@ and lists for weak refs, preserved values and finalization.
 [`jl_resolve_sysimg_location()`](https://github.com/JuliaLang/julia/blob/master/src/init.c) searches
 configured paths for the base system image. See [Building the Julia system image](@ref).
 
-[`jl_init_frontend()`](https://github.com/JuliaLang/julia/blob/master/src/ast.c) loads and initializes
+[`jl_init_flisp()`](https://github.com/JuliaLang/julia/blob/master/src/ast.c) loads and initializes
 a pre-compiled femtolisp image containing the scanner/parser.
 
 [`jl_init_types()`](https://github.com/JuliaLang/julia/blob/master/src/jltypes.c) creates `jl_datatype_t`
