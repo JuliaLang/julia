@@ -685,7 +685,7 @@ function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method:
 end
 
 function const_prop_function_heuristic(
-    interp::AbstractInterpreter, @nospecialize(f), (; argtypes)::ArgInfo,
+    _::AbstractInterpreter, @nospecialize(f), (; argtypes)::ArgInfo,
     nargs::Int, all_overridden::Bool, _::InferenceState)
     if nargs > 1
         if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
@@ -704,9 +704,9 @@ function const_prop_function_heuristic(
         end
     end
     if !all_overridden && (istopfunction(f, :+) || istopfunction(f, :-) || istopfunction(f, :*) ||
-                     istopfunction(f, :(==)) || istopfunction(f, :!=) ||
-                     istopfunction(f, :<=) || istopfunction(f, :>=) || istopfunction(f, :<) || istopfunction(f, :>) ||
-                     istopfunction(f, :<<) || istopfunction(f, :>>))
+                           istopfunction(f, :(==)) || istopfunction(f, :!=) ||
+                           istopfunction(f, :<=) || istopfunction(f, :>=) || istopfunction(f, :<) || istopfunction(f, :>) ||
+                           istopfunction(f, :<<) || istopfunction(f, :>>))
         # it is almost useless to inline the op when all the same type,
         # but highly worthwhile to inline promote of a constant
         length(argtypes) > 2 || return false

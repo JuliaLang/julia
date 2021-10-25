@@ -446,7 +446,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     return_value
 end
 
-const fatal_type_bound_error = ErrorException("fatal error in type inference (type bound)")
+const FATAL_TYPE_BOUND_ERROR = ErrorException("fatal error in type inference (type bound)")
 
 function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
                                argexprs::Vector{Any}, linetable::Vector{LineInfoNode},
@@ -516,7 +516,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
     bb += 1
     # We're now in the fall through block, decide what to do
     if item.fully_covered
-        e = Expr(:call, GlobalRef(Core, :throw), fatal_type_bound_error)
+        e = Expr(:call, GlobalRef(Core, :throw), FATAL_TYPE_BOUND_ERROR)
         insert_node_here!(compact, NewInstruction(e, Union{}, line))
         insert_node_here!(compact, NewInstruction(ReturnNode(), Union{}, line))
         finish_current_bb!(compact, 0)
