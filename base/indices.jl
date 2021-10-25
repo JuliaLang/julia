@@ -77,7 +77,7 @@ type:
 
     Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 
-The default is [`IndexCartesian()`](@ref).
+The default is [`IndexCartesian()`](@ref), unless the input's dimension is explicitly less than 2.
 
 Julia's internal indexing machinery will automatically (and invisibly)
 recompute all indexing operations into the preferred style. This allows users
@@ -90,12 +90,19 @@ methods check this trait on their inputs, and dispatch to different
 algorithms depending on the most efficient access pattern. In
 particular, [`eachindex`](@ref) creates an iterator whose type depends
 on the setting of this trait.
+
+!!! note
+    It is recommended to only set [`IndexLinear()`](@ref) for needed cases.
+    Arbitrary dimensional definition might make vector-like types treated as
+    [`IndexCartesian()`](@ref).
+
 """
 IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
 IndexStyle(::Type{Union{}}) = IndexLinear()
-IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
+_islinear(::Type{<:AbstractArray}) = false
+_islinear(::Type{<:Union{AbstractVector, AbstractZeroDimArray}}) = true
+IndexStyle(::Type{T}) where {T<:AbstractArray} = _islinear(T) ? IndexLinear() : IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
-IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
 
 IndexStyle(A::AbstractArray, B::AbstractArray) = IndexStyle(IndexStyle(A), IndexStyle(B))
 IndexStyle(A::AbstractArray, B::AbstractArray...) = IndexStyle(IndexStyle(A), IndexStyle(B...))

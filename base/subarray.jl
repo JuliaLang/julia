@@ -349,7 +349,6 @@ function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::Int)
 end
 
 IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
-IndexStyle(::Type{<:SubArray}) = IndexCartesian()
 
 # Strides are the distance in memory between adjacent elements in a given dimension
 # which we determine from the strides of the parent
