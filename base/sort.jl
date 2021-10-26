@@ -1233,7 +1233,7 @@ end
 
 sort!(v::FPSortable, a::Algorithm, o::DirectOrdering) =
     fpsort!(v, a, o)
-sort!(v::AbstractVector{Integer}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable}) =
+sort!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable}) =
     fpsort!(v, a, o)
 
 end # module Sort.Float
