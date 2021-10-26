@@ -343,37 +343,60 @@ algorithms. See [`muladd`](@ref).
 """
 function fma end
 function fma_emulated(a::Float32, b::Float32, c::Float32)
-    return Float32(Float64(a) * Float64(b) + Float64(c))
+    ab = Float64(a) * b
+    result = ab+c
+    # If converting to Float32 doesn't cause rounding problems
+    (reinterpret(UInt64, result)&0x0000_0000_1fff_ffff != 0x1000_0000) && isequal(ab, result-c)  && return Float32(result)
+    return result #TODO fixed.
+end
+
+""" Splits a Float64 into a hi bit and a low bit where the high bit has 27 trailing 0s and the low bit has 26 trailing 0s"""
+@inline function splitbits(x::Float64)
+    hi = reinterpret(Float64, reinterpret(UInt64, x) & 0xffff_ffff_f800_0000)
+    return hi, x-hi
 end
 
 @inline function twomul(a::Float64, b::Float64)
-    ahi = reinterpret(Float64, reinterpret(UInt64, a) & 0xffff_ffff_f800_0000)
-    alo = a-ahi
-    bhi = reinterpret(Float64, reinterpret(UInt64, b) & 0xffff_ffff_f800_0000)
-    blo = b-bhi
+    ahi, alo = splitbits(a)
+    bhi, blo = splitbits(b)
     abhi = a*b
-    blohi = reinterpret(Float64, reinterpret(UInt64, blo) & 0xffff_ffff_f800_0000)
-    blolo = blo-blohi
+    blohi, blolo = splitbits(blo)
     ablo = alo*blohi - (((abhi - ahi*bhi) - alo*bhi) - ahi*blo) + blolo*alo
-    return abhi, ifelse(isfinite(abhi), ablo, abhi)
+    return abhi, ablo
 end
 
 function fma_emulated(a::Float64, b::Float64,c::Float64)
-    absab = abs(a*b)
-    if !isfinite(absab) || issubnormal(absab) || issubnormal(a) || issubnormal(b) || iszero(a)
-        !(isfinite(a) && isfinite(b) && isfinite(c)) && return a*b+c
-        iszero(a) || iszero(b) && return a*b+c
-        a_norm = reinterpret(Float64, reinterpret(UInt64, a) & 0xc00fffffffffffff)
-        b_norm = reinterpret(Float64, reinterpret(UInt64, b) & 0xc00fffffffffffff)
-        abhi, ablo = twomul(a_norm,b_norm)
-        bias = exponent(a) + exponent(b)
-        c_denorm = ldexp(c, bias)
-        isfinite(c_denorm) && return ldexp(fma_emulated(a_norm, b_norm, c_denorm), -bias)
-        c_denorm = ldexp(c, bias-54)
-        isfinite(c_denorm) && return ldexp(fma_emulated(ldexp(a_norm, -54), b_norm, c_denorm), bias+54)
-        return a*b+c
-    end
     abhi, ablo = twomul(a,b)
+    if !isfinite(abhi+c) || issubnormal(ablo) || issubnormal(a) || issubnormal(b)
+        !(isfinite(abhi+c)) && return abhi+c
+        (iszero(a) || iszero(b)) && return abhi+c
+        bias = exponent(a) + exponent(b)
+        c_denorm = ldexp(c, -bias)
+        if isfinite(c_denorm)
+            # rescale a and b to [1,2), equivalent to ldexp(a, -exponent(a))
+            issubnormal(a) && (a *= 0x1p52)
+            issubnormal(b) && (b *= 0x1p52)
+            a = reinterpret(Float64, (reinterpret(UInt64, a) & 0x800fffffffffffff) | 0x3ff0000000000000)
+            b = reinterpret(Float64, (reinterpret(UInt64, b) & 0x800fffffffffffff) | 0x3ff0000000000000)
+            c = c_denorm
+            abhi, ablo = twomul(a,b)
+            r = abhi+c
+            s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
+            sumhi = r+s
+            if issubnormal(ldexp(sumhi, bias)) #black magic don't worry about it.
+                sumlo = sumhi-r-s
+                bits_lost = -bias-exponent(sumhi)-1022
+                sumhiInt = reinterpret(UInt64, sumhi)
+                if sumlo != 0 && ((bits_lost != 1) ⊻ (sumhiInt&1 == 1))
+                    sumhi = nextfloat(sumhi, ifelse(signbit(sumhi)==signbit(sumlo), -1, 1))
+                end
+            end
+            return ldexp(sumhi, bias)
+        end
+        isinf(abhi) && signbit(c) == signbit(a*b) && return abhi
+        # fall through
+    end
+
     r = abhi+c
     s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
     return r+s
