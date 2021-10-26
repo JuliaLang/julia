@@ -456,6 +456,11 @@ dot2(x,y) = invoke(dot, Tuple{AbstractArray,AbstractArray}, x,y)
     end
 end
 
+@testset "dot with missings" begin
+    @test dot(1, missing) === dot(missing, 1) === dot(missing, missing) === missing
+    @test dot([1, missing], [1, 2]) === dot([1, 2], [1, missing]) === missing
+end
+
 @testset "Issue 11978" begin
     A = Matrix{Matrix{Float64}}(undef, 2, 2)
     A[1,1] = Matrix(1.0I, 3, 3)
