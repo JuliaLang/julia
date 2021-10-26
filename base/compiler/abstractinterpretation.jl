@@ -1404,7 +1404,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
     f = singleton_type(ft)
     if isa(ft, PartialOpaque)
         return abstract_call_opaque_closure(interp, ft, argtypes[2:end], sv)
-    elseif (uft = unwrap_unionall(ft); isa(uft, DataType) && uft.name === typename(Core.OpaqueClosure))
+    elseif (uft = unwrap_unionall(widenconst(ft)); isa(uft, DataType) && uft.name === typename(Core.OpaqueClosure))
         return CallMeta(rewrap_unionall((uft::DataType).parameters[2], ft), false)
     elseif f === nothing
         # non-constant function, but the number of arguments is known
