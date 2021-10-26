@@ -77,7 +77,6 @@ functions up to Julia function symbols. e.g. the symbol `Core.:(===)()` is bound
 
 [`jl_init_main_module()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) creates
 the global "Main" module and sets `jl_main_module->parent = jl_main_module`.
-This function also does "using Base" in the "Main" module.
 
 [`jl_load(jl_core_module, "boot.jl")`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
 calls [`jl_parse_eval_all`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) which repeatedly
