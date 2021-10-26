@@ -296,13 +296,7 @@ function is_block_end(data, i)
     # and we could have (though very unlikely):
     # 1:<stack><metadata><null><null><NULL><metadata><null><null>:end
     # and we want to ignore the triple NULL (which is an ip).
-    data[i] == 0 || return false        # first block end null
-    data[i - 1] == 0 || return false    # second block end null
-    data[i - 2] in 1:2 || return false  # sleep state
-    data[i - 3] != 0 || return false    # cpu_cycle_clock
-    data[i - 4] != 0 || return false    # taskid
-    data[i - 5] != 0 || return false    # threadid
-    return true
+    return data[i] == 0 && data[i - 1] == 0 && data[i - 2] != 0
 end
 
 """
