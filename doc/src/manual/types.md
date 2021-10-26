@@ -171,11 +171,11 @@ Let's consider some of the abstract types that make up Julia's numerical hierarc
 
 ```julia
 abstract type Number end
-abstract type Real     <: Number end
+abstract type Real          <: Number end
 abstract type AbstractFloat <: Real end
-abstract type Integer  <: Real end
-abstract type Signed   <: Integer end
-abstract type Unsigned <: Integer end
+abstract type Integer       <: Real end
+abstract type Signed        <: Integer end
+abstract type Unsigned      <: Integer end
 ```
 
 The [`Number`](@ref) type is a direct child type of `Any`, and [`Real`](@ref) is its child.
