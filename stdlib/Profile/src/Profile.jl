@@ -549,7 +549,7 @@ function strip_meta(data)
         i -= 1
         j -= 1
     end
-    @assert i == j == 0 "metadata stripping failed i=$i j=$j data[1:i]=$(data[1:i])"
+    @assert i == j == 0 "metadata stripping failed"
     return data_stripped
 end
 
