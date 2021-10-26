@@ -4804,14 +4804,6 @@ static Value *get_current_ptls(jl_codectx_t &ctx)
     return get_current_ptls_from_task(ctx.builder, get_current_task(ctx));
 }
 
-llvm::MDNode *get_tbaa_gcframe() {
-    return tbaa_gcframe;
-}
-
-llvm::MDNode *get_tbaa_const() {
-    return tbaa_const;
-}
-
 // Store world age at the entry block of the function. This function should be
 // called right after `allocate_gc_frame` and there should be no context switch.
 static void emit_last_age_field(jl_codectx_t &ctx)

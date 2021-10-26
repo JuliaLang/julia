@@ -5,6 +5,7 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/MDBuilder.h>
 
 #define STR(csym)           #csym
 #define XSTR(csym)          STR(csym)
@@ -88,13 +89,27 @@ static inline void llvm_dump(llvm::DebugLoc *dbg)
     llvm::dbgs() << "\n";
 }
 
-llvm::MDNode *get_tbaa_gcframe();
-llvm::MDNode *get_tbaa_const();
+static inline std::pair<llvm::MDNode*,llvm::MDNode*> tbaa_make_child_with_context(llvm::LLVMContext &ctxt, const char *name, llvm::MDNode *parent=nullptr, bool isConstant=false)
+{
+    llvm::MDBuilder mbuilder(ctxt);
+    llvm::MDNode *jtbaa = mbuilder.createTBAARoot("jtbaa");
+    llvm::MDNode *tbaa_root = mbuilder.createTBAAScalarTypeNode("jtbaa", jtbaa);
+    llvm::MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, parent ? parent : tbaa_root);
+    llvm::MDNode *n = mbuilder.createTBAAStructTagNode(scalar, scalar, 0, isConstant);
+    return std::make_pair(n, scalar);
+}
+
+static inline llvm::MDNode *get_tbaa_gcframe(llvm::LLVMContext &ctxt) {
+    return tbaa_make_child_with_context(ctxt, "jtbaa_gcframe").first;
+}
+static inline llvm::MDNode *get_tbaa_const(llvm::LLVMContext &ctxt) {
+    return tbaa_make_child_with_context(ctxt, "jtbaa_const", nullptr, true).first;
+}
 
 static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instruction *inst)
 {
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, md);
-    if (llvm::isa<llvm::LoadInst>(inst) && md == get_tbaa_const())
+    if (llvm::isa<llvm::LoadInst>(inst) && md == get_tbaa_const(md->getContext()))
         inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), llvm::None));
     return inst;
 }
@@ -130,7 +145,7 @@ static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder
     LoadInst *ptls_load = builder.CreateAlignedLoad(
         emit_bitcast_with_builder(builder, pptls, T_ppjlvalue), Align(sizeof(void *)), "ptls_load");
     // Note: Corresponding store (`t->ptls = ptls`) happens in `ctx_switch` of tasks.c.
-    tbaa_decorate(get_tbaa_gcframe(), ptls_load);
+    tbaa_decorate(get_tbaa_gcframe(builder.getContext()), ptls_load);
     // Using `CastInst::Create` to get an `Instruction*` without explicit cast:
     auto ptls = CastInst::Create(Instruction::BitCast, ptls_load, T_ppjlvalue, "ptls");
     builder.Insert(ptls);
