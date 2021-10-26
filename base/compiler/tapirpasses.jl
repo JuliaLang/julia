@@ -754,14 +754,36 @@ end
 Return an `SSAValue` `ssa` such that `ir[ssa]` is a syncregion expression if
 found. Return `nothing` otherwise.
 """
-function resolve_syncregion(ir::IRCode, inst)
-    @nospecialize inst
+function resolve_syncregion(ir::IRCode, @nospecialize(inst), seen = nothing)
     inst0 = inst
     while true
         if inst isa PhiCNode
             @assert length(inst.values) == 1
             ups = ir[inst.values[1]::SSAValue]::UpsilonNode
             inst = ups.val::SSAValue
+        elseif inst isa PhiNode
+            seen = seen === nothing ? IdSet{SSAValue}() : seen
+            for v in inst.values
+                if v isa SSAValue
+                    if v in seen
+                        error("cycle detected")
+                    else
+                        push!(seen, v)
+                    end
+                end
+            end
+            let seen = seen
+                resolved = Union{SSAValue,Nothing}[
+                    resolve_syncregion(ir, v, seen) for v in inst.values
+                ]
+                isempty(resolved) && return nothing
+                r = resolved[1]
+                if all(x -> x == r, resolved)
+                    return r
+                else
+                    return nothing
+                end
+            end
         elseif inst isa SSAValue
             sr = ir[inst]
             isexpr(sr, :syncregion) && return inst
@@ -789,7 +811,7 @@ function normalize_syncregions!(ir::IRCode)
         if inst isa SyncNode
             inst = ir[inst.syncregion::SSAValue]
             isexpr(inst, :syncregion) && continue
-            ssa = resolve_syncregion(ir, inst)
+            ssa = resolve_syncregion(ir, inst)::SSAValue
             # TODO: validate that syncregion dominates sync
             stmt[:inst] = SyncNode(ssa)
         elseif inst isa Union{DetachNode, ReattachNode}
