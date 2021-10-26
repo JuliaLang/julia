@@ -207,7 +207,7 @@ function show_convert_error(io::IO, ex::MethodError, arg_types_param)
     elseif ex.args[1] <: Union{}
         printstyled(io, "Converting to ")
         printstyled(io, "Union{} "; color = :light_red)
-        printstyled(io, "is not possible, check the stacktrace for more information.")
+        printstyled(io, "is not possible.")
     else
         p2 = arg_types_param[2]
         print_one_line = isa(T, DataType) && isa(p2, DataType) && T.name != p2.name
