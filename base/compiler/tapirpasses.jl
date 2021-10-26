@@ -1340,6 +1340,17 @@ Detect detach after sync and insert runtime errors.
 
 This can happen when a taskgroup is captured by a closure and then get inlined
 (at a wrong position).
+
+Example:
+
+    local closure
+    Tapir.@sync begin
+        closure = function ()
+            Tapir.@spawn ...
+        end
+        ...
+    end
+    closure()
 """
 function disallow_detach_after_sync!(ir::IRCode, tasks)
     # This pass only looks into `ir.stmts` at the moment:
