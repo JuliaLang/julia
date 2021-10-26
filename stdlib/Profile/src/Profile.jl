@@ -299,6 +299,19 @@ function is_block_end(data, i)
     return data[i] == 0 && data[i - 1] == 0 && data[i - 2] != 0
 end
 
+function has_meta(data)
+    for i in 6:length(data)
+        data[i] == 0 || continue            # first block end null
+        data[i - 1] == 0 || continue        # second block end null
+        data[i - 2] in 1:2 || continue      # sleep state
+        data[i - 3] != 0 || continue        # cpu_cycle_clock
+        data[i - 4] != 0 || continue        # taskid
+        data[i - 5] != 0 || continue        # threadid
+        return true
+    end
+    return false
+end
+
 """
     print([io::IO = stdout,] data::Vector, lidict::LineInfoDict; kwargs...)
 
@@ -550,7 +563,7 @@ details of the metadata format.
 function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
     threadid == 0 && error("Fake threadid cannot be 0")
     taskid == 0 && error("Fake taskid cannot be 0")
-    any(Base.Fix1(is_block_end, data), eachindex(data)) && error("input already has metadata")
+    has_meta(data) && error("input already has metadata")
     cpu_clock_cycle = UInt64(99)
     data_with_meta = similar(data, 0)
     for i = 1:length(data)
