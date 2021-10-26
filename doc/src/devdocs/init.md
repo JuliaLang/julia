@@ -79,11 +79,14 @@ functions up to Julia function symbols. e.g. the symbol `Core.:(===)()` is bound
 [`jl_init_main_module()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) creates
 the global "Main" module and sets `jl_main_module->parent = jl_main_module`.
 
-[`jl_load(jl_core_module, "boot.jl")`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
-calls [`jl_parse_eval_all`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) which repeatedly
-calls [`jl_toplevel_eval_flex()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
-to execute [`boot.jl`](https://github.com/JuliaLang/julia/blob/master/base/boot.jl). <!-- TODO – drill
-down into eval? -->
+[`jl_load(jl_core_module, "boot.jl")`][src/toplevel.c] calls [`jl_load_`][src/toplevel.c],
+then calls [`jl_parse_eval_all`][src/toplevel.c] which repeatedly
+calls [`jl_toplevel_eval_flex()`][src/toplevel.c]
+to execute [`boot.jl`](https://github.com/JuliaLang/julia/blob/master/base/boot.jl). 
+<!-- TODO – drill down into eval? -->
+
+[src/toplevel.c]: https://github.com/JuliaLang/julia/blob/master/src/toplevel.c
+
 
 [`post_boot_hooks()`](https://github.com/JuliaLang/julia/blob/master/src/init.c) initializes
 global C pointers to Julia globals defined in `boot.jl`.
