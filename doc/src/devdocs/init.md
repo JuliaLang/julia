@@ -166,7 +166,7 @@ When given `println("Hello World!")`, it would usually decide to run the code by
 [src-interpreter_c]: https://github.com/JuliaLang/julia/blob/master/src/interpreter.c
 
 The stack dump below shows how the interpreter works its way through various methods of [`Base.println()`](@ref)
-and [`Base.print()`](@ref) before arriving at [`write(s::IO, a::Array)`](https://github.com/JuliaLang/julia/blob/master/base/stream.jl)
+and [`Base.print()`](@ref) before arriving at [`uv_write_async`](https://github.com/JuliaLang/julia/blob/master/base/stream.jl)
  which does `ccall(jl_uv_write())`.
 
 [`jl_uv_write()`](https://github.com/JuliaLang/julia/blob/master/src/jl_uv.c) calls `uv_write()`
