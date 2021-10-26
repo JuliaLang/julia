@@ -64,6 +64,27 @@ function pwd()
     end
 end
 
+"""
+    pwd(paths...) -> AbstractString
+
+Get the current working directory joined with `paths`.
+
+# Examples
+
+```julia-repl
+julia> pwd("mypath")
+"/home/JuliaUser/mypath"
+
+julia> cd("/home/JuliaUser/Projects/julia")
+
+julia> pwd("mypath", "dir")
+"/home/JuliaUser/Projects/julia/mypath/dir"
+```
+"""
+function pwd(path::String, paths::String...)
+    joinpath(pwd(), path, paths...)
+end
+
 
 """
     cd(dir::AbstractString=homedir())

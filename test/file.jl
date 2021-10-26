@@ -1695,3 +1695,7 @@ end
         @test !isnothing(Base.Filesystem.getgroupname(s.gid))
     end
 end
+
+@testset "pwd(paths...)" begin
+    @test pwd("mypath") == joinpath(pwd(), "mypath")
+end
