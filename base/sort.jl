@@ -1150,7 +1150,7 @@ allowsmissing(::AbstractVector{Int},
               ::Perm{<:DirectOrdering,<:AbstractVector{T}}) where {T} =
     T >: Missing
 
-function specials2left!(testf::Function, v::FPSortable, o::Ordering,
+function specials2left!(testf::Function, v::AbstractVector, o::Ordering,
                         lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
     i = lo
     @inbounds while i <= hi && testf(o,v[i])
@@ -1166,7 +1166,7 @@ function specials2left!(testf::Function, v::FPSortable, o::Ordering,
     end
     return i, hi
 end
-function specials2right!(testf::Function, v::FPSortable, o::Ordering,
+function specials2right!(testf::Function, v::AbstractVector, o::Ordering,
                          lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
     i = hi
     @inbounds while lo <= i && testf(o,v[i])
@@ -1183,7 +1183,7 @@ function specials2right!(testf::Function, v::FPSortable, o::Ordering,
     return lo, i
 end
 
-function specials2left!(v::FPSortable, a::Algorithm, o::Ordering)
+function specials2left!(v::AbstractVector, a::Algorithm, o::Ordering)
     lo, hi = first(axes(v,1)), last(axes(v,1))
     if allowsmissing(v, o)
         i, _ = specials2left!((v, o) -> ismissing(v, o) || isnan(v, o), v, o, lo, hi)
@@ -1193,7 +1193,7 @@ function specials2left!(v::FPSortable, a::Algorithm, o::Ordering)
         return specials2left!(isnan, v, o, lo, hi)
     end
 end
-function specials2right!(v::FPSortable, a::Algorithm, o::Ordering)
+function specials2right!(v::AbstractVector, a::Algorithm, o::Ordering)
     lo, hi = first(axes(v,1)), last(axes(v,1))
     if allowsmissing(v, o)
         _, i = specials2right!((v, o) -> ismissing(v, o) || isnan(v, o), v, o, lo, hi)
@@ -1204,9 +1204,9 @@ function specials2right!(v::FPSortable, a::Algorithm, o::Ordering)
     end
 end
 
-specials2end!(v::FPSortable, a::Algorithm, o::ForwardOrdering) =
+specials2end!(v::AbstractVector, a::Algorithm, o::ForwardOrdering) =
     specials2right!(v, a, o)
-specials2end!(v::FPSortable, a::Algorithm, o::ReverseOrdering) =
+specials2end!(v::AbstractVector, a::Algorithm, o::ReverseOrdering) =
     specials2left!(v, a, o)
 specials2end!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:ForwardOrdering}) =
     specials2right!(v, a, o)
@@ -1217,7 +1217,7 @@ issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
 issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
-function fpsort!(v::FPSortable, a::Algorithm, o::Ordering)
+function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     i, j = lo, hi = specials2end!(v,a,o)
     @inbounds while true
         while i <= j &&  issignleft(o,v[i]); i += 1; end
