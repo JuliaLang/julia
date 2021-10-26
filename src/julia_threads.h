@@ -32,8 +32,12 @@ JL_DLLEXPORT void jl_threading_profile(void);
 
 #ifdef _OS_WINDOWS_
 #define JL_HAVE_UCONTEXT
-typedef win32_ucontext_t jl_ucontext_t;
+typedef win32_ucontext_t jl_stack_context_t;
+typedef jl_stack_context_t _jl_ucontext_t;
 #else
+typedef struct {
+    jl_jmp_buf uc_mcontext;
+} jl_stack_context_t;
 #if !defined(JL_HAVE_UCONTEXT) && \
     !defined(JL_HAVE_ASM) && \
     !defined(JL_HAVE_UNW_CONTEXT) && \
@@ -56,13 +60,8 @@ typedef win32_ucontext_t jl_ucontext_t;
 #endif
 #endif
 
-
-struct jl_stack_context_t {
-    jl_jmp_buf uc_mcontext;
-};
-
 #if (!defined(JL_HAVE_UNW_CONTEXT) && defined(JL_HAVE_ASM)) || defined(JL_HAVE_SIGALTSTACK)
-typedef struct jl_stack_context_t jl_ucontext_t;
+typedef jl_stack_context_t _jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_ASYNCIFY)
 #if defined(_COMPILER_TSAN_ENABLED_)
@@ -75,18 +74,29 @@ typedef struct {
     // __asyncify_data struct.
     void *stackbottom;
     void *stacktop;
-} jl_ucontext_t;
+} _jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_UNW_CONTEXT)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
-typedef unw_context_t jl_ucontext_t;
+typedef unw_context_t _jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_UCONTEXT)
 #include <ucontext.h>
-typedef ucontext_t jl_ucontext_t;
+typedef ucontext_t _jl_ucontext_t;
 #endif
 #endif
+
+typedef struct {
+    union {
+        _jl_ucontext_t ctx;
+        jl_stack_context_t copy_ctx;
+    };
+#if defined(_COMPILER_TSAN_ENABLED_)
+    void *tsan_state;
+#endif
+} jl_ucontext_t;
+
 
 // handle to reference an OS thread
 #ifdef _OS_WINDOWS_
@@ -95,9 +105,11 @@ typedef DWORD jl_thread_t;
 typedef pthread_t jl_thread_t;
 #endif
 
+struct _jl_task_t;
+
 // Recursive spin lock
 typedef struct {
-    _Atomic(jl_thread_t) owner;
+    _Atomic(struct _jl_task_t*) owner;
     uint32_t count;
 } jl_mutex_t;
 
@@ -180,7 +192,7 @@ typedef struct {
     // this makes sure that a single objects can only appear once in
     // the lists (the mark bit cannot be flipped to `0` without sweeping)
     void *big_obj[1024];
-    jl_mutex_t stack_lock;
+    uv_mutex_t stack_lock;
     void **pc_stack;
     void **pc_stack_end;
     jl_gc_mark_data_t *data_stack;
@@ -217,7 +229,7 @@ typedef struct _jl_tls_states_t {
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
     volatile sig_atomic_t defer_signal;
-    struct _jl_task_t *current_task;
+    _Atomic(struct _jl_task_t*) current_task;
     struct _jl_task_t *next_task;
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
@@ -225,13 +237,9 @@ typedef struct _jl_tls_states_t {
     void *stackbase;
     size_t stacksize;
     union {
-        jl_ucontext_t base_ctx; // base context of stack
+        _jl_ucontext_t base_ctx; // base context of stack
         // This hack is needed to support always_copy_stacks:
-#ifdef _OS_WINDOWS_
-        jl_ucontext_t copy_stack_ctx;
-#else
-        struct jl_stack_context_t copy_stack_ctx;
-#endif
+        jl_stack_context_t copy_stack_ctx;
     };
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
@@ -347,7 +355,7 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
 JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);
 JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
-extern JL_DLLEXPORT int jl_gc_have_pending_finalizers;
+extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
 

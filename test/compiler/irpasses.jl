@@ -425,3 +425,32 @@ let # `getfield_elim_pass!` should work with constant globals
         return Meta.isexpr(stmt, :new)
     end
 end
+
+let # `typeassert_elim_pass!`
+    src = @eval Module() begin
+        struct Foo; x; end
+
+        code_typed((Int,)) do a
+            x1 = Foo(a)
+            x2 = Foo(x1)
+            x3 = Foo(x2)
+
+            r1 = (x2.x::Foo).x
+            r2 = (x2.x::Foo).x::Int
+            r3 = (x2.x::Foo).x::Integer
+            r4 = ((x3.x::Foo).x::Foo).x
+
+            return r1, r2, r3, r4
+        end |> only |> first
+    end
+    # eliminate `typeassert(f2.a, Foo)`
+    @test all(src.code) do @nospecialize(stmt)
+        Meta.isexpr(stmt, :call) || return true
+        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        return Core.Compiler.widenconst(ft) !== typeof(typeassert)
+    end
+    # succeeding simple DCE will eliminate `Foo(a)`
+    @test all(src.code) do @nospecialize(stmt)
+        return !Meta.isexpr(stmt, :new)
+    end
+end

@@ -13,6 +13,8 @@ New language features
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
+* `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
+  no errors were thrown. ([#42211])
 
 Language changes
 ----------------
@@ -20,6 +22,9 @@ Language changes
 * Newly created Task objects (`@spawn`, `@async`, etc.) now adopt the world-age for methods from their parent
   Task upon creation, instead of using the global latest world at start. This is done to enable inference to
   eventually optimize these calls. Places that wish for the old behavior may use `Base.invokelatest`. ([#41449])
+* `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
+  i.e. `@time "Evaluating foo" foo()` ([#42431])
+* New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -52,11 +57,15 @@ New library features
 * `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
   contains "some message" regardless of the specific exception type.
   Regular expressions, lists of strings, and matching functions are also supported. ([#41888])
+* `@testset foo()` can now be used to create a test set from a given function. The name of the test set
+  is the name of the called function. The called function can contain `@test` and other `@testset`
+  definitions, including to other function calls, while recording all intermediate test results. ([#42518])
 
 Standard library changes
 ------------------------
 
 * `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
+* `precision` and `setprecision` now accept a `base` keyword ([#42428]).
 * The `length` function on certain ranges of certain specific element types no longer checks for integer
   overflow in most cases. The new function `checked_length` is now available, which will try to use checked
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
@@ -117,6 +126,14 @@ Standard library changes
 #### Logging
 * The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
   and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
+
+#### Unicode
+* Added function `isequal_normalized` to check for Unicode equivalence without
+  explicitly constructing normalized strings ([#42493]).
+* The `Unicode.normalize` function now accepts a `chartransform` keyword that can
+  be used to supply custom character mappings, and a `Unicode.julia_chartransform`
+  function is provided to reproduce the mapping used in identifier normalization
+  by the Julia parser ([#42561]).
 
 
 Deprecated or removed

@@ -531,7 +531,10 @@ end
 
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
-    if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
+    uid = Libc.geteuid()
+    @test stat(file).uid == uid
+    @test uid == Libc.getuid()
+    if uid == 0 # root user
         chown(file, -2, -1)  # Change the file owner to nobody
         @test stat(file).uid != 0
         chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)

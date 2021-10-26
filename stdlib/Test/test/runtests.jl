@@ -1239,3 +1239,27 @@ Test.finish(ts::PassInformationTestSet) = ts
     @test ts.results[2].value == ErrorException("Msg")
     @test ts.results[2].source == LineNumberNode(test_throws_line_number, @__FILE__)
 end
+
+let
+    f(x) = @test isone(x)
+    function h(x)
+        @testset f(x)
+        @testset "success" begin @test true end
+        @testset for i in 1:3
+            @test !iszero(i)
+        end
+    end
+    tret = @testset h(1)
+    tdesc = @testset "description" h(1)
+    @testset "Function calls" begin
+        @test tret.description == "h"
+        @test tdesc.description == "description"
+        @test length(tret.results) == 5
+        @test tret.results[1].description == "f"
+        @test tret.results[2].description == "success"
+        for i in 1:3
+            @test tret.results[2+i].description == "i = $i"
+        end
+    end
+end
+

@@ -1160,7 +1160,7 @@ additional optimizations, such as inlining, are also applied.
 The keyword `debuginfo` controls the amount of code metadata present in the output,
 possible options are `:source` or `:none`.
 """
-function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
+function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
                     optimize=true,
                     debuginfo::Symbol=:default,
                     world = get_world_counter(),
@@ -1179,6 +1179,18 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
         tt = Tuple{ft, types...}
     end
     return code_typed_by_type(tt; optimize, debuginfo, world, interp)
+end
+
+# returns argument tuple type which is supposed to be used for `code_typed` and its family;
+# if there is a single method this functions returns the method argument signature,
+# otherwise returns `Tuple` that doesn't match with any signature
+function default_tt(@nospecialize(f))
+    ms = methods(f)
+    if length(ms) == 1
+        return tuple_type_tail(only(ms).sig)
+    else
+        return Tuple
+    end
 end
 
 """
@@ -1218,7 +1230,7 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure), @nospecialize(types=Tuple);
+function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure);
         optimize=true,
         debuginfo::Symbol=:default,
         interp = Core.Compiler.NativeInterpreter(closure.world))
@@ -1232,7 +1244,7 @@ function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure), @
     end
 end
 
-function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.Compiler.NativeInterpreter())
+function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), interp=Core.Compiler.NativeInterpreter())
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))

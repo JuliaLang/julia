@@ -227,8 +227,35 @@ end
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))
 end
+# Computes base^(x+xlo). Used for pow.
+@inline function exp_impl(x::Float64, xlo::Float64, base)
+    T = Float64
+    N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
+    N = reinterpret(UInt64, N_float) % Int32
+    N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
+    r = muladd(N_float, LogBo256U(base, T), x)
+    r = muladd(N_float, LogBo256L(base, T), r)
+    k = N >> 8
+    jU, jL = table_unpack(N&255 + 1)
+    very_small = muladd(jU, expm1b_kernel(base, r), jL)
+    small_part =  muladd(jU,xlo,very_small) + jU
+    if !(abs(x) <= SUBNORM_EXP(base, T))
+        x >= MAX_EXP(base, T) && return Inf
+        x <= MIN_EXP(base, T) && return 0.0
+        if k <= -53
+            # The UInt64 forces promotion. (Only matters for 32 bit systems.)
+            twopk = (k + UInt64(53)) << 52
+            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*(2.0^-53)
+        end
+        #k == 1024 && return (small_part * 2.0) * 2.0^1023
+    end
+    twopk = Int64(k) << 52
+    return reinterpret(T, twopk + reinterpret(Int64, small_part))
+end
 @inline function exp_impl_fast(x::Float64, base)
     T = Float64
+    x >= MAX_EXP(base, T) && return Inf
+    x <= -SUBNORM_EXP(base, T) && return 0.0
     N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
     N = reinterpret(UInt64, N_float) % Int32
     N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
@@ -263,6 +290,8 @@ end
 
 @inline function exp_impl_fast(x::Float32, base)
     T = Float32
+    x >= MAX_EXP(base, T) && return Inf32
+    x <= -SUBNORM_EXP(base, T) && return 0f0
     N_float = round(x*LogBINV(base, T))
     N = unsafe_trunc(Int32, N_float)
     r = muladd(N_float, LogBU(base, T), x)
@@ -279,9 +308,9 @@ end
     N = unsafe_trunc(Int32, N_float)
     r = muladd(N_float, LogB(base, Float16), x)
     small_part = expb_kernel(base, r)
-    if !(abs(x) <= SUBNORM_EXP(base, T))
-        x > MAX_EXP(base, T) && return Inf16
-        N<=Int32(-24) && return zero(Float16)
+    if !(abs(x) <= 25)
+        x > 16 && return Inf16
+        x < 25 && return zero(Float16)
     end
     twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
     return Float16(twopk*small_part)
@@ -308,7 +337,7 @@ See also [`exp2`](@ref), [`exp10`](@ref) and [`cis`](@ref).
 julia> exp(1.0)
 2.718281828459045
 
-julia> exp(im * pi) == cis(pi)
+julia> exp(im * pi) ≈ cis(pi)
 true
 ```
 """ exp(x::Real)

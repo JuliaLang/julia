@@ -493,7 +493,7 @@ Pass *createRemoveJuliaAddrspacesPass()
     return new RemoveJuliaAddrspacesPass();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveJuliaAddrspacesPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveJuliaAddrspacesPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createRemoveJuliaAddrspacesPass());
 }

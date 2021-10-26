@@ -291,7 +291,7 @@ function CodeInstance(result::InferenceResult, @nospecialize(inferred_result::An
     @assert !(result_type isa LimitedAccuracy)
     if inferred_result isa Const
         # use constant calling convention
-        rettype_const = (result.src::Const).val
+        rettype_const = inferred_result.val
         const_flags = 0x3
         inferred_result = nothing
     else
@@ -335,9 +335,11 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
     if toplevel
         return ci
     end
-    cache_the_tree = !may_discard_trees(interp) || (ci.inferred &&
-        (ci.inlineable ||
-        ccall(:jl_isa_compileable_sig, Int32, (Any, Any), linfo.specTypes, def) != 0))
+    if may_discard_trees(interp)
+        cache_the_tree = ci.inferred && (ci.inlineable || isa_compileable_sig(linfo.specTypes, def))
+    else
+        cache_the_tree = true
+    end
     if cache_the_tree
         if may_compress(interp)
             nslots = length(ci.slotflags)
@@ -959,7 +961,6 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
     return src
 end
 
-
 function return_type(@nospecialize(f), @nospecialize(t))
     world = ccall(:jl_get_tls_world_age, UInt, ())
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), Any[_return_type, f, t, world], 4)
@@ -971,14 +972,10 @@ function _return_type(interp::AbstractInterpreter, @nospecialize(f), @nospeciali
     rt = Union{}
     if isa(f, Builtin)
         rt = builtin_tfunction(interp, f, Any[t.parameters...], nothing)
-        if isa(rt, TypeVar)
-            rt = rt.ub
-        else
-            rt = widenconst(rt)
-        end
+        rt = widenconst(rt)
     else
         for match in _methods(f, t, -1, get_world_counter(interp))::Vector
-            match = match::Core.MethodMatch
+            match = match::MethodMatch
             ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
             ty === nothing && return Any
             rt = tmerge(rt, ty)

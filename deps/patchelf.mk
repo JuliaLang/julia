@@ -12,6 +12,9 @@ $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCCACHE)/patchelf-$(PA
 checksum-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.gz
 	$(JLCHECKSUM) $<
 
+$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: CC:=$(HOSTCC)
+$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: CXX:=$(HOSTCXX)
+$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: XC_HOST:=$(BUILD_MACHINE)
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \

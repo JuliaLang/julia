@@ -192,8 +192,8 @@ export
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!,
-    nfields, throw, tuple, ===, isdefined, eval, ifelse,
-    # sizeof    # not exported, to avoid conflicting with Base.sizeof
+    nfields, throw, tuple, ===, isdefined, eval,
+    # ifelse, sizeof    # not exported, to avoid conflicting with Base
     # type reflection
     <:, typeof, isa, typeassert,
     # method reflection

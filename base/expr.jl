@@ -385,13 +385,6 @@ macro propagate_inbounds(ex)
 end
 
 """
-    @compile
-
-Force compilation of the block or function (Julia's built-in interpreter is blocked from executing it).
-"""
-macro compile() Expr(:meta, :compile) end
-
-"""
     @polly
 
 Tells the compiler to apply the polyhedral optimizer Polly to a function.

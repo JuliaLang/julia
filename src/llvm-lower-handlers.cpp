@@ -246,7 +246,7 @@ Pass *createLowerExcHandlersPass()
     return new LowerExcHandlers();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLowerExcHandlersPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddLowerExcHandlersPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createLowerExcHandlersPass());
 }

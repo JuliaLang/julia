@@ -46,7 +46,7 @@ end
 
 # obtain Vararg with 2 undefined fields
 let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
-    @test Core.Compiler.limit_type_size(Tuple, va, Union{}, 2, 2) === Any
+    @test Core.Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Any
 end
 
 let # 40336
@@ -2000,6 +2000,61 @@ function _g_ifelse_isa_()
 end
 @test Base.return_types(_g_ifelse_isa_, ()) == [Int]
 
+@testset "Conditional forwarding" begin
+    # forward `Conditional` if it conveys a constraint on any other argument
+    ifelselike(cnd, x, y) = cnd ? x : y
+
+    @test Base.return_types((Any,Int,)) do x, y
+        ifelselike(isa(x, Int), x, y)
+    end |> only == Int
+
+    # should work nicely with union-split
+    @test Base.return_types((Union{Int,Nothing},)) do x
+        ifelselike(isa(x, Int), x, 0)
+    end |> only == Int
+
+    @test Base.return_types((Any,Int)) do x, y
+        ifelselike(!isa(x, Int), y, x)
+    end |> only == Int
+
+    @test Base.return_types((Any,Int)) do x, y
+        a = ifelselike(x === 0, x, 0) # ::Const(0)
+        if a == 0
+            return y
+        else
+            return nothing # dead branch
+        end
+    end |> only == Int
+
+    # pick up the first if there are multiple constrained arguments
+    @test Base.return_types((Any,)) do x
+        ifelselike(isa(x, Int), x, x)
+    end |> only == Any
+
+    # just propagate multiple constraints
+    ifelselike2(cnd1, cnd2, x, y, z) = cnd1 ? x : cnd2 ? y : z
+    @test Base.return_types((Any,Any)) do x, y
+        ifelselike2(isa(x, Int), isa(y, Int), x, y, 0)
+    end |> only == Int
+
+    # work with `invoke`
+    @test Base.return_types((Any,Any)) do x, y
+        Base.@invoke ifelselike(isa(x, Int), x, y::Int)
+    end |> only == Int
+
+    # don't be confused with vararg method
+    vacond(cnd, va...) = cnd ? va : 0
+    @test Base.return_types((Any,)) do x
+        # at runtime we will see `va::Tuple{Tuple{Int,Int}, Tuple{Int,Int}}`
+        vacond(isa(x, Tuple{Int,Int}), x, x)
+    end |> only == Union{Int,Tuple{Any,Any}}
+
+    # demonstrate extra constraint propagation for Base.ifelse
+    @test Base.return_types((Any,Int,)) do x, y
+        ifelse(isa(x, Int), x, y)
+    end |> only == Int
+end
+
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
 
@@ -3230,6 +3285,11 @@ function splat_lotta_unions()
 end
 @test Core.Compiler.return_type(splat_lotta_unions, Tuple{}) >: Tuple{Int,Int,Int}
 
+# handle `fargs = nothing` edge cases
+@test (code_typed(; optimize=false) do
+    Core.Compiler.return_type(invoke, Tuple{typeof(sin), Type{Tuple{Integer}}, Int})
+end; true)
+
 # Bare Core.Argument in IR
 @eval f_bare_argument(x) = $(Core.Argument(2))
 @test Base.return_types(f_bare_argument, (Int,))[1] == Int
@@ -3422,8 +3482,7 @@ let
     ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
     sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
         Core.Compiler.NativeInterpreter())
-    ir = Core.Compiler.convert_to_ircode(ci, Core.Compiler.copy_exprargs(ci.code),
-        false, sv)
+    ir = Core.Compiler.convert_to_ircode(ci, sv)
     ir = Core.Compiler.slot2reg(ir, ci, sv)
     ir = Core.Compiler.compact!(ir)
     Core.Compiler.replace_code_newstyle!(ci, ir, 4)
@@ -3545,3 +3604,44 @@ Foo42097(f::F, args) where {F} = Foo42097{F}()
 Foo42097(A) = Foo42097(Base.inferencebarrier(+), Base.inferencebarrier(1)...)
 foo42097() = Foo42097([1]...)
 @test foo42097() isa Foo42097{typeof(+)}
+
+# eliminate unbound `TypeVar`s on `argtypes` construction
+let
+    a0(a01, a02, a03, a04, a05, a06, a07, a08, a09, a10, va...) = nothing
+    method = only(methods(a0))
+    unbound = TypeVar(:Unbound, Integer)
+    specTypes = Tuple{typeof(a0),
+               # TypeVar
+        #=01=# Bound,                  # => Integer
+        #=02=# unbound,                # => Integer (invalid `TypeVar` widened beforehand)
+               # DataType
+        #=03=# Type{Bound},            # => Type{Bound} where Bound<:Integer
+        #=04=# Type{unbound},          # => Type
+        #=05=# Vector{Bound},          # => Vector{Bound} where Bound<:Integer
+        #=06=# Vector{unbound},        # => Any
+               # UnionAll
+        #=07=# Type{<:Bound},          # => Type{<:Bound} where Bound<:Integer
+        #=08=# Type{<:unbound},        # => Any
+               # Union
+        #=09=# Union{Nothing,Bound},   # => Union{Nothing,Bound} where Bound<:Integer
+        #=10=# Union{Nothing,unbound}, # => Any
+               # Vararg
+        #=va=# Bound, unbound,         # => Tuple{Integer,Integer} (invalid `TypeVar` widened beforehand)
+        } where Bound<:Integer
+    argtypes = Core.Compiler.most_general_argtypes(method, specTypes, true)
+    popfirst!(argtypes)
+    @test argtypes[1] == Integer
+    @test argtypes[2] == Integer
+    @test argtypes[3] == Type{Bound} where Bound<:Integer
+    @test argtypes[4] == Type
+    @test argtypes[5] == Vector{Bound} where Bound<:Integer
+    @test argtypes[6] == Any
+    @test argtypes[7] == Type{<:Bound} where Bound<:Integer
+    @test argtypes[8] == Any
+    @test argtypes[9] == Union{Nothing,Bound} where Bound<:Integer
+    @test argtypes[10] == Any
+    @test argtypes[11] == Tuple{Integer,Integer}
+end
+
+# issue #42646
+@test only(Base.return_types(getindex, (Array{undef}, Int))) >: Union{} # check that it does not throw
