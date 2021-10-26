@@ -533,15 +533,15 @@ end
     invoke_escaped_spawn()::Union{}
 
 Invoke a closure that captures syncregion after sync, which should be disallowed.
+This tests that the copmiler can handle this even when the closure is inlined.
 """
 function invoke_escaped_spawn()
-    local closure
-    Tapir.@sync begin
-        closure = function ()
-            Tapir.@spawn produce(111)
-        end
-        produce(222)
+    token = Tapir.@syncregion
+    function closure()
+        Tapir.@spawnin token produce(111)
     end
+    produce(222)
+    Tapir.@sync_end token
     closure()
     return
 end
