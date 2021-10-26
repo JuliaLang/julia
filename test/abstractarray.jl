@@ -1054,7 +1054,7 @@ end
     @test IndexStyle(MyArray) == IndexCartesian()
     @test IndexStyle(MyArray{Real}) == IndexCartesian()
     @test IndexStyle(MyArray{Real, 1}) == IndexLinear()
-    @test IndexStyle(MyArray{Real, 0}()) == IndexLinear()
+    @test IndexStyle(MyArray{Real, 1}()) == IndexLinear()
     @test Base.IndexStyle(UpperTriangular) == IndexCartesian() # subtype of AbstractArray, not of Array
     @test Base.IndexStyle(Vector) == IndexLinear()
     @test Base.IndexStyle(UnitRange) == IndexLinear()
