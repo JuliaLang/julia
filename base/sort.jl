@@ -1231,6 +1231,10 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     return v
 end
 
+
+fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
+    sort!(v, first(axes(v,1)), last(axes(v,1)), a, o)
+
 sort!(v::FPSortable, a::Algorithm, o::DirectOrdering) =
     fpsort!(v, a, o)
 sort!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable}) =
