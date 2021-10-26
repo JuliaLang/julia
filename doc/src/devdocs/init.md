@@ -82,7 +82,7 @@ the global "Main" module and sets `jl_main_module->parent = jl_main_module`.
 [`jl_load(jl_core_module, "boot.jl")`][src/toplevel.c] calls [`jl_load_`][src/toplevel.c],
 then calls [`jl_parse_eval_all`][src/toplevel.c] which repeatedly
 calls [`jl_toplevel_eval_flex()`][src/toplevel.c]
-to execute [`boot.jl`](https://github.com/JuliaLang/julia/blob/master/base/boot.jl). 
+to execute [`boot.jl`](https://github.com/JuliaLang/julia/blob/master/base/boot.jl).
 <!-- TODO – drill down into eval? -->
 
 [src/toplevel.c]: https://github.com/JuliaLang/julia/blob/master/src/toplevel.c
@@ -222,7 +222,7 @@ the stack now rapidly unwinds back to `repl_entrypoint()`.
 
 `repl_entrypoint()` calls [`jl_atexit_hook()`][src-init_c].
 
-If `exitcode == 0` and requested on the command line, 
+If `exitcode == 0` and requested on the command line,
 `jl_atexit_hook()` calls [`jl_write_compiler_output`][src-init_c] saves the runtime state to a new system image.
 See [`jl_compile_all_defs()`](https://github.com/JuliaLang/julia/blob/master/src/precompile.c)
 and [`jl_save_system_image()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c).
