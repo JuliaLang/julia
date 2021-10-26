@@ -1082,7 +1082,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                                sv::InferenceState, max_methods::Int)
     @nospecialize f
     la = length(argtypes)
-    if f === ifelse && fargs isa Vector{Any} && la == 4
+    if f === Core.ifelse && fargs isa Vector{Any} && la == 4
         cnd = argtypes[2]
         if isa(cnd, Conditional)
             newcnd = widenconditional(cnd)
