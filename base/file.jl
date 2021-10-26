@@ -1184,7 +1184,12 @@ end
 # See also
 # - http://docs.libuv.org/en/v1.x/fs.html#c.uv_fs_statfs (libuv function docs)
 # - http://docs.libuv.org/en/v1.x/fs.html#c.uv_statfs_t (libuv docs of the returned struct)
-struct StatFS
+"""
+    DiskStat
+
+Stores information about the disk in bytes. Populate by calling `diskstat`.
+"""
+struct DiskStat
     ftype::UInt64
     bsize::UInt64
     blocks::UInt64
@@ -1195,26 +1200,21 @@ struct StatFS
     fspare::NTuple{4, UInt64} # reserved
 end
 
-function statfs(path::AbstractString)
-    req = Ref{NTuple{Int(_sizeof_uv_fs), UInt8}}()
-    err = ccall(:uv_fs_statfs, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
-                C_NULL, req, path, C_NULL)
-    err < 0 && uv_error("statfs($(repr(path)))", err)
-    statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
-
-    return unsafe_load(reinterpret(Ptr{StatFS}, statfs_ptr))
+function Base.getproperty(stats::DiskStat, field::Symbol)
+    total = getfield(stats, :bsize) * getfield(stats, :blocks)
+    available = getfield(stats, :bsize) * getfield(stats, :bavail)
+    field === :available && return available
+    field === :total && return total
+    field === :used && return total - available
+    return getfield(stats, field)
 end
 
-"""
-    DiskStat
-
-Stores the total size, available space, and currently used space of the disk in bytes.
-Populate by calling `diskstat`.
-"""
-struct DiskStat
-    total::UInt64
-    available::UInt64
-    used::UInt64
+function Base.show(io::IO, x::DiskStat)
+    print(io, "DiskStat(total: $(x.total), available: $(x.available), used: $(x.used)")
+    for field in fieldnames(DiskStat)[1:end-1]
+        print(io, ", $(getfield(x, field))")
+    end
+    println(io, ")")
 end
 
 """
@@ -1228,14 +1228,11 @@ working directory are returned.
     This method was added in Julia 1.8.
 """
 function diskstat(path::AbstractString=pwd())
-    stats = statfs(path)
+    req = zeros(UInt8, _sizeof_uv_fs)
+    err = ccall(:uv_fs_statfs, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                C_NULL, req, path, C_NULL)
+    err < 0 && uv_error("diskstat($(repr(path)))", err)
+    statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
 
-    total = stats.bsize * stats.blocks
-    available = stats.bsize * stats.bavail
-    disk_stats = DiskStat(total, available, total - available)
-
-    # Cleanup
-    uv_fs_req_cleanup(req)
-
-    return disk_stats
+    return unsafe_load(reinterpret(Ptr{DiskStat}, statfs_ptr))
 end
