@@ -217,14 +217,13 @@ the stack now rapidly unwinds back to `repl_entrypoint()`.
 ## `jl_atexit_hook()`
 
 `repl_entrypoint()` calls [`jl_atexit_hook()`][src-init_c].
-This calls `Base._atexit`, then calls [`jl_gc_run_all_finalizers()`](https://github.com/JuliaLang/julia/blob/master/src/gc.c)
-and cleans up libuv handles.
 
-## `jl_write_compiler_output()`
-
-Finally, if `exitcode == 0`, [`jl_atexit_hook()`][src-init_c] calls [`jl_write_compiler_output`][src-init_c],
-which if requested on the command line, saves the runtime state to a new system image.
+If `exitcode == 0` and requested on the command line, 
+`jl_atexit_hook()` calls [`jl_write_compiler_output`][src-init_c] saves the runtime state to a new system image.
 See [`jl_compile_all_defs()`](https://github.com/JuliaLang/julia/blob/master/src/precompile.c)
 and [`jl_save_system_image()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c).
+
+Finally, this calls `Base._atexit`, then calls [`jl_gc_run_all_finalizers()`](https://github.com/JuliaLang/julia/blob/master/src/gc.c)
+and cleans up libuv handles.
 
 [src-init_c]: https://github.com/JuliaLang/julia/blob/master/src/init.c
