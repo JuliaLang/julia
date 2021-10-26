@@ -34,6 +34,10 @@ and lists for weak refs, preserved values and finalization.
 [`jl_resolve_sysimg_location()`](https://github.com/JuliaLang/julia/blob/master/src/init.c) searches
 configured paths for the base system image. See [Building the Julia system image](@ref).
 
+[`jl_preload_sysimg_so()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) loads and
+[`jl_restore_system_image()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) initializes
+a pre-compiled femtolisp image containing the scanner/parser.
+
 [`jl_init_types()`](https://github.com/JuliaLang/julia/blob/master/src/jltypes.c) creates `jl_datatype_t`
 type description objects for the [built-in types defined in `julia.h`](https://github.com/JuliaLang/julia/blob/master/src/julia.h).
 e.g.
@@ -53,9 +57,6 @@ the [LLVM library](http://llvm.org).
 
 [`jl_init_root_task()`](https://github.com/JuliaLang/julia/blob/master/src/task.c) creates the `jl_datatype_t* jl_task_type`
 object; initializes the global `jl_root_task` (`ptls->root_task`) struct; and sets `jl_current_task` (`ptls->current_task`) to the root task.
-
-[`jl_init_flisp()`](https://github.com/JuliaLang/julia/blob/master/src/ast.c) loads and initializes
-a pre-compiled femtolisp image containing the scanner/parser.
 
 [`jl_init_serializer()`](https://github.com/JuliaLang/julia/blob/master/src/dump.c) initializes
 8-bit serialization tags for builtin `jl_value_t` values.
