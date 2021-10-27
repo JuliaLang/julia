@@ -217,7 +217,7 @@ typedef struct _jl_tls_states_t {
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
     volatile sig_atomic_t defer_signal;
-    struct _jl_task_t *current_task;
+    _Atomic(struct _jl_task_t*) current_task;
     struct _jl_task_t *next_task;
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
@@ -347,7 +347,7 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
 JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);
 JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
-extern JL_DLLEXPORT int jl_gc_have_pending_finalizers;
+extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
 

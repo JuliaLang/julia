@@ -527,7 +527,7 @@ void jl_start_threads(void)
     uv_barrier_wait(&thread_init_done);
 }
 
-unsigned volatile _threadedregion; // HACK: keep track of whether it is safe to do IO
+_Atomic(unsigned) _threadedregion; // HACK: keep track of whether it is safe to do IO
 
 JL_DLLEXPORT int jl_in_threaded_region(void)
 {

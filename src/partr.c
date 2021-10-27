@@ -59,7 +59,7 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 typedef struct taskheap_tag {
     uv_mutex_t lock;
     jl_task_t **tasks;
-    int32_t ntasks;
+    _Atomic(int32_t) ntasks;
     _Atomic(int16_t) prio;
 } taskheap_t;
 
@@ -414,7 +414,7 @@ static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
     return jl_atomic_load_relaxed(&ptls->sleep_check_state) == sleeping;
 }
 
-extern unsigned _threadedregion;
+extern _Atomic(unsigned) _threadedregion;
 
 JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
 {
