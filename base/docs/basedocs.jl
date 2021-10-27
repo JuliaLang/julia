@@ -992,7 +992,7 @@ then their contents are vertically concatenated together.
 In the standard REPL, typing `;` on an empty line will switch to shell mode.
 
 # Examples
-```julia
+```julia-repl
 julia> function foo()
            x = "Hello, "; x *= "World!"
            return x

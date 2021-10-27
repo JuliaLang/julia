@@ -54,7 +54,7 @@ end
 Which quietly assumes 1-based indexing and therefore exposes unsafe memory access when used
 with [`OffsetArrays`](@ref man-custom-indice):
 
-```julia
+```julia-repl
 julia> using OffsetArrays
 julia> sum(OffsetArray([1,2,3], -10))
 9164911648 # inconsistent results or segfault
