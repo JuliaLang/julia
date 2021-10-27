@@ -392,3 +392,113 @@ let f(x) = (x...,)
     # the the original apply call is not union-split, but the inserted `iterate` call is.
     @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
 end
+
+# check if `x` is a statically-resolved call of a function whose name is `sym`
+isinvoke(@nospecialize(x), sym::Symbol) = isinvoke(x, mi->mi.def.name===sym)
+function isinvoke(@nospecialize(x), pred)
+    if Meta.isexpr(x, :invoke)
+        return pred(x.args[1]::Core.MethodInstance)
+    end
+    return false
+end
+code_typed1(args...; kwargs...) = (first(only(code_typed(args...; kwargs...)))::Core.CodeInfo).code
+
+# https://github.com/JuliaLang/julia/issues/42754
+# inline union-split constant-prop'ed sources
+mutable struct X42754
+    # NOTE in order to confuse `fieldtype_tfunc`, we need to have at least two fields with different types
+    a::Union{Nothing, Int}
+    b::Symbol
+end
+let code = code_typed1((X42754, Union{Nothing,Int})) do x, a
+        # this `setproperty` call would be union-split and constant-prop will happen for
+        # each signature: inlining would fail if we don't use constant-prop'ed source
+        # since the approximate inlining cost of `convert(fieldtype(X, sym), a)` would
+        # end up very high if we don't propagate `sym::Const(:a)`
+        x.a = a
+        x
+    end
+    @test all(code) do @nospecialize(x)
+        isinvoke(x, :setproperty!) && return false
+        if Meta.isexpr(x, :call)
+            f = x.args[1]
+            isa(f, GlobalRef) && f.name === :setproperty! && return false
+        end
+        return true
+    end
+end
+
+import Base: @constprop
+
+# test single, non-dispatchtuple callsite inlining
+
+@constprop :none @inline test_single_nondispatchtuple(@nospecialize(t)) =
+    isa(t, DataType) && t.name === Type.body.name
+let
+    code = code_typed1((Any,)) do x
+        test_single_nondispatchtuple(x)
+    end
+    @test all(code) do @nospecialize(x)
+        isinvoke(x, :test_single_nondispatchtuple) && return false
+        if Meta.isexpr(x, :call)
+            f = x.args[1]
+            isa(f, GlobalRef) && f.name === :test_single_nondispatchtuple && return false
+        end
+        return true
+    end
+end
+
+@constprop :aggressive @inline test_single_nondispatchtuple(c, @nospecialize(t)) =
+    c && isa(t, DataType) && t.name === Type.body.name
+let
+    code = code_typed1((Any,)) do x
+        test_single_nondispatchtuple(true, x)
+    end
+    @test all(code) do @nospecialize(x)
+        isinvoke(x, :test_single_nondispatchtuple) && return false
+        if Meta.isexpr(x, :call)
+            f = x.args[1]
+            isa(f, GlobalRef) && f.name === :test_single_nondispatchtuple && return false
+        end
+        return true
+    end
+end
+
+# force constant-prop' for `setproperty!`
+let m = Module()
+    code = @eval m begin
+        # if we don't force constant-prop', `T = fieldtype(Foo, ::Symbol)` will be union-split to
+        # `Union{Type{Any},Type{Int}` and it will make `convert(T, nothing)` too costly
+        # and it leads to inlining failure
+        mutable struct Foo
+            val
+            _::Int
+        end
+
+        function setter(xs)
+            for x in xs
+                x.val = nothing
+            end
+        end
+
+        $code_typed1(setter, (Vector{Foo},))
+    end
+
+    @test !any(x->isinvoke(x, :setproperty!), code)
+end
+
+# validate inlining processing
+
+@constprop :none @inline validate_unionsplit_inlining(@nospecialize(t)) = throw("invalid inlining processing detected")
+@constprop :none @noinline validate_unionsplit_inlining(i::Integer) = (println(IOBuffer(), "prevent inlining"); false)
+let
+    invoke(xs) = validate_unionsplit_inlining(xs[1])
+    @test invoke(Any[10]) === false
+end
+
+@constprop :aggressive @inline validate_unionsplit_inlining(c, @nospecialize(t)) = c && throw("invalid inlining processing detected")
+@constprop :aggressive @noinline validate_unionsplit_inlining(c, i::Integer) = c && (println(IOBuffer(), "prevent inlining"); false)
+let
+    invoke(xs) = validate_unionsplit_inlining(true, xs[1])
+    @test invoke(Any[10]) === false
+end
