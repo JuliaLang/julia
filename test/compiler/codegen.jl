@@ -640,7 +640,7 @@ U41096 = Term41096{:U}(Modulate41096(:U, false))
 
 # test that we can start julia with libjulia-codegen removed; PR #41936
 mktempdir() do pfx
-    run(`cp -r $(Sys.BINDIR)/.. $pfx`)
+    cp(dirname(Sys.BINDIR), pfx; force=true)
     run(`rm -rf $pfx/lib/julia/libjulia-codegen\*`)
     @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'println("no codegen!")'`) == "no codegen!"
 end
