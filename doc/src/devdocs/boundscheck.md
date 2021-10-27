@@ -56,6 +56,7 @@ with [`OffsetArrays`](@ref man-custom-indice):
 
 ```julia-repl
 julia> using OffsetArrays
+
 julia> sum(OffsetArray([1,2,3], -10))
 9164911648 # inconsistent results or segfault
 ```
