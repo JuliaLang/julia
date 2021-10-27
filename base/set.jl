@@ -46,18 +46,15 @@ emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 
 _similar_for(c::AbstractSet, ::Type{T}, itr, isz, len) where {T} = empty(c, T)
 
-function show(io::IO, s::Set)
+function show(io::IO, s::Set; opt_kwargs...)
     if isempty(s)
-        if get(io, :typeinfo, Any) == typeof(s)
-            print(io, "Set()")
-        else
-            show(io, typeof(s))
-            print(io, "()")
-        end
+        typeinfo = get(opt_kwargs, :typeinfo, Any)
+        show_typeof(io, typeof(s), typeinfo)
+        print(io, "()")
     else
         print(io, "Set(")
         show_vector(io, s)
-        print(io, ')')
+        print(io, ")")
     end
 end
 

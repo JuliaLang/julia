@@ -58,7 +58,7 @@ Base.IOContext(::IO, ::IOContext)
 ## Text I/O
 
 ```@docs
-Base.show(::IO, ::Any)
+Base.show(::Any)
 Base.summary
 Base.print
 Base.println

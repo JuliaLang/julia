@@ -187,64 +187,65 @@ end
 
 
 # show
-io = IOBuffer()
-show(io, v)
-str = String(take!(io))
-show(io, v0)
-@test str == String(take!(io))
-show(io, A)
-str = String(take!(io))
-@test str == "[1 3; 2 4]"
-show(io, S)
-str = String(take!(io))
-@test str == "[1 3; 2 4]"
-show(io, MIME("text/plain"), A)
-strs = split(strip(String(take!(io))), '\n')
-@test strs[2] == " 1  3"
-@test strs[3] == " 2  4"
-v = OffsetArray(rand(3), (-2,))
-show(io, v)
-str = String(take!(io))
-show(io, parent(v))
-@test str == String(take!(io))
-smry = summary(v)
-@test occursin("OffsetArray(::Vector{Float64", smry)
-@test occursin("with indices -1:1", smry)
-function cmp_showf(printfunc, io, A; options = ())
-    ioc = IOContext(io, :limit => true, :compact => true, options...)
-    printfunc(ioc, A)
-    str1 = String(take!(io))
-    printfunc(ioc, parent(A))
-    str2 = String(take!(io))
-    @test str1 == str2
-end
-cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,5), (10,-9)))       # rows&cols fit
-cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,5), (10,-9)))    # columns fit
-cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,10^3), (10,-9)))    # rows fit
-cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neither fits
-cmp_showf(Base.print_matrix, io, OffsetArray(reshape(range(-0.212121212121, stop=2/11, length=3*29), 3, 29), (-2, -15)); options=(:displaysize=>(53,210),))
-cmp_showf(show, io, OffsetArray(collect(1:100), (100,)))   # issue #31641
+let io = IOBuffer()
+    show(io, v)
+    str = String(take!(io))
+    show(io, v0)
+    @test str == String(take!(io))
+    show(io, A)
+    str = String(take!(io))
+    @test str == "[1 3; 2 4]"
+    show(io, S)
+    str = String(take!(io))
+    @test str == "[1 3; 2 4]"
+    show(io, MIME("text/plain"), A)
+    strs = split(strip(String(take!(io))), '\n')
+    @test strs[2] == " 1  3"
+    @test strs[3] == " 2  4"
+    v = OffsetArray(rand(3), (-2,))
+    show(io, v)
+    str = String(take!(io))
+    show(io, parent(v))
+    @test str == String(take!(io))
+    smry = summary(v)
+    @test occursin("OffsetArray(::Vector{Float64", smry)
+    @test occursin("with indices -1:1", smry)
+    function cmp_showf(printfunc, io, A, args...; options = ())
+        ioc = IOContext(io, :limit => true, :compact => true, options...)
+        printfunc(ioc, A, args...)
+        str1 = String(take!(io))
+        printfunc(ioc, parent(A), args...)
+        str2 = String(take!(io))
+        @test str1 == str2
+    end
+    cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,5), (10,-9)), Any)       # rows&cols fit
+    cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,5), (10,-9)), Any)    # columns fit
+    cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,10^3), (10,-9)), Any)    # rows fit
+    cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9)), Any) # neither fits
+    cmp_showf(Base.print_matrix, io, OffsetArray(reshape(range(-0.212121212121, stop=2/11, length=3*29), 3, 29), (-2, -15)), Any; options=(:displaysize => (53, 210),))
+    cmp_showf(show, io, OffsetArray(collect(1:100), (100,)))   # issue #31641
 
-targets1 = ["0-dimensional OffsetArray(::Array{Float64, 0}) with eltype Float64:\n1.0",
-            "1-element OffsetArray(::Vector{Float64}, 2:2) with eltype Float64 with indices 2:2:\n 1.0",
-            "1×1 OffsetArray(::Matrix{Float64}, 2:2, 3:3) with eltype Float64 with indices 2:2×3:3:\n 1.0",
-            "1×1×1 OffsetArray(::Array{Float64, 3}, 2:2, 3:3, 4:4) with eltype Float64 with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
-            "1×1×1×1 OffsetArray(::Array{Float64, 4}, 2:2, 3:3, 4:4, 5:5) with eltype Float64 with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
-targets2 = ["(fill(1.0), fill(1.0))",
-            "([1.0], [1.0])",
-            "([1.0;;], [1.0;;])",
-            "([1.0;;;], [1.0;;;])",
-            "([1.0;;;;], [1.0;;;;])"]
-@testset "printing of OffsetArray with n=$n" for n = 0:4
-    a = OffsetArray(fill(1.,ntuple(Returns(1),n)), ntuple(identity,n))
-    show(IOContext(io, :limit => true), MIME("text/plain"), a)
-    @test String(take!(io)) == targets1[n+1]
-    show(IOContext(io, :limit => true), MIME("text/plain"), (a,a))
-    @test String(take!(io)) == targets2[n+1]
+    targets1 = ["0-dimensional OffsetArray(::Array{Float64, 0}) with eltype Float64:\n1.0",
+                "1-element OffsetArray(::Vector{Float64}, 2:2) with eltype Float64 with indices 2:2:\n 1.0",
+                "1×1 OffsetArray(::Matrix{Float64}, 2:2, 3:3) with eltype Float64 with indices 2:2×3:3:\n 1.0",
+                "1×1×1 OffsetArray(::Array{Float64, 3}, 2:2, 3:3, 4:4) with eltype Float64 with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
+                "1×1×1×1 OffsetArray(::Array{Float64, 4}, 2:2, 3:3, 4:4, 5:5) with eltype Float64 with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
+    targets2 = ["(fill(1.0), fill(1.0))",
+                "([1.0], [1.0])",
+                "([1.0;;], [1.0;;])",
+                "([1.0;;;], [1.0;;;])",
+                "([1.0;;;;], [1.0;;;;])"]
+    @testset "printing of OffsetArray with n=$n" for n = 0:4
+        a = OffsetArray(fill(1.,ntuple(Returns(1),n)), ntuple(identity,n))
+        show(IOContext(io, :limit => true), MIME("text/plain"), a)
+        @test String(take!(io)) == targets1[n+1]
+        show(IOContext(io, :limit => true), MIME("text/plain"), (a,a))
+        @test String(take!(io)) == targets2[n+1]
+    end
+    P = OffsetArray(rand(8,8), (1,1))
+    PV = view(P, 2:3, :)
+    @test endswith(summary(PV), "with indices Base.OneTo(2)×OffsetArrays.IdOffsetRange(2:9)")
 end
-P = OffsetArray(rand(8,8), (1,1))
-PV = view(P, 2:3, :)
-@test endswith(summary(PV), "with indices Base.OneTo(2)×OffsetArrays.IdOffsetRange(2:9)")
 
 # Similar
 B = similar(A, Float32)

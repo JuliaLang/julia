@@ -44,7 +44,7 @@ macro MIME_str(s)
 end
 
 # fallback text/plain representation of any type:
-show(io::IO, ::MIME"text/plain", x) = show(io, x)
+show(io::IO, ::MIME"text/plain", x) = haskey(io, :typeinfo) ? show(io, x; typeinfo=io[:typeinfo]) : show(io, x) # TODO
 
 MIME(s) = MIME{Symbol(s)}()
 show(io::IO, ::MIME{mime}) where {mime} = print(io, "MIME type ", string(mime))

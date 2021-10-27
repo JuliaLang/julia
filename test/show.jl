@@ -5,8 +5,8 @@ using LinearAlgebra, SparseArrays
 # For curmod_*
 include("testenv.jl")
 
-replstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), MIME("text/plain"), x), x)
-showstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), x), x)
+replstr(x, kv::Pair...) = sprint(show, MIME("text/plain"), x, context=IOContext(devnull, :limit => true, :displaysize => (24, 80), kv...))
+showstr(x, kv::Pair...) = sprint(show, x, context=IOContext(devnull, :limit => true, :displaysize => (24, 80), kv...))
 
 @testset "IOContext" begin
     io = IOBuffer()
@@ -873,8 +873,11 @@ end
         @test length(r) == 7*80
         @test r == repr("x"^271) * " ⋯ 459 bytes ⋯ " * repr("x"^270)
         r = replstr(["x"^1000])
+        @test length(r) < 7*120
+        @test r == "1-element Vector{String}:\n " * repr("x"^271) * " ⋯ 459 bytes ⋯ " * repr("x"^270)
+        r = replstr(["x"^1000 "x"])
         @test length(r) < 120
-        @test r == "1-element Vector{String}:\n " * repr("x"^31) * " ⋯ 939 bytes ⋯ " * repr("x"^30)
+        @test r == "1×2 Matrix{String}:\n " * repr("x"^31) * " ⋯ 939 bytes ⋯ " * repr("x"^30) * "  …  \"x\""
     end
 end
 
@@ -1222,15 +1225,9 @@ let io = IOBuffer()
 end
 
 @testset "PR 17117: print_array" begin
-    s = IOBuffer(Vector{UInt8}(), read=true, write=true)
-    Base.print_array(s, [1, 2, 3])
-    @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
-    close(s)
-    s2 = IOBuffer(Vector{UInt8}(), read=true, write=true)
+    @test sprint(Base.print_array, [1, 2, 3], Int) == " 1\n 2\n 3"
     z = zeros(0,0,0,0,0,0,0,0)
-    Base.print_array(s2, z)
-    @test String(resize!(s2.data, s2.size)) == ""
-    close(s2)
+    @test sprint(Base.print_array, z, Int) == ""
 end
 
 let repr = sprint(dump, :(x = 1))
@@ -1824,10 +1821,10 @@ end
     @test showstr([values(Dict('a' => 'b'))]) == "Base.ValueIterator{Dict{Char, Char}}[['b']]"
     @test replstr([keys(Dict('a' => 'b'))]) == "1-element Vector{Base.KeySet{Char, Dict{Char, Char}}}:\n ['a']"
 
-    @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
+    @test sprint(show, Pair{Integer,Integer}(1, 2), kwargs=(; typeinfo=Pair{Integer,Integer})) == "1 => 2"
     @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer, Integer}[1 => 2]"
     @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer, Integer}(1 => 2)"
-    @test showstr(Dict(true=>false)) == "Dict{Bool, Bool}(1 => 0)"
+    @test showstr(Dict(true=>false)) == "Dict{Bool, Bool}(true => false)"
     @test showstr(Dict((1 => 2) => (3 => 4))) == "Dict((1 => 2) => (3 => 4))"
 
     # issue #27979 (displaying arrays of pairs containing arrays as first member)

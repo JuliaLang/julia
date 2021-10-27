@@ -251,9 +251,9 @@ function Base.array_summary(io::IO, S::AbstractSparseMatrixCSCInclAdjointAndTran
 end
 
 # called by `show(io, MIME("text/plain"), ::AbstractSparseMatrixCSCInclAdjointAndTranspose)`
-function Base.print_array(io::IO, S::AbstractSparseMatrixCSCInclAdjointAndTranspose)
+function Base.print_array(io::IO, S::AbstractSparseMatrixCSCInclAdjointAndTranspose, typeinfo::Type)
     if max(size(S)...) < 16
-        Base.print_matrix(io, S)
+        Base.print_matrix(io, S, typeinfo)
     else
         _show_with_braille_patterns(io, S)
     end

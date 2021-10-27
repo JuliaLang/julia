@@ -108,10 +108,10 @@ function writeexp(x::T,
     return String(resize!(buf, pos - 1))
 end
 
-function Base.show(io::IO, x::T, forceuntyped::Bool=false, fromprint::Bool=false) where {T <: Base.IEEEFloat}
+function Base.show(io::IO, x::T; forceuntyped::Bool=false, fromprint::Bool=false, typeinfo::Type=Any, opt_kwargs...) where {T <: Base.IEEEFloat}
     compact = get(io, :compact, false)::Bool
     buf = Base.StringVector(neededdigits(T))
-    typed = !forceuntyped && !compact && get(io, :typeinfo, Any) != typeof(x)
+    typed = !forceuntyped && !compact && typeinfo !== typeof(x)
     pos = writeshortest(buf, 1, x, false, false, true, -1,
         (x isa Float32 && !fromprint) ? UInt8('f') : UInt8('e'), false, UInt8('.'), typed, compact)
     write(io, resize!(buf, pos - 1))
@@ -125,6 +125,6 @@ function Base.string(x::T) where {T <: Base.IEEEFloat}
     return String(resize!(buf, pos - 1))
 end
 
-Base.print(io::IO, x::Union{Float16, Float32}) = show(io, x, true, true)
+Base.print(io::IO, x::Union{Float16, Float32}) = show(io, x, forceuntyped=true, fromprint=true)
 
 end # module

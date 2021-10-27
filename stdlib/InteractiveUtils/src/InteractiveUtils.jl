@@ -131,7 +131,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
         try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
         print(io, "  Load Avg: ")
-        Base.print_matrix(io, Sys.loadavg()')
+        Base.print_matrix(io, Sys.loadavg()', Float64)
         println(io)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)

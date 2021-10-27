@@ -39,13 +39,20 @@ convert(::Type{Nothing}, ::Nothing) = nothing
 convert(::Type{Some{T}}, x::Some{T}) where {T} = x
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
 
-function show(io::IO, x::Some)
-    if get(io, :typeinfo, Any) == typeof(x)
+function show(io::IO, x::Some; opt_kwargs...)
+    typeinfo = get(opt_kwargs, :typeinfo, Any)
+    if typeinfo === typeof(x)
         show(io, x.value)
     else
-        print(io, "Some(")
-        show(io, x.value)
-        print(io, ')')
+        v = getfield(x, :value)
+        ft = fieldtype(typeof(x), 1)
+        if typeof(v) === ft
+            print(io, "Some(")
+        else
+            show_typeof(io, typeof(x), typeinfo)
+        end
+        show(io, v; typeinfo=ft)
+        print(io, ")")
     end
 end
 

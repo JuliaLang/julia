@@ -200,10 +200,10 @@ big(x::AbstractIrrational) = BigFloat(x)
 big(::Type{<:AbstractIrrational}) = BigFloat
 
 # align along = for nice Array printing
-function alignment(io::IO, x::AbstractIrrational)
-    m = match(r"^(.*?)(=.*)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-    (length(something(m.captures[1])), length(something(m.captures[2])))
+function alignment(io::IO, x::AbstractIrrational, typeinfo::Type)
+    s = stringshow(io, x, typeinfo)
+    m = match(r"^(.*?)(=.*)$", s)
+    m === nothing ? (length(s), 0) : (length(something(m.captures[1])), length(something(m.captures[2])))
 end
 
 # inv

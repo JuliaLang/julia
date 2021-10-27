@@ -28,19 +28,19 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
     limit = get(io, :limit, false)::Bool
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
     print(io, typeinfo_prefix(io, t)[1])
-    print(io, '(')
+    print(io, "(")
     if !isempty(t) && !show_circular(io, t)
         first = true
         n = 0
         for pair in t
             first || print(io, ", ")
             first = false
-            show(recur_io, pair)
-            n+=1
+            show(recur_io, pair, typeinfo=eltype(t))
+            n += 1
             limit && n >= 10 && (print(io, "…"); break)
         end
     end
-    print(io, ')')
+    print(io, ")")
 end
 
 # Dict

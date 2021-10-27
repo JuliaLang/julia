@@ -599,6 +599,7 @@ function print_range(io::IO, r::AbstractRange,
                      hdots::AbstractString = ",\u2026,") # horiz ellipsis
     # This function borrows from print_matrix() in show.jl
     # and should be called by show and display
+    typeinfo = eltype(r)
     sz = displaysize(io)
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
@@ -613,25 +614,25 @@ function print_range(io::IO, r::AbstractRange,
     # left and right edge columns, as many as could conceivably fit on the
     # screen, with the middle columns summarized by horz, vert, or diag ellipsis
     maxpossiblecols = div(screenwidth, 1+sepsize) # assume each element is at least 1 char + 1 separator
-    colsr = n <= maxpossiblecols ? (1:n) : [1:div(maxpossiblecols,2)+1; (n-div(maxpossiblecols,2)):n]
+    colsr = n <= maxpossiblecols ? (1:n) : [1:div(maxpossiblecols, 2)+1; (n-div(maxpossiblecols, 2)):n]
     rowmatrix = reshape(r[colsr], 1, length(colsr)) # treat the range as a one-row matrix for print_matrix_row
     nrow, idxlast = size(rowmatrix, 2), last(axes(rowmatrix, 2))
-    A = alignment(io, rowmatrix, 1:m, 1:length(rowmatrix), screenwidth, screenwidth, sepsize, nrow) # how much space range takes
+    A = alignment(io, rowmatrix, typeinfo, 1:m, 1:length(rowmatrix), screenwidth, screenwidth, sepsize, nrow) # how much space range takes
     if n <= length(A) # cols fit screen, so print out all elements
         print(io, pre) # put in pre chars
-        print_matrix_row(io,rowmatrix,A,1,1:n,sep,idxlast) # the entire range
+        print_matrix_row(io, rowmatrix, typeinfo, A, 1, 1:n, sep, idxlast) # the entire range
         print(io, post) # add the post characters
     else # cols don't fit so put horiz ellipsis in the middle
         # how many chars left after dividing width of screen in half
         # and accounting for the horiz ellipsis
-        c = div(screenwidth-length(hdots)+1,2)+1 # chars remaining for each side of rowmatrix
-        alignR = reverse(alignment(io, rowmatrix, 1:m, length(rowmatrix):-1:1, c, c, sepsize, nrow)) # which cols of rowmatrix to put on the right
-        c = screenwidth - sum(map(sum,alignR)) - (length(alignR)-1)*sepsize - length(hdots)
-        alignL = alignment(io, rowmatrix, 1:m, 1:length(rowmatrix), c, c, sepsize, nrow) # which cols of rowmatrix to put on the left
+        c = div(screenwidth-length(hdots)+1, 2)+1 # chars remaining for each side of rowmatrix
+        alignR = reverse(alignment(io, rowmatrix, typeinfo, 1:m, length(rowmatrix):-1:1, c, c, sepsize, nrow)) # which cols of rowmatrix to put on the right
+        c = screenwidth - sum(map(sum, alignR)) - (length(alignR)-1)*sepsize - length(hdots)
+        alignL = alignment(io, rowmatrix, typeinfo, 1:m, 1:length(rowmatrix), c, c, sepsize, nrow) # which cols of rowmatrix to put on the left
         print(io, pre)   # put in pre chars
-        print_matrix_row(io, rowmatrix,alignL,1,1:length(alignL),sep,idxlast) # left part of range
+        print_matrix_row(io, rowmatrix, typeinfo, alignL, 1, 1:length(alignL), sep, idxlast) # left part of range
         print(io, hdots) # horizontal ellipsis
-        print_matrix_row(io, rowmatrix,alignR,1,length(rowmatrix)-length(alignR)+1:length(rowmatrix),sep,idxlast) # right part of range
+        print_matrix_row(io, rowmatrix, typeinfo, alignR, 1, length(rowmatrix)-length(alignR)+1:length(rowmatrix), sep, idxlast) # right part of range
         print(io, post)  # post chars
     end
 end

@@ -77,7 +77,7 @@ println(io::IO, xs...) = print(io, xs..., "\n")
 ## conversion of general objects to strings ##
 
 """
-    sprint(f::Function, args...; context=nothing, sizehint=0)
+    sprint(f::Function, args...; context=nothing, sizehint=0, kwargs)
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
@@ -95,6 +95,9 @@ string.
 !!! compat "Julia 1.7"
     Passing a tuple to keyword `context` requires Julia 1.7 or later.
 
+!!! compat "Julia 1.8"
+    Passing kwargs requires Julia 1.8 or later.
+
 # Examples
 ```jldoctest
 julia> sprint(show, 66.66666; context=:compact => true)
@@ -104,14 +107,14 @@ julia> sprint(showerror, BoundsError([1], 100))
 "BoundsError: attempt to access 1-element Vector{Int64} at index [100]"
 ```
 """
-function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
+function sprint(f, args...; context=nothing, sizehint::Integer=0, kwargs=NamedTuple())
     s = IOBuffer(sizehint=sizehint)
     if context isa Tuple
-        f(IOContext(s, context...), args...)
+        f(IOContext(s, context...), args...; kwargs...)
     elseif context !== nothing
-        f(IOContext(s, context), args...)
+        f(IOContext(s, context), args...; kwargs...)
     else
-        f(s, args...)
+        f(s, args...; kwargs...)
     end
     String(resize!(s.data, s.size))
 end
@@ -204,7 +207,7 @@ function show(
         get(io, :limit, false) || return show(io, str)
         limit = max(20, displaysize(io)[2])
         # one line in collection, seven otherwise
-        get(io, :typeinfo, nothing) === nothing && (limit *= 7)
+        get(io, :compact, false) || (limit *= 7)
     end
 
     # early out for short strings

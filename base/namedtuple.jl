@@ -147,29 +147,28 @@ if nameof(@__MODULE__) === :Base
     (::Type{T})(nt::NamedTuple) where {T <: Tuple} = convert(T, Tuple(nt))
 end
 
-function show(io::IO, t::NamedTuple)
+function show(io::IO, t::NamedTuple; opt_kwargs...)
+    typeinfo = get(opt_kwargs, :typeinfo, Any)
     n = nfields(t)
     for i = 1:n
         # if field types aren't concrete, show full type
         if typeof(getfield(t, i)) !== fieldtype(typeof(t), i)
             show(io, typeof(t))
-            print(io, "(")
-            show(io, Tuple(t))
-            print(io, ")")
+            print(io, "((")
+            join(io, t, ", ")
+            print(io, "))")
             return
         end
     end
     if n == 0
         print(io, "NamedTuple()")
     else
-        typeinfo = get(io, :typeinfo, Any)
         print(io, "(")
         for i = 1:n
             show_sym(io, fieldname(typeof(t), i))
             print(io, " = ")
-            show(IOContext(io, :typeinfo =>
-                           t isa typeinfo <: NamedTuple ? fieldtype(typeinfo, i) : Any),
-                 getfield(t, i))
+            ft = t isa typeinfo <: NamedTuple ? fieldtype(typeinfo, i) : Any
+            show(IOContext(io, :typeinfo => ft), getfield(t, i); typeinfo=ft)
             if n == 1
                 print(io, ",")
             elseif i < n

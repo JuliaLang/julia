@@ -86,8 +86,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
-    recur_io_k = IOContext(recur_io, :typeinfo=>keytype(t))
-    recur_io_v = IOContext(recur_io, :typeinfo=>valtype(t))
+    recur_io_k = IOContext(recur_io, :typeinfo=>K)
+    recur_io_v = IOContext(recur_io, :typeinfo=>V)
 
     summary(io, t)
     isempty(t) && return
@@ -108,8 +108,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         vallen = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
-            ks[i] = sprint(show, k, context=recur_io_k, sizehint=0)
-            vs[i] = sprint(show, v, context=recur_io_v, sizehint=0)
+            ks[i] = stringshow(recur_io_k, k, K) # TODO: use typeof(k)
+            vs[i] = stringshow(recur_io_v, v, V) # TODO: use typeof(v)
             keylen = clamp(length(ks[i]), keylen, cols)
             vallen = clamp(length(vs[i]), vallen, cols)
         end
@@ -129,17 +129,17 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
 
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
+            print(io, key)
         else
-            key = sprint(show, k, context=recur_io_k, sizehint=0)
+            show(recur_io_k, k, typeinfo=K)
         end
-        print(recur_io, key)
         print(io, " => ")
 
         if limit
             val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
             print(io, val)
         else
-            show(recur_io_v, v)
+            show(recur_io_v, v, typeinfo=V)
         end
     end
 end
@@ -276,7 +276,7 @@ The following properties are in common use:
  - `:displaysize`: A `Tuple{Int,Int}` giving the size in rows and columns to use for text
    output. This can be used to override the display size for called functions, but to
    get the size of the screen use the `displaysize` function.
- - `:typeinfo`: a `Type` characterizing the information already printed
+ - [deprecated]`:typeinfo`: a `Type` characterizing the information already printed
    concerning the type of the object about to be displayed. This is mainly useful when
    displaying a collection of objects of the same type, so that redundant type information
    can be avoided (e.g. `[Float16(0)]` can be shown as "Float16[0.0]" instead
@@ -388,16 +388,25 @@ julia> print("Hello World!")
 Hello World!
 ```
 """
-show(io::IO, @nospecialize(x)) = show_default(io, x)
-
 show(x) = show(stdout::IO, x)
+let thismethod
+global function show(io::IO, @nospecialize(x); opt_kwargs...)
+    if isempty(opt_kwargs) || which(show, (typeof(io), typeof(x))) === thismethod
+        typeinfo = get(opt_kwargs, :typeinfo, Any)
+        _show_default(io, inferencebarrier(x), typeinfo)
+    else
+        show(io, x)
+    end
+end
+thismethod = which(show, (IO, Any))
+end
 
 # avoid inferring show_default on the type of `x`
-show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
+show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x), inferencebarrier(Any))
 
-function _show_default(io::IO, @nospecialize(x))
+function _show_default(io::IO, @nospecialize(x), typeinfo)
     t = typeof(x)
-    show(io, inferencebarrier(t)::DataType)
+    show_typeof(io, t, typeinfo::Type)
     print(io, '(')
     nf = nfields(x)
     nb = sizeof(x)::Int
@@ -407,10 +416,11 @@ function _show_default(io::IO, @nospecialize(x))
                                  Pair{Symbol,Any}(:typeinfo, Any))
             for i in 1:nf
                 f = fieldname(t, i)
+                ft = fieldtype(t, i)
                 if !isdefined(x, f)
                     print(io, undef_ref_str)
                 else
-                    show(recur_io, getfield(x, i))
+                    show(recur_io, getfield(x, i), typeinfo=ft)
                 end
                 if i < nf
                     print(io, ", ")
@@ -952,6 +962,12 @@ function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
 end
 
 function show_type_name(io::IO, tn::Core.TypeName)
+    # Print module prefix unless type is visible from module passed to
+    # IOContext If :module is not set, default to Main. nothing can be used
+    # to force printing prefix
+    show_type_name(io, tn, !get(io, :compact, false)::Bool)
+end
+function show_type_name(io::IO, tn::Core.TypeName, prefix::Bool)
     if tn === UnionAll.name
         # by coincidence, `typeof(Type)` is a valid representation of the UnionAll type.
         # intercept this case and print `UnionAll` instead.
@@ -962,10 +978,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
     sym = (globfunc ? globname : tn.name)::Symbol
     globfunc && print(io, "typeof(")
     quo = false
-    if !(get(io, :compact, false)::Bool)
-        # Print module prefix unless type is visible from module passed to
-        # IOContext If :module is not set, default to Main. nothing can be used
-        # to force printing prefix
+    if prefix
         from = get(io, :module, Main)
         if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from))
             show(io, tn.module)
@@ -983,6 +996,17 @@ function show_type_name(io::IO, tn::Core.TypeName)
     quo      && print(io, ")")
     globfunc && print(io, ")")
     nothing
+end
+
+function show_typeof(io::IO, x::DataType, typeinfo::Type)
+    if typeinfo === x
+        show_type_name(io, x.name, false)
+    elseif false
+        #show_type_name(io, x.name, #=compact=#)
+        ##show_typeparams(io, x.parameters, unwrap_unionall(x.name.wrapper).parameters, [])
+    else
+        show(io, x)
+    end
 end
 
 function show_datatype(io::IO, @nospecialize(x::DataType), wheres::Vector=TypeVar[])
@@ -1050,46 +1074,52 @@ function show(io::IO, tn::Core.TypeName)
 end
 
 show(io::IO, ::Nothing) = print(io, "nothing")
-show(io::IO, b::Bool) = print(io, get(io, :typeinfo, Any) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
+show(io::IO, b::Bool; opt_kwargs...) = print(io, get(io, :compact, false) && get(opt_kwargs, :typeinfo, Any) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
 print(io::IO, n::Unsigned) = print(io, string(n))
 
-show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(string(UInt(p), base = 16, pad = Sys.WORD_SIZE>>2))")
+function show(io::IO, p::Ptr; opt_kwargs...)
+    show_typeof(io, typeof(p), get(opt_kwargs, :typeinfo, Any))
+    print(io, " @0x$(string(UInt(p), base = 16, pad = Sys.WORD_SIZE>>2))")
+end
 
 has_tight_type(p::Pair) =
-    typeof(p.first)  == typeof(p).parameters[1] &&
-    typeof(p.second) == typeof(p).parameters[2]
+    typeof(p.first)  === typeof(p).parameters[1] &&
+    typeof(p.second) === typeof(p).parameters[2]
 
-isdelimited(io::IO, x) = true
-isdelimited(io::IO, x::Function) = !isoperator(Symbol(x))
+isdelimited(typeinfo::Type, x) = !(x isa Function && isoperator(Symbol(x)))
 
 # !isdelimited means that the Pair is printed with "=>" (like in "1 => 2"),
 # without its explicit type (like in "Pair{Integer,Integer}(1, 2)")
-isdelimited(io::IO, p::Pair) = !(has_tight_type(p) || get(io, :typeinfo, Any) == typeof(p))
+isdelimited(typeinfo::Type, p::Pair) = !(typeinfo === typeof(p) || has_tight_type(p))
 
-function gettypeinfos(io::IO, p::Pair)
-    typeinfo = get(io, :typeinfo, Any)
+function gettypeinfos(typeinfo::Type, p::Pair)
     p isa typeinfo <: Pair ?
         fieldtype(typeinfo, 1) => fieldtype(typeinfo, 2) :
         Any => Any
 end
 
-function show(io::IO, p::Pair)
-    isdelimited(io, p) && return show_pairtyped(io, p)
-    typeinfos = gettypeinfos(io, p)
+function show(io::IO, p::Pair; opt_kwargs...)
+    typeinfo = get(opt_kwargs, :typeinfo, Any)
+    isdelimited(typeinfo, p) && return show_pairtyped(io, p, typeinfo)
+    typeinfos = gettypeinfos(typeinfo, p)
     for i = (1, 2)
         io_i = IOContext(io, :typeinfo => typeinfos[i])
-        isdelimited(io_i, p[i]) || print(io, "(")
-        show(io_i, p[i])
-        isdelimited(io_i, p[i]) || print(io, ")")
+        isdelimited(typeinfos[i], p[i]) || print(io, "(")
+        show(io_i, p[i], typeinfo=typeinfos[i])
+        isdelimited(typeinfos[i], p[i]) || print(io, ")")
         i == 1 && print(io, get(io, :compact, false) ? "=>" : " => ")
     end
 end
 
-function show_pairtyped(io::IO, p::Pair{K,V}) where {K,V}
-    show(io, typeof(p))
-    show(io, (p.first, p.second))
+function show_pairtyped(io::IO, p::Pair{K,V}, typeinfo::Type) where {K,V}
+    show_typeof(io, typeof(p), typeinfo)
+    print(io, "(")
+    show(io, p.first; typeinfo=K)
+    print(io, ", ")
+    show(io, p.second; typeinfo=V)
+    print(io, ")")
 end
 
 function show(io::IO, m::Module)
@@ -1178,6 +1208,7 @@ end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
                           delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
+    typeinfo = get(io, :typeinfo, Any) # TODO
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
@@ -1189,7 +1220,7 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
                     print(io, undef_ref_str)
                 else
                     x = itr[i]
-                    show(recur_io, x)
+                    show(recur_io, x; typeinfo)
                 end
                 i += 1
                 if i > l
@@ -1206,6 +1237,7 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
 end
 
 function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax(Int))
+    typeinfo = get(io, :typeinfo, Any) # TODO
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
@@ -1221,10 +1253,8 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
             while true
                 x = y[1]
                 y = iterate(itr, y[2])
-                show(IOContext(recur_io, :typeinfo => itr isa typeinfo <: Tuple ?
-                                             fieldtype(typeinfo, i1+i0) :
-                                             typeinfo),
-                     x)
+                et = itr isa typeinfo <: Tuple ? fieldtype(typeinfo, i1+i0) : typeinfo
+                show(IOContext(recur_io, :typeinfo => et), x, typeinfo=et)
                 i1 += 1
                 if y === nothing || i1 > n
                     delim_one && first && print(io, delim)
@@ -2490,7 +2520,7 @@ module IRShow
     debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
 end
 
-function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
+function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source, opt_kwargs...)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
     lambda_io::IOContext = io
@@ -2575,7 +2605,7 @@ function dump(io::IOContext, @nospecialize(x), n::Int, indent)
         end
     elseif !isa(x, Function)
         print(io, " ")
-        show(io, x)
+        show(io, x; typeinfo=T)
     end
     nothing
 end
@@ -2602,7 +2632,7 @@ function dump(io::IOContext, x::Array, n::Int, indent)
     print(io, "Array{", eltype(x), "}(", size(x), ")")
     if eltype(x) <: Number
         print(io, " ")
-        show(io, x)
+        show(io, x; typeinfo=typeof(x))
     else
         if n > 0 && !isempty(x) && !show_circular(io, x)
             println(io)
@@ -2694,48 +2724,60 @@ function dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH)
     dump(IOContext(stdout::IO, :limit => true, :module => mod), arg; maxdepth=maxdepth)
 end
 
+stringshow(io::IO, x::Any, typeinfo::Type) =
+    sprint(show, x, kwargs=(;typeinfo), context=io, sizehint=_str_sizehint(x))
 
 """
-`alignment(io, X)` returns a tuple (left,right) showing how many characters are
-needed on either side of an alignment feature such as a decimal point.
+`alignment(io, X, typeinfo)` returns a tuple (left,right) showing how many
+characters are needed on either side of an alignment feature such as a decimal
+point.
 
 # Examples
 ```jldoctest
-julia> Base.alignment(stdout, 42)
+julia> Base.alignment(stdout, 42, Int)
 (2, 0)
 
-julia> Base.alignment(stdout, 4.23)
+julia> Base.alignment(stdout, 4.23, Float64)
 (1, 3)
 
-julia> Base.alignment(stdout, 1 + 10im)
+julia> Base.alignment(stdout, 1 + 10im, Any)
 (3, 5)
 ```
 """
-alignment(io::IO, x::Any) = (0, length(sprint(show, x, context=io, sizehint=0)))
-alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-function alignment(io::IO, x::Real)
-    m = match(r"^(.*?)((?:[\.eEfF].*)?)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+alignment(io::IO, x::Any) = (0, length(stringshow(io, x, Any))) # deprecated
+let deprecated = which(alignment, (IO, Any))
+global function alignment(io::IO, x::Any, typeinfo::Type)
+    if which(alignment, (typeof(io), typeof(x))) === deprecated
+        (0, length(stringshow(io, x, typeinfo)))
+    else
+        alignment(io, x)
+    end
 end
-function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[^ef][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
 end
-function alignment(io::IO, x::Rational)
-    m = match(r"^(.*?/)(/.*)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+alignment(io::IO, x::Number, typeinfo::Type) = (length(stringshow(io, x, typeinfo)), 0)
+alignment(io::IO, x::Integer, typeinfo::Type) = (length(stringshow(io, x, typeinfo)), 0)
+function alignment(io::IO, x::Real, typeinfo::Type)
+    s = stringshow(io, x, typeinfo)
+    m = match(r"^(.*?)((?:[\.eEfF].*)?)$", s)
+    m === nothing ? (length(s), 0) : (length(something(m.captures[1])), length(something(m.captures[2])))
 end
-
-function alignment(io::IO, x::Pair)
-    s = sprint(show, x, context=io, sizehint=0)
-    if !isdelimited(io, x) # i.e. use "=>" for display
-        ctx = IOContext(io, :typeinfo => gettypeinfos(io, x)[1])
-        left = length(sprint(show, x.first, context=ctx, sizehint=0))
-        left += 2 * !isdelimited(ctx, x.first) # for parens around p.first
+function alignment(io::IO, x::Complex, typeinfo::Type)
+    s = stringshow(io, x, typeinfo)
+    m = match(r"^(.*[^ef][\+\-])(.*)$", s)
+    m === nothing ? (length(s), 0) : (length(something(m.captures[1])), length(something(m.captures[2])))
+end
+function alignment(io::IO, x::Rational, typeinfo::Type)
+    s = stringshow(io, x, typeinfo)
+    m = match(r"^(.*?/)(/.*)$", s)
+    m === nothing ? (length(s), 0) : (length(something(m.captures[1])), length(something(m.captures[2])))
+end
+function alignment(io::IO, x::Pair, typeinfo::Type)
+    s = stringshow(io, x, typeinfo)
+    if !isdelimited(typeinfo, x) # i.e. use "=>" for display
+        keyinfo = gettypeinfos(typeinfo, x)[1]
+        ctx = IOContext(io, :typeinfo => keyinfo)
+        left = length(stringshow(ctx, x.first, keyinfo))
+        left += 2 * !isdelimited(keyinfo, x.first) # for parens around p.first
         left += !(get(io, :compact, false)::Bool) # spaces are added around "=>"
         (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
     else

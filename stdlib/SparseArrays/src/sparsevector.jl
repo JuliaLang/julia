@@ -889,12 +889,12 @@ function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
            " stored ", xnnz == 1 ? "entry" : "entries")
     if xnnz != 0
         println(io, ":")
-        show(IOContext(io, :typeinfo => eltype(x)), x)
+        show(io, x)
     end
 end
 
-show(io::IO, x::AbstractSparseVector) = show(convert(IOContext, io), x)
-function show(io::IOContext, x::AbstractSparseVector)
+show(io::IO, x::AbstractSparseVector; opt_kwargs...) = show(convert(IOContext, io), x; opt_kwargs...)
+function show(io::IOContext, x::AbstractSparseVector; opt_kwargs...)
     # TODO: make this a one-line form
     n = length(x)
     nzind = nonzeroinds(x)
@@ -908,11 +908,12 @@ function show(io::IOContext, x::AbstractSparseVector)
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
     end
+    typeinfo = eltype(x)
     for k = eachindex(nzind)
         if k < half_screen_rows || k > length(nzind) - half_screen_rows
             print(io, "  ", '[', rpad(nzind[k], pad), "]  =  ")
             if isassigned(nzval, Int(k))
-                show(io, nzval[k])
+                show(io, nzval[k]; typeinfo)
             else
                 print(io, Base.undef_ref_str)
             end

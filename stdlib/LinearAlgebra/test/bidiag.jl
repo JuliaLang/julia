@@ -110,11 +110,11 @@ Random.seed!(1)
 
     @testset "show" begin
         BD = Bidiagonal(dv, ev, :U)
-        dstring = sprint(Base.print_matrix,BD.dv')
-        estring = sprint(Base.print_matrix,BD.ev')
-        @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n super:$estring"
-        BD = Bidiagonal(dv,ev,:L)
-        @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n sub:$estring"
+        dstring = sprint(Base.print_matrix, BD.dv', eltype(BD))
+        estring = sprint(Base.print_matrix, BD.ev', eltype(BD))
+        @test sprint(show, BD) == "$(summary(BD)):\n diag:$dstring\n super:$estring"
+        BD = Bidiagonal(dv, ev, :L)
+        @test sprint(show, BD) == "$(summary(BD)):\n diag:$dstring\n sub:$estring"
     end
 
     @testset for uplo in (:U, :L)
