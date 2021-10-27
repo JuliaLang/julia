@@ -481,7 +481,7 @@ Instead of destructuring based on iteration, the right side of assignments can a
 This follows the syntax for NamedTuples, and works by assigning to each variable on the left a
 property of the right side of the assignment with the same name using `getproperty`:
 
-```julia-repl
+```jldoctest
 julia> (; b, a) = (a=1, b=2, c=3)
 (a = 1, b = 2, c = 3)
 
