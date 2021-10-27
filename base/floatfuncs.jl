@@ -342,12 +342,14 @@ significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in 
 algorithms. See [`muladd`](@ref).
 """
 function fma end
-function fma_emulated(a::Float32, b::Float32, c::Float32)
+function fma_emulated(a::Float32, b::Float32, c::Float32)::Float32
     ab = Float64(a) * b
-    result = ab+c
-    # If converting to Float32 doesn't cause rounding problems
-    (reinterpret(UInt64, result)&0x0000_0000_1fff_ffff != 0x1000_0000) && isequal(ab, result-c)  && return Float32(result)
-    return result #TODO fixed.
+    res = ab+c
+    reinterpret(UInt64, res)&0x1fff_ffff!=0x1000_0000 && return res
+    # yes error compensation is necessary. It sucks
+    reslo = abs(c)>abs(ab) ? ab-(res - c) : c-(res - ab)
+    res = iszero(reslo) ? res : (signbit(reslo) ? prevfloat(res) : nextfloat(res))
+    return res
 end
 
 """ Splits a Float64 into a hi bit and a low bit where the high bit has 27 trailing 0s and the low bit has 26 trailing 0s"""

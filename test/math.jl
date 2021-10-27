@@ -1307,5 +1307,6 @@ end
         @test fma(floatmax(Float32), nextfloat(1f0), -floatmax(Float32)) === 4.0564817f31
         @test fma(1.6341681540852291e308, -2., floatmax(Float64)) == -1.4706431733081426e308 # case where inv(a)*c*a == Inf
         @test fma(-2., 1.6341681540852291e308, floatmax(Float64)) == -1.4706431733081426e308 # case where inv(b)*c*b == Inf
+        @test fma(-1.9369631f13, 2.1513551f-7, -1.7354427f-24) == -4.1670958f6
     end
 end
