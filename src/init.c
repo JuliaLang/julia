@@ -210,6 +210,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         jl_write_coverage_data(jl_options.output_code_coverage);
     if (jl_options.malloc_log)
         jl_write_malloc_log();
+    if (!(jl_options.strip_ir && jl_generating_output())) {
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
@@ -276,7 +277,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     loop->stop_flag = 0;
     while (uv_run(loop, UV_RUN_DEFAULT)) { }
     JL_UV_UNLOCK();
-
+    }
     // TODO: Destroy threads
 
     jl_destroy_timing();
