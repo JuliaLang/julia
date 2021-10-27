@@ -816,10 +816,12 @@ end
     @test norm(x, Inf) == 3.5
 end
 
-@testset "maximum, minimum" begin
+@testset "maximum, minimum, findmax, findmin" begin
     let x = spv_x1
         @test maximum(x) == 3.5
+        @test findmax(x) == (3.5, 6)
         @test minimum(x) == -0.75
+        @test findmin(x) == (-0.75, 5)
         @test maximum(abs, x) == 3.5
         @test minimum(abs, x) == 0.0
         @test @inferred(minimum(t -> true, x)) === true
@@ -832,19 +834,47 @@ end
 
     let x = abs.(spv_x1)
         @test maximum(x) == 3.5
+        @test findmax(x) == (3.5, 6)
         @test minimum(x) == 0.0
+        @test findmin(x) == (0.0, 1)
     end
 
     let x = -abs.(spv_x1)
         @test maximum(x) == 0.0
+        @test findmax(x) == (0.0, 1)
         @test minimum(x) == -3.5
+        @test findmin(x) == (-3.5, 6)
     end
 
     let x = SparseVector(3, [1, 2, 3], [-4.5, 2.5, 3.5])
         @test maximum(x) == 3.5
+        @test findmax(x) == (3.5, 3)
         @test minimum(x) == -4.5
+        @test findmin(x) == (-4.5, 1)
         @test maximum(abs, x) == 4.5
         @test minimum(abs, x) == 2.5
+    end
+
+    let x = SparseVector(3, [1, 2, 3], [4.5, 0.0, 3.5])
+        @test minimum(x) == 0.0
+        @test findmin(x) == (0.0, 2)
+    end
+
+    let x = SparseVector(3, [1, 2, 3], [-4.5, 0.0, -3.5])
+        @test maximum(x) == 0.0
+        @test findmax(x) == (0.0, 2)
+    end
+
+    for i in (2, 3)
+        let x = SparseVector(4, [1, i, 4], [4.5, 0.0, 3.5])
+            @test minimum(x) == 0.0
+            @test findmin(x) == (0.0, 2)
+        end
+
+        let x = SparseVector(4, [1, i, 4], [-4.5, 0.0, -3.5])
+            @test maximum(x) == 0.0
+            @test findmax(x) == (0.0, 2)
+        end
     end
 
     let x = spzeros(Float64, 8)
@@ -861,6 +891,8 @@ end
     let x = spzeros(Float64, 0)
         @test_throws ArgumentError minimum(t -> true, x)
         @test_throws ArgumentError maximum(t -> true, x)
+        @test_throws ArgumentError findmin(x)
+        @test_throws ArgumentError findmax(x)
     end
 end
 
