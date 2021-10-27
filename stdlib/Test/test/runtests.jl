@@ -300,11 +300,17 @@ let fails = @testset NoThrowTestSet begin
 
 end
 
+struct BadError <: Exception end
+Base.show(io::IO, ::BadError) = throw("I am a bad error")
 let errors = @testset NoThrowTestSet begin
         # 1 - Error - unexpected pass
         @test_broken true
         # 2 - Error - converting a call into a comparison
         @test ==(1, 1:2...)
+        # 3 - Error - objects with broken show
+        @test throw(BadError())
+        @test BadError()
+        throw(BadError())
     end
 
     for err in errors
@@ -319,6 +325,18 @@ let errors = @testset NoThrowTestSet begin
     let str = sprint(show, errors[2])
         @test occursin("Expression: ==(1, 1:2...)", str)
         @test occursin("MethodError: no method matching ==(::$Int, ::$Int, ::$Int)", str)
+    end
+
+    let str = sprint(show, errors[3])
+        @test occursin("Expression: throw(BadError())\n  #=ERROR showing exception stack=# \"I am a bad error\"\n  Stacktrace:\n", str)
+    end
+
+    let str = sprint(show, errors[4])
+        @test occursin("Expression: BadError()\n       Value: #=ERROR showing error of type $BadError=# \"I am a bad error\"\nStacktrace:\n", str)
+    end
+
+    let str = sprint(show, errors[5])
+        @test occursin("Got exception outside of a @test\n  #=ERROR showing exception stack=# \"I am a bad error\"\n  Stacktrace:\n", str)
     end
 end
 
