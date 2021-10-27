@@ -369,11 +369,13 @@ end
 
 function fma_emulated(a::Float64, b::Float64,c::Float64)
     abhi, ablo = twomul(a,b)
-    if !isfinite(abhi+c) || issubnormal(ablo) || issubnormal(a) || issubnormal(b)
-        !(isfinite(abhi+c)) && return abhi+c
+    #display(twomul(a,b))
+    if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || issubnormal(a) || issubnormal(b)
+        isfinite(abhi+c) || return abhi+c
         (iszero(a) || iszero(b)) && return abhi+c
         bias = exponent(a) + exponent(b)
         c_denorm = ldexp(c, -bias)
+        #display((a,b,c_denorm))
         if isfinite(c_denorm)
             # rescale a and b to [1,2), equivalent to ldexp(a, -exponent(a))
             issubnormal(a) && (a *= 0x1p52)
@@ -381,6 +383,7 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             a = reinterpret(Float64, (reinterpret(UInt64, a) & 0x800fffffffffffff) | 0x3ff0000000000000)
             b = reinterpret(Float64, (reinterpret(UInt64, b) & 0x800fffffffffffff) | 0x3ff0000000000000)
             c = c_denorm
+            #display((a,b,c))
             abhi, ablo = twomul(a,b)
             r = abhi+c
             s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
@@ -398,7 +401,6 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
         isinf(abhi) && signbit(c) == signbit(a*b) && return abhi
         # fall through
     end
-
     r = abhi+c
     s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
     return r+s
