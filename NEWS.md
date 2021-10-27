@@ -80,6 +80,7 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
+* The BLAS submodule now supports the level-2 BLAS subroutine `spr!` ([#42830]).
 
 #### Markdown
 

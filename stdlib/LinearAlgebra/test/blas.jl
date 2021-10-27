@@ -314,6 +314,37 @@ Random.seed!(100)
             end
         end
 
+        # spr!
+        if elty in (Float32, Float64)
+            @testset "spr! $elty" begin
+                α = rand(elty)
+                M = rand(elty, n, n)
+                AL = Symmetric(M, :L)
+                AU = Symmetric(M, :U)
+                x = rand(elty, n)
+
+                function pack(A, uplo)
+                    AP = elty[]
+                    for j in 1:n
+                        for i in (uplo==:L ? (j:n) : (1:j))
+                            push!(AP, A[i,j])
+                        end
+                    end
+                    return AP
+                end
+
+                ALP_result_julia_lower = pack(α*x*x' + AL, :L)
+                ALP_result_blas_lower = pack(AL, :L)
+                BLAS.spr!('L', α, x, ALP_result_blas_lower)
+                @test ALP_result_julia_lower ≈ ALP_result_blas_lower
+
+                AUP_result_julia_upper = pack(α*x*x' + AU, :U)
+                AUP_result_blas_upper = pack(AU, :U)
+                BLAS.spr!('U', α, x, AUP_result_blas_upper)
+                @test AUP_result_julia_upper ≈ AUP_result_blas_upper
+            end
+        end
+
         #trsm
         A = triu(rand(elty,n,n))
         B = rand(elty,(n,n))
