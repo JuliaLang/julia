@@ -1010,7 +1010,9 @@ function require(into::Module, mod::Symbol)
             else
                 s = """
                 Package $(where.name) does not have $mod in its dependencies:
-                - If you have $(where.name) checked out for development and have
+                - You may have a partially installed environment. Try `Pkg.instantiate()`
+                  to ensure all packages in the environment are installed.
+                - Or, if you have $(where.name) checked out for development and have
                   added $mod as a dependency but haven't updated your primary
                   environment's manifest file, try `Pkg.resolve()`.
                 - Otherwise you may need to report an issue with $(where.name)"""
