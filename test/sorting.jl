@@ -142,6 +142,26 @@ end
         @test searchsortedlast(500:1.0:600, 1.0e20) == 101
     end
 
+    @testset "issue 10966" begin
+        for R in numTypes, T in numTypes
+            @test searchsortedfirst(R(2):R(2), T(0)) == 1
+            @test searchsortedfirst(R(2):R(2), T(2)) == 1
+            @test searchsortedfirst(R(2):R(2), T(3)) == 2
+            @test searchsortedfirst(R(1):1//2:R(5), T(0)) == 1
+            @test searchsortedfirst(R(1):1//2:R(5), T(2)) == 3
+            @test searchsortedfirst(R(1):1//2:R(5), T(6)) == 10
+            @test searchsortedlast(R(2):R(2), T(0)) == 0
+            @test searchsortedlast(R(2):R(2), T(2)) == 1
+            @test searchsortedlast(R(2):R(2), T(3)) == 1
+            @test searchsortedlast(R(1):1//2:R(5), T(0)) == 0
+            @test searchsortedlast(R(1):1//2:R(5), T(2)) == 3
+            @test searchsortedlast(R(1):1//2:R(5), T(6)) == 9
+            @test searchsorted(R(2):R(2), T(0)) === 1:0
+            @test searchsorted(R(2):R(2), T(2)) == 1:1
+            @test searchsorted(R(2):R(2), T(3)) === 2:1
+        end
+    end
+
     @testset "issue 32568" begin
         for R in numTypes, T in numTypes
             for arr in Any[R[1:5;], R(1):R(5), R(1):2:R(5)]
@@ -642,6 +662,14 @@ end
     a = OffsetArray([9:-1:0;], -5)
     Base.Sort.sort_int_range!(a, 10, 0, identity)
     @test issorted(a)
+end
+
+@testset "sort!(::OffsetMatrix; dims)" begin
+    x = OffsetMatrix(rand(5,5), 5, -5)
+    sort!(x; dims=1)
+    for i in axes(x, 2)
+        @test issorted(x[:,i])
+    end
 end
 
 end

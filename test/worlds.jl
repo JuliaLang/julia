@@ -107,8 +107,24 @@ end
 
 g265() = [f265(x) for x in 1:3.]
 wc265 = get_world_counter()
-f265(::Any) = 1.0
-@test wc265 + 1 == get_world_counter()
+wc265_41332a = Task(tls_world_age)
+@test tls_world_age() == wc265
+(function ()
+    global wc265_41332b = Task(tls_world_age)
+    @eval f265(::Any) = 1.0
+    global wc265_41332c = Base.invokelatest(Task, tls_world_age)
+    global wc265_41332d = Task(tls_world_age)
+    nothing
+end)()
+@test wc265 + 2 == get_world_counter() == tls_world_age()
+schedule(wc265_41332a)
+schedule(wc265_41332b)
+schedule(wc265_41332c)
+schedule(wc265_41332d)
+@test wc265 == fetch(wc265_41332a)
+@test wc265 + 1 == fetch(wc265_41332b)
+@test wc265 + 2 == fetch(wc265_41332c)
+@test wc265 + 1 == fetch(wc265_41332d)
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
 
@@ -136,7 +152,9 @@ f265(::Int) = 1
 
 # test for method errors
 h265() = true
-loc_h265 = "$(@__FILE__):$(@__LINE__() - 1)"
+file = @__FILE__
+Base.stacktrace_contract_userdir() && (file = Base.contractuser(file))
+loc_h265 = "$file:$(@__LINE__() - 3)"
 @test h265()
 @test_throws TaskFailedException(t265) put_n_take!(h265, ())
 @test_throws TaskFailedException(t265) fetch(t265)

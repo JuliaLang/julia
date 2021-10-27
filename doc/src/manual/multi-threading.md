@@ -18,10 +18,16 @@ The number of execution threads is controlled either by using the
 [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) environment variable. When both are
 specified, then `-t`/`--threads` takes precedence.
 
+The number of threads can either be specified as an integer (`--threads=4`) or as `auto`
+(`--threads=auto`), where `auto` sets the number of threads to the number of local CPU
+threads.
+
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
     In older versions you must use the environment variable instead.
 
+!!! compat "Julia 1.7"
+    Using `auto` together with the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
 Lets start Julia with 4 threads:
 
 ```bash
@@ -244,10 +250,13 @@ which will later be published formally.
 
 Any field in a struct declaration can be decorated with `@atomic`, and then any
 write must be marked with `@atomic` also, and must use one of the defined atomic
-orderings (:monotonic, :acquire, :release, :acquire\_release, or
-:sequentially\_consistent). Any read of an atomic field can also be annotated
+orderings (`:monotonic`, `:acquire`, `:release`, `:acquire_release`, or
+`:sequentially_consistent`). Any read of an atomic field can also be annotated
 with an atomic ordering constraint, or will be done with monotonic (relaxed)
 ordering if unspecified.
+
+!!! compat "Julia 1.7"
+    Per-field atomics requires at least Julia 1.7.
 
 
 ## Side effects and mutable function arguments

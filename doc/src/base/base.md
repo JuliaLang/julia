@@ -320,6 +320,7 @@ Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
 Base.@time
+Base.@showtime
 Base.@timev
 Base.@timed
 Base.@elapsed

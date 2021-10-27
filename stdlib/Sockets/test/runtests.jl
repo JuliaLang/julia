@@ -566,7 +566,7 @@ end
         end
         let s = Sockets.connect(addr)
             @test iswritable(s)
-            shutdown(s)
+            closewrite(s)
             @test !iswritable(s)
             close(s)
         end
@@ -578,7 +578,7 @@ end
             end
             @test iswritable(s)
             write(s, "hello world\n")
-            shutdown(s)
+            closewrite(s)
             @test !iswritable(s)
             @test isreadable(s)
             @test read(s, String) == "hello world\n"

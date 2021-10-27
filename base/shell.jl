@@ -49,22 +49,24 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
         empty!(innerlist)
     end
 
+    C = eltype(str)
+    P = Pair{Int,C}
     for (j, c) in st
-        j, c = j::Int, c::eltype(str)
+        j, c = j::Int, c::C
         if !in_single_quotes && !in_double_quotes && isspace(c)
             i = consume_upto!(arg, s, i, j)
             append_2to1!(args, arg)
             while !isempty(st)
                 # We've made sure above that we don't end in whitespace,
                 # so updating `i` here is ok
-                (i, c) = peek(st)::Pair{Int,eltype(str)}
+                (i, c) = peek(st)::P
                 isspace(c) || break
                 popfirst!(st)
             end
         elseif interpolate && !in_single_quotes && c == '$'
             i = consume_upto!(arg, s, i, j)
             isempty(st) && error("\$ right before end of command")
-            stpos, c = popfirst!(st)::Pair{Int,eltype(str)}
+            stpos, c = popfirst!(st)::P
             isspace(c) && error("space not allowed right after \$")
             if startswith(SubString(s, stpos), "var\"")
                 # Disallow var"#" syntax in cmd interpolations.
@@ -88,19 +90,19 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 in_double_quotes = !in_double_quotes
                 i = consume_upto!(arg, s, i, j)
             elseif !in_single_quotes && c == '\\'
-                if !isempty(st) && peek(st)[2] in ('\n', '\r')
+                if !isempty(st) && (peek(st)::P)[2] in ('\n', '\r')
                     i = consume_upto!(arg, s, i, j) + 1
-                    if popfirst!(st)[2] == '\r' && peek(st)[2] == '\n'
+                    if popfirst!(st)[2] == '\r' && (peek(st)::P)[2] == '\n'
                         i += 1
                         popfirst!(st)
                     end
-                    while !isempty(st) && peek(st)[2] in (' ', '\t')
+                    while !isempty(st) && (peek(st)::P)[2] in (' ', '\t')
                         i = nextind(str, i)
                         _ = popfirst!(st)
                     end
                 elseif in_double_quotes
                     isempty(st) && error("unterminated double quote")
-                    k, c′ = peek(st)
+                    k, c′ = peek(st)::P
                     if c′ == '"' || c′ == '$' || c′ == '\\'
                         i = consume_upto!(arg, s, i, j)
                         _ = popfirst!(st)

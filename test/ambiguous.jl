@@ -66,7 +66,7 @@ end
 ## Other ways of accessing functions
 # Test that non-ambiguous cases work
 let io = IOBuffer()
-    @test @test_logs precompile(ambig, (Int, Int))
+    @test precompile(ambig, (Int, Int))
     cf = @eval @cfunction(ambig, Int, (Int, Int))
     @test ccall(cf, Int, (Int, Int), 1, 2) == 4
     @test length(code_lowered(ambig, (Int, Int))) == 1
@@ -75,7 +75,7 @@ end
 
 # Test that ambiguous cases fail appropriately
 let io = IOBuffer()
-    @test @test_logs (:warn,) precompile(ambig, (UInt8, Int))
+    @test !precompile(ambig, (UInt8, Int))
     cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
     @test_throws(MethodError(ambig, (UInt8(1), Int(2)), get_world_counter()),
                  ccall(cf, Int, (UInt8, Int), 1, 2))

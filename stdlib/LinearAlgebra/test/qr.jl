@@ -415,4 +415,39 @@ end
     @test A.Q' * B ≈ A.Q
 end
 
+@testset "convert between eltypes" begin
+    a = rand(Float64, 10, 5)
+    qra = qr(a)
+    qrwy = LinearAlgebra.QRCompactWY{Float32}(qra.factors, qra.T)
+    @test Array(qrwy) ≈ Array(qr(Float32.(a)))
+    @test eltype(qrwy.factors) == eltype(qrwy.T) == Float32
+    qra = qr(a, ColumnNorm())
+    qrp = QRPivoted{Float32}(qra.factors, qra.τ, qra.jpvt)
+    @test Array(qrp) ≈ Array(qr(Float32.(a), ColumnNorm()))
+    @test eltype(qrp.factors) == eltype(qrp.τ) == Float32
+    a = rand(Float16, 10, 5)
+    qra = qr(a)
+    qrnonblas = QR{ComplexF16}(qra.factors, qra.τ)
+    @test Array(qrnonblas) ≈ Array(qr(ComplexF16.(a)))
+    @test eltype(qrnonblas.factors) == eltype(qrnonblas.τ) == ComplexF16
+end
+
+@testset "optimized getindex for an AbstractQ" begin
+    for T in [Float64, ComplexF64]
+        Q = qr(rand(T, 4, 4))
+        Q2 = Q.Q
+        M = Matrix(Q2)
+        for j in axes(M, 2)
+            @test Q2[:, j] == M[:, j]
+            for i in axes(M, 1)
+                @test Q2[i, :] == M[i, :]
+                @test Q2[i, j] == M[i, j]
+            end
+        end
+        @test Q2[:] == M[:]
+        @test Q2[:, :] == M[:, :]
+        @test Q2[:, :, :] == M[:, :, :]
+    end
+end
+
 end # module TestQR

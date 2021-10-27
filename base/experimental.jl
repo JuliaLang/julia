@@ -29,9 +29,9 @@ Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
 @eval Base.getindex(A::Const, i1::Int) =
-    (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
+    (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
 @eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =
-  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+  (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 """
     @aliasscope expr
@@ -161,6 +161,30 @@ macro compiler_options(args...)
     end
     return opts
 end
+
+"""
+    Experimental.@force_compile
+
+Force compilation of the block or function (Julia's built-in interpreter is blocked from executing it).
+
+# Examples
+
+```
+julia> occursin("interpreter", string(stacktrace(begin
+           # with forced compilation
+           Base.Experimental.@force_compile
+           backtrace()
+       end, true)))
+false
+
+julia> occursin("interpreter", string(stacktrace(begin
+           # without forced compilation
+           backtrace()
+       end, true)))
+true
+```
+"""
+macro force_compile() Expr(:meta, :force_compile) end
 
 # UI features for errors
 

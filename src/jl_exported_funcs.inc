@@ -1,6 +1,7 @@
-#define JL_EXPORTED_FUNCS(XX) \
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
+#define JL_RUNTIME_EXPORTED_FUNCS(XX) \
     XX(jl_active_task_stack) \
-    XX(jl_add_optimization_passes) \
     XX(jl_add_standard_imports) \
     XX(jl_alignment) \
     XX(jl_alloc_array_1d) \
@@ -11,6 +12,7 @@
     XX(jl_alloc_svec_uninit) \
     XX(jl_alloc_vec_any) \
     XX(jl_apply_array_type) \
+    XX(jl_apply_cmpswap_type) \
     XX(jl_apply_generic) \
     XX(jl_apply_tuple_type) \
     XX(jl_apply_tuple_type_v) \
@@ -21,7 +23,6 @@
     XX(jl_argument_method_table) \
     XX(jl_array_cconvert_cstring) \
     XX(jl_array_copy) \
-    XX(jl_array_data_owner) \
     XX(jl_array_del_at) \
     XX(jl_array_del_beg) \
     XX(jl_array_del_end) \
@@ -43,7 +44,6 @@
     XX(jl_array_to_string) \
     XX(jl_array_typetagdata) \
     XX(jl_arrayunset) \
-    XX(jl_astaggedvalue) \
     XX(jl_atexit_hook) \
     XX(jl_atomic_bool_cmpswap_bits) \
     XX(jl_atomic_cmpswap_bits) \
@@ -93,8 +93,6 @@
     XX(jl_cglobal_auto) \
     XX(jl_checked_assignment) \
     XX(jl_clear_implicit_imports) \
-    XX(jl_clear_malloc_data) \
-    XX(jl_clock_now) \
     XX(jl_close_uv) \
     XX(jl_code_for_staged) \
     XX(jl_compile_hint) \
@@ -103,11 +101,8 @@
     XX(jl_compute_fieldtypes) \
     XX(jl_copy_ast) \
     XX(jl_copy_code_info) \
-    XX(jl_cpu_pause) \
     XX(jl_cpu_threads) \
-    XX(jl_cpu_wake) \
     XX(jl_crc32c_sw) \
-    XX(jl_create_native) \
     XX(jl_create_system_image) \
     XX(jl_cstr_to_string) \
     XX(jl_current_exception) \
@@ -118,13 +113,7 @@
     XX(jl_dlclose) \
     XX(jl_dlopen) \
     XX(jl_dlsym) \
-    XX(jl_dump_compiles) \
-    XX(jl_dump_fptr_asm) \
-    XX(jl_dump_function_ir) \
     XX(jl_dump_host_cpu) \
-    XX(jl_dump_llvm_asm) \
-    XX(jl_dump_method_asm) \
-    XX(jl_egal) \
     XX(jl_egal__bits) \
     XX(jl_egal__special) \
     XX(jl_eh_restore_state) \
@@ -149,17 +138,17 @@
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
     XX(jl_expand) \
+    XX(jl_resolve_globals_in_ir) \
     XX(jl_expand_and_resolve) \
     XX(jl_expand_stmt) \
     XX(jl_expand_stmt_with_loc) \
     XX(jl_expand_with_loc) \
     XX(jl_expand_with_loc_warn) \
-    XX(jl_extern_c) \
     XX(jl_field_index) \
+    XX(jl_field_isdefined) \
     XX(jl_gc_add_finalizer) \
     XX(jl_gc_add_finalizer_th) \
     XX(jl_gc_add_ptr_finalizer) \
-    XX(jl_gc_alloc) \
     XX(jl_gc_alloc_0w) \
     XX(jl_gc_alloc_1w) \
     XX(jl_gc_alloc_2w) \
@@ -194,9 +183,6 @@
     XX(jl_gc_pool_alloc) \
     XX(jl_gc_queue_multiroot) \
     XX(jl_gc_queue_root) \
-    XX(jl_gc_safe_enter) \
-    XX(jl_gc_safe_leave) \
-    XX(jl_gc_safepoint) \
     XX(jl_gc_schedule_foreign_sweepfunc) \
     XX(jl_gc_set_cb_notify_external_alloc) \
     XX(jl_gc_set_cb_notify_external_free) \
@@ -206,8 +192,6 @@
     XX(jl_gc_set_cb_task_scanner) \
     XX(jl_gc_sync_total_bytes) \
     XX(jl_gc_total_hrtime) \
-    XX(jl_gc_unsafe_enter) \
-    XX(jl_gc_unsafe_leave) \
     XX(jl_gdblookup) \
     XX(jl_generating_output) \
     XX(jl_generic_function_def) \
@@ -219,7 +203,6 @@
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
-    XX(jl_get_cfunction_trampoline) \
     XX(jl_get_cpu_name) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
@@ -227,8 +210,6 @@
     XX(jl_get_fenv_consts) \
     XX(jl_get_field) \
     XX(jl_get_field_offset) \
-    XX(jl_get_fieldtypes) \
-    XX(jl_get_function_id) \
     XX(jl_get_global) \
     XX(jl_get_image_file) \
     XX(jl_get_JIT) \
@@ -236,11 +217,6 @@
     XX(jl_get_julia_bindir) \
     XX(jl_get_keyword_sorter) \
     XX(jl_get_kwsorter) \
-    XX(jl_get_llvm_context) \
-    XX(jl_get_llvmf_defn) \
-    XX(jl_get_llvm_function) \
-    XX(jl_get_llvm_module) \
-    XX(jl_get_LLVM_VERSION) \
     XX(jl_get_method_inferred) \
     XX(jl_get_module_binding) \
     XX(jl_get_module_compile) \
@@ -260,7 +236,6 @@
     XX(jl_get_safe_restore) \
     XX(jl_get_size) \
     XX(jl_get_task_tid) \
-    XX(jl_gettimeofday) \
     XX(jl_get_tls_world_age) \
     XX(jl_get_UNAME) \
     XX(jl_get_world_counter) \
@@ -276,8 +251,6 @@
     XX(jl_has_typevar) \
     XX(jl_has_typevar_from_unionall) \
     XX(jl_hrtime) \
-    XX(jl_id_char) \
-    XX(jl_id_start_char) \
     XX(jl_idtable_rehash) \
     XX(jl_infer_thunk) \
     XX(jl_init) \
@@ -285,6 +258,7 @@
     XX(jl_init_restored_modules) \
     XX(jl_init_with_image) \
     XX(jl_init_with_image__threading) \
+    XX(jl_init_options) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
@@ -384,7 +358,6 @@
     XX(jl_object_id_) \
     XX(jl_obvious_subtype) \
     XX(jl_operator_precedence) \
-    XX(jl_op_suffix_char) \
     XX(jl_parse) \
     XX(jl_parse_all) \
     XX(jl_parse_input_line) \
@@ -466,10 +439,6 @@
     XX(jl_stored_inline) \
     XX(jl_string_ptr) \
     XX(jl_string_to_array) \
-    XX(jl_strtod_c) \
-    XX(jl_strtof_c) \
-    XX(jl_substrtod) \
-    XX(jl_substrtof) \
     XX(jl_subtype) \
     XX(jl_subtype_env) \
     XX(jl_subtype_env_size) \
@@ -479,14 +448,12 @@
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
     XX(jl_svec_isassigned) \
-    XX(jl_svec_len) \
     XX(jl_svec_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \
     XX(jl_symbol_lookup) \
     XX(jl_symbol_n) \
-    XX(jl_symbol_name) \
     XX(jl_tagged_gensym) \
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
@@ -515,10 +482,8 @@
     XX(jl_type_morespecific) \
     XX(jl_type_morespecific_no_subtype) \
     XX(jl_typename_str) \
-    XX(jl_typeof) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
-    XX(jl_type_to_llvm) \
     XX(jl_type_union) \
     XX(jl_type_unionall) \
     XX(jl_unbox_bool) \
@@ -538,7 +503,6 @@
     XX(jl_uncompress_argnames) \
     XX(jl_uncompress_ir) \
     XX(jl_undefined_var_error) \
-    XX(jl_valueof) \
     XX(jl_value_ptr) \
     XX(jl_ver_is_release) \
     XX(jl_ver_major) \
@@ -549,3 +513,56 @@
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
     XX(jl_yield) \
+
+#define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
+    XX(jl_setjmp)
+
+// use YY instead of XX to avoid jl -> ijl renaming in libjulia-codegen
+#define JL_CODEGEN_EXPORTED_FUNCS(YY) \
+    YY(jl_clear_malloc_data) \
+    YY(jl_dump_function_ir) \
+    YY(jl_dump_method_asm) \
+    YY(jl_extern_c) \
+    YY(jl_get_llvm_context) \
+    YY(jl_get_llvmf_defn) \
+    YY(jl_get_llvm_function) \
+    YY(jl_get_llvm_module) \
+    YY(jl_get_LLVM_VERSION) \
+    YY(jl_dump_native) \
+    YY(jl_get_llvm_gv) \
+    YY(jl_write_malloc_log) \
+    YY(jl_write_coverage_data) \
+    YY(jl_dump_function_asm) \
+    YY(jl_LLVMCreateDisasm) \
+    YY(jl_LLVMDisasmInstruction) \
+    YY(jl_init_codegen) \
+    YY(jl_getFunctionInfo) \
+    YY(jl_register_fptrs) \
+    YY(jl_generate_fptr) \
+    YY(jl_generate_fptr_for_unspecialized) \
+    YY(jl_compile_extern_c) \
+    YY(jl_teardown_codegen) \
+    YY(jl_lock_profile) \
+    YY(jl_unlock_profile) \
+    YY(jl_create_native) \
+    YY(jl_dump_compiles) \
+    YY(jl_dump_fptr_asm) \
+    YY(jl_get_function_id) \
+    YY(jl_type_to_llvm) \
+    YY(jl_getUnwindInfo) \
+    YY(jl_get_libllvm) \
+    YY(LLVMExtraAddLowerSimdLoopPass) \
+    YY(LLVMExtraAddFinalLowerGCPass) \
+    YY(LLVMExtraAddPropagateJuliaAddrspaces) \
+    YY(LLVMExtraAddRemoveJuliaAddrspacesPass) \
+    YY(LLVMExtraAddCombineMulAddPass) \
+    YY(LLVMExtraAddMultiVersioningPass) \
+    YY(LLVMExtraAddLowerExcHandlersPass) \
+    YY(LLVMExtraAddLateLowerGCFramePass) \
+    YY(LLVMExtraJuliaLICMPass) \
+    YY(LLVMExtraAddAllocOptPass) \
+    YY(LLVMExtraAddLowerPTLSPass) \
+    YY(LLVMExtraAddRemoveNIPass) \
+    YY(LLVMExtraAddGCInvariantVerifierPass) \
+    YY(LLVMExtraAddDemoteFloat16Pass) \
+

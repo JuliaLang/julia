@@ -8,7 +8,7 @@ Module containing the broadcasting implementation.
 module Broadcast
 
 using .Base.Cartesian
-using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, @pure,
+using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, promote_typejoin_union, @pure,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, BroadcastFunction
@@ -697,7 +697,7 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair}) = Ref(x)
+broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO}) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
@@ -712,50 +712,6 @@ eltypes(::Tuple{}) = Tuple{}
 eltypes(t::Tuple{Any}) = Tuple{_broadcast_getindex_eltype(t[1])}
 eltypes(t::Tuple{Any,Any}) = Tuple{_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2])}
 eltypes(t::Tuple) = Tuple{_broadcast_getindex_eltype(t[1]), eltypes(tail(t)).types...}
-
-function promote_typejoin_union(::Type{T}) where T
-    if T === Union{}
-        return Union{}
-    elseif T isa UnionAll
-        return Any # TODO: compute more precise bounds
-    elseif T isa Union
-        return promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
-    elseif T <: Tuple
-        return typejoin_union_tuple(T)
-    else
-        return T
-    end
-end
-
-@pure function typejoin_union_tuple(T::Type)
-    u = Base.unwrap_unionall(T)
-    u isa Union && return typejoin(
-            typejoin_union_tuple(Base.rewrap_unionall(u.a, T)),
-            typejoin_union_tuple(Base.rewrap_unionall(u.b, T)))
-    p = (u::DataType).parameters
-    lr = length(p)::Int
-    if lr == 0
-        return Tuple{}
-    end
-    c = Vector{Any}(undef, lr)
-    for i = 1:lr
-        pi = p[i]
-        U = Core.Compiler.unwrapva(pi)
-        if U === Union{}
-            ci = Union{}
-        elseif U isa Union
-            ci = typejoin(U.a, U.b)
-        else
-            ci = U
-        end
-        if i == lr && Core.Compiler.isvarargtype(pi)
-            c[i] = isdefined(pi, :N) ? Vararg{ci, pi.N} : Vararg{ci}
-        else
-            c[i] = ci
-        end
-    end
-    return Base.rewrap_unionall(Tuple{c...}, T)
-end
 
 # Inferred eltype of result of broadcast(f, args...)
 combine_eltypes(f, args::Tuple) =
@@ -985,8 +941,8 @@ broadcast_unalias(::Nothing, src) = src
 preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
 
 @inline preprocess_args(dest, args::Tuple) = (preprocess(dest, args[1]), preprocess_args(dest, tail(args))...)
-preprocess_args(dest, args::Tuple{Any}) = (preprocess(dest, args[1]),)
-preprocess_args(dest, args::Tuple{}) = ()
+@inline preprocess_args(dest, args::Tuple{Any}) = (preprocess(dest, args[1]),)
+@inline preprocess_args(dest, args::Tuple{}) = ()
 
 # Specialize this method if all you want to do is specialize on typeof(dest)
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{Nothing})
@@ -1131,10 +1087,12 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::LinRange) = LinRange(-r.star
 # For #18336 we need to prevent promotion of the step type:
 broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractRange, x::Number) = range(first(r) + x, step=step(r), length=length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::AbstractRange) = range(x + first(r), step=step(r), length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::OrdinalRange, x::Real) = range(first(r) + x, last(r) + x, step=step(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Real, r::Real) = range(x + first(r), x + last(r), step=step(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractUnitRange, x::Real) = range(first(r) + x, last(r) + x)
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Real, r::AbstractUnitRange) = range(x + first(r), x + last(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::OrdinalRange, x::Integer) = range(first(r) + x, last(r) + x, step=step(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Integer, r::OrdinalRange) = range(x + first(r), x + last(r), step=step(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractUnitRange, x::Integer) = range(first(r) + x, last(r) + x)
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Integer, r::AbstractUnitRange) = range(x + first(r), x + last(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractUnitRange, x::Real) = range(first(r) + x, length=length(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Real, r::AbstractUnitRange) = range(x + first(r), length=length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::StepRangeLen{T}, x::Number) where T =
     StepRangeLen{typeof(T(r.ref)+x)}(r.ref + x, r.step, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::StepRangeLen{T}) where T =
@@ -1145,9 +1103,10 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r1::AbstractRange, r2::Abstract
 
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractRange, x::Number) = range(first(r) - x, step=step(r), length=length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::AbstractRange) = range(x - first(r), step=-step(r), length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::OrdinalRange, x::Real) = range(first(r) - x, last(r) - x, step=step(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Real, r::OrdinalRange) = range(x - first(r), x - last(r), step=-step(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractUnitRange, x::Real) = range(first(r) - x, last(r) - x)
+broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::OrdinalRange, x::Integer) = range(first(r) - x, last(r) - x, step=step(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Integer, r::OrdinalRange) = range(x - first(r), x - last(r), step=-step(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractUnitRange, x::Integer) = range(first(r) - x, last(r) - x)
+broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractUnitRange, x::Real) = range(first(r) - x, length=length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::StepRangeLen{T}, x::Number) where T =
     StepRangeLen{typeof(T(r.ref)-x)}(r.ref - x, r.step, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::StepRangeLen{T}) where T =

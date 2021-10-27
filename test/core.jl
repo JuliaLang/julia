@@ -7579,3 +7579,31 @@ const T35130 = Tuple{Vector{Int}, <:Any}
 end
 h35130(x) = A35130(Any[x][1]::Vector{T35130})
 @test h35130(T35130[([1],1)]) isa A35130
+
+# issue #41503
+let S = Tuple{Tuple{Tuple{K, UInt128} where K<:Tuple{Int64}, Int64}},
+    T = Tuple{Tuple{Tuple{Tuple{Int64}, UInt128}, Int64}}
+    @test pointer_from_objref(T) === pointer_from_objref(S)
+    @test isbitstype(T)
+end
+
+# avoid impossible normalization (don't try to form Tuple{Complex{String}} here)
+@test Tuple{Complex{T} where String<:T<:String} == Tuple{Complex{T} where String<:T<:String}
+
+# control over compilation/interpreter
+@testset "Experimental.@force_compile" begin
+    function trim_after_eval(str::AbstractString)
+        rng = findfirst("eval(", str)
+        @test !isempty(rng)
+        return str[1:first(rng)-1]
+    end
+    btc = eval(quote
+        Base.Experimental.@force_compile
+        backtrace()
+    end)
+    bti = eval(quote
+        backtrace()
+    end)
+    @test !occursin(r"(interpreter|do_call)", trim_after_eval(string(stacktrace(btc, true))))
+    @test  occursin(r"(interpreter|do_call)", trim_after_eval(string(stacktrace(bti, true))))
+end

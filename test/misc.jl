@@ -242,6 +242,35 @@ v11801, t11801 = @timed sin(1)
 
 @test names(@__MODULE__, all = true) == names_before_timing
 
+# Accepted @time argument formats
+@test @time true
+@test @time "message" true
+let msg = "message"
+    @test @time msg true
+end
+let foo() = "message"
+    @test @time foo() true
+end
+
+# Accepted @timev argument formats
+@test @timev true
+@test @timev "message" true
+let msg = "message"
+    @test @timev msg true
+end
+let foo() = "message"
+    @test @timev foo() true
+end
+
+# @showtime
+@test @showtime true
+let foo() = true
+    @test @showtime foo()
+end
+let foo() = false
+    @test (@showtime foo()) == false
+end
+
 # PR #39133, ensure that @time evaluates in the same scope
 function time_macro_scope()
     try # try/throw/catch bypasses printing
@@ -262,6 +291,22 @@ function timev_macro_scope()
     end
 end
 @test timev_macro_scope() == 1
+
+before = Base.cumulative_compile_time_ns_before();
+
+# exercise concurrent calls to `@time` for reentrant compilation time measurement.
+t1 = @async @time begin
+    sleep(2)
+    @eval module M ; f(x,y) = x+y ; end
+    @eval M.f(2,3)
+end
+t2 = @async begin
+    sleep(1)
+    @time 2 + 2
+end
+
+after = Base.cumulative_compile_time_ns_after();
+@test after >= before;
 
 # interactive utilities
 

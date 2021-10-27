@@ -73,16 +73,6 @@ struct MaybeUndef
     MaybeUndef(@nospecialize(typ)) = new(typ)
 end
 
-# The type of a variable load is either a value or an UndefVarError
-# (only used in abstractinterpret, doesn't appear in optimize)
-struct VarState
-    typ
-    undef::Bool
-    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
-end
-
-const VarTable = Array{Any,1}
-
 struct StateUpdate
     var::SlotNumber
     vtype::VarState
@@ -96,10 +86,29 @@ end
 struct LimitedAccuracy
     typ
     causes::IdSet{InferenceState}
-    LimitedAccuracy(@nospecialize(typ), causes::IdSet{InferenceState}) =
-        new(typ, causes)
+    function LimitedAccuracy(@nospecialize(typ), causes::IdSet{InferenceState})
+        @assert !isa(typ, LimitedAccuracy) "malformed LimitedAccuracy"
+        return new(typ, causes)
+    end
 end
 
+@inline function collect_limitations!(@nospecialize(typ), sv::InferenceState)
+    if isa(typ, LimitedAccuracy)
+        union!(sv.pclimitations, typ.causes)
+        return typ.typ
+    end
+    return typ
+end
+
+"""
+    struct NotFound end
+    const NOT_FOUND = NotFound()
+
+A special sigleton that represents a variable has not been analyzed yet.
+Particularly, all SSA value types are initialized as `NOT_FOUND` when creating a new `InferenceState`.
+Note that this is only used for `smerge`, which updates abstract state `VarTable`,
+and thus we don't define the lattice for this.
+"""
 struct NotFound end
 
 const NOT_FOUND = NotFound()
@@ -268,23 +277,14 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
 end
 
 widenconst(c::AnyConditional) = Bool
-function widenconst(c::Const)
-    if isa(c.val, Type)
-        if isvarargtype(c.val)
-            return Type
-        end
-        return Type{c.val}
-    else
-        return typeof(c.val)
-    end
-end
+widenconst((; val)::Const) = isa(val, Type) ? Type{val} : typeof(val)
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
 widenconst(t::Type) = t
-widenconst(t::TypeVar) = t
-widenconst(t::Core.TypeofVararg) = t
+widenconst(t::TypeVar) = error("unhandled TypeVar")
+widenconst(t::TypeofVararg) = error("unhandled Vararg")
 widenconst(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)

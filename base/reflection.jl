@@ -453,7 +453,7 @@ end
 """
     ismutable(v) -> Bool
 
-Return `true` iff value `v` is mutable.  See [Mutable Composite Types](@ref)
+Return `true` if and only if value `v` is mutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 
@@ -1160,7 +1160,7 @@ additional optimizations, such as inlining, are also applied.
 The keyword `debuginfo` controls the amount of code metadata present in the output,
 possible options are `:source` or `:none`.
 """
-function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
+function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
                     optimize=true,
                     debuginfo::Symbol=:default,
                     world = get_world_counter(),
@@ -1179,6 +1179,18 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
         tt = Tuple{ft, types...}
     end
     return code_typed_by_type(tt; optimize, debuginfo, world, interp)
+end
+
+# returns argument tuple type which is supposed to be used for `code_typed` and its family;
+# if there is a single method this functions returns the method argument signature,
+# otherwise returns `Tuple` that doesn't match with any signature
+function default_tt(@nospecialize(f))
+    ms = methods(f)
+    if length(ms) == 1
+        return tuple_type_tail(only(ms).sig)
+    else
+        return Tuple
+    end
 end
 
 """
@@ -1218,7 +1230,7 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure), @nospecialize(types=Tuple);
+function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure);
         optimize=true,
         debuginfo::Symbol=:default,
         interp = Core.Compiler.NativeInterpreter(closure.world))
@@ -1232,7 +1244,7 @@ function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure), @
     end
 end
 
-function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.Compiler.NativeInterpreter())
+function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), interp=Core.Compiler.NativeInterpreter())
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -1683,6 +1695,9 @@ Provides a convenient way to call [`invoke`](@ref);
 `@invoke f(arg1::T1, arg2::T2; kwargs...)` will be expanded into `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
 When an argument's type annotation is omitted, it's specified as `Any` argument, e.g.
 `@invoke f(arg1::T, arg2)` will be expanded into `invoke(f, Tuple{T,Any}, arg1, arg2)`.
+
+!!! compat "Julia 1.7"
+    This macro requires Julia 1.7 or later.
 """
 macro invoke(ex)
     f, args, kwargs = destructure_callex(ex)
@@ -1699,6 +1714,9 @@ end
 Provides a convenient way to call [`Base.invokelatest`](@ref).
 `@invokelatest f(args...; kwargs...)` will simply be expanded into
 `Base.invokelatest(f, args...; kwargs...)`.
+
+!!! compat "Julia 1.7"
+    This macro requires Julia 1.7 or later.
 """
 macro invokelatest(ex)
     f, args, kwargs = destructure_callex(ex)

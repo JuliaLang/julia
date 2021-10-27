@@ -331,7 +331,7 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-_tuple_error(T::Type, x) = (@_noinline_meta; throw(MethodError(convert, (T, x))))
+_tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
 
 convert(::Type{T}, x::T) where {T<:Tuple} = x
 function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
@@ -340,7 +340,7 @@ function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
     if typeintersect(NTuple{N,Any}, T) === Union{}
         _tuple_error(T, x)
     end
-    cvt1(n) = (@_inline_meta; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
+    cvt1(n) = (@inline; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
     return ntuple(cvt1, Val(N))::NTuple{N,Any}
 end
 
@@ -476,6 +476,22 @@ Stacktrace:
 ```
 """
 sizeof(x) = Core.sizeof(x)
+
+"""
+    ifelse(condition::Bool, x, y)
+
+Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in
+that it is an ordinary function, so all the arguments are evaluated first. In some cases,
+using `ifelse` instead of an `if` statement can eliminate the branch in generated code and
+provide higher performance in tight loops.
+
+# Examples
+```jldoctest
+julia> ifelse(1 > 2, 1, 2)
+2
+```
+"""
+ifelse(condition::Bool, x, y) = Core.ifelse(condition, x, y)
 
 # simple Array{Any} operations needed for bootstrap
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)

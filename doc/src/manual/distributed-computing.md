@@ -705,11 +705,11 @@ Num Unique objects : 3
 ```
 
 As can be seen, [`put!`](@ref) on a locally owned [`RemoteChannel`](@ref) with the same
-object `v` modifed between calls results in the same single object instance stored. As
+object `v` modified between calls results in the same single object instance stored. As
 opposed to copies of `v` being created when the node owning `rc` is a different node.
 
 It is to be noted that this is generally not an issue. It is something to be factored in only
-if the object is both being stored locally and modifed post the call. In such cases it may be
+if the object is both being stored locally and modified post the call. In such cases it may be
 appropriate to store a `deepcopy` of the object.
 
 This is also true for remotecalls on the local node as seen in the following example:

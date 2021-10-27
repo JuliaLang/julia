@@ -321,16 +321,16 @@ which they index. To support those cases, `to_indices(A, I)` calls
 given tuple of indices and the dimensional indices of `A` in tandem. As such,
 not all index types are guaranteed to propagate to `Base.to_index`.
 """
-to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, axes(A), I))
-to_indices(A, I::Tuple{Any}) = (@_inline_meta; to_indices(A, (eachindex(IndexLinear(), A),), I))
+to_indices(A, I::Tuple) = (@inline; to_indices(A, axes(A), I))
+to_indices(A, I::Tuple{Any}) = (@inline; to_indices(A, (eachindex(IndexLinear(), A),), I))
 # In simple cases, we know that we don't need to use axes(A), optimize those.
 # Having this here avoids invalidations from multidimensional.jl: to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}})
 to_indices(A, I::Tuple{}) = ()
 to_indices(A, I::Tuple{Vararg{Int}}) = I
-to_indices(A, I::Tuple{Vararg{Integer}}) = (@_inline_meta; to_indices(A, (), I))
+to_indices(A, I::Tuple{Vararg{Integer}}) = (@inline; to_indices(A, (), I))
 to_indices(A, inds, ::Tuple{}) = ()
 to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
-    (@_inline_meta; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
+    (@inline; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
 
 _maybetail(::Tuple{}) = ()
 _maybetail(t::Tuple) = tail(t)
@@ -360,9 +360,9 @@ first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
 size(S::Slice) = (length(S.indices),)
 length(S::Slice) = length(S.indices)
-getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::Slice, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::Slice, i::Int) = (@inline; @boundscheck checkbounds(S, i); i)
+getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
+getindex(S::Slice, i::StepRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 iterate(S::Slice, s...) = iterate(S.indices, s...)
 
@@ -388,15 +388,15 @@ first(S::IdentityUnitRange) = first(S.indices)
 last(S::IdentityUnitRange) = last(S.indices)
 size(S::IdentityUnitRange) = (length(S.indices),)
 length(S::IdentityUnitRange) = length(S.indices)
-getindex(S::IdentityUnitRange, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::Int) = (@inline; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
 # For OneTo, the values and indices of the values are identical, so this may be defined in Base.
 # In general such an indexing operation would produce offset ranges
-getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}}) = (@_inline_meta; @boundscheck checkbounds(S, I); I)
+getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}}) = (@inline; @boundscheck checkbounds(S, I); I)
 
 """
     LinearIndices(A::AbstractArray)
@@ -475,12 +475,12 @@ IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
 axes(iter::LinearIndices) = map(axes1, iter.indices)
 size(iter::LinearIndices) = map(length, iter.indices)
 function getindex(iter::LinearIndices, i::Int)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(iter, i)
     i
 end
 function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(iter, i)
     @inbounds isa(iter, LinearIndices{1}) ? iter.indices[1][i] : (first(iter):last(iter))[i]
 end
@@ -491,6 +491,6 @@ iterate(iter::LinearIndices, i=1) = i > length(iter) ? nothing : (i, i+1)
 
 # Needed since firstindex and lastindex are defined in terms of LinearIndices
 first(iter::LinearIndices) = 1
-first(iter::LinearIndices{1}) = (@_inline_meta; first(axes1(iter.indices[1])))
-last(iter::LinearIndices) = (@_inline_meta; length(iter))
-last(iter::LinearIndices{1}) = (@_inline_meta; last(axes1(iter.indices[1])))
+first(iter::LinearIndices{1}) = (@inline; first(axes1(iter.indices[1])))
+last(iter::LinearIndices) = (@inline; length(iter))
+last(iter::LinearIndices{1}) = (@inline; last(axes1(iter.indices[1])))
