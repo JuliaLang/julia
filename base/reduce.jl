@@ -388,7 +388,7 @@ reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
 
 The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref`) or
 [`foldr`](@ref) with reduction `op` over an iterator which contains a single element
-`x`. This value may also used to initialise the recursion, so that `reduce(op, [x, y])`
+`x`. This value may also be used to initialise the recursion, so that `reduce(op, [x, y])`
 may call `op(reduce_first(op, x), y)`.
 
 The default is `x` for most types. The main purpose is to ensure type stability, so
@@ -411,8 +411,8 @@ reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
 
 The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an iterator which contains a
-single element `x`. This value may also used to initialise the recursion, so that
-`mapreduce(f, op, [x, y])` may call `op(reduce_first(op, f, x), f(y))`.
+single element `x`. This value may also be used to initialise the recursion, so that
+`mapreduce(f, op, [x, y])` may call `op(mapreduce_first(f, op, x), f(y))`.
 
 The default is `reduce_first(op, f(x))`.
 """
