@@ -231,6 +231,7 @@ function ⊑(@nospecialize(a), @nospecialize(b))
         return a === b
     end
 end
+⋤(@nospecialize(a), @nospecialize(b)) = !⊑(b, a)
 
 # Check if two lattice elements are partial order equivalent. This is basically
 # `a ⊑ b && b ⊑ a` but with extra performance optimizations.
