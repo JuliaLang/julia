@@ -205,7 +205,14 @@ JL_DLLEXPORT uint16_t __gnu_f2h_ieee(float param)
 
 JL_DLLEXPORT uint16_t __truncdfhf2(double param)
 {
-    return float_to_half((float)param);
+    float res = (float)param;
+    uint32_t resi;
+    memcpy(&resi, &res, sizeof(res));
+    if ((resi & 0x1fff) == 0x1000) {
+        resi += (res < param) - (param < res);
+        memcpy(&res, &resi, sizeof(res));
+    }
+    return float_to_half(res);
 }
 
 #endif

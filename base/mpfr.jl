@@ -338,8 +338,11 @@ Float32(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) =
     _cpynansgn(ccall((:mpfr_get_flt,:libmpfr), Float32, (Ref{BigFloat}, MPFRRoundingMode), x, r), x)
 Float32(x::BigFloat, r::RoundingMode) = Float32(x, convert(MPFRRoundingMode, r))
 
-# TODO: avoid double rounding
-Float16(x::BigFloat) = Float16(Float64(x))
+function Float16(x::BigFloat) :: Float16
+    res = Float32(x)
+    reinterpret(UInt32, res) & 0x1fff != 0x1000 && return res
+    return nextfloat(res, cmp(x, res))
+end
 
 promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
 promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat
