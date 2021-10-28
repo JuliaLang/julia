@@ -227,7 +227,7 @@ function showerror(io::IO, ex::MethodError)
     arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
-    if isa(meth, MethodList) && length(meth) > 1
+    if isa(meth, MethodList) && length(meth) > 1 && f !== Base.convert
         return showerror_ambiguous(io, meth, f, arg_types)
     end
     arg_types_param::SimpleVector = arg_types.parameters
