@@ -1409,8 +1409,7 @@ function findmax(x::AbstractSparseVector{T}) where {T}
     n > 0 || throw(ArgumentError("maximum over empty array is not allowed."))
     nzvals = nonzeros(x)
     m = length(nzvals)
-    iszero(m) && return zero(T), firstindex(x)
-    nzvals = nonzeros(x)
+    m == 0 && return zero(T), firstindex(x)
     maxval, index = findmax(nzvals)
     m == n && return maxval, index
     nzinds = nonzeroinds(x)
