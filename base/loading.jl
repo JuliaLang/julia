@@ -358,7 +358,7 @@ or `nothing` if `m` was not imported from a package. Optionally further
 path component strings can be provided to construct a path within the
 package root.
 
-```julia
+```julia-repl
 julia> pkgdir(Foo)
 "/path/to/Foo.jl"
 
