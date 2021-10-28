@@ -1404,22 +1404,23 @@ maximum(f::Union{Function, Type}, x::AbstractSparseVector) = _maximum(f, x) # re
 maximum(f, x::AbstractSparseVector) = _maximum(f, x)
 maximum(x::AbstractSparseVector) = maximum(identity, x)
 
-function findmax(x::AbstractSparseVector{T}) where {T}
+function findmax(f, x::AbstractSparseVector{T}) where {T}
     n = length(x)
     n > 0 || throw(ArgumentError("maximum over empty array is not allowed."))
     nzvals = nonzeros(x)
     m = length(nzvals)
     m == 0 && return zero(T), firstindex(x)
-    maxval, index = findmax(nzvals)
+    maxval, index = findmax(f, nzvals)
     m == n && return maxval, index
     nzinds = nonzeroinds(x)
-    maxval > zero(T) && return maxval, nzinds[index]
+    zeroval = f(zero(T))
+    maxval > zeroval && return maxval, nzinds[index]
     # we need to find the first zero, which could be stored or not
     # we try to avoid findfirst(iszero, x)
     sindex = findfirst(iszero, nzvals) # first stored zero, if any
     zindex = findfirst(i -> i < nzinds[i], eachindex(nzinds)) # first non-stored zero
     index = isnothing(sindex) ? zindex : min(sindex, zindex)
-    return zero(T), index
+    return zeroval, index
 end
 
 function _minimum(f, x::AbstractSparseVector)
@@ -1435,22 +1436,23 @@ minimum(f::Union{Function, Type}, x::AbstractSparseVector) = _minimum(f, x) # re
 minimum(f, x::AbstractSparseVector) = _minimum(f, x)
 minimum(x::AbstractSparseVector) = minimum(identity, x)
 
-function findmin(x::AbstractSparseVector{T}) where {T}
+function findmin(f, x::AbstractSparseVector{T}) where {T}
     n = length(x)
     n > 0 || throw(ArgumentError("minimum over empty array is not allowed."))
     nzvals = nonzeros(x)
     m = length(nzvals)
     m == 0 && return zero(T), firstindex(x)
-    minval, index = findmin(nzvals)
+    minval, index = findmin(f, nzvals)
     m == n && return minval, index
     nzinds = nonzeroinds(x)
-    minval < zero(T) && return minval, nzinds[index]
+    zeroval = f(zero(T))
+    minval < zeroval && return minval, nzinds[index]
     # we need to find the first zero, which could be stored or not
     # we try to avoid findfirst(iszero, x)
     sindex = findfirst(iszero, nzvals) # first stored zero, if any
     zindex = findfirst(i -> i < nzinds[i], eachindex(nzinds)) # first non-stored zero
     index = isnothing(sindex) ? zindex : min(sindex, zindex)
-    return zero(T), index
+    return zeroval, index
 end
 
 norm(x::SparseVectorUnion, p::Real=2) = norm(nonzeros(x), p)
