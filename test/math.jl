@@ -1299,7 +1299,7 @@ end
             @test isnan_type(T, fma(T(Inf), T(0), -T(0)))
             @test fma(-zero(T), zero(T), -zero(T)) === -zero(T)
             for _ in 1:2^18
-                a, b, c = reinterpret.(T, rand(uinttype(T), 3))
+                a, b, c = reinterpret.(T, rand(Base.uinttype(T), 3))
                 @test isequal(Base.fma_emulated(a, b, c), fma(a, b, c)) || (a,b,c)
             end
         end
