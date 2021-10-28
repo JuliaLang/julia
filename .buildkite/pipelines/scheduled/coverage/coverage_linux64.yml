@@ -19,8 +19,8 @@ steps:
           persist_depot_dirs: packages,artifacts,compiled
           version: '1.6'
       - staticfloat/sandbox#v1:
-          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
-          rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v4.8/package_linux.x86_64.tar.gz
+          rootfs_treehash: "2a058481b567f0e91b9aa3ce4ad4f09e6419355a"
           uid: 1000
           gid: 1000
     commands: |
@@ -42,4 +42,3 @@ steps:
       echo "--- Process and upload coverage information"
       ./julia .buildkite/pipelines/scheduled/coverage/upload_coverage.jl
     timeout_in_minutes: 240 # 240 minutes = 4 hours
-
