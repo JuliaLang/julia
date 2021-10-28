@@ -2000,6 +2000,61 @@ function _g_ifelse_isa_()
 end
 @test Base.return_types(_g_ifelse_isa_, ()) == [Int]
 
+@testset "Conditional forwarding" begin
+    # forward `Conditional` if it conveys a constraint on any other argument
+    ifelselike(cnd, x, y) = cnd ? x : y
+
+    @test Base.return_types((Any,Int,)) do x, y
+        ifelselike(isa(x, Int), x, y)
+    end |> only == Int
+
+    # should work nicely with union-split
+    @test Base.return_types((Union{Int,Nothing},)) do x
+        ifelselike(isa(x, Int), x, 0)
+    end |> only == Int
+
+    @test Base.return_types((Any,Int)) do x, y
+        ifelselike(!isa(x, Int), y, x)
+    end |> only == Int
+
+    @test Base.return_types((Any,Int)) do x, y
+        a = ifelselike(x === 0, x, 0) # ::Const(0)
+        if a == 0
+            return y
+        else
+            return nothing # dead branch
+        end
+    end |> only == Int
+
+    # pick up the first if there are multiple constrained arguments
+    @test Base.return_types((Any,)) do x
+        ifelselike(isa(x, Int), x, x)
+    end |> only == Any
+
+    # just propagate multiple constraints
+    ifelselike2(cnd1, cnd2, x, y, z) = cnd1 ? x : cnd2 ? y : z
+    @test Base.return_types((Any,Any)) do x, y
+        ifelselike2(isa(x, Int), isa(y, Int), x, y, 0)
+    end |> only == Int
+
+    # work with `invoke`
+    @test Base.return_types((Any,Any)) do x, y
+        Base.@invoke ifelselike(isa(x, Int), x, y::Int)
+    end |> only == Int
+
+    # don't be confused with vararg method
+    vacond(cnd, va...) = cnd ? va : 0
+    @test Base.return_types((Any,)) do x
+        # at runtime we will see `va::Tuple{Tuple{Int,Int}, Tuple{Int,Int}}`
+        vacond(isa(x, Tuple{Int,Int}), x, x)
+    end |> only == Union{Int,Tuple{Any,Any}}
+
+    # demonstrate extra constraint propagation for Base.ifelse
+    @test Base.return_types((Any,Int,)) do x, y
+        ifelse(isa(x, Int), x, y)
+    end |> only == Int
+end
+
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
 
@@ -3230,6 +3285,11 @@ function splat_lotta_unions()
 end
 @test Core.Compiler.return_type(splat_lotta_unions, Tuple{}) >: Tuple{Int,Int,Int}
 
+# handle `fargs = nothing` edge cases
+@test (code_typed(; optimize=false) do
+    Core.Compiler.return_type(invoke, Tuple{typeof(sin), Type{Tuple{Integer}}, Int})
+end; true)
+
 # Bare Core.Argument in IR
 @eval f_bare_argument(x) = $(Core.Argument(2))
 @test Base.return_types(f_bare_argument, (Int,))[1] == Int
@@ -3582,3 +3642,6 @@ let
     @test argtypes[10] == Any
     @test argtypes[11] == Tuple{Integer,Integer}
 end
+
+# issue #42646
+@test only(Base.return_types(getindex, (Array{undef}, Int))) >: Union{} # check that it does not throw

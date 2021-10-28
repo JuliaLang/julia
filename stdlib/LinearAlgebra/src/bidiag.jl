@@ -115,6 +115,18 @@ Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
+bidiagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
+function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
+    Tel = eltype(eltype(A.dv))
+    if i < j && A.uplo == 'U' #= top right zeros =#
+        return zeros(Tel, size(A.ev[i], 1), size(A.ev[j-1], 2))
+    elseif j < i && A.uplo == 'L' #= bottom left zeros =#
+        return zeros(Tel, size(A.ev[i-1], 1), size(A.ev[j], 2))
+    else
+        return zeros(Tel, size(A.dv[i], 1), size(A.dv[j], 2))
+    end
+end
+
 @inline function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
@@ -124,7 +136,7 @@ Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
     elseif A.uplo == 'L' && (i == j + 1)
         return @inbounds A.ev[j]
     else
-        return zero(T)
+        return bidiagzero(A, i, j)
     end
 end
 

@@ -10,7 +10,7 @@ using Base: Experimental
 include("choosetests.jl")
 include("testenv.jl")
 
-tests, net_on, exit_on_error, use_revise, seed = choosetests(ARGS)
+(; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
 tests = unique(tests)
 
 if Sys.islinux()

@@ -348,6 +348,7 @@ end
         end
     end
     @testset "findfirst" begin
+        @test findfirst(==(1), Base.IdentityUnitRange(-1:1)) == 1
         @test findfirst(isequal(3), Base.OneTo(10)) == 3
         @test findfirst(==(0), Base.OneTo(10)) == nothing
         @test findfirst(==(11), Base.OneTo(10)) == nothing
