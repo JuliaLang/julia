@@ -11,6 +11,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "APInt-C.h"
+#include "stdio.h"
 
 const unsigned int host_char_bit = 8;
 
@@ -208,8 +209,14 @@ JL_DLLEXPORT uint16_t __truncdfhf2(double param)
     float res = (float)param;
     uint32_t resi;
     memcpy(&resi, &res, sizeof(res));
-    if ((resi & 0x1fff) == 0x1000) {
-        resi += (res < param) - (param < res);
+    if ((resi&0x7fffffffu) < 0x38800000u){
+        uint32_t shift = 113u-((resi & 0x7f800000u)>>23u);
+        if (shift<23u)
+            resi >>= shift;
+    }
+    if ((resi & 0x1fffu) == 0x1000u) {
+        memcpy(&resi, &res, sizeof(res));
+        resi += (fabs(res) < fabs(param)) - (fabs(param) < fabs(res));
         memcpy(&res, &resi, sizeof(res));
     }
     return float_to_half(res);

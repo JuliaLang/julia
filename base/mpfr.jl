@@ -340,8 +340,15 @@ Float32(x::BigFloat, r::RoundingMode) = Float32(x, convert(MPFRRoundingMode, r))
 
 function Float16(x::BigFloat) :: Float16
     res = Float32(x)
-    reinterpret(UInt32, res) & 0x1fff != 0x1000 && return res
-    return nextfloat(res, cmp(x, res))
+    resi = reinterpret(UInt32, res)
+    if (resi&0x7fffffff) < 0x38800000
+        shift = 113-((resi & 0x7f800000)>>23)
+        shift<23 && (resi >>= shift)
+    end
+    if (resi & 0x1fff == 0x1000)
+        res = nextfloat(res, cmp(x, res))
+    end
+    return res
 end
 
 promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
