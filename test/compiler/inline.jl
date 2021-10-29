@@ -380,7 +380,7 @@ using Base.Experimental: @opaque
 f_oc_getfield(x) = (@opaque ()->x)()
 @test fully_eliminated(f_oc_getfield, Tuple{Int})
 
-import Core.Compiler: argextype
+import Core.Compiler: argextype, singleton_type
 const EMPTY_SPTYPES = Core.Compiler.EMPTY_SLOTTYPES
 
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
@@ -389,7 +389,7 @@ get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 # check if `x` is a dynamic call of a given function
 function iscall((src, f)::Tuple{Core.CodeInfo,Function}, @nospecialize(x))
     return iscall(x) do @nospecialize x
-        argextype(x, src, EMPTY_SPTYPES) === typeof(f)
+        singleton_type(argextype(x, src, EMPTY_SPTYPES)) === f
     end
 end
 iscall(pred, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
@@ -724,7 +724,7 @@ let f(x) = (x...,)
 end
 
 # https://github.com/JuliaLang/julia/issues/42754
-# inline union-split constant-prop'ed sources
+# inline union-split constant-prop'ed results
 mutable struct X42754
     # NOTE in order to confuse `fieldtype_tfunc`, we need to have at least two fields with different types
     a::Union{Nothing, Int}
@@ -744,6 +744,33 @@ let src = code_typed1((X42754, Union{Nothing,Int})) do x, a
 end
 
 import Base: @constprop
+
+# test union-split callsite with successful and unsuccessful constant-prop' results
+@constprop :aggressive @inline f42840(xs, a::Int) = xs[a]             # should be successful, and inlined
+@constprop :none @noinline f42840(xs::AbstractVector, a::Int) = xs[a] # should be unsuccessful, but still statically resolved
+let src = code_typed((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
+             f42840(xs, 2)
+         end |> only |> first
+    @test count(src.code) do @nospecialize x
+        iscall((src, getfield), x) # `(xs::Tuple{Int,Int,Int})[a::Const(2)]` => `getfield(xs, 2)`
+    end == 1
+    @test count(src.code) do @nospecialize x
+        isinvoke(:f42840, x)
+    end == 1
+end
+# a bit weird, but should handle this kind of case as well
+@constprop :aggressive @noinline g42840(xs, a::Int) = xs[a]         # should be successful, but only statically resolved
+@constprop :none @inline g42840(xs::AbstractVector, a::Int) = xs[a] # should be unsuccessful, still inlined
+let src = code_typed((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
+        g42840(xs, 2)
+    end |> only |> first
+    @test count(src.code) do @nospecialize x
+        iscall((src, Base.arrayref), x) # `(xs::Vector{Int})[a::Const(2)]` => `Base.arrayref(true, xs, 2)`
+    end == 1
+    @test count(src.code) do @nospecialize x
+        isinvoke(:g42840, x)
+    end == 1
+end
 
 # test single, non-dispatchtuple callsite inlining
 
