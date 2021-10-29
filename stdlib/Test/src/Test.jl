@@ -180,8 +180,8 @@ struct Error <: Result
             bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = try
-                    sprint(Base.show_exception_stack, bt; context=stdout)
+            bt_str = try # try the latest world for this, since we might have eval'd new code for show
+                    Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
                 catch ex
                     "#=ERROR showing exception stack=# " *
                         try
