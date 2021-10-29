@@ -76,24 +76,17 @@ end
 
 function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use_idx::Int)
     # Find the first dominating def
-    curblock = stmtblock = block_for_inst(ir.cfg, use_idx)
-    curblock = find_curblock(domtree, allblocks, curblock)
-    defblockdefs = let curblock = curblock
-        Int[stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock]
-    end
-    def = 0
-    if !isempty(defblockdefs)
-        if curblock != stmtblock
-            # Find the last def in this block
-            def = 0
-            for x in defblockdefs
-                def = max(def, x)
-            end
-        else
-            # Find the last def before our use
-            def = 0
-            for x in defblockdefs
-                def = max(def, x >= use_idx ? 0 : x)
+    stmtblock = block_for_inst(ir.cfg, use_idx)
+    curblock = find_curblock(domtree, allblocks, stmtblock)
+    local def = 0
+    for idx in du.defs
+        if block_for_inst(ir.cfg, idx) == curblock
+            if curblock != stmtblock
+                # Find the last def in this block
+                def = max(def, idx)
+            else
+                # Find the last def before our use
+                def = max(def, idx >= use_idx ? 0 : idx)
             end
         end
     end
@@ -564,15 +557,10 @@ a result of dead code elimination.
 """
 function getfield_elim_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
-    insertions = Vector{Any}()
     defuses = IdDict{Int, Tuple{IdSet{Int}, SSADefUse}}()
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
-    revisit_worklist = Int[]
-    #ndone, nmax = 0, 200
     for ((_, idx), stmt) in compact
         isa(stmt, Expr) || continue
-        #ndone >= nmax && continue
-        #ndone += 1
         result_t = compact_exprtype(compact, SSAValue(idx))
         is_getfield = is_setfield = false
         field_ordering = :unspecified
@@ -998,8 +986,6 @@ function adce_pass!(ir::IRCode)
 end
 
 function type_lift_pass!(ir::IRCode)
-    type_ctx_uses = Vector{Vector{Int}}[]
-    has_non_type_ctx_uses = IdSet{Int}()
     lifted_undef = IdDict{Int, Any}()
     insts = ir.stmts
     for idx in 1:length(insts)

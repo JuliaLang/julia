@@ -205,7 +205,7 @@ For example, `Base` exports the function name `read`, but the CSV.jl package als
 If we are going to invoke CSV reading many times, it would be convenient to drop the `CSV.` qualifier.
 But then it is ambiguous whether we are referring to `Base.read` or `CSV.read`:
 
-```julia
+```julia-repl
 julia> read;
 
 julia> import CSV: read
@@ -214,7 +214,7 @@ WARNING: ignoring conflicting import of CSV.read into Main
 
 Renaming provides a solution:
 
-```julia
+```julia-repl
 julia> import CSV: read as rd
 ```
 

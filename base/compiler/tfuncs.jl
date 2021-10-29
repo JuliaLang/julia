@@ -231,7 +231,7 @@ function ifelse_tfunc(@nospecialize(cnd), @nospecialize(x), @nospecialize(y))
     end
     return tmerge(x, y)
 end
-add_tfunc(ifelse, 3, 3, ifelse_tfunc, 1)
+add_tfunc(Core.ifelse, 3, 3, ifelse_tfunc, 1)
 
 function egal_tfunc(@nospecialize(x), @nospecialize(y))
     xx = widenconditional(x)

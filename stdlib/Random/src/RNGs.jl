@@ -23,16 +23,26 @@ else # !windows
     rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
     rand(rd::RandomDevice, ::SamplerType{Bool}) = read(getfile(rd), UInt8) % Bool
 
-    function getfile(rd::RandomDevice)
-        devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
-        # TODO: there is a data-race, this can leak up to nthreads() copies of the file descriptors,
-        # so use a "thread-once" utility once available
-        isassigned(devrandom) || (devrandom[] = open(rd.unlimited ? "/dev/urandom" : "/dev/random"))
-        devrandom[]
+    mutable struct FileRef
+        @atomic file::Union{IOStream, Nothing}
     end
 
-    const DEV_RANDOM  = Ref{IOStream}()
-    const DEV_URANDOM = Ref{IOStream}()
+    const DEV_RANDOM  = FileRef(nothing)
+    const DEV_URANDOM = FileRef(nothing)
+
+    function getfile(rd::RandomDevice)
+        ref = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
+        fd = ref.file
+        if fd === nothing
+            fd = open(rd.unlimited ? "/dev/urandom" : "/dev/random")
+            old, ok = @atomicreplace ref.file nothing => fd
+            if !ok
+                close(fd)
+                fd = old::IOStream
+            end
+        end
+        return fd
+    end
 
 end # os-test
 
@@ -411,6 +421,10 @@ for T in BitInteger_types
 end
 
 function __init__()
+    @static if !Sys.iswindows()
+        @atomic DEV_RANDOM.file = nothing
+        @atomic DEV_URANDOM.file = nothing
+    end
     seed!(GLOBAL_RNG)
 end
 
