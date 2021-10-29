@@ -364,9 +364,9 @@ clang-sagc-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) 
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c++ $<)
 
 clang-sa-%: $(SRCDIR)/%.c .FORCE | analyzegc-deps-check
-	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $<)
+	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $<)
 clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
-	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c++ $<)
+	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c++ $<)
 
 
 # Add C files as a target of `analyzesrc` and `analyzegc`
