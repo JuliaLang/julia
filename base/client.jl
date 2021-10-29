@@ -261,7 +261,7 @@ function exec_options(opts)
         try
             load_julia_startup()
         catch
-            invokelatest(display_error, current_exceptions())
+            invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
             !(repl || is_interactive::Bool) && exit(1)
         end
     end
@@ -295,7 +295,7 @@ function exec_options(opts)
         try
             include(Main, PROGRAM_FILE)
         catch
-            invokelatest(display_error, current_exceptions())
+            invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
             if !is_interactive::Bool
                 exit(1)
             end
@@ -497,7 +497,7 @@ function _start()
     try
         exec_options(JLOptions())
     catch
-        invokelatest(display_error, current_exceptions())
+        invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
         exit(1)
     end
     if is_interactive && get(stdout, :color, false)
