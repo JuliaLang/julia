@@ -92,14 +92,6 @@ struct LimitedAccuracy
     end
 end
 
-@inline function collect_limitations!(@nospecialize(typ), sv::InferenceState)
-    if isa(typ, LimitedAccuracy)
-        union!(sv.pclimitations, typ.causes)
-        return typ.typ
-    end
-    return typ
-end
-
 """
     struct NotFound end
     const NOT_FOUND = NotFound()
