@@ -84,33 +84,26 @@ end
 
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
-        bt = stacktrace(bt)
+        bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
 end
+scrub_repl_backtrace(stack::ExceptionStack) =
+    ExceptionStack([(exception = x[1], backtrace = scrub_repl_backtrace(x[2])) for x in stack])
 
-function display_error(io::IO, er, bt)
-    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = scrub_repl_backtrace(bt)
-    stack = ExceptionStack([(exception = er, backtrace = bt)])
-    istrivial = length(bt) ≤ 1 # frame 1 = top level
-    !istrivial && ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
-    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
-    println(io)
-end
+istrivialerror(stack::ExceptionStack) =
+    length(stack) == 1 && length(stack[1].backtrace) ≤ 1
+    # frame 1 = top level; assumes already went through scrub_repl_backtrace
+
 function display_error(io::IO, stack::ExceptionStack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    stack = ExceptionStack([(exception = x[1], backtrace = scrub_repl_backtrace(x[2])) for x in stack ])
-    istrivial = length(stack) == 1 && length(stack[1].backtrace) ≤ 1 # frame 1 = top level
-    !istrivial && ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
     show_exception_stack(IOContext(io, :limit => true), stack)
     println(io)
 end
 display_error(stack::ExceptionStack) = display_error(stderr, stack)
-display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
@@ -122,6 +115,8 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 print(color_normal)
             end
             if lasterr !== nothing
+                lasterr = scrub_repl_backtrace(lasterr)
+                istrivialerror(lasterr) || ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
@@ -149,6 +144,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             errcount += 1
             lasterr = current_exceptions()
+            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
