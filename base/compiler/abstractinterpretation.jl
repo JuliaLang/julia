@@ -137,9 +137,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                Any[Bottom for _ in 1:length(argtypes)]
             end
             for i = 1:length(argtypes)
-                vtype, elsetype = conditional_argtype(this_conditional, sig, argtypes, i)
-                conditionals[1][i] = tmerge(conditionals[1][i], vtype)
-                conditionals[2][i] = tmerge(conditionals[2][i], elsetype)
+                cnd = conditional_argtype(this_conditional, sig, argtypes, i)
+                conditionals[1][i] = tmerge(conditionals[1][i], cnd.vtype)
+                conditionals[2][i] = tmerge(conditionals[2][i], cnd.elsetype)
             end
         end
         if bail_out_call(interp, rettype, sv)
@@ -327,7 +327,9 @@ function from_interconditional(@nospecialize(typ), (; fargs, argtypes)::ArgInfo,
                 new_elsetype = maybecondinfo[2][i]
             else
                 # otherwise compute it on the fly
-                new_vtype, new_elsetype = conditional_argtype(typ, maybecondinfo, argtypes, i)
+                cnd = conditional_argtype(typ, maybecondinfo, argtypes, i)
+                new_vtype = cnd.vtype
+                new_elsetype = cnd.elsetype
             end
             if condval === false
                 vtype = Bottom
@@ -365,13 +367,13 @@ end
 
 function conditional_argtype(@nospecialize(rt), @nospecialize(sig), argtypes::Vector{Any}, i::Int)
     if isa(rt, InterConditional) && rt.slot == i
-        return rt.vtype, rt.elsetype
+        return rt
     else
         vtype = elsetype = tmeet(argtypes[i], fieldtype(sig, i))
         condval = maybe_extract_const_bool(rt)
         condval === true && (elsetype = Bottom)
         condval === false && (vtype = Bottom)
-        return vtype, elsetype
+        return InterConditional(i, vtype, elsetype)
     end
 end
 
