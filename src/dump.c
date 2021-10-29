@@ -2203,6 +2203,8 @@ static jl_array_t *jl_finalize_deserializer(jl_serializer_state *s, arraylist_t 
 
 JL_DLLEXPORT void jl_init_restored_modules(jl_array_t *init_order)
 {
+    if (!init_order)
+        return;
     int i, l = jl_array_len(init_order);
     for (i = 0; i < l; i++) {
         jl_value_t *mod = jl_array_ptr_ref(init_order, i);
@@ -2655,9 +2657,6 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     jl_recache_other(); // make all of the other objects identities correct (needs to be after insert methods)
     htable_free(&uniquing_table);
     jl_array_t *init_order = jl_finalize_deserializer(&s, tracee_list); // done with f and s (needs to be after recache)
-    if (init_order == NULL)
-        init_order = (jl_array_t*)jl_an_empty_vec_any;
-    assert(jl_isa((jl_value_t*)init_order, jl_array_any_type));
 
     JL_GC_PUSH4(&init_order, &restored, &external_backedges, &external_edges);
     jl_gc_enable(en); // subtyping can allocate a lot, not valid before recache-other
