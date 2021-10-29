@@ -1205,7 +1205,7 @@ function Base.show(io::IO, x::DiskStat)
     for field in 1:(nfields(x) - 1)
         print(io, "$(getfield(x, field)), ")
     end
-    println("available: $(x.available), total: $(x.total), used: $(x.used))")
+    print(io, "available: $(x.available), total: $(x.total), used: $(x.used))")
 end
 
 """
