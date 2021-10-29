@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-8228553d-ab90-4fd3-a06b-5eb3b0014ade",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-b8fba2d8-e097-4650-9c1b-40646e9cbccd",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-29T16:44:24Z"
+        "created": "2021-10-29T19:17:49Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -283,6 +283,19 @@
             "summary": "CHOLMOD module of the official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
         },
         {
+            "name": "LibSuiteSparse-SPQR",
+            "SPDXID": "SPDXRef-LibSuiteSparse-SPQR",
+            "packageFileName": "./SPQR",
+            "downloadLocation": "git+https://github.com/DrTimothyAldenDavis/SuiteSparse.git",
+            "filesAnalyzed": false,
+            "homepage": "https://people.engr.tamu.edu/davis/suitesparse.html",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "GPL-2.0-or-later",
+            "licenseDeclared": "GPL-2.0-or-later",
+            "copyrightText": "",
+            "summary": "SPQR module of the official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
+        },
+        {
             "name": "libunwind",
             "SPDXID": "SPDXRef-libunwind",
             "downloadLocation": "git+https://github.com/libunwind/libunwind.git",
@@ -465,6 +478,11 @@
         },
         {
             "spdxElementId": "SPDXRef-LibSuiteSparse-CHOLMOD",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaSuiteSparse"
+        },
+        {
+            "spdxElementId": "SPDXRef-LibSuiteSparse-SPQR",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaSuiteSparse"
         },
