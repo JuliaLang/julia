@@ -1340,9 +1340,8 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
                         ir, idx, stmt, info, sig,
                         state, flag, sig.f === Core.invoke, todo) && continue
                 end
-            else
-                info = info.call
             end
+            info = info.call # cascade to the non-constant handling
         end
 
         if isa(info, OpaqueClosureCallInfo)
