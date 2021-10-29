@@ -287,7 +287,7 @@ int jl_running_under_rr(int recheck)
 #ifdef _OS_LINUX_
 #define RR_CALL_BASE 1000
 #define SYS_rrcall_check_presence (RR_CALL_BASE + 8)
-    static int is_running_under_rr = 0;
+    static _Atomic(int) is_running_under_rr = 0;
     int rr = jl_atomic_load_relaxed(&is_running_under_rr);
     if (rr == 0 || recheck) {
         int ret = syscall(SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0);
