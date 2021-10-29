@@ -1925,7 +1925,7 @@ end
             return a
         end
         return 0
-    end |> only == Bool
+    end |> only === Int
 end
 
 function f25579(g)
