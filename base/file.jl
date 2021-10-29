@@ -1171,17 +1171,6 @@ function chown(path::AbstractString, owner::Integer, group::Integer=-1)
 end
 
 
-# typedef struct uv_statfs_s {
-#     uint64_t f_type;
-#     uint64_t f_bsize;    <- block size
-#     uint64_t f_blocks;   <- total blocks
-#     uint64_t f_bfree;
-#     uint64_t f_bavail;   <- available blocks
-#     uint64_t f_files;
-#     uint64_t f_ffree;
-#     uint64_t f_spare[4];
-# } uv_statfs_t;
-# See also
 # - http://docs.libuv.org/en/v1.x/fs.html#c.uv_fs_statfs (libuv function docs)
 # - http://docs.libuv.org/en/v1.x/fs.html#c.uv_statfs_t (libuv docs of the returned struct)
 """
@@ -1209,12 +1198,14 @@ function Base.getproperty(stats::DiskStat, field::Symbol)
     return getfield(stats, field)
 end
 
+@eval Base.propertynames(stats::DiskStat) = $((fieldnames(DiskStat)[1:end-1]..., :available, :total, :used))
+
 function Base.show(io::IO, x::DiskStat)
-    print(io, "DiskStat(total: $(x.total), available: $(x.available), used: $(x.used)")
-    for field in fieldnames(DiskStat)[1:end-1]
-        print(io, ", $(getfield(x, field))")
+    print(io, "DiskStat(")
+    for field in 1:(nfields(x) - 1)
+        print(io, "$(getfield(x, field)), ")
     end
-    println(io, ")")
+    println("available: $(x.available), total: $(x.total), used: $(x.used))")
 end
 
 """
