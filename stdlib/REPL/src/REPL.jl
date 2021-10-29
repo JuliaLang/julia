@@ -307,7 +307,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
-                    excs = current_exceptions()
+                    excs = Base.scrub_repl_backtrace(current_exceptions())
                     ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, excs)
                     Base.invokelatest(Base.display_error, errio, excs)
                 catch e

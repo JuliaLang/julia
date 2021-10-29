@@ -143,7 +143,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 @error "SYSTEM: display_error(errio, lasterr) caused an error"
             end
             errcount += 1
-            lasterr = current_exceptions()
+            lasterr = scrub_repl_backtrace(current_exceptions())
             ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
