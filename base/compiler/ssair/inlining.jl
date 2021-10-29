@@ -1045,11 +1045,7 @@ end
 
 function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), state::InliningState)
     if isa(info, OpaqueClosureCreateInfo)
-        unspec_call_info = info.unspec.info
-        if isa(unspec_call_info, ConstCallInfo)
-            unspec_call_info = unspec_call_info.call
-        end
-        isa(unspec_call_info, OpaqueClosureCallInfo) || return
+        isa(info.unspec.info, OpaqueClosureCallInfo) || return
         lbt = argextype(stmt.args[3], ir, ir.sptypes)
         lb, exact = instanceof_tfunc(lbt)
         exact || return
@@ -1285,10 +1281,8 @@ function maybe_handle_const_call!(
 end
 
 function handle_const_opaque_closure_call!(
-    ir::IRCode, idx::Int, stmt::Expr, (; results)::ConstCallInfo,
+    ir::IRCode, idx::Int, stmt::Expr, result::InferenceResult,
     (; atypes)::Signature, state::InliningState, flag::UInt8, todo::Vector{Pair{Int, Any}})
-    @assert length(results) == 1
-    result = results[1]::InferenceResult
     item = InliningTodo(result, atypes)
     isdispatchtuple(item.mi.specTypes) || return
     validate_sparams(item.mi.sparam_vals) || return
@@ -1330,23 +1324,23 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         # we can perform a specialized analysis for just this case
         if isa(info, ConstCallInfo)
             if !is_stmt_noinline(flag)
-                if isa(info.call, OpaqueClosureCallInfo)
-                    handle_const_opaque_closure_call!(
-                        ir, idx, stmt, info,
-                        sig, state, flag, todo)
-                    continue
-                else
-                    maybe_handle_const_call!(
-                        ir, idx, stmt, info, sig,
-                        state, flag, sig.f === Core.invoke, todo) && continue
-                end
+                maybe_handle_const_call!(
+                    ir, idx, stmt, info, sig,
+                    state, flag, sig.f === Core.invoke, todo) && continue
             end
             info = info.call # cascade to the non-constant handling
         end
 
         if isa(info, OpaqueClosureCallInfo)
-            item = analyze_method!(info.match, sig.atypes, state, flag)
-            handle_single_case!(ir, stmt, idx, item, false, todo)
+            result = info.result
+            if isa(result, InferenceResult)
+                handle_const_opaque_closure_call!(
+                    ir, idx, stmt, result,
+                    sig, state, flag, todo)
+            else
+                item = analyze_method!(info.match, sig.atypes, state, flag)
+                handle_single_case!(ir, stmt, idx, item, false, todo)
+            end
             continue
         end
 

@@ -89,30 +89,39 @@ struct UnionSplitApplyCallInfo
 end
 
 """
-    struct ConstCallInfo
+    call::ConstCallInfo
 
-Precision for this call was improved using constant information. This info
-keeps a reference to the result that was used (or created for these)
-constant information.
+The precision of this call was improved using constant information.
+In addition to the original call information `call.call`, `call` also keeps
+the inference results with constant information `call.results::Vector{Union{Nothing,InferenceResult}}`.
 """
 struct ConstCallInfo
-    call::Any
+    call::Union{MethodMatchInfo,UnionSplitInfo}
     results::Vector{Union{Nothing,InferenceResult}}
 end
 
 """
-    struct InvokeCallInfo
+    call::InvokeCallInfo
 
-Represents a resolved call to `invoke`, carrying the Method match of the
-method being processed.
+Represents a resolved call to `invoke`, carrying the `call.match::MethodMatch` of the
+method that has been processed.
+Optionally keeps `result::InferenceResult` that carries constant information.
 """
 struct InvokeCallInfo
     match::MethodMatch
     result::Union{Nothing,InferenceResult}
 end
 
+"""
+    call::OpaqueClosureCallInfo
+
+Represents a resolved call of opaque closure, carrying the `call.match::MethodMatch` of the
+method that has been processed.
+Optionally keeps `result::InferenceResult` that carries constant information.
+"""
 struct OpaqueClosureCallInfo
     match::MethodMatch
+    result::Union{Nothing,InferenceResult}
 end
 
 struct OpaqueClosureCreateInfo

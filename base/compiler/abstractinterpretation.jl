@@ -1420,18 +1420,18 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
     tt = closure.typ
     sigT = (unwrap_unionall(tt)::DataType).parameters[1]
     match = MethodMatch(sig, Core.svec(), closure.source, sig <: rewrap_unionall(sigT, tt))
-    info = OpaqueClosureCallInfo(match)
+    res = nothing
     if !result.edgecycle
         const_result = abstract_call_method_with_const_args(interp, result, closure,
             arginfo, match, sv, closure.isva)
         if const_result !== nothing
             const_rettype, const_result = const_result
             if const_rettype ⊑ rt
-               rt = const_rettype
+               rt, res = const_rettype, const_result
             end
-            info = ConstCallInfo(info, Union{Nothing,InferenceResult}[const_result])
         end
     end
+    info = OpaqueClosureCallInfo(match, res)
     return CallMeta(from_interprocedural!(rt, sv, arginfo, match.spec_types), info)
 end
 
