@@ -1009,19 +1009,19 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::
     nargs = length(aargtypes)
     splitunions = 1 < unionsplitcost(aargtypes) <= InferenceParams(interp).MAX_APPLY_UNION_ENUM
     ctypes = [Any[aft]]
-    infos = [Union{Nothing, AbstractIterationInfo}[]]
+    infos = Vector{MaybeAbstractIterationInfo}[MaybeAbstractIterationInfo[]]
     for i = 1:nargs
         ctypes´ = Vector{Any}[]
-        infos′ = Vector{Union{Nothing, AbstractIterationInfo}}[]
+        infos′ = Vector{MaybeAbstractIterationInfo}[]
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
             if !isvarargtype(ti)
                 cti_info = precise_container_type(interp, itft, ti, sv)
                 cti = cti_info[1]::Vector{Any}
-                info = cti_info[2]::Union{Nothing,AbstractIterationInfo}
+                info = cti_info[2]::MaybeAbstractIterationInfo
             else
                 cti_info = precise_container_type(interp, itft, unwrapva(ti), sv)
                 cti = cti_info[1]::Vector{Any}
-                info = cti_info[2]::Union{Nothing,AbstractIterationInfo}
+                info = cti_info[2]::MaybeAbstractIterationInfo
                 # We can't represent a repeating sequence of the same types,
                 # so tmerge everything together to get one type that represents
                 # everything.

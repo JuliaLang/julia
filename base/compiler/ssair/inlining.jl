@@ -1045,7 +1045,6 @@ end
 
 function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), state::InliningState)
     if isa(info, OpaqueClosureCreateInfo)
-        isa(info.unspec.info, OpaqueClosureCallInfo) || return
         lbt = argextype(stmt.args[3], ir, ir.sptypes)
         lb, exact = instanceof_tfunc(lbt)
         exact || return
@@ -1053,7 +1052,6 @@ function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), sta
         ub, exact = instanceof_tfunc(ubt)
         exact || return
         # Narrow opaque closure type
-
         newT = widenconst(tmeet(tmerge(lb, info.unspec.rt), ub))
         if newT != ub
             # N.B.: Narrowing the ub requires a backdge on the mi whose type
