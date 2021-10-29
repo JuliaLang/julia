@@ -1698,12 +1698,12 @@ end
 
 @testset "diskstat() works" begin
     # Sanity check assuming disk is smaller than 32PB
-    PB = 2^44
+    PB = Int64(2)^44
 
     dstat = diskstat()
     @test dstat.total < 32PB
     @test dstat.used + dstat.available == dstat.total
-
+    @test occursin(r"^DiskStat\(.*, available: \d+, total: \d+, used: \d+\)$", sprint(show, dstat))
     # Test diskstat(::AbstractString)
     dstat = diskstat(pwd())
     @test dstat.total < 32PB
