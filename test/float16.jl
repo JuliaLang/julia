@@ -209,7 +209,7 @@ const minsubf16_32 = Float32(minsubf16)
             for i in 1:2^16
                 f = reinterpret(Float16, UInt16(i-1))
                 isfinite(f) || continue
-                abs(f)<eps(f) && continue
+                abs(f)<=eps(f) && continue
                 if f < 0
                     epsdown = T(eps(f))/2
                     epsup   = issubnormal(f) ? epsdown : T(eps(nextfloat(f)))/2
