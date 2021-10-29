@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-cc8b3e09-5f9b-4745-94da-e48e2389fa6e",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-8228553d-ab90-4fd3-a06b-5eb3b0014ade",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-25T03:39:11Z"
+        "created": "2021-10-29T16:44:24Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -270,16 +270,17 @@
             "summary": "PCRE2 is a library of functions to support regular expressions whose syntax and semantics are as close as possible to those of the Perl 5 language."
         },
         {
-            "name": "LibSuiteSparse",
-            "SPDXID": "SPDXRef-LibSuiteSparse",
-            "downloadLocation": "git+https://github.com/DrTimothyAldenDavis/SuiteSparse",
+            "name": "LibSuiteSparse-CHOLMOD",
+            "SPDXID": "SPDXRef-LibSuiteSparse-CHOLMOD",
+            "packageFileName": "./CHOLMOD",
+            "downloadLocation": "git+https://github.com/DrTimothyAldenDavis/SuiteSparse.git",
             "filesAnalyzed": false,
             "homepage": "https://people.engr.tamu.edu/davis/suitesparse.html",
             "sourceInfo": "The version in use can be found in the file deps/Versions.make",
-            "licenseConcluded": "NOASSERTION",
-            "licenseDeclared": "NOASSERTION",
-            "copyrightText": "",
-            "summary": "The official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
+            "licenseConcluded": "GPL-2.0-or-later",
+            "licenseDeclared": "LGPL-2.0-or-later AND GPL-2.0-or-later",
+            "copyrightText": "CHOLMOD/Check Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Cholesky module, Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Core Module.  Copyright (C) 2005-2006, Univ. of Florida.  Author: Timothy A. Davis.\nCHOLMOD/Demo Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Include/* files.  Copyright (C) 2005-2006, either Univ. of Florida or T. Davis, depending on the file\nCHOLMOD/MATLAB Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/MatrixOps Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Modify Module.  Copyright (C) 2005-2006, Timothy A. Davis and William W. Hager.\nCHOLMOD/Partition Module.  Copyright (C) 2005-2006, Univ. of Florida.  Author: Timothy A. Davis\nCHOLMOD/Supernodal Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Tcov Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Valgrind Module.  Copyright (C) 2005-2006, Timothy A. Davis.",
+            "summary": "CHOLMOD module of the official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
         },
         {
             "name": "libunwind",
@@ -463,9 +464,9 @@
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
-            "spdxElementId": "SPDXRef-LibSuiteSparse",
+            "spdxElementId": "SPDXRef-LibSuiteSparse-CHOLMOD",
             "relationshipType": "BUILD_DEPENDENCY_OF",
-            "relatedSpdxElement": "SPDXRef-JuliaMain"
+            "relatedSpdxElement": "SPDXRef-JuliaSuiteSparse"
         },
         {
             "spdxElementId": "SPDXRef-libunwind",
