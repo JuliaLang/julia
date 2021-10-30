@@ -162,7 +162,7 @@ div12(x, y) = div12(promote(x, y)...)
     TwicePrecision{T}((num, denom))
 
 A number with twice the precision of `T`, e.g., quad-precision if `T =
-Float64`. 
+Float64`.
 
 !!! warn
     `TwicePrecision` is an internal type used to increase the
