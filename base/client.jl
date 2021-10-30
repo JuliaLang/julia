@@ -88,6 +88,13 @@ function scrub_repl_backtrace(bt)
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
+        if length(bt) > 1
+            topframe = bt[end - 1]
+            # scrub whole backtrace if it's shell mode
+            if topframe.func === :repl_cmd && topframe.linfo.def.module === Base
+                bt = StackTraces.StackFrame[]
+            end
+        end
     end
     return bt
 end
