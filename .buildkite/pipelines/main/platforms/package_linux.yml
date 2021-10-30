@@ -23,7 +23,7 @@ steps:
     retry:
       automatic:
         - exit_status: "*"
-          limit: 5
+          limit: 0
     commands: |
       echo "--- Print the full and short commit hashes"
       exit 1
