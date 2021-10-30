@@ -1334,6 +1334,9 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_modifyfield!(interp, argtypes, sv)
         end
         return CallMeta(abstract_call_builtin(interp, f, arginfo, sv, max_methods), false)
+    elseif isa(f, Core.OpaqueClosure)
+        # calling an OpaqueClosure about which we have no information returns no information
+        return CallMeta(Any, false)
     elseif f === Core.kwfunc
         if la == 2
             ft = widenconst(argtypes[2])
@@ -1455,8 +1458,8 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
         newargtypes = copy(argtypes)
         newargtypes[1] = ft.env
         return abstract_call_opaque_closure(interp, ft, ArgInfo(arginfo.fargs, newargtypes), sv)
-    elseif (uft = unwrap_unionall(ft); isa(uft, DataType) && uft.name === typename(Core.OpaqueClosure))
-        return CallMeta(rewrap_unionall((uft::DataType).parameters[2], ft), false)
+    elseif (uft = unwrap_unionall(widenconst(ft)); isa(uft, DataType) && uft.name === typename(Core.OpaqueClosure))
+        return CallMeta(rewrap_unionall((uft::DataType).parameters[2], widenconst(ft)), false)
     elseif f === nothing
         # non-constant function, but the number of arguments is known
         # and the ft is not a Builtin or IntrinsicFunction
