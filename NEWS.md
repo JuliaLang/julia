@@ -50,6 +50,7 @@ New library functions
 ---------------------
 
 * `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 
 New library features
 --------------------
