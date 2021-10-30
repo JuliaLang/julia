@@ -345,9 +345,9 @@ function from_interconditional(@nospecialize(typ), (; fargs, argtypes)::ArgInfo,
             else
                 elsetype = tmeet(elsetype, widenconst(new_elsetype))
             end
-            if (slot > 0 || condval !== false) && !(old ⊑ vtype) # essentially vtype ⋤ old
+            if (slot > 0 || condval !== false) && vtype ⋤ old
                 slot = id
-            elseif (slot > 0 || condval !== true) && !(old ⊑ elsetype) # essentially elsetype ⋤ old
+            elseif (slot > 0 || condval !== true) && elsetype ⋤ old
                 slot = id
             else # reset: no new useful information for this slot
                 vtype = elsetype = Any
@@ -1606,7 +1606,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 at = widenconditional(abstract_eval_value(interp, e.args[i], vtypes, sv))
                 if !anyrefine
                     anyrefine = has_nontrivial_const_info(at) || # constant information
-                                at ⋤ fieldtype(t, i - 1)         # just a type-level information, but more precise than the declared type
+                                at ⊏ fieldtype(t, i - 1)         # just a type-level information, but more precise than the declared type
                 end
                 ats[i-1] = at
                 if at === Bottom
@@ -1809,7 +1809,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
             if !anyrefine
                 # TODO: consider adding && const_prop_profitable(a) here?
                 anyrefine = has_const_info(a) ||
-                            a ⋤ fieldtype(rt.typ, i)
+                            a ⊏ fieldtype(rt.typ, i)
             end
             fields[i] = a
         end
