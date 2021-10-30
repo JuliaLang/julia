@@ -20,8 +20,13 @@ steps:
             # Include `/cache/repos` so that our `git` version introspection works.
             - "/cache/repos:/cache/repos"
     timeout_in_minutes: ${TIMEOUT?}
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: 5
     commands: |
       echo "--- Print the full and short commit hashes"
+      exit 1
       SHORT_COMMIT_LENGTH=10
       SHORT_COMMIT=`echo $${BUILDKITE_COMMIT:?} | cut -c1-$${SHORT_COMMIT_LENGTH:?}`
       ARTIFACT_FILE_EXTENSION="tar.gz"
