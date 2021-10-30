@@ -137,7 +137,7 @@ function choosetests(choices = [])
     if startswith(string(Sys.ARCH), "arm")
         # Remove profile from default tests on ARM since it currently segfaults
         # Allow explicitly adding it for testing
-        @warn "Skipping Profile tests"
+        @warn "Skipping Profile tests because the architecture is ARM"
         filter!(x -> (x != "Profile"), tests)
     end
 
