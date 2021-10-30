@@ -341,11 +341,14 @@ Float32(x::BigFloat, r::RoundingMode) = Float32(x, convert(MPFRRoundingMode, r))
 function Float16(x::BigFloat) :: Float16
     res = Float32(x)
     resi = reinterpret(UInt32, res)
-    if (resi&0x7fffffff) < 0x38800000
+    if (resi&0x7fffffff) < 0x38800000 # if Float16(res) is subnormal
+        #shift so that the mantissa lines up where it would for normal Float16
         shift = 113-((resi & 0x7f800000)>>23)
         shift<23 && (resi >>= shift)
     end
-    if (resi & 0x1fff == 0x1000)
+    if (resi & 0x1fff == 0x1000) # if we are halfway between 2 Float16 values
+        memcpy(&resi, &res, sizeof(res));
+        # adjust the value by 1 ULP in the direction that will make Float16(res) give the right answer
         res = nextfloat(res, cmp(x, res))
     end
     return res
