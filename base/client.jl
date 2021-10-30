@@ -92,7 +92,7 @@ function scrub_repl_backtrace(bt)
             topframe = bt[end - 1]
             # scrub whole backtrace if it's shell mode
             if topframe.func === :repl_cmd && topframe.linfo.def.module === Base
-                bt = StackTraces.StackFrame[]
+                empty!(bt)
             end
         end
     end
