@@ -1009,19 +1009,19 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::
     nargs = length(aargtypes)
     splitunions = 1 < unionsplitcost(aargtypes) <= InferenceParams(interp).MAX_APPLY_UNION_ENUM
     ctypes = [Any[aft]]
-    infos = [Union{Nothing, AbstractIterationInfo}[]]
+    infos = Vector{MaybeAbstractIterationInfo}[MaybeAbstractIterationInfo[]]
     for i = 1:nargs
         ctypes´ = Vector{Any}[]
-        infos′ = Vector{Union{Nothing, AbstractIterationInfo}}[]
+        infos′ = Vector{MaybeAbstractIterationInfo}[]
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
             if !isvarargtype(ti)
                 cti_info = precise_container_type(interp, itft, ti, sv)
                 cti = cti_info[1]::Vector{Any}
-                info = cti_info[2]::Union{Nothing,AbstractIterationInfo}
+                info = cti_info[2]::MaybeAbstractIterationInfo
             else
                 cti_info = precise_container_type(interp, itft, unwrapva(ti), sv)
                 cti = cti_info[1]::Vector{Any}
-                info = cti_info[2]::Union{Nothing,AbstractIterationInfo}
+                info = cti_info[2]::MaybeAbstractIterationInfo
                 # We can't represent a repeating sequence of the same types,
                 # so tmerge everything together to get one type that represents
                 # everything.
@@ -1423,18 +1423,18 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
     tt = closure.typ
     sigT = (unwrap_unionall(tt)::DataType).parameters[1]
     match = MethodMatch(sig, Core.svec(), closure.source, sig <: rewrap_unionall(sigT, tt))
-    info = OpaqueClosureCallInfo(match)
+    res = nothing
     if !result.edgecycle
         const_result = abstract_call_method_with_const_args(interp, result, closure,
             arginfo, match, sv, closure.isva)
         if const_result !== nothing
             const_rettype, const_result = const_result
             if const_rettype ⊑ rt
-               rt = const_rettype
+               rt, res = const_rettype, const_result
             end
-            info = ConstCallInfo(info, Union{Nothing,InferenceResult}[const_result])
         end
     end
+    info = OpaqueClosureCallInfo(match, res)
     return CallMeta(from_interprocedural!(rt, sv, arginfo, match.spec_types), info)
 end
 
