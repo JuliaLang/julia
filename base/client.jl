@@ -66,7 +66,15 @@ function repl_cmd(cmd, out)
             end
             cmd = `$shell -c $shell_escape_cmd`
         end
-        run(ignorestatus(cmd))
+        try
+            run(ignorestatus(cmd))
+        catch
+            # strip backtrace and display error
+            # mainly for Windows
+            lasterr = current_exceptions()
+            lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
+            invokelatest(display_error, lasterr)
+        end
     end
     nothing
 end
@@ -88,13 +96,6 @@ function scrub_repl_backtrace(bt)
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
-        if length(bt) > 1
-            topframe = bt[end - 1]
-            # scrub whole backtrace if it's shell mode
-            if topframe.func === :repl_cmd && topframe.linfo.def.module === Base
-                empty!(bt)
-            end
-        end
     end
     return bt
 end
