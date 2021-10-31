@@ -321,7 +321,7 @@ Int64
 
 Note that we do **not** overload `promote_type` directly: we overload `promote_rule` instead.
 `promote_type` uses `promote_rule`, and adds the symmetry.
-Overloading it directly can cause ambiguity errrors.
+Overloading it directly can cause ambiguity errors.
 We overload `promote_rule` to define how things should be promoted, and we use `promote_type`
 to query that.
 

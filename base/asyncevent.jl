@@ -15,7 +15,7 @@ mutable struct AsyncCondition
     handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
     isopen::Bool
-    set::Bool
+    @atomic set::Bool
 
     function AsyncCondition()
         this = new(Libc.malloc(_sizeof_uv_async), ThreadSynchronizer(), true, false)
@@ -69,7 +69,7 @@ mutable struct Timer
     handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
     isopen::Bool
-    set::Bool
+    @atomic set::Bool
 
     function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
@@ -124,7 +124,7 @@ function _trywait(t::Union{Timer, AsyncCondition})
         end
         iolock_end()
     end
-    t.set = false
+    @atomic :monotonic t.set = false
     return set
 end
 
@@ -182,7 +182,7 @@ function uv_asynccb(handle::Ptr{Cvoid})
     async = @handle_as handle AsyncCondition
     lock(async.cond)
     try
-        async.set = true
+        @atomic :monotonic async.set = true
         notify(async.cond, true)
     finally
         unlock(async.cond)
@@ -194,7 +194,7 @@ function uv_timercb(handle::Ptr{Cvoid})
     t = @handle_as handle Timer
     lock(t.cond)
     try
-        t.set = true
+        @atomic :monotonic t.set = true
         if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
             # timer is stopped now
             close(t)

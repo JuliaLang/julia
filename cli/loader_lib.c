@@ -41,10 +41,11 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
             break;
     basename++;
 #if defined(_OS_WINDOWS_)
-    if ((handle = GetModuleHandleW(basename)))
+    if ((handle = GetModuleHandleA(basename)))
         return handle;
 #else
-    if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | RTLD_GLOBAL)))
+    // if err == 0 the library is optional, so don't allow global lookups to see it
+    if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL))))
         return handle;
 #endif
 
@@ -61,7 +62,7 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
     }
     handle = (void *)LoadLibraryExW(wpath, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 #else
-    handle = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+    handle = dlopen(path, RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL));
 #endif
 
     if (handle == NULL) {

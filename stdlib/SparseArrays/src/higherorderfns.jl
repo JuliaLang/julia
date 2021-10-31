@@ -840,13 +840,19 @@ function _outer(trans::Tf, x, y) where Tf
     @inbounds colptrC[1] = 1
     @inbounds for jj = 1:nnzy
         yval = nzvalsy[jj]
-        iszero(yval) && continue
+        if iszero(yval)
+            nnzC -= nnzx
+            continue
+        end
         col = rowvaly[jj]
         yval = trans(yval)
 
         for ii = 1:nnzx
             xval = nzvalsx[ii]
-            iszero(xval) && continue
+            if iszero(xval)
+                nnzC -= 1
+                continue
+            end
             idx += 1
             colptrC[col+1] += 1
             rowvalC[idx] = rowvalx[ii]
@@ -854,6 +860,8 @@ function _outer(trans::Tf, x, y) where Tf
         end
     end
     cumsum!(colptrC, colptrC)
+    resize!(rowvalC, nnzC)
+    resize!(nzvalsC, nnzC)
 
     return SparseMatrixCSC(nx, ny, colptrC, rowvalC, nzvalsC)
 end

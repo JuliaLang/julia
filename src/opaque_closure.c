@@ -41,7 +41,7 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isv
     oc->invoke = (jl_fptr_args_t)jl_invoke_opaque_closure;
     oc->specptr = NULL;
     oc->captures = captures;
-    oc->world = jl_world_counter;
+    oc->world = jl_atomic_load_acquire(&jl_world_counter);
     return oc;
 }
 

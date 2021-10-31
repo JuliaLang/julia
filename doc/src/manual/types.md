@@ -171,11 +171,11 @@ Let's consider some of the abstract types that make up Julia's numerical hierarc
 
 ```julia
 abstract type Number end
-abstract type Real     <: Number end
+abstract type Real          <: Number end
 abstract type AbstractFloat <: Real end
-abstract type Integer  <: Real end
-abstract type Signed   <: Integer end
-abstract type Unsigned <: Integer end
+abstract type Integer       <: Real end
+abstract type Signed        <: Integer end
+abstract type Unsigned      <: Integer end
 ```
 
 The [`Number`](@ref) type is a direct child type of `Any`, and [`Real`](@ref) is its child.
@@ -1226,7 +1226,7 @@ While `Type` is part of Julia's type hierarchy like any other abstract parametri
 is not commonly used outside method signatures except in some special cases. Another
 important use case for `Type` is sharpening field types which would otherwise be captured
 less precisely, e.g. as [`DataType`](@ref man-declared-types) in the example below where the
-default constuctor could lead to performance problems in code relying on the precise wrapped
+default constructor could lead to performance problems in code relying on the precise wrapped
 type (similarly to [abstract type parameters](@ref man-performance-abstract-container)).
 
 ```jldoctest

@@ -53,6 +53,11 @@ end
     @test occursin("3.14159", sprint(show, MIME"text/plain"(), π))
     @test repr(Any[pi ℯ; ℯ pi]) == "Any[π ℯ; ℯ π]"
     @test string(pi) == "π"
+
+    @test sin(π) === sinpi(1) == tan(π) == sinpi(1 // 1) == 0
+    @test cos(π) === cospi(1) == sec(π) == cospi(1 // 1) == -1
+    @test csc(π) == 1/0 && cot(π) == -1/0
+    @test sincos(π) === sincospi(1) == (0, -1)
 end
 
 @testset "frexp,ldexp,significand,exponent" begin
@@ -316,10 +321,13 @@ end
             X = Iterators.flatten((minval:T(.1):maxval,
                                    minval/100:T(.0021):maxval/100,
                                    minval/10000:T(.000021):maxval/10000,
-                                   nextfloat(zero(T)) ))
+                                   nextfloat(zero(T)),
+                                   T(-100):T(1):T(100) ))
             for x in X
                 y, yb = func(x), func(widen(x))
-                @test abs(y-yb) <= 1.2*eps(T(yb))
+                if isfinite(eps(T(yb)))
+                    @test abs(y-yb) <= 1.2*eps(T(yb))
+                end
             end
         end
         @testset "$T $func edge cases" begin

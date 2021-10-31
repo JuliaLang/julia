@@ -19,9 +19,6 @@
 
 #if defined(__GNUC__)
 #define USED_FUNC __attribute__((used))
-#elif defined(_COMPILER_MICROSOFT_)
-// Does MSVC have this?
-#define USED_FUNC
 #else
 #define USED_FUNC
 #endif
@@ -1454,6 +1451,23 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     SVal Result = C.getSValBuilder().makeTruthVal(EnabledNow, CE->getType());
     C.addTransition(State->BindExpr(CE, C.getLocationContext(), Result));
     return true;
+  }
+  else if (name == "uv_mutex_lock") {
+    ProgramStateRef State = C.getState();
+    if (State->get<SafepointDisabledAt>() == (unsigned)-1) {
+      C.addTransition(State->set<SafepointDisabledAt>(C.getStackFrame()->getIndex()));
+      return true;
+    }
+  }
+  else if (name == "uv_mutex_unlock") {
+    ProgramStateRef State = C.getState();
+    const auto *LCtx = C.getLocationContext();
+    const auto *FD = dyn_cast<FunctionDecl>(LCtx->getDecl());
+    if (State->get<SafepointDisabledAt>() == (unsigned)C.getStackFrame()->getIndex() &&
+        !isFDAnnotatedNotSafepoint(FD)) {
+      C.addTransition(State->set<SafepointDisabledAt>(-1));
+      return true;
+    }
   }
   return false;
 }

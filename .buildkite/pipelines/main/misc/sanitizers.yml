@@ -12,8 +12,8 @@ steps:
           persist_depot_dirs: packages,artifacts,compiled
           version: '1.6'
       - staticfloat/sandbox#v1:
-          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/llvm_passes.x86_64.tar.gz
-          rootfs_treehash: "9dd715500b117a16fcfa419ea0bca0c0ca902cee"
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v4.8/llvm_passes.x86_64.tar.gz
+          rootfs_treehash: "c7a289a8cc544b234b1e2d7cbcce3e6815359ecd"
           uid: 1000
           gid: 1000
           workspaces:
@@ -33,8 +33,8 @@ steps:
           persist_depot_dirs: packages,artifacts,compiled
           version: '1.6'
       - staticfloat/sandbox#v1:
-          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/llvm_passes.x86_64.tar.gz
-          rootfs_treehash: "9dd715500b117a16fcfa419ea0bca0c0ca902cee"
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v4.8/llvm_passes.x86_64.tar.gz
+          rootfs_treehash: "c7a289a8cc544b234b1e2d7cbcce3e6815359ecd"
           uid: 1000
           gid: 1000
           workspaces:

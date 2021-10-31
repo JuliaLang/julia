@@ -1843,6 +1843,12 @@ end
     # issue #34343
     @test showstr([[1], Int[]]) == "[[1], $Int[]]"
     @test showstr([Dict(1=>1), Dict{Int,Int}()]) == "[Dict(1 => 1), Dict{$Int, $Int}()]"
+
+    # issue #42719, NamedTuple with @var_str
+    @test replstr((; var"a b"=1)) == """(var"a b" = 1,)"""
+    @test replstr((; var"#var#"=1)) == """(var"#var#" = 1,)"""
+    @test replstr((; var"a"=1, b=2)) == "(a = 1, b = 2)"
+    @test replstr((; a=1, b=2)) == "(a = 1, b = 2)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin

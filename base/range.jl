@@ -394,7 +394,7 @@ UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
 
 unitrange_last(::Bool, stop::Bool) = stop
 unitrange_last(start::T, stop::T) where {T<:Integer} =
-    stop >= start ? stop : convert(T,start-oneunit(stop-start))
+    stop >= start ? stop : convert(T,start-oneunit(start-stop))
 unitrange_last(start::T, stop::T) where {T} =
     stop >= start ? convert(T,start+floor(stop-start)) :
                     convert(T,start-oneunit(stop-start))
@@ -734,8 +734,14 @@ end
 
 function length(r::AbstractUnitRange{T}) where T
     @inline
-    a = last(r) - first(r) # even when isempty, by construction (with overflow)
-    return Integer(a + oneunit(a))
+    start, stop = first(r), last(r)
+    a = oneunit(zero(stop) - zero(start))
+    if a isa Signed || stop >= start
+        a += stop - start # Signed are allowed to go negative
+    else
+        a = zero(a) # Unsigned don't necessarily underflow
+    end
+    return Integer(a)
 end
 
 length(r::OneTo) = Integer(r.stop - zero(r.stop))

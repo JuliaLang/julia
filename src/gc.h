@@ -11,9 +11,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#ifndef _MSC_VER
 #include <strings.h>
-#endif
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_threads.h"
@@ -376,13 +374,7 @@ unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
 #else
 STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 {
-#if defined(_COMPILER_MICROSOFT_)
-    unsigned long j;
-    _BitScanForward(&j, bitvec);
-    return j;
-#else
     return __builtin_ffs(bitvec) - 1;
-#endif
 }
 #endif
 

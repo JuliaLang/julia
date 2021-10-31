@@ -118,11 +118,11 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
 ### Compiling with MinGW/MSYS2
 
-Compiling Julia from source using [MSYS2](https://msys2.github.io) has worked
-in the past but is not actively supported. Pull requests to restore support
-would be welcome. See a [past version of this file]
-(https://github.com/JuliaLang/julia/blob/v0.6.0/README.windows.md)
-for the former instructions for compiling using MSYS2.
+Compiling Julia from source using [MSYS2](https://msys2.github.io) has worked in the past
+but is not actively supported. Pull requests to restore support would be welcome. See a
+[past version of this
+file](https://github.com/JuliaLang/julia/blob/v0.6.0/README.windows.md) for the former
+instructions for compiling using MSYS2.
 
 
 ### Cross-compiling from Unix
@@ -140,10 +140,10 @@ apt-get install wine-stable gcc wget p7zip-full winbind mingw-w64 gfortran-mingw
 for pkg in i686-w64-mingw32-g++ i686-w64-mingw32-gcc i686-w64-mingw32-gfortran x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gfortran; do sudo update-alternatives --config $pkg; done
 ```
 
-**On Mac**: Install XCode, XCode command line tools, X11 (now [XQuartz]
-(https://www.xquartz.org/)), and [MacPorts](https://www.macports.org/install.php)
-or [Homebrew](https://brew.sh/).  Then run `port install wine wget mingw-w64`,
-or `brew install wine wget mingw-w64`, as appropriate.
+**On Mac**: Install XCode, XCode command line tools, X11 (now
+[XQuartz](https://www.xquartz.org/)), and [MacPorts](https://www.macports.org/install.php)
+or [Homebrew](https://brew.sh/).  Then run `port install wine wget mingw-w64`, or `brew
+install wine wget mingw-w64`, as appropriate.
 
 Then run the build:
 
@@ -161,13 +161,13 @@ in 32-bit mode).
 
 ## Debugging a cross-compiled build under wine
 
-The most effective way to debug a cross-compiled version of Julia on the
-cross-compilation host is to install a windows version of gdb and run it under wine
-as usual. The pre-built packages available [as part of the MSYS2 project]
-(https://sourceforge.net/projects/msys2/files/REPOS/MINGW/) are known to work.
-Apart from the GDB package you may also need the python and termcap packages.
-Finally, GDB's prompt may not work when launch from the command line. This can
-be worked around by prepending `wineconsole` to the regular GDB invocation.
+The most effective way to debug a cross-compiled version of Julia on the cross-compilation
+host is to install a windows version of gdb and run it under wine as usual. The pre-built
+packages available [as part of the MSYS2
+project](https://sourceforge.net/projects/msys2/files/REPOS/MINGW/) are known to work. Apart
+from the GDB package you may also need the python and termcap packages. Finally, GDB's
+prompt may not work when launch from the command line. This can be worked around by
+prepending `wineconsole` to the regular GDB invocation.
 
 
 ## After compiling
@@ -183,10 +183,10 @@ yourself using ```make win-extras``` followed by ```make binary-dist``` and ```m
 
 ### GDB hangs with cygwin mintty
 
-- Run gdb under the windows console (cmd) instead. gdb [may not function properly]
-  (https://www.cygwin.com/ml/cygwin/2009-02/msg00531.html) under mintty with non-
-  cygwin applications. You can use `cmd /c start` to start the windows console
-  from mintty if necessary.
+- Run gdb under the windows console (cmd) instead. gdb [may not function
+  properly](https://www.cygwin.com/ml/cygwin/2009-02/msg00531.html) under mintty with non-
+  cygwin applications. You can use `cmd /c start` to start the windows console from mintty
+  if necessary.
 
 ### GDB not attaching to the right process
 
@@ -205,11 +205,12 @@ yourself using ```make win-extras``` followed by ```make binary-dist``` and ```m
 
 ### Build process is slow/eats memory/hangs my computer
 
- - Disable the Windows [Superfetch](https://en.wikipedia.org/wiki/Windows_Vista_I/O_technologies#SuperFetch)
-   and [Program Compatibility Assistant]
-   (https://blogs.msdn.com/b/cjacks/archive/2011/11/22/managing-the-windows-7-program-compatibility-assistant-pca.aspx)
-   services, as they are known to have [spurious interactions]
-   (https://cygwin.com/ml/cygwin/2011-12/msg00058.html) with MinGW/Cygwin.
+ - Disable the Windows
+   [Superfetch](https://en.wikipedia.org/wiki/Windows_Vista_I/O_technologies#SuperFetch) and
+   [Program Compatibility
+   Assistant](https://blogs.msdn.com/b/cjacks/archive/2011/11/22/managing-the-windows-7-program-compatibility-assistant-pca.aspx)
+   services, as they are known to have [spurious
+   interactions](https://cygwin.com/ml/cygwin/2011-12/msg00058.html) with MinGW/Cygwin.
 
    As mentioned in the link above: excessive memory use by `svchost` specifically
    may be investigated in the Task Manager by clicking on the high-memory
