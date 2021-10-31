@@ -75,8 +75,8 @@ end
 end
 
 @testset "Profile.fetch() with and without meta" begin
-    data_without = Profile.fetch()
-    data_with = Profile.fetch(include_meta = true)
+    data_without = Profile.fetch(include_meta = false)
+    data_with = Profile.fetch()
     @test data_without[1] == data_with[1]
     @test data_without[end] == data_with[end]
     nblocks = count(Base.Fix1(Profile.is_block_end, data_with), eachindex(data_with))
