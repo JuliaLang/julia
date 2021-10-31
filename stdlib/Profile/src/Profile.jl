@@ -563,7 +563,7 @@ details of the metadata format.
 function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
     threadid == 0 && error("Fake threadid cannot be 0")
     taskid == 0 && error("Fake taskid cannot be 0")
-    has_meta(data) && error("input already has metadata")
+    !isempty(data) && has_meta(data) && error("input already has metadata")
     cpu_clock_cycle = UInt64(99)
     data_with_meta = similar(data, 0)
     for i = 1:length(data)
@@ -583,6 +583,7 @@ end
 # Merging multiple equivalent entries and recursive calls
 function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool,
                     threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}) where {T}
+    !isempty(data) && !has_meta(data) && error("Profile data is missing required metadata")
     lilist = StackFrame[]
     n = Int[]
     m = Int[]
@@ -835,6 +836,7 @@ end
 # turn a list of backtraces into a tree (implicitly separated by NULL markers)
 function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool, recur::Symbol,
                 threads::Union{Int,AbstractVector{Int},Nothing}=nothing, tasks::Union{UInt,AbstractVector{UInt},Nothing}=nothing) where {T}
+    !isempty(all) && !has_meta(all) && error("Profile data is missing required metadata")
     parent = root
     tops = Vector{StackFrameTree{T}}()
     build = Vector{StackFrameTree{T}}()
