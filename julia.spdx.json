@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-a3a6ef66-ab64-47b5-af3d-59373a8bad76",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-6e7271ec-ee4d-4171-b4b0-0e09f08453f4",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-31T16:51:30Z"
+        "created": "2021-10-31T17:30:07Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -309,6 +309,18 @@
             "summary": "UMFPACK module of the official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
         },
         {
+            "name": "LibBlasTrampoline",
+            "SPDXID": "SPDXRef-LibBlasTrampoline",
+            "downloadLocation": "git+https://github.com/JuliaLinearAlgebra/libblastrampoline.git",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/JuliaLinearAlgebra",
+            "sourceInfo": "The version in use can be found in the file deps/blastrampoline.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2021: Elliot Saba, Viral B. Shah, Julia Computing.",
+            "summary": "Using PLT trampolines to provide a BLAS and LAPACK demuxing library."
+        },
+        {
             "name": "libunwind",
             "SPDXID": "SPDXRef-libunwind",
             "downloadLocation": "git+https://github.com/libunwind/libunwind.git",
@@ -503,6 +515,11 @@
             "spdxElementId": "SPDXRef-LibSuiteSparse-UMFPACK",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaSuiteSparse"
+        },
+        {
+            "spdxElementId": "SPDXRef-LibBlasTrampoline",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
             "spdxElementId": "SPDXRef-libunwind",
