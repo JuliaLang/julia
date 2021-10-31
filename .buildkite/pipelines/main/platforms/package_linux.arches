@@ -1,7 +1,7 @@
-# PLATFORM    LABEL       ALLOW_FAIL    ARCH        ARCH_ROOTFS    MAKE_FLAGS     TIMEOUT    IS_RR    IS_ST    IS_MT    ROOTFS_TAG    ROOTFS_HASH
-# linux       _aarch64    false         _aarch64    aarch64        none           60         no       no       no       v0.0          0000000000000000000000000000000000000000
-# linux       _armv7l     false         _armv7l     armv7l         none           60         no       no       no       v0.0          0000000000000000000000000000000000000000
-linux         32          false         32          i686           none           60         no       no       no       v4.8          b6dffc772ab4c2cd7fd4f83459308f6f0d89b957
-# linux       _ppc64le    false         _ppc64le    powerpc64le    none           60         no       no       no       v0.0          0000000000000000000000000000000000000000
-linux         64          false         64          x86_64         none           60         no       no       no       v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
-musl          64          false         64          x86_64         none           60         no       no       no       v4.8          d13a47c87c38005bd5d97132e51789cafd852f90
+# PLATFORM    LABEL       ALLOW_FAIL    ARCH        ARCH_ROOTFS    GROUP    MAKE_FLAGS     TIMEOUT_BK    TIMEOUT_RR     RETRIES    IS_RR    IS_ST    IS_MT    ROOTFS_TAG    ROOTFS_HASH
+linux         32          .             32          i686           .        .              .             .              .          .        .        .        v4.8          b6dffc772ab4c2cd7fd4f83459308f6f0d89b957
+linux         64          .             64          x86_64         .        .              .             .              .          .        .        .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
+# linux       _aarch64    .             _aarch64    aarch64        .        .              .             .              .          .        .        .        ....          ........................................
+# linux       _armv7l     .             _armv7l     armv7l         .        .              .             .              .          .        .        .        ....          ........................................
+# linux       _ppc64le    .             _ppc64le    powerpc64le    .        .              .             .              .          .        .        .        ....          ........................................
+musl          64          .             64          x86_64         .        .              .             .              .          .        .        .        v4.8          d13a47c87c38005bd5d97132e51789cafd852f90
