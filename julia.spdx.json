@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-b8fba2d8-e097-4650-9c1b-40646e9cbccd",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-a3a6ef66-ab64-47b5-af3d-59373a8bad76",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-29T19:17:49Z"
+        "created": "2021-10-31T16:51:30Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -292,8 +292,21 @@
             "sourceInfo": "The version in use can be found in the file deps/Versions.make",
             "licenseConcluded": "GPL-2.0-or-later",
             "licenseDeclared": "GPL-2.0-or-later",
-            "copyrightText": "",
+            "copyrightText": "SPQR, Copyright 2008-2016 by Timothy A. Davis.",
             "summary": "SPQR module of the official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
+        },
+        {
+            "name": "LibSuiteSparse-UMFPACK",
+            "SPDXID": "SPDXRef-LibSuiteSparse-UMFPACK",
+            "packageFileName": "./UMFPACK",
+            "downloadLocation": "git+https://github.com/DrTimothyAldenDavis/SuiteSparse.git",
+            "filesAnalyzed": false,
+            "homepage": "https://people.engr.tamu.edu/davis/suitesparse.html",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "GPL-2.0-or-later",
+            "licenseDeclared": "GPL-2.0-or-later",
+            "copyrightText": "UMFPACK, Copyright 1995-2009 by Timothy A. Davis.",
+            "summary": "UMFPACK module of the official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
         },
         {
             "name": "libunwind",
@@ -483,6 +496,11 @@
         },
         {
             "spdxElementId": "SPDXRef-LibSuiteSparse-SPQR",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaSuiteSparse"
+        },
+        {
+            "spdxElementId": "SPDXRef-LibSuiteSparse-UMFPACK",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaSuiteSparse"
         },
