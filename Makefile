@@ -368,6 +368,11 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 endif
 endif
 
+	# Set rpath for LLVM.so which is `$ORIGIN/../lib` moving from `../lib` to `../lib/julia`.  We only need to do this for Linux/FreeBSD
+ifneq (,$(findstring $(OS),Linux FreeBSD))
+	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libLLVM.$(SHLIB_EXT)
+endif
+
 
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
