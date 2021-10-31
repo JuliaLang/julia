@@ -1096,7 +1096,20 @@ function show(io::IO, m::Module)
     if is_root_module(m)
         print(io, nameof(m))
     else
-        print(io, join(fullname(m),"."))
+        print_fullname(io, m)
+    end
+end
+# The call to print_fullname above was originally `print(io, join(fullname(m),"."))`,
+# which allocates. The method below provides the same behavior without allocating.
+# See https://github.com/JuliaLang/julia/pull/42773 for perf information.
+function print_fullname(io::IO, m::Module)
+    mp = parentmodule(m)
+    if m === Main || m === Base || m === Core || mp === m
+        print(io, nameof(m))
+    else
+        print_fullname(io, mp)
+        print(io, '.')
+        print(io, nameof(m))
     end
 end
 
