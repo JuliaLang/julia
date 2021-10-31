@@ -213,8 +213,12 @@ by typing `?` followed by the name of a function or macro, and pressing `Enter`.
 ?r""
 ```
 
-will show documentation for the relevant function, macro or string macro respectively. In
-[Juno](http://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
+will show documentation for the relevant function, macro or string macro respectively. Most Julia
+environments provide a way to access documentation directly:
+- [VS Code](https://www.julia-vscode.org/) shows documentation when you hover over a function name.
+  You can also use the Julia panel in the sidebar to search for documentation.
+- In [Pluto](https://github.com/fonsp/Pluto.jl), open the "Live Docs" panel on the bottom right.
+- In [Juno](http://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
 under the cursor.
 
 ## Functions & Methods
