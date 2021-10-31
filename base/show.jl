@@ -2132,11 +2132,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :line && 1 <= nargs <= 2
         show_linenumber(io, args...)
 
-    elseif head === :try && 3 <= nargs <= 4
+    elseif head === :try && 3 <= nargs <= 5
         iob = IOContext(io, beginsym=>false)
         show_block(iob, "try", args[1], indent, quote_level)
         if is_expr(args[3], :block)
             show_block(iob, "catch", args[2] === false ? Any[] : args[2], args[3]::Expr, indent, quote_level)
+        end
+        if nargs >= 5 && is_expr(args[5], :block)
+            show_block(iob, "else", Any[], args[5]::Expr, indent, quote_level)
         end
         if nargs >= 4 && is_expr(args[4], :block)
             show_block(iob, "finally", Any[], args[4]::Expr, indent, quote_level)

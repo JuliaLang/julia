@@ -626,7 +626,8 @@ end
     @test 2 .* ((1:5) .+ A) == 2:2:10
     @test 2 .* (A .+ (1:5)) == 2:2:10
 
-    @test Diagonal(spzeros(5)) \ view(rand(10), 1:5) == [Inf,Inf,Inf,Inf,Inf]
+    # lu(zeros(5,5)) throw SingularException, see #42343
+    @test_throws SingularException Diagonal(spzeros(5)) \ view(rand(10), 1:5)
 end
 
 @testset "Issue #27836" begin
@@ -724,6 +725,15 @@ end
     @test extrema(f, x; dims=1) == extrema(f, y; dims=1)
     @test_throws BoundsError extrema(sparse(z); dims=1)
     @test extrema(x; dims=[]) == extrema(y; dims=[])
+end
+
+@testset "issue #42670 - error in sparsevec outer product" begin
+    A = spzeros(Int, 4)
+    B = copy(A)
+    C = sparsevec([0 0 1 1 0 0])'
+    A[2] = 1
+    A[2] = 0
+    @test A * C == B * C == spzeros(Int, 4, 6)
 end
 
 end # module

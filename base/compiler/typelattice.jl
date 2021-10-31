@@ -92,14 +92,6 @@ struct LimitedAccuracy
     end
 end
 
-@inline function collect_limitations!(@nospecialize(typ), sv::InferenceState)
-    if isa(typ, LimitedAccuracy)
-        union!(sv.pclimitations, typ.causes)
-        return typ.typ
-    end
-    return typ
-end
-
 """
     struct NotFound end
     const NOT_FOUND = NotFound()
@@ -283,8 +275,8 @@ widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
 widenconst(t::Type) = t
-widenconst(t::TypeVar) = t
-widenconst(t::Core.TypeofVararg) = t
+widenconst(t::TypeVar) = error("unhandled TypeVar")
+widenconst(t::TypeofVararg) = error("unhandled Vararg")
 widenconst(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)

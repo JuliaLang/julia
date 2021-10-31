@@ -281,7 +281,7 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
     }
 
     // save a record of this so that the alias is generated when we write an object file
-    jl_method_t *meth = (jl_method_t*)jl_methtable_lookup(ft->name->mt, (jl_value_t*)sigt, jl_world_counter);
+    jl_method_t *meth = (jl_method_t*)jl_methtable_lookup(ft->name->mt, (jl_value_t*)sigt, jl_atomic_load_acquire(&jl_world_counter));
     if (!jl_is_method(meth))
         jl_error("@ccallable: could not find requested method");
     JL_GC_PUSH1(&meth);

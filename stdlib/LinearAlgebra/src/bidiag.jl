@@ -115,22 +115,32 @@ Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
-function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
-    if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
-        throw(BoundsError(A,(i,j)))
-    end
-    if i == j
-        return A.dv[i]
-    elseif A.uplo == 'U' && (i == j - 1)
-        return A.ev[i]
-    elseif A.uplo == 'L' && (i == j + 1)
-        return A.ev[j]
+bidiagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
+function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
+    Tel = eltype(eltype(A.dv))
+    if i < j && A.uplo == 'U' #= top right zeros =#
+        return zeros(Tel, size(A.ev[i], 1), size(A.ev[j-1], 2))
+    elseif j < i && A.uplo == 'L' #= bottom left zeros =#
+        return zeros(Tel, size(A.ev[i-1], 1), size(A.ev[j], 2))
     else
-        return zero(T)
+        return zeros(Tel, size(A.dv[i], 1), size(A.dv[j], 2))
     end
 end
 
-function setindex!(A::Bidiagonal, x, i::Integer, j::Integer)
+@inline function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds A.dv[i]
+    elseif A.uplo == 'U' && (i == j - 1)
+        return @inbounds A.ev[i]
+    elseif A.uplo == 'L' && (i == j + 1)
+        return @inbounds A.ev[j]
+    else
+        return bidiagzero(A, i, j)
+    end
+end
+
+@inline function setindex!(A::Bidiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j
         @inbounds A.dv[i] = x
@@ -300,45 +310,45 @@ function istril(M::Bidiagonal, k::Integer=0)
 end
 isdiag(M::Bidiagonal) = iszero(M.ev)
 
-function tril!(M::Bidiagonal, k::Integer=0)
+function tril!(M::Bidiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n - 1 <= k <= n - 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'U' && k < 0
-        fill!(M.dv,0)
-        fill!(M.ev,0)
+        fill!(M.dv, zero(T))
+        fill!(M.ev, zero(T))
     elseif k < -1
-        fill!(M.dv,0)
-        fill!(M.ev,0)
+        fill!(M.dv, zero(T))
+        fill!(M.ev, zero(T))
     elseif M.uplo == 'U' && k == 0
-        fill!(M.ev,0)
+        fill!(M.ev, zero(T))
     elseif M.uplo == 'L' && k == -1
-        fill!(M.dv,0)
+        fill!(M.dv, zero(T))
     end
     return M
 end
 
-function triu!(M::Bidiagonal, k::Integer=0)
+function triu!(M::Bidiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n + 1 <= k <= n + 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least",
             "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'L' && k > 0
-        fill!(M.dv,0)
-        fill!(M.ev,0)
+        fill!(M.dv, zero(T))
+        fill!(M.ev, zero(T))
     elseif k > 1
-        fill!(M.dv,0)
-        fill!(M.ev,0)
+        fill!(M.dv, zero(T))
+        fill!(M.ev, zero(T))
     elseif M.uplo == 'L' && k == 0
-        fill!(M.ev,0)
+        fill!(M.ev, zero(T))
     elseif M.uplo == 'U' && k == 1
-        fill!(M.dv,0)
+        fill!(M.dv, zero(T))
     end
     return M
 end
 
-function diag(M::Bidiagonal, n::Integer=0)
+function diag(M::Bidiagonal{T}, n::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     if n == 0
@@ -346,7 +356,7 @@ function diag(M::Bidiagonal, n::Integer=0)
     elseif (n == 1 && M.uplo == 'U') ||  (n == -1 && M.uplo == 'L')
         return copyto!(similar(M.ev, length(M.ev)), M.ev)
     elseif -size(M,1) <= n <= size(M,1)
-        return fill!(similar(M.dv, size(M,1)-abs(n)), 0)
+        return fill!(similar(M.dv, size(M,1)-abs(n)), zero(T))
     else
         throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
             "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))

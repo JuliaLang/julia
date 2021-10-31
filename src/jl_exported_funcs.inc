@@ -145,6 +145,7 @@
     XX(jl_expand_with_loc) \
     XX(jl_expand_with_loc_warn) \
     XX(jl_field_index) \
+    XX(jl_field_isdefined) \
     XX(jl_gc_add_finalizer) \
     XX(jl_gc_add_finalizer_th) \
     XX(jl_gc_add_ptr_finalizer) \
@@ -518,7 +519,6 @@
 
 // use YY instead of XX to avoid jl -> ijl renaming in libjulia-codegen
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
-    YY(jl_clear_malloc_data) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
     YY(jl_extern_c) \
@@ -529,8 +529,6 @@
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
     YY(jl_get_llvm_gv) \
-    YY(jl_write_malloc_log) \
-    YY(jl_write_coverage_data) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \

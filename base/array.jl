@@ -2070,7 +2070,7 @@ findfirst(p::Union{Fix2{typeof(isequal),Int},Fix2{typeof(==),Int}}, r::OneTo{Int
     1 <= p.x <= r.stop ? p.x : nothing
 
 findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange) where {T<:Integer} =
-    first(r) <= p.x <= last(r) ? 1+Int(p.x - first(r)) : nothing
+    first(r) <= p.x <= last(r) ? firstindex(r) + Int(p.x - first(r)) : nothing
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing

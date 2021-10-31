@@ -164,23 +164,25 @@ static void accumchar(fl_context_t *fl_ctx, char c, int *pi)
 // return: 1 if escaped (forced to be symbol)
 static int read_token(fl_context_t *fl_ctx, char c, int digits)
 {
-    int i=0, ch, escaped=0, issym=0, first=1;
+    int i=0, ch, escaped=0, issym=0, nc=0;
 
     while (1) {
-        if (!first) {
-            ch = ios_getc(readF(fl_ctx));
+        if (nc != 0) {
+            if (nc != 1)
+                (void)ios_getc(readF(fl_ctx)); // consume ch
+            ch = ios_peekc(readF(fl_ctx));
             if (ch == IOS_EOF)
                 goto terminate;
             c = (char)ch;
         }
-        first = 0;
         if (c == '|') {
             issym = 1;
             escaped = !escaped;
         }
         else if (c == '\\') {
             issym = 1;
-            ch = ios_getc(readF(fl_ctx));
+            (void)ios_getc(readF(fl_ctx)); // consume '\'
+            ch = ios_peekc(readF(fl_ctx));
             if (ch == IOS_EOF)
                 goto terminate;
             accumchar(fl_ctx, (char)ch, &i);
@@ -191,8 +193,10 @@ static int read_token(fl_context_t *fl_ctx, char c, int digits)
         else {
             accumchar(fl_ctx, c, &i);
         }
+        nc++;
     }
-    ios_ungetc(c, readF(fl_ctx));
+    if (nc == 0)
+        ios_skip(readF(fl_ctx), -1); // rewind stream for the caller, to prepare for throwing an error
  terminate:
     fl_ctx->readbuf[i++] = '\0';
     return issym;
@@ -376,7 +380,7 @@ static uint32_t peek(fl_context_t *fl_ctx)
     }
     else if (c == ',') {
         fl_ctx->readtoktype = TOK_COMMA;
-        ch = ios_getc(readF(fl_ctx));
+        ch = ios_peekc(readF(fl_ctx));
         if (ch == IOS_EOF)
             return fl_ctx->readtoktype;
         if ((char)ch == '@')
@@ -384,7 +388,8 @@ static uint32_t peek(fl_context_t *fl_ctx)
         else if ((char)ch == '.')
             fl_ctx->readtoktype = TOK_COMMADOT;
         else
-            ios_ungetc((char)ch, readF(fl_ctx));
+            return fl_ctx->readtoktype;
+        (void)ios_getc(readF(fl_ctx)); // consume ch
     }
     else {
         if (!read_token(fl_ctx, c, 0)) {
@@ -486,13 +491,15 @@ static value_t read_string(fl_context_t *fl_ctx)
                 free(buf);
                 lerror(fl_ctx, fl_ctx->ParseError, "read: end of input in escape sequence");
             }
-            j=0;
+            j = 0;
             if (octal_digit(c)) {
-                do {
+                while (1) {
                     eseq[j++] = c;
-                    c = ios_getc(readF(fl_ctx));
-                } while (octal_digit(c) && j<3 && (c!=IOS_EOF));
-                if (c!=IOS_EOF) ios_ungetc(c, readF(fl_ctx));
+                    c = ios_peekc(readF(fl_ctx));
+                    if (c == IOS_EOF || !octal_digit(c) || j >= 3)
+                        break;
+                    (void)ios_getc(readF(fl_ctx)); // consume c
+                }
                 eseq[j] = '\0';
                 wc = strtol(eseq, NULL, 8);
                 // \DDD and \xXX read bytes, not characters
@@ -501,12 +508,13 @@ static value_t read_string(fl_context_t *fl_ctx)
             else if ((c=='x' && (ndig=2)) ||
                      (c=='u' && (ndig=4)) ||
                      (c=='U' && (ndig=8))) {
-                c = ios_getc(readF(fl_ctx));
-                while (hex_digit(c) && j<ndig && (c!=IOS_EOF)) {
+                while (1) {
+                    c = ios_peekc(readF(fl_ctx));
+                    if (c == IOS_EOF || !hex_digit(c) || j >= ndig)
+                        break;
                     eseq[j++] = c;
-                    c = ios_getc(readF(fl_ctx));
+                    (void)ios_getc(readF(fl_ctx)); // consume c
                 }
-                if (c!=IOS_EOF) ios_ungetc(c, readF(fl_ctx));
                 eseq[j] = '\0';
                 if (j) wc = strtol(eseq, NULL, 16);
                 if (!j || wc > 0x10ffff) {

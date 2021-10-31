@@ -306,6 +306,18 @@ function _wait2(t::Task, waiter::Task)
         if !istaskdone(t)
             push!(t.donenotify.waitq, waiter)
             unlock(t.donenotify)
+            # since _wait2 is similar to schedule, we should observe the sticky
+            # bit, even if we aren't calling `schedule` due to this early-return
+            if waiter.sticky && Threads.threadid(waiter) == 0
+                # Issue #41324
+                # t.sticky && tid == 0 is a task that needs to be co-scheduled with
+                # the parent task. If the parent (current_task) is not sticky we must
+                # set it to be sticky.
+                # XXX: Ideally we would be able to unset this
+                current_task().sticky = true
+                tid = Threads.threadid()
+                ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
+            end
             return nothing
         else
             unlock(t.donenotify)
@@ -455,6 +467,7 @@ function errormonitor(t::Task)
         end
         nothing
     end
+    t2.sticky = false
     _wait2(t, t2)
     return t
 end

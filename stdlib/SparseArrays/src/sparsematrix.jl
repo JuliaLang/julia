@@ -563,6 +563,8 @@ SparseMatrixCSC(M::Matrix) = sparse(M)
 SparseMatrixCSC(T::Tridiagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(T)
 function SparseMatrixCSC{Tv,Ti}(T::Tridiagonal) where {Tv,Ti}
     m = length(T.d)
+    m == 0 && return SparseMatrixCSC{Tv,Ti}(0, 0, ones(Ti, 1), Ti[], Tv[])
+    m == 1 && return SparseMatrixCSC{Tv,Ti}(1, 1, Ti[1, 2], Ti[1], Tv[T.d[1]])
 
     colptr = Vector{Ti}(undef, m+1)
     colptr[1] = 1
@@ -593,6 +595,8 @@ end
 SparseMatrixCSC(T::SymTridiagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(T)
 function SparseMatrixCSC{Tv,Ti}(T::SymTridiagonal) where {Tv,Ti}
     m = length(T.dv)
+    m == 0 && return SparseMatrixCSC{Tv,Ti}(0, 0, ones(Ti, 1), Ti[], Tv[])
+    m == 1 && return SparseMatrixCSC{Tv,Ti}(1, 1, Ti[1, 2], Ti[1], Tv[T.dv[1]])
 
     colptr = Vector{Ti}(undef, m+1)
     colptr[1] = 1
@@ -623,7 +627,7 @@ end
 SparseMatrixCSC(B::Bidiagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(B)
 function SparseMatrixCSC{Tv,Ti}(B::Bidiagonal) where {Tv,Ti}
     m = length(B.dv)
-    m == 0 && return SparseMatrixCSC{Tv,Ti}(zeros(Tv, 0, 0))
+    m == 0 && return SparseMatrixCSC{Tv,Ti}(0, 0, ones(Ti, 1), Ti[], Tv[])
 
     colptr = Vector{Ti}(undef, m+1)
     colptr[1] = 1
@@ -652,7 +656,7 @@ end
 SparseMatrixCSC(D::Diagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(D)
 function SparseMatrixCSC{Tv,Ti}(D::Diagonal) where {Tv,Ti}
     m = length(D.diag)
-    return SparseMatrixCSC(m, m, Vector(1:(m+1)), Vector(1:m), Vector{Tv}(D.diag))
+    return SparseMatrixCSC(m, m, Vector(Ti(1):Ti(m+1)), Vector(Ti(1):Ti(m)), Vector{Tv}(D.diag))
 end
 SparseMatrixCSC(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
@@ -2185,7 +2189,7 @@ end
 getindex(A::AbstractSparseMatrixCSC, I::Tuple{Integer,Integer}) = getindex(A, I[1], I[2])
 
 function getindex(A::AbstractSparseMatrixCSC{T}, i0::Integer, i1::Integer) where T
-    if !(1 <= i0 <= size(A, 1) && 1 <= i1 <= size(A, 2)); throw(BoundsError()); end
+    @boundscheck checkbounds(A, i0, i1)
     r1 = Int(getcolptr(A)[i1])
     r2 = Int(getcolptr(A)[i1+1]-1)
     (r1 > r2) && return zero(T)
@@ -3836,3 +3840,91 @@ end
 
 circshift!(O::AbstractSparseMatrixCSC, X::AbstractSparseMatrixCSC, (r,)::Base.DimsInteger{1}) = circshift!(O, X, (r,0))
 circshift!(O::AbstractSparseMatrixCSC, X::AbstractSparseMatrixCSC, r::Real) = circshift!(O, X, (Integer(r),0))
+
+## swaprows! / swapcols!
+macro swap(a, b)
+    esc(:(($a, $b) = ($b, $a)))
+end
+
+function Base.swapcols!(A::AbstractSparseMatrixCSC, i, j)
+    i == j && return
+
+    # For simplicitly, let i denote the smaller of the two columns
+    j < i && @swap(i, j)
+
+    colptr = getcolptr(A)
+    irow = colptr[i]:(colptr[i+1]-1)
+    jrow = colptr[j]:(colptr[j+1]-1)
+
+    function rangeexchange!(arr, irow, jrow)
+        if length(irow) == length(jrow)
+            for (a, b) in zip(irow, jrow)
+                @inbounds @swap(arr[i], arr[j])
+            end
+            return
+        end
+        # This is similar to the triple-reverse tricks for
+        # circshift!, except that we have three ranges here,
+        # so it ends up being 4 reverse calls (but still
+        # 2 overall reversals for the memory range). Like
+        # circshift!, there's also a cycle chasing algorithm
+        # with optimal memory complexity, but the performance
+        # tradeoffs against this implementation are non-trivial,
+        # so let's just do this simple thing for now.
+        # See https://github.com/JuliaLang/julia/pull/42676 for
+        # discussion of circshift!-like algorithms.
+        reverse!(@view arr[irow])
+        reverse!(@view arr[jrow])
+        reverse!(@view arr[(last(irow)+1):(first(jrow)-1)])
+        reverse!(@view arr[first(irow):last(jrow)])
+    end
+    rangeexchange!(rowvals(A), irow, jrow)
+    rangeexchange!(nonzeros(A), irow, jrow)
+
+    if length(irow) != length(jrow)
+        @inbounds colptr[i+1:j] .+= length(jrow) - length(irow)
+    end
+    return nothing
+end
+
+function Base.swaprows!(A::AbstractSparseMatrixCSC, i, j)
+    # For simplicitly, let i denote the smaller of the two rows
+    j < i && @swap(i, j)
+
+    rows = rowvals(A)
+    vals = nonzeros(A)
+    for col = 1:size(A, 2)
+        rr = nzrange(A, col)
+        iidx = searchsortedfirst(@view(rows[rr]), i)
+        has_i = iidx <= length(rr) && rows[rr[iidx]] == i
+
+        jrange = has_i ? (iidx:last(rr)) : rr
+        jidx = searchsortedlast(@view(rows[jrange]), j)
+        has_j = jidx != 0 && rows[jrange[jidx]] == j
+
+        if !has_j && !has_i
+            # Has neither row - nothing to do
+            continue
+        elseif has_i && has_j
+            # This column had both i and j rows - swap them
+            @swap(vals[rr[iidx]], vals[jrange[jidx]])
+        elseif has_i
+            # Update the rowval and then rotate both nonzeros
+            # and the remaining rowvals into the correct place
+            rows[rr[iidx]] = j
+            jidx == 0 && continue
+            rotate_range = rr[iidx]:jrange[jidx]
+            circshift!(@view(vals[rotate_range]), -1)
+            circshift!(@view(rows[rotate_range]), -1)
+        else
+            # Same as i, but in the opposite direction
+            @assert has_j
+            rows[jrange[jidx]] = i
+            iidx > length(rr) && continue
+            rotate_range = rr[iidx]:jrange[jidx]
+            circshift!(@view(vals[rotate_range]), 1)
+            circshift!(@view(rows[rotate_range]), 1)
+        end
+    end
+    return nothing
+end

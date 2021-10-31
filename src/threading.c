@@ -88,7 +88,7 @@ __attribute__((constructor)) void jl_init_tls(void)
 
 JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
 {
-    return pthread_getspecific(jl_pgcstack_key);
+    return (jl_gcframe_t**)pthread_getspecific(jl_pgcstack_key);
 }
 
 void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
@@ -176,7 +176,7 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
 {
     SAVE_ERRNO;
-    jl_gcframe_t **pgcstack = (jl_ptls_t)TlsGetValue(jl_pgcstack_key);
+    jl_gcframe_t **pgcstack = (jl_gcframe_t**)TlsGetValue(jl_pgcstack_key);
     LOAD_ERRNO;
     return pgcstack;
 }
@@ -527,21 +527,22 @@ void jl_start_threads(void)
     uv_barrier_wait(&thread_init_done);
 }
 
-unsigned volatile _threadedregion; // HACK: keep track of whether it is safe to do IO
+_Atomic(unsigned) _threadedregion; // HACK: keep track of whether to prioritize IO or threading
 
 JL_DLLEXPORT int jl_in_threaded_region(void)
 {
-    return _threadedregion != 0;
+    return jl_atomic_load_relaxed(&jl_current_task->tid) != 0 ||
+        jl_atomic_load_relaxed(&_threadedregion) != 0;
 }
 
 JL_DLLEXPORT void jl_enter_threaded_region(void)
 {
-    _threadedregion += 1;
+    jl_atomic_fetch_add(&_threadedregion, 1);
 }
 
 JL_DLLEXPORT void jl_exit_threaded_region(void)
 {
-    _threadedregion -= 1;
+    jl_atomic_fetch_add(&_threadedregion, -1);
     jl_wake_libuv();
     // make sure no more callbacks will run while user code continues
     // outside thread region and might touch an I/O object.

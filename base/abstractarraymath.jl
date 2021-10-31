@@ -501,7 +501,6 @@ function repeat_outer(arr::AbstractArray{<:Any,N}, dims::NTuple{N,Any}) where {N
 end
 
 function repeat_inner(arr, inner)
-    basedims = size(arr)
     outsize = map(*, size(arr), inner)
     out = similar(arr, outsize)
     for I in CartesianIndices(arr)
