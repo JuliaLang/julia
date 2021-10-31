@@ -59,8 +59,8 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 typedef struct taskheap_tag {
     uv_mutex_t lock;
     jl_task_t **tasks;
-    int32_t ntasks;
-    int16_t prio;
+    _Atomic(int32_t) ntasks;
+    _Atomic(int16_t) prio;
 } taskheap_t;
 
 /* multiqueue parameters */
@@ -287,7 +287,7 @@ int jl_running_under_rr(int recheck)
 #ifdef _OS_LINUX_
 #define RR_CALL_BASE 1000
 #define SYS_rrcall_check_presence (RR_CALL_BASE + 8)
-    static int is_running_under_rr = 0;
+    static _Atomic(int) is_running_under_rr = 0;
     int rr = jl_atomic_load_relaxed(&is_running_under_rr);
     if (rr == 0 || recheck) {
         int ret = syscall(SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0);
@@ -414,7 +414,7 @@ static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
     return jl_atomic_load_relaxed(&ptls->sleep_check_state) == sleeping;
 }
 
-extern unsigned _threadedregion;
+extern _Atomic(unsigned) _threadedregion;
 
 JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
 {

@@ -706,7 +706,7 @@ static jl_value_t *do_apply( jl_value_t **args, uint32_t nargs, jl_value_t *iter
     }
     if (arg_heap) {
         // optimization: keep only the first root, free the others
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
         ((void**)roots)[-2] = (void*)JL_GC_ENCODE_PUSHARGS(1);
 #endif
     }

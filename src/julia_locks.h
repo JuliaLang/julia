@@ -40,7 +40,7 @@ static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
 
 static inline void jl_mutex_lock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
     // Hide this body from the analyzer, otherwise it complains that we're calling
     // a non-safepoint from this function. The 0 arguments guarantees that we do
     // not reach the safepoint, but the analyzer can't figure that out
@@ -112,7 +112,7 @@ static inline int jl_mutex_trylock(jl_mutex_t *lock)
 }
 static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
     assert(jl_atomic_load_relaxed(&lock->owner) == jl_current_task &&
            "Unlocking a lock in a different thread.");
     if (--lock->count == 0) {

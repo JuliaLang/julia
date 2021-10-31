@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
+_Atomic(jl_value_t*) cmpswap_names JL_GLOBALLY_ROOTED;
 
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
@@ -625,7 +625,7 @@ static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t
     if (sz == 0)
         return NULL;
     size_t maxprobe = max_probe(sz);
-    jl_datatype_t **tab = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *tab = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t index = h2index(hv, sz);
     size_t orig = index;
     size_t iter = 0;
@@ -648,7 +648,7 @@ static jl_datatype_t *lookup_type_setvalue(jl_svec_t *cache, jl_value_t *key1, j
     if (sz == 0)
         return NULL;
     size_t maxprobe = max_probe(sz);
-    jl_datatype_t **tab = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *tab = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t index = h2index(hv, sz);
     size_t orig = index;
     size_t iter = 0;
@@ -671,7 +671,7 @@ static ssize_t lookup_type_idx_linear(jl_svec_t *cache, jl_value_t **key, size_t
 {
     if (n == 0)
         return -1;
-    jl_datatype_t **data = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *data = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t cl = jl_svec_len(cache);
     ssize_t i;
     for (i = 0; i < cl; i++) {
@@ -688,7 +688,7 @@ static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, j
 {
     if (n == 0)
         return -1;
-    jl_datatype_t **data = (jl_datatype_t**)jl_svec_data(cache);
+    _Atomic(jl_datatype_t*) *data = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
     size_t cl = jl_svec_len(cache);
     ssize_t i;
     for (i = 0; i < cl; i++) {
@@ -734,7 +734,7 @@ static jl_value_t *lookup_typevalue(jl_typename_t *tn, jl_value_t *key1, jl_valu
 
 static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv)
 {
-    jl_datatype_t **tab = (jl_datatype_t**)jl_svec_data(a);
+    _Atomic(jl_datatype_t*) *tab = (_Atomic(jl_datatype_t*)*)jl_svec_data(a);
     size_t sz = jl_svec_len(a);
     if (sz <= 1)
         return 0;
