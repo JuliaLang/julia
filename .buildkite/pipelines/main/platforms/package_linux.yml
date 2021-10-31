@@ -19,7 +19,7 @@ steps:
           workspaces:
             # Include `/cache/repos` so that our `git` version introspection works.
             - "/cache/repos:/cache/repos"
-    timeout_in_minutes: ${TIMEOUT?}
+    timeout_in_minutes: ${TIMEOUT_BK?}
     commands: |
       echo "--- Print the full and short commit hashes"
       SHORT_COMMIT_LENGTH=10
