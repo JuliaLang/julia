@@ -309,7 +309,7 @@ Call function `f` with an address `ptr::Ptr{Cvoid}` of an independent frame
 immediately outer to `f`.
 """
 @noinline function withframeaddress(f)
-    sp = ccall("llvm.frameaddress", llvmcall, Ptr{Cvoid}, (Int,), 0)
+    sp = ccall("llvm.frameaddress", llvmcall, Ptr{Cvoid}, (Int32,), 0)
     @noinline f(sp)
 end
 
