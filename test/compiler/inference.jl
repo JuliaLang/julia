@@ -1899,6 +1899,35 @@ end
     end == Any[Union{Bool,Nothing}]
 end
 
+@testset "`from_interprocedural!`: translate inter-procedural information" begin
+    # TODO come up with a test case to check the functionality of `collect_limitations!`
+    # one heavy test case would be to use https://github.com/aviatesk/JET.jl and
+    # check `julia /path/to/JET/jet /path/to/JET/src/JET.jl` doesn't result in errors
+    # because of nested `LimitedAccuracy`es
+
+    # `InterConditional` handling: `abstract_invoke`
+    ispositive(a) = isa(a, Int) && a > 0
+    @test Base.return_types((Any,)) do a
+        if Base.@invoke ispositive(a::Any)
+            return a
+        end
+        return 0
+    end |> only == Int
+    # the `fargs = nothing` edge case
+    @test Base.return_types((Any,)) do a
+        Core.Compiler.return_type(invoke, Tuple{typeof(ispositive), Type{Tuple{Any}}, Any})
+    end |> only == Type{Bool}
+
+    # `InterConditional` handling: `abstract_call_opaque_closure`
+    @test Base.return_types((Any,)) do a
+        f = Base.Experimental.@opaque a -> isa(a, Int) && a > 0
+        if f(a)
+            return a
+        end
+        return 0
+    end |> only === Int
+end
+
 function f25579(g)
     h = g[]
     t = (h === nothing)
@@ -3285,11 +3314,6 @@ function splat_lotta_unions()
 end
 @test Core.Compiler.return_type(splat_lotta_unions, Tuple{}) >: Tuple{Int,Int,Int}
 
-# handle `fargs = nothing` edge cases
-@test (code_typed(; optimize=false) do
-    Core.Compiler.return_type(invoke, Tuple{typeof(sin), Type{Tuple{Integer}}, Int})
-end; true)
-
 # Bare Core.Argument in IR
 @eval f_bare_argument(x) = $(Core.Argument(2))
 @test Base.return_types(f_bare_argument, (Int,))[1] == Int
@@ -3642,3 +3666,29 @@ let
     @test argtypes[10] == Any
     @test argtypes[11] == Tuple{Integer,Integer}
 end
+
+# issue #42646
+@test only(Base.return_types(getindex, (Array{undef}, Int))) >: Union{} # check that it does not throw
+
+# form PartialStruct for extra type information propagation
+struct FieldTypeRefinement{S,T}
+    s::S
+    t::T
+end
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Any,Int}(s, s)
+    o.s
+end |> only == Int
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Int,Any}(s, s)
+    o.t
+end |> only == Int
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Any,Any}(s, s)
+    o.s, o.t
+end |> only == Tuple{Int,Int}
+@test Base.return_types((Int,)) do a
+    s1 = Some{Any}(a)
+    s2 = Some{Any}(s1)
+    s2.value.value
+end |> only == Int

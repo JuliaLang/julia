@@ -442,7 +442,7 @@ static void foreach_mtable_in_module(
                     jl_typename_t *tn = ((jl_datatype_t*)v)->name;
                     if (tn->module == m && tn->name == b->name) {
                         jl_methtable_t *mt = tn->mt;
-                        if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt) {
+                        if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt && mt != jl_nonfunction_mt) {
                             visit(mt, env);
                         }
                     }
@@ -467,6 +467,7 @@ void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), v
     JL_GC_PUSH2(&visited, &mod_array);
     mod_array = jl_get_loaded_modules();
     visit(jl_type_type_mt, env);
+    visit(jl_nonfunction_mt, env);
     if (mod_array) {
         int i;
         for (i = 0; i < jl_array_len(mod_array); i++) {
@@ -1828,7 +1829,7 @@ static void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args,
         jl_static_show((JL_STREAM*)STDERR_FILENO,args); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
         jl_ptls_t ptls = jl_current_task->ptls;
         ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, 0);
-        jl_critical_error(0, NULL);
+        jl_critical_error(0, NULL, jl_current_task);
         abort();
     }
     // not reached

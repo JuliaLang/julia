@@ -23,7 +23,11 @@ steps:
             - "/cache/repos:/cache/repos"
     env:
       JULIA_SHELL: "/bin/bash"
-    timeout_in_minutes: ${TIMEOUT?}
+    timeout_in_minutes: ${TIMEOUT_BK?}
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: ${RETRIES?}
     soft_fail: ${ALLOW_FAIL?}
     commands: |
       echo "--- Print the full and short commit hashes"
@@ -55,45 +59,42 @@ steps:
       echo "--- Set some environment variables in preparation for running the Julia test suite"
       unset JULIA_DEPOT_PATH
       export OPENBLAS_NUM_THREADS=8
-      export TESTS="[\"all\"]"
 
-      if [[ "${IS_RR?}" == "yes" ]]; then
-        export JULIA_BINARY_UNDER_RR="$${JULIA_BINARY:?} .buildkite/utilities/rr/rr_capture.jl $${JULIA_BINARY:?}"
-
-        export JULIA_BINARY_FOR_TESTS="$${JULIA_BINARY_UNDER_RR:?}"
-        export NCORES_FOR_TESTS="parse(Int, ENV[\"JULIA_RRCAPTURE_NUM_CORES\"])"
-
-        # For the `rr` job, we disable multi-threading.
-        export JULIA_NUM_THREADS=1
+      if [[   "${GROUP?}" == "all" ]]; then
+        export TESTS="all"
+      elif [[ "${GROUP?}" == "net" ]]; then
+        export TESTS="Downloads LibGit2 LibGit2/online download"
+      elif [[ "${GROUP?}" == "no-net" ]]; then
+        export TESTS="all --skip Downloads LibGit2/online download"
       else
-        export JULIA_BINARY_FOR_TESTS="$${JULIA_BINARY:?}"
-        export NCORES_FOR_TESTS="Sys.CPU_THREADS"
-
-        if [[ "${IS_ST?}"   == "yes" ]]; then
-          # "ST" = single-threaded
-          export JULIA_NUM_THREADS=1
-        elif [[ "${IS_MT?}" == "yes" ]]; then
-          # "MT" = multi-threaded
-          export JULIA_NUM_THREADS=16
-
-          if [[ "$${BUILDKITE_PIPELINE_SLUG:?}"   == "julia-release-1-dot-6" ]]; then
-            # On Julia 1.6, we skip the Distributed test suite if multithreading is enabled.
-            export TESTS="[\"all\", \"--skip\", \"Distributed\"]"
-          elif [[ "$${BUILDKITE_PIPELINE_SLUG:?}" == "julia-release-1-dot-7" ]]; then
-            # On Julia 1.7, we skip the Distributed test suite if multithreading is enabled.
-            export TESTS="[\"all\", \"--skip\", \"Distributed\"]"
-          else
-            # On Julia 1.8 and later, we do not skip any test suites.
-            export TESTS="[\"all\"]"
-          fi
-        fi
+        echo "Invalid value for GROUP: ${GROUP?}"
+        exit 1
       fi
 
-      echo "JULIA_BINARY_FOR_TESTS is: $${JULIA_BINARY_FOR_TESTS:?}"
-      echo "JULIA_NUM_THREADS is:      $${JULIA_NUM_THREADS}" # this variable might not be set
+      export JULIA_TEST_RR_TIMEOUT="${TIMEOUT_RR?}"
+
+      if [[ "${IS_RR?}" == "yes" ]]; then
+        export JULIA_CMD_FOR_TESTS="$${JULIA_BINARY:?} .buildkite/utilities/rr/rr_capture.jl $${JULIA_BINARY:?}"
+        export NCORES_FOR_TESTS="parse(Int, ENV[\"JULIA_RRCAPTURE_NUM_CORES\"])"
+      else
+        export JULIA_CMD_FOR_TESTS="$${JULIA_BINARY:?}"
+        export NCORES_FOR_TESTS="Sys.CPU_THREADS"
+      fi
+
+      if [[ "${IS_ST?}"   == "yes" ]]; then
+        export JULIA_NUM_THREADS=1
+      fi
+
+      if [[ "${IS_MT?}" == "yes" ]]; then
+        export JULIA_NUM_THREADS=16
+      fi
+
+      echo "JULIA_CMD_FOR_TESTS is:    $${JULIA_CMD_FOR_TESTS:?}"
+      echo "JULIA_NUM_THREADS is:      $${JULIA_NUM_THREADS}" # Note: this environment variable might not be set
       echo "NCORES_FOR_TESTS is:       $${NCORES_FOR_TESTS:?}"
       echo "OPENBLAS_NUM_THREADS is:   $${OPENBLAS_NUM_THREADS:?}"
+      echo "GROUP is:                  ${GROUP?}"
       echo "TESTS is:                  $${TESTS:?}"
 
       echo "--- Run the Julia test suite"
-      $${JULIA_BINARY_FOR_TESTS:?} -e "Base.runtests($${TESTS:?}; ncores = $${NCORES_FOR_TESTS:?})"
+      $${JULIA_CMD_FOR_TESTS:?} -e "Base.runtests(\"$${TESTS:?}\"; ncores = $${NCORES_FOR_TESTS:?})"

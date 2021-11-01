@@ -47,7 +47,7 @@ RUNTIME_SRCS := \
 	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
 	jlapi signal-handling safepoint timing subtype \
-	crc32c APInt-C processor ircode opaque_closure codegen-stubs
+	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage
 SRCS := jloptions runtime_ccall rtutils
 ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
@@ -395,8 +395,8 @@ libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 
 clean:
 	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen* $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest*
-	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc
-	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a
+	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc $(BUILDDIR)/jl_internal_funcs.inc
+	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia_version.h
 
 clean-flisp:

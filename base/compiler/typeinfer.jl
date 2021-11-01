@@ -335,9 +335,11 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
     if toplevel
         return ci
     end
-    cache_the_tree = !may_discard_trees(interp) || (ci.inferred &&
-        (ci.inlineable ||
-        ccall(:jl_isa_compileable_sig, Int32, (Any, Any), linfo.specTypes, def) != 0))
+    if may_discard_trees(interp)
+        cache_the_tree = ci.inferred && (ci.inlineable || isa_compileable_sig(linfo.specTypes, def))
+    else
+        cache_the_tree = true
+    end
     if cache_the_tree
         if may_compress(interp)
             nslots = length(ci.slotflags)
