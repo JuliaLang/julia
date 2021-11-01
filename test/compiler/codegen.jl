@@ -637,3 +637,31 @@ t41096 = Term41096{:t}(Modulate41096(:t, false))
 U41096 = Term41096{:U}(Modulate41096(:U, false))
 
 @test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)
+
+# test that we can start julia with libjulia-codegen removed; PR #41936
+mktempdir() do pfx
+    run(`cp -r $(Sys.BINDIR)/.. $pfx`)
+    run(`rm -rf $pfx/lib/julia/libjulia-codegen\*`)
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'println("no codegen!")'`) == "no codegen!"
+end
+
+# issue #42645
+mutable struct A42645{T}
+    x::Bool
+    function A42645(a::Vector{T}) where T
+        r = new{T}()
+        r.x = false
+        return r
+    end
+end
+mutable struct B42645{T}
+  y::A42645{T}
+end
+x42645 = 1
+function f42645()
+  res = B42645(A42645([x42645]))
+  res.y = A42645([x42645])
+  res.y.x = true
+  res
+end
+@test ((f42645()::B42645).y::A42645{Int}).x

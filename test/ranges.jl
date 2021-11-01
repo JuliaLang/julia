@@ -348,6 +348,7 @@ end
         end
     end
     @testset "findfirst" begin
+        @test findfirst(==(1), Base.IdentityUnitRange(-1:1)) == 1
         @test findfirst(isequal(3), Base.OneTo(10)) == 3
         @test findfirst(==(0), Base.OneTo(10)) == nothing
         @test findfirst(==(11), Base.OneTo(10)) == nothing
@@ -582,6 +583,8 @@ struct OverflowingReal <: Real
     val::UInt8
 end
 OverflowingReal(x::OverflowingReal) = x
+Base.:<(x::OverflowingReal, y::OverflowingReal) = x.val < y.val
+Base.:(==)(x::OverflowingReal, y::OverflowingReal) = x.val == y.val
 Base.:<=(x::OverflowingReal, y::OverflowingReal) = x.val <= y.val
 Base.:+(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val + y.val)
 Base.:-(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val - y.val)
@@ -687,14 +690,14 @@ end
 end
 @testset "broadcasted operations with scalars" for T in (Int, UInt, Int128)
     @test broadcast(-, T(1):3, 2) === T(1)-2:1
-    @test broadcast(-, T(1):3, 0.25) === T(1)-0.25:3-0.25
+    @test broadcast(-, T(1):3, 0.25) === range(T(1)-0.25, length=T(3)) == T(1)-0.25:3-0.25
     @test broadcast(+, T(1):3) === T(1):3
     @test broadcast(+, T(1):3, 2) === T(3):5
-    @test broadcast(+, T(1):3, 0.25) === T(1)+0.25:3+0.25
+    @test broadcast(+, T(1):3, 0.25) === range(T(1)+0.25, length=T(3)) == T(1)+0.25:3+0.25
     @test broadcast(+, T(1):2:6, 1) === T(2):2:6
-    @test broadcast(+, T(1):2:6, 0.3) === T(1)+0.3:2:5+0.3
+    @test broadcast(+, T(1):2:6, 0.3) === range(T(1)+0.3, step=2, length=T(3)) == T(1)+0.3:2:5+0.3
     @test broadcast(-, T(1):2:6, 1) === T(0):2:4
-    @test broadcast(-, T(1):2:6, 0.3) === T(1)-0.3:2:5-0.3
+    @test broadcast(-, T(1):2:6, 0.3) === range(T(1)-0.3, step=2, length=T(3)) == T(1)-0.3:2:5-0.3
     is_unsigned = T <: Unsigned
     is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
     @test broadcast(-, T(1):3) == -T(1):-T(1):-T(3)
@@ -1534,6 +1537,11 @@ end
     @test @inferred(x .\ r) === 0.5:0.5:2.5
 
     @test @inferred(2 .* (r .+ 1) .+ 2) == 6:2:14
+
+    # issue #42291
+    @test length((1:5) .- 1/7) == 5
+    @test length((1:5) .+ -1/7) == 5
+    @test length(-1/7 .+ (1:5)) == 5
 end
 
 @testset "Bad range calls" begin
@@ -2180,4 +2188,25 @@ end
     @test (x in StepRangeLen(x, 0, rand(1:100))) == true
     @test ((x - 1) in StepRangeLen(x, 0, rand(1:100))) == false
     @test ((x + 1) in StepRangeLen(x, 0, rand(1:100))) == false
+end
+
+@testset "issue #42528" begin
+    struct Fix42528 <: Unsigned
+        val::UInt
+    end
+    Fix42528(a::Fix42528) = a
+    Base.:(<)(a::Fix42528, b::Fix42528) = a.val < b.val
+    Base.:(>=)(a::Fix42528, b::Fix42528) = a.val >= b.val
+    Base.:(+)(a::Fix42528, b::Fix42528) = a.val+b.val
+    Base.promote_rule(::Type{Fix42528}, ::Type{<:Unsigned}) = Fix42528
+    Base.show(io::IO, ::MIME"text/plain", a::Fix42528) = print(io, "Fix42528(", a.val, ')')
+    Base.show(io::IO, a::Fix42528) = print(io, "Fix42528(", a.val, ')')
+    function Base.:(-)(a::Fix42528, b::Fix42528)
+        a.val < b.val && throw(DomainError("Can't subtract, result outside of domain"))
+        return a.val - b.val
+    end
+    Base.one(::Type{Fix42528}) = Fix42528(0x1)
+    @test Fix42528(0x0):Fix42528(0x1) == [Fix42528(0x0), Fix42528(0x01)]
+    @test iszero(length(Fix42528(0x1):Fix42528(0x0)))
+    @test_throws DomainError Fix42528(0x0) - Fix42528(0x1)
 end

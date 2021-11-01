@@ -1332,25 +1332,29 @@
   (let ((tryb   (cadr e))
         (var    (caddr e))
         (catchb (cadddr e)))
-    (cond ((length= e 5)
+    (cond ((and (length> e 4) (not (equal? (caddddr e) '(false))))
            (if (has-unmatched-symbolic-goto? tryb)
                (error "goto from a try/finally block is not permitted"))
-           (let ((finalb (cadddr (cdr e))))
+           (let ((finalb (caddddr e)))
              (expand-forms
               `(tryfinally
-                ,(if (not (equal? catchb '(false)))
-                     `(try ,tryb ,var ,catchb)
-                     `(scope-block ,tryb))
+                ,(if (and (equal? catchb '(false)) (length= e 5))
+                     `(scope-block ,tryb)
+                     `(try ,tryb ,var ,catchb (false) ,@(cdddddr e)))
                 (scope-block ,finalb)))))
-          ((length= e 4)
-           (expand-forms
-            (if (symbol-like? var)
-                `(trycatch (scope-block ,tryb)
-                           (scope-block
-                            (block (= ,var (the_exception))
-                                   ,catchb)))
-                `(trycatch (scope-block ,tryb)
-                           (scope-block ,catchb)))))
+          ((length> e 3)
+           (and (length> e 6) (error "invalid \"try\" form"))
+           (let ((elseb (if (length= e 6) (cdddddr e) '())))
+             (expand-forms
+               `(,(if (null? elseb) 'trycatch 'trycatchelse)
+                 (scope-block ,tryb)
+                 (scope-block
+                   ,(if (symbol-like? var)
+                        `(scope-block
+                          (block (= ,var (the_exception))
+                                 ,catchb))
+                        `(scope-block ,catchb)))
+                 ,@elseb))))
           (else
            (error "invalid \"try\" form")))))
 
@@ -1956,21 +1960,28 @@
                 (else
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
-(define (expand-if e)
-  (let* ((test (cadr e))
-         (blk? (and (pair? test) (eq? (car test) 'block)))
-         (stmts (if blk? (cdr (butlast test)) '()))
-         (test  (if blk? (last test) test)))
+(define (expand-condition cnd)
+  (let* ((blk? (and (pair? cnd) (eq? (car cnd) 'block)))
+         (stmts (if blk? (cdr (butlast cnd)) '()))
+         (test  (if blk? (last cnd) cnd)))
     (if (and (pair? test) (memq (car test) '(&& |\|\||)))
         (let* ((clauses `(,(car test) ,@(map expand-forms (cdr (flatten-ex (car test) test)))))
                (clauses (if (null? (cdr clauses))
                             (if (eq? (car clauses) '&&) '(true) '(false))
                             clauses)))
-          `(if ,(if blk?
-                    `(block ,@(map expand-forms stmts) ,clauses)
-                    clauses)
-               ,@(map expand-forms (cddr e))))
-        (cons (car e) (map expand-forms (cdr e))))))
+          (if blk?
+              `(block ,@(map expand-forms stmts) ,clauses)
+              clauses))
+        (expand-forms cnd))))
+
+(define (expand-if e)
+  (list* (car e) (expand-condition (cadr e)) (map expand-forms (cddr e))))
+
+(define (expand-while e)
+  `(break-block loop-exit
+                (_while ,(expand-condition (cadr e))
+                        (break-block loop-cont
+                                     (scope-block ,(blockify (expand-forms (caddr e))))))))
 
 (define (expand-vcat e
                      (vcat '((top vcat)))
@@ -2565,13 +2576,7 @@
 
    'if expand-if
    'elseif expand-if
-
-   'while
-   (lambda (e)
-     `(break-block loop-exit
-                   (_while ,(expand-forms (cadr e))
-                           (break-block loop-cont
-                                        (scope-block ,(blockify (expand-forms (caddr e))))))))
+   'while expand-while
 
    'break
    (lambda (e)
@@ -2734,7 +2739,7 @@
   (check-no-return expr)
   (if (has-break-or-continue? expr)
       (error "break or continue outside loop"))
-  (let ((result    (gensy))
+  (let ((result    (make-ssavalue))
         (idx       (gensy))
         (oneresult (make-ssavalue))
         (prod      (make-ssavalue))
@@ -2758,16 +2763,14 @@
     (let ((overall-itr (if (length= itrs 1) (car iv) prod)))
       `(scope-block
         (block
-         (local ,result) (local ,idx)
+         (local ,idx)
          ,.(map (lambda (v r) `(= ,v ,(caddr r))) iv itrs)
          ,.(if (length= itrs 1)
                '()
                `((= ,prod (call (top product) ,@iv))))
          (= ,isz (call (top IteratorSize) ,overall-itr))
          (= ,szunk (call (core isa) ,isz (top SizeUnknown)))
-         (if ,szunk
-             (= ,result (call (curly (core Array) ,ty 1) (core undef) 0))
-             (= ,result (call (top _array_for) ,ty ,overall-itr ,isz)))
+         (= ,result (call (top _array_for) ,ty ,overall-itr ,isz))
          (= ,idx (call (top first) (call (top LinearIndices) ,result)))
          ,(construct-loops (reverse itrs) (reverse iv))
          ,result)))))
@@ -3588,7 +3591,7 @@ f(x) = yt(x)
             ((eq? (car e) 'symboliclabel)
              (kill)
              #t)
-            ((memq (car e) '(if elseif trycatch tryfinally))
+            ((memq (car e) '(if elseif trycatch tryfinally trycatchelse))
              (let ((prev (table.clone live)))
                (if (eager-any (lambda (e) (begin0 (visit e)
                                                   (kill)))
@@ -3654,7 +3657,7 @@ f(x) = yt(x)
         (and cv (vinfo:asgn cv) (vinfo:capt cv)))))
 
 (define (toplevel-preserving? e)
-  (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally))))
+  (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse))))
 
 (define (map-cl-convert exprs fname lam namemap defined toplevel interp opaq)
   (if toplevel
@@ -4207,6 +4210,29 @@ f(x) = yt(x)
               (emit `(= ,tmp ,cnd))
               tmp)
             cnd)))
+    (define (emit-cond cnd break-labels endl)
+      (let* ((cnd (if (and (pair? cnd) (eq? (car cnd) 'block))
+                       (begin (if (length> cnd 2) (compile (butlast cnd) break-labels #f #f))
+                              (last cnd))
+                       cnd))
+             (or? (and (pair? cnd) (eq? (car cnd) '|\|\||)))
+             (tests (if or?
+                        (let ((short-circuit `(goto _)))
+                          (for-each
+                            (lambda (clause)
+                              (let ((jmp (emit `(gotoifnot ,(compile-cond clause break-labels) ,endl))))
+                                (emit short-circuit)
+                                (set-car! (cddr jmp) (make&mark-label))))
+                            (butlast (cdr cnd)))
+                          (let ((last-jmp (emit `(gotoifnot ,(compile-cond (last (cdr cnd)) break-labels) ,endl))))
+                            (set-car! (cdr short-circuit) (make&mark-label))
+                            (list last-jmp)))
+                        (map (lambda (clause)
+                               (emit `(gotoifnot ,(compile-cond clause break-labels) ,endl)))
+                             (if (and (pair? cnd) (eq? (car cnd) '&&))
+                                 (cdr cnd)
+                                 (list cnd))))))
+          tests))
     (define (emit-assignment lhs rhs)
       (if rhs
           (if (valid-ir-rvalue? lhs rhs)
@@ -4347,28 +4373,7 @@ f(x) = yt(x)
                  (compile (cadr e) break-labels value tail)
                  #f))
             ((if elseif)
-             (let* ((cnd (cadr e))
-                    (cnd (if (and (pair? cnd) (eq? (car cnd) 'block))
-                              (begin (if (length> cnd 2) (compile (butlast cnd) break-labels #f #f))
-                                     (last cnd))
-                              cnd))
-                    (or? (and (pair? cnd) (eq? (car cnd) '|\|\||)))
-                    (tests (if or?
-                               (let ((short-circuit `(goto _)))
-                                 (for-each
-                                   (lambda (clause)
-                                     (let ((jmp (emit `(gotoifnot ,(compile-cond clause break-labels) _))))
-                                       (emit short-circuit)
-                                       (set-car! (cddr jmp) (make&mark-label))))
-                                   (butlast (cdr cnd)))
-                                 (let ((last-jmp (emit `(gotoifnot ,(compile-cond (last (cdr cnd)) break-labels) _))))
-                                   (set-car! (cdr short-circuit) (make&mark-label))
-                                   (list last-jmp)))
-                               (map (lambda (clause)
-                                      (emit `(gotoifnot ,(compile-cond clause break-labels) _)))
-                                    (if (and (pair? cnd) (eq? (car cnd) '&&))
-                                        (cdr cnd)
-                                        (list cnd)))))
+             (let* ((tests (emit-cond (cadr e) break-labels '_))
                     (end-jump `(goto _))
                     (val (if (and value (not tail)) (new-mutable-var) #f)))
                (let ((v1 (compile (caddr e) break-labels value tail)))
@@ -4390,9 +4395,8 @@ f(x) = yt(x)
                    val))))
             ((_while)
              (let* ((endl (make-label))
-                    (topl (make&mark-label))
-                    (test (compile-cond (cadr e) break-labels)))
-               (emit `(gotoifnot ,test ,endl))
+                    (topl (make&mark-label)))
+               (emit-cond (cadr e) break-labels endl)
                (compile (caddr e) break-labels #f #f)
                (emit `(goto ,topl))
                (mark-label endl))
@@ -4446,9 +4450,10 @@ f(x) = yt(x)
             ;; (= tok (enter L)) - push handler with catch block at label L, yielding token
             ;; (leave n) - pop N exception handlers
             ;; (pop_exception tok) - pop exception stack back to state of associated enter
-            ((trycatch tryfinally)
+            ((trycatch tryfinally trycatchelse)
              (let ((handler-token (make-ssavalue))
                    (catch (make-label))
+                   (els   (and (eq? (car e) 'trycatchelse) (make-label)))
                    (endl  (make-label))
                    (last-finally-handler finally-handler)
                    (finally           (if (eq? (car e) 'tryfinally) (new-mutable-var) #f))
@@ -4465,11 +4470,20 @@ f(x) = yt(x)
                  ;; handler block postfix
                  (if (and val v1) (emit-assignment val v1))
                  (if tail
-                     (begin (if v1 (emit-return v1))
+                     (begin (if els
+                                (begin (if (and (not val) v1) (emit v1))
+                                       (emit '(leave 1)))
+                                (if v1 (emit-return v1)))
                             (if (not finally) (set! endl #f)))
                      (begin (emit '(leave 1))
-                            (emit `(goto ,endl))))
+                            (emit `(goto ,(or els endl)))))
                  (set! handler-level (- handler-level 1))
+                 ;; emit else block
+                 (if els
+                     (begin (mark-label els)
+                            (let ((v3 (compile (cadddr e) break-labels value tail))) ;; emit else block code
+                              (if val (emit-assignment val v3)))
+                            (emit `(goto ,endl))))
                  ;; emit either catch or finally block
                  (mark-label catch)
                  (emit `(leave 1))

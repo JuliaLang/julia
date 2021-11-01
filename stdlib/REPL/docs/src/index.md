@@ -135,6 +135,8 @@ REPL.stripmd
 Base.Docs.apropos
 ```
 
+Another feature of help mode is the ability to access extended docstrings. You can do this by typing something like `??Print` rather than `?Print` which will display the `# Extended help` section from the source codes documentation.
+
 Help mode can be exited by pressing backspace at the beginning of the line.
 
 ### [Shell mode](@id man-shell-mode)
@@ -667,7 +669,7 @@ v  [ ] blueberry
 
 can instead be rendered with Unicode selection and navigation characters with
 
-```julia
+```julia-repl
 julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode);
 
 julia> request(menu)
@@ -681,7 +683,7 @@ julia> request(menu)
 
 More fine-grained configuration is also possible:
 
-```julia
+```julia-repl
 julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode, checked="YEP!", unchecked="NOPE", cursor='⧐');
 
 julia> request(menu)

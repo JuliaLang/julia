@@ -85,7 +85,7 @@ mutable struct OptimizationState
         if nssavalues isa Int
             src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
         else
-            nssavalues = length(src.ssavaluetypes)
+            nssavalues = length(src.ssavaluetypes::Vector{Any})
         end
         nslots = length(src.slotflags)
         slottypes = src.slottypes
@@ -142,16 +142,18 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 # NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
 
+const IR_FLAG_NULL        = 0x00
 # This statement is marked as @inbounds by user.
 # Ff replaced by inlining, any contained boundschecks may be removed.
-const IR_FLAG_INBOUNDS       = 0x01 << 0
+const IR_FLAG_INBOUNDS    = 0x01 << 0
 # This statement is marked as @inline by user
-const IR_FLAG_INLINE         = 0x01 << 1
+const IR_FLAG_INLINE      = 0x01 << 1
 # This statement is marked as @noinline by user
-const IR_FLAG_NOINLINE       = 0x01 << 2
+const IR_FLAG_NOINLINE    = 0x01 << 2
+const IR_FLAG_THROW_BLOCK = 0x01 << 3
 # This statement may be removed if its result is unused. In particular it must
 # thus be both pure and effect free.
-const IR_FLAG_EFFECT_FREE    = 0x01 << 4
+const IR_FLAG_EFFECT_FREE = 0x01 << 4
 
 # known to be always effect-free (in particular nothrow)
 const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
@@ -160,7 +162,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 const _PURE_OR_ERROR_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
-    Core.kwfunc, ifelse, Core._typevar, (<:)
+    Core.kwfunc, Core.ifelse, Core._typevar, (<:)
 ]
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
@@ -194,8 +196,9 @@ function isinlineable(m::Method, me::OptimizationState, params::OptimizationPara
     return inlineable
 end
 
-is_stmt_inline(stmt_flag::UInt8)   = stmt_flag & IR_FLAG_INLINE   != 0
-is_stmt_noinline(stmt_flag::UInt8) = stmt_flag & IR_FLAG_NOINLINE != 0
+is_stmt_inline(stmt_flag::UInt8)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
+is_stmt_noinline(stmt_flag::UInt8)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
+is_stmt_throw_block(stmt_flag::UInt8) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
 
 # These affect control flow within the function (so may not be removed
 # if there is no usage within the function), but don't affect the purity
@@ -314,31 +317,26 @@ function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::O
 end
 
 function run_passes(ci::CodeInfo, sv::OptimizationState)
-    preserve_coverage = coverage_enabled(sv.mod)
-    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, sv)
-    ir = slot2reg(ir, ci, sv)
-    #@Base.show ("after_construct", ir)
+    @timeit "convert"   ir = convert_to_ircode(ci, sv)
+    @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
-    @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
-    #@timeit "verify 2" verify_ir(ir)
-    ir = compact!(ir)
-    #@Base.show ("before_sroa", ir)
-    @timeit "SROA" ir = getfield_elim_pass!(ir)
-    #@Base.show ir.new_nodes
-    #@Base.show ("after_sroa", ir)
-    ir = adce_pass!(ir)
-    #@Base.show ("after_adce", ir)
+    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    # @timeit "verify 2" verify_ir(ir)
+    @timeit "compact 2" ir = compact!(ir)
+    @timeit "SROA"      ir = getfield_elim_pass!(ir)
+    @timeit "ADCE"      ir = adce_pass!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
-    #@Base.show ir
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end
     return ir
 end
 
-function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::OptimizationState)
+function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
+    code = copy_exprargs(ci.code)
+    coverage = coverage_enabled(sv.mod)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     idx = 1
@@ -347,15 +345,18 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
     labelmap = coverage ? fill(0, length(code)) : changemap
     prevloc = zero(eltype(ci.codelocs))
     stmtinfo = sv.stmt_info
+    codelocs = ci.codelocs
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    ssaflags = ci.ssaflags
     while idx <= length(code)
-        codeloc = ci.codelocs[idx]
+        codeloc = codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
             # insert a side-effect instruction before the current instruction in the same basic block
             insert!(code, idx, Expr(:code_coverage_effect))
-            insert!(ci.codelocs, idx, codeloc)
+            insert!(codelocs, idx, codeloc)
             insert!(ssavaluetypes, idx, Nothing)
             insert!(stmtinfo, idx, nothing)
+            insert!(ssaflags, idx, IR_FLAG_NULL)
             changemap[oldidx] += 1
             if oldidx < length(labelmap)
                 labelmap[oldidx + 1] += 1
@@ -367,9 +368,10 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
             if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
                 # insert unreachable in the same basic block after the current instruction (splitting it)
                 insert!(code, idx + 1, ReturnNode())
-                insert!(ci.codelocs, idx + 1, ci.codelocs[idx])
+                insert!(codelocs, idx + 1, codelocs[idx])
                 insert!(ssavaluetypes, idx + 1, Union{})
                 insert!(stmtinfo, idx + 1, nothing)
+                insert!(ssaflags, idx + 1, ssaflags[idx])
                 if oldidx < length(changemap)
                     changemap[oldidx + 1] += 1
                     coverage && (labelmap[oldidx + 1] += 1)
@@ -389,7 +391,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
     strip_trailing_junk!(ci, code, stmtinfo)
     cfg = compute_basic_blocks(code)
     types = Any[]
-    stmts = InstructionStream(code, types, stmtinfo, ci.codelocs, ci.ssaflags)
+    stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
     ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable::Union{Vector{LineInfoNode},Vector{Any}}), sv.slottypes, meta, sv.sptypes)
     return ir
 end
@@ -533,13 +535,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
 end
 
 function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any},
-                                  slottypes::Vector{Any}, union_penalties::Bool, params::OptimizationParams,
-                                  throw_blocks::Union{Nothing,BitSet})
+                                  slottypes::Vector{Any}, union_penalties::Bool, params::OptimizationParams)
     thiscost = 0
     dst(tgt) = isa(src, IRCode) ? first(src.cfg.blocks[tgt].stmts) : tgt
     if stmt isa Expr
         thiscost = statement_cost(stmt, line, src, sptypes, slottypes, union_penalties, params,
-                                  throw_blocks !== nothing && line in throw_blocks)::Int
+                                  is_stmt_throw_block(isa(src, IRCode) ? src.stmts.flag[line] : src.ssaflags[line]))::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
         # but assume that forward jumps are already counted for from
@@ -554,10 +555,9 @@ end
 function inline_worthy(ir::IRCode,
                        params::OptimizationParams, union_penalties::Bool=false, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
-    throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(ir.stmts.inst, RefValue(ir)) : nothing
     for line = 1:length(ir.stmts)
         stmt = ir.stmts[line][:inst]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, ir.argtypes, union_penalties, params, throw_blocks)
+        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, ir.argtypes, union_penalties, params)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return false
     end
@@ -565,13 +565,12 @@ function inline_worthy(ir::IRCode,
 end
 
 function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)
-    throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(body) : nothing
     maxcost = 0
     for line = 1:length(body)
         stmt = body[line]
         thiscost = statement_or_branch_cost(stmt, line, src, sptypes,
                                             src isa CodeInfo ? src.slottypes : src.argtypes,
-                                            unionpenalties, params, throw_blocks)
+                                            unionpenalties, params)
         cost[line] = thiscost
         if thiscost > maxcost
             maxcost = thiscost
@@ -580,7 +579,7 @@ function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeI
     return maxcost
 end
 
-function is_known_call(e::Expr, @nospecialize(func), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
+function is_known_call(e::Expr, @nospecialize(func), src, sptypes::Vector{Any}, slottypes::Vector{Any} = EMPTY_SLOTTYPES)
     if e.head !== :call
         return false
     end

@@ -39,7 +39,7 @@ end
 ####
 
 """
-    init(; n::Integer, delay::Real))
+    init(; n::Integer, delay::Real)
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of instruction pointers that may be
 stored per thread. Each instruction pointer corresponds to a single line of code; backtraces generally consist of a long
@@ -51,18 +51,19 @@ using keywords or in the order `(n, delay)`.
     As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
     Previously this was `n` total.
 """
-function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, limitwarn::Bool = true)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
-        return Int(n_cur), delay_cur
+        nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
+        return round(Int, n_cur / nthreads), delay_cur
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
-    init(nnew, delaynew)
+    init(nnew, delaynew; limitwarn)
 end
 
-function init(n::Integer, delay::Real)
+function init(n::Integer, delay::Real; limitwarn::Bool = true)
     nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
     buffer_samples = n * nthreads
@@ -72,7 +73,7 @@ function init(n::Integer, delay::Real)
         buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
         buffer_samples = buffer_samples_per_thread * nthreads
         buffer_size_bytes = buffer_samples * sample_size_bytes
-        @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
     end
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
     if status == -1
@@ -86,9 +87,9 @@ end
 if Sys.iswindows() && Sys.WORD_SIZE == 32
     # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
     # so we don't want to slow the program down by quite that much
-    __init__() = init(1_000_000, 0.01)
+    __init__() = init(1_000_000, 0.01, limitwarn = false)
 else
-    __init__() = init(10_000_000, 0.001)
+    __init__() = init(10_000_000, 0.001, limitwarn = false)
 end
 
 """
@@ -143,8 +144,8 @@ The keyword arguments can be any combination of:
     line, `:count` sorts in order of number of collected samples, and `:overhead` sorts by the number of samples
     incurred by each function by itself.
 
- - `groupby` -- Controls grouping over tasks and threads, or no grouping. Options are `:none` (default), `:threads`, `:tasks`,
-    `[:threads, :tasks]`, or `[:tasks, :threads]` where the last two provide nested grouping.
+ - `groupby` -- Controls grouping over tasks and threads, or no grouping. Options are `:none` (default), `:thread`, `:task`,
+    `[:thread, :task]`, or `[:task, :thread]` where the last two provide nested grouping.
 
  - `noisefloor` -- Limits frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
     A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
@@ -290,9 +291,18 @@ end
 
 function is_block_end(data, i)
     i < nmeta + 1 && return false
-    # 32-bit linux has been seen to have rogue NULL ips, so we use two to indicate block end, where the 2nd is the
-    # actual end index
-    return data[i] == 0 && data[i - 1] == 0
+    # 32-bit linux has been seen to have rogue NULL ips, so we use two to
+    # indicate block end, where the 2nd is the actual end index.
+    # and we could have (though very unlikely):
+    # 1:<stack><metadata><null><null><NULL><metadata><null><null>:end
+    # and we want to ignore the triple NULL (which is an ip).
+    data[i] == 0 || return false        # first block end null
+    data[i - 1] == 0 || return false    # second block end null
+    data[i - 2] in 1:2 || return false  # sleep state
+    data[i - 3] != 0 || return false    # cpu_cycle_clock
+    data[i - 4] != 0 || return false    # taskid
+    data[i - 5] != 0 || return false    # threadid
+    return true
 end
 
 """
@@ -515,29 +525,51 @@ function fetch(;include_meta = false)
     GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
     if include_meta || isempty(data)
         return data
-    else
-        nblocks = 0
-        for i = 2:length(data)
-            if is_block_end(data, i) # detect block ends and count them
-                nblocks += 1
-            end
-        end
-        data_stripped = Vector{UInt}(undef, length(data) - (nblocks * (nmeta + 1)))
-        j = length(data_stripped)
-        i = length(data)
-        while i > 0 && j > 0
-            data_stripped[j] = data[i]
-            if is_block_end(data, i)
-                i -= (nmeta + 1) # metadata fields and the extra NULL IP
-            end
-            i -= 1
-            j -= 1
-        end
-        @assert i == j == 0 "metadata stripping failed i=$i j=$j data[1:i]=$(data[1:i])"
-        return data_stripped
     end
+    return strip_meta(data)
 end
 
+function strip_meta(data)
+    nblocks = count(Base.Fix1(is_block_end, data), eachindex(data))
+    data_stripped = Vector{UInt}(undef, length(data) - (nblocks * (nmeta + 1)))
+    j = length(data_stripped)
+    i = length(data)
+    while i > 0 && j > 0
+        data_stripped[j] = data[i]
+        if is_block_end(data, i)
+            i -= (nmeta + 1) # metadata fields and the extra NULL IP
+        end
+        i -= 1
+        j -= 1
+    end
+    @assert i == j == 0 "metadata stripping failed i=$i j=$j data[1:i]=$(data[1:i])"
+    return data_stripped
+end
+
+"""
+    Profile.add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0) -> data_with_meta
+
+The converse of `Profile.fetch(;include_meta = false)`; this will add fake metadata, and can be used
+for compatibility and by packages (e.g., FlameGraphs.jl) that would rather not depend on the internal
+details of the metadata format.
+"""
+function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
+    threadid == 0 && error("Fake threadid cannot be 0")
+    taskid == 0 && error("Fake taskid cannot be 0")
+    any(Base.Fix1(is_block_end, data), eachindex(data)) && error("input already has metadata")
+    cpu_clock_cycle = UInt64(99)
+    data_with_meta = similar(data, 0)
+    for i = 1:length(data)
+        val = data[i]
+        if iszero(val)
+            # (threadid, taskid, cpu_cycle_clock, thread_sleeping)
+            push!(data_with_meta, threadid, taskid, cpu_clock_cycle+=1, false+1, 0, 0)
+        else
+            push!(data_with_meta, val)
+        end
+    end
+    return data_with_meta
+end
 
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level and at the topmost level
@@ -555,7 +587,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     skip = false
     nsleeping = 0
     for i in startframe:-1:1
-        startframe - 1 <= i <= startframe - (nmeta + 1) && continue # skip metadata (it's read ahead below) and extra block-end NULL IP
+        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
         ip = data[i]
         if is_block_end(data, i)
             # read metadata
@@ -795,7 +827,7 @@ end
 
 # turn a list of backtraces into a tree (implicitly separated by NULL markers)
 function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool, recur::Symbol,
-                threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}) where {T}
+                threads::Union{Int,AbstractVector{Int},Nothing}=nothing, tasks::Union{UInt,AbstractVector{UInt},Nothing}=nothing) where {T}
     parent = root
     tops = Vector{StackFrameTree{T}}()
     build = Vector{StackFrameTree{T}}()
@@ -803,7 +835,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     skip = false
     nsleeping = 0
     for i in startframe:-1:1
-        startframe - 1 <= i <= startframe - (nmeta + 1) && continue # skip metadata (its read ahead below) and extra block end NULL IP
+        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (it's read ahead below) and extra block end NULL IP
         ip = all[i]
         if is_block_end(all, i)
             # read metadata
@@ -811,7 +843,8 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             # cpu_cycle_clock = all[i - 3]
             taskid = all[i - 4]
             threadid = all[i - 5]
-            if !in(threadid, threads) || !in(taskid, tasks)
+            if (threads !== nothing && !in(threadid, threads)) ||
+               (tasks !== nothing && !in(taskid, tasks))
                 skip = true
                 continue
             end

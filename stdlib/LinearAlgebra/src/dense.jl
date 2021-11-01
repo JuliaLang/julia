@@ -576,8 +576,8 @@ julia> cis([π 0; 0 π]) ≈ -I
 true
 ```
 """
-Base.cis(A::AbstractMatrix) = exp(im * A)  # fallback
-Base.cis(A::AbstractMatrix{<:Base.HWNumber}) = exp_maybe_inplace(float.(im .* A))
+cis(A::AbstractMatrix) = exp(im * A)  # fallback
+cis(A::AbstractMatrix{<:Base.HWNumber}) = exp_maybe_inplace(float.(im .* A))
 
 exp_maybe_inplace(A::StridedMatrix{<:Union{ComplexF32, ComplexF64}}) = exp!(A)
 exp_maybe_inplace(A) = exp(A)
@@ -836,6 +836,8 @@ julia> sqrt(A)
  0.0  2.0
 ```
 """
+sqrt(::StridedMatrix)
+
 function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
     if ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))

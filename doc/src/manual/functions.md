@@ -481,7 +481,7 @@ Instead of destructuring based on iteration, the right side of assignments can a
 This follows the syntax for NamedTuples, and works by assigning to each variable on the left a
 property of the right side of the assignment with the same name using `getproperty`:
 
-```julia
+```jldoctest
 julia> (; b, a) = (a=1, b=2, c=3)
 (a = 1, b = 2, c = 3)
 
@@ -498,7 +498,7 @@ The destructuring feature can also be used within a function argument.
 If a function argument name is written as a tuple (e.g. `(x, y)`) instead of just
 a symbol, then an assignment `(x, y) = argument` will be inserted for you:
 
-```julia
+```julia-repl
 julia> minmax(x, y) = (y < x) ? (y, x) : (x, y)
 
 julia> gap((min, max)) = max - min
@@ -512,7 +512,7 @@ would be a two-argument function, and this example would not work.
 
 Similarly, property destructuring can also be used for function arguments:
 
-```julia
+```julia-repl
 julia> foo((; x, y)) = x + y
 foo (generic function with 1 method)
 

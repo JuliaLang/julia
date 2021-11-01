@@ -37,8 +37,14 @@ void jl_shuffle_int_array_inplace(volatile uint64_t *carray, size_t size, uint64
 
 JL_DLLEXPORT int jl_profile_is_buffer_full(void)
 {
+    // declare buffer full if there isn't enough room to take samples across all threads
+    #if defined(_OS_WINDOWS_)
+        uint64_t nthreads = 1; // windows only profiles the main thread
+    #else
+        uint64_t nthreads = jl_n_threads;
+    #endif
     // the `+ 6` is for the two block terminators `0` plus 4 metadata entries
-    return bt_size_cur + (JL_BT_MAX_ENTRY_SIZE + 1) + 6 > bt_size_max;
+    return bt_size_cur + (((JL_BT_MAX_ENTRY_SIZE + 1) + 6) * nthreads) > bt_size_max;
 }
 
 static uint64_t jl_last_sigint_trigger = 0;
@@ -235,19 +241,20 @@ void jl_show_sigill(void *_ctx)
 }
 
 // what to do on a critical error on a thread
-void jl_critical_error(int sig, bt_context_t *context)
+void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
 {
 
-    jl_task_t *ct = jl_current_task;
-    jl_bt_element_t *bt_data = ct->ptls->bt_data;
-    size_t *bt_size = &ct->ptls->bt_size;
-    size_t i, n = *bt_size;
+    jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
+    size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
+    size_t i, n = ct ? *bt_size : 0;
     if (sig) {
         // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jlbacktrace in jl_exit)
         jl_set_safe_restore(NULL);
-        ct->gcstack = NULL;
-        ct->eh = NULL;
-        ct->excstack = NULL;
+        if (ct) {
+            ct->gcstack = NULL;
+            ct->eh = NULL;
+            ct->excstack = NULL;
+        }
 #ifndef _OS_WINDOWS_
         sigset_t sset;
         sigemptyset(&sset);
@@ -271,7 +278,7 @@ void jl_critical_error(int sig, bt_context_t *context)
         jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
     }
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
-    if (context) {
+    if (context && ct) {
         // Must avoid extended backtrace frames here unless we're sure bt_data
         // is properly rooted.
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL);
@@ -279,8 +286,8 @@ void jl_critical_error(int sig, bt_context_t *context)
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
         jl_print_bt_entry_codeloc(bt_data + i);
     }
-    gc_debug_print_status();
-    gc_debug_critical_error();
+    jl_gc_debug_print_status();
+    jl_gc_debug_critical_error();
 }
 
 ///////////////////////

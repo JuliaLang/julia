@@ -19,37 +19,28 @@ struct SSADefUse
 end
 SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
-try_compute_fieldidx_expr(typ::DataType, expr::Expr) = try_compute_fieldidx_args(typ, expr.args)
-function try_compute_fieldidx_args(typ::DataType, args::Vector{Any})
-    field = args[3]
-    isa(field, QuoteNode) && (field = field.value)
+function try_compute_field_stmt(compact::IncrementalCompact, stmt::Expr)
+    field = stmt.args[3]
+    # fields are usually literals, handle them manually
+    if isa(field, QuoteNode)
+        field = field.value
+    elseif isa(field, Int)
+    # try to resolve other constants, e.g. global reference
+    else
+        field = compact_exprtype(compact, field)
+        if isa(field, Const)
+            field = field.val
+        else
+            return nothing
+        end
+    end
     isa(field, Union{Int, Symbol}) || return nothing
-    return try_compute_fieldidx(typ, field)
+    return field
 end
 
-function lift_defuse(cfg::CFG, ssa::SSADefUse)
-    # We remove from `uses` any block where all uses are dominated
-    # by a def. This prevents insertion of dead phi nodes at the top
-    # of such a block if that block happens to be in a loop
-    ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in ssa.uses]
-    for x in ssa.defs
-        push!(ordered, (x, block_for_inst(cfg, x), false))
-    end
-    ordered = sort(ordered, by=x->x[1])
-    bb_defs = Int[]
-    bb_uses = Int[]
-    last_bb = last_def_bb = 0
-    for (_, bb, is_use) in ordered
-        if bb != last_bb && is_use
-            push!(bb_uses, bb)
-        end
-        last_bb = bb
-        if last_def_bb != bb && !is_use
-            push!(bb_defs, bb)
-            last_def_bb = bb
-        end
-    end
-    SSADefUse(bb_uses, bb_defs, Int[])
+function try_compute_fieldidx_stmt(compact::IncrementalCompact, stmt::Expr, typ::DataType)
+    field = try_compute_field_stmt(compact, stmt)
+    return try_compute_fieldidx(typ, field)
 end
 
 function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
@@ -85,24 +76,17 @@ end
 
 function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use_idx::Int)
     # Find the first dominating def
-    curblock = stmtblock = block_for_inst(ir.cfg, use_idx)
-    curblock = find_curblock(domtree, allblocks, curblock)
-    defblockdefs = let curblock = curblock
-        Int[stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock]
-    end
-    def = 0
-    if !isempty(defblockdefs)
-        if curblock != stmtblock
-            # Find the last def in this block
-            def = 0
-            for x in defblockdefs
-                def = max(def, x)
-            end
-        else
-            # Find the last def before our use
-            def = 0
-            for x in defblockdefs
-                def = max(def, x >= use_idx ? 0 : x)
+    stmtblock = block_for_inst(ir.cfg, use_idx)
+    curblock = find_curblock(domtree, allblocks, stmtblock)
+    local def = 0
+    for idx in du.defs
+        if block_for_inst(ir.cfg, idx) == curblock
+            if curblock != stmtblock
+                # Find the last def in this block
+                def = max(def, idx)
+            else
+                # Find the last def before our use
+                def = max(def, idx >= use_idx ? 0 : idx)
             end
         end
     end
@@ -119,7 +103,8 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{I
     end
 end
 
-function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#), pi_callback=(pi, idx)->false)
+function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#),
+                     callback = (@nospecialize(pi), @nospecialize(idx)) -> false)
     while true
         if isa(defssa, OldSSAValue)
             if already_inserted(compact, defssa)
@@ -133,7 +118,7 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
         end
         def = compact[defssa]
         if isa(def, PiNode)
-            if pi_callback(def, defssa)
+            if callback(def, defssa)
                 return defssa
             end
             def = def.val
@@ -144,7 +129,7 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
             end
             defssa = def
         elseif isa(def, AnySSAValue)
-            pi_callback(def, defssa)
+            callback(def, defssa)
             if isa(def, SSAValue)
                 is_old(compact, defssa) && (def = OldSSAValue(def.id))
             end
@@ -157,12 +142,15 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
     end
 end
 
-function simple_walk_constraint(compact::IncrementalCompact, @nospecialize(defidx), @nospecialize(typeconstraint) = types(compact)[defidx])
+function simple_walk_constraint(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#),
+                                @nospecialize(typeconstraint) = types(compact)[defssa])
     callback = function (@nospecialize(pi), @nospecialize(idx))
-        isa(pi, PiNode) && (typeconstraint = typeintersect(typeconstraint, widenconst(pi.typ)))
+        if isa(pi, PiNode)
+            typeconstraint = typeintersect(typeconstraint, widenconst(pi.typ))
+        end
         return false
     end
-    def = simple_walk(compact, defidx, callback)
+    def = simple_walk(compact, defssa, callback)
     return Pair{Any, Any}(def, typeconstraint)
 end
 
@@ -282,8 +270,10 @@ function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
     return oc ⊑ Core.OpaqueClosure
 end
 
-function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
-        @nospecialize(result_t), field::Int, leaves::Vector{Any})
+# try to compute lifted values that can replace `getfield(x, field)` call
+# where `x` is an immutable struct that are defined at any of `leaves`
+function lift_leaves(compact::IncrementalCompact,
+                     @nospecialize(result_t), field::Int, leaves::Vector{Any})
     # For every leaf, the lifted value
     lifted_leaves = IdDict{Any, Any}()
     maybe_undef = false
@@ -405,13 +395,13 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
         elseif isa(leaf, Union{Argument, Expr})
             return nothing
         end
-        !ismutable(leaf) || return nothing
+        ismutable(leaf) && return nothing
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
         is_inlineable_constant(val) || return nothing
         lifted_leaves[leaf_key] = RefValue{Any}(quoted(val))
     end
-    lifted_leaves, maybe_undef
+    return lifted_leaves, maybe_undef
 end
 
 make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
@@ -424,12 +414,10 @@ function lift_comparison!(compact::IncrementalCompact, idx::Int,
         typeconstraint = widenconst(c2)
         val = stmt.args[3]
     else
-        cmp = c2
+        cmp = c2::Const
         typeconstraint = widenconst(c1)
         val = stmt.args[2]
     end
-
-    is_type_only = isdefined(typeof(cmp), :instance)
 
     if isa(val, Union{OldSSAValue, SSAValue})
         val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
@@ -454,10 +442,10 @@ function lift_comparison!(compact::IncrementalCompact, idx::Int,
     lifted_val = perform_lifting!(compact, visited_phinodes, cmp, lifting_cache, Bool, lifted_leaves, val)
     @assert lifted_val !== nothing
 
-    #global assertion_counter
-    #assertion_counter::Int += 1
-    #insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), lifted_val), nothing, 0, true)
-    #return
+    # global assertion_counter
+    # assertion_counter::Int += 1
+    # insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), lifted_val), nothing, 0, true)
+    # return
     compact[idx] = lifted_val.x
 end
 
@@ -506,7 +494,7 @@ function perform_lifting!(compact::IncrementalCompact,
             if is_old(compact, old_node_ssa) && isa(val, SSAValue)
                 val = OldSSAValue(val.id)
             end
-            if isa(val, Union{NewSSAValue, SSAValue, OldSSAValue})
+            if isa(val, AnySSAValue)
                 val = simple_walk(compact, val)
             end
             if val in keys(lifted_leaves)
@@ -517,11 +505,12 @@ function perform_lifting!(compact::IncrementalCompact,
                     continue
                 end
                 lifted_val = lifted_val.x
-                if isa(lifted_val, Union{NewSSAValue, SSAValue, OldSSAValue})
-                    lifted_val = simple_walk(compact, lifted_val, (pi, idx)->true)
+                if isa(lifted_val, AnySSAValue)
+                    callback = (@nospecialize(pi), @nospecialize(idx)) -> true
+                    lifted_val = simple_walk(compact, lifted_val, callback)
                 end
                 push!(new_node.values, lifted_val)
-            elseif isa(val, Union{NewSSAValue, SSAValue, OldSSAValue}) && val in keys(reverse_mapping)
+            elseif isa(val, AnySSAValue) && val in keys(reverse_mapping)
                 push!(new_node.edges, edge)
                 push!(new_node.values, lifted_phis[reverse_mapping[val]].ssa)
             else
@@ -541,29 +530,40 @@ function perform_lifting!(compact::IncrementalCompact,
 
     if stmt_val in keys(lifted_leaves)
         stmt_val = lifted_leaves[stmt_val]
-    elseif isa(stmt_val, Union{NewSSAValue, SSAValue, OldSSAValue}) && stmt_val in keys(reverse_mapping)
+    elseif isa(stmt_val, AnySSAValue) && stmt_val in keys(reverse_mapping)
         stmt_val = RefValue{Any}(lifted_phis[reverse_mapping[stmt_val]].ssa)
     end
 
     return stmt_val
 end
 
-assertion_counter = 0
+"""
+    getfield_elim_pass!(ir::IRCode) -> newir::IRCode
+
+`getfield` elimination pass, a.k.a. Scalar Replacements of Aggregates optimization.
+
+This pass is based on a local alias analysis that collects field information by def-use chain walking.
+It looks for struct allocation sites ("definitions"), and `getfield` calls as well as
+`:foreigncall`s that preserve the structs ("usages"). If "definitions" have enough information,
+then this pass will replace corresponding usages with lifted values.
+`mutable struct`s require additional cares and need to be handled separately from immutables.
+For `mutable struct`s, `setfield!` calls account for "definitions" also, and the pass should
+give up the lifting conservatively when there are any "intermediate usages" that may escape
+the mutable struct (e.g. non-inlined generic function call that takes the mutable struct as
+its argument).
+
+In a case when all usages are fully eliminated, `struct` allocation may also be erased as
+a result of dead code elimination.
+"""
 function getfield_elim_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
-    insertions = Vector{Any}()
     defuses = IdDict{Int, Tuple{IdSet{Int}, SSADefUse}}()
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
-    revisit_worklist = Int[]
-    #ndone, nmax = 0, 200
     for ((_, idx), stmt) in compact
         isa(stmt, Expr) || continue
-        #ndone >= nmax && continue
-        #ndone += 1
         result_t = compact_exprtype(compact, SSAValue(idx))
         is_getfield = is_setfield = false
         field_ordering = :unspecified
-        is_ccall = false
         # Step 1: Check whether the statement we're looking at is a getfield/setfield!
         if is_known_call(stmt, setfield!, compact)
             is_setfield = true
@@ -619,8 +619,8 @@ function getfield_elim_pass!(ir::IRCode)
             old_preserves = stmt.args[(6+nccallargs):end]
             for (pidx, preserved_arg) in enumerate(old_preserves)
                 isa(preserved_arg, SSAValue) || continue
-                let intermediaries = IdSet()
-                    callback = function(@nospecialize(pi), ssa::AnySSAValue)
+                let intermediaries = IdSet{Int}()
+                    callback = function (@nospecialize(pi), @nospecialize(ssa))
                         push!(intermediaries, ssa.id)
                         return false
                     end
@@ -661,10 +661,8 @@ function getfield_elim_pass!(ir::IRCode)
         else
             continue
         end
-        ## Normalize the field argument to getfield/setfield
-        field = stmt.args[3]
-        isa(field, QuoteNode) && (field = field.value)
-        isa(field, Union{Int, Symbol}) || continue
+        field = try_compute_field_stmt(compact, stmt)
+        field === nothing && continue
 
         struct_typ = unwrap_unionall(widenconst(compact_exprtype(compact, stmt.args[2])))
         if isa(struct_typ, Union) && struct_typ <: Tuple
@@ -681,8 +679,8 @@ function getfield_elim_pass!(ir::IRCode)
 
         if ismutabletype(struct_typ)
             isa(def, SSAValue) || continue
-            let intermediaries = IdSet()
-                callback = function(@nospecialize(pi), ssa::AnySSAValue)
+            let intermediaries = IdSet{Int}()
+                callback = function (@nospecialize(pi), @nospecialize(ssa))
                     push!(intermediaries, ssa.id)
                     return false
                 end
@@ -702,6 +700,8 @@ function getfield_elim_pass!(ir::IRCode)
             continue
         end
 
+        # perform SROA on immutable structs here on
+
         if isa(def, Union{OldSSAValue, SSAValue})
             def, typeconstraint = simple_walk_constraint(compact, def, typeconstraint)
         end
@@ -714,7 +714,7 @@ function getfield_elim_pass!(ir::IRCode)
         field = try_compute_fieldidx(struct_typ, field)
         field === nothing && continue
 
-        r = lift_leaves(compact, stmt, result_t, field, leaves)
+        r = lift_leaves(compact, result_t, field, leaves)
         r === nothing && continue
         lifted_leaves, any_undef = r
 
@@ -722,17 +722,6 @@ function getfield_elim_pass!(ir::IRCode)
             result_t = make_MaybeUndef(result_t)
         end
 
-#        @Base.show result_t
-#        @Base.show stmt
-#        for (k,v) in lifted_leaves
-#            @Base.show (k, v)
-#            if isa(k, AnySSAValue)
-#                @Base.show compact[k]
-#            end
-#            if isa(v, RefValue) && isa(v.x, AnySSAValue)
-#                @Base.show compact[v.x]
-#            end
-#        end
         val = perform_lifting!(compact, visited_phinodes, field, lifting_cache, result_t, lifted_leaves, stmt.args[2])
 
         # Insert the undef check if necessary
@@ -747,13 +736,12 @@ function getfield_elim_pass!(ir::IRCode)
             @assert val !== nothing
         end
 
-        global assertion_counter
-        assertion_counter::Int += 1
-        #insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), val), nothing, 0, true)
-        #continue
+        # global assertion_counter
+        # assertion_counter::Int += 1
+        # insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), val), nothing, 0, true)
+        # continue
         compact[idx] = val === nothing ? nothing : val.x
     end
-
 
     non_dce_finish!(compact)
     # Copy the use count, `simple_dce!` may modify it and for our predicate
@@ -804,13 +792,13 @@ function getfield_elim_pass!(ir::IRCode)
             # it would have been deleted. That's fine, just ignore
             # the use in that case.
             stmt === nothing && continue
-            field = try_compute_fieldidx_expr(typ, stmt)
+            field = try_compute_fieldidx_stmt(compact, stmt::Expr, typ)
             field === nothing && (ok = false; break)
             push!(fielddefuse[field].uses, use)
         end
         ok || continue
         for use in defuse.defs
-            field = try_compute_fieldidx_expr(typ, ir[SSAValue(use)])
+            field = try_compute_fieldidx_stmt(compact, ir[SSAValue(use)]::Expr, typ)
             field === nothing && (ok = false; break)
             push!(fielddefuse[field].defs, use)
         end
@@ -883,13 +871,15 @@ function getfield_elim_pass!(ir::IRCode)
             ir[SSAValue(use)] = new_expr
         end
     end
-    ir
+
+    return ir
 end
+# assertion_counter = 0
 
 function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int)
     # return whether this made a change
     if isa(compact.result[idx][:inst], PhiNode)
-        return maybe_erase_unused!(extra_worklist, compact, idx, val -> phi_uses[val.id] -= 1)
+        return maybe_erase_unused!(extra_worklist, compact, idx, val::SSAValue -> phi_uses[val.id] -= 1)
     else
         return maybe_erase_unused!(extra_worklist, compact, idx)
     end
@@ -904,7 +894,7 @@ function count_uses(@nospecialize(stmt), uses::Vector{Int})
     end
 end
 
-function mark_phi_cycles(compact::IncrementalCompact, safe_phis::BitSet, phi::Int)
+function mark_phi_cycles!(compact::IncrementalCompact, safe_phis::BitSet, phi::Int)
     worklist = Int[]
     push!(worklist, phi)
     while !isempty(worklist)
@@ -920,6 +910,25 @@ function mark_phi_cycles(compact::IncrementalCompact, safe_phis::BitSet, phi::In
     end
 end
 
+"""
+    adce_pass!(ir::IRCode) -> newir::IRCode
+
+Aggressive Dead Code Elimination pass.
+
+In addition to a simple DCE for unused values and allocations,
+this pass also nullifies `typeassert` calls that can be proved to be no-op,
+in order to allow LLVM to emit simpler code down the road.
+
+Note that this pass is more effective after SROA optimization (i.e. `getfield_elim_pass!`),
+since SROA often allows this pass to:
+- eliminate allocation of object whose field references are all replaced with scalar values, and
+- nullify `typeassert` call whose first operand has been replaced with a scalar value
+  (, which may have introduced new type information that inference did not understand)
+
+Also note that currently this pass _needs_ to run after `getfield_elim_pass!`, because
+the `typeassert` elimination depends on the transformation within `getfield_elim_pass!`
+which redirects references of `typeassert`ed value to the corresponding `PiNode`.
+"""
 function adce_pass!(ir::IRCode)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
@@ -927,6 +936,14 @@ function adce_pass!(ir::IRCode)
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
+        elseif isexpr(stmt, :call)
+            # nullify safe `typeassert` calls
+            if is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
+                ty, isexact = instanceof_tfunc(compact_exprtype(compact, stmt.args[3]))
+                if isexact && compact_exprtype(compact, stmt.args[2]) ⊑ ty
+                    compact[idx] = nothing
+                end
+            end
         end
     end
     non_dce_finish!(compact)
@@ -951,7 +968,7 @@ function adce_pass!(ir::IRCode)
         for phi in all_phis
             # Save any phi cycles that have non-phi uses
             if compact.used_ssas[phi] - phi_uses[phi] != 0
-                mark_phi_cycles(compact, safe_phis, phi)
+                mark_phi_cycles!(compact, safe_phis, phi)
             end
         end
         for phi in all_phis
@@ -969,8 +986,6 @@ function adce_pass!(ir::IRCode)
 end
 
 function type_lift_pass!(ir::IRCode)
-    type_ctx_uses = Vector{Vector{Int}}[]
-    has_non_type_ctx_uses = IdSet{Int}()
     lifted_undef = IdDict{Int, Any}()
     insts = ir.stmts
     for idx in 1:length(insts)
@@ -1209,12 +1224,12 @@ function cfg_simplify!(ir::IRCode)
         # Compute (renamed) successors and predecessors given (renamed) block
         function compute_succs(i)
             orig_bb = follow_merged_succ(result_bbs[i])
-            return map(i -> bb_rename_succ[i], bbs[orig_bb].succs)
+            return Int[bb_rename_succ[i] for i in bbs[orig_bb].succs]
         end
         function compute_preds(i)
             orig_bb = result_bbs[i]
             preds = bbs[orig_bb].preds
-            return map(pred -> bb_rename_pred[pred], preds)
+            return Int[bb_rename_pred[pred] for pred in preds]
         end
 
         BasicBlock[

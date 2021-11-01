@@ -454,29 +454,35 @@ end
         c_di = Diagonal(rand(m)); c = sparse(c_di); c_d = Array(c_di)
         d_di = Diagonal(rand(n)); d = sparse(d_di); d_d = Array(d_di)
         # mat ⊗ mat
-        @test Array(kron(a, b)) == kron(a_d, b_d)
-        @test Array(kron(a_d, b)) == kron(a_d, b_d)
-        @test Array(kron(a, b_d)) == kron(a_d, b_d)
-        @test issparse(kron(c, d_di))
-        @test Array(kron(c, d_di)) == kron(c_d, d_d)
-        @test issparse(kron(c_di, d))
-        @test Array(kron(c_di, d)) == kron(c_d, d_d)
-        @test issparse(kron(c_di, y))
-        @test Array(kron(c_di, y)) == kron(c_di, y_d)
-        @test issparse(kron(x, d_di))
-        @test Array(kron(x, d_di)) == kron(x_d, d_di)
+        for t in (identity, adjoint, transpose)
+            @test Array(kron(t(a), b)::SparseMatrixCSC) == kron(t(a_d), b_d)
+            @test Array(kron(a, t(b))::SparseMatrixCSC) == kron(a_d, t(b_d))
+            @test Array(kron(t(a), t(b))::SparseMatrixCSC) == kron(t(a_d), t(b_d))
+            @test Array(kron(a_d, t(b))::SparseMatrixCSC) == kron(a_d, t(b_d))
+            @test Array(kron(t(a), b_d)::SparseMatrixCSC) == kron(t(a_d), b_d)
+            @test issparse(kron(c, d_di))
+            @test Array(kron(c, d_di)) == kron(c_d, d_d)
+            @test issparse(kron(c_di, d))
+            @test Array(kron(c_di, d)) == kron(c_d, d_d)
+            @test issparse(kron(c_di, y))
+            @test Array(kron(c_di, y)) == kron(c_di, y_d)
+            @test issparse(kron(x, d_di))
+            @test Array(kron(x, d_di)) == kron(x_d, d_di)
+        end
         # vec ⊗ vec
         @test Vector(kron(x, y)) == kron(x_d, y_d)
         @test Vector(kron(x_d, y)) == kron(x_d, y_d)
         @test Vector(kron(x, y_d)) == kron(x_d, y_d)
-        # mat ⊗ vec
-        @test Array(kron(a, y)) == kron(a_d, y_d)
-        @test Array(kron(a_d, y)) == kron(a_d, y_d)
-        @test Array(kron(a, y_d)) == kron(a_d, y_d)
-        # vec ⊗ mat
-        @test Array(kron(x, b)) == kron(x_d, b_d)
-        @test Array(kron(x_d, b)) == kron(x_d, b_d)
-        @test Array(kron(x, b_d)) == kron(x_d, b_d)
+        for t in (identity, adjoint, transpose)
+            # mat ⊗ vec
+            @test Array(kron(t(a), y)::SparseMatrixCSC) == kron(t(a_d), y_d)
+            @test Array(kron(t(a_d), y)) == kron(t(a_d), y_d)
+            @test Array(kron(t(a), y_d)::SparseMatrixCSC) == kron(t(a_d), y_d)
+            # vec ⊗ mat
+            @test Array(kron(x, t(b))::SparseMatrixCSC) == kron(x_d, t(b_d))
+            @test Array(kron(x_d, t(b))::SparseMatrixCSC) == kron(x_d, t(b_d))
+            @test Array(kron(x, t(b_d))) == kron(x_d, t(b_d))
+        end
         # vec ⊗ vec'
         @test issparse(kron(v, y'))
         @test issparse(kron(x, y'))
@@ -1691,6 +1697,33 @@ end
     S2 = SparseMatrixCSC(D)
     @test Array(D) == Array(S) == Array(S2)
     @test S == S2
+
+    # An issue discovered in #42574 where
+    # SparseMatrixCSC{Tv, Ti}(::Diagonal) ignored Ti
+    D = Diagonal(rand(3))
+    S = SparseMatrixCSC{Float64, Int8}(D)
+    @test S isa SparseMatrixCSC{Float64, Int8}
+end
+
+@testset "Sparse construction with empty/1x1 structured matrices" begin
+    empty = spzeros(0, 0)
+
+    @test sparse(Diagonal(zeros(0, 0))) == empty
+    @test sparse(Bidiagonal(zeros(0, 0), :U)) == empty
+    @test sparse(Bidiagonal(zeros(0, 0), :L)) == empty
+    @test sparse(SymTridiagonal(zeros(0, 0))) == empty
+    @test sparse(Tridiagonal(zeros(0, 0))) == empty
+
+    one_by_one = rand(1,1)
+    sp_one_by_one = sparse(one_by_one)
+
+    @test sparse(Diagonal(one_by_one)) == sp_one_by_one
+    @test sparse(Bidiagonal(one_by_one, :U)) == sp_one_by_one
+    @test sparse(Bidiagonal(one_by_one, :L)) == sp_one_by_one
+    @test sparse(Tridiagonal(one_by_one)) == sp_one_by_one
+
+    s = SymTridiagonal(rand(1), rand(0))
+    @test sparse(s) == s
 end
 
 @testset "error conditions for reshape, and dropdims" begin
@@ -1741,10 +1774,10 @@ end
 end
 
 @testset "droptol" begin
-    local A = guardseed(1234321) do
+    A = guardseed(1234321) do
         triu(sprand(10, 10, 0.2))
     end
-    @test getcolptr(SparseArrays.droptol!(A, 0.01)) == [1, 1, 1, 1, 3, 3, 5, 6, 8, 11, 12]
+    @test getcolptr(SparseArrays.droptol!(A, 0.01)) == [1, 1, 1, 1, 2, 2, 2, 4, 4, 5, 5]
     @test isequal(SparseArrays.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1, 1, Int[1, 1], Int[], Int[]))
 end
 
@@ -2076,7 +2109,7 @@ end
 end
 
 @testset "sparse matrix opnormestinv" begin
-    Random.seed!(1234)
+    Random.seed!(1235)
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
     Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)
@@ -3259,6 +3292,28 @@ end
     m = sparse([85, 5, 38, 37, 59], [19, 72, 76, 98, 162], [0.8, 0.3, 0.2, 0.1, 0.5], 100, 200)
     @test repr(m) == "sparse([85, 5, 38, 37, 59], [19, 72, 76, 98, 162], [0.8, 0.3, 0.2, 0.1, 0.5], 100, 200)"
     @test eval(Meta.parse(repr(m))) == m
+end
+
+using Base: swaprows!, swapcols!
+@testset "swaprows!, swapcols!" begin
+    S = sparse(
+        [ 0   0  0  0  0   0
+          0  -1  1  1  0   0
+          0   0  0  1  1   0
+          0   0  1  1  1  -1])
+
+    for (f!, i, j) in
+            ((swaprows!, 1, 2), # Test swapping rows where one row is fully sparse
+             (swaprows!, 2, 3), # Test swapping rows of unequal length
+             (swaprows!, 2, 4), # Test swapping non-adjacent rows
+             (swapcols!, 1, 2), # Test swapping columns where one column is fully sparse
+             (swapcols!, 2, 3), # Test swapping coulms of unequal length
+             (swapcols!, 2, 4)) # Test swapping non-adjacent columns
+        Scopy = copy(S)
+        Sdense = Array(S)
+        f!(Scopy, i, j); f!(Sdense, i, j)
+        @test Scopy == Sdense
+    end
 end
 
 end # module

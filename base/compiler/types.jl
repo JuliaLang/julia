@@ -17,6 +17,11 @@ If `interp` is an `AbstractInterpreter`, it is expected to provide at least the 
 """
 abstract type AbstractInterpreter end
 
+struct ArgInfo
+    fargs::Union{Nothing,Vector{Any}}
+    argtypes::Vector{Any}
+end
+
 """
     InferenceResult
 
@@ -29,8 +34,10 @@ mutable struct InferenceResult
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     valid_worlds::WorldRange # if inference and optimization is finished
-    function InferenceResult(linfo::MethodInstance, given_argtypes = nothing, va_override=false)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes, va_override)
+    function InferenceResult(linfo::MethodInstance,
+                             arginfo::Union{Nothing,ArgInfo} = nothing,
+                             va_override::Bool = false)
+        argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo, va_override)
         return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange())
     end
 end
@@ -53,8 +60,6 @@ struct OptimizationParams
     MAX_TUPLE_SPLAT::Int
     MAX_UNION_SPLITTING::Int
 
-    unoptimize_throw_blocks::Bool
-
     function OptimizationParams(;
             inlining::Bool = inlining_enabled(),
             inline_cost_threshold::Int = 100,
@@ -64,7 +69,6 @@ struct OptimizationParams
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
-            unoptimize_throw_blocks::Bool = true,
         )
         return new(
             inlining,
@@ -75,7 +79,6 @@ struct OptimizationParams
             max_methods,
             tuple_splat,
             union_splitting,
-            unoptimize_throw_blocks,
         )
     end
 end

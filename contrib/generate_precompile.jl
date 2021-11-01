@@ -188,7 +188,7 @@ Test = get(Base.loaded_modules,
 if Test !== nothing
     hardcoded_precompile_statements *= """
     precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
-    precompile(Tuple{typeof(Test.testset_beginend), Tuple{String, Expr}, Expr, LineNumberNode})
+    precompile(Tuple{typeof(Test.testset_beginend_call), Tuple{String, Expr}, Expr, LineNumberNode})
     precompile(Tuple{Type{Test.DefaultTestSet}, String})
     precompile(Tuple{Type{Test.DefaultTestSet}, AbstractString})
     precompile(Tuple{Core.kwftype(Type{Test.DefaultTestSet}), Any, Type{Test.DefaultTestSet}, AbstractString})

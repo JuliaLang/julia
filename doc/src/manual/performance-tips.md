@@ -14,8 +14,8 @@ The functions should take arguments, instead of operating directly on global var
 ## Avoid global variables
 
 A global variable might have its value, and therefore its type, change at any point. This makes
-it difficult for the compiler to optimize code using global variables. Variables should be local,
-or passed as arguments to functions, whenever possible.
+it difficult for the compiler to optimize code using global variables. This also applies to type-valued variables, i.e. type aliases on the global level.
+Variables should be local, or passed as arguments to functions, whenever possible.
 
 
 We find that global names are frequently constants, and declaring them as such greatly improves
@@ -77,12 +77,12 @@ julia> function sum_global()
        end;
 
 julia> @time sum_global()
-  0.026328 seconds (9.30 k allocations: 416.747 KiB, 36.50% gc time, 99.48% compilation time)
-508.39048990953665
+  0.011539 seconds (9.08 k allocations: 373.386 KiB, 98.69% compilation time)
+523.0007221951678
 
 julia> @time sum_global()
-  0.000075 seconds (3.49 k allocations: 70.156 KiB)
-508.39048990953665
+  0.000091 seconds (3.49 k allocations: 70.156 KiB)
+523.0007221951678
 ```
 
 On the first call (`@time sum_global()`) the function gets compiled. (If you've not yet used [`@time`](@ref)
@@ -113,12 +113,12 @@ julia> function sum_arg(x)
        end;
 
 julia> @time sum_arg(x)
-  0.010298 seconds (4.23 k allocations: 226.021 KiB, 99.81% compilation time)
-508.39048990953665
+  0.007551 seconds (3.98 k allocations: 200.548 KiB, 99.77% compilation time)
+523.0007221951678
 
 julia> @time sum_arg(x)
-  0.000005 seconds (1 allocation: 16 bytes)
-508.39048990953665
+  0.000006 seconds (1 allocation: 16 bytes)
+523.0007221951678
 ```
 
 The 1 allocation seen is from running the `@time` macro itself in global scope. If we instead run
@@ -128,8 +128,8 @@ the timing in a function, we can see that indeed no allocations are performed:
 julia> time_sum(x) = @time sum_arg(x);
 
 julia> time_sum(x)
-  0.000001 seconds
-508.39048990953665
+  0.000002 seconds
+523.0007221951678
 ```
 
 In some situations, your function may need to allocate memory as part of its operation, and this
@@ -671,10 +671,10 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Vector{Float64}:
- 2.0
- 2.0
- 2.0
+3-element Vector{Int64}:
+ 2
+ 2
+ 2
 ```
 
 This should be written as:
@@ -693,10 +693,10 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Vector{Float64}:
- 2.0
- 2.0
- 2.0
+3-element Vector{Int64}:
+ 2
+ 2
+ 2
 ```
 
 Julia's compiler specializes code for argument types at function boundaries, so in the original

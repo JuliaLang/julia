@@ -129,7 +129,13 @@ Set{Int64} with 1 element:
 """
 function intersect(s::AbstractSet, itr, itrs...)
     T = promote_eltype(s, itr, itrs...)
-    return intersect!(Set{T}(s), itr, itrs...)
+    if T == promote_eltype(s, itr)
+        out = intersect(s, itr)
+    else
+        out = union!(emptymutable(s, T), s)
+        intersect!(out, itr)
+    end
+    return intersect!(out, itrs...)
 end
 intersect(s) = union(s)
 intersect(s::AbstractSet, itr) = mapfilter(in(s), push!, itr, emptymutable(s, promote_eltype(s, itr)))
@@ -338,8 +344,10 @@ false
 """
 ⊊, ⊋
 
-⊊(a::AbstractSet, b) = length(a) < length(b) && a ⊆ b
-⊊(a, b) = Set(a) ⊊ b
+⊊(a::AbstractSet, b::AbstractSet) = length(a) < length(b) && a ⊆ b
+⊊(a::AbstractSet, b) = a ⊊ Set(b)
+⊊(a, b::AbstractSet) = Set(a) ⊊ b
+⊊(a, b) = Set(a) ⊊ Set(b)
 ⊋(a, b) = b ⊊ a
 
 function ⊈ end

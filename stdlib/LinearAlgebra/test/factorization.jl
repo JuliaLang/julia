@@ -42,6 +42,27 @@ using Test, LinearAlgebra
     @test hash(F) == hash(G)
 end
 
+@testset "size for factorizations - $f" for f in Any[
+    bunchkaufman,
+    cholesky,
+    x -> cholesky(x, Val(true)),
+    hessenberg,
+    lq,
+    lu,
+    qr,
+    x -> qr(x, ColumnNorm()),
+    svd,
+]
+    A = randn(3, 3)
+    A = A * A' # ensure A is pos. def. and symmetric
+    F = f(A)
+    tF = Transpose(F)
+    aF = Adjoint(F)
+    @test size(F) == size(A)
+    @test size(tF) == size(Transpose(A))
+    @test size(aF) == size(Adjoint(A))
+end
+
 @testset "equality of QRCompactWY" begin
     A = rand(100, 100)
     F, G = qr(A), qr(A)

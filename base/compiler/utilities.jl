@@ -137,9 +137,6 @@ function retrieve_code_info(linfo::MethodInstance)
     return nothing
 end
 
-# Get at the nonfunction_mt, which happens to be the mt of SimpleVector
-const nonfunction_mt = typename(SimpleVector).mt
-
 function get_compileable_sig(method::Method, @nospecialize(atypes), sparams::SimpleVector)
     isa(atypes, DataType) || return nothing
     mt = ccall(:jl_method_table_for, Any, (Any,), atypes)
@@ -147,6 +144,9 @@ function get_compileable_sig(method::Method, @nospecialize(atypes), sparams::Sim
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
         mt, atypes, sparams, method)
 end
+
+isa_compileable_sig(@nospecialize(atype), method::Method) =
+    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any), atype, method))
 
 # eliminate UnionAll vars that might be degenerate due to having identical bounds,
 # or a concrete upper bound and appearing covariantly.
@@ -222,11 +222,15 @@ function method_for_inference_heuristics(method::Method, @nospecialize(sig), spa
     return nothing
 end
 
+#########
+# types #
+#########
+
 argextype(@nospecialize(x), state) = argextype(x, state.src, state.sptypes, state.slottypes)
 
-const empty_slottypes = Any[]
+const EMPTY_SLOTTYPES = Any[]
 
-function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
+function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = EMPTY_SLOTTYPES)
     if isa(x, Expr)
         if x.head === :static_parameter
             return sptypes[x.args[1]::Int]
@@ -257,6 +261,17 @@ function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vecto
     else
         return Const(x)
     end
+end
+
+function singleton_type(@nospecialize(ft))
+    if isa(ft, Const)
+        return ft.val
+    elseif isconstType(ft)
+        return ft.parameters[1]
+    elseif ft isa DataType && isdefined(ft, :instance)
+        return ft.instance
+    end
+    return nothing
 end
 
 ###################
@@ -319,25 +334,27 @@ function is_throw_call(e::Expr)
     return false
 end
 
-function find_throw_blocks(code::Vector{Any}, ir = RefValue{IRCode}())
+function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Int})
+    for stmt in find_throw_blocks(src.code, handler_at)
+        src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
+    end
+    return nothing
+end
+
+function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
     stmts = BitSet()
     n = length(code)
-    try_depth = 0
     for i in n:-1:1
         s = code[i]
         if isa(s, Expr)
-            if s.head === :enter
-                try_depth -= 1
-            elseif s.head === :leave
-                try_depth += (s.args[1]::Int)
-            elseif s.head === :gotoifnot
-                tgt = s.args[2]::Int
-                if i+1 in stmts && tgt in stmts
+            if s.head === :gotoifnot
+                if i+1 in stmts && s.args[2]::Int in stmts
                     push!(stmts, i)
                 end
             elseif s.head === :return
+                # see `ReturnNode` handling
             elseif is_throw_call(s)
-                if try_depth == 0
+                if handler_at[i] == 0
                     push!(stmts, i)
                 end
             elseif i+1 in stmts
@@ -348,22 +365,12 @@ function find_throw_blocks(code::Vector{Any}, ir = RefValue{IRCode}())
             # (where !isdefined(s, :val)) as `throw` points, but that can cause
             # worse codegen around the call site (issue #37558)
         elseif isa(s, GotoNode)
-            tgt = s.label
-            if isassigned(ir)
-                tgt = first(ir[].cfg.blocks[tgt].stmts)
-            end
-            if tgt in stmts
+            if s.label in stmts
                 push!(stmts, i)
             end
         elseif isa(s, GotoIfNot)
-            if i+1 in stmts
-                tgt = s.dest::Int
-                if isassigned(ir)
-                    tgt = first(ir[].cfg.blocks[tgt].stmts)
-                end
-                if tgt in stmts
-                    push!(stmts, i)
-                end
+            if i+1 in stmts && s.dest in stmts
+                push!(stmts, i)
             end
         elseif i+1 in stmts
             push!(stmts, i)

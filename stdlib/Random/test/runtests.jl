@@ -688,7 +688,7 @@ end
 @testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister,Xoshiro)
     seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), rand(UInt128, 3)...]
     if RNG == Xoshiro
-        push!(seeds, rand(UInt64, rand(1:4)), Tuple(rand(UInt64, 4)))
+        push!(seeds, rand(UInt64, rand(1:4)))
     end
     for seed=seeds
         m = RNG(seed)
@@ -699,7 +699,7 @@ end
 end
 
 @testset "Random.seed!(seed) sets Random.GLOBAL_SEED" begin
-    seeds = Any[0, rand(UInt128), rand(UInt64, 4), Tuple(rand(UInt64, 4))]
+    seeds = Any[0, rand(UInt128), rand(UInt64, 4)]
 
     for seed=seeds
         Random.seed!(seed)

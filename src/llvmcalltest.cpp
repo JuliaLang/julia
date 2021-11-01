@@ -13,9 +13,20 @@
 
 using namespace llvm;
 
+// Borrow definition from `support/dtypes.h`
+#ifdef _OS_WINDOWS_
+#  define DLLEXPORT __declspec(dllexport)
+#else
+# if defined(_OS_LINUX_)
+#  define DLLEXPORT __attribute__ ((visibility("protected")))
+# else
+#  define DLLEXPORT __attribute__ ((visibility("default")))
+# endif
+#endif
+
 extern "C" {
 
-JL_DLLEXPORT const char *MakeIdentityFunction(jl_value_t* jl_AnyTy) {
+DLLEXPORT const char *MakeIdentityFunction(jl_value_t* jl_AnyTy) {
     LLVMContext Ctx;
     PointerType *AnyTy = PointerType::get(StructType::get(Ctx), 0);
     // FIXME: get AnyTy via jl_type_to_llvm(Ctx, jl_AnyTy)
@@ -40,7 +51,7 @@ JL_DLLEXPORT const char *MakeIdentityFunction(jl_value_t* jl_AnyTy) {
     return strdup(buf.c_str());
 }
 
-JL_DLLEXPORT const char *MakeLoadGlobalFunction() {
+DLLEXPORT const char *MakeLoadGlobalFunction() {
     LLVMContext Ctx;
 
     auto M = new Module("shadow", Ctx);

@@ -899,7 +899,7 @@ julia> m.offsets
 ```
 
 It is convenient to have captures returned as an array so that one can use destructuring syntax
-to bind them to local variables. As a convinience, the `RegexMatch` object implements iterator methods that pass through to the `captures` field, so you can destructure the match object directly:
+to bind them to local variables. As a convenience, the `RegexMatch` object implements iterator methods that pass through to the `captures` field, so you can destructure the match object directly:
 
 ```jldoctest acdmatch
 julia> first, second, third = m; first
