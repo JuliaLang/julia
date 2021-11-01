@@ -684,7 +684,7 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
                 if isa(info, ConstCallInfo)
                     if !is_stmt_noinline(flag) && maybe_handle_const_call!(
                         ir, state1.id, new_stmt, info, new_sig,
-                        istate, flag, false, todo)
+                        istate, flag, todo)
                         handled = true
                     else
                         info = info.call
@@ -714,15 +714,6 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
         end
     end
     return new_argexprs, new_atypes
-end
-
-function rewrite_invoke_exprargs!(expr::Expr)
-    argexprs = expr.args
-    argexpr0 = argexprs[2]
-    argexprs = argexprs[3:end]
-    argexprs[1] = argexpr0
-    expr.args = argexprs
-    return expr
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch)
@@ -874,6 +865,8 @@ function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(cas
     nothing
 end
 
+rewrite_invoke_exprargs!(expr::Expr) = (expr.args = invoke_rewrite(expr.args); expr)
+
 function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::OptimizationParams)
     if isa(typ, Const) && isa(typ.val, SimpleVector)
         length(typ.val) > params.MAX_TUPLE_SPLAT && return false
@@ -1023,10 +1016,7 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, (; match, result):
         return nothing
     end
 
-    atypes = sig.atypes
-    atype0 = atypes[2]
-    atypes = atypes[4:end]
-    pushfirst!(atypes, atype0)
+    atypes = invoke_rewrite(sig.atypes)
 
     if isa(result, InferenceResult) && !is_stmt_noinline(flag)
         (; mi) = item = InliningTodo(result, atypes)
@@ -1226,7 +1216,7 @@ end
 # TODO this function contains a lot of duplications with `analyze_single_call!`, factor them out
 function maybe_handle_const_call!(
     ir::IRCode, idx::Int, stmt::Expr, (; results)::ConstCallInfo, (; atypes, atype)::Signature,
-    state::InliningState, flag::UInt8, isinvoke::Bool, todo::Vector{Pair{Int, Any}})
+    state::InliningState, flag::UInt8, todo::Vector{Pair{Int, Any}})
     cases = InliningCase[] # TODO avoid this allocation for single cases ?
     local fully_covered = true
     local signature_union = Bottom
@@ -1270,9 +1260,8 @@ function maybe_handle_const_call!(
     # be able to do the inlining now (for constant cases), or push it directly
     # onto the todo list
     if fully_covered && length(cases) == 1
-        handle_single_case!(ir, stmt, idx, cases[1].item, isinvoke, todo)
+        handle_single_case!(ir, stmt, idx, cases[1].item, false, todo)
     elseif length(cases) > 0
-        isinvoke && rewrite_invoke_exprargs!(stmt)
         push!(todo, idx=>UnionSplit(fully_covered, atype, cases))
     end
     return true
@@ -1318,17 +1307,6 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             continue
         end
 
-        # if inference arrived here with constant-prop'ed result(s),
-        # we can perform a specialized analysis for just this case
-        if isa(info, ConstCallInfo)
-            if !is_stmt_noinline(flag)
-                maybe_handle_const_call!(
-                    ir, idx, stmt, info, sig,
-                    state, flag, sig.f === Core.invoke, todo) && continue
-            end
-            info = info.call # cascade to the non-constant handling
-        end
-
         if isa(info, OpaqueClosureCallInfo)
             result = info.result
             if isa(result, InferenceResult)
@@ -1348,6 +1326,17 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
                 inline_invoke!(ir, idx, sig, info, state, todo, flag)
             end
             continue
+        end
+
+        # if inference arrived here with constant-prop'ed result(s),
+        # we can perform a specialized analysis for just this case
+        if isa(info, ConstCallInfo)
+            if !is_stmt_noinline(flag)
+                maybe_handle_const_call!(
+                    ir, idx, stmt, info, sig,
+                    state, flag, todo) && continue
+            end
+            info = info.call # cascade to the non-constant handling
         end
 
         # Ok, now figure out what method to call

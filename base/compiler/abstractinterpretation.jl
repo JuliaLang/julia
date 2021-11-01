@@ -1294,14 +1294,8 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     res = nothing
     sig = match.spec_types
-    argtypes′ = argtypes[3:end]
-    argtypes′[1] = ft
-    if fargs === nothing
-        fargs′ = nothing
-    else
-        fargs′ = fargs[3:end]
-        fargs′[1] = fargs[1]
-    end
+    argtypes′ = invoke_rewrite(argtypes)
+    fargs′ = fargs === nothing ? nothing : invoke_rewrite(fargs)
     arginfo = ArgInfo(fargs′, argtypes′)
     # # typeintersect might have narrowed signature, but the accuracy gain doesn't seem worth the cost involved with the lattice comparisons
     # for i in 1:length(argtypes′)
@@ -1316,6 +1310,13 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
         end
     end
     return CallMeta(from_interprocedural!(rt, sv, arginfo, sig), InvokeCallInfo(match, res))
+end
+
+function invoke_rewrite(xs::Vector{Any})
+    x0 = xs[2]
+    newxs = xs[3:end]
+    newxs[1] = x0
+    return newxs
 end
 
 # call where the function is known exactly
