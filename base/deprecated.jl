@@ -39,7 +39,9 @@ old (generic function with 1 method)
 To deprecate a specific signature, annotate the arguments of `old`. For example,
 ```jldoctest
 julia> new(x::Integer, y::Real) = x + y
+
 julia> new(x::Real, y::Integer) = x - y
+
 julia> @deprecate old(x::Integer, y::Real) new(x, y)
 old (generic function with 1 method)
 ```
