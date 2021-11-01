@@ -62,13 +62,16 @@ function eigen(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
 end
 
-eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) =
-    sort!(LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1], by=sortby)
+function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing)
+    vals = LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
+    !isnothing(sortby) && sort!(vals, by=sortby)
+    return vals
+end
 
 function eigvals(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
     T = eltype(A)
     S = eigtype(T)
-    sort!(eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A)), by=sortby)
+    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
 end
 
 """
@@ -265,9 +268,14 @@ function _UtiAsymUi_diag!(uplo, A, U)
     return A
 end
 
-eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix} =
-    LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
-eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix} =
-    LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
-
+function eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
+    vals = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
+    isnothing(sortby) || sort!(vals, by=sortby)
+    return vals
+end
+function eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasComplex,S<:StridedMatrix}
+    vals = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
+    isnothing(sortby) || sort!(vals, by=sortby)
+    return vals
+end
 eigvecs(A::HermOrSym) = eigvecs(eigen(A))
