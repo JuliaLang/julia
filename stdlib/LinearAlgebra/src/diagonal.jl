@@ -16,12 +16,9 @@ Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v
 
 function Base.promote_rule(A::Type{<:Diagonal{<:Any,V}}, B::Type{<:Diagonal{<:Any,W}}) where {V,W}
     X = promote_type(V, W)
-    # We check if the promoted type has a well-defined eltype.
-    # if it does, use it to construct the Diagonal type
-    _promoted_type(::Type{T}, ::Type{Z}) where {T,Z<:AbstractVector{T}} = Diagonal{T,Z}
-    # If it doesn't, we fall back to the common ancestor
-    _promoted_type(::Type, ::Type) = typejoin(A, B)
-    _promoted_type(eltype(X), X)
+    T = eltype(X)
+    isconcretetype(T) && return Diagonal{T,X}
+    return typejoin(A, B)
 end
 
 """
