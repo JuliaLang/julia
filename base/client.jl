@@ -69,8 +69,8 @@ function repl_cmd(cmd, out)
         try
             run(ignorestatus(cmd))
         catch
-            # strip backtrace and display error
-            # mainly for Windows
+            # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
+            # Julia throws an exception if it can't find the program, but the stack trace isn't useful
             lasterr = current_exceptions()
             lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
             invokelatest(display_error, lasterr)
