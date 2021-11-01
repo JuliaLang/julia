@@ -211,8 +211,10 @@ JL_DLLEXPORT uint16_t __truncdfhf2(double param)
     if ((resi&0x7fffffffu) < 0x38800000u){ // if Float16(res) is subnormal
         // shift so that the mantissa lines up where it would for normal Float16
         uint32_t shift = 113u-((resi & 0x7f800000u)>>23u);
-        if (shift<23u)
+        if (shift<23u) {
+            resi |= 0x00800000; // set implicit bit
             resi >>= shift;
+        }
     }
     if ((resi & 0x1fffu) == 0x1000u) { // if we are halfway between 2 Float16 values
         memcpy(&resi, &res, sizeof(res));
