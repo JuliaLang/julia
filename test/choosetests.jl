@@ -65,6 +65,7 @@ function choosetests(choices = [])
     exit_on_error = false
     use_revise = false
     seed = rand(RandomDevice(), UInt128)
+    force_net = false
     dryrun = false
 
     for (i, t) in enumerate(choices)
@@ -77,6 +78,8 @@ function choosetests(choices = [])
             use_revise = true
         elseif startswith(t, "--seed=")
             seed = parse(UInt128, t[8:end])
+        elseif t == "--force-net"
+            force_net = true
         elseif t == "--help-list"
             dryrun = true
         elseif t == "--help"
@@ -149,7 +152,12 @@ function choosetests(choices = [])
     net_on = true
     try
         ipa = getipaddr()
-    catch
+    catch ex
+        if force_net
+            msg = "Networking is unavailable, and the `--force-net` option was passed"
+            @error msg
+            rethrow()
+        end
         @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
         net_on = false
     end
