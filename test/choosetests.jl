@@ -93,6 +93,9 @@ function choosetests(choices = [])
        end
     end
 
+    explicit_pkg3    = ("Pkg"            in tests) || ("Pkg/pkg" in tests)
+    explicit_libgit2 =  "LibGit2/online" in tests
+
     filtertests!(tests, "unicode", ["unicode/utf8"])
     filtertests!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
                    "strings/io", "strings/types"])
@@ -133,8 +136,6 @@ function choosetests(choices = [])
 
     filter!(!in(skip_tests), tests)
 
-    explicit_pkg3    =  "Pkg/pkg"       in tests
-    explicit_libgit2 =  "LibGit2/online" in tests
     new_tests = String[]
     for test in tests
         if test in STDLIBS
@@ -150,7 +151,8 @@ function choosetests(choices = [])
     end
     filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
     append!(tests, new_tests)
-    explicit_pkg3    || filter!(x -> x != "Pkg/pkg",       tests)
+    explicit_pkg3    || filter!(x -> x != "Pkg",            tests)
+    explicit_pkg3    || filter!(x -> x != "Pkg/pkg",        tests)
     explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
 
     # Filter out tests from the test groups in the stdlibs
