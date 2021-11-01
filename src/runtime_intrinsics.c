@@ -11,7 +11,6 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "APInt-C.h"
-#include "stdio.h"
 
 const unsigned int host_char_bit = 8;
 
