@@ -176,7 +176,7 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
 {
     SAVE_ERRNO;
-    jl_gcframe_t **pgcstack = (jl_ptls_t)TlsGetValue(jl_pgcstack_key);
+    jl_gcframe_t **pgcstack = (jl_gcframe_t**)TlsGetValue(jl_pgcstack_key);
     LOAD_ERRNO;
     return pgcstack;
 }
@@ -226,7 +226,7 @@ static jl_gcframe_t ***jl_pgcstack_addr_fallback(void) JL_NOTSAFEPOINT
 }
 void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
 {
-    *jl_pgcstack_key() = pgcstack;
+    *(jl_gcframe_t**)jl_pgcstack_key() = pgcstack;
 }
 #  if JL_USE_IFUNC
 JL_DLLEXPORT __attribute__((weak))
