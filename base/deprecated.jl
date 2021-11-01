@@ -18,7 +18,7 @@
     @deprecate old new [ex=true]
 
 Deprecate method `old` and specify the replacement call `new`, defining a new method `old`
-with the specified signature in the process. 
+with the specified signature in the process.
 
 To prevent `old` from being exported, set `ex` to `false`.
 
