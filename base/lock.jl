@@ -4,7 +4,7 @@ const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
 
 # Advisory reentrant lock
 """
-    ReentrantLock()
+    Lock()
 
 Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
 acquire the lock as many times as required. Each [`lock`](@ref) must be matched
@@ -25,13 +25,14 @@ finally
 end
 ```
 """
-mutable struct ReentrantLock <: AbstractLock
-    locked_by::Union{Task, Nothing}
+mutable struct Lock <: AbstractLock
+    @atomic locked_by::Union{Task, Nothing}
     cond_wait::ThreadSynchronizer
-    reentrancy_cnt::Int
+    @atomic reentrancy_cnt::Int
 
-    ReentrantLock() = new(nothing, ThreadSynchronizer(), 0)
+    Lock() = new(nothing, ThreadSynchronizer(), 0)
 end
+const ReentrantLock = Lock
 
 assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
 
@@ -55,23 +56,17 @@ return `false`.
 
 Each successful `trylock` must be matched by an [`unlock`](@ref).
 """
-function trylock(rl::ReentrantLock)
-    t = current_task()
-    if t === rl.locked_by
-        rl.reentrancy_cnt += 1
+@inline function trylock(rl::ReentrantLock)
+    ct = current_task()
+    GC.disable_finalizers()
+    locked_by, success = @atomicreplace :acquire rl.locked_by nothing => ct
+    if success | (ct === locked_by)
+        @atomic :monotonic rl.reentrancy_cnt = rl.reentrancy_cnt + 1
         return true
-    end
-    lock(rl.cond_wait)
-    if rl.reentrancy_cnt == 0
-        rl.locked_by = t
-        rl.reentrancy_cnt = 1
-        GC.disable_finalizers()
-        got = true
     else
-        got = false
+        GC.enable_finalizers()
+        return false
     end
-    unlock(rl.cond_wait)
-    return got
 end
 
 """
@@ -84,26 +79,41 @@ wait for it to become available.
 Each `lock` must be matched by an [`unlock`](@ref).
 """
 function lock(rl::ReentrantLock)
-    t = current_task()
-    if t === rl.locked_by
-        rl.reentrancy_cnt += 1
-    else
-        lock(rl.cond_wait)
+    trylock(rl) || slowlock(rl)
+    return
+end
+@noinline function slowlock(rl::ReentrantLock)
+    ct = current_task()
+    c = rl.cond_wait
+    lock(c.lock)
+    try
+        # Implements this, but race-free, while avoiding adding an extra
+        # bit to the Lock struct to indicate the presence of waiters.
+        #   while !trylock(rl)
+        #       wait(rl.cond_wait)
+        #   end
         while true
-            if rl.reentrancy_cnt == 0
-                rl.locked_by = t
-                rl.reentrancy_cnt = 1
-                GC.disable_finalizers()
+            _wait2(c, ct)
+            if trylock(rl)
+                # This removes it from _wait2 again.
+                # Note that we hold the lock on c, so we know the list
+                # cannot have changed even while the other thread might
+                # have checked `isempty`, and is now waiting on this lock.
+                list_deletefirst!(c.waitq, ct)
                 break
             end
+            token = unlockall(c.lock)
             try
-                wait(rl.cond_wait)
+                wait()
             catch
-                unlock(rl.cond_wait)
+                ct.queue === nothing || list_deletefirst!(ct.queue, ct)
                 rethrow()
+            finally
+                relockall(c.lock, token)
             end
         end
-        unlock(rl.cond_wait)
+    finally
+        unlock(c.lock)
     end
     return
 end
@@ -117,56 +127,44 @@ If this is a recursive lock which has been acquired before, decrement an
 internal counter and return immediately.
 """
 function unlock(rl::ReentrantLock)
-    t = current_task()
+    ct = current_task()
     n = rl.reentrancy_cnt
-    n == 0 && error("unlock count must match lock count")
-    rl.locked_by === t || error("unlock from wrong thread")
-    if n > 1
-        rl.reentrancy_cnt = n - 1
-    else
-        lock(rl.cond_wait)
-        rl.reentrancy_cnt = 0
-        rl.locked_by = nothing
-        if !isempty(rl.cond_wait.waitq)
-            try
-                notify(rl.cond_wait)
-            catch
-                unlock(rl.cond_wait)
-                rethrow()
-            end
+    rl.locked_by === ct || error(n == 0 ? "unlock count must match lock count" : "unlock from wrong thread")
+    # n == 0 && error("unlock count must match lock count") # impossible
+    @atomic :monotonic rl.reentrancy_cnt = n - 1
+    if n == 1
+        # either our thread will release locked_by first,
+        # or the other thread will be added to waitq first
+        # so we avoid the race, and usually the lock
+        @atomic rl.locked_by = nothing # TODO: make this :release?
+        # FIXME: Core.Intrinsics.atomic_fence(:acquire)
+        if !isempty(rl.cond_wait.waitq) # TODO: make this :acquire?
+            (@noinline function notifywaiters(rl)
+                cond_wait = rl.cond_wait
+                lock(cond_wait)
+                try
+                    notify(cond_wait)
+                finally
+                    unlock(cond_wait)
+                end
+            end)(rl)
         end
         GC.enable_finalizers()
-        unlock(rl.cond_wait)
     end
     return
 end
 
 function unlockall(rl::ReentrantLock)
-    t = current_task()
     n = rl.reentrancy_cnt
-    rl.locked_by === t || error("unlock from wrong thread")
-    n == 0 && error("unlock count must match lock count")
-    lock(rl.cond_wait)
-    rl.reentrancy_cnt = 0
-    rl.locked_by = nothing
-    if !isempty(rl.cond_wait.waitq)
-        try
-            notify(rl.cond_wait)
-        catch
-            unlock(rl.cond_wait)
-            rethrow()
-        end
-    end
-    GC.enable_finalizers()
-    unlock(rl.cond_wait)
+    @atomic :monotonic rl.reentrancy_cnt = 1
+    unlock(rl)
     return n
 end
 
 function relockall(rl::ReentrantLock, n::Int)
-    t = current_task()
     lock(rl)
     n1 = rl.reentrancy_cnt
-    rl.reentrancy_cnt = n
+    @atomic :monotonic rl.reentrancy_cnt = n
     n1 == 1 || concurrency_violation()
     return
 end

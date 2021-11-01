@@ -26,6 +26,8 @@ Base.schedule
 
 ## [Synchronization](@id lib-task-sync)
 
+## Synchronization
+
 ```@docs
 Base.errormonitor
 Base.@sync
@@ -34,6 +36,8 @@ Base.fetch(t::Task)
 Base.timedwait
 
 Base.Condition
+Base.Threads.Condition
+Base.Threads.Event
 Base.notify
 
 Base.Semaphore
@@ -45,7 +49,7 @@ Base.lock
 Base.unlock
 Base.trylock
 Base.islocked
-Base.ReentrantLock
+Base.Lock
 ```
 
 ## Channels
