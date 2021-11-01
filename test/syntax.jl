@@ -2473,6 +2473,10 @@ import .Mod: x as x2
 @test x2 == 1
 @test !@isdefined(x)
 
+module_names = names(@__MODULE__; all=true, imported=true)
+@test :x2 ∈ module_names
+@test :x ∉ module_names
+
 import .Mod2.y as y2
 
 @test y2 == 2
