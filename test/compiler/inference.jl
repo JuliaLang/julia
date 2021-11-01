@@ -3669,3 +3669,26 @@ end
 
 # issue #42646
 @test only(Base.return_types(getindex, (Array{undef}, Int))) >: Union{} # check that it does not throw
+
+# form PartialStruct for extra type information propagation
+struct FieldTypeRefinement{S,T}
+    s::S
+    t::T
+end
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Any,Int}(s, s)
+    o.s
+end |> only == Int
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Int,Any}(s, s)
+    o.t
+end |> only == Int
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Any,Any}(s, s)
+    o.s, o.t
+end |> only == Tuple{Int,Int}
+@test Base.return_types((Int,)) do a
+    s1 = Some{Any}(a)
+    s2 = Some{Any}(s1)
+    s2.value.value
+end |> only == Int

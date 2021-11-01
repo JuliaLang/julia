@@ -345,9 +345,9 @@ function from_interconditional(@nospecialize(typ), (; fargs, argtypes)::ArgInfo,
             else
                 elsetype = tmeet(elsetype, widenconst(new_elsetype))
             end
-            if (slot > 0 || condval !== false) && !(old ⊑ vtype) # essentially vtype ⋤ old
+            if (slot > 0 || condval !== false) && vtype ⋤ old
                 slot = id
-            elseif (slot > 0 || condval !== true) && !(old ⊑ elsetype) # essentially elsetype ⋤ old
+            elseif (slot > 0 || condval !== true) && elsetype ⋤ old
                 slot = id
             else # reset: no new useful information for this slot
                 vtype = elsetype = Any
@@ -1598,36 +1598,35 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     elseif ehead === :new
         t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
         if isconcretetype(t) && !ismutabletype(t)
-            args = Vector{Any}(undef, length(e.args)-1)
-            ats = Vector{Any}(undef, length(e.args)-1)
-            anyconst = false
-            allconst = true
+            nargs = length(e.args) - 1
+            ats = Vector{Any}(undef, nargs)
+            local anyrefine = false
+            local allconst = true
             for i = 2:length(e.args)
                 at = widenconditional(abstract_eval_value(interp, e.args[i], vtypes, sv))
-                if !anyconst
-                    anyconst = has_nontrivial_const_info(at)
-                end
-                ats[i-1] = at
+                ft = fieldtype(t, i-1)
+                at = tmeet(at, ft)
                 if at === Bottom
                     t = Bottom
-                    allconst = anyconst = false
-                    break
-                elseif at isa Const
-                    if !(at.val isa fieldtype(t, i - 1))
-                        t = Bottom
-                        allconst = anyconst = false
-                        break
-                    end
-                    args[i-1] = at.val
-                else
+                    @goto t_computed
+                elseif !isa(at, Const)
                     allconst = false
                 end
+                if !anyrefine
+                    anyrefine = has_nontrivial_const_info(at) || # constant information
+                                at ⋤ ft                          # just a type-level information, but more precise than the declared type
+                end
+                ats[i-1] = at
             end
             # For now, don't allow partially initialized Const/PartialStruct
-            if t !== Bottom && fieldcount(t) == length(ats)
+            if fieldcount(t) == nargs
                 if allconst
-                    t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, args, length(args)))
-                elseif anyconst
+                    argvals = Vector{Any}(undef, nargs)
+                    for j in 1:nargs
+                        argvals[j] = (ats[j]::Const).val
+                    end
+                    t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, argvals, nargs))
+                elseif anyrefine
                     t = PartialStruct(t, ats)
                 end
             end
@@ -1638,7 +1637,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
             if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val::Tuple) &&
-                let t = t; _all(i->getfield(at.val::Tuple, i) isa fieldtype(t, i), 1:n); end
+                let t = t, at = at; _all(i->getfield(at.val::Tuple, i) isa fieldtype(t, i), 1:n); end
                 t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
             elseif isa(at, PartialStruct) && at ⊑ Tuple && n == length(at.fields::Vector{Any}) &&
                 let t = t, at = at; _all(i->(at.fields::Vector{Any})[i] ⊑ fieldtype(t, i), 1:n); end
@@ -1718,6 +1717,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     else
         t = abstract_eval_value_expr(interp, e, vtypes, sv)
     end
+    @label t_computed
     @assert !isa(t, TypeVar) "unhandled TypeVar"
     if isa(t, DataType) && isdefined(t, :instance)
         # replace singleton types with their equivalent Const object
@@ -1801,17 +1801,18 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
     isa(rt, Type) && return rt
     if isa(rt, PartialStruct)
         fields = copy(rt.fields)
-        haveconst = false
+        local anyrefine = false
         for i in 1:length(fields)
             a = fields[i]
             a = isvarargtype(a) ? a : widenreturn(a, bestguess, nslots, slottypes, changes)
-            if !haveconst && has_const_info(a)
+            if !anyrefine
                 # TODO: consider adding && const_prop_profitable(a) here?
-                haveconst = true
+                anyrefine = has_const_info(a) ||
+                            a ⊏ fieldtype(rt.typ, i)
             end
             fields[i] = a
         end
-        haveconst && return PartialStruct(rt.typ, fields)
+        anyrefine && return PartialStruct(rt.typ, fields)
     end
     if isa(rt, PartialOpaque)
         return rt # XXX: this case was missed in #39512
