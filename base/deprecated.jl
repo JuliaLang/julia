@@ -17,9 +17,10 @@
 """
     @deprecate old new [ex=true]
 
-Deprecate method `old` and specify the replacement call `new`. Prevent `@deprecate` from
-exporting `old` by setting `ex` to `false`. `@deprecate` defines a new method with the same
-signature as `old`.
+Deprecate method `old` and specify the replacement call `new`, defining a new method `old`
+with the specified signature in the process. 
+
+To prevent `old` from being exported, set `ex` to `false`.
 
 !!! compat "Julia 1.5"
     As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
@@ -34,6 +35,16 @@ old (generic function with 1 method)
 julia> @deprecate old(x) new(x) false
 old (generic function with 1 method)
 ```
+
+To deprecate a specific signature, annotate the arguments of `old`. For example,
+```jldoctest
+julia> new(x::Integer, y::Real) = x + y
+julia> new(x::Real, y::Integer) = x - y
+julia> @deprecate old(x::Integer, y::Real) new(x, y)
+old (generic function with 1 method)
+```
+will define (and deprecate) a method `old(x::Integer, y::Real)` but not a method
+`old(x::Real, y::Integer)`.
 """
 macro deprecate(old, new, ex=true)
     meta = Expr(:meta, :noinline)
