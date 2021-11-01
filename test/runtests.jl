@@ -398,6 +398,15 @@ cd(@__DIR__) do
         Test.pop_testset()
     end
     Test.TESTSET_PRINT_ENABLE[] = true
+    if !o_ts.anynonpass
+        # We want to print the names of all of the top-level test sets,
+        # even if all of the tests passed.
+        original_verbose_value = o_ts.verbose
+        o_ts.verbose = true
+        println()
+        Test.print_test_results(o_ts, 1)
+        o_ts.verbose = original_verbose_value
+    end
     println()
     Test.print_test_results(o_ts, 1)
     if !o_ts.anynonpass
