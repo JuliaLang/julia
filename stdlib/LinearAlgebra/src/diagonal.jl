@@ -355,7 +355,7 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     require_one_based_indexing(A)
     dd = D.diag
     m, n = size(A, 1), size(A, 2)
-    if (k = length(dd)) ≠ n
+    if (k = length(dd)) != n
         throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
     end
     @inbounds for j in 1:n
@@ -387,7 +387,7 @@ end
 \(D::Diagonal, B::Diagonal) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B))), D, B)
 /(A::Diagonal, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D))), A, D)
 function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
-    n, k = length(Db.diag), length(Db.diag)
+    n, k = length(Db.diag), length(Da.diag)
     n == k || throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
     j = findfirst(iszero, Da.diag)
     isnothing(j) || throw(SingularException(j))
@@ -395,6 +395,81 @@ function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
     Dc
 end
 ldiv!(Dc::Diagonal, Da::Diagonal, Db::Diagonal) = Diagonal(ldiv!(Dc.diag, Da, Db.diag))
+
+# optimizations for (Sym)Tridiagonal and Diagonal
+function (\)(D::Diagonal, S::SymTridiagonal)
+    T = typeof(oneunit(eltype(D)) \ oneunit(eltype(S)))
+    dl = copy_oftype(S.ev, T)
+    d  = copy_oftype(S.dv, T)
+    du = copy_oftype(S.ev, T)
+    ldiv!(D, Tridiagonal(dl, d, du))
+end
+function (\)(D::Diagonal, T::Tridiagonal)
+    Td = typeof(oneunit(eltype(D)) \ oneunit(eltype(T)))
+    ldiv!(D, copy_oftype(T, Td))
+end
+function ldiv!(Tr::Tridiagonal, D::Diagonal, T::Tridiagonal)
+    m = length(T.d)
+    dd = D.diag
+    if (k = length(dd)) != m
+        throw(DimensionMismatch("diagonal matrix is $k by $k but right hand side has $m rows"))
+    end
+    if length(Tr.d) != m
+        throw(DimensionMismatch("target matrix size $(size(Tr)) does not match input matrix size $(size(T))"))
+    end
+    j = findfirst(iszero, dd)
+    isnothing(j) || throw(SingularException(j))
+    ddj = dd[1]
+    Tr.d[1] = ddj \ T.d[1]
+    Tr.du[1] = ddj \ T.du[1]
+    for j in 2:m-1
+        ddj = dd[j]
+        Tr.dl[j-1] = ddj \ T.dl[j-1]
+        Tr.d[j]  = ddj \ T.d[j]
+        Tr.du[j] = ddj \ T.du[j]
+    end
+    ddj = dd[m]
+    Tr.dl[m-1] = ddj \ T.dl[m-1]
+    Tr.d[m] = ddj \ T.d[m]
+    return Tr
+end
+
+function (/)(S::SymTridiagonal, D::Diagonal)
+    T = typeof(oneunit(eltype(S)) / oneunit(eltype(D)))
+    dl = copy_oftype(S.ev, T)
+    d  = copy_oftype(S.dv, T)
+    du = copy_oftype(S.ev, T)
+    rdiv!(Tridiagonal(dl, d, du), D)
+end
+function (/)(T::Tridiagonal, D::Diagonal)
+    Td = typeof(oneunit(eltype(T)) / oneunit(eltype(D)))
+    rdiv!(copy_oftype(T, Td), D)
+end
+function _rdiv!(Tr::Tridiagonal, T::Tridiagonal, D::Diagonal)
+    n = length(T.d)
+    dd = D.diag
+    if (k = length(dd)) != n
+        throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
+    end
+    if length(Tr.d) != n
+        throw(DimensionMismatch("target matrix size $(size(Tr)) does not match input matrix size $(size(T))"))
+    end
+    j = findfirst(iszero, dd)
+    isnothing(j) || throw(SingularException(j))
+    ddj = dd[1]
+    Tr.d[1] = T.d[1] / ddj
+    Tr.dl[1] = T.dl[1] / ddj
+    for j in 2:n-1
+        ddj = dd[j]
+        Tr.dl[j] = T.dl[j] / ddj
+        Tr.d[j] = T.d[j] / ddj
+        Tr.du[j-1] = T.du[j-1] / ddj
+    end
+    ddj = dd[n]
+    Tr.d[n] = T.d[n] / ddj
+    Tr.du[n-1] = T.du[n-1] / ddj
+    return Tr
+end
 
 # Optimizations for [l/r]mul!, l/rdiv!, *, / and \ between Triangular and Diagonal.
 # These functions are generally more efficient if we calculate the whole data field.

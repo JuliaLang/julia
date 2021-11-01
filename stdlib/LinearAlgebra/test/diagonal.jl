@@ -776,6 +776,19 @@ end
     end
 end
 
+@testset "(Sym)Tridiagonal division by Diagonal" begin
+    K = 5
+    for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        S = SymTridiagonal(randn(elty, K), randn(elty, K-1))
+        T = Tridiagonal(randn(elty, K-1), randn(elty, K), randn(elty, K-1))
+        D = Diagonal(randn(elty, K))
+        @test (D \ S)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(S))
+        @test (D \ T)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(T))
+        @test (S / D)::Tridiagonal{elty} == Tridiagonal(Matrix(S) / Matrix(D))
+        @test (T / D)::Tridiagonal{elty} == Tridiagonal(Matrix(T) / Matrix(D))
+    end
+end
+
 @testset "eigenvalue sorting" begin
     D = Diagonal([0.4, 0.2, -1.3])
     @test eigvals(D) == eigen(D).values == [0.4, 0.2, -1.3] # not sorted by default
