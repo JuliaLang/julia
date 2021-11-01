@@ -705,7 +705,7 @@ end
 # # https://github.com/JuliaLang/julia/pull/39845
 @test LinearAlgebra.LAPACK.liblapack == "libblastrampoline"
 
-# Issue #13976 https://github.com/JuliaLang/julia/issues/42762
+# Issue #42762 https://github.com/JuliaLang/julia/issues/42762
 # Tests geqrf! and gerqf! with null column dimensions
 a = zeros(2,0), zeros(0)
 @test LinearAlgebra.LAPACK.geqrf!(a...) == a
