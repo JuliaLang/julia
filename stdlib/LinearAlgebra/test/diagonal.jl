@@ -908,7 +908,7 @@ end
     @test c[1] == d1
     @test c[2] == d2
 end
-                    
+
 @testset "zero and one" begin
     D1 = Diagonal(rand(3))
     @test D1 + zero(D1) == D1
