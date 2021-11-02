@@ -166,6 +166,10 @@ function _noshapecheck_map(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N
     fpreszeros = _iszero(fofzeros)
     maxnnzC = Int(fpreszeros ? min(widelength(A), _sumnnzs(A, Bs...)) : widelength(A))
     entrytypeC = Base.Broadcast.combine_eltypes(f, (A, Bs...))
+    # handle the case where inference fails (#35454), but try not to hit a zero
+    if entrytypeC == Any && length(nonzeros(A)) > 0
+        entrytypeC = typeof(f(first(nonzeros(A))))
+    end
     indextypeC = _promote_indtype(A, Bs...)
     C = _allocres(size(A), indextypeC, entrytypeC, maxnnzC)
     return fpreszeros ? _map_zeropres!(f, C, A, Bs...) :

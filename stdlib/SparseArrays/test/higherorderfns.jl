@@ -736,4 +736,10 @@ end
     @test A * C == B * C == spzeros(Int, 4, 6)
 end
 
+@testset "#35454 - broadcasting type constructor over sparse array results in Any sparse array" begin
+    for T in (Float64, Float32, ComplexF64, ComplexF32, Int64, Int32)
+        @test T.(sprand(4,5,0.4) .> 0.5) isa SparseMatrixCSC{T, Int64}
+    end
+end
+
 end # module
