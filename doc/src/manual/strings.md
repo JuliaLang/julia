@@ -482,17 +482,17 @@ of the concatenated strings, e.g.:
 julia> a, b = "\xe2\x88", "\x80"
 ("\xe2\x88", "\x80")
 
-julia> c = a*b
+julia> c = string(a, b)
 "∀"
 
 julia> collect.([a, b, c])
-3-element Array{Array{Char,1},1}:
+3-element Vector{Vector{Char}}:
  ['\xe2\x88']
  ['\x80']
  ['∀']
 
 julia> length.([a, b, c])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  1
  1
