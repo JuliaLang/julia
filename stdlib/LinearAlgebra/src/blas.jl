@@ -192,6 +192,10 @@ julia> BLAS.get_num_threads()
     threads calling BLAS routines, then the threads they are
     using will also be changed until this function finishes.
 
+!!! warning
+    This interface is experimental and subject to change or
+    removal without notice.
+
 See also [`set_num_threads`](@ref BLAS.set_num_threads) to permanently change
 number of BLAS threads.
 """
