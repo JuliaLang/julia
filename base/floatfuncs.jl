@@ -369,13 +369,11 @@ end
 
 function fma_emulated(a::Float64, b::Float64,c::Float64)
     abhi, ablo = twomul(a,b)
-    #display(twomul(a,b))
     if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || issubnormal(a) || issubnormal(b)
-        isfinite(abhi+c) || return abhi+c
+        (isfinite(a) && isfinite(b) && isfinite(c)) || return abhi+c
         (iszero(a) || iszero(b)) && return abhi+c
         bias = exponent(a) + exponent(b)
         c_denorm = ldexp(c, -bias)
-        #display((a,b,c_denorm))
         if isfinite(c_denorm)
             # rescale a and b to [1,2), equivalent to ldexp(a, -exponent(a))
             issubnormal(a) && (a *= 0x1p52)
@@ -383,17 +381,18 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             a = reinterpret(Float64, (reinterpret(UInt64, a) & 0x800fffffffffffff) | 0x3ff0000000000000)
             b = reinterpret(Float64, (reinterpret(UInt64, b) & 0x800fffffffffffff) | 0x3ff0000000000000)
             c = c_denorm
-            #display((a,b,c))
+            display((a,b,c))
             abhi, ablo = twomul(a,b)
             r = abhi+c
             s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
             sumhi = r+s
             if issubnormal(ldexp(sumhi, bias)) #black magic don't worry about it.
-                sumlo = sumhi-r-s
+                sumlo = r-sumhi+s
                 bits_lost = -bias-exponent(sumhi)-1022
                 sumhiInt = reinterpret(UInt64, sumhi)
+                display((sumhi, sumlo, bits_lost, sumhiInt, bias))
                 if sumlo != 0 && ((bits_lost != 1) ⊻ (sumhiInt&1 == 1))
-                    sumhi = nextfloat(sumhi, ifelse(signbit(sumhi)==signbit(sumlo), -1, 1))
+                    sumhi = nextfloat(sumhi, ifelse(signbit(sumhi)==signbit(sumlo), 1, -1))
                 end
             end
             return ldexp(sumhi, bias)
