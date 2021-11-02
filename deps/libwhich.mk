@@ -1,5 +1,5 @@
 ## LIBWHICH ##
-LIBWHICH_GIT_URL := git://github.com/vtjnash/libwhich.git
+LIBWHICH_GIT_URL := https://github.com/vtjnash/libwhich.git
 LIBWHICH_TAR_URL = https://api.github.com/repos/vtjnash/libwhich/tarball/$1
 $(eval $(call git-external,libwhich,LIBWHICH,,,$(BUILDDIR)))
 
