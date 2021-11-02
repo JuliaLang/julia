@@ -36,9 +36,9 @@ julia> @deprecate old(x) new(x) false
 old (generic function with 1 method)
 ```
 
-By default, calls to `@deprecate` without explicit type-annotations will define deprecated
-methods accepting arguments of type `Any`. To restrict deprecation to a specific signature,
-annotate the arguments of `old`. For example,
+Calls to `@deprecate` without explicit type-annotations will define deprecated methods
+accepting arguments of type `Any`. To restrict deprecation to a specific signature, annotate
+the arguments of `old`. For example,
 ```jldoctest
 julia> new(x::Int) = x
 
