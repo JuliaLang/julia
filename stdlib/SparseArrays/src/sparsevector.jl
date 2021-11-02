@@ -1411,6 +1411,27 @@ end
 
 minimum(x::AbstractSparseVector) = minimum(identity, x)
 
+for (fun, comp, word) in ((:findmin, :(<), "minimum"), (:findmax, :(>), "maximum"))
+    @eval function $fun(f, x::AbstractSparseVector{T}) where {T}
+        n = length(x)
+        n > 0 || throw(ArgumentError($word * " over empty array is not allowed"))
+        nzvals = nonzeros(x)
+        m = length(nzvals)
+        m == 0 && return zero(T), firstindex(x)
+        val, index = $fun(f, nzvals)
+        m == n && return val, index
+        nzinds = nonzeroinds(x)
+        zeroval = f(zero(T))
+        $comp(val, zeroval) && return val, nzinds[index]
+        # we need to find the first zero, which could be stored or implicit
+        # we try to avoid findfirst(iszero, x)
+        sindex = findfirst(iszero, nzvals) # first stored zero, if any
+        zindex = findfirst(i -> i < nzinds[i], eachindex(nzinds)) # first non-stored zero
+        index = isnothing(sindex) ? zindex : min(sindex, zindex)
+        return zeroval, index
+    end
+end
+
 norm(x::SparseVectorUnion, p::Real=2) = norm(nonzeros(x), p)
 
 ### linalg.jl
