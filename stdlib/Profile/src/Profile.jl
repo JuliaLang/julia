@@ -122,6 +122,12 @@ struct ProfileFormat
     end
 end
 
+# offsets of the metadata in the data stream
+const META_OFFSET_SLEEPSTATE = 2
+const META_OFFSET_CPUCYCLECLOCK = 3
+const META_OFFSET_TASKID = 4
+const META_OFFSET_THREADID = 5
+
 """
     print([io::IO = stdout,] [data::Vector]; kwargs...)
 
@@ -267,8 +273,8 @@ function get_task_ids(data::Vector{<:Unsigned}, threadid = nothing)
     taskids = UInt[]
     for i in length(data):-1:1
         if is_block_end(data, i)
-            if isnothing(threadid) || data[i - 5] == threadid
-                taskid = data[i - 4]
+            if isnothing(threadid) || data[i - META_OFFSET_THREADID] == threadid
+                taskid = data[i - META_OFFSET_TASKID]
                 !in(taskid, taskids) && push!(taskids, taskid)
             end
         end
@@ -280,8 +286,8 @@ function get_thread_ids(data::Vector{<:Unsigned}, taskid = nothing)
     threadids = Int[]
     for i in length(data):-1:1
         if is_block_end(data, i)
-            if isnothing(taskid) || data[i - 4] == taskid
-                threadid = data[i - 5]
+            if isnothing(taskid) || data[i - META_OFFSET_TASKID] == taskid
+                threadid = data[i - META_OFFSET_THREADID]
                 !in(threadid, threadids) && push!(threadids, threadid)
             end
         end
@@ -296,17 +302,17 @@ function is_block_end(data, i)
     # and we could have (though very unlikely):
     # 1:<stack><metadata><null><null><NULL><metadata><null><null>:end
     # and we want to ignore the triple NULL (which is an ip).
-    return data[i] == 0 && data[i - 1] == 0 && data[i - 2] != 0
+    return data[i] == 0 && data[i - 1] == 0 && data[i - META_OFFSET_SLEEPSTATE] != 0
 end
 
 function has_meta(data)
     for i in 6:length(data)
         data[i] == 0 || continue            # first block end null
         data[i - 1] == 0 || continue        # second block end null
-        data[i - 2] in 1:2 || continue      # sleep state
-        data[i - 3] != 0 || continue        # cpu_cycle_clock
-        data[i - 4] != 0 || continue        # taskid
-        data[i - 5] != 0 || continue        # threadid
+        data[i - META_OFFSET_SLEEPSTATE] in 1:2 || continue
+        data[i - META_OFFSET_CPUCYCLECLOCK] != 0 || continue
+        data[i - META_OFFSET_TASKID] != 0 || continue
+        data[i - META_OFFSET_THREADID] != 0 || continue
         return true
     end
     return false
@@ -599,10 +605,10 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
         ip = data[i]
         if is_block_end(data, i)
             # read metadata
-            thread_sleeping = data[i - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
-            # cpu_cycle_clock = data[i - 3]
-            taskid = data[i - 4]
-            threadid = data[i - 5]
+            thread_sleeping = data[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = data[i - META_OFFSET_CPUCYCLECLOCK]
+            taskid = data[i - META_OFFSET_TASKID]
+            threadid = data[i - META_OFFSET_THREADID]
             if !in(threadid, threads) || !in(taskid, tasks)
                 skip = true
                 continue
@@ -848,10 +854,10 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         ip = all[i]
         if is_block_end(all, i)
             # read metadata
-            thread_sleeping = all[i - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
-            # cpu_cycle_clock = all[i - 3]
-            taskid = all[i - 4]
-            threadid = all[i - 5]
+            thread_sleeping = all[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = all[i - META_OFFSET_CPUCYCLECLOCK]
+            taskid = all[i - META_OFFSET_TASKID]
+            threadid = all[i - META_OFFSET_THREADID]
             if (threads !== nothing && !in(threadid, threads)) ||
                (tasks !== nothing && !in(taskid, tasks))
                 skip = true
