@@ -136,6 +136,9 @@ rest(a::Array, i::Int=1) = a[i:end]
 rest(a::Core.SimpleVector, i::Int=1) = a[i:end]
 rest(itr, state...) = Iterators.rest(itr, state...)
 
+split_rest(t::Tuple, ::Val{N}) where {N} = t[1:end-N], t[end-N+1:end]
+split_rest(t::Tuple, ::Val{N}, st) where {N} = t[st:end-N], t[end-N+1:end]
+
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
 first(t::Tuple) = t[1]

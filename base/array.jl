@@ -2672,3 +2672,33 @@ function intersect(v::AbstractVector, r::AbstractRange)
     return vectorfilter(T, _shrink_filter!(seen), common)
 end
 intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
+
+
+_collect_n(itr, ::Val{0}) = error()
+_collect_n(itr, ::Val{0}, st) = ((), st)
+function _collect_n(itr, ::Val{N}, st...) where {N}
+    tmp = iterate(itr, st...)
+    if tmp === nothing
+        error("Iterator does not contain enough elements for the given variables.")
+    end
+    first, st′ = tmp
+    tail, st′′ = _collect_n(itr, Val(N-1), st′)
+    return (first, tail...), st′′
+end
+
+function split_rest(itr, ::Val{N}, st...) where {N}
+    if IteratorSize(itr) == IsInfinite()
+        error("Can't split an infinite iterator in the middle.")
+    end
+    last_n, st′ = _collect_n(itr, Val(N), st...)
+    front = Vector{@default_eltype(itr)}()
+    while true
+        tmp = iterate(itr, st′)
+        tmp === nothing && break
+        xᵢ, st′ = tmp
+        push!(front, first(last_n))
+        last_n = (tail(last_n)..., xᵢ)
+    end
+    return front, last_n
+end
+
