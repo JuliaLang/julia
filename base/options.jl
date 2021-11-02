@@ -47,6 +47,7 @@ struct JLOptions
     warn_scope::Int8
     image_codegen::Int8
     rr_detach::Int8
+    strip_metadata::Int8
 end
 
 # This runs early in the sysimage != is not defined yet
