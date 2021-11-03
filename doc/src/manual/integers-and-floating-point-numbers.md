@@ -180,10 +180,10 @@ literal, which has the same length but leading digit `1`. It means that:
 - `0x12345` and `0x12345678` are `UInt32` literals,
 - `0x123456789` and `0x1234567890adcdef` are `UInt64` literals, etc.
 
-Even if there are leading zero digits which don’t contribute to the value, they count for 
+Even if there are leading zero digits which don’t contribute to the value, they count for
 determining storage size of a literal. So `0x01` is a `UInt8` while `0x0001` is a `UInt16`.
 
-That allows the user to control the size. 
+That allows the user to control the size.
 
 Values which cannot be stored in `UInt128` cannot be written as such literals.
 
