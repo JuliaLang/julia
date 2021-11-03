@@ -507,6 +507,22 @@ end
     @test det(B)  ==  0.0
     @test det(B)  ≈  det(A) atol=eps()
     @test logdet(B)  ==  -Inf
- end
+end
+
+@testset "accessing both L and U factors should avoid allocations" begin
+    n = 10
+    A = rand(n, n)
+    Apd = A'A
+
+    for uplo in (:L, :U)
+        C = Symmetric(Apd, uplo)
+        for val in (Val(true), Val(false))
+            B = cholesky(C, val)
+            B.L, B.U  # access once to ensure the accessor is compiled already
+            @test @allocated B.L <= 16
+            @test @allocated B.U <= 16
+        end
+    end
+end
 
 end # module TestCholesky
