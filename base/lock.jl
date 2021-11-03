@@ -26,15 +26,15 @@ end
 ```
 """
 mutable struct Lock <: AbstractLock
-    @atomic locked_by::Union{Task, Nothing}
+    @atomic locked_by::Ptr{Nothing} # Task or NULL, but without the write barrier
     cond_wait::ThreadSynchronizer
     @atomic reentrancy_cnt::Int
 
-    Lock() = new(nothing, ThreadSynchronizer(), 0)
+    Lock() = new(C_NULL, ThreadSynchronizer(), 0)
 end
 const ReentrantLock = Lock
 
-assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
+assert_havelock(l::ReentrantLock) = (l.locked_by === pointer_from_objref(current_task())) ? nothing : concurrency_violation()
 
 """
     islocked(lock) -> Status (Boolean)
@@ -57,9 +57,9 @@ return `false`.
 Each successful `trylock` must be matched by an [`unlock`](@ref).
 """
 @inline function trylock(rl::ReentrantLock)
-    ct = current_task()
+    ct = pointer_from_objref(current_task())
     GC.disable_finalizers()
-    locked_by, success = @atomicreplace :acquire rl.locked_by nothing => ct
+    locked_by, success = @atomicreplace :acquire rl.locked_by C_NULL => ct
     if success | (ct === locked_by)
         @atomic :monotonic rl.reentrancy_cnt = rl.reentrancy_cnt + 1
         return true
@@ -127,7 +127,7 @@ If this is a recursive lock which has been acquired before, decrement an
 internal counter and return immediately.
 """
 function unlock(rl::ReentrantLock)
-    ct = current_task()
+    ct = pointer_from_objref(current_task())
     n = rl.reentrancy_cnt
     rl.locked_by === ct || error(n == 0 ? "unlock count must match lock count" : "unlock from wrong thread")
     # n == 0 && error("unlock count must match lock count") # impossible
@@ -136,7 +136,7 @@ function unlock(rl::ReentrantLock)
         # either our thread will release locked_by first,
         # or the other thread will be added to waitq first
         # so we avoid the race, and usually the lock
-        @atomic rl.locked_by = nothing # TODO: make this :release?
+        @atomic rl.locked_by = C_NULL # TODO: make this :release?
         # FIXME: Core.Intrinsics.atomic_fence(:acquire)
         if !isempty(rl.cond_wait.waitq) # TODO: make this :acquire?
             (@noinline function notifywaiters(rl)
