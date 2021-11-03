@@ -612,7 +612,7 @@ function fetch(r::Future)
         v_old, status = lock(r.lock) do
             @atomicreplace r.v nothing => Some(v_local)
         end
-        # status == true - when value obtained through call_on_owner, put! done from a different worker
+        # status == true - when value obtained through call_on_owner, put! called from a different worker
         # status == false - any other situation: atomicreplace fails, because by the time the lock is obtained cache will be populated
         # why? put! performs caching and putting into channel under r.lock
 
