@@ -27,6 +27,8 @@ Language changes
 * New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
 * `last(collection)` will now work on any collection that supports `Iterators.reverse` and `first`, rather than being
   restricted to indexable collections.
+* Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
+  to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
 
 Compiler/Runtime improvements
 -----------------------------
