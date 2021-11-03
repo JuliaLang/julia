@@ -43,6 +43,7 @@ Random.seed!(1)
             @test ubd.dv === x
             @test lbd.ev === y
             @test_throws ArgumentError Bidiagonal(x, y, :R)
+            @test_throws ArgumentError Bidiagonal(x, y, 'R')
             x == dv0 || @test_throws DimensionMismatch Bidiagonal(x, x, :U)
             @test_throws MethodError Bidiagonal(x, y)
             # from matrix
@@ -676,6 +677,30 @@ using .Main.ImmutableArrays
     @test convert(AbstractMatrix{Float64}, Bu)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bu
     @test convert(AbstractArray{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
     @test convert(AbstractMatrix{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
+end
+
+@testset "block-bidiagonal matrix indexing" begin
+    dv = [ones(4,3), ones(2,2).*2, ones(2,3).*3, ones(4,4).*4]
+    evu = [ones(4,2), ones(2,3).*2, ones(2,4).*3]
+    evl = [ones(2,3), ones(2,2).*2, ones(4,3).*3]
+    BU = Bidiagonal(dv, evu, :U)
+    BL = Bidiagonal(dv, evl, :L)
+    # check that all the matrices along a column have the same number of columns,
+    # and the matrices along a row have the same number of rows
+    for j in axes(BU, 2), i in 2:size(BU, 1)
+        @test size(BU[i,j], 2) == size(BU[1,j], 2)
+        @test size(BU[i,j], 1) == size(BU[i,1], 1)
+        if j < i || j > i + 1
+            @test iszero(BU[i,j])
+        end
+    end
+    for j in axes(BL, 2), i in 2:size(BL, 1)
+        @test size(BL[i,j], 2) == size(BL[1,j], 2)
+        @test size(BL[i,j], 1) == size(BL[i,1], 1)
+        if j < i-1 || j > i
+            @test iszero(BL[i,j])
+        end
+    end
 end
 
 end # module TestBidiagonal

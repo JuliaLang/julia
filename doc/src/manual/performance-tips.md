@@ -17,7 +17,6 @@ A global variable might have its value, and therefore possibly its type, changed
 it difficult for the compiler to optimize code using global variables. Variables should be local,
 or passed as arguments to functions, whenever possible.
 
-
 We find that global names are frequently constants, and declaring them as such greatly improves
 performance:
 

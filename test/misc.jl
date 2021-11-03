@@ -242,6 +242,35 @@ v11801, t11801 = @timed sin(1)
 
 @test names(@__MODULE__, all = true) == names_before_timing
 
+# Accepted @time argument formats
+@test @time true
+@test @time "message" true
+let msg = "message"
+    @test @time msg true
+end
+let foo() = "message"
+    @test @time foo() true
+end
+
+# Accepted @timev argument formats
+@test @timev true
+@test @timev "message" true
+let msg = "message"
+    @test @timev msg true
+end
+let foo() = "message"
+    @test @timev foo() true
+end
+
+# @showtime
+@test @showtime true
+let foo() = true
+    @test @showtime foo()
+end
+let foo() = false
+    @test (@showtime foo()) == false
+end
+
 # PR #39133, ensure that @time evaluates in the same scope
 function time_macro_scope()
     try # try/throw/catch bypasses printing

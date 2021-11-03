@@ -24,10 +24,10 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT size_t jl_world_counter = 1; // TODO: should this be atomic release/consume?
+JL_DLLEXPORT _Atomic(size_t) jl_world_counter = 1; // uses atomic acquire/release
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT
 {
-    return jl_world_counter;
+    return jl_atomic_load_acquire(&jl_world_counter);
 }
 
 JL_DLLEXPORT size_t jl_get_tls_world_age(void) JL_NOTSAFEPOINT
@@ -412,11 +412,12 @@ static int get_method_unspec_list(jl_typemap_entry_t *def, void *closure)
 {
     jl_svec_t *specializations = def->func.method->specializations;
     size_t i, l = jl_svec_len(specializations);
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     for (i = 0; i < l; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
         if ((jl_value_t*)mi != jl_nothing) {
             assert(jl_is_method_instance(mi));
-            if (jl_rettype_inferred(mi, jl_world_counter, jl_world_counter) == jl_nothing)
+            if (jl_rettype_inferred(mi, world, world) == jl_nothing)
                 jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
         }
     }
@@ -441,7 +442,7 @@ static void foreach_mtable_in_module(
                     jl_typename_t *tn = ((jl_datatype_t*)v)->name;
                     if (tn->module == m && tn->name == b->name) {
                         jl_methtable_t *mt = tn->mt;
-                        if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt) {
+                        if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt && mt != jl_nonfunction_mt) {
                             visit(mt, env);
                         }
                     }
@@ -466,6 +467,7 @@ void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), v
     JL_GC_PUSH2(&visited, &mod_array);
     mod_array = jl_get_loaded_modules();
     visit(jl_type_type_mt, env);
+    visit(jl_nonfunction_mt, env);
     if (mod_array) {
         int i;
         for (i = 0; i < jl_array_len(mod_array); i++) {
@@ -494,14 +496,14 @@ static void reset_mt_caches(jl_methtable_t *mt, void *env)
 
 
 jl_function_t *jl_typeinf_func = NULL;
-size_t jl_typeinf_world = 1;
+JL_DLLEXPORT size_t jl_typeinf_world = 1;
 
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
     size_t newfunc = jl_typeinf_world == 1 && jl_typeinf_func == NULL;
     jl_typeinf_func = (jl_function_t*)f;
     jl_typeinf_world = jl_get_tls_world_age();
-    ++jl_world_counter; // make type-inference the only thing in this world
+    int world = jl_atomic_fetch_add(&jl_world_counter, 1) + 1; // make type-inference the only thing in this world
     if (newfunc) {
         // give type inference a chance to see all of these
         // TODO: also reinfer if max_world != ~(size_t)0
@@ -511,8 +513,8 @@ JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
         size_t i, l;
         for (i = 0, l = jl_array_len(unspec); i < l; i++) {
             jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(unspec, i);
-            if (jl_rettype_inferred(mi, jl_world_counter, jl_world_counter) == jl_nothing)
-                jl_type_infer(mi, jl_world_counter, 1);
+            if (jl_rettype_inferred(mi, world, world) == jl_nothing)
+                jl_type_infer(mi, world, 1);
         }
         JL_GC_POP();
     }
@@ -1588,7 +1590,8 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     jl_typemap_entry_t *methodentry = do_typemap_search(mt, method);
     JL_LOCK(&mt->writelock);
     // Narrow the world age on the method to make it uncallable
-    jl_method_table_invalidate(mt, methodentry, method, jl_world_counter++);
+    size_t world = jl_atomic_fetch_add(&jl_world_counter, 1);
+    jl_method_table_invalidate(mt, methodentry, method, world);
     JL_UNLOCK(&mt->writelock);
 }
 
@@ -1627,7 +1630,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     jl_value_t *oldvalue = NULL;
     jl_array_t *oldmi = NULL;
     if (method->primary_world == 1)
-        method->primary_world = ++jl_world_counter;
+        method->primary_world = jl_atomic_fetch_add(&jl_world_counter, 1) + 1;
     size_t max_world = method->primary_world - 1;
     jl_value_t *loctag = NULL;  // debug info for invalidation
     jl_value_t *isect = NULL;
@@ -1826,7 +1829,7 @@ static void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args,
         jl_static_show((JL_STREAM*)STDERR_FILENO,args); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
         jl_ptls_t ptls = jl_current_task->ptls;
         ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, 0);
-        jl_critical_error(0, NULL);
+        jl_critical_error(0, NULL, jl_current_task);
         abort();
     }
     // not reached
@@ -2003,12 +2006,12 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 }
 
 
-JL_DLLEXPORT jl_value_t *jl_fptr_const_return(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+jl_value_t *jl_fptr_const_return(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     return m->rettype_const;
 }
 
-JL_DLLEXPORT jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     while (1) {
         jl_fptr_args_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr1);
@@ -2017,7 +2020,7 @@ JL_DLLEXPORT jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t
     }
 }
 
-JL_DLLEXPORT jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     jl_svec_t *sparams = m->def->sparam_vals;
     assert(sparams != jl_emptysvec);
@@ -2027,6 +2030,12 @@ JL_DLLEXPORT jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32
             return invoke(f, args, nargs, sparams);
     }
 }
+
+JL_DLLEXPORT jl_callptr_t jl_fptr_args_addr = &jl_fptr_args;
+
+JL_DLLEXPORT jl_callptr_t jl_fptr_const_return_addr = &jl_fptr_const_return;
+
+JL_DLLEXPORT jl_callptr_t jl_fptr_sparam_addr = &jl_fptr_sparam;
 
 // Return the index of the invoke api, if known
 JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *codeinst)
@@ -2126,7 +2135,7 @@ static void _generate_from_hint(jl_method_instance_t *mi, size_t world)
 
 static void jl_compile_now(jl_method_instance_t *mi)
 {
-    size_t world = jl_world_counter;
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     size_t tworld = jl_typeinf_world;
     _generate_from_hint(mi, world);
     if (jl_typeinf_func && mi->def.method->primary_world <= tworld) {
@@ -2137,7 +2146,7 @@ static void jl_compile_now(jl_method_instance_t *mi)
 
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 {
-    size_t world = jl_world_counter;
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     size_t tworld = jl_typeinf_world;
     size_t min_valid = 0;
     size_t max_valid = ~(size_t)0;
@@ -3161,7 +3170,7 @@ int jl_has_concrete_subtype(jl_value_t *typ)
 //   the best way to avoid acquisition priority
 //   ordering violations
 //static jl_mutex_t typeinf_lock;
-#define typeinf_lock codegen_lock
+#define typeinf_lock jl_codegen_lock
 
 static uint64_t inference_start_time = 0;
 static uint8_t inference_is_measuring_compile_time = 0;

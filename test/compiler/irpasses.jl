@@ -425,3 +425,23 @@ let # `getfield_elim_pass!` should work with constant globals
         return Meta.isexpr(stmt, :new)
     end
 end
+
+let
+    # `typeassert` elimination after SROA
+    # NOTE we can remove this optimization once inference is able to reason about memory-effects
+    src = @eval Module() begin
+        mutable struct Foo; x; end
+
+        code_typed((Int,)) do a
+            x1 = Foo(a)
+            x2 = Foo(x1)
+            return typeassert(x2.x, Foo).x
+        end |> only |> first
+    end
+    # eliminate `typeassert(x2.x, Foo)`
+    @test all(src.code) do @nospecialize stmt
+        Meta.isexpr(stmt, :call) || return true
+        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        return Core.Compiler.widenconst(ft) !== typeof(typeassert)
+    end
+end

@@ -4,6 +4,7 @@
 
 using Random
 using InteractiveUtils
+using Libdl
 
 const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
@@ -637,3 +638,37 @@ t41096 = Term41096{:t}(Modulate41096(:t, false))
 U41096 = Term41096{:U}(Modulate41096(:U, false))
 
 @test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)
+
+# test that we can start julia with libjulia-codegen removed; PR #41936
+mktempdir() do pfx
+    cp(dirname(Sys.BINDIR), pfx; force=true)
+    libpath = relpath(dirname(dlpath("libjulia-codegen")), dirname(Sys.BINDIR))
+    libs_deleted = 0
+    for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+        rm(f; force=true, recursive=true)
+        libs_deleted += 1
+    end
+    @test libs_deleted > 0
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'println("no codegen!")'`) == "no codegen!"
+end
+
+# issue #42645
+mutable struct A42645{T}
+    x::Bool
+    function A42645(a::Vector{T}) where T
+        r = new{T}()
+        r.x = false
+        return r
+    end
+end
+mutable struct B42645{T}
+  y::A42645{T}
+end
+x42645 = 1
+function f42645()
+  res = B42645(A42645([x42645]))
+  res.y = A42645([x42645])
+  res.y.x = true
+  res
+end
+@test ((f42645()::B42645).y::A42645{Int}).x

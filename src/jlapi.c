@@ -475,6 +475,20 @@ JL_DLLEXPORT void (jl_cpu_wake)(void)
     jl_cpu_wake();
 }
 
+JL_DLLEXPORT uint64_t jl_cumulative_compile_time_ns_before(void)
+{
+    // Increment the flag to allow reentrant callers to `@time`.
+    jl_atomic_fetch_add(&jl_measure_compile_time_enabled, 1);
+    return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
+}
+
+JL_DLLEXPORT uint64_t jl_cumulative_compile_time_ns_after(void)
+{
+    // Decrement the flag when done measuring, allowing other callers to continue measuring.
+    jl_atomic_fetch_add(&jl_measure_compile_time_enabled, -1);
+    return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
+}
+
 JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
 {
     ret[0] = FE_INEXACT;
@@ -604,8 +618,7 @@ static NOINLINE int true_main(int argc, char *argv[])
 static void lock_low32(void)
 {
 #if defined(_OS_WINDOWS_) && defined(_P64) && defined(JL_DEBUG_BUILD)
-    // Wine currently has a that causes it to answer VirtualQuery incorrectly.
-    // block usage of the 32-bit address space on win64, to catch pointer cast errors
+    // Prevent usage of the 32-bit address space on Win64, to catch pointer cast errors.
     char *const max32addr = (char*)0xffffffffL;
     SYSTEM_INFO info;
     MEMORY_BASIC_INFORMATION meminfo;
@@ -629,11 +642,12 @@ static void lock_low32(void)
                 if ((char*)p != first)
                     // Wine and Windows10 seem to have issues with reporting memory access information correctly
                     // so we sometimes end up with unexpected results - this is just ignore those and continue
-                    // this is just a debugging aid to help find accidental pointer truncation anyways, so it's not critical
+                    // this is just a debugging aid to help find accidental pointer truncation anyways,
+                    // so it is not critical
                     VirtualFree(p, 0, MEM_RELEASE);
             }
         }
-        meminfo.BaseAddress += meminfo.RegionSize;
+        meminfo.BaseAddress = (void*)((char*)meminfo.BaseAddress + meminfo.RegionSize);
     }
 #endif
     return;
@@ -642,16 +656,16 @@ static void lock_low32(void)
 // Actual definition in `ast.c`
 void jl_lisp_prompt(void);
 
-static void rr_detach_teleport(void) {
 #ifdef _OS_LINUX_
+static void rr_detach_teleport(void) {
 #define RR_CALL_BASE 1000
 #define SYS_rrcall_detach_teleport (RR_CALL_BASE + 9)
     int err = syscall(SYS_rrcall_detach_teleport, 0, 0, 0, 0, 0, 0);
     if (err < 0 || jl_running_under_rr(1)) {
         jl_error("Failed to detach from rr session");
     }
-#endif
 }
+#endif
 
 JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 {
@@ -668,16 +682,18 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
         memmove(&argv[1], &argv[2], (argc-2)*sizeof(void*));
         argc--;
     }
-    char **orig_argv = argv;
-    jl_parse_opts(&argc, (char***)&argv);
+    char **new_argv = argv;
+    jl_parse_opts(&argc, (char***)&new_argv);
 
     // The parent process requested that we detach from the rr session.
     // N.B.: In a perfect world, we would only do this for the portion of
     // the execution where we actually need to exclude rr (e.g. because we're
     // testing for the absence of a memory-model-dependent bug).
     if (jl_options.rr_detach && jl_running_under_rr(0)) {
+#ifdef _OS_LINUX_
         rr_detach_teleport();
-        execv("/proc/self/exe", orig_argv);
+        execv("/proc/self/exe", argv);
+#endif
         jl_error("Failed to self-execute");
     }
 
@@ -687,7 +703,7 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
         jl_lisp_prompt();
         return 0;
     }
-    int ret = true_main(argc, (char**)argv);
+    int ret = true_main(argc, (char**)new_argv);
     jl_atexit_hook(ret);
     return ret;
 }

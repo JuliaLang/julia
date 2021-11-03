@@ -122,6 +122,12 @@ struct ProfileFormat
     end
 end
 
+# offsets of the metadata in the data stream
+const META_OFFSET_SLEEPSTATE = 2
+const META_OFFSET_CPUCYCLECLOCK = 3
+const META_OFFSET_TASKID = 4
+const META_OFFSET_THREADID = 5
+
 """
     print([io::IO = stdout,] [data::Vector]; kwargs...)
 
@@ -144,8 +150,8 @@ The keyword arguments can be any combination of:
     line, `:count` sorts in order of number of collected samples, and `:overhead` sorts by the number of samples
     incurred by each function by itself.
 
- - `groupby` -- Controls grouping over tasks and threads, or no grouping. Options are `:none` (default), `:threads`, `:tasks`,
-    `[:threads, :tasks]`, or `[:tasks, :threads]` where the last two provide nested grouping.
+ - `groupby` -- Controls grouping over tasks and threads, or no grouping. Options are `:none` (default), `:thread`, `:task`,
+    `[:thread, :task]`, or `[:task, :thread]` where the last two provide nested grouping.
 
  - `noisefloor` -- Limits frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
     A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
@@ -267,8 +273,8 @@ function get_task_ids(data::Vector{<:Unsigned}, threadid = nothing)
     taskids = UInt[]
     for i in length(data):-1:1
         if is_block_end(data, i)
-            if isnothing(threadid) || data[i - 5] == threadid
-                taskid = data[i - 4]
+            if isnothing(threadid) || data[i - META_OFFSET_THREADID] == threadid
+                taskid = data[i - META_OFFSET_TASKID]
                 !in(taskid, taskids) && push!(taskids, taskid)
             end
         end
@@ -280,8 +286,8 @@ function get_thread_ids(data::Vector{<:Unsigned}, taskid = nothing)
     threadids = Int[]
     for i in length(data):-1:1
         if is_block_end(data, i)
-            if isnothing(taskid) || data[i - 4] == taskid
-                threadid = data[i - 5]
+            if isnothing(taskid) || data[i - META_OFFSET_TASKID] == taskid
+                threadid = data[i - META_OFFSET_THREADID]
                 !in(threadid, threadids) && push!(threadids, threadid)
             end
         end
@@ -296,7 +302,20 @@ function is_block_end(data, i)
     # and we could have (though very unlikely):
     # 1:<stack><metadata><null><null><NULL><metadata><null><null>:end
     # and we want to ignore the triple NULL (which is an ip).
-    return data[i] == 0 && data[i - 1] == 0 && data[i - 2] != 0
+    return data[i] == 0 && data[i - 1] == 0 && data[i - META_OFFSET_SLEEPSTATE] != 0
+end
+
+function has_meta(data)
+    for i in 6:length(data)
+        data[i] == 0 || continue            # first block end null
+        data[i - 1] == 0 || continue        # second block end null
+        data[i - META_OFFSET_SLEEPSTATE] in 1:2 || continue
+        data[i - META_OFFSET_CPUCYCLECLOCK] != 0 || continue
+        data[i - META_OFFSET_TASKID] != 0 || continue
+        data[i - META_OFFSET_THREADID] != 0 || continue
+        return true
+    end
+    return false
 end
 
 """
@@ -499,15 +518,15 @@ error_codes = Dict(
 
 
 """
-    fetch(;include_meta = false) -> data
+    fetch(;include_meta = true) -> data
 
 Returns a copy of the buffer of profile backtraces. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
-By default metadata such as threadid and taskid will be stripped. Set `include_meta` to `true` to include metadata.
+By default metadata such as threadid and taskid is included. Set `include_meta` to `false` to strip metadata.
 """
-function fetch(;include_meta = false)
+function fetch(;include_meta = true)
     maxlen = maxlen_data()
     len = len_data()
     if is_buffer_full()
@@ -519,35 +538,58 @@ function fetch(;include_meta = false)
     GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
     if include_meta || isempty(data)
         return data
-    else
-        nblocks = 0
-        for i = 2:length(data)
-            if is_block_end(data, i) # detect block ends and count them
-                nblocks += 1
-            end
-        end
-        data_stripped = Vector{UInt}(undef, length(data) - (nblocks * (nmeta + 1)))
-        j = length(data_stripped)
-        i = length(data)
-        while i > 0 && j > 0
-            data_stripped[j] = data[i]
-            if is_block_end(data, i)
-                i -= (nmeta + 1) # metadata fields and the extra NULL IP
-            end
-            i -= 1
-            j -= 1
-        end
-        @assert i == j == 0 "metadata stripping failed i=$i j=$j data[1:i]=$(data[1:i])"
-        return data_stripped
     end
+    return strip_meta(data)
 end
 
+function strip_meta(data)
+    nblocks = count(Base.Fix1(is_block_end, data), eachindex(data))
+    data_stripped = Vector{UInt}(undef, length(data) - (nblocks * (nmeta + 1)))
+    j = length(data_stripped)
+    i = length(data)
+    while i > 0 && j > 0
+        data_stripped[j] = data[i]
+        if is_block_end(data, i)
+            i -= (nmeta + 1) # metadata fields and the extra NULL IP
+        end
+        i -= 1
+        j -= 1
+    end
+    @assert i == j == 0 "metadata stripping failed"
+    return data_stripped
+end
+
+"""
+    Profile.add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0) -> data_with_meta
+
+The converse of `Profile.fetch(;include_meta = false)`; this will add fake metadata, and can be used
+for compatibility and by packages (e.g., FlameGraphs.jl) that would rather not depend on the internal
+details of the metadata format.
+"""
+function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
+    threadid == 0 && error("Fake threadid cannot be 0")
+    taskid == 0 && error("Fake taskid cannot be 0")
+    !isempty(data) && has_meta(data) && error("input already has metadata")
+    cpu_clock_cycle = UInt64(99)
+    data_with_meta = similar(data, 0)
+    for i = 1:length(data)
+        val = data[i]
+        if iszero(val)
+            # (threadid, taskid, cpu_cycle_clock, thread_sleeping)
+            push!(data_with_meta, threadid, taskid, cpu_clock_cycle+=1, false+1, 0, 0)
+        else
+            push!(data_with_meta, val)
+        end
+    end
+    return data_with_meta
+end
 
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level and at the topmost level
 # Merging multiple equivalent entries and recursive calls
 function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool,
                     threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}) where {T}
+    !isempty(data) && !has_meta(data) && error("Profile data is missing required metadata")
     lilist = StackFrame[]
     n = Int[]
     m = Int[]
@@ -563,10 +605,10 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
         ip = data[i]
         if is_block_end(data, i)
             # read metadata
-            thread_sleeping = data[i - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
-            # cpu_cycle_clock = data[i - 3]
-            taskid = data[i - 4]
-            threadid = data[i - 5]
+            thread_sleeping = data[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = data[i - META_OFFSET_CPUCYCLECLOCK]
+            taskid = data[i - META_OFFSET_TASKID]
+            threadid = data[i - META_OFFSET_THREADID]
             if !in(threadid, threads) || !in(taskid, tasks)
                 skip = true
                 continue
@@ -800,6 +842,7 @@ end
 # turn a list of backtraces into a tree (implicitly separated by NULL markers)
 function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool, recur::Symbol,
                 threads::Union{Int,AbstractVector{Int},Nothing}=nothing, tasks::Union{UInt,AbstractVector{UInt},Nothing}=nothing) where {T}
+    !isempty(all) && !has_meta(all) && error("Profile data is missing required metadata")
     parent = root
     tops = Vector{StackFrameTree{T}}()
     build = Vector{StackFrameTree{T}}()
@@ -807,14 +850,14 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     skip = false
     nsleeping = 0
     for i in startframe:-1:1
-        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
+        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (it's read ahead below) and extra block end NULL IP
         ip = all[i]
         if is_block_end(all, i)
             # read metadata
-            thread_sleeping = all[i - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
-            # cpu_cycle_clock = all[i - 3]
-            taskid = all[i - 4]
-            threadid = all[i - 5]
+            thread_sleeping = all[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = all[i - META_OFFSET_CPUCYCLECLOCK]
+            taskid = all[i - META_OFFSET_TASKID]
+            threadid = all[i - META_OFFSET_THREADID]
             if (threads !== nothing && !in(threadid, threads)) ||
                (tasks !== nothing && !in(taskid, tasks))
                 skip = true

@@ -54,14 +54,14 @@ static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_
         empty_slot = -1;
 
         do {
-            jl_value_t *k2 = tab[index];
+            jl_value_t *k2 = jl_atomic_load_relaxed(&tab[index]);
             if (k2 == NULL) {
                 if (empty_slot == -1)
                     empty_slot = index;
                 break;
             }
             if (jl_egal(key, k2)) {
-                if (tab[index + 1] != NULL) {
+                if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL) {
                     jl_atomic_store_release(&tab[index + 1], val);
                     jl_gc_wb(a, val);
                     return 0;
@@ -71,8 +71,8 @@ static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_
                 if (empty_slot == -1)
                     empty_slot = index;
             }
-            if (empty_slot == -1 && tab[index + 1] == NULL) {
-                assert(tab[index] == jl_nothing);
+            if (empty_slot == -1 && jl_atomic_load_relaxed(&tab[index + 1]) == NULL) {
+                assert(jl_atomic_load_relaxed(&tab[index]) == jl_nothing);
                 empty_slot = index;
             }
 
