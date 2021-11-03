@@ -1303,7 +1303,7 @@ end
                 @test isequal(func(a, b, c), fma(a, b, c)) || (a,b,c)
             end
         end
-        @test fmafuncfloatmax(Float64), nextfloat(1.0), -floatmax(Float64)) === 3.991680619069439e292
+        @test func(floatmax(Float64), nextfloat(1.0), -floatmax(Float64)) === 3.991680619069439e292
         @test func(floatmax(Float32), nextfloat(1f0), -floatmax(Float32)) === 4.0564817f31
         @test func(1.6341681540852291e308, -2., floatmax(Float64)) == -1.4706431733081426e308 # case where inv(a)*c*a == Inf
         @test func(-2., 1.6341681540852291e308, floatmax(Float64)) == -1.4706431733081426e308 # case where inv(b)*c*b == Inf
