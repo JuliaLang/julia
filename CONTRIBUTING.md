@@ -276,22 +276,22 @@ The process of creating a patch release is roughly as follows:
 7. Open a pull request that bumps the version of the relevant minor release to the
    next prerelase patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37724).
 
-Step 2 above, i.e. backporting commits to the `backports-release-X.X` branch, has largely
+Step 2 above, i.e. backporting commits to the `backports-release-X.Y` branch, has largely
 been automated via [`Backporter`](https://github.com/KristofferC/Backporter): Backporter
-searches for merged pull requests with the relevant `backport-X.X` tag, and attempts to
-cherry-pick the commits from those pull requests onto the `backports-release-X.X` branch.
+searches for merged pull requests with the relevant `backport-X.Y` tag, and attempts to
+cherry-pick the commits from those pull requests onto the `backports-release-X.Y` branch.
 Some commits apply successfully without intervention, others not so much. The latter
 commits require "manual" backporting, with which help is generally much appreciated.
 Backporter generates a report identifying those commits it managed to backport automatically
 and those that require manual backporting; this report is usually copied into the first
-post of the pull request associated with `backports-release-X.X` and maintained as
+post of the pull request associated with `backports-release-X.Y` and maintained as
 additional commits are automatically and/or manually backported.
 
 When contributing a manual backport, if you have the necessary permissions, please push the
-backport directly to the `backports-release-X.X` branch. If you lack the relevant
-permissions, please open a pull request against the `backports-release-X.X` branch with the
-manual backport. Once the manual backport is live on the `backports-release-X.X` branch,
-please remove the `backport-X.X` tag from the originating pull request for the commits.
+backport directly to the `backports-release-X.Y` branch. If you lack the relevant
+permissions, please open a pull request against the `backports-release-X.Y` branch with the
+manual backport. Once the manual backport is live on the `backports-release-X.Y` branch,
+please remove the `backport-X.Y` tag from the originating pull request for the commits.
 
 ### Code Formatting Guidelines
 
