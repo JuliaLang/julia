@@ -1676,6 +1676,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 needloop = false;
             }
             else if (!isboxed) {
+                assert(jl_is_concrete_type(jltype));
                 needloop = ((jl_datatype_t*)jltype)->layout->haspadding;
                 Value *SameType = emit_isa(ctx, cmp, jltype, nullptr).first;
                 if (SameType != ConstantInt::getTrue(jl_LLVMContext)) {
@@ -1702,12 +1703,14 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 if (realelty != elty)
                     Compare = ctx.builder.CreateZExt(Compare, elty);
             }
-            else if (cmp.isboxed) {
+            else if (cmp.isboxed || cmp.constant || jl_pointer_egal(jltype)) {
                 Compare = boxed(ctx, cmp);
-                needloop = !jl_is_mutable_datatype(jltype);
+                needloop = !jl_pointer_egal(jltype) && !jl_pointer_egal(cmp.typ);
+                if (needloop && !cmp.isboxed) // try to use the same box in the compare now and later
+                    cmp = mark_julia_type(ctx, Compare, true, cmp.typ);
             }
             else {
-                Compare = V_rnull;
+                Compare = V_rnull; // TODO: does this need to be an invalid bit pattern?
                 needloop = true;
             }
         }
