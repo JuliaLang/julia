@@ -651,16 +651,16 @@ end
 
     @testset "thread unsafe" begin
         prev_num_threads = BLAS.get_num_threads()
-        # thread unsafe
-        @async BLAS.with_num_threads(1) do
+        context_num_threads = 1
+        # task A
+        t = @async BLAS.with_num_threads(context_num_threads) do
             sleep(0.5)
         end
         sleep(0.1)
-
-        context_num_threads = BLAS.get_num_threads()
-        @test context_num_threads == 1
-
-        sleep(0.5) # wait for the task to finish
+        # check that main thread is affected by task A
+        @test BLAS.get_num_threads() == context_num_threads
+        # when the task finishes, the num threads get restored
+        wait(t)
         @test prev_num_threads == BLAS.get_num_threads()
     end
 end
