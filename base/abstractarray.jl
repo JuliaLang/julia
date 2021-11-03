@@ -1401,7 +1401,7 @@ See also: [`parent`](@ref)
 julia> A = [1 2; 3 4];
 
 julia> parenttype(view(A, 1:2, :)) <: typeof(A)
- true
+true
 ```
 """
 parenttype(x) = parenttype(typeof(x))
