@@ -272,7 +272,7 @@ function Matrix(A::Hermitian)
 end
 Array(A::Union{Symmetric,Hermitian}) = convert(Matrix, A)
 
-Base.parenttype(::Type{<:HermOrSym{T,S}) where {T,S} = S
+Base.parenttype(::Type{<:HermOrSym{T,S}}) where {T,S} = S
 parent(A::HermOrSym) = A.data
 Symmetric{T,S}(A::Symmetric{T,S}) where {T,S<:AbstractMatrix{T}} = A
 Symmetric{T,S}(A::Symmetric) where {T,S<:AbstractMatrix{T}} = Symmetric{T,S}(convert(S,A.data),A.uplo)

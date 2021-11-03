@@ -100,7 +100,6 @@ end
                 @test aherm === parent(Hermitian(aherm))
                 @test asym === parent(Symmetric(asym))
                 @test aherm === parent(Hermitian(aherm)) 
-
                 @test typeof(asym) === parenttype(Symmetric(asym))
                 @test typeof(aherm) === parenttype(Hermitian(aherm))
                 @test typeof(asym) === parenttype(Symmetric(asym))
