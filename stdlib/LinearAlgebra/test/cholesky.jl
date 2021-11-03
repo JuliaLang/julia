@@ -510,17 +510,19 @@ end
 end
 
 @testset "accessing both L and U factors should avoid allocations" begin
-    n = 10
+    n = 30
     A = rand(n, n)
     Apd = A'A
+    allowed_cost_of_overhead = 32
+    @assert sizeof(Apd) > 4allowed_cost_of_overhead  # ensure that we could positively identify extra copies
 
     for uplo in (:L, :U)
         C = Symmetric(Apd, uplo)
         for val in (Val(true), Val(false))
             B = cholesky(C, val)
             B.L, B.U  # access once to ensure the accessor is compiled already
-            @test (@allocated B.L) <= 16
-            @test (@allocated B.U) <= 16
+            @test (@allocated B.L) <= allowed_cost_of_overhead
+            @test (@allocated B.U) <= allowed_cost_of_overhead
         end
     end
 end
