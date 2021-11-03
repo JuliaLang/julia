@@ -353,22 +353,22 @@ Consider the following example, where the submodule `SubA` defines a function, w
 
 ```jldoctest module_manual
 julia> module ParentModule
-       
+
        module SubA
        export add_D  # exported interface
        const D = 3
        add_D(x) = x + D
        end
-       
+
        using .SubA  # brings `add_D` into the namespace
        export add_D # export it from ParentModule too
-       
+
        module SubB
        import ..SubA: add_D # relative path for a “sibling” module
        struct Infinity end
        add_D(x::Infinity) = x
        end
-       
+
        end;
 
 ```
