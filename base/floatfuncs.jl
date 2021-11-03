@@ -372,9 +372,6 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
     if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || issubnormal(a) || issubnormal(b)
         (isfinite(a) && isfinite(b) && isfinite(c)) || return abhi+c
         (iszero(a) || iszero(b)) && return abhi+c
-        if issubnormal(abhi+c) #todo optimize
-            return Float64(big(a)*b+c)
-        end
         bias = exponent(a) + exponent(b)
         c_denorm = ldexp(c, -bias)
         if isfinite(c_denorm)
@@ -388,6 +385,14 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             r = abhi+c
             s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
             sumhi = r+s
+            if issubnormal(ldexp(sumhi, bias)) #black magic don't worry about it.
+                sumlo = r-sumhi+s
+                bits_lost = -bias-exponent(sumhi)-1022
+                sumhiInt = reinterpret(UInt64, sumhi)
+                if (bits_lost != 1) ⊻ (sumhiInt&1 == 1)
+                    sumhi = nextfloat(sumhi, cmp(sumlo,0))
+                end
+            end
             return ldexp(sumhi, bias)
         end
         isinf(abhi) && signbit(c) == signbit(a*b) && return abhi
