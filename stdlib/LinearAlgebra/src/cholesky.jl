@@ -519,9 +519,9 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d === :U
-        return UpperTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return UpperTriangular(sym_uplo(Cuplo) == d ? Cfactors : Cfactors')
     elseif d === :L
-        return LowerTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return LowerTriangular(sym_uplo(Cuplo) == d ? Cfactors : Cfactors')
     elseif d === :p
         return getfield(C, :piv)
     elseif d === :P
