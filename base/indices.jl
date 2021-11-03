@@ -351,6 +351,8 @@ struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
 Slice(S::Slice) = S
+parenttype(::Type{Slice{T}}) where {T} = T
+parent(S::Slice) = S.indices
 axes(S::Slice) = (IdentityUnitRange(S.indices),)
 axes1(S::Slice) = IdentityUnitRange(S.indices)
 axes(S::Slice{<:OneTo}) = (S.indices,)

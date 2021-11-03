@@ -314,6 +314,7 @@ end
 
 # avoid nesting
 @test parent(reinterpret(eltype(A), reinterpret(eltype(B), A))) === A
+@test parenttype(reinterpret(eltype(A), reinterpret(eltype(B), A))) <: typeof(A)
 
 # Test 0-dimensional Arrays
 A = zeros(UInt32)

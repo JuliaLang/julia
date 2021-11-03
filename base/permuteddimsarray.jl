@@ -45,6 +45,7 @@ function PermutedDimsArray(data::AbstractArray{T,N}, perm) where {T,N}
     PermutedDimsArray{T,N,(perm...,),(iperm...,),typeof(data)}(data)
 end
 
+Base.parenttype(::Type{<:PermutedDimsArray{T,N,I1,I2,A}}) where {T,N,I1,I2,A} = A
 Base.parent(A::PermutedDimsArray) = A.parent
 Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(size(parent(A)), perm)
 Base.axes(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(axes(parent(A)), perm)

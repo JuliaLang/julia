@@ -125,6 +125,7 @@ function Base.replace_in_print_matrix(A::Diagonal,i::Integer,j::Integer,s::Abstr
     i==j ? s : Base.replace_with_centered_mark(s)
 end
 
+Base.parenttype(::Type{<:Diagonal{T,V}}) where {T,V} = V
 parent(D::Diagonal) = D.diag
 
 ishermitian(D::Diagonal{<:Real}) = true

@@ -75,6 +75,7 @@ function Base.copy(V::SubArray)
     return x
 end
 
+parenttype(::Type{<:SubArray{T,N,P}}) where {T,N,P} = P
 parent(V::SubArray) = V.parent
 parentindices(V::SubArray) = V.indices
 

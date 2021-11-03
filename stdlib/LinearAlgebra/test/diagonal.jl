@@ -47,6 +47,7 @@ Random.seed!(1)
         @test Array(imag(D)) == imag(DM)
 
         @test parent(D) == dd
+        @test parenttype(D) == typeof(dd)
         @test D[1,1] == dd[1]
         @test D[1,2] == 0
 

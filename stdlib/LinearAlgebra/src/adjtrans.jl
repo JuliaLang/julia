@@ -215,6 +215,7 @@ AbstractMatrix{T}(A::AdjOrTransAbsVec) where {T} = wrapperop(A)(AbstractVector{T
 
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
+Base.parenttype(::Type{AdjOrTrans{T,S}}) where {T,S} = S
 vec(v::TransposeAbsVec{<:Number}) = parent(v)
 vec(v::AdjointAbsVec{<:Real}) = parent(v)
 

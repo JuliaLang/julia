@@ -98,6 +98,13 @@ end
             @testset "parent" begin
                 @test asym === parent(Symmetric(asym))
                 @test aherm === parent(Hermitian(aherm))
+                @test asym === parent(Symmetric(asym))
+                @test aherm === parent(Hermitian(aherm)) 
+
+                @test typeof(asym) === parenttype(Symmetric(asym))
+                @test typeof(aherm) === parenttype(Hermitian(aherm))
+                @test typeof(asym) === parenttype(Symmetric(asym))
+                @test typeof(aherm) === parenttype(Hermitian(aherm))
             end
             # Unary minus for Symmetric/Hermitian matrices
             @testset "Unary minus for Symmetric/Hermitian matrices" begin

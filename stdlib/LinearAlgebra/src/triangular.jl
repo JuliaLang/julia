@@ -157,6 +157,7 @@ imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
 imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
 
 Array(A::AbstractTriangular) = Matrix(A)
+Base.parenttype(::Type{<:AbstractTriangular{T,S}}) where {T,S} = S
 parent(A::AbstractTriangular) = A.data
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal

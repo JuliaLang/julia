@@ -279,6 +279,7 @@ eachindex(style::IndexSCartesian2, A::AbstractArray) = eachindex(style, parent(A
 
 ## AbstractArray interface
 
+parenttype(::Type{R}) where {S,T,A,N,R<:Base.ReinterpretArray{T,N,S,A}} = A
 parent(a::ReinterpretArray) = a.parent
 dataids(a::ReinterpretArray) = dataids(a.parent)
 unaliascopy(a::NonReshapedReinterpretArray{T}) where {T} = reinterpret(T, unaliascopy(a.parent))

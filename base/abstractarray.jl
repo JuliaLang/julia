@@ -1385,6 +1385,29 @@ julia> parent(V)
 """
 parent(a::AbstractArray) = a
 
+"""
+    parenttype(A)
+
+Returns the parent array that type `T` wraps.
+
+Return the underlying "parent array” type. This type directly corresponds to the instance
+returned by `parent(A)`. Therefore, new types that define a `parent` method should also
+define a corresponding `parenttype(::Type{<:MyArray}) = ParentType` method.
+
+See also: [`parent`](@ref)
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4];
+
+julia> parenttype(view(A, 1:2, :)) <: typeof(A)
+ true
+```
+"""
+parenttype(x) = parenttype(typeof(x))
+parenttype(::Type{T}) where {T} = T
+
+
 ## rudimentary aliasing detection ##
 """
     Base.unalias(dest, A)

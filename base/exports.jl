@@ -413,6 +413,7 @@ export
     ones,
     parent,
     parentindices,
+    parenttype,
     partialsort,
     partialsort!,
     partialsortperm,
