@@ -252,8 +252,8 @@ runtest harness).
 
 The process of creating a patch release is roughly as follows:
 
-1. Create a new branch (e.g. `backports-release-1.5`) against the relevant minor release
-   branch (e.g. `release-1.5`). Usually a corresponding pull request is created as well.
+1. Create a new branch (e.g. `backports-release-1.6`) against the relevant minor release
+   branch (e.g. `release-1.6`). Usually a corresponding pull request is created as well.
 
 2. Add commits, nominally from `master` (hence "backports"), to that branch.
    See below for more information on this process.
@@ -265,8 +265,8 @@ The process of creating a patch release is roughly as follows:
    the pull request associated with the backports branch. Fix any issues.
 
 4. Once all test and benchmark reports look good, merge the backports branch into
-   the corresponding release branch (e.g. merge `backports-release-1.5` into
-   `release-1.5`).
+   the corresponding release branch (e.g. merge `backports-release-1.6` into
+   `release-1.6`).
 
 5. Open a pull request that bumps the version of the relevant minor release to the
    next patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37718).
