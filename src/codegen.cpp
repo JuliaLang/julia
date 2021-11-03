@@ -2176,19 +2176,27 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
 static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                                Value *nullcheck1, Value *nullcheck2)
 {
-    if (jl_pointer_egal(arg1.typ) || jl_pointer_egal(arg2.typ)) {
-        assert((arg1.isboxed || arg1.constant) && (arg2.isboxed || arg2.constant) &&
-                "Expected unboxed cases to be handled earlier");
-        Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : arg1.V;
-        Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : arg2.V;
-        varg1 = maybe_decay_tracked(ctx, varg1);
-        varg2 = maybe_decay_tracked(ctx, varg2);
-        if (cast<PointerType>(varg1->getType())->getAddressSpace() != cast<PointerType>(varg2->getType())->getAddressSpace()) {
-            varg1 = decay_derived(ctx, varg1);
-            varg2 = decay_derived(ctx, varg2);
+    // If either sides is boxed or can be trivially boxed,
+    // we'll prefer to do a pointer check.
+    // At this point, we know that at least one of the arguments isn't a constant
+    // so a runtime content check will involve at least one load from the
+    // pointer (and likely a type check)
+    // so a pointer comparison should be no worse than that even in imaging mode
+    // when the constant pointer has to be loaded.
+    // Note that we ignore nullcheck, since in the case where it may be set, we
+    // also knew the types of both fields must be the same so there cannot be
+    // any unboxed values on either side.
+    if ((!arg1.TIndex && jl_pointer_egal(arg1.typ)) || (!arg2.TIndex && jl_pointer_egal(arg2.typ))) {
+        // n.b. Vboxed may be incomplete if Tindex is set (missing singletons)
+        // and Vboxed == isboxed || Tindex
+        if ((arg1.Vboxed || arg1.constant) && (arg2.Vboxed || arg2.constant)) {
+            Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : maybe_bitcast(ctx, arg1.Vboxed, T_pjlvalue);
+            Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : maybe_bitcast(ctx, arg2.Vboxed, T_pjlvalue);
+            return ctx.builder.CreateICmpEQ(decay_derived(ctx, varg1), decay_derived(ctx, varg2));
         }
-        return ctx.builder.CreateICmpEQ(emit_bitcast(ctx, varg1, T_pint8),
-                                        emit_bitcast(ctx, varg2, T_pint8));
+        return ConstantInt::get(T_int1, 0); // seems probably unreachable?
+        // (since intersection of rt1 and rt2 is non-empty here, so we should have
+        // a value in this intersection, but perhaps intersection might have failed)
     }
 
     return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] {
@@ -2433,27 +2441,8 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
         });
     }
 
-    // If either sides is boxed or can be trivially boxed,
-    // we'll prefer to do a pointer check.
-    // At this point, we know that at least one of the arguments isn't a constant
-    // so a runtime content check will involve at least one load from the
-    // pointer (and likely a type check)
-    // so a pointer comparison should be no worse than that even in imaging mode
-    // when the constant pointer has to be loaded.
-    // Note that we ignore nullcheck, since in the case where it may be set, we
-    // also knew the types of both fields must be the same so there cannot be
-    // any unboxed values on either side.
-    if (jl_pointer_egal(rt1) || jl_pointer_egal(rt2)) {
-        // n.b. Vboxed == isboxed || Tindex
-        if (!(arg1.Vboxed || arg1.constant) || !(arg2.Vboxed || arg2.constant))
-            return ConstantInt::get(T_int1, 0);
-        Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : maybe_bitcast(ctx, arg1.Vboxed, T_pjlvalue);
-        Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : maybe_bitcast(ctx, arg2.Vboxed, T_pjlvalue);
-        return ctx.builder.CreateICmpEQ(decay_derived(ctx, varg1), decay_derived(ctx, varg2));
-    }
-
-    // TODO: handle the case where arg1.typ != arg2.typ, or when one of these isn't union,
-    //       or when the union can be pointer
+    // TODO: handle the case where arg1.typ is not exactly arg2.typ, or when
+    // one of these isn't union, or when the union can be pointer
     if (arg1.TIndex && arg2.TIndex && jl_egal(arg1.typ, arg2.typ) &&
         jl_is_uniontype(arg1.typ) && is_uniontype_allunboxed(arg1.typ))
         return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] {
