@@ -1777,7 +1777,7 @@ static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t 
     // not invalid, consider if specialized signature is worthwhile
     if (prefer_specsig)
         return std::make_pair(true, false);
-    if (!deserves_retbox(rettype) && !jl_is_datatype_singleton((jl_datatype_t*)rettype))
+    if (!deserves_retbox(rettype) && !jl_is_datatype_singleton((jl_datatype_t*)rettype) && rettype != (jl_value_t*)jl_bool_type)
         return std::make_pair(true, false);
     if (jl_is_uniontype(rettype)) {
         bool allunbox;
@@ -1786,6 +1786,8 @@ static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t 
         if (nbytes > 0)
             return std::make_pair(true, false); // some elements of the union could be returned unboxed avoiding allocation
     }
+    if (jl_nparams(sig) <= 3) // few parameters == more efficient to pass directly
+        return std::make_pair(true, false);
     bool allSingleton = true;
     for (size_t i = 0; i < jl_nparams(sig); i++) {
         jl_value_t *sigt = jl_tparam(sig, i);
