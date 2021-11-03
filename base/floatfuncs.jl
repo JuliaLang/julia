@@ -385,7 +385,9 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             r = abhi+c
             s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
             sumhi = r+s
-            if issubnormal(ldexp(sumhi, bias)) #black magic don't worry about it.
+            # If result is subnormal, ldexp will cause double rounding because subnormals have fewer mantisa bits.
+            # As such, we need to check whether round to even would lead to double rounding and manually round sumhi to avoid it.
+            if issubnormal(ldexp(sumhi, bias))
                 sumlo = r-sumhi+s
                 bits_lost = -bias-exponent(sumhi)-1022
                 sumhiInt = reinterpret(UInt64, sumhi)
