@@ -271,7 +271,7 @@ The process of creating a patch release is roughly as follows:
 5. Open a pull request that bumps the version of the relevant minor release to the
    next patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37718).
 
-6. Ping Alex Arslan to tag the patch release and update the website.
+6. Ping `@JuliaLang/releases` to tag the patch release and update the website.
 
 7. Open a pull request that bumps the version of the relevant minor release to the
    next prerelase patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37724).
