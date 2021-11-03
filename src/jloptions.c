@@ -129,7 +129,7 @@ static const char opts[]  =
     " -C, --cpu-target <target> Limit usage of CPU features up to <target>; set to \"help\" to see the available options\n"
     " -O, --optimize={0,1,2,3}  Set the optimization level (default level is 2 if unspecified or 3 if used without a level)\n"
     " --min-optlevel={0,1,2,3}  Set a lower bound on the optimization level (default is 0)\n"
-    " -g, -g <level>            Enable / Set the level of debug info generation"
+    " -g, -g <level>            Enable or set the level of debug info generation"
 #ifdef JL_DEBUG_BUILD
         " (default level for julia-debug is 2 if unspecified or if used without a level)\n"
 #else
