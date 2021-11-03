@@ -261,7 +261,7 @@ The process of creating a patch release is roughly as follows:
 3. Run the [BaseBenchmarks.jl](https://github.com/JuliaCI/BaseBenchmarks.jl) benchmark
    suite and [PkgEval.jl](https://github.com/JuliaCI/PkgEval.jl) package ecosystem
    exerciser against that branch. Nominally BaseBenchmarks.jl and PkgEval.jl are
-   invoked via [NanoSolider.jl](https://github.com/JuliaCI/Nanosoldier.jl) from
+   invoked via [Nanosoldier.jl](https://github.com/JuliaCI/Nanosoldier.jl) from
    the pull request associated with the backports branch. Fix any issues.
 
 4. Once all test and benchmark reports look good, merge the backports branch into
