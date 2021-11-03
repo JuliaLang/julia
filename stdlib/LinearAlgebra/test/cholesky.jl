@@ -519,8 +519,8 @@ end
         for val in (Val(true), Val(false))
             B = cholesky(C, val)
             B.L, B.U  # access once to ensure the accessor is compiled already
-            @test @allocated B.L <= 16
-            @test @allocated B.U <= 16
+            @test (@allocated B.L) <= 16
+            @test (@allocated B.U) <= 16
         end
     end
 end
