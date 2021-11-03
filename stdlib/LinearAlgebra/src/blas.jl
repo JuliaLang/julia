@@ -202,15 +202,13 @@ number of BLAS threads.
 function with_num_threads(f, num_threads::Integer)
     prev_num_threads = BLAS.get_num_threads()
     BLAS.set_num_threads(num_threads)
-    local retval
     try
-        retval = f()
-    catch err
-        rethrow(err)
+        return f()
+    catch
+        rethrow()
     finally
         BLAS.set_num_threads(prev_num_threads)
     end
-    return retval
 end
 
 # Level 1
