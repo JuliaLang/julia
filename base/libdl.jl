@@ -9,7 +9,7 @@ import Base.DL_LOAD_PATH
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
-    dlpath, find_library, dlext, dllist
+    dlpath, find_library, dlext, dllist, check_dllist
 
 """
     DL_LOAD_PATH
@@ -76,6 +76,48 @@ function dlsym_e(hnd::Ptr, s::Union{Symbol,AbstractString})
     return something(dlsym(hnd, s; throw_error=false), C_NULL)
 end
 
+if Sys.isapple()
+    const dlpattern = r"^([^.]+).*\.dylib$"
+elseif Sys.iswindows()
+    const dlpattern = r"^(.+)\.dll$"
+else
+    #assume Sys.islinux, or similar
+    const dlpattern = r"^(.+?)\.so(?:\..*)?$"
+end
+
+"""
+    dlname(fullpath::String)
+
+Returns the name of the library.
+"""
+function dlname(fullpath::String)
+    bn = basename(fullpath)
+    m = match(dlpattern, bn)
+    return isnothing(m) ? bn : m.captures[1]
+end
+
+"""
+    check_dllist(; warnings = true)::Bool
+
+xxxxx
+
+TODO - from v1.8
+"""
+function check_dllist(; warnings = true)::Bool
+    fullpaths = dllist()
+    names = dlname.(fullpaths)
+    noduplicity = true
+    for (i,dl) in enumerate(names), j in i+1:length(names)
+        if dl == names[j]
+            warn && @warn """detected possible duplicate library loaded: $dl. this may lead to unexpected behavior.
+$(fullpaths[i])
+$(fullpaths[j])""" maxlog=1
+            noduplicity = false
+        end
+    end
+    return noduplicity
+end
+
 """
     dlopen(libfile::AbstractString [, flags::Integer]; throw_error:Bool = true)
 
@@ -118,6 +160,7 @@ function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; t
     if ret == C_NULL
         return nothing
     end
+    check_dllist()
     return ret
 end
 

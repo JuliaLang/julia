@@ -252,14 +252,14 @@ include("missing.jl")
 # version
 include("version.jl")
 
+# Logging
+include("logging.jl")
+using .CoreLogging
+
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
-
-# Logging
-include("logging.jl")
-using .CoreLogging
 
 # Concurrency
 include("linked_list.jl")
