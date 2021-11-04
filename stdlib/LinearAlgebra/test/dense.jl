@@ -193,7 +193,7 @@ bimg  = randn(n,2)/2
         @test factorize(A) == UpperTriangular(A)
 
         x = rand(eltya)
-        @test factorize(x) ≈ x
+        @test factorize(x) == x
     end
 end # for eltya
 
