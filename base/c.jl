@@ -548,6 +548,12 @@ function expand_ccallable(rt, def)
     error("expected method definition in @ccallable")
 end
 
+"""
+    `ccallable(def)
+
+ Julia app with `ccallable` entry-point means that the respective Julia function can be called directly from C
+
+"""
 macro ccallable(def)
     expand_ccallable(nothing, def)
 end
