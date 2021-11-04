@@ -28,8 +28,8 @@ end
 mutable struct Lock <: AbstractLock
     @atomic locked_by::Union{Task, Nothing}
     cond_wait::ThreadSynchronizer
-    reentrancy_cnt::Int32
-    @atomic havelock::Bool
+    @atomic reentrancy_cnt::Int32
+    @atomic havewaiting::Bool
 
     Lock() = new(nothing, ThreadSynchronizer(), 0, false)
 end
@@ -44,7 +44,7 @@ Check whether the `lock` is held by any task/thread.
 This should not be used for synchronization (see instead [`trylock`](@ref)).
 """
 function islocked(rl::ReentrantLock)
-    return rl.locked_by !== nothing
+    return rl.reentrancy_cnt != 0
 end
 
 """
@@ -61,12 +61,12 @@ function trylock(rl::ReentrantLock)
     ct = current_task()
     locked_by = @atomic :monotonic rl.locked_by
     if locked_by === ct
-        rl.reentrancy_cnt += Int32(1)
+        @atomic :monotonic rl.reentrancy_cnt = rl.reentrancy_cnt + Int32(1)
         return true
     elseif locked_by === nothing
         GC.disable_finalizers()
         if (@atomicreplace :acquire rl.locked_by nothing => ct).success
-            rl.reentrancy_cnt += Int32(1)
+            @atomic :monotonic rl.reentrancy_cnt = Int32(1)
             return true
         end
         GC.enable_finalizers()
@@ -116,18 +116,18 @@ function unlock(rl::ReentrantLock)
     n = rl.reentrancy_cnt
     rl.locked_by === ct || error(n == 0 ? "unlock count must match lock count" : "unlock from wrong thread")
     # n == 0 && error("unlock count must match lock count") # impossible
-    rl.reentrancy_cnt = n - Int32(1)
+    @atomic :monotonic rl.reentrancy_cnt = n - Int32(1)
     if n == Int32(1)
         # either our thread will release locked_by first,
         # or the other thread will be added to waitq first
         # so we avoid the race, and usually the lock
-        @atomic :monotonic rl.locked_by = nothing
+        @atomic :release rl.locked_by = nothing
         if @atomicswap :sequentially_consistent rl.havewaiting = false
             (@noinline function notifywaiters(rl)
                 cond_wait = rl.cond_wait
                 lock(cond_wait)
                 try
-                    notify(cond_wait) # TODO: all=false, and set havewaiting if !isempty(cond_wait) after
+                    notify(cond_wait)
                 finally
                     unlock(cond_wait)
                 end
@@ -139,14 +139,16 @@ function unlock(rl::ReentrantLock)
 end
 
 function unlockall(rl::ReentrantLock)
-    n = @atomicswap :notatomic rl.reentrancy_cnt = Int32(1)
+    n = rl.reentrancy_cnt
+    @atomic :monotonic rl.reentrancy_cnt = Int32(1)
     unlock(rl)
     return n
 end
 
 function relockall(rl::ReentrantLock, n::Int32)
     lock(rl)
-    n1 = @atomicswap :notatomic rl.reentrancy_cnt = n
+    n1 = rl.reentrancy_cnt
+    @atomic :monotonic rl.reentrancy_cnt = n
     n1 == Int32(1) || concurrency_violation()
     return
 end
