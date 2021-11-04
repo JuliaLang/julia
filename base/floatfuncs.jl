@@ -415,7 +415,7 @@ fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 # TODO actually detect fma in hardware and switch on that.
 if (Sys.ARCH !== :i686 &&
     fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
-    fma_llvm(-0.05339717f0, -2.6319417f-26, -1.8926976f-33) == 1.4053805f-27
+    fma_llvm(-0.05339717f0, -2.6319417f-26, -1.8926976f-33) == 1.4053805f-27 &&
     (fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) == 1.8626451500983188e-9) &&
      0.1 + 0.2 == 0.30000000000000004)
     fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x,y,z)
