@@ -101,17 +101,8 @@ end
                                   sqrt,cbrt)
         for x in FloatIterator{Float16}()
              @test try func(x) === Float16(func(Float64(x))) catch; true end
-
-<<<<<<< HEAD
-    # no domain error is thrown for negative values
-    @test cbrt(Float16(-1.0)) == -1.0
-    # test zero and Inf
-    @test cbrt(Float16(0.0)) == Float16(0.0)
-    @test cbrt(Inf16) == Inf16
-=======
         end
     end
->>>>>>> e791da70c2 (More rigerous, easy to interpret checks)
 end
 @testset "binary ops" begin
     @test f+g === Float16(3f0)
