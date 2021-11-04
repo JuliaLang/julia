@@ -96,7 +96,7 @@ end
         c = rl.cond_wait
         lock(c.lock)
         try
-            if (@atomic rl.havelock) == 0x01 # :sequentially_consistent ?
+            if (@atomic rl.havelock) == 0x02 # :sequentially_consistent ?
                 wait(c)
             end
         finally
