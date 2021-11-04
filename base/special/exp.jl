@@ -299,7 +299,7 @@ end
     x = T(a)
     N_float = round(x*LogBINV(base, T))
     N = unsafe_trunc(Int32, N_float)
-    r = muladd(N_float, LogB(base, T), x)
+    r = muladd(N_float, LogBU(base, T), x)
     r = muladd(N_float, LogBL(base, T), r)
     small_part = expb_kernel(base, r)
     if !(abs(x) <= 25)
