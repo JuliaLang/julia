@@ -38,7 +38,7 @@ Base.assert_havelock(l::SpinLock) = islocked(l) ? nothing : Base.concurrency_vio
 
 function lock(l::SpinLock)
     while true
-        if trylock(l)
+        if @inline trylock(l)
             return
         end
         ccall(:jl_cpu_pause, Cvoid, ())
@@ -50,7 +50,7 @@ end
 function trylock(l::SpinLock)
     if l.owned == 0
         GC.disable_finalizers()
-        p = @atomicswap :acquire_release l.owned = 1
+        p = @atomicswap :acquire l.owned = 1
         if p == 0
             return true
         end
