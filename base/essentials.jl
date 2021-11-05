@@ -181,7 +181,7 @@ Stacktrace:
 [...]
 ```
 
-If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
+If `T` is a [`AbstractFloat`](@ref) type,
 then it will return the closest value to `x` representable by `T`.
 
 ```jldoctest
