@@ -790,19 +790,19 @@ static void *signal_listener(void *arg)
                         }
                         jl_set_safe_restore(old_buf);
 
-                        jl_ptls_t ptls = jl_all_tls_states[i];
+                        jl_ptls_t ptls2 = jl_all_tls_states[i];
 
                         // store threadid but add 1 as 0 is preserved to indicate end of block
-                        bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+                        bt_data_prof[bt_size_cur++].uintptr = ptls2->tid + 1;
 
                         // store task id
-                        bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
+                        bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls2->current_task);
 
                         // store cpu cycle clock
                         bt_data_prof[bt_size_cur++].uintptr = cycleclock();
 
                         // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                        bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
+                        bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls2->sleep_check_state) + 1;
 
                         // Mark the end of this block with two 0's
                         bt_data_prof[bt_size_cur++].uintptr = 0;
@@ -834,6 +834,15 @@ static void *signal_listener(void *arg)
                 jl_exit_thread0(128 + sig, bt_data, bt_size);
             }
             else {
+#ifndef SIGINFO // SIGINFO already prints this automatically
+                int nrunning = 0;
+                for (int idx = jl_n_threads; idx-- > 0; ) {
+                    jl_ptls_t ptls2 = jl_all_tls_states[idx];
+                    nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
+                }
+                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", jl_getpid(), nrunning, jl_n_threads);
+#endif
+
                 jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
                 size_t i;
                 for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
