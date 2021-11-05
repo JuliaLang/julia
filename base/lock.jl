@@ -57,18 +57,21 @@ return `false`.
 
 Each successful `trylock` must be matched by an [`unlock`](@ref).
 """
-function trylock(rl::ReentrantLock)
+@inline function trylock(rl::ReentrantLock)
     ct = current_task()
     if rl.locked_by === ct
         #@assert rl.havelock !== 0x00
         rl.reentrancy_cnt += 0x0000_0001
         return true
     end
+    return _trylock(rl, ct)
+end
+@noinline function _trylock(rl::ReentrantLock, ct::Task)
     GC.disable_finalizers()
     if (@atomicreplace :acquire rl.havelock 0x00 => 0x01).success
         #@assert rl.locked_by === nothing
         #@assert rl.reentrancy_cnt === 0
-        rl.reentrancy_cnt = 1
+        rl.reentrancy_cnt = 0x0000_0001
         @atomic :release rl.locked_by = ct
         return true
     end
@@ -85,25 +88,24 @@ wait for it to become available.
 
 Each `lock` must be matched by an [`unlock`](@ref).
 """
-function lock(rl::ReentrantLock)
-    @inline(trylock(rl)) || slowlock(rl)
-    return
-end
-@noinline function slowlock(rl::ReentrantLock)
-    c = rl.cond_wait
-    lock(c.lock)
-    try
-        while true
-            if (@atomicreplace rl.havelock 0x01 => 0x02).old == 0x00 # :sequentially_consistent ? # now either 0x00 or 0x02
-                # it was unlocked, so try to lock it ourself
-                trylock(rl) && break
-            else # it was locked, so now wait for the release to notify us
-                wait(c)
+@inline function lock(rl::ReentrantLock)
+    trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
+        c = rl.cond_wait
+        lock(c.lock)
+        try
+            while true
+                if (@atomicreplace rl.havelock 0x01 => 0x02).old == 0x00 # :sequentially_consistent ? # now either 0x00 or 0x02
+                    # it was unlocked, so try to lock it ourself
+                    _trylock(rl, current_task()) && break
+                else # it was locked, so now wait for the release to notify us
+                    wait(c)
+                end
             end
+        finally
+            unlock(c.lock)
         end
-    finally
-        unlock(c.lock)
-    end
+    end)(rl)
+    return
 end
 
 """
@@ -114,28 +116,30 @@ Releases ownership of the `lock`.
 If this is a recursive lock which has been acquired before, decrement an
 internal counter and return immediately.
 """
-function unlock(rl::ReentrantLock)
-    ct = current_task()
-    n = rl.reentrancy_cnt
-    rl.locked_by === ct || error(n == 0 ? "unlock count must match lock count" : "unlock from wrong thread")
-    # n == 0 && error("unlock count must match lock count") # impossible
-    rl.reentrancy_cnt = n - 0x0000_0001
-    if n == 0x0000_00001
-        @atomic :monotonic rl.locked_by = nothing
-        if (@atomicswap :release rl.havelock = 0x00) == 0x02
-            (@noinline function notifywaiters(rl)
-                cond_wait = rl.cond_wait
-                lock(cond_wait)
-                try
-                    notify(cond_wait)
-                finally
-                    unlock(cond_wait)
-                end
-            end)(rl)
+@inline function unlock(rl::ReentrantLock)
+    rl.locked_by === current_task() ||
+        error(rl.reentrancy_cnt == 0x0000_0000 ? "unlock count must match lock count" : "unlock from wrong thread")
+    (@noinline function _unlock(rl::ReentrantLock)
+        n = rl.reentrancy_cnt - 0x0000_0001
+        rl.reentrancy_cnt = n
+        if n == 0x0000_00000
+            @atomic :monotonic rl.locked_by = nothing
+            if (@atomicswap :release rl.havelock = 0x00) == 0x02
+                (@noinline function notifywaiters(rl)
+                    cond_wait = rl.cond_wait
+                    lock(cond_wait)
+                    try
+                        notify(cond_wait)
+                    finally
+                        unlock(cond_wait)
+                    end
+                end)(rl)
+            end
+            return true
         end
-        GC.enable_finalizers()
-    end
-    return
+        return false
+    end)(rl) && GC.enable_finalizers()
+    nothing
 end
 
 function unlockall(rl::ReentrantLock)

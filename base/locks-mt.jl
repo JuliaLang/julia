@@ -60,8 +60,9 @@ function trylock(l::SpinLock)
 end
 
 function unlock(l::SpinLock)
-    l.owned == 0 && error("unlock count must match lock count")
-    @atomic :release l.owned = 0
+    if (@atomicswap :release l.owned = 0) == 0
+        error("unlock count must match lock count")
+    end
     GC.enable_finalizers()
     ccall(:jl_cpu_wake, Cvoid, ())
     return
