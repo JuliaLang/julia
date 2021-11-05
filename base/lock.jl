@@ -90,18 +90,19 @@ function lock(rl::ReentrantLock)
     return
 end
 @noinline function slowlock(rl::ReentrantLock)
-    while true
-        @atomicreplace rl.havelock 0x01 => 0x02 # :sequentially_consistent ?
-        trylock(rl) && return
-        c = rl.cond_wait
-        lock(c.lock)
-        try
-            if (@atomic rl.havelock) == 0x02 # :sequentially_consistent ?
+    c = rl.cond_wait
+    lock(c.lock)
+    try
+        while true
+            if (@atomicreplace rl.havelock 0x01 => 0x02).old == 0x00 # :sequentially_consistent ? # now either 0x00 or 0x02
+                # it was unlocked, so try to lock it ourself
+                trylock(rl) && break
+            else # it was locked, so now wait for the release to notify us
                 wait(c)
             end
-        finally
-            unlock(c.lock)
         end
+    finally
+        unlock(c.lock)
     end
 end
 
