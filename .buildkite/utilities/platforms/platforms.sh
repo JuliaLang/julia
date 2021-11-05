@@ -61,11 +61,11 @@ cat "${ARCHES:?}" | tr -s ' ' | while read _line; do
   fi
 
   if [[ "${TIMEOUT_BK:?}" == "." ]]; then
-    export TIMEOUT_BK="60"
+    export TIMEOUT_BK="90"
   fi
 
   if [[ "${TIMEOUT_RR:?}" == "." ]]; then
-    export TIMEOUT_RR="30"
+    export TIMEOUT_RR="60"
   fi
 
   if [[ "${RETRIES:?}" == "." ]]; then
