@@ -5,6 +5,10 @@
 
 #include "options.h"
 #include "julia_locks.h"
+#include "support/utils.h"
+#include "support/hashing.h"
+#include "support/ptrhash.h"
+#include "support/strtod.h"
 #include <uv.h>
 #if !defined(_WIN32)
 #include <unistd.h>
