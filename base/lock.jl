@@ -160,8 +160,8 @@ end
 
 function relockall(rl::ReentrantLock, n::UInt32)
     lock(rl)
-    new = @atomic :not_atomic rl.reentrancy_cnt += n - UInt32(1)
-    new == n || concurrency_violation()
+    old = @atomicswap :not_atomic rl.reentrancy_cnt = n
+    old == 0x0000_0001 || concurrency_violation()
     return
 end
 
