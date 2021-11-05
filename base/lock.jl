@@ -26,12 +26,22 @@ end
 ```
 """
 mutable struct Lock <: AbstractLock
+    # offset = 16
     @atomic locked_by::Union{Task, Nothing}
-    cond_wait::ThreadSynchronizer
+    # offset32 = 20, offset64 = 24
     reentrancy_cnt::UInt32
-    @atomic havelock::UInt8 # 0 = none, 1 = lock, 2 = conflict
+    # offset32 = 24, offset64 = 28
+    @atomic havelock::UInt8 # 0x0 = none, 0x1 = lock, 0x2 = conflict
+    # offset32 = 28, offset64 = 32
+    cond_wait::ThreadSynchronizer # 2 words
+    # offset32 = 36, offset64 = 48
+    # sizeof32 = 20, sizeof64 = 32
+    # now add padding to make this a full cache line to minimize false sharing between objects
+    _::NTuple{Int == Int32 ? 2 : 3, Int}
+    # offset32 = 44, offset64 = 72 == sizeof+offset
+    # sizeof32 = 28, sizeof64 = 56
 
-    Lock() = new(nothing, ThreadSynchronizer(), 0x0000_0000, 0x00)
+    Lock() = new(nothing, 0x0000_0000, 0x00, ThreadSynchronizer())
 end
 const ReentrantLock = Lock
 
