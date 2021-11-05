@@ -1711,11 +1711,11 @@ enum JL_RTLD_CONSTANT {
 };
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 
-typedef void *jl_uv_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
-JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);
-JL_DLLEXPORT jl_uv_libhandle jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_dlclose(jl_uv_libhandle handle) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_dlsym(jl_uv_libhandle handle, const char *symbol, void ** value, int throw_err) JL_NOTSAFEPOINT;
+typedef void *jl_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
+JL_DLLEXPORT jl_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);
+JL_DLLEXPORT jl_libhandle jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_dlclose(jl_libhandle handle) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_dlsym(jl_libhandle handle, const char *symbol, void ** value, int throw_err) JL_NOTSAFEPOINT;
 
 // evaluation
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v);
@@ -1832,7 +1832,7 @@ typedef struct _jl_task_t {
     jl_gcframe_t *gcstack;
     size_t world_age;
     // quick lookup for current ptls
-    jl_tls_states_t *ptls; // == jl_all_tls_states[tid]
+    jl_ptls_t ptls; // == jl_all_tls_states[tid]
     // saved exception stack
     jl_excstack_t *excstack;
     // current exception handler
@@ -1935,24 +1935,32 @@ extern int had_exception;
 
 // I/O system -----------------------------------------------------------------
 
-#define JL_STREAM uv_stream_t
+struct uv_loop_s;
+struct uv_handle_s;
+struct uv_stream_s;
+#ifdef _OS_WINDOWS_
+typedef HANDLE jl_uv_os_fd_t;
+#else
+typedef int jl_uv_os_fd_t;
+#endif
+#define JL_STREAM struct uv_stream_s
 #define JL_STDOUT jl_uv_stdout
 #define JL_STDERR jl_uv_stderr
 #define JL_STDIN  jl_uv_stdin
 
 JL_DLLEXPORT int jl_process_events(void);
 
-JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void);
+JL_DLLEXPORT struct uv_loop_s *jl_global_event_loop(void);
 
-JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle);
+JL_DLLEXPORT void jl_close_uv(struct uv_handle_s *handle);
 
 JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
 
 typedef struct {
     void *data;
-    uv_loop_t *loop;
-    uv_handle_type type;
-    uv_os_fd_t file;
+    struct uv_loop_s *loop;
+    int type; // enum uv_handle_type
+    jl_uv_os_fd_t file;
 } jl_uv_file_t;
 
 #ifdef __GNUC__
@@ -1962,10 +1970,10 @@ typedef struct {
 #define _JL_FORMAT_ATTR(type, str, arg)
 #endif
 
-JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n);
-JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
+JL_DLLEXPORT void jl_uv_puts(struct uv_stream_s *stream, const char *str, size_t n);
+JL_DLLEXPORT int jl_printf(struct uv_stream_s *s, const char *format, ...)
     _JL_FORMAT_ATTR(printf, 2, 3);
-JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
+JL_DLLEXPORT int jl_vprintf(struct uv_stream_s *s, const char *format, va_list args)
     _JL_FORMAT_ATTR(printf, 2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 1, 2);
