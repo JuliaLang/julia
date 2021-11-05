@@ -406,28 +406,34 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
 end
 fma_llvm(x::Float32, y::Float32, z::Float32) = fma_float(x, y, z)
 fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
-# Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back
-# onto a broken system libm; if so, use a software emulated fma
-# 1.0000305f0 = 1 + 1/2^15
-# 1.0000000009313226 = 1 + 1/2^30
+
+# fma_llvm may call the libc fma function if no hardware instruction is available.
+# On sufficiently old x86 glibc (<2.20), the fma function will modify the floating point
+# rounding mode and not reset it correctly, which will cause subsequent floating point
+# operations to give incorrect results:
+# https://sourceware.org/bugzilla/show_bug.cgi?id=17907
+
 # If fma_llvm() clobbers the rounding mode, the result of 0.1 + 0.2 will be 0.3
 # instead of the properly-rounded 0.30000000000000004; check after calling fma
-# TODO actually detect fma in hardware and switch on that.
 if (Sys.ARCH !== :i686 && fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
     (fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) ==
      1.8626451500983188e-9) && 0.1 + 0.2 == 0.30000000000000004)
-    fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x,y,z)
-    fma(x::Float64, y::Float64, z::Float64) = fma_llvm(x,y,z)
+    # fma is correct
+    fma(x::T, y::T, z::T) where {T<:Union{Float32,Float64}} = fma_llvm(x,y,z)
 else
-    fma(x::Float32, y::Float32, z::Float32) = fma_emulated(x,y,z)
-    fma(x::Float64, y::Float64, z::Float64) = fma_emulated(x,y,z)
+    # fma has modified the rounding mode
+    # first reset the rounding mode so subsequent things don't break
+    Rounding.setrounding_raw(Float32, Rounding.JL_FE_TONEAREST)
+    Rounding.setrounding_raw(Float64, Rounding.JL_FE_TONEAREST)
+
+    # fma function should manually reset the rounding mode each time it is called
+    function fma(x::T, y::T, z::T) where {T<:Union{Float32,Float64}}
+        old_rounding_raw = rounding_raw(T)
+        r = fma_llvm(x,y,z)
+        setrounding_raw(T,old_rounding_raw)
+        return r
+    end
 end
 function fma(a::Float16, b::Float16, c::Float16)
     Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.
 end
-
-# This is necessary at least on 32-bit Intel Linux, since fma_llvm may
-# have called glibc, and some broken glibc fma implementations don't
-# properly restore the rounding mode
-Rounding.setrounding_raw(Float32, Rounding.JL_FE_TONEAREST)
-Rounding.setrounding_raw(Float64, Rounding.JL_FE_TONEAREST)
