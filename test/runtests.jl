@@ -17,7 +17,7 @@ if Sys.isfreebsd() && Base.VERSION >= v"1.8.0-"
     if get(ENV, "CI", "false") == "true"
         @error "This is FreeBSD, on Julia 1.8+, on CI. Tests are known to be broken, so we will skip almost all of the tests."
         empty!(tests)
-        
+
         # We will actually run a single test set, just as a sanity check to make sure that Julia can be run.
         push!(tests, "sysinfo")
     end
