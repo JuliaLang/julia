@@ -92,7 +92,7 @@ function scrub_repl_backtrace(bt)
     return bt
 end
 scrub_repl_backtrace(stack::ExceptionStack) =
-    ExceptionStack([(exception = x[1], backtrace = scrub_repl_backtrace(x[2])) for x in stack])
+    ExceptionStack([(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
 
 istrivialerror(stack::ExceptionStack) =
     length(stack) == 1 && length(stack[1].backtrace) ≤ 1
