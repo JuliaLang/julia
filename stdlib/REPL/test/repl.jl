@@ -885,7 +885,7 @@ end
 
 # Test containers in error messages are limited #18726
 let io = IOBuffer()
-    Base.display_error(io, Base.ExceptionStack([(exception =
+    Base.display_error(io, Base.ExceptionStack(Any[(exception =
         (try
             [][trues(6000)]
             @assert false
