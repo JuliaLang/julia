@@ -60,6 +60,12 @@ end
 @test Base.in_sysimage(Base.PkgId(Base.UUID("cf7118a7-6976-5b1a-9a39-7adc72f591a4"), "UUIDs"))
 @test Base.in_sysimage(Base.PkgId(Base.UUID("3a7fdc7e-7467-41b4-9f64-ea033d046d5b"), "NotAPackage")) == false
 
+## Unit tests for safe file operations ##
+
+@test Base.safe_isfile("/root/path/doesn't/exist") == false
+@test Base.safe_ispath("/root/path/doesn't/exist") == false
+@test Base.safe_isdir("/root/path/doesn't/exist") == false
+
 # Issue #5789 and PR #13542:
 mktempdir() do dir
     cd(dir) do
