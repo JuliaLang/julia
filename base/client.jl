@@ -105,6 +105,14 @@ function display_error(io::IO, stack::ExceptionStack)
 end
 display_error(stack::ExceptionStack) = display_error(stderr, stack)
 
+# these forms are depended on by packages outside Julia
+function display_error(io::IO, exception, backtrace)
+    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
+    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
+    println(io)
+end
+display_error(er, bt=nothing) = display_error(stderr, er, bt)
+
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
     lasterr = nothing
