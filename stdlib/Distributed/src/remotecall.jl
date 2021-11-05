@@ -96,9 +96,9 @@ function finalize_ref(r::AbstractRemoteRef)
                     send_del_client_no_lock(r)
                 else
                     # send_del_client only if the reference has not been set
-                    v_cache = @atomic :acquire r.v
+                    v_cache = @atomic :monotonic r.v
                     v_cache === nothing && send_del_client_no_lock(r)
-                    @atomic :release r.v = nothing
+                    @atomic :monotonic r.v = nothing
                 end
                 r.where = 0
             finally
@@ -592,10 +592,10 @@ function fetch(r::Future)
     v_cache !== nothing && return something(v_cache)
 
     if r.where == myid()
-        v_cache, rv = lock(r.lock) do
+        @lock(r.lock, begin
             v_cache = @atomic :monotonic r.v
-            v_cache, v_cache === nothing ? lookup_ref(remoteref_id(r)) : nothing
-        end
+            rv = v_cache === nothing ? lookup_ref(remoteref_id(r)) : nothing
+        end)
 
         if v_cache !== nothing
             return something(v_cache)
@@ -609,8 +609,8 @@ function fetch(r::Future)
     v_cache = @atomic r.v
 
     if v_cache === nothing # call_on_owner case
-        v_old, status = lock(r.lock) do
-            @atomicreplace r.v nothing => Some(v_local)
+        @lock r.lock begin
+            v_old, status = @atomicreplace r.v nothing => Some(v_local)
         end
         # status == true - when value obtained through call_on_owner, put! called from a different worker
         # status == false - any other situation: atomicreplace fails, because by the time the lock is obtained cache will be populated
@@ -650,13 +650,13 @@ function put!(r::Future, v)
         rid = remoteref_id(r)
         rv = lookup_ref(rid)
         isready(rv) && error("Future can be set only once")
-        lock(r.lock) do
+        @lock r.lock begin
             put!(rv, v) # this notifies the tasks waiting on the channel in fetch
             set_future_cache(r, v) # set the cache before leaving the lock, so that the notified tasks already see it cached
         end
         del_client(rid, myid())
     else
-        lock(r.lock) do # same idea as above if there were any local tasks fetching on this Future
+        @lock r.lock begin # same idea as above if there were any local tasks fetching on this Future
             call_on_owner(put_future, r, v, myid())
             set_future_cache(r, v)
         end
@@ -666,7 +666,7 @@ end
 
 function set_future_cache(r::Future, v)
     _, ok = @atomicreplace r.v nothing => Some(v)
-    ok || error("Future can be set only once")
+    @assert ok "internal consistency error detected for Future"
 end
 
 function put_future(rid, v, caller)
