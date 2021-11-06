@@ -71,6 +71,7 @@ function test_existing_ref(r::AbstractRemoteRef)
     if found !== nothing
         @assert r.where > 0
         if isa(r, Future)
+            # this is only for copying the reference from Future to RemoteRef (just created)
             fv_cache = @atomic :acquire found.v
             rv_cache = @atomic :monotonic r.v
             if fv_cache === nothing && rv_cache !== nothing
@@ -358,7 +359,10 @@ end
 
 channel_type(rr::RemoteChannel{T}) where {T} = T
 
-serialize(s::ClusterSerializer, f::Future) = serialize(s, f, f.v === nothing)
+function serialize(s::ClusterSerializer, f::Future)
+    v_cache = @atomic f.v
+    serialize(s, f, v_cache === nothing)
+end
 serialize(s::ClusterSerializer, rr::RemoteChannel) = serialize(s, rr, true)
 function serialize(s::ClusterSerializer, rr::AbstractRemoteRef, addclient)
     if addclient
@@ -370,14 +374,16 @@ end
 
 function deserialize(s::ClusterSerializer, t::Type{<:Future})
     f = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, t)
-    f2 = Future(f.where, RRID(f.whence, f.id), f.v) # ctor adds to client_refs table
+    fv_cache = @atomic f.v
+    f2 = Future(f.where, RRID(f.whence, f.id), fv_cache) # ctor adds to client_refs table
 
     # 1) send_add_client() is not executed when the ref is being serialized
     #    to where it exists, hence do it here.
     # 2) If we have received a 'fetch'ed Future or if the Future ctor found an
     #    already 'fetch'ed instance in client_refs (Issue #25847), we should not
     #    track it in the backing RemoteValue store.
-    if f2.where == myid() && f2.v === nothing
+    f2v_cache = @atomic f2.v
+    if f2.where == myid() && f2v_cache === nothing
         add_client(remoteref_id(f2), myid())
     end
     f2
@@ -613,9 +619,9 @@ function fetch(r::Future)
         v_old, status = @lock r.lock begin
             @atomicreplace r.v nothing => Some(v_local)
         end
-        # status == true - when value obtained through call_on_owner, put! called from a different worker
+        # status == true - when value obtained through call_on_owner
         # status == false - any other situation: atomicreplace fails, because by the time the lock is obtained cache will be populated
-        # why? put! performs caching and putting into channel under r.lock
+        # why? local put! performs caching and putting into channel under r.lock
 
         # for local put! use the cached value, for call_on_owner cases just take the v_local as it was just cached in r.v
         v_cache = status ? v_local : v_old
