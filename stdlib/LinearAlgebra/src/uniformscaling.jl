@@ -90,8 +90,8 @@ getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ)
 
 getindex(J::UniformScaling, n::Integer, m::AbstractVector{<:Integer}) = getindex(J, m, n)
 function getindex(J::UniformScaling{T}, n::AbstractVector{<:Integer}, m::Integer) where T
-    v = zeros(T, length(n))
-    @inbounds for (i,ii) in enumerate(n)
+    v = zeros(T, axes(n))
+    @inbounds for (i,ii) in pairs(n)
         if ii == m
             v[i] = J.λ
         end
@@ -99,10 +99,9 @@ function getindex(J::UniformScaling{T}, n::AbstractVector{<:Integer}, m::Integer
     return v
 end
 
-
 function getindex(J::UniformScaling{T}, n::AbstractVector{<:Integer}, m::AbstractVector{<:Integer}) where T
-    A = zeros(T, length(n), length(m))
-    @inbounds for (j,jj) in enumerate(m), (i,ii) in enumerate(n)
+    A = zeros(T, axes(n)..., axes(m)...)
+    @inbounds for (j,jj) in pairs(m), (i,ii) in pairs(n)
         if ii == jj
             A[i,j] = J.λ
         end
