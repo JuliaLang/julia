@@ -796,20 +796,24 @@ function const_prop_methodinstance_heuristic(
     # was able to cut it down to something simple (inlineable in particular).
     # If so, there's a good chance we might be able to const prop all the way
     # through and learn something new.
-    code = get(code_cache(interp), mi, nothing)
-    declared_inline = isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
-    cache_inlineable = declared_inline
-    if isdefined(code, :inferred) && !cache_inlineable
-        cache_inf = code.inferred
-        if !(cache_inf === nothing)
-            src = inlining_policy(interp, cache_inf, get_curr_ssaflag(sv), mi, argtypes)
-            cache_inlineable = src !== nothing
+    if isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
+        return true
+    else
+        flag = get_curr_ssaflag(sv)
+        if is_stmt_inline(flag)
+            # force constant propagation for a call that is going to be inlined
+            # since the inliner will try to find this constant result
+            # if these constant arguments arrive there
+            return true
+        else
+            code = get(code_cache(interp), mi, nothing)
+            if isdefined(code, :inferred) && inlining_policy(
+                    interp, code.inferred, IR_FLAG_NULL, mi, argtypes) !== nothing
+                return true
+            end
         end
     end
-    if !cache_inlineable
-        return false
-    end
-    return true
+    return false # the cache isn't inlineable, so this constant-prop' will most likely be unfruitful
 end
 
 # This is only for use with `Conditional`.

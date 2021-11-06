@@ -53,6 +53,7 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
             return nothing
         end
     end
+    return nothing
 end
 
 include("compiler/ssair/driver.jl")

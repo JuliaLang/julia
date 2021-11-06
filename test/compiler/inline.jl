@@ -653,6 +653,58 @@ let
     end
 end
 
+begin
+    # more idempotency of callsite inling
+    # -----------------------------------
+    # this test case requires forced constant propagation for callsite inlined function call,
+    # particularly, in the following example, the inlinear will look up `+ₚ(::Point, ::Const(Point(2.25, 4.75)))`
+    # and the callsite inlining needs the corresponding constant result to exist in the local cache
+
+    struct Point
+        x::Float64
+        y::Float64
+    end
+    @noinline a::Point +ₚ b::Point = Point(a.x + b.x, a.y + b.y)
+
+    function compute(n)
+        a = Point(1.5, 2.5)
+        b = Point(2.25, 4.75)
+        for i in 0:(n-1)
+            a = @inline (a +ₚ b) +ₚ b
+        end
+        return a.x, a.y
+    end
+    let src = code_typed1(compute, (Int,))
+        @test count(isinvoke(:+ₚ), src.code) == 0 # successful inlining
+    end
+
+    function compute(n)
+        a = Point(1.5, 2.5)
+        b = Point(2.25, 4.75)
+        for i in 0:(n-1)
+            a = (a +ₚ b) +ₚ b
+        end
+        return a.x, a.y
+    end
+    let src = code_typed1(compute, (Int,))
+        @test count(isinvoke(:+ₚ), src.code) == 2 # no inlining
+    end
+
+    compute(42) # this execution should discard the cache of `+ₚ` since it's declared as `@noinline`
+
+    function compute(n)
+        a = Point(1.5, 2.5)
+        b = Point(2.25, 4.75)
+        for i in 0:(n-1)
+            @inline a = (a +ₚ b) +ₚ b
+        end
+        return a.x, a.y
+    end
+    let src = code_typed1(compute, (Int,))
+        @test count(isinvoke(:+ₚ), src.code) == 0 # no inlining !?
+    end
+end
+
 # https://github.com/JuliaLang/julia/issues/42246
 @test mktempdir() do dir
     cd(dir) do
