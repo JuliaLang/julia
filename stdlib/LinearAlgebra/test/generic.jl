@@ -256,6 +256,18 @@ end
     @test_throws DimensionMismatch reflect!([x; x], y, c, s)
 end
 
+@testset "LinearAlgebra.reflectorApply!" begin
+    for T in (Float64, ComplexF64)
+        x = rand(T, 6)
+        τ = rand(T)
+        A = rand(T, 6)
+        B = LinearAlgebra.reflectorApply!(x, τ, copy(A))
+        C = LinearAlgebra.reflectorApply!(x, τ, reshape(copy(A), (length(A), 1)))
+        @test B[1] ≈ C[1] ≈ A[1] - conj(τ)*(A[1] + dot(x[2:end], A[2:end]))
+        @test B[2:end] ≈ C[2:end] ≈ A[2:end] - conj(τ)*(A[1] + dot(x[2:end], A[2:end]))*x[2:end]
+    end
+end
+
 @testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin
     α = [1 2; 3 4]
     β = [5 6; 7 8]
@@ -355,6 +367,11 @@ end
     @test [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]] ≈ [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 end
 
+@testset "Issue 40128" begin
+    @test det(BigInt[9 1 8 0; 0 0 8 7; 7 6 8 3; 2 9 7 7])::BigInt == -1
+    @test det(BigInt[1 big(2)^65+1; 3 4])::BigInt == (4 - 3*(big(2)^65+1))
+end
+
 # Minimal modulo number type - but not subtyping Number
 struct ModInt{n}
     k
@@ -382,13 +399,13 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
-    @test A*(lu(A, Val(false))\b) == b
+    @test A*(lu(A, NoPivot())\b) == b
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
-    @test A*(lu(A, Val(true))\b) == b
+    @test A*(lu(A, RowMaximum())\b) == b
 end
 
 @testset "Issue 18742" begin

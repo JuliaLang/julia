@@ -32,7 +32,7 @@ extern "C" {
 
 // egal and object_id ---------------------------------------------------------
 
-static int bits_equal(void *a, void *b, int sz) JL_NOTSAFEPOINT
+static int bits_equal(const void *a, const void *b, int sz) JL_NOTSAFEPOINT
 {
     switch (sz) {
     case 1:  return *(int8_t*)a == *(int8_t*)b;
@@ -76,7 +76,7 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
 }
 
 // See comment above for an explanation of NOINLINE.
-static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
+static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     size_t f, nf = jl_datatype_nfields(dt);
     for (f = 0; f < nf; f++) {
@@ -126,7 +126,7 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
     return 1;
 }
 
-static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env, int tvar_names) JL_NOTSAFEPOINT
+static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *env, int tvar_names) JL_NOTSAFEPOINT
 {
     if (a == b)
         return 1;
@@ -183,7 +183,7 @@ static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env, int tvar_
     }
     if (dt == jl_symbol_type)
         return 0;
-    assert(!dt->mutabl);
+    assert(!dt->name->mutabl);
     return jl_egal__bits(a, b, dt);
 }
 
@@ -192,13 +192,19 @@ JL_DLLEXPORT int jl_types_egal(jl_value_t *a, jl_value_t *b)
     return egal_types(a, b, NULL, 0);
 }
 
-JL_DLLEXPORT int (jl_egal)(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
+JL_DLLEXPORT int (jl_egal)(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
     // warning: a,b may NOT have been gc-rooted by the caller
     return jl_egal(a, b);
 }
 
-int jl_egal__special(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_egal__unboxed(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    // warning: a,b may NOT have been gc-rooted by the caller
+    return jl_egal__unboxed_(a, b, dt);
+}
+
+int jl_egal__special(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     if (dt == jl_simplevector_type)
         return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
@@ -221,7 +227,7 @@ int jl_egal__special(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNR
     return 0;
 }
 
-int jl_egal__bits(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
+int jl_egal__bits(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     size_t sz = jl_datatype_size(dt);
     if (sz == 0)
@@ -324,7 +330,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
     }
     if (tv == jl_symbol_type)
         return ((jl_sym_t*)v)->hash;
-    assert(!tv->mutabl);
+    assert(!tv->name->mutabl);
     return immut_id_(tv, v, tv->hash);
 }
 
@@ -358,7 +364,7 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
                 uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
                 fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
             }
-            assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
+            assert(jl_is_datatype(fieldtype) && !fieldtype->name->abstract && !fieldtype->name->mutabl);
             int32_t first_ptr = fieldtype->layout->first_ptr;
             if (first_ptr >= 0 && ((jl_value_t**)vo)[first_ptr] == NULL) {
                 // If the field is a inline immutable that can be can be undef
@@ -391,7 +397,7 @@ static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) J
         return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
 #endif
     }
-    if (dt->mutabl)
+    if (dt->name->mutabl)
         return inthash((uintptr_t)v);
     return immut_id_(dt, v, dt->hash);
 }
@@ -451,7 +457,7 @@ JL_CALLABLE(jl_f_sizeof)
     if (jl_is_datatype(x)) {
         jl_datatype_t *dx = (jl_datatype_t*)x;
         if (dx->layout == NULL) {
-            if (dx->abstract)
+            if (dx->name->abstract)
                 jl_errorf("Abstract type %s does not have a definite size.", jl_symbol_name(dx->name->name));
             else
                 jl_errorf("Argument is an incomplete %s type and does not have a definite size.", jl_symbol_name(dx->name->name));
@@ -473,7 +479,7 @@ JL_CALLABLE(jl_f_sizeof)
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
-    assert(!dt->abstract);
+    assert(!dt->name->abstract);
     return jl_box_long(jl_datatype_size(dt));
 }
 
@@ -700,7 +706,7 @@ static jl_value_t *do_apply( jl_value_t **args, uint32_t nargs, jl_value_t *iter
     }
     if (arg_heap) {
         // optimization: keep only the first root, free the others
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
         ((void**)roots)[-2] = (void*)JL_GC_ENCODE_PUSHARGS(1);
 #endif
     }
@@ -718,24 +724,24 @@ JL_CALLABLE(jl_f__apply_iterate)
 // this is like `_apply`, but with quasi-exact checks to make sure it is pure
 JL_CALLABLE(jl_f__apply_pure)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    int last_in = ptls->in_pure_callback;
+    jl_task_t *ct = jl_current_task;
+    int last_in = ct->ptls->in_pure_callback;
     jl_value_t *ret = NULL;
     JL_TRY {
-        ptls->in_pure_callback = 1;
+        ct->ptls->in_pure_callback = 1;
         // because this function was declared pure,
         // we should be allowed to run it in any world
         // so we run it in the newest world;
         // because, why not :)
         // and `promote` works better this way
-        size_t last_age = ptls->world_age;
-        ptls->world_age = jl_world_counter;
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         ret = do_apply(args, nargs, NULL);
-        ptls->world_age = last_age;
-        ptls->in_pure_callback = last_in;
+        ct->world_age = last_age;
+        ct->ptls->in_pure_callback = last_in;
     }
     JL_CATCH {
-        ptls->in_pure_callback = last_in;
+        ct->ptls->in_pure_callback = last_in;
         jl_rethrow();
     }
     return ret;
@@ -744,29 +750,31 @@ JL_CALLABLE(jl_f__apply_pure)
 // this is like a regular call, but always runs in the newest world
 JL_CALLABLE(jl_f__call_latest)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    size_t last_age = ptls->world_age;
-    if (!ptls->in_pure_callback)
-        ptls->world_age = jl_world_counter;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    if (!ct->ptls->in_pure_callback)
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     jl_value_t *ret = jl_apply(args, nargs);
-    ptls->world_age = last_age;
+    ct->world_age = last_age;
     return ret;
 }
 
 // Like call_in_world, but runs in the specified world.
-// If world > jl_world_counter, run in the latest world.
+// If world > jl_atomic_load_acquire(&jl_world_counter), run in the latest world.
 JL_CALLABLE(jl_f__call_in_world)
 {
     JL_NARGSV(_apply_in_world, 2);
-    jl_ptls_t ptls = jl_get_ptls_states();
-    size_t last_age = ptls->world_age;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
     JL_TYPECHK(_apply_in_world, ulong, args[0]);
     size_t world = jl_unbox_ulong(args[0]);
-    world = world <= jl_world_counter ? world : jl_world_counter;
-    if (!ptls->in_pure_callback)
-        ptls->world_age = world;
+    if (!ct->ptls->in_pure_callback) {
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        if (ct->world_age > world)
+            ct->world_age = world;
+    }
     jl_value_t *ret = jl_apply(&args[1], nargs - 1);
-    ptls->world_age = last_age;
+    ct->world_age = last_age;
     return ret;
 }
 
@@ -781,10 +789,10 @@ JL_CALLABLE(jl_f_tuple)
     JL_GC_PROMISE_ROOTED(tt); // it is a concrete type
     if (tt->instance != NULL)
         return tt->instance;
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(tt), tt);
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(tt), tt);
     for (i = 0; i < nargs; i++)
-        set_nth_field(tt, (void*)jv, i, args[i]);
+        set_nth_field(tt, jv, i, args[i], 0);
     return jv;
 }
 
@@ -802,63 +810,182 @@ JL_CALLABLE(jl_f_svec)
 
 // struct operations ------------------------------------------------------------
 
-JL_CALLABLE(jl_f_getfield)
+enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char storing)
 {
-    if (nargs == 3) {
-        JL_TYPECHK(getfield, bool, args[2]);
-        nargs -= 1;
+    if (order == jl_not_atomic_sym)
+        return jl_memory_order_notatomic;
+    if (order == jl_unordered_sym && (loading ^ storing))
+        return jl_memory_order_unordered;
+    if (order == jl_monotonic_sym && (loading || storing))
+        return jl_memory_order_monotonic;
+    if (order == jl_acquire_sym && loading)
+        return jl_memory_order_acquire;
+    if (order == jl_release_sym && storing)
+        return jl_memory_order_release;
+    if (order == jl_acquire_release_sym && loading && storing)
+        return jl_memory_order_acq_rel;
+    if (order == jl_sequentially_consistent_sym)
+        return jl_memory_order_seq_cst;
+    return jl_memory_order_invalid;
+}
+
+enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, char loading, char storing)
+{
+    enum jl_memory_order mo = jl_get_atomic_order(order, loading, storing);
+    if (mo < 0) // invalid
+        jl_atomic_error("invalid atomic ordering");
+    return mo;
+}
+
+static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st, jl_value_t *v, jl_value_t *arg, int mutabl)
+{
+    if (mutabl) {
+        if (st == jl_module_type)
+            jl_error("cannot assign variables in other modules");
+        if (!st->name->mutabl)
+            jl_errorf("%s: immutable struct of type %s cannot be changed", name, jl_symbol_name(st->name->name));
     }
-    JL_NARGS(getfield, 2, 2);
-    jl_value_t *v = args[0];
-    jl_value_t *vt = (jl_value_t*)jl_typeof(v);
-    if (vt == (jl_value_t*)jl_module_type) {
-        JL_TYPECHK(getfield, symbol, args[1]);
-        return jl_eval_global_var((jl_module_t*)v, (jl_sym_t*)args[1]);
-    }
-    if (!jl_is_datatype(vt))
-        jl_type_error("getfield", (jl_value_t*)jl_datatype_type, v);
-    jl_datatype_t *st = (jl_datatype_t*)vt;
     size_t idx;
-    if (jl_is_long(args[1])) {
-        idx = jl_unbox_long(args[1])-1;
+    if (jl_is_long(arg)) {
+        idx = jl_unbox_long(arg) - 1;
         if (idx >= jl_datatype_nfields(st))
-            jl_bounds_error(args[0], args[1]);
+            jl_bounds_error(v, arg);
     }
     else {
-        JL_TYPECHK(getfield, symbol, args[1]);
-        jl_sym_t *fld = (jl_sym_t*)args[1];
-        idx = jl_field_index(st, fld, 1);
+        JL_TYPECHKS(name, symbol, arg);
+        idx = jl_field_index(st, (jl_sym_t*)arg, 1);
     }
-    return jl_get_nth_field_checked(v, idx);
+    return idx;
+}
+
+JL_CALLABLE(jl_f_getfield)
+{
+    enum jl_memory_order order = jl_memory_order_unspecified;
+    JL_NARGS(getfield, 2, 4);
+    if (nargs == 4) {
+        JL_TYPECHK(getfield, symbol, args[3]);
+        JL_TYPECHK(getfield, bool, args[4]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 0);
+    }
+    else if (nargs == 3) {
+        if (!jl_is_bool(args[2])) {
+            JL_TYPECHK(getfield, symbol, args[2]);
+            order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 0);
+        }
+    }
+    jl_value_t *v = args[0];
+    jl_value_t *vt = jl_typeof(v);
+    if (vt == (jl_value_t*)jl_module_type) {
+        JL_TYPECHK(getfield, symbol, args[1]);
+        v = jl_eval_global_var((jl_module_t*)v, (jl_sym_t*)args[1]); // is seq_cst already
+    }
+    else {
+        jl_datatype_t *st = (jl_datatype_t*)vt;
+        size_t idx = get_checked_fieldindex("getfield", st, v, args[1], 0);
+        int isatomic = jl_field_isatomic(st, idx);
+        if (!isatomic && order != jl_memory_order_notatomic && order != jl_memory_order_unspecified)
+            jl_atomic_error("getfield: non-atomic field cannot be accessed atomically");
+        if (isatomic && order == jl_memory_order_notatomic)
+            jl_atomic_error("getfield: atomic field cannot be accessed non-atomically");
+        v = jl_get_nth_field_checked(v, idx);
+        if (order >= jl_memory_order_acq_rel || order == jl_memory_order_acquire)
+            jl_fence(); // `v` already had at least consume ordering
+    }
+    return v;
 }
 
 JL_CALLABLE(jl_f_setfield)
 {
-    JL_NARGS(setfield!, 3, 3);
+    enum jl_memory_order order = jl_memory_order_notatomic;
+    JL_NARGS(setfield!, 3, 4);
+    if (nargs == 4) {
+        JL_TYPECHK(getfield, symbol, args[3]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 0, 1);
+    }
     jl_value_t *v = args[0];
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
-    assert(jl_is_datatype(st));
-    if (st == jl_module_type)
-        jl_error("cannot assign variables in other modules");
-    if (!st->mutabl)
-        jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
-    size_t idx;
-    if (jl_is_long(args[1])) {
-        idx = jl_unbox_long(args[1]) - 1;
-        if (idx >= jl_datatype_nfields(st))
-            jl_bounds_error(args[0], args[1]);
-    }
-    else {
-        JL_TYPECHK(setfield!, symbol, args[1]);
-        idx = jl_field_index(st, (jl_sym_t*)args[1], 1);
-    }
+    size_t idx = get_checked_fieldindex("setfield!", st, v, args[1], 1);
+    int isatomic = !!jl_field_isatomic(st, idx);
+    if (isatomic == (order == jl_memory_order_notatomic))
+        jl_atomic_error(isatomic ? "setfield!: atomic field cannot be written non-atomically"
+                                 : "setfield!: non-atomic field cannot be written atomically");
     jl_value_t *ft = jl_field_type_concrete(st, idx);
-    if (!jl_isa(args[2], ft)) {
+    if (!jl_isa(args[2], ft))
         jl_type_error("setfield!", ft, args[2]);
-    }
-    set_nth_field(st, (void*)v, idx, args[2]);
+    if (order >= jl_memory_order_acq_rel || order == jl_memory_order_release)
+        jl_fence(); // `st->[idx]` will have at least relaxed ordering
+    set_nth_field(st, v, idx, args[2], isatomic);
     return args[2];
 }
+
+JL_CALLABLE(jl_f_swapfield)
+{
+    enum jl_memory_order order = jl_memory_order_notatomic;
+    JL_NARGS(swapfield!, 3, 4);
+    if (nargs == 4) {
+        JL_TYPECHK(swapfield!, symbol, args[3]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 1);
+    }
+    jl_value_t *v = args[0];
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    size_t idx = get_checked_fieldindex("swapfield!", st, v, args[1], 1);
+    int isatomic = !!jl_field_isatomic(st, idx);
+    if (isatomic == (order == jl_memory_order_notatomic))
+        jl_atomic_error(isatomic ? "swapfield!: atomic field cannot be written non-atomically"
+                                 : "swapfield!: non-atomic field cannot be written atomically");
+    v = swap_nth_field(st, v, idx, args[2], isatomic); // always seq_cst, if isatomic needed at all
+    return v;
+}
+
+JL_CALLABLE(jl_f_modifyfield)
+{
+    enum jl_memory_order order = jl_memory_order_notatomic;
+    JL_NARGS(modifyfield!, 4, 5);
+    if (nargs == 5) {
+        JL_TYPECHK(modifyfield!, symbol, args[4]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[4], 1, 1);
+    }
+    jl_value_t *v = args[0];
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    size_t idx = get_checked_fieldindex("modifyfield!", st, v, args[1], 1);
+    int isatomic = !!jl_field_isatomic(st, idx);
+    if (isatomic == (order == jl_memory_order_notatomic))
+        jl_atomic_error(isatomic ? "modifyfield!: atomic field cannot be written non-atomically"
+                                 : "modifyfield!: non-atomic field cannot be written atomically");
+    v = modify_nth_field(st, v, idx, args[2], args[3], isatomic); // always seq_cst, if isatomic needed at all
+    return v;
+}
+
+JL_CALLABLE(jl_f_replacefield)
+{
+    enum jl_memory_order success_order = jl_memory_order_notatomic;
+    JL_NARGS(replacefield!, 4, 6);
+    if (nargs >= 5) {
+        JL_TYPECHK(replacefield!, symbol, args[4]);
+        success_order = jl_get_atomic_order_checked((jl_sym_t*)args[4], 1, 1);
+    }
+    enum jl_memory_order failure_order = success_order;
+    if (nargs == 6) {
+        JL_TYPECHK(replacefield!, symbol, args[5]);
+        failure_order = jl_get_atomic_order_checked((jl_sym_t*)args[5], 1, 0);
+    }
+    if (failure_order > success_order)
+        jl_atomic_error("invalid atomic ordering");
+    // TODO: filter more invalid ordering combinations?
+    jl_value_t *v = args[0];
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    size_t idx = get_checked_fieldindex("replacefield!", st, v, args[1], 1);
+    int isatomic = !!jl_field_isatomic(st, idx);
+    if (isatomic == (success_order == jl_memory_order_notatomic))
+        jl_atomic_error(isatomic ? "replacefield!: atomic field cannot be written non-atomically"
+                                 : "replacefield!: non-atomic field cannot be written atomically");
+    if (isatomic == (failure_order == jl_memory_order_notatomic))
+        jl_atomic_error(isatomic ? "replacefield!: atomic field cannot be accessed non-atomically"
+                                 : "replacefield!: non-atomic field cannot be accessed atomically");
+    v = replace_nth_field(st, v, idx, args[2], args[3], isatomic); // always seq_cst, if isatomic needed at all
+    return v;
+}
+
 
 static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
 {
@@ -939,11 +1066,10 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
 
 JL_CALLABLE(jl_f_fieldtype)
 {
+    JL_NARGS(fieldtype, 2, 3);
     if (nargs == 3) {
         JL_TYPECHK(fieldtype, bool, args[2]);
-        nargs -= 1;
     }
-    JL_NARGS(fieldtype, 2, 2);
     return get_fieldtype(args[0], args[1], 1);
 }
 
@@ -958,29 +1084,53 @@ JL_CALLABLE(jl_f_isdefined)
 {
     jl_module_t *m = NULL;
     jl_sym_t *s = NULL;
-    JL_NARGS(isdefined, 2, 2);
-    if (!jl_is_module(args[0])) {
-        jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);
-        assert(jl_is_datatype(vt));
-        size_t idx;
-        if (jl_is_long(args[1])) {
-            idx = jl_unbox_long(args[1]) - 1;
-            if (idx >= jl_datatype_nfields(vt))
-                return jl_false;
-        }
-        else {
-            JL_TYPECHK(isdefined, symbol, args[1]);
-            idx = jl_field_index(vt, (jl_sym_t*)args[1], 0);
-            if ((int)idx == -1)
-                return jl_false;
-        }
-        return jl_field_isdefined(args[0], idx) ? jl_true : jl_false;
+    JL_NARGS(isdefined, 2, 3);
+    enum jl_memory_order order = jl_memory_order_unspecified;
+    if (nargs == 3) {
+        JL_TYPECHK(isdefined, symbol, args[2]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 0);
     }
-    JL_TYPECHK(isdefined, module, args[0]);
-    JL_TYPECHK(isdefined, symbol, args[1]);
-    m = (jl_module_t*)args[0];
-    s = (jl_sym_t*)args[1];
-    return jl_boundp(m, s) ? jl_true : jl_false;
+    if (jl_is_module(args[0])) {
+        JL_TYPECHK(isdefined, symbol, args[1]);
+        m = (jl_module_t*)args[0];
+        s = (jl_sym_t*)args[1];
+        return jl_boundp(m, s) ? jl_true : jl_false; // is seq_cst already
+    }
+    jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);
+    assert(jl_is_datatype(vt));
+    size_t idx;
+    if (jl_is_long(args[1])) {
+        idx = jl_unbox_long(args[1]) - 1;
+        if (idx >= jl_datatype_nfields(vt)) {
+            if (order != jl_memory_order_unspecified)
+                jl_atomic_error("isdefined: atomic ordering cannot be specified for nonexistent field");
+            return jl_false;
+        }
+    }
+    else {
+        JL_TYPECHK(isdefined, symbol, args[1]);
+        idx = jl_field_index(vt, (jl_sym_t*)args[1], 0);
+        if ((int)idx == -1) {
+            if (order != jl_memory_order_unspecified)
+                jl_atomic_error("isdefined: atomic ordering cannot be specified for nonexistent field");
+            return jl_false;
+        }
+    }
+    int isatomic = jl_field_isatomic(vt, idx);
+    if (!isatomic && order != jl_memory_order_notatomic && order != jl_memory_order_unspecified)
+        jl_atomic_error("isdefined: non-atomic field cannot be accessed atomically");
+    if (isatomic && order == jl_memory_order_notatomic)
+        jl_atomic_error("isdefined: atomic field cannot be accessed non-atomically");
+    int v = jl_field_isdefined(args[0], idx);
+    if (v == 2) {
+        if (order > jl_memory_order_notatomic)
+            jl_fence(); // isbits case has no ordering already
+    }
+    else {
+        if (order >= jl_memory_order_acq_rel || order == jl_memory_order_acquire)
+            jl_fence(); // `v` already gave at least consume ordering
+    }
+    return v ? jl_true : jl_false;
 }
 
 
@@ -1061,7 +1211,7 @@ JL_CALLABLE(jl_f_apply_type)
 JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
-    size_t world = jl_get_ptls_states()->world_age;
+    size_t world = jl_current_task->world_age;
     return jl_method_lookup(args, nargs, world) != NULL ? jl_true : jl_false;
 }
 
@@ -1127,10 +1277,10 @@ JL_CALLABLE(jl_f_invoke_kwsorter)
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_array_t *ar = jl_alloc_vec_any(n);
     JL_GC_PUSH1(&ar);
-    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t),
+    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ct->ptls, sizeof(jl_expr_t),
                                             jl_expr_type);
     ex->head = head;
     ex->args = ar;
@@ -1140,14 +1290,14 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 
 JL_CALLABLE(jl_f__expr)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     JL_NARGSV(Expr, 1);
     JL_TYPECHK(Expr, symbol, args[0]);
     jl_array_t *ar = jl_alloc_vec_any(nargs-1);
     JL_GC_PUSH1(&ar);
     for(size_t i=0; i < nargs-1; i++)
         jl_array_ptr_set(ar, i, args[i+1]);
-    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t),
+    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ct->ptls, sizeof(jl_expr_t),
                                             jl_expr_type);
     ex->head = (jl_sym_t*)args[0];
     ex->args = ar;
@@ -1162,8 +1312,8 @@ JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_
         jl_type_error_rt("TypeVar", "lower bound", (jl_value_t *)jl_type_type, lb);
     if (ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub))
         jl_type_error_rt("TypeVar", "upper bound", (jl_value_t *)jl_type_type, ub);
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ptls, sizeof(jl_tvar_t), jl_tvar_type);
+    jl_task_t *ct = jl_current_task;
+    jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type);
     tv->name = name;
     tv->lb = lb;
     tv->ub = ub;
@@ -1247,18 +1397,20 @@ JL_CALLABLE(jl_f_arrayset)
 
 JL_CALLABLE(jl_f__structtype)
 {
-    JL_NARGS(_structtype, 6, 6);
+    JL_NARGS(_structtype, 7, 7);
     JL_TYPECHK(_structtype, module, args[0]);
     JL_TYPECHK(_structtype, symbol, args[1]);
     JL_TYPECHK(_structtype, simplevector, args[2]);
     JL_TYPECHK(_structtype, simplevector, args[3]);
-    JL_TYPECHK(_structtype, bool, args[4]);
-    JL_TYPECHK(_structtype, long, args[5]);
+    JL_TYPECHK(_structtype, simplevector, args[4]);
+    JL_TYPECHK(_structtype, bool, args[5]);
+    JL_TYPECHK(_structtype, long, args[6]);
     jl_value_t *fieldnames = args[3];
+    jl_value_t *fieldattrs = args[4];
     jl_datatype_t *dt = NULL;
     dt = jl_new_datatype((jl_sym_t*)args[1], (jl_module_t*)args[0], NULL, (jl_svec_t*)args[2],
-                         (jl_svec_t*)fieldnames, NULL,
-                         0, args[4]==jl_true ? 1 : 0, jl_unbox_long(args[5]));
+                         (jl_svec_t*)fieldnames, NULL, (jl_svec_t*)fieldattrs,
+                         0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
     return dt->name->wrapper;
 }
 
@@ -1337,6 +1489,48 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
     return 1;
 }
 
+// If a field can reference its enclosing type, then the inlining
+// recursive depth is not statically bounded for some layouts, so we cannot
+// inline it. The only way fields can reference this type (due to
+// syntax-enforced restrictions) is via being passed as a type parameter. Thus
+// we can conservatively check this by examining only the parameters of the
+// dependent types.
+// affects_layout is a hack introduced by #35275 to workaround a problem
+// introduced by #34223: it checks whether we will potentially need to
+// compute the layout of the object before we have fully computed the types of
+// the fields during recursion over the allocation of the parameters for the
+// field types (of the concrete subtypes)
+static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout) JL_NOTSAFEPOINT
+{
+    if (jl_is_uniontype(p))
+        return references_name(((jl_uniontype_t*)p)->a, name, affects_layout) ||
+               references_name(((jl_uniontype_t*)p)->b, name, affects_layout);
+    if (jl_is_unionall(p))
+        return references_name((jl_value_t*)((jl_unionall_t*)p)->var->lb, name, 0) ||
+               references_name((jl_value_t*)((jl_unionall_t*)p)->var->ub, name, 0) ||
+               references_name(((jl_unionall_t*)p)->body, name, affects_layout);
+    if (jl_is_typevar(p))
+        return 0; // already checked by unionall, if applicable
+    if (jl_is_datatype(p)) {
+        jl_datatype_t *dp = (jl_datatype_t*)p;
+        if (affects_layout && dp->name == name)
+            return 1;
+        // affects_layout checks whether we will need to attempt to layout this
+        // type (based on whether all copies of it have the same layout) in
+        // that case, we still need to check the recursive parameters for
+        // layout recursion happening also, but we know it won't itself cause
+        // problems for the layout computation
+        affects_layout = ((jl_datatype_t*)jl_unwrap_unionall(dp->name->wrapper))->layout == NULL;
+        size_t i, l = jl_nparams(p);
+        for (i = 0; i < l; i++) {
+            if (references_name(jl_tparam(p, i), name, affects_layout))
+                return 1;
+        }
+    }
+    return 0;
+}
+
+
 JL_CALLABLE(jl_f__typebody)
 {
     JL_NARGS(_typebody!, 1, 2);
@@ -1361,6 +1555,22 @@ JL_CALLABLE(jl_f__typebody)
         else {
             dt->types = (jl_svec_t*)ft;
             jl_gc_wb(dt, ft);
+            // If a supertype can reference the same type, then we may not be
+            // able to compute the layout of the object before needing to
+            // publish it, so we must assume it cannot be inlined, if that
+            // check passes, then we also still need to check the fields too.
+            if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 1))) {
+                int mayinlinealloc = 1;
+                size_t i;
+                for (i = 0; i < nf; i++) {
+                    jl_value_t *fld = jl_svecref(ft, i);
+                    if (references_name(fld, dt->name, 1)) {
+                        mayinlinealloc = 0;
+                        break;
+                    }
+                }
+                dt->name->mayinlinealloc = mayinlinealloc;
+            }
         }
     }
 
@@ -1386,10 +1596,14 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     jl_datatype_t *dtb = (jl_datatype_t*)jl_unwrap_unionall(tb);
     if (!(jl_typeof(dta) == jl_typeof(dtb) &&
           dta->name->name == dtb->name->name &&
-          dta->abstract == dtb->abstract &&
-          dta->mutabl == dtb->mutabl &&
+          dta->name->abstract == dtb->name->abstract &&
+          dta->name->mutabl == dtb->name->mutabl &&
+          dta->name->n_uninitialized == dtb->name->n_uninitialized &&
           (jl_svec_len(jl_field_names(dta)) != 0 || dta->size == dtb->size) &&
-          dta->ninitialized == dtb->ninitialized &&
+          (dta->name->atomicfields == NULL
+           ? dtb->name->atomicfields == NULL
+           : (dtb->name->atomicfields != NULL &&
+              memcmp(dta->name->atomicfields, dtb->name->atomicfields, (jl_svec_len(dta->name->names) + 31) / 32 * sizeof(uint32_t)) == 0)) &&
           jl_egal((jl_value_t*)jl_field_names(dta), (jl_value_t*)jl_field_names(dtb)) &&
           jl_nparams(dta) == jl_nparams(dtb)))
         return 0;
@@ -1440,14 +1654,13 @@ static unsigned intrinsic_nargs[num_intrinsics];
 
 JL_CALLABLE(jl_f_intrinsic_call)
 {
-    JL_NARGSV(intrinsic_call, 1);
     JL_TYPECHK(intrinsic_call, intrinsic, F);
     enum intrinsic f = (enum intrinsic)*(uint32_t*)jl_data_ptr(F);
     if (f == cglobal && nargs == 1)
         f = cglobal_auto;
     unsigned fargs = intrinsic_nargs[f];
     if (!fargs)
-        jl_error("this intrinsic must be compiled to be called");
+        jl_errorf("`%s` must be compiled to be called", jl_intrinsic_name(f));
     JL_NARGS(intrinsic_call, fargs, fargs);
 
     union {
@@ -1456,6 +1669,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         jl_value_t *(*call2)(jl_value_t*, jl_value_t*);
         jl_value_t *(*call3)(jl_value_t*, jl_value_t*, jl_value_t*);
         jl_value_t *(*call4)(jl_value_t*, jl_value_t*, jl_value_t*, jl_value_t*);
+        jl_value_t *(*call5)(jl_value_t*, jl_value_t*, jl_value_t*, jl_value_t*, jl_value_t*);
     } fptr;
     fptr.fptr = runtime_fp[f];
     switch (fargs) {
@@ -1467,10 +1681,12 @@ JL_CALLABLE(jl_f_intrinsic_call)
             return fptr.call3(args[0], args[1], args[2]);
         case 4:
             return fptr.call4(args[0], args[1], args[2], args[3]);
+        case 5:
+            return fptr.call5(args[0], args[1], args[2], args[3], args[4]);
         default:
             assert(0 && "unexpected number of arguments to an intrinsic function");
     }
-    gc_debug_critical_error();
+    jl_gc_debug_critical_error();
     abort();
 }
 
@@ -1547,7 +1763,9 @@ static void add_builtin(const char *name, jl_value_t *v)
 jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    return ((jl_typemap_entry_t*)jl_gf_mtable(b)->cache)->func.linfo->cache->specptr.fptr1;
+    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_atomic_load_relaxed(&jl_gf_mtable(b)->cache);
+    jl_code_instance_t *ci = jl_atomic_load_relaxed(&entry->func.linfo->cache);
+    return jl_atomic_load_relaxed(&ci->specptr.fptr1);
 }
 
 static jl_value_t *add_builtin_func(const char *name, jl_fptr_args_t fptr)
@@ -1570,6 +1788,9 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // field access
     jl_builtin_getfield = add_builtin_func("getfield",  jl_f_getfield);
     jl_builtin_setfield = add_builtin_func("setfield!",  jl_f_setfield);
+    jl_builtin_swapfield = add_builtin_func("swapfield!",  jl_f_swapfield);
+    jl_builtin_modifyfield = add_builtin_func("modifyfield!",  jl_f_modifyfield);
+    jl_builtin_replacefield = add_builtin_func("replacefield!",  jl_f_replacefield);
     jl_builtin_fieldtype = add_builtin_func("fieldtype", jl_f_fieldtype);
     jl_builtin_nfields = add_builtin_func("nfields", jl_f_nfields);
     jl_builtin_isdefined = add_builtin_func("isdefined", jl_f_isdefined);

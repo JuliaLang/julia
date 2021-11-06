@@ -819,7 +819,7 @@ let f = function (x; kw...)
 end
 
 # normalization of Unicode symbols (#19464)
-let ε=1, μ=2, x=3, î=4, ⋅=5
+let ε=1, μ=2, x=3, î=4, ⋅=5, (-)=6
     # issue #5434 (mu vs micro):
     @test Meta.parse("\u00b5") === Meta.parse("\u03bc")
     @test µ == μ == 2
@@ -832,6 +832,17 @@ let ε=1, μ=2, x=3, î=4, ⋅=5
     # middot char · or · vs math dot operator ⋅ (#25098)
     @test Meta.parse("\u00b7") === Meta.parse("\u0387") === Meta.parse("\u22c5")
     @test (·) == (·) == (⋅) == 5
+    # minus − vs hyphen-minus - (#26193)
+    @test Meta.parse("\u2212") === Meta.parse("-")
+    @test Meta.parse("\u221242") === Meta.parse("-42")
+    @test Meta.parse("\u2212 42") == Meta.parse("- 42")
+    @test Meta.parse("\u2212x") == Meta.parse("-x")
+    @test Meta.parse("x \u2212 42") == Meta.parse("x - 42")
+    @test Meta.parse("x \u2212= 42") == Meta.parse("x -= 42")
+    @test Meta.parse("100.0e\u22122") === Meta.parse("100.0E\u22122") === Meta.parse("100.0e-2")
+    @test Meta.parse("100.0f\u22122") === Meta.parse("100.0f-2")
+    @test Meta.parse("0x100p\u22128") === Meta.parse("0x100P\u22128") === Meta.parse("0x100p-8")
+    @test (−) == (-) == 6
 end
 
 # issue #8925
@@ -1499,7 +1510,7 @@ let ex = Meta.parse("@test27521(2) do y; y; end")
 end
 
 # issue #27129
-f27129(x = 1) = (@Base._inline_meta; x)
+f27129(x = 1) = (@inline; x)
 for meth in methods(f27129)
     @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end
@@ -2482,6 +2493,10 @@ import .Mod: x as x2
 @test x2 == 1
 @test !@isdefined(x)
 
+module_names = names(@__MODULE__; all=true, imported=true)
+@test :x2 ∈ module_names
+@test :x ∉ module_names
+
 import .Mod2.y as y2
 
 @test y2 == 2
@@ -2699,6 +2714,27 @@ end
     @test Meta.isexpr(Meta.@lower(f((; a, b::Int)) = a + b), :error)
 end
 
+# #33697
+@testset "N-dimensional concatenation" begin
+    @test :([1 2 5; 3 4 6;;; 0 9 3; 4 5 4]) ==
+        Expr(:ncat, 3, Expr(:nrow, 1, Expr(:row, 1, 2, 5), Expr(:row, 3, 4, 6)),
+                        Expr(:nrow, 1, Expr(:row, 0, 9, 3), Expr(:row, 4, 5, 4)))
+    @test :([1 ; 2 ;; 3 ; 4]) == Expr(:ncat, 2, Expr(:nrow, 1, 1, 2), Expr(:nrow, 1, 3, 4))
+
+    @test_throws ParseError Meta.parse("[1 2 ;; 3 4]") # cannot mix spaces and ;; except as line break
+    @test :([1 2 ;;
+            3 4]) == :([1 2 3 4])
+    @test :([1 2 ;;
+            3 4 ; 2 3 4 5]) == :([1 2 3 4 ; 2 3 4 5])
+
+    @test Meta.parse("[1;\n]") == :([1;]) # ensure line breaks following semicolons are treated correctly
+    @test Meta.parse("[1;\n\n]") == :([1;])
+    @test Meta.parse("[1\n;]") == :([1;]) # semicolons following a linebreak are fine
+    @test Meta.parse("[1\n;;; 2]") == :([1;;; 2])
+    @test_throws ParseError Meta.parse("[1;\n;2]") # semicolons cannot straddle a line break
+    @test_throws ParseError Meta.parse("[1; ;2]") # semicolons cannot be separated by a space
+end
+
 # issue #25652
 x25652 = 1
 x25652_2 = let (x25652, _) = (x25652, nothing)
@@ -2787,3 +2823,240 @@ macro m_nospecialize_unnamed_hygiene()
 end
 
 @test @m_nospecialize_unnamed_hygiene()(1) === Any
+
+# https://github.com/JuliaLang/julia/issues/40574
+@testset "no mutation while destructuring" begin
+    x = [1, 2]
+    x[2], x[1] = x
+    @test x == [2, 1]
+
+    x = [1, 2, 3]
+    x[3], x[1:2]... = x
+    @test x == [2, 3, 1]
+end
+
+@testset "escaping newlines inside strings" begin
+    c = "c"
+
+    @test "a\
+b" == "ab"
+    @test "a\
+    b" == "ab"
+    @test raw"a\
+b" == "a\\\nb"
+    @test "a$c\
+b" == "acb"
+    @test "\\
+" == "\\\n"
+
+
+    @test """
+          a\
+          b""" == "ab"
+    @test """
+          a\
+            b""" == "ab"
+    @test """
+            a\
+          b""" == "ab"
+    @test raw"""
+          a\
+          b""" == "a\\\nb"
+    @test """
+          a$c\
+          b""" == "acb"
+
+    @test """
+          \
+          """ == ""
+    @test """
+          \\
+          """ == "\\\n"
+    @test """
+          \\\
+          """ == "\\"
+    @test """
+          \\\\
+          """ == "\\\\\n"
+    @test """
+          \\\\\
+          """ == "\\\\"
+    @test """
+          \
+          \
+          """ == ""
+    @test """
+          \\
+          \
+          """ == "\\\n"
+    @test """
+          \\\
+          \
+          """ == "\\"
+
+
+    @test `a\
+b` == `ab`
+    @test `a\
+    b` == `ab`
+    @test `a$c\
+b` == `acb`
+    @test `"a\
+b"` == `ab`
+    @test `'a\
+b'` == `$("a\\\nb")`
+    @test `\\
+` == `'\'`
+
+
+    @test ```
+          a\
+          b``` == `ab`
+    @test ```
+          a\
+            b``` == `ab`
+    @test ```
+            a\
+          b``` == `  ab`
+    @test ```
+          a$c\
+          b``` == `acb`
+    @test ```
+          "a\
+          b"``` == `ab`
+    @test ```
+          'a\
+          b'``` == `$("a\\\nb")`
+    @test ```
+          \\
+          ``` == `'\'`
+end
+
+# issue #41253
+@test (function (::Dict{}); end)(Dict()) === nothing
+
+@testset "issue #41330" begin
+    @test Meta.parse("\"a\\\r\nb\"") == "ab"
+    @test Meta.parse("\"a\\\rb\"") == "ab"
+    @test eval(Meta.parse("`a\\\r\nb`")) == `ab`
+    @test eval(Meta.parse("`a\\\rb`")) == `ab`
+end
+
+@testset "slurping into function def" begin
+    x, f()... = [1, 2, 3]
+    @test x == 1
+    @test f() == [2, 3]
+    # test that call to `Base.rest` is outside the definition of `f`
+    @test f() === f()
+
+    x, f()... = 1, 2, 3
+    @test x == 1
+    @test f() == (2, 3)
+end
+
+@testset "long function bodies" begin
+    ex = Expr(:block)
+    ex.args = fill!(Vector{Any}(undef, 700000), 1)
+    f = eval(Expr(:function, :(), ex))
+    @test f() == 1
+    ex = Expr(:vcat)
+    ex.args = fill!(Vector{Any}(undef, 600000), 1)
+    @test_throws ErrorException("syntax: expression too large") eval(ex)
+end
+
+# issue 25678
+@generated f25678(x::T) where {T} = code_lowered(sin, Tuple{x})[]
+@test f25678(pi/6) === sin(pi/6)
+
+@generated g25678(x) = return :x
+@test g25678(7) === 7
+
+# issue #19012
+@test Meta.parse("\U2200", raise=false) == Symbol("∀")
+@test Meta.parse("\U2203", raise=false) == Symbol("∃")
+@test Meta.parse("a\U2203", raise=false) == Symbol("a∃")
+@test Meta.parse("\U2204", raise=false) == Symbol("∄")
+
+# issue 42220
+macro m42220()
+    return quote
+        function foo(::Type{T}=Float64) where {T}
+            return Vector{T}(undef, 10)
+        end
+    end
+end
+@test @m42220()() isa Vector{Float64}
+@test @m42220()(Bool) isa Vector{Bool}
+
+@testset "try else" begin
+    fails(f) = try f() catch; true else false end
+    @test fails(error)
+    @test !fails(() -> 1 + 2)
+
+    @test_throws ParseError Meta.parse("try foo() else bar() end")
+    @test_throws ParseError Meta.parse("try foo() else bar() catch; baz() end")
+    @test_throws ParseError Meta.parse("try foo() catch; baz() finally foobar() else bar() end")
+    @test_throws ParseError Meta.parse("try foo() finally foobar() else bar() catch; baz() end")
+
+    err = try
+        try
+            1 + 2
+        catch
+        else
+            error("foo")
+        end
+    catch e
+        e
+    end
+    @test err == ErrorException("foo")
+
+    x = 0
+    err = try
+        try
+            1 + 2
+        catch
+        else
+            error("foo")
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == ErrorException("foo")
+    @test x == 1
+
+    x = 0
+    err = try
+        try
+            1 + 2
+        catch
+            5 + 6
+        else
+            3 + 4
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == 3 + 4
+    @test x == 1
+
+    x = 0
+    err = try
+        try
+            error()
+        catch
+            5 + 6
+        else
+            3 + 4
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == 5 + 6
+    @test x == 1
+end

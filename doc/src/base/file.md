@@ -8,12 +8,14 @@ Base.Filesystem.readdir
 Base.Filesystem.walkdir
 Base.Filesystem.mkdir
 Base.Filesystem.mkpath
+Base.Filesystem.hardlink
 Base.Filesystem.symlink
 Base.Filesystem.readlink
 Base.Filesystem.chmod
 Base.Filesystem.chown
 Base.RawFD
 Base.stat
+Base.Filesystem.diskstat
 Base.Filesystem.lstat
 Base.Filesystem.ctime
 Base.Filesystem.mtime

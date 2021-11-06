@@ -133,7 +133,7 @@ function lookup(ip::Union{Base.InterpreterIP,Core.Compiler.InterpreterIP})
     else
         func = top_level_scope_sym
         file = empty_sym
-        line = 0
+        line = Int32(0)
     end
     i = max(ip.stmt+1, 1)  # ip.stmt is 0-indexed
     if i > length(codeinfo.codelocs) || codeinfo.codelocs[i] == 0

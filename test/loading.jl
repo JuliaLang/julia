@@ -132,18 +132,6 @@ end
 @test_throws ArgumentError parse(UUID, "not a UUID")
 @test tryparse(UUID, "either is this") === nothing
 
-function subset(v::Vector{T}, m::Int) where T
-    T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
-end
-
-function perm(p::Vector, i::Int)
-    for j = length(p):-1:1
-        i, k = divrem(i, j)
-        p[j], p[k+1] = p[k+1], p[j]
-    end
-    return p
-end
-
 @testset "explicit_project_deps_get" begin
     mktempdir() do dir
         project_file = joinpath(dir, "Project.toml")
@@ -152,39 +140,40 @@ end
         proj_uuid = dummy_uuid(project_file)
         root_uuid = uuid4()
         this_uuid = uuid4()
-        # project file to subset/permute
-        lines = split("""
-        name = "Root"
-        uuid = "$root_uuid"
-        [deps]
-        This = "$this_uuid"
-        """, '\n')
-        N = length(lines)
-        # test every permutation of every subset of lines
-        for m = 0:2^N-1
-            s = subset(lines, m) # each subset of lines
-            for i = 1:factorial(count_ones(m))
-                p = perm(s, i) # each permutation of the subset
-                open(project_file, write=true) do io
-                    for line in p
-                        println(io, line)
-                    end
-                end
-                # look at lines and their order
-                n = findfirst(line -> startswith(line, "name"), p)
-                u = findfirst(line -> startswith(line, "uuid"), p)
-                d = findfirst(line -> line == "[deps]", p)
-                t = findfirst(line -> startswith(line, "This"), p)
-                # look up various packages by name
-                root = Base.explicit_project_deps_get(project_file, "Root")
-                this = Base.explicit_project_deps_get(project_file, "This")
-                that = Base.explicit_project_deps_get(project_file, "That")
-                # test that the correct answers are given
-                @test root == (something(n, N+1) ≥ something(d, N+1) ? nothing :
-                               something(u, N+1) < something(d, N+1) ? root_uuid : proj_uuid)
-                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : nothing)
-                @test that == nothing
-            end
+
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [project_file])
+            write(project_file, """
+            name = "Root"
+            uuid = "$root_uuid"
+            [deps]
+            This = "$this_uuid"
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == root_uuid
+            @test this.uuid == this_uuid
+            @test that == nothing
+
+            write(project_file, """
+            name = "Root"
+            This = "$this_uuid"
+            [deps]
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == proj_uuid
+            @test this == nothing
+            @test that == nothing
+        finally
+            copy!(LOAD_PATH, old_load_path)
         end
     end
 end
@@ -314,6 +303,11 @@ module NotPkgModule; end
         @test pkgdir(Foo.SubFoo1) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
         @test pkgdir(Foo.SubFoo2) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
         @test pkgdir(NotPkgModule) === nothing
+
+        @test pkgdir(Foo, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(Foo.SubFoo1, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(Foo.SubFoo2, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(NotPkgModule, "src") === nothing
     end
 
 end
@@ -724,4 +718,30 @@ end
     n = length(Base.project_names)
     @test length(Base.manifest_names) == n
     @test length(Base.preferences_names) == n
+end
+
+@testset "Manifest formats" begin
+    deps = Dict{String,Any}(
+        "Serialization" => Any[Dict{String, Any}("uuid"=>"9e88b42a-f829-5b0c-bbe9-9e923198166b")],
+        "Random"        => Any[Dict{String, Any}("deps"=>["Serialization"], "uuid"=>"9a3f8284-a2c9-5f02-9a11-845980a1fd5c")],
+        "Logging"       => Any[Dict{String, Any}("uuid"=>"56ddb016-857b-54e1-b83d-db4d58db5568")]
+    )
+
+    @testset "v1.0" begin
+        env_dir = joinpath(@__DIR__, "manifest", "v1.0")
+        manifest_file = joinpath(env_dir, "Manifest.toml")
+        isfile(manifest_file) || error("Reference manifest is missing")
+        raw_manifest = Base.parsed_toml(manifest_file)
+        @test Base.is_v1_format_manifest(raw_manifest)
+        @test Base.get_deps(raw_manifest) == deps
+    end
+
+    @testset "v2.0" begin
+        env_dir = joinpath(@__DIR__, "manifest", "v2.0")
+        manifest_file = joinpath(env_dir, "Manifest.toml")
+        isfile(manifest_file) || error("Reference manifest is missing")
+        raw_manifest = Base.parsed_toml(manifest_file)
+        @test Base.is_v1_format_manifest(raw_manifest) == false
+        @test Base.get_deps(raw_manifest) == deps
+    end
 end

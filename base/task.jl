@@ -306,6 +306,18 @@ function _wait2(t::Task, waiter::Task)
         if !istaskdone(t)
             push!(t.donenotify.waitq, waiter)
             unlock(t.donenotify)
+            # since _wait2 is similar to schedule, we should observe the sticky
+            # bit, even if we aren't calling `schedule` due to this early-return
+            if waiter.sticky && Threads.threadid(waiter) == 0
+                # Issue #41324
+                # t.sticky && tid == 0 is a task that needs to be co-scheduled with
+                # the parent task. If the parent (current_task) is not sticky we must
+                # set it to be sticky.
+                # XXX: Ideally we would be able to unset this
+                current_task().sticky = true
+                tid = Threads.threadid()
+                ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
+            end
             return nothing
         else
             unlock(t.donenotify)
@@ -455,6 +467,7 @@ function errormonitor(t::Task)
         end
         nothing
     end
+    t2.sticky = false
     _wait2(t, t2)
     return t
 end
@@ -619,19 +632,28 @@ function enq_work(t::Task)
     # 1. The Task's stack is currently being used by the scheduler for a certain thread.
     # 2. There is only 1 thread.
     # 3. The multiq is full (can be fixed by making it growable).
-    if t.sticky || tid != 0 || Threads.nthreads() == 1
+    if t.sticky || Threads.nthreads() == 1
         if tid == 0
+            # Issue #41324
+            # t.sticky && tid == 0 is a task that needs to be co-scheduled with
+            # the parent task. If the parent (current_task) is not sticky we must
+            # set it to be sticky.
+            # XXX: Ideally we would be able to unset this
+            current_task().sticky = true
             tid = Threads.threadid()
             ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
         end
         push!(Workqueues[tid], t)
     else
-        tid = 0
         if ccall(:jl_enqueue_task, Cint, (Any,), t) != 0
             # if multiq is full, give to a random thread (TODO fix)
-            tid = mod(time_ns() % Int, Threads.nthreads()) + 1
-            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            if tid == 0
+                tid = mod(time_ns() % Int, Threads.nthreads()) + 1
+                ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            end
             push!(Workqueues[tid], t)
+        else
+            tid = 0
         end
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
@@ -712,6 +734,7 @@ A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
 immediately yields to `t` before calling the scheduler.
 """
 function yield(t::Task, @nospecialize(x=nothing))
+    (t._state === task_state_runnable && t.queue === nothing) || error("yield: Task not runnable")
     t.result = x
     enq_work(current_task())
     set_next_task(t)
@@ -727,6 +750,13 @@ call to `yieldto`. This is a low-level call that only switches tasks, not consid
 or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
+    # TODO: these are legacy behaviors; these should perhaps be a scheduler
+    # state error instead.
+    if t._state === task_state_done
+        return x
+    elseif t._state === task_state_failed
+        throw(t.result)
+    end
     t.result = x
     set_next_task(t)
     return try_yieldto(identity)
@@ -801,6 +831,7 @@ end
 end
 
 function wait()
+    GC.safepoint()
     W = Workqueues[Threads.threadid()]
     poptask(W)
     result = try_yieldto(ensure_rescheduled)

@@ -25,16 +25,26 @@ static volatile size_t bt_size_cur = 0;
 static volatile uint64_t nsecprof = 0;
 static volatile int running = 0;
 static const    uint64_t GIGA = 1000000000ULL;
+static uint64_t profile_cong_rng_seed = 0;
+static uint64_t profile_cong_rng_unbias = 0;
+static volatile uint64_t *profile_round_robin_thread_order = NULL;
 // Timers to take samples at intervals
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
 void jl_lock_profile(void);
 void jl_unlock_profile(void);
+void jl_shuffle_int_array_inplace(volatile uint64_t *carray, size_t size, uint64_t *seed);
 
 JL_DLLEXPORT int jl_profile_is_buffer_full(void)
 {
-    // the latter `+ 1` is for the block terminator `0`.
-    return bt_size_cur + (JL_BT_MAX_ENTRY_SIZE + 1) + 1 > bt_size_max;
+    // declare buffer full if there isn't enough room to take samples across all threads
+    #if defined(_OS_WINDOWS_)
+        uint64_t nthreads = 1; // windows only profiles the main thread
+    #else
+        uint64_t nthreads = jl_n_threads;
+    #endif
+    // the `+ 6` is for the two block terminators `0` plus 4 metadata entries
+    return bt_size_cur + (((JL_BT_MAX_ENTRY_SIZE + 1) + 6) * nthreads) > bt_size_max;
 }
 
 static uint64_t jl_last_sigint_trigger = 0;
@@ -106,17 +116,16 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
 void jl_show_sigill(void *_ctx);
 static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_jmp_buf *old_buf = ptls->safe_restore;
+    jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
-    ptls->safe_restore = &buf;
+    jl_set_safe_restore(&buf);
     volatile size_t i = 0;
     if (!jl_setjmp(buf, 0)) {
-        for (;i < len;i++) {
+        for (; i < len; i++) {
             out[i] = ptr[i];
         }
     }
-    ptls->safe_restore = old_buf;
+    jl_set_safe_restore(old_buf);
     return i;
 }
 
@@ -232,20 +241,19 @@ void jl_show_sigill(void *_ctx)
 }
 
 // what to do on a critical error on a thread
-void jl_critical_error(int sig, bt_context_t *context)
+void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
 {
 
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_bt_element_t *bt_data = ptls->bt_data;
-    size_t *bt_size = &ptls->bt_size;
-    size_t i, n = *bt_size;
+    jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
+    size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
+    size_t i, n = ct ? *bt_size : 0;
     if (sig) {
         // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jlbacktrace in jl_exit)
-        ptls->pgcstack = NULL;
-        ptls->safe_restore = NULL;
-        if (ptls->current_task) {
-            ptls->current_task->eh = NULL;
-            ptls->current_task->excstack = NULL;
+        jl_set_safe_restore(NULL);
+        if (ct) {
+            ct->gcstack = NULL;
+            ct->eh = NULL;
+            ct->excstack = NULL;
         }
 #ifndef _OS_WINDOWS_
         sigset_t sset;
@@ -270,7 +278,7 @@ void jl_critical_error(int sig, bt_context_t *context)
         jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
     }
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
-    if (context) {
+    if (context && ct) {
         // Must avoid extended backtrace frames here unless we're sure bt_data
         // is properly rooted.
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL);
@@ -278,8 +286,8 @@ void jl_critical_error(int sig, bt_context_t *context)
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
         jl_print_bt_entry_codeloc(bt_data + i);
     }
-    gc_debug_print_status();
-    gc_debug_critical_error();
+    jl_gc_debug_print_status();
+    jl_gc_debug_critical_error();
 }
 
 ///////////////////////
@@ -291,11 +299,33 @@ JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
     nsecprof = delay_nsec;
     if (bt_data_prof != NULL)
         free((void*)bt_data_prof);
+    if (profile_round_robin_thread_order == NULL) {
+        // NOTE: We currently only allocate this once, since jl_n_threads cannot change
+        // during execution of a julia process. If/when this invariant changes in the
+        // future, this will have to be adjusted.
+        profile_round_robin_thread_order = (uint64_t*) calloc(jl_n_threads, sizeof(uint64_t));
+        for (int i = 0; i < jl_n_threads; i++) {
+            profile_round_robin_thread_order[i] = i;
+        }
+    }
+    seed_cong(&profile_cong_rng_seed);
+    unbias_cong(jl_n_threads, &profile_cong_rng_unbias);
     bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
     if (bt_data_prof == NULL && maxsize > 0)
         return -1;
     bt_size_cur = 0;
     return 0;
+}
+
+void jl_shuffle_int_array_inplace(volatile uint64_t *carray, size_t size, uint64_t *seed) {
+    // The "modern Fisher–Yates shuffle" - O(n) algorithm
+    // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
+    for (size_t i = size - 1; i >= 1; --i) {
+        size_t j = cong(i, profile_cong_rng_unbias, seed);
+        uint64_t tmp = carray[j];
+        carray[j] = carray[i];
+        carray[i] = tmp;
+    }
 }
 
 JL_DLLEXPORT uint8_t *jl_profile_get_data(void)

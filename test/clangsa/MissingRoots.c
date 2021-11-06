@@ -1,6 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// RUN: clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%shlibext -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CPPFLAGS} ${CFLAGS} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -Xclang -verify -x c %s
+// RUN: clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%shlibext -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CPPFLAGS} ${CFLAGS} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -Xclang -verify -x c %s
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -407,14 +407,6 @@ void stack_rooted(jl_value_t *lb JL_MAYBE_UNROOTED, jl_value_t *ub JL_MAYBE_UNRO
     escape_vb(&vb);
     look_at_value(vb.lb);
     JL_GC_POP();
-}
-
-void JL_NORETURN throw_internal(jl_value_t *e JL_MAYBE_UNROOTED)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->sig_exception = e;
-    jl_gc_unsafe_enter(ptls);
-    look_at_value(e);
 }
 
 JL_DLLEXPORT jl_value_t *jl_totally_used_function(int i)

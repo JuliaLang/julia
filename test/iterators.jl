@@ -2,6 +2,8 @@
 
 using Base.Iterators
 using Random
+using Base: IdentityUnitRange
+using Dates: Date, Day
 
 @test Base.IteratorSize(Any) isa Base.SizeUnknown
 
@@ -122,7 +124,7 @@ end
 
 # countfrom
 # ---------
-let i = 0, k = 1
+let i = 0, k = 1, l = 0
     for j = countfrom(0, 2)
         @test j == i*2
         i += 1
@@ -133,6 +135,15 @@ let i = 0, k = 1
         k += 1
         k <= 10 || break
     end
+    # test that `start` promotes to `typeof(start+step)`
+    for j = countfrom(Int[0, 0], Float64[1.0, 2.0])
+        @test j isa Vector{Float64}
+        @test j == l*[1, 2]
+        l += 1
+        l <= 10 || break
+    end
+    # test with `start` and `step` having different types
+    @test collect(take(countfrom(Date(2020,12,25), Day(1)), 12)) == range(Date(2020,12,25), step=Day(1), length=12)
 end
 
 # take
@@ -289,6 +300,18 @@ let (a, b) = (1:3, [4 6;
         @test cp[i, :, :] == [(i, 4) (i, 6);
                               (i, 5) (i, 7)]
     end
+end
+
+# collect stateful iterator
+let itr
+    itr = Iterators.Stateful(Iterators.map(identity, 1:5))
+    @test collect(itr) == 1:5
+    @test collect(itr) == Int[] # Stateful do not preserve shape
+    itr = (i+1 for i in Base.Stateful([1, 2, 3]))
+    @test collect(itr) == [2, 3, 4]
+    @test collect(itr) == Int[] # Stateful do not preserve shape
+    itr = (i-1 for i in Base.Stateful(zeros(Int, 0, 0)))
+    @test collect(itr) == Int[] # Stateful do not preserve shape
 end
 
 # with 1D inputs
@@ -847,4 +870,16 @@ end
     @test cumsum(x^2 for x in 1:3) == [1, 5, 14]
     @test cumprod(x + 1 for x in 1:3) == [2, 6, 24]
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
+end
+
+@testset "proper patition for non-1-indexed vector" begin
+    @test partition(IdentityUnitRange(11:19), 5) |> collect == [11:15,16:19] # IdentityUnitRange
+end
+
+@testset "Iterators.peel" begin
+    @test Iterators.peel([]) == nothing
+    @test Iterators.peel(1:10)[1] == 1
+    @test Iterators.peel(1:10)[2] |> collect == 2:10
+    @test Iterators.peel(x^2 for x in 2:4)[1] == 4
+    @test Iterators.peel(x^2 for x in 2:4)[2] |> collect == [9, 16]
 end

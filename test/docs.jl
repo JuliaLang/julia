@@ -1271,6 +1271,8 @@ end
 
 # issue #36378 (\u1e8b and x\u307 are the fully composed and decomposed forms of ẋ, respectively)
 @test sprint(repl_latex, "\u1e8b") == "\"x\u307\" can be typed by x\\dot<tab>\n\n"
+# issue 39814
+@test sprint(repl_latex, "\u2209") == "\"\u2209\" can be typed by \\notin<tab>\n\n"
 
 # issue #15684
 begin

@@ -14,7 +14,7 @@ end
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-haskey(d::AbstractDict, k) = in(k, keys(d))
+haskey(d, k) = in(k, keys(d))
 
 function in(p::Pair, a::AbstractDict, valcmp=(==))
     v = get(a, p.first, secret_table_token)
@@ -65,6 +65,8 @@ function iterate(v::Union{KeySet,ValueIterator}, state...)
     y === nothing && return nothing
     return (y[1][isa(v, KeySet) ? 1 : 2], y[2])
 end
+
+copy(v::KeySet) = copymutable(v)
 
 in(k, v::KeySet) = get(v.dict, k, secret_table_token) !== secret_table_token
 
@@ -134,6 +136,38 @@ values(a::AbstractDict) = ValueIterator(a)
 Return an iterator over `key => value` pairs for any
 collection that maps a set of keys to a set of values.
 This includes arrays, where the keys are the array indices.
+
+# Examples
+```jldoctest
+julia> a = Dict(zip(["a", "b", "c"], [1, 2, 3]))
+Dict{String, Int64} with 3 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+
+julia> pairs(a)
+Dict{String, Int64} with 3 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+
+julia> foreach(println, pairs(["a", "b", "c"]))
+1 => "a"
+2 => "b"
+3 => "c"
+
+julia> (;a=1, b=2, c=3) |> pairs |> collect
+3-element Vector{Pair{Symbol, Int64}}:
+ :a => 1
+ :b => 2
+ :c => 3
+
+julia> (;a=1, b=2, c=3) |> collect
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
 """
 pairs(collection) = Generator(=>, keys(collection), values(collection))
 
@@ -234,12 +268,14 @@ Dict{Int64, Int64} with 3 entries:
 ```
 """
 function mergewith!(combine, d::AbstractDict, others::AbstractDict...)
-    for other in others
-        for (k,v) in other
-            d[k] = haskey(d, k) ? combine(d[k], v) : v
-        end
+    foldl(mergewith!(combine), others; init = d)
+end
+
+function mergewith!(combine, d1::AbstractDict, d2::AbstractDict)
+    for (k, v) in d2
+        d1[k] = haskey(d1, k) ? combine(d1[k], v) : v
     end
-    return d
+    return d1
 end
 
 mergewith!(combine) = (args...) -> mergewith!(combine, args...)

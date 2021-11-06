@@ -23,6 +23,9 @@ as well as many great tutorials and learning resources:
 For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 Type `;` to enter shell mode, `]` to enter package mode.
+
+To exit the interactive session, type `CTRL-D` (press the
+control key together with the `d` key), or type `exit()`.
 """
 kw"help", kw"Julia", kw"julia", kw""
 
@@ -127,7 +130,7 @@ kw"__init__"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base` or local definitions of
-[`eval`](@ref Base.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+[`eval`](@ref Base.MainInclude.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
 module Mod
@@ -179,8 +182,8 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
-code instead simply becomes part of the surrounding program.
+Macros are a way to run generated code without calling [`eval`](@ref Base.MainInclude.eval),
+since the generated code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
 Every macro also implicitly gets passed the arguments `__source__`, which contains the line number
@@ -974,12 +977,22 @@ kw"..."
     ;
 
 `;` has a similar role in Julia as in many C-like languages, and is used to delimit the
-end of the previous statement. `;` is not necessary after new lines, but can be used to
+end of the previous statement.
+
+`;` is not necessary at the end of a line, but can be used to
 separate statements on a single line or to join statements into a single expression.
-`;` is also used to suppress output printing in the REPL and similar interfaces.
+
+Adding `;` at the end of a line in the REPL will suppress printing the result of that expression.
+
+In function declarations, and optionally in calls, `;` separates regular arguments from keywords.
+
+While constructing arrays, if the arguments inside the square brackets are separated by `;`
+then their contents are vertically concatenated together.
+
+In the standard REPL, typing `;` on an empty line will switch to shell mode.
 
 # Examples
-```julia
+```jldoctest
 julia> function foo()
            x = "Hello, "; x *= "World!"
            return x
@@ -993,6 +1006,19 @@ julia> foo();
 
 julia> bar()
 "Hello, Mars!"
+
+julia> function plot(x, y; style="solid", width=1, color="black")
+           ###
+       end
+
+julia> [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+shell> echo hello
+hello
 ```
 """
 kw";"
@@ -1162,10 +1188,10 @@ fields of the type to be set after construction. See the manual section on
 kw"mutable struct"
 
 """
-    new
+    new, or new{A,B,...}
 
-Special function available to inner constructors which created a new object
-of the type.
+Special function available to inner constructors which creates a new object
+of the type. The form new{A,B,...} explicitly specifies values of parameters for parametric types.
 See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
 for more information.
 """
@@ -1507,8 +1533,9 @@ DomainError
 """
     Task(func)
 
-Create a `Task` (i.e. coroutine) to execute the given function `func` (which must be
-callable with no arguments). The task exits when this function returns.
+Create a `Task` (i.e. coroutine) to execute the given function `func` (which
+must be callable with no arguments). The task exits when this function returns.
+The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
 
 # Examples
 ```jldoctest
@@ -1914,10 +1941,14 @@ julia> Tuple(Real[1, 2, pi])  # takes a collection
 tuple
 
 """
-    getfield(value, name::Symbol)
-    getfield(value, i::Int)
+    getfield(value, name::Symbol, [order::Symbol])
+    getfield(value, i::Int, [order::Symbol])
 
-Extract a field from a composite `value` by name or position.
+Extract a field from a composite `value` by name or position. Optionally, an
+ordering can be defined for the operation. If the field was declared `@atomic`,
+the specification is strongly recommended to be compatible with the stores to
+that location. Otherwise, if not declared as `@atomic`, this parameter must be
+`:not_atomic` if specified.
 See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
 
 # Examples
@@ -1938,10 +1969,14 @@ julia> getfield(a, 1)
 getfield
 
 """
-    setfield!(value, name::Symbol, x)
+    setfield!(value, name::Symbol, x, [order::Symbol])
+    setfield!(value, i::Int, x, [order::Symbol])
 
-Assign `x` to a named field in `value` of composite type.
-The `value` must be mutable and `x` must be a subtype of `fieldtype(typeof(value), name)`.
+Assign `x` to a named field in `value` of composite type. The `value` must be
+mutable and `x` must be a subtype of `fieldtype(typeof(value), name)`.
+Additionally, an ordering can be specified for this operation. If the field was
+declared `@atomic`, this specification is mandatory. Otherwise, if not declared
+as `@atomic`, it must be `:not_atomic` if specified.
 See also [`setproperty!`](@ref Base.setproperty!).
 
 # Examples
@@ -1961,10 +1996,60 @@ julia> a = 1//2
 1//2
 
 julia> setfield!(a, :num, 3);
-ERROR: setfield! immutable struct of type Rational cannot be changed
+ERROR: setfield!: immutable struct of type Rational cannot be changed
 ```
 """
 setfield!
+
+"""
+    swapfield!(value, name::Symbol, x, [order::Symbol])
+    swapfield!(value, i::Int, x, [order::Symbol])
+
+These atomically perform the operations to simultaneously get and set a field:
+
+    y = getfield(value, name)
+    setfield!(value, name, x)
+    return y
+"""
+swapfield!
+
+"""
+    modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
+    modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
+
+These atomically perform the operations to get and set a field after applying
+the function `op`.
+
+    y = getfield(value, name)
+    z = op(y, x)
+    setfield!(value, name, z)
+    return y => z
+
+If supported by the hardware (for example, atomic increment), this may be
+optimized to the appropriate hardware instruction, otherwise it'll use a loop.
+"""
+modifyfield!
+
+"""
+    replacefield!(value, name::Symbol, expected, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+    replacefield!(value, i::Int, expected, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+
+These atomically perform the operations to get and conditionally set a field to
+a given value.
+
+    y = getfield(value, name, fail_order)
+    ok = y === expected
+    if ok
+        setfield!(value, name, desired, success_order)
+    end
+    return (; old = y, success = ok)
+
+If supported by the hardware, this may be optimized to the appropriate hardware
+instruction, otherwise it'll use a loop.
+"""
+replacefield!
 
 """
     typeof(x)
@@ -1989,12 +2074,16 @@ Matrix{Float64} (alias for Array{Float64, 2})
 typeof
 
 """
-    isdefined(m::Module, s::Symbol)
-    isdefined(object, s::Symbol)
-    isdefined(object, index::Int)
+    isdefined(m::Module, s::Symbol, [order::Symbol])
+    isdefined(object, s::Symbol, [order::Symbol])
+    isdefined(object, index::Int, [order::Symbol])
 
-Tests whether a global variable or object field is defined. The arguments can be a module and a symbol
-or a composite object and field name (as a symbol) or index.
+Tests whether a global variable or object field is defined. The arguments can
+be a module and a symbol or a composite object and field name (as a symbol) or
+index. Optionally, an ordering can be defined for the operation. If the field
+was declared `@atomic`, the specification is strongly recommended to be
+compatible with the stores to that location. Otherwise, if not declared as
+`@atomic`, this parameter must be `:not_atomic` if specified.
 
 To test whether an array element is defined, use [`isassigned`](@ref) instead.
 
@@ -2351,8 +2440,8 @@ julia> 4.5/2
 """
     ArgumentError(msg)
 
-The parameters to a function call do not match a valid signature. Argument `msg` is a
-descriptive error string.
+The arguments passed to a function are invalid.
+`msg` is a descriptive error message.
 """
 ArgumentError
 
@@ -2467,10 +2556,20 @@ UnionAll
 """
     ::
 
-With the `::`-operator type annotations are attached to expressions and variables in programs.
-See the manual section on [Type Declarations](@ref).
+The `::` operator either asserts that a value has the given type, or declares that
+a local variable or function return always has the given type.
 
-Outside of declarations `::` is used to assert that expressions and variables in programs have a given type.
+Given `expression::T`, `expression` is first evaluated. If the result is of type
+`T`, the value is simply returned. Otherwise, a [`TypeError`](@ref) is thrown.
+
+In local scope, the syntax `local x::T` or `x::T = expression` declares that local variable
+`x` always has type `T`. When a value is assigned to the variable, it will be
+converted to type `T` by calling [`convert`](@ref).
+
+In a method declaration, the syntax `function f(x)::T` causes any value returned by
+the method to be converted to type `T`.
+
+See the manual section on [Type Declarations](@ref).
 
 # Examples
 ```jldoctest
@@ -2479,6 +2578,13 @@ ERROR: TypeError: typeassert: expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
+
+julia> let
+           local x::Int
+           x = 2.0
+           x
+       end
+2
 ```
 """
 kw"::"
@@ -2582,8 +2688,11 @@ typeassert
 
 """
     getproperty(value, name::Symbol)
+    getproperty(value, name::Symbol, order::Symbol)
 
 The syntax `a.b` calls `getproperty(a, :b)`.
+The syntax `@atomic order a.b` calls `getproperty(a, :b, :order)` and
+the syntax `@atomic a.b` calls `getproperty(a, :b, :sequentially_consistent)`.
 
 # Examples
 ```jldoctest
@@ -2608,20 +2717,61 @@ julia> obj.x
 1
 ```
 
-See also [`propertynames`](@ref Base.propertynames) and
+See also [`getfield`](@ref Core.getfield),
+[`propertynames`](@ref Base.propertynames) and
 [`setproperty!`](@ref Base.setproperty!).
 """
 Base.getproperty
 
 """
     setproperty!(value, name::Symbol, x)
+    setproperty!(value, name::Symbol, x, order::Symbol)
 
 The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
+The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
+and the syntax `@atomic a.b = c` calls `getproperty(a, :b, :sequentially_consistent)`.
 
-See also [`propertynames`](@ref Base.propertynames) and
+See also [`setfield!`](@ref Core.setfield!),
+[`propertynames`](@ref Base.propertynames) and
 [`getproperty`](@ref Base.getproperty).
 """
 Base.setproperty!
+
+"""
+    swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic)
+
+The syntax `@atomic a.b, _ = c, a.b` returns `(c, swapproperty!(a, :b, c, :sequentially_consistent))`,
+where there must be one getfield expression common to both sides.
+
+See also [`swapfield!`](@ref Core.swapfield!)
+and [`setproperty!`](@ref Base.setproperty!).
+"""
+Base.swapproperty!
+
+"""
+    modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
+
+The syntax `@atomic! max(a().b, c)` returns `modifyproperty!(a(), :b,
+max, c, :sequentially_consistent))`, where the first argument must be a
+`getfield` expression and is modified atomically.
+
+See also [`modifyfield!`](@ref Core.modifyfield!)
+and [`setproperty!`](@ref Base.setproperty!).
+"""
+Base.modifyproperty!
+
+"""
+    replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+
+Perform a compare-and-swap operation on `x.f` from `expected` to `desired`, per
+egal. The syntax `@atomic_replace! x.f expected => desired` can be used instead
+of the function call form.
+
+See also [`replacefield!`](@ref Core.replacefield!)
+and [`setproperty!`](@ref Base.setproperty!).
+"""
+Base.replaceproperty!
+
 
 """
     StridedArray{T, N}
@@ -2663,6 +2813,13 @@ StridedVecOrMat
     Module
 
 A `Module` is a separate global variable workspace. See [`module`](@ref) and the [manual section about modules](@ref modules) for details.
+
+    Module(name::Symbol=:anonymous, std_imports=true, default_names=true)
+
+Return a module with the specified name. A `baremodule` corresponds to `Module(:ModuleName, false)`
+
+An empty module containing no names at all can be created with `Module(:ModuleName, false, false)`.
+This module will not import `Base` or `Core` and does not contain a reference to itself.
 """
 Module
 
@@ -2697,5 +2854,47 @@ Base.Base
 A quoted piece of code, that does not support interpolation. See the [manual section about QuoteNodes](@ref man-quote-node) for details.
 """
 QuoteNode
+
+
+"""
+    "
+`"` Is used to delimit string literals.
+
+# Examples
+
+```jldoctest
+julia> "Hello World!"
+"Hello World!"
+
+julia> "Hello World!\\n"
+"Hello World!\\n"
+```
+
+See also [`\"""`](@ref \"\"\").
+"""
+kw"\""
+
+"""
+    \"""
+`\"""` is used to delimit string literals. Strings created by triple quotation marks can contain `"` characters without escaping and are dedented to the level of the least-indented line. This is useful for defining strings within code that is indented.
+
+# Examples
+
+```jldoctest
+julia> \"""Hello World!\"""
+"Hello World!"
+
+julia> \"""Contains "quote" characters\"""
+"Contains \\"quote\\" characters"
+
+julia> \"""
+         Hello,
+         world.\"""
+"Hello,\\nworld."
+```
+
+See also [`"`](@ref \")
+"""
+kw"\"\"\""
 
 end

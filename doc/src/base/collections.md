@@ -66,6 +66,7 @@ Base.LinRange
 Base.isempty
 Base.empty!
 Base.length
+Base.checked_length
 ```
 
 Fully implemented by:
@@ -118,8 +119,6 @@ Base.all(::Any)
 Base.all(::AbstractArray, ::Any)
 Base.all!
 Base.count
-Base.any(::Any, ::Any)
-Base.all(::Any, ::Any)
 Base.foreach
 Base.map
 Base.map!
@@ -273,6 +272,7 @@ Base.pushfirst!
 Base.popfirst!
 Base.insert!
 Base.deleteat!
+Base.keepat!
 Base.splice!
 Base.resize!
 Base.append!

@@ -341,20 +341,6 @@ end
         String(take!(io))
     end
 
-    function genmsg_out(level, message, _module, filepath, line; kws...)
-        fname = tempname()
-        f = open(fname, "w")
-        logger = SimpleLogger()
-        redirect_stdout(f) do
-            handle_message(logger, level, message, _module, :group, :id,
-                           filepath, line; kws...)
-        end
-        close(f)
-        buf = read(fname)
-        rm(fname)
-        String(buf)
-    end
-
     function genmsg_err(level, message, _module, filepath, line; kws...)
         fname = tempname()
         f = open(fname, "w")
@@ -370,7 +356,7 @@ end
     end
 
     # Simple
-    @test genmsg_out(Info, "msg", Main, "some/path.jl", 101) ==
+    @test genmsg_err(Info, "msg", Main, "some/path.jl", 101) ==
     """
     ┌ Info: msg
     └ @ Main some/path.jl:101

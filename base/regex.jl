@@ -528,6 +528,7 @@ end
 Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
 
+# Examples
 ```jldoctest
 julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
 s"Hello \\g<name>, it's \\1"
@@ -564,6 +565,7 @@ Construct a substitution string, used for regular expression substitutions.  Wit
 string, sequences of the form `\\N` refer to the Nth capture group in the regex, and
 `\\g<groupname>` refers to a named capture group with name `groupname`.
 
+# Examples
 ```jldoctest
 julia> msg = "#Hello# from Julia";
 
@@ -589,7 +591,7 @@ _free_pat_replacer(r::RegexAndMatchData) = PCRE.free_match_data(r.match_data)
 
 replace_err(repl) = error("Bad replacement string: $repl")
 
-function _write_capture(io, re::RegexAndMatchData, group)
+function _write_capture(io::IO, group::Int, str, r, re::RegexAndMatchData)
     len = PCRE.substring_length_bynumber(re.match_data, group)
     # in the case of an optional group that doesn't match, len == 0
     len == 0 && return
@@ -598,6 +600,11 @@ function _write_capture(io, re::RegexAndMatchData, group)
         pointer(io.data, io.ptr), len+1)
     io.ptr += len
     io.size = max(io.size, io.ptr - 1)
+    nothing
+end
+function _write_capture(io::IO, group::Int, str, r, re)
+    group == 0 || replace_err("pattern is not a Regex")
+    return print(io, SubString(str, r))
 end
 
 
@@ -605,7 +612,7 @@ const SUB_CHAR = '\\'
 const GROUP_CHAR = 'g'
 const KEEP_ESC = [SUB_CHAR, GROUP_CHAR, '0':'9'...]
 
-function _replace(io, repl_s::SubstitutionString, str, r, re::RegexAndMatchData)
+function _replace(io, repl_s::SubstitutionString, str, r, re)
     LBRACKET = '<'
     RBRACKET = '>'
     repl = unescape_string(repl_s.string, KEEP_ESC)
@@ -629,7 +636,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re::RegexAndMatchData)
                         break
                     end
                 end
-                _write_capture(io, re, group)
+                _write_capture(io, group, str, r, re)
             elseif repl[next_i] == GROUP_CHAR
                 i = nextind(repl, next_i)
                 if i > e || repl[i] != LBRACKET
@@ -642,15 +649,16 @@ function _replace(io, repl_s::SubstitutionString, str, r, re::RegexAndMatchData)
                     i = nextind(repl, i)
                     i > e && replace_err(repl)
                 end
-                #  TODO: avoid this allocation
                 groupname = SubString(repl, groupstart, prevind(repl, i))
                 if all(isdigit, groupname)
-                    _write_capture(io, re, parse(Int, groupname))
-                else
+                    group = parse(Int, groupname)
+                elseif re isa RegexAndMatchData
                     group = PCRE.substring_number_from_name(re.re.regex, groupname)
                     group < 0 && replace_err("Group $groupname not found in regex $(re.re)")
-                    _write_capture(io, re, group)
+                else
+                    group = -1
                 end
+                _write_capture(io, group, str, r, re)
                 i = nextind(repl, i)
             else
                 replace_err(repl)

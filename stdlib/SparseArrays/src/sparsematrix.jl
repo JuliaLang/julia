@@ -81,6 +81,7 @@ size(S::SparseMatrixCSC) = (getfield(S, :m), getfield(S, :n))
 
 _goodbuffers(S::SparseMatrixCSC) = _goodbuffers(size(S)..., getcolptr(S), getrowval(S), nonzeros(S))
 _checkbuffers(S::SparseMatrixCSC) = (@assert _goodbuffers(S); S)
+_checkbuffers(S::Union{Adjoint, Transpose}) = (_checkbuffers(parent(S)); S)
 
 function _goodbuffers(m, n, colptr, rowval, nzval)
     (length(colptr) == n + 1 && colptr[end] - 1 == length(rowval) == length(nzval))
@@ -125,6 +126,8 @@ julia> nnz(A)
 """
 nnz(S::AbstractSparseMatrixCSC) = Int(getcolptr(S)[size(S, 2) + 1]) - 1
 nnz(S::ReshapedArray{<:Any,1,<:AbstractSparseMatrixCSC}) = nnz(parent(S))
+nnz(S::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) = nnz(parent(S))
+nnz(S::Transpose{<:Any,<:AbstractSparseMatrixCSC}) = nnz(parent(S))
 nnz(S::UpperTriangular{<:Any,<:AbstractSparseMatrixCSC}) = nnz1(S)
 nnz(S::LowerTriangular{<:Any,<:AbstractSparseMatrixCSC}) = nnz1(S)
 nnz(S::SparseMatrixCSCView) = nnz1(S)
@@ -215,6 +218,7 @@ nzrange(S::SparseMatrixCSCView, col::Integer) = nzrange(S.parent, S.indices[2][c
 nzrange(S::UpperTriangular{<:Any,<:SparseMatrixCSCUnion}, i::Integer) = nzrangeup(S.data, i)
 nzrange(S::LowerTriangular{<:Any,<:SparseMatrixCSCUnion}, i::Integer) = nzrangelo(S.data, i)
 
+const AbstractSparseMatrixCSCInclAdjointAndTranspose = Union{AbstractSparseMatrixCSC,Adjoint{<:Any,<:AbstractSparseMatrixCSC},Transpose{<:Any,<:AbstractSparseMatrixCSC}}
 function Base.isstored(A::AbstractSparseMatrixCSC, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     rows = rowvals(A)
@@ -224,25 +228,50 @@ function Base.isstored(A::AbstractSparseMatrixCSC, i::Integer, j::Integer)
     return false
 end
 
-Base.replace_in_print_matrix(A::AbstractSparseMatrix, i::Integer, j::Integer, s::AbstractString) =
+function Base.isstored(A::Union{Adjoint{<:Any,<:AbstractSparseMatrixCSC},Transpose{<:Any,<:AbstractSparseMatrixCSC}}, i::Integer, j::Integer)
+    @boundscheck checkbounds(A, i, j)
+    cols = rowvals(parent(A))
+    for istored in nzrange(parent(A), i)
+        j == cols[istored] && return true
+    end
+    return false
+end
+
+Base.replace_in_print_matrix(A::AbstractSparseMatrixCSCInclAdjointAndTranspose, i::Integer, j::Integer, s::AbstractString) =
     Base.isstored(A, i, j) ? s : Base.replace_with_centered_mark(s)
 
-function Base.show(io::IO, ::MIME"text/plain", S::AbstractSparseMatrixCSC)
+function Base.array_summary(io::IO, S::AbstractSparseMatrixCSCInclAdjointAndTranspose, dims::Tuple{Vararg{Base.OneTo}})
     _checkbuffers(S)
+
     xnnz = nnz(S)
     m, n = size(S)
     print(io, m, "×", n, " ", typeof(S), " with ", xnnz, " stored ",
               xnnz == 1 ? "entry" : "entries")
-    if !(m == 0 || n == 0)
-        print(io, ":")
-        show(IOContext(io, :typeinfo => eltype(S)), S)
+    nothing
+end
+
+# called by `show(io, MIME("text/plain"), ::AbstractSparseMatrixCSCInclAdjointAndTranspose)`
+function Base.print_array(io::IO, S::AbstractSparseMatrixCSCInclAdjointAndTranspose)
+    if max(size(S)...) < 16
+        Base.print_matrix(io, S)
+    else
+        _show_with_braille_patterns(io, S)
     end
 end
 
-Base.show(io::IO, S::AbstractSparseMatrixCSC) = Base.show(convert(IOContext, io), S::AbstractSparseMatrixCSC)
+# always show matrices as `sparse(I, J, K)`
+function Base.show(io::IO, S::AbstractSparseMatrixCSCInclAdjointAndTranspose)
+    _checkbuffers(S)
+    # can't use `findnz`, because that expects all values not to be #undef
+    I = rowvals(S)
+    J = [col for col = 1 : size(S, 2) for k = getcolptr(S)[col] : (getcolptr(S)[col+1]-1)]
+    K = nonzeros(S)
+    m, n = size(S)
+    print(io, "sparse(", I, ", ", J, ", ", K, ", ", m, ", ", n, ")")
+end
 
 const brailleBlocks = UInt16['⠁', '⠂', '⠄', '⡀', '⠈', '⠐', '⠠', '⢀']
-function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
+function _show_with_braille_patterns(io::IO, S::AbstractSparseMatrixCSCInclAdjointAndTranspose)
     m, n = size(S)
     (m == 0 || n == 0) && return show(io, MIME("text/plain"), S)
 
@@ -276,43 +305,46 @@ function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
     brailleGrid = fill(UInt16(10240), (scaleWidth - 1) ÷ 2 + 2, (scaleHeight - 1) ÷ 4 + 1)
     brailleGrid[end, :] .= '\n'
 
-    rvals = rowvals(S)
+    rvals = rowvals(parent(S))
     rowscale = max(1, scaleHeight - 1) / max(1, m - 1)
     colscale = max(1, scaleWidth - 1) / max(1, n - 1)
-    @inbounds for j = 1:n
-        # Scale the column index `j` to the best matching column index
-        # of a matrix of size `scaleHeight × scaleWidth`
-        sj = round(Int, (j - 1) * colscale + 1)
-        for x in nzrange(S, j)
-            # Scale the row index `i` to the best matching row index
+    if isa(S, AbstractSparseMatrixCSC)
+        @inbounds for j = 1:n
+            # Scale the column index `j` to the best matching column index
             # of a matrix of size `scaleHeight × scaleWidth`
-            si = round(Int, (rvals[x] - 1) * rowscale + 1)
+            sj = round(Int, (j - 1) * colscale + 1)
+            for x in nzrange(S, j)
+                # Scale the row index `i` to the best matching row index
+                # of a matrix of size `scaleHeight × scaleWidth`
+                si = round(Int, (rvals[x] - 1) * rowscale + 1)
 
-            # Given the index pair `(si, sj)` of the scaled matrix,
-            # calculate the corresponding triple `(k, l, p)` such that the
-            # element at `(si, sj)` can be found at position `(k, l)` in the
-            # braille grid `brailleGrid` and corresponds to the 1-dot braille
-            # character `brailleBlocks[p]`
-            k = (sj - 1) ÷ 2 + 1
-            l = (si - 1) ÷ 4 + 1
-            p = ((sj - 1) % 2) * 4 + ((si - 1) % 4 + 1)
+                # Given the index pair `(si, sj)` of the scaled matrix,
+                # calculate the corresponding triple `(k, l, p)` such that the
+                # element at `(si, sj)` can be found at position `(k, l)` in the
+                # braille grid `brailleGrid` and corresponds to the 1-dot braille
+                # character `brailleBlocks[p]`
+                k = (sj - 1) ÷ 2 + 1
+                l = (si - 1) ÷ 4 + 1
+                p = ((sj - 1) % 2) * 4 + ((si - 1) % 4 + 1)
 
-            brailleGrid[k, l] |= brailleBlocks[p]
+                brailleGrid[k, l] |= brailleBlocks[p]
+            end
+        end
+    else
+        # If `S` is a adjoint or transpose of a sparse matrix we invert the
+        # roles of the indices `i` and `j`
+        @inbounds for i = 1:m
+            si = round(Int, (i - 1) * rowscale + 1)
+            for x in nzrange(parent(S), i)
+                sj = round(Int, (rvals[x] - 1) * colscale + 1)
+                k = (sj - 1) ÷ 2 + 1
+                l = (si - 1) ÷ 4 + 1
+                p = ((sj - 1) % 2) * 4 + ((si - 1) % 4 + 1)
+                brailleGrid[k, l] |= brailleBlocks[p]
+            end
         end
     end
     foreach(c -> print(io, Char(c)), @view brailleGrid[1:end-1])
-end
-
-function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
-    _checkbuffers(S)
-    if max(size(S)...) < 16 && !(get(io, :compact, false)::Bool)
-        ioc = IOContext(io, :compact => true)
-        println(ioc)
-        Base.print_matrix(ioc, S)
-        return
-    end
-    println(io)
-    _show_with_braille_patterns(io, S)
 end
 
 ## Reshape
@@ -531,6 +563,8 @@ SparseMatrixCSC(M::Matrix) = sparse(M)
 SparseMatrixCSC(T::Tridiagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(T)
 function SparseMatrixCSC{Tv,Ti}(T::Tridiagonal) where {Tv,Ti}
     m = length(T.d)
+    m == 0 && return SparseMatrixCSC{Tv,Ti}(0, 0, ones(Ti, 1), Ti[], Tv[])
+    m == 1 && return SparseMatrixCSC{Tv,Ti}(1, 1, Ti[1, 2], Ti[1], Tv[T.d[1]])
 
     colptr = Vector{Ti}(undef, m+1)
     colptr[1] = 1
@@ -561,6 +595,8 @@ end
 SparseMatrixCSC(T::SymTridiagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(T)
 function SparseMatrixCSC{Tv,Ti}(T::SymTridiagonal) where {Tv,Ti}
     m = length(T.dv)
+    m == 0 && return SparseMatrixCSC{Tv,Ti}(0, 0, ones(Ti, 1), Ti[], Tv[])
+    m == 1 && return SparseMatrixCSC{Tv,Ti}(1, 1, Ti[1, 2], Ti[1], Tv[T.dv[1]])
 
     colptr = Vector{Ti}(undef, m+1)
     colptr[1] = 1
@@ -591,7 +627,7 @@ end
 SparseMatrixCSC(B::Bidiagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(B)
 function SparseMatrixCSC{Tv,Ti}(B::Bidiagonal) where {Tv,Ti}
     m = length(B.dv)
-    m == 0 && return SparseMatrixCSC{Tv,Ti}(zeros(Tv, 0, 0))
+    m == 0 && return SparseMatrixCSC{Tv,Ti}(0, 0, ones(Ti, 1), Ti[], Tv[])
 
     colptr = Vector{Ti}(undef, m+1)
     colptr[1] = 1
@@ -620,7 +656,7 @@ end
 SparseMatrixCSC(D::Diagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(D)
 function SparseMatrixCSC{Tv,Ti}(D::Diagonal) where {Tv,Ti}
     m = length(D.diag)
-    return SparseMatrixCSC(m, m, Vector(1:(m+1)), Vector(1:m), Vector{Tv}(D.diag))
+    return SparseMatrixCSC(m, m, Vector(Ti(1):Ti(m+1)), Vector(Ti(1):Ti(m)), Vector{Tv}(D.diag))
 end
 SparseMatrixCSC(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
@@ -683,6 +719,17 @@ Array(S::AbstractSparseMatrixCSC) = Matrix(S)
 
 convert(T::Type{<:AbstractSparseMatrixCSC}, m::AbstractMatrix) = m isa T ? m : T(m)
 
+convert(T::Type{<:Diagonal},       m::AbstractSparseMatrixCSC) = m isa T ? m :
+    isdiag(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as Diagonal"))
+convert(T::Type{<:SymTridiagonal}, m::AbstractSparseMatrixCSC) = m isa T ? m :
+    issymmetric(m) && isbanded(m, -1, 1) ? T(m) : throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
+convert(T::Type{<:Tridiagonal},    m::AbstractSparseMatrixCSC) = m isa T ? m :
+    isbanded(m, -1, 1) ? T(m) : throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
+convert(T::Type{<:LowerTriangular}, m::AbstractSparseMatrixCSC) = m isa T ? m :
+    istril(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as LowerTriangular"))
+convert(T::Type{<:UpperTriangular}, m::AbstractSparseMatrixCSC) = m isa T ? m :
+    istriu(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as UpperTriangular"))
+
 float(S::SparseMatrixCSC) = SparseMatrixCSC(size(S, 1), size(S, 2), copy(getcolptr(S)), copy(rowvals(S)), float.(nonzeros(S)))
 complex(S::SparseMatrixCSC) = SparseMatrixCSC(size(S, 1), size(S, 2), copy(getcolptr(S)), copy(rowvals(S)), complex(copy(nonzeros(S))))
 
@@ -706,7 +753,7 @@ julia> sparse(A)
   ⋅    ⋅   1.0
 ```
 """
-sparse(A::AbstractMatrix{Tv}) where {Tv} = convert(SparseMatrixCSC{Tv,Int}, A)
+sparse(A::AbstractMatrix{Tv}) where {Tv} = convert(SparseMatrixCSC{Tv}, A)
 
 sparse(S::AbstractSparseMatrixCSC) = copy(S)
 
@@ -1103,7 +1150,7 @@ avoids an unnecessary length-`nnz(A)` array-sweep and associated recomputation o
 pointers. See [`halfperm!`](:func:SparseArrays.halfperm!) for additional algorithmic
 information.
 
-See also: `unchecked_aliasing_permute!`
+See also `unchecked_aliasing_permute!`.
 """
 function unchecked_noalias_permute!(X::AbstractSparseMatrixCSC{Tv,Ti},
         A::AbstractSparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
@@ -1280,7 +1327,7 @@ For additional (algorithmic) information, and for versions of these methods that
 argument checking, see (unexported) parent methods `unchecked_noalias_permute!`
 and `unchecked_aliasing_permute!`.
 
-See also: [`permute`](@ref).
+See also [`permute`](@ref).
 """
 function permute!(X::AbstractSparseMatrixCSC{Tv,Ti}, A::AbstractSparseMatrixCSC{Tv,Ti},
         p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer}) where {Tv,Ti}
@@ -1598,13 +1645,14 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> sprand(Bool, 2, 2, 0.5)
-2×2 SparseMatrixCSC{Bool, Int64} with 1 stored entry:
+2×2 SparseMatrixCSC{Bool, Int64} with 2 stored entries:
+ 1  1
  ⋅  ⋅
- ⋅  1
 
 julia> sprand(Float64, 3, 0.75)
-3-element SparseVector{Float64, Int64} with 1 stored entry:
-  [3]  =  0.298614
+3-element SparseVector{Float64, Int64} with 2 stored entries:
+  [1]  =  0.795547
+  [2]  =  0.49425
 ```
 """
 function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, rfn::Function, ::Type{T}=eltype(rfn(r, 1))) where T
@@ -1645,9 +1693,9 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest; setup = :(using Random; Random.seed!(0))
 julia> sprandn(2, 2, 0.75)
-2×2 SparseMatrixCSC{Float64, Int64} with 2 stored entries:
-  ⋅   0.586617
-  ⋅   0.297336
+2×2 SparseMatrixCSC{Float64, Int64} with 3 stored entries:
+ -1.20577     ⋅
+  0.311817  -0.234641
 ```
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) =
@@ -2058,7 +2106,7 @@ function _findr(op, A, region, Tv)
             throw(ArgumentError("array slices must be non-empty"))
         else
             ri = Base.reduced_indices0(A, region)
-            return (similar(A, ri), zeros(Ti, ri))
+            return (zeros(Tv, ri), zeros(Ti, ri))
         end
     end
 
@@ -2124,8 +2172,10 @@ end
 _isless_fm(a, b)    =  b == b && ( a != a || isless(a, b) )
 _isgreater_fm(a, b) =  b == b && ( a != a || isless(b, a) )
 
-findmin(A::AbstractSparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = _findr(_isless_fm, A, region, Tv)
-findmax(A::AbstractSparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = _findr(_isgreater_fm, A, region, Tv)
+findmin(A::AbstractSparseMatrixCSC{Tv}, region::Union{Integer,Tuple{Integer},NTuple{2,Integer}}) where {Tv} =
+    _findr(_isless_fm, A, region, Tv)
+findmax(A::AbstractSparseMatrixCSC{Tv}, region::Union{Integer,Tuple{Integer},NTuple{2,Integer}}) where {Tv} =
+    _findr(_isgreater_fm, A, region, Tv)
 findmin(A::AbstractSparseMatrixCSC) = (r=findmin(A,(1,2)); (r[1][1], r[2][1]))
 findmax(A::AbstractSparseMatrixCSC) = (r=findmax(A,(1,2)); (r[1][1], r[2][1]))
 
@@ -2141,7 +2191,7 @@ end
 getindex(A::AbstractSparseMatrixCSC, I::Tuple{Integer,Integer}) = getindex(A, I[1], I[2])
 
 function getindex(A::AbstractSparseMatrixCSC{T}, i0::Integer, i1::Integer) where T
-    if !(1 <= i0 <= size(A, 1) && 1 <= i1 <= size(A, 2)); throw(BoundsError()); end
+    @boundscheck checkbounds(A, i0, i1)
     r1 = Int(getcolptr(A)[i1])
     r2 = Int(getcolptr(A)[i1+1]-1)
     (r1 > r2) && return zero(T)
@@ -3288,6 +3338,10 @@ dropstored!(A::AbstractSparseMatrixCSC, ::Colon) = dropstored!(A, :, :)
 
 # Sparse concatenation
 
+promote_idxtype(::AbstractSparseMatrixCSC{<:Any, Ti}) where {Ti} = Ti
+promote_idxtype(::AbstractSparseMatrixCSC{<:Any, Ti}, X::AbstractSparseMatrixCSC...) where {Ti} =
+    promote_type(Ti, promote_idxtype(X...))
+
 function vcat(X::AbstractSparseMatrixCSC...)
     num = length(X)
     mX = Int[ size(x, 1) for x in X ]
@@ -3302,7 +3356,7 @@ function vcat(X::AbstractSparseMatrixCSC...)
     end
 
     Tv = promote_eltype(X...)
-    Ti = promote_eltype(map(x->rowvals(x), X)...)
+    Ti = promote_idxtype(X...)
 
     nnzX = Int[ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
@@ -3354,7 +3408,7 @@ function hcat(X::AbstractSparseMatrixCSC...)
     n = sum(nX)
 
     Tv = promote_eltype(X...)
-    Ti = promote_eltype(map(x->rowvals(x), X)...)
+    Ti = promote_idxtype(X...)
 
     colptr = Vector{Ti}(undef, n+1)
     nnzX = Int[ nnz(x) for x in X ]
@@ -3788,3 +3842,91 @@ end
 
 circshift!(O::AbstractSparseMatrixCSC, X::AbstractSparseMatrixCSC, (r,)::Base.DimsInteger{1}) = circshift!(O, X, (r,0))
 circshift!(O::AbstractSparseMatrixCSC, X::AbstractSparseMatrixCSC, r::Real) = circshift!(O, X, (Integer(r),0))
+
+## swaprows! / swapcols!
+macro swap(a, b)
+    esc(:(($a, $b) = ($b, $a)))
+end
+
+function Base.swapcols!(A::AbstractSparseMatrixCSC, i, j)
+    i == j && return
+
+    # For simplicitly, let i denote the smaller of the two columns
+    j < i && @swap(i, j)
+
+    colptr = getcolptr(A)
+    irow = colptr[i]:(colptr[i+1]-1)
+    jrow = colptr[j]:(colptr[j+1]-1)
+
+    function rangeexchange!(arr, irow, jrow)
+        if length(irow) == length(jrow)
+            for (a, b) in zip(irow, jrow)
+                @inbounds @swap(arr[i], arr[j])
+            end
+            return
+        end
+        # This is similar to the triple-reverse tricks for
+        # circshift!, except that we have three ranges here,
+        # so it ends up being 4 reverse calls (but still
+        # 2 overall reversals for the memory range). Like
+        # circshift!, there's also a cycle chasing algorithm
+        # with optimal memory complexity, but the performance
+        # tradeoffs against this implementation are non-trivial,
+        # so let's just do this simple thing for now.
+        # See https://github.com/JuliaLang/julia/pull/42676 for
+        # discussion of circshift!-like algorithms.
+        reverse!(@view arr[irow])
+        reverse!(@view arr[jrow])
+        reverse!(@view arr[(last(irow)+1):(first(jrow)-1)])
+        reverse!(@view arr[first(irow):last(jrow)])
+    end
+    rangeexchange!(rowvals(A), irow, jrow)
+    rangeexchange!(nonzeros(A), irow, jrow)
+
+    if length(irow) != length(jrow)
+        @inbounds colptr[i+1:j] .+= length(jrow) - length(irow)
+    end
+    return nothing
+end
+
+function Base.swaprows!(A::AbstractSparseMatrixCSC, i, j)
+    # For simplicitly, let i denote the smaller of the two rows
+    j < i && @swap(i, j)
+
+    rows = rowvals(A)
+    vals = nonzeros(A)
+    for col = 1:size(A, 2)
+        rr = nzrange(A, col)
+        iidx = searchsortedfirst(@view(rows[rr]), i)
+        has_i = iidx <= length(rr) && rows[rr[iidx]] == i
+
+        jrange = has_i ? (iidx:last(rr)) : rr
+        jidx = searchsortedlast(@view(rows[jrange]), j)
+        has_j = jidx != 0 && rows[jrange[jidx]] == j
+
+        if !has_j && !has_i
+            # Has neither row - nothing to do
+            continue
+        elseif has_i && has_j
+            # This column had both i and j rows - swap them
+            @swap(vals[rr[iidx]], vals[jrange[jidx]])
+        elseif has_i
+            # Update the rowval and then rotate both nonzeros
+            # and the remaining rowvals into the correct place
+            rows[rr[iidx]] = j
+            jidx == 0 && continue
+            rotate_range = rr[iidx]:jrange[jidx]
+            circshift!(@view(vals[rotate_range]), -1)
+            circshift!(@view(rows[rotate_range]), -1)
+        else
+            # Same as i, but in the opposite direction
+            @assert has_j
+            rows[jrange[jidx]] = i
+            iidx > length(rr) && continue
+            rotate_range = rr[iidx]:jrange[jidx]
+            circshift!(@view(vals[rotate_range]), 1)
+            circshift!(@view(rows[rotate_range]), 1)
+        end
+    end
+    return nothing
+end

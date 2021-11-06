@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-@inline isexpr(@nospecialize(stmt), head::Symbol) = isa(stmt, Expr) && stmt.head === head
 Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
 isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode)
@@ -173,7 +172,7 @@ end
 NewInstruction(@nospecialize(stmt), @nospecialize(type)) =
     NewInstruction(stmt, type, nothing)
 NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Nothing, Int32}) =
-    NewInstruction(stmt, type, nothing, line, 0x00, false)
+    NewInstruction(stmt, type, nothing, line, IR_FLAG_NULL, false)
 
 effect_free(inst::NewInstruction) =
     NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | IR_FLAG_EFFECT_FREE, true)
@@ -194,7 +193,7 @@ function InstructionStream(len::Int)
     info = Array{Any}(undef, len)
     fill!(info, nothing)
     lines = fill(Int32(0), len)
-    flags = fill(0x00, len)
+    flags = fill(IR_FLAG_NULL, len)
     return InstructionStream(insts, types, info, lines, flags)
 end
 InstructionStream() = InstructionStream(0)
@@ -222,7 +221,7 @@ function resize!(stmts::InstructionStream, len)
     resize!(stmts.flag, len)
     for i in (old_length + 1):len
         stmts.line[i] = 0
-        stmts.flag[i] = 0x00
+        stmts.flag[i] = IR_FLAG_NULL
         stmts.info[i] = nothing
     end
     return stmts
@@ -404,7 +403,8 @@ function getindex(x::UseRef)
 end
 
 function is_relevant_expr(e::Expr)
-    return e.head in (:call, :invoke, :new, :splatnew, :(=), :(&),
+    return e.head in (:call, :invoke, :invoke_modify,
+                      :new, :splatnew, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
                       :undefcheck, :throw_undef_if_not,
@@ -723,18 +723,27 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
         end
     elseif isa(before, OldSSAValue)
         pos = before.id
-        if pos > length(compact.ir.stmts)
-            #@assert attach_after
-            info = compact.pending_nodes.info[pos - length(compact.ir.stmts) - length(compact.ir.new_nodes)]
-            pos, attach_after = info.pos, info.attach_after
+        if pos < compact.idx
+            renamed = compact.ssa_rename[pos]
+            count_added_node!(compact, inst.stmt)
+            line = something(inst.line, compact.result[renamed.id][:line])
+            node = add!(compact.new_new_nodes, renamed.id, attach_after)
+            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
+            return NewSSAValue(node.idx)
+        else
+            if pos > length(compact.ir.stmts)
+                #@assert attach_after
+                info = compact.pending_nodes.info[pos - length(compact.ir.stmts) - length(compact.ir.new_nodes)]
+                pos, attach_after = info.pos, info.attach_after
+            end
+            line = something(inst.line, compact.ir.stmts[pos][:line])
+            node = add_pending!(compact, pos, attach_after)
+            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
+            os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
+            push!(compact.ssa_rename, os)
+            push!(compact.used_ssas, 0)
+            return os
         end
-        line = something(inst.line, compact.ir.stmts[pos][:line])
-        node = add_pending!(compact, pos, attach_after)
-        node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
-        os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
-        push!(compact.ssa_rename, os)
-        push!(compact.used_ssas, 0)
-        return os
     elseif isa(before, NewSSAValue)
         before_entry = compact.new_new_nodes.info[before.id]
         line = something(inst.line, compact.new_new_nodes.stmts[before.id][:line])
@@ -1094,8 +1103,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         # passes look at all code, dead or not. This check should be
         # unnecessary when DCE can remove those dead loops entirely, so this is
         # just to be safe.
-        before_def = isassigned(values, 1) && isa(values[1], OldSSAValue) &&
-            idx < values[1].id
+        before_def = isassigned(values, 1) && (v = values[1]; isa(v, OldSSAValue)) && idx < v.id
         if length(edges) == 1 && isassigned(values, 1) && !before_def &&
                 length(compact.cfg_transforms_enabled ?
                     compact.result_bbs[compact.bb_rename_succ[active_bb]].preds :
@@ -1308,7 +1316,7 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         compact.result[old_result_idx][:inst]), (compact.idx, active_bb)
 end
 
-function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing)
+function maybe_erase_unused!(extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, callback = x::SSAValue->nothing)
     stmt = compact.result[idx][:inst]
     stmt === nothing && return false
     if compact_exprtype(compact, SSAValue(idx)) === Bottom
@@ -1459,3 +1467,8 @@ function iterate(x::BBIdxIter, (idx, bb)::Tuple{Int, Int}=(1, 1))
     end
     return (bb, idx), (idx + 1, next_bb)
 end
+
+is_known_call(e::Expr, @nospecialize(func), ir::IRCode) =
+    is_known_call(e, func, ir, ir.sptypes, ir.argtypes)
+
+argextype(@nospecialize(x), ir::IRCode) = argextype(x, ir, ir.sptypes, ir.argtypes)

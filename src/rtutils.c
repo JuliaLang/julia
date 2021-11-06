@@ -132,6 +132,14 @@ JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_atomicerror_type, "%s", str)
+{
+    jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
+    JL_GC_PUSH1(&msg);
+    jl_throw(jl_new_struct(jl_atomicerror_type, msg));
+}
+
+
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t)
 {
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
@@ -206,22 +214,33 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
         jl_type_error("typeassert", t, x);
 }
 
+#ifndef HAVE_SSP
+JL_DLLEXPORT uintptr_t __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
+
+JL_DLLEXPORT void __stack_chk_fail(void)
+{
+    /* put your panic function or similar in here */
+    fprintf(stderr, "fatal error: stack corruption detected\n");
+    jl_gc_debug_critical_error();
+    abort(); // end with abort, since the compiler destroyed the stack upon entry to this function, there's no going back now
+}
+#endif
+
 // exceptions -----------------------------------------------------------------
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_task_t *current_task = ptls->current_task;
+    jl_task_t *ct = jl_current_task;
     // Must have no safepoint
-    eh->prev = current_task->eh;
-    eh->gcstack = ptls->pgcstack;
-    eh->gc_state = ptls->gc_state;
-    eh->locks_len = ptls->locks.len;
-    eh->defer_signal = ptls->defer_signal;
-    eh->world_age = ptls->world_age;
-    current_task->eh = eh;
+    eh->prev = ct->eh;
+    eh->gcstack = ct->gcstack;
+    eh->gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
+    eh->locks_len = ct->ptls->locks.len;
+    eh->defer_signal = ct->ptls->defer_signal;
+    eh->world_age = ct->world_age;
+    ct->eh = eh;
 #ifdef ENABLE_TIMINGS
-    eh->timing_stack = ptls->timing_stack;
+    eh->timing_stack = ct->ptls->timing_stack;
 #endif
 }
 
@@ -232,50 +251,50 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 //   there's additional cleanup required, eg pushing the exception stack.
 JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
 #ifdef _OS_WINDOWS_
-    if (ptls->needs_resetstkoflw) {
+    if (ct->ptls->needs_resetstkoflw) {
         _resetstkoflw();
-        ptls->needs_resetstkoflw = 0;
+        ct->ptls->needs_resetstkoflw = 0;
     }
 #endif
-    jl_task_t *current_task = ptls->current_task;
-    // `eh` may be not equal to `ptls->current_task->eh`. See `jl_pop_handler`
+    // `eh` may be not equal to `ct->eh`. See `jl_pop_handler`
     // This function should **NOT** have any safepoint before the ones at the
     // end.
-    sig_atomic_t old_defer_signal = ptls->defer_signal;
-    int8_t old_gc_state = ptls->gc_state;
-    current_task->eh = eh->prev;
-    ptls->pgcstack = eh->gcstack;
-    small_arraylist_t *locks = &ptls->locks;
+    sig_atomic_t old_defer_signal = ct->ptls->defer_signal;
+    int8_t old_gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
+    ct->eh = eh->prev;
+    ct->gcstack = eh->gcstack;
+    small_arraylist_t *locks = &ct->ptls->locks;
     int unlocks = locks->len > eh->locks_len;
     if (unlocks) {
         for (size_t i = locks->len; i > eh->locks_len; i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
         locks->len = eh->locks_len;
     }
-    ptls->world_age = eh->world_age;
-    ptls->defer_signal = eh->defer_signal;
+    ct->world_age = eh->world_age;
+    ct->ptls->defer_signal = eh->defer_signal;
     if (old_gc_state != eh->gc_state) {
-        jl_atomic_store_release(&ptls->gc_state, eh->gc_state);
+        jl_atomic_store_release(&ct->ptls->gc_state, eh->gc_state);
         if (old_gc_state) {
-            jl_gc_safepoint_(ptls);
+            jl_gc_safepoint_(ct->ptls);
         }
     }
     if (old_defer_signal && !eh->defer_signal) {
-        jl_sigint_safepoint(ptls);
+        jl_sigint_safepoint(ct->ptls);
     }
-    if (jl_gc_have_pending_finalizers && unlocks && eh->locks_len == 0) {
-        jl_gc_run_pending_finalizers(ptls);
+    if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers) &&
+            unlocks && eh->locks_len == 0) {
+        jl_gc_run_pending_finalizers(ct);
     }
 }
 
 JL_DLLEXPORT void jl_pop_handler(int n)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     if (__unlikely(n <= 0))
         return;
-    jl_handler_t *eh = ptls->current_task->eh;
+    jl_handler_t *eh = ct->eh;
     while (--n > 0)
         eh = eh->prev;
     jl_eh_restore_state(eh);
@@ -283,15 +302,15 @@ JL_DLLEXPORT void jl_pop_handler(int n)
 
 JL_DLLEXPORT size_t jl_excstack_state(void) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_excstack_t *s = ptls->current_task->excstack;
+    jl_task_t *ct = jl_current_task;
+    jl_excstack_t *s = ct->excstack;
     return s ? s->top : 0;
 }
 
 JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_excstack_t *s = ptls->current_task->excstack;
+    jl_task_t *ct = jl_current_task;
+    jl_excstack_t *s = ct->excstack;
     if (s) {
         assert(s->top >= state);
         s->top = state;
@@ -312,7 +331,8 @@ static void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
     if (s && s->reserved_size >= reserved_size)
         return;
     size_t bufsz = sizeof(jl_excstack_t) + sizeof(uintptr_t)*reserved_size;
-    jl_excstack_t *new_s = (jl_excstack_t*)jl_gc_alloc_buf(jl_get_ptls_states(), bufsz);
+    jl_task_t *ct = jl_current_task;
+    jl_excstack_t *new_s = (jl_excstack_t*)jl_gc_alloc_buf(ct->ptls, bufsz);
     new_s->top = 0;
     new_s->reserved_size = reserved_size;
     if (s)
@@ -354,15 +374,17 @@ JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
-    if (!st->mutabl)
-        jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
+    if (!st->name->mutabl)
+        jl_errorf("setfield!: immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
     if (idx0 >= jl_datatype_nfields(st))
         jl_bounds_error_int(v, idx0 + 1);
     //jl_value_t *ft = jl_field_type(st, idx0);
     //if (!jl_isa(rhs, ft)) {
     //    jl_type_error("setfield!", ft, rhs);
     //}
-    set_nth_field(st, (void*)v, idx0, rhs);
+    //int isatomic = jl_field_isatomic(st, idx0);
+    //if (isatomic) ...
+    set_nth_field(st, v, idx0, rhs, 0);
 }
 
 
@@ -963,7 +985,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;
-        if (e->head == assign_sym && jl_array_len(e->args) == 2) {
+        if (e->head == jl_assign_sym && jl_array_len(e->args) == 2) {
             n += jl_static_show_x(out, jl_exprarg(e,0), depth);
             n += jl_printf(out, " = ");
             n += jl_static_show_x(out, jl_exprarg(e,1), depth);
@@ -1091,10 +1113,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             size_t i = 0;
             if (vt == jl_typemap_entry_type)
                 i = 1;
+            jl_value_t *names = isnamedtuple ? jl_tparam0(vt) : (jl_value_t*)jl_field_names(vt);
             for (; i < tlen; i++) {
                 if (!istuple) {
-                    n += jl_printf(out, "%s", jl_symbol_name(jl_field_name(vt, i)));
-                    n += jl_printf(out, "=");
+                    jl_value_t *fname = isnamedtuple ? jl_fieldref_noalloc(names, i) : jl_svecref(names, i);
+                    n += jl_printf(out, "%s=", jl_symbol_name((jl_sym_t*)fname));
                 }
                 size_t offs = jl_field_offset(vt, i);
                 char *fld_ptr = (char*)v + offs;
@@ -1270,10 +1293,9 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_N
 
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_jmp_buf *old_buf = ptls->safe_restore;
+    jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
-    ptls->safe_restore = &buf;
+    jl_set_safe_restore(&buf);
     if (!jl_setjmp(buf, 0)) {
         jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)jl_value);
         jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
@@ -1281,7 +1303,7 @@ JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT
     else {
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n!!! ERROR in jl_ -- ABORTING !!!\n");
     }
-    ptls->safe_restore = old_buf;
+    jl_set_safe_restore(old_buf);
 }
 
 JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)

@@ -721,7 +721,8 @@ For translating a C return type to Julia:
           * `Ptr{T}`, where `T` is the Julia type corresponding to `T`
   * `T (*)(...)` (e.g. a pointer to a function)
 
-      * `Ptr{Cvoid}` (you may need to use [`@cfunction`](@ref) explicitly to create this pointer)
+      * `Ptr{Cvoid}` to call this directly from Julia you will need to pass this as the first argument to [`ccall`](@ref).
+        See [Indirect Calls](@ref).
 
 ### Passing Pointers for Modifying Inputs
 
@@ -840,7 +841,7 @@ the Julia pointer to a Julia array data structure into a form understandable by 
 
 ## Fortran Wrapper Example
 
-The following example utilizes ccall to call a function in a common Fortran library (libBLAS) to
+The following example utilizes `ccall` to call a function in a common Fortran library (libBLAS) to
 computes a dot product. Notice that the argument mapping is a bit different here than above, as
 we need to map from Julia to Fortran.  On every argument type, we specify `Ref` or `Ptr`. This
 mangling convention may be specific to your fortran compiler and operating system, and is likely
@@ -928,7 +929,7 @@ macro dlsym(func, lib)
         let zlocal = $z[]
             if zlocal == C_NULL
                 zlocal = dlsym($(esc(lib))::Ptr{Cvoid}, $(esc(func)))::Ptr{Cvoid}
-                $z[] = $zlocal
+                $z[] = zlocal
             end
             zlocal
         end

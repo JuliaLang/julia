@@ -166,6 +166,14 @@ julia> """Contains "quote" characters"""
 "Contains \"quote\" characters"
 ```
 
+Long lines in strings can be broken up by preceding the newline with a backslash (`\`):
+
+```jldoctest
+julia> "This is a long \
+       line"
+"This is a long line"
+```
+
 If you want to extract a character from a string, you index into it:
 
 ```jldoctest helloworldstring
@@ -639,6 +647,15 @@ julia> """
 "Hello,\nworld."
 ```
 
+If the newline is removed using a backslash, dedentation will be respected as well:
+
+```jldoctest
+julia> """
+         Averylong\
+         word"""
+"Averylongword"
+```
+
 Trailing whitespace is left unaltered.
 
 Triple-quoted string literals can contain `"` characters without escaping.
@@ -882,7 +899,7 @@ julia> m.offsets
 ```
 
 It is convenient to have captures returned as an array so that one can use destructuring syntax
-to bind them to local variables. As a convinience, the `RegexMatch` object implements iterator methods that pass through to the `captures` field, so you can destructure the match object directly:
+to bind them to local variables. As a convenience, the `RegexMatch` object implements iterator methods that pass through to the `captures` field, so you can destructure the match object directly:
 
 ```jldoctest acdmatch
 julia> first, second, third = m; first

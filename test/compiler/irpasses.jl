@@ -128,7 +128,7 @@ let nt = (a=1, b=2)
     @test_throws ArgumentError blah31139(nt)
 end
 
-# Expr(:new) annoted as PartialStruct
+# Expr(:new) annotated as PartialStruct
 struct FooPartial
     x
     y
@@ -383,3 +383,65 @@ exc39508 = ErrorException("expected")
     return err
 end
 @test test39508() === exc39508
+
+let # `getfield_elim_pass!` should work with constant globals
+    # immutable pass
+    src = @eval Module() begin
+        const REF_FLD = :x
+        struct ImmutableRef{T}
+            x::T
+        end
+
+        code_typed((Int,)) do x
+            r = ImmutableRef{Int}(x) # should be eliminated
+            x = getfield(r, REF_FLD) # should be eliminated
+            return sin(x)
+        end |> only |> first
+    end
+    @test !any(src.code) do @nospecialize(stmt)
+        Meta.isexpr(stmt, :call) || return false
+        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        return Core.Compiler.widenconst(ft) == typeof(getfield)
+    end
+    @test !any(src.code) do @nospecialize(stmt)
+        return Meta.isexpr(stmt, :new)
+    end
+
+    # mutable pass
+    src = @eval Module() begin
+        const REF_FLD = :x
+        code_typed() do
+            r = Ref{Int}(42) # should be eliminated
+            x = getfield(r, REF_FLD) # should be eliminated
+            return sin(x)
+        end |> only |> first
+    end
+    @test !any(src.code) do @nospecialize(stmt)
+        Meta.isexpr(stmt, :call) || return false
+        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        return Core.Compiler.widenconst(ft) == typeof(getfield)
+    end
+    @test !any(src.code) do @nospecialize(stmt)
+        return Meta.isexpr(stmt, :new)
+    end
+end
+
+let
+    # `typeassert` elimination after SROA
+    # NOTE we can remove this optimization once inference is able to reason about memory-effects
+    src = @eval Module() begin
+        mutable struct Foo; x; end
+
+        code_typed((Int,)) do a
+            x1 = Foo(a)
+            x2 = Foo(x1)
+            return typeassert(x2.x, Foo).x
+        end |> only |> first
+    end
+    # eliminate `typeassert(x2.x, Foo)`
+    @test all(src.code) do @nospecialize stmt
+        Meta.isexpr(stmt, :call) || return true
+        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        return Core.Compiler.widenconst(ft) !== typeof(typeassert)
+    end
+end

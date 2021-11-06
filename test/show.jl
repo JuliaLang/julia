@@ -728,11 +728,18 @@ Base.zero(x::T12960) = T12960()
 let
     A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
-    @test sprint(show, B)  == "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
-    @test sprint(print, B) == "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
+    @test repr(B) == "sparse([1, 2, 3], [1, 2, 3], $T12960[#undef, #undef, #undef], 3, 3)"
+    @test occursin(
+        "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
+        repr(MIME("text/plain"), B),
+    )
+
     B[1,2] = T12960()
-    @test sprint(show, B)  == "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
-    @test sprint(print, B) == "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
+    @test repr(B)  == "sparse([1, 1, 2, 3], [1, 2, 2, 3], $T12960[#undef, $T12960(), #undef, #undef], 3, 3)"
+    @test occursin(
+        "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
+        repr(MIME("text/plain"), B),
+    )
 end
 
 # issue #13127
@@ -1370,6 +1377,11 @@ let m = which(T20332{Int}(), (Int,)),
     mi = Core.Compiler.specialize_method(m, Tuple{T20332{T}, Int} where T, Core.svec())
     # test that this doesn't throw an error
     @test occursin("MethodInstance for", repr(mi))
+    # issue #41928
+    str = sprint(mi; context=:color=>true) do io, mi
+        printstyled(io, mi; color=:light_cyan)
+    end
+    @test !occursin("\U1b[0m", str)
 end
 
 @test sprint(show, Main) == "Main"
@@ -1762,7 +1774,7 @@ end
     # spurious binding resolutions
     show(IOContext(b, :module => TestShowType), Base.Pair)
     @test !Base.isbindingresolved(TestShowType, :Pair)
-    @test String(take!(b)) == "Base.Pair"
+    @test String(take!(b)) == "Core.Pair"
     show(IOContext(b, :module => TestShowType), Base.Complex)
     @test Base.isbindingresolved(TestShowType, :Complex)
     @test String(take!(b)) == "Complex"
@@ -1818,7 +1830,7 @@ end
     @test showstr(Dict(true=>false)) == "Dict{Bool, Bool}(1 => 0)"
     @test showstr(Dict((1 => 2) => (3 => 4))) == "Dict((1 => 2) => (3 => 4))"
 
-    # issue #27979 (dislaying arrays of pairs containing arrays as first member)
+    # issue #27979 (displaying arrays of pairs containing arrays as first member)
     @test replstr([[1.0]=>1.0]) == "1-element Vector{Pair{Vector{Float64}, Float64}}:\n [1.0] => 1.0"
 
     # issue #28159
@@ -1831,6 +1843,12 @@ end
     # issue #34343
     @test showstr([[1], Int[]]) == "[[1], $Int[]]"
     @test showstr([Dict(1=>1), Dict{Int,Int}()]) == "[Dict(1 => 1), Dict{$Int, $Int}()]"
+
+    # issue #42719, NamedTuple with @var_str
+    @test replstr((; var"a b"=1)) == """(var"a b" = 1,)"""
+    @test replstr((; var"#var#"=1)) == """(var"#var#" = 1,)"""
+    @test replstr((; var"a"=1, b=2)) == "(a = 1, b = 2)"
+    @test replstr((; a=1, b=2)) == "(a = 1, b = 2)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -2011,7 +2029,7 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     io = IOBuffer()
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
-    @test count(contains(r"my_fun28173 at a{80}:\d+"), eachline(io)) == 9
+    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
 end
 
 # Verify that extra instructions at the end of the IR
@@ -2285,4 +2303,31 @@ end
     @test s == "UnionAll"
     s = sprint(show, MIME("text/plain"), Function)
     @test s == "Function"
+end
+
+@testset "printing inline n-dimensional arrays and one-column matrices" begin
+    @test replstr([Int[1 2 3 ;;; 4 5 6]]) == "1-element Vector{Array{$Int, 3}}:\n [1 2 3;;; 4 5 6]"
+    @test replstr([Int[1 2 3 ;;; 4 5 6;;;;]]) == "1-element Vector{Array{$Int, 4}}:\n [1 2 3;;; 4 5 6;;;;]"
+    @test replstr([fill(1, (20,20,20))]) == "1-element Vector{Array{$Int, 3}}:\n [1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; … ;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1]"
+    @test replstr([fill(1, 5, 1)]) == "1-element Vector{Matrix{$Int}}:\n [1; 1; … ; 1; 1;;]"
+    @test replstr([fill(1, 5, 2)]) == "1-element Vector{Matrix{$Int}}:\n [1 1; 1 1; … ; 1 1; 1 1]"
+    @test replstr([[1;]]) == "1-element Vector{Vector{$Int}}:\n [1]"
+    @test replstr([[1;;]]) == "1-element Vector{Matrix{$Int}}:\n [1;;]"
+    @test replstr([[1;;;]]) == "1-element Vector{Array{$Int, 3}}:\n [1;;;]"
+end
+
+@testset "ncat and nrow" begin
+    @test_repr "[1;;]"
+    @test_repr "[1;;;]"
+    @test_repr "[1;; 2]"
+    @test_repr "[1;;; 2]"
+    @test_repr "[1;;; 2 3;;; 4]"
+    @test_repr "[1;;; 2;;;; 3;;; 4]"
+
+    @test_repr "T[1;;]"
+    @test_repr "T[1;;;]"
+    @test_repr "T[1;; 2]"
+    @test_repr "T[1;;; 2]"
+    @test_repr "T[1;;; 2 3;;; 4]"
+    @test_repr "T[1;;; 2;;;; 3;;; 4]"
 end

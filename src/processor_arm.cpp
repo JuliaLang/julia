@@ -215,7 +215,7 @@ static constexpr FeatureDep deps[] = {
     {ccdp, ccpp},
     {sve, fullfp16},
     {fp16fml, fullfp16},
-    {altnzcv, fmi},
+    {altnzcv, flagm},
     {sve2, sve},
     {sve2_aes, sve2},
     {sve2_aes, aes},
@@ -237,7 +237,7 @@ constexpr auto armv8_2a = armv8_1a | get_feature_masks(v8_2a, ccpp);
 constexpr auto armv8_2a_crypto = armv8_2a | get_feature_masks(aes, sha2);
 constexpr auto armv8_3a = armv8_2a | get_feature_masks(v8_3a, jsconv, complxnum, rcpc);
 constexpr auto armv8_3a_crypto = armv8_3a | get_feature_masks(aes, sha2);
-constexpr auto armv8_4a = armv8_3a | get_feature_masks(v8_4a, dit, rcpc_immo, fmi);
+constexpr auto armv8_4a = armv8_3a | get_feature_masks(v8_4a, dit, rcpc_immo, flagm);
 constexpr auto armv8_4a_crypto = armv8_4a | get_feature_masks(aes, sha2);
 constexpr auto armv8_5a = armv8_4a | get_feature_masks(v8_5a, sb, ccdp, altnzcv, fptoint);
 constexpr auto armv8_6a = armv8_5a | get_feature_masks(v8_6a, i8mm, bf16);
@@ -256,7 +256,7 @@ constexpr auto armv8_6a = armv8_5a | get_feature_masks(v8_6a, i8mm, bf16);
 //     .SM4: sm4
 //     .DP: dotprod
 //     .FHM: fp16fml
-//     .TS: fmi, altnzcz
+//     .TS: flagm, altnzcz
 //     .RNDR: rand
 
 // ID_AA64ISAR1_EL1
@@ -1191,7 +1191,7 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
     features[1] = (uint32_t)jl_getauxval(AT_HWCAP2);
 #ifdef _CPU_AARCH64_
     if (test_nbit(features, 31)) // HWCAP_PACG
-        set_bit(features, Feature::pa, true);
+        set_bit(features, Feature::pauth, true);
 #endif
     auto cpuinfo = get_cpuinfo();
     auto arch = get_elf_arch();
@@ -1419,7 +1419,7 @@ static inline void enable_depends(FeatureList<n> &features)
     if (test_nbit(features, Feature::v8_4a)) {
         set_bit(features, Feature::dit, true);
         set_bit(features, Feature::rcpc_immo, true);
-        set_bit(features, Feature::fmi, true);
+        set_bit(features, Feature::flagm, true);
     }
     if (test_nbit(features, Feature::v8_5a)) {
         set_bit(features, Feature::sb, true);

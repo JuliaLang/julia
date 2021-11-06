@@ -97,6 +97,9 @@ inv(x::Integer) = float(one(x)) / float(x)
 
 Return `true` if `x` is an odd integer (that is, an integer not divisible by 2), and `false` otherwise.
 
+!!! compat "Julia 1.7"
+    Non-`Integer` arguments require Julia 1.7 or later.
+
 # Examples
 ```jldoctest
 julia> isodd(9)
@@ -113,6 +116,9 @@ isodd(n::Real) = isinteger(n) && !iszero(rem(Integer(n), 2))
     iseven(x::Number) -> Bool
 
 Return `true` if `x` is an even integer (that is, an integer divisible by 2), and `false` otherwise.
+
+!!! compat "Julia 1.7"
+    Non-`Integer` arguments require Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -583,14 +589,26 @@ unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
     trunc(x; sigdigits::Integer= [, base = 10])
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
-is less than or equal to `x`.
+is less than or equal to the absolute value of `x`.
 
 `trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
 Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 
-See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref).
+See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref), [`unsafe_trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> trunc(2.22)
+2.0
+
+julia> trunc(-2.22, digits=1)
+-2.2
+
+julia> trunc(Int, -2.22)
+-2
+```
 """
 function trunc end
 
@@ -635,8 +653,8 @@ floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
     @int128_str str
     @int128_str(str)
 
-`@int128_str` parses a string into a Int128
-Throws an `ArgumentError` if the string is not a valid integer
+`@int128_str` parses a string into a Int128.
+Throws an `ArgumentError` if the string is not a valid integer.
 """
 macro int128_str(s)
     return parse(Int128, s)
@@ -646,8 +664,8 @@ end
     @uint128_str str
     @uint128_str(str)
 
-`@uint128_str` parses a string into a UInt128
-Throws an `ArgumentError` if the string is not a valid integer
+`@uint128_str` parses a string into a UInt128.
+Throws an `ArgumentError` if the string is not a valid integer.
 """
 macro uint128_str(s)
     return parse(UInt128, s)

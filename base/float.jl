@@ -290,8 +290,18 @@ float(::Type{T}) where {T<:AbstractFloat} = T
     unsafe_trunc(T, x)
 
 Return the nearest integral value of type `T` whose absolute value is
-less than or equal to `x`. If the value is not representable by `T`, an arbitrary value will
-be returned.
+less than or equal to the absolute value of `x`. If the value is not representable by `T`,
+an arbitrary value will be returned.
+See also [`trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> unsafe_trunc(Int, -2.2)
+-2
+
+julia> unsafe_trunc(Int, NaN)
+-9223372036854775808
+```
 """
 function unsafe_trunc end
 
@@ -467,7 +477,7 @@ end
 #  b. unsafe_convert undefined behaviour if fy == Tf(typemax(Ti))
 #     (but consequently x == fy > y)
 for Ti in (Int64,UInt64,Int128,UInt128)
-    for Tf in (Float16,Float32,Float64)
+    for Tf in (Float32,Float64)
         @eval begin
             function ==(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
@@ -666,17 +676,31 @@ end
 
 
 """
-    precision(num::AbstractFloat)
+    precision(num::AbstractFloat; base::Integer=2)
+    precision(T::Type; base::Integer=2)
 
 Get the precision of a floating point number, as defined by the effective number of bits in
-the significand.
+the significand, or the precision of a floating-point type `T` (its current default, if
+`T` is a variable-precision type like [`BigFloat`](@ref)).
+
+If `base` is specified, then it returns the maximum corresponding
+number of significand digits in that base.
+
+!!! compat "Julia 1.8"
+    The `base` keyword requires at least Julia 1.8.
 """
 function precision end
 
-precision(::Type{Float16}) = 11
-precision(::Type{Float32}) = 24
-precision(::Type{Float64}) = 53
-precision(::T) where {T<:AbstractFloat} = precision(T)
+_precision(::Type{Float16}) = 11
+_precision(::Type{Float32}) = 24
+_precision(::Type{Float64}) = 53
+function _precision(x, base::Integer=2)
+    base > 1 || throw(DomainError(base, "`base` cannot be less than 2."))
+    p = _precision(x)
+    return base == 2 ? Int(p) : floor(Int, p / log2(base))
+end
+precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
+precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)
 
 """
     uabs(x::Integer)

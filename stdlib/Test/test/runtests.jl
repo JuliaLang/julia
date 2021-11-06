@@ -96,6 +96,16 @@ end
                    "Thrown: ErrorException")
     @test endswith(sprint(show, @test_throws ErrorException("test") error("test")),
                    "Thrown: ErrorException")
+    @test endswith(sprint(show, @test_throws "a test" error("a test")),
+                   "Message: \"a test\"")
+    @test occursin("Message: \"DomainError",
+                   sprint(show, @test_throws r"sqrt\([Cc]omplex" sqrt(-1)))
+    @test endswith(sprint(show, @test_throws str->occursin("a t", str) error("a test")),
+                   "Message: \"a test\"")
+    @test endswith(sprint(show, @test_throws ["BoundsError", "access", "1-element", "at index [2]"] [1][2]),
+                   "Message: \"BoundsError: attempt to access 1-element Vector{$Int} at index [2]\"")
+    @test_throws "\"" throw("\"")
+    @test_throws Returns(false) throw(Returns(false))
 end
 # Test printing of Fail results
 include("nothrow_testset.jl")
@@ -148,6 +158,11 @@ let fails = @testset NoThrowTestSet begin
         @test contains(str1, str2)
         # 22 - Fail - Type Comparison
         @test typeof(1) <: typeof("julia")
+        # 23 - 26 - Fail - wrong message
+        @test_throws "A test" error("a test")
+        @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
+        @test_throws str->occursin("a T", str) error("a test")
+        @test_throws ["BoundsError", "acess", "1-element", "at index [2]"] [1][2]
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -262,13 +277,40 @@ let fails = @testset NoThrowTestSet begin
         @test occursin("Expression: typeof(1) <: typeof(\"julia\")", str)
         @test occursin("Evaluated: $(typeof(1)) <: $(typeof("julia"))", str)
     end
+
+    let str = sprint(show, fails[23])
+        @test occursin("Expected: \"A test\"", str)
+        @test occursin("Message: \"a test\"", str)
+    end
+
+    let str = sprint(show, fails[24])
+        @test occursin("Expected: r\"sqrt\\([Cc]omplx\"", str)
+        @test occursin(r"Message: .*Try sqrt\(Complex", str)
+    end
+
+    let str = sprint(show, fails[25])
+        @test occursin("Expected: < match function >", str)
+        @test occursin("Message: \"a test\"", str)
+    end
+
+    let str = sprint(show, fails[26])
+        @test occursin("Expected: [\"BoundsError\", \"acess\", \"1-element\", \"at index [2]\"]", str)
+        @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
+    end
+
 end
 
+struct BadError <: Exception end
+Base.show(io::IO, ::BadError) = throw("I am a bad error")
 let errors = @testset NoThrowTestSet begin
         # 1 - Error - unexpected pass
         @test_broken true
         # 2 - Error - converting a call into a comparison
         @test ==(1, 1:2...)
+        # 3 - Error - objects with broken show
+        @test throw(BadError())
+        @test BadError()
+        throw(BadError())
     end
 
     for err in errors
@@ -284,11 +326,23 @@ let errors = @testset NoThrowTestSet begin
         @test occursin("Expression: ==(1, 1:2...)", str)
         @test occursin("MethodError: no method matching ==(::$Int, ::$Int, ::$Int)", str)
     end
+
+    let str = sprint(show, errors[3])
+        @test occursin("Expression: throw(BadError())\n  #=ERROR showing exception stack=# \"I am a bad error\"\n  Stacktrace:\n", str)
+    end
+
+    let str = sprint(show, errors[4])
+        @test occursin("Expression: BadError()\n       Value: #=ERROR showing error of type $BadError=# \"I am a bad error\"\nStacktrace:\n", str)
+    end
+
+    let str = sprint(show, errors[5])
+        @test occursin("Got exception outside of a @test\n  #=ERROR showing exception stack=# \"I am a bad error\"\n  Stacktrace:\n", str)
+    end
 end
 
 let retval_tests = @testset NoThrowTestSet begin
         ts = Test.DefaultTestSet("Mock for testing retval of record(::DefaultTestSet, ::T <: Result) methods")
-        pass_mock = Test.Pass(:test, 1, 2, LineNumberNode(0, "A Pass Mock"))
+        pass_mock = Test.Pass(:test, 1, 2, 3, LineNumberNode(0, "A Pass Mock"))
         @test Test.record(ts, pass_mock) isa Test.Pass
         error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"))
         @test Test.record(ts, error_mock) isa Test.Error
@@ -853,7 +907,7 @@ let code = quote
 end
 
 @testset "@testset preserves GLOBAL_RNG's state, and re-seeds it" begin
-    # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_RNG.seed)` block
+    # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_SEED)` block
     seed = rand(UInt128)
     Random.seed!(seed)
     a = rand()
@@ -988,7 +1042,7 @@ end
 
 let ex = :(something_complex + [1, 2, 3])
     b = PipeBuffer()
-    let t = Test.Pass(:test, (ex, 1), (ex, 2), (ex, 3))
+    let t = Test.Pass(:test, (ex, 1), (ex, 2), (ex, 3), LineNumberNode(@__LINE__, @__FILE__))
         serialize(b, t)
         @test string(t) == string(deserialize(b))
         @test eof(b)
@@ -1177,3 +1231,53 @@ end
     # Decorated LoadErrors are not unwrapped if a LoadError was thrown.
     @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
 end
+
+# Issue 25483
+mutable struct PassInformationTestSet <: Test.AbstractTestSet
+    results::Vector
+    PassInformationTestSet(desc) = new([])
+end
+Test.record(ts::PassInformationTestSet, t::Test.Result) = (push!(ts.results, t); t)
+Test.finish(ts::PassInformationTestSet) = ts
+@testset "Information in Pass result (Issue 25483)" begin
+    ts = @testset PassInformationTestSet begin
+        @test 1 == 1
+        @test_throws ErrorException throw(ErrorException("Msg"))
+    end
+    test_line_number = (@__LINE__) - 3
+    test_throws_line_number =  (@__LINE__) - 3
+    @test ts.results[1].test_type == :test
+    @test ts.results[1].orig_expr == :(1 == 1)
+    @test ts.results[1].data == Expr(:comparison, 1, :(==), 1)
+    @test ts.results[1].value == true
+    @test ts.results[1].source == LineNumberNode(test_line_number, @__FILE__)
+    @test ts.results[2].test_type == :test_throws
+    @test ts.results[2].orig_expr == :(throw(ErrorException("Msg")))
+    @test ts.results[2].data == ErrorException
+    @test ts.results[2].value == ErrorException("Msg")
+    @test ts.results[2].source == LineNumberNode(test_throws_line_number, @__FILE__)
+end
+
+let
+    f(x) = @test isone(x)
+    function h(x)
+        @testset f(x)
+        @testset "success" begin @test true end
+        @testset for i in 1:3
+            @test !iszero(i)
+        end
+    end
+    tret = @testset h(1)
+    tdesc = @testset "description" h(1)
+    @testset "Function calls" begin
+        @test tret.description == "h"
+        @test tdesc.description == "description"
+        @test length(tret.results) == 5
+        @test tret.results[1].description == "f"
+        @test tret.results[2].description == "success"
+        for i in 1:3
+            @test tret.results[2+i].description == "i = $i"
+        end
+    end
+end
+

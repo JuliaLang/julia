@@ -15,7 +15,7 @@ avoid Julia-specific details.
 For example, `show` displays strings with quotes, and `print` displays strings
 without quotes.
 
-[`string`](@ref) returns the output of `print` as a string.
+See also [`println`](@ref), [`string`](@ref), [`printstyled`](@ref).
 
 # Examples
 ```jldoctest
@@ -54,8 +54,10 @@ end
 """
     println([io::IO], xs...)
 
-Print (using [`print`](@ref)) `xs` followed by a newline.
-If `io` is not supplied, prints to [`stdout`](@ref).
+Print (using [`print`](@ref)) `xs` to `io` followed by a newline.
+If `io` is not supplied, prints to the default output stream [`stdout`](@ref).
+
+See also [`printstyled`](@ref) to add colors etc.
 
 # Examples
 ```jldoctest
@@ -249,13 +251,17 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 Create a string from any value using the [`show`](@ref) function.
 You should not add methods to `repr`; define a `show` method instead.
 
-The optional keyword argument `context` can be set to an `IO` or [`IOContext`](@ref)
-object whose attributes are used for the I/O stream passed to `show`.
+The optional keyword argument `context` can be set to a `:key=>value` pair, a
+tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
+attributes are used for the I/O stream passed to `show`.
 
 Note that `repr(x)` is usually similar to how the value of `x` would
 be entered in Julia.  See also [`repr(MIME("text/plain"), x)`](@ref) to instead
 return a "pretty-printed" version of `x` designed more for human consumption,
 equivalent to the REPL display of `x`.
+
+!!! compat "Julia 1.7"
+    Passing a tuple to keyword `context` requires Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -370,6 +376,8 @@ escaped by a prepending backslash (`\"` is also escaped by default in the first 
 The argument `keep` specifies a collection of characters which are to be kept as
 they are. Notice that `esc` has precedence here.
 
+See also [`unescape_string`](@ref) for the reverse operation.
+
 !!! compat "Julia 1.7"
     The `keep` argument is available as of Julia 1.7.
 
@@ -390,9 +398,6 @@ julia> escape_string(string('\\u2135','\\0')) # unambiguous
 julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 "ℵ\\\\x000"
 ```
-
-## See also
-[`unescape_string`](@ref) for the reverse operation.
 """
 function escape_string(io::IO, s::AbstractString, esc=""; keep = ())
     a = Iterators.Stateful(s)
@@ -453,6 +458,8 @@ The following escape sequences are recognised:
  - Hex bytes (`\\x` with 1-2 trailing hex digits)
  - Octal bytes (`\\` with 1-3 trailing octal digits)
 
+See also [`escape_string`](@ref).
+
 # Examples
 ```jldoctest
 julia> unescape_string("aaa\\\\nbbb") # C escape sequence
@@ -467,9 +474,6 @@ julia> unescape_string("\\\\101") # octal
 julia> unescape_string("aaa \\\\g \\\\n", ['g']) # using `keep` argument
 "aaa \\\\g \\n"
 ```
-
-## See also
-[`escape_string`](@ref).
 """
 function unescape_string(io::IO, s::AbstractString, keep = ())
     a = Iterators.Stateful(s)
@@ -597,7 +601,7 @@ string literals. (It also happens to be the escaping convention
 expected by the Microsoft C/C++ compiler runtime when it parses a
 command-line string into the argv[] array.)
 
-See also: [`escape_string`](@ref)
+See also [`escape_string`](@ref).
 """
 function escape_raw_string(io, str::AbstractString)
     escapes = 0
@@ -669,6 +673,8 @@ end
 
 Remove leading indentation from string.
 
+See also `indent` from the [`MultilineStrings` package](https://github.com/invenia/MultilineStrings.jl).
+
 # Examples
 ```jldoctest
 julia> Base.unindent("   a\\n   b", 2)
@@ -677,8 +683,6 @@ julia> Base.unindent("   a\\n   b", 2)
 julia> Base.unindent("\\ta\\n\\tb", 2, tabwidth=8)
 "      a\\n      b"
 ```
-
-See also `indent` from the [`MultilineStrings` package](https://github.com/invenia/MultilineStrings.jl).
 """
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str

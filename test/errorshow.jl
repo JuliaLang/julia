@@ -48,8 +48,9 @@ include("testenv.jl")
     end
 end
 
-
-cfile = " at $(@__FILE__):"
+file = @__FILE__
+Base.stacktrace_contract_userdir() && (file = Base.contractuser(file))
+cfile = " at $file:"
 c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
 
@@ -184,6 +185,11 @@ addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), un
 Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), pairs((uncset = nothing,)))
 @test String(take!(buf)) == "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)"
 
+# Busted Vararg method definitions
+bad_vararg_decl(x::Int, y::Vararg) = 1   # don't do this, instead use (x::Int, y...)
+Base.show_method_candidates(buf, try bad_vararg_decl("hello", 3) catch e e end)
+@test occursin("bad_vararg_decl(!Matched::$Int, ::Any...)", String(take!(buf)))
+
 macro except_str(expr, err_type)
     return quote
         let err = nothing
@@ -271,7 +277,7 @@ let
     @test occursin("column vector", err_str)
 end
 
-struct TypeWithIntParam{T <: Integer} end
+struct TypeWithIntParam{T<:Integer, Vector{T}<:A<:AbstractArray{T}} end
 struct Bounded  # not an AbstractArray
     bound::Int
 end
@@ -317,7 +323,13 @@ let undefvar
     @test err_str == "TypeError: in Type, in parameter, expected Type, got a value of type String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
+    err_str = @except_str TypeWithIntParam{Int64,Vector{Float64}} TypeError
+    @test err_str == "TypeError: in TypeWithIntParam, in A, expected Vector{Int64}<:A<:(AbstractArray{Int64}), got Type{Vector{Float64}}"
+    err_str = @except_str TypeWithIntParam{Int64}{Vector{Float64}} TypeError
+    @test err_str == "TypeError: in TypeWithIntParam, in A, expected Vector{Int64}<:A<:(AbstractArray{Int64}), got Type{Vector{Float64}}"
     err_str = @except_str Type{Vararg} TypeError
+    @test err_str == "TypeError: in Type, in parameter, expected Type, got Vararg"
+    err_str = @except_str Ref{Vararg} TypeError
     @test err_str == "TypeError: in Type, in parameter, expected Type, got Vararg"
 
     err_str = @except_str mod(1,0) DivideError
@@ -653,13 +665,8 @@ backtrace()
     @test occursin("g28442", output[3])
     @test lstrip(output[5])[1:3] == "[2]"
     @test occursin("f28442", output[5])
-    # Issue #30233
-    # Note that we can't use @test_broken on FreeBSD here, because the tests actually do
-    # pass with some compilation options, e.g. with assertions enabled
-    if !Sys.isfreebsd()
-        @test occursin("the last 2 lines are repeated 5000 more times", output[7])
-        @test lstrip(output[8])[1:7] == "[10003]"
-    end
+    @test occursin("the last 2 lines are repeated 5000 more times", output[7])
+    @test lstrip(output[8])[1:7] == "[10003]"
 end
 
 @testset "Line number correction" begin
@@ -728,7 +735,7 @@ end
 
 # Test that implementation detail of include() is hidden from the user by default
 let bt = try
-        include("testhelpers/include_error.jl")
+        @noinline include("testhelpers/include_error.jl")
     catch
         catch_backtrace()
     end
@@ -740,7 +747,7 @@ end
 # Test backtrace printing
 module B
     module C
-        f(x; y=2.0) = error()
+        @noinline f(x; y=2.0) = error()
     end
     module D
         import ..C: f
@@ -749,7 +756,8 @@ module B
 end
 
 @testset "backtrace" begin
-    bt = try B.D.g()
+    bt = try
+        B.D.g()
     catch
         catch_backtrace()
     end
@@ -777,7 +785,8 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
     pair_repeater_b() = pair_repeater_a()
 
     @testset "repeated stack frames" begin
-        let bt = try single_repeater()
+        let bt = try
+                single_repeater()
             catch
                 catch_backtrace()
             end
@@ -785,7 +794,8 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
             @test occursin(r"repeats \d+ times", bt_str)
         end
 
-        let bt = try pair_repeater_a()
+        let bt = try
+                pair_repeater_a()
             catch
                 catch_backtrace()
             end
@@ -794,3 +804,86 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
         end
     end
 end  # Sys.isapple()
+
+@testset "error message hints relative modules #40959" begin
+    m = Module()
+    expr = :(module Foo
+        module Bar
+        end
+
+        using Bar
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        Bar = 3
+
+        using Bar
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        using Bar
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        module Bar end
+        module Buzz
+            using Bar
+        end
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test contains(err_str, "maybe you meant `import/using ..Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        Bar = 3
+        module Buzz
+            using Bar
+        end
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !contains(err_str, "maybe you meant `import/using ..Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        module Bar end
+        module Buzz
+            module Bar end
+            using Bar
+        end
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+end

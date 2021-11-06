@@ -549,9 +549,9 @@ end # Float16
         @test Ryu.writefixed(1.0, 1, false, false, false, UInt8('.'), true) == "1"
         @test Ryu.writefixed(2.0, 1, false, false, false, UInt8('.'), true) == "2"
 
-        @show Ryu.writefixed(1.25e+5, 0, false, false, false, UInt8('.'), true) == "125000"
-        @show Ryu.writefixed(1.25e+5, 1, false, false, false, UInt8('.'), true) == "125000"
-        @show Ryu.writefixed(1.25e+5, 2, false, false, false, UInt8('.'), true) == "125000"
+        @test Ryu.writefixed(1.25e+5, 0, false, false, false, UInt8('.'), true) == "125000"
+        @test Ryu.writefixed(1.25e+5, 1, false, false, false, UInt8('.'), true) == "125000"
+        @test Ryu.writefixed(1.25e+5, 2, false, false, false, UInt8('.'), true) == "125000"
     end
 end # fixed
 

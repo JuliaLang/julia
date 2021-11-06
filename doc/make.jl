@@ -155,6 +155,16 @@ DevDocs = [
         "devdocs/debuggingtips.md",
         "devdocs/valgrind.md",
         "devdocs/sanitizers.md",
+        "devdocs/probes.md",
+    ],
+    "Building Julia" => [
+        "devdocs/build/build.md",
+        "devdocs/build/linux.md",
+        "devdocs/build/macos.md",
+        "devdocs/build/windows.md",
+        "devdocs/build/freebsd.md",
+        "devdocs/build/arm.md",
+        "devdocs/build/distributing.md",
     ]
 ]
 
