@@ -766,14 +766,14 @@ function const_prop_function_heuristic(
         # but highly worthwhile to inline promote of a constant
         length(argtypes) > 2 || return false
         t1 = widenconst(argtypes[2])
-        all_same = true
         for i in 3:length(argtypes)
-            if widenconst(argtypes[i]) !== t1
-                all_same = false
-                break
+            at = argtypes[i]
+            ty = isvarargtype(at) ? unwraptv(at) : widenconst(at)
+            if ty !== t1
+                return true
             end
         end
-        return !all_same
+        return false
     end
     return true
 end
@@ -1344,9 +1344,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(Any, false)
     elseif f === Core.kwfunc
         if la == 2
-            ft = widenconst(argtypes[2])
-            if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
-                return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
+            aty = argtypes[2]
+            if !isvarargtype(aty)
+                ft = widenconst(aty)
+                if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
+                    return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
+                end
             end
         end
         return CallMeta(Any, false)
@@ -1366,8 +1369,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(typevar_tfunc(n, lb_var, ub_var), false)
     elseif f === UnionAll
         return CallMeta(abstract_call_unionall(argtypes), false)
-    elseif f === Tuple && la == 2 && !isconcretetype(widenconst(argtypes[2]))
-        return CallMeta(Tuple, false)
+    elseif f === Tuple && la == 2
+        aty = argtypes[2]
+        ty = isvarargtype(aty) ? unwrapva(aty) : widenconst(aty)
+        if !isconcretetype(ty)
+            return CallMeta(Tuple, false)
+        end
     elseif is_return_type(f)
         return return_type_tfunc(interp, argtypes, sv)
     elseif la == 2 && istopfunction(f, :!)
