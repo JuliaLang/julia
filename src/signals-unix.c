@@ -452,6 +452,8 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     if (ct == NULL)
         return;
     jl_ptls_t ptls = ct->ptls;
+    if (ptls == NULL)
+        return;
     int errno_save = errno;
     sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
 #if !defined(JL_DISABLE_LIBUNWIND)
