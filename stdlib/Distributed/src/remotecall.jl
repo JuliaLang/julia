@@ -592,10 +592,11 @@ function fetch(r::Future)
     v_cache !== nothing && return something(v_cache)
 
     if r.where == myid()
-        @lock(r.lock, begin
+        rv, v_cache = @lock r.lock begin
             v_cache = @atomic :monotonic r.v
             rv = v_cache === nothing ? lookup_ref(remoteref_id(r)) : nothing
-        end)
+            rv, v_cache
+        end
 
         if v_cache !== nothing
             return something(v_cache)
@@ -609,8 +610,8 @@ function fetch(r::Future)
     v_cache = @atomic r.v
 
     if v_cache === nothing # call_on_owner case
-        @lock r.lock begin
-            v_old, status = @atomicreplace r.v nothing => Some(v_local)
+        v_old, status = @lock r.lock begin
+            @atomicreplace r.v nothing => Some(v_local)
         end
         # status == true - when value obtained through call_on_owner, put! called from a different worker
         # status == false - any other situation: atomicreplace fails, because by the time the lock is obtained cache will be populated
