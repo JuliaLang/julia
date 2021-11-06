@@ -89,7 +89,7 @@ function _wait2(c::GenericCondition, waiter::Task)
         # the parent task. If the parent (current_task) is not sticky we must
         # set it to be sticky.
         # XXX: Ideally we would be able to unset this
-        ct.sticky = true
+        current_task().sticky = true
         tid = Threads.threadid()
         ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
     end
