@@ -2519,7 +2519,7 @@ julia> -5:5 |> filter(<(-3))
  -4
 ```
 !!! compat "Julia 1.8"
-This method requires at least Julia 1.8.
+    This method requires at least Julia 1.8.
 """
 function filter(f)
     Fix1(filter, f)
