@@ -2511,7 +2511,7 @@ a function equivalent to `x -> filter(f, x)`.
 The returned function is of type `Base.Fix1{typeof(filter)}`, which can be
 used to implement specialized methods.
 
-# Example usage:
+# Examples
 ```jldoctest
 julia> -5:5 |> filter(<(-3))
 2-element Vector{Int64}:
