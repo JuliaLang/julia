@@ -1446,6 +1446,10 @@ end
     @test isempty(eoa)
 end
 
+@testset "filter curried #41173" begin
+    @test -5:5 |> filter(iseven) == -4:2:4
+end
+
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]
