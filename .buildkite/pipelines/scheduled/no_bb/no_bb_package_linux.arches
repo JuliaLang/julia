@@ -1,2 +1,2 @@
 # PLATFORM    LABEL       GROUP    ALLOW_FAIL    ARCH        ARCH_ROOTFS    MAKE_FLAGS             TIMEOUT_BK    TIMEOUT_RR     RETRIES    IS_RR    IS_ST    IS_MT    ROOTFS_TAG    ROOTFS_HASH
-linux         64_src      .        .             64_src      x86_64         USE_BINARYBUILDER=0    180           .              .          .        .        .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
+linux         64src       .        .             64src       x86_64         USE_BINARYBUILDER=0    180           .              .          .        .        .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
