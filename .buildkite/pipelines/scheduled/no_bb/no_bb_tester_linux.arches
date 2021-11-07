@@ -5,6 +5,6 @@ linux         64src_g2_mt      g2       .             64src    x86_64         . 
 linux         64src_g1_st      g1       .             64src    x86_64         .              .             .              .          .        yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
 linux         64src_g2_st      g2       .             64src    x86_64         .              .             .              3          .        yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
 
-linux         64src_g1_rrst    g1       .             64src    x86_64         .              180           120            .          yes      yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
-linux         64src_g2_rrst    g2       .             64src    x86_64         .              120           60             3          yes      yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
+linux         64src_g1_rrst    g1       .             64src    x86_64         .              300           240            .          yes      yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
+linux         64src_g2_rrst    g2       .             64src    x86_64         .              180           120             3          yes      yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
 linux         64src_g3_st      g3       .             64src    x86_64         .              .             .              3          .        yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
