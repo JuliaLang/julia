@@ -750,6 +750,7 @@ static void *signal_listener(void *arg)
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
         if (critical || profile) {
+            jl_lock_profile();
             if (!critical)
                 jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
             for (int idx = jl_n_threads; idx-- > 0; ) {
@@ -757,10 +758,6 @@ static void *signal_listener(void *arg)
                 int i = critical ? idx : profile_round_robin_thread_order[idx];
                 // notify thread to stop
                 jl_thread_suspend_and_get_state(i, &signal_context);
-
-                // Taking profile lock after to avoid deadlock in case the i-th thread is
-                // trying to take the lock when signalled.
-                jl_lock_profile();
 
                 // do backtrace on thread contexts for critical signals
                 // this part must be signal-handler safe
@@ -813,11 +810,10 @@ static void *signal_listener(void *arg)
                     }
                 }
 
-                jl_unlock_profile();
-
                 // notify thread to resume
                 jl_thread_resume(i, sig);
             }
+            jl_unlock_profile();
         }
 #ifndef HAVE_MACH
         if (profile && running) {
