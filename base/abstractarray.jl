@@ -466,9 +466,9 @@ accomplished by calling [`Iterators.reverse`](@ref) and then [`first`](@ref) on 
 Return the end point of an [`AbstractRange`](@ref) even if it is empty.
 
 See also [`first`](@ref), [`endswith`](@ref).
-                                                                                    
+
 !!! compat "Julia 1.8"
-    For versions of julia older than 1.8, `last(x)` will only work on collections that support indexing and 
+    For versions of julia older than 1.8, `last(x)` will only work on collections that support indexing and
     [`lastindex`](@ref).
 
 # Examples
