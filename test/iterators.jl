@@ -883,3 +883,8 @@ end
     @test Iterators.peel(x^2 for x in 2:4)[1] == 4
     @test Iterators.peel(x^2 for x in 2:4)[2] |> collect == [9, 16]
 end
+
+@testset "last for iterators" begin
+    @test last(Iterators.map(identity, 1:3)) == 3
+    @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3))) == 2
+end 
