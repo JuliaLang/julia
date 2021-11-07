@@ -63,6 +63,39 @@ using Random
 @test v"3.2+1.a" == VersionNumber(3, 2, 0, (), (1, "a"))
 @test v"4.3.2+1.a" == VersionNumber(4, 3, 2, (), (1, "a"))
 
+# full equality
+@test isequal(v"1", v"1")
+@test isequal(v"1", v"2") == false
+@test isequal(v"1.2", v"1.2")
+@test isequal(v"1.1", v"1.2") == false
+@test isequal(v"1.2.3", v"1.2.3")
+@test isequal(v"1.2.1", v"1.2.3") == false
+@test isequal(v"1.2.3-dev", v"1.2.3-dev")
+@test isequal(v"1.2.3", v"1.2.3-dev") == false
+@test isequal(v"1.2.3-dev+1.a", v"1.2.3-dev+1.a")
+@test isequal(v"1.2.3-dev", v"1.2.3-dev+1.a") == false
+
+# partial equality
+@test isequal(v"1", v"1", downto = :major)
+@test isequal(v"1", v"1.2.3-dev+1.a", downto = :major)
+@test isequal(v"1", v"2", downto = :major) == false
+
+@test isequal(v"1.2", v"1.2", downto = :minor)
+@test isequal(v"1.2", v"1.2.3-dev+1.a", downto = :minor)
+@test isequal(v"1.1", v"1.2", downto = :minor) == false
+
+@test isequal(v"1.2.3", v"1.2.3", downto = :patch)
+@test isequal(v"1.2.3", v"1.2.3-dev+1.a", downto = :patch)
+@test isequal(v"1.2.1", v"1.2.3", downto = :patch) == false
+
+@test isequal(v"1.2.3-dev", v"1.2.3-dev", downto = :prerelease)
+@test isequal(v"1.2.3-dev", v"1.2.3-dev+1.a", downto = :prerelease)
+@test isequal(v"1.2.3-foo", v"1.2.3-dev+1.a", downto = :prerelease) == false
+
+@test isequal(v"1.2.3-dev+1.a", v"1.2.3-dev+1.a", downto = :build)
+@test isequal(v"1.2.3-dev", v"1.2.3-dev+1.a", downto = :build) == false
+@test isequal(v"1.2.3-dev+2.a", v"1.2.3-dev+1.a", downto = :build) == false
+
 # ArgumentErrors in constructor
 @test_throws ArgumentError VersionNumber(4, 3, 2, ("nonalphanumeric!",), ())
 @test_throws ArgumentError VersionNumber(4, 3, 2, ("nonalphanumeric!", 1), ())
