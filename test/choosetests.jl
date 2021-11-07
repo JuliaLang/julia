@@ -93,7 +93,7 @@ function choosetests(choices = [])
                   --seed=<SEED>        : set the initial seed for all testgroups (parsed as a UInt128)
                   --skip <NAMES>...    : skip test or collection tagged with <NAMES>
                 TESTS:
-                  Can be special tokens, such as "all", "unicode", "stdlib", the names of stdlib modules, or the names of any file in the TESTNAMES array (defaults to "all").
+                  Can be special tokens, such as "all", "unicode", "stdlib", the names of stdlib modules, or the names of any file in the testnames array (defaults to "all").
 
                   Or prefix a name with `-` (such as `-core`) to skip a particular test.
                 """)
@@ -109,9 +109,13 @@ function choosetests(choices = [])
 
     unhandled = copy(skip_tests)
 
-    if tests == ["all"] || isempty(tests)
-        tests = testnames
+    requested_all     = "all"     in tests
+    requested_default = "default" in tests
+    if isempty(tests) || requested_all || requested_default
+        append!(tests, testnames)
     end
+    filter!(x -> x != "all",     tests)
+    filter!(x -> x != "default", tests)
 
     function filtertests!(tests, name, files=[name])
        flt = x -> (x != name && !(x in files))
@@ -124,7 +128,7 @@ function choosetests(choices = [])
        end
     end
 
-    explicit_pkg3    = "Pkg"            in tests
+    explicit_pkg     = "Pkg"            in tests
     explicit_libgit2 = "LibGit2/online" in tests
 
     filtertests!(tests, "unicode", ["unicode/utf8"])
@@ -187,8 +191,9 @@ function choosetests(choices = [])
     end
     filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
     append!(tests, new_tests)
-    explicit_pkg3    || filter!(x -> x != "Pkg",            tests)
-    explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
+
+    requested_all || explicit_pkg     || filter!(x -> x != "Pkg",            tests)
+    requested_all || explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
 
     # Filter out tests from the test groups in the stdlibs
     filter!(!in(tests), unhandled)
