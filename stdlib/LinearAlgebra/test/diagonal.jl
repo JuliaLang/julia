@@ -787,6 +787,13 @@ end
         @test (S / D)::Tridiagonal{elty} == Tridiagonal(Matrix(S) / Matrix(D))
         @test (T / D)::Tridiagonal{elty} == Tridiagonal(Matrix(T) / Matrix(D))
     end
+    S = SymTridiagonal(rand(-20:20, K), rand(-20:20, K-1))
+    T = Tridiagonal(rand(-20:20, K-1), rand(-20:20, K), rand(-20:20, K-1))
+    D = Diagonal(rand(1:20, K))
+    @test (D \ S)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(S))
+    @test (D \ T)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(T))
+    @test (S / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(S) / Matrix(D))
+    @test (T / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(T) / Matrix(D))
 end
 
 @testset "eigenvalue sorting" begin
