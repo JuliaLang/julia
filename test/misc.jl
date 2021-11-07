@@ -1037,12 +1037,25 @@ end
 # Test that read fault on a prot-none region does not incorrectly give
 # ReadOnlyMemoryEror, but rather crashes the program
 const MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
-let script = :(let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
-    (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int),
-    C_NULL, 16*1024, 0, $MAP_ANONYMOUS_PRIVATE, -1, 0)); try
-    unsafe_load(ptr)
-    catch e; println(e) end; end)
-    @test !success(`$(Base.julia_cmd()) -e $script`)
+let script = :(
+        let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
+                                  (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int),
+                                  C_NULL, 16*1024, 0, $MAP_ANONYMOUS_PRIVATE, -1, 0))
+            try
+                unsafe_load(ptr)
+            catch e
+                println(e)
+            end
+        end
+    )
+    cmd = if Sys.isunix()
+        # Set the maximum core dump size to 0 to keep this expected crash from
+        # producing a (and potentially overwriting an existing) core dump file
+        `sh -c "ulimit -c 0; $(Base.shell_escape(Base.julia_cmd())) -e '$script'"`
+    else
+        `$(Base.julia_cmd()) -e '$script'`
+    end
+    @test !success(cmd)
 end
 
 # issue #41656
