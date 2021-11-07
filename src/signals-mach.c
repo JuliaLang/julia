@@ -537,6 +537,7 @@ void *mach_profile_listener(void *arg)
         HANDLE_MACH_ERROR("mach_msg", ret);
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
+        jl_lock_profile();
         void *unused = NULL;
         int keymgr_locked = _keymgr_get_and_lock_processwide_ptr_2(KEYMGR_GCC3_DW2_OBJ_LIST, &unused) == 0;
         jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
@@ -552,10 +553,6 @@ void *mach_profile_listener(void *arg)
             host_thread_state_t state;
             jl_thread_suspend_and_get_state2(i, &state);
             unw_context_t *uc = (unw_context_t*)&state;
-
-            // Taking profile lock after to avoid deadlock in case the i-th thread is
-            // trying to take the lock when signalled.
-            jl_lock_profile();
 
             if (running) {
 #ifdef LLVMLIBUNWIND
@@ -609,12 +606,12 @@ void *mach_profile_listener(void *arg)
                 bt_data_prof[bt_size_cur++].uintptr = 0;
                 bt_data_prof[bt_size_cur++].uintptr = 0;
             }
-            jl_unlock_profile();
             // We're done! Resume the thread.
             jl_thread_resume(i, 0);
         }
         if (keymgr_locked)
             _keymgr_unlock_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST);
+        jl_unlock_profile();
         if (running) {
             // Reset the alarm
             kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
