@@ -25,6 +25,8 @@ Language changes
 * `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
   i.e. `@time "Evaluating foo" foo()` ([#42431])
 * New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
+* `last(collection)` will now work on any collection that supports `Iterators.reverse` and `first`, rather than being 
+  restricted to indexable collections.
 
 Compiler/Runtime improvements
 -----------------------------
