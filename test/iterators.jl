@@ -886,5 +886,5 @@ end
 
 @testset "last for iterators" begin
     @test last(Iterators.map(identity, 1:3)) == 3
-    @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3))) == 2
+    @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3)))) == 2
 end
