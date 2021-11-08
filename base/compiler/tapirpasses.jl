@@ -2118,8 +2118,7 @@ function _lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::Co
     opt = OptimizationState(linfo, copy(ci), params, interp)
 
     # Ref: run_passes
-    preserve_coverage = coverage_enabled(opt.mod)
-    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, opt)
+    ir = convert_to_ircode(ci, opt)
     ir = slot2reg(ir, ci, opt)
     if JLOptions().debug_level == 2
         @timeit "verify pre-tapir" (verify_ir(ir); verify_linetable(ir.linetable))
