@@ -17,6 +17,9 @@ extern "C" {
 
 // thread sleep state
 
+// default to DEFAULT_THREAD_SLEEP_THRESHOLD; set via $JULIA_THREAD_SLEEP_THRESHOLD
+uint64_t sleep_threshold;
+
 // thread should not be sleeping--it might need to do work.
 static const int16_t not_sleeping = 0;
 
@@ -234,6 +237,15 @@ void jl_init_threadinginfra(void)
     /* initialize the synchronization trees pool and the multiqueue */
     multiq_init();
 
+    sleep_threshold = DEFAULT_THREAD_SLEEP_THRESHOLD;
+    char *cp = getenv(THREAD_SLEEP_THRESHOLD_NAME);
+    if (cp) {
+        if (!strncasecmp(cp, "infinite", 8))
+            sleep_threshold = UINT64_MAX;
+        else
+            sleep_threshold = (uint64_t)strtol(cp, NULL, 10);
+    }
+
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_install_thread_signal_handler(ptls);
     uv_mutex_init(&ptls->sleep_lock);
@@ -324,7 +336,7 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
         return 0;
     }
     uint64_t elapsed_cycles = jl_hrtime() - (*start_cycles);
-    if (elapsed_cycles >= DEFAULT_THREAD_SLEEP_THRESHOLD) {
+    if (elapsed_cycles >= sleep_threshold) {
         *start_cycles = 0;
         return 1;
     }
