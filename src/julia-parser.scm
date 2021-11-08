@@ -253,13 +253,13 @@
                                        (and (or (eq? opsym '--) (eq? opsym '.--))
                                             (read-char port)
                                             (or (begin0 (eqv? (peek-char port) #\>)
-                                                        (io.ungetc port #\-))
+                                                        (io.skip port -1)) ; unget -, leaving -
                                                 (error (string "invalid operator \"" newop "\""))))
                                        ;; <- is not an operator but <-- and <--> are
                                        (and (or (eq? opsym '<-) (eq? opsym '.<-))
                                             (read-char port)
                                             (begin0 (eqv? (peek-char port) #\-)
-                                                    (io.ungetc port #\-)))
+                                                    (io.skip port -1))) ; unget -, leaving <
                                        ;; consume suffixes after ', only if parsing a call chain
                                        ;; otherwise 'ᵀ' would parse as (|'| |'ᵀ|)
                                        (and postfix? (eqv? c0 #\') sufchar?))
@@ -278,7 +278,7 @@
                  (if (and (not (eof-object? c)) (pred c))
                      (loop str c)
                      (begin
-                       (io.ungetc port #\_)
+                       (io.skip port -1) ; unget _
                        (list->string (reverse str))))))
         (if (and (not (eof-object? c)) (pred c))
             (begin (read-char port)
@@ -328,7 +328,7 @@
       (if (eqv? (peek-char port) #\.)
           (begin (read-char port)
                  (if (dot-opchar? (peek-char port))
-                     (io.ungetc port #\.)
+                     (io.skip port -1) ; unget .
                      (error (string "invalid numeric constant \""
                                     (get-output-string str) #\. "\""))))))
     (define (read-digs lz _-digit-sep)
@@ -368,7 +368,7 @@
                                           (if (eqv? (peek-char port) #\')
                                               ""
                                               "; add space(s) to clarify")))))
-                     (io.ungetc port #\.))
+                     (io.skip port -1)) ; unget .
                    (begin (write-char #\. str)
                           (read-digs #f #t)
                           (if (eq? pred char-hex?)
@@ -393,7 +393,7 @@
                                   (write-char (read-char port) str))
                               (read-digs #t #f)
                               (disallow-dot))
-                       (io.ungetc port c)))))
+                       (io.skip port -1))))) ; unget c
       (if (and (char? c)
                (or (eq? pred char-bin?) (eq? pred char-oct?)
                    (and (eq? pred char-hex?) (not is-hex-float-literal)))
@@ -1329,7 +1329,8 @@
 (define (valid-1arg-func-sig? sig)
   (or (symbol? sig)
       (and (pair? sig) (eq? (car sig) '|::|)
-           (symbol? (cadr sig)))))
+           (or (symbol? (cadr sig))
+               (length= sig 2)))))
 
 (define (unwrap-where x)
   (if (and (pair? x) (eq? (car x) 'where))
@@ -1375,14 +1376,14 @@
             (if (eq? word 'quote)
                 (list 'quote blk)
                 blk))))
-       ((while)  (begin0 (list 'while (parse-cond s) (parse-block s))
+       ((while)  (begin0 (list 'while (parse-cond s) (append (parse-block s) (list (line-number-node s))))
                          (expect-end s word)))
        ((for)
         (let* ((ranges (parse-comma-separated-iters s))
                (body   (parse-block s)))
           (expect-end s word)
           `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
-                ,body)))
+                ,(append body (list (line-number-node s))))))
 
        ((let)
         (let ((binds (if (memv (peek-token s) '(#\newline #\;))
@@ -1469,7 +1470,9 @@
                                    ;; function foo  =>  syntax error
                                    (error (string "expected \"(\" in " word " definition")))
                                (if (not (valid-func-sig? paren sig))
-                                   (error (string "expected \"(\" in " word " definition"))
+                                   (if paren
+                                       (error (string "ambiguous signature in " word " definition. Try adding a comma if this is a 1-argument anonymous function."))
+                                       (error (string "expected \"(\" in " word " definition")))
                                    sig)))
                      (body (parse-block s)))
                 (expect-end s word)
@@ -1506,29 +1509,33 @@
           (let loop ((nxt    (peek-token s))
                      (catchb #f)
                      (catchv #f)
-                     (finalb #f))
+                     (finalb #f)
+                     (elseb #f))
             (take-token s)
             (cond
              ((eq? nxt 'end)
               (list* 'try try-block (or catchv '(false))
                      (or catchb (if finalb '(false) (error "try without catch or finally")))
-                     (if finalb (list finalb) '())))
+                     (cond (elseb  (list (or finalb '(false)) elseb))
+                           (finalb (list finalb))
+                           (else   '()))))
              ((and (eq? nxt 'catch)
                    (not catchb))
               (let ((nl (memv (peek-token s) '(#\newline #\;))))
                 (if (eqv? (peek-token s) #\;)
                     (take-token s))
-                (if (memq (require-token s) '(end finally))
+                (if (memq (require-token s) '(end finally else))
                     (loop (require-token s)
                           '(block)
                           #f
-                          finalb)
+                          finalb
+                          elseb)
                     (let* ((loc (line-number-node s))
                            (var (if nl #f (parse-eq* s)))
                            (var? (and (not nl) (or (symbol? var)
                                                    (and (length= var 2) (eq? (car var) '$))
                                                    (error (string "invalid syntax \"catch " (deparse var) "\"")))))
-                           (catch-block (if (eq? (require-token s) 'finally)
+                           (catch-block (if (memq (require-token s) '(finally else))
                                             `(block ,(line-number-node s))
                                             (parse-block s))))
                       (loop (require-token s)
@@ -1540,16 +1547,30 @@
                                               '()
                                               (cdr catch-block))))
                             (if var? var '(false))
-                            finalb)))))
+                            finalb
+                            elseb)))))
              ((and (eq? nxt 'finally)
                    (not finalb))
-              (let ((fb (if (eq? (require-token s) 'catch)
+              (let ((fb (if (memq (require-token s) '(catch else))
                             '(block)
                             (parse-block s))))
                 (loop (require-token s)
                       catchb
                       catchv
-                      fb)))
+                      fb
+                      elseb)))
+             ((and (eq? nxt 'else)
+                   (not elseb))
+              (if (or (not catchb) finalb)
+                  (error "else inside try block needs to be immediately after catch"))
+              (let ((eb (if (eq? (require-token s) 'finally)
+                            '(block)
+                            (parse-block s))))
+                (loop (require-token s)
+                      catchb
+                      catchv
+                      finalb
+                      eb)))
              (else (expect-end-error nxt 'try))))))
        ((return)          (let ((t (peek-token s)))
                             (if (or (eqv? t #\newline) (closing-token? t))
@@ -2185,8 +2206,13 @@
 (define (unescape-parsed-string-literal strs)
   (map-at even? unescape-string strs))
 
+(define (strip-escaped-newline s raw)
+  (if raw s (map (lambda (s)
+                   (if (string? s) (strip-escaped-newline- s) s))
+                 s)))
+
 ;; remove `\` followed by a newline
-(define (strip-escaped-newline s)
+(define (strip-escaped-newline- s)
   (let ((in  (open-input-string s))
         (out (open-output-string)))
     (define (loop preceding-backslash?)
@@ -2194,7 +2220,10 @@
             (cond ((eof-object? c))
                   (preceding-backslash?
                    (if (not (eqv? c #\newline))
-                       (begin (write-char #\\ out) (write-char c out)))
+                       (begin (write-char #\\ out) (write-char c out))
+                       ((define (loop-)
+                          (if (memv (peek-char in) '(#\space #\tab))
+                              (begin (take-char in) (loop-))))))
                    (loop #f))
                   ((eqv? c #\\) (loop #t))
                   (else (write-char c out) (loop #f)))))
@@ -2207,13 +2236,14 @@
                   (if (eqv? (peek-char (take-char p)) delim)
                       (map-first strip-leading-newline
                                  (dedent-triplequoted-string
-                                   (parse-string-literal- 2 (take-char p) s delim raw)))
+                                   (strip-escaped-newline
+                                     (parse-string-literal- 2 (take-char p) s delim raw)
+                                     raw)))
                       (list ""))
-                  (parse-string-literal- 0 p s delim raw))))
-    (if raw str (unescape-parsed-string-literal
-                  (map (lambda (s)
-                         (if (string? s) (strip-escaped-newline s) s))
-                       str)))))
+                  (strip-escaped-newline
+                    (parse-string-literal- 0 p s delim raw)
+                    raw))))
+    (if raw str (unescape-parsed-string-literal str))))
 
 (define (strip-leading-newline s)
   (let ((n (sizeof s)))
@@ -2362,8 +2392,11 @@
                     (loop (read-char p) b e 0))))
            (let ((nxch (not-eof-for delim (read-char p))))
              (write-char #\\ b)
-             (write-char nxch b)
-             (loop (read-char p) b e 0))))
+             (if (eqv? nxch #\return)
+                 (loop nxch b e 0)
+                 (begin
+                   (write-char nxch b)
+                   (loop (read-char p) b e 0))))))
 
       ((and (eqv? c #\$) (not raw))
        (let* ((ex (parse-interpolate s))

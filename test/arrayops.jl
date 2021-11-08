@@ -567,6 +567,7 @@ end
     @test findlast(!iszero, a) == 8
     @test findlast(a.==0) == 5
     @test findlast(a.==5) == nothing
+    @test findlast(false) == nothing # test non-AbstractArray findlast
     @test findlast(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findlast(isodd, [2,4,6,3,9,2,0]) == 5
     @test findlast(isodd, [2,4,6,2,0]) == nothing
@@ -748,6 +749,12 @@ end
     @test res === dst == [5 6 4; 2 3 1]
     res = circshift!(dst, src, (3.0, 2.0))
     @test res === dst == [5 6 4; 2 3 1]
+
+    # https://github.com/JuliaLang/julia/issues/41402
+    src = Float64[]
+    @test circshift(src, 1) == src
+    src = zeros(Bool, (4,0))
+    @test circshift(src, 1) == src
 end
 
 @testset "circcopy" begin
@@ -784,6 +791,10 @@ let A, B, C, D
 
     # With hash collisions
     @test map(x -> x.x, unique(map(HashCollision, B), dims=1)) == C
+
+    # With NaNs:
+    E = [1 NaN 3; 1 NaN 3; 1 NaN 3];
+    @test isequal(unique(E, dims=1), [1  NaN  3])
 end
 
 @testset "large matrices transpose" begin
@@ -1106,6 +1117,11 @@ end
     @test isequal(intersect([1,2,3], Float64[]), Float64[])
     @test isequal(intersect(Int64[], [1,2,3]), Int64[])
     @test isequal(intersect(Int64[]), Int64[])
+    @test isequal(intersect([1, 3], 1:typemax(Int)), [1, 3])
+    @test isequal(intersect(1:typemax(Int), [1, 3]), [1, 3])
+    @test isequal(intersect([1, 2, 3], 2:0.1:5), [2., 3.])
+    @test isequal(intersect([1.0, 2.0, 3.0], 2:5), [2., 3.])
+
     @test isequal(setdiff([1,2,3,4], [2,5,4]), [1,3])
     @test isequal(setdiff([1,2,3,4], [7,8,9]), [1,2,3,4])
     @test isequal(setdiff([1,2,3,4], Int64[]), Int64[1,2,3,4])
@@ -1449,6 +1465,25 @@ end
 @testset "filter curried #41173" begin
     @test -5:5 |> filter(iseven) == -4:2:4
 end
+@testset "logical keepat!" begin
+    # Vector
+    a = Vector(1:10)
+    keepat!(a, [falses(5); trues(5)])
+    @test a == 6:10
+    @test_throws BoundsError keepat!(a, trues(1))
+    @test_throws BoundsError keepat!(a, trues(11))
+
+    # BitVector
+    ba = rand(10) .> 0.5
+    @test isa(ba, BitArray)
+    keepat!(ba, ba)
+    @test all(ba)
+
+    # empty array
+    ea = []
+    keepat!(ea, Bool[])
+    @test isempty(ea)
+end
 
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
@@ -1547,6 +1582,12 @@ end
     @test_throws BoundsError reverse!([1:10;], 1, 11)
     @test_throws BoundsError reverse!([1:10;], 0, 10)
     @test reverse!(Any[]) == Any[]
+end
+
+@testset "reverseind" begin
+    @test reverseind([1, 2, 3], 2) == 2
+    @test reverseind([1, 2, 3], 0) == 4
+    @test reverseind([1, 2, 3], 3) == 1
 end
 
 @testset "reverse dim" begin
@@ -2664,7 +2705,7 @@ let TT = Union{UInt8, Int8}
     resize!(b, 1)
     @assert pointer(a) == pa
     @assert pointer(b) == pb
-    unsafe_store!(pa, 0x1, 2) # reset a[2] to 1
+    unsafe_store!(Ptr{UInt8}(pa), 0x1, 2) # reset a[2] to 1
     @test length(a) == length(b) == 1
     @test a[1] == b[1] == 0x0
     @test a == b
@@ -2911,4 +2952,14 @@ end
     @test [fill(1); [2; 2]] == [1; 2; 2]
     @test [fill(1); fill(2, (2,1,1))] == reshape([1; 2; 2], (3, 1, 1))
     @test_throws DimensionMismatch [fill(1); rand(2, 2, 2)]
+end
+
+@testset "eltype of zero for arrays (issue #41348)" begin
+    for a in Any[[DateTime(2020), DateTime(2021)], [Date(2000), Date(2001)], [Time(1), Time(2)]]
+        @test a + zero(a) == a
+        b = reshape(a, :, 1)
+        @test b + zero(b) == b
+        c = view(b, 1:1, 1:1)
+        @test c + zero(c) == c
+    end
 end

@@ -618,3 +618,23 @@ end
 @testset "checked_den with different integer types" begin
     @test Base.checked_den(Int8(4), Int32(8)) == Base.checked_den(Int32(4), Int32(8))
 end
+
+@testset "Rational{T} with non-concrete T (issue #41222)" begin
+    @test @inferred(Rational{Integer}(2,3)) isa Rational{Integer}
+end
+
+@testset "issue #41489" begin
+    @test Core.Compiler.return_type(+, NTuple{2, Rational}) == Rational
+    @test Core.Compiler.return_type(-, NTuple{2, Rational}) == Rational
+
+    A=Rational[1 1 1; 2 2 2; 3 3 3]
+    @test @inferred(A*A) isa Matrix{Rational}
+end
+
+@testset "issue #42560" begin
+    @test rationalize(0.5 + 0.5im) == 1//2 + 1//2*im
+    @test rationalize(float(pi)im) == 0//1 + 165707065//52746197*im
+    @test rationalize(Int8, float(pi)im) == 0//1 + 22//7*im
+    @test rationalize(1.192 + 2.233im) == 149//125 + 2233//1000*im
+    @test rationalize(Int8, 1.192 + 2.233im) == 118//99 + 67//30*im
+end

@@ -1083,35 +1083,43 @@ const _Triangular_DenseArrays{T,A<:Matrix} = LinearAlgebra.AbstractTriangular{T,
 const _Annotated_DenseArrays = Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
 const _Annotated_Typed_DenseArrays{T} = Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
 
-const _SparseConcatGroup = Union{Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
-const _DenseConcatGroup = Union{Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _Annotated_DenseArrays}
+const _SparseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
+const _DenseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _Annotated_DenseArrays}
 const _TypedDenseConcatGroup{T} = Union{Vector{T}, Adjoint{T,Vector{T}}, Transpose{T,Vector{T}}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
+_makesparse(x::Number) = x
+_makesparse(x::AbstractArray) = SparseMatrixCSC(issparse(x) ? x : sparse(x))
+
 function Base._cat(dims, Xin::_SparseConcatGroup...)
-    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
+    X = map(_makesparse, Xin)
     T = promote_eltype(Xin...)
     Base.cat_t(T, X...; dims=dims)
 end
 function hcat(Xin::_SparseConcatGroup...)
-    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
-    hcat(X...)
+    X = map(_makesparse, Xin)
+    return cat(X..., dims=Val(2))
 end
 function vcat(Xin::_SparseConcatGroup...)
-    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
-    vcat(X...)
+    X = map(_makesparse, Xin)
+    return cat(X..., dims=Val(1))
 end
-function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
-    nbr = length(rows)  # number of block rows
-
-    tmp_rows = Vector{SparseMatrixCSC}(undef, nbr)
-    k = 0
-    @inbounds for i = 1 : nbr
-        tmp_rows[i] = hcat(X[(1 : rows[i]) .+ k]...)
-        k += rows[i]
+hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...) =
+    vcat(_hvcat_rows(rows, X...)...)
+function _hvcat_rows((row1, rows...)::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
+    if row1 ≤ 0
+        throw(ArgumentError("length of block row must be positive, got $row1"))
     end
-    vcat(tmp_rows...)
+    # assert `X` is non-empty so that inference of `eltype` won't include `Type{Union{}}`
+    T = eltype(X::Tuple{Any,Vararg{Any}})
+    # inference of `getindex` may be imprecise in case `row1` is not const-propagated up
+    # to here, so help inference with the following type-assertions
+    return (
+        hcat(X[1 : row1]::Tuple{typeof(X[1]),Vararg{T}}...),
+        _hvcat_rows(rows, X[row1+1:end]::Tuple{Vararg{T}}...)...
+    )
 end
+_hvcat_rows(::Tuple{}, X::_SparseConcatGroup...) = ()
 
 # make sure UniformScaling objects are converted to sparse matrices for concatenation
 promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}) = SparseMatrixCSC
@@ -1364,7 +1372,7 @@ end
 
 ### Reduction
 
-function _sum(f, x::AbstractSparseVector)
+function sum(f, x::AbstractSparseVector)
     n = length(x)
     n > 0 || return sum(f, nonzeros(x)) # return zero() of proper type
     m = nnz(x)
@@ -1373,11 +1381,9 @@ function _sum(f, x::AbstractSparseVector)
      Base.add_sum((n - m) * f(zero(eltype(x))), sum(f, nonzeros(x))))
 end
 
-sum(f::Union{Function, Type}, x::AbstractSparseVector) = _sum(f, x) # resolve ambiguity
-sum(f, x::AbstractSparseVector) = _sum(f, x)
 sum(x::AbstractSparseVector) = sum(nonzeros(x))
 
-function _maximum(f, x::AbstractSparseVector)
+function maximum(f, x::AbstractSparseVector)
     n = length(x)
     if n == 0
         if f === abs || f === abs2
@@ -1392,11 +1398,9 @@ function _maximum(f, x::AbstractSparseVector)
      max(f(zero(eltype(x))), maximum(f, nonzeros(x))))
 end
 
-maximum(f::Union{Function, Type}, x::AbstractSparseVector) = _maximum(f, x) # resolve ambiguity
-maximum(f, x::AbstractSparseVector) = _maximum(f, x)
 maximum(x::AbstractSparseVector) = maximum(identity, x)
 
-function _minimum(f, x::AbstractSparseVector)
+function minimum(f, x::AbstractSparseVector)
     n = length(x)
     n > 0 || throw(ArgumentError("minimum over an empty array is not allowed."))
     m = nnz(x)
@@ -1405,9 +1409,28 @@ function _minimum(f, x::AbstractSparseVector)
      min(f(zero(eltype(x))), minimum(f, nonzeros(x))))
 end
 
-minimum(f::Union{Function, Type}, x::AbstractSparseVector) = _minimum(f, x) # resolve ambiguity
-minimum(f, x::AbstractSparseVector) = _minimum(f, x)
 minimum(x::AbstractSparseVector) = minimum(identity, x)
+
+for (fun, comp, word) in ((:findmin, :(<), "minimum"), (:findmax, :(>), "maximum"))
+    @eval function $fun(f, x::AbstractSparseVector{T}) where {T}
+        n = length(x)
+        n > 0 || throw(ArgumentError($word * " over empty array is not allowed"))
+        nzvals = nonzeros(x)
+        m = length(nzvals)
+        m == 0 && return zero(T), firstindex(x)
+        val, index = $fun(f, nzvals)
+        m == n && return val, index
+        nzinds = nonzeroinds(x)
+        zeroval = f(zero(T))
+        $comp(val, zeroval) && return val, nzinds[index]
+        # we need to find the first zero, which could be stored or implicit
+        # we try to avoid findfirst(iszero, x)
+        sindex = findfirst(iszero, nzvals) # first stored zero, if any
+        zindex = findfirst(i -> i < nzinds[i], eachindex(nzinds)) # first non-stored zero
+        index = isnothing(sindex) ? zindex : min(sindex, zindex)
+        return zeroval, index
+    end
+end
 
 norm(x::SparseVectorUnion, p::Real=2) = norm(nonzeros(x), p)
 
@@ -1568,9 +1591,6 @@ function (*)(A::_StridedOrTriangularMatrix{Ta}, x::AbstractSparseVector{Tx}) whe
     mul!(y, A, x)
 end
 
-mul!(y::AbstractVector{Ty}, A::_StridedOrTriangularMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, A, x, true, false)
-
 function mul!(y::AbstractVector, A::_StridedOrTriangularMatrix, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
@@ -1598,21 +1618,18 @@ end
 
 # * and mul!(C, transpose(A), B)
 
-function *(transA::Transpose{<:Any,<:_StridedOrTriangularMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
-    require_one_based_indexing(transA, x)
-    m, n = size(transA)
+function *(tA::Transpose{<:Any,<:_StridedOrTriangularMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
+    require_one_based_indexing(tA, x)
+    m, n = size(tA)
     length(x) == n || throw(DimensionMismatch())
-    Ty = promote_op(matprod, eltype(transA), eltype(x))
+    Ty = promote_op(matprod, eltype(tA), eltype(x))
     y = Vector{Ty}(undef, m)
-    mul!(y, transA, x)
+    mul!(y, tA, x)
 end
 
-mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, transA, x, true, false)
-
-function mul!(y::AbstractVector, transA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
-    require_one_based_indexing(y, transA, x)
-    m, n = size(transA)
+function mul!(y::AbstractVector, tA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
+    require_one_based_indexing(y, tA, x)
+    m, n = size(tA)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
     if β != one(β)
@@ -1625,7 +1642,7 @@ function mul!(y::AbstractVector, transA::Transpose{<:Any,<:_StridedOrTriangularM
     _nnz = length(xnzind)
     _nnz == 0 && return y
 
-    A = transA.parent
+    A = tA.parent
     Ty = promote_op(matprod, eltype(A), eltype(x))
     @inbounds for j = 1:m
         s = zero(Ty)
@@ -1647,9 +1664,6 @@ function *(adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix{Ta}}, x::AbstractSpa
     y = Vector{Ty}(undef, m)
     mul!(y, adjA, x)
 end
-
-mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, adjA, x, true, false)
 
 function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, adjA, x)
@@ -1707,9 +1721,6 @@ end
 
 # * and mul!
 
-mul!(y::AbstractVector{Ty}, A::AbstractSparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, A, x, true, false)
-
 function mul!(y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
@@ -1740,18 +1751,11 @@ function mul!(y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVe
 end
 
 # * and *(Tranpose(A), B)
-
-mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(y, transpose(A), x, true, false))
-
-mul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
-    (A = transA.parent; _At_or_Ac_mul_B!((a,b) -> transpose(a) * b, y, A, x, α, β))
-
-mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = adjA.parent; mul!(y, adjoint(A), x, true, false))
+mul!(y::AbstractVector, tA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
+    _At_or_Ac_mul_B!((a,b) -> transpose(a) * b, y, tA.parent, x, α, β)
 
 mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
-    (A = adjA.parent; _At_or_Ac_mul_B!((a,b) -> adjoint(a) * b, y, A, x, α, β))
+    _At_or_Ac_mul_B!((a,b) -> adjoint(a) * b, y, adjA.parent, x, α, β)
 
 function _At_or_Ac_mul_B!(tfun::Function,
                           y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVector,
@@ -1791,11 +1795,11 @@ function *(A::AbstractSparseMatrixCSC, x::AbstractSparseVector)
     _dense2sparsevec(y, initcap)
 end
 
-*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector) =
-    (A = transA.parent; _At_or_Ac_mul_B((a,b) -> transpose(a) * b, A, x, promote_op(matprod, eltype(transA), eltype(x))))
+*(tA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector) =
+    _At_or_Ac_mul_B((a,b) -> transpose(a) * b, tA.parent, x, promote_op(matprod, eltype(tA), eltype(x)))
 
 *(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector) =
-    (A = adjA.parent; _At_or_Ac_mul_B((a,b) -> adjoint(a) * b, A, x, promote_op(matprod, eltype(adjA), eltype(x))))
+    _At_or_Ac_mul_B((a,b) -> adjoint(a) * b, adjA.parent, x, promote_op(matprod, eltype(adjA), eltype(x)))
 
 function _At_or_Ac_mul_B(tfun::Function, A::AbstractSparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX},
                          Tv = promote_op(matprod, TvA, TvX)) where {TvA,TiA,TvX,TiX}
@@ -2096,18 +2100,6 @@ function fill!(A::Union{SparseVector, AbstractSparseMatrixCSC}, x)
     return A
 end
 
-
-
-# in-place swaps (dense) blocks start:split and split+1:fin in col
-function _swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer)
-    split == fin && return
-    reverse!(col, start, split)
-    reverse!(col, split + 1, fin)
-    reverse!(col, start, fin)
-    return
-end
-
-
 # in-place shifts a sparse subvector by r. Used also by sparsematrix.jl
 function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
     split = fin
@@ -2121,16 +2113,14 @@ function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer
         end
     end
     # ...but rowval should be sorted within columns
-    _swap!(R, start, fin, split)
-    _swap!(V, start, fin, split)
+    circshift!(@view(R[start:fin]), split-start+1)
+    circshift!(@view(V[start:fin]), split-start+1)
 end
-
 
 function circshift!(O::SparseVector, X::SparseVector, (r,)::Base.DimsInteger{1})
     copy!(O, X)
     subvector_shifter!(nonzeroinds(O), nonzeros(O), 1, length(nonzeroinds(O)), length(O), mod(r, length(X)))
     return O
 end
-
 
 circshift!(O::SparseVector, X::SparseVector, r::Real,) = circshift!(O, X, (Integer(r),))

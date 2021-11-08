@@ -203,7 +203,7 @@ big(::Type{<:AbstractIrrational}) = BigFloat
 function alignment(io::IO, x::AbstractIrrational)
     m = match(r"^(.*?)(=.*)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-    (length(m.captures[1]), length(m.captures[2]))
+    (length(something(m.captures[1])), length(something(m.captures[2])))
 end
 
 # inv

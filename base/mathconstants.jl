@@ -123,4 +123,10 @@ Base.literal_pow(::typeof(^), ::Irrational{:ℯ}, ::Val{p}) where {p} = exp(p)
 Base.log(::Irrational{:ℯ}) = 1 # use 1 to correctly promote expressions like log(x)/log(ℯ)
 Base.log(::Irrational{:ℯ}, x::Number) = log(x)
 
+Base.sin(::Irrational{:π}) = 0.0
+Base.cos(::Irrational{:π}) = -1.0
+Base.sincos(::Irrational{:π}) = (0.0, -1.0)
+Base.tan(::Irrational{:π}) = 0.0
+Base.cot(::Irrational{:π}) = -1/0
+
 end # module

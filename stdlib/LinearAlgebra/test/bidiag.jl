@@ -43,6 +43,7 @@ Random.seed!(1)
             @test ubd.dv === x
             @test lbd.ev === y
             @test_throws ArgumentError Bidiagonal(x, y, :R)
+            @test_throws ArgumentError Bidiagonal(x, y, 'R')
             x == dv0 || @test_throws DimensionMismatch Bidiagonal(x, x, :U)
             @test_throws MethodError Bidiagonal(x, y)
             # from matrix
@@ -240,9 +241,9 @@ Random.seed!(1)
             @test_throws DimensionMismatch transpose(T) \ offsizemat
             @test_throws DimensionMismatch T' \ offsizemat
 
-            if elty <: BlasReal
-                @test_throws SingularException LinearAlgebra.naivesub!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :U), rand(elty, n))
-                @test_throws SingularException LinearAlgebra.naivesub!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :L), rand(elty, n))
+            if elty <: BigFloat
+                @test_throws SingularException ldiv!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :U), rand(elty, n))
+                @test_throws SingularException ldiv!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :L), rand(elty, n))
             end
             let bb = b, cc = c
                 for atype in ("Array", "SubArray")
@@ -256,7 +257,7 @@ Random.seed!(1)
                 end
                 x = T \ b
                 tx = Tfull \ b
-                @test_throws DimensionMismatch LinearAlgebra.naivesub!(T,Vector{elty}(undef,n+1))
+                @test_throws DimensionMismatch ldiv!(T, Vector{elty}(undef, n+1))
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 x = transpose(T) \ b
                 tx = transpose(Tfull) \ b
@@ -269,6 +270,11 @@ Random.seed!(1)
                     end
                 end
             end
+            zdv = Vector{elty}(undef, 0)
+            zev = Vector{elty}(undef, 0)
+            zA  = Bidiagonal(zdv, zev, :U)
+            zb  = Vector{elty}(undef, 0)
+            @test ldiv!(zA, zb) === zb
         end
 
         if elty <: BlasReal
@@ -549,6 +555,14 @@ end
             B = Bidiagonal(dv, ev, uplo)
             @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
         end
+        dv = Vector{elty}(undef, 0)
+        ev = Vector{elty}(undef, 0)
+        x = Vector{elty}(undef, 0)
+        y = Vector{elty}(undef, 0)
+        for uplo in (:U, :L)
+            B = Bidiagonal(dv, ev, uplo)
+            @test dot(x, B, y) ≈ dot(zero(elty), zero(elty), zero(elty))
+        end
     end
 end
 
@@ -647,6 +661,46 @@ end
     @test A / c ≈ Matrix(A) / c
     @test c * A ≈ c * Matrix(A)
     @test c \ A ≈ c \ Matrix(A)
+end
+
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    dv = ImmutableArray([1, 2, 3, 4])
+    ev = ImmutableArray([7, 8, 9])
+    Bu = Bidiagonal(dv, ev, :U)
+    Bl = Bidiagonal(dv, ev, :L)
+
+    @test convert(AbstractArray{Float64}, Bu)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bu
+    @test convert(AbstractMatrix{Float64}, Bu)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bu
+    @test convert(AbstractArray{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
+    @test convert(AbstractMatrix{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
+end
+
+@testset "block-bidiagonal matrix indexing" begin
+    dv = [ones(4,3), ones(2,2).*2, ones(2,3).*3, ones(4,4).*4]
+    evu = [ones(4,2), ones(2,3).*2, ones(2,4).*3]
+    evl = [ones(2,3), ones(2,2).*2, ones(4,3).*3]
+    BU = Bidiagonal(dv, evu, :U)
+    BL = Bidiagonal(dv, evl, :L)
+    # check that all the matrices along a column have the same number of columns,
+    # and the matrices along a row have the same number of rows
+    for j in axes(BU, 2), i in 2:size(BU, 1)
+        @test size(BU[i,j], 2) == size(BU[1,j], 2)
+        @test size(BU[i,j], 1) == size(BU[i,1], 1)
+        if j < i || j > i + 1
+            @test iszero(BU[i,j])
+        end
+    end
+    for j in axes(BL, 2), i in 2:size(BL, 1)
+        @test size(BL[i,j], 2) == size(BL[1,j], 2)
+        @test size(BL[i,j], 1) == size(BL[i,1], 1)
+        if j < i-1 || j > i
+            @test iszero(BL[i,j])
+        end
+    end
 end
 
 end # module TestBidiagonal

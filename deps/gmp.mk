@@ -22,10 +22,27 @@ $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 checksum-gmp: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
-$(SRCCACHE)/gmp-$(GMP_VER)/build-patched: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp-exception.patch
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp_alloc_overflow_func.patch
+# Apply fix to avoid using Apple ARM reserved register X18
+# Necessary for version 6.2.1, remove after next gmp release
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp-HG-changeset.patch-applied: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 < $(SRCDIR)/patches/gmp-HG-changeset.patch
 	echo 1 > $@
+
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp-exception.patch-applied: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-HG-changeset.patch-applied
+	cd $(dir $@) && \
+		patch -p1 < $(SRCDIR)/patches/gmp-exception.patch
+	echo 1 > $@
+
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp_alloc_overflow_func.patch-applied: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-exception.patch-applied
+	cd $(dir $@) && \
+		patch -p1 < $(SRCDIR)/patches/gmp_alloc_overflow_func.patch
+	echo 1 > $@
+
+$(SRCCACHE)/gmp-$(GMP_VER)/build-patched: \
+	$(SRCCACHE)/gmp-$(GMP_VER)/gmp-HG-changeset.patch-applied \
+	$(SRCCACHE)/gmp-$(GMP_VER)/gmp-exception.patch-applied \
+	$(SRCCACHE)/gmp-$(GMP_VER)/gmp_alloc_overflow_func.patch-applied
 
 $(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted $(SRCCACHE)/gmp-$(GMP_VER)/build-patched
 	mkdir -p $(dir $@)

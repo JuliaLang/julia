@@ -579,6 +579,26 @@ julia> Dates.value(Dates.Millisecond(10))
 10
 ```
 
+Representing periods or durations that are not integer multiples of the basic types can be achieved
+with the [`Dates.CompoundPeriod`](@ref) type. Compound periods may be constructed manually from simple
+[`Period`](@ref) types. Additionally, the [`canonicalize`](@ref) function can be used to break down a
+period into a [`Dates.CompoundPeriod`](@ref). This is particularly useful to convert a duration, e.g.,
+a difference of two `DateTime`, into a more convenient representation.
+
+```jldoctest
+julia> cp = Dates.CompoundPeriod(Day(1),Minute(1))
+1 day, 1 minute
+
+julia> t1 = DateTime(2018,8,8,16,58,00)
+2018-08-08T16:58:00
+
+julia> t2 = DateTime(2021,6,23,10,00,00)
+2021-06-23T10:00:00
+
+julia> canonicalize(t2-t1) # creates a CompoundPeriod
+149 weeks, 6 days, 17 hours, 2 minutes
+```
+
 ## Rounding
 
 [`Date`](@ref) and [`DateTime`](@ref) values can be rounded to a specified resolution (e.g., 1
@@ -784,6 +804,7 @@ Dates.toprev(::Function, ::Dates.TimeType)
 ```@docs
 Dates.Period(::Any)
 Dates.CompoundPeriod(::Vector{<:Dates.Period})
+Dates.canonicalize
 Dates.value
 Dates.default
 Dates.periods

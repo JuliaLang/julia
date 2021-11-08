@@ -59,7 +59,8 @@ column going across the screen.
 """
 function alignment(io::IO, @nospecialize(X::AbstractVecOrMat),
         rows::AbstractVector{T}, cols::AbstractVector{V},
-        cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer) where {T,V}
+        cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer,
+        #= `size(X) may not infer, set this in caller =# ncols::Integer=size(X, 2)) where {T,V}
     a = Tuple{T, V}[]
     for j in cols # need to go down each column one at a time
         l = r = 0
@@ -78,7 +79,7 @@ function alignment(io::IO, @nospecialize(X::AbstractVecOrMat),
             break
         end
     end
-    if 1 < length(a) < length(axes(X,2))
+    if 1 < length(a) < ncols
         while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
             pop!(a)
         end
@@ -95,7 +96,8 @@ is specified as string sep.
 """
 function print_matrix_row(io::IO,
         @nospecialize(X::AbstractVecOrMat), A::Vector,
-        i::Integer, cols::AbstractVector, sep::AbstractString)
+        i::Integer, cols::AbstractVector, sep::AbstractString,
+        #= `axes(X)` may not infer, set this in caller =# idxlast::Integer=last(axes(X, 2)))
     for (k, j) = enumerate(cols)
         k > length(A) && break
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
@@ -114,7 +116,7 @@ function print_matrix_row(io::IO,
             sx = undef_ref_str
         end
         l = repeat(" ", A[k][1]-a[1]) # pad on left and right as needed
-        r = j == axes(X, 2)[end] ? "" : repeat(" ", A[k][2]-a[2])
+        r = j == idxlast ? "" : repeat(" ", A[k][2]-a[2])
         prettysx = replace_in_print_matrix(X,i,j,sx)
         print(io, l, prettysx, r)
         if k < length(A); print(io, sep); end
@@ -171,6 +173,7 @@ end
 
 function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, hdots, vdots, ddots, hmod, vmod, rowsA, colsA)
     hmod, vmod = Int(hmod)::Int, Int(vmod)::Int
+    ncols, idxlast = length(colsA), last(colsA)
     if !(get(io, :limit, false)::Bool)
         screenheight = screenwidth = typemax(Int)
     else
@@ -201,26 +204,26 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
     else
 	    colsA = [colsA;]
     end
-    A = alignment(io, X, rowsA, colsA, screenwidth, screenwidth, sepsize)
+    A = alignment(io, X, rowsA, colsA, screenwidth, screenwidth, sepsize, ncols)
     # Nine-slicing is accomplished using print_matrix_row repeatedly
     if m <= screenheight # rows fit vertically on screen
         if n <= length(A) # rows and cols fit so just print whole matrix in one piece
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
-                print_matrix_row(io, X,A,i,colsA,sep)
+                print_matrix_row(io, X,A,i,colsA,sep,idxlast)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != last(rowsA); println(io); end
             end
         else # rows fit down screen but cols don't, so need horizontal ellipsis
             c = div(screenwidth-length(hdots)::Int+1,2)+1  # what goes to right of ellipsis
-            Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize)) # alignments for right
+            Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize, ncols)) # alignments for right
             c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)::Int
-            Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize) # alignments for left of ellipsis
+            Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize, ncols) # alignments for left of ellipsis
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
-                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
+                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep,idxlast)
                 print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)::Int))
-                print_matrix_row(io, X, Ralign, i, (n - length(Ralign)) .+ colsA, sep)
+                print_matrix_row(io, X, Ralign, i, (n - length(Ralign)) .+ colsA, sep, idxlast)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != last(rowsA); println(io); end
             end
@@ -229,7 +232,7 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
         if n <= length(A) # rows don't fit, cols do, so only vertical ellipsis
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
-                print_matrix_row(io, X,A,i,colsA,sep)
+                print_matrix_row(io, X,A,i,colsA,sep,idxlast)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
@@ -240,15 +243,15 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
             end
         else # neither rows nor cols fit, so use all 3 kinds of dots
             c = div(screenwidth-length(hdots)::Int+1,2)+1
-            Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize))
+            Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize, ncols))
             c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)::Int
-            Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize)
+            Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize, ncols)
             r = mod((length(Ralign)-n+1),vmod) # where to put dots on right half
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
-                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
+                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep,idxlast)
                 print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)::Int))
-                print_matrix_row(io, X,Ralign,i,(n-length(Ralign)).+colsA,sep)
+                print_matrix_row(io, X,Ralign,i,(n-length(Ralign)).+colsA,sep,idxlast)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]

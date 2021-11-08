@@ -6,7 +6,7 @@ The following is a complete list of command-line switches available when launchi
 |:---                                   |:---|
 |`-v`, `--version`                      |Display version information|
 |`-h`, `--help`                         |Print command-line options (this message).|
-|`--project[={<dir>\|@.}]`              |Set <dir> as the home project/environment. The default @. option will search through parent directories until a Project.toml or JuliaProject.toml file is found.|
+|`--project[={<dir>\|@.}]`              |Set `<dir>` as the home project/environment. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
 |`--startup-file={yes\|no}`             |Load `~/.julia/config/startup.jl`|
@@ -29,10 +29,10 @@ The following is a complete list of command-line switches available when launchi
 |`-C`, `--cpu-target <target>`          |Limit usage of CPU features up to `<target>`; set to `help` to see the available options|
 |`-O`, `--optimize={0,1,2,3}`           |Set the optimization level (default level is 2 if unspecified or 3 if used without a level)|
 |`--min-optlevel={0,1,2,3}`             |Set the lower bound on per-module optimization (default is 0)|
-|`-g`, `-g <level>`                     |Enable / Set the level of debug info generation (default level is 1 if unspecified or 2 if used without a level)|
+|`-g`, `-g <level>`                     |Enable or set the level of debug info generation (default level is 1 if unspecified or 2 if used without a level)|
 |`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
-|`--check-bounds={yes\|no}`             |Emit bounds checks always or never (ignoring declarations)|
-|`--math-mode={ieee,fast}`              |Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)|
+|`--check-bounds={yes\|no\|auto}`       |Emit bounds checks always, never, or respect `@inbounds` declarations|
+|`--math-mode={ieee,fast}`              |Disallow or enable unsafe floating point optimizations (overrides `@fastmath` declaration)|
 |`--code-coverage={none\|user\|all}`    |Count executions of source lines|
 |`--code-coverage`                      |equivalent to `--code-coverage=user`|
 |`--track-allocation={none\|user\|all}` |Count bytes allocated by each source line|

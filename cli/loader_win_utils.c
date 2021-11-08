@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // Workarounds for compiling via mingw without using libgcc_s
 typedef struct {
     HANDLE fd;

@@ -224,6 +224,9 @@ let a, b
     a = rand(1:100, 10000)
     b = map(BigInt, a)
     @test sum(a) == sum(b)
+    @test 0 == sum(BigInt[]) isa BigInt
+    @test prod(b) == foldl(*, b)
+    @test 1 == prod(BigInt[]) isa BigInt
 end
 
 @testset "Iterated arithmetic" begin

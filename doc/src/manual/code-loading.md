@@ -349,6 +349,23 @@ The subscripted `rootsᵢ`, `graphᵢ` and `pathsᵢ` variables correspond to th
 
 Since the primary environment is typically the environment of a project you're working on, while environments later in the stack contain additional tools, this is the right trade-off: it's better to break your development tools but keep the project working. When such incompatibilities occur, you'll typically want to upgrade your dev tools to versions that are compatible with the main project.
 
+### Package/Environment Preferences
+
+Preferences are dictionaries of metadata that influence package behavior within an environment.
+The preferences system supports reading preferences at compile-time, which means that at code-loading time, we must ensure that a particular `.ji` file was built with the same preferences as the current environment before loading it.
+The public API for modifying Preferences is contained within the [Preferences.jl](https://github.com/JuliaPackaging/Preferences.jl) package.
+Preferences are stored as TOML dictionaries within a `(Julia)LocalPreferences.toml` file next to the currently-active project.
+If a preference is "exported", it is instead stored within the `(Julia)Project.toml` instead.
+The intention is to allow shared projects to contain shared preferences, while allowing for users themselves to override those preferences with their own settings in the LocalPreferences.toml file, which should be .gitignored as the name implies.
+
+Preferences that are accessed during compilation are automatically marked as compile-time preferences, and any change recorded to these preferences will cause the Julia compiler to recompile any cached precompilation `.ji` files for that module.
+This is done by serializing the hash of all compile-time preferences during compilation, then checking that hash against the current environment when searching for the proper `.ji` file to load.
+
+Preferences can be set with depot-wide defaults; if package Foo is installed within your global environment and it has preferences set, these preferences will apply as long as your global environment is part of your `LOAD_PATH`.
+Preferences in environments higher up in the environment stack get overridden by the more proximal entries in the load path, ending with the currently active project.
+This allows depot-wide preference defaults to exist, with active projects able to merge or even completely overwrite these inherited preferences.
+See the docstring for `Preferences.set_preferences!()` for the full details of how to set preferences to allow or disallow merging.
+
 ## Conclusion
 
 Federated package management and precise software reproducibility are difficult but worthy goals in a package system. In combination, these goals lead to a more complex package loading mechanism than most dynamic languages have, but it also yields scalability and reproducibility that is more commonly associated with static languages. Typically, Julia users should be able to use the built-in package manager to manage their projects without needing a precise understanding of these interactions. A call to `Pkg.add("X")` will add to the appropriate project and manifest files, selected via `Pkg.activate("Y")`, so that a future call to `import X` will load `X` without further thought.

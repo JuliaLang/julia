@@ -9,14 +9,15 @@ module LinearAlgebra
 
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, conj, convert, copy, copyto!, cos,
+    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!, cos,
     cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
     getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!, length, log, map, ndims,
-    oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
+    one, oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, sqrt,
-    strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
-using Base: IndexLinear, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
+    strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec, zero
+using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
+    @propagate_inbounds, @pure, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
+    splat
 using Base.Broadcast: Broadcasted, broadcasted
 import Libdl
 
@@ -261,9 +262,7 @@ function sym_uplo(uplo::Char)
     end
 end
 
-
 @noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
-
 
 """
     ldiv!(Y, A, B) -> Y
@@ -290,14 +289,14 @@ julia> ldiv!(Y, qr(A), X);
 julia> Y
 3-element Vector{Float64}:
   0.7128099173553719
- -0.051652892561983806
-  0.10020661157024781
+ -0.051652892561983674
+  0.10020661157024757
 
 julia> A\\X
 3-element Vector{Float64}:
   0.7128099173553719
- -0.05165289256198342
-  0.1002066115702479
+ -0.05165289256198333
+  0.10020661157024785
 ```
 """
 ldiv!(Y, A, B)
@@ -327,14 +326,14 @@ julia> ldiv!(qr(A), X);
 julia> X
 3-element Vector{Float64}:
   0.7128099173553719
- -0.051652892561983806
-  0.10020661157024781
+ -0.051652892561983674
+  0.10020661157024757
 
 julia> A\\Y
 3-element Vector{Float64}:
   0.7128099173553719
- -0.05165289256198342
-  0.1002066115702479
+ -0.05165289256198333
+  0.10020661157024785
 ```
 """
 ldiv!(A, B)
@@ -354,8 +353,58 @@ control over the factorization of `B`.
 """
 rdiv!(A, B)
 
-copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
-copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
+
+
+"""
+    copy_oftype(A, T)
+
+Copy `A` to a mutable array with eltype `T` based on `similar(A, T)`.
+
+The resulting matrix typically has similar algebraic structure as `A`. For
+example, supplying a tridiagonal matrix results in another tridiagonal matrix.
+In general, the type of the output corresponds to that of `similar(A, T)`.
+
+There are three often used methods in LinearAlgebra to create a mutable copy
+of an array with a given eltype. These copies can be passed to in-place
+algorithms (such as ldiv!, rdiv!, lu! and so on). Which one to use in practice
+depends on what is known (or assumed) about the structure of the array in that
+algorithm.
+
+See also: `copy_similar`, `copy_to_array`.
+"""
+copy_oftype(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A,T), A)
+
+"""
+    copy_similar(A, T)
+
+Copy `A` to a mutable array with eltype `T` based on `similar(A, T, size(A))`.
+
+Compared to `copy_oftype`, the result can be more flexible. For example,
+supplying a tridiagonal matrix results in a sparse array. In general, the type
+of the output corresponds to that of the three-argument method `similar(A, T, size(s))`.
+
+See also: `copy_oftype`, `copy_to_array`.
+"""
+copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
+
+"""
+    copy_to_array(A, T)
+
+Copy `A` to a regular dense `Array` with element type `T`.
+
+The resulting array is mutable. It can be used, for example, to pass the data of
+`A` to an efficient in-place method for a matrix factorization such as `lu!`, in
+cases where a more specific implementation of `lu!` (or `lu`) is not available.
+
+See also: `copy_oftype`, `copy_similar`.
+"""
+copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)...), A)
+
+# The three copy functions above return mutable arrays with eltype T.
+# To only ensure a certain eltype, and if a mutable copy is not needed, it is
+# more efficient to use:
+# convert(AbstractArray{T}, A)
+
 
 include("adjtrans.jl")
 include("transpose.jl")
@@ -402,6 +451,12 @@ export ⋅, ×
 ## vectors to matrices.
 _cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
 _cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+
+# SymTridiagonal ev can be the same length as dv, but the last element is
+# ignored. However, some methods can fail if they read the entired ev
+# rather than just the meaningful elements. This is a helper function
+# for getting only the meaningful elements of ev. See #41089
+_evview(S::SymTridiagonal) = @view S.ev[begin:length(S.dv) - 1]
 
 ## append right hand side with zeros if necessary
 _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
@@ -525,14 +580,16 @@ function __init__()
     try
         libblas_path = find_library_path(Base.libblas_name)
         liblapack_path = find_library_path(Base.liblapack_name)
+        # We manually `dlopen()` these libraries here, so that we search with `libjulia-internal`'s
+        # `RPATH` and not `libblastrampoline's`.  Once it's been opened, when LBT tries to open it,
+        # it will find the library already loaded.
+        libblas_path = Libdl.dlpath(Libdl.dlopen(libblas_path))
         BLAS.lbt_forward(libblas_path; clear=true)
         if liblapack_path != libblas_path
+            liblapack_path = Libdl.dlpath(Libdl.dlopen(liblapack_path))
             BLAS.lbt_forward(liblapack_path)
         end
         BLAS.check()
-        Threads.resize_nthreads!(Abuf)
-        Threads.resize_nthreads!(Bbuf)
-        Threads.resize_nthreads!(Cbuf)
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")
     end

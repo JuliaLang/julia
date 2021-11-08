@@ -79,15 +79,15 @@ function _invoked_shouldlog(logger, level, _module, group, id)
         shouldlog,
         Tuple{typeof(logger), typeof(level), typeof(_module), typeof(group), typeof(id)},
         logger, level, _module, group, id
-    )
+    )::Bool
 end
 
 function _invoked_min_enabled_level(@nospecialize(logger))
-    return invoke(min_enabled_level, Tuple{typeof(logger)}, logger)
+    return invoke(min_enabled_level, Tuple{typeof(logger)}, logger)::LogLevel
 end
 
 function _invoked_catch_exceptions(@nospecialize(logger))
-    return invoke(catch_exceptions, Tuple{typeof(logger)}, logger)
+    return invoke(catch_exceptions, Tuple{typeof(logger)}, logger)::Bool
 end
 
 """
@@ -670,14 +670,15 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     buf = IOBuffer()
     stream = logger.stream
     if !isopen(stream)
-        stream = level < Warn ? stdout : stderr
+        stream = stderr
     end
     iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
-    msglines = split(chomp(string(message)::String), '\n')
-    println(iob, "┌ ", levelstr, ": ", msglines[1])
-    for i in 2:length(msglines)
-        println(iob, "│ ", msglines[i])
+    msglines = eachsplit(chomp(string(message)::String), '\n')
+    msg1, rest = Iterators.peel(msglines)
+    println(iob, "┌ ", levelstr, ": ", msg1)
+    for msg in rest
+        println(iob, "│ ", msg)
     end
     for (key, val) in kwargs
         key === :maxlog && continue

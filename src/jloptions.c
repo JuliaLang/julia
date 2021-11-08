@@ -5,12 +5,8 @@
 
 #include "julia.h"
 
-#ifndef _MSC_VER
 #include <unistd.h>
 #include <getopt.h>
-#else
-#include "getopt.h"
-#endif
 #include "julia_assert.h"
 
 #ifdef _OS_WINDOWS_
@@ -27,57 +23,66 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
     return &system_image_path[1];
 }
 
+static int jl_options_initialized = 0;
 
-jl_options_t jl_options = { 0,    // quiet
-                            -1,   // banner
-                            NULL, // julia_bindir
-                            NULL, // julia_bin
-                            NULL, // cmds
-                            NULL, // image_file (will be filled in below)
-                            NULL, // cpu_target ("native", "core2", etc...)
-                            0,    // nthreads
-                            0,    // nprocs
-                            NULL, // machine_file
-                            NULL, // project
-                            0,    // isinteractive
-                            0,    // color
-                            JL_OPTIONS_HISTORYFILE_ON, // history file
-                            0,    // startup file
-                            JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
-                            0,    // code_coverage
-                            0,    // malloc_log
-                            2,    // opt_level
-                            0,    // opt_level_min
+JL_DLLEXPORT void jl_init_options(void)
+{
+    if (jl_options_initialized)
+        return;
+    jl_options =
+        (jl_options_t){ 0,    // quiet
+                        -1,   // banner
+                        NULL, // julia_bindir
+                        NULL, // julia_bin
+                        NULL, // cmds
+                        NULL, // image_file (will be filled in below)
+                        NULL, // cpu_target ("native", "core2", etc...)
+                        0,    // nthreads
+                        0,    // nprocs
+                        NULL, // machine_file
+                        NULL, // project
+                        0,    // isinteractive
+                        0,    // color
+                        JL_OPTIONS_HISTORYFILE_ON, // history file
+                        0,    // startup file
+                        JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
+                        0,    // code_coverage
+                        0,    // malloc_log
+                        2,    // opt_level
+                        0,    // opt_level_min
 #ifdef JL_DEBUG_BUILD
-                            2,    // debug_level [debug build]
+                        2,    // debug_level [debug build]
 #else
-                            1,    // debug_level [release build]
+                        1,    // debug_level [release build]
 #endif
-                            JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
-                            JL_OPTIONS_DEPWARN_OFF,    // deprecation warning
-                            0,    // method overwrite warning
-                            1,    // can_inline
-                            JL_OPTIONS_POLLY_ON, // polly
-                            NULL, // trace_compile
-                            JL_OPTIONS_FAST_MATH_DEFAULT,
-                            0,    // worker
-                            NULL, // cookie
-                            JL_OPTIONS_HANDLE_SIGNALS_ON,
-                            JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES,
-                            JL_OPTIONS_USE_COMPILED_MODULES_YES,
-                            NULL, // bind-to
-                            NULL, // output-bc
-                            NULL, // output-unopt-bc
-                            NULL, // output-o
-                            NULL, // output-asm
-                            NULL, // output-ji
-                            NULL,    // output-code_coverage
-                            0, // incremental
-                            0, // image_file_specified
-                            JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
-                            0, // image-codegen
-                            0, // rr-detach
-};
+                        JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
+                        JL_OPTIONS_DEPWARN_OFF,    // deprecation warning
+                        0,    // method overwrite warning
+                        1,    // can_inline
+                        JL_OPTIONS_POLLY_ON, // polly
+                        NULL, // trace_compile
+                        JL_OPTIONS_FAST_MATH_DEFAULT,
+                        0,    // worker
+                        NULL, // cookie
+                        JL_OPTIONS_HANDLE_SIGNALS_ON,
+                        JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES,
+                        JL_OPTIONS_USE_COMPILED_MODULES_YES,
+                        NULL, // bind-to
+                        NULL, // output-bc
+                        NULL, // output-unopt-bc
+                        NULL, // output-o
+                        NULL, // output-asm
+                        NULL, // output-ji
+                        NULL,    // output-code_coverage
+                        0, // incremental
+                        0, // image_file_specified
+                        JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
+                        0, // image-codegen
+                        0, // rr-detach
+                        0, // strip-metadata
+    };
+    jl_options_initialized = 1;
+}
 
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
 static const char opts[]  =
@@ -124,14 +129,15 @@ static const char opts[]  =
     " -C, --cpu-target <target> Limit usage of CPU features up to <target>; set to \"help\" to see the available options\n"
     " -O, --optimize={0,1,2,3}  Set the optimization level (default level is 2 if unspecified or 3 if used without a level)\n"
     " --min-optlevel={0,1,2,3}  Set a lower bound on the optimization level (default is 0)\n"
-    " -g, -g <level>            Enable / Set the level of debug info generation"
+    " -g, -g <level>            Enable or set the level of debug info generation"
 #ifdef JL_DEBUG_BUILD
         " (default level for julia-debug is 2 if unspecified or if used without a level)\n"
 #else
         " (default level is 1 if unspecified or 2 if used without a level)\n"
 #endif
     " --inline={yes|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
-    " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring @inbounds declarations)\n"
+    " --check-bounds={yes|no|auto}\n"
+    "                           Emit bounds checks always, never, or respect @inbounds declarations\n"
 #ifdef USE_POLLY
     " --polly={yes|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
@@ -158,6 +164,7 @@ static const char opts_hidden[]  =
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
     " --output-ji name          Generate a system image data file (.ji)\n"
+    " --strip-metadata          Remove docstrings and source location info from system image\n"
 
     // compiler debugging (see the devdocs for tips on using these options)
     " --output-unopt-bc name    Generate unoptimized LLVM bitcode (.bc)\n"
@@ -207,6 +214,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_bug_report,
            opt_image_codegen,
            opt_rr_detach,
+           opt_strip_metadata,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -260,6 +268,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "lisp",            no_argument,       0, 1 },
         { "image-codegen",   no_argument,       0, opt_image_codegen },
         { "rr-detach",       no_argument,       0, opt_rr_detach },
+        { "strip-metadata",  no_argument,       0, opt_strip_metadata },
         { 0, 0, 0, 0 }
     };
 
@@ -565,8 +574,10 @@ restart_switch:
                 jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_ON;
             else if (!strcmp(optarg,"no"))
                 jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_OFF;
+            else if (!strcmp(optarg,"auto"))
+                jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_DEFAULT;
             else
-                jl_errorf("julia: invalid argument to --check-bounds={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --check-bounds={yes|no|auto} (%s)", optarg);
             break;
         case opt_output_bc:
             jl_options.outputbc = optarg;
@@ -681,6 +692,9 @@ restart_switch:
             break;
         case opt_rr_detach:
             jl_options.rr_detach = 1;
+            break;
+        case opt_strip_metadata:
+            jl_options.strip_metadata = 1;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

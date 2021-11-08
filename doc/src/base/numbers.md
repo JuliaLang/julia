@@ -122,7 +122,6 @@ and for [`BigInt`](@ref) the [GNU Multiple Precision Arithmetic Library (GMP)]
 ```@docs
 Base.MPFR.BigFloat(::Any, rounding::RoundingMode)
 Base.precision
-Base.MPFR.precision(::Type{BigFloat})
 Base.MPFR.setprecision
 Base.GMP.BigInt(::Any)
 Base.@big_str

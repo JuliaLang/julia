@@ -688,7 +688,7 @@ end
 @testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister,Xoshiro)
     seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), rand(UInt128, 3)...]
     if RNG == Xoshiro
-        push!(seeds, rand(UInt64, rand(1:4)), Tuple(rand(UInt64, 4)))
+        push!(seeds, rand(UInt64, rand(1:4)))
     end
     for seed=seeds
         m = RNG(seed)
@@ -696,6 +696,40 @@ end
         Random.seed!(m, seed)
         @test a == [rand(m) for _=1:100]
     end
+end
+
+@testset "Random.seed!(seed) sets Random.GLOBAL_SEED" begin
+    seeds = Any[0, rand(UInt128), rand(UInt64, 4)]
+
+    for seed=seeds
+        Random.seed!(seed)
+        @test Random.GLOBAL_SEED === seed
+    end
+    # two separate loops as otherwise we are no sure that the second call (with GLOBAL_RNG)
+    # actually sets GLOBAL_SEED
+    for seed=seeds
+        Random.seed!(Random.GLOBAL_RNG, seed)
+        @test Random.GLOBAL_SEED === seed
+    end
+
+    Random.seed!(nothing)
+    seed1 = Random.GLOBAL_SEED
+    @test seed1 isa Vector{UInt64} # could change, but must not be nothing
+
+    Random.seed!(Random.GLOBAL_RNG, nothing)
+    seed2 = Random.GLOBAL_SEED
+    @test seed2 isa Vector{UInt64}
+    @test seed2 != seed1
+
+    Random.seed!()
+    seed3 = Random.GLOBAL_SEED
+    @test seed3 isa Vector{UInt64}
+    @test seed3 != seed2
+
+    Random.seed!(Random.GLOBAL_RNG)
+    seed4 = Random.GLOBAL_SEED
+    @test seed4 isa Vector{UInt64}
+    @test seed4 != seed3
 end
 
 struct RandomStruct23964 end
@@ -875,14 +909,25 @@ end
     @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
 end
 
-@testset "rand! for BigInt/BigFloat" begin
+@testset "rand[!] for BigInt/BigFloat" begin
     rng = MersenneTwister()
-    s = Random.SamplerBigInt(1:big(9))
+    s = Random.SamplerBigInt(MersenneTwister, 1:big(9))
     x = rand(s)
     @test x isa BigInt
     y = rand!(rng, x, s)
     @test y === x
     @test x in 1:9
+
+    for t = BigInt[0, 10, big(2)^100]
+        s = Random.Sampler(rng, t:t) # s.nlimbs == 0
+        @test rand(rng, s) == t
+        @test x === rand!(rng, x, s) == t
+
+        s = Random.Sampler(rng, big(-1):t) # s.nlimbs != 0
+        @test rand(rng, s) ∈ -1:t
+        @test x === rand!(rng, x, s) ∈ -1:t
+
+    end
 
     s = Random.Sampler(MersenneTwister, Random.CloseOpen01(BigFloat))
     x = rand(s)

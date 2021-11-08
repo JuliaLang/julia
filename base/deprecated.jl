@@ -240,6 +240,15 @@ end
 @deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes) false
 cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not recursively calls itself
 
+@deprecate unsafe_indices(A) axes(A) false
+@deprecate unsafe_length(r) length(r) false
+
+# these were internal type aliases, but some pacakges seem to be relying on them
+const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                        Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,Vararg{T,N}}
+
 # END 1.6 deprecations
 
 # BEGIN 1.7 deprecations
@@ -254,3 +263,10 @@ end
 @deprecate catch_stack(task=current_task(); include_bt=true) current_exceptions(task; backtrace=include_bt) false
 
 # END 1.7 deprecations
+
+# BEGIN 1.8 deprecations
+
+@deprecate var"@_inline_meta"   var"@inline"   false
+@deprecate var"@_noinline_meta" var"@noinline" false
+
+# END 1.8 deprecations

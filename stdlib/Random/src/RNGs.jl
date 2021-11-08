@@ -23,16 +23,26 @@ else # !windows
     rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
     rand(rd::RandomDevice, ::SamplerType{Bool}) = read(getfile(rd), UInt8) % Bool
 
-    function getfile(rd::RandomDevice)
-        devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
-        # TODO: there is a data-race, this can leak up to nthreads() copies of the file descriptors,
-        # so use a "thread-once" utility once available
-        isassigned(devrandom) || (devrandom[] = open(rd.unlimited ? "/dev/urandom" : "/dev/random"))
-        devrandom[]
+    mutable struct FileRef
+        @atomic file::Union{IOStream, Nothing}
     end
 
-    const DEV_RANDOM  = Ref{IOStream}()
-    const DEV_URANDOM = Ref{IOStream}()
+    const DEV_RANDOM  = FileRef(nothing)
+    const DEV_URANDOM = FileRef(nothing)
+
+    function getfile(rd::RandomDevice)
+        ref = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
+        fd = ref.file
+        if fd === nothing
+            fd = open(rd.unlimited ? "/dev/urandom" : "/dev/random")
+            old, ok = @atomicreplace ref.file nothing => fd
+            if !ok
+                close(fd)
+                fd = old::IOStream
+            end
+        end
+        return fd
+    end
 
 end # os-test
 
@@ -377,15 +387,15 @@ copy(::_GLOBAL_RNG) = copy(default_rng())
 
 GLOBAL_SEED = 0
 
-seed!(::_GLOBAL_RNG, seed) = (global GLOBAL_SEED = seed; seed!(default_rng(), seed))
-
-function seed!(rng::_GLOBAL_RNG)
-    seed!(rng, (rand(RandomDevice(), UInt64), rand(RandomDevice(), UInt64),
-                rand(RandomDevice(), UInt64), rand(RandomDevice(), UInt64)))
+function seed!(::_GLOBAL_RNG, seed=rand(RandomDevice(), UInt64, 4))
+    global GLOBAL_SEED = seed
+    seed!(default_rng(), seed)
 end
-seed!() = seed!(GLOBAL_RNG)
+
 seed!(rng::_GLOBAL_RNG, ::Nothing) = seed!(rng)  # to resolve ambiguity
-seed!(seed::Union{Integer,Vector{UInt32},Vector{UInt64},NTuple{4,UInt64}}) = seed!(GLOBAL_RNG, seed)
+
+seed!(seed::Union{Nothing,Integer,Vector{UInt32},Vector{UInt64}}=nothing) =
+    seed!(GLOBAL_RNG, seed)
 
 rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
 rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(default_rng(), sp)
@@ -411,6 +421,10 @@ for T in BitInteger_types
 end
 
 function __init__()
+    @static if !Sys.iswindows()
+        @atomic DEV_RANDOM.file = nothing
+        @atomic DEV_URANDOM.file = nothing
+    end
     seed!(GLOBAL_RNG)
 end
 

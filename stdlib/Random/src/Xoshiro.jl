@@ -4,10 +4,13 @@
 # Lots of implementation is shared with TaskLocalRNG
 
 """
-    Xoshiro
+    Xoshiro(seed)
+    Xoshiro()
 
-Xoshiro256++ is a fast pseudorandom number generator originally developed by Sebastian Vigna.
-Reference implementation is available at http://prng.di.unimi.it
+Xoshiro256++ is a fast pseudorandom number generator described by David Blackman and
+Sebastiano Vigna in "Scrambled Linear Pseudorandom Number Generators",
+ACM Trans. Math. Softw., 2021. Reference implementation is available
+at http://prng.di.unimi.it
 
 Apart from the high speed, Xoshiro has a small memory footprint, making it suitable for
 applications where many different random states need to be held for long time.
@@ -25,23 +28,15 @@ mutable struct Xoshiro <: AbstractRNG
     s3::UInt64
 
     Xoshiro(s0::Integer, s1::Integer, s2::Integer, s3::Integer) = new(s0, s1, s2, s3)
-    Xoshiro(seed) = seed!(new(), seed)
+    Xoshiro(seed=nothing) = seed!(new(), seed)
 end
 
-Xoshiro(::Nothing) = Xoshiro()
-
-function Xoshiro()
-    parent = RandomDevice()
-    # Constants have nothing up their sleeve, see task.c
-    # 0x02011ce34bce797f == hash(UInt(1))|0x01
-    # 0x5a94851fb48a6e05 == hash(UInt(2))|0x01
-    # 0x3688cf5d48899fa7 == hash(UInt(3))|0x01
-    # 0x867b4bb4c42e5661 == hash(UInt(4))|0x01
-
-    Xoshiro(0x02011ce34bce797f * rand(parent, UInt64),
-            0x5a94851fb48a6e05 * rand(parent, UInt64),
-            0x3688cf5d48899fa7 * rand(parent, UInt64),
-            0x867b4bb4c42e5661 * rand(parent, UInt64))
+function setstate!(x::Xoshiro, s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64)
+    x.s0 = s0
+    x.s1 = s1
+    x.s2 = s2
+    x.s3 = s3
+    x
 end
 
 copy(rng::Xoshiro) = Xoshiro(rng.s0, rng.s1, rng.s2, rng.s3)
@@ -57,22 +52,10 @@ end
 
 rng_native_52(::Xoshiro) = UInt64
 
-function seed!(rng::Xoshiro, seed::NTuple{4,UInt64})
-    s = Base.hash_64_64(seed[1])
-    rng.s0 = s
-    s += Base.hash_64_64(seed[2])
-    rng.s1 = s
-    s += Base.hash_64_64(seed[3])
-    rng.s2 = s
-    s += Base.hash_64_64(seed[4])
-    rng.s3 = s
-    rng
-end
-
 @inline function rand(rng::Xoshiro, ::SamplerType{UInt64})
     s0, s1, s2, s3 = rng.s0, rng.s1, rng.s2, rng.s3
     tmp = s0 + s3
-    res = tmp << 23 | tmp >> 41
+    res = ((tmp << 23) | (tmp >> 41)) + s0
     t = s1 << 17
     s2 = xor(s2, s0)
     s3 = xor(s3, s1)
@@ -108,31 +91,20 @@ struct TaskLocalRNG <: AbstractRNG end
 TaskLocalRNG(::Nothing) = TaskLocalRNG()
 rng_native_52(::TaskLocalRNG) = UInt64
 
-function seed!(rng::TaskLocalRNG, seed::NTuple{4,UInt64})
-    # TODO: Consider a less ad-hoc construction
-    # We can afford burning a handful of cycles here, and we don't want any
-    # surprises with respect to bad seeds / bad interactions.
+function setstate!(x::TaskLocalRNG, s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64)
     t = current_task()
-    s = Base.hash_64_64(seed[1])
-    t.rngState0 = s
-    s += Base.hash_64_64(seed[2])
-    t.rngState1 = s
-    s += Base.hash_64_64(seed[3])
-    t.rngState2 = s
-    s += Base.hash_64_64(seed[4])
-    t.rngState3 = s
-    rand(rng, UInt64)
-    rand(rng, UInt64)
-    rand(rng, UInt64)
-    rand(rng, UInt64)
-    rng
+    t.rngState0 = s0
+    t.rngState1 = s1
+    t.rngState2 = s2
+    t.rngState3 = s3
+    x
 end
 
 @inline function rand(::TaskLocalRNG, ::SamplerType{UInt64})
     task = current_task()
     s0, s1, s2, s3 = task.rngState0, task.rngState1, task.rngState2, task.rngState3
     tmp = s0 + s3
-    res = tmp << 23 | tmp >> 41
+    res = ((tmp << 23) | (tmp >> 41)) + s0
     t = s1 << 17
     s2 = xor(s2, s0)
     s3 = xor(s3, s1)
@@ -145,35 +117,22 @@ end
 end
 
 # Shared implementation between Xoshiro and TaskLocalRNG -- seeding
-function seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::UInt128)
-    seed0 = seed % UInt64
-    seed1 = (seed>>>64) % UInt64
-    seed!(rng, (seed0, seed1, zero(UInt64), zero(UInt64)))
-end
-seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::Integer) = seed!(rng, UInt128(seed))
 
-seed!(rng::Union{TaskLocalRNG, Xoshiro}) =
-    seed!(rng, (rand(RandomDevice(), UInt64), rand(RandomDevice(), UInt64),
-                rand(RandomDevice(), UInt64), rand(RandomDevice(), UInt64)))
-
-function seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::AbstractVector{UInt64})
-    if length(seed) > 4
-        throw(ArgumentError("seed should have no more than 256 bits"))
-    end
-    seed0 = length(seed)>0 ? seed[1] : UInt64(0)
-    seed1 = length(seed)>1 ? seed[2] : UInt64(0)
-    seed2 = length(seed)>2 ? seed[3] : UInt64(0)
-    seed3 = length(seed)>3 ? seed[4] : UInt64(0)
-    seed!(rng, (seed0, seed1, seed2, seed3))
+function seed!(rng::Union{TaskLocalRNG,Xoshiro})
+    # as we get good randomness from RandomDevice, we can skip hashing
+    rd = RandomDevice()
+    setstate!(rng, rand(rd, UInt64), rand(rd, UInt64), rand(rd, UInt64), rand(rd, UInt64))
 end
 
-function seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::AbstractVector{UInt32})
-    if iseven(length(seed))
-        seed!(rng, reinterpret(UInt64, seed))
-    else
-        seed!(rng, UInt64[reinterpret(UInt64, @view(seed[begin:end-1])); seed[end] % UInt64])
-    end
+function seed!(rng::Union{TaskLocalRNG,Xoshiro}, seed::Union{Vector{UInt32}, Vector{UInt64}})
+    c = SHA.SHA2_256_CTX()
+    SHA.update!(c, reinterpret(UInt8, seed))
+    s0, s1, s2, s3 = reinterpret(UInt64, SHA.digest!(c))
+    setstate!(rng, s0, s1, s2, s3)
 end
+
+seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::Integer) = seed!(rng, make_seed(seed))
+
 
 @inline function rand(rng::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt128})
     first = rand(rng, UInt64)
