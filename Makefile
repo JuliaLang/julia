@@ -165,13 +165,14 @@ JL_TARGETS += julia-debug
 endif
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest libjulia-internal libjulia-codegen libblastrampoline
+JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest libjulia-internal libjulia-codegen
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
 endif
 ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libbtf libcamd libccolamd libcholmod libcolamd libklu libldl librbio libspqr libsuitesparseconfig libumfpack
 endif
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBBLASTRAMPOLINE) += libblastrampoline
 JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
 JL_PRIVATE_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
 JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp libgmpxx

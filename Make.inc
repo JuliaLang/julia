@@ -41,6 +41,7 @@ USE_SYSTEM_LIBM:=0
 USE_SYSTEM_OPENLIBM:=0
 UNTRUSTED_SYSTEM_LIBM:=0
 USE_SYSTEM_DSFMT:=0
+USE_SYSTEM_LIBBLASTRAMPOLINE:=0
 USE_SYSTEM_BLAS:=0
 USE_SYSTEM_LAPACK:=0
 USE_SYSTEM_GMP:=0
@@ -1025,6 +1026,12 @@ ifeq ($(USE_SYSTEM_PATCHELF), 1)
 PATCHELF := patchelf
 else
 PATCHELF := $(build_depsbindir)/patchelf
+endif
+
+ifeq ($(USE_SYSTEM_LIBWHICH), 1)
+LIBWHICH := libwhich
+else
+LIBWHICH := $(build_depsbindir)/libwhich
 endif
 
 # On aarch64 and powerpc64le, we assume the page size is 64K.  Our binutils linkers
