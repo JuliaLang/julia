@@ -185,6 +185,21 @@ SYMLINK_SYSTEM_LIBRARIES += symlink_$2
 endif
 endef
 
+# libexec executables
+symlink_p7zip: $(build_bindir)/7z$(EXE)
+
+ifneq ($(USE_SYSTEM_P7ZIP),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_p7zip
+7Z_PATH := $(shell which 7z$(EXE))
+endif
+
+$(build_bindir)/7z$(EXE):
+	exepath=$(7Z_PATH) && \
+	[ -e "$$exepath" ] && \
+	([ ! -e "$@" ] || rm "$@") && \
+	echo ln -sf "$$exepath" "$@" && \
+	ln -sf "$$exepath" "$@"
+
 # the following excludes: libuv.a, libutf8proc.a
 
 ifneq ($(USE_SYSTEM_LIBM),0)
