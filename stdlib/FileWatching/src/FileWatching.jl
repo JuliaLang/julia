@@ -563,7 +563,7 @@ function wait(fdw::FDWatcher)
         events = GC.@preserve fdw _wait(fdw.watcher, fdw.mask)
         isopen(fdw) || throw(EOFError())
         if !events.timedout
-            @lock fdw.notify fdw.events &= ~events.events
+            @lock fdw.watcher.notify fdw.watcher.events &= ~events.events
             return events
         end
     end
