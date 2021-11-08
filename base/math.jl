@@ -952,7 +952,7 @@ function ^(x::Float64, y::Float64)
     hi = xyhi+xylo
     return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
-@inline function ^(x::T, y::T) where T <: Union{Float16, Float32}
+function ^(x::T, y::T) where T <: Union{Float16, Float32}
     yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
     x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
@@ -973,7 +973,7 @@ function ^(x::Float64, n::Integer)
         x = rx
         n = -n
     end
-    n==3 && return x*x*x #keep compatability with literal_pow
+    n == 3 && return x*x*x # keep compatibility with literal_pow
     while n > 1
         if n&1 > 0
             yn = x*y
@@ -988,9 +988,9 @@ function ^(x::Float64, n::Integer)
     !isfinite(x) && return x*y
     return muladd(x, y, muladd(y, xnlo, x*ynlo))
 end
-@inline function ^(x::Float32, n::Integer)
+function ^(x::Float32, n::Integer)
     n < 0 && return inv(x)^(-n)
-    n==3 && return x*x*x #keep compatability with literal_pow
+    n == 3 && return x*x*x #keep compatibility with literal_pow
     Float32(Base.power_by_squaring(Float64(x),n))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
