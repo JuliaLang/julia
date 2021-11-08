@@ -99,9 +99,13 @@ end
 """
     check_dllist(; warnings = true)::Bool
 
-xxxxx
+Check wheather the same shared library is loaded from two different files.
+The `warnings` determines if the warnings are printed to the console.
 
-TODO - from v1.8
+Returns if no duplicate was detected.
+
+!!! compat "Julia 1.8"
+    This method requires Julia 1.8 or later.
 """
 function check_dllist(; warnings = true)::Bool
     fullpaths = dllist()
@@ -109,7 +113,8 @@ function check_dllist(; warnings = true)::Bool
     noduplicity = true
     for (i,dl) in enumerate(names), j in i+1:length(names)
         if dl == names[j]
-            warn && @warn """detected possible duplicate library loaded: $dl. this may lead to unexpected behavior.
+            warnings && @warn """Detected possible duplicate library loaded: $dl
+This may lead to unexpected behavior!
 $(fullpaths[i])
 $(fullpaths[j])""" maxlog=1
             noduplicity = false
