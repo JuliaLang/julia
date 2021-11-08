@@ -766,14 +766,14 @@ function const_prop_function_heuristic(
         # but highly worthwhile to inline promote of a constant
         length(argtypes) > 2 || return false
         t1 = widenconst(argtypes[2])
-        all_same = true
         for i in 3:length(argtypes)
-            if widenconst(argtypes[i]) !== t1
-                all_same = false
-                break
+            at = argtypes[i]
+            ty = isvarargtype(at) ? unwraptv(at) : widenconst(at)
+            if ty !== t1
+                return true
             end
         end
-        return !all_same
+        return false
     end
     return true
 end
@@ -796,20 +796,24 @@ function const_prop_methodinstance_heuristic(
     # was able to cut it down to something simple (inlineable in particular).
     # If so, there's a good chance we might be able to const prop all the way
     # through and learn something new.
-    code = get(code_cache(interp), mi, nothing)
-    declared_inline = isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
-    cache_inlineable = declared_inline
-    if isdefined(code, :inferred) && !cache_inlineable
-        cache_inf = code.inferred
-        if !(cache_inf === nothing)
-            src = inlining_policy(interp, cache_inf, get_curr_ssaflag(sv), mi, argtypes)
-            cache_inlineable = src !== nothing
+    if isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
+        return true
+    else
+        flag = get_curr_ssaflag(sv)
+        if is_stmt_inline(flag)
+            # force constant propagation for a call that is going to be inlined
+            # since the inliner will try to find this constant result
+            # if these constant arguments arrive there
+            return true
+        else
+            code = get(code_cache(interp), mi, nothing)
+            if isdefined(code, :inferred) && inlining_policy(
+                    interp, code.inferred, IR_FLAG_NULL, mi, argtypes) !== nothing
+                return true
+            end
         end
     end
-    if !cache_inlineable
-        return false
-    end
-    return true
+    return false # the cache isn't inlineable, so this constant-prop' will most likely be unfruitful
 end
 
 # This is only for use with `Conditional`.
@@ -1340,9 +1344,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(Any, false)
     elseif f === Core.kwfunc
         if la == 2
-            ft = widenconst(argtypes[2])
-            if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
-                return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
+            aty = argtypes[2]
+            if !isvarargtype(aty)
+                ft = widenconst(aty)
+                if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
+                    return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
+                end
             end
         end
         return CallMeta(Any, false)
@@ -1362,8 +1369,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(typevar_tfunc(n, lb_var, ub_var), false)
     elseif f === UnionAll
         return CallMeta(abstract_call_unionall(argtypes), false)
-    elseif f === Tuple && la == 2 && !isconcretetype(widenconst(argtypes[2]))
-        return CallMeta(Tuple, false)
+    elseif f === Tuple && la == 2
+        aty = argtypes[2]
+        ty = isvarargtype(aty) ? unwrapva(aty) : widenconst(aty)
+        if !isconcretetype(ty)
+            return CallMeta(Tuple, false)
+        end
     elseif is_return_type(f)
         return return_type_tfunc(interp, argtypes, sv)
     elseif la == 2 && istopfunction(f, :!)

@@ -53,6 +53,7 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
             return nothing
         end
     end
+    return nothing
 end
 
 include("compiler/ssair/driver.jl")
@@ -324,7 +325,7 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @timeit "compact 2" ir = compact!(ir)
-    @timeit "SROA"      ir = getfield_elim_pass!(ir)
+    @timeit "SROA"      ir = sroa_pass!(ir)
     @timeit "ADCE"      ir = adce_pass!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)

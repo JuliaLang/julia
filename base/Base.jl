@@ -212,8 +212,6 @@ let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
         if Base.DARWIN_FRAMEWORK
             push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-        else
-            push!(DL_LOAD_PATH, "@loader_path/julia")
         end
         push!(DL_LOAD_PATH, "@loader_path")
     end
