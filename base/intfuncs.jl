@@ -329,7 +329,7 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 # for other types, define x^-n as inv(x)^n so that negative literal powers can
 # be computed in a type-stable way even for e.g. integers.
-@inline function literal_pow(f::typeof(^), x::Integer, ::Val{p}) where {p<:Integer}
+@inline function literal_pow(f::typeof(^), x::BitInteger64, ::Val{p}) where {p<:Integer}
     if p < 0
         f(Float64(x), p)
     else
