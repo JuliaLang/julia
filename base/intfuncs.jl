@@ -331,7 +331,7 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 # be computed in a type-stable way even for e.g. integers.
 @inline function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
-        if p isa BitInteger64
+        if x isa BitInteger64
             f(Float64(x), p)
         else
             f(inv(x), -p)
