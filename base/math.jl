@@ -969,6 +969,7 @@ function ^(x::Float64, n::Integer)
     xnlo = ynlo = 0.0
     if n < 0
         rx = inv(x)
+        n==-2 && return x*x #keep compatability with literal_pow
         isfinite(x) && (xnlo = -fma(x, rx, -1.) * rx)
         x = rx
         n = -n
