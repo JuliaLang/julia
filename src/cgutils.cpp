@@ -3320,7 +3320,12 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         Value *ptindex = ctx.builder.CreateInBoundsGEP(T_int8, emit_bitcast(ctx, maybe_decay_tracked(ctx, addr), T_pint8), ConstantInt::get(T_size, fsz));
         if (needlock)
             emit_lockstate_value(ctx, strct, true);
-        BasicBlock *BB = ctx.builder.GetInsertBlock();
+        BasicBlock *ModifyBB;
+        if (ismodifyfield) {
+            ModifyBB = BasicBlock::Create(jl_LLVMContext, "modify_xchg", ctx.f);
+            ctx.builder.CreateBr(ModifyBB);
+            ctx.builder.SetInsertPoint(ModifyBB);
+        }
         jl_cgval_t oldval = rhs;
         if (!issetfield)
             oldval = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, strct.tbaa, true);
@@ -3353,7 +3358,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
             BasicBlock *XchgBB = BasicBlock::Create(jl_LLVMContext, "xchg", ctx.f);
             DoneBB = BasicBlock::Create(jl_LLVMContext, "done_xchg", ctx.f);
             Success = emit_f_is(ctx, oldval, cmp);
-            ctx.builder.CreateCondBr(Success, XchgBB, ismodifyfield ? BB : DoneBB);
+            ctx.builder.CreateCondBr(Success, XchgBB, ismodifyfield ? ModifyBB : DoneBB);
             ctx.builder.SetInsertPoint(XchgBB);
         }
         Value *tindex = compute_tindex_unboxed(ctx, rhs_union, jfty);
