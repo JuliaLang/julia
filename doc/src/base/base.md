@@ -347,7 +347,6 @@ Base.@static
 ```@docs
 Base.VersionNumber
 Base.@v_str
-Base.isequal(::VersionNumber, ::VersionNumber)
 ```
 
 ## Errors

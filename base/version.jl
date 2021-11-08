@@ -21,7 +21,6 @@ v"1.2.3"
 julia> VersionNumber("2.0.1-rc1")
 v"2.0.1-rc1"
 ```
-See also: [`isequal`](@ref).
 """
 struct VersionNumber
     major::VInt
@@ -167,39 +166,14 @@ function ident_cmp(A::VerTuple, B::VerTuple)
     length(B) < length(A) ? +1 : 0
 end
 
-"""
-    isequal(v1::VersionNumber, v2::VersionNumber; downto::Symbol = :patch)
-
-Compare two VersionNumbers for equality in fields cascading down to the `downto` field of the VersionNumbers,
-which by default is the `build` thus all fields are compared.
-
-```julia-repl
-julia> isequal(v"1.6", v"1.6.3")
-false
-
-julia> isequal(v"1.6", v"1.6.3", downto = :minor)
-true
-
-julia> isequal(v"1.5", v"1.6.3", downto = :major)
-true
-```
-See also: [`VersionNumber`](@ref).
-"""
-function isequal(a::VersionNumber, b::VersionNumber; downto::Symbol = :build)
-    downto in fieldnames(VersionNumber) || error("Unrecognized `downto` value. Must be :major, :minor, :patch, :prerelease, or :build")
+function ==(a::VersionNumber, b::VersionNumber)
     (a.major != b.major) && return false
-    downto == :major && return true
     (a.minor != b.minor) && return false
-    downto == :minor && return true
     (a.patch != b.patch) && return false
-    downto == :patch && return true
     (ident_cmp(a.prerelease, b.prerelease) != 0) && return false
-    downto == :prerelease && return true
     (ident_cmp(a.build, b.build) != 0) && return false
     return true
 end
-
-==(a::VersionNumber, b::VersionNumber) = isequal(a, b; downto = :build)
 
 issupbuild(v::VersionNumber) = length(v.build)==1 && isempty(v.build[1])
 
