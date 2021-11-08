@@ -1347,6 +1347,14 @@ test_repr("(:).a")
 @test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4, Float64}"
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32, Float32, Float32}"
 
+@testset "issue #42931" begin
+    @test repr(NTuple{4, :sym}) == "NTuple{4, :sym}"
+    @test repr(NTuple{3, :sym}) == "Tuple{:sym, :sym, :sym}"
+    @test repr(Tuple{:A, :B}) == "Tuple{:A, :B}"
+    @test repr(Tuple{:A}) == "Tuple{:A}"
+    @test repr(Tuple{}) == "Tuple{}"
+end
+
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
 @test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
