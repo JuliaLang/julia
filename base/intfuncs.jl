@@ -320,8 +320,8 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{-1}) = inv(x)
-@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-2}) = i=inv(x); i*i
-@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-3}) = i=inv(x); i*i*i
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-2}) = (i=inv(x); i*i)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-3}) = (i=inv(x); i*i*i)
 
 # don't use the inv(x) transformation here since float^p is slightly more accurate
 @inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p
@@ -329,9 +329,16 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 # for other types, define x^-n as inv(x)^n so that negative literal powers can
 # be computed in a type-stable way even for e.g. integers.
-@inline function literal_pow(f::typeof(^), x, ::Val{p}) where {p<:Integer}
+@inline function literal_pow(f::typeof(^), x::Integer, ::Val{p}) where {p<:Integer}
     if p < 0
         f(Float64(x), p)
+    else
+        f(x, p)
+    end
+end
+@inline function literal_pow(f::typeof(^), x, ::Val{p}) where {p<:Integer}
+    if p < 0
+        f(inv(x), p)
     else
         f(x, p)
     end
