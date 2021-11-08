@@ -2513,10 +2513,14 @@ used to implement specialized methods.
 
 # Examples
 ```jldoctest
-julia> -5:5 |> filter(<(-3))
-2-element Vector{Int64}:
- -5
- -4
+julia> (1, 2, Inf, 4, NaN, 6) |> filter(isfinite)
+(1, 2, 4, 6)
+
+julia> map(filter(iseven), [1:3, 2:4, 3:5])
+3-element Vector{Vector{Int64}}:
+ [2]
+ [2, 4]
+ [4]
 ```
 !!! compat "Julia 1.8"
     This method requires at least Julia 1.8.
