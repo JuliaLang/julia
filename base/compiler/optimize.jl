@@ -176,7 +176,6 @@ _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
 function isinlineable(m::Method, me::OptimizationState, params::OptimizationParams, union_penalties::Bool, bonus::Int=0)
     # compute the cost (size) of inlining this code
-    inlineable = false
     cost_threshold = params.inline_cost_threshold
     if m.module === _topmod(m.module)
         # a few functions get special treatment
@@ -184,17 +183,14 @@ function isinlineable(m::Method, me::OptimizationState, params::OptimizationPara
         sig = m.sig
         if ((name === :+ || name === :* || name === :min || name === :max) &&
             isa(sig,DataType) &&
-            sig == Tuple{sig.parameters[1],Any,Any,Any,Vararg{Any}})
-            inlineable = true
+            sig === Tuple{sig.parameters[1],Any,Any,Any,Vararg{Any}})
+            return true
         elseif (name === :iterate || name === :unsafe_convert ||
                 name === :cconvert)
             cost_threshold *= 4
         end
     end
-    if !inlineable
-        inlineable = inline_worthy(me.ir::IRCode, params, union_penalties, cost_threshold + bonus)
-    end
-    return inlineable
+    return inline_worthy(me.ir::IRCode, params, union_penalties, cost_threshold + bonus)
 end
 
 is_stmt_inline(stmt_flag::UInt8)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
@@ -393,7 +389,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     cfg = compute_basic_blocks(code)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
-    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable::Union{Vector{LineInfoNode},Vector{Any}}), sv.slottypes, meta, sv.sptypes)
+    linetable = ci.linetable
+    isa(linetable, Vector{LineInfoNode}) || (linetable = collect(LineInfoNode, linetable::Vector{Any}))
+    ir = IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
     return ir
 end
 
