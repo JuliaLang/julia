@@ -399,9 +399,11 @@ ldiv!(Dc::Diagonal, Da::Diagonal, Db::Diagonal) = Diagonal(ldiv!(Dc.diag, Da, Db
 # optimizations for (Sym)Tridiagonal and Diagonal
 function (\)(D::Diagonal, S::SymTridiagonal)
     T = typeof(oneunit(eltype(D)) \ oneunit(eltype(S)))
-    dl = copy_oftype(S.ev, T)
+    # this is essentially copy_oftype, but we need to handle the case when S.ev has the
+    # same length as S.dv
+    dl = copyto!(similar(S.ev, T, length(S.dv)-1), _evview(S))
     d  = copy_oftype(S.dv, T)
-    du = copy_oftype(S.ev, T)
+    du = copy(dl)
     ldiv!(D, Tridiagonal(dl, d, du))
 end
 function (\)(D::Diagonal, T::Tridiagonal)
@@ -436,9 +438,11 @@ end
 
 function (/)(S::SymTridiagonal, D::Diagonal)
     T = typeof(oneunit(eltype(S)) / oneunit(eltype(D)))
-    dl = copy_oftype(S.ev, T)
+    # this is essentially copy_oftype, but we need to handle the case when S.ev has the
+    # same length as S.dv
+    dl = copyto!(similar(S.ev, T, length(S.dv)-1), _evview(S))
     d  = copy_oftype(S.dv, T)
-    du = copy_oftype(S.ev, T)
+    du = copy(dl)
     rdiv!(Tridiagonal(dl, d, du), D)
 end
 function (/)(T::Tridiagonal, D::Diagonal)
