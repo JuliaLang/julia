@@ -1198,8 +1198,12 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
                 dt->has_concrete_subtype = 0;
         }
     }
-    if (dt->name == jl_type_typename)
+    if (dt->name == jl_type_typename) {
         cacheable = 0; // the cache for Type ignores parameter normalization, so it can't be used as a regular hash
+        jl_value_t *p = jl_tparam(dt, 0);
+        if (!jl_is_type(p) && !jl_is_typevar(p)) // Type{v} has no subtypes, if v is not a Type
+            dt->has_concrete_subtype = 0;
+    }
     dt->hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), l, cacheable);
     dt->cached_by_hash = cacheable ? (typekey_hash(dt->name, jl_svec_data(dt->parameters), l, 0) != 0) : (dt->hash != 0);
 }

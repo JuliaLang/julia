@@ -53,6 +53,7 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
             return nothing
         end
     end
+    return nothing
 end
 
 include("compiler/ssair/driver.jl")
@@ -162,7 +163,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 const _PURE_OR_ERROR_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
-    Core.kwfunc, ifelse, Core._typevar, (<:)
+    Core.kwfunc, Core.ifelse, Core._typevar, (<:)
 ]
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
@@ -318,10 +319,8 @@ function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::O
 end
 
 function run_passes(ci::CodeInfo, sv::OptimizationState)
-    preserve_coverage = coverage_enabled(sv.mod)
-    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, sv)
-    ir = slot2reg(ir, ci, sv)
-    #@Base.show ("after_construct", ir)
+    @timeit "convert"   ir = convert_to_ircode(ci, sv)
+    @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     tapir = has_tapir(ir)
     if tapir
@@ -339,27 +338,24 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
         end
     end
     @timeit "compact 1" ir = compact!(ir)
-    @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
-    #@timeit "verify 2" verify_ir(ir)
-    ir = compact!(ir)
-    #@Base.show ("before_sroa", ir)
-    @timeit "SROA" ir = getfield_elim_pass!(ir)
-    #@Base.show ir.new_nodes
-    #@Base.show ("after_sroa", ir)
-    ir = adce_pass!(ir)
+    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    # @timeit "verify 2" verify_ir(ir)
+    @timeit "compact 2" ir = compact!(ir)
+    @timeit "SROA"      ir = sroa_pass!(ir)
+    @timeit "ADCE"      ir = adce_pass!(ir)
     @timeit "Tapir DSE" ir = tapir_dead_store_elimination_pass!(ir)
-    #@Base.show ("after_adce", ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
     @timeit "Late tapir pass" ir = late_tapir_pass!(ir)
-    #@Base.show ir
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end
     return ir
 end
 
-function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::OptimizationState)
+function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
+    code = copy_exprargs(ci.code)
+    coverage = coverage_enabled(sv.mod)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     idx = 1
@@ -613,7 +609,7 @@ function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeI
     return maxcost
 end
 
-function is_known_call(e::Expr, @nospecialize(func), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
+function is_known_call(e::Expr, @nospecialize(func), src, sptypes::Vector{Any}, slottypes::Vector{Any} = EMPTY_SLOTTYPES)
     if e.head !== :call
         return false
     end

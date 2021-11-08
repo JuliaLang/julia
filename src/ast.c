@@ -104,6 +104,7 @@ JL_DLLEXPORT jl_sym_t *jl_atom_sym;
 JL_DLLEXPORT jl_sym_t *jl_statement_sym;
 JL_DLLEXPORT jl_sym_t *jl_all_sym;
 JL_DLLEXPORT jl_sym_t *jl_compile_sym;
+JL_DLLEXPORT jl_sym_t *jl_force_compile_sym;
 JL_DLLEXPORT jl_sym_t *jl_infer_sym;
 JL_DLLEXPORT jl_sym_t *jl_atomic_sym;
 JL_DLLEXPORT jl_sym_t *jl_not_atomic_sym;
@@ -441,6 +442,7 @@ void jl_init_common_symbols(void)
     jl_specialize_sym = jl_symbol("specialize");
     jl_optlevel_sym = jl_symbol("optlevel");
     jl_compile_sym = jl_symbol("compile");
+    jl_force_compile_sym = jl_symbol("force_compile");
     jl_infer_sym = jl_symbol("infer");
     jl_macrocall_sym = jl_symbol("macrocall");
     jl_escape_sym = jl_symbol("escape");

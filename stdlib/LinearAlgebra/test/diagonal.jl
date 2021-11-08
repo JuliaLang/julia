@@ -902,4 +902,36 @@ end
     @test oneunit(D3) isa typeof(D3)
 end
 
+@testset "AbstractTriangular" for (Tri, UTri) in ((UpperTriangular, UnitUpperTriangular), (LowerTriangular, UnitLowerTriangular))
+    A = randn(4, 4)
+    TriA = Tri(A)
+    UTriA = UTri(A)
+    D = Diagonal(1.0:4.0)
+    DM = Matrix(D)
+    DMF = factorize(DM)
+    outTri = similar(TriA)
+    out = similar(A)
+    # 2 args
+    for fun in (*, rmul!, rdiv!, /)
+        @test fun(copy(TriA), D)::Tri == fun(Matrix(TriA), D)
+        @test fun(copy(UTriA), D)::Tri == fun(Matrix(UTriA), D)
+    end
+    for fun in (*, lmul!, ldiv!, \)
+        @test fun(D, copy(TriA))::Tri == fun(D, Matrix(TriA))
+        @test fun(D, copy(UTriA))::Tri == fun(D, Matrix(UTriA))
+    end
+    # 3 args
+    @test outTri === ldiv!(outTri, D, TriA)::Tri == ldiv!(out, D, Matrix(TriA))
+    @test outTri === ldiv!(outTri, D, UTriA)::Tri == ldiv!(out, D, Matrix(UTriA))
+    @test outTri === mul!(outTri, D, TriA)::Tri == mul!(out, D, Matrix(TriA))
+    @test outTri === mul!(outTri, D, UTriA)::Tri == mul!(out, D, Matrix(UTriA))
+    @test outTri === mul!(outTri, TriA, D)::Tri == mul!(out, Matrix(TriA), D)
+    @test outTri === mul!(outTri, UTriA, D)::Tri == mul!(out, Matrix(UTriA), D)
+    # 5 args
+    @test outTri === mul!(outTri, D, TriA, 2, 1)::Tri == mul!(out, D, Matrix(TriA), 2, 1)
+    @test outTri === mul!(outTri, D, UTriA, 2, 1)::Tri == mul!(out, D, Matrix(UTriA), 2, 1)
+    @test outTri === mul!(outTri, TriA, D, 2, 1)::Tri == mul!(out, Matrix(TriA), D, 2, 1)
+    @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
+end
+
 end # module TestDiagonal

@@ -36,7 +36,6 @@
 #include "julia_internal.h"
 #include "threading.h"
 #include "julia_assert.h"
-#include "support/hashing.h"
 
 #ifdef __cplusplus
 extern "C" {

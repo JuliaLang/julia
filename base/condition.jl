@@ -82,6 +82,17 @@ function _wait2(c::GenericCondition, waiter::Task)
     ct = current_task()
     assert_havelock(c)
     push!(c.waitq, waiter)
+    # since _wait2 is similar to schedule, we should observe the sticky bit now
+    if waiter.sticky && Threads.threadid(waiter) == 0
+        # Issue #41324
+        # t.sticky && tid == 0 is a task that needs to be co-scheduled with
+        # the parent task. If the parent (current_task) is not sticky we must
+        # set it to be sticky.
+        # XXX: Ideally we would be able to unset this
+        ct.sticky = true
+        tid = Threads.threadid()
+        ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
+    end
     return
 end
 

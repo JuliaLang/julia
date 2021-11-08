@@ -1516,3 +1516,8 @@ function iterate(x::BBIdxIter, (idx, bb)::Tuple{Int, Int}=(1, 1))
     end
     return (bb, idx), (idx + 1, next_bb)
 end
+
+is_known_call(e::Expr, @nospecialize(func), ir::IRCode) =
+    is_known_call(e, func, ir, ir.sptypes, ir.argtypes)
+
+argextype(@nospecialize(x), ir::IRCode) = argextype(x, ir, ir.sptypes, ir.argtypes)

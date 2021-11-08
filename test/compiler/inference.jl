@@ -46,8 +46,42 @@ end
 
 # obtain Vararg with 2 undefined fields
 let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
-    @test Core.Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Any
+    @test Core.Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Tuple
 end
+
+# issue #42835
+@test !Core.Compiler.type_more_complex(Int, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Int, Type{Int}, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Type{Int}, Core.svec(Type{Int}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Int, Core.svec(Type{Int}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Int}}}, Type{Type{Int}}, Core.svec(Type{Type{Int}}), 1, 1, 1)
+
+@test  Core.Compiler.type_more_complex(ComplexF32, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(ComplexF32, Any, Core.svec(Type{ComplexF32}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(ComplexF32, Type{ComplexF32}, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{ComplexF32}, Any, Core.svec(Type{Type{ComplexF32}}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{ComplexF32}, Type{Type{ComplexF32}}, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{ComplexF32}, ComplexF32, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{ComplexF32}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{ComplexF32}}, Type{ComplexF32}, Core.svec(Type{ComplexF32}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{ComplexF32}}, ComplexF32, Core.svec(ComplexF32), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{ComplexF32}}}, Type{Type{ComplexF32}}, Core.svec(Type{ComplexF32}), 1, 1, 1)
+
+# n.b. Type{Type{Union{}} === Type{Core.TypeofBottom}
+@test !Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Type{Type{Union{}}}, Core.svec(Type{Type{Union{}}}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Type{Union{}}}}}, Type{Type{Type{Union{}}}}, Core.svec(Type{Type{Type{Union{}}}}), 1, 1, 1)
+
+@test !Core.Compiler.type_more_complex(Type{1}, Type{2}, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
+@test_broken Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+
 
 let # 40336
     t = Type{Type{Int}}
@@ -1899,6 +1933,35 @@ end
     end == Any[Union{Bool,Nothing}]
 end
 
+@testset "`from_interprocedural!`: translate inter-procedural information" begin
+    # TODO come up with a test case to check the functionality of `collect_limitations!`
+    # one heavy test case would be to use https://github.com/aviatesk/JET.jl and
+    # check `julia /path/to/JET/jet /path/to/JET/src/JET.jl` doesn't result in errors
+    # because of nested `LimitedAccuracy`es
+
+    # `InterConditional` handling: `abstract_invoke`
+    ispositive(a) = isa(a, Int) && a > 0
+    @test Base.return_types((Any,)) do a
+        if Base.@invoke ispositive(a::Any)
+            return a
+        end
+        return 0
+    end |> only == Int
+    # the `fargs = nothing` edge case
+    @test Base.return_types((Any,)) do a
+        Core.Compiler.return_type(invoke, Tuple{typeof(ispositive), Type{Tuple{Any}}, Any})
+    end |> only == Type{Bool}
+
+    # `InterConditional` handling: `abstract_call_opaque_closure`
+    @test Base.return_types((Any,)) do a
+        f = Base.Experimental.@opaque a -> isa(a, Int) && a > 0
+        if f(a)
+            return a
+        end
+        return 0
+    end |> only === Int
+end
+
 function f25579(g)
     h = g[]
     t = (h === nothing)
@@ -1999,6 +2062,61 @@ function _g_ifelse_isa_()
     ifelse(isa(x, Nothing), 1, x)
 end
 @test Base.return_types(_g_ifelse_isa_, ()) == [Int]
+
+@testset "Conditional forwarding" begin
+    # forward `Conditional` if it conveys a constraint on any other argument
+    ifelselike(cnd, x, y) = cnd ? x : y
+
+    @test Base.return_types((Any,Int,)) do x, y
+        ifelselike(isa(x, Int), x, y)
+    end |> only == Int
+
+    # should work nicely with union-split
+    @test Base.return_types((Union{Int,Nothing},)) do x
+        ifelselike(isa(x, Int), x, 0)
+    end |> only == Int
+
+    @test Base.return_types((Any,Int)) do x, y
+        ifelselike(!isa(x, Int), y, x)
+    end |> only == Int
+
+    @test Base.return_types((Any,Int)) do x, y
+        a = ifelselike(x === 0, x, 0) # ::Const(0)
+        if a == 0
+            return y
+        else
+            return nothing # dead branch
+        end
+    end |> only == Int
+
+    # pick up the first if there are multiple constrained arguments
+    @test Base.return_types((Any,)) do x
+        ifelselike(isa(x, Int), x, x)
+    end |> only == Any
+
+    # just propagate multiple constraints
+    ifelselike2(cnd1, cnd2, x, y, z) = cnd1 ? x : cnd2 ? y : z
+    @test Base.return_types((Any,Any)) do x, y
+        ifelselike2(isa(x, Int), isa(y, Int), x, y, 0)
+    end |> only == Int
+
+    # work with `invoke`
+    @test Base.return_types((Any,Any)) do x, y
+        Base.@invoke ifelselike(isa(x, Int), x, y::Int)
+    end |> only == Int
+
+    # don't be confused with vararg method
+    vacond(cnd, va...) = cnd ? va : 0
+    @test Base.return_types((Any,)) do x
+        # at runtime we will see `va::Tuple{Tuple{Int,Int}, Tuple{Int,Int}}`
+        vacond(isa(x, Tuple{Int,Int}), x, x)
+    end |> only == Union{Int,Tuple{Any,Any}}
+
+    # demonstrate extra constraint propagation for Base.ifelse
+    @test Base.return_types((Any,Int,)) do x, y
+        ifelse(isa(x, Int), x, y)
+    end |> only == Int
+end
 
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
@@ -3422,8 +3540,7 @@ let
     ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
     sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
         Core.Compiler.NativeInterpreter())
-    ir = Core.Compiler.convert_to_ircode(ci, Core.Compiler.copy_exprargs(ci.code),
-        false, sv)
+    ir = Core.Compiler.convert_to_ircode(ci, sv)
     ir = Core.Compiler.slot2reg(ir, ci, sv)
     ir = Core.Compiler.compact!(ir)
     Core.Compiler.replace_code_newstyle!(ci, ir, 4)
@@ -3583,3 +3700,58 @@ let
     @test argtypes[10] == Any
     @test argtypes[11] == Tuple{Integer,Integer}
 end
+
+# make sure not to call `widenconst` on `TypeofVararg` objects
+@testset "unhandled Vararg" begin
+    struct UnhandledVarargCond
+        val::Bool
+    end
+    function Base.:+(a::UnhandledVarargCond, xs...)
+        if a.val
+            return nothing
+        else
+            s = 0
+            for x in xs
+                s += x
+            end
+            return s
+        end
+    end
+    @test Base.return_types((Vector{Int},)) do xs
+        +(UnhandledVarargCond(false), xs...)
+    end |> only === Int
+
+    @test (Base.return_types((Vector{Any},)) do xs
+        Core.kwfunc(xs...)
+    end; true)
+
+    @test Base.return_types((Vector{Vector{Int}},)) do xs
+        Tuple(xs...)
+    end |> only === Tuple{Vararg{Int}}
+end
+
+# issue #42646
+@test only(Base.return_types(getindex, (Array{undef}, Int))) >: Union{} # check that it does not throw
+
+# form PartialStruct for extra type information propagation
+struct FieldTypeRefinement{S,T}
+    s::S
+    t::T
+end
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Any,Int}(s, s)
+    o.s
+end |> only == Int
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Int,Any}(s, s)
+    o.t
+end |> only == Int
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Any,Any}(s, s)
+    o.s, o.t
+end |> only == Tuple{Int,Int}
+@test Base.return_types((Int,)) do a
+    s1 = Some{Any}(a)
+    s2 = Some{Any}(s1)
+    s2.value.value
+end |> only == Int

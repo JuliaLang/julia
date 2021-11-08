@@ -1471,7 +1471,7 @@ end
 end
 
 ## fill! contiguous views of BitArrays with a single value
-function fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}}}, x)
+function fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, x)
     B = V.parent
     I0 = V.indices[1]
     l0 = length(I0)
@@ -1480,7 +1480,7 @@ function fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}
     return V
 end
 
-fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, x) =
+fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, x) =
     _unsafe_fill_indices!(V.parent, x, V.indices...)
 
 @generated function _unsafe_fill_indices!(B::BitArray, x,
@@ -1666,7 +1666,7 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
             else
                 j_d = i_d
             end) begin
-                if (@nref $N A j) != (@nref $N A i)
+                if !isequal((@nref $N A j), (@nref $N A i))
                     collided[k] = true
                 end
             end
@@ -1696,7 +1696,7 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
                         j_d = i_d
                     end
                 end begin
-                    if (@nref $N A j) != (@nref $N A i)
+                    if !isequal((@nref $N A j), (@nref $N A i))
                         nowcollided[k] = true
                     end
                 end

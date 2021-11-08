@@ -212,6 +212,12 @@ eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
 Compute the memory stride in bytes between consecutive elements of `eltype`
 stored inside the given `type`, if the array elements are stored densely with a
 uniform linear stride.
+
+# Examples
+```jldoctest
+julia> Base.elsize(rand(Float32, 10))
+4
+```
 """
 elsize(A::AbstractArray) = elsize(typeof(A))
 
@@ -752,7 +758,7 @@ neither mutable nor support 2 dimensions:
 
 ```julia-repl
 julia> similar(1:10, 1, 4)
-1×4 Array{Int64,2}:
+1×4 Matrix{Int64}:
  4419743872  4374413872  4419743888  0
 ```
 
@@ -771,7 +777,7 @@ different element type it will create a regular `Array` instead:
 
 ```julia-repl
 julia> similar(falses(10), Float64, 2, 4)
-2×4 Array{Float64,2}:
+2×4 Matrix{Float64}:
  2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
  2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 ```

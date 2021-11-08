@@ -8,6 +8,7 @@ export
     chown,
     cp,
     cptree,
+    diskstat,
     hardlink,
     mkdir,
     mkpath,
@@ -1167,4 +1168,58 @@ function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
     err < 0 && uv_error("chown($(repr(path)), $owner, $group)", err)
     path
+end
+
+
+# - http://docs.libuv.org/en/v1.x/fs.html#c.uv_fs_statfs (libuv function docs)
+# - http://docs.libuv.org/en/v1.x/fs.html#c.uv_statfs_t (libuv docs of the returned struct)
+"""
+    DiskStat
+
+Stores information about the disk in bytes. Populate by calling `diskstat`.
+"""
+struct DiskStat
+    ftype::UInt64
+    bsize::UInt64
+    blocks::UInt64
+    bfree::UInt64
+    bavail::UInt64
+    files::UInt64
+    ffree::UInt64
+    fspare::NTuple{4, UInt64} # reserved
+end
+
+function Base.getproperty(stats::DiskStat, field::Symbol)
+    total = Int64(getfield(stats, :bsize) * getfield(stats, :blocks))
+    available = Int64(getfield(stats, :bsize) * getfield(stats, :bavail))
+    field === :total && return total
+    field === :available && return available
+    field === :used && return total - available
+    return getfield(stats, field)
+end
+
+@eval Base.propertynames(stats::DiskStat) =
+    $((fieldnames(DiskStat)[1:end-1]..., :available, :total, :used))
+
+Base.show(io::IO, x::DiskStat) =
+    print(io, "DiskStat(total=$(x.total), used=$(x.used), available=$(x.available))")
+
+"""
+    diskstat(path=pwd())
+
+Returns statistics in bytes about the disk that contains the file or directory pointed at by
+`path`. If no argument is passed, statistics about the disk that contains the current
+working directory are returned.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
+"""
+function diskstat(path::AbstractString=pwd())
+    req = zeros(UInt8, _sizeof_uv_fs)
+    err = ccall(:uv_fs_statfs, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                C_NULL, req, path, C_NULL)
+    err < 0 && uv_error("diskstat($(repr(path)))", err)
+    statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
+
+    return unsafe_load(reinterpret(Ptr{DiskStat}, statfs_ptr))
 end

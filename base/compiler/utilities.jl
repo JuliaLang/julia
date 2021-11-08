@@ -140,9 +140,6 @@ function retrieve_code_info(linfo::MethodInstance)
     return nothing
 end
 
-# Get at the nonfunction_mt, which happens to be the mt of SimpleVector
-const nonfunction_mt = typename(SimpleVector).mt
-
 function get_compileable_sig(method::Method, @nospecialize(atypes), sparams::SimpleVector)
     isa(atypes, DataType) || return nothing
     mt = ccall(:jl_method_table_for, Any, (Any,), atypes)
@@ -150,6 +147,9 @@ function get_compileable_sig(method::Method, @nospecialize(atypes), sparams::Sim
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
         mt, atypes, sparams, method)
 end
+
+isa_compileable_sig(@nospecialize(atype), method::Method) =
+    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any), atype, method))
 
 # eliminate UnionAll vars that might be degenerate due to having identical bounds,
 # or a concrete upper bound and appearing covariantly.
@@ -231,9 +231,9 @@ end
 
 argextype(@nospecialize(x), state) = argextype(x, state.src, state.sptypes, state.slottypes)
 
-const empty_slottypes = Any[]
+const EMPTY_SLOTTYPES = Any[]
 
-function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
+function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = EMPTY_SLOTTYPES)
     if isa(x, Expr)
         if x.head === :static_parameter
             return sptypes[x.args[1]::Int]

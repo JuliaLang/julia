@@ -345,7 +345,7 @@ end
     Event()
 
 Create a level-triggered event source. Tasks that call [`wait`](@ref) on an
-`Event` are suspended and queued until `notify` is called on the `Event`.
+`Event` are suspended and queued until [`notify`](@ref) is called on the `Event`.
 After `notify` is called, the `Event` remains in a signaled state and
 tasks will no longer block when waiting for it.
 
