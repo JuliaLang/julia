@@ -461,7 +461,7 @@ end
 """
     last(coll)
 
-Get the last element of an ordered collection, if it can be computed by reversing the collection. This is
+Get the last element of an ordered collection, if it can be computed in O(1) time. This is
 accomplished by calling [`Iterators.reverse`](@ref) and then [`first`](@ref) on that reversed iterator.
 Return the end point of an [`AbstractRange`](@ref) even if it is empty.
 
