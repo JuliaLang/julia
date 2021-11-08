@@ -1085,6 +1085,12 @@ else
 PATCHELF := $(build_depsbindir)/patchelf
 endif
 
+ifeq ($(USE_SYSTEM_LIBWHICH), 1)
+LIBWHICH := libwhich
+else
+LIBWHICH := $(build_depsbindir)/libwhich
+endif
+
 # On aarch64 and powerpc64le, we assume the page size is 64K.  Our binutils linkers
 # and such already assume this, but `patchelf` seems to be behind the times.  We
 # explicitly tell it to use this large page size so that when we rewrite rpaths and

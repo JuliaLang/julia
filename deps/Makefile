@@ -159,8 +159,10 @@ DEP_LIBS += lapack
 endif
 endif
 
+ifeq ($(USE_SYSTEM_LIBWHICH), 0)
 ifneq ($(OS), WINNT)
 DEP_LIBS += libwhich
+endif
 endif
 
 # unlist targets that have not been converted to use the staged-install
