@@ -963,7 +963,7 @@ end
 end
 
 # compensated power by squaring
-@inline function ^(x::Float64, n::Integer)
+function ^(x::Float64, n::Integer)
     n == 0 && return one(x)
     y = 1.0
     xnlo = ynlo = 0.0
