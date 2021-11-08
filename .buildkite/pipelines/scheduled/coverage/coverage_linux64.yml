@@ -23,6 +23,7 @@ steps:
           rootfs_treehash: "2a058481b567f0e91b9aa3ce4ad4f09e6419355a"
           uid: 1000
           gid: 1000
+    timeout_in_minutes: 360 # 360 minutes = 6 hours
     commands: |
       echo "--- Build Julia from source"
       make --output-sync -j 6
@@ -41,4 +42,3 @@ steps:
 
       echo "--- Process and upload coverage information"
       ./julia .buildkite/pipelines/scheduled/coverage/upload_coverage.jl
-    timeout_in_minutes: 240 # 240 minutes = 4 hours
