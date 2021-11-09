@@ -993,10 +993,17 @@ function show_datatype(io::IO, @nospecialize(x::DataType), wheres::Vector=TypeVa
     # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
     if istuple
         if n > 3 && all(@nospecialize(i) -> (parameters[1] === i), parameters)
-            print(io, "NTuple{", n, ", ", repr(parameters[1]), "}")
+            print(io, "NTuple{", n, ", ")
+            show(io, parameters[1])
+            print(io, "}")
         else
             print(io, "Tuple{")
-            join(io, repr.(parameters), ", ")
+            # join(io, params, ", ") params but `show` it
+            first = true
+            for param in parameters
+                first ? (first = false) : print(io, ", ")
+                show(io, param)
+            end
             print(io, "}")
         end
     else
