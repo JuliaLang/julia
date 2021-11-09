@@ -332,7 +332,7 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
         if x isa BitInteger64
-            f(Float64(x), p)
+            f(Float64(x), p) # inv would cause rounding, while Float64^Integer is able to compensate the inverse
         else
             f(inv(x), -p)
         end
