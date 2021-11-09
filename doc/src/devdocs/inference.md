@@ -53,12 +53,8 @@ ci = (@code_typed convert(Int, UInt(1)))[1]
 
 Much of the hardest work for inlining runs in `ssa_inlining_pass!`.
 However, if your question is "why didn't my function inline?"
-then you will most likely be interested in `isinlineable` and its
-primary callee, `inline_worthy`.
-`isinlineable` handles a number of special cases
-(e.g., critical functions like `iterate`).
-The main decision-making happens in `inline_worthy`,
-which returns `true` if the function should be inlined.
+then you will most likely be interested in `inline_worthy`,
+which makes a decision to inline the function call or not.
 
 `inline_worthy` implements a cost-model, where "cheap" functions get
 inlined; more specifically, we inline functions if their anticipated
