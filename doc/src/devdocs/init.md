@@ -10,7 +10,7 @@ which loads a few libraries, eventually calling [`repl_entrypoint()` in `src/jla
 
 `repl_entrypoint()` calls [`libsupport_init()`](https://github.com/JuliaLang/julia/blob/master/src/support/libsupportinit.c)
 to set the C library locale and to initialize the "ios" library (see [`ios_init_stdstreams()`](https://github.com/JuliaLang/julia/blob/master/src/support/ios.c)
-and [Legacy `ios.c` library](@ref)).
+and [Legacy `ios.c` library](@ref dev-stdio-ios-c)).
 
 Next [`jl_parse_opts()`](https://github.com/JuliaLang/julia/blob/master/src/jloptions.c) is called to process
 command line options. Note that `jl_parse_opts()` only deals with options that affect code generation
@@ -137,7 +137,7 @@ and `main()` calls `repl_entrypoint(argc, (char**)argv)`.
     `jl_init_box_caches()` below...
 
     Note: [`jl_restore_system_image()` (and `staticdata.c` in general)](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c)
-    uses the [Legacy `ios.c` library](@ref).
+    uses the [Legacy `ios.c` library](@ref dev-stdio-ios-c).
 
 ## `repl_entrypoint()`
 
