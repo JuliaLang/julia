@@ -103,24 +103,22 @@ Check wheather the same shared library is loaded from two different files.
 The `warnings` determines if the warnings are printed to the console.
 
 Returns if no duplicate was detected.
-
-!!! compat "Julia 1.8"
-    This method requires Julia 1.8 or later.
 """
-function check_dllist(; warnings = true)::Bool
+function check_dllist()
     fullpaths = dllist()
     names = dlname.(fullpaths)
-    noduplicity = true
+    dlabspath(x) = isfile(x) ? abspath(realpath(x)) : x
     for (i,dl) in enumerate(names), j in i+1:length(names)
         if dl == names[j]
-            warnings && @warn """Detected possible duplicate library loaded: $dl
+            if dlabspath(fullpaths[i]) == dlabspath(fullpaths[j])
+                continue
+            end
+            @warn """Detected possible duplicate library loaded: $dl
 This may lead to unexpected behavior!
 $(fullpaths[i])
 $(fullpaths[j])""" maxlog=1
-            noduplicity = false
         end
     end
-    return noduplicity
 end
 
 """
@@ -160,12 +158,12 @@ function dlopen end
 dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; kwargs...) =
     dlopen(string(s), flags; kwargs...)
 
-function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; throw_error::Bool = true)
+function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; throw_error::Bool = true, warnings::Bool = true)
     ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
     if ret == C_NULL
         return nothing
     end
-    check_dllist()
+    warnings && check_dllist()
     return ret
 end
 
