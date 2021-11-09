@@ -49,7 +49,7 @@ Base.lock
 Base.unlock
 Base.trylock
 Base.islocked
-Base.Lock
+Base.ReentrantLock
 ```
 
 ## Channels

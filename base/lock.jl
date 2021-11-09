@@ -4,7 +4,7 @@ const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
 
 # Advisory reentrant lock
 """
-    Lock()
+    ReentrantLock()
 
 Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
 acquire the lock as many times as required. Each [`lock`](@ref) must be matched
@@ -25,7 +25,7 @@ finally
 end
 ```
 """
-mutable struct Lock <: AbstractLock
+mutable struct ReentrantLock <: AbstractLock
     # offset = 16
     @atomic locked_by::Union{Task, Nothing}
     # offset32 = 20, offset64 = 24
@@ -41,9 +41,8 @@ mutable struct Lock <: AbstractLock
     # offset32 = 44, offset64 = 72 == sizeof+offset
     # sizeof32 = 28, sizeof64 = 56
 
-    Lock() = new(nothing, 0x0000_0000, 0x00, ThreadSynchronizer())
+    ReentrantLock() = new(nothing, 0x0000_0000, 0x00, ThreadSynchronizer())
 end
-const ReentrantLock = Lock
 
 assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
 
