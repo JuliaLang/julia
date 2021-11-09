@@ -111,7 +111,7 @@ Base.@int128_str
 Base.@uint128_str
 ```
 
-## BigFloats and BigInts
+## [BigFloats and BigInts](@id base-big)
 
 The [`BigFloat`](@ref) and [`BigInt`](@ref) types implements
 arbitrary-precision floating point and integer arithmetic, respectively. For
