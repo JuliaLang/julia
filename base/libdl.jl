@@ -97,12 +97,10 @@ function dlname(fullpath::String)
 end
 
 """
-    check_dllist(; warnings = true)::Bool
+    check_dllist()
 
 Check wheather the same shared library is loaded from two different files.
 The `warnings` determines if the warnings are printed to the console.
-
-Returns if no duplicate was detected.
 """
 function check_dllist()
     fullpaths = dllist()
