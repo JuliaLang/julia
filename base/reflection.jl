@@ -1085,10 +1085,10 @@ const SLOT_USED = 0x8
 ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 
 """
-    may_invoke_generator(method, atypes, sparams)
+    may_invoke_generator(method, atype, sparams)
 
 Computes whether or not we may invoke the generator for the given `method` on
-the given atypes and sparams. For correctness, all generated function are
+the given atype and sparams. For correctness, all generated function are
 required to return monotonic answers. However, since we don't expect users to
 be able to successfully implement this criterion, we only call generated
 functions on concrete types. The one exception to this is that we allow calling
@@ -1102,9 +1102,9 @@ in some cases, but this may still allow inference not to fall over in some limit
 function may_invoke_generator(method::MethodInstance)
     return may_invoke_generator(method.def::Method, method.specTypes, method.sparam_vals)
 end
-function may_invoke_generator(method::Method, @nospecialize(atypes), sparams::SimpleVector)
+function may_invoke_generator(method::Method, @nospecialize(atype), sparams::SimpleVector)
     # If we have complete information, we may always call the generator
-    isdispatchtuple(atypes) && return true
+    isdispatchtuple(atype) && return true
 
     # We don't have complete information, but it is possible that the generator
     # syntactically doesn't make use of the information we don't have. Check
@@ -1122,7 +1122,7 @@ function may_invoke_generator(method::Method, @nospecialize(atypes), sparams::Si
     isdefined(generator_method, :source) || return false
     code = generator_method.source
     nslots = ccall(:jl_ir_nslots, Int, (Any,), code)
-    at = unwrap_unionall(atypes)::DataType
+    at = unwrap_unionall(atype)::DataType
     (nslots >= 1 + length(sparams) + length(at.parameters)) || return false
 
     for i = 1:nsparams
