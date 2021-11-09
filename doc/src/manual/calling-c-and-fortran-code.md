@@ -777,8 +777,7 @@ simply declared as `(Csize_t,)` without any `Ref` or `Ptr` necessary. (If the
 wrapper was calling a Fortran function instead, the corresponding function input
 signature would instead be `(Ref{Csize_t},)`, since Fortran variables are
 passed by pointers.) Furthermore, `n` can be any type that is convertible to a
-`Csize_t` integer; the [`ccall`](@ref) implicitly calls [`Base.cconvert(Csize_t,
-n)`](@ref).
+`Csize_t` integer; the [`ccall`](@ref) implicitly calls [`Base.cconvert(Csize_t, n)`](@ref).
 
 Here is a second example wrapping the corresponding destructor:
 
