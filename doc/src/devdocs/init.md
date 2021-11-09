@@ -174,7 +174,7 @@ and [`Base.print()`](@ref) before arriving at [`write(s::IO, a::Array{T}) where 
  which does `ccall(jl_uv_write())`.
 
 [`jl_uv_write()`](https://github.com/JuliaLang/julia/blob/master/src/jl_uv.c) calls `uv_write()`
-to write "Hello World!" to `JL_STDOUT`. See [Libuv wrappers for stdio](@ref).:
+to write "Hello World!" to `JL_STDOUT`. See [Libuv wrappers for stdio](@ref dev-stdio-libuv).:
 
 ```
 Hello World!

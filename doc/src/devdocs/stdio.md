@@ -1,6 +1,6 @@
 # printf() and stdio in the Julia runtime
 
-## Libuv wrappers for stdio
+## [Libuv wrappers for stdio](@id dev-stdio-libuv)
 
 `julia.h` defines [libuv](http://docs.libuv.org) wrappers for the `stdio.h` streams:
 
