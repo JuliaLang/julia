@@ -63,15 +63,6 @@
 #  define JL_USED_FUNC __attribute__((used))
 #  define JL_SECTION(name) __attribute__((section(name)))
 #  define JL_THREAD_LOCAL __thread
-#elif defined(_COMPILER_MICROSOFT_)
-#  define JL_NORETURN __declspec(noreturn)
-// This is the closest I can find for __attribute__((const))
-#  define JL_CONST_FUNC __declspec(noalias)
-// Does MSVC have this?
-#  define JL_USED_FUNC
-// TODO: Figure out what to do on MSVC
-#  define JL_SECTION(x)
-#  define JL_THREAD_LOCAL __declspec(threaD)
 #else
 #  define JL_NORETURN
 #  define JL_CONST_FUNC
@@ -225,15 +216,19 @@ typedef jl_call_t *jl_callptr_t;
 
 // "speccall" calling convention signatures.
 // This describes some of the special ABI used by compiled julia functions.
-JL_DLLEXPORT extern jl_call_t jl_fptr_args;
+extern jl_call_t jl_fptr_args;
+JL_DLLEXPORT extern jl_callptr_t jl_fptr_args_addr;
 typedef jl_value_t *(*jl_fptr_args_t)(jl_value_t*, jl_value_t**, uint32_t);
 
-JL_DLLEXPORT extern jl_call_t jl_fptr_const_return;
+extern jl_call_t jl_fptr_const_return;
+JL_DLLEXPORT extern jl_callptr_t jl_fptr_const_return_addr;
 
-JL_DLLEXPORT extern jl_call_t jl_fptr_sparam;
+extern jl_call_t jl_fptr_sparam;
+JL_DLLEXPORT extern jl_callptr_t jl_fptr_sparam_addr;
 typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*);
 
-JL_DLLEXPORT extern jl_call_t jl_fptr_interpret_call;
+extern jl_call_t jl_fptr_interpret_call;
+JL_DLLEXPORT extern jl_callptr_t jl_fptr_interpret_call_addr;
 
 typedef struct _jl_method_instance_t jl_method_instance_t;
 
@@ -674,7 +669,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_initerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_typeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_methoderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_undefvarerror_type JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_exception JL_GLOBALLY_ROOTED;
@@ -1716,11 +1711,11 @@ enum JL_RTLD_CONSTANT {
 };
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 
-typedef void *jl_uv_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
-JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);
-JL_DLLEXPORT jl_uv_libhandle jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_dlclose(jl_uv_libhandle handle) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_dlsym(jl_uv_libhandle handle, const char *symbol, void ** value, int throw_err) JL_NOTSAFEPOINT;
+typedef void *jl_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
+JL_DLLEXPORT jl_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);
+JL_DLLEXPORT jl_libhandle jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_dlclose(jl_libhandle handle) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_dlsym(jl_libhandle handle, const char *symbol, void ** value, int throw_err) JL_NOTSAFEPOINT;
 
 // evaluation
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v);
@@ -1837,23 +1832,13 @@ typedef struct _jl_task_t {
     jl_gcframe_t *gcstack;
     size_t world_age;
     // quick lookup for current ptls
-    jl_tls_states_t *ptls; // == jl_all_tls_states[tid]
+    jl_ptls_t ptls; // == jl_all_tls_states[tid]
     // saved exception stack
     jl_excstack_t *excstack;
     // current exception handler
     jl_handler_t *eh;
-
-    union {
-        jl_ucontext_t ctx; // saved thread state
-#ifdef _OS_WINDOWS_
-        jl_ucontext_t copy_stack_ctx;
-#else
-        struct jl_stack_context_t copy_stack_ctx;
-#endif
-    };
-#if defined(_COMPILER_TSAN_ENABLED_)
-    void *tsan_state;
-#endif
+    // saved thread state
+    jl_ucontext_t ctx;
     void *stkbuf; // malloc'd memory (either copybuf or stack)
     size_t bufsz; // actual sizeof stkbuf
     unsigned int copy_stack:31; // sizeof stack for copybuf
@@ -1950,24 +1935,32 @@ extern int had_exception;
 
 // I/O system -----------------------------------------------------------------
 
-#define JL_STREAM uv_stream_t
+struct uv_loop_s;
+struct uv_handle_s;
+struct uv_stream_s;
+#ifdef _OS_WINDOWS_
+typedef HANDLE jl_uv_os_fd_t;
+#else
+typedef int jl_uv_os_fd_t;
+#endif
+#define JL_STREAM struct uv_stream_s
 #define JL_STDOUT jl_uv_stdout
 #define JL_STDERR jl_uv_stderr
 #define JL_STDIN  jl_uv_stdin
 
 JL_DLLEXPORT int jl_process_events(void);
 
-JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void);
+JL_DLLEXPORT struct uv_loop_s *jl_global_event_loop(void);
 
-JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle);
+JL_DLLEXPORT void jl_close_uv(struct uv_handle_s *handle);
 
 JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
 
 typedef struct {
     void *data;
-    uv_loop_t *loop;
-    uv_handle_type type;
-    uv_os_fd_t file;
+    struct uv_loop_s *loop;
+    int type; // enum uv_handle_type
+    jl_uv_os_fd_t file;
 } jl_uv_file_t;
 
 #ifdef __GNUC__
@@ -1977,10 +1970,10 @@ typedef struct {
 #define _JL_FORMAT_ATTR(type, str, arg)
 #endif
 
-JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n);
-JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
+JL_DLLEXPORT void jl_uv_puts(struct uv_stream_s *stream, const char *str, size_t n);
+JL_DLLEXPORT int jl_printf(struct uv_stream_s *s, const char *format, ...)
     _JL_FORMAT_ATTR(printf, 2, 3);
-JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
+JL_DLLEXPORT int jl_vprintf(struct uv_stream_s *s, const char *format, va_list args)
     _JL_FORMAT_ATTR(printf, 2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 1, 2);
@@ -2134,7 +2127,6 @@ typedef struct {
     // generic_context(f, args...) instead of f(args...).
     jl_value_t *generic_context;
 } jl_cgparams_t;
-extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
 #ifdef __cplusplus

@@ -799,7 +799,7 @@ that is the unique matrix ``X`` with eigenvalues having positive real part such 
 
 If `A` is real-symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
 used to compute the square root.   For such matrices, eigenvalues λ that
-appear to be slightly negative due to roundoff errors are treated as if they were zero
+appear to be slightly negative due to roundoff errors are treated as if they were zero.
 More precisely, matrices with all eigenvalues `≥ -rtol*(max |λ|)` are treated as semidefinite
 (yielding a Hermitian square root), with negative eigenvalues taken to be zero.
 `rtol` is a keyword argument to `sqrt` (in the Hermitian/real-symmetric case only) that
@@ -836,6 +836,8 @@ julia> sqrt(A)
  0.0  2.0
 ```
 """
+sqrt(::StridedMatrix)
+
 function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
     if ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
@@ -1462,7 +1464,7 @@ end
     nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular
-vectors of `M` whose singular values have magnitudes greater than `max(atol, rtol*σ₁)`,
+vectors of `M` whose singular values have magnitudes smaller than `max(atol, rtol*σ₁)`,
 where `σ₁` is `M`'s largest singular value.
 
 By default, the relative tolerance `rtol` is `n*ϵ`, where `n`

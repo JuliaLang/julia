@@ -1332,25 +1332,29 @@
   (let ((tryb   (cadr e))
         (var    (caddr e))
         (catchb (cadddr e)))
-    (cond ((length= e 5)
+    (cond ((and (length> e 4) (not (equal? (caddddr e) '(false))))
            (if (has-unmatched-symbolic-goto? tryb)
                (error "goto from a try/finally block is not permitted"))
-           (let ((finalb (cadddr (cdr e))))
+           (let ((finalb (caddddr e)))
              (expand-forms
               `(tryfinally
-                ,(if (not (equal? catchb '(false)))
-                     `(try ,tryb ,var ,catchb)
-                     `(scope-block ,tryb))
+                ,(if (and (equal? catchb '(false)) (length= e 5))
+                     `(scope-block ,tryb)
+                     `(try ,tryb ,var ,catchb (false) ,@(cdddddr e)))
                 (scope-block ,finalb)))))
-          ((length= e 4)
-           (expand-forms
-            (if (symbol-like? var)
-                `(trycatch (scope-block ,tryb)
-                           (scope-block
-                            (block (= ,var (the_exception))
-                                   ,catchb)))
-                `(trycatch (scope-block ,tryb)
-                           (scope-block ,catchb)))))
+          ((length> e 3)
+           (and (length> e 6) (error "invalid \"try\" form"))
+           (let ((elseb (if (length= e 6) (cdddddr e) '())))
+             (expand-forms
+               `(,(if (null? elseb) 'trycatch 'trycatchelse)
+                 (scope-block ,tryb)
+                 (scope-block
+                   ,(if (symbol-like? var)
+                        `(scope-block
+                          (block (= ,var (the_exception))
+                                 ,catchb))
+                        `(scope-block ,catchb)))
+                 ,@elseb))))
           (else
            (error "invalid \"try\" form")))))
 
@@ -3587,7 +3591,7 @@ f(x) = yt(x)
             ((eq? (car e) 'symboliclabel)
              (kill)
              #t)
-            ((memq (car e) '(if elseif trycatch tryfinally))
+            ((memq (car e) '(if elseif trycatch tryfinally trycatchelse))
              (let ((prev (table.clone live)))
                (if (eager-any (lambda (e) (begin0 (visit e)
                                                   (kill)))
@@ -3653,7 +3657,7 @@ f(x) = yt(x)
         (and cv (vinfo:asgn cv) (vinfo:capt cv)))))
 
 (define (toplevel-preserving? e)
-  (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally))))
+  (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse))))
 
 (define (map-cl-convert exprs fname lam namemap defined toplevel interp opaq)
   (if toplevel
@@ -4446,9 +4450,10 @@ f(x) = yt(x)
             ;; (= tok (enter L)) - push handler with catch block at label L, yielding token
             ;; (leave n) - pop N exception handlers
             ;; (pop_exception tok) - pop exception stack back to state of associated enter
-            ((trycatch tryfinally)
+            ((trycatch tryfinally trycatchelse)
              (let ((handler-token (make-ssavalue))
                    (catch (make-label))
+                   (els   (and (eq? (car e) 'trycatchelse) (make-label)))
                    (endl  (make-label))
                    (last-finally-handler finally-handler)
                    (finally           (if (eq? (car e) 'tryfinally) (new-mutable-var) #f))
@@ -4465,11 +4470,20 @@ f(x) = yt(x)
                  ;; handler block postfix
                  (if (and val v1) (emit-assignment val v1))
                  (if tail
-                     (begin (if v1 (emit-return v1))
+                     (begin (if els
+                                (begin (if (and (not val) v1) (emit v1))
+                                       (emit '(leave 1)))
+                                (if v1 (emit-return v1)))
                             (if (not finally) (set! endl #f)))
                      (begin (emit '(leave 1))
-                            (emit `(goto ,endl))))
+                            (emit `(goto ,(or els endl)))))
                  (set! handler-level (- handler-level 1))
+                 ;; emit else block
+                 (if els
+                     (begin (mark-label els)
+                            (let ((v3 (compile (cadddr e) break-labels value tail))) ;; emit else block code
+                              (if val (emit-assignment val v3)))
+                            (emit `(goto ,endl))))
                  ;; emit either catch or finally block
                  (mark-label catch)
                  (emit `(leave 1))

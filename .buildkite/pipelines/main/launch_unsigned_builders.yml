@@ -22,8 +22,8 @@ steps:
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/sanitizers.yml
 
       # Launch all of the platform jobs.
-      bash .buildkite/pipelines/main/platforms/platforms.sh package_linux
-      bash .buildkite/pipelines/main/platforms/platforms.sh tester_linux
+      bash .buildkite/utilities/platforms/platforms.sh .buildkite/pipelines/main/platforms/package_linux.arches .buildkite/pipelines/main/platforms/package_linux.yml
+      bash .buildkite/utilities/platforms/platforms.sh .buildkite/pipelines/main/platforms/tester_linux.arches .buildkite/pipelines/main/platforms/tester_linux.yml
 
       # Launch the `whitespace` job last. Uploading it last actually causes it to start
       # first. We want this job to start first because we want it to finish as quickly

@@ -409,3 +409,51 @@ function log1p(x::Float32)
     end
 end
 
+
+@inline function log_ext_kernel(x_hi::Float64, x_lo::Float64)
+    c1hi = 0.666666666666666629659233
+    hi_order =  evalpoly(x_hi, (0.400000000000000077715612, 0.285714285714249172087875,
+                                0.222222222230083560345903, 0.181818180850050775676507,
+                                0.153846227114512262845736, 0.13332981086846273921509,
+                                0.117754809412463995466069, 0.103239680901072952701192,
+                                0.116255524079935043668677))
+    res_hi = hi_order * x_hi
+    res_lo = fma(x_lo, hi_order, fma(hi_order, x_hi, -res_hi))
+    ans_hi = c1hi + res_hi
+    ans_lo = ((c1hi - ans_hi) + res_hi) + (res_lo + 3.80554962542412056336616e-17)
+    return ans_hi, ans_lo
+end
+
+# Log implementation that returns 2 numbers which sum to give true value with about 68 bits of precision
+# Implimentation adapted from SLEEFPirates.jl
+# Does not normalize results.
+# Must be caused with positive finite arguments
+function _log_ext(d::Float64)
+    m, e = significand(d), exponent(d)
+    if m > 1.5
+        m *= 0.5
+        e += 1.0
+    end
+    # x = (m-1)/(m+1)
+    mp1hi = m + 1.0
+    mp1lo = m + (1.0 - mp1hi)
+    invy = inv(mp1hi)
+    xhi = (m - 1.0) * invy
+    xlo = fma(-xhi, mp1lo, fma(-xhi, mp1hi, m - 1.0)) * invy
+    x2hi = xhi * xhi
+    x2lo = muladd(xhi, xlo * 2.0, fma(xhi, xhi, -x2hi))
+    thi, tlo  = log_ext_kernel(x2hi, x2lo)
+
+    shi = 0.6931471805582987 * e
+    xhi2 = xhi * 2.0
+    shinew = muladd(xhi, 2.0, shi)
+    slo = muladd(1.6465949582897082e-12, e, muladd(xlo, 2.0, (((shi - shinew) + xhi2))))
+    shi = shinew
+    x3hi = x2hi * xhi
+    x3lo = muladd(x2hi, xlo, muladd(xhi, x2lo,fma(x2hi, xhi, -x3hi)))
+    x3thi = x3hi * thi
+    x3tlo = muladd(x3hi, tlo, muladd(x3lo, thi, fma(x3hi, thi, -x3thi)))
+    anshi = x3thi + shi
+    anslo = slo + x3tlo - ((anshi - shi) - x3thi)
+    return anshi, anslo
+end

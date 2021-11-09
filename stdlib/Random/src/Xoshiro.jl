@@ -4,7 +4,8 @@
 # Lots of implementation is shared with TaskLocalRNG
 
 """
-    Xoshiro
+    Xoshiro(seed)
+    Xoshiro()
 
 Xoshiro256++ is a fast pseudorandom number generator described by David Blackman and
 Sebastiano Vigna in "Scrambled Linear Pseudorandom Number Generators",

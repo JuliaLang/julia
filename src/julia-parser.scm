@@ -253,13 +253,13 @@
                                        (and (or (eq? opsym '--) (eq? opsym '.--))
                                             (read-char port)
                                             (or (begin0 (eqv? (peek-char port) #\>)
-                                                        (io.ungetc port #\-))
+                                                        (io.skip port -1)) ; unget -, leaving -
                                                 (error (string "invalid operator \"" newop "\""))))
                                        ;; <- is not an operator but <-- and <--> are
                                        (and (or (eq? opsym '<-) (eq? opsym '.<-))
                                             (read-char port)
                                             (begin0 (eqv? (peek-char port) #\-)
-                                                    (io.ungetc port #\-)))
+                                                    (io.skip port -1))) ; unget -, leaving <
                                        ;; consume suffixes after ', only if parsing a call chain
                                        ;; otherwise 'ᵀ' would parse as (|'| |'ᵀ|)
                                        (and postfix? (eqv? c0 #\') sufchar?))
@@ -278,7 +278,7 @@
                  (if (and (not (eof-object? c)) (pred c))
                      (loop str c)
                      (begin
-                       (io.ungetc port #\_)
+                       (io.skip port -1) ; unget _
                        (list->string (reverse str))))))
         (if (and (not (eof-object? c)) (pred c))
             (begin (read-char port)
@@ -328,7 +328,7 @@
       (if (eqv? (peek-char port) #\.)
           (begin (read-char port)
                  (if (dot-opchar? (peek-char port))
-                     (io.ungetc port #\.)
+                     (io.skip port -1) ; unget .
                      (error (string "invalid numeric constant \""
                                     (get-output-string str) #\. "\""))))))
     (define (read-digs lz _-digit-sep)
@@ -368,7 +368,7 @@
                                           (if (eqv? (peek-char port) #\')
                                               ""
                                               "; add space(s) to clarify")))))
-                     (io.ungetc port #\.))
+                     (io.skip port -1)) ; unget .
                    (begin (write-char #\. str)
                           (read-digs #f #t)
                           (if (eq? pred char-hex?)
@@ -393,7 +393,7 @@
                                   (write-char (read-char port) str))
                               (read-digs #t #f)
                               (disallow-dot))
-                       (io.ungetc port c)))))
+                       (io.skip port -1))))) ; unget c
       (if (and (char? c)
                (or (eq? pred char-bin?) (eq? pred char-oct?)
                    (and (eq? pred char-hex?) (not is-hex-float-literal)))
@@ -1509,29 +1509,33 @@
           (let loop ((nxt    (peek-token s))
                      (catchb #f)
                      (catchv #f)
-                     (finalb #f))
+                     (finalb #f)
+                     (elseb #f))
             (take-token s)
             (cond
              ((eq? nxt 'end)
               (list* 'try try-block (or catchv '(false))
                      (or catchb (if finalb '(false) (error "try without catch or finally")))
-                     (if finalb (list finalb) '())))
+                     (cond (elseb  (list (or finalb '(false)) elseb))
+                           (finalb (list finalb))
+                           (else   '()))))
              ((and (eq? nxt 'catch)
                    (not catchb))
               (let ((nl (memv (peek-token s) '(#\newline #\;))))
                 (if (eqv? (peek-token s) #\;)
                     (take-token s))
-                (if (memq (require-token s) '(end finally))
+                (if (memq (require-token s) '(end finally else))
                     (loop (require-token s)
                           '(block)
                           #f
-                          finalb)
+                          finalb
+                          elseb)
                     (let* ((loc (line-number-node s))
                            (var (if nl #f (parse-eq* s)))
                            (var? (and (not nl) (or (symbol? var)
                                                    (and (length= var 2) (eq? (car var) '$))
                                                    (error (string "invalid syntax \"catch " (deparse var) "\"")))))
-                           (catch-block (if (eq? (require-token s) 'finally)
+                           (catch-block (if (memq (require-token s) '(finally else))
                                             `(block ,(line-number-node s))
                                             (parse-block s))))
                       (loop (require-token s)
@@ -1543,16 +1547,30 @@
                                               '()
                                               (cdr catch-block))))
                             (if var? var '(false))
-                            finalb)))))
+                            finalb
+                            elseb)))))
              ((and (eq? nxt 'finally)
                    (not finalb))
-              (let ((fb (if (eq? (require-token s) 'catch)
+              (let ((fb (if (memq (require-token s) '(catch else))
                             '(block)
                             (parse-block s))))
                 (loop (require-token s)
                       catchb
                       catchv
-                      fb)))
+                      fb
+                      elseb)))
+             ((and (eq? nxt 'else)
+                   (not elseb))
+              (if (or (not catchb) finalb)
+                  (error "else inside try block needs to be immediately after catch"))
+              (let ((eb (if (eq? (require-token s) 'finally)
+                            '(block)
+                            (parse-block s))))
+                (loop (require-token s)
+                      catchb
+                      catchv
+                      finalb
+                      eb)))
              (else (expect-end-error nxt 'try))))))
        ((return)          (let ((t (peek-token s)))
                             (if (or (eqv? t #\newline) (closing-token? t))

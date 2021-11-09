@@ -3,8 +3,8 @@
 #include "jl_exported_funcs.inc"
 #include "trampolines/common.h"
 #define XX(x) --strip-symbol=CNAME(x)
-JL_EXPORTED_FUNCS(XX)
+JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_
-JL_EXPORTED_FUNCS_WIN(XX)
+JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
 #endif
 #undef XX

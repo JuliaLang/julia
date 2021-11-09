@@ -103,6 +103,18 @@ function swapcols!(a::AbstractMatrix, i, j)
         @inbounds a[k,i],a[k,j] = a[k,j],a[k,i]
     end
 end
+
+# swap rows i and j of a, in-place
+function swaprows!(a::AbstractMatrix, i, j)
+    i == j && return
+    rows = axes(a,1)
+    @boundscheck i in rows || throw(BoundsError(a, (:,i)))
+    @boundscheck j in rows || throw(BoundsError(a, (:,j)))
+    for k in axes(a,2)
+        @inbounds a[i,k],a[j,k] = a[j,k],a[i,k]
+    end
+end
+
 # like permute!! applied to each row of a, in-place in a (overwriting p).
 function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
     require_one_based_indexing(a, p)

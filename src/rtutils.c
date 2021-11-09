@@ -214,6 +214,18 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
         jl_type_error("typeassert", t, x);
 }
 
+#ifndef HAVE_SSP
+JL_DLLEXPORT uintptr_t __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
+
+JL_DLLEXPORT void __stack_chk_fail(void)
+{
+    /* put your panic function or similar in here */
+    fprintf(stderr, "fatal error: stack corruption detected\n");
+    jl_gc_debug_critical_error();
+    abort(); // end with abort, since the compiler destroyed the stack upon entry to this function, there's no going back now
+}
+#endif
+
 // exceptions -----------------------------------------------------------------
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
@@ -271,7 +283,8 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     if (old_defer_signal && !eh->defer_signal) {
         jl_sigint_safepoint(ct->ptls);
     }
-    if (jl_gc_have_pending_finalizers && unlocks && eh->locks_len == 0) {
+    if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers) &&
+            unlocks && eh->locks_len == 0) {
         jl_gc_run_pending_finalizers(ct);
     }
 }
@@ -972,7 +985,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;
-        if (e->head == assign_sym && jl_array_len(e->args) == 2) {
+        if (e->head == jl_assign_sym && jl_array_len(e->args) == 2) {
             n += jl_static_show_x(out, jl_exprarg(e,0), depth);
             n += jl_printf(out, " = ");
             n += jl_static_show_x(out, jl_exprarg(e,1), depth);

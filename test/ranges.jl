@@ -348,6 +348,7 @@ end
         end
     end
     @testset "findfirst" begin
+        @test findfirst(==(1), Base.IdentityUnitRange(-1:1)) == 1
         @test findfirst(isequal(3), Base.OneTo(10)) == 3
         @test findfirst(==(0), Base.OneTo(10)) == nothing
         @test findfirst(==(11), Base.OneTo(10)) == nothing
@@ -582,6 +583,8 @@ struct OverflowingReal <: Real
     val::UInt8
 end
 OverflowingReal(x::OverflowingReal) = x
+Base.:<(x::OverflowingReal, y::OverflowingReal) = x.val < y.val
+Base.:(==)(x::OverflowingReal, y::OverflowingReal) = x.val == y.val
 Base.:<=(x::OverflowingReal, y::OverflowingReal) = x.val <= y.val
 Base.:+(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val + y.val)
 Base.:-(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val - y.val)
@@ -2185,4 +2188,25 @@ end
     @test (x in StepRangeLen(x, 0, rand(1:100))) == true
     @test ((x - 1) in StepRangeLen(x, 0, rand(1:100))) == false
     @test ((x + 1) in StepRangeLen(x, 0, rand(1:100))) == false
+end
+
+@testset "issue #42528" begin
+    struct Fix42528 <: Unsigned
+        val::UInt
+    end
+    Fix42528(a::Fix42528) = a
+    Base.:(<)(a::Fix42528, b::Fix42528) = a.val < b.val
+    Base.:(>=)(a::Fix42528, b::Fix42528) = a.val >= b.val
+    Base.:(+)(a::Fix42528, b::Fix42528) = a.val+b.val
+    Base.promote_rule(::Type{Fix42528}, ::Type{<:Unsigned}) = Fix42528
+    Base.show(io::IO, ::MIME"text/plain", a::Fix42528) = print(io, "Fix42528(", a.val, ')')
+    Base.show(io::IO, a::Fix42528) = print(io, "Fix42528(", a.val, ')')
+    function Base.:(-)(a::Fix42528, b::Fix42528)
+        a.val < b.val && throw(DomainError("Can't subtract, result outside of domain"))
+        return a.val - b.val
+    end
+    Base.one(::Type{Fix42528}) = Fix42528(0x1)
+    @test Fix42528(0x0):Fix42528(0x1) == [Fix42528(0x0), Fix42528(0x01)]
+    @test iszero(length(Fix42528(0x1):Fix42528(0x0)))
+    @test_throws DomainError Fix42528(0x0) - Fix42528(0x1)
 end

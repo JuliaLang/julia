@@ -36,6 +36,37 @@ your function contains multiple layers of inlining, only `@boundscheck` blocks a
 of inlining deeper are eliminated. The rule prevents unintended changes in program behavior from
 code further up the stack.
 
+### Caution!
+
+It is easy to accidentally expose unsafe operations with `@inbounds`. You might be tempted
+to write the above example as
+
+```julia
+function sum(A::AbstractArray)
+    r = zero(eltype(A))
+    for i in 1:length(A)
+        @inbounds r += A[i]
+    end
+	return r
+end
+```
+
+Which quietly assumes 1-based indexing and therefore exposes unsafe memory access when used
+with [`OffsetArrays`](@ref man-custom-indice):
+
+```julia-repl
+julia> using OffsetArrays
+
+julia> sum(OffsetArray([1,2,3], -10))
+9164911648 # inconsistent results or segfault
+```
+
+While the original source of the error here is `1:length(A)`, the use of `@inbounds`
+increases the consequences from a bounds error to a less easily caught and debugged unsafe
+memory access. It is often difficult or impossible to prove that a method which uses
+`@inbounds` is safe, so one must weigh the benefits of performance improvements against the
+risk of segfaults and silent misbehavior, especially in public facing APIs.
+
 ## Propagating inbounds
 
 There may be certain scenarios where for code-organization reasons you want more than one layer

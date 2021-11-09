@@ -270,13 +270,13 @@ function qrfactPivotedUnblocked!(A::AbstractMatrix)
 
         # Compute reflector of columns j
         x = view(A, j:m, j)
-        τj = LinearAlgebra.reflector!(x)
+        τj = reflector!(x)
         τ[j] = τj
 
         # Update trailing submatrix with reflector
-        LinearAlgebra.reflectorApply!(x, τj, view(A, j:m, j+1:n))
+        reflectorApply!(x, τj, view(A, j:m, j+1:n))
     end
-    return LinearAlgebra.QRPivoted{eltype(A), typeof(A)}(A, τ, piv)
+    return QRPivoted{eltype(A), typeof(A)}(A, τ, piv)
 end
 
 # LAPACK version
@@ -567,13 +567,17 @@ size(F::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(F, :factors))
 size(Q::AbstractQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
 size(Q::AbstractQ) = size(Q, 1), size(Q, 2)
 
-function getindex(Q::AbstractQ, i::Integer, j::Integer)
-    x = zeros(eltype(Q), size(Q, 1))
-    x[i] = 1
+copy(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
+getindex(Q::AbstractQ, inds...) = copy(Q)[inds...]
+getindex(Q::AbstractQ, ::Colon, ::Colon) = copy(Q)
+
+function getindex(Q::AbstractQ, ::Colon, j::Int)
     y = zeros(eltype(Q), size(Q, 2))
     y[j] = 1
-    return dot(x, lmul!(Q, y))
+    lmul!(Q, y)
 end
+
+getindex(Q::AbstractQ, i::Int, j::Int) = Q[:, j][i]
 
 # specialization avoiding the fallback using slow `getindex`
 function copyto!(dest::AbstractMatrix, src::AbstractQ)

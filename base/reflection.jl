@@ -1085,10 +1085,10 @@ const SLOT_USED = 0x8
 ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 
 """
-    may_invoke_generator(method, atypes, sparams)
+    may_invoke_generator(method, atype, sparams)
 
 Computes whether or not we may invoke the generator for the given `method` on
-the given atypes and sparams. For correctness, all generated function are
+the given atype and sparams. For correctness, all generated function are
 required to return monotonic answers. However, since we don't expect users to
 be able to successfully implement this criterion, we only call generated
 functions on concrete types. The one exception to this is that we allow calling
@@ -1102,9 +1102,9 @@ in some cases, but this may still allow inference not to fall over in some limit
 function may_invoke_generator(method::MethodInstance)
     return may_invoke_generator(method.def::Method, method.specTypes, method.sparam_vals)
 end
-function may_invoke_generator(method::Method, @nospecialize(atypes), sparams::SimpleVector)
+function may_invoke_generator(method::Method, @nospecialize(atype), sparams::SimpleVector)
     # If we have complete information, we may always call the generator
-    isdispatchtuple(atypes) && return true
+    isdispatchtuple(atype) && return true
 
     # We don't have complete information, but it is possible that the generator
     # syntactically doesn't make use of the information we don't have. Check
@@ -1122,7 +1122,7 @@ function may_invoke_generator(method::Method, @nospecialize(atypes), sparams::Si
     isdefined(generator_method, :source) || return false
     code = generator_method.source
     nslots = ccall(:jl_ir_nslots, Int, (Any,), code)
-    at = unwrap_unionall(atypes)::DataType
+    at = unwrap_unionall(atype)::DataType
     (nslots >= 1 + length(sparams) + length(at.parameters)) || return false
 
     for i = 1:nsparams
@@ -1160,7 +1160,7 @@ additional optimizations, such as inlining, are also applied.
 The keyword `debuginfo` controls the amount of code metadata present in the output,
 possible options are `:source` or `:none`.
 """
-function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
+function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
                     optimize=true,
                     debuginfo::Symbol=:default,
                     world = get_world_counter(),
@@ -1179,6 +1179,18 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
         tt = Tuple{ft, types...}
     end
     return code_typed_by_type(tt; optimize, debuginfo, world, interp)
+end
+
+# returns argument tuple type which is supposed to be used for `code_typed` and its family;
+# if there is a single method this functions returns the method argument signature,
+# otherwise returns `Tuple` that doesn't match with any signature
+function default_tt(@nospecialize(f))
+    ms = methods(f)
+    if length(ms) == 1
+        return tuple_type_tail(only(ms).sig)
+    else
+        return Tuple
+    end
 end
 
 """
@@ -1218,7 +1230,7 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure), @nospecialize(types=Tuple);
+function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure);
         optimize=true,
         debuginfo::Symbol=:default,
         interp = Core.Compiler.NativeInterpreter(closure.world))
@@ -1232,7 +1244,7 @@ function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure), @
     end
 end
 
-function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.Compiler.NativeInterpreter())
+function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), interp=Core.Compiler.NativeInterpreter())
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
