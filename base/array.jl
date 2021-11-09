@@ -252,19 +252,26 @@ length(a::Array) = arraylen(a)
 elsize(::Type{<:Array{T}}) where {T} = aligned_sizeof(T)
 sizeof(a::Array) = Core.sizeof(a)
 
-function isassigned(a::Array, i::Int...)
+function isassigned(a::IMArray, i::Int...)
     @_inline_meta
     ii = (_sub2ind(size(a), i...) % UInt) - 1
     @boundscheck ii < length(a) % UInt || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
-function isassigned(a::ImmutableArray, i::Int...)
-    @_inline_meta
-    ii = (_sub2ind(size(a), i...) % UInt) - 1
-    @boundscheck ii < length(a) % UInt || return false
-    ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
-end
+# function isassigned(a::Array, i::Int...)
+#     @_inline_meta
+#     ii = (_sub2ind(size(a), i...) % UInt) - 1
+#     @boundscheck ii < length(a) % UInt || return false
+#     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
+# end
+
+# function isassigned(a::ImmutableArray, i::Int...)
+#     @_inline_meta
+#     ii = (_sub2ind(size(a), i...) % UInt) - 1
+#     @boundscheck ii < length(a) % UInt || return false
+#     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
+# end
 
 ## copy ##
 
@@ -431,7 +438,7 @@ ImmutableArray{T}(undef::UndefInitializer, dims::Dims) where T = ImmutableArray(
 To do so, the optimizer decides whether to create a copy of `x` or not based on the implementation
 That is, `maybecopy` will either be a call to [`copy`](@ref) or just a reference to x.
 """
-maybecopy = Core.maybecopy
+const maybecopy = Core.maybecopy
 
 # T[x...] constructs Array{T,1}
 """
@@ -953,6 +960,9 @@ function getindex end
 
 @eval getindex(A::ImmutableArray, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
 @eval getindex(A::ImmutableArray, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
+
+# @eval getindex(A::IMArray,  i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
+# @eval getindex(A::IMArray, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for UnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})

@@ -162,7 +162,7 @@ struct NativeInterpreter <: AbstractInterpreter
         end
 
         # If they didn't pass typemax(UInt) but passed something more subtly
-        # incorrect, fail out loudly.
+        # incorrect, fail out loud.
         @assert world <= get_world_counter()
 
 

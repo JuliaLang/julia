@@ -2557,7 +2557,8 @@ end
 # pull request #9534
 @test_throws BoundsError((1, 2), 3) begin; a, b, c = 1, 2; end
 let a = []
-    @test try; a[]; catch ex; (ex::BoundsError).a === a && ex.i == (); end
+    # no longer passes because BoundsError now copies arrays
+    # @test try; a[]; catch ex; (ex::BoundsError).a === a && ex.i == (); end
     @test_throws BoundsError(a, (1, 2)) a[1, 2]
     @test_throws BoundsError(a, (10,)) a[10]
 end

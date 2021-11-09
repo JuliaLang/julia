@@ -308,6 +308,11 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     #@Base.show ("after_adce", ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     #@timeit "compact 3" ir = compact!(ir)
+    nargs = let def = sv.linfo.def
+        isa(def, Method) ? Int(def.nargs) : 0
+    end
+    esc_state = find_escapes(ir, nargs)
+    @eval Main (esc = $esc_state)
     ir = memory_opt!(ir)
     #@Base.show ir
     if JLOptions().debug_level == 2
@@ -666,4 +671,398 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
         end
     end
+end
+
+struct EscapeLattice
+    Analyzed::Bool
+    ReturnEscape::BitSet
+    ThrownEscape::Bool
+    GlobalEscape::Bool
+    # TODO: ArgEscape::Int
+end
+
+function (==)(x::EscapeLattice, y::EscapeLattice)
+    return x.Analyzed === y.Analyzed &&
+            x.ReturnEscape == y.ReturnEscape &&
+            x.ThrownEscape === y.ThrownEscape &&
+            x.GlobalEscape === y.GlobalEscape
+end
+
+const NO_RETURN = BitSet()
+const ARGUMENT_RETURN = BitSet(0)
+NotAnalyzed() = EscapeLattice(false, NO_RETURN, false, false) # not formally part of the lattice
+NoEscape() = EscapeLattice(true, NO_RETURN, false, false)
+ReturnEscape(pcs::BitSet) = EscapeLattice(true, pcs, false, false)
+ReturnEscape(pc::Int) = ReturnEscape(BitSet(pc))
+ArgumentReturnEscape() = ReturnEscape(ARGUMENT_RETURN)
+ThrownEscape() = EscapeLattice(true, NO_RETURN, true, false)
+GlobalEscape() = EscapeLattice(true, NO_RETURN, false, true)
+let
+    all_return = BitSet(0:100_000)
+    global AllReturnEscape() = ReturnEscape(all_return) # used for `show`
+    global AllEscape() = EscapeLattice(true, all_return, true, true)
+end
+
+has_not_analyzed(x::EscapeLattice) = x == NotAnalyzed()
+has_no_escape(x::EscapeLattice) = x ⊑ NoEscape()
+has_return_escape(x::EscapeLattice) = !isempty(x.ReturnEscape)
+has_return_escape(x::EscapeLattice, pc::Int) = pc in x.ReturnEscape
+has_thrown_escape(x::EscapeLattice) = x.ThrownEscape
+has_global_escape(x::EscapeLattice) = x.GlobalEscape
+has_all_escape(x::EscapeLattice) = AllEscape() == x
+
+function ⊑(x::EscapeLattice, y::EscapeLattice)
+    if x.Analyzed ≤ y.Analyzed &&
+       x.ReturnEscape ⊆ y.ReturnEscape &&
+       x.ThrownEscape ≤ y.ThrownEscape &&
+       x.GlobalEscape ≤ y.GlobalEscape
+       return true
+    end
+    return false
+end
+
+⋤(x::EscapeLattice, y::EscapeLattice) = ⊑(x, y) && !⊑(y, x)
+
+function ⊔(x::EscapeLattice, y::EscapeLattice)
+    return EscapeLattice(
+        x.Analyzed | y.Analyzed,
+        x.ReturnEscape ∪ y.ReturnEscape,
+        x.ThrownEscape | y.ThrownEscape,
+        x.GlobalEscape | y.GlobalEscape,
+        )
+end
+
+function ⊓(x::EscapeLattice, y::EscapeLattice)
+    return EscapeLattice(
+        x.Analyzed & y.Analyzed,
+        x.ReturnEscape ∩ y.ReturnEscape,
+        x.ThrownEscape & y.ThrownEscape,
+        x.GlobalEscape & y.GlobalEscape,
+        )
+end
+
+struct EscapeState
+    arguments::Vector{EscapeLattice}
+    ssavalues::Vector{EscapeLattice}
+end
+
+function EscapeState(nslots::Int, nargs::Int, nstmts::Int)
+    arguments = EscapeLattice[
+        1 ≤ i ≤ nargs ? ArgumentReturnEscape() : NotAnalyzed() for i in 1:nslots]
+    ssavalues = EscapeLattice[NotAnalyzed() for _ in 1:nstmts]
+    return EscapeState(arguments, ssavalues)
+end
+
+const Change  = Pair{Union{Argument,SSAValue},EscapeLattice}
+const Changes = Vector{Change}
+
+function propagate_changes!(state::EscapeState, changes::Changes)
+    local anychanged = false
+
+    for (x, info) in changes
+        if isa(x, Argument)
+            old = state.arguments[x.n]
+            new = old ⊔ info
+            if old ≠ new
+                state.arguments[x.n] = new
+                anychanged |= true
+            end
+        else
+            x = x::SSAValue
+            old = state.ssavalues[x.id]
+            new = old ⊔ info
+            if old ≠ new
+                state.ssavalues[x.id] = new
+                anychanged |= true
+            end
+        end
+    end
+
+    return anychanged
+end
+
+# function normalize(@nospecialize(x))
+#     if isa(x, QuoteNode)
+#         return x.value
+#     else
+#         return x
+#     end
+# end
+
+function add_changes!(args::Vector{Any}, ir::IRCode, info::EscapeLattice, changes::Changes)
+    for x in args
+        add_change!(x, ir, info, changes)
+    end
+end
+
+function add_change!(@nospecialize(x), ir::IRCode, info::EscapeLattice, changes::Changes)
+    if isa(x, Argument) || isa(x, SSAValue)
+        if !isbitstype(widenconst(argextype(x, ir, ir.sptypes, ir.argtypes)))
+            push!(changes, Change(x, info))
+        end
+    end
+end
+
+function escape_invoke!(args::Vector{Any}, pc::Int,
+                        state::EscapeState, ir::IRCode, changes::Changes)
+    linfo = first(args)::MethodInstance
+    cache = get(GLOBAL_ESCAPE_CACHE, linfo, nothing)
+    args = args[2:end]
+    if isnothing(cache)
+        add_changes!(args, ir, AllEscape(), changes)
+    else
+        (linfostate, _ #=ir::IRCode=#) = cache
+        retinfo = state.ssavalues[pc] # escape information imposed on the call statement
+        method = linfo.def::Method
+        nargs = Int(method.nargs)
+        for i in 1:length(args)
+            arg = args[i]
+            if i ≤ nargs
+                arginfo = linfostate.arguments[i]
+            else # handle isva signature: COMBAK will this invalid once we encode alias information ?
+                arginfo = linfostate.arguments[nargs]
+            end
+            if isempty(arginfo.ReturnEscape)
+                @eval Main (ir = $ir; linfo = $linfo)
+                error("invalid escape lattice element returned from inter-procedural context: inspect `Main.ir` and `Main.linfo`")
+            end
+            info = from_interprocedural(arginfo, retinfo)
+            add_change!(arg, ir, info, changes)
+        end
+    end
+end
+
+# reinterpret the escape information imposed on the callee argument (`arginfo`) in the
+# context of the caller frame using the escape information imposed on the return value (`retinfo`)
+function from_interprocedural(arginfo::EscapeLattice, retinfo::EscapeLattice)
+    ar = arginfo.ReturnEscape
+    newarginfo = EscapeLattice(true, NO_RETURN, arginfo.ThrownEscape, arginfo.GlobalEscape)
+    if ar == ARGUMENT_RETURN
+        # if this is simply passed as the call argument, we can discard the `ReturnEscape`
+        # information and just propagate the other escape information
+        return newarginfo
+    else
+        # if this can be a return value, we have to merge it with the escape information
+        return newarginfo ⊔ retinfo
+    end
+end
+
+function escape_call!(args::Vector{Any}, pc::Int,
+                      state::EscapeState, ir::IRCode, changes::Changes)
+    ft = argextype(first(args), ir, ir.sptypes, ir.argtypes)
+    f = singleton_type(ft)
+    if isa(f, Core.IntrinsicFunction)
+        return false # COMBAK we may break soundness here, e.g. `pointerref`
+    end
+    ishandled = escape_builtin!(f, args, pc, state, ir, changes)::Union{Nothing,Bool}
+    Main.Base.isnothing(ishandled) && return false # nothing to propagate
+    if !ishandled
+        # if this call hasn't been handled by any of pre-defined handlers,
+        # we escape this call conservatively
+        add_changes!(args[2:end], ir, AllEscape(), changes)
+    end
+    return true
+end
+
+# TODO implement more builtins, make them more accurate
+# TODO use `T_IFUNC`-like logic and don't not abuse dispatch ?
+
+escape_builtin!(@nospecialize(f), _...) = return false
+
+escape_builtin!(::typeof(isa), _...) = return nothing
+escape_builtin!(::typeof(typeof), _...) = return nothing
+escape_builtin!(::typeof(Core.sizeof), _...) = return nothing
+escape_builtin!(::typeof(===), _...) = return nothing
+
+function escape_builtin!(::typeof(Core.ifelse), args::Vector{Any}, pc::Int, state::EscapeState, ir::IRCode, changes::Changes)
+    length(args) == 4 || return false
+    f, cond, th, el = args
+    info = state.ssavalues[pc]
+    condt = argextype(cond, ir, ir.sptypes, ir.argtypes)
+    if isa(condt, Const) && (cond = condt.val; isa(cond, Bool))
+        if cond
+            add_change!(th, ir, info, changes)
+        else
+            add_change!(el, ir, info, changes)
+        end
+    else
+        add_change!(th, ir, info, changes)
+        add_change!(el, ir, info, changes)
+    end
+    return true
+end
+
+function escape_builtin!(::typeof(typeassert), args::Vector{Any}, pc::Int, state::EscapeState, ir::IRCode, changes::Changes)
+    length(args) == 3 || return false
+    f, obj, typ = args
+    info = state.ssavalues[pc]
+    add_change!(obj, ir, info, changes)
+    return true
+end
+
+function escape_builtin!(::typeof(tuple), args::Vector{Any}, pc::Int, state::EscapeState, ir::IRCode, changes::Changes)
+    info = state.ssavalues[pc]
+    if info == NotAnalyzed()
+        info = NoEscape()
+    end
+    add_changes!(args[2:end], ir, info, changes)
+    return true
+end
+
+# TODO don't propagate escape information to the 1st argument, but propagate information to aliased field
+function escape_builtin!(::typeof(getfield), args::Vector{Any}, pc::Int, state::EscapeState, ir::IRCode, changes::Changes)
+    info = state.ssavalues[pc]
+    if info == NotAnalyzed()
+        info = NoEscape()
+    end
+    # only propagate info when the field itself is non-bitstype
+    if !isbitstype(widenconst(ir.stmts.type[pc]))
+        add_changes!(args[2:end], ir, info, changes)
+    end
+    return true
+end
+
+function find_escapes(ir::IRCode, nargs::Int)
+    (; stmts, sptypes, argtypes) = ir
+    nstmts = length(stmts)
+
+    # only manage a single state, some flow-sensitivity is encoded as `EscapeLattice` properties
+    state = EscapeState(length(ir.argtypes), nargs, nstmts)
+    changes = Changes() # stashes changes that happen at current statement
+
+    while true
+        local anyupdate = false
+
+        for pc in nstmts:-1:1
+            stmt = stmts.inst[pc]
+
+            # we escape statements with the `ThrownEscape` property using the effect-freeness
+            # information computed by the inliner
+            is_effect_free = stmts.flag[pc] & IR_FLAG_EFFECT_FREE ≠ 0
+
+            # collect escape information
+            if isa(stmt, Expr)
+                head = stmt.head
+                if head === :call
+                    has_changes = escape_call!(stmt.args, pc, state, ir, changes)
+                    if !is_effect_free
+                        add_changes!(stmt.args, ir, ThrownEscape(), changes)
+                    else
+                        has_changes || continue
+                    end
+                elseif head === :invoke
+                    escape_invoke!(stmt.args, pc, state, ir, changes)
+                elseif head === :new
+                    info = state.ssavalues[pc]
+                    if info == NotAnalyzed()
+                        info = NoEscape()
+                        add_change!(SSAValue(pc), ir, info, changes) # we will be interested in if this allocation escapes or not
+                    end
+                    add_changes!(stmt.args[2:end], ir, info, changes)
+                elseif head === :splatnew
+                    info = state.ssavalues[pc]
+                    if info == NotAnalyzed()
+                        info = NoEscape()
+                        add_change!(SSAValue(pc), ir, info, changes) # we will be interested in if this allocation escapes or not
+                    end
+                    # splatnew passes field values using a single tuple (args[2])
+                    add_change!(stmt.args[2], ir, info, changes)
+                elseif head === :(=)
+                    lhs, rhs = stmt.args
+                    if isa(lhs, GlobalRef) # global store
+                        add_change!(rhs, ir, GlobalEscape(), changes)
+                    end
+                elseif head === :foreigncall
+                    # for foreigncall we simply escape every argument (args[6:length(args[3])])
+                    # and its name (args[1])
+                    # TODO: we can apply a similar strategy like builtin calls to specialize some foreigncalls
+                    foreigncall_nargs = length((stmt.args[3])::SimpleVector)
+                    name = stmt.args[1]
+                    # if normalize(name) === :jl_gc_add_finalizer_th
+                    #     continue # XXX assume this finalizer call is valid for finalizer elision
+                    # end
+                    add_change!(name, ir, ThrownEscape(), changes)
+                    add_changes!(stmt.args[6:5+foreigncall_nargs], ir, ThrownEscape(), changes)
+                elseif head === :throw_undef_if_not # XXX when is this expression inserted ?
+                    add_change!(stmt.args[1], ir, ThrownEscape(), changes)
+                elseif is_meta_expr_head(head)
+                    # meta expressions doesn't account for any usages
+                    continue
+                elseif head === :static_parameter
+                    # :static_parameter refers any of static parameters, but since they exist
+                    # statically, we're really not interested in their escapes
+                    continue
+                elseif head === :copyast
+                    # copyast simply copies a surface syntax AST, and should never use any of arguments or SSA values
+                    continue
+                elseif head === :undefcheck
+                    # undefcheck is temporarily inserted by compiler
+                    # it will be processd be later pass so it won't change any of escape states
+                    continue
+                elseif head === :the_exception
+                    # we don't propagate escape information on exceptions via this expression, but rather
+                    # use a dedicated lattice property `ThrownEscape`
+                    continue
+                elseif head === :isdefined
+                    # just returns `Bool`, nothing accounts for any usages
+                    continue
+                elseif head === :enter || head === :leave || head === :pop_exception
+                    # these exception frame managements doesn't account for any usages
+                    # we can just ignore escape information from
+                    continue
+                elseif head === :gc_preserve_begin || head === :gc_preserve_end
+                    # `GC.@preserve` may "use" arbitrary values, but we can just ignore the escape information
+                    # imposed on `GC.@preserve` expressions since they're supposed to never be used elsewhere
+                    continue
+                else
+                    add_changes!(stmt.args, ir, AllEscape(), changes)
+                end
+            elseif isa(stmt, GlobalRef) # global load
+                add_change!(SSAValue(pc), ir, GlobalEscape(), changes)
+            elseif isa(stmt, PiNode)
+                if isdefined(stmt, :val)
+                    info = state.ssavalues[pc]
+                    add_change!(stmt.val, ir, info, changes)
+                end
+            elseif isa(stmt, PhiNode)
+                info = state.ssavalues[pc]
+                values = stmt.values
+                for i in 1:length(values)
+                    if isassigned(values, i)
+                        add_change!(values[i], ir, info, changes)
+                    end
+                end
+            elseif isa(stmt, PhiCNode)
+                info = state.ssavalues[pc]
+                values = stmt.values
+                for i in 1:length(values)
+                    if isassigned(values, i)
+                        add_change!(values[i], ir, info, changes)
+                    end
+                end
+            elseif isa(stmt, UpsilonNode)
+                if isdefined(stmt, :val)
+                    info = state.ssavalues[pc]
+                    add_change!(stmt.val, ir, info, changes)
+                end
+            elseif isa(stmt, ReturnNode)
+                if isdefined(stmt, :val)
+                    add_change!(stmt.val, ir, ReturnEscape(pc), changes)
+                end
+            else
+                #@assert stmt isa GotoNode || stmt isa GotoIfNot || stmt isa GlobalRef || isnothing(stmt)
+                continue
+            end
+
+            isempty(changes) && continue
+
+            anyupdate |= propagate_changes!(state, changes)
+
+            empty!(changes)
+        end
+
+        anyupdate || break
+    end
+
+    return state
 end

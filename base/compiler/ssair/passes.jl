@@ -1256,29 +1256,29 @@ function cfg_simplify!(ir::IRCode)
     return finish(compact)
 end
 
-# function is_known_fcall(stmt::Expr, @nospecialize(func))
-#     isexpr(stmt, :foreigncall) || return false
-#     s = stmt.args[1]
-#     isa(s, QuoteNode) && (s = s.value)
-#     return s === func
-# end
-
-function is_known_fcall(stmt::Expr, funcs::Vector{Symbol})
+function is_known_fcall(stmt::Expr, funcs)
     isexpr(stmt, :foreigncall) || return false
     s = stmt.args[1]
     isa(s, QuoteNode) && (s = s.value)
-    # return any(e -> s === e, funcs)
-    return true in map(e -> s === e, funcs)
+    isa(s, Symbol) || return false
+    for func in funcs
+        s === func && return true
+    end
+    return false
 end
 
-function is_allocation(stmt::Expr)
-    isexpr(stmt, :foreigncall) || return false
-    s = stmt.args[1]
-    isa(s, QuoteNode) && (s = s.value)
-    return (s === :jl_alloc_array_1d
-         || s === :jl_alloc_array_2d
-         || s ===  :jl_alloc_array_3d
-         || s === :jl_new_array)
+is_array_allocation(stmt::Expr) = 
+    is_known_fcall(stmt, 
+        (:jl_alloc_array_1d,
+        :jl_alloc_array_2d,
+        :jl_alloc_array_3d,
+        :jl_new_array))
+
+function memory_opt!(ir::IRCode, state)
+    compact = IncrementalCompact(ir, false)
+    ir = finish(compact)
+    println("analyzed escapes : ", state)
+    return ir
 end
 
 function memory_opt!(ir::IRCode)
@@ -1339,7 +1339,7 @@ function memory_opt!(ir::IRCode)
             continue
         end
 
-        if is_allocation(stmt)
+        if is_array_allocation(stmt)
             push!(relevant, idx)
             # TODO: Mark everything else here
             continue
@@ -1355,13 +1355,13 @@ function memory_opt!(ir::IRCode)
             arr = stmt.args[3]
             mark_use(arr, idx)
 
-        elseif is_known_call(stmt, setindex!, compact) && length(stmt.args) == 4
-            # handle similarly to arrayset
-            val = stmt.args[3]
-            mark_escape(val)
+        # elseif is_known_call(stmt, setindex!, compact) && length(stmt.args) == 4
+        #     # handle similarly to arrayset
+        #     val = stmt.args[3]
+        #     mark_escape(val)
 
-            arr = stmt.args[2]
-            mark_use(arr, idx)
+        #     arr = stmt.args[2]
+        #     mark_use(arr, idx)
 
         elseif is_known_call(stmt, (===), compact) && length(stmt.args) == 3
             arr1 = stmt.args[2]
@@ -1371,7 +1371,7 @@ function memory_opt!(ir::IRCode)
             mark_use(arr2, idx)
 
         # these foreigncalls have similar structure and don't escape our array, so handle them all at once
-        elseif is_known_fcall(stmt, [:jl_array_ptr, :jl_array_copy]) && length(stmt.args) == 6
+        elseif is_known_fcall(stmt, (:jl_array_ptr, :jl_array_copy)) && length(stmt.args) == 6
             arr = stmt.args[6]
             mark_use(arr, idx)
 
@@ -1399,6 +1399,7 @@ function memory_opt!(ir::IRCode)
     for idx in revisit
         # Make sure that the value we reference didn't escape
         stmt = ir.stmts[idx][:inst]::Expr
+        #println("test, stmt : ", stmt)
         id = (stmt.args[2]::SSAValue).id
         (id in relevant) || continue
 
