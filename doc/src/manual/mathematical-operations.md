@@ -465,8 +465,8 @@ conversions.
   * `x % T` converts an integer `x` to a value of integer type `T` congruent to `x` modulo `2^n`,
     where `n` is the number of bits in `T`. In other words, the binary representation is truncated
     to fit.
-  * The [Rounding functions](@ref) take a type `T` as an optional argument. For example, `round(Int,x)`
-    is a shorthand for `Int(round(x))`.
+  * The [Rounding functions](@ref man-math-ops-round) take a type `T` as an optional argument.
+    For example, `round(Int,x)` is a shorthand for `Int(round(x))`.
 
 The following examples show the different forms.
 
@@ -509,7 +509,7 @@ Stacktrace:
 
 See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.
 
-### Rounding functions
+### [Rounding functions](@id man-math-ops-round)
 
 | Function              | Description                      | Return type |
 |:--------------------- |:-------------------------------- |:----------- |

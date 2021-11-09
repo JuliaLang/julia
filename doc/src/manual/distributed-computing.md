@@ -271,7 +271,7 @@ of the other running processes. You may use `addprocs(exeflags="--project")` to 
 a particular environment, and then `@everywhere using <modulename>` or `@everywhere include("file.jl")`.
 
 Other types of clusters can be supported by writing your own custom `ClusterManager`, as described
-below in the [ClusterManagers](@ref) section.
+below in the [Cluster Managers](@ref man-distributed-cluster) section.
 
 ## Data Movement
 
@@ -465,7 +465,7 @@ end
 ```
 
 This code will not initialize all of `a`, since each process will have a separate copy of it.
-Parallel for loops like these must be avoided. Fortunately, [Shared Arrays](@ref man-shared-arrays) can be used
+Parallel for loops like these must be avoided. Fortunately, [Shared Arrays](@ref man-distributed-shared-arrays) can be used
 to get around this limitation:
 
 ```julia
@@ -743,7 +743,7 @@ will always operate on copies of arguments.
 
 
 
-## [Shared Arrays](@id man-shared-arrays)
+## [Shared Arrays](@id man-distributed-shared-arrays)
 
 Shared Arrays use system shared memory to map the same array across many processes. While there
 are some similarities to a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl), the
@@ -950,7 +950,7 @@ node to release references from all participating workers. Code which creates ma
 shared array objects would benefit from explicitly finalizing these objects as soon as possible.
 This results in both memory and file handles mapping the shared segment being released sooner.
 
-## ClusterManagers
+## [Cluster Managers](@id man-distributed-cluster)
 
 The launching, management and networking of Julia processes into a logical cluster is done via
 cluster managers. A `ClusterManager` is responsible for
@@ -1259,7 +1259,8 @@ in future releases.
 
 Outside of Julia parallelism there are plenty of external packages that should be mentioned.
 For example [MPI.jl](https://github.com/JuliaParallel/MPI.jl) is a Julia wrapper for the `MPI` protocol, or
-[DistributedArrays.jl](https://github.com/JuliaParallel/Distributedarrays.jl), as presented in [Shared Arrays](@ref).
+[DistributedArrays.jl](https://github.com/JuliaParallel/Distributedarrays.jl), as presented in
+[Shared Arrays](@ref man-distributed-shared-arrays).
 A mention must be made of Julia's GPU programming ecosystem, which includes:
 
 1. Low-level (C kernel) based operations [OpenCL.jl](https://github.com/JuliaGPU/OpenCL.jl) and [CUDAdrv.jl](https://github.com/JuliaGPU/CUDAdrv.jl) which are respectively an OpenCL interface and a CUDA wrapper.

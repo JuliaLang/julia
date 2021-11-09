@@ -395,7 +395,7 @@ Float32[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 
 Comprehensions can also be written without the enclosing square brackets, producing an object
 known as a generator. This object can be iterated to produce values on demand, instead of allocating
-an array and storing them in advance (see [Iteration](@ref)). For example, the following expression
+an array and storing them in advance (see [Iteration](@id man-array-iteration)). For example, the following expression
 sums a series without allocating memory:
 
 ```jldoctest
@@ -723,7 +723,7 @@ Considered alone, this may seem relatively trivial; `CartesianIndex` simply
 gathers multiple integers together into one object that represents a single
 multidimensional index. When combined with other indexing forms and iterators
 that yield `CartesianIndex`es, however, this can produce very elegant
-and efficient code. See [Iteration](@ref) below, and for some more advanced
+and efficient code. See [Iteration](@id man-array-iteration) below, and for some more advanced
 examples, see [this blog post on multidimensional algorithms and
 iteration](https://julialang.org/blog/2016/02/iteration).
 
@@ -933,7 +933,7 @@ julia> A[2,1]
 6
 ```
 
-## Iteration
+## [Iteration](@id man-array-iteration)
 
 The recommended ways to iterate over a whole array are
 

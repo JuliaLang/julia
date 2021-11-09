@@ -54,7 +54,7 @@ to [`ccall`](@ref) are:
 
 !!! note
     The `(:function, "library")` pair, return type, and input types must be literal constants
-    (i.e., they can't be variables, but see [Non-constant Function Specifications](@ref) below).
+    (i.e., they can't be variables, but see [Non-constant Function Specifications](@ref man-call-c-non-const-func) below).
 
     The remaining parameters are evaluated at compile time, when the containing method is defined.
 
@@ -722,7 +722,7 @@ For translating a C return type to Julia:
   * `T (*)(...)` (e.g. a pointer to a function)
 
       * `Ptr{Cvoid}` to call this directly from Julia you will need to pass this as the first argument to [`ccall`](@ref).
-        See [Indirect Calls](@ref).
+        See [Indirect Calls](@ref man-call-c-indirect).
 
 ### Passing Pointers for Modifying Inputs
 
@@ -883,7 +883,7 @@ a reference to `b` and both `a` and `b` are due for garbage collection, there is
 that `b` would be finalized after `a`. If proper finalization of `a` depends on `b` being valid,
 it must be handled in other ways.
 
-## Non-constant Function Specifications
+## [Non-constant Function Specifications](@id man-call-c-non-const-func)
 
 In some cases, the exact name or path of the needed library is not known in advance and must
 be computed at run time. To handle such cases, the library component of a `(name, library)`
@@ -911,7 +911,7 @@ However, doing this will also be very slow and leak memory, so you should usuall
 reading.
 The next section discusses how to use indirect calls to efficiently achieve a similar effect.
 
-## Indirect Calls
+## [Indirect Calls](@id man-call-c-indirect)
 
 The first argument to [`ccall`](@ref) can also be an expression evaluated at run time. In this
 case, the expression must evaluate to a `Ptr`, which will be used as the address of the native
