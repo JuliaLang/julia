@@ -478,7 +478,7 @@ We have not yet worked out a complete algorithm for this.
 Most operations for dealing with types are found in the files `jltypes.c` and `subtype.c`.
 A good way to start is to watch subtyping in action.
 Build Julia with `make debug` and fire up Julia within a debugger.
-[gdb debugging tips](@ref) has some tips which may be useful.
+[gdb debugging tips](@ref dev-debug) has some tips which may be useful.
 
 Because the subtyping code is used heavily in the REPL itself -- and hence breakpoints in this
 code get triggered often -- it will be easiest if you make the following definition:
