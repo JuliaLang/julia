@@ -91,13 +91,15 @@ using Random
 end
 
 @testset "tempname with parent" begin
-    t = tempname()
-    @test dirname(t) == tempdir()
-    mktempdir() do d
-        t = tempname(d)
-        @test dirname(t) == d
+    withenv("TMPDIR" => nothing) do
+        t = tempname()
+        @test dirname(t) == tempdir()
+        mktempdir() do d
+            t = tempname(d)
+            @test dirname(t) == d
+        end
+        @test_throws ArgumentError tempname(randstring())
     end
-    @test_throws ArgumentError tempname(randstring())
 end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
