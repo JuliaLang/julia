@@ -123,7 +123,7 @@ julia> y = ___
 ERROR: syntax: all-underscore identifier used as rvalue
 ```
 
-The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref):
+The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref base-keywords):
 
 ```julia-repl
 julia> else = false
