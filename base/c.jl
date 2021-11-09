@@ -551,7 +551,8 @@ end
 """
     @ccallable(def)
 
-Julia app with `ccallable` entry-point means that the respective Julia function can be called directly from C
+Make the annotated function be callable from C using its name. This can, for example,
+be used to expose functionality as a C-API when creating a custom Julia sysimage.
 """
 macro ccallable(def)
     expand_ccallable(nothing, def)
