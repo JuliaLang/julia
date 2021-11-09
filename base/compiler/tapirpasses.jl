@@ -1291,12 +1291,13 @@ end
 function tapir_dead_store_elimination_pass!(ir::IRCode)
     Tapir = tapir_module()
     Tapir isa Module || return ir
+    isdefined(Tapir, :OutputRef) || return ir
+    (; OutputRef) = Tapir
 
     if !isempty(ir.new_nodes.stmts.inst)
         ir = compact!(ir)
     end
 
-    (; OutputRef) = Tapir
     function is_ref_allocation(ref::SSAValue)
         local stmt = ir.stmts[ref.id]
         return widenconst(stmt[:type]) <: OutputRef && isexpr(stmt[:inst], :new)
