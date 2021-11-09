@@ -7607,3 +7607,12 @@ end
     @test !occursin(r"(interpreter|do_call)", trim_after_eval(string(stacktrace(btc, true))))
     @test  occursin(r"(interpreter|do_call)", trim_after_eval(string(stacktrace(bti, true))))
 end
+
+@testset "rest(svec, ...)" begin
+    x = Core.svec(1, 2, 3)
+    a..., = x
+    @test a == Core.svec(1, 2, 3)
+    a, b... = x
+    @test a == 1
+    @test b == Core.svec(2, 3)
+end
