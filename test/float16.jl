@@ -94,13 +94,13 @@ end
 end
 @testset "unary ops" begin
     @test -f === Float16(-2.)
-    @test Float16(0.5f0)^2 ≈ Float16(0.5f0^2)
+    @test Float16(0.5f0)^2 === Float16(0.5f0^2)
     @testset "$func" for func in (sin,cos,tan,asin,acos,atan,
                                   sinh,cosh,tanh,asinh,acosh,atanh,
                                   exp,exp2,exp10,expm1,log,log2,log10,log1p,
                                   sqrt,cbrt)
         for x in FloatIterator{Float16}()
-             @test try func(x) === Float16(func(Float64(x))) catch; true end
+             @test try func(x) === Float16(func(Float64(x))) catch; true end || (func,x)
         end
     end
 end
