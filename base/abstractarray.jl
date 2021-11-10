@@ -462,10 +462,14 @@ end
     last(coll)
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
-accomplished by calling [`lastindex`](@ref) to get the last index. Return the end
-point of an [`AbstractRange`](@ref) even if it is empty.
+accomplished by calling [`Iterators.reverse`](@ref) and then [`first`](@ref) on that reversed iterator.
+Return the end point of an [`AbstractRange`](@ref) even if it is empty.
 
 See also [`first`](@ref), [`endswith`](@ref).
+
+!!! compat "Julia 1.8"
+    For versions of julia older than 1.8, `last(x)` will only work on collections that support indexing and
+    [`lastindex`](@ref).
 
 # Examples
 ```jldoctest
@@ -476,7 +480,8 @@ julia> last([1; 2; 3; 4])
 4
 ```
 """
-last(a) = a[end]
+last(a) = first(Iterators.reverse(a))
+last(a::AbstractVector) = a[end]
 
 """
     last(itr, n::Integer)
