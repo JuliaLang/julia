@@ -2851,9 +2851,27 @@
   (or (valid-name? e)
       (error (string "invalid identifier name \"" e "\""))))
 
+(define (push-var! tab var val) (put! tab var (cons val (get tab var #f))))
+(define (pop-var! tab var) (put! tab var (cdr (get tab var))))
+
 (define (make-scope (lam #f) (args '()) (locals '()) (globals '()) (sp '()) (renames '()) (prev #f)
                     (soft? #f) (hard? #f) (implicit-globals '()) (warn-vars #f))
-  (vector lam args locals globals sp renames prev soft? hard? implicit-globals warn-vars))
+  (let ((tab (if prev (scope:table prev) (table))))
+    (for-each (lambda (v) (push-var! tab v v)) sp)
+    (for-each (lambda (v) (push-var! tab v v)) locals)
+    (for-each (lambda (pair) (push-var! tab (car pair) (cdr pair))) renames)
+    (for-each (lambda (v) (push-var! tab v `(outerref ,v))) globals)
+    (for-each (lambda (v) (push-var! tab v v)) args)
+    (vector lam args locals globals sp renames prev soft? hard? implicit-globals warn-vars tab)))
+
+(define (pop-scope! scope)
+  (let ((tab (scope:table scope)))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:sp scope))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:locals scope))
+    (for-each (lambda (pair) (pop-var! tab (car pair))) (scope:renames scope))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:globals scope))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:args scope))))
+
 (define (scope:lam s)     (aref s 0))
 (define (scope:args s)    (aref s 1))
 (define (scope:locals s)  (aref s 2))
@@ -2865,6 +2883,7 @@
 (define (scope:hard? s)   (aref s 8))
 (define (scope:implicit-globals s) (aref s 9))
 (define (scope:warn-vars s) (aref s 10))
+(define (scope:table s)   (aref s 11))
 
 (define (var-kind var scope (exclude-top-level-globals #f))
   (if scope
@@ -2902,20 +2921,10 @@
 ;; returns lambdas in the form (lambda (args...) (locals...) body)
 (define (resolve-scopes- e scope (sp '()) (loc #f))
   (cond ((symbol? e)
-         (let lookup ((scope scope))
-           (if scope
-               (cond ((memq e (scope:args scope)) e)
-                     ((memq e (scope:globals scope)) `(outerref ,e))
-                     (else
-                      (let ((r (assq e (scope:renames scope))))
-                        (cond (r (cdr r))
-                              ((memq e (scope:locals scope)) e)
-                              ((memq e (scope:sp scope)) e)
-                              (else
-                               (lookup (scope:prev scope)))))))
-               (if (underscore-symbol? e)
-                   e
-                   `(outerref ,e)))))
+         (let ((val (and scope (get (scope:table scope) e #f))))
+           (cond (val (car val))
+                 ((underscore-symbol? e) e)
+                 (else `(outerref ,e)))))
         ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel symbolicgoto symboliclabel toplevel-only)))
          e)
         ((eq? (car e) 'global)
@@ -2953,7 +2962,9 @@
              '(true)))
         ((eq? (car e) 'lambda)
          (let* ((args (lam:argnames e))
-                (body (resolve-scopes- (lam:body e) (make-scope e args '() '() sp '() scope))))
+                (new-scope (make-scope e args '() '() sp '() scope))
+                (body (resolve-scopes- (lam:body e) new-scope)))
+           (pop-scope! new-scope)
            `(lambda ,(cadr e) ,(caddr e) ,body)))
         ((eq? (car e) 'scope-block)
          (let* ((blok            (cadr e)) ;; body of scope-block expression
@@ -3034,8 +3045,7 @@
                          (append (caddr lam) newnames newnames-def)))
            (insert-after-meta ;; return the new, expanded scope-block
             (blockify
-             (resolve-scopes- blok
-                              (make-scope lam
+             (let ((new-scope (make-scope lam
                                           '()
                                           (append locals-nondef locals-def)
                                           globals
@@ -3048,9 +3058,10 @@
                                           (if toplevel?
                                               implicit-globals
                                               (scope:implicit-globals scope))
-                                          warn-vars)
-                              '()
-                              loc))
+                                          warn-vars)))
+               (begin0
+                (resolve-scopes- blok new-scope '() loc)
+                (pop-scope! new-scope))))
             (append! (map (lambda (v) `(local ,v)) newnames)
                      (map (lambda (v) `(local-def ,v)) newnames-def)))
            ))
