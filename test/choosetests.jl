@@ -93,8 +93,7 @@ function choosetests(choices = [])
                   --seed=<SEED>        : set the initial seed for all testgroups (parsed as a UInt128)
                   --skip <NAMES>...    : skip test or collection tagged with <NAMES>
                 TESTS:
-                  Can be special tokens, such as "all", "unicode", "stdlib", the names of stdlib \
-                  modules, or the names of any file in the TESTNAMES array (defaults to "all").
+                  Can be special tokens, such as "all", "unicode", "stdlib", the names of stdlib modules, or the names of any file in the TESTNAMES array (defaults to "all").
 
                   Or prefix a name with `-` (such as `-core`) to skip a particular test.
                 """)
