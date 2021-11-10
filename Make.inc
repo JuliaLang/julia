@@ -1018,19 +1018,19 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
-PCRE_CONFIG := pcre2-config
+PCRE_CONFIG ?= pcre2-config
 else
 PCRE_CONFIG := $(build_depsbindir)/pcre2-config
 endif
 
 ifeq ($(USE_SYSTEM_PATCHELF), 1)
-PATCHELF := patchelf
+PATCHELF ?= patchelf
 else
 PATCHELF := $(build_depsbindir)/patchelf
 endif
 
 ifeq ($(USE_SYSTEM_LIBWHICH), 1)
-LIBWHICH := libwhich
+LIBWHICH ?= libwhich
 else
 LIBWHICH := $(build_depsbindir)/libwhich
 endif
@@ -1083,24 +1083,24 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBM), 1)
-LIBM := -lm
-LIBMNAME := libm
+LIBM ?= -lm
+LIBMNAME ?= libm
 else
 LIBM := -lopenlibm
 LIBMNAME := libopenlibm
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 1)
-  LIBUV := $(LOCALBASE)/lib/libuv-julia.a
-  LIBUV_INC := $(LOCALBASE)/include
+  LIBUV ?= $(LOCALBASE)/lib/libuv-julia.a
+  LIBUV_INC ?= $(LOCALBASE)/include
 else
   LIBUV := $(build_libdir)/libuv.a
   LIBUV_INC := $(build_includedir)
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
-  LIBUTF8PROC := -lutf8proc
-  UTF8PROC_INC := $(LOCALBASE)/include
+  LIBUTF8PROC ?= -lutf8proc
+  UTF8PROC_INC ?= $(LOCALBASE)/include
 else
   LIBUTF8PROC := $(build_libdir)/libutf8proc.a
   UTF8PROC_INC := $(build_includedir)
