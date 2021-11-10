@@ -38,7 +38,10 @@ Command-line option changes
 ---------------------------
 
 * New option `--strip-metadata` to remove docstrings, source location information, and local
-  variable names when building a system image.
+  variable names when building a system image ([#42513]).
+* New option `--strip-ir` to remove the compiler's IR (intermediate representation) of source
+  code when building a system image. The resulting image will only work if `--compile=all` is
+  used, or if all needed code is precompiled ([#42925]).
 
 Multi-threading changes
 -----------------------
