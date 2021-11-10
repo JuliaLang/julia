@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const pthread_t = Culong # TODO: this is wrong, but usually tolerable by the ABI
-const uv_thread_t = pthread_t
+const uv_thread_t = UInt # TODO: this is usually correct (or tolerated by the API), but not guaranteed
 
 function uv_thread_getaffinity()
     masksize = ccall(:uv_cpumask_size, Cint, ())
