@@ -267,7 +267,7 @@ include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
 
-# Libdl
+# Libc and Libdl
 include("libc.jl")
 using .Libc: getpid, gethostname, time
 
