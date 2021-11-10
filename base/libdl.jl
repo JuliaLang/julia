@@ -85,15 +85,21 @@ else
     const dlpattern = r"^(.+?)\.so(?:\..*)?$"
 end
 
+const _dlname_cache = Dict{String, SubString{String}}()
+
 """
     dlname(fullpath::String)
 
 Returns the name of the library.
 """
-function dlname(fullpath::String)
+function dlname(fullpath::String)::SubString{String}
+    cache = get(_dlname_cache, fullpath, "")
+    cache != "" && return cache
     bn = basename(fullpath)
     m = match(dlpattern, bn)
-    return isnothing(m) ? bn : m.captures[1]
+    ret = isnothing(m) ? bn : m.captures[1]
+    _dlname_cache[fullpath] = ret
+    return ret
 end
 
 """
