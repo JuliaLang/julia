@@ -61,6 +61,11 @@ steps:
       unset JULIA_DEPOT_PATH
       unset JULIA_PKG_SERVER
 
+      # Make sure that temp files and temp directories are created in a location that is
+      # backed by real storage.
+      export TMPDIR="$(pwd)/tmp"
+      mkdir -p $${TMPDIR:?}
+
       export NETWORK_RELATED_TESTS="Artifacts Downloads download LazyArtifacts LibGit2/online Pkg"
 
       if [[   "${GROUP?}" == "all" ]]; then
