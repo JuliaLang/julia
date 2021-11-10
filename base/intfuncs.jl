@@ -319,6 +319,9 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{1}) = x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-1}) = inv(x)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-2}) = (i=inv(x); i*i)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-3}) = (i=inv(x); i*i*i)
 
 # don't use the inv(x) transformation here since float^p is slightly more accurate
 @inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p
@@ -328,7 +331,11 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 # be computed in a type-stable way even for e.g. integers.
 @inline function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
-        literal_pow(^, inv(x), Val(-p))
+        if x isa BitInteger64
+            f(Float64(x), p) # inv would cause rounding, while Float64^Integer is able to compensate the inverse
+        else
+            f(inv(x), -p)
+        end
     else
         f(x, p)
     end
