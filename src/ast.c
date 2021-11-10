@@ -226,51 +226,10 @@ static value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nar
 
 static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 
-static value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
-{
-    int kwargs_len = (int)nargs - 6;
-    if (nargs < 6 || kwargs_len % 2 != 0) {
-        lerror(fl_ctx, fl_ctx->ArgError, "julia-logmsg: bad argument list - expected "
-               "level (symbol) group (symbol) id file line msg . kwargs");
-    }
-    value_t arg_level = args[0];
-    value_t arg_group = args[1];
-    value_t arg_id    = args[2];
-    value_t arg_file  = args[3];
-    value_t arg_line  = args[4];
-    value_t arg_msg   = args[5];
-    value_t *arg_kwargs = args + 6;
-    if (!isfixnum(arg_level) || !issymbol(arg_group) || !issymbol(arg_id) ||
-        !issymbol(arg_file) || !isfixnum(arg_line) || !fl_isstring(fl_ctx, arg_msg)) {
-        lerror(fl_ctx, fl_ctx->ArgError,
-               "julia-logmsg: Unexpected type in argument list");
-    }
-
-    // Abuse scm_to_julia here to convert arguments.  This is meant for `Expr`s
-    // but should be good enough provided we're only passing simple numbers,
-    // symbols and strings.
-    jl_value_t *group=NULL, *id=NULL, *file=NULL, *line=NULL, *msg=NULL;
-    jl_array_t *kwargs=NULL;
-    JL_GC_PUSH6(&group, &id, &file, &line, &msg, &kwargs);
-    group = scm_to_julia(fl_ctx, arg_group, NULL);
-    id    = scm_to_julia(fl_ctx, arg_id, NULL);
-    file  = scm_to_julia(fl_ctx, arg_file, NULL);
-    line  = scm_to_julia(fl_ctx, arg_line, NULL);
-    msg   = scm_to_julia(fl_ctx, arg_msg, NULL);
-    kwargs = jl_alloc_vec_any(kwargs_len);
-    for (int i = 0; i < kwargs_len; ++i) {
-        jl_array_ptr_set(kwargs, i, scm_to_julia(fl_ctx, arg_kwargs[i], NULL));
-    }
-    jl_log(numval(arg_level), NULL, group, id, file, line, (jl_value_t*)kwargs, msg);
-    JL_GC_POP();
-    return fl_ctx->T;
-}
-
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global }, // TODO: can we kill this safepoint
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar }, // TODO: can we kill this safepoint? (from jl_isa)
-    { "julia-logmsg", fl_julia_logmsg }, // TODO: kill this safepoint
     { "julia-current-file", fl_julia_current_file },
     { "julia-current-line", fl_julia_current_line },
     { NULL, NULL }
@@ -299,7 +258,6 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx) JL_NOTSAFEPOINT
     ctx->slot_sym = symbol(fl_ctx, "slot");
     ctx->task = NULL;
     ctx->module = NULL;
-    set(symbol(fl_ctx, "*depwarn-opt*"), fixnum(jl_options.depwarn));
     set(symbol(fl_ctx, "*scopewarn-opt*"), fixnum(jl_options.warn_scope));
 }
 
@@ -1282,7 +1240,8 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
                                                  const char *file, int line)
 {
     JL_TIMING(LOWERING);
-    JL_GC_PUSH1(&expr);
+    jl_array_t *kwargs = NULL;
+    JL_GC_PUSH2(&expr, &kwargs);
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0, ~(size_t)0, 1);
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
@@ -1294,6 +1253,34 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
     expr = scm_to_julia(fl_ctx, e, inmodule);
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
+    jl_sym_t *warn_sym = jl_symbol("warn");
+    if (jl_is_expr(expr) && ((jl_expr_t*)expr)->head == warn_sym) {
+        size_t nargs = jl_expr_nargs(expr);
+        for (int i = 0; i < nargs - 1; i++) {
+            jl_value_t *warning = jl_exprarg(expr, i);
+            size_t nargs = 0;
+            if (jl_is_expr(warning) && ((jl_expr_t*)warning)->head == warn_sym)
+                 nargs = jl_expr_nargs(warning);
+            int kwargs_len = (int)nargs - 6;
+            if (nargs < 6 || kwargs_len % 2 != 0) {
+                jl_error("julia-logmsg: bad argument list - expected "
+                         ":warn level (symbol) group (symbol) id file line msg . kwargs");
+            }
+            jl_value_t *level = jl_exprarg(warning, 0);
+            jl_value_t *group = jl_exprarg(warning, 1);
+            jl_value_t *id = jl_exprarg(warning, 2);
+            jl_value_t *file = jl_exprarg(warning, 3);
+            jl_value_t *line = jl_exprarg(warning, 4);
+            jl_value_t *msg = jl_exprarg(warning, 5);
+            kwargs = jl_alloc_vec_any(kwargs_len);
+            for (int i = 0; i < kwargs_len; ++i) {
+                jl_array_ptr_set(kwargs, i, jl_exprarg(warning, i + 6));
+            }
+            JL_TYPECHK(logmsg, long, level);
+            jl_log(jl_unbox_long(level), NULL, group, id, file, line, (jl_value_t*)kwargs, msg);
+        }
+        expr = jl_exprarg(expr, nargs - 1);
+    }
     JL_GC_POP();
     return expr;
 }
