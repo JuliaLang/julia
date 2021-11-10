@@ -1232,6 +1232,28 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 end
                 return Conditional(aty.var, ifty, elty)
             end
+        elseif f === isdefined
+            uty = argtypes[2]
+            a = ssa_def_slot(fargs[2], sv)
+            if isa(uty, Union) && isa(a, SlotNumber)
+                fld = argtypes[3]
+                vtype = Union{}
+                elsetype = Union{}
+                for ty in uniontypes(uty)
+                    cnd = isdefined_tfunc(ty, fld)
+                    if isa(cnd, Const)
+                        if cnd.val::Bool
+                            vtype = tmerge(vtype, ty)
+                        else
+                            elsetype = tmerge(elsetype, ty)
+                        end
+                    else
+                        vtype = tmerge(vtype, ty)
+                        elsetype = tmerge(elsetype, ty)
+                    end
+                end
+                return Conditional(a, vtype, elsetype)
+            end
         end
     end
     @assert !isa(rt, TypeVar) "unhandled TypeVar"
