@@ -250,12 +250,12 @@ include("missing.jl")
 # version
 include("version.jl")
 
+# system & environment
+include("sysinfo.jl")
+
 # Logging
 include("logging.jl")
 using .CoreLogging
-
-# system & environment
-include("sysinfo.jl")
 
 # Concurrency
 include("linked_list.jl")
