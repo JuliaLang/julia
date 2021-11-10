@@ -397,19 +397,9 @@ end
 ldiv!(Dc::Diagonal, Da::Diagonal, Db::Diagonal) = Diagonal(ldiv!(Dc.diag, Da, Db.diag))
 
 # optimizations for (Sym)Tridiagonal and Diagonal
-function (\)(D::Diagonal, S::SymTridiagonal)
-    T = typeof(oneunit(eltype(D)) \ oneunit(eltype(S)))
-    # this is essentially copy_oftype, but we need to handle the case when S.ev has the
-    # same length as S.dv
-    dl = copyto!(similar(S.ev, T, length(S.dv)-1), _evview(S))
-    d  = copy_oftype(S.dv, T)
-    du = copy(dl)
-    ldiv!(D, Tridiagonal(dl, d, du))
-end
-function (\)(D::Diagonal, T::Tridiagonal)
-    Td = typeof(oneunit(eltype(D)) \ oneunit(eltype(T)))
-    ldiv!(D, copy_oftype(T, Td))
-end
+# TODO: this cannot handle matrix-eltypes of S!
+(\)(D::Diagonal, S::SymTridiagonal) = D \ Tridiagonal(_evview(S), view(S.dv, 1:length(S.dv)), _evview(S))
+(\)(D::Diagonal, T::Tridiagonal) = ldiv!(similar(T, promote_op(\, eltype(D), eltype(T))), D, T)
 function ldiv!(Tr::Tridiagonal, D::Diagonal, T::Tridiagonal)
     m = length(T.d)
     dd = D.diag
@@ -436,19 +426,8 @@ function ldiv!(Tr::Tridiagonal, D::Diagonal, T::Tridiagonal)
     return Tr
 end
 
-function (/)(S::SymTridiagonal, D::Diagonal)
-    T = typeof(oneunit(eltype(S)) / oneunit(eltype(D)))
-    # this is essentially copy_oftype, but we need to handle the case when S.ev has the
-    # same length as S.dv
-    dl = copyto!(similar(S.ev, T, length(S.dv)-1), _evview(S))
-    d  = copy_oftype(S.dv, T)
-    du = copy(dl)
-    rdiv!(Tridiagonal(dl, d, du), D)
-end
-function (/)(T::Tridiagonal, D::Diagonal)
-    Td = typeof(oneunit(eltype(T)) / oneunit(eltype(D)))
-    rdiv!(copy_oftype(T, Td), D)
-end
+(/)(S::SymTridiagonal, D::Diagonal) = Tridiagonal(_evview(S), view(S.dv, 1:length(S.dv)), _evview(S)) / D
+(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(similar(T, promote_op(/, eltype(T), eltype(D))), T, D)
 function _rdiv!(Tr::Tridiagonal, T::Tridiagonal, D::Diagonal)
     n = length(T.d)
     dd = D.diag
@@ -694,7 +673,7 @@ dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
 
 function _mapreduce_prod(f, x, D::Diagonal, y)
     if isempty(x) && isempty(D) && isempty(y)
-        return zero(Base.promote_op(f, eltype(x), eltype(D), eltype(y)))
+        return zero(promote_op(f, eltype(x), eltype(D), eltype(y)))
     else
         return mapreduce(t -> f(t[1], t[2], t[3]), +, zip(x, D.diag, y))
     end
