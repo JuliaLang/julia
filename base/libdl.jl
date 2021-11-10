@@ -86,13 +86,14 @@ else
 end
 
 const _dlname_cache = Dict{String, SubString{String}}()
+const _dlname_cache_lock = ReentrantLock()
 
 """
     dlname(fullpath::String)
 
 Returns the name of the library.
 """
-function dlname(fullpath::String)::SubString{String}
+function _dlname_thread_unsafe(fullpath::String)::SubString{String}
     cache = get(_dlname_cache, fullpath, "")
     cache != "" && return cache
     bn = basename(fullpath)
@@ -109,8 +110,10 @@ Check wheather the same shared library is loaded from two different files.
 The `warnings` determines if the warnings are printed to the console.
 """
 function check_dllist()
-    fullpaths = dllist()
-    names = dlname.(fullpaths)
+    fullpaths, names = @lock _dlname_cache_lock begin
+        fullpaths = dllist()
+        fullpaths, _dlname_thread_unsafe.(fullpaths)
+    end
     perm = sortperm(names)
     dlabspath(x) = isfile(x) ? abspath(realpath(x)) : x
     for i in 1:length(names)-1

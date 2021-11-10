@@ -256,8 +256,6 @@ using .CoreLogging
 
 # system & environment
 include("sysinfo.jl")
-include("libc.jl")
-using .Libc: getpid, gethostname, time
 
 # Concurrency
 include("linked_list.jl")
@@ -268,6 +266,10 @@ include("channels.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
+
+# Libdl
+include("libc.jl")
+using .Libc: getpid, gethostname, time
 
 include("env.jl")
 
