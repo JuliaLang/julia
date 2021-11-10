@@ -1703,7 +1703,7 @@ end
     dstat = diskstat()
     @test dstat.total < 32PB
     @test dstat.used + dstat.available == dstat.total
-    @test occursin(r"^DiskStat\(.*, available: \d+, total: \d+, used: \d+\)$", sprint(show, dstat))
+    @test occursin(r"^DiskStat\(total=\d+, used=\d+, available=\d+\)$", sprint(show, dstat))
     # Test diskstat(::AbstractString)
     dstat = diskstat(pwd())
     @test dstat.total < 32PB

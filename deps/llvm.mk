@@ -3,7 +3,7 @@ include $(SRCDIR)/llvm-ver.make
 include $(SRCDIR)/llvm-options.mk
 
 ifneq ($(USE_BINARYBUILDER_LLVM), 1)
-LLVM_GIT_URL:=git://github.com/JuliaLang/llvm-project.git
+LLVM_GIT_URL:=https://github.com/JuliaLang/llvm-project.git
 LLVM_TAR_URL=https://api.github.com/repos/JuliaLang/llvm-project/tarball/$1
 $(eval $(call git-external,llvm,LLVM,CMakeLists.txt,,$(SRCCACHE)))
 

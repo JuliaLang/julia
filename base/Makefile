@@ -164,7 +164,7 @@ endif
 
 define symlink_system_library
 libname_$2 := $$(notdir $(call versioned_libname,$2,$3))
-libpath_$2 := $$(shell $$(call spawn,$$(build_depsbindir)/libwhich) -p $$(libname_$2) 2>/dev/null)
+libpath_$2 := $$(shell $$(call spawn,$$(LIBWHICH)) -p $$(libname_$2) 2>/dev/null)
 symlink_$2: $$(build_private_libdir)/$$(libname_$2)
 $$(build_private_libdir)/$$(libname_$2):
 	@if [ -e "$$(libpath_$2)" ]; then \
@@ -205,6 +205,7 @@ $(eval $(call symlink_system_library,CSL,libatomic,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libgomp,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,PCRE,libpcre2-8))
 $(eval $(call symlink_system_library,DSFMT,libdSFMT))
+$(eval $(call symlink_system_library,LIBBLASTRAMPOLINE,libblastrampoline))
 $(eval $(call symlink_system_library,BLAS,$(LIBBLASNAME)))
 ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
 $(eval $(call symlink_system_library,LAPACK,$(LIBLAPACKNAME)))

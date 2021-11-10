@@ -19,7 +19,8 @@ Base.runtests
 The `Test` module provides simple *unit testing* functionality. Unit testing is a way to
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
-of specifying the behaviors your code should have when complete.
+of specifying the behaviors your code should have when complete. You may also want to look at the
+documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 

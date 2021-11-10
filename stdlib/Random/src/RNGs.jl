@@ -13,6 +13,9 @@ if Sys.iswindows()
         rand!(rd, rd.buffer)
         @inbounds return rd.buffer[1] % sp[]
     end
+
+    show(io::IO, ::RandomDevice) = print(io, RandomDevice, "()")
+
 else # !windows
     struct RandomDevice <: AbstractRNG
         unlimited::Bool
@@ -43,6 +46,9 @@ else # !windows
         end
         return fd
     end
+
+    show(io::IO, rd::RandomDevice) =
+        print(io, RandomDevice, rd.unlimited ? "()" : "(unlimited=false)")
 
 end # os-test
 

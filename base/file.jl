@@ -1190,23 +1190,19 @@ struct DiskStat
 end
 
 function Base.getproperty(stats::DiskStat, field::Symbol)
-    total = getfield(stats, :bsize) * getfield(stats, :blocks)
-    available = getfield(stats, :bsize) * getfield(stats, :bavail)
-    field === :available && return available
+    total = Int64(getfield(stats, :bsize) * getfield(stats, :blocks))
+    available = Int64(getfield(stats, :bsize) * getfield(stats, :bavail))
     field === :total && return total
+    field === :available && return available
     field === :used && return total - available
     return getfield(stats, field)
 end
 
-@eval Base.propertynames(stats::DiskStat) = $((fieldnames(DiskStat)[1:end-1]..., :available, :total, :used))
+@eval Base.propertynames(stats::DiskStat) =
+    $((fieldnames(DiskStat)[1:end-1]..., :available, :total, :used))
 
-function Base.show(io::IO, x::DiskStat)
-    print(io, "DiskStat(")
-    for field in 1:(nfields(x) - 1)
-        print(io, "$(getfield(x, field)), ")
-    end
-    print(io, "available: $(x.available), total: $(x.total), used: $(x.used))")
-end
+Base.show(io::IO, x::DiskStat) =
+    print(io, "DiskStat(total=$(x.total), used=$(x.used), available=$(x.available))")
 
 """
     diskstat(path=pwd())

@@ -1,7 +1,7 @@
 ## OpenBLAS ##
 ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
 # LAPACK is built into OpenBLAS by default
-OPENBLAS_GIT_URL := git://github.com/xianyi/OpenBLAS.git
+OPENBLAS_GIT_URL := https://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
 $(eval $(call git-external,openblas,OPENBLAS,,,$(BUILDDIR)))
 

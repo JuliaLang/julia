@@ -212,6 +212,7 @@ end
     @test collect(takewhile(Returns(true),5:10)) == 5:10
     @test collect(takewhile(isodd,[1,1,2,3])) == [1,1]
     @test collect(takewhile(<(2), takewhile(<(3), [1,1,2,3]))) == [1,1]
+    @test Base.IteratorEltype(typeof(takewhile(<(4),Iterators.map(identity, 1:10)))) isa Base.EltypeUnknown
 end
 
 # dropwhile
@@ -224,6 +225,7 @@ end
     @test isempty(dropwhile(Returns(true), 1:3))
     @test collect(dropwhile(isodd,[1,1,2,3])) == [2,3]
     @test collect(dropwhile(iseven,dropwhile(isodd,[1,1,2,3]))) == [3]
+    @test Base.IteratorEltype(typeof(dropwhile(<(4),Iterators.map(identity, 1:10)))) isa Base.EltypeUnknown
 end
 
 # cycle
