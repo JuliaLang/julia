@@ -10,7 +10,7 @@ Julia provides a broad range of primitive numeric types, and a full complement o
 bitwise operators as well as standard mathematical functions are defined over them. These map
 directly onto numeric types and operations that are natively supported on modern computers, thus
 allowing Julia to take full advantage of computational resources. Additionally, Julia provides
-software support for [Arbitrary Precision Arithmetic](@ref man-integers-arbitrary-precision), which can handle operations on numeric
+software support for [Arbitrary Precision Arithmetic](@ref Arbitrary-Precision-Arithmetic), which can handle operations on numeric
 values that cannot be represented effectively in native hardware representations, but at the cost
 of relatively slower performance.
 
@@ -245,7 +245,7 @@ Thus, arithmetic with Julia integers is actually a form of [modular arithmetic](
 This reflects the characteristics of the underlying arithmetic of integers as implemented on modern
 computers. In applications where overflow is possible, explicit checking for wraparound produced
 by overflow is essential; otherwise, the [`BigInt`](@ref) type in
-[Arbitrary Precision Arithmetic](@ref man-integers-arbitrary-precision) is recommended instead.
+[Arbitrary Precision Arithmetic](@ref Arbitrary-Precision-Arithmetic) is recommended instead.
 
 An example of overflow behavior and how to potentially resolve it is as follows:
 
@@ -550,7 +550,7 @@ most books on scientific computation, and also in the following references:
     of [William Kahan](https://en.wikipedia.org/wiki/William_Kahan), commonly known as the "Father
     of Floating-Point". Of particular interest may be [An Interview with the Old Man of Floating-Point](https://people.eecs.berkeley.edu/~wkahan/ieee754status/754story.html).
 
-## [Arbitrary Precision Arithmetic](@id man-integers-arbitrary-precision)
+## [Arbitrary Precision Arithmetic](@id Arbitrary-Precision-Arithmetic)
 
 To allow computations with arbitrary-precision integers and floating point numbers, Julia wraps
 the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and the [GNU MPFR Library](https://www.mpfr.org),

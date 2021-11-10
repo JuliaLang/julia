@@ -8,10 +8,10 @@ to figure out why your script is running slower than expected.
 If you've been directed to this page, find the symptom that best matches what you're experiencing
 and follow the instructions to generate the debugging information requested.  Table of symptoms:
 
-  * [Segfaults during bootstrap (`sysimg.jl`)](@ref dev-bt-bootstrap)
-  * [Segfaults when running a script](@ref dev-bt-script)
-  * [Errors during Julia startup](@ref dev-bt-startup)
-  * [Other generic segfaults or unreachables reached](@ref dev-bt-others)
+  * [Segfaults during bootstrap (`sysimg.jl`)](@ref Segfaults-during-bootstrap-(sysimg.jl))
+  * [Segfaults when running a script](@ref Segfaults-when-running-a-script)
+  * [Errors during Julia startup](@ref Errors-during-Julia-startup)
+  * [Other generic segfaults or unreachables reached](@ref Glossary)
 
 ## [Version/Environment info](@id dev-bt-version-info)
 
@@ -23,7 +23,7 @@ using InteractiveUtils
 versioninfo()
 ```
 
-## [Segfaults during bootstrap (`sysimg.jl`)](@id dev-bt-bootstrap)
+## [Segfaults during bootstrap (`sysimg.jl`)](@id Segfaults-during-bootstrap-(sysimg.jl))
 
 Segfaults toward the end of the `make` process of building Julia are a common symptom of something
 going wrong while Julia is preparsing the corpus of code in the `base/` folder.  Many factors
@@ -53,9 +53,9 @@ the full backtrace.  Create a [gist](https://gist.github.com) with the backtrace
 and any other pertinent information you can think of and open a new [issue](https://github.com/JuliaLang/julia/issues?q=is%3Aopen)
 on Github with a link to the gist.
 
-## [Segfaults when running a script](@id dev-bt-script)
+## [Segfaults when running a script](@id Segfaults-when-running-a-script)
 
-The procedure is very similar to [Segfaults during bootstrap (`sysimg.jl`)](@ref dev-bt-bootstrap).  Create a debug
+The procedure is very similar to [Segfaults during bootstrap (`sysimg.jl`)](@ref Segfaults-during-bootstrap-(sysimg.jl)).  Create a debug
 build of Julia, and run your script inside of a debugged Julia process:
 
 ```
@@ -78,7 +78,7 @@ Create a [gist](https://gist.github.com) with the backtrace, the [version info](
 other pertinent information you can think of and open a new [issue](https://github.com/JuliaLang/julia/issues?q=is%3Aopen)
 on Github with a link to the gist.
 
-## [Errors during Julia startup](@id dev-bt-startup)
+## [Errors during Julia startup](@id Errors-during-Julia-startup)
 
 Occasionally errors occur during Julia's startup process (especially when using binary distributions,
 as opposed to compiling from source) such as the following:
@@ -107,7 +107,7 @@ Create a [gist](https://gist.github.com) with the `strace`/ `dtruss` output, the
 and any other pertinent information and open a new [issue](https://github.com/JuliaLang/julia/issues?q=is%3Aopen)
 on Github with a link to the gist.
 
-## [Other generic segfaults or unreachables reached](@id dev-bt-others)
+## [Other generic segfaults or unreachables reached](@id Glossary)
 
 As mentioned elsewhere, `julia` has good integration with `rr` for generating traces; this includes, on Linux, the ability to automatically run `julia` under `rr` and share the trace after a crash. This can be immensely helpful when debugging such crashes and is strongly encouraged when reporting crash issues to the JuliaLang/julia repo. To run `julia` under `rr` automatically, do:
 
