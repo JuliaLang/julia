@@ -16,7 +16,7 @@ function uv_thread_getaffinity()
         cpumask,
         masksize,
     )
-    @assert err == 0
+    Base.uv_error("getaffinity", err)
     n = something(findlast(cpumask)) # we must have at least one active core
     resize!(cpumask, n)
     return cpumask
