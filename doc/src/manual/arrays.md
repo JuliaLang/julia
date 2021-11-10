@@ -8,7 +8,8 @@ other code written in Julia. As such, it's also possible to define custom array 
 from [`AbstractArray`](@ref). See the [manual section on the AbstractArray interface](@ref man-interface-array)
 for more details on implementing a custom array type.
 
-An array is a collection of objects stored in a multi-dimensional grid. In the most general case,
+An array is a collection of objects stored in a multi-dimensional grid. Zero-dimensional arrays
+are allowed, see [this FAQ entry](@ref faq-array-0dim). In the most general case,
 an array may contain objects of type [`Any`](@ref). For most computational purposes, arrays should contain
 objects of a more specific type, such as [`Float64`](@ref) or [`Int32`](@ref).
 
@@ -67,9 +68,9 @@ omitted it will default to [`Float64`](@ref).
 | [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                       |
 | [`randn(T, dims...)`](@ref)                    | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
 | [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix. Requires `using LinearAlgebra` for [`I`](@ref).                                                                                                                                                                                                                   |
-| [`range(start, stop=stop, length=n)`](@ref)    | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                 |
+| [`range(start, stop, n)`](@ref)                | a range of `n` linearly spaced elements from `start` to `stop` |
 | [`fill!(A, x)`](@ref)                          | fill the array `A` with the value `x`                                                                                                                                                                                                        |
-| [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`                                                                                                                                                                                                         |
+| [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`. In particular, `fill(x)` constructs a zero-dimensional `Array` containing `x`. |
 
 [^1]: *iid*, independently and identically distributed.
 
@@ -95,7 +96,7 @@ Here, `(2, 3)` is a [`Tuple`](@ref) and the first argument — the element type 
 ## [Array literals](@id man-array-literals)
 
 Arrays can also be directly constructed with square braces; the syntax `[A, B, C, ...]`
-creates a one dimensional array (i.e., a vector) containing the comma-separated arguments as
+creates a one-dimensional array (i.e., a vector) containing the comma-separated arguments as
 its elements. The element type ([`eltype`](@ref)) of the resulting array is automatically
 determined by the types of the arguments inside the braces. If all the arguments are the
 same type, then that is its `eltype`. If they all have a common
@@ -222,7 +223,7 @@ julia> [1:2; 4;; 1; 3:4]
 
 Just as `;` and `;;` concatenate in the first and second dimension, using more semicolons
 extends this same general scheme. The number of semicolons in the separator specifies the
-particular dimension, so `;;;` concetenates in the third dimension, `;;;;` in the 4th, and
+particular dimension, so `;;;` concatenates in the third dimension, `;;;;` in the 4th, and
 so on. Fewer semicolons take precedence, so the lower dimensions are generally concatenated
 first.
 
@@ -240,7 +241,7 @@ julia> [1; 2;; 3; 4;; 5; 6;;;
 ```
 
 Like before, spaces (and tabs) for horizontal concatenation have a higher precedence than
-any number of semicolons. Thus, higher dimensional arrays can also be written by specifying
+any number of semicolons. Thus, higher-dimensional arrays can also be written by specifying
 their rows first, with their elements textually arranged in a manner similar to their layout:
 
 ```jldoctest
@@ -874,7 +875,7 @@ full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
 introspect which is which). As such, when iterating over an entire array, it's
 much better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
 Not only will the former be much faster in cases where `A` is `IndexCartesian`,
-but it will also support OffsetArrays, too.
+but it will also support [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl), too.
 
 #### Omitted and extra indices
 

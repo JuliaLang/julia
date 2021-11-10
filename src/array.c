@@ -26,7 +26,7 @@ static inline void arrayassign_safe(int hasptr, jl_value_t *parent, char *dst, c
     assert(nb >= jl_datatype_size(jl_typeof(src))); // nb might move some undefined bits, but we should be okay with that
     if (hasptr) {
         size_t nptr = nb / sizeof(void*);
-        memmove_refs((void**)dst, (void**)src, nptr);
+        memmove_refs((void**)dst, (void* const*)src, nptr);
         jl_gc_multi_wb(parent, src);
     }
     else {
@@ -114,20 +114,23 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
     }
 
     int ndimwords = jl_array_ndimwords(ndims);
-    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
+    int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
     if (tot <= ARRAY_INLINE_NBYTES) {
-        if (isunboxed && elsz >= 4)
-            tsz = JL_ARRAY_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT); // align data area
+        // align data area
+        if (tot >= ARRAY_CACHE_ALIGN_THRESHOLD)
+            tsz = JL_ARRAY_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT);
+        else if (isunboxed && elsz >= 4)
+            tsz = JL_ARRAY_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT);
         size_t doffs = tsz;
         tsz += tot;
-        tsz = JL_ARRAY_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT); // align whole object
+        // jl_array_t is large enough that objects will always be aligned 16
         a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
+        assert(((size_t)a & 15) == 0);
         // No allocation or safepoint allowed after this
         a->flags.how = 0;
         data = (char*)a + doffs;
     }
     else {
-        tsz = JL_ARRAY_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT); // align whole object
         data = jl_gc_managed_malloc(tot);
         // Allocate the Array **after** allocating the data
         // to make sure the array is still young
@@ -223,7 +226,7 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     assert(jl_types_equal(jl_tparam0(jl_typeof(data)), jl_tparam0(atype)));
 
     int ndimwords = jl_array_ndimwords(ndims);
-    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords * sizeof(size_t) + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
+    int tsz = sizeof(jl_array_t) + ndimwords * sizeof(size_t) + sizeof(void*);
     a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
     // No allocation or safepoint allowed after this
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
@@ -304,7 +307,7 @@ JL_DLLEXPORT jl_array_t *jl_string_to_array(jl_value_t *str)
     jl_array_t *a;
 
     int ndimwords = jl_array_ndimwords(1);
-    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t) + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
+    int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t) + sizeof(void*);
     a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, jl_array_uint8_type);
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
     a->flags.ndims = 1;
@@ -351,7 +354,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
 
     int ndimwords = jl_array_ndimwords(1);
-    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
+    int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
     a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
     // No allocation or safepoint allowed after this
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
@@ -418,7 +421,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
 
     int ndimwords = jl_array_ndimwords(ndims);
-    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
+    int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
     a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
     // No allocation or safepoint allowed after this
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
@@ -514,32 +517,39 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
     return jl_pchar_to_string((const char*)jl_array_data(a), len);
 }
 
-JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
+JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
 {
+    if (len == 0)
+        return jl_an_empty_string;
     size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
     if (sz < len) // overflow
         jl_throw(jl_memory_exception);
-    if (len == 0)
-        return jl_an_empty_string;
     jl_task_t *ct = jl_current_task;
-    jl_value_t *s = jl_gc_alloc_(ct->ptls, sz, jl_string_type); // force inlining
+    jl_value_t *s;
+    jl_ptls_t ptls = ct->ptls;
+    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    if (sz <= GC_MAX_SZCLASS) {
+        int pool_id = jl_gc_szclass_align8(allocsz);
+        jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
+        int osize = jl_gc_sizeclasses[pool_id];
+        s = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
+    }
+    else {
+        if (allocsz < sz) // overflow in adding offs, size was "negative"
+            jl_throw(jl_memory_exception);
+        s = jl_gc_big_alloc(ptls, allocsz);
+    }
+    jl_set_typeof(s, jl_string_type);
     *(size_t*)s = len;
-    memcpy((char*)s + sizeof(size_t), str, len);
-    ((char*)s + sizeof(size_t))[len] = 0;
+    jl_string_data(s)[len] = 0;
     return s;
 }
 
-JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
+JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
-    size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
-    if (sz < len) // overflow
-        jl_throw(jl_memory_exception);
-    if (len == 0)
-        return jl_an_empty_string;
-    jl_task_t *ct = jl_current_task;
-    jl_value_t *s = jl_gc_alloc_(ct->ptls, sz, jl_string_type); // force inlining
-    *(size_t*)s = len;
-    ((char*)s + sizeof(size_t))[len] = 0;
+    jl_value_t *s = jl_alloc_string(len);
+    if (len > 0)
+        memcpy(jl_string_data(s), str, len);
     return s;
 }
 
@@ -578,7 +588,7 @@ JL_DLLEXPORT jl_value_t *jl_ptrarrayref(jl_array_t *a JL_PROPAGATES_ROOT, size_t
 {
     assert(i < jl_array_len(a));
     assert(a->flags.ptrarray);
-    jl_value_t *elt = jl_atomic_load_relaxed(((jl_value_t**)a->data) + i);
+    jl_value_t *elt = jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)a->data) + i);
     if (elt == NULL)
         jl_throw(jl_undefref_exception);
     return elt;
@@ -607,7 +617,7 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
 {
     if (a->flags.ptrarray) {
-        return jl_atomic_load_relaxed(((jl_value_t**)jl_array_data(a)) + i) != NULL;
+        return jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)jl_array_data(a)) + i) != NULL;
     }
     else if (a->flags.hasptr) {
          jl_datatype_t *eltype = (jl_datatype_t*)jl_tparam0(jl_typeof(a));
@@ -646,7 +656,7 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs
         arrayassign_safe(hasptr, jl_array_owner(a), &((char*)a->data)[i * a->elsize], rhs, a->elsize);
     }
     else {
-        jl_atomic_store_relaxed(((jl_value_t**)a->data) + i, rhs);
+        jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)a->data) + i, rhs);
         jl_gc_wb(jl_array_owner(a), rhs);
     }
 }
@@ -656,7 +666,7 @@ JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
     if (i >= jl_array_len(a))
         jl_bounds_error_int((jl_value_t*)a, i + 1);
     if (a->flags.ptrarray)
-        jl_atomic_store_relaxed(((jl_value_t**)a->data) + i, NULL);
+        jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)a->data) + i, NULL);
     else if (a->flags.hasptr) {
         size_t elsize = a->elsize;
         jl_assume(elsize >= sizeof(void*) && elsize % sizeof(void*) == 0);
@@ -1109,7 +1119,7 @@ STATIC_INLINE void jl_array_del_at_beg(jl_array_t *a, size_t idx, size_t dec,
         // Move the rest of the data if the offset changed
         if (newoffs != offset) {
             memmove_safe(a->flags.hasptr, newdata + nb1, olddata + nb1 + nbdec, nbtotal - nb1);
-            if (isbitsunion) memmove(newtypetagdata + idx, typetagdata + idx + dec, n - idx);
+            if (isbitsunion) memmove(newtypetagdata + idx, typetagdata + idx + dec, a->nrows - idx);
         }
         a->data = newdata;
     }
@@ -1233,9 +1243,11 @@ static NOINLINE ssize_t jl_array_ptr_copy_forward(jl_value_t *owner,
                                                   void **src_p, void **dest_p,
                                                   ssize_t n) JL_NOTSAFEPOINT
 {
+    _Atomic(void*) *src_pa = (_Atomic(void*)*)src_p;
+    _Atomic(void*) *dest_pa = (_Atomic(void*)*)dest_p;
     for (ssize_t i = 0; i < n; i++) {
-        void *val = jl_atomic_load_relaxed(src_p + i);
-        jl_atomic_store_relaxed(dest_p + i, val);
+        void *val = jl_atomic_load_relaxed(src_pa + i);
+        jl_atomic_store_relaxed(dest_pa + i, val);
         // `val` is young or old-unmarked
         if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
             jl_gc_queue_root(owner);
@@ -1249,9 +1261,11 @@ static NOINLINE ssize_t jl_array_ptr_copy_backward(jl_value_t *owner,
                                                    void **src_p, void **dest_p,
                                                    ssize_t n) JL_NOTSAFEPOINT
 {
+    _Atomic(void*) *src_pa = (_Atomic(void*)*)src_p;
+    _Atomic(void*) *dest_pa = (_Atomic(void*)*)dest_p;
     for (ssize_t i = 0; i < n; i++) {
-        void *val = jl_atomic_load_relaxed(src_p + n - i - 1);
-        jl_atomic_store_relaxed(dest_p + n - i - 1, val);
+        void *val = jl_atomic_load_relaxed(src_pa + n - i - 1);
+        jl_atomic_store_relaxed(dest_pa + n - i - 1, val);
         // `val` is young or old-unmarked
         if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
             jl_gc_queue_root(owner);

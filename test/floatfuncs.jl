@@ -119,6 +119,23 @@ end
     @test round(Float32(1.2), sigdigits=5) === Float32(1.2)
     @test round(Float16(0.6), sigdigits=2) === Float16(0.6)
     @test round(Float16(1.1), sigdigits=70) === Float16(1.1)
+
+    # issue 37171
+    @test round(9.87654321e-308, sigdigits = 1) ≈ 1.0e-307
+    @test round(9.87654321e-308, sigdigits = 2) ≈ 9.9e-308
+    @test round(9.87654321e-308, sigdigits = 3) ≈ 9.88e-308
+    @test round(9.87654321e-308, sigdigits = 4) ≈ 9.877e-308
+    @test round(9.87654321e-308, sigdigits = 5) ≈ 9.8765e-308
+    @test round(9.87654321e-308, sigdigits = 6) ≈ 9.87654e-308
+    @test round(9.87654321e-308, sigdigits = 7) ≈ 9.876543e-308
+    @test round(9.87654321e-308, sigdigits = 8) ≈ 9.8765432e-308
+    @test round(9.87654321e-308, sigdigits = 9) ≈ 9.87654321e-308
+    @test round(9.87654321e-308, sigdigits = 10) ≈ 9.87654321e-308
+    @test round(9.87654321e-308, sigdigits = 11) ≈ 9.87654321e-308
+
+    @inferred round(Float16(1.), sigdigits=2)
+    @inferred round(Float32(1.), sigdigits=2)
+    @inferred round(Float64(1.), sigdigits=2)
 end
 
 @testset "literal pow matches runtime pow matches optimized pow" begin

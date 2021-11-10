@@ -252,13 +252,16 @@ function exec_options(opts)
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
+    interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
+    is_interactive::Bool |= interactiveinput
+
     # load ~/.julia/config/startup.jl file
     if startup
         try
             load_julia_startup()
         catch
             invokelatest(display_error, current_exceptions())
-            !(repl || is_interactive) && exit(1)
+            !(repl || is_interactive::Bool) && exit(1)
         end
     end
 
@@ -297,11 +300,8 @@ function exec_options(opts)
             end
         end
     end
-    repl |= is_interactive::Bool
-    if repl
-        interactiveinput = isa(stdin, TTY)
+    if repl || is_interactive::Bool
         if interactiveinput
-            global is_interactive = true
             banner = (opts.banner != 0) # --banner!=no
         else
             banner = (opts.banner == 1) # --banner=yes
@@ -472,6 +472,8 @@ Returns the result of the last evaluated expression of the input file. During in
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
+The argument `path` is normalized using [`normpath`](@ref) which will resolve
+relative path tokens such as `..` and convert `/` to the appropriate path separator.
 
 The optional first argument `mapexpr` can be used to transform the included code before
 it is evaluated: for each parsed expression `expr` in `path`, the `include` function

@@ -480,20 +480,22 @@ This is effectively a lazy version of [`Base.accumulate`](@ref).
 
 # Examples
 ```jldoctest
-julia> f = Iterators.accumulate(+, [1,2,3,4]);
+julia> a = Iterators.accumulate(+, [1,2,3,4]);
 
-julia> foreach(println, f)
+julia> foreach(println, a)
 1
 3
 6
 10
 
-julia> f = Iterators.accumulate(+, [1,2,3]; init = 100);
+julia> b = Iterators.accumulate(/, (2, 5, 2, 5); init = 100);
 
-julia> foreach(println, f)
-101
-103
-106
+julia> collect(b)
+4-element Vector{Float64}:
+ 50.0
+ 10.0
+  5.0
+  1.0
 ```
 """
 accumulate(f, itr; init = Base._InitialValue()) = Accumulate(f, itr, init)
@@ -592,8 +594,8 @@ IteratorSize(::Type{<:Rest{I}}) where {I} = rest_iteratorsize(IteratorSize(I))
 
 # Count -- infinite counting
 
-struct Count{S<:Number}
-    start::S
+struct Count{T,S}
+    start::T
     step::S
 end
 
@@ -613,11 +615,13 @@ julia> for v in Iterators.countfrom(5, 2)
 9
 ```
 """
-countfrom(start::Number, step::Number) = Count(promote(start, step)...)
-countfrom(start::Number)               = Count(start, oneunit(start))
-countfrom()                            = Count(1, 1)
+countfrom(start::T, step::S) where {T,S} = Count{typeof(start+step),S}(start, step)
+countfrom(start::Number, step::Number)   = Count(promote(start, step)...)
+countfrom(start)                         = Count(start, oneunit(start))
+countfrom()                              = Count(1, 1)
 
-eltype(::Type{Count{S}}) where {S} = S
+
+eltype(::Type{<:Count{T}}) where {T} = T
 
 iterate(it::Count, state=it.start) = (state, state + it.step)
 
@@ -786,7 +790,7 @@ end
 
 IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
 eltype(::Type{TakeWhile{I,P}} where P) where {I} = eltype(I)
-IteratorEltype(::Type{TakeWhile{I}} where P) where {I} = IteratorEltype(I)
+IteratorEltype(::Type{TakeWhile{I, P}} where P) where {I} = IteratorEltype(I)
 
 
 # dropwhile
@@ -1191,11 +1195,11 @@ end
 struct IterationCutShort; end
 
 function iterate(itr::PartitionIterator, state...)
-    v = Vector{eltype(itr.c)}(undef, itr.n)
     # This is necessary to remember whether we cut the
     # last element short. In such cases, we do return that
     # element, but not the next one
     state === (IterationCutShort(),) && return nothing
+    v = Vector{eltype(itr.c)}(undef, itr.n)
     i = 0
     y = iterate(itr.c, state...)
     while y !== nothing
@@ -1340,13 +1344,32 @@ length(s::Stateful) = length(s.itr) - s.taken
 """
     only(x)
 
-Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
+Return the one and only element of collection `x`, or throw an [`ArgumentError`](@ref) if the
 collection has zero or multiple elements.
 
 See also [`first`](@ref), [`last`](@ref).
 
 !!! compat "Julia 1.4"
     This method requires at least Julia 1.4.
+
+# Examples
+```jldoctest
+julia> only(["a"])
+"a"
+
+julia> only("a")
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+
+julia> only(())
+ERROR: ArgumentError: Tuple contains 0 elements, must contain exactly 1 element
+Stacktrace:
+[...]
+
+julia> only(('a', 'b'))
+ERROR: ArgumentError: Tuple contains 2 elements, must contain exactly 1 element
+Stacktrace:
+[...]
+```
 """
 @propagate_inbounds function only(x)
     i = iterate(x)

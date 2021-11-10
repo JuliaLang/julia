@@ -50,17 +50,17 @@ typedef object::SymbolRef SymRef;
 // and cannot have any interaction with the julia runtime
 static uv_rwlock_t threadsafe;
 
-extern "C" void jl_init_debuginfo(void)
+void jl_init_debuginfo(void)
 {
     uv_rwlock_init(&threadsafe);
 }
 
-extern "C" void jl_lock_profile(void)
+extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void)
 {
     uv_rwlock_rdlock(&threadsafe);
 }
 
-extern "C" void jl_unlock_profile(void)
+extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void)
 {
     uv_rwlock_rdunlock(&threadsafe);
 }
@@ -136,7 +136,7 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
     mod_size = Size;
 #endif
     if (0) {
-        JL_LOCK_NOGC(&jl_in_stackwalk);
+        uv_mutex_lock(&jl_in_stackwalk);
         if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
             static int warned = 0;
             if (!warned) {
@@ -156,7 +156,7 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
                 jl_printf(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %lu\n", name, GetLastError());
             }
         }
-        JL_UNLOCK_NOGC(&jl_in_stackwalk);
+        uv_mutex_unlock(&jl_in_stackwalk);
     }
 #if defined(_CPU_X86_64_)
     jl_profile_atomic([&]() {
@@ -299,8 +299,8 @@ public:
 
 #if defined(_OS_WINDOWS_)
         uint64_t SectionAddrCheck = 0;
-        uint64_t SectionLoadCheck = 0;
-        uint64_t SectionWriteCheck = 0;
+        uint64_t SectionLoadCheck = 0; (void)SectionLoadCheck;
+        uint64_t SectionWriteCheck = 0; (void)SectionWriteCheck;
         uint8_t *UnwindData = NULL;
 #if defined(_CPU_X86_64_)
         uint8_t *catchjmp = NULL;
@@ -426,6 +426,7 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
     ((JuliaJITEventListener*)Listener)->_NotifyObjectEmitted(Object, L, memmgr);
 }
 
+// TODO: convert the safe names from aotcomile.cpp:makeSafeName back into symbols
 static std::pair<char *, bool> jl_demangle(const char *name) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables since
@@ -709,8 +710,9 @@ static uint64_t jl_sysimage_base;
 static jl_sysimg_fptrs_t sysimg_fptrs;
 static jl_method_instance_t **sysimg_fvars_linfo;
 static size_t sysimg_fvars_n;
-void jl_register_fptrs(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fptrs,
-                       jl_method_instance_t **linfos, size_t n)
+extern "C" JL_DLLEXPORT
+void jl_register_fptrs_impl(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fptrs,
+    jl_method_instance_t **linfos, size_t n)
 {
     jl_sysimage_base = (uintptr_t)sysimage_base;
     sysimg_fptrs = *fptrs;
@@ -782,10 +784,30 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
             if (needs_name) {
                 if (auto name_or_err = sym_found.getName()) {
                     auto nameref = name_or_err.get();
+                    const char globalPrefix = // == DataLayout::getGlobalPrefix
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+                        '_';
+#elif defined(_OS_DARWIN_)
+                        '_';
+#else
+                        '\0';
+#endif
+                    if (globalPrefix) {
+                        if (nameref[0] == globalPrefix)
+                          nameref = nameref.drop_front();
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+                        else if (nameref[0] == '@') // X86_VectorCall
+                          nameref = nameref.drop_front();
+#endif
+                        // else VectorCall, Assembly, Internal, etc.
+                    }
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+                    nameref = nameref.split('@').first;
+#endif
                     size_t len = nameref.size();
                     *name = (char*)realloc_s(*name, len + 1);
-                    (*name)[len] = 0;
                     memcpy(*name, nameref.data(), len);
+                    (*name)[len] = 0;
                     needs_name = false;
                 }
             }
@@ -802,12 +824,12 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
         PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)frame_info_func;
         pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
         pSymbol->MaxNameLen = MAX_SYM_NAME;
-        JL_LOCK_NOGC(&jl_in_stackwalk);
+        uv_mutex_lock(&jl_in_stackwalk);
         if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol)) {
             // errors are ignored
             jl_copy_str(name, pSymbol->Name);
         }
-        JL_UNLOCK_NOGC(&jl_in_stackwalk);
+        uv_mutex_unlock(&jl_in_stackwalk);
     }
 #endif
 }
@@ -1046,10 +1068,10 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
 #ifdef _OS_WINDOWS_
     IMAGEHLP_MODULE64 ModuleInfo;
     ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
-    JL_LOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_lock(&jl_in_stackwalk);
     jl_refresh_dbg_module_list();
     bool isvalid = SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
-    JL_UNLOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_unlock(&jl_in_stackwalk);
     if (!isvalid)
         return false;
 
@@ -1122,7 +1144,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
 #ifdef _OS_WINDOWS_
     static IMAGEHLP_LINE64 frame_info_line;
     DWORD dwDisplacement = 0;
-    JL_LOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_lock(&jl_in_stackwalk);
     DWORD64 dwAddress = pointer;
     frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
     if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
@@ -1132,7 +1154,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
             jl_copy_str(&frame0->file_name, frame_info_line.FileName);
         frame0->line = frame_info_line.LineNumber;
     }
-    JL_UNLOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_unlock(&jl_in_stackwalk);
 #endif
     object::SectionRef Section;
     llvm::DIContext *context = NULL;
@@ -1189,7 +1211,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
 }
 
 // Set *name and *filename to either NULL or malloc'd string
-int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
+extern "C" JL_DLLEXPORT int jl_getFunctionInfo_impl(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables if noInline
     // since it can be called from an unmanaged thread on OSX.
@@ -1477,6 +1499,13 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     jl_profile_atomic([&]() {
         __register_frame(Addr);
     });
+
+    // Now first count the number of FDEs
+    size_t nentries = 0;
+    processFDEs((char*)Addr, Size, [&](const char*){ nentries++; });
+    if (nentries == 0)
+        return;
+
     // Our unwinder
     unw_dyn_info_t *di = new unw_dyn_info_t;
     // In a shared library, this is set to the address of the PLT.
@@ -1484,13 +1513,10 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     // not seem to be used on our supported architectures.
     di->gp = 0;
     // I'm not a great fan of the naming of this constant, but it means the
-    // right thing, which is a table of FDEs and ips.
+    // right thing, which is a table of FDEs and IPs.
     di->format = UNW_INFO_FORMAT_IP_OFFSET;
     di->u.rti.name_ptr = 0;
     di->u.rti.segbase = (unw_word_t)Addr;
-    // Now first count the number of FDEs
-    size_t nentries = 0;
-    processFDEs((char*)Addr, Size, [&](const char*){ nentries++; });
 
     uintptr_t start_ip = (uintptr_t)-1;
     uintptr_t end_ip = 0;
@@ -1625,8 +1651,8 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
 
 #endif
 
-extern "C"
-uint64_t jl_getUnwindInfo(uint64_t dwAddr)
+extern "C" JL_DLLEXPORT
+uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr)
 {
     // Might be called from unmanaged thread
     uv_rwlock_rdlock(&threadsafe);

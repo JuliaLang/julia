@@ -1,13 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // --- the ccall, cglobal, and llvm intrinsics ---
-#include "llvm/Support/Path.h" // for llvm::sys::path
-#include <llvm/Bitcode/BitcodeReader.h>
-#include <llvm/Linker/Linker.h>
-
-#ifdef _OS_WINDOWS_
-extern const char jl_crtdll_basename[];
-#endif
 
 // somewhat unusual variable, in that aotcompile wants to get the address of this for a sanity check
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
@@ -31,8 +24,12 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f
         symMap = &emission_context.symMapExe;
     }
     else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_INTERNAL_DL_LIBNAME) {
+        libptrgv = prepare_global_in(M, jldlli_var);
+        symMap = &emission_context.symMapDlli;
+    }
+    else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_DL_LIBNAME) {
         libptrgv = prepare_global_in(M, jldll_var);
-        symMap = &emission_context.symMapDl;
+        symMap = &emission_context.symMapDll;
     }
     else
 #endif
@@ -290,9 +287,9 @@ static Value *emit_plt(
 class AbiLayout {
 public:
     virtual ~AbiLayout() {}
-    virtual bool use_sret(jl_datatype_t *ty) = 0;
-    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&) = 0;
-    virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret) const = 0;
+    virtual bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) = 0;
+    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx) = 0;
+    virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret, LLVMContext &ctx) const = 0;
 };
 
 // Determine if object of bitstype ty maps to a native x86 SIMD type (__m128, __m256, or __m512) in C
@@ -493,7 +490,7 @@ static Value *julia_to_native(
         assert(!byRef); // don't expect any ABI to pass pointers by pointer
         return boxed(ctx, jvinfo);
     }
-    assert(jl_is_datatype(jlto) && julia_struct_has_layout((jl_datatype_t*)jlto));
+    assert(jl_is_datatype(jlto) && jl_struct_try_layout((jl_datatype_t*)jlto));
 
     typeassert_input(ctx, jvinfo, jlto, jlto_env, argn);
     if (!byRef)
@@ -530,7 +527,7 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
 
     jl_value_t *ptr = static_eval(ctx, arg);
     if (ptr == NULL) {
-        if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == call_sym && jl_expr_nargs(arg) == 3 &&
+        if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_call_sym && jl_expr_nargs(arg) == 3 &&
             jl_is_globalref(jl_exprarg(arg,0)) && jl_globalref_mod(jl_exprarg(arg,0)) == jl_core_module &&
             jl_globalref_name(jl_exprarg(arg,0)) == jl_symbol("tuple")) {
             // attempt to interpret a non-constant 2-tuple expression as (func_name, lib_name()), where
@@ -573,10 +570,22 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
             // will look in process symbol table
+            if (!llvmcall) {
+                void *symaddr;
+                std::string iname("i");
+                iname += f_name;
+                if (jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0)) {
 #ifdef _OS_WINDOWS_
-            if (!llvmcall)
-                f_lib = jl_dlfind_win32(f_name);
+                    f_lib = JL_LIBJULIA_INTERNAL_DL_LIBNAME;
 #endif
+                    f_name = jl_symbol_name(jl_symbol(iname.c_str()));
+                }
+#ifdef _OS_WINDOWS_
+                else {
+                    f_lib = jl_dlfind_win32(f_name);
+                }
+#endif
+            }
         }
         else if (jl_is_cpointer_type(jl_typeof(ptr))) {
             fptr = *(void(**)(void))jl_data_ptr(ptr);
@@ -1008,14 +1017,14 @@ std::string generate_func_sig(const char *fname)
 
     if (type_is_ghost(lrt)) {
         prt = lrt = T_void;
-        abi->use_sret(jl_nothing_type);
+        abi->use_sret(jl_nothing_type, jl_LLVMContext);
     }
     else {
         if (!jl_is_datatype(rt) || ((jl_datatype_t*)rt)->layout == NULL || jl_is_layout_opaque(((jl_datatype_t*)rt)->layout) || jl_is_cpointer_type(rt) || retboxed) {
             prt = lrt; // passed as pointer
-            abi->use_sret(jl_voidpointer_type);
+            abi->use_sret(jl_voidpointer_type, jl_LLVMContext);
         }
-        else if (abi->use_sret((jl_datatype_t*)rt)) {
+        else if (abi->use_sret((jl_datatype_t*)rt, jl_LLVMContext)) {
             AttrBuilder retattrs = AttrBuilder();
 #if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
 #if JL_LLVM_VERSION < 120000
@@ -1031,7 +1040,7 @@ std::string generate_func_sig(const char *fname)
             prt = lrt;
         }
         else {
-            prt = abi->preferred_llvm_type((jl_datatype_t*)rt, true);
+            prt = abi->preferred_llvm_type((jl_datatype_t*)rt, true, jl_LLVMContext);
             if (prt == NULL)
                 prt = lrt;
         }
@@ -1077,7 +1086,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         // Whether or not LLVM wants us to emit a pointer to the data
-        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab);
+        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, jl_LLVMContext);
 
         if (jl_is_cpointer_type(tti)) {
             pat = t;
@@ -1086,7 +1095,7 @@ std::string generate_func_sig(const char *fname)
             pat = PointerType::get(t, AddressSpace::Derived);
         }
         else {
-            pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false);
+            pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false, jl_LLVMContext);
             if (pat == NULL)
                 pat = t;
         }
@@ -1267,13 +1276,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         return args[6 + i];
     };
 
-    auto _is_libjulia_func = [&] (uintptr_t ptr, const char *name) {
+    auto _is_libjulia_func = [&] (uintptr_t ptr, StringRef name) {
         if ((uintptr_t)fptr == ptr)
             return true;
         if (f_lib) {
 #ifdef _OS_WINDOWS_
             if ((f_lib == JL_EXE_LIBNAME) || // preventing invalid pointer access
                 (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
+                (f_lib == JL_LIBJULIA_DL_LIBNAME) ||
                 (!strcmp(f_lib, jl_crtdll_basename))) {
                 // libjulia-like
             }
@@ -1283,9 +1293,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             return false;
 #endif
         }
-        return f_name && !strcmp(f_name, name);
+        return f_name && f_name == name;
     };
-#define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
+#define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), StringRef(XSTR(name)))
 
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);

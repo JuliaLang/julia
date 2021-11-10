@@ -29,9 +29,9 @@ Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
 @eval Base.getindex(A::Const, i1::Int) =
-    (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
+    (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
 @eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =
-  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+  (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 """
     @aliasscope expr
@@ -162,6 +162,30 @@ macro compiler_options(args...)
     return opts
 end
 
+"""
+    Experimental.@force_compile
+
+Force compilation of the block or function (Julia's built-in interpreter is blocked from executing it).
+
+# Examples
+
+```
+julia> occursin("interpreter", string(stacktrace(begin
+           # with forced compilation
+           Base.Experimental.@force_compile
+           backtrace()
+       end, true)))
+false
+
+julia> occursin("interpreter", string(stacktrace(begin
+           # without forced compilation
+           backtrace()
+       end, true)))
+true
+```
+"""
+macro force_compile() Expr(:meta, :force_compile) end
+
 # UI features for errors
 
 """
@@ -268,15 +292,21 @@ method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
 """
 macro overlay(mt, def)
     def = macroexpand(__module__, def) # to expand @inline, @generated, etc
-    if !isexpr(def, [:function, :(=)]) || !isexpr(def.args[1], :call)
+    if !isexpr(def, [:function, :(=)])
         error("@overlay requires a function Expr")
     end
-    def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
+    if isexpr(def.args[1], :call)
+        def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
+    elseif isexpr(def.args[1], :where)
+        def.args[1].args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1].args[1])
+    else
+        error("@overlay requires a function Expr")
+    end
     esc(def)
 end
 
 let new_mt(name::Symbol, mod::Module) = begin
-        ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, name)
+        ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, "@MethodTable")
         ccall(:jl_new_method_table, Any, (Any, Any), name, mod)
     end
     @eval macro MethodTable(name::Symbol)

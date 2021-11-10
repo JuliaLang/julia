@@ -55,6 +55,7 @@ import ..LineEdit:
     history_last,
     history_search,
     accept_result,
+    setmodifiers!,
     terminal,
     MIState,
     PromptState,
@@ -167,6 +168,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
 end
 
 function check_for_missing_packages_and_run_hooks(ast)
+    isa(ast, Expr) || return
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
     if !isempty(mods)
@@ -176,15 +178,18 @@ function check_for_missing_packages_and_run_hooks(ast)
     end
 end
 
-function modules_to_be_loaded(ast, mods = Symbol[])
+function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
+    ast.head == :quote && return mods # don't search if it's not going to be run during this eval
     if ast.head in [:using, :import]
         for arg in ast.args
-            if first(arg.args) isa Symbol # i.e. `Foo`
-                if first(arg.args) != :. # don't include local imports
-                    push!(mods, first(arg.args))
+            arg = arg::Expr
+            arg1 = first(arg.args)
+            if arg1 isa Symbol # i.e. `Foo`
+                if arg1 != :. # don't include local imports
+                    push!(mods, arg1)
                 end
             else # i.e. `Foo: bar`
-                push!(mods, first(first(arg.args).args))
+                push!(mods, first((arg1::Expr).args))
             end
         end
     end
@@ -192,9 +197,8 @@ function modules_to_be_loaded(ast, mods = Symbol[])
         arg isa Expr && modules_to_be_loaded(arg, mods)
     end
     filter!(mod -> !in(String(mod), ["Base", "Main", "Core"]), mods) # Exclude special non-package modules
-    return mods
+    return unique(mods)
 end
-modules_to_be_loaded(::Nothing) = Symbol[] # comments are parsed as nothing
 
 """
     start_repl_backend(repl_channel::Channel, response_channel::Channel)
@@ -470,9 +474,14 @@ LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
         false, false, false, envcolors
     )
 
-mutable struct REPLCompletionProvider <: CompletionProvider end
+mutable struct REPLCompletionProvider <: CompletionProvider
+    modifiers::LineEdit.Modifiers
+end
+REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
+
+setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
@@ -480,6 +489,15 @@ function complete_line(c::REPLCompletionProvider, s::PromptState)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = completions(full, lastindex(partial))
+    if !c.modifiers.shift
+        # Filter out methods where all arguments are `Any`
+        filter!(ret) do c
+            isa(c, REPLCompletions.MethodCompletion) || return true
+            sig = Base.unwrap_unionall(c.method.sig)::DataType
+            return !all(T -> T === Any || T === Vararg{Any}, sig.parameters[2:end])
+        end
+    end
+    c.modifiers = LineEdit.Modifiers()
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 

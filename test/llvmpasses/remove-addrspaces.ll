@@ -101,3 +101,10 @@ loop:
 exit:
   ret i64 %sum
 }
+
+
+; COM: check that address spaces in byval types are processed correctly
+define void @byval_type([1 x {} addrspace(10)*] addrspace(11)* byval([1 x {} addrspace(10)*]) %0) {
+; CHECK: define void @byval_type([1 x {}*]* byval([1 x {}*]) %0)
+  ret void
+}

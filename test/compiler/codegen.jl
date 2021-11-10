@@ -4,6 +4,7 @@
 
 using Random
 using InteractiveUtils
+using Libdl
 
 const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
@@ -350,7 +351,7 @@ struct Const{T<:Array}
 end
 
 @eval Base.getindex(A::Const, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 function foo31018!(a, b)
     @aliasscope for i in eachindex(a, b)
@@ -580,3 +581,94 @@ g40612(a, b) = a[]|a[] === b[]|b[]
 @test g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[missing])
 @test g40612(Union{Bool,Missing}[true], Union{Bool,Missing}[true])
 @test g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[false])
+
+# issue #41438
+struct A41438{T}
+  x::Ptr{T}
+end
+struct B41438{T}
+  x::T
+end
+f41438(y) = y[].x
+@test A41438.body.layout != C_NULL
+@test B41438.body.layout === C_NULL
+@test f41438(Ref{A41438}(A41438(C_NULL))) === C_NULL
+@test f41438(Ref{B41438}(B41438(C_NULL))) === C_NULL
+
+const S41438 = Pair{Any, Ptr{T}} where T
+g41438() = Array{S41438,1}(undef,1)[1].first
+get_llvm(g41438, ()); # cause allocation of layout
+@test S41438.body.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438.body)
+@test S41438{Int}.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438{Int})
+
+# issue #41157
+f41157(a, b) = a[1] = b[1]
+@test_throws BoundsError f41157(Tuple{Int}[], Tuple{Union{}}[])
+
+# issue #41096
+struct Modulate41096{M<:Union{Function, Val{true}, Val{false}}, id}
+    modulate::M
+    Modulate41096(id::Symbol, modulate::Function) = new{typeof(modulate), id}(modulate)
+    Modulate41096(id::Symbol, modulate::Bool=true) = new{Val{modulate}, id}(modulate|>Val)
+end
+@inline ismodulatable41096(modulate::Modulate41096) = ismodulatable41096(typeof(modulate))
+@inline ismodulatable41096(::Type{<:Modulate41096{Val{B}}}) where B = B
+@inline ismodulatable41096(::Type{<:Modulate41096{<:Function}}) = true
+
+mutable struct Term41096{I, M<:Modulate41096}
+    modulate::M
+    Term41096{I}(modulate::Modulate41096) where I = new{I, typeof(modulate)}(modulate)
+end
+@inline ismodulatable41096(term::Term41096) = ismodulatable41096(typeof(term))
+@inline ismodulatable41096(::Type{<:Term41096{I, M} where I}) where M = ismodulatable41096(M)
+
+function newexpand41096(gen, name::Symbol)
+    flag = ismodulatable41096(getfield(gen, name))
+    if flag
+        return true
+    else
+        return false
+    end
+end
+
+t41096 = Term41096{:t}(Modulate41096(:t, false))
+μ41096 = Term41096{:μ}(Modulate41096(:μ, false))
+U41096 = Term41096{:U}(Modulate41096(:U, false))
+
+@test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)
+
+# test that we can start julia with libjulia-codegen removed; PR #41936
+mktempdir() do pfx
+    cp(dirname(Sys.BINDIR), pfx; force=true)
+    libpath = relpath(dirname(dlpath("libjulia-codegen")), dirname(Sys.BINDIR))
+    libs_deleted = 0
+    for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+        rm(f; force=true, recursive=true)
+        libs_deleted += 1
+    end
+    @test libs_deleted > 0
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'println("no codegen!")'`) == "no codegen!"
+end
+
+# issue #42645
+mutable struct A42645{T}
+    x::Bool
+    function A42645(a::Vector{T}) where T
+        r = new{T}()
+        r.x = false
+        return r
+    end
+end
+mutable struct B42645{T}
+  y::A42645{T}
+end
+x42645 = 1
+function f42645()
+  res = B42645(A42645([x42645]))
+  res.y = A42645([x42645])
+  res.y.x = true
+  res
+end
+@test ((f42645()::B42645).y::A42645{Int}).x

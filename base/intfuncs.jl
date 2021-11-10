@@ -13,25 +13,25 @@ The arguments may be integer and rational numbers.
 
 # Examples
 ```jldoctest
-julia> gcd(6,9)
+julia> gcd(6, 9)
 3
 
-julia> gcd(6,-9)
+julia> gcd(6, -9)
 3
 
-julia> gcd(6,0)
+julia> gcd(6, 0)
 6
 
-julia> gcd(0,0)
+julia> gcd(0, 0)
 0
 
-julia> gcd(1//3,2//3)
+julia> gcd(1//3, 2//3)
 1//3
 
-julia> gcd(1//3,-2//3)
+julia> gcd(1//3, -2//3)
 1//3
 
-julia> gcd(1//3,2)
+julia> gcd(1//3, 2)
 1//3
 
 julia> gcd(0, 0, 10, 15)
@@ -47,11 +47,22 @@ function gcd(a::T, b::T) where T<:Integer
     checked_abs(a)
 end
 
-# binary GCD (aka Stein's) algorithm
-# about 1.7x (2.1x) faster for random Int64s (Int128s)
 function gcd(a::T, b::T) where T<:BitInteger
     a == 0 && return checked_abs(b)
     b == 0 && return checked_abs(a)
+    r = _gcd(a, b)
+    signbit(r) && __throw_gcd_overflow(a, b)
+    return r
+end
+@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
+
+# binary GCD (aka Stein's) algorithm
+# about 1.7x (2.1x) faster for random Int64s (Int128s)
+# Unfortunately, we need to manually annotate this as `@pure` to work around #41694. Since
+# this is used in the Rational constructor, constant prop is something we do care about here.
+# This does call generic functions, so it might not be completely sound, but since `_gcd` is
+# restricted to BitIntegers, it is probably fine in practice.
+@pure function _gcd(a::T, b::T) where T<:BitInteger
     za = trailing_zeros(a)
     zb = trailing_zeros(b)
     k = min(za, zb)
@@ -65,11 +76,8 @@ function gcd(a::T, b::T) where T<:BitInteger
         v >>= trailing_zeros(v)
     end
     r = u << k
-    # T(r) would throw InexactError; we want OverflowError instead
-    r > typemax(T) && __throw_gcd_overflow(a, b)
-    r % T
+    return r % T
 end
-@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
 
 """
     lcm(x, y...)
@@ -82,33 +90,33 @@ The arguments may be integer and rational numbers.
 
 # Examples
 ```jldoctest
-julia> lcm(2,3)
+julia> lcm(2, 3)
 6
 
-julia> lcm(-2,3)
+julia> lcm(-2, 3)
 6
 
-julia> lcm(0,3)
+julia> lcm(0, 3)
 0
 
-julia> lcm(0,0)
+julia> lcm(0, 0)
 0
 
-julia> lcm(1//3,2//3)
+julia> lcm(1//3, 2//3)
 2//3
 
-julia> lcm(1//3,-2//3)
+julia> lcm(1//3, -2//3)
 2//3
 
-julia> lcm(1//3,2)
+julia> lcm(1//3, 2)
 2//1
 
-julia> lcm(1,3,5,7)
+julia> lcm(1, 3, 5, 7)
 105
 ```
 """
 function lcm(a::T, b::T) where T<:Integer
-    # explicit a==0 test is to handle case of lcm(0,0) correctly
+    # explicit a==0 test is to handle case of lcm(0, 0) correctly
     # explicit b==0 test is to handle case of lcm(typemin(T),0) correctly
     if a == 0 || b == 0
         return zero(a)
@@ -206,13 +214,13 @@ and ``div(y,m) = 0``. This will throw an error if ``m = 0``, or if
 
 # Examples
 ```jldoctest
-julia> invmod(2,5)
+julia> invmod(2, 5)
 3
 
-julia> invmod(2,3)
+julia> invmod(2, 3)
 2
 
-julia> invmod(5,6)
+julia> invmod(5, 6)
 5
 ```
 """
@@ -311,6 +319,9 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{1}) = x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-1}) = inv(x)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-2}) = (i=inv(x); i*i)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-3}) = (i=inv(x); i*i*i)
 
 # don't use the inv(x) transformation here since float^p is slightly more accurate
 @inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p
@@ -320,7 +331,11 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 # be computed in a type-stable way even for e.g. integers.
 @inline function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
-        literal_pow(^, inv(x), Val(-p))
+        if x isa BitInteger64
+            f(Float64(x), p) # inv would cause rounding, while Float64^Integer is able to compensate the inverse
+        else
+            f(inv(x), -p)
+        end
     else
         f(x, p)
     end
@@ -792,7 +807,7 @@ string(b::Bool) = b ? "true" : "false"
 """
     bitstring(n)
 
-A string giving the literal bit representation of a number.
+A string giving the literal bit representation of a primitive type.
 
 See also [`count_ones`](@ref), [`count_zeros`](@ref), [`digits`](@ref).
 
@@ -805,13 +820,23 @@ julia> bitstring(2.2)
 "0100000000000001100110011001100110011001100110011001100110011010"
 ```
 """
-function bitstring end
-
-bitstring(x::Union{Bool,Int8,UInt8})           = string(reinterpret(UInt8,x), pad = 8, base = 2)
-bitstring(x::Union{Int16,UInt16,Float16})      = string(reinterpret(UInt16,x), pad = 16, base = 2)
-bitstring(x::Union{Char,Int32,UInt32,Float32}) = string(reinterpret(UInt32,x), pad = 32, base = 2)
-bitstring(x::Union{Int64,UInt64,Float64})      = string(reinterpret(UInt64,x), pad = 64, base = 2)
-bitstring(x::Union{Int128,UInt128})            = string(reinterpret(UInt128,x), pad = 128, base = 2)
+function bitstring(x::T) where {T}
+    isprimitivetype(T) || throw(ArgumentError("$T not a primitive type"))
+    sz = sizeof(T) * 8
+    str = StringVector(sz)
+    i = sz
+    @inbounds while i >= 4
+        b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
+        d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+        str[i-3] = (d >> 0x00) % UInt8
+        str[i-2] = (d >> 0x08) % UInt8
+        str[i-1] = (d >> 0x10) % UInt8
+        str[i]   = (d >> 0x18) % UInt8
+        x = lshr_int(x, 4)
+        i -= 4
+    end
+    return String(str)
+end
 
 """
     digits([T<:Integer], n::Integer; base::T = 10, pad::Integer = 1)
@@ -864,6 +889,7 @@ end
 Return true if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
 hastypemax(::Base.BitIntegerType) = true
+hastypemax(::Type{Bool}) = true
 hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
 
 """
@@ -875,14 +901,14 @@ the array length. If the array length is excessive, the excess portion is filled
 
 # Examples
 ```jldoctest
-julia> digits!([2,2,2,2], 10, base = 2)
+julia> digits!([2, 2, 2, 2], 10, base = 2)
 4-element Vector{Int64}:
  0
  1
  0
  1
 
-julia> digits!([2,2,2,2,2,2], 10, base = 2)
+julia> digits!([2, 2, 2, 2, 2, 2], 10, base = 2)
 6-element Vector{Int64}:
  0
  1

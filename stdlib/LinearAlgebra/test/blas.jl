@@ -370,6 +370,41 @@ Random.seed!(100)
         @test all(o4cp .== z4)
         @test all(BLAS.gemv('N', U4, o4) .== v41)
         @test all(BLAS.gemv('N', U4, o4) .== v41)
+        @testset "non-standard strides" begin
+            if elty <: Complex
+                A = elty[1+2im 3+4im 5+6im 7+8im; 2+3im 4+5im 6+7im 8+9im; 3+4im 5+6im 7+8im 9+10im]
+                v = elty[1+2im, 2+3im, 3+4im, 4+5im, 5+6im]
+                dest = view(ones(elty, 7), 6:-2:2)
+                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(v, 1:3:4), elty(3), dest) == elty[-31+154im, -35+178im, -39+202im]
+                @test BLAS.gemv('N', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[15-41im, 17-49im]
+                @test BLAS.gemv('N', view(A, 1:0, 1:2), view(v, 1:2)) == elty[]
+                dest = view(ones(elty, 5), 4:-2:2)
+                @test BLAS.gemv!('T', elty(2), view(A, :, 2:2:4), view(v, 1:2:5), elty(3), dest) == elty[-45+202im, -69+370im]
+                @test BLAS.gemv('T', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[14-38im, 18-54im]
+                @test BLAS.gemv('T', view(A, 2:3, 2:1), view(v, 1:2)) == elty[]
+                dest = view(ones(elty, 5), 4:-2:2)
+                @test BLAS.gemv!('C', elty(2), view(A, :, 2:2:4), view(v, 5:-2:1), elty(3), dest) == elty[179+6im, 347+30im]
+                @test BLAS.gemv('C', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[-40-6im, -56-10im]
+                @test BLAS.gemv('C', view(A, 2:3, 2:1), view(v, 1:2)) == elty[]
+            else
+                A = elty[1 2 3 4; 5 6 7 8; 9 10 11 12]
+                v = elty[1, 2, 3, 4, 5]
+                dest = view(ones(elty, 7), 6:-2:2)
+                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(v, 1:3:4), elty(3), dest) == elty[39, 79, 119]
+                @test BLAS.gemv('N', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[-19, -31]
+                @test BLAS.gemv('N', view(A, 1:0, 1:2), view(v, 1:2)) == elty[]
+                for trans = ('T', 'C')
+                    dest = view(ones(elty, 5), 4:-2:2)
+                    @test BLAS.gemv!(trans, elty(2), view(A, :, 2:2:4), view(v, 1:2:5), elty(3), dest) == elty[143, 179]
+                    @test BLAS.gemv(trans, elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[-22, -25]
+                    @test BLAS.gemv(trans, view(A, 2:3, 2:1), view(v, 1:2)) == elty[]
+                end
+            end
+            for trans = ('N', 'T', 'C')
+                @test_throws ErrorException BLAS.gemv(trans, view(A, 1:2:3, 1:2), view(v, 1:2))
+                @test_throws ErrorException BLAS.gemv(trans, view(A, 1:2, 2:-1:1), view(v, 1:2))
+            end
+        end
     end
     @testset "gemm" begin
         @test all(BLAS.gemm('N', 'N', I4, I4) .== I4)
@@ -459,6 +494,7 @@ Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setin
 Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
 
 Base.strides(A::WrappedArray) = strides(A.A)
+Base.elsize(::Type{WrappedArray{T,N}}) where {T,N} = Base.elsize(Array{T,N})
 
 @testset "strided interface adjtrans" begin
     x = WrappedArray([1, 2, 3, 4])

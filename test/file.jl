@@ -63,15 +63,30 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 end
 
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    link = joinpath(dir, "afilelink.txt")
+    link = joinpath(dir, "afilesymlink.txt")
     symlink(file, link)
     @test stat(file) == stat(link)
 
     # relative link
-    rellink = joinpath(subdir, "rel_afilelink.txt")
+    rellink = joinpath(subdir, "rel_afilesymlink.txt")
     relfile = joinpath("..", "afile.txt")
     symlink(relfile, rellink)
     @test stat(rellink) == stat(file)
+end
+
+@testset "hardlink" begin
+    link = joinpath(dir, "afilehardlink.txt")
+    hardlink(file, link)
+    @test stat(file) == stat(link)
+
+    # when the destination exists
+    @test_throws Base.IOError hardlink(file, link)
+
+    rm(link)
+
+    # the source file does not exist
+    missing_file = joinpath(dir, "for-sure-missing-file.txt")
+    @test_throws Base.IOError hardlink(missing_file, link)
 end
 
 using Random
@@ -91,13 +106,15 @@ using Random
 end
 
 @testset "tempname with parent" begin
-    t = tempname()
-    @test dirname(t) == tempdir()
-    mktempdir() do d
-        t = tempname(d)
-        @test dirname(t) == d
+    withenv("TMPDIR" => nothing) do
+        t = tempname()
+        @test dirname(t) == tempdir()
+        mktempdir() do d
+            t = tempname(d)
+            @test dirname(t) == d
+        end
+        @test_throws ArgumentError tempname(randstring())
     end
-    @test_throws ArgumentError tempname(randstring())
 end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
@@ -491,9 +508,35 @@ rm(c_tmpdir, recursive=true)
 @test_throws Base._UVError("unlink($(repr(c_tmpdir)))", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
+# Some operations can return multiple different error codes depending on the system environment.
+function throws_matching_exception(f::Function, acceptable_exceptions::AbstractVector)
+    try
+        f()
+        @error "No exception was thrown."
+        return false
+    catch ex
+        if ex in acceptable_exceptions
+            return true
+        else
+            @error "The thrown exception is not in the list of acceptable exceptions" acceptable_exceptions exception=(ex, catch_backtrace())
+            return false
+        end
+    end
+end
+function throws_matching_uv_error(f::Function, pfx::AbstractString, codes::AbstractVector{<:Integer})
+    acceptable_exceptions = multiple_uv_errors(pfx, codes)
+    return throws_matching_exception(f, acceptable_exceptions)
+end
+function multiple_uv_errors(pfx::AbstractString, codes::AbstractVector{<:Integer})
+    return [Base._UVError(pfx, code) for code in codes]
+end
+
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
-    if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
+    uid = Libc.geteuid()
+    @test stat(file).uid == uid
+    @test uid == Libc.getuid()
+    if uid == 0 # root user
         chown(file, -2, -1)  # Change the file owner to nobody
         @test stat(file).uid != 0
         chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
@@ -503,8 +546,12 @@ if !Sys.iswindows()
         @test stat(file).gid == 0
         @test stat(file).uid == 0
     else
-        @test_throws Base._UVError("chown($(repr(file)), -2, -1)", Base.UV_EPERM) chown(file, -2, -1)  # Non-root user cannot change ownership to another user
-        @test_throws Base._UVError("chown($(repr(file)), -1, -2)", Base.UV_EPERM) chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        @test throws_matching_uv_error("chown($(repr(file)), -2, -1)", [Base.UV_EPERM, Base.UV_EINVAL]) do
+            chown(file, -2, -1)  # Non-root user cannot change ownership to another user
+        end
+        @test throws_matching_uv_error("chown($(repr(file)), -1, -2)", [Base.UV_EPERM, Base.UV_EINVAL]) do
+            chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        end
     end
 else
     # test that chown doesn't cause any errors for Windows
@@ -1649,4 +1696,18 @@ end
         @test !isnothing(Base.Filesystem.getusername(s.uid))
         @test !isnothing(Base.Filesystem.getgroupname(s.gid))
     end
+end
+
+@testset "diskstat() works" begin
+    # Sanity check assuming disk is smaller than 32PB
+    PB = Int64(2)^44
+
+    dstat = diskstat()
+    @test dstat.total < 32PB
+    @test dstat.used + dstat.available == dstat.total
+    @test occursin(r"^DiskStat\(total=\d+, used=\d+, available=\d+\)$", sprint(show, dstat))
+    # Test diskstat(::AbstractString)
+    dstat = diskstat(pwd())
+    @test dstat.total < 32PB
+    @test dstat.used + dstat.available == dstat.total
 end

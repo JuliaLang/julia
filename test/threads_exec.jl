@@ -840,6 +840,19 @@ fib34666(x) =
     end
 @test fib34666(25) == 75025
 
+# issue #41324
+@testset "Co-schedule" begin
+    parent = Threads.@spawn begin
+        @test current_task().sticky == false
+        child = @async begin end
+        @test current_task().sticky == true
+        @test Threads.threadid() == Threads.threadid(child)
+        wait(child)
+    end
+    wait(parent)
+    @test parent.sticky == true
+end
+
 function jitter_channel(f, k, delay, ntasks, schedule)
     x = Channel(ch -> foreach(i -> put!(ch, i), 1:k), 1)
     y = Channel(k) do ch
@@ -897,5 +910,33 @@ end
     for i = 1:4
         Random.seed!(r, 23)
         @test reproducible_rand(r, 10) == val
+    end
+end
+
+# issue #41546, thread-safe package loading
+@testset "package loading" begin
+    ch = Channel{Bool}(nthreads())
+    barrier = Base.Event()
+    old_act_proj = Base.ACTIVE_PROJECT[]
+    try
+        pushfirst!(LOAD_PATH, "@")
+        Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
+        @sync begin
+            for _ in 1:nthreads()
+                Threads.@spawn begin
+                    put!(ch, true)
+                    wait(barrier)
+                    @eval using TestPkg
+                end
+            end
+            for _ in 1:nthreads()
+                take!(ch)
+            end
+            notify(barrier)
+        end
+        @test Base.root_module(@__MODULE__, :TestPkg) isa Module
+    finally
+        Base.ACTIVE_PROJECT[] = old_act_proj
+        popfirst!(LOAD_PATH)
     end
 end

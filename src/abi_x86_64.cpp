@@ -168,7 +168,7 @@ Classification classify(jl_datatype_t *dt) const
     return cl;
 }
 
-bool use_sret(jl_datatype_t *dt) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
 {
     int sret = classify(dt).isMemory;
     if (sret) {
@@ -178,7 +178,7 @@ bool use_sret(jl_datatype_t *dt) override
     return sret;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx) override
 {
     Classification cl = classify(dt);
     if (cl.isMemory) {
@@ -210,7 +210,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 
 // Called on behalf of ccall to determine preferred LLVM representation
 // for an argument or return value.
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
 {
     (void) isret;
     // no need to rewrite these types (they are returned as pointers anyways)
@@ -230,15 +230,15 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
     switch (cl.classes[0]) {
         case Integer:
             if (size >= 8)
-                types[0] = T_int64;
+                types[0] = Type::getInt64Ty(ctx);
             else
-                types[0] = Type::getIntNTy(jl_LLVMContext, nbits);
+                types[0] = Type::getIntNTy(ctx, nbits);
             break;
         case Sse:
             if (size <= 4)
-                types[0] = T_float32;
+                types[0] = Type::getFloatTy(ctx);
             else
-                types[0] = T_float64;
+                types[0] = Type::getDoubleTy(ctx);
             break;
         default:
             assert(0 && "Unexpected cl.classes[0]");
@@ -248,14 +248,14 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
             return types[0];
         case Integer:
             assert(size > 8);
-            types[1] = Type::getIntNTy(jl_LLVMContext, (nbits-64));
-            return StructType::get(jl_LLVMContext,ArrayRef<Type*>(&types[0],2));
+            types[1] = Type::getIntNTy(ctx, (nbits-64));
+            return StructType::get(ctx,ArrayRef<Type*>(&types[0],2));
         case Sse:
             if (size <= 12)
-                types[1] = T_float32;
+                types[1] = Type::getFloatTy(ctx);
             else
-                types[1] = T_float64;
-            return StructType::get(jl_LLVMContext,ArrayRef<Type*>(&types[0],2));
+                types[1] = Type::getDoubleTy(ctx);
+            return StructType::get(ctx,ArrayRef<Type*>(&types[0],2));
         default:
             assert(0 && "Unexpected cl.classes[0]");
     }
