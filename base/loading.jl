@@ -7,11 +7,11 @@ const require_lock = ReentrantLock()
 
 if Sys.isunix() && !Sys.isapple()
     # assume case-sensitive filesystems, don't have to do anything
-    isfile_casesensitive(path) = safe_isfile(path)
+    isfile_casesensitive(path) = isaccessiblefile(path)
 elseif Sys.iswindows()
     # GetLongPathName Win32 function returns the case-preserved filename on NTFS.
     function isfile_casesensitive(path)
-        safe_isfile(path) || return false  # Fail fast
+        isaccessiblefile(path) || return false  # Fail fast
         basename(Filesystem.longpath(path)) == basename(path)
     end
 elseif Sys.isapple()
@@ -44,7 +44,7 @@ elseif Sys.isapple()
     # Buffer buf;
     # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
     function isfile_casesensitive(path)
-        safe_isfile(path) || return false
+        isaccessiblefile(path) || return false
         path_basename = String(basename(path))
         local casepreserved_basename
         header_size = 12
@@ -75,15 +75,15 @@ elseif Sys.isapple()
 else
     # Generic fallback that performs a slow directory listing.
     function isfile_casesensitive(path)
-        safe_isfile(path) || return false
+        isaccessiblefile(path) || return false
         dir, filename = splitdir(path)
         any(readdir(dir) .== filename)
     end
 end
 
-# Safe, as in, `isdir`, `isfile`, `ispath` return false if an IOError is encountered
+# Check if the file is accessible. If stat fails return `false`
 
-function safe_isdir(dir)
+function isaccessibledir(dir)
     return try
         isdir(dir)
     catch err
@@ -92,7 +92,7 @@ function safe_isdir(dir)
     end
 end
 
-function safe_isfile(file)
+function isaccessiblefile(file)
     return try
         isfile(file)
     catch err
@@ -101,7 +101,7 @@ function safe_isfile(file)
     end
 end
 
-function safe_ispath(path)
+function isaccessiblepath(path)
     return try
         ispath(path)
     catch err
