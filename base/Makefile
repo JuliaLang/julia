@@ -194,11 +194,9 @@ SYMLINK_SYSTEM_LIBRARIES += symlink_p7zip
 endif
 
 $(build_bindir)/7z$(EXE):
-	exepath=$(7Z_PATH) && \
-	[ -e "$$exepath" ] && \
+	[ -e "$(7Z_PATH)" ] && \
 	([ ! -e "$@" ] || rm "$@") && \
-	echo ln -sf "$$exepath" "$@" && \
-	ln -sf "$$exepath" "$@"
+	ln -svf "$(7Z_PATH)" "$@"
 
 # the following excludes: libuv.a, libutf8proc.a
 
