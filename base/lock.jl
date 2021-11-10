@@ -37,7 +37,7 @@ mutable struct ReentrantLock <: AbstractLock
     # offset32 = 36, offset64 = 48
     # sizeof32 = 20, sizeof64 = 32
     # now add padding to make this a full cache line to minimize false sharing between objects
-    _::NTuple{Int == Int32 ? 2 : 3, Int}
+    _::NTuple{Int === Int32 ? 2 : 3, Int}
     # offset32 = 44, offset64 = 72 == sizeof+offset
     # sizeof32 = 28, sizeof64 = 56
 
