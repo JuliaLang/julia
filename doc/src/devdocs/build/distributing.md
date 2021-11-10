@@ -108,14 +108,8 @@ Alternatively, Julia may be built as a framework by invoking `make` with the
 Windows
 -------
 
-The best supported method of creating a Julia distribution on Windows
-is to cross-compile from a Linux distribution such as Ubuntu. In-depth
-compilation instructions [are
-available](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/windows.md).
-However the important steps for redistribution are to ensure to `make
-win-extras` in between `make` and `make binary-dist`.  After that process is
-completed, the `.zip` file created in the head Julia directory will
-hold a completely self-contained Julia.
+Instructions for reating a Julia distribution on Windows are described in the 
+[build devdocs for Windows](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/windows.md).
 
 Notes on BLAS and LAPACK
 ------------------------
@@ -156,6 +150,9 @@ Finally, OpenBLAS includes its own optimized version of LAPACK. If you
 set `USE_SYSTEM_BLAS=1` and `USE_SYSTEM_LAPACK=1`, you should also set
 `LIBLAPACK=-l$(YOURBLAS)` and `LIBLAPACKNAME=lib$(YOURBLAS)`. Else, the
 reference LAPACK will be used and performance will typically be much lower.
+
+Starting with Julia 1.7, Julia uses [libblastrampoline](https://github.com/JuliaLinearAlgebra/libblastrampoline)
+to pick a different BLAS at runtime. 
 
 # Point releasing 101
 
