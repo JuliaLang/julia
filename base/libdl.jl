@@ -105,16 +105,18 @@ The `warnings` determines if the warnings are printed to the console.
 function check_dllist()
     fullpaths = dllist()
     names = dlname.(fullpaths)
+    perm = sortperm(names)
     dlabspath(x) = isfile(x) ? abspath(realpath(x)) : x
-    for (i,dl) in enumerate(names), j in i+1:length(names)
-        if dl == names[j]
-            if dlabspath(fullpaths[i]) == dlabspath(fullpaths[j])
+    for i in 1:length(names)-1
+        p1, p2 = perm[i], perm[i+1]
+        if names[p1] == names[p2]
+            if dlabspath(fullpaths[p1]) == dlabspath(fullpaths[p2])
                 continue
             end
-            @warn """Detected possible duplicate library loaded: $dl
+            @warn """Detected possible duplicate library loaded: $(names[p1])
 This may lead to unexpected behavior!
-$(fullpaths[i])
-$(fullpaths[j])""" maxlog=1
+$(fullpaths[p1])
+$(fullpaths[p2])""" maxlog=1
         end
     end
 end
