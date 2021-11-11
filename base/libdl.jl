@@ -85,9 +85,6 @@ else
     const dlpattern = r"^(.+?)\.so(?:\..*)?$"
 end
 
-const _dlname_cache = Dict{String, String}()
-const _dlname_cache_lock = ReentrantLock()
-
 # Returns the name of the library.
 function _dlname(path)
     bn = basename(path)
@@ -98,21 +95,24 @@ end
 # Returns absolute path without symbolic links.
 _dlabspath(x) = isfile(x) ? abspath(realpath(x)) : x
 
+const _dlname_cache = Dict{String, String}()
+const _suppressed_warnings = Set{String}()
+
 # Checks if the same shared library is loaded from two different files.
-function check_dllist()
-    paths, names = @lock _dlname_cache_lock begin
-        paths = dllist()
-        names = [get!(() -> _dlname(x), _dlname_cache, x) for x in paths]
-        paths, names
-    end
+function _check_dllist()
+    paths = dllist()
+    names = [get!(() -> _dlname(x), _dlname_cache, x) for x in paths]
     dict = Dict{String, String}() # name => path
     for (name, path) in zip(names, paths)
         oldpath = get!(dict, name, path)
         if path != oldpath && _dlabspath(path) != _dlabspath(oldpath)
+            name ∈ _suppressed_warnings && continue
             @warn """Detected possible duplicate library loaded: $(name)
 This may lead to unexpected behavior!
 $(path)
-$(oldpath)""" maxlog=1
+$(oldpath)
+To suppress this warning, you can use the following argument:
+dlopen([name_or_path]; suppress_warnings = ["$(name)"])""" maxlog=1
         end
     end
 end
@@ -151,20 +151,25 @@ If the library cannot be found, this method throws an error, unless the keyword 
 """
 function dlopen end
 
+const _dlopen_lock = ReentrantLock()
+
 dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; kwargs...) =
     dlopen(string(s), flags; kwargs...)
 
-function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; throw_error::Bool = true, warnings::Bool = true)
-    if isempty(s) # Do not load anything, but run check_dllist()
-        ret = nothing
-    else
+function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; throw_error::Bool = true, suppress_warnings::Vector{String} = String[])
+    @lock _dlopen_lock begin
+        union!(_suppressed_warnings, suppress_warnings)
+        if isempty(s) # Do not load anything, but run _check_dllist()
+            _check_dllist()
+            return nothing
+        end
         ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
         if ret == C_NULL
             return nothing
         end
+        _check_dllist()
+        return ret
     end
-    warnings && check_dllist()
-    return ret
 end
 
 """
