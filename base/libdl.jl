@@ -85,23 +85,30 @@ else
     const dlpattern = r"^(.+?)\.so(?:\..*)?$"
 end
 
-const _dlname_cache = Dict{String, SubString{String}}()
+const _dlname_cache = Dict{String, String}()
 const _dlname_cache_lock = ReentrantLock()
 
 """
-    dlname(fullpath::String)
+    _dlname_thread_unsafe(fullpath::String)::String
 
 Returns the name of the library.
 """
-function _dlname_thread_unsafe(fullpath::String)::SubString{String}
+function _dlname_thread_unsafe(fullpath::String)::String
     cache = get(_dlname_cache, fullpath, "")
     cache != "" && return cache
     bn = basename(fullpath)
     m = match(dlpattern, bn)
-    ret = isnothing(m) ? bn : m.captures[1]
+    ret = String(isnothing(m) ? bn : m.captures[1])
     _dlname_cache[fullpath] = ret
     return ret
 end
+
+"""
+    _dlabspath(fullpath)
+
+Returns absolute path without symbolic links.
+"""
+_dlabspath(x) = isfile(x) ? abspath(realpath(x)) : x
 
 """
     check_dllist()
@@ -114,18 +121,14 @@ function check_dllist()
         fullpaths = dllist()
         fullpaths, _dlname_thread_unsafe.(fullpaths)
     end
-    perm = sortperm(names)
-    dlabspath(x) = isfile(x) ? abspath(realpath(x)) : x
-    for i in 1:length(names)-1
-        p1, p2 = perm[i], perm[i+1]
-        if names[p1] == names[p2]
-            if dlabspath(fullpaths[p1]) == dlabspath(fullpaths[p2])
-                continue
-            end
-            @warn """Detected possible duplicate library loaded: $(names[p1])
+    dict = Dict{String, String}() # name => path
+    for (name, path) in zip(names, fullpaths)
+        oldpath = get!(dict, name, path)
+        if path != oldpath && _dlabspath(path) != _dlabspath(oldpath)
+            @warn """Detected possible duplicate library loaded: $(name)
 This may lead to unexpected behavior!
-$(fullpaths[p1])
-$(fullpaths[p2])""" maxlog=1
+$(path)
+$(oldpath)""" maxlog=1
         end
     end
 end
