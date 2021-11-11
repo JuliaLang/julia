@@ -313,7 +313,7 @@ function iterate(itr::AsyncCollector)
             # and the args tuple....
             batched_args = map(x->x[2], batch)
 
-            results = f(batched_args)
+            results = itr.f(batched_args)
             foreach(x -> (itr.results[batch_idxs[x[1]]] = x[2]), enumerate(results))
         end
     else
