@@ -206,7 +206,7 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS
 [LAPACK]:       https://www.netlib.org/lapack
 [MKL]:          https://software.intel.com/en-us/articles/intel-mkl
-[SuiteSparse]:  https://suitesparse.com
+[SuiteSparse]:  https://people.engr.tamu.edu/davis/suitesparse.html
 [PCRE]:         https://www.pcre.org
 [LLVM]:         https://www.llvm.org
 [LLVM libunwind]: https://github.com/llvm/llvm-project/tree/main/libunwind
