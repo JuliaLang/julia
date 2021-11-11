@@ -636,15 +636,6 @@
 (define (space-before-next-token? s)
   (or (skip-ws (ts:port s) #f) (eqv? #\newline (peek-char (ts:port s)))))
 
-;; --- misc ---
-
-; Log a syntax deprecation, attributing it to current-filename and the line
-; number of the stream `s`
-(define (parser-depwarn s what instead)
-  (let ((line (if (number? s) s (input-port-line (if (port? s) s (ts:port s)))))
-        (file current-filename))
-    (frontend-depwarn (format-syntax-deprecation what instead file line #t) file line)))
-
 ;; --- parser ---
 
 ;; parse left-to-right binary operator
