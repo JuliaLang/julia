@@ -699,7 +699,7 @@ end
         @test Iterators.reverse(Iterators.reverse(t)) === t
         @test first(Iterators.reverse(t)) === last(t)
         @test last(Iterators.reverse(t)) === first(t)
-        @test collect(Iterators.reverse(t)) == [11, 7, 5, 3, 2]
+        @test collect(Iterators.reverse(t)) == reverse(collect(t))
     end
 end
 
