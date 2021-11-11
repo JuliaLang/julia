@@ -313,6 +313,12 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
                 end
             end
         end
+    elseif isa(a1, Union)
+        t = Bottom
+        for u in uniontypes(a1)
+            t = tmerge(t, isdefined_tfunc(u, sym))
+        end
+        return t
     end
     return Bool
 end
