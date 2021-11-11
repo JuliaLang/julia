@@ -430,7 +430,9 @@ static void ctx_switch(jl_task_t *lastt)
     t->ptls = ptls;
     jl_atomic_store_relaxed(&ptls->current_task, t);
     JL_GC_PROMISE_ROOTED(t);
+    jl_signal_fence();
     jl_set_pgcstack(&t->gcstack);
+    jl_signal_fence();
     lastt->ptls = NULL;
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
