@@ -88,41 +88,25 @@ end
 const _dlname_cache = Dict{String, String}()
 const _dlname_cache_lock = ReentrantLock()
 
-"""
-    _dlname_thread_unsafe(fullpath::String)::String
-
-Returns the name of the library.
-"""
-function _dlname_thread_unsafe(fullpath::String)::String
-    cache = get(_dlname_cache, fullpath, "")
-    cache != "" && return cache
-    bn = basename(fullpath)
+# Returns the name of the library.
+function _dlname(path)
+    bn = basename(path)
     m = match(dlpattern, bn)
-    ret = String(isnothing(m) ? bn : m.captures[1])
-    _dlname_cache[fullpath] = ret
-    return ret
+    return isnothing(m) ? bn : m.captures[1]
 end
 
-"""
-    _dlabspath(fullpath)
-
-Returns absolute path without symbolic links.
-"""
+# Returns absolute path without symbolic links.
 _dlabspath(x) = isfile(x) ? abspath(realpath(x)) : x
 
-"""
-    check_dllist()
-
-Check wheather the same shared library is loaded from two different files.
-The `warnings` determines if the warnings are printed to the console.
-"""
+# Checks if the same shared library is loaded from two different files.
 function check_dllist()
-    fullpaths, names = @lock _dlname_cache_lock begin
-        fullpaths = dllist()
-        fullpaths, _dlname_thread_unsafe.(fullpaths)
+    paths, names = @lock _dlname_cache_lock begin
+        paths = dllist()
+        names = [get!(() -> _dlname(x), _dlname_cache, x) for x in paths]
+        paths, names
     end
     dict = Dict{String, String}() # name => path
-    for (name, path) in zip(names, fullpaths)
+    for (name, path) in zip(names, paths)
         oldpath = get!(dict, name, path)
         if path != oldpath && _dlabspath(path) != _dlabspath(oldpath)
             @warn """Detected possible duplicate library loaded: $(name)
