@@ -680,3 +680,10 @@ g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
 @test only(Base.return_types(g42457, (NTuple{3, Int}, Tuple))) === Union{Float64, Int}
 @test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple))) === Union{Float64, Int}
 @test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple{4}))) === Float64
+
+# reinterpret tuples
+@test_throws ArgumentError reinterpret(Int64, (Int32(45),))
+@test reinterpret(Int64, (Int32(45), Int32(0))) == (45,)
+@test reinterpret(Int16, (Int32(45), Int32(0))) == (Int16(45), Int16(0), Int16(0), Int16(0))
+@test reinterpret(Int64, (Int32(45), Int16(0), Int16(0))) == (45,)
+@test_throws ArgumentError reinterpret(Int64, ([4],))

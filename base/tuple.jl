@@ -552,6 +552,7 @@ Returns an empty tuple, `()`.
 """
 empty(@nospecialize x::Tuple) = ()
 
+
 """
     reinterpret(::Type, s::Tuple)
 
@@ -581,11 +582,13 @@ function reinterpret(::Type{T}, s::S) where {T, S <: Tuple}
     M = sizeof(s) ÷ sizeof(T)
     tref = Ref{NTuple{M, T}}()
     sref = Ref(s)
-    @GC.preserve tref sref begin
-        tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, tref))
-        sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, sref))
-        _memcpy!(tptr, sptr, M * sizeof(T))
-    end
+    gc1 = @_gc_preserve_begin tref # GC module not defined in Compiler
+    gc2 = @_gc_preserve_begin sref
+    tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, tref))
+    sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, sref))
+    _memcpy!(tptr, sptr, M * sizeof(T))
+    @_gc_preserve_end gc2
+    @_gc_preserve_end gc1
     return tref[]
 end
 
