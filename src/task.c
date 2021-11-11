@@ -424,18 +424,17 @@ static void ctx_switch(jl_task_t *lastt)
         else
 #endif
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
-        lastt->ptls = NULL;
     }
 
     // set up global state for new task and clear global state for old task
     t->ptls = ptls;
     jl_atomic_store_relaxed(&ptls->current_task, t);
     JL_GC_PROMISE_ROOTED(t);
+    jl_set_pgcstack(&t->gcstack);
     lastt->ptls = NULL;
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
 #endif
-    jl_set_pgcstack(&t->gcstack);
 
     if (t->started) {
 #ifdef COPY_STACKS
