@@ -34,7 +34,7 @@ Julia currently uses LLVM's [Type Based Alias Analysis](https://llvm.org/docs/La
 To find the comments that document the inclusion relationships, look for `static MDNode*` in
 `src/codegen.cpp`.
 
-The `-O` option enables LLVM's [Basic Alias Analysis](https://llvm.org/docs/AliasAnalysis.html#the-basicaa-pass).
+The `-O` option enables LLVM's [Basic Alias Analysis](https://llvm.org/docs/AliasAnalysis.html#the-basic-aa-pass).
 
 ## Building Julia with a different version of LLVM
 

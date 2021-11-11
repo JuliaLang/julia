@@ -939,7 +939,7 @@ julia> replace("a", r"." => s"\g<0>1")
 
 You can modify the behavior of regular expressions by some combination of the flags `i`, `m`,
 `s`, and `x` after the closing double quote mark. These flags have the same meaning as they do
-in Perl, as explained in this excerpt from the [perlre manpage](https://perldoc.perl.org/perlre.html#Modifiers):
+in Perl, as explained in this excerpt from the [perlre manpage](https://perldoc.perl.org/perlre#Modifiers):
 
 ```
 i   Do case-insensitive pattern matching.

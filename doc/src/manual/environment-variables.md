@@ -334,7 +334,7 @@ event listener for just-in-time (JIT) profiling.
     profiling support, using either
     * Intel's [VTune™ Amplifier](https://software.intel.com/en-us/vtune)
       (`USE_INTEL_JITEVENTS` set to `1` in the build configuration), or
-    * [OProfile](https://oprofile.sourceforge.net/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
+    * [OProfile](https://oprofile.sourceforge.io/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
       in the build configuration).
     * [Perf](https://perf.wiki.kernel.org) (`USE_PERF_JITEVENTS` set to `1`
       in the build configuration). This integration is enabled by default.
