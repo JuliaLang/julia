@@ -239,7 +239,7 @@ affinitized. Otherwise, Julia lets the operating system handle thread policy.
 
 Environment variables that determine how REPL output should be formatted at the
 terminal. Generally, these variables should be set to [ANSI terminal escape
-sequences](http://ascii-table.com/ansi-escape-sequences.php). Julia provides
+sequences](https://en.wikipedia.org/wiki/ANSI_escape_code). Julia provides
 a high-level interface with much of the same functionality; see the section on
 [The Julia REPL](@ref).
 
