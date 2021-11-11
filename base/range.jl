@@ -306,62 +306,43 @@ struct StepRange{T,S} <: OrdinalRange{T,S}
     stop::T
 
     function StepRange{T,S}(start, step, stop) where {T,S}
-        sta = convert(T, start)
-        ste = convert(S, step)
-        sto = convert(T, stop)
-        new(sta, ste, steprange_last(sta,ste,sto))
+        start = convert(T, start)
+        step = convert(S, step)
+        stop = convert(T, stop)
+        return new(start, step, steprange_last(start, step, stop))
     end
 end
 
 # to make StepRange constructor inlineable, so optimizer can see `step` value
 function steprange_last(start::T, step, stop) where T
-    if isa(start,AbstractFloat) || isa(step,AbstractFloat)
+    if isa(start, AbstractFloat) || isa(step, AbstractFloat)
         throw(ArgumentError("StepRange should not be used with floating point"))
     end
-    if isa(start,Integer) && !isinteger(start + step)
+    if isa(start, Integer) && !isinteger(start + step)
         throw(ArgumentError("StepRange{<:Integer} cannot have non-integer step"))
     end
     z = zero(step)
     step == z && throw(ArgumentError("step cannot be zero"))
 
-    if stop == start
+    if stop == start || (step > z) != (stop > start)
         last = stop
     else
-        if (step > z) != (stop > start)
-            last = steprange_last_empty(start, step, stop)
+        # Compute absolute value of difference between `start` and `stop`
+        # (to simplify handling both signed and unsigned T and checking for signed overflow):
+        absdiff, absstep = stop > start ? (stop - start, step) : (start - stop, -step)
+
+        # Compute remainder as a nonnegative number:
+        if T <: Signed && absdiff < zero(absdiff)
+            # handle signed overflow with unsigned rem
+            remain = convert(T, unsigned(absdiff) % absstep)
         else
-            # Compute absolute value of difference between `start` and `stop`
-            # (to simplify handling both signed and unsigned T and checking for signed overflow):
-            absdiff, absstep = stop > start ? (stop - start, step) : (start - stop, -step)
-
-            # Compute remainder as a nonnegative number:
-            if T <: Signed && absdiff < zero(absdiff)
-                # handle signed overflow with unsigned rem
-                remain = convert(T, unsigned(absdiff) % absstep)
-            else
-                remain = absdiff % absstep
-            end
-            # Move `stop` closer to `start` if there is a remainder:
-            last = stop > start ? stop - remain : stop + remain
+            remain = absdiff % absstep
         end
+        # Move `stop` closer to `start` if there is a remainder:
+        last = stop > start ? stop - remain : stop + remain
     end
-    last
+    return last
 end
-
-function steprange_last_empty(start::Integer, step, stop)
-    # empty range has a special representation where stop = start-1
-    # this is needed to avoid the wrap-around that can happen computing
-    # start - step, which leads to a range that looks very large instead
-    # of empty.
-    if step > zero(step)
-        last = start - oneunit(stop-start)
-    else
-        last = start + oneunit(stop-start)
-    end
-    last
-end
-# For types where x+oneunit(x) may not be well-defined use the user-given value for stop
-steprange_last_empty(start, step, stop) = stop
 
 StepRange{T}(start, step::S, stop) where {T,S} = StepRange{T,S}(start, step, stop)
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
@@ -388,16 +369,18 @@ UnitRange{Int64}
 struct UnitRange{T<:Real} <: AbstractUnitRange{T}
     start::T
     stop::T
-    UnitRange{T}(start, stop) where {T<:Real} = new(start, unitrange_last(start,stop))
+    function UnitRange{T}(start, stop) where {T<:Real}
+        start = convert(T, start)
+        stop = convert(T, stop)
+        return new(start, unitrange_last(start, stop))
+    end
 end
 UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
 
 unitrange_last(::Bool, stop::Bool) = stop
-unitrange_last(start::T, stop::T) where {T<:Integer} =
-    stop >= start ? stop : convert(T,start-oneunit(start-stop))
-unitrange_last(start::T, stop::T) where {T} =
-    stop >= start ? convert(T,start+floor(stop-start)) :
-                    convert(T,start-oneunit(stop-start))
+unitrange_last(start::Integer, stop::Integer) = stop
+unitrange_last(start, stop) =
+    stop >= start ? convert(typeof(stop), start + floor(stop - start)) : stop
 
 unitrange(x) = UnitRange(x)
 
@@ -432,7 +415,7 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
     function OneTo{T}(stop) where {T<:Integer}
         throwbool(r)  = (@noinline; throw(ArgumentError("invalid index: $r of type Bool")))
         T === Bool && throwbool(stop)
-        return new(max(zero(T), stop))
+        return new(stop)
     end
 
     function OneTo{T}(r::AbstractRange) where {T<:Integer}
@@ -442,7 +425,7 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
         first(r) == 1 || throwstart(r)
         step(r)  == 1 || throwstep(r)
         T === Bool && throwbool(r)
-        return new(max(zero(T), last(r)))
+        return new(last(r))
     end
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
@@ -642,7 +625,7 @@ length(r::AbstractRange) = error("length implementation missing") # catch mistak
 size(r::AbstractRange) = (length(r),)
 
 isempty(r::StepRange) =
-    # steprange_last_empty(r.start, r.step, r.stop) == r.stop
+    # steprange_last(r.start, r.step, r.stop) == r.stop
     (r.start != r.stop) & ((r.step > zero(r.step)) != (r.stop > r.start))
 isempty(r::AbstractUnitRange) = first(r) > last(r)
 isempty(r::StepRangeLen) = length(r) == 0
@@ -689,9 +672,8 @@ firstindex(::LinRange) = 1
 # defined between the relevant types
 function checked_length(r::OrdinalRange{T}) where T
     s = step(r)
-    # s != 0, by construction, but avoids the division error later
     start = first(r)
-    if s == zero(s) || isempty(r)
+    if isempty(r)
         return Integer(div(start - start, oneunit(s)))
     end
     stop = last(r)
@@ -716,9 +698,8 @@ end
 
 function length(r::OrdinalRange{T}) where T
     s = step(r)
-    # s != 0, by construction, but avoids the division error later
     start = first(r)
-    if s == zero(s) || isempty(r)
+    if isempty(r)
         return Integer(div(start - start, oneunit(s)))
     end
     stop = last(r)
@@ -735,28 +716,27 @@ end
 function length(r::AbstractUnitRange{T}) where T
     @inline
     start, stop = first(r), last(r)
-    a = oneunit(zero(stop) - zero(start))
-    if a isa Signed || stop >= start
-        a += stop - start # Signed are allowed to go negative
+    if stop >= start
+        a = stop - start
+        a += oneunit(a)
     else
-        a = zero(a) # Unsigned don't necessarily underflow
+        a = start - start
     end
     return Integer(a)
 end
 
-length(r::OneTo) = Integer(r.stop - zero(r.stop))
+length(r::OneTo) = Integer(max(zero(r.stop), r.stop) - zero(r.stop))
 length(r::StepRangeLen) = r.len
 length(r::LinRange) = r.len
 
 let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
     global length, checked_length
     # compile optimization for which promote_type(T, Int) == T
-    length(r::OneTo{T}) where {T<:bigints} = r.stop
+    length(r::OneTo{T}) where {T<:bigints} = max(zero(r.stop), r.stop)
     # slightly more accurate length and checked_length in extreme cases
     # (near typemax) for types with known `unsigned` functions
     function length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
-        s == zero(s) && return zero(T) # unreachable, by construction, but avoids the error case here later
         isempty(r) && return zero(T)
         diff = last(r) - first(r)
         # if |s| > 1, diff might have overflowed, but unsigned(diff)÷s should
@@ -773,7 +753,6 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
     end
     function checked_length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
-        s == zero(s) && return zero(T) # unreachable, by construction, but avoids the error case here later
         isempty(r) && return zero(T)
         stop, start = last(r), first(r)
         # n.b. !(s isa T)
@@ -1232,10 +1211,10 @@ function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer}
     r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
 end
 
-issubset(r::OneTo, s::OneTo) = r.stop <= s.stop
+issubset(r::OneTo, s::OneTo) = isempty(r) || last(r) <= last(s)
 
 issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) =
-    isempty(r) || first(r) >= first(s) && last(r) <= last(s)
+    isempty(r) || (first(r) >= first(s) && last(r) <= last(s))
 
 ## linear operations on ranges ##
 

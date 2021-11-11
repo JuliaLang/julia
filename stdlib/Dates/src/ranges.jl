@@ -24,6 +24,7 @@ end
 Base.length(r::StepRange{<:TimeType}) = isempty(r) ? Int64(0) : len(r.start, r.stop, r.step) + 1
 # Period ranges hook into Int64 overflow detection
 Base.length(r::StepRange{<:Period}) = length(StepRange(value(r.start), value(r.step), value(r.stop)))
+Base.checked_length(r::StepRange{<:Period}) = Base.checked_length(StepRange(value(r.start), value(r.step), value(r.stop)))
 
 # Overload Base.steprange_last because `rem` is not overloaded for `TimeType`s
 function Base.steprange_last(start::T, step, stop) where T<:TimeType
@@ -33,19 +34,14 @@ function Base.steprange_last(start::T, step, stop) where T<:TimeType
     z = zero(step)
     step == z && throw(ArgumentError("step cannot be zero"))
 
-    if stop == start
+    if stop == start || (step > z) != (stop > start)
         last = stop
     else
-        if (step > z) != (stop > start)
-            last = Base.steprange_last_empty(start, step, stop)
-        else
-            diff = stop - start
-            if (diff > zero(diff)) != (stop > start)
-                throw(OverflowError())
-            end
-            remain = stop - (start + step * len(start, stop, step))
-            last = stop - remain
+        diff = stop - start
+        if (diff > zero(diff)) != (stop > start)
+            throw(OverflowError())
         end
+        last = start + step * len(start, stop, step)
     end
     last
 end

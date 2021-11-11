@@ -709,7 +709,7 @@ let s, c, r
     if !isdir(joinpath(s, "tmp"))
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
-        @test r === length(s) + 1:0
+        @test r === length(s)+1:length(s)
         @test s[r] == ""
     end
 

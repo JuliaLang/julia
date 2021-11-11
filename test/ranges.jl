@@ -38,6 +38,21 @@ using Base.Checked: checked_length
     for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
         @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
     end
+
+    @test first(10:3) === 10
+    @test last(10:3) === 3
+    @test step(10:3) === 1
+    @test isempty(10:3)
+
+    @test first(10:2:3) === 10
+    @test last(10:2:3) === 3
+    @test step(10:2:3) === 2
+    @test isempty(10:2:3)
+
+    @test first(10:0.2:3) === 10.0
+    @test last(10:0.2:3) === 9.8 # StepRangeLen doesn't support negative lengths
+    @test step(10:0.2:3) === 0.2
+    @test isempty(10:0.2:3)
 end
 
 using Dates, Random
@@ -368,52 +383,55 @@ end
         @test reverse(reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
     end
     @testset "intersect" begin
-        @test intersect(1:5, 2:3) == 2:3
-        @test intersect(-3:5, 2:8) == 2:5
-        @test intersect(-8:-3, -8:-3) == -8:-3
-        @test intersect(1:5, 5:13) == 5:5
+        @test intersect(1:5, 2:3) === 2:3
+        @test intersect(-3:5, 2:8) === 2:5
+        @test intersect(-8:-3, -8:-3) === -8:-3
+        @test intersect(1:5, 5:13) === 5:5
         @test isempty(intersect(-8:-3, -2:2))
         @test isempty(intersect(-3:7, 2:1))
-        @test intersect(1:11, -2:3:15) == 1:3:10
-        @test intersect(1:11, -2:2:15) == 2:2:10
-        @test intersect(1:11, -2:1:15) == 1:11
-        @test intersect(1:11, 15:-1:-2) == 1:11
-        @test intersect(1:11, 15:-4:-2) == 3:4:11
-        @test intersect(-20:-5, -10:3:-2) == -10:3:-7
+        @test intersect(-8:-3, -2:2) === -2:-3
+        @test intersect(-3:7, 2:1) === 2:1
+        @test intersect(1:11, -2:3:15) === 1:3:10
+        @test intersect(1:11, -2:2:15) === 2:2:10
+        @test intersect(1:11, -2:1:15) === 1:1:11
+        @test intersect(1:11, 15:-1:-2) === 1:1:11
+        @test intersect(1:11, 15:-4:-2) === 3:4:11
+        @test intersect(-20:-5, -10:3:-2) === -10:3:-7
         @test isempty(intersect(-5:5, -6:13:20))
         @test isempty(intersect(1:11, 15:4:-2))
         @test isempty(intersect(11:1, 15:-4:-2))
-        #@test intersect(-5:5, 1+0*(1:3)) == 1:1
-        #@test isempty(intersect(-5:5, 6+0*(1:3)))
-        @test intersect(-15:4:7, -10:-2) == -7:4:-3
-        @test intersect(13:-2:1, -2:8) == 7:-2:1
+        @test intersect(-5:5, 1 .+ 0 .* (1:3)) == 1:1
+        @test isempty(intersect(-5:5, 6 .+ 0 .* (1:3)))
+        @test intersect(-15:4:7, -10:-2) === -7:4:-3
+        @test intersect(13:-2:1, -2:8) === 7:-2:1
         @test isempty(intersect(13:2:1, -2:8))
         @test isempty(intersect(13:-2:1, 8:-2))
-        #@test intersect(5+0*(1:4), 2:8) == 5+0*(1:4)
-        #@test isempty(intersect(5+0*(1:4), -7:3))
-        @test intersect(0:3:24, 0:4:24) == 0:12:24
-        @test intersect(0:4:24, 0:3:24) == 0:12:24
-        @test intersect(0:3:24, 24:-4:0) == 0:12:24
-        @test intersect(24:-3:0, 0:4:24) == 24:-12:0
-        @test intersect(24:-3:0, 24:-4:0) == 24:-12:0
-        @test intersect(1:3:24, 0:4:24) == 4:12:16
-        @test intersect(0:6:24, 0:4:24) == 0:12:24
+        @test intersect(5 .+ 0 .* (1:4), 2:8) == 5:5
+        @test isempty(intersect(5 .+ 0 .* (1:4), -7:3))
+        @test intersect(0:3:24, 0:4:24) === 0:12:24
+        @test intersect(0:4:24, 0:3:24) === 0:12:24
+        @test intersect(0:3:24, 24:-4:0) === 0:12:24
+        @test intersect(24:-3:0, 0:4:24) === 24:-12:0
+        @test intersect(24:-3:0, 24:-4:0) === 24:-12:0
+        @test intersect(1:3:24, 0:4:24) === 4:12:16
+        @test intersect(0:6:24, 0:4:24) === 0:12:24
         @test isempty(intersect(1:6:2400, 0:4:2400))
-        @test intersect(-51:5:100, -33:7:125) == -26:35:79
-        @test intersect(-51:5:100, -32:7:125) == -11:35:94
-        #@test intersect(0:6:24, 6+0*(0:4:24)) == 6:6:6
-        #@test intersect(12+0*(0:6:24), 0:4:24) == AbstractRange(12, 0, 5)
-        #@test isempty(intersect(6+0*(0:6:24), 0:4:24))
-        @test intersect(-10:3:24, -10:3:24) == -10:3:23
+        @test intersect(-51:5:100, -33:7:125) === -26:35:79
+        @test intersect(-51:5:100, -32:7:125) === -11:35:94
+        @test intersect(0:6:24, 6 .+ 0 .* (0:4:24)) == 6:6:6
+        @test intersect(12 .+ 0 .* (0:6:24), 0:4:24) == 12:12 # forms StepRangeLen(12, 0, 5)
+        @test isempty(intersect(6 .+ 0 .* (0:6:24), 0:4:24))
+        @test intersect(-10:3:24, -10:3:24) === -10:3:23
         @test isempty(intersect(-11:3:24, -10:3:24))
-        @test intersect(typemin(Int):2:typemax(Int),1:10) == 2:2:10
-        @test intersect(1:10,typemin(Int):2:typemax(Int)) == 2:2:10
+        @test intersect(-11:3:24, -10:3:24) === -11:3:-14
+        @test intersect(typemin(Int):2:typemax(Int),1:10) === 2:2:10
+        @test intersect(1:10, typemin(Int):2:typemax(Int)) === 2:2:10
 
         @test intersect(reverse(typemin(Int):2:typemax(Int)),typemin(Int):2:typemax(Int)) == reverse(typemin(Int):2:typemax(Int))
         @test intersect(typemin(Int):2:typemax(Int),reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
 
-        @test intersect(UnitRange(1,2),3) == UnitRange(3,2)
-        @test intersect(UnitRange(1,2), UnitRange(1,5), UnitRange(3,7), UnitRange(4,6)) == UnitRange(4,3)
+        @test intersect(UnitRange(1, 2), 3) === UnitRange(3, 2)
+        @test intersect(UnitRange(1, 2), UnitRange(1, 5), UnitRange(3, 7), UnitRange(4, 6)) === UnitRange(4, 2)
 
         @test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
         @test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
@@ -829,11 +847,11 @@ function range_fuzztests(::Type{T}, niter, nrange) where {T}
         @test m == length(r)
         @test strt == first(r)
         @test Δ == step(r)
-        @test_skip stop == last(r)
+        @test stop ≈ last(r)
         l = range(strt, stop=stop, length=n)
         @test n == length(l)
         @test strt == first(l)
-        @test stop  == last(l)
+        @test stop == last(l)
     end
 end
 @testset "range fuzztests for $T" for T = (Float32, Float64,)
@@ -1373,6 +1391,8 @@ end
         @test isempty(r)
         @test length(r) == checked_length(r) == 0
         @test size(r) == (0,)
+        @test first(r) === 1
+        @test last(r) === -5
     end
     let r = Base.OneTo(3)
         @test !isempty(r)
