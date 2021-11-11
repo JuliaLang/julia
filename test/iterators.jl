@@ -885,3 +885,29 @@ end
     @test Iterators.peel(x^2 for x in 2:4)[1] == 4
     @test Iterators.peel(x^2 for x in 2:4)[2] |> collect == [9, 16]
 end
+
+struct FibonacciIndices
+    last::NTuple{2, Int}
+    length::Int
+end
+Base.length((; length)::FibonacciIndices) = length
+Base.keytype(::Type{FibonacciIndices}) = NTuple{2, Int}
+Base.firstindex(::FibonacciIndices) = (1, 1)
+Base.lastindex((; last)::FibonacciIndices) = last
+Base.nextind(::FibonacciIndices, (i, j)) = (j, i+j)
+Base.prevind(::FibonacciIndices, (i, j)) = (j-i, i)
+
+@testset "generic eachindex" begin
+    f = FibonacciIndices((5, 8), 5)
+    @test length(eachindex(f)) == 5
+    @test eltype(eachindex(f)) == NTuple{2, Int}
+
+    expected = [(1, 1), (1, 2), (2, 3), (3, 5), (5, 8)]
+    fwd = collect(eachindex(f))
+    @test fwd == expected
+    @test fwd isa Vector{NTuple{2, Int}}
+
+    bwd = collect(Iterators.reverse(eachindex(f)))
+    @test bwd == reverse(expected)
+    @test bwd isa Vector{NTuple{2, Int}}
+end

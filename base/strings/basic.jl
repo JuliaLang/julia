@@ -565,16 +565,17 @@ end
 
 ## string index iteration type ##
 
-struct EachStringIndex{T<:AbstractString}
+struct EachIndex{T}
     s::T
 end
-keys(s::AbstractString) = EachStringIndex(s)
+keys(s) = EachIndex(s)
+keytype(::Type{<:AbstractString}) = Int
 
-length(e::EachStringIndex) = length(e.s)
-first(::EachStringIndex) = 1
-last(e::EachStringIndex) = lastindex(e.s)
-iterate(e::EachStringIndex, state=firstindex(e.s)) = state > ncodeunits(e.s) ? nothing : (state, nextind(e.s, state))
-eltype(::Type{<:EachStringIndex}) = Int
+length(e::EachIndex) = length(e.s)
+first(e::EachIndex) = firstindex(e.s)
+last(e::EachIndex) = lastindex(e.s)
+iterate(e::EachIndex, state=firstindex(e.s)) = state > lastindex(e.s) ? nothing : (state, nextind(e.s, state))
+eltype(::Type{EachIndex{T}}) where {T} = keytype(T)
 
 """
     isascii(c::Union{AbstractChar,AbstractString}) -> Bool
@@ -731,7 +732,7 @@ julia> "Test "^3
 
 # reverse-order iteration for strings and indices thereof
 iterate(r::Iterators.Reverse{<:AbstractString}, i=lastindex(r.itr)) = i < firstindex(r.itr) ? nothing : (r.itr[i], prevind(r.itr, i))
-iterate(r::Iterators.Reverse{<:EachStringIndex}, i=lastindex(r.itr.s)) = i < firstindex(r.itr.s) ? nothing : (i, prevind(r.itr.s, i))
+iterate(r::Iterators.Reverse{<:EachIndex}, i=lastindex(r.itr.s)) = i < firstindex(r.itr.s) ? nothing : (i, prevind(r.itr.s, i))
 
 ## code unit access ##
 
