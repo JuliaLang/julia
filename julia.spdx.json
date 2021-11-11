@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-6e7271ec-ee4d-4171-b4b0-0e09f08453f4",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-98303dbd-7cfe-4c4d-8a4d-b01847d8a9e9",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-10-31T17:30:07Z"
+        "created": "2021-11-11T06:36:26Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -270,43 +270,18 @@
             "summary": "PCRE2 is a library of functions to support regular expressions whose syntax and semantics are as close as possible to those of the Perl 5 language."
         },
         {
-            "name": "LibSuiteSparse-CHOLMOD",
-            "SPDXID": "SPDXRef-LibSuiteSparse-CHOLMOD",
-            "packageFileName": "./CHOLMOD",
+            "name": "LibSuiteSparse",
+            "SPDXID": "SPDXRef-LibSuiteSparse",
+            "packageFileName": "./",
             "downloadLocation": "git+https://github.com/DrTimothyAldenDavis/SuiteSparse.git",
             "filesAnalyzed": false,
             "homepage": "https://people.engr.tamu.edu/davis/suitesparse.html",
             "sourceInfo": "The version in use can be found in the file deps/Versions.make",
             "licenseConcluded": "GPL-2.0-or-later",
-            "licenseDeclared": "LGPL-2.0-or-later AND GPL-2.0-or-later",
-            "copyrightText": "CHOLMOD/Check Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Cholesky module, Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Core Module.  Copyright (C) 2005-2006, Univ. of Florida.  Author: Timothy A. Davis.\nCHOLMOD/Demo Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Include/* files.  Copyright (C) 2005-2006, either Univ. of Florida or T. Davis, depending on the file\nCHOLMOD/MATLAB Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/MatrixOps Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Modify Module.  Copyright (C) 2005-2006, Timothy A. Davis and William W. Hager.\nCHOLMOD/Partition Module.  Copyright (C) 2005-2006, Univ. of Florida.  Author: Timothy A. Davis\nCHOLMOD/Supernodal Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Tcov Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Valgrind Module.  Copyright (C) 2005-2006, Timothy A. Davis.",
-            "summary": "CHOLMOD module of the official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
-        },
-        {
-            "name": "LibSuiteSparse-SPQR",
-            "SPDXID": "SPDXRef-LibSuiteSparse-SPQR",
-            "packageFileName": "./SPQR",
-            "downloadLocation": "git+https://github.com/DrTimothyAldenDavis/SuiteSparse.git",
-            "filesAnalyzed": false,
-            "homepage": "https://people.engr.tamu.edu/davis/suitesparse.html",
-            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
-            "licenseConcluded": "GPL-2.0-or-later",
-            "licenseDeclared": "GPL-2.0-or-later",
-            "copyrightText": "SPQR, Copyright 2008-2016 by Timothy A. Davis.",
-            "summary": "SPQR module of the official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
-        },
-        {
-            "name": "LibSuiteSparse-UMFPACK",
-            "SPDXID": "SPDXRef-LibSuiteSparse-UMFPACK",
-            "packageFileName": "./UMFPACK",
-            "downloadLocation": "git+https://github.com/DrTimothyAldenDavis/SuiteSparse.git",
-            "filesAnalyzed": false,
-            "homepage": "https://people.engr.tamu.edu/davis/suitesparse.html",
-            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
-            "licenseConcluded": "GPL-2.0-or-later",
-            "licenseDeclared": "GPL-2.0-or-later",
-            "copyrightText": "UMFPACK, Copyright 1995-2009 by Timothy A. Davis.",
-            "summary": "UMFPACK module of the official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
+            "licenseDeclared": "LGPL-2.0-or-later AND GPL-2.0-or-later AND BSD-3 AND Apache-2.0 ",
+            "licenseComments": "SuiteSparse consists of many modules, each of which is licensed separately.",
+            "copyrightText": "AMD, Copyright (c), 1996-2015, Timothy A. Davis,\nBTF, Copyright (C) 2004-2013, University of Florida\nCAMD, Copyright (c) by Timothy A. Davis, Yanqing Chen, Patrick R. Amestoy, and Iain S. Duff.  All Rights Reserved.\nCCOLAMD: Copyright (C) 2005-2016, Univ. of Florida.  Authors: Timothy A. Davis, Sivasankaran Rajamanickam, and Stefan Larimore.  Closely based on COLAMD by Davis, Stefan Larimore, in collaboration with Esmond Ng, and John Gilbert.\nCHOLMOD/Check Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Cholesky module, Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Core Module.  Copyright (C) 2005-2006, Univ. of Florida.  Author: Timothy A. Davis.\nCHOLMOD/Demo Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Include/* files.  Copyright (C) 2005-2006, either Univ. of Florida or T. Davis, depending on the file\nCHOLMOD/MATLAB Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/MatrixOps Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Modify Module.  Copyright (C) 2005-2006, Timothy A. Davis and William W. Hager.\nCHOLMOD/Partition Module.  Copyright (C) 2005-2006, Univ. of Florida.  Author: Timothy A. Davis\nCHOLMOD/Supernodal Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Tcov Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Valgrind Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCOLAMD, Copyright 1998-2016, Timothy A. Davis.\nCSparse, Copyright (c) 2006, Timothy A. Davis.\nCXSparse: Copyright (c) 2006, Timothy A. Davis.\nGPUQREngine, Copyright (c) 2013, Timothy A. Davis, Sencer Nuri Yeralan, and Sanjay Ranka.\nKLU, Copyright (C) 2004-2013, University of Florida by Timothy A. Davis and Ekanathan Palamadai.\nLDL, Copyright (c) 2005-2013 by Timothy A. Davis.\nThe MATLAB_Tools collection of packages is Copyright (c), Timothy A. Davis, All Rights Reserved, with the exception of the spqr_rank package, which is Copyright (c), Timothy A. Davis and Les Foster, All Rights Reserved\nMATLAB_Tools, SSMULT, Copyright (c) 2007-2011, Timothy A. Davis,\nMongoose Graph Partitioning Library  Copyright (C) 2017-2018, Scott P. Kolodziej, Nuri S. Yeralan, Timothy A. Davis, William W. Hager\nRBio toolbox.  Copyright (C) 2006-2009, Timothy A. Davis\nSLIP_LU: (c) 2019-2020, Chris Lourenco, Jinhao Chen, Erick Moreno-Centeno, Timothy A. Davis, Texas A&M University. \nSPQR, Copyright 2008-2016 by Timothy A. Davis.\nSuiteSparse_GPURuntime Copyright (c) 2013-2016, Timothy A. Davis, Sencer Nuri Yeralan, and Sanjay Ranka.\nUMFPACK, Copyright 1995-2009 by Timothy A. Davis.",
+            "summary": "The official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
         },
         {
             "name": "LibBlasTrampoline",
@@ -502,19 +477,9 @@
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
-            "spdxElementId": "SPDXRef-LibSuiteSparse-CHOLMOD",
+            "spdxElementId": "SPDXRef-LibSuiteSparse",
             "relationshipType": "BUILD_DEPENDENCY_OF",
-            "relatedSpdxElement": "SPDXRef-JuliaSuiteSparse"
-        },
-        {
-            "spdxElementId": "SPDXRef-LibSuiteSparse-SPQR",
-            "relationshipType": "BUILD_DEPENDENCY_OF",
-            "relatedSpdxElement": "SPDXRef-JuliaSuiteSparse"
-        },
-        {
-            "spdxElementId": "SPDXRef-LibSuiteSparse-UMFPACK",
-            "relationshipType": "BUILD_DEPENDENCY_OF",
-            "relatedSpdxElement": "SPDXRef-JuliaSuiteSparse"
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
             "spdxElementId": "SPDXRef-LibBlasTrampoline",
