@@ -886,7 +886,7 @@ readdir(; join::Bool=false, sort::Bool=true) =
     readdir(join ? pwd() : ".", join=join, sort=sort)
 
 """
-    walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
+    walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw, depth=Inf)
 
 Return an iterator that walks the directory tree of a directory.
 The iterator returns a tuple containing `(rootpath, dirs, files)`.
@@ -894,6 +894,7 @@ The directory tree can be traversed top-down or bottom-up.
 If `walkdir` or `stat` encounters a `IOError` it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `IOError` as argument.
+`depth` specifies the maximally allowed distance from the root (when iterating top down) or any leaf (when iterating bottom up). A root/leaf has distance 0 from itself.
 
 # Examples
 ```julia
@@ -924,8 +925,8 @@ julia> (root, dirs, files) = first(itr)
 ("my/test/dir", String[], String[])
 ```
 """
-function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
-    function _walkdir(chnl, root)
+function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw, depth::Int=typemax(Int))
+    function _walkdir(chnl, root, depth_state)
         tryf(f, p) = try
                 f(p)
             catch err
@@ -953,17 +954,31 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         end
 
         if topdown
+            depth_state[] < 0 && return
             push!(chnl, (root, dirs, files))
+            depth_state[] -= 1
         end
+
+        minDepth = typemax(Int)
         for dir in dirs
-            _walkdir(chnl, joinpath(root, dir))
+            _walkdir(chnl, joinpath(root, dir), depth_state)
+            minDepth = min(minDepth, depth_state[])
+            if topdown
+                depth_state[] += 1
+            end
         end
+
         if !topdown
-            push!(chnl, (root, dirs, files))
+            if isempty(dirs)
+                depth_state[] = 0
+            else
+                depth_state[] = minDepth + 1
+            end
+            depth_state[] <= depth && push!(chnl, (root, dirs, files))
         end
         nothing
     end
-    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, root))
+    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, root, Ref(depth)))
 end
 
 function unlink(p::AbstractString)
