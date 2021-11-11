@@ -234,7 +234,7 @@ process)
 
 ## Mozilla's Record and Replay Framework (rr)
 
-Julia now works out of the box with [rr](http://rr-project.org/), the lightweight recording and
+Julia now works out of the box with [rr](https://rr-project.org/), the lightweight recording and
 deterministic debugging framework from Mozilla. This allows you to replay the trace of an execution
 deterministically.  The replayed execution's address spaces, register contents, syscall data etc
 are exactly the same in every run.

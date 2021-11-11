@@ -93,7 +93,7 @@ ERROR: cannot assign a value to variable Base.sqrt from module Main
 ## [Allowed Variable Names](@id man-allowed-variable-names)
 
 Variable names must begin with a letter (A-Z or a-z), underscore, or a subset of Unicode code
-points greater than 00A0; in particular, [Unicode character categories](http://www.fileformat.info/info/unicode/category/index.htm)
+points greater than 00A0; in particular, [Unicode character categories](https://www.fileformat.info/info/unicode/category/index.htm)
 Lu/Ll/Lt/Lm/Lo/Nl (letters), Sc/So (currency and other symbols), and a few other letter-like characters
 (e.g. a subset of the Sm math symbols) are allowed. Subsequent characters may also include ! and
 digits (0-9 and other characters in categories Nd/No), as well as other Unicode code points: diacritics
@@ -135,7 +135,7 @@ ERROR: syntax: unexpected "="
 
 Some Unicode characters are considered to be equivalent in identifiers.
 Different ways of entering Unicode combining characters (e.g., accents)
-are treated as equivalent (specifically, Julia identifiers are [NFC](http://www.macchiato.com/unicode/nfc-faq)-normalized).
+are treated as equivalent (specifically, Julia identifiers are [NFC](https://www.macchiato.com/unicode/nfc-faq)-normalized).
 Julia also includes a few non-standard equivalences for characters that are
 visually similar and are easily entered by some input methods. The Unicode
 characters `ɛ` (U+025B: Latin small letter open e) and `µ` (U+00B5: micro sign)
