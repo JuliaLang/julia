@@ -798,7 +798,12 @@ let smallints = (Int === Int64 ?
                 Union{Int8, UInt8, Int16, UInt16})
     global length, checked_length
     # n.b. !(step isa T)
-    length(r::OrdinalRange{<:smallints}) = div(Int(last(r)) - Int(first(r)), step(r)) + 1
+    function length(r::OrdinalRange{<:smallints})
+        s = step(r)
+        s == zero(s) && return 0 # unreachable, by construction, but avoids the error case here later
+        isempty(r) && return 0
+        return div(Int(last(r)) - Int(first(r)), s) + 1
+    end
     length(r::AbstractUnitRange{<:smallints}) = Int(last(r)) - Int(first(r)) + 1
     length(r::OneTo{<:smallints}) = Int(r.stop)
     checked_length(r::OrdinalRange{<:smallints}) = length(r)
