@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-98303dbd-7cfe-4c4d-8a4d-b01847d8a9e9",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-bc23e123-6728-4ec3-ac07-8b671d27875c",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-11-11T06:36:26Z"
+        "created": "2021-11-11T06:52:04Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -296,6 +296,18 @@
             "summary": "Using PLT trampolines to provide a BLAS and LAPACK demuxing library."
         },
         {
+            "name": "NGHTTP2",
+            "SPDXID": "SPDXRef-NGHTTP2",
+            "downloadLocation": "git+https://github.com/nghttp2/nghttp2.git",
+            "filesAnalyzed": false,
+            "homepage": "https://nghttp2.org",
+            "sourceInfo": "The version in use can be found in the file deps/Version.make",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2012, 2014, 2015, 2016 Tatsuhiro Tsujikawa\nCopyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors",
+            "summary": "nghttp2 is an implementation of HTTP/2 and its header compression algorithm HPACK in C."
+        },
+        {
             "name": "libunwind",
             "SPDXID": "SPDXRef-libunwind",
             "downloadLocation": "git+https://github.com/libunwind/libunwind.git",
@@ -478,6 +490,11 @@
         },
         {
             "spdxElementId": "SPDXRef-LibSuiteSparse",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-LibBlasTrampoline",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
