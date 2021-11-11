@@ -767,8 +767,8 @@ Further documentation is given in the [Metaprogramming](@ref meta-non-standard-s
 
 ## [Regular Expressions](@id man-regex-literals)
 
-Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](http://www.pcre.org/)
-library (a description of the syntax can be found [here](http://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
+Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](https://www.pcre.org/)
+library (a description of the syntax can be found [here](https://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
 regular expressions are used to find regular patterns in strings; the other connection is that
 regular expressions are themselves input as strings, which are parsed into a state machine that
 can be used to efficiently search for patterns in strings. In Julia, regular expressions are input
@@ -939,7 +939,7 @@ julia> replace("a", r"." => s"\g<0>1")
 
 You can modify the behavior of regular expressions by some combination of the flags `i`, `m`,
 `s`, and `x` after the closing double quote mark. These flags have the same meaning as they do
-in Perl, as explained in this excerpt from the [perlre manpage](http://perldoc.perl.org/perlre.html#Modifiers):
+in Perl, as explained in this excerpt from the [perlre manpage](https://perldoc.perl.org/perlre#Modifiers):
 
 ```
 i   Do case-insensitive pattern matching.

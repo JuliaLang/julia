@@ -239,7 +239,7 @@ affinitized. Otherwise, Julia lets the operating system handle thread policy.
 
 Environment variables that determine how REPL output should be formatted at the
 terminal. Generally, these variables should be set to [ANSI terminal escape
-sequences](http://ascii-table.com/ansi-escape-sequences.php). Julia provides
+sequences](https://en.wikipedia.org/wiki/ANSI_escape_code). Julia provides
 a high-level interface with much of the same functionality; see the section on
 [The Julia REPL](@ref).
 
@@ -334,7 +334,7 @@ event listener for just-in-time (JIT) profiling.
     profiling support, using either
     * Intel's [VTune™ Amplifier](https://software.intel.com/en-us/vtune)
       (`USE_INTEL_JITEVENTS` set to `1` in the build configuration), or
-    * [OProfile](http://oprofile.sourceforge.net/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
+    * [OProfile](https://oprofile.sourceforge.io/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
       in the build configuration).
     * [Perf](https://perf.wiki.kernel.org) (`USE_PERF_JITEVENTS` set to `1`
       in the build configuration). This integration is enabled by default.

@@ -30,11 +30,11 @@ and therefore its arguments must be statically typed.
 
 ### Alias Analysis
 
-Julia currently uses LLVM's [Type Based Alias Analysis](http://llvm.org/docs/LangRef.html#tbaa-metadata).
+Julia currently uses LLVM's [Type Based Alias Analysis](https://llvm.org/docs/LangRef.html#tbaa-metadata).
 To find the comments that document the inclusion relationships, look for `static MDNode*` in
 `src/codegen.cpp`.
 
-The `-O` option enables LLVM's [Basic Alias Analysis](http://llvm.org/docs/AliasAnalysis.html#the-basicaa-pass).
+The `-O` option enables LLVM's [Basic Alias Analysis](https://llvm.org/docs/AliasAnalysis.html#the-basic-aa-pass).
 
 ## Building Julia with a different version of LLVM
 
@@ -102,7 +102,7 @@ above.
 Improving LLVM code generation usually involves either changing Julia lowering to be more friendly
 to LLVM's passes, or improving a pass.
 
-If you are planning to improve a pass, be sure to read the [LLVM developer policy](http://llvm.org/docs/DeveloperPolicy.html).
+If you are planning to improve a pass, be sure to read the [LLVM developer policy](https://llvm.org/docs/DeveloperPolicy.html).
 The best strategy is to create a code example in a form where you can use LLVM's `opt` tool to
 study it and the pass of interest in isolation.
 

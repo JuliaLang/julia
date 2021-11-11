@@ -55,7 +55,7 @@ jl_int32_type = jl_new_primitivetype(jl_symbol("Int32"), core,
 object; initializes the global `jl_root_task` struct; and sets `jl_current_task` to the root task.
 
 [`jl_init_codegen()`](https://github.com/JuliaLang/julia/blob/master/src/codegen.cpp) initializes
-the [LLVM library](http://llvm.org).
+the [LLVM library](https://llvm.org).
 
 [`jl_init_serializer()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) initializes
 8-bit serialization tags for builtin `jl_value_t` values.

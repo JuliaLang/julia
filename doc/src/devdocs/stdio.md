@@ -2,7 +2,7 @@
 
 ## [Libuv wrappers for stdio](@id dev-stdio-libuv)
 
-`julia.h` defines [libuv](http://docs.libuv.org) wrappers for the `stdio.h` streams:
+`julia.h` defines [libuv](https://docs.libuv.org) wrappers for the `stdio.h` streams:
 
 ```c
 uv_stream_t *JL_STDIN;
