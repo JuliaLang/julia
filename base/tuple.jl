@@ -551,3 +551,56 @@ end
 Returns an empty tuple, `()`.
 """
 empty(@nospecialize x::Tuple) = ()
+
+"""
+    reinterpret(::Type, s::Tuple)
+
+Reinterpret the bits of a tuple as an NTuple of the given type.
+
+```jldoctest
+julia> reinterpret(Int64, (Int32(1), Int32(2)))
+(8589934593,)
+
+julia> reinterpret(Int16, (Int32(-1), Int32(-1), Int32(43), Int32(0)))
+(-1, -1, -1, -1, 43, 0, 0, 0)
+
+julia> reinterpret(Int64, (Int32(-1), Int32(-1), Int32(43), Int32(0)))
+(-1, 43)
+
+julia> a = reinterpret(Int64, (Int32(1), Int16(1), Int8(1), Int8(1))
+(72339073309605889,)
+
+julia> bitstring(a) == bitstring((Int32(1), Int16(1), Int8(1), Int8(1)))
+true
+```
+"""
+function reinterpret(::Type{T}, s::S) where {T, S <: Tuple}
+    isbitstype(S) || throw(ArgumentError("can only reinterpret a tuple containing bits types"))
+    isbitstype(T) || throw(ArgumentError("destination type must be a bits type"))
+    sizeof(s) % sizeof(T) == 0 || throw(ArgumentError("an integer number of target types must fit into the source tuple"))   
+    M = sizeof(s) ÷ sizeof(T)
+    tref = Ref{NTuple{M, T}}()
+    sref = Ref(s)
+    @GC.preserve tref sref begin
+        tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, tref))
+        sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, sref))
+        _memcpy!(tptr, sptr, M * sizeof(T))
+    end
+    return tref[]
+end
+
+"""
+    bitstring(::Tuple)
+
+A string giving the literal bit representation of a tuple of primitive types.
+
+julia> a = bitstring((UInt8(45), UInt8(254)))
+"1111111000101101"
+
+julia> a == bitstring(UInt8(254)) * bitstring(UInt8(45))
+true
+"""
+function bitstring(x::T) where {T <: Tuple}
+    isbitstype(T) || throw(ArgumentError("must be a tuple containing bits types"))
+    join(reverse(bitstring.(x)))
+end
