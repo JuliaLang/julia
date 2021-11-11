@@ -695,7 +695,7 @@ end
     let r = repeated(3.14159)
         @test Iterators.reverse(r) === r
     end
-    for t in [(), (1,), (2, 3, 5, 7, 11), NamedTuple(), (a=1,), (a=2, b=3, c=5, d=7, e=11)]
+    for t in [(1,), (2, 3, 5, 7, 11), (a=1,), (a=2, b=3, c=5, d=7, e=11)]
         @test Iterators.reverse(Iterators.reverse(t)) === t
         @test first(Iterators.reverse(t)) === last(t)
         @test last(Iterators.reverse(t)) === first(t)
