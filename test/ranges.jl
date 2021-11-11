@@ -2210,3 +2210,13 @@ end
     @test iszero(length(Fix42528(0x1):Fix42528(0x0)))
     @test_throws DomainError Fix42528(0x0) - Fix42528(0x1)
 end
+
+let r = Ptr{Cvoid}(20):-UInt(2):Ptr{Cvoid}(10)
+    @test isempty(r)
+    @test length(r) == 0
+    @test count(i -> true, r) == 0
+    @test isempty(collect(r))
+    @test first(r) === Ptr{Cvoid}(20)
+    @test step(r) === -UInt(2)
+    @test last(r) === Ptr{Cvoid}(10)
+end

@@ -360,8 +360,8 @@ function steprange_last_empty(start::Integer, step, stop)
     end
     last
 end
-# For types where x+oneunit(x) may not be well-defined
-steprange_last_empty(start, step, stop) = start - step
+# For types where x+oneunit(x) may not be well-defined use the user-given value for stop
+steprange_last_empty(start, step, stop) = stop
 
 StepRange{T}(start, step::S, stop) where {T,S} = StepRange{T,S}(start, step, stop)
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
@@ -692,7 +692,7 @@ function checked_length(r::OrdinalRange{T}) where T
     # s != 0, by construction, but avoids the division error later
     start = first(r)
     if s == zero(s) || isempty(r)
-        return Integer(start - start + zero(s))
+        return Integer(div(start - start, oneunit(s)))
     end
     stop = last(r)
     if isless(s, zero(s))
@@ -719,7 +719,7 @@ function length(r::OrdinalRange{T}) where T
     # s != 0, by construction, but avoids the division error later
     start = first(r)
     if s == zero(s) || isempty(r)
-        return Integer(div(start-start, oneunit(s)))
+        return Integer(div(start - start, oneunit(s)))
     end
     stop = last(r)
     if isless(s, zero(s))
@@ -811,7 +811,7 @@ first(r::OneTo{T}) where {T} = oneunit(T)
 first(r::StepRangeLen) = unsafe_getindex(r, 1)
 first(r::LinRange) = r.start
 
-last(r::OrdinalRange{T}) where {T} = convert(T, r.stop)
+last(r::OrdinalRange{T}) where {T} = convert(T, r.stop) # via steprange_last
 last(r::StepRangeLen) = unsafe_getindex(r, length(r))
 last(r::LinRange) = r.stop
 
