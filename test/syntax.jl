@@ -2704,3 +2704,21 @@ end
 # issue #39705
 @eval f39705(x) = $(Expr(:||)) && x
 @test f39705(1) === false
+
+@test_throws ParseError Meta.parse("""
+function checkUserAccess(u::User)
+	if u.accessLevel != "user\u202e \u2066# users are not allowed\u2069\u2066"
+		return true
+	end
+	return false
+end
+""")
+
+@test_throws ParseError Meta.parse("""
+function checkUserAccess(u::User)
+	#=\u202e \u2066if (u.isAdmin)\u2069 \u2066 begin admins only =#
+		return true
+	#= end admin only \u202e \u2066end\u2069 \u2066=#
+	return false
+end
+""")
