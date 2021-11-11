@@ -786,6 +786,21 @@ end
         @test (D \ T)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(T))
         @test (S / D)::Tridiagonal{elty} == Tridiagonal(Matrix(S) / Matrix(D))
         @test (T / D)::Tridiagonal{elty} == Tridiagonal(Matrix(T) / Matrix(D))
+        S = SymTridiagonal([rand(elty, 2, 2) for _ in 1:K], [rand(elty, 2, 2) for _ in 1:K-overlength])
+        T = Tridiagonal([rand(elty, 2, 2) for _ in 1:K-1], [rand(elty, 2, 2) for _ in 1:K], [rand(elty, 2, 2) for _ in 1:K-1])
+        SM = fill(zeros(elty, 2, 2), K, K)
+        TM = copy(SM)
+        SM[1,1] = S[1,1]; TM[1,1] = T[1,1]
+        for j in 2:K
+            SM[j,j-1] = S[j,j-1]; SM[j,j] = S[j,j]; SM[j-1,j] = S[j-1,j]
+            TM[j,j-1] = T[j,j-1]; TM[j,j] = T[j,j]; TM[j-1,j] = T[j-1,j]
+        end
+        for (M, Mm) in ((S, SM), (T, TM))
+            DS = D \ M
+            @test DS isa Tridiagonal
+            DM = D \ Mm
+            for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
+        end
     end
     S = SymTridiagonal(rand(-20:20, K), rand(-20:20, K-1))
     T = Tridiagonal(rand(-20:20, K-1), rand(-20:20, K), rand(-20:20, K-1))
