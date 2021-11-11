@@ -386,4 +386,12 @@ end
 @test_throws MethodError B12814{3, Float64}([1, 2, 3]) # ambiguous
 @test B12814{3,Float64}((1, 2, 3)).x === (1.0, 2.0, 3.0)
 
+# issue #43040
+module M43040
+   struct C end
+   stripType(::Type{C}) where {T} = C # where {T} is intentionally incorrect
+end
+
+@test isempty(detect_ambiguities(M43040; recursive=true))
+
 nothing
