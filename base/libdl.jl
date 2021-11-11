@@ -9,7 +9,7 @@ import Base.DL_LOAD_PATH
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
-    dlpath, find_library, dlext, dllist, check_dllist
+    dlpath, find_library, dlext, dllist
 
 """
     DL_LOAD_PATH
@@ -171,9 +171,13 @@ dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; kwargs...) =
     dlopen(string(s), flags; kwargs...)
 
 function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; throw_error::Bool = true, warnings::Bool = true)
-    ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
-    if ret == C_NULL
-        return nothing
+    if isempty(s) # Do not load anything, but run check_dllist()
+        ret = nothing
+    else
+        ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
+        if ret == C_NULL
+            return nothing
+        end
     end
     warnings && check_dllist()
     return ret
