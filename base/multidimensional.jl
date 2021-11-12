@@ -1752,7 +1752,7 @@ _extrema_dims(f::F, A::AbstractArray, ::Colon, ::_InitialValue) where {F} =
 _extrema_dims(f::F, A::AbstractArray, dims, init) where {F} =
     mapreduce(_DupY(f), _extrema_rf, A; dims = dims, init = init)
 function _extrema_dims(f::F, A::AbstractArray, dims, ::_InitialValue) where {F}
-    sz = [size(A)...]
+    sz = size(A)
     for d in dims
         sz = setindex(sz, 1, d)
     end
