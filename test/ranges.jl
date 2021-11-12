@@ -2257,3 +2257,19 @@ let r = Ptr{Cvoid}(20):-UInt(2):Ptr{Cvoid}(10)
     @test step(r) === -UInt(2)
     @test last(r) === Ptr{Cvoid}(10)
 end
+
+# test behavior of wrap-around and promotion of empty ranges (#35711)
+@test length(range(0, length=UInt(0))) === UInt(0)
+@test !isempty(range(0, length=UInt(0)))
+@test length(range(typemax(Int), length=UInt(0))) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0)))
+@test length(range(0, length=UInt(0), step=UInt(2))) == typemin(Int) % UInt
+@test !isempty(range(0, length=UInt(0), step=UInt(2)))
+@test length(range(typemax(Int), length=UInt(0), step=UInt(2))) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0), step=UInt(2)))
+@test length(range(typemax(Int), length=UInt(0), step=2)) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0), step=2))
+@test length(range(typemax(Int), length=0, step=UInt(2))) === UInt(0)
+@test isempty(range(typemax(Int), length=0, step=UInt(2)))
+
+@test length(range(1, length=typemax(Int128))) === typemax(Int128)
