@@ -884,6 +884,31 @@ end
     @test \(x, B) == /(B, x)
 end
 
+@testset "promotion" begin
+    for (v1, v2) in (([true], [1]), ([zeros(2,2)], [zeros(Int, 2,2)]))
+        T = promote_type(eltype(v1), eltype(v2))
+        V = promote_type(typeof(v1), typeof(v2))
+        d1 = Diagonal(v1)
+        d2 = Diagonal(v2)
+        v = [d1, d2]
+        @test (@inferred eltype(v)) == Diagonal{T, V}
+    end
+    # test for a type for which promote_type doesn't lead to a concrete eltype
+    struct MyArrayWrapper{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+       a :: A
+    end
+    Base.size(M::MyArrayWrapper) = size(M.a)
+    Base.axes(M::MyArrayWrapper) = axes(M.a)
+    Base.length(M::MyArrayWrapper) = length(M.a)
+    Base.getindex(M::MyArrayWrapper, i::Int...) = M.a[i...]
+    Base.setindex!(M::MyArrayWrapper, v, i::Int...) = M.a[i...] = v
+    d1 = Diagonal(MyArrayWrapper(1:3))
+    d2 = Diagonal(MyArrayWrapper(1.0:3.0))
+    c = [d1, d2]
+    @test c[1] == d1
+    @test c[2] == d2
+end
+
 @testset "zero and one" begin
     D1 = Diagonal(rand(3))
     @test D1 + zero(D1) == D1

@@ -10,8 +10,16 @@ struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         new{T,V}(diag)
     end
 end
+Diagonal{T,V}(d::Diagonal) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(d.diag)
 Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
+
+function Base.promote_rule(A::Type{<:Diagonal{<:Any,V}}, B::Type{<:Diagonal{<:Any,W}}) where {V,W}
+    X = promote_type(V, W)
+    T = eltype(X)
+    isconcretetype(T) && return Diagonal{T,X}
+    return typejoin(A, B)
+end
 
 """
     Diagonal(V::AbstractVector)
@@ -88,7 +96,7 @@ similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
 
 copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
-size(D::Diagonal) = (length(D.diag),length(D.diag))
+size(D::Diagonal) = (n = length(D.diag); (n,n))
 
 function size(D::Diagonal,d::Integer)
     if d<1
