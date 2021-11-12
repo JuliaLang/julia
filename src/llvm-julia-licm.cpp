@@ -8,6 +8,7 @@
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Transforms/Utils/LoopUtils.h>
+#include <llvm/Analysis/ValueTracking.h>
 
 #include "llvm-pass-helpers.h"
 #include "julia.h"
@@ -126,7 +127,18 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                     if (use_info.escaped || use_info.addrescaped || use_info.hasunknownmem) {
                         continue;
                     }
-                    L->makeLoopInvariant(call, changed);
+                    bool valid = true;
+                    for (std::size_t i = 0; i < call->getNumArgOperands(); i++) {
+                        if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                    //We can't directly make the call invariant because it may read from memory (ptls is read from current task)
+                    if (valid) {
+                        call->moveBefore(preheader->getTerminator());
+                        changed = true;
+                    }
                 }
             }
         }
