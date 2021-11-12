@@ -1,6 +1,6 @@
 # Using Valgrind with Julia
 
-[Valgrind](http://valgrind.org/) is a tool for memory debugging, memory leak detection, and profiling.
+[Valgrind](https://valgrind.org/) is a tool for memory debugging, memory leak detection, and profiling.
  This section describes things to keep in mind when using Valgrind to debug memory issues with
 Julia.
 
@@ -24,10 +24,13 @@ Another thing to note: if your program uses multiple workers processes, it is li
 want all such worker processes to run under Valgrind, not just the parent process.  To do this,
 pass `--trace-children=yes` to `valgrind`.
 
+Yet another thing to note: if using `valgrind` errors with `Unable to find compatible target in system image`,
+try rebuilding the sysimage with target `generic` or julia with `JULIA_CPU_TARGET=generic`.
+
 ## Suppressions
 
 Valgrind will typically display spurious warnings as it runs.  To reduce the number of such warnings,
-it helps to provide a [suppressions file](http://valgrind.org/docs/manual/manual-core.html#manual-core.suppress)
+it helps to provide a [suppressions file](https://valgrind.org/docs/manual/manual-core.html#manual-core.suppress)
 to Valgrind.  A sample suppressions file is included in the Julia source distribution at `contrib/valgrind-julia.supp`.
 
 The suppressions file can be used from the `julia/` source directory as follows:

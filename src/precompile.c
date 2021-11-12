@@ -268,7 +268,7 @@ static void _compile_all_deq(jl_array_t *found)
         src = m->source;
         assert(src);
         // TODO: we could now enable storing inferred function pointers in the `unspecialized` cache
-        //src = jl_type_infer(mi, jl_world_counter, 1);
+        //src = jl_type_infer(mi, jl_atomic_load_acquire(&jl_world_counter), 1);
         //if (ucache->invoke != NULL)
         //    continue;
 
@@ -344,8 +344,8 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
 static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *closure)
 {
     jl_method_t *m = def->func.method;
-    if (m->name == jl_symbol("__init__") && jl_is_dispatch_tupletype(m->sig)) {
-        // ensure `__init__()` gets strongly-hinted, specialized, and compiled
+    if ((m->name == jl_symbol("__init__") || m->ccallable) && jl_is_dispatch_tupletype(m->sig)) {
+        // ensure `__init__()` and @ccallables get strongly-hinted, specialized, and compiled
         jl_method_instance_t *mi = jl_specializations_get_linfo(m, m->sig, jl_emptysvec);
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
     }
@@ -387,7 +387,7 @@ static void *jl_precompile(int all)
             size_t min_world = 0;
             size_t max_world = ~(size_t)0;
             if (!jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->def.method))
-                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_world_counter, &min_world, &max_world, 0);
+                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world, 0);
             if (mi)
                 jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
         }
@@ -398,7 +398,7 @@ static void *jl_precompile(int all)
         }
     }
     m = NULL;
-    void *native_code = jl_create_native(m2, jl_default_cgparams, 0);
+    void *native_code = jl_create_native(m2, NULL, 0);
     JL_GC_POP();
     return native_code;
 }

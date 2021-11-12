@@ -70,7 +70,7 @@ function default_metafmt(level::LogLevel, _module, group, id, file, line)
     prefix = string(level == Warn ? "Warning" : string(level), ':')
     suffix::String = ""
     Info <= level < Warn && return color, prefix, suffix
-    _module !== nothing && (suffix *= "$(_module)")
+    _module !== nothing && (suffix *= string(_module)::String)
     if file !== nothing
         _module !== nothing && (suffix *= " ")
         suffix *= Base.contractuser(file)::String

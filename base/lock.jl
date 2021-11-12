@@ -180,6 +180,9 @@ available.
 
 When this function returns, the `lock` has been released, so the caller should
 not attempt to `unlock` it.
+
+!!! compat "Julia 1.7"
+    Using a [`Channel`](@ref) as the second argument requires Julia 1.7 or later.
 """
 function lock(f, l::AbstractLock)
     lock(l)
@@ -342,7 +345,7 @@ end
     Event()
 
 Create a level-triggered event source. Tasks that call [`wait`](@ref) on an
-`Event` are suspended and queued until `notify` is called on the `Event`.
+`Event` are suspended and queued until [`notify`](@ref) is called on the `Event`.
 After `notify` is called, the `Event` remains in a signaled state and
 tasks will no longer block when waiting for it.
 

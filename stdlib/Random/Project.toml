@@ -3,6 +3,7 @@ uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [deps]
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

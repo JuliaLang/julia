@@ -38,7 +38,7 @@ error(s::AbstractString) = throw(ErrorException(s))
 Raise an `ErrorException` with the given message.
 """
 function error(s::Vararg{Any,N}) where {N}
-    @_noinline_meta
+    @noinline
     throw(ErrorException(Main.Base.string(s...)))
 end
 
@@ -105,7 +105,7 @@ end
 Get a backtrace object for the current program point.
 """
 function backtrace()
-    @_noinline_meta
+    @noinline
     # skip frame for backtrace(). Note that for this to work properly,
     # backtrace() itself must not be interpreted nor inlined.
     skip = 1
@@ -124,7 +124,7 @@ function catch_backtrace()
 end
 
 struct ExceptionStack <: AbstractArray{Any,1}
-    stack
+    stack::Array{Any,1}
 end
 
 """
@@ -142,7 +142,7 @@ arbitrary task. This is useful for inspecting tasks which have failed due to
 uncaught exceptions.
 
 !!! compat "Julia 1.7"
-    This function went by the experiemental name `catch_stack()` in Julia
+    This function went by the experimental name `catch_stack()` in Julia
     1.1–1.6, and had a plain Vector-of-tuples as a return type.
 """
 function current_exceptions(task::Task=current_task(); backtrace::Bool=true)
@@ -159,7 +159,7 @@ end
 
 ## keyword arg lowering generates calls to this ##
 function kwerr(kw, args::Vararg{Any,N}) where {N}
-    @_noinline_meta
+    @noinline
     throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
 end
 
