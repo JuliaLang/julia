@@ -294,3 +294,51 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
         }
     }
 }
+
+bool jl_alloc::getAllocIdInfo(AllocIdInfo &info, llvm::CallInst *call, llvm::Function *alloc_obj_func) {
+    auto callee = call->getCalledOperand();
+    if (callee == alloc_obj_func) {
+        info.isarray = false;
+        info.type = call->getArgOperand(2);
+        auto sz = call->getArgOperand(1);
+        if (auto size = dyn_cast<ConstantInt>(sz)) {
+            info.object.size = size->getZExtValue();
+        } else {
+            info.object.size = -1;
+        }
+        return true;
+    } else if (auto cexpr = dyn_cast<ConstantExpr>(callee)) {
+        if (cexpr->getNumOperands() == 1) {
+            if (auto cint = dyn_cast<ConstantInt>(cexpr->getOperand(0))) {
+                info.isarray = true;
+                assert(call->getNumArgOperands() >= 2);
+                info.type = call->getArgOperand(0);
+                std::size_t faddr = cint->getZExtValue();
+                if (faddr == reinterpret_cast<std::uintptr_t>(jl_alloc_array_1d)) {
+                    info.array.dimcount = 1;
+                } else if (faddr == reinterpret_cast<std::uintptr_t>(jl_alloc_array_2d)) {
+                    info.array.dimcount = 2;
+                } else if (faddr == reinterpret_cast<std::uintptr_t>(jl_alloc_array_3d)) {
+                    info.array.dimcount = 3;
+                } else if (faddr == reinterpret_cast<std::uintptr_t>(jl_new_array)) {
+                    info.array.dimcount = 0;
+                } else {
+                    info.isarray = false;
+                }
+                if (info.isarray) {
+                    assert((info.array.dimcount ? info.array.dimcount + 1 : 2) == call->getNumArgOperands());
+                    for (int i = 0; i < info.array.dimcount; i++) {
+                        auto op = call->getArgOperand(i + 1);
+                        if (auto dim = dyn_cast<ConstantInt>(op)) {
+                            info.array.dims[i] = dim->getSExtValue();
+                        } else {
+                            info.array.dims[i] = -1;
+                        }
+                    }
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}

@@ -45,8 +45,8 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
         // We also hoist write barriers here, so we don't exit if write_barrier_func exists
-        if (!gc_preserve_begin_func && !write_barrier_func && !alloc_obj_func)
-            return false;
+        // if (!gc_preserve_begin_func && !write_barrier_func && !alloc_obj_func)
+        //     return false;
         auto LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
         auto DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
 
@@ -120,25 +120,28 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
 <<<<<<< HEAD
                     L->makeLoopInvariant(call, changed);
                 }
-                else if (callee == alloc_obj_func) {
-                    jl_alloc::AllocUseInfo use_info;
-                    jl_alloc::CheckInst::Stack check_stack;
-                    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
-                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()).with_ignore_return(true));
-                    if (use_info.escaped || use_info.addrescaped || use_info.hasunknownmem) {
-                        continue;
-                    }
-                    bool valid = true;
-                    for (std::size_t i = 0; i < call->getNumArgOperands(); i++) {
-                        if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
-                            valid = false;
-                            break;
+                else {
+                    jl_alloc::AllocIdInfo info;
+                    if (jl_alloc::getAllocIdInfo(info, call, alloc_obj_func)) {
+                        jl_alloc::AllocUseInfo use_info;
+                        jl_alloc::CheckInst::Stack check_stack;
+                        jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
+                        jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()).with_ignore_return(true));
+                        if (use_info.escaped || use_info.addrescaped || use_info.hasunknownmem) {
+                            continue;
                         }
-                    }
-                    //We can't directly make the call invariant because it may read from memory (ptls is read from current task)
-                    if (valid) {
-                        call->moveBefore(preheader->getTerminator());
-                        changed = true;
+                        bool valid = true;
+                        for (std::size_t i = 0; i < call->getNumArgOperands(); i++) {
+                            if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
+                                valid = false;
+                                break;
+                            }
+                        }
+                        //We can't directly make the call invariant because it may read from memory (ptls is read from current task)
+                        if (valid) {
+                            call->moveBefore(preheader->getTerminator());
+                            changed = true;
+                        }
                     }
 =======
                     if (!L->hasLoopInvariantOperands(call)) {
