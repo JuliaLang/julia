@@ -798,8 +798,8 @@ collections. Note: it implies that, for empty `itr`, the returned value `(mn, mx
 `mn ≥ mx` even though for non-empty `itr` it  satisfies `mn ≤ mx`.  This is a "paradoxical"
 but yet expected result.
 
-!!! compat "Julia 1.6"
-    Keyword argument `init` requires Julia 1.6 or later.
+!!! compat "Julia 1.8"
+    Keyword argument `init` requires Julia 1.8 or later.
 
 # Examples
 ```jldoctest
@@ -831,8 +831,8 @@ but yet expected result.
 !!! compat "Julia 1.2"
     This method requires Julia 1.2 or later.
 
-!!! compat "Julia 1.6"
-    Keyword argument `init` requires Julia 1.6 or later.
+!!! compat "Julia 1.8"
+    Keyword argument `init` requires Julia 1.8 or later.
 
 # Examples
 ```jldoctest
