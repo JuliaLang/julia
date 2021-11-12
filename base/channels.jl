@@ -166,13 +166,11 @@ isbuffered(c::Channel) = c.sz_max==0 ? false : true
 
 function check_channel_state(c::Channel)
     if !isopen(c)
-        lock(c)
-        excp = try
-            @something(c.excp, closed_exception())
-        finally
-            unlock(c)
-        end
-        throw(excp)
+        # if the monotonic load succeed, now do an acquire fence
+        (@atomic :acquire c.state) === :open || concurrency_violation()
+        excp = c.excp
+        excp !== nothing && throw(excp)
+        throw(closed_exception())
     end
 end
 """
@@ -186,8 +184,8 @@ Close a channel. An exception (optionally given by `excp`), is thrown by:
 function close(c::Channel, excp::Exception=closed_exception())
     lock(c)
     try
-        @atomic :monotonic c.state = :closed
         c.excp = excp
+        @atomic :release c.state = :closed
         notify_error(c.cond_take, excp)
         notify_error(c.cond_wait, excp)
         notify_error(c.cond_put, excp)
