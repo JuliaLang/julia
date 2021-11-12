@@ -397,7 +397,13 @@ end
 ldiv!(Dc::Diagonal, Da::Diagonal, Db::Diagonal) = Diagonal(ldiv!(Dc.diag, Da, Db.diag))
 
 # optimizations for (Sym)Tridiagonal and Diagonal
-# TODO: replace by D \ Tridiagonal(S), which would make the ldiv! method below obsolete
+@propagate_inbounds _getudiag(T::Tridiagonal, i) = T.du[i]
+@propagate_inbounds _getudiag(S::SymTridiagonal, i) = S.ev[i]
+@propagate_inbounds _getdiag(T::Tridiagonal, i) = T.d[i]
+@propagate_inbounds _getdiag(S::SymTridiagonal, i) = symmetric(S.dv[i], :U)::symmetric_type(eltype(S.dv))
+@propagate_inbounds _getldiag(T::Tridiagonal, i) = T.dl[i]
+@propagate_inbounds _getldiag(S::SymTridiagonal, i) = transpose(S.ev[i])
+
 function (\)(D::Diagonal, S::SymTridiagonal)
     T = promote_op(\, eltype(D), eltype(S))
     du = similar(S.ev, T, length(S.dv)-1)
@@ -405,8 +411,9 @@ function (\)(D::Diagonal, S::SymTridiagonal)
     dl = copy(du)
     ldiv!(Tridiagonal(dl, d, du), D, S)
 end
-function ldiv!(T::Tridiagonal, D::Diagonal, S::SymTridiagonal)
-    m = length(S.dv)
+(\)(D::Diagonal, T::Tridiagonal) = ldiv!(similar(T, promote_op(\, eltype(D), eltype(T))), D, T)
+function ldiv!(T::Tridiagonal, D::Diagonal, S::Union{SymTridiagonal,Tridiagonal})
+    m = size(S, 1)
     dd = D.diag
     if (k = length(dd)) != m
         throw(DimensionMismatch("diagonal matrix is $k by $k but right hand side has $m rows"))
@@ -416,48 +423,23 @@ function ldiv!(T::Tridiagonal, D::Diagonal, S::SymTridiagonal)
     end
     j = findfirst(iszero, dd)
     isnothing(j) || throw(SingularException(j))
-    ddj = dd[1]
-    T.d[1] = ddj \ symmetric(S.dv[1], :U)
-    T.du[1] = ddj \ S.ev[1]
-    for j in 2:m-1
-        ddj = dd[j]
-        T.dl[j-1] = ddj \ transpose(S.ev[j-1])
-        T.d[j]  = ddj \ symmetric(S.dv[j], :U)
-        T.du[j] = ddj \ S.ev[j]
+    @inbounds begin
+        ddj = dd[1]
+        T.d[1] = ddj \ _getdiag(S, 1)
+        T.du[1] = ddj \ _getudiag(S, 1)
+        for j in 2:m-1
+            ddj = dd[j]
+            T.dl[j-1] = ddj \ _getldiag(S, j-1)
+            T.d[j]  = ddj \ _getdiag(S, j)
+            T.du[j] = ddj \ _getudiag(S, j)
+        end
+        ddj = dd[m]
+        T.dl[m-1] = ddj \ _getldiag(S, m-1)
+        T.d[m] = ddj \ _getdiag(S, m)
     end
-    ddj = dd[m]
-    T.dl[m-1] = ddj \ transpose(S.ev[m-1])
-    T.d[m] = ddj \ symmetric(S.dv[m], :U)
     return T
 end
-(\)(D::Diagonal, T::Tridiagonal) = ldiv!(similar(T, promote_op(\, eltype(D), eltype(T))), D, T)
-function ldiv!(Tr::Tridiagonal, D::Diagonal, T::Tridiagonal)
-    m = length(T.d)
-    dd = D.diag
-    if (k = length(dd)) != m
-        throw(DimensionMismatch("diagonal matrix is $k by $k but right hand side has $m rows"))
-    end
-    if length(Tr.d) != m
-        throw(DimensionMismatch("target matrix size $(size(Tr)) does not match input matrix size $(size(T))"))
-    end
-    j = findfirst(iszero, dd)
-    isnothing(j) || throw(SingularException(j))
-    ddj = dd[1]
-    Tr.d[1] = ddj \ T.d[1]
-    Tr.du[1] = ddj \ T.du[1]
-    for j in 2:m-1
-        ddj = dd[j]
-        Tr.dl[j-1] = ddj \ T.dl[j-1]
-        Tr.d[j]  = ddj \ T.d[j]
-        Tr.du[j] = ddj \ T.du[j]
-    end
-    ddj = dd[m]
-    Tr.dl[m-1] = ddj \ T.dl[m-1]
-    Tr.d[m] = ddj \ T.d[m]
-    return Tr
-end
 
-# TODO: replace by Tridiagonal(S) / D, which would make the _rdiv! method below obsolete
 function (/)(S::SymTridiagonal, D::Diagonal)
     T = promote_op(\, eltype(D), eltype(S))
     du = similar(S.ev, T, length(S.dv)-1)
@@ -465,8 +447,9 @@ function (/)(S::SymTridiagonal, D::Diagonal)
     dl = copy(du)
     _rdiv!(Tridiagonal(dl, d, du), S, D)
 end
-function _rdiv!(T::Tridiagonal, S::SymTridiagonal, D::Diagonal)
-    n = length(S.dv)
+(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(similar(T, promote_op(/, eltype(T), eltype(D))), T, D)
+function _rdiv!(T::Tridiagonal, S::Union{SymTridiagonal,Tridiagonal}, D::Diagonal)
+    n = size(S, 1)
     dd = D.diag
     if (k = length(dd)) != n
         throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
@@ -476,45 +459,21 @@ function _rdiv!(T::Tridiagonal, S::SymTridiagonal, D::Diagonal)
     end
     j = findfirst(iszero, dd)
     isnothing(j) || throw(SingularException(j))
-    ddj = dd[1]
-    T.d[1] = symmetric(S.dv[1], :U) / ddj
-    T.dl[1] = transpose(S.ev[1]) / ddj
-    for j in 2:n-1
-        ddj = dd[j]
-        T.dl[j] = transpose(S.ev[j]) / ddj
-        T.d[j] = symmetric(S.dv[j], :U) / ddj
-        T.du[j-1] = S.ev[j-1] / ddj
+    @inbounds begin
+        ddj = dd[1]
+        T.d[1] = _getdiag(S, 1) / ddj
+        T.dl[1] = _getldiag(S, 1) / ddj
+        for j in 2:n-1
+            ddj = dd[j]
+            T.dl[j] = _getldiag(S, j) / ddj
+            T.d[j] = _getdiag(S, j) / ddj
+            T.du[j-1] = _getudiag(S, j-1) / ddj
+        end
+        ddj = dd[n]
+        T.d[n] = _getdiag(S, n) / ddj
+        T.du[n-1] = _getudiag(S, n-1) / ddj
     end
-    ddj = dd[n]
-    T.d[n] = symmetric(S.dv[n], :U) / ddj
-    T.du[n-1] = S.ev[n-1] / ddj
     return T
-end
-(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(similar(T, promote_op(/, eltype(T), eltype(D))), T, D)
-function _rdiv!(Tr::Tridiagonal, T::Tridiagonal, D::Diagonal)
-    n = length(T.d)
-    dd = D.diag
-    if (k = length(dd)) != n
-        throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
-    end
-    if length(Tr.d) != n
-        throw(DimensionMismatch("target matrix size $(size(Tr)) does not match input matrix size $(size(T))"))
-    end
-    j = findfirst(iszero, dd)
-    isnothing(j) || throw(SingularException(j))
-    ddj = dd[1]
-    Tr.d[1] = T.d[1] / ddj
-    Tr.dl[1] = T.dl[1] / ddj
-    for j in 2:n-1
-        ddj = dd[j]
-        Tr.dl[j] = T.dl[j] / ddj
-        Tr.d[j] = T.d[j] / ddj
-        Tr.du[j-1] = T.du[j-1] / ddj
-    end
-    ddj = dd[n]
-    Tr.d[n] = T.d[n] / ddj
-    Tr.du[n-1] = T.du[n-1] / ddj
-    return Tr
 end
 
 # Optimizations for [l/r]mul!, l/rdiv!, *, / and \ between Triangular and Diagonal.
