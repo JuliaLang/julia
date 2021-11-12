@@ -777,8 +777,7 @@ end
 end
 
 @testset "(Sym)Tridiagonal division by Diagonal" begin
-    K = 5
-    for elty in (Float64, ComplexF32), overlength in (1, 0)
+    for K in (5, 1), elty in (Float64, ComplexF32), overlength in (1, 0)
         S = SymTridiagonal(randn(elty, K), randn(elty, K-overlength))
         T = Tridiagonal(randn(elty, K-1), randn(elty, K), randn(elty, K-1))
         D = Diagonal(randn(elty, K))
@@ -786,8 +785,12 @@ end
         @test (D \ T)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(T))
         @test (S / D)::Tridiagonal{elty} == Tridiagonal(Matrix(S) / Matrix(D))
         @test (T / D)::Tridiagonal{elty} == Tridiagonal(Matrix(T) / Matrix(D))
+    end
+    K = 5
+    for elty in (Float64, ComplexF32), overlength in (1, 0)
         S = SymTridiagonal([rand(elty, 2, 2) for _ in 1:K], [rand(elty, 2, 2) for _ in 1:K-overlength])
         T = Tridiagonal([rand(elty, 2, 2) for _ in 1:K-1], [rand(elty, 2, 2) for _ in 1:K], [rand(elty, 2, 2) for _ in 1:K-1])
+        D = Diagonal(randn(elty, K))
         SM = fill(zeros(elty, 2, 2), K, K)
         TM = copy(SM)
         SM[1,1] = S[1,1]; TM[1,1] = T[1,1]
