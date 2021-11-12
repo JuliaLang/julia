@@ -33,16 +33,6 @@ function scan_entry!(result::Vector{SlotInfo}, idx::Int, @nospecialize(stmt))
 end
 
 
-function lift_defuse(cfg::CFG, defuse)
-    map(defuse) do slot
-        SlotInfo(
-            Int[block_for_inst(cfg, x) for x in slot.defs],
-            Int[block_for_inst(cfg, x) for x in slot.uses],
-            slot.any_newvar
-        )
-    end
-end
-
 function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
     nslots = length(ci.slotflags)
     result = SlotInfo[SlotInfo() for i = 1:nslots]
@@ -98,10 +88,10 @@ end
 function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecialize(stmt::Union{SlotNumber, TypedSlot}), @nospecialize(ssa))
     # We don't really have the information here to get rid of these.
     # We'll do so later
-    if ssa === undef_token
+    if ssa === UNDEF_TOKEN
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], false), Any))
-        return undef_token
+        return UNDEF_TOKEN
     end
     if !isa(ssa, Argument) && !(ssa === nothing) && ((ci.slotflags[slot] & SLOT_USEDUNDEF) != 0)
         # insert a temporary node. type_lift_pass! will remove it
@@ -144,7 +134,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
                 return true
             else
                 ssa = rename(val)
-                if ssa === undef_token
+                if ssa === UNDEF_TOKEN
                     return false
                 elseif !isa(ssa, SSAValue) && !isa(ssa, NewSSAValue)
                     return true
@@ -162,7 +152,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
             x = fixup_slot!(ir, ci, idx, slot_id(val), val, rename(val))
             # We inserted an undef error node. Delete subsequent statement
             # to avoid confusing the optimizer
-            if x === undef_token
+            if x === UNDEF_TOKEN
                 return nothing
             end
             op[] = x
@@ -183,17 +173,18 @@ function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), r
     return fixemup!(stmt->true, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
-function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}, flags::Vector{UInt8})
+function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any})
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    (; codelocs, ssaflags) = ci
     for i = length(code):-1:1
         if code[i] !== nothing
             resize!(code, i)
             resize!(ssavaluetypes, i)
-            resize!(ci.codelocs, i)
+            resize!(codelocs, i)
             resize!(info, i)
-            resize!(flags, i)
+            resize!(ssaflags, i)
             break
         end
     end
@@ -203,9 +194,9 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
     if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
         push!(code, ReturnNode())
         push!(ssavaluetypes, Union{})
-        push!(ci.codelocs, 0)
+        push!(codelocs, 0)
         push!(info, nothing)
-        push!(flags, 0x00)
+        push!(ssaflags, IR_FLAG_NULL)
     end
     nothing
 end
@@ -524,7 +515,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     return new_ir
 end
 
-function compute_live_ins(cfg::CFG, defuse)
+function compute_live_ins(cfg::CFG, defuse #=::Union{SlotInfo,SSADefUse}=#)
     # We remove from `uses` any block where all uses are dominated
     # by a def. This prevents insertion of dead phi nodes at the top
     # of such a block if that block happens to be in a loop
@@ -586,11 +577,10 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
     return new_typ
 end
 
-function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
-                        slottypes::Vector{Any})
+function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
+                        defuses::Vector{SlotInfo}, slottypes::Vector{Any})
     code = ir.stmts.inst
     cfg = ir.cfg
-    left = Int[]
     catch_entry_blocks = Tuple{Int, Int}[]
     for idx in 1:length(code)
         stmt = code[idx]
@@ -616,7 +606,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
     for (_, exc) in catch_entry_blocks
         phicnodes[exc] = Vector{Tuple{SlotNumber, NewSSAValue, PhiCNode}}()
     end
-    @timeit "idf" for (idx, slot) in Iterators.enumerate(defuse)
+    @timeit "idf" for (idx, slot) in Iterators.enumerate(defuses)
         # No uses => no need for phi nodes
         isempty(slot.uses) && continue
         # TODO: Restore this optimization
@@ -667,14 +657,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
                 first_insert_for_bb(code, cfg, block), NewInstruction(node, Union{})).id - length(ir.stmts))
             push!(phi_nodes[block], ssa=>node)
         end
-        push!(left, idx)
     end
     # Perform SSA renaming
     initial_incoming_vals = Any[
-        if 0 in defuse[x].defs
+        if 0 in defuses[x].defs
             Argument(x)
-        elseif !defuse[x].any_newvar
-            undef_token
+        elseif !defuses[x].any_newvar
+            UNDEF_TOKEN
         else
             SSAValue(-2)
         end for x in 1:length(ci.slotflags)
@@ -711,7 +700,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
                 continue
             end
             push!(node.edges, pred)
-            if incoming_val === undef_token
+            if incoming_val === UNDEF_TOKEN
                 resize!(node.values, length(node.values)+1)
             else
                 push!(node.values, incoming_val)
@@ -721,7 +710,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
             if isa(incoming_val, NewSSAValue)
                 push!(type_refine_phi, ssaval.id)
             end
-            typ = incoming_val === undef_token ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci, ir.sptypes, -1, slottypes)
+            typ = incoming_val === UNDEF_TOKEN ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci, ir.sptypes, -1, slottypes)
             old_entry = new_nodes.stmts[ssaval.id]
             if isa(typ, DelayedTyp)
                 push!(type_refine_phi, ssaval.id)
@@ -743,7 +732,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
         if eidx !== nothing
             for (slot, _, node) in phicnodes[catch_entry_blocks[eidx][2]]
                 ival = incoming_vals[slot_id(slot)]
-                ivalundef = ival === undef_token
+                ivalundef = ival === UNDEF_TOKEN
                 unode = ivalundef ? UpsilonNode() : UpsilonNode(ival)
                 typ = ivalundef ? MaybeUndef(Union{}) : typ_for_val(ival, ci, ir.sptypes, -1, slottypes)
                 push!(node.values,
@@ -756,7 +745,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
             stmt = code[idx]
             (isa(stmt, PhiNode) || (isexpr(stmt, :(=)) && isa(stmt.args[2], PhiNode))) && continue
             if isa(stmt, NewvarNode)
-                incoming_vals[slot_id(stmt.slot)] = undef_token
+                incoming_vals[slot_id(stmt.slot)] = UNDEF_TOKEN
                 code[idx] = nothing
             else
                 stmt = rename_uses!(ir, ci, idx, stmt, incoming_vals)
@@ -770,13 +759,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
                     id = slot_id(stmt.args[1])
                     val = stmt.args[2]
                     typ = typ_for_val(val, ci, ir.sptypes, idx, slottypes)
-                    # Having undef_token appear on the RHS is possible if we're on a dead branch.
+                    # Having UNDEF_TOKEN appear on the RHS is possible if we're on a dead branch.
                     # Do something reasonable here, by marking the LHS as undef as well.
-                    if val !== undef_token
+                    if val !== UNDEF_TOKEN
                         incoming_vals[id] = SSAValue(make_ssa!(ci, code, idx, id, typ)::Int)
                     else
                         code[idx] = nothing
-                        incoming_vals[id] = undef_token
+                        incoming_vals[id] = UNDEF_TOKEN
                     end
                     eidx = item
                     while haskey(exc_handlers, eidx)
@@ -784,7 +773,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
                         cidx = findfirst(x->slot_id(x[1]) == id, phicnodes[exc])
                         if cidx !== nothing
                             node = UpsilonNode(incoming_vals[id])
-                            if incoming_vals[id] === undef_token
+                            if incoming_vals[id] === UNDEF_TOKEN
                                 node = UpsilonNode()
                                 typ = MaybeUndef(Union{})
                             end
@@ -825,7 +814,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
             new_dest = block_for_inst(cfg, stmt.dest)
             if new_dest == bb+1
                 # Drop this node - it's a noop
-                new_code[idx] = stmt.cond
+                new_code[idx] = Expr(:call, GlobalRef(Core, :typeassert), stmt.cond, GlobalRef(Core, :Bool))
             else
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end

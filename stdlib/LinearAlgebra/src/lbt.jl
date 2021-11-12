@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## This file contains libblastrampoline-specific APIs
 
 # Keep these in sync with `src/libblastrampoline_internal.h`

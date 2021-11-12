@@ -22,11 +22,6 @@
 #include "support/ios.h"
 #include "uv.h"
 
-#if defined(_COMPILER_MICROSOFT_) && !defined(write)
-#include <io.h>
-#define write _write
-#endif
-
 #include "julia_assert.h"
 
 #ifdef __cplusplus
@@ -57,7 +52,7 @@ void jl_init_uv(void)
     JL_MUTEX_INIT(&jl_uv_mutex); // a file-scope initializer can be used instead
 }
 
-int jl_uv_n_waiters = 0;
+_Atomic(int) jl_uv_n_waiters = 0;
 
 void JL_UV_LOCK(void)
 {
@@ -107,7 +102,7 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
     if (handle->type != UV_FILE && handle->data) {
         jl_task_t *ct = jl_current_task;
         size_t last_age = ct->world_age;
-        ct->world_age = jl_world_counter;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         jl_uv_call_close_callback((jl_value_t*)handle->data);
         ct->world_age = last_age;
     }
@@ -201,14 +196,14 @@ JL_DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data) { req->data = da
 JL_DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle) { return handle->data; }
 JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
-extern volatile unsigned _threadedregion;
+extern _Atomic(unsigned) _threadedregion;
 
 JL_DLLEXPORT int jl_process_events(void)
 {
     jl_task_t *ct = jl_current_task;
     uv_loop_t *loop = jl_io_loop;
     jl_gc_safepoint_(ct->ptls);
-    if (loop && (_threadedregion || ct->tid == 0)) {
+    if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == 0)) {
         if (jl_atomic_load(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
             loop->stop_flag = 0;
             int r = uv_run(loop, UV_RUN_NOWAIT);
@@ -414,7 +409,7 @@ JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
 {
     jl_task_t *ct = jl_get_current_task();
     // TODO: fix this cheating
-    if (jl_get_safe_restore() || ct == NULL || ct->tid != 0)
+    if (jl_get_safe_restore() || ct == NULL || jl_atomic_load_relaxed(&ct->tid) != 0)
 #ifdef _OS_WINDOWS_
         return WriteFile(handle, data, len, NULL, NULL);
 #else
@@ -514,7 +509,7 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
 
     // TODO: Hack to make CoreIO thread-safer
     jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || ct->tid != 0) {
+    if (ct == NULL || jl_atomic_load_relaxed(&ct->tid) != 0) {
         if (stream == JL_STDOUT) {
             fd = UV_STDOUT_FD;
         }

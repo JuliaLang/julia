@@ -47,8 +47,19 @@ end
         (2:3, 1:2),
         (2:-1:1, 1:2),
         (1:2:9, 5:2:13),
+        (1, [1,2,5]),
+        (1, [1,10,5,2]),
+        (10, [10]),
+        ([1], 1),
+        ([15,1,5,2], 6),
+        ([2], [2]),
+        ([2,9,8,2,1], [2,8,4,3,1]),
+        ([8,3,5,3], 2:9),
     ]
         @test I[a,b] == J[a,b]
+        ndims(a) == 1 && @test I[OffsetArray(a,-10),b] == J[OffsetArray(a,-10),b]
+        ndims(b) == 1 && @test I[a,OffsetArray(b,-9)] == J[a,OffsetArray(b,-9)]
+        ndims(a) == ndims(b) == 1 && @test I[OffsetArray(a,-7),OffsetArray(b,-8)] == J[OffsetArray(a,-7),OffsetArray(b,-8)]
     end
 end
 
@@ -133,7 +144,7 @@ end
 end
 
 @testset "arithmetic with Number" begin
-    α = randn()
+    α = rand()
     @test α + I == α + 1
     @test I + α == α + 1
     @test α - I == α - 1

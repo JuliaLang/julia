@@ -94,10 +94,10 @@ const ALLOC_OVERFLOW_FUNCTION = Ref(false)
 function __init__()
     try
         if version().major != VERSION.major || bits_per_limb() != BITS_PER_LIMB
-            msg = bits_per_limb() != BITS_PER_LIMB ? error : warn
-            msg("The dynamically loaded GMP library (v\"$(version())\" with __gmp_bits_per_limb == $(bits_per_limb()))\n",
-                "does not correspond to the compile time version (v\"$VERSION\" with __gmp_bits_per_limb == $BITS_PER_LIMB).\n",
-                "Please rebuild Julia.")
+            msg = """The dynamically loaded GMP library (v\"$(version())\" with __gmp_bits_per_limb == $(bits_per_limb()))
+                     does not correspond to the compile time version (v\"$VERSION\" with __gmp_bits_per_limb == $BITS_PER_LIMB).
+                     Please rebuild Julia."""
+            bits_per_limb() != BITS_PER_LIMB ? @error(msg) : @warn(msg)
         end
 
         ccall((:__gmp_set_memory_functions, :libgmp), Cvoid,

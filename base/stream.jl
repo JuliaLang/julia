@@ -283,6 +283,7 @@ end
 lock(s::LibuvStream) = lock(s.lock)
 unlock(s::LibuvStream) = unlock(s.lock)
 
+setup_stdio(stream::LibuvStream, ::Bool) = (stream, false)
 rawhandle(stream::LibuvStream) = stream.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, s::Union{LibuvStream, LibuvServer}) = s.handle
 
@@ -433,7 +434,7 @@ function wait_readnb(x::LibuvStream, nb::Int)
     nothing
 end
 
-function shutdown(s::LibuvStream)
+function closewrite(s::LibuvStream)
     iolock_begin()
     check_open(s)
     req = Libc.malloc(_sizeof_uv_shutdown)
@@ -467,7 +468,9 @@ function shutdown(s::LibuvStream)
         end
         iolock_end()
         unpreserve_handle(ct)
-        if isopen(s) && (s.status == StatusEOF && !isa(s, TTY)) || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
+    end
+    if isopen(s)
+        if status < 0 || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
             close(s)
         end
     end
@@ -549,7 +552,7 @@ julia> withenv("LINES" => 30, "COLUMNS" => 100) do
 
 To get your TTY size,
 
-```julia
+```julia-repl
 julia> displaysize(stdout)
 (34, 147)
 ```
@@ -658,9 +661,9 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                 notify(stream.cond)
             elseif nread == UV_EOF # libuv called uv_stop_reading already
                 if stream.status != StatusClosing
-                    if stream isa TTY || ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
-                        # stream can still be used either by reseteof or write
-                        stream.status = StatusEOF
+                    stream.status = StatusEOF
+                    if stream isa TTY # TODO: || ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
+                        # stream can still be used either by reseteof # TODO: or write
                         notify(stream.cond)
                     else
                         # underlying stream is no longer useful: begin finalization
@@ -1325,7 +1328,7 @@ Possible values for each stream are:
 * `io` an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
 
 # Examples
-```julia
+```julia-repl
 julia> redirect_stdio(stdout="stdout.txt", stderr="stderr.txt") do
            print("hello stdout")
            print(stderr, "hello stderr")
@@ -1341,14 +1344,14 @@ julia> read("stderr.txt", String)
 # Edge cases
 
 It is possible to pass the same argument to `stdout` and `stderr`:
-```julia
+```julia-repl
 julia> redirect_stdio(stdout="log.txt", stderr="log.txt", stdin=devnull) do
     ...
 end
 ```
 
 However it is not supported to pass two distinct descriptors of the same file.
-```julia
+```julia-repl
 julia> io1 = open("same/path", "w")
 
 julia> io2 = open("same/path", "w")
@@ -1356,7 +1359,7 @@ julia> io2 = open("same/path", "w")
 julia> redirect_stdio(f, stdout=io1, stderr=io2) # not suppored
 ```
 Also the `stdin` argument may not be the same descriptor as `stdout` or `stderr`.
-```julia
+```julia-repl
 julia> io = open(...)
 
 julia> redirect_stdio(f, stdout=io, stdin=io) # not supported
@@ -1476,7 +1479,7 @@ end
 
 isopen(s::BufferStream) = s.status != StatusClosed
 
-shutdown(s::BufferStream) = close(s)
+closewrite(s::BufferStream) = close(s)
 
 function close(s::BufferStream)
     lock(s.cond) do
@@ -1486,6 +1489,7 @@ function close(s::BufferStream)
     end
 end
 uvfinalize(s::BufferStream) = nothing
+setup_stdio(stream::BufferStream, child_readable::Bool) = invoke(setup_stdio, Tuple{IO, Bool}, stream, child_readable)
 
 function read(s::BufferStream, ::Type{UInt8})
     nread = lock(s.cond) do

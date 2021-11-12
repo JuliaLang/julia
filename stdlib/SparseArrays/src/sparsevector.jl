@@ -1372,7 +1372,7 @@ end
 
 ### Reduction
 
-function _sum(f, x::AbstractSparseVector)
+function sum(f, x::AbstractSparseVector)
     n = length(x)
     n > 0 || return sum(f, nonzeros(x)) # return zero() of proper type
     m = nnz(x)
@@ -1381,11 +1381,9 @@ function _sum(f, x::AbstractSparseVector)
      Base.add_sum((n - m) * f(zero(eltype(x))), sum(f, nonzeros(x))))
 end
 
-sum(f::Union{Function, Type}, x::AbstractSparseVector) = _sum(f, x) # resolve ambiguity
-sum(f, x::AbstractSparseVector) = _sum(f, x)
 sum(x::AbstractSparseVector) = sum(nonzeros(x))
 
-function _maximum(f, x::AbstractSparseVector)
+function maximum(f, x::AbstractSparseVector)
     n = length(x)
     if n == 0
         if f === abs || f === abs2
@@ -1400,11 +1398,9 @@ function _maximum(f, x::AbstractSparseVector)
      max(f(zero(eltype(x))), maximum(f, nonzeros(x))))
 end
 
-maximum(f::Union{Function, Type}, x::AbstractSparseVector) = _maximum(f, x) # resolve ambiguity
-maximum(f, x::AbstractSparseVector) = _maximum(f, x)
 maximum(x::AbstractSparseVector) = maximum(identity, x)
 
-function _minimum(f, x::AbstractSparseVector)
+function minimum(f, x::AbstractSparseVector)
     n = length(x)
     n > 0 || throw(ArgumentError("minimum over an empty array is not allowed."))
     m = nnz(x)
@@ -1413,9 +1409,28 @@ function _minimum(f, x::AbstractSparseVector)
      min(f(zero(eltype(x))), minimum(f, nonzeros(x))))
 end
 
-minimum(f::Union{Function, Type}, x::AbstractSparseVector) = _minimum(f, x) # resolve ambiguity
-minimum(f, x::AbstractSparseVector) = _minimum(f, x)
 minimum(x::AbstractSparseVector) = minimum(identity, x)
+
+for (fun, comp, word) in ((:findmin, :(<), "minimum"), (:findmax, :(>), "maximum"))
+    @eval function $fun(f, x::AbstractSparseVector{T}) where {T}
+        n = length(x)
+        n > 0 || throw(ArgumentError($word * " over empty array is not allowed"))
+        nzvals = nonzeros(x)
+        m = length(nzvals)
+        m == 0 && return zero(T), firstindex(x)
+        val, index = $fun(f, nzvals)
+        m == n && return val, index
+        nzinds = nonzeroinds(x)
+        zeroval = f(zero(T))
+        $comp(val, zeroval) && return val, nzinds[index]
+        # we need to find the first zero, which could be stored or implicit
+        # we try to avoid findfirst(iszero, x)
+        sindex = findfirst(iszero, nzvals) # first stored zero, if any
+        zindex = findfirst(i -> i < nzinds[i], eachindex(nzinds)) # first non-stored zero
+        index = isnothing(sindex) ? zindex : min(sindex, zindex)
+        return zeroval, index
+    end
+end
 
 norm(x::SparseVectorUnion, p::Real=2) = norm(nonzeros(x), p)
 
@@ -2085,18 +2100,6 @@ function fill!(A::Union{SparseVector, AbstractSparseMatrixCSC}, x)
     return A
 end
 
-
-
-# in-place swaps (dense) blocks start:split and split+1:fin in col
-function _swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer)
-    split == fin && return
-    reverse!(col, start, split)
-    reverse!(col, split + 1, fin)
-    reverse!(col, start, fin)
-    return
-end
-
-
 # in-place shifts a sparse subvector by r. Used also by sparsematrix.jl
 function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
     split = fin
@@ -2110,16 +2113,14 @@ function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer
         end
     end
     # ...but rowval should be sorted within columns
-    _swap!(R, start, fin, split)
-    _swap!(V, start, fin, split)
+    circshift!(@view(R[start:fin]), split-start+1)
+    circshift!(@view(V[start:fin]), split-start+1)
 end
-
 
 function circshift!(O::SparseVector, X::SparseVector, (r,)::Base.DimsInteger{1})
     copy!(O, X)
     subvector_shifter!(nonzeroinds(O), nonzeros(O), 1, length(nonzeroinds(O)), length(O), mod(r, length(X)))
     return O
 end
-
 
 circshift!(O::SparseVector, X::SparseVector, r::Real,) = circshift!(O, X, (Integer(r),))

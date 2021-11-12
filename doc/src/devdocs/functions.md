@@ -13,7 +13,7 @@ share the same `Complex` type name object.
 All objects in Julia are potentially callable, because every object has a type, which in turn
 has a `TypeName`.
 
-## Function calls
+## [Function calls](@id dev-func-call)
 
 Given the call `f(x,y)`, the following steps are performed: first, the method table to use is
 accessed as `typeof(f).name.mt`. Second, an argument tuple type is formed, `Tuple{typeof(f), typeof(x), typeof(y)}`.

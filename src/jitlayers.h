@@ -16,12 +16,14 @@
 
 using namespace llvm;
 
+extern "C" jl_cgparams_t jl_default_cgparams;
+
 extern TargetMachine *jl_TargetMachine;
 extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM);
+void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
 Module *jl_create_llvm_module(StringRef name);
@@ -63,7 +65,8 @@ typedef struct {
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
 #ifdef _OS_WINDOWS_
     SymMapGV symMapExe;
-    SymMapGV symMapDl;
+    SymMapGV symMapDll;
+    SymMapGV symMapDlli;
 #endif
     SymMapGV symMapDefault;
     // Map from distinct callee's to its GOT entry.
@@ -223,7 +226,7 @@ private:
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer;
 
-    DenseMap<void*, StringRef> ReverseLocalSymbolTable;
+    DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 

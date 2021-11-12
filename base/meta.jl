@@ -440,7 +440,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 @assert isa(arg, Union{GlobalRef, Symbol})
                 return x
             end
-        elseif !is_meta_expr_head(head)
+        elseif !Core.Compiler.is_meta_expr_head(head)
             partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
                               slot_offset, statement_offset, boundscheck)
         end
@@ -449,7 +449,5 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
 end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
-
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
 
 end # module

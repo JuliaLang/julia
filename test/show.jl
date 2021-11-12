@@ -1347,6 +1347,20 @@ test_repr("(:).a")
 @test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4, Float64}"
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32, Float32, Float32}"
 
+@testset "issue #42931" begin
+    @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
+    @test repr(NTuple{3, :A}) == "Tuple{:A, :A, :A}"
+    @test repr(NTuple{2, :A}) == "Tuple{:A, :A}"
+    @test repr(NTuple{1, :A}) == "Tuple{:A}"
+    @test repr(NTuple{0, :A}) == "Tuple{}"
+
+    @test repr(Tuple{:A, :A, :A, :B}) == "Tuple{:A, :A, :A, :B}"
+    @test repr(Tuple{:A, :A, :A, :A}) == "NTuple{4, :A}"
+    @test repr(Tuple{:A, :A, :A}) == "Tuple{:A, :A, :A}"
+    @test repr(Tuple{:A}) == "Tuple{:A}"
+    @test repr(Tuple{}) == "Tuple{}"
+end
+
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
 @test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
@@ -1377,6 +1391,11 @@ let m = which(T20332{Int}(), (Int,)),
     mi = Core.Compiler.specialize_method(m, Tuple{T20332{T}, Int} where T, Core.svec())
     # test that this doesn't throw an error
     @test occursin("MethodInstance for", repr(mi))
+    # issue #41928
+    str = sprint(mi; context=:color=>true) do io, mi
+        printstyled(io, mi; color=:light_cyan)
+    end
+    @test !occursin("\U1b[0m", str)
 end
 
 @test sprint(show, Main) == "Main"
@@ -1838,6 +1857,12 @@ end
     # issue #34343
     @test showstr([[1], Int[]]) == "[[1], $Int[]]"
     @test showstr([Dict(1=>1), Dict{Int,Int}()]) == "[Dict(1 => 1), Dict{$Int, $Int}()]"
+
+    # issue #42719, NamedTuple with @var_str
+    @test replstr((; var"a b"=1)) == """(var"a b" = 1,)"""
+    @test replstr((; var"#var#"=1)) == """(var"#var#" = 1,)"""
+    @test replstr((; var"a"=1, b=2)) == "(a = 1, b = 2)"
+    @test replstr((; a=1, b=2)) == "(a = 1, b = 2)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin

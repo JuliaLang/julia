@@ -203,7 +203,7 @@ Pass *createGCInvariantVerifierPass(bool Strong) {
     return new GCInvariantVerifier(Strong);
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass(LLVMPassManagerRef PM, LLVMBool Strong)
+extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_impl(LLVMPassManagerRef PM, LLVMBool Strong)
 {
     unwrap(PM)->add(createGCInvariantVerifierPass(Strong));
 }
