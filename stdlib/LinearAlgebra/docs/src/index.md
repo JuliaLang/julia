@@ -460,8 +460,10 @@ Base.copy(::Union{Transpose,Adjoint})
 LinearAlgebra.stride1
 LinearAlgebra.checksquare
 LinearAlgebra.peakflops
-LinearAlgebra.symmetrize
-LinearAlgebra.symmetrize!
+LinearAlgebra.symmetricpart
+LinearAlgebra.symmetricpart!
+LinearAlgebra.hermitianpart
+LinearAlgebra.hermitianpart!
 ```
 
 ## Low-level matrix operations

@@ -856,47 +856,62 @@ for func in (:log, :sqrt)
 end
 
 """
-    symmetrize!(X::AbstractMatrix; conjugate::Bool=true)
+    symmetricpart(A, uplo=:U)
 
-Make the matrix `X` symmetric in-place using the formula `(X + X') / 2`.
-If `conjugate` is `true`, `X` is made Hermitian rather than symmetric.
+Return the symmetric part of the square matrix `A`, defined as `(A + transpose(A)) / 2`,
+as a [`Symmetric`](@ref) matrix.
 
-See also: [`symmetrize`](@ref)
-
-!!! compat "Julia 1.3"
-    This function requires Julia 1.3 or later.
+!!! compat "Julia 1.8"
+    This function requires Julia 1.8 or later.
 """
-symmetrize!(X::AbstractMatrix; conjugate::Bool=true) =
-    conjugate ? _symmetrize!(conj, real, X) : _symmetrize!(identity, identity, X)
+symmetricpart(A::AbstractMatrix{T}, uplo=:U) where {T} =
+    symmetricpart!(copyto!(similar(A, typeof(one(T) / 2)), A), uplo)
 
-function _symmetrize!(f::Function, g::Function, X::AbstractMatrix)
-    inds = axes(X, 1)
-    inds == axes(X, 2) || throw(DimensionMismatch("matrix is not square"))
-    r = first(inds)
-    s = step(inds)
-    @inbounds for j in inds
-        X[j,j] = g(X[j,j])
-        for i in r:s:j-s
-            X[i,j] = (X[i,j] + f(X[j,i])) / 2
-            X[j,i] = f(X[i,j])
+"""
+    symmetricpart!(A, uplo=:U)
+
+Overwrite the square matrix `A` with its symmetric part, `(A + transpose(A)) / 2`,
+and return `Symmetric(A, uplo)`.
+
+!!! compat "Julia 1.8"
+    This function requires Julia 1.8 or later.
+"""
+symmetricpart!(A::AbstractMatrix, uplo::Symbol=:U) =
+    Symmetric(_hermorsympart!(identity, identity, A, char_uplo(uplo)), uplo)
+
+"""
+    hermitianpart(A, uplo=:U)
+
+Return the Hermitian part of the square matrix `A`, defined as `(A + A') / 2`,
+as a [`Hermitian`](@ref) matrix.
+
+!!! compat "Julia 1.8"
+    This function requires Julia 1.8 or later.
+"""
+hermitianpart(A::AbstractMatrix{T}, uplo=:U) where {T} =
+    hermitianpart!(copyto!(similar(A, typeof(one(T) / 2)), A), uplo)
+
+"""
+    hermitianpart!(A, uplo=:U)
+
+Overwrite the square matrix `A` with its Hermitian part, `(A + A') / 2`,
+and return `Hermitian(A, uplo)`.
+
+!!! compat "Julia 1.8"
+    This function requires Julia 1.8 or later.
+"""
+hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) =
+    Hermitian(_hermorsympart!(real, conj, A, char_uplo(uplo)), uplo)
+
+function _hermorsympart!(real::Function, conj::Function, A::AbstractMatrix, uplo::Char)
+    require_one_based_indexing(A)
+    n = checksquare(A)
+    triangle = uplo === 'U' ? (j -> 1:(j - 1)) : (j -> (j + 1):n)
+    @inbounds for j in 1:n
+        A[j, j] = real(A[j, j])
+        for i in triangle(j)
+            A[i, j] = (A[i, j] + conj(A[j, i])) / 2
         end
     end
-    X
+    return A
 end
-
-"""
-    symmetrize(X::AbstractMatrix; conjugate::Bool=true)
-
-Construct a symmetric matrix based on `X` using the formula `(X + X') / 2`.
-If `conjugate` is `true`, the result is Hermitian rather than symmetric.
-
-See also: [`symmetrize!`](@ref)
-
-!!! compat "Julia 1.3"
-    This function requires Julia 1.3 or later.
-"""
-symmetrize(X::AbstractMatrix{T}; conjugate::Bool=true) where {T<:Number} =
-    symmetrize!(copyto!(similar(X, typeof(zero(T) / 2)), X), conjugate=conjugate)
-symmetrize(X::Symmetric{<:Real}; conjugate::Bool=true) = X
-symmetrize(X::Symmetric{<:Complex}; conjugate::Bool=true) = conjugate ? Hermitian(X) : X
-symmetrize(X::Hermitian; conjugate::Bool=true) = X

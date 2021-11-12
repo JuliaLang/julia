@@ -90,7 +90,7 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
-* New functions `symmetrize` and `symmetrize!` for constructing symmetric matrices ([#31836]).
+* New functions `symmetricpart`, `symmetricpart!`, `hermitianpart`, and `hermitianpart!` for extracting the symmetric or Hermitian part of a matrix ([#31836]).
 
 #### Markdown
 
