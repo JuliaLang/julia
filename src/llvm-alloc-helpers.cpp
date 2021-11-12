@@ -169,17 +169,17 @@ JL_USED_FUNC void AllocUseInfo::dump()
     }
 }
 
-void jl_alloc::runEscapeAnalysis(AllocUseInfo &use_info, Instruction *I, CheckInst::Stack &check_stack, JuliaPassContext &pass, const DataLayout &DL, const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set) {
-    use_info.reset();
+void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options) {
+    required.use_info.reset();
     if (I->use_empty())
         return;
     CheckInst::Frame cur{I, 0, I->use_begin(), I->use_end()};
-    check_stack.clear();
+    required.check_stack.clear();
 
     // Recursion
     auto push_inst = [&] (Instruction *inst) {
         if (cur.use_it != cur.use_end)
-            check_stack.push_back(cur);
+            required.check_stack.push_back(cur);
         cur.parent = inst;
         cur.use_it = inst->use_begin();
         cur.use_end = inst->use_end();
@@ -187,11 +187,11 @@ void jl_alloc::runEscapeAnalysis(AllocUseInfo &use_info, Instruction *I, CheckIn
 
     auto check_inst = [&] (Instruction *inst, Use *use) {
         if (isa<LoadInst>(inst)) {
-            use_info.hasload = true;
-            if (cur.offset == UINT32_MAX || !use_info.addMemOp(inst, 0, cur.offset,
+            required.use_info.hasload = true;
+            if (cur.offset == UINT32_MAX || !required.use_info.addMemOp(inst, 0, cur.offset,
                                                                inst->getType(),
-                                                               false, DL))
-                use_info.hasunknownmem = true;
+                                                               false, required.DL))
+                required.use_info.hasunknownmem = true;
             return true;
         }
         if (auto call = dyn_cast<CallInst>(inst)) {
@@ -207,70 +207,70 @@ void jl_alloc::runEscapeAnalysis(AllocUseInfo &use_info, Instruction *I, CheckIn
                             !isa<ConstantInt>(call->getArgOperand(1)) ||
                             (cast<ConstantInt>(call->getArgOperand(2))->getLimitedValue() >=
                              UINT32_MAX - cur.offset))
-                            use_info.hasunknownmem = true;
+                            required.use_info.hasunknownmem = true;
                         return true;
                     }
                     if (id == Intrinsic::lifetime_start || id == Intrinsic::lifetime_end ||
                         isa<DbgInfoIntrinsic>(II))
                         return true;
-                    use_info.addrescaped = true;
+                    required.use_info.addrescaped = true;
                     return true;
                 }
-                if (pass.gc_preserve_begin_func == callee) {
+                if (required.pass.gc_preserve_begin_func == callee) {
                     for (auto user: call->users())
-                        use_info.uses.insert(cast<Instruction>(user));
-                    use_info.preserves.insert(call);
-                    use_info.haspreserve = true;
+                        required.use_info.uses.insert(cast<Instruction>(user));
+                    required.use_info.preserves.insert(call);
+                    required.use_info.haspreserve = true;
                     return true;
                 }
             }
-            if (pass.pointer_from_objref_func == callee) {
-                use_info.addrescaped = true;
+            if (required.pass.pointer_from_objref_func == callee) {
+                required.use_info.addrescaped = true;
                 return true;
             }
-            if (pass.typeof_func == callee) {
-                use_info.hastypeof = true;
+            if (required.pass.typeof_func == callee) {
+                required.use_info.hastypeof = true;
                 assert(use->get() == I);
                 return true;
             }
-            if (pass.write_barrier_func == callee)
+            if (required.pass.write_barrier_func == callee)
                 return true;
             auto opno = use->getOperandNo();
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
             if (!call->isBundleOperand(opno) ||
                 call->getOperandBundleForOperand(opno).getTagName() != "jl_roots") {
-                use_info.escaped = true;
+                required.use_info.escaped = true;
                 return false;
             }
-            use_info.haspreserve = true;
+            required.use_info.haspreserve = true;
             return true;
         }
         if (auto store = dyn_cast<StoreInst>(inst)) {
             // Only store value count
             if (use->getOperandNo() != StoreInst::getPointerOperandIndex()) {
-                use_info.escaped = true;
+                required.use_info.escaped = true;
                 return false;
             }
             auto storev = store->getValueOperand();
-            if (cur.offset == UINT32_MAX || !use_info.addMemOp(inst, use->getOperandNo(),
+            if (cur.offset == UINT32_MAX || !required.use_info.addMemOp(inst, use->getOperandNo(),
                                                                cur.offset, storev->getType(),
-                                                               true, DL))
-                use_info.hasunknownmem = true;
+                                                               true, required.DL))
+                required.use_info.hasunknownmem = true;
             return true;
         }
         if (isa<AtomicCmpXchgInst>(inst) || isa<AtomicRMWInst>(inst)) {
             // Only store value count
             if (use->getOperandNo() != isa<AtomicCmpXchgInst>(inst) ? AtomicCmpXchgInst::getPointerOperandIndex() : AtomicRMWInst::getPointerOperandIndex()) {
-                use_info.escaped = true;
+                required.use_info.escaped = true;
                 return false;
             }
-            use_info.hasload = true;
+            required.use_info.hasload = true;
             auto storev = isa<AtomicCmpXchgInst>(inst) ? cast<AtomicCmpXchgInst>(inst)->getNewValOperand() : cast<AtomicRMWInst>(inst)->getValOperand();
-            if (cur.offset == UINT32_MAX || !use_info.addMemOp(inst, use->getOperandNo(),
+            if (cur.offset == UINT32_MAX || !required.use_info.addMemOp(inst, use->getOperandNo(),
                                                                cur.offset, storev->getType(),
-                                                               true, DL))
-                use_info.hasunknownmem = true;
-            use_info.refload = true;
+                                                               true, required.DL))
+                required.use_info.hasunknownmem = true;
+            required.use_info.refload = true;
             return true;
         }
         if (isa<AddrSpaceCastInst>(inst) || isa<BitCastInst>(inst)) {
@@ -281,7 +281,7 @@ void jl_alloc::runEscapeAnalysis(AllocUseInfo &use_info, Instruction *I, CheckIn
             uint64_t next_offset = cur.offset;
             if (cur.offset != UINT32_MAX) {
                 APInt apoffset(sizeof(void*) * 8, cur.offset, true);
-                if (!gep->accumulateConstantOffset(DL, apoffset) || apoffset.isNegative()) {
+                if (!gep->accumulateConstantOffset(required.DL, apoffset) || apoffset.isNegative()) {
                     next_offset = UINT32_MAX;
                 }
                 else {
@@ -295,7 +295,11 @@ void jl_alloc::runEscapeAnalysis(AllocUseInfo &use_info, Instruction *I, CheckIn
             cur.offset = (uint32_t)next_offset;
             return true;
         }
-        use_info.escaped = true;
+        if (options.ignore_return && isa<ReturnInst>(inst)) {
+            return true; // Sometimes a returned object can still be optimized
+            //(e.g. loop allocation hoisting)
+        }
+        required.use_info.escaped = true;
         return false;
     };
 
@@ -305,19 +309,19 @@ void jl_alloc::runEscapeAnalysis(AllocUseInfo &use_info, Instruction *I, CheckIn
         auto inst = dyn_cast<Instruction>(use->getUser());
         ++cur.use_it;
         if (!inst) {
-            use_info.escaped = true;
+            required.use_info.escaped = true;
             return;
         }
-        if (!valid_set || valid_set->contains(inst->getParent())) {
+        if (!options.valid_set || options.valid_set->contains(inst->getParent())) {
             if (!check_inst(inst, use))
                 return;
-            use_info.uses.insert(inst);
+            required.use_info.uses.insert(inst);
         }
         if (cur.use_it == cur.use_end) {
-            if (check_stack.empty())
+            if (required.check_stack.empty())
                 return;
-            cur = check_stack.back();
-            check_stack.pop_back();
+            cur = required.check_stack.back();
+            required.check_stack.pop_back();
         }
     }
 }

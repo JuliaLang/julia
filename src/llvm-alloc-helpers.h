@@ -108,7 +108,36 @@ namespace jl_alloc {
         }
     };
 
-    void runEscapeAnalysis(AllocUseInfo &use_info, llvm::Instruction *I, CheckInst::Stack &check_stack, JuliaPassContext &pass, const llvm::DataLayout &DL, const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set = nullptr);
+    struct EscapeAnalysisRequiredArgs {
+        AllocUseInfo &use_info; // The returned escape analysis data
+        CheckInst::Stack &check_stack; // A preallocated stack to be used for escape analysis
+        JuliaPassContext &pass; // The current optimization pass (for accessing intrinsic functions)
+        const llvm::DataLayout &DL; // The module's data layout (for handling GEPs/memory operations)
+    };
+
+    struct EscapeAnalysisOptionalArgs {
+        //A set of basic blocks to run escape analysis over. Uses outside these basic blocks
+        //will not be considered. Defaults to nullptr, which means all uses of the allocation
+        //are considered
+        const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set;
+        //Whether or not to consider returns to escape the function. Defaults to false,
+        //which means a return of an allocation does cause an escape.
+        bool ignore_return;
+
+        EscapeAnalysisOptionalArgs() = default;
+
+        EscapeAnalysisOptionalArgs &with_valid_set(decltype(valid_set) valid_set) {
+            this->valid_set = valid_set;
+            return *this;
+        }
+
+        EscapeAnalysisOptionalArgs &with_ignore_return(decltype(ignore_return) ignore_return) {
+            this->ignore_return = ignore_return;
+            return *this;
+        }
+    };
+
+    void runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options=EscapeAnalysisOptionalArgs());
 }
 
 
