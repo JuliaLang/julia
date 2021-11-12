@@ -727,14 +727,14 @@ end
 function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybereverse)
     offs = 1 - minval
 
-    where = fill(0, rangelen)
+    counts = fill(0, rangelen)
     @inbounds for i = eachindex(x)
-        where[x[i] + offs] += 1
+        counts[x[i] + offs] += 1
     end
 
     idx = firstindex(x)
     @inbounds for i = maybereverse(1:rangelen)
-        lastidx = idx + where[i] - 1
+        lastidx = idx + counts[i] - 1
         val = i-offs
         for j = idx:lastidx
             x[j] = val
@@ -975,22 +975,22 @@ function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     offs = 1 - minval
     n = length(x)
 
-    where = fill(0, rangelen+1)
-    where[1] = 1
+    counts = fill(0, rangelen+1)
+    counts[1] = 1
     @inbounds for i = 1:n
-        where[x[i] + offs + 1] += 1
+        counts[x[i] + offs + 1] += 1
     end
 
-    #cumsum!(where, where)
-    @inbounds for i = 2:length(where)
-        where[i] += where[i-1]
+    #cumsum!(counts, counts)
+    @inbounds for i = 2:length(counts)
+        counts[i] += counts[i-1]
     end
 
     P = Vector{Int}(undef, n)
     @inbounds for i = 1:n
         label = x[i] + offs
-        P[where[label]] = i
-        where[label] += 1
+        P[counts[label]] = i
+        counts[label] += 1
     end
 
     return P
