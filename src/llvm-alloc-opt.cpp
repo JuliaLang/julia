@@ -317,7 +317,7 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
 
 void Optimizer::checkInst(Instruction *I)
 {
-    jl_alloc::checkInst(use_info, I, check_stack, pass, *pass.DL);
+    jl_alloc::runEscapeAnalysis(use_info, I, check_stack, pass, *pass.DL);
 }
 
 void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)

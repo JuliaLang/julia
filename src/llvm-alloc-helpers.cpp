@@ -169,7 +169,7 @@ JL_USED_FUNC void AllocUseInfo::dump()
     }
 }
 
-void jl_alloc::checkInst(AllocUseInfo &use_info, Instruction *I, CheckInst::Stack &check_stack, JuliaPassContext &pass, const DataLayout &DL, const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set) {
+void jl_alloc::runEscapeAnalysis(AllocUseInfo &use_info, Instruction *I, CheckInst::Stack &check_stack, JuliaPassContext &pass, const DataLayout &DL, const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set) {
     use_info.reset();
     if (I->use_empty())
         return;

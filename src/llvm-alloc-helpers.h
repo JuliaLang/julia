@@ -108,7 +108,7 @@ namespace jl_alloc {
         }
     };
 
-    void checkInst(AllocUseInfo &use_info, llvm::Instruction *I, CheckInst::Stack &check_stack, JuliaPassContext &pass, const llvm::DataLayout &DL, const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set = nullptr);
+    void runEscapeAnalysis(AllocUseInfo &use_info, llvm::Instruction *I, CheckInst::Stack &check_stack, JuliaPassContext &pass, const llvm::DataLayout &DL, const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set = nullptr);
 }
 
 
