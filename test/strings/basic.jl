@@ -164,6 +164,9 @@ end
     @test endswith(y)(y)
     @test endswith(z, z)
     @test endswith(z)(z)
+    #40616 startswith for IO objects
+    io = IOBuffer("JuliaLang")
+    @test startswith(io, "Julia")
 end
 
 @testset "SubStrings and Views" begin

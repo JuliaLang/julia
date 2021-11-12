@@ -57,6 +57,20 @@ function startswith(a::Union{String, SubString{String}},
     end
 end
 
+"""
+    startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
+
+Check if an `IO` object starts with a prefix.
+"""
+function Base.startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
+    pos = position(io)
+    s = _getminprefix(io, prefix)
+    seek(io, pos)
+    return startswith(s, prefix)
+end
+_getminprefix(io::IO, prefix::Union{AbstractString,AbstractChar}) = String(read(io, length(prefix)))
+_getminprefix(io::IO, chars::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}) = _getminprefix(io, first(chars))
+
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
     cub = ncodeunits(b)
