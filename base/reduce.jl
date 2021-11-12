@@ -793,10 +793,9 @@ as a 2-tuple.
 
 The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
 first and second elements are neutral elements for `min` and `max` respectively
-(i.e. which are greater/less than or equal to any other element). It is used for non-empty
-collections. Note: it implies that, for empty `itr`, the returned value `(mn, mx)` satisfies
-`mn ≥ mx` even though for non-empty `itr` it  satisfies `mn ≤ mx`.  This is a "paradoxical"
-but yet expected result.
+(i.e. which are greater/less than or equal to any other element). As a consequence, when
+`itr` is empty the returned `(mn, mx)` tuple will satisfy `mn ≥ mx`. When `init` is
+specified it may be used even for non-empty `itr`.
 
 !!! compat "Julia 1.8"
     Keyword argument `init` requires Julia 1.8 or later.
