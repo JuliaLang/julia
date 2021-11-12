@@ -149,7 +149,7 @@ end
 close(proc.in)
 
 # https://github.com/JuliaLang/julia/pull/42973
-@testset "spawn and wait *a lot* of tasks in @profile" begin
+Sys.islinux() && @testset "spawn and wait *a lot* of tasks in @profile" begin
     # Not using threads_exec.jl for better isolation, reproducibility, and a
     # tighter timeout.
     script = "profile_spawnmany_exec.jl"
@@ -158,7 +158,7 @@ close(proc.in)
         proc = run(ignorestatus(setenv(cmd, "NTASKS" => n; dir = @__DIR__)); wait = false)
         done = Threads.Atomic{Bool}(false)
         timeout = false
-        timer = Timer(10) do _
+        timer = Timer(100) do _
             timeout = true
             for sig in [Base.SIGTERM, Base.SIGHUP, Base.SIGKILL]
                 for _ in 1:1000
