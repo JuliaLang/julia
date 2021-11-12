@@ -1,37 +1,6 @@
-#define DEBUG_TYPE "alloc_opt"
-#undef DEBUG
-#include "llvm-version.h"
-
-#include <llvm-c/Core.h>
-#include <llvm-c/Types.h>
-
-#include <llvm/ADT/SmallSet.h>
-#include <llvm/ADT/SmallVector.h>
-#include <llvm/ADT/SetVector.h>
-#include <llvm/IR/Value.h>
-#include <llvm/IR/CFG.h>
-#include <llvm/IR/LegacyPassManager.h>
-#include <llvm/IR/Dominators.h>
-#include <llvm/IR/Function.h>
-#include <llvm/IR/Instructions.h>
-#include <llvm/IR/IntrinsicInst.h>
-#include <llvm/IR/Module.h>
-#include <llvm/IR/Operator.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/Pass.h>
-#include <llvm/Support/Debug.h>
-#include <llvm/Transforms/Utils/PromoteMemToReg.h>
-
-#include <llvm/InitializePasses.h>
-
-#include "codegen_shared.h"
-#include "julia.h"
-#include "julia_internal.h"
-#include "llvm-pass-helpers.h"
 #include "llvm-alloc-helpers.h"
 
-#include <map>
-#include <set>
+#include "codegen_shared.h"
 
 #include "julia_assert.h"
 
