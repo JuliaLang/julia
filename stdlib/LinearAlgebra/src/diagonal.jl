@@ -421,11 +421,12 @@ function ldiv!(T::Tridiagonal, D::Diagonal, S::Union{SymTridiagonal,Tridiagonal}
     if length(T.d) != m
         throw(DimensionMismatch("target matrix size $(size(T)) does not match input matrix size $(size(S))"))
     end
+    m == 0 && return T
     j = findfirst(iszero, dd)
     isnothing(j) || throw(SingularException(j))
-    @inbounds begin
-        ddj = dd[1]
-        T.d[1] = ddj \ _getdiag(S, 1)
+    ddj = dd[1]
+    T.d[1] = ddj \ _getdiag(S, 1)
+    @inbounds if m > 1
         T.du[1] = ddj \ _getudiag(S, 1)
         for j in 2:m-1
             ddj = dd[j]
@@ -449,7 +450,7 @@ function (/)(S::SymTridiagonal, D::Diagonal)
 end
 (/)(T::Tridiagonal, D::Diagonal) = _rdiv!(similar(T, promote_op(/, eltype(T), eltype(D))), T, D)
 function _rdiv!(T::Tridiagonal, S::Union{SymTridiagonal,Tridiagonal}, D::Diagonal)
-    n = size(S, 1)
+    n = size(S, 2)
     dd = D.diag
     if (k = length(dd)) != n
         throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
@@ -457,11 +458,12 @@ function _rdiv!(T::Tridiagonal, S::Union{SymTridiagonal,Tridiagonal}, D::Diagona
     if length(T.d) != n
         throw(DimensionMismatch("target matrix size $(size(T)) does not match input matrix size $(size(S))"))
     end
+    n == 0 && return T
     j = findfirst(iszero, dd)
     isnothing(j) || throw(SingularException(j))
-    @inbounds begin
-        ddj = dd[1]
-        T.d[1] = _getdiag(S, 1) / ddj
+    ddj = dd[1]
+    T.d[1] = _getdiag(S, 1) / ddj
+    @inbounds if n > 1
         T.dl[1] = _getldiag(S, 1) / ddj
         for j in 2:n-1
             ddj = dd[j]

@@ -781,11 +781,25 @@ end
         S = SymTridiagonal(randn(elty, K), randn(elty, K-overlength))
         T = Tridiagonal(randn(elty, K-1), randn(elty, K), randn(elty, K-1))
         D = Diagonal(randn(elty, K))
+        D0 = Diagonal(zeros(elty, K))
         @test (D \ S)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(S))
         @test (D \ T)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(T))
         @test (S / D)::Tridiagonal{elty} == Tridiagonal(Matrix(S) / Matrix(D))
         @test (T / D)::Tridiagonal{elty} == Tridiagonal(Matrix(T) / Matrix(D))
+        @test_throws SingularException D0 \ S
+        @test_throws SingularException D0 \ T
+        @test_throws SingularException S / D0
+        @test_throws SingularException T / D0
     end
+    # 0-length case
+    S = SymTridiagonal(Float64[], Float64[])
+    T = Tridiagonal(Float64[], Float64[], Float64[])
+    D = Diagonal(Float64[])
+    @test (D \ S)::Tridiagonal{Float64} == T
+    @test (D \ T)::Tridiagonal{Float64} == T
+    @test (S / D)::Tridiagonal{Float64} == T
+    @test (T / D)::Tridiagonal{Float64} == T
+    # matrix eltype case
     K = 5
     for elty in (Float64, ComplexF32), overlength in (1, 0)
         S = SymTridiagonal([rand(elty, 2, 2) for _ in 1:K], [rand(elty, 2, 2) for _ in 1:K-overlength])
@@ -805,6 +819,7 @@ end
             for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
         end
     end
+    # eltype promotion case
     S = SymTridiagonal(rand(-20:20, K), rand(-20:20, K-1))
     T = Tridiagonal(rand(-20:20, K-1), rand(-20:20, K), rand(-20:20, K-1))
     D = Diagonal(rand(1:20, K))
