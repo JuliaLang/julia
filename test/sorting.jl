@@ -53,7 +53,7 @@ end
     @test issorted([1,2,3])
     @test reverse([2,3,1]) == [1,3,2]
     @test sum(randperm(6)) == 21
-    @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # PR #?????
+    @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # issue #43034
 end
 
 @testset "partialsort" begin
