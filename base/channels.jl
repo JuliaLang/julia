@@ -168,7 +168,7 @@ isbuffered(c::Channel) = c.sz_max==0 ? false : true
 function check_channel_state(c::Channel)
     if !isopen(c)
         # if the monotonic load succeed, now do an acquire fence
-        (@atomic :acquire c.state) === :open || concurrency_violation()
+        (@atomic :acquire c.state) === :open && concurrency_violation()
         excp = c.excp
         excp !== nothing && throw(excp)
         throw(closed_exception())
