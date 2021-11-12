@@ -406,9 +406,9 @@ ldiv!(Dc::Diagonal, Da::Diagonal, Db::Diagonal) = Diagonal(ldiv!(Dc.diag, Da, Db
 
 function (\)(D::Diagonal, S::SymTridiagonal)
     T = promote_op(\, eltype(D), eltype(S))
-    du = similar(S.ev, T, length(S.dv)-1)
+    du = similar(S.ev, T, max(length(S.dv)-1, 0))
     d  = similar(S.dv, T, length(S.dv))
-    dl = copy(du)
+    dl = similar(S.ev, T, max(length(S.dv)-1, 0))
     ldiv!(Tridiagonal(dl, d, du), D, S)
 end
 (\)(D::Diagonal, T::Tridiagonal) = ldiv!(similar(T, promote_op(\, eltype(D), eltype(T))), D, T)
@@ -443,9 +443,9 @@ end
 
 function (/)(S::SymTridiagonal, D::Diagonal)
     T = promote_op(\, eltype(D), eltype(S))
-    du = similar(S.ev, T, length(S.dv)-1)
+    du = similar(S.ev, T, max(length(S.dv)-1, 0))
     d  = similar(S.dv, T, length(S.dv))
-    dl = copy(du)
+    dl = similar(S.ev, T, max(length(S.dv)-1, 0))
     _rdiv!(Tridiagonal(dl, d, du), S, D)
 end
 (/)(T::Tridiagonal, D::Diagonal) = _rdiv!(similar(T, promote_op(/, eltype(T), eltype(D))), T, D)
