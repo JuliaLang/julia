@@ -904,7 +904,7 @@
                                x))
                          fields)))
           (attrs (reverse attrs))
-          (defs        (filter (lambda (x) (not (effect-free? x))) defs))
+          (defs        (filter (lambda (x) (not (or (effect-free? x) (eq? (car x) 'string)))) defs))
           (locs        (if (and (pair? fields0) (linenum? (car fields0)))
                            (list (car fields0))
                            '()))
