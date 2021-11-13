@@ -43,11 +43,11 @@ pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names
 #export NamedTuplePair
 
 macro _gc_preserve_begin(arg1)
-    Expr(:gc_preserve_begin, esc(arg1))
+    Expr(:gc_preserve_begin, Expr(:escape, arg1))
 end
 
 macro _gc_preserve_end(token)
-    Expr(:gc_preserve_end, esc(token))
+    Expr(:gc_preserve_end, Expr(:escape, token))
 end
 
 """
