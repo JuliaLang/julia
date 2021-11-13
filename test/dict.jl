@@ -1218,7 +1218,7 @@ end
 
         @test modify!(dict, "a") do val
             Some(val === nothing ? 1 : something(val) + 1)
-        end == Some(2)
+        end == (Some(1) => Some(2))
 
         @test Dict(dict) == Dict("a" => 2)
     end
@@ -1228,20 +1228,20 @@ end
 
         @test modify!(dict, "a") do val
             Some(val === nothing ? 1 : something(val) + 1)
-        end == Some(1)
+        end == (nothing => Some(1))
 
         @test Dict(dict) == Dict("a" => 1)
     end
 
     @testset "delete" begin
         dict = constructor(Dict("a" => 1))
-        @test modify!(_ -> nothing, dict, "a") === nothing
+        @test modify!(_ -> nothing, dict, "a") == (Some(1) => nothing)
         @test Dict(dict) == Dict()
     end
 
     @testset "no-op" begin
         dict = constructor(Dict("a" => 1))
-        @test modify!(_ -> nothing, dict, "b") === nothing
+        @test modify!(_ -> nothing, dict, "b") == (nothing => nothing)
         @test Dict(dict) == Dict("a" => 1)
     end
 
@@ -1251,7 +1251,7 @@ end
         @test modify!(dict, "a") do val
             dict["a"] = 0
             Some(val === nothing ? 1 : something(val) + 1)
-        end == Some(1)
+        end == (nothing => Some(1))
 
         @test Dict(dict) == Dict("a" => 1)
     end

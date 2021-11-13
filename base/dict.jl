@@ -407,9 +407,11 @@ function modify!(f, h::Dict{K, V}, key0) where {K, V}
     age0 = h.age
     if idx > 0
         @inbounds vold = h.vals[idx]
-        vnew = f(Some{V}(vold))
+        vold = Some{V}(vold)
+        vnew = f(vold)
     else
-        vnew = f(nothing)
+        vold = nothing
+        vnew = f(vold)
     end
     if h.age != age0
         idx = ht_keyindex2!(h, key)
@@ -428,7 +430,7 @@ function modify!(f, h::Dict{K, V}, key0) where {K, V}
             @inbounds _setindex!(h, something(vnew), key, -idx)
         end
     end
-    return vnew
+    return vold => vnew
 end
 
 """

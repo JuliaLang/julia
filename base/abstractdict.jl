@@ -528,18 +528,22 @@ function hash(a::AbstractDict, h::UInt)
 end
 
 """
-    modify!(f, d::AbstractDict{K, V}, key)
+    modify!(f, d::AbstractDict{K, V}, key) -> (old => new)
 
 Lookup and then update, insert or delete in one go without re-computing the hash.
+Return a pair of `old::Union{Some,Nothing}` and `new::::Union{Some,Nothing}`.
 
-`f` is a callable object that must take a single `Union{Some{V}, Nothing}` argument and return
-a `Union{T, Some{T}, Nothing}` value, where `T` is a type [`convert`](@ref)-able to the value type
-`V`.  The value `Some(d[key])` is passed to `f` if `haskey(d, key)`; otherwise `nothing`
-is passed.  If `f` returns `nothing`, corresponding entry in the dictionary `d`  is removed.
-If `f` returns non-`nothing` value `x`, `key => something(x)` is inserted or updated in `d`
-(equivalent to `d[key] = something(x)` but more efficient).
+`f` is a callable object that must take a single `old::Union{Some, Nothing}` argument and
+return a `new::Union{T, Some{T}, Nothing}` value, where `T` is a type [`convert`](@ref)-able
+to the value type `V`.  The value `Some(d[key])` is passed to `f` if `haskey(d, key)`;
+otherwise `nothing` is passed.  If `f` returns `nothing`, corresponding entry in the
+dictionary `d`  is removed.  If `f` returns non-`nothing` value `x`, `key => something(x)`
+is inserted or updated in `d` (equivalent to `d[key] = something(x)` but more efficient).
 
-`modify!` returns whatever `f` returns as-is.
+Whether `Some{V}(value)` or `Some{typeof(value)}(value)` is returned is an implementation
+defined behavior. The callback function `f` must use `old === nothing` or `old isa Some`
+instead of `old isa Some{valtype(d)}` unless the type of the dictionary `d` is known to
+define a certain behavior.
 
 # Examples
 ```jldoctest
@@ -548,7 +552,7 @@ julia> dict = Dict("a" => 1);
 julia> modify!(dict, "a") do val
            Some(val === nothing ? 1 : something(val) + 1)
        end
-Some(2)
+Some(1) => Some(2)
 
 julia> dict
 Dict{String,Int64} with 1 entry:
@@ -559,13 +563,14 @@ julia> dict = Dict();
 julia> modify!(dict, "a") do val
            Some(something(val, 0) + 1)
        end
-Some(1)
+nothing => Some(1)
 
 julia> dict
 Dict{Any,Any} with 1 entry:
   "a" => 1
 
 julia> modify!(_ -> nothing, dict, "a")
+Some("a") => nothing
 
 julia> dict
 Dict{Any,Any} with 0 entries
@@ -573,16 +578,18 @@ Dict{Any,Any} with 0 entries
 """
 function modify!(f, dict::AbstractDict{K,V}, key) where {K, V}
     if haskey(dict, key)
-        val = f(Some{V}(dict[key]))
+        old = Some{V}(dict[key])
+        val = f(old)
     else
-        val = f(nothing)
+        old = nothing
+        val = f(old)
     end
     if val === nothing
         delete!(dict, key)
     else
         dict[key] = something(val)
     end
-    return val
+    return old => val
 end
 
 function getindex(t::AbstractDict, key)
