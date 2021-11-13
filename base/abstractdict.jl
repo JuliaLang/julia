@@ -530,9 +530,9 @@ julia> dict
 Dict{Any,Any} with 0 entries
 ```
 """
-function modify!(f, dict::AbstractDict, key)
+function modify!(f, dict::AbstractDict{K,V}, key) where {K, V}
     if haskey(dict, key)
-        val = f(Some(dict[key]))
+        val = f(Some{V}(dict[key]))
     else
         val = f(nothing)
     end

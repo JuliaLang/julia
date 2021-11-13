@@ -392,7 +392,7 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     return h
 end
 
-function modify!(f, h::Dict{K}, key0) where K
+function modify!(f, h::Dict{K, V}, key0) where {K, V}
     key = convert(K, key0)
     if !isequal(key, key0)
         throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
@@ -407,7 +407,7 @@ function modify!(f, h::Dict{K}, key0) where K
     age0 = h.age
     if idx > 0
         @inbounds vold = h.vals[idx]
-        vnew = f(Some(vold))
+        vnew = f(Some{V}(vold))
     else
         vnew = f(nothing)
     end
