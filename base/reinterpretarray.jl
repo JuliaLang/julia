@@ -691,7 +691,7 @@ function padding(T, baseoffset = UInt(0))
         last_end = offset + sizeof(fT)
     end
     if 0 < last_end - baseoffset < sizeof(T)
-        push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - last_end - baseoffset))
+        push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - last_end + baseoffset))
     end
     return pads
 end
@@ -781,6 +781,38 @@ end
 
 @pure ispacked(::Type{T}) where T = packedsize(T) == sizeof(T)
 
+function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
+    writeoffset = 0
+    for i ∈ 1:fieldcount(In)
+        readoffset = fieldoffset(In, i)
+        fT = fieldtype(In, i)
+        if ispacked(fT)
+            readsize = sizeof(fT)
+            _memcpy!(ptr_out + writeoffset, ptr_in + readoffset, readsize)
+            writeoffset += readsize
+        else # nested padded type
+            _copytopacked!(ptr_out + writeoffset, Ptr{fT}(ptr_in + readoffset))
+            writeoffset += packedsize(fT)
+        end
+    end
+end
+
+function _copyfrompacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
+    readoffset = 0
+    for i ∈ 1:fieldcount(Out)
+        writeoffset = fieldoffset(Out, i)
+        fT = fieldtype(Out, i)
+        if ispacked(fT)
+            writesize = sizeof(fT)
+            _memcpy!(ptr_out + writeoffset, ptr_in + readoffset, writesize)
+            readoffset += writesize
+        else # nested padded type
+            _copyfrompacked!(Ptr{fT}(ptr_out + writeoffset), ptr_in + readoffset)
+            readoffset += packedsize(fT)
+        end
+    end
+end
+
 @inline function reinterpret(::Type{Out}, x::In) where {Out, In}
     isbitstype(Out) || error("reinterpret target type must be isbits")
     isbitstype(In) || error("reinterpret source type must be isbits")
@@ -800,66 +832,20 @@ end
         return out[]
     else
         # mismatched padding
-        function copytopacked(ptr_out, ptr_in)
-            writeoffset = 0
-            for i ∈ 1:fieldcount(In)
-                readoffset = fieldoffset(In, i)
-                fT = fieldtype(In, i)
-                if ispacked(fT)
-                    readsize = sizeof(fT)
-                    _memcpy!(ptr_out + writeoffset, ptr_in + readoffset, readsize)
-                    writeoffset += readsize
-                else # nested padded type
-                    fTpackedsize = packedsize(fT)
-                    fpacked = Ref{NTuple{fTpackedsize, UInt8}}(reinterpret(NTuple{fTpackedsize, UInt8}, getfield(x, i)))
-                     GC.@preserve fpacked begin
-                         ptr_fpacked = unsafe_convert(Ptr{NTuple{fTpackedsize, UInt8}}, fpacked)
-                         _memcpy!(ptr_out + writeoffset, ptr_fpacked, fTpackedsize)
-                     end
-                     writeoffset += fTpackedsize
-                end
-            end
-        end
-        function copyfrompacked(ptr_out, ptr_in)
-            readoffset = 0
-            for i ∈ 1:fieldcount(Out)
-                writeoffset = fieldoffset(Out, i)
-                fT = fieldtype(Out, i)
-                if ispacked(fT)
-                    writesize = sizeof(fT)
-                    _memcpy!(ptr_out + writeoffset, ptr_in + readoffset, writesize)
-                    readoffset += writesize
-                else # nested padded type
-                    fTpackedsize = packedsize(fT)
-                    fpacked = Ref{NTuple{fTpackedsize, UInt8}}()
-                    GC.@preserve fpacked begin
-                        ptr_fpacked = unsafe_convert(Ptr{NTuple{fTpackedsize, UInt8}}, fpacked)
-                        _memcpy!(ptr_fpacked, ptr_in + readoffset, fTpackedsize)
-                    end
-                    funpacked = Ref{fT}(reinterpret(fT, fpacked[]))
-                    GC.@preserve funpacked begin
-                        ptr_funpacked = unsafe_convert(Ptr{fT}, funpacked)
-                        _memcpy!(ptr_out + writeoffset, ptr_funpacked, sizeof(fT))
-                    end
-                    readoffset += fTpackedsize
-                end
-            end
-        end
-
         GC.@preserve in out begin
             ptr_in = unsafe_convert(Ptr{In}, in)
             ptr_out = unsafe_convert(Ptr{Out}, out)
 
             if fieldcount(In) > 0 && ispacked(Out)
-                copytopacked(ptr_out, ptr_in)
+                _copytopacked!(ptr_out, ptr_in)
             elseif fieldcount(Out) > 0 && ispacked(In)
-                copyfrompacked(ptr_out, ptr_in)
+                _copyfrompacked!(ptr_out, ptr_in)
             else
                 packed = Ref{NTuple{inpackedsize, UInt8}}()
                 GC.@preserve packed begin
                     ptr_packed = unsafe_convert(Ptr{NTuple{inpackedsize, UInt8}}, packed)
-                    copytopacked(ptr_packed, ptr_in)
-                    copyfrompacked(ptr_out, ptr_packed)
+                    _copytopacked!(ptr_packed, ptr_in)
+                    _copyfrompacked!(ptr_out, ptr_packed)
                 end
             end
         end
