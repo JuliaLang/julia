@@ -302,7 +302,13 @@ function _reformat_sp(
     end
 end
 
-@eval @inline function frameaddr()
+"""
+    withframeaddress(f)
+
+Call function `f` with an address `ptr::Ptr{Cvoid}` of an independent frame
+immediately outer to `f`.
+"""
+@noinline function withframeaddress(f)
     sp = Core.Intrinsics.llvmcall(
         ($"""
         declare i8* @llvm.frameaddress(i32)
@@ -314,18 +320,7 @@ end
         UInt,
         Tuple{},
     )
-    return Ptr{Cvoid}(sp)
-end
-
-"""
-    withframeaddress(f)
-
-Call function `f` with an address `ptr::Ptr{Cvoid}` of an independent frame
-immediately outer to `f`.
-"""
-@noinline function withframeaddress(f)
-    sp = frameaddr()
-    @noinline f(sp)
+    @noinline f(Ptr{Cvoid}(sp))
 end
 
 function sandwiched_backtrace()
