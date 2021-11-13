@@ -328,6 +328,6 @@ end
 @testset "stack pointers" begin
     ptr1, ptr2, bt_data = sandwiched_backtrace()
     sp = _reformat_sp(bt_data...)
-    @test ptr2 < sp[1] < ptr1
+    @test ptr2 < sp[2] < ptr1
     @test all(diff(Int128.(UInt.(sp))) .> 0)
 end
