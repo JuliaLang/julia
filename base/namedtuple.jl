@@ -221,7 +221,7 @@ function _foldl_impl(
         end
         quote
             @inline
-            vals = Tuple(itr.data)
+            vals = Tuple(values(itr))
             $ex
         end
     else
