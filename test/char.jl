@@ -19,7 +19,7 @@
 
     @test widen('a') === 'a'
     # just check this works
-    @test_throws Base.CodePointError Base.code_point_err(UInt32(1))
+    @test_throws Base.CodePointError Base.throw_code_point_err(UInt32(1))
 end
 
 @testset "ASCII conversion to/from Integer" begin
@@ -99,6 +99,7 @@ end
     #getindex(c::Char) = c
     for x in testarrays
         @test getindex(x) == x
+        @test getindex(x, CartesianIndex()) == x
     end
 
     #first(c::Char) = c
@@ -290,6 +291,7 @@ end
 
 @testset "broadcasting of Char" begin
     @test identity.('a') == 'a'
+    @test 'a' .* ['b', 'c'] == ["ab", "ac"]
 end
 
 @testset "code point format of U+ syntax (PR 33291)" begin

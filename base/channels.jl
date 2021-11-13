@@ -7,6 +7,9 @@ Representation of a channel passing objects of type `T`.
 """
 abstract type AbstractChannel{T} end
 
+push!(c::AbstractChannel, v) = (put!(c, v); c)
+popfirst!(c::AbstractChannel) = take!(c)
+
 """
     Channel{T=Any}(size::Int=0)
 
@@ -34,6 +37,7 @@ mutable struct Channel{T} <: AbstractChannel{T}
     excp::Union{Exception, Nothing}      # exception to be thrown when state !== :open
 
     data::Vector{T}
+    @atomic n_avail_items::Int           # Available items for taking, can be read without lock
     sz_max::Int                          # maximum size of channel
 
     function Channel{T}(sz::Integer = 0) where T
@@ -43,7 +47,7 @@ mutable struct Channel{T} <: AbstractChannel{T}
         lock = ReentrantLock()
         cond_put, cond_take = Threads.Condition(lock), Threads.Condition(lock)
         cond_wait = (sz == 0 ? Threads.Condition(lock) : cond_take) # wait is distinct from take iff unbuffered
-        return new(cond_take, cond_wait, cond_put, :open, nothing, Vector{T}(), sz)
+        return new(cond_take, cond_wait, cond_put, :open, nothing, Vector{T}(), 0, sz)
     end
 end
 
@@ -118,7 +122,7 @@ julia> chnl = Channel{Char}(1, spawn=true) do ch
                put!(ch, c)
            end
        end
-Channel{Char}(1) (1 item available)
+Channel{Char}(1) (2 items available)
 
 julia> String(collect(chnl))
 "hello world"
@@ -236,9 +240,10 @@ julia> take!(c)
 1
 
 julia> put!(c, 1);
-ERROR: TaskFailedException:
-foo
+ERROR: TaskFailedException
 Stacktrace:
+[...]
+    nested task error: foo
 [...]
 ```
 """
@@ -279,7 +284,7 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
     lock(c)
     try
         isopen(c) || return
-        if istaskfailed(t) && task_result(t) isa Exception
+        if istaskfailed(t)
             close(c, TaskFailedException(t))
             return
         end
@@ -291,9 +296,10 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
 end
 
 struct InvalidStateException <: Exception
-    msg::AbstractString
+    msg::String
     state::Symbol
 end
+showerror(io::IO, ex::InvalidStateException) = print(io, "InvalidStateException: ", ex.msg)
 
 """
     put!(c::Channel, v)
@@ -312,17 +318,35 @@ function put!(c::Channel{T}, v) where T
     return isbuffered(c) ? put_buffered(c, v) : put_unbuffered(c, v)
 end
 
+# Atomically update channel n_avail, *assuming* we hold the channel lock.
+function _increment_n_avail(c, inc)
+    # We hold the channel lock so it's safe to non-atomically read and
+    # increment c.n_avail_items
+    newlen = c.n_avail_items + inc
+    # Atomically store c.n_avail_items to prevent data races with other threads
+    # reading this outside the lock.
+    @atomic :monotonic c.n_avail_items = newlen
+end
+
 function put_buffered(c::Channel, v)
     lock(c)
+    did_buffer = false
     try
+        # Increment channel n_avail eagerly (before push!) to count data in the
+        # buffer as well as offers from tasks which are blocked in wait().
+        _increment_n_avail(c, 1)
         while length(c.data) == c.sz_max
             check_channel_state(c)
             wait(c.cond_put)
         end
         push!(c.data, v)
+        did_buffer = true
         # notify all, since some of the waiters may be on a "fetch" call.
         notify(c.cond_take, nothing, true, false)
     finally
+        # Decrement the available items if this task had an exception before pushing the
+        # item to the buffer (e.g., during `wait(c.cond_put)`):
+        did_buffer || _increment_n_avail(c, -1)
         unlock(c)
     end
     return v
@@ -331,6 +355,7 @@ end
 function put_unbuffered(c::Channel, v)
     lock(c)
     taker = try
+        _increment_n_avail(c, 1)
         while isempty(c.cond_take.waitq)
             check_channel_state(c)
             notify(c.cond_wait)
@@ -339,14 +364,13 @@ function put_unbuffered(c::Channel, v)
         # unfair scheduled version of: notify(c.cond_take, v, false, false); yield()
         popfirst!(c.cond_take.waitq)
     finally
+        _increment_n_avail(c, -1)
         unlock(c)
     end
     schedule(taker, v)
     yield()  # immediately give taker a chance to run, but don't block the current task
     return v
 end
-
-push!(c::Channel, v) = put!(c, v)
 
 """
     fetch(c::Channel)
@@ -387,14 +411,13 @@ function take_buffered(c::Channel)
             wait(c.cond_take)
         end
         v = popfirst!(c.data)
+        _increment_n_avail(c, -1)
         notify(c.cond_put, nothing, false, false) # notify only one, since only one slot has become available for a put!.
         return v
     finally
         unlock(c)
     end
 end
-
-popfirst!(c::Channel) = take!(c)
 
 # 0-size channel
 function take_unbuffered(c::Channel{T}) where T
@@ -418,9 +441,14 @@ For unbuffered channels returns `true` if there are tasks waiting
 on a [`put!`](@ref).
 """
 isready(c::Channel) = n_avail(c) > 0
-n_avail(c::Channel) = isbuffered(c) ? length(c.data) : length(c.cond_put.waitq)
+isempty(c::Channel) = n_avail(c) == 0
+function n_avail(c::Channel)
+    # Lock-free equivalent to `length(c.data) + length(c.cond_put.waitq)`
+    @atomic :monotonic c.n_avail_items
+end
 
 lock(c::Channel) = lock(c.cond_take)
+lock(f, c::Channel) = lock(f, c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)
 trylock(c::Channel) = trylock(c.cond_take)
 
@@ -453,7 +481,7 @@ function show(io::IO, ::MIME"text/plain", c::Channel)
                 print(io, " (empty)")
             else
                 s = n == 1 ? "" : "s"
-                print(io, " (", n_avail(c), " item$s available)")
+                print(io, " (", n, " item$s available)")
             end
         end
     end

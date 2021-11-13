@@ -11,9 +11,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#ifndef _MSC_VER
 #include <strings.h>
-#endif
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_threads.h"
@@ -81,6 +79,7 @@ enum {
     GC_MARK_L_finlist,
     GC_MARK_L_objarray,
     GC_MARK_L_array8,
+    GC_MARK_L_array16,
     GC_MARK_L_obj8,
     GC_MARK_L_obj16,
     GC_MARK_L_obj32,
@@ -149,6 +148,13 @@ typedef struct {
     gc_mark_obj8_t elem;
 } gc_mark_array8_t;
 
+typedef struct {
+    jl_value_t **begin; // The first slot to be scanned.
+    jl_value_t **end; // The end address (after the last slot to be scanned)
+    uint16_t *rebegin;
+    gc_mark_obj16_t elem;
+} gc_mark_array16_t;
+
 // Stack frame
 typedef struct {
     jl_gcframe_t *s; // The current stack frame
@@ -192,6 +198,7 @@ union _jl_gc_mark_data {
     gc_mark_marked_obj_t marked;
     gc_mark_objarray_t objarray;
     gc_mark_array8_t array8;
+    gc_mark_array16_t array16;
     gc_mark_obj8_t obj8;
     gc_mark_obj16_t obj16;
     gc_mark_obj32_t obj32;
@@ -362,18 +369,12 @@ typedef struct {
     int ub;
 } pagetable_t;
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
 #else
 STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 {
-#if defined(_COMPILER_MICROSOFT_)
-    unsigned long j;
-    _BitScanForward(&j, bitvec);
-    return j;
-#else
     return __builtin_ffs(bitvec) - 1;
-#endif
 }
 #endif
 
@@ -508,7 +509,7 @@ void gc_mark_queue_finlist(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
                            arraylist_t *list, size_t start);
 void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp);
 void sweep_stack_pools(void);
-void gc_debug_init(void);
+void jl_gc_debug_init(void);
 
 extern void *gc_mark_label_addrs[_GC_MARK_L_MAX];
 
@@ -637,14 +638,14 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
 #define gc_sweep_always_full jl_gc_debug_env.always_full
-int gc_debug_check_other(void);
+int jl_gc_debug_check_other(void);
 int gc_debug_check_pool(void);
-void gc_debug_print(void);
+void jl_gc_debug_print(void);
 void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT;
 void gc_scrub(void);
 #else
 #define gc_sweep_always_full 0
-static inline int gc_debug_check_other(void)
+static inline int jl_gc_debug_check_other(void)
 {
     return 0;
 }
@@ -652,7 +653,7 @@ static inline int gc_debug_check_pool(void)
 {
     return 0;
 }
-static inline void gc_debug_print(void)
+static inline void jl_gc_debug_print(void)
 {
 }
 static inline void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT
@@ -692,6 +693,8 @@ void gc_stats_big_obj(void);
 
 // For debugging
 void gc_count_pool(void);
+
+size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

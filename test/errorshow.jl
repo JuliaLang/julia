@@ -48,8 +48,9 @@ include("testenv.jl")
     end
 end
 
-
-cfile = " at $(@__FILE__):"
+file = @__FILE__
+Base.stacktrace_contract_userdir() && (file = Base.contractuser(file))
+cfile = " at $file:"
 c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
 
@@ -86,7 +87,7 @@ method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2(x::T, y::T, z::T) where {T<:Real} = true
 
 Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
-@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cfile$(c2line+5)\n  ..."
+@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cfile$(c2line+5)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  ..."
 
 c3line = @__LINE__() + 1
 method_c3(x::Float64, y::Float64) = true
@@ -184,6 +185,11 @@ addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), un
 Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), pairs((uncset = nothing,)))
 @test String(take!(buf)) == "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)"
 
+# Busted Vararg method definitions
+bad_vararg_decl(x::Int, y::Vararg) = 1   # don't do this, instead use (x::Int, y...)
+Base.show_method_candidates(buf, try bad_vararg_decl("hello", 3) catch e e end)
+@test occursin("bad_vararg_decl(!Matched::$Int, ::Any...)", String(take!(buf)))
+
 macro except_str(expr, err_type)
     return quote
         let err = nothing
@@ -271,7 +277,7 @@ let
     @test occursin("column vector", err_str)
 end
 
-struct TypeWithIntParam{T <: Integer} end
+struct TypeWithIntParam{T<:Integer, Vector{T}<:A<:AbstractArray{T}} end
 struct Bounded  # not an AbstractArray
     bound::Int
 end
@@ -291,12 +297,14 @@ let undefvar
     @test occursin("DomainError with [0.0 -1.0 …", err_str)
 
     err_str = @except_str (1, 2, 3)[4] BoundsError
-    @test err_str == "BoundsError: attempt to access (1, 2, 3) at index [4]"
+    @test err_str == "BoundsError: attempt to access Tuple{$Int, $Int, $Int} at index [4]"
 
     err_str = @except_str [5, 4, 3][-2, 1] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2, 1]"
+    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [-2, 1]"
     err_str = @except_str [5, 4, 3][1:5] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [1:5]"
+    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [1:5]"
+    err_str = @except_str [5, 4, 3][trues(6,7)] BoundsError
+    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [6×7 BitMatrix]"
 
     err_str = @except_str Bounded(2)[3] BoundsError
     @test err_str == "BoundsError: attempt to access 2-size Bounded at index [3]"
@@ -315,7 +323,13 @@ let undefvar
     @test err_str == "TypeError: in Type, in parameter, expected Type, got a value of type String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
+    err_str = @except_str TypeWithIntParam{Int64,Vector{Float64}} TypeError
+    @test err_str == "TypeError: in TypeWithIntParam, in A, expected Vector{Int64}<:A<:(AbstractArray{Int64}), got Type{Vector{Float64}}"
+    err_str = @except_str TypeWithIntParam{Int64}{Vector{Float64}} TypeError
+    @test err_str == "TypeError: in TypeWithIntParam, in A, expected Vector{Int64}<:A<:(AbstractArray{Int64}), got Type{Vector{Float64}}"
     err_str = @except_str Type{Vararg} TypeError
+    @test err_str == "TypeError: in Type, in parameter, expected Type, got Vararg"
+    err_str = @except_str Ref{Vararg} TypeError
     @test err_str == "TypeError: in Type, in parameter, expected Type, got Vararg"
 
     err_str = @except_str mod(1,0) DivideError
@@ -370,10 +384,10 @@ let err_str,
     err_str = @except_str FunctionLike()() MethodError
     @test occursin("MethodError: no method matching (::$(curmod_prefix)FunctionLike)()", err_str)
     err_str = @except_str [1,2](1) MethodError
-    @test occursin("MethodError: objects of type Array{$Int,1} are not callable\nUse square brackets [] for indexing an Array.", err_str)
+    @test occursin("MethodError: objects of type Vector{$Int} are not callable\nUse square brackets [] for indexing an Array.", err_str)
     # Issue 14940
     err_str = @except_str randn(1)() MethodError
-    @test occursin("MethodError: objects of type Array{Float64,1} are not callable", err_str)
+    @test occursin("MethodError: objects of type Vector{Float64} are not callable", err_str)
 end
 @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
 @test occursin(r"^@doc \(macro with \d+ method[s]?\)$", repr("text/plain", getfield(Base, Symbol("@doc"))))
@@ -381,10 +395,10 @@ end
 # Issue 34636
 let err_str
     err_str = @except_str 1 + rand(5) MethodError
-    @test occursin("MethodError: no method matching +(::$Int, ::Array{Float64,1})", err_str)
+    @test occursin("MethodError: no method matching +(::$Int, ::Vector{Float64})", err_str)
     @test occursin("For element-wise addition, use broadcasting with dot syntax: scalar .+ array", err_str)
     err_str = @except_str rand(5) - 1//3 MethodError
-    @test occursin("MethodError: no method matching -(::Array{Float64,1}, ::Rational{$Int})", err_str)
+    @test occursin("MethodError: no method matching -(::Vector{Float64}, ::Rational{$Int})", err_str)
     @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
 end
 
@@ -426,7 +440,7 @@ let err_str,
     @test startswith(sprint(show, which(Complex{Int}, Tuple{Int})),
                      "Complex{T}(")
     @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Module, Vararg{Any}})),
-                     "@doc(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
+                     "var\"@doc\"(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
                      "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
     @test startswith(sprint(show, which(StructWithUnionAllMethodDefs{<:Integer}, (Any,))),
@@ -473,12 +487,6 @@ let
     @test (@macroexpand @fastmath +      ) == :(Base.FastMath.add_fast)
     @test (@macroexpand @fastmath min(1) ) == :(Base.FastMath.min_fast(1))
     let err = try; @macroexpand @doc "" f() = @x; catch ex; ex; end
-        file, line = @__FILE__, @__LINE__() - 1
-        err = err::LoadError
-        @test err.file == file && err.line == line
-        err = err.error::LoadError
-        @test err.file == file && err.line == line
-        err = err.error::UndefVarError
         @test err == UndefVarError(Symbol("@x"))
     end
     @test (@macroexpand @seven_dollar $bar) == 7
@@ -549,8 +557,10 @@ let
     @test !occursin("where T at sysimg.jl", sprint(showerror, method_error))
 
     # Test that tab-completion will not show the 'default' sysimg.jl method.
-    for method_string in REPL.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()))
-        @test !startswith(method_string, "(::Type{T})(arg) where T in Base at sysimg.jl")
+    completions = REPL.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()), @__MODULE__)
+    @test !isempty(completions)
+    for method_string in completions
+        @test !startswith(REPL.REPLCompletions.completion_text(method_string), "(::Type{T})(arg) where T in Base at sysimg.jl")
     end
 end
 
@@ -630,6 +640,18 @@ catch ex
 end
 pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
 
+struct ANumber <: Number end
+let err_str
+    err_str = @except_str ANumber()(3 + 4) MethodError
+    @test occursin("objects of type $(curmod_prefix)ANumber are not callable", err_str)
+    @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
+    # issue 40478
+    err_str = @except_str ANumber()(3 + 4) MethodError
+    @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
+end
+
+# Execute backtrace once before checking formatting, see #38858
+backtrace()
 
 # issue #28442
 @testset "Long stacktrace printing" begin
@@ -639,17 +661,12 @@ pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't
     io = IOBuffer()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
-    @test output[3][1:4] == " [1]"
+    @test lstrip(output[3])[1:3] == "[1]"
     @test occursin("g28442", output[3])
-    @test output[4][1:4] == " [2]"
-    @test occursin("f28442", output[4])
-    # Issue #30233
-    # Note that we can't use @test_broken on FreeBSD here, because the tests actually do
-    # pass with some compilation options, e.g. with assertions enabled
-    if !Sys.isfreebsd()
-        @test occursin("the last 2 lines are repeated 5000 more times", output[5])
-        @test output[6][1:8] == " [10003]"
-    end
+    @test lstrip(output[5])[1:3] == "[2]"
+    @test occursin("f28442", output[5])
+    @test occursin("the last 2 lines are repeated 5000 more times", output[7])
+    @test lstrip(output[8])[1:7] == "[10003]"
 end
 
 @testset "Line number correction" begin
@@ -667,10 +684,11 @@ end
     output0 = split(String(take!(io)), '\n')
     function getline(output)
         idx = findfirst(str->occursin("getbt", str), output)
-        return parse(Int, match(r":(\d*)$", output[idx]).captures[1])
+        return parse(Int, match(r":(\d*)$", output[idx+1]).captures[1])
     end
     @test getline(outputc) == getline(output0) + 2
 end
+
 
 # issue #30633
 @test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
@@ -696,7 +714,7 @@ let t1 = @async(error(1)),
     showerror(buf, e)
     s = String(take!(buf))
     @test length(findall("Stacktrace:", s)) == 2
-    @test occursin("[1] error(::Int", s)
+    @test occursin("[1] error(s::Int", s)
 end
 
 module TestMethodShadow
@@ -717,11 +735,155 @@ end
 
 # Test that implementation detail of include() is hidden from the user by default
 let bt = try
-        include("testhelpers/include_error.jl")
+        @noinline include("testhelpers/include_error.jl")
     catch
         catch_backtrace()
     end
     bt_str = sprint(Base.show_backtrace, bt)
     @test occursin(" include(", bt_str)
     @test !occursin(" _include(", bt_str)
+end
+
+# Test backtrace printing
+module B
+    module C
+        @noinline f(x; y=2.0) = error()
+    end
+    module D
+        import ..C: f
+        g() = f(2.0; y=3.0)
+    end
+end
+
+@testset "backtrace" begin
+    bt = try
+        B.D.g()
+    catch
+        catch_backtrace()
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    m = @__MODULE__
+    @test contains(bt_str, "f(x::Float64; y::Float64)")
+    @test contains(bt_str, "@ $m.B.C")
+    @test contains(bt_str, "@ $m.B.D")
+end
+# 1d/2d error shouldn't appear in unsupported keywords arg #36325
+let err = nothing
+    try
+        identity([1 1]; bad_kwards = :julia)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !occursin("2d", err_str)
+    end
+end
+
+# issue #37587
+# TODO: enable on more platforms
+if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
+    single_repeater() = single_repeater()
+    pair_repeater_a() = pair_repeater_b()
+    pair_repeater_b() = pair_repeater_a()
+
+    @testset "repeated stack frames" begin
+        let bt = try
+                single_repeater()
+            catch
+                catch_backtrace()
+            end
+            bt_str = sprint(Base.show_backtrace, bt)
+            @test occursin(r"repeats \d+ times", bt_str)
+        end
+
+        let bt = try
+                pair_repeater_a()
+            catch
+                catch_backtrace()
+            end
+            bt_str = sprint(Base.show_backtrace, bt)
+            @test occursin(r"the last 2 lines are repeated \d+ more times", bt_str)
+        end
+    end
+end  # Sys.isapple()
+
+@testset "error message hints relative modules #40959" begin
+    m = Module()
+    expr = :(module Foo
+        module Bar
+        end
+
+        using Bar
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        Bar = 3
+
+        using Bar
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        using Bar
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        module Bar end
+        module Buzz
+            using Bar
+        end
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test contains(err_str, "maybe you meant `import/using ..Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        Bar = 3
+        module Buzz
+            using Bar
+        end
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !contains(err_str, "maybe you meant `import/using ..Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        module Bar end
+        module Buzz
+            module Bar end
+            using Bar
+        end
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test contains(err_str, "maybe you meant `import/using .Bar`")
+    end
 end

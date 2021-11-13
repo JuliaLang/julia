@@ -127,6 +127,40 @@ Base.iterate(S::QRCompactWY) = (S.Q, Val(:R))
 Base.iterate(S::QRCompactWY, ::Val{:R}) = (S.R, Val(:done))
 Base.iterate(S::QRCompactWY, ::Val{:done}) = nothing
 
+# returns upper triangular views of all non-undef values of `qr(A).T`:
+#
+# julia> sparse(qr(A).T .== qr(A).T)
+# 36×100 SparseMatrixCSC{Bool, Int64} with 1767 stored entries:
+# ⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⠀⠀⠀⠀⠀⠂⠛⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⢀⠐⠙⢿⣿⣿⣿⣿
+# ⠀⠀⠐⠀⠀⠀⠀⠀⠀⢀⢙⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠁⠀⡀⠀⠙⢿⣿⣿
+# ⠀⠀⠐⠀⠀⠀⠀⠀⠀⠀⠄⠀⠙⢿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⡀⠀⠀⢀⠀⠀⠙⢿
+# ⠀⡀⠀⠀⠀⠀⠀⠀⠂⠒⠒⠀⠀⠀⠙⢿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⠀⠀⠀⠀⠀⠀⠀⢀⠀⠀⠀⡀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⣈⡀⠀⠀⠀⠀⠀⠀⠙⢿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠂⠀⢀⠀
+#
+function _triuppers_qr(T)
+    blocksize, cols = size(T)
+    return Iterators.map(0:div(cols - 1, blocksize)) do i
+        n = min(blocksize, cols - i * blocksize)
+        return UpperTriangular(view(T, 1:n, (1:n) .+ i * blocksize))
+    end
+end
+
+function Base.hash(F::QRCompactWY, h::UInt)
+    return hash(F.factors, foldr(hash, _triuppers_qr(F.T); init=hash(QRCompactWY, h)))
+end
+function Base.:(==)(A::QRCompactWY, B::QRCompactWY)
+    return A.factors == B.factors && all(splat(==), zip(_triuppers_qr.((A.T, B.T))...))
+end
+function Base.isequal(A::QRCompactWY, B::QRCompactWY)
+    return isequal(A.factors, B.factors) && all(zip(_triuppers_qr.((A.T, B.T))...)) do (a, b)
+        isequal(a, b)::Bool
+    end
+end
+
 """
     QRPivoted <: Factorization
 
@@ -198,7 +232,7 @@ function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
 end
 
 # Find index for columns with largest two norm
-function indmaxcolumn(A::StridedMatrix)
+function indmaxcolumn(A::AbstractMatrix)
     mm = norm(view(A, :, 1))
     ii = 1
     for i = 2:size(A, 2)
@@ -211,7 +245,7 @@ function indmaxcolumn(A::StridedMatrix)
     return ii
 end
 
-function qrfactPivotedUnblocked!(A::StridedMatrix)
+function qrfactPivotedUnblocked!(A::AbstractMatrix)
     m, n = size(A)
     piv = Vector(UnitRange{BlasInt}(1,n))
     τ = Vector{eltype(A)}(undef, min(m,n))
@@ -236,27 +270,27 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
 
         # Compute reflector of columns j
         x = view(A, j:m, j)
-        τj = LinearAlgebra.reflector!(x)
+        τj = reflector!(x)
         τ[j] = τj
 
         # Update trailing submatrix with reflector
-        LinearAlgebra.reflectorApply!(x, τj, view(A, j:m, j+1:n))
+        reflectorApply!(x, τj, view(A, j:m, j+1:n))
     end
-    return LinearAlgebra.QRPivoted{eltype(A), typeof(A)}(A, τ, piv)
+    return QRPivoted{eltype(A), typeof(A)}(A, τ, piv)
 end
 
 # LAPACK version
-qr!(A::StridedMatrix{<:BlasFloat}, ::Val{false} = Val(false); blocksize=36) =
+qr!(A::StridedMatrix{<:BlasFloat}, ::NoPivot; blocksize=36) =
     QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), blocksize))...)
-qr!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
+qr!(A::StridedMatrix{<:BlasFloat}, ::ColumnNorm) = QRPivoted(LAPACK.geqp3!(A)...)
 
 # Generic fallbacks
 
 """
-    qr!(A, pivot=Val(false); blocksize)
+    qr!(A, pivot = NoPivot(); blocksize)
 
-`qr!` is the same as [`qr`](@ref) when `A` is a subtype of
-[`StridedMatrix`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
+`qr!` is the same as [`qr`](@ref) when `A` is a subtype of [`StridedMatrix`](@ref),
+but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
 
@@ -266,40 +300,43 @@ representable by the element type of `A`, e.g. for integer types.
 # Examples
 ```jldoctest
 julia> a = [1. 2.; 3. 4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> qr!(a)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
 Q factor:
-2×2 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
  -0.316228  -0.948683
  -0.948683   0.316228
 R factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -3.16228  -4.42719
   0.0      -0.632456
 
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> qr!(a)
-ERROR: InexactError: Int64(-3.1622776601683795)
+ERROR: InexactError: Int64(3.1622776601683795)
 Stacktrace:
 [...]
 ```
 """
-qr!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
-qr!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
-qr!(A::StridedMatrix) = qr!(A, Val(false))
+qr!(A::AbstractMatrix, ::NoPivot) = qrfactUnblocked!(A)
+qr!(A::AbstractMatrix, ::ColumnNorm) = qrfactPivotedUnblocked!(A)
+qr!(A::AbstractMatrix) = qr!(A, NoPivot())
+# TODO: Remove in Julia v2.0
+@deprecate qr!(A::AbstractMatrix, ::Val{true})  qr!(A, ColumnNorm())
+@deprecate qr!(A::AbstractMatrix, ::Val{false}) qr!(A, NoPivot())
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
 """
-    qr(A, pivot=Val(false); blocksize) -> F
+    qr(A, pivot = NoPivot(); blocksize) -> F
 
 Compute the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
 complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
@@ -310,7 +347,7 @@ A = Q R
 
 The returned object `F` stores the factorization in a packed format:
 
- - if `pivot == Val(true)` then `F` is a [`QRPivoted`](@ref) object,
+ - if `pivot == ColumnNorm()` then `F` is a [`QRPivoted`](@ref) object,
 
  - otherwise if the element type of `A` is a BLAS type ([`Float32`](@ref), [`Float64`](@ref),
    `ComplexF32` or `ComplexF64`), then `F` is a [`QRCompactWY`](@ref) object,
@@ -340,7 +377,7 @@ and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix w
 orthogonal matrix.
 
 The block size for QR decomposition can be specified by keyword argument
-`blocksize :: Integer` when `pivot == Val(false)` and `A isa StridedMatrix{<:BlasFloat}`.
+`blocksize :: Integer` when `pivot == NoPivot()` and `A isa StridedMatrix{<:BlasFloat}`.
 It is ignored when `blocksize > minimum(size(A))`.  See [`QRCompactWY`](@ref).
 
 !!! compat "Julia 1.4"
@@ -349,20 +386,20 @@ It is ignored when `blocksize > minimum(size(A))`.  See [`QRCompactWY`](@ref).
 # Examples
 ```jldoctest
 julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
-3×2 Array{Float64,2}:
+3×2 Matrix{Float64}:
  3.0  -6.0
  4.0  -8.0
  0.0   1.0
 
 julia> F = qr(A)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
 Q factor:
-3×3 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
  -0.6   0.0   0.8
  -0.8   0.0  -0.6
   0.0  -1.0   0.0
 R factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -5.0  10.0
   0.0  -1.0
 
@@ -378,10 +415,13 @@ true
 """
 function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     require_one_based_indexing(A)
-    AA = similar(A, _qreltype(T), size(A))
-    copyto!(AA, A)
+    AA = copy_similar(A, _qreltype(T))
     return qr!(AA, arg...; kwargs...)
 end
+# TODO: remove in Julia v2.0
+@deprecate qr(A::AbstractMatrix, ::Val{false}; kwargs...) qr(A, NoPivot(); kwargs...)
+@deprecate qr(A::AbstractMatrix, ::Val{true}; kwargs...)  qr(A, ColumnNorm(); kwargs...)
+
 qr(x::Number) = qr(fill(x,1,1))
 function qr(v::AbstractVector)
     require_one_based_indexing(v)
@@ -465,6 +505,8 @@ end
 Base.propertynames(F::QRPivoted, private::Bool=false) =
     (:R, :Q, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
+adjoint(F::Union{QR,QRPivoted,QRCompactWY}) = Adjoint(F)
+
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
 
 inv(Q::AbstractQ) = Q'
@@ -525,20 +567,49 @@ size(F::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(F, :factors))
 size(Q::AbstractQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
 size(Q::AbstractQ) = size(Q, 1), size(Q, 2)
 
-function getindex(Q::AbstractQ, i::Integer, j::Integer)
-    x = zeros(eltype(Q), size(Q, 1))
-    x[i] = 1
+copy(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
+getindex(Q::AbstractQ, inds...) = copy(Q)[inds...]
+getindex(Q::AbstractQ, ::Colon, ::Colon) = copy(Q)
+
+function getindex(Q::AbstractQ, ::Colon, j::Int)
     y = zeros(eltype(Q), size(Q, 2))
     y[j] = 1
-    return dot(x, lmul!(Q, y))
+    lmul!(Q, y)
+end
+
+getindex(Q::AbstractQ, i::Int, j::Int) = Q[:, j][i]
+
+# specialization avoiding the fallback using slow `getindex`
+function copyto!(dest::AbstractMatrix, src::AbstractQ)
+    copyto!(dest, I)
+    lmul!(src, dest)
+end
+# needed to resolve method ambiguities
+function copyto!(dest::PermutedDimsArray{T,2,perm}, src::AbstractQ) where {T,perm}
+    if perm == (1, 2)
+        copyto!(parent(dest), src)
+    else
+        @assert perm == (2, 1) # there are no other permutations of two indices
+        if T <: Real
+            copyto!(parent(dest), I)
+            lmul!(src', parent(dest))
+        else
+            # LAPACK does not offer inplace lmul!(transpose(Q), B) for complex Q
+            tmp = similar(parent(dest))
+            copyto!(tmp, I)
+            rmul!(tmp, src)
+            permutedims!(parent(dest), tmp, (2, 1))
+        end
+    end
+    return dest
 end
 
 ## Multiplication by Q
 ### QB
 lmul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
-    LAPACK.gemqrt!('L','N',A.factors,A.T,B)
+    LAPACK.gemqrt!('L', 'N', A.factors, A.T, B)
 lmul!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
-    LAPACK.ormqr!('L','N',A.factors,A.τ,B)
+    LAPACK.ormqr!('L', 'N', A.factors, A.τ, B)
 function lmul!(A::QRPackedQ, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     mA, nA = size(A.factors)
@@ -590,15 +661,22 @@ function (*)(A::AbstractQ, B::StridedMatrix)
     lmul!(Anew, Bnew)
 end
 
+function (*)(A::AbstractQ, b::Number)
+    TAb = promote_type(eltype(A), typeof(b))
+    dest = similar(A, TAb)
+    copyto!(dest, b*I)
+    lmul!(A, dest)
+end
+
 ### QcB
 lmul!(adjA::Adjoint{<:Any,<:QRCompactWYQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
-    (A = adjA.parent; LAPACK.gemqrt!('L','T',A.factors,A.T,B))
+    (A = adjA.parent; LAPACK.gemqrt!('L', 'T', A.factors, A.T, B))
 lmul!(adjA::Adjoint{<:Any,<:QRCompactWYQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
-    (A = adjA.parent; LAPACK.gemqrt!('L','C',A.factors,A.T,B))
+    (A = adjA.parent; LAPACK.gemqrt!('L', 'C', A.factors, A.T, B))
 lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
-    (A = adjA.parent; LAPACK.ormqr!('L','T',A.factors,A.τ,B))
+    (A = adjA.parent; LAPACK.ormqr!('L', 'T', A.factors, A.τ, B))
 lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
-    (A = adjA.parent; LAPACK.ormqr!('L','C',A.factors,A.τ,B))
+    (A = adjA.parent; LAPACK.ormqr!('L', 'C', A.factors, A.τ, B))
 function lmul!(adjA::Adjoint{<:Any,<:QRPackedQ}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     A = adjA.parent
@@ -649,7 +727,7 @@ end
 
 ### AQ
 rmul!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
-    LAPACK.gemqrt!('R','N', B.factors, B.T, A)
+    LAPACK.gemqrt!('R', 'N', B.factors, B.T, A)
 rmul!(A::StridedVecOrMat{T}, B::QRPackedQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
     LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
 function rmul!(A::StridedMatrix,Q::QRPackedQ)
@@ -683,15 +761,22 @@ function (*)(A::StridedMatrix, Q::AbstractQ)
     return rmul!(copy_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
 end
 
+function (*)(a::Number, B::AbstractQ)
+    TaB = promote_type(typeof(a), eltype(B))
+    dest = similar(B, TaB)
+    copyto!(dest, a*I)
+    rmul!(dest, B)
+end
+
 ### AQc
 rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasReal} =
-    (B = adjB.parent; LAPACK.gemqrt!('R','T',B.factors,B.T,A))
+    (B = adjB.parent; LAPACK.gemqrt!('R', 'T', B.factors, B.T, A))
 rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasComplex} =
-    (B = adjB.parent; LAPACK.gemqrt!('R','C',B.factors,B.T,A))
+    (B = adjB.parent; LAPACK.gemqrt!('R', 'C', B.factors, B.T, A))
 rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRPackedQ{T}}) where {T<:BlasReal} =
-    (B = adjB.parent; LAPACK.ormqr!('R','T',B.factors,B.τ,A))
+    (B = adjB.parent; LAPACK.ormqr!('R', 'T', B.factors, B.τ, A))
 rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRPackedQ{T}}) where {T<:BlasComplex} =
-    (B = adjB.parent; LAPACK.ormqr!('R','C',B.factors,B.τ,A))
+    (B = adjB.parent; LAPACK.ormqr!('R', 'C', B.factors, B.τ, A))
 function rmul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRPackedQ})
     Q = adjQ.parent
     mQ, nQ = size(Q.factors)
@@ -722,8 +807,7 @@ function *(A::StridedMatrix, adjB::Adjoint{<:Any,<:AbstractQ})
     TAB = promote_type(eltype(A),eltype(B))
     BB = convert(AbstractMatrix{TAB}, B)
     if size(A,2) == size(B.factors, 1)
-        AA = similar(A, TAB, size(A))
-        copyto!(AA, A)
+        AA = copy_similar(A, TAB)
         return rmul!(AA, adjoint(BB))
     elseif size(A,2) == size(B.factors,2)
         return rmul!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], adjoint(BB))
@@ -751,15 +835,33 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
 end
 
 ### mul!
-mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T} = lmul!(Q, copyto!(C, B))
+function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T}
+    require_one_based_indexing(C, B)
+    mB = size(B, 1)
+    mC = size(C, 1)
+    if mB < mC
+        inds = CartesianIndices(B)
+        copyto!(C, inds, B, inds)
+        C[CartesianIndices((mB+1:mC, axes(C, 2)))] .= zero(T)
+        return lmul!(Q, C)
+    else
+        return lmul!(Q, copyto!(C, B))
+    end
+end
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, Q::AbstractQ{T}) where {T} = rmul!(copyto!(C, A), Q)
 mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::StridedVecOrMat{T}) where {T} = lmul!(adjQ, copyto!(C, B))
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where {T} = rmul!(copyto!(C, A), adjQ)
 
-ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), b), 1:size(A, 2))); b)
-ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2))); B)
+function ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat}
+    m,n = size(A)
+    ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), b), 1:size(A, 2)))
+    return b
+end
+function ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat}
+    m,n = size(A)
+    ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2)))
+    return B
+end
 
 # Julia implementation similar to xgelsy
 function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
@@ -801,12 +903,12 @@ ldiv!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =
     vec(ldiv!(A,reshape(B,length(B),1)))
 ldiv!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     ldiv!(A, B, min(size(A)...)*eps(real(float(one(eltype(B))))))[1]
-function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
+function _wide_qr_ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
     lmul!(adjoint(A.Q), view(B, 1:m, :))
-    R = A.R
+    R = A.R # makes a copy, used as a buffer below
     @inbounds begin
         if n > m # minimum norm solution
             τ = zeros(T,m)
@@ -827,7 +929,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
                 end
             end
         end
-        LinearAlgebra.ldiv!(UpperTriangular(view(R, :, 1:minmn)), view(B, 1:minmn, :))
+        ldiv!(UpperTriangular(view(R, :, 1:minmn)), view(B, 1:minmn, :))
         if n > m # Apply elementary transformation to solution
             B[m + 1:mB,1:nB] .= zero(T)
             for j = 1:nB
@@ -847,7 +949,22 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     end
     return B
 end
-ldiv!(A::QR, B::StridedVector) = ldiv!(A, reshape(B, length(B), 1))[:]
+
+
+function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
+    m, n = size(A)
+    m < n && return _wide_qr_ldiv!(A, B)
+
+    lmul!(adjoint(A.Q), view(B, 1:m, :))
+    R = A.factors
+    ldiv!(UpperTriangular(view(R,1:n,:)), view(B, 1:n, :))
+    return B
+end
+function ldiv!(A::QR, B::StridedVector)
+    ldiv!(A, reshape(B, length(B), 1))
+    return B
+end
+
 function ldiv!(A::QRPivoted, b::StridedVector)
     ldiv!(QR(A.factors,A.τ), b)
     b[1:size(A.factors, 2)] = view(b, 1:size(A.factors, 2))[invperm(A.jpvt)]
@@ -859,28 +976,35 @@ function ldiv!(A::QRPivoted, B::StridedMatrix)
     B
 end
 
-# convenience methods
-## return only the solution of a least squares problem while avoiding promoting
-## vectors to matrices.
-_cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
-_cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+function _apply_permutation!(F::QRPivoted, B::AbstractVecOrMat)
+    # Apply permutation but only to the top part of the solution vector since
+    # it's padded with zeros for underdetermined problems
+    B[1:length(F.p), :] = B[F.p, :]
+    return B
+end
+_apply_permutation!(F::Factorization, B::AbstractVecOrMat) = B
 
-## append right hand side with zeros if necessary
-_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
-_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
-
-function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB}) where {TA,TB}
+function ldiv!(Fadj::Adjoint{<:Any,<:Union{QR,QRCompactWY,QRPivoted}}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
-    S = promote_type(TA,TB)
-    m, n = size(A)
-    m == size(B,1) || throw(DimensionMismatch("Both inputs should have the same number of rows"))
+    m, n = size(Fadj)
 
-    AA = Factorization{S}(A)
+    # We don't allow solutions overdetermined systems
+    if m > n
+        throw(DimensionMismatch("overdetermined systems are not supported"))
+    end
+    if n != size(B, 1)
+        throw(DimensionMismatch("inputs should have the same number of rows"))
+    end
+    F = parent(Fadj)
 
-    X = _zeros(S, B, n)
-    X[1:size(B, 1), :] = B
-    ldiv!(AA, X)
-    return _cut_B(X, 1:n)
+    B = _apply_permutation!(F, B)
+
+    # For underdetermined system, the triangular solve should only be applied to the top
+    # part of B that contains the rhs. For square problems, the view corresponds to B itself
+    ldiv!(LowerTriangular(adjoint(F.R)), view(B, 1:size(F.R, 2), :))
+    lmul!(F.Q, B)
+
+    return B
 end
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret the complex

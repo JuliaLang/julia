@@ -51,9 +51,21 @@ subtypes.
 """
 abstract type AbstractMenu end
 
+function getproperty(m::AbstractMenu, name::Symbol)
+    if name === :pagesize
+        return getfield(m, :pagesize)::Int
+    elseif name === :pageoffset
+        return getfield(m, :pageoffset)::Int
+    end
+    return getfield(m, name)
+end
+
+
 # TODO Julia2.0: get rid of parametric intermediate, making it just
 #   abstract type ConfiguredMenu <: AbstractMenu end
 # Or perhaps just make all menus ConfiguredMenus
+# Also consider making `cursor` a mandatory field in the Menu structs
+# instead of going via the RefValue in `request`.
 abstract type _ConfiguredMenu{C} <: AbstractMenu end
 const ConfiguredMenu = _ConfiguredMenu{<:AbstractConfig}
 
@@ -137,6 +149,9 @@ keypress(m::AbstractMenu, i::UInt32) = false
     numoptions(m::AbstractMenu) -> Int
 
 Return the number of options in menu `m`. Defaults to `length(options(m))`.
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 numoptions(m::AbstractMenu) = length(options(m))
 
@@ -152,26 +167,32 @@ selected(m::AbstractMenu) = m.selected
     request(m::AbstractMenu; cursor=1)
 
 Display the menu and enter interactive mode. `cursor` indicates the item
-number used for the initial cursor position.
+number used for the initial cursor position. `cursor` can be either an
+`Int` or a `RefValue{Int}`. The latter is useful for observation and
+control of the cursor position from the outside.
 
 Returns `selected(m)`.
+
+!!! compat "Julia 1.6"
+    The `cursor` argument requires Julia 1.6 or later.
 """
 request(m::AbstractMenu; kwargs...) = request(terminal, m; kwargs...)
 
-function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=1, suppress_output=false)
-    menu_header = header(m)
-    !suppress_output && !isempty(menu_header) && println(term.out_stream, menu_header)
+function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Union{Int, Base.RefValue{Int}}=1, suppress_output=false)
+    if cursor isa Int
+        cursor = Ref(cursor)
+    end
 
     state = nothing
     if !suppress_output
-        state = printmenu(term.out_stream, m, cursor, init=true)
+        state = printmenu(term.out_stream, m, cursor[], init=true)
     end
 
     raw_mode_enabled = try
         REPL.Terminals.raw!(term, true)
         true
     catch err
-        @warn("TerminalMenus: Unable to enter raw mode: $err")
+        suppress_output || @warn("TerminalMenus: Unable to enter raw mode: $err")
         false
     end
     # hide the cursor
@@ -183,22 +204,22 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
             c = readkey(term.in_stream)
 
             if c == Int(ARROW_UP)
-                cursor = move_up!(m, cursor, lastoption)
+                cursor[] = move_up!(m, cursor[], lastoption)
             elseif c == Int(ARROW_DOWN)
-                cursor = move_down!(m, cursor, lastoption)
+                cursor[] = move_down!(m, cursor[], lastoption)
             elseif c == Int(PAGE_UP)
-                cursor = page_up!(m, cursor, lastoption)
+                cursor[] = page_up!(m, cursor[], lastoption)
             elseif c == Int(PAGE_DOWN)
-                cursor = page_down!(m, cursor, lastoption)
+                cursor[] = page_down!(m, cursor[], lastoption)
             elseif c == Int(HOME_KEY)
-                cursor = 1
+                cursor[] = 1
                 m.pageoffset = 0
             elseif c == Int(END_KEY)
-                cursor = lastoption
+                cursor[] = lastoption
                 m.pageoffset = lastoption - m.pagesize
             elseif c == 13 # <enter>
                 # will break if pick returns true
-                pick(m, cursor) && break
+                pick(m, cursor[]) && break
             elseif c == UInt32('q')
                 cancel(m)
                 break
@@ -211,7 +232,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
             end
 
             if !suppress_output
-                state = printmenu(term.out_stream, m, cursor, oldstate=state)
+                state = printmenu(term.out_stream, m, cursor[], oldstate=state)
             end
         end
     finally # always disable raw mode
@@ -256,7 +277,8 @@ end
 function move_down!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
     if cursor < lastoption
         cursor += 1 # move selection down
-        if m.pagesize + m.pageoffset <= cursor < lastoption
+        pagepos = m.pagesize + m.pageoffset
+        if pagepos <= cursor && pagepos < lastoption
             m.pageoffset += 1 # scroll page down
         end
     elseif scroll_wrap(m)
@@ -284,8 +306,8 @@ end
 """
     printmenu(out, m::AbstractMenu, cursoridx::Int; init::Bool=false, oldstate=nothing) -> newstate
 
-Display the state of a menu. `init=true` causes `m.pageoffset` to be initialized to zero,
-and starts printing at the current cursor location; when `init` is false, the terminal will
+Display the state of a menu. `init=true` causes `m.pageoffset` to be initialized to start printing at
+or just above the current cursor location; when `init` is false, the terminal will
 preserve the current setting of `m.pageoffset` and overwrite the previous display.
 Returns `newstate`, which can be passed in as `oldstate` on the next call to allow accurate
 overwriting of the previous display.
@@ -296,16 +318,30 @@ overwriting of the previous display.
     On older versions of Julia, this was called `printMenu` and it lacked the `state` argument/return value.
     This older function is supported on all Julia 1.x versions but will be dropped in Julia 2.0.
 """
-function printmenu(out, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init::Bool=false)
+function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init::Bool=false)
     # TODO Julia 2.0?: get rid of `init` and just use `oldstate`
     buf = IOBuffer()
-    lastoption = numoptions(m)
+    lastoption = numoptions(m)::Int
     ncleared = oldstate === nothing ? m.pagesize-1 : oldstate
 
     if init
-        m.pageoffset = 0
+        # like clamp, except this takes the min if max < min
+        m.pageoffset = max(0, min(cursoridx - m.pagesize ÷ 2, lastoption - m.pagesize))
     else
-        print(buf, "\x1b[999D\x1b[$(ncleared)A")   # move left 999 spaces and up `ncleared` lines
+        print(buf, "\r")
+        if ncleared > 0
+            # Move up `ncleared` lines. However, moving up zero lines
+            # is interpreted as one line, so need to do this
+            # conditionally. (More specifically, the `0` value means
+            # to use the default, and for move up this is one.)
+            print(buf, "\x1b[$(ncleared)A")
+        end
+    end
+
+    nheaderlines = 0
+    for headerline in split(header(m), "\n", keepempty=false)
+        print(buf, "\x1b[2K", headerline, "\r\n")
+        nheaderlines += 1
     end
 
     firstline = m.pageoffset+1
@@ -315,20 +351,27 @@ function printmenu(out, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init:
         # clearline
         print(buf, "\x1b[2K")
 
-        if i == firstline && m.pageoffset > 0
-            print_arrow(buf, m, up_arrow(m))
-        elseif i == lastline && i != lastoption
-            print_arrow(buf, m, down_arrow(m))
+        upscrollable = i == firstline && m.pageoffset > 0
+        downscrollable = i == lastline && i != lastoption
+
+        if upscrollable && downscrollable
+            print(buf, updown_arrow(m)::Union{Char,String})
+        elseif upscrollable
+            print(buf, up_arrow(m)::Union{Char,String})
+        elseif downscrollable
+            print(buf, down_arrow(m)::Union{Char,String})
         else
-            printcursor(buf, m, i == cursoridx)
+            print(buf, ' ')
         end
 
+        printcursor(buf, m, i == cursoridx)
         writeline(buf, m, i, i == cursoridx)
 
-        i != lastline && print(buf, "\r\n")
+        (i != lastline) && print(buf, "\r\n")
     end
 
-    newstate = lastline-firstline  # final line doesn't have `\n`
+    newstate = nheaderlines + lastline - firstline  # final line doesn't have `\n`
+
     if newstate < ncleared && oldstate !== nothing
         # we printed fewer lines than last time. Erase the leftovers.
         for i = newstate+1:ncleared
@@ -362,10 +405,12 @@ down_arrow(c::AbstractConfig) = down_arrow(c.config)
 down_arrow(c::Config) = c.down_arrow
 down_arrow(::AbstractMenu) = CONFIG[:down_arrow]
 
-print_arrow(buf, ::ConfiguredMenu, c::Char) = print(buf, c, "  ")
-print_arrow(buf, ::AbstractMenu, c::Char) = print(buf, c)
+updown_arrow(m::ConfiguredMenu) = updown_arrow(m.config)
+updown_arrow(c::AbstractConfig) = updown_arrow(c.config)
+updown_arrow(c::Config) = c.updown_arrow
+updown_arrow(::AbstractMenu) = CONFIG[:updown_arrow]
 
-printcursor(buf, m::ConfiguredMenu, iscursor::Bool) = print(buf, ' ', iscursor ? cursor(m.config) : ' ', ' ')
+printcursor(buf, m::ConfiguredMenu, iscursor::Bool) = print(buf, iscursor ? cursor(m.config) : ' ', ' ')
 cursor(c::AbstractConfig) = cursor(c.config)
 cursor(c::Config) = c.cursor
-printcursor(buf, ::AbstractMenu, ::Bool) = print(buf, ' ')   # `writeLine` is expected to do the printing (get from CONFIG[:cursor])
+printcursor(buf, ::AbstractMenu, ::Bool) = nothing   # `writeLine` is expected to do the printing (get from CONFIG[:cursor])

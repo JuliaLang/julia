@@ -41,7 +41,7 @@ Any object that defines this function is iterable and can be used in the [many f
 It can also be used directly in a [`for`](@ref) loop since the syntax:
 
 ```julia
-for i in iter   # or  "for i = iter"
+for item in iter   # or  "for item = iter"
     # body
 end
 ```
@@ -51,7 +51,7 @@ is translated into:
 ```julia
 next = iterate(iter)
 while next !== nothing
-    (i, state) = next
+    (item, state) = next
     # body
     next = iterate(iter, state)
 end
@@ -71,8 +71,8 @@ With only [`iterate`](@ref) definition, the `Squares` type is already pretty pow
 We can iterate over all the elements:
 
 ```jldoctest squaretype
-julia> for i in Squares(7)
-           println(i)
+julia> for item in Squares(7)
+           println(item)
        end
 1
 4
@@ -117,7 +117,7 @@ of the right size instead of naively [`push!`](@ref)ing each element into a `Vec
 
 ```jldoctest squaretype
 julia> collect(Squares(4))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   1
   4
   9
@@ -151,7 +151,7 @@ In our `Squares` example, we would implement `Iterators.Reverse{Squares}` method
 julia> Base.iterate(rS::Iterators.Reverse{Squares}, state=rS.itr.count) = state < 1 ? nothing : (state*state, state-1)
 
 julia> collect(Iterators.reverse(Squares(4)))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  16
   9
   4
@@ -193,6 +193,10 @@ julia> Squares(23)[end]
 529
 ```
 
+For multi-dimensional `begin`/`end` indexing as in `a[3, begin, 7]`, for example,
+you should define `firstindex(a, dim)` and `lastindex(a, dim)`
+(which default to calling `first` and `last` on `axes(a, dim)`, respectively).
+
 Note, though, that the above *only* defines [`getindex`](@ref) with one integer index. Indexing with
 anything other than an `Int` will throw a [`MethodError`](@ref) saying that there was no matching method.
 In order to support indexing with ranges or vectors of `Int`s, separate methods must be written:
@@ -203,7 +207,7 @@ julia> Base.getindex(S::Squares, i::Number) = S[convert(Int, i)]
 julia> Base.getindex(S::Squares, I) = [S[i] for i in I]
 
 julia> Squares(10)[[3,4.,5]]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   9
  16
  25
@@ -234,7 +238,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A, dims::Dims)`                        | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
 | `similar(A, ::Type{S}, dims::Dims)`             | `Array{S}(undef, dims)`                | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
-| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return the `AbstractUnitRange` of valid indices                                       |
+| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return a tuple of `AbstractUnitRange{<:Integer}` of valid indices                    |
 | `similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
 | `similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 
@@ -289,19 +293,19 @@ julia> s = SquaresVector(4)
  16
 
 julia> s[s .> 8]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
   9
  16
 
 julia> s + s
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   2
   8
  18
  32
 
 julia> sin.(s)
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
   0.8414709848078965
  -0.7568024953079282
   0.4121184852417566
@@ -336,19 +340,19 @@ and so we can mutate the array:
 
 ```jldoctest squarevectype
 julia> A = SparseArray(Float64, 3, 3)
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  0.0  0.0  0.0
  0.0  0.0  0.0
  0.0  0.0  0.0
 
 julia> fill!(A, 2)
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  2.0  2.0  2.0
  2.0  2.0  2.0
  2.0  2.0  2.0
 
 julia> A[:] = 1:length(A); A
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  1.0  4.0  7.0
  2.0  5.0  8.0
  3.0  6.0  9.0
@@ -362,12 +366,12 @@ well:
 
 ```jldoctest squarevectype
 julia> A[1:2,:]
-2×3 SparseArray{Float64,2}:
+2×3 SparseArray{Float64, 2}:
  1.0  4.0  7.0
  2.0  5.0  8.0
 ```
 
-In this example it is accomplished by defining `Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims)`
+In this example it is accomplished by defining `Base.similar(A::SparseArray, ::Type{T}, dims::Dims) where T`
 to create the appropriate wrapped array. (Note that while `similar` supports 1- and 2-argument
 forms, in most case you only need to specialize the 3-argument form.) For this to work it's important
 that `SparseArray` is mutable (supports `setindex!`). Defining `similar`, `getindex` and
@@ -375,7 +379,7 @@ that `SparseArray` is mutable (supports `setindex!`). Defining `similar`, `getin
 
 ```jldoctest squarevectype
 julia> copy(A)
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  1.0  4.0  7.0
  2.0  5.0  8.0
  3.0  6.0  9.0
@@ -386,7 +390,7 @@ with each other and use most of the methods defined in Julia Base for `AbstractA
 
 ```jldoctest squarevectype
 julia> A[SquaresVector(3)]
-3-element SparseArray{Float64,1}:
+3-element SparseArray{Float64, 1}:
  1.0
  4.0
  9.0
@@ -403,12 +407,13 @@ perhaps range-types `Ind` of your own design. For more information, see
 
 ## [Strided Arrays](@id man-interface-strided-arrays)
 
-| Methods to implement                            |                                        | Brief description                                                                     |
+| Methods to implement                            |                                        | Brief description                                                                     |
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
-| `strides(A)`                             |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
-| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                     |
-| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
-| `stride(A, i::Int)`                             |     `strides(A)[i]`                                   | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
+| `strides(A)`                                    |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
+| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                                             |
+| `Base.elsize(::Type{<:A})`                      |                                        | Return the stride between consecutive elements in the array.                                       |
+| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                              |
+| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
 
 A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
 Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
@@ -474,7 +479,7 @@ they are iterable collections of their characters (see [Strings](@ref) for more)
 The next two steps (selecting the output array and implementation) are dependent upon
 determining a single answer for a given set of arguments. Broadcast must take all the varied
 types of its arguments and collapse them down to just one output array and one
-implementation. Broadcast calls this single answer a "style." Every broadcastable object
+implementation. Broadcast calls this single answer a "style". Every broadcastable object
 each has its own preferred style, and a promotion-like system is used to combine these
 styles into a single answer — the "destination style".
 
@@ -544,7 +549,7 @@ Base.showarg(io::IO, A::ArrayAndChar, toplevel) = print(io, typeof(A), " with ch
 
 ```
 
-You might want broadcasting to preserve the `char` "metadata." First we define
+You might want broadcasting to preserve the `char` "metadata". First we define
 
 ```jldoctest ArrayAndChar; output = false
 Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}()
@@ -575,17 +580,17 @@ find_aac (generic function with 6 methods)
 From these definitions, one obtains the following behavior:
 ```jldoctest ArrayAndChar
 julia> a = ArrayAndChar([1 2; 3 4], 'x')
-2×2 ArrayAndChar{Int64,2} with char 'x':
+2×2 ArrayAndChar{Int64, 2} with char 'x':
  1  2
  3  4
 
 julia> a .+ 1
-2×2 ArrayAndChar{Int64,2} with char 'x':
+2×2 ArrayAndChar{Int64, 2} with char 'x':
  2  3
  4  5
 
 julia> a .+ [5,10]
-2×2 ArrayAndChar{Int64,2} with char 'x':
+2×2 ArrayAndChar{Int64, 2} with char 'x':
   6   7
  13  14
 ```
@@ -701,7 +706,7 @@ array types that have fixed dimensionality requirements.
 BroadcastStyle(a::AbstractArrayStyle{Any}, ::DefaultArrayStyle) = a
 BroadcastStyle(a::AbstractArrayStyle{N}, ::DefaultArrayStyle{N}) where N = a
 BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
-    typeof(a)(_max(Val(M),Val(N)))
+    typeof(a)(Val(max(M, N)))
 ```
 
 You do not need to write binary `BroadcastStyle`

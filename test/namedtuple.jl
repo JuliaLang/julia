@@ -21,9 +21,20 @@
 @test (a=3,)[:a] == 3
 @test (x=4, y=5, z=6).y == 5
 @test (x=4, y=5, z=6).z == 6
+@test (x=4, y=5, z=6)[(:x, :y)] == (x=4, y=5)
+@test (x=4, y=5, z=6)[(:x,)] == (x=4,)
+@test (x=4, y=5, z=6)[[:x, :y]] == (x=4, y=5)
+@test (x=4, y=5, z=6)[[:x]] == (x=4,)
+@test (x=4, y=5, z=6)[()] == NamedTuple()
+@test NamedTuple()[()] == NamedTuple()
 @test_throws ErrorException (x=4, y=5, z=6).a
 @test_throws BoundsError (a=2,)[0]
 @test_throws BoundsError (a=2,)[2]
+@test_throws ErrorException (x=4, y=5, z=6)[(:a,)]
+@test_throws ErrorException (x=4, y=5, z=6)[(:x, :a)]
+@test_throws ErrorException (x=4, y=5, z=6)[[:a]]
+@test_throws ErrorException (x=4, y=5, z=6)[[:x, :a]]
+@test_throws ErrorException (x=4, y=5, z=6)[(:x, :x)]
 
 @test length(NamedTuple()) == 0
 @test length((a=1,)) == 1
@@ -69,6 +80,8 @@ end
     NamedTuple{(:a,), Tuple{Union{Int,Nothing}}}((2,))
 
 @test eltype((a=[1,2], b=[3,4])) === Vector{Int}
+@test eltype(NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
+    (missing, missing))) === Union{Real, Missing}
 
 @test Tuple((a=[1,2], b=[3,4])) == ([1,2], [3,4])
 @test Tuple(NamedTuple()) === ()
@@ -77,10 +90,19 @@ end
 @test Tuple((a=1, b=2, c=3)) == (1, 2, 3)
 
 @test isless((a=1,b=2), (a=1,b=3))
-@test_broken isless((a=1,), (a=1,b=2))
+@test_throws MethodError isless((a=1,), (a=1,b=2))
 @test !isless((a=1,b=2), (a=1,b=2))
 @test !isless((a=2,b=1), (a=1,b=2))
 @test_throws MethodError isless((a=1,), (x=2,))
+
+@test (a=1,b=2) < (a=1,b=3)
+@test_throws MethodError (a=1,) < (a=1,b=2)
+@test !((a=1,b=2) < (a=1,b=2))
+@test !((a=2,b=1) < (a=1,b=2))
+@test_throws MethodError (a=1,) < (x=2,)
+@test !((a=-0.0,) < (a=0.0,))
+@test ismissing((a=missing,) < (a=1,))
+@test ismissing((a=missing,) < (a=missing,))
 
 @test map(-, (x=1, y=2)) == (x=-1, y=-2)
 @test map(+, (x=1, y=2), (x=10, y=20)) == (x=11, y=22)
@@ -98,7 +120,7 @@ end
 let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Nothing}}}((1,Int32(2))),
                NamedTuple{(:a,:c),Tuple{Union{Int8,Nothing},Float64}}((nothing,1.0)))
     @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Nothing},Union{Int32,Nothing},Float64}}
-    @test repr(nt) == "NamedTuple{(:a, :b, :c),Tuple{Union{Nothing, Int8},Union{Nothing, Int32},Float64}}((nothing, 2, 1.0))"
+    @test repr(nt) == "NamedTuple{(:a, :b, :c), Tuple{Union{Nothing, Int8}, Union{Nothing, Int32}, Float64}}((nothing, 2, 1.0))"
 end
 
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)
@@ -181,6 +203,8 @@ let d = [:a=>1, :b=>2, :c=>3]   # use an array to preserve order
     y = (w=30, z=40)
     @test (;t..., y...) == (x=1, y=20, w=30, z=40)
     @test (;t..., y=0, y...) == (x=1, y=0, w=30, z=40)
+
+    @test NamedTuple(d) === (a=1, b=2, c=3)
 end
 
 # inference tests
@@ -190,7 +214,7 @@ namedtuple_get_a(x) = x.a
 @test Base.return_types(namedtuple_get_a, (typeof((b=1,a="")),)) == Any[String]
 
 namedtuple_fieldtype_a(x) = fieldtype(typeof(x), :a)
-@test Base.return_types(namedtuple_fieldtype_a, (NamedTuple,)) == Any[Type]
+@test Base.return_types(namedtuple_fieldtype_a, (NamedTuple,)) == Any[Union{Type, TypeVar}]
 @test Base.return_types(namedtuple_fieldtype_a, (typeof((b=1,a="")),)) == Any[Type{String}]
 namedtuple_fieldtype__(x, y) = fieldtype(typeof(x), y)
 @test Base.return_types(namedtuple_fieldtype__, (typeof((b=1,a="")),Symbol))[1] >: Union{Type{Int}, Type{String}}
@@ -329,3 +353,7 @@ let x = 1, y = 2
     @test Meta.lower(Main, Meta.parse("(; a.y, y)")) == Expr(:error, "field name \"y\" repeated in named tuple")
     @test (; a.y, x) === (y=2, x=1)
 end
+
+# issue #37926
+@test nextind((a=1,), 1) == nextind((1,), 1) == 2
+@test prevind((a=1,), 2) == prevind((1,), 2) == 1

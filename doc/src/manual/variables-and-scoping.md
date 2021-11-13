@@ -1,7 +1,7 @@
 # [Scope of Variables](@id scope-of-variables)
 
-The *scope* of a variable is the region of code within which a variable is visible. Variable scoping
-helps avoid variable naming conflicts. The concept is intuitive: two functions can both have
+The *scope* of a variable is the region of code within which a variable is accessible. Variable
+scoping helps avoid variable naming conflicts. The concept is intuitive: two functions can both have
 arguments called `x` without the two `x`'s referring to the same thing. Similarly, there are many
 other cases where different blocks of code can use the same name without referring to the same
 thing. The rules for when the same variable name does or doesn't refer to the same thing are called
@@ -12,20 +12,21 @@ eligible to be the scope of some set of variables. The scope of a variable canno
 set of source lines; instead, it will always line up with one of these blocks. There are two main
 types of scopes in Julia, *global scope* and *local scope*. The latter can be nested. There is also
 a distinction in Julia between constructs which introduce a "hard scope" and those which only
-introduce a "soft scope", which affects whether shadowing a global variable by the same name is
-allowed or not.
+introduce a "soft scope", which affects whether
+[shadowing](https://en.wikipedia.org/wiki/Variable_shadowing)
+a global variable by the same name is allowed or not.
 
 ### [Scope constructs](@id man-scope-table)
 
 The constructs introducing scope blocks are:
 
-Construct | Scope type | Allowed within
-----------|------------|---------------
-[`module`](@ref), [`baremodule`](@ref) | global | global
-[`struct`](@ref) | local (soft) | global
-[`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global or local
-[`macro`](@ref) | local (hard) | global
-[`let`](@ref), functions, comprehensions, generators | local (hard) | global or local
+| Construct | Scope type | Allowed within |
+|:----------|:-----------|:---------------|
+| [`module`](@ref), [`baremodule`](@ref) | global | global |
+| [`struct`](@ref) | local (soft) | global |
+| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global, local |
+| [`macro`](@ref) | local (hard) | global |
+| functions, [`do`](@ref) blocks, [`let`](@ref) blocks, comprehensions, generators | local (hard) | global, local |
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)
@@ -102,14 +103,37 @@ Note that the interactive prompt (aka REPL) is in the global scope of the module
 
 ## Local Scope
 
-A new local scope is introduced by most code blocks (see above [table](@ref man-scope-table) for a
-complete list). Some programming languages require explicitly declaring new variables before using
-them. Explicit declaration works in Julia too: in any local scope, writing `local x` declares a new
-local variable in that scope, regardless of whether there is already a variable named `x` in an
-outer scope or not. Declaring each new local like this is somewhat verbose and tedious, however, so
-Julia, like many other languages, considers assignment to a new variable in a local scope to
-implicitly declare that variable as a new local. Mostly this is pretty intuitive, but as with many
-things that behave intuitively, the details are more subtle than one might naïvely imagine.
+A new local scope is introduced by most code blocks (see above [table](@ref
+man-scope-table) for a complete list). If such a block is syntactically nested
+inside of another local scope, the scope it creates is nested inside of all the
+local scopes that it appears within, which are all ultimately nested inside of
+the global scope of the module in which the code is evaluated. Variables in
+outer scopes are visible from any scope they contain — meaning that they can be
+read and written in inner scopes — unless there is a local variable with the
+same name that "shadows" the outer variable of the same name. This is true even
+if the outer local is declared after (in the sense of textually below) an inner
+block. When we say that a variable "exists" in a given scope, this means that a
+variable by that name exists in any of the scopes that the current scope is
+nested inside of, including the current one.
+
+Some programming languages require explicitly declaring new variables before
+using them. Explicit declaration works in Julia too: in any local scope, writing
+`local x` declares a new local variable in that scope, regardless of whether
+there is already a variable named `x` in an outer scope or not. Declaring each
+new variable like this is somewhat verbose and tedious, however, so Julia, like
+many other languages, considers assignment to a variable name that doesn't
+already exist to implicitly declare that variable. If the current scope is
+global, the new variable is global; if the current scope is local, the new
+variable is local to the innermost local scope and will be visible inside of
+that scope but not outside of it. If you assign to an existing local, it
+_always_ updates that existing local: you can only shadow a local by explicitly
+declaring a new local in a nested scope with the `local` keyword. In particular,
+this applies to variables assigned in inner functions, which may surprise users
+coming from Python where assignment in an inner function creates a new local
+unless the variable is explicitly declared to be non-local.
+
+Mostly this is pretty intuitive, but as with many things that behave
+intuitively, the details are more subtle than one might naïvely imagine.
 
 When `x = <value>` occurs in a local scope, Julia applies the following rules to decide what the
 expression means based on where the assignment expression occurs and what `x` already refers to at
@@ -118,7 +142,7 @@ that location:
 1. **Existing local:** If `x` is *already a local variable*, then the existing local `x` is
    assigned;
 2. **Hard scope:** If `x` is *not already a local variable* and assignment occurs inside of any
-   hard scope construct (i.e. within a let block, function or macro body, comprehension, or
+   hard scope construct (i.e. within a `let` block, function or macro body, comprehension, or
    generator), a new local named `x` is created in the scope of the assignment;
 3. **Soft scope:** If `x` is *not already a local variable* and all of the scope constructs
    containing the assignment are soft scopes (loops, `try`/`catch` blocks, or `struct` blocks), the
@@ -182,9 +206,15 @@ Since the `x` in `greet` is local, the value (or lack thereof) of the global `x`
 calling `greet`. The hard scope rule doesn't care whether a global named `x` exists or not:
 assignment to `x` in a hard scope is local (unless `x` is declared global).
 
-The next clear cut situation we'll consider is when there is already a local variable named `x`, in
-which case `x = <value>` always assigns to this existing local `x`.  The function `sum_to` computes
-the sum of the numbers from one up to `n`:
+The next clear cut situation we'll consider is when there is already a local
+variable named `x`, in which case `x = <value>` always assigns to this existing
+local `x`. This is true whether the assignment occurs in the same local scope,
+an inner local scope in the same function body, or in the body of a function
+nested inside of another function, also known as a
+[closure](https://en.wikipedia.org/wiki/Closure_(computer_programming)).
+
+We'll use the `sum_to` function, which computes the sum of integers from one up
+to `n`, as an example:
 
 ```julia
 function sum_to(n)
@@ -225,11 +255,11 @@ variable `s`. We can also see that the update `s = s + i` in the `for` loop must
 through 10.
 
 Let's dig into the fact that the `for` loop body has its own scope for a second by writing a slightly
-more verbose variation which we'll call `sum_to′`, in which we save the sum `s + i` in a variable `t`
+more verbose variation which we'll call `sum_to_def`, in which we save the sum `s + i` in a variable `t`
 before updating `s`:
 
 ```jldoctest
-julia> function sum_to′(n)
+julia> function sum_to_def(n)
            s = 0 # new local
            for i = 1:n
                t = s + i # new local `t`
@@ -237,9 +267,9 @@ julia> function sum_to′(n)
            end
            return s, @isdefined(t)
        end
-sum_to′ (generic function with 1 method)
+sum_to_def (generic function with 1 method)
 
-julia> sum_to′(10)
+julia> sum_to_def(10)
 (55, false)
 ```
 
@@ -251,8 +281,46 @@ introduces a hard scope, the assignment causes `t` to become a new local variabl
 where it appears, i.e. inside of the loop body. Even if there were a global named `t`, it would make
 no difference—the hard scope rule isn't affected by anything in global scope.
 
+Note that the local scope of a for loop body is no different from the local
+scope of an inner function. This means that we could rewrite this example so
+that the loop body is implemented as a call to an inner helper function and it
+behaves the same way:
+
+```jldoctest
+julia> function sum_to_def_closure(n)
+           function loop_body(i)
+               t = s + i # new local `t`
+               s = t # assign same local `s` as below
+           end
+           s = 0 # new local
+           for i = 1:n
+               loop_body(i)
+           end
+           return s, @isdefined(t)
+       end
+sum_to_def_closure (generic function with 1 method)
+
+julia> sum_to_def_closure(10)
+(55, false)
+```
+
+This example illustrates a couple of key points:
+
+1. Inner function scopes are just like any other nested local scope. In
+   particular, if a variable is already a local outside of an inner function and
+   you assign to it in the inner function, the outer local variable is updated.
+
+2. It doesn't matter if the definition of an outer local happens below where it
+   is updated, the rule remains the same. The entire enclosing local scope is
+   parsed and its locals determined before inner local meanings are resolved.
+
+This design means that you can generally move code in or out of an inner
+function without changing its meaning, which facilitates a number of common
+idioms in the language using closures (see [do blocks](@ref
+Do-Block-Syntax-for-Function-Arguments)).
+
 Let's move onto some more ambiguous cases covered by the soft scope rule. We'll explore this by
-extracting the bodies of the `greet` and `sum_to′` functions into soft scope contexts. First, let's put the
+extracting the bodies of the `greet` and `sum_to_def` functions into soft scope contexts. First, let's put the
 body of `greet` in a `for` loop—which is soft, rather than hard—and evaluate it in the REPL:
 
 ```jldoctest
@@ -270,7 +338,7 @@ ERROR: UndefVarError: x not defined
 
 Since the global `x` is not defined when the `for` loop is evaluated, the first clause of the soft
 scope rule applies and `x` is created as local to the `for` loop and therefore global `x` remains
-undefined after the loop executes. Next, let's consider the body of `sum_to′` extracted into global
+undefined after the loop executes. Next, let's consider the body of `sum_to_def` extracted into global
 scope, fixing its argument to `n = 10`
 
 ```julia
@@ -457,8 +525,9 @@ file, if it behaves differently than it did in the REPL, then you will get a war
 
 ### Let Blocks
 
-Unlike assignments to local variables, `let` statements allocate new variable bindings each time
-they run. An assignment modifies an existing value location, and `let` creates new locations.
+`let` statements create a new *hard scope* block (see above) and introduce new variable
+bindings each time they run. Whereas assignments might reassign a new value to an existing value location,
+`let` always creates a new location.
 This difference is usually not important, and is only detectable in the case of variables that
 outlive their scope via closures. The `let` syntax accepts a comma-separated series of assignments
 and variable names:
@@ -516,7 +585,7 @@ julia> Fs[2]()
 ```
 
 Since the `begin` construct does not introduce a new scope, it can be useful to use a zero-argument
-`let` to just introduce a new scope block without creating any new bindings:
+`let` to just introduce a new scope block without creating any new bindings immediately:
 
 ```jldoctest
 julia> let
@@ -530,7 +599,16 @@ julia> let
 ```
 
 Since `let` introduces a new scope block, the inner local `x` is a different variable than the
-outer local `x`.
+outer local `x`. This particular example is equivalent to:
+
+```jldoctest
+julia> let x = 1
+           let x = 2
+           end
+           x
+       end
+1
+```
 
 ### Loops and Comprehensions
 
@@ -665,12 +743,12 @@ julia> pointer.([s1, s2], 1)
 However, for mutable objects the warning is printed as expected:
 ```jldoctest
 julia> const a = [1]
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  1
 
 julia> a = [1]
 WARNING: redefinition of constant a. This may fail, cause incorrect answers, or produce other errors.
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  1
 ```
 

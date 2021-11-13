@@ -1,0 +1,1 @@
+Dict{String,Any}("negpi" => Dict{String,Any}("value" => "-3.14","type" => "float"),"pospi" => Dict{String,Any}("value" => "3.14","type" => "float"),"pi" => Dict{String,Any}("value" => "3.14","type" => "float"),"zero-intpart" => Dict{String,Any}("value" => "0.123","type" => "float"))

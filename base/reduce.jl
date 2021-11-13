@@ -88,6 +88,8 @@ Create a mapping reducing function `rf′(acc, x) = rf(acc, f(x))`.
 struct MappingRF{F, T}
     f::F
     rf::T
+    MappingRF(f::F, rf::T) where {F,T} = new{F,T}(f, rf)
+    MappingRF(::Type{f}, rf::T) where {f,T} = new{Type{f},T}(f, rf)
 end
 
 @inline (op::MappingRF)(acc, x) = op.rf(acc, op.f(x))
@@ -166,6 +168,8 @@ Like [`reduce`](@ref), but with guaranteed left associativity. If provided, the 
 argument `init` will be used exactly once. In general, it will be necessary to provide
 `init` to work with empty collections.
 
+See also [`mapfoldl`](@ref), [`foldr`](@ref), [`accumulate`](@ref).
+
 # Examples
 ```jldoctest
 julia> foldl(=>, 1:4)
@@ -173,6 +177,9 @@ julia> foldl(=>, 1:4)
 
 julia> foldl(=>, 1:4; init=0)
 (((0 => 1) => 2) => 3) => 4
+
+julia> accumulate(=>, (1,2,3,4))
+(1, 1 => 2, (1 => 2) => 3, ((1 => 2) => 3) => 4)
 ```
 """
 foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
@@ -235,7 +242,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
         return mapreduce_first(f, op, a1)
-    elseif ifirst + blksize > ilast
+    elseif ilast - ifirst < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
@@ -247,7 +254,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
         return v
     else
         # pairwise portion
-        imid = (ifirst + ilast) >> 1
+        imid = ifirst + (ilast - ifirst) >> 1
         v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize)
         v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
         return op(v1, v2)
@@ -297,6 +304,9 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 # handling empty arrays
 _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
+_empty_reduce_error(@nospecialize(f), @nospecialize(T::Type)) = throw(ArgumentError("""
+    reducing with $f over an empty collection of element type $T is not allowed.
+    You may be able to prevent this error by supplying an `init` value to the reducer."""))
 
 """
     Base.reduce_empty(op, T)
@@ -304,23 +314,32 @@ _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection i
 The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref) or [`foldr`](@ref)
 with reduction `op` over an empty array with element type of `T`.
 
-If not defined, this will throw an `ArgumentError`.
+This should only be defined in unambiguous cases; for example,
+
+```julia
+Base.reduce_empty(::typeof(+), ::Type{T}) where T = zero(T)
+```
+
+is justified (the sum of zero elements is zero), whereas
+`reduce_empty(::typeof(max), ::Type{Any})` is not (the maximum value of an empty collection
+is generally ambiguous, and especially so when the element type is unknown).
+
+As an alternative, consider supplying an `init` value to the reducer.
 """
-reduce_empty(op, ::Type{T}) where {T} = _empty_reduce_error()
-reduce_empty(::typeof(+), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(+), ::Type{Union{}}) = _empty_reduce_error(+, Union{})
 reduce_empty(::typeof(+), ::Type{T}) where {T} = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
-reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error(*, Union{})
 reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
-reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error(add_sum, Union{})
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
-reduce_empty(::typeof(mul_prod), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(mul_prod), ::Type{Union{}}) = _empty_reduce_error(mul_prod, Union{})
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T} = reduce_empty(*, T)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
@@ -335,11 +354,8 @@ reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
 
 The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an empty array with element type
-of `T`.
-
-If not defined, this will throw an `ArgumentError`.
+of `T`. See [`Base.reduce_empty`](@ref) for more information.
 """
-mapreduce_empty(f, op, T) = _empty_reduce_error()
 mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
 mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
 mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
@@ -353,7 +369,10 @@ mapreduce_empty_iter(f, op, itr, ItrEltype) =
 
 @inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
 @inline reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
-reduce_empty_iter(op, itr, ::EltypeUnknown) = _empty_reduce_error()
+reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
+    reducing over an empty collection of unknown element type is not allowed.
+    You may be able to prevent this error by supplying an `init` value to the reducer."""))
+
 
 # handling of single-element iterators
 """
@@ -516,6 +535,8 @@ for non-empty collections.
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
 
+See also: [`reduce`](@ref), [`mapreduce`](@ref), [`count`](@ref), [`union`](@ref).
+
 # Examples
 ```jldoctest
 julia> sum(1:20)
@@ -527,7 +548,7 @@ julia> sum(1:20; init = 0.0)
 """
 sum(a; kw...) = sum(identity, a; kw...)
 sum(a::AbstractArray{Bool}; kw...) =
-    kw.data === NamedTuple() ? count(a) : reduce(add_sum, a; kw...)
+    isempty(kw) ? count(a) : reduce(add_sum, a; kw...)
 
 ## prod
 """
@@ -569,6 +590,8 @@ for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
+
+See also: [`reduce`](@ref), [`cumprod`](@ref), [`any`](@ref).
 
 # Examples
 ```jldoctest
@@ -720,7 +743,7 @@ julia> maximum([1,2,3])
 3
 
 julia> maximum(())
-ERROR: ArgumentError: reducing over an empty collection is not allowed
+ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
 Stacktrace:
 [...]
 
@@ -752,7 +775,7 @@ julia> minimum([1,2,3])
 1
 
 julia> minimum([])
-ERROR: ArgumentError: reducing over an empty collection is not allowed
+ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
 Stacktrace:
 [...]
 
@@ -762,22 +785,251 @@ Inf
 """
 minimum(a; kw...) = mapreduce(identity, min, a; kw...)
 
+## findmax, findmin, argmax & argmin
+
+"""
+    findmax(f, domain) -> (f(x), index)
+
+Returns a pair of a value in the codomain (outputs of `f`) and the index of
+the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is maximised.
+If there are multiple maximal points, then the first one will be returned.
+
+`domain` must be a non-empty iterable.
+
+Values are compared with `isless`.
+
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
+
+# Examples
+
+```jldoctest
+julia> findmax(identity, 5:9)
+(9, 5)
+
+julia> findmax(-, 1:10)
+(-1, 1)
+
+julia> findmax(first, [(1, :a), (3, :b), (3, :c)])
+(3, 2)
+
+julia> findmax(cos, 0:π/2:2π)
+(1.0, 1)
+```
+"""
+findmax(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmax, pairs(domain) )
+_rf_findmax((fm, im), (fx, ix)) = isless(fm, fx) ? (fx, ix) : (fm, im)
+
+"""
+    findmax(itr) -> (x, index)
+
+Return the maximal element of the collection `itr` and its index or key.
+If there are multiple maximal elements, then the first one will be returned.
+Values are compared with `isless`.
+
+See also: [`findmin`](@ref), [`argmax`](@ref), [`maximum`](@ref).
+
+# Examples
+
+```jldoctest
+julia> findmax([8, 0.1, -9, pi])
+(8.0, 1)
+
+julia> findmax([1, 7, 7, 6])
+(7, 2)
+
+julia> findmax([1, 7, 7, NaN])
+(NaN, 4)
+```
+"""
+findmax(itr) = _findmax(itr, :)
+_findmax(a, ::Colon) = findmax(identity, a)
+
+"""
+    findmin(f, domain) -> (f(x), index)
+
+Returns a pair of a value in the codomain (outputs of `f`) and the index of
+the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is minimised.
+If there are multiple minimal points, then the first one will be returned.
+
+`domain` must be a non-empty iterable.
+
+`NaN` is treated as less than all other values except `missing`.
+
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
+
+# Examples
+
+```jldoctest
+julia> findmin(identity, 5:9)
+(5, 1)
+
+julia> findmin(-, 1:10)
+(-10, 10)
+
+julia> findmin(first, [(2, :a), (2, :b), (3, :c)])
+(2, 1)
+
+julia> findmin(cos, 0:π/2:2π)
+(-1.0, 3)
+```
+
+"""
+findmin(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmin, pairs(domain) )
+_rf_findmin((fm, im), (fx, ix)) = isgreater(fm, fx) ? (fx, ix) : (fm, im)
+
+"""
+    findmin(itr) -> (x, index)
+
+Return the minimal element of the collection `itr` and its index or key.
+If there are multiple minimal elements, then the first one will be returned.
+`NaN` is treated as less than all other values except `missing`.
+
+See also: [`findmax`](@ref), [`argmin`](@ref), [`minimum`](@ref).
+
+# Examples
+
+```jldoctest
+julia> findmin([8, 0.1, -9, pi])
+(-9.0, 3)
+
+julia> findmin([1, 7, 7, 6])
+(1, 1)
+
+julia> findmin([1, 7, 7, NaN])
+(NaN, 4)
+```
+"""
+findmin(itr) = _findmin(itr, :)
+_findmin(a, ::Colon) = findmin(identity, a)
+
+"""
+    argmax(f, domain)
+
+Return a value `x` in the domain of `f` for which `f(x)` is maximised.
+If there are multiple maximal values for `f(x)` then the first one will be found.
+
+`domain` must be a non-empty iterable.
+
+Values are compared with `isless`.
+
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
+
+See also [`argmin`](@ref), [`findmax`](@ref).
+
+# Examples
+```jldoctest
+julia> argmax(abs, -10:5)
+-10
+
+julia> argmax(cos, 0:π/2:2π)
+0.0
+```
+"""
+argmax(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmax, domain)[2]
+
+"""
+    argmax(itr)
+
+Return the index or key of the maximal element in a collection.
+If there are multiple maximal elements, then the first one will be returned.
+
+The collection must not be empty.
+
+Values are compared with `isless`.
+
+See also: [`argmin`](@ref), [`findmax`](@ref).
+
+# Examples
+```jldoctest
+julia> argmax([8, 0.1, -9, pi])
+1
+
+julia> argmax([1, 7, 7, 6])
+2
+
+julia> argmax([1, 7, 7, NaN])
+4
+```
+"""
+argmax(itr) = findmax(itr)[2]
+
+"""
+    argmin(f, domain)
+
+Return a value `x` in the domain of `f` for which `f(x)` is minimised.
+If there are multiple minimal values for `f(x)` then the first one will be found.
+
+`domain` must be a non-empty iterable.
+
+`NaN` is treated as less than all other values except `missing`.
+
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
+
+See also [`argmax`](@ref), [`findmin`](@ref).
+
+# Examples
+```jldoctest
+julia> argmin(sign, -10:5)
+-10
+
+julia> argmin(x -> -x^3 + x^2 - 10, -5:5)
+5
+
+julia> argmin(acos, 0:0.1:1)
+1.0
+```
+"""
+argmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)[2]
+
+"""
+    argmin(itr)
+
+Return the index or key of the minimal element in a collection.
+If there are multiple minimal elements, then the first one will be returned.
+
+The collection must not be empty.
+
+`NaN` is treated as less than all other values except `missing`.
+
+See also: [`argmax`](@ref), [`findmin`](@ref).
+
+# Examples
+```jldoctest
+julia> argmin([8, 0.1, -9, pi])
+3
+
+julia> argmin([7, 1, 1, 6])
+2
+
+julia> argmin([7, 1, 1, NaN])
+4
+```
+"""
+argmin(itr) = findmin(itr)[2]
+
 ## all & any
 
 """
     any(itr) -> Bool
 
 Test whether any elements of a boolean collection are `true`, returning `true` as
-soon as the first `true` value in `itr` is encountered (short-circuiting).
+soon as the first `true` value in `itr` is encountered (short-circuiting). To
+short-circuit on `false`, use [`all`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), , [`||`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = [true,false,false,true]
-4-element Array{Bool,1}:
+4-element Vector{Bool}:
  1
  0
  0
@@ -803,16 +1055,19 @@ any(itr) = any(identity, itr)
     all(itr) -> Bool
 
 Test whether all elements of a boolean collection are `true`, returning `false` as
-soon as the first `false` value in `itr` is encountered (short-circuiting).
+soon as the first `false` value in `itr` is encountered (short-circuiting). To
+short-circuit on `true`, use [`any`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), , [`&&`](@ref), [`allunique`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = [true,false,false,true]
-4-element Array{Bool,1}:
+4-element Vector{Bool}:
  1
  0
  0
@@ -840,7 +1095,7 @@ all(itr) = all(identity, itr)
 
 Determine whether predicate `p` returns `true` for any elements of `itr`, returning
 `true` as soon as the first item in `itr` for which `p` returns `true` is encountered
-(short-circuiting).
+(short-circuiting). To short-circuit on `false`, use [`all`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `false` (or equivalently, if the input contains no `true` value), following
@@ -888,7 +1143,7 @@ end
 
 Determine whether predicate `p` returns `true` for all elements of `itr`, returning
 `false` as soon as the first item in `itr` for which `p` returns `false` is encountered
-(short-circuiting).
+(short-circuiting). To short-circuit on `true`, use [`any`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `true` (or equivalently, if the input contains no `false` value), following
@@ -938,12 +1193,17 @@ end
 _bool(f) = x->f(x)::Bool
 
 """
-    count(p, itr) -> Integer
-    count(itr) -> Integer
+    count([f=identity,] itr; init=0) -> Integer
 
-Count the number of elements in `itr` for which predicate `p` returns `true`.
-If `p` is omitted, counts the number of `true` elements in `itr` (which
-should be a collection of boolean values).
+Count the number of elements in `itr` for which the function `f` returns `true`.
+If `f` is omitted, count the number of `true` elements in `itr` (which
+should be a collection of boolean values). `init` optionally specifies the value
+to start counting from and therefore also determines the output type.
+
+!!! compat "Julia 1.6"
+    `init` keyword was added in Julia 1.6.
+
+See also: [`any`](@ref), [`sum`](@ref).
 
 # Examples
 ```jldoctest
@@ -952,24 +1212,35 @@ julia> count(i->(4<=i<=6), [2,3,4,5,6])
 
 julia> count([true, false, true, true])
 3
+
+julia> count(>(3), 1:7, init=0x03)
+0x07
 ```
 """
-count(itr) = count(identity, itr)
+count(itr; init=0) = count(identity, itr; init)
 
-count(f, itr) = mapreduce(_bool(f), add_sum, itr, init=0)
+count(f, itr; init=0) = _simple_count(f, itr, init)
 
-function count(::typeof(identity), x::Array{Bool})
-    n = 0
+function _simple_count(pred, itr, init::T) where {T}
+    n::T = init
+    for x in itr
+        n += pred(x)::Bool
+    end
+    return n
+end
+
+function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
+    n::T = init
     chunks = length(x) ÷ sizeof(UInt)
     mask = 0x0101010101010101 % UInt
     GC.@preserve x begin
         ptr = Ptr{UInt}(pointer(x))
         for i in 1:chunks
-            n += count_ones(unsafe_load(ptr, i) & mask)
+            n = (n + count_ones(unsafe_load(ptr, i) & mask)) % T
         end
     end
     for i in sizeof(UInt)*chunks+1:length(x)
-        n += x[i]
+        n = (n + x[i]) % T
     end
     return n
 end

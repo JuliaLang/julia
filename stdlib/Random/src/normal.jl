@@ -30,12 +30,30 @@ julia> randn(rng, ComplexF64)
 0.6133070881429037 - 0.6376291670853887im
 
 julia> randn(rng, ComplexF32, (2, 3))
-2×3 Array{Complex{Float32},2}:
+2×3 Matrix{ComplexF32}:
  -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im
   0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
 ```
 """
-@inline randn(rng::AbstractRNG=default_rng()) = _randn(rng, rand(rng, UInt52Raw()))
+@inline function randn(rng::AbstractRNG=default_rng())
+    #=
+    When defining
+    `@inline randn(rng::AbstractRNG=default_rng()) = _randn(rng, rand(rng, UInt52Raw()))`
+    the function call to `_randn` is currently not inlined, resulting in slightly worse
+    performance for scalar random normal numbers than repeating the code of `_randn`
+    inside the following function.
+    =#
+    @inbounds begin
+        r = rand(rng, UInt52())
+
+        # the following code is identical to the one in `_randn(rng::AbstractRNG, r::UInt64)`
+        rabs = Int64(r>>1) # One bit for the sign
+        idx = rabs & 0xFF
+        x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
+        rabs < ki[idx+1] && return x # 99.3% of the time we return here 1st try
+        return randn_unlikely(rng, idx, rabs, x)
+    end
+end
 
 @inline function _randn(rng::AbstractRNG, r::UInt64)
     @inbounds begin
@@ -91,7 +109,7 @@ julia> randexp(rng, Float32)
 2.4835055f0
 
 julia> randexp(rng, 3, 3)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.5167    1.30652   0.344435
  0.604436  2.78029   0.418516
  0.695867  0.693292  0.643644
@@ -133,7 +151,7 @@ Also see the [`rand`](@ref) function.
 julia> rng = MersenneTwister(1234);
 
 julia> randn!(rng, zeros(5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
   0.8673472019512456
  -0.9017438158568171
  -0.4944787535042339
@@ -154,7 +172,7 @@ Fill the array `A` with random numbers following the exponential distribution
 julia> rng = MersenneTwister(1234);
 
 julia> randexp!(rng, zeros(5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  2.4835053723904896
  1.516703605376473
  0.6044364871025417
@@ -190,6 +208,22 @@ for randfun in [:randn, :randexp]
                 rand!(rng, A, CloseOpen12())
                 for i in eachindex(A)
                     @inbounds A[i] = $_randfun(rng, reinterpret(UInt64, A[i]))
+                end
+            end
+            A
+        end
+
+        # optimization for Xoshiro, which randomizes natively Array{UInt64}
+        function $randfun!(rng::Union{Xoshiro, TaskLocalRNG}, A::Array{Float64})
+            if length(A) < 7
+                for i in eachindex(A)
+                    @inbounds A[i] = $randfun(rng, Float64)
+                end
+            else
+                GC.@preserve A rand!(rng, UnsafeView{UInt64}(pointer(A), length(A)))
+
+                for i in eachindex(A)
+                    @inbounds A[i] = $_randfun(rng, reinterpret(UInt64, A[i]) >>> 12)
                 end
             end
             A

@@ -4,13 +4,13 @@
 ##             and REPL
 
 have_color = nothing
-default_color_warn = :yellow
-default_color_error = :light_red
-default_color_info = :cyan
-default_color_debug = :blue
-default_color_input = :normal
-default_color_answer = :normal
-color_normal = text_colors[:normal]
+const default_color_warn = :yellow
+const default_color_error = :light_red
+const default_color_info = :cyan
+const default_color_debug = :blue
+const default_color_input = :normal
+const default_color_answer = :normal
+const color_normal = text_colors[:normal]
 
 function repl_color(key, default)
     env_str = get(ENV, key, "")
@@ -98,18 +98,19 @@ function display_error(io::IO, er, bt)
     showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
     println(io)
 end
-function display_error(io::IO, stack::Vector)
+function display_error(io::IO, stack::ExceptionStack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
     show_exception_stack(IOContext(io, :limit => true), bt)
+    println(io)
 end
-display_error(stack::Vector) = display_error(stderr, stack)
+display_error(stack::ExceptionStack) = display_error(stderr, stack)
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
     lasterr = nothing
-    have_color = get(stdout, :color, false)
+    have_color = get(stdout, :color, false)::Bool
     while true
         try
             if have_color
@@ -142,7 +143,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 @error "SYSTEM: display_error(errio, lasterr) caused an error"
             end
             errcount += 1
-            lasterr = catch_stack()
+            lasterr = current_exceptions()
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
@@ -251,8 +252,18 @@ function exec_options(opts)
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
+    interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
+    is_interactive::Bool |= interactiveinput
+
     # load ~/.julia/config/startup.jl file
-    startup && load_julia_startup()
+    if startup
+        try
+            load_julia_startup()
+        catch
+            invokelatest(display_error, current_exceptions())
+            !(repl || is_interactive::Bool) && exit(1)
+        end
+    end
 
     # process cmds list
     for (cmd, arg) in cmds
@@ -277,23 +288,20 @@ function exec_options(opts)
     # load file
     if arg_is_program
         # program
-        if !is_interactive
+        if !is_interactive::Bool
             exit_on_sigint(true)
         end
         try
             include(Main, PROGRAM_FILE)
         catch
-            invokelatest(display_error, catch_stack())
-            if !is_interactive
+            invokelatest(display_error, current_exceptions())
+            if !is_interactive::Bool
                 exit(1)
             end
         end
     end
-    repl |= is_interactive
-    if repl
-        interactiveinput = isa(stdin, TTY)
+    if repl || is_interactive::Bool
         if interactiveinput
-            global is_interactive = true
             banner = (opts.banner != 0) # --banner!=no
         else
             banner = (opts.banner == 1) # --banner=yes
@@ -371,13 +379,12 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            color_set || (global have_color = REPL.Terminals.hascolor(term))
             banner && Base.banner(term)
             if term.term_type == "dumb"
                 active_repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
             else
-                active_repl = REPL.LineEditREPL(term, have_color, true)
+                active_repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
                 active_repl.history_file = history_file
             end
             # Make sure any displays pushed in .julia/config/startup.jl ends up above the
@@ -465,12 +472,17 @@ Returns the result of the last evaluated expression of the input file. During in
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
+The argument `path` is normalized using [`normpath`](@ref) which will resolve
+relative path tokens such as `..` and convert `/` to the appropriate path separator.
 
 The optional first argument `mapexpr` can be used to transform the included code before
 it is evaluated: for each parsed expression `expr` in `path`, the `include` function
 actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 
 Use [`Base.include`](@ref) to evaluate a file into another module.
+
+!!! compat "Julia 1.5"
+    Julia 1.5 is required for passing the `mapexpr` argument.
 """
 MainInclude.include
 
@@ -484,10 +496,10 @@ function _start()
     try
         exec_options(JLOptions())
     catch
-        invokelatest(display_error, catch_stack())
+        invokelatest(display_error, current_exceptions())
         exit(1)
     end
-    if is_interactive && have_color === true
+    if is_interactive && get(stdout, :color, false)
         print(color_normal)
     end
 end

@@ -102,7 +102,7 @@ detail that may change in the future.
 julia> rng = MersenneTwister(1234);
 
 julia> uuid4(rng)
-UUID("196f2941-2d58-45ba-9f13-43a2532b2fa8")
+UUID("7a052949-c101-4ca3-9a7e-43a2532b2fa8")
 ```
 """
 function uuid4(rng::AbstractRNG=Random.RandomDevice())
@@ -126,10 +126,10 @@ as specified by RFC 4122.
 julia> rng = MersenneTwister(1234);
 
 julia> u4 = uuid4(rng)
-UUID("196f2941-2d58-45ba-9f13-43a2532b2fa8")
+UUID("7a052949-c101-4ca3-9a7e-43a2532b2fa8")
 
 julia> u5 = uuid5(u4, "julia")
-UUID("b37756f8-b0c0-54cd-a466-19b3d25683bc")
+UUID("086cc5bb-2461-57d8-8068-0aed7f5b5cd1")
 ```
 """
 function uuid5(ns::UUID, name::String)

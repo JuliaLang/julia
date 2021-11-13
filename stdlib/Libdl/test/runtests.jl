@@ -19,7 +19,7 @@ end
       if Base.DARWIN_FRAMEWORK
           return occursin(Regex("^$(Base.DARWIN_FRAMEWORK_NAME)(?:_debug)?\$"), basename(dl))
       else
-          return occursin(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
+          return occursin(Regex("^libjulia-internal(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
       end
     end) == 1 # look for something libjulia-like (but only one)
 
@@ -29,9 +29,8 @@ end
 
 cd(@__DIR__) do
 
-# Find the library directory by finding the path of libjulia (or libjulia-debug, as the case may be)
-# and then adding on /julia to that directory path to get the private library directory, if we need
-# to (where "need to" is defined as private_libdir/julia/libccalltest.dlext exists
+# Find the library directory by finding the path of libjulia-internal (or libjulia-internal-debug,
+# as the case may be) to get the private library directory
 private_libdir = if Base.DARWIN_FRAMEWORK
     if ccall(:jl_is_debugbuild, Cint, ()) != 0
         dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
@@ -39,13 +38,9 @@ private_libdir = if Base.DARWIN_FRAMEWORK
         joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
     end
 elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
-    dirname(abspath(Libdl.dlpath("libjulia-debug")))
+    dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
 else
-    dirname(abspath(Libdl.dlpath("libjulia")))
-end
-
-if isfile(joinpath(private_libdir,"julia","libccalltest."*Libdl.dlext))
-    private_libdir = joinpath(private_libdir, "julia")
+    dirname(abspath(Libdl.dlpath("libjulia-internal")))
 end
 
 @test !isempty(Libdl.find_library(["libccalltest"], [private_libdir]))
@@ -220,6 +215,56 @@ let dl = C_NULL
 
     @test Libdl.dlclose(dl)
     @test_skip !Libdl.dlclose(dl)   # Syscall doesn't fail on Win32
+end
+
+# test DL_LOAD_PATH handling and @executable_path expansion
+mktempdir() do dir
+    # Create a `libdcalltest` in a directory that is not on our load path
+    src_path = joinpath(private_libdir, "libccalltest.$(Libdl.dlext)")
+    dst_path = joinpath(dir, "libdcalltest.$(Libdl.dlext)")
+    cp(src_path, dst_path)
+
+    # Add an absurdly long entry to the load path to verify it doesn't lead to a buffer overflow
+    push!(Base.DL_LOAD_PATH, joinpath(dir, join(rand('a':'z', 10000))))
+
+    # Add the temporary directors to load path by absolute path
+    push!(Base.DL_LOAD_PATH, dir)
+
+    # Test that we can now open that file
+    Libdl.dlopen("libdcalltest") do dl
+        fptr = Libdl.dlsym(dl, :set_verbose)
+        @test fptr !== nothing
+        @test_throws ErrorException Libdl.dlsym(dl, :foo)
+
+        fptr = Libdl.dlsym_e(dl, :set_verbose)
+        @test fptr != C_NULL
+        fptr = Libdl.dlsym_e(dl, :foo)
+        @test fptr == C_NULL
+    end
+
+    # Skip these tests if the temporary directory is not on the same filesystem
+    # as the BINDIR, as in that case, a relative path will never work.
+    if Base.Filesystem.splitdrive(dir)[1] != Base.Filesystem.splitdrive(Sys.BINDIR)[1]
+        return
+    end
+
+    empty!(Base.DL_LOAD_PATH)
+    push!(Base.DL_LOAD_PATH, joinpath(dir, join(rand('a':'z', 10000))))
+
+    # Add this temporary directory to our load path, now using `@executable_path` to do so.
+    push!(Base.DL_LOAD_PATH, joinpath("@executable_path", relpath(dir, Sys.BINDIR)))
+
+    # Test that we can now open that file
+    Libdl.dlopen("libdcalltest") do dl
+        fptr = Libdl.dlsym(dl, :set_verbose)
+        @test fptr !== nothing
+        @test_throws ErrorException Libdl.dlsym(dl, :foo)
+
+        fptr = Libdl.dlsym_e(dl, :set_verbose)
+        @test fptr != C_NULL
+        fptr = Libdl.dlsym_e(dl, :foo)
+        @test fptr == C_NULL
+    end
 end
 
 end

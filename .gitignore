@@ -22,6 +22,7 @@
 *.so
 *.dylib
 *.dSYM
+*.h.gen
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
@@ -31,3 +32,10 @@
 /perf*
 .DS_Store
 .idea/*
+.vscode/*
+
+# Buildkite: cryptic plugin
+# Ignore the unencrypted repo_key
+repo_key
+# Ignore any agent keys (public or private) we have stored
+agent_key*
