@@ -214,24 +214,21 @@ function _foldl_impl(
     init,
     itr::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple{names}},
 ) where {names}
-    if @generated
-        ex = :init
-        for (i, n) in enumerate(names)
-            ex = :(op($ex, $(QuoteNode(n)) => vals[$i]))
+    if length(names) < 32
+        if @generated
+            ex = :init
+            for (i, n) in enumerate(names)
+                ex = :(op($ex, $(QuoteNode(n)) => vals[$i]))
+            end
+            quote
+                @inline
+                vals = Tuple(values(itr))
+                return $ex
+            end
         end
-        quote
-            @inline
-            vals = Tuple(values(itr))
-            $ex
-        end
-    else
-        return invoke(_foldl_impl, Tuple{Any,Any,Any}, op, init, itr)
     end
+    return invoke(_foldl_impl, Tuple{Any,Any,Any}, op, init, itr)
 end
-
-# dispatch to the generic method with longer named tuple
-_foldl_impl(op, init, itr::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple{<:Any,<:Any32}}) =
-    invoke(_foldl_impl, Tuple{Any,Any,Any}, op, init, itr)
 
 @pure function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize an bn
