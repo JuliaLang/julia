@@ -1633,7 +1633,7 @@ if Sys.isunix()
     end
 else
     @test_throws(
-        ErrorException("not supported on this platform"),
+        "mkfifo: Operation not supported",
         Libc.mkfifo(joinpath(pwd(), "dummy_path")),
     )
 end
