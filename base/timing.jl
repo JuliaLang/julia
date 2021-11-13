@@ -175,24 +175,30 @@ macro __tryfinally(ex, fin)
 end
 
 """
-    @time
+    @time expr
+    @time "description" expr
 
 A macro to execute an expression, printing the time it took to execute, the number of
 allocations, and the total number of bytes its execution caused to be allocated, before
 returning the value of the expression. Any time spent garbage collecting (gc) or
 compiling is shown as a percentage.
 
+Optionally provide a description string to print before the time report.
+
 In some cases the system will look inside the `@time` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
 compilation time will not be counted. To include this time you can run `@time @eval ...`.
 
-See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
+See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
 !!! note
     For more serious benchmarking, consider the `@btime` macro from the BenchmarkTools.jl
     package which among other things evaluates the function multiple times in order to
     reduce noise.
+
+!!! compat "Julia 1.8"
+    The option to add a description was introduced in Julia 1.8.
 
 ```julia-repl
 julia> x = rand(10,10);
@@ -209,9 +215,24 @@ julia> @time begin
        end
   0.301395 seconds (8 allocations: 336 bytes)
 2
+
+julia> @time "A one second sleep" sleep(1)
+A one second sleep ->  1.005750 seconds (5 allocations: 144 bytes)
+
+julia> for loop in 1:3
+            @time loop sleep(1)
+        end
+1 ->  1.006760 seconds (5 allocations: 144 bytes)
+2 ->  1.001263 seconds (5 allocations: 144 bytes)
+3 ->  1.003676 seconds (5 allocations: 144 bytes)
 ```
 """
 macro time(ex)
+    quote
+        @time nothing $(esc(ex))
+    end
+end
+macro time(msg, ex)
     quote
         Experimental.@force_compile
         local stats = gc_num()
@@ -222,17 +243,45 @@ macro time(ex)
             compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
         )
         local diff = GC_Diff(gc_num(), stats)
+        isnothing($(esc(msg))) || print($(esc(msg)), " ->")
         time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
         val
     end
 end
 
 """
-    @timev
+    @showtime expr
+
+Like `@time` but also prints the expression being evaluated for reference.
+
+!!! compat "Julia 1.8"
+    This macro was added in Julia 1.8.
+
+See also [`@time`](@ref).
+
+```julia-repl
+julia> @showtime sleep(1)
+sleep(1) ->  1.002164 seconds (4 allocations: 128 bytes)
+```
+"""
+macro showtime(ex)
+    quote
+        @time $(sprint(show_unquoted,ex)) $(esc(ex))
+    end
+end
+
+"""
+    @timev expr
+    @timev "description" expr
 
 This is a verbose version of the `@time` macro. It first prints the same information as
 `@time`, then any non-zero memory allocation counters, and then returns the value of the
 expression.
+
+Optionally provide a description string to print before the time report.
+
+!!! compat "Julia 1.8"
+    The option to add a description was introduced in Julia 1.8.
 
 See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
@@ -260,6 +309,11 @@ pool allocs:       1
 """
 macro timev(ex)
     quote
+        @timev nothing $(esc(ex))
+    end
+end
+macro timev(msg, ex)
+    quote
         Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
@@ -269,6 +323,7 @@ macro timev(ex)
             compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
         )
         local diff = GC_Diff(gc_num(), stats)
+        isnothing($(esc(msg))) || print($(esc(msg)), " ->")
         timev_print(elapsedtime, diff, compile_elapsedtime)
         val
     end

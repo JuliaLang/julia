@@ -1516,9 +1516,9 @@ end
 end
 
 # apply reflector from left
-@inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractMatrix)
+@inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
     require_one_based_indexing(x)
-    m, n = size(A)
+    m, n = size(A, 1), size(A, 2)
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
@@ -1594,6 +1594,8 @@ julia> logabsdet(B)
 ```
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
+
+logabsdet(a::Number) = log(abs(a)), sign(a)
 
 """
     logdet(M)

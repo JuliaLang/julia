@@ -270,13 +270,13 @@ function qrfactPivotedUnblocked!(A::AbstractMatrix)
 
         # Compute reflector of columns j
         x = view(A, j:m, j)
-        τj = LinearAlgebra.reflector!(x)
+        τj = reflector!(x)
         τ[j] = τj
 
         # Update trailing submatrix with reflector
-        LinearAlgebra.reflectorApply!(x, τj, view(A, j:m, j+1:n))
+        reflectorApply!(x, τj, view(A, j:m, j+1:n))
     end
-    return LinearAlgebra.QRPivoted{eltype(A), typeof(A)}(A, τ, piv)
+    return QRPivoted{eltype(A), typeof(A)}(A, τ, piv)
 end
 
 # LAPACK version

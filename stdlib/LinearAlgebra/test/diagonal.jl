@@ -884,6 +884,31 @@ end
     @test \(x, B) == /(B, x)
 end
 
+@testset "promotion" begin
+    for (v1, v2) in (([true], [1]), ([zeros(2,2)], [zeros(Int, 2,2)]))
+        T = promote_type(eltype(v1), eltype(v2))
+        V = promote_type(typeof(v1), typeof(v2))
+        d1 = Diagonal(v1)
+        d2 = Diagonal(v2)
+        v = [d1, d2]
+        @test (@inferred eltype(v)) == Diagonal{T, V}
+    end
+    # test for a type for which promote_type doesn't lead to a concrete eltype
+    struct MyArrayWrapper{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+       a :: A
+    end
+    Base.size(M::MyArrayWrapper) = size(M.a)
+    Base.axes(M::MyArrayWrapper) = axes(M.a)
+    Base.length(M::MyArrayWrapper) = length(M.a)
+    Base.getindex(M::MyArrayWrapper, i::Int...) = M.a[i...]
+    Base.setindex!(M::MyArrayWrapper, v, i::Int...) = M.a[i...] = v
+    d1 = Diagonal(MyArrayWrapper(1:3))
+    d2 = Diagonal(MyArrayWrapper(1.0:3.0))
+    c = [d1, d2]
+    @test c[1] == d1
+    @test c[2] == d2
+end
+
 @testset "zero and one" begin
     D1 = Diagonal(rand(3))
     @test D1 + zero(D1) == D1
@@ -900,6 +925,38 @@ end
     @test D3 * one(D3) == D3
     @test D3 * oneunit(D3) == D3
     @test oneunit(D3) isa typeof(D3)
+end
+
+@testset "AbstractTriangular" for (Tri, UTri) in ((UpperTriangular, UnitUpperTriangular), (LowerTriangular, UnitLowerTriangular))
+    A = randn(4, 4)
+    TriA = Tri(A)
+    UTriA = UTri(A)
+    D = Diagonal(1.0:4.0)
+    DM = Matrix(D)
+    DMF = factorize(DM)
+    outTri = similar(TriA)
+    out = similar(A)
+    # 2 args
+    for fun in (*, rmul!, rdiv!, /)
+        @test fun(copy(TriA), D)::Tri == fun(Matrix(TriA), D)
+        @test fun(copy(UTriA), D)::Tri == fun(Matrix(UTriA), D)
+    end
+    for fun in (*, lmul!, ldiv!, \)
+        @test fun(D, copy(TriA))::Tri == fun(D, Matrix(TriA))
+        @test fun(D, copy(UTriA))::Tri == fun(D, Matrix(UTriA))
+    end
+    # 3 args
+    @test outTri === ldiv!(outTri, D, TriA)::Tri == ldiv!(out, D, Matrix(TriA))
+    @test outTri === ldiv!(outTri, D, UTriA)::Tri == ldiv!(out, D, Matrix(UTriA))
+    @test outTri === mul!(outTri, D, TriA)::Tri == mul!(out, D, Matrix(TriA))
+    @test outTri === mul!(outTri, D, UTriA)::Tri == mul!(out, D, Matrix(UTriA))
+    @test outTri === mul!(outTri, TriA, D)::Tri == mul!(out, Matrix(TriA), D)
+    @test outTri === mul!(outTri, UTriA, D)::Tri == mul!(out, Matrix(UTriA), D)
+    # 5 args
+    @test outTri === mul!(outTri, D, TriA, 2, 1)::Tri == mul!(out, D, Matrix(TriA), 2, 1)
+    @test outTri === mul!(outTri, D, UTriA, 2, 1)::Tri == mul!(out, D, Matrix(UTriA), 2, 1)
+    @test outTri === mul!(outTri, TriA, D, 2, 1)::Tri == mul!(out, Matrix(TriA), D, 2, 1)
+    @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
 end
 
 end # module TestDiagonal

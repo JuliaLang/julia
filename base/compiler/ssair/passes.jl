@@ -75,28 +75,7 @@ function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector
 end
 
 function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use_idx::Int)
-    # Find the first dominating def
-    curblock = stmtblock = block_for_inst(ir.cfg, use_idx)
-    curblock = find_curblock(domtree, allblocks, curblock)
-    defblockdefs = let curblock = curblock
-        Int[stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock]
-    end
-    def = 0
-    if !isempty(defblockdefs)
-        if curblock != stmtblock
-            # Find the last def in this block
-            def = 0
-            for x in defblockdefs
-                def = max(def, x)
-            end
-        else
-            # Find the last def before our use
-            def = 0
-            for x in defblockdefs
-                def = max(def, x >= use_idx ? 0 : x)
-            end
-        end
-    end
+    def, stmtblock, curblock = find_def_for_use(ir, domtree, allblocks, du, use_idx)
     if def == 0
         if !haskey(phinodes, curblock)
             # If this happens, we need to search the predecessors for defs. Which
@@ -108,6 +87,25 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{I
     else
         return val_for_def_expr(ir, def, fidx)
     end
+end
+
+# find the first dominating def for the given use
+function find_def_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, use_idx::Int)
+    stmtblock = block_for_inst(ir.cfg, use_idx)
+    curblock = find_curblock(domtree, allblocks, stmtblock)
+    local def = 0
+    for idx in du.defs
+        if block_for_inst(ir.cfg, idx) == curblock
+            if curblock != stmtblock
+                # Find the last def in this block
+                def = max(def, idx)
+            else
+                # Find the last def before our use
+                def = max(def, idx >= use_idx ? 0 : idx)
+            end
+        end
+    end
+    return def, stmtblock, curblock
 end
 
 function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#),
@@ -545,7 +543,7 @@ function perform_lifting!(compact::IncrementalCompact,
 end
 
 """
-    getfield_elim_pass!(ir::IRCode) -> newir::IRCode
+    sroa_pass!(ir::IRCode) -> newir::IRCode
 
 `getfield` elimination pass, a.k.a. Scalar Replacements of Aggregates optimization.
 
@@ -562,17 +560,12 @@ its argument).
 In a case when all usages are fully eliminated, `struct` allocation may also be erased as
 a result of dead code elimination.
 """
-function getfield_elim_pass!(ir::IRCode)
+function sroa_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
-    insertions = Vector{Any}()
     defuses = IdDict{Int, Tuple{IdSet{Int}, SSADefUse}}()
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
-    revisit_worklist = Int[]
-    #ndone, nmax = 0, 200
     for ((_, idx), stmt) in compact
         isa(stmt, Expr) || continue
-        #ndone >= nmax && continue
-        #ndone += 1
         result_t = compact_exprtype(compact, SSAValue(idx))
         is_getfield = is_setfield = false
         field_ordering = :unspecified
@@ -796,7 +789,6 @@ function getfield_elim_pass!(ir::IRCode)
         typ = typ::DataType
         # Partition defuses by field
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
-        ok = true
         for use in defuse.uses
             stmt = ir[SSAValue(use)]
             # We may have discovered above that this use is dead
@@ -805,39 +797,52 @@ function getfield_elim_pass!(ir::IRCode)
             # the use in that case.
             stmt === nothing && continue
             field = try_compute_fieldidx_stmt(compact, stmt::Expr, typ)
-            field === nothing && (ok = false; break)
+            field === nothing && @goto skip
             push!(fielddefuse[field].uses, use)
         end
-        ok || continue
         for use in defuse.defs
             field = try_compute_fieldidx_stmt(compact, ir[SSAValue(use)]::Expr, typ)
-            field === nothing && (ok = false; break)
+            field === nothing && @goto skip
             push!(fielddefuse[field].defs, use)
         end
-        ok || continue
         # Check that the defexpr has defined values for all the fields
         # we're accessing. In the future, we may want to relax this,
         # but we should come up with semantics for well defined semantics
         # for uninitialized fields first.
-        for (fidx, du) in pairs(fielddefuse)
+        ndefuse = length(fielddefuse)
+        blocks = Vector{Tuple{#=phiblocks=# Vector{Int}, #=allblocks=# Vector{Int}}}(undef, ndefuse)
+        for fidx in 1:ndefuse
+            du = fielddefuse[fidx]
             isempty(du.uses) && continue
+            push!(du.defs, idx)
+            ldu = compute_live_ins(ir.cfg, du)
+            phiblocks = Int[]
+            if !isempty(ldu.live_in_bbs)
+                phiblocks = idf(ir.cfg, ldu, domtree)
+            end
+            allblocks = sort(vcat(phiblocks, ldu.def_bbs))
+            blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
-                ok = false
-                break
+                # even if the allocation contains an uninitialized field, we try an extra effort
+                # to check if all uses have any "solid" `setfield!` calls that define the field
+                # although we give up the cases below:
+                # `def == idx`: this field can only defined at the allocation site (thus this case will throw)
+                # `def == 0`: this field comes from `PhiNode`
+                # we may be able to traverse control flows of PhiNode values, but it sounds
+                # more complicated than beneficial under the current implementation
+                for use in du.uses
+                    def = find_def_for_use(ir, domtree, allblocks, du, use)[1]
+                    (def == 0 || def == idx) && @goto skip
+                end
             end
         end
-        ok || continue
         preserve_uses = IdDict{Int, Vector{Any}}((idx=>Any[] for idx in IdSet{Int}(defuse.ccall_preserve_uses)))
         # Everything accounted for. Go field by field and perform idf
-        for (fidx, du) in pairs(fielddefuse)
+        for fidx in 1:ndefuse
+            du = fielddefuse[fidx]
             ftyp = fieldtype(typ, fidx)
             if !isempty(du.uses)
-                push!(du.defs, idx)
-                ldu = compute_live_ins(ir.cfg, du)
-                phiblocks = Int[]
-                if !isempty(ldu.live_in_bbs)
-                    phiblocks = idf(ir.cfg, ldu, domtree)
-                end
+                phiblocks, allblocks = blocks[fidx]
                 phinodes = IdDict{Int, SSAValue}()
                 for b in phiblocks
                     n = PhiNode()
@@ -845,7 +850,6 @@ function getfield_elim_pass!(ir::IRCode)
                         NewInstruction(n, ftyp))
                 end
                 # Now go through all uses and rewrite them
-                allblocks = sort(vcat(phiblocks, ldu.def_bbs))
                 for stmt in du.uses
                     ir[SSAValue(stmt)] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
                 end
@@ -867,7 +871,6 @@ function getfield_elim_pass!(ir::IRCode)
                 stmt == idx && continue
                 ir[SSAValue(stmt)] = nothing
             end
-            continue
         end
         isempty(defuse.ccall_preserve_uses) && continue
         push!(intermediaries, idx)
@@ -882,6 +885,8 @@ function getfield_elim_pass!(ir::IRCode)
                 old_preserves..., new_preserves...)
             ir[SSAValue(use)] = new_expr
         end
+
+        @label skip
     end
 
     return ir
@@ -931,14 +936,14 @@ In addition to a simple DCE for unused values and allocations,
 this pass also nullifies `typeassert` calls that can be proved to be no-op,
 in order to allow LLVM to emit simpler code down the road.
 
-Note that this pass is more effective after SROA optimization (i.e. `getfield_elim_pass!`),
+Note that this pass is more effective after SROA optimization (i.e. `sroa_pass!`),
 since SROA often allows this pass to:
 - eliminate allocation of object whose field references are all replaced with scalar values, and
 - nullify `typeassert` call whose first operand has been replaced with a scalar value
   (, which may have introduced new type information that inference did not understand)
 
-Also note that currently this pass _needs_ to run after `getfield_elim_pass!`, because
-the `typeassert` elimination depends on the transformation within `getfield_elim_pass!`
+Also note that currently this pass _needs_ to run after `sroa_pass!`, because
+the `typeassert` elimination depends on the transformation within `sroa_pass!`
 which redirects references of `typeassert`ed value to the corresponding `PiNode`.
 """
 function adce_pass!(ir::IRCode)
@@ -998,8 +1003,6 @@ function adce_pass!(ir::IRCode)
 end
 
 function type_lift_pass!(ir::IRCode)
-    type_ctx_uses = Vector{Vector{Int}}[]
-    has_non_type_ctx_uses = IdSet{Int}()
     lifted_undef = IdDict{Int, Any}()
     insts = ir.stmts
     for idx in 1:length(insts)

@@ -9,7 +9,7 @@ Profile.init()
 let iobuf = IOBuffer()
     for fmt in (:tree, :flat)
         Test.@test_logs (:warn, r"^There were no samples collected\.") Profile.print(iobuf, format=fmt, C=true)
-        Test.@test_logs (:warn, r"^There were no samples collected\.") Profile.print(iobuf, [0x0000000000000001], Dict(0x0000000000000001 => [Base.StackTraces.UNKNOWN]), format=fmt, C=false)
+        Test.@test_logs (:warn, r"^There were no samples collected\.") Profile.print(iobuf, Profile.add_fake_meta([0x0000000000000001, 0x0000000000000000]), Dict(0x0000000000000001 => [Base.StackTraces.UNKNOWN]), format=fmt, C=false)
     end
 end
 
@@ -75,8 +75,8 @@ end
 end
 
 @testset "Profile.fetch() with and without meta" begin
-    data_without = Profile.fetch()
-    data_with = Profile.fetch(include_meta = true)
+    data_without = Profile.fetch(include_meta = false)
+    data_with = Profile.fetch()
     @test data_without[1] == data_with[1]
     @test data_without[end] == data_with[end]
     nblocks = count(Base.Fix1(Profile.is_block_end, data_with), eachindex(data_with))

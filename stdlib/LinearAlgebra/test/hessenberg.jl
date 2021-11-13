@@ -90,14 +90,12 @@ let n = 10
                 @testset "Multiplication/division" begin
                     for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
                              UpperTriangular(A), UnitUpperTriangular(A))
-                        @test H*x == Array(H)*x broken = eltype(H) <: Furlong && x isa Bidiagonal
-                        @test x*H == x*Array(H) broken = eltype(H) <: Furlong && x isa Bidiagonal
-                        @test H/x == Array(H)/x broken = eltype(H) <: Furlong && x isa Union{Bidiagonal, Diagonal, UpperTriangular}
-                        @test x\H == x\Array(H) broken = eltype(H) <: Furlong && x isa Union{Bidiagonal, Diagonal, UpperTriangular}
-                        @test H*x isa UpperHessenberg broken = eltype(H) <: Furlong && x isa Bidiagonal
-                        @test x*H isa UpperHessenberg broken = eltype(H) <: Furlong && x isa Bidiagonal
-                        @test H/x isa UpperHessenberg broken = eltype(H) <: Furlong && x isa Union{Bidiagonal, Diagonal}
-                        @test x\H isa UpperHessenberg broken = eltype(H) <: Furlong && x isa Union{Bidiagonal, Diagonal}
+                        @test (H*x)::UpperHessenberg == Array(H)*x broken = eltype(H) <: Furlong && x isa Bidiagonal
+                        @test (x*H)::UpperHessenberg == x*Array(H) broken = eltype(H) <: Furlong && x isa Bidiagonal
+                        @test H/x == Array(H)/x broken = eltype(H) <: Furlong && x isa Union{Bidiagonal, UpperTriangular}
+                        @test x\H == x\Array(H) broken = eltype(H) <: Furlong && x isa Union{Bidiagonal, UpperTriangular}
+                        @test H/x isa UpperHessenberg broken = eltype(H) <: Furlong && x isa Bidiagonal
+                        @test x\H isa UpperHessenberg broken = eltype(H) <: Furlong && x isa Bidiagonal
                     end
                     x = Bidiagonal(d, dl, :L)
                     @test H*x == Array(H)*x

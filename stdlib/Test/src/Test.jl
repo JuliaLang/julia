@@ -180,13 +180,32 @@ struct Error <: Result
             bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(Base.show_exception_stack, bt; context=stdout)
+            bt_str = try # try the latest world for this, since we might have eval'd new code for show
+                    Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
+                catch ex
+                    "#=ERROR showing exception stack=# " *
+                        try
+                            sprint(Base.showerror, ex, catch_backtrace(); context=stdout)
+                        catch
+                            "of type " * string(typeof(ex))
+                        end
+                end
         else
             bt_str = ""
         end
+        value = try # try the latest world for this, since we might have eval'd new code for show
+                Base.invokelatest(sprint, show, value, context = :limit => true)
+            catch ex
+                "#=ERROR showing error of type " * string(typeof(value)) * "=# " *
+                    try
+                        sprint(Base.showerror, ex, catch_backtrace(); context=stdout)
+                    catch
+                        "of type " * string(typeof(ex))
+                    end
+            end
         return new(test_type,
             string(orig_expr),
-            sprint(show, value, context = :limit => true),
+            value,
             bt_str,
             source)
     end
@@ -971,7 +990,7 @@ record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 # but do not terminate. Print a backtrace.
 function record(ts::DefaultTestSet, t::Union{Fail, Error})
     if TESTSET_PRINT_ENABLE[]
-        printstyled(ts.description, ": ", color=:white)
+        print(ts.description, ": ")
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
@@ -1030,7 +1049,7 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
     pad = total == 0 ? "" : " "
-    printstyled(rpad("Test Summary:", align, " "), " |", pad; bold=true, color=:white)
+    printstyled(rpad("Test Summary:", align, " "), " |", pad; bold=true)
     if pass_width > 0
         printstyled(lpad("Pass", pass_width, " "), "  "; bold=true, color=:green)
     end

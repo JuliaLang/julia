@@ -326,7 +326,7 @@ function show_completions(s::PromptState, completions::Vector{String})
         for col = 0:num_cols
             idx = row + col*entries_per_col
             if idx <= length(completions)
-                cmove_col(terminal(s), (colmax+2)*col)
+                cmove_col(terminal(s), (colmax+2)*col+1)
                 print(terminal(s), completions[idx])
             end
         end
