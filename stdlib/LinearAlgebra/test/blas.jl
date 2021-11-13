@@ -67,6 +67,16 @@ Random.seed!(100)
                 @test BLAS.dotu(z1,z2) ≈ sum(z1.*z2)
                 @test_throws DimensionMismatch BLAS.dotc(z1,rand(elty, n + 1))
                 @test_throws DimensionMismatch BLAS.dotu(z1,rand(elty, n + 1))
+
+            end
+        end
+        @testset "Issue #40963: OpenBLAS, cblas_zdotc_sub" begin
+            if elty <: Complex
+                arrSzie = 10001
+                z1 = ones(elty, arrSzie);
+                z2 = ones(elty, arrSzie);
+                @test BLAS.dotc(z1,z2) ≈ sum(conj(z1).*z2)
+                @test BLAS.dotu(z1,z2) ≈ sum(z1.*z2)
             end
         end
         @testset "iamax" begin

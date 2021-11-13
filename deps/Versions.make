@@ -101,7 +101,7 @@ SUITESPARSE_JLL_NAME := SuiteSparse
 # unwind
 UNWIND_VER := 1.3.2
 UNWIND_JLL_NAME := LibUnwind
-UNWIND_JLL_VER  := 1.3.2+4
+UNWIND_JLL_VER  := 1.3.2+6
 
 # zlib
 ZLIB_VER := 1.2.11

@@ -91,13 +91,15 @@ using Random
 end
 
 @testset "tempname with parent" begin
-    t = tempname()
-    @test dirname(t) == tempdir()
-    mktempdir() do d
-        t = tempname(d)
-        @test dirname(t) == d
+    withenv("TMPDIR" => nothing) do
+        t = tempname()
+        @test dirname(t) == tempdir()
+        mktempdir() do d
+            t = tempname(d)
+            @test dirname(t) == d
+        end
+        @test_throws ArgumentError tempname(randstring())
     end
-    @test_throws ArgumentError tempname(randstring())
 end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
@@ -516,7 +518,10 @@ end
 
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
-    if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
+    uid = Libc.geteuid()
+    @test stat(file).uid == uid
+    @test uid == Libc.getuid()
+    if uid == 0 # root user
         chown(file, -2, -1)  # Change the file owner to nobody
         @test stat(file).uid != 0
         chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
