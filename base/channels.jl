@@ -401,9 +401,9 @@ Take an `item` from channel `c` if it is open and return `Some(item)`. Return
 When this function is called on an empty channel, it blocks until an item is
 available or the channel is closed.
 """
-function maybetake!(c::Channel)
+function maybetake!(c::Channel{T}) where T
     try
-        return Some(take!(c))
+        return Some{T}(take!(c))
     catch e
         if isa(e, InvalidStateException) && e.state === :closed
             return nothing
