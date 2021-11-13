@@ -139,9 +139,6 @@ function TCPServer(; delay=true)
     return tcp
 end
 
-isreadable(io::TCPSocket) = isopen(io) || bytesavailable(io) > 0
-iswritable(io::TCPSocket) = isopen(io) && io.status != StatusClosing
-
 """
     accept(server[, client])
 
@@ -367,7 +364,7 @@ function recvfrom(sock::UDPSocket)
     end
 end
 
-alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), size) # size is always 64k from libuv
+alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), Int(size)) # size is always 64k from libuv
 
 function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::Ptr{Cvoid}, flags::Cuint)
     sock = @handle_as handle UDPSocket
@@ -572,14 +569,17 @@ end
     nagle(socket::Union{TCPServer, TCPSocket}, enable::Bool)
 
 Enables or disables Nagle's algorithm on a given TCP server or socket.
+
+!!! compat "Julia 1.3"
+    This function requires Julia 1.3 or later.
 """
 function nagle(sock::Union{TCPServer, TCPSocket}, enable::Bool)
     # disable or enable Nagle's algorithm on all OSes
-    Sockets.iolock_begin()
-    Sockets.check_open(sock)
+    iolock_begin()
+    check_open(sock)
     err = ccall(:uv_tcp_nodelay, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(!enable))
     # TODO: check err
-    Sockets.iolock_end()
+    iolock_end()
     return err
 end
 
@@ -589,15 +589,15 @@ end
 On Linux systems, the TCP_QUICKACK is disabled or enabled on `socket`.
 """
 function quickack(sock::Union{TCPServer, TCPSocket}, enable::Bool)
-    Sockets.iolock_begin()
-    Sockets.check_open(sock)
+    iolock_begin()
+    check_open(sock)
     @static if Sys.islinux()
         # tcp_quickack is a linux only option
         if ccall(:jl_tcp_quickack, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(enable)) < 0
             @warn "Networking unoptimized ( Error enabling TCP_QUICKACK : $(Libc.strerror(Libc.errno())) )" maxlog=1
         end
     end
-    Sockets.iolock_end()
+    iolock_end()
     nothing
 end
 
@@ -803,6 +803,7 @@ socket is connected to. Valid only for connected TCP sockets.
 getpeername(sock::TCPSocket) = _sockname(sock, false)
 
 function _sockname(sock, self=true)
+    sock.status == StatusInit || check_open(sock)
     rport = Ref{Cushort}(0)
     raddress = zeros(UInt8, 16)
     rfamily = Ref{Cuint}(0)

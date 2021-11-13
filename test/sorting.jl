@@ -105,7 +105,7 @@ end
         @test searchsorted(fill(R(1), 15), T(1), 6, 10, Forward) == 6:10
     end
 
-    for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
+    for (rg,I) in Any[(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
         rg_r = reverse(rg)
         rgv, rgv_r = [rg;], [rg_r;]
         for i = I
@@ -142,9 +142,29 @@ end
         @test searchsortedlast(500:1.0:600, 1.0e20) == 101
     end
 
+    @testset "issue 10966" begin
+        for R in numTypes, T in numTypes
+            @test searchsortedfirst(R(2):R(2), T(0)) == 1
+            @test searchsortedfirst(R(2):R(2), T(2)) == 1
+            @test searchsortedfirst(R(2):R(2), T(3)) == 2
+            @test searchsortedfirst(R(1):1//2:R(5), T(0)) == 1
+            @test searchsortedfirst(R(1):1//2:R(5), T(2)) == 3
+            @test searchsortedfirst(R(1):1//2:R(5), T(6)) == 10
+            @test searchsortedlast(R(2):R(2), T(0)) == 0
+            @test searchsortedlast(R(2):R(2), T(2)) == 1
+            @test searchsortedlast(R(2):R(2), T(3)) == 1
+            @test searchsortedlast(R(1):1//2:R(5), T(0)) == 0
+            @test searchsortedlast(R(1):1//2:R(5), T(2)) == 3
+            @test searchsortedlast(R(1):1//2:R(5), T(6)) == 9
+            @test searchsorted(R(2):R(2), T(0)) === 1:0
+            @test searchsorted(R(2):R(2), T(2)) == 1:1
+            @test searchsorted(R(2):R(2), T(3)) === 2:1
+        end
+    end
+
     @testset "issue 32568" begin
         for R in numTypes, T in numTypes
-            for arr in [R[1:5;], R(1):R(5), R(1):2:R(5)]
+            for arr in Any[R[1:5;], R(1):R(5), R(1):2:R(5)]
                 @test eltype(searchsorted(arr, T(2))) == keytype(arr)
                 @test eltype(searchsorted(arr, T(2), big(1), big(4), Forward)) == keytype(arr)
                 @test searchsortedfirst(arr, T(2)) isa keytype(arr)
@@ -164,29 +184,45 @@ end
         @test searchsorted([1,2], Inf) === 3:2
         @test searchsorted(1:2,   Inf) === 3:2
 
-        for coll in [
+        for coll in Any[
                 Base.OneTo(10),
                 1:2,
+                0x01:0x02,
                 -4:6,
                 5:2:10,
                 [1,2],
                 1.0:4,
                 [10.0,20.0],
             ]
-            for huge in [Inf, 1e300]
+            for huge in Any[Inf, 1e300, typemax(Int64), typemax(UInt64)]
                 @test searchsortedfirst(coll, huge) === lastindex(coll) + 1
-                @test searchsortedfirst(coll, -huge)=== firstindex(coll)
                 @test searchsortedlast(coll, huge)  === lastindex(coll)
-                @test searchsortedlast(coll, -huge) === firstindex(coll) - 1
                 @test searchsorted(coll, huge)      === lastindex(coll)+1 : lastindex(coll)
-                @test searchsorted(coll, -huge)     === firstindex(coll) : firstindex(coll) - 1
+                if !(eltype(coll) <: Unsigned)
+                    @test searchsortedfirst(reverse(coll), huge, rev=true) === firstindex(coll)
+                    @test searchsortedlast(reverse(coll), huge, rev=true) === firstindex(coll) - 1
+                    @test searchsorted(reverse(coll), huge, rev=true) === firstindex(coll):firstindex(coll) - 1
+                end
 
-                @test searchsortedfirst(reverse(coll), huge, rev=true) === firstindex(coll)
-                @test searchsortedfirst(reverse(coll), -huge, rev=true) === lastindex(coll) + 1
-                @test searchsortedlast(reverse(coll), huge, rev=true) === firstindex(coll) - 1
-                @test searchsortedlast(reverse(coll), -huge, rev=true) === lastindex(coll)
-                @test searchsorted(reverse(coll), huge, rev=true) === firstindex(coll):firstindex(coll) - 1
-                @test searchsorted(reverse(coll), -huge, rev=true) === lastindex(coll)+1:lastindex(coll)
+                if !(huge isa Unsigned)
+                    @test searchsortedfirst(coll, -huge)=== firstindex(coll)
+                    @test searchsortedlast(coll, -huge) === firstindex(coll) - 1
+                    @test searchsorted(coll, -huge)     === firstindex(coll) : firstindex(coll) - 1
+                    if !(eltype(coll) <: Unsigned)
+                        @test searchsortedfirst(reverse(coll), -huge, rev=true) === lastindex(coll) + 1
+                        @test searchsortedlast(reverse(coll), -huge, rev=true) === lastindex(coll)
+                        @test searchsorted(reverse(coll), -huge, rev=true) === lastindex(coll)+1:lastindex(coll)
+                    end
+                end
+            end
+        end
+
+        @test_broken length(reverse(0x1:0x2)) == 2
+        @testset "issue #34408" begin
+            r = 1f8-10:1f8
+            # collect(r) = Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]
+            for i in r
+                @test_broken searchsorted(collect(r), i) == searchsorted(r, i)
             end
         end
     end
@@ -289,27 +325,95 @@ Base.step(r::ConstantRange) = 0
     end
 
     @testset "unstable algorithms" begin
-        for alg in [QuickSort, PartialQuickSort(length(a))]
-            b = sort(a, alg=alg)
-            @test issorted(b)
-            b = sort(a, alg=alg, rev=true)
-            @test issorted(b, rev=true)
-            b = sort(a, alg=alg, by=x->1/x)
-            @test issorted(b, by=x->1/x)
+        b = sort(a, alg=QuickSort)
+        @test issorted(b)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
+        b = sort(a, alg=QuickSort, rev=true)
+        @test issorted(b, rev=true)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
+        b = sort(a, alg=QuickSort, by=x->1/x)
+        @test issorted(b, by=x->1/x)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
+    end
+end
+@testset "insorted" begin
+    numTypes = [Int8,  Int16,  Int32,  Int64,  Int128,
+                UInt8, UInt16, UInt32, UInt64, UInt128,
+                Float16, Float32, Float64, BigInt, BigFloat]
+
+    @test insorted(1, collect(1:10), by=(>=(5)))
+    @test insorted(10, collect(1:10), by=(>=(5)))
+
+    for R in numTypes, T in numTypes
+        @test !insorted(T(0), R[1, 1, 2, 2, 3, 3])
+        @test insorted(T(1), R[1, 1, 2, 2, 3, 3])
+        @test insorted(T(2), R[1, 1, 2, 2, 3, 3])
+        @test !insorted(T(4), R[1, 1, 2, 2, 3, 3])
+        @test !insorted(2.5, R[1, 1, 2, 2, 3, 3])
+
+        @test !insorted(T(0), 1:3)
+        @test insorted(T(1), 1:3)
+        @test insorted(T(2), 1:3)
+        @test !insorted(T(4), 1:3)
+
+        @test insorted(T(1), R.(collect(1:10)), by=(>=(5)))
+        @test insorted(T(10), R.(collect(1:10)), by=(>=(5)))
+    end
+
+    for (rg,I) in Any[(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
+        rg_r = reverse(rg)
+        rgv, rgv_r = collect(rg), collect(rg_r)
+        for i = I
+            @test insorted(i,rg) === insorted(i,rgv)
+            @test insorted(i,rg_r) === insorted(i,rgv_r,rev=true)
         end
     end
+
+    rg = 0.0:0.01:1.0
+    for i = 2:101
+        @test insorted(rg[i], rg)
+        @test !insorted(prevfloat(rg[i]), rg)
+        @test !insorted(nextfloat(rg[i]), rg)
+    end
+
+    rg_r = reverse(rg)
+    for i = 1:100
+        @test insorted(rg_r[i], rg_r)
+        @test !insorted(prevfloat(rg_r[i]), rg_r)
+        @test !insorted(nextfloat(rg_r[i]), rg_r)
+    end
+
+    @test insorted(1, 1:10) == insorted(1, collect(1:10), by=(>=(5)))
+    @test insorted(10, 1:10) == insorted(10, collect(1:10), by=(>=(5)))
+
+    @test !insorted(0, [])
+    @test !insorted(0, [1,2,3])
+    @test !insorted(4, [1,2,3])
+    @test insorted(3, [10,8,6,9,4,7,2,5,3,1], by=(x -> iseven(x) ? x+5 : x), rev=true)
 end
 @testset "PartialQuickSort" begin
     a = rand(1:10000, 1000)
     # test PartialQuickSort only does a partial sort
+    let alg = PartialQuickSort(1:div(length(a), 10))
+        k = alg.k
+        b = sort(a, alg=alg)
+        c = sort(a, alg=alg, by=x->1/x)
+        d = sort(a, alg=alg, rev=true)
+        @test issorted(b[k])
+        @test issorted(c[k], by=x->1/x)
+        @test issorted(d[k], rev=true)
+        @test !issorted(b)
+        @test !issorted(c, by=x->1/x)
+        @test !issorted(d, rev=true)
+    end
     let alg = PartialQuickSort(div(length(a), 10))
         k = alg.k
         b = sort(a, alg=alg)
         c = sort(a, alg=alg, by=x->1/x)
         d = sort(a, alg=alg, rev=true)
-        @test issorted(b[1:k])
-        @test issorted(c[1:k], by=x->1/x)
-        @test issorted(d[1:k], rev=true)
+        @test b[k] == sort(a)[k]
+        @test c[k] == sort(a, by=x->1/x)[k]
+        @test d[k] == sort(a, rev=true)[k]
         @test !issorted(b)
         @test !issorted(c, by=x->1/x)
         @test !issorted(d, rev=true)
@@ -357,7 +461,8 @@ end
             # stable algorithms
             for alg in [MergeSort]
                 p = sortperm(v, alg=alg, rev=rev)
-                @test p == sortperm(float(v), alg=alg, rev=rev)
+                p2 = sortperm(float(v), alg=alg, rev=rev)
+                @test p == p2
                 @test p == pi
                 s = copy(v)
                 permute!(s, p)
@@ -367,9 +472,10 @@ end
             end
 
             # unstable algorithms
-            for alg in [QuickSort, PartialQuickSort(n)]
+            for alg in [QuickSort, PartialQuickSort(1:n)]
                 p = sortperm(v, alg=alg, rev=rev)
-                @test p == sortperm(float(v), alg=alg, rev=rev)
+                p2 = sortperm(float(v), alg=alg, rev=rev)
+                @test p == p2
                 @test isperm(p)
                 @test v[p] == si
                 s = copy(v)
@@ -377,6 +483,22 @@ end
                 @test s == si
                 invpermute!(s, p)
                 @test s == v
+            end
+            for alg in [PartialQuickSort(n)]
+                p = sortperm(v, alg=alg, rev=rev)
+                p2 = sortperm(float(v), alg=alg, rev=rev)
+                if n == 0
+                    @test isempty(p) && isempty(p2)
+                else
+                    @test p[n] == p2[n]
+                    @test v[p][n] == si[n]
+                    @test isperm(p)
+                    s = copy(v)
+                    permute!(s, p)
+                    @test s[n] == si[n]
+                    invpermute!(s, p)
+                    @test s == v
+                end
             end
         end
 
@@ -540,6 +662,14 @@ end
     a = OffsetArray([9:-1:0;], -5)
     Base.Sort.sort_int_range!(a, 10, 0, identity)
     @test issorted(a)
+end
+
+@testset "sort!(::OffsetMatrix; dims)" begin
+    x = OffsetMatrix(rand(5,5), 5, -5)
+    sort!(x; dims=1)
+    for i in axes(x, 2)
+        @test issorted(x[:,i])
+    end
 end
 
 end

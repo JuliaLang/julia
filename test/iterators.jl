@@ -2,6 +2,8 @@
 
 using Base.Iterators
 using Random
+using Base: IdentityUnitRange
+using Dates: Date, Day
 
 @test Base.IteratorSize(Any) isa Base.SizeUnknown
 
@@ -122,7 +124,7 @@ end
 
 # countfrom
 # ---------
-let i = 0, k = 1
+let i = 0, k = 1, l = 0
     for j = countfrom(0, 2)
         @test j == i*2
         i += 1
@@ -133,6 +135,15 @@ let i = 0, k = 1
         k += 1
         k <= 10 || break
     end
+    # test that `start` promotes to `typeof(start+step)`
+    for j = countfrom(Int[0, 0], Float64[1.0, 2.0])
+        @test j isa Vector{Float64}
+        @test j == l*[1, 2]
+        l += 1
+        l <= 10 || break
+    end
+    # test with `start` and `step` having different types
+    @test collect(take(countfrom(Date(2020,12,25), Day(1)), 12)) == range(Date(2020,12,25), step=Day(1), length=12)
 end
 
 # take
@@ -198,9 +209,10 @@ end
     @test collect(takewhile(<(4),1:10)) == [1,2,3]
     @test collect(takewhile(<(4),Iterators.countfrom(1))) == [1,2,3]
     @test collect(takewhile(<(4),5:10)) == []
-    @test collect(takewhile(_->true,5:10)) == 5:10
+    @test collect(takewhile(Returns(true),5:10)) == 5:10
     @test collect(takewhile(isodd,[1,1,2,3])) == [1,1]
     @test collect(takewhile(<(2), takewhile(<(3), [1,1,2,3]))) == [1,1]
+    @test Base.IteratorEltype(typeof(takewhile(<(4),Iterators.map(identity, 1:10)))) isa Base.EltypeUnknown
 end
 
 # dropwhile
@@ -209,10 +221,11 @@ end
     @test collect(dropwhile(<(4), 1:10)) == 4:10
     @test collect(dropwhile(<(4), 1:10)) isa Vector{Int}
     @test isempty(dropwhile(<(4), []))
-    @test collect(dropwhile(_->false,1:3)) == 1:3
-    @test isempty(dropwhile(_->true, 1:3))
+    @test collect(dropwhile(Returns(false),1:3)) == 1:3
+    @test isempty(dropwhile(Returns(true), 1:3))
     @test collect(dropwhile(isodd,[1,1,2,3])) == [2,3]
     @test collect(dropwhile(iseven,dropwhile(isodd,[1,1,2,3]))) == [3]
+    @test Base.IteratorEltype(typeof(dropwhile(<(4),Iterators.map(identity, 1:10)))) isa Base.EltypeUnknown
 end
 
 # cycle
@@ -289,6 +302,18 @@ let (a, b) = (1:3, [4 6;
         @test cp[i, :, :] == [(i, 4) (i, 6);
                               (i, 5) (i, 7)]
     end
+end
+
+# collect stateful iterator
+let itr
+    itr = Iterators.Stateful(Iterators.map(identity, 1:5))
+    @test collect(itr) == 1:5
+    @test collect(itr) == Int[] # Stateful do not preserve shape
+    itr = (i+1 for i in Base.Stateful([1, 2, 3]))
+    @test collect(itr) == [2, 3, 4]
+    @test collect(itr) == Int[] # Stateful do not preserve shape
+    itr = (i-1 for i in Base.Stateful(zeros(Int, 0, 0)))
+    @test collect(itr) == Int[] # Stateful do not preserve shape
 end
 
 # with 1D inputs
@@ -381,7 +406,7 @@ let a = 1:2,
     end
 
     # size infinite or unknown raises an error
-    for itr in Any[countfrom(1), Iterators.filter(i->0, 1:10)]
+    for itr in Any[countfrom(1), Iterators.filter(Returns(0), 1:10)]
         @test_throws ArgumentError length(product(itr))
         @test_throws ArgumentError   size(product(itr))
         @test_throws ArgumentError  ndims(product(itr))
@@ -592,7 +617,7 @@ end
 end
 
 @testset "filter empty iterable #16704" begin
-    arr = filter(n -> true, 1:0)
+    arr = filter(Returns(true), 1:0)
     @test length(arr) == 0
     @test eltype(arr) == Int
 end
@@ -618,7 +643,7 @@ end
         @test isempty(d) || haskey(d, first(keys(d)))
         @test collect(v for (k, v) in d) == collect(A)
         if A isa NamedTuple
-            K = isempty(d) ? Union{} : Symbol
+            K = Symbol
             V = isempty(d) ? Union{} : Float64
             @test isempty(d) || haskey(d, :a)
             @test !haskey(d, :abc)
@@ -691,10 +716,10 @@ end
     @test eltype(Iterators.Stateful("a")) == Char
     # Interaction of zip/Stateful
     let a = Iterators.Stateful("a"), b = ""
-	@test isempty(collect(zip(a,b)))
-	@test !isempty(a)
-	@test isempty(collect(zip(b,a)))
-	@test !isempty(a)
+    @test isempty(collect(zip(a,b)))
+    @test !isempty(a)
+    @test isempty(collect(zip(b,a)))
+    @test !isempty(a)
     end
     let a = Iterators.Stateful("a"), b = "", c = Iterators.Stateful("c")
         @test isempty(collect(zip(a,b,c)))
@@ -847,4 +872,21 @@ end
     @test cumsum(x^2 for x in 1:3) == [1, 5, 14]
     @test cumprod(x + 1 for x in 1:3) == [2, 6, 24]
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
+end
+
+@testset "proper patition for non-1-indexed vector" begin
+    @test partition(IdentityUnitRange(11:19), 5) |> collect == [11:15,16:19] # IdentityUnitRange
+end
+
+@testset "Iterators.peel" begin
+    @test Iterators.peel([]) == nothing
+    @test Iterators.peel(1:10)[1] == 1
+    @test Iterators.peel(1:10)[2] |> collect == 2:10
+    @test Iterators.peel(x^2 for x in 2:4)[1] == 4
+    @test Iterators.peel(x^2 for x in 2:4)[2] |> collect == [9, 16]
+end
+
+@testset "last for iterators" begin
+    @test last(Iterators.map(identity, 1:3)) == 3
+    @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3)))) == 2
 end

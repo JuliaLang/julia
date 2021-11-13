@@ -102,26 +102,6 @@ function serialize(s::ClusterSerializer, t::Core.TypeName)
     nothing
 end
 
-function serialize(s::ClusterSerializer, t::Task)
-    serialize_cycle(s, t) && return
-    if istaskstarted(t) && !istaskdone(t)
-        error("cannot serialize a running Task")
-    end
-    writetag(s.io, TASK_TAG)
-    serialize(s, t.code)
-    serialize(s, t.storage)
-    bt = t.backtrace
-    if bt !== nothing
-        if !isa(bt, Vector{Any})
-            bt = Base.process_backtrace(bt, 100)
-        end
-        serialize(s, bt)
-    end
-    serialize(s, t.state)
-    serialize(s, t.result)
-    serialize(s, t.exception)
-end
-
 function serialize(s::ClusterSerializer, g::GlobalRef)
     # Record if required and then invoke the default GlobalRef serializer.
     sym = g.name
@@ -249,23 +229,6 @@ function deserialize(s::ClusterSerializer, t::Type{<:CapturedException})
     end
 
     return CapturedException(capex, bt)
-end
-
-function deserialize(s::ClusterSerializer, ::Type{Task})
-    t = Task(nothing)
-    deserialize_cycle(s, t)
-    t.code = deserialize(s)
-    t.storage = deserialize(s)
-    state_or_bt = deserialize(s)
-    if state_or_bt isa Symbol
-        t.state = state_or_bt
-    else
-        t.backtrace = state_or_bt
-        t.state = deserialize(s)
-    end
-    t.result = deserialize(s)
-    t.exception = deserialize(s)
-    t
 end
 
 """

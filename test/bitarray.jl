@@ -198,6 +198,9 @@ timesofar("utils")
                   ((x+y)%5==2 for x = 1:n1 for y = 1:n2))
             @test BitArray(g) == BitArray(collect(g))
         end
+        @test_throws DimensionMismatch BitVector(false)
+        @test_throws DimensionMismatch BitVector((iszero(i%4) for i in 1:n1, j in 1:n2))
+        @test_throws DimensionMismatch BitMatrix((isodd(i) for i in 1:3))
     end
 
     @testset "constructor from NTuple" begin
@@ -219,6 +222,10 @@ timesofar("utils")
     # issue #24062
     @test_throws InexactError BitArray([0, 1, 2, 3])
     @test_throws MethodError BitArray([0, ""])
+
+    # construction with poor inference
+    f(c) = BitVector(c[1])
+    @test @inferred(f(AbstractVector[[0,1]])) == [false, true]
 end
 
 timesofar("constructors")
@@ -825,6 +832,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, b1, b2)  BitMatrix
         @check_bit_operation broadcast(|, b1, b2)  BitMatrix
         @check_bit_operation broadcast(xor, b1, b2)  BitMatrix
+        @check_bit_operation broadcast(nand, b1, b2)  BitMatrix
+        @check_bit_operation broadcast(nor, b1, b2)  BitMatrix
         @check_bit_operation (+)(b1, b2)  Matrix{Int}
         @check_bit_operation (-)(b1, b2)  Matrix{Int}
         @check_bit_operation broadcast(*, b1, b2) BitMatrix
@@ -854,6 +863,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, b0, b0)  BitVector
         @check_bit_operation broadcast(|, b0, b0)  BitVector
         @check_bit_operation broadcast(xor, b0, b0)  BitVector
+        @check_bit_operation broadcast(nand, b0, b0)  BitVector
+        @check_bit_operation broadcast(nor, b0, b0)  BitVector
         @check_bit_operation broadcast(*, b0, b0) BitVector
         @check_bit_operation (*)(b0, b0') BitMatrix
     end
@@ -864,6 +875,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(|, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(xor, b1, i2)  Matrix{Int}
+        @check_bit_operation broadcast(nand, b1, i2)  Matrix{Int}
+        @check_bit_operation broadcast(nor, b1, i2)  Matrix{Int}
         @check_bit_operation (+)(b1, i2)  Matrix{Int}
         @check_bit_operation (-)(b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(*, b1, i2) Matrix{Int}
@@ -895,6 +908,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, i1, b2)  Matrix{Int}
         @check_bit_operation broadcast(|, i1, b2)  Matrix{Int}
         @check_bit_operation broadcast(xor, i1, b2)  Matrix{Int}
+        @check_bit_operation broadcast(nand, i1, b2)  Matrix{Int}
+        @check_bit_operation broadcast(nor, i1, b2)  Matrix{Int}
         @check_bit_operation broadcast(+, i1, b2)  Matrix{Int}
         @check_bit_operation broadcast(-, i1, b2)  Matrix{Int}
         @check_bit_operation broadcast(*, i1, b2) Matrix{Int}
@@ -902,6 +917,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, u1, b2)  Matrix{UInt8}
         @check_bit_operation broadcast(|, u1, b2)  Matrix{UInt8}
         @check_bit_operation broadcast(xor, u1, b2)  Matrix{UInt8}
+        @check_bit_operation broadcast(nand, u1, b2)  Matrix{UInt8}
+        @check_bit_operation broadcast(nor, u1, b2)  Matrix{UInt8}
         @check_bit_operation broadcast(+, u1, b2)  Matrix{UInt8}
         @check_bit_operation broadcast(-, u1, b2)  Matrix{UInt8}
         @check_bit_operation broadcast(*, u1, b2) Matrix{UInt8}
@@ -979,6 +996,14 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(xor, b1, false)  BitMatrix
         @check_bit_operation broadcast(xor, true, b1)   BitMatrix
         @check_bit_operation broadcast(xor, false, b1)  BitMatrix
+        @check_bit_operation broadcast(nand, b1, true)   BitMatrix
+        @check_bit_operation broadcast(nand, b1, false)  BitMatrix
+        @check_bit_operation broadcast(nand, true, b1)   BitMatrix
+        @check_bit_operation broadcast(nand, false, b1)  BitMatrix
+        @check_bit_operation broadcast(nor, b1, true)   BitMatrix
+        @check_bit_operation broadcast(nor, b1, false)  BitMatrix
+        @check_bit_operation broadcast(nor, true, b1)   BitMatrix
+        @check_bit_operation broadcast(nor, false, b1)  BitMatrix
         @check_bit_operation broadcast(+, b1, true)   Matrix{Int}
         @check_bit_operation broadcast(+, b1, false)  Matrix{Int}
         @check_bit_operation broadcast(-, b1, true)   Matrix{Int}
@@ -995,12 +1020,18 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, b1, b2)  BitMatrix
         @check_bit_operation broadcast(|, b1, b2)  BitMatrix
         @check_bit_operation broadcast(xor, b1, b2)  BitMatrix
+        @check_bit_operation broadcast(nand, b1, b2)  BitMatrix
+        @check_bit_operation broadcast(nor, b1, b2)  BitMatrix
         @check_bit_operation broadcast(&, b2, b1)  BitMatrix
         @check_bit_operation broadcast(|, b2, b1)  BitMatrix
         @check_bit_operation broadcast(xor, b2, b1)  BitMatrix
+        @check_bit_operation broadcast(nand, b2, b1)  BitMatrix
+        @check_bit_operation broadcast(nor, b2, b1)  BitMatrix
         @check_bit_operation broadcast(&, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(|, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(xor, b1, i2)  Matrix{Int}
+        @check_bit_operation broadcast(nand, b1, i2)  Matrix{Int}
+        @check_bit_operation broadcast(nor, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(+, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(-, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(*, b1, i2) Matrix{Int}
@@ -1011,6 +1042,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, b1, u2)  Matrix{UInt8}
         @check_bit_operation broadcast(|, b1, u2)  Matrix{UInt8}
         @check_bit_operation broadcast(xor, b1, u2)  Matrix{UInt8}
+        @check_bit_operation broadcast(nand, b1, u2)  Matrix{UInt8}
+        @check_bit_operation broadcast(nor, b1, u2)  Matrix{UInt8}
         @check_bit_operation broadcast(+, b1, u2)  Matrix{UInt8}
         @check_bit_operation broadcast(-, b1, u2)  Matrix{UInt8}
         @check_bit_operation broadcast(*, b1, u2) Matrix{UInt8}
@@ -1079,6 +1112,14 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(xor, b1, transpose(b3))  BitMatrix
         @check_bit_operation broadcast(xor, b2, b1)             BitMatrix
         @check_bit_operation broadcast(xor, transpose(b3), b1)  BitMatrix
+        @check_bit_operation broadcast(nand, b1, b2)             BitMatrix
+        @check_bit_operation broadcast(nand, b1, transpose(b3))  BitMatrix
+        @check_bit_operation broadcast(nand, b2, b1)             BitMatrix
+        @check_bit_operation broadcast(nand, transpose(b3), b1)  BitMatrix
+        @check_bit_operation broadcast(nor, b1, b2)             BitMatrix
+        @check_bit_operation broadcast(nor, b1, transpose(b3))  BitMatrix
+        @check_bit_operation broadcast(nor, b2, b1)             BitMatrix
+        @check_bit_operation broadcast(nor, transpose(b3), b1)  BitMatrix
         @check_bit_operation broadcast(+, b1, b2)             Matrix{Int}
         @check_bit_operation broadcast(+, b1, transpose(b3))  Matrix{Int}
         @check_bit_operation broadcast(+, b2, b1)             Matrix{Int}
@@ -1173,8 +1214,8 @@ timesofar("datamove")
 
         @check_bit_operation findfirst(x->x, b1)     Union{Int,Nothing}
         @check_bit_operation findfirst(x->!x, b1)    Union{Int,Nothing}
-        @check_bit_operation findfirst(x->true, b1)  Union{Int,Nothing}
-        @check_bit_operation findfirst(x->false, b1) Union{Int,Nothing}
+        @check_bit_operation findfirst(Returns(true ), b1)  Union{Int,Nothing}
+        @check_bit_operation findfirst(Returns(false), b1) Union{Int,Nothing}
 
         @check_bit_operation findall(b1) Vector{Int}
     end
@@ -1215,6 +1256,9 @@ timesofar("datamove")
         @check_bit_operation findall(falses(t)) ret_type
         @check_bit_operation findall(bitrand(t)) ret_type
     end
+
+    @test count(trues(2, 2), init=0x03) === 0x07
+    @test count(trues(2, 2, 2), dims=2) == fill(2, 2, 1, 2)
 end
 
 timesofar("find")
@@ -1265,49 +1309,51 @@ timesofar("find")
     @test_throws BoundsError findprevnot(b2, 1001)
     @test_throws BoundsError findprev(!, b2, 1001)
     @test_throws BoundsError findprev(identity, b1, 1001)
-    @test_throws BoundsError findprev(x->false, b1, 1001)
-    @test_throws BoundsError findprev(x->true, b1, 1001)
+    @test_throws BoundsError findprev(Returns(false), b1, 1001)
+    @test_throws BoundsError findprev(Returns(true ), b1, 1001)
     @test findprev(b1, 1000) == findprevnot(b2, 1000) == findprev(!, b2, 1000) == 777
     @test findprev(b1, 777)  == findprevnot(b2, 777)  == findprev(!, b2, 777)  == 777
     @test findprev(b1, 776)  == findprevnot(b2, 776)  == findprev(!, b2, 776)  == 77
     @test findprev(b1, 77)   == findprevnot(b2, 77)   == findprev(!, b2, 77)   == 77
     @test findprev(b1, 76)   == findprevnot(b2, 76)   == findprev(!, b2, 76)   == nothing
     @test findprev(b1, -1)   == findprevnot(b2, -1)   == findprev(!, b2, -1)   == nothing
-    @test findprev(identity, b1, -1) == findprev(x->false, b1, -1) == findprev(x->true, b1, -1) == nothing
+    @test findprev(identity, b1, -1) == nothing
+    @test findprev(Returns(false), b1, -1) == nothing
+    @test findprev(Returns(true), b1, -1) == nothing
     @test_throws BoundsError findnext(b1, -1)
     @test_throws BoundsError findnextnot(b2, -1)
     @test_throws BoundsError findnext(!, b2, -1)
     @test_throws BoundsError findnext(identity, b1, -1)
-    @test_throws BoundsError findnext(x->false, b1, -1)
-    @test_throws BoundsError findnext(x->true, b1, -1)
+    @test_throws BoundsError findnext(Returns(false), b1, -1)
+    @test_throws BoundsError findnext(Returns(true), b1, -1)
     @test findnext(b1, 1)    == findnextnot(b2, 1)    == findnext(!, b2, 1)    == 77
     @test findnext(b1, 77)   == findnextnot(b2, 77)   == findnext(!, b2, 77)   == 77
     @test findnext(b1, 78)   == findnextnot(b2, 78)   == findnext(!, b2, 78)   == 777
     @test findnext(b1, 777)  == findnextnot(b2, 777)  == findnext(!, b2, 777)  == 777
     @test findnext(b1, 778)  == findnextnot(b2, 778)  == findnext(!, b2, 778)  == nothing
     @test findnext(b1, 1001) == findnextnot(b2, 1001) == findnext(!, b2, 1001) == nothing
-    @test findnext(identity, b1, 1001) == findnext(x->false, b1, 1001) == findnext(x->true, b1, 1001) == nothing
+    @test findnext(identity, b1, 1001) == findnext(Returns(false), b1, 1001) == findnext(Returns(true), b1, 1001) == nothing
 
     @test findlast(b1) == Base.findlastnot(b2) == 777
     @test findfirst(b1) == Base.findfirstnot(b2) == 77
 
     b0 = BitVector()
-    @test findprev(x->true, b0, -1) == nothing
-    @test_throws BoundsError findprev(x->true, b0, 1)
-    @test_throws BoundsError findnext(x->true, b0, -1)
-    @test findnext(x->true, b0, 1) == nothing
+    @test findprev(Returns(true), b0, -1) == nothing
+    @test_throws BoundsError findprev(Returns(true), b0, 1)
+    @test_throws BoundsError findnext(Returns(true), b0, -1)
+    @test findnext(Returns(true), b0, 1) == nothing
 
     b1 = falses(10)
-    @test findprev(x->true, b1, 5) == 5
-    @test findnext(x->true, b1, 5) == 5
-    @test findprev(x->true, b1, -1) == nothing
-    @test findnext(x->true, b1, 11) == nothing
-    @test findprev(x->false, b1, 5) == nothing
-    @test findnext(x->false, b1, 5) == nothing
-    @test findprev(x->false, b1, -1) == nothing
-    @test findnext(x->false, b1, 11) == nothing
-    @test_throws BoundsError findprev(x->true, b1, 11)
-    @test_throws BoundsError findnext(x->true, b1, -1)
+    @test findprev(Returns(true), b1, 5) == 5
+    @test findnext(Returns(true), b1, 5) == 5
+    @test findprev(Returns(true), b1, -1) == nothing
+    @test findnext(Returns(true), b1, 11) == nothing
+    @test findprev(Returns(false), b1, 5) == nothing
+    @test findnext(Returns(false), b1, 5) == nothing
+    @test findprev(Returns(false), b1, -1) == nothing
+    @test findnext(Returns(false), b1, 11) == nothing
+    @test_throws BoundsError findprev(Returns(true), b1, 11)
+    @test_throws BoundsError findnext(Returns(true), b1, -1)
 
     @testset "issue 32568" for T = (UInt, BigInt)
         for x = (1, 2)
@@ -1372,12 +1418,14 @@ timesofar("reductions")
         b2 = bitrand(l)
         @test map(~, b1) == map(x->~x, b1) == broadcast(~, b1)
         @test map(identity, b1) == map(x->x, b1) == b1
-        @test map(zero, b1) == map(x->false, b1) == falses(l)
-        @test map(one, b1) == map(x->true, b1) == trues(l)
+        @test map(zero, b1) == map(Returns(false), b1) == falses(l)
+        @test map(one, b1) == map(Returns(true), b1) == trues(l)
 
         @test map(&, b1, b2) == map((x,y)->x&y, b1, b2) == broadcast(&, b1, b2)
         @test map(|, b1, b2) == map((x,y)->x|y, b1, b2) == broadcast(|, b1, b2)
         @test map(⊻, b1, b2) == map((x,y)->x⊻y, b1, b2) == broadcast(⊻, b1, b2) == broadcast(xor, b1, b2)
+        @test map(⊼, b1, b2) == map((x,y)->x⊼y, b1, b2) == broadcast(⊼, b1, b2) == broadcast(nand, b1, b2)
+        @test map(⊽, b1, b2) == map((x,y)->x⊽y, b1, b2) == broadcast(⊽, b1, b2) == broadcast(nor, b1, b2)
 
         @test map(^, b1, b2) == map((x,y)->x^y, b1, b2) == b1 .^ b2
         @test map(*, b1, b2) == map((x,y)->x*y, b1, b2) == b1 .* b2
@@ -1397,8 +1445,8 @@ timesofar("reductions")
             @test map!(~, b, b1) == map!(x->~x, b, b1) == broadcast(~, b1) == b
             @test map!(!, b, b1) == map!(x->!x, b, b1) == broadcast(~, b1) == b
             @test map!(identity, b, b1) == map!(x->x, b, b1) == b1 == b
-            @test map!(zero, b, b1) == map!(x->false, b, b1) == falses(l) == b
-            @test map!(one, b, b1) == map!(x->true, b, b1) == trues(l) == b
+            @test map!(zero, b, b1) == map!(Returns(false), b, b1) == falses(l) == b
+            @test map!(one, b, b1) == map!(Returns(true), b, b1) == trues(l) == b
 
             @test map!(&, b, b1, b2) == map!((x,y)->x&y, b, b1, b2) == broadcast(&, b1, b2) == b
             @test map!(|, b, b1, b2) == map!((x,y)->x|y, b, b1, b2) == broadcast(|, b1, b2) == b
@@ -1655,4 +1703,68 @@ end
     @check_bit_operation all!(falses(10), trues(10, 10))
     @check_bit_operation all!(falses(100), trues(100, 100))
     @check_bit_operation all!(falses(1000), trues(1000, 100))
+end
+
+@testset "multidimensional concatenation returns BitArrays" begin
+    a = BitVector(ones(5))
+    @test typeof([a ;;; a]) <: BitArray
+    @test typeof([a a ;;; a a]) <: BitArray
+    @test typeof([a a ;;; [a a]]) <: BitArray
+end
+
+@testset "deleteat! additional tests" begin
+    for v in ([1, 2, 3], [true, true, true], trues(3))
+        @test_throws BoundsError deleteat!(v, true:true)
+    end
+
+    for v in ([1], [true], trues(1))
+        @test length(deleteat!(v, false:false)) == 1
+        @test isempty(deleteat!(v, true:true))
+    end
+
+    x = trues(3)
+    x[3] = false
+    @test deleteat!(x, [UInt8(2)]) == [true, false]
+    @test_throws ArgumentError deleteat!(x, Any[true])
+    @test_throws ArgumentError deleteat!(x, Any[1, true])
+    @test_throws ArgumentError deleteat!(x, Any[2, 1])
+    @test_throws BoundsError deleteat!(x, Any[4])
+    @test_throws BoundsError deleteat!(x, Any[2, 4])
+
+    function test_equivalence(n::Int)
+        x1 = rand(Bool, n)
+        x2 = BitVector(x1)
+        inds1 = rand(Bool, n)
+        inds2 = BitVector(inds1)
+        return deleteat!(copy(x1), findall(inds1)) ==
+               deleteat!(copy(x1), inds1) ==
+               deleteat!(copy(x2), inds1) ==
+               deleteat!(copy(x1), inds2) ==
+               deleteat!(copy(x2), inds2)
+    end
+
+    Random.seed!(1234)
+    for n in 1:20, _ in 1:100
+        @test test_equivalence(n)
+    end
+end
+
+@testset "fill! for BitArray with contiguous view (#42795)" begin
+    # change values in range `rangein`, `rangeout` should stay unchanged
+    for (rangein, rangeout) in ((1:5, 6:10), (5:10, 1:4))
+        bitvector = trues(10)
+        bitarray  = trues(10, 10)
+        viewvector = view(bitvector, rangein)
+        viewarray  = view(bitarray, rangein, rangein)
+        @test which(fill!, (typeof(viewvector), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, Any}
+        @test which(fill!, (typeof(viewarray), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, Any}
+        fill!(viewvector, false)
+        fill!(viewarray, false)
+        @test all(bitvector[rangein] .== false)
+        @test all(bitvector[rangeout] .== true)
+        @test all(bitarray[rangein, rangein] .== false)
+        @test all(bitarray[rangeout, rangeout] .== true)
+        @test all(bitarray[rangeout, rangein] .== true)
+        @test all(bitarray[rangein, rangeout] .== true)
+    end
 end

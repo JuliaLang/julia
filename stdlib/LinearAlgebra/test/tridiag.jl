@@ -4,6 +4,11 @@ module TestTridiagonal
 
 using Test, LinearAlgebra, SparseArrays, Random
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -159,6 +164,19 @@ end
         @test !isdiag(Tridiagonal(dl,d,zerosdu))
         @test !isdiag(Tridiagonal(zerosdl,d,du))
         @test !isdiag(Tridiagonal(dl,d,du))
+
+        # Test methods that could fail due to dv and ev having the same length
+        # see #41089
+
+        badev = zero(d)
+        badev[end] = 1
+        S = SymTridiagonal(d, badev)
+
+        @test istriu(S, -2)
+        @test istriu(S, 0)
+        @test !istriu(S, 2)
+
+        @test isdiag(S)
     end
 
     @testset "iszero and isone" begin
@@ -185,6 +203,12 @@ end
         @test isone(Sone)
         @test !iszero(Smix)
         @test !isone(Smix)
+
+        badev = zeros(elty, 3)
+        badev[end] = 1
+
+        @test isone(SymTridiagonal(ones(elty, 3), badev))
+        @test iszero(SymTridiagonal(zeros(elty, 3), badev))
     end
 
     @testset for mat_type in (Tridiagonal, SymTridiagonal)
@@ -193,10 +217,8 @@ end
         @testset "similar, size, and copyto!" begin
             B = similar(A)
             @test size(B) == size(A)
-            if mat_type == Tridiagonal # doesn't work for SymTridiagonal yet
-                copyto!(B, A)
-                @test B == A
-            end
+            copyto!(B, A)
+            @test B == A
             @test isa(similar(A), mat_type{elty})
             @test isa(similar(A, Int), mat_type{Int})
             @test isa(similar(A, (3, 2)), SparseMatrixCSC)
@@ -458,7 +480,7 @@ end
     F = lu(Tridiagonal(sparse(1.0I, 3, 3)))
     @test F.L == Matrix(I, 3, 3)
     @test startswith(sprint(show, MIME("text/plain"), F),
-          "LinearAlgebra.LU{Float64,LinearAlgebra.Tridiagonal{Float64,SparseArrays.SparseVector")
+          "$(LinearAlgebra.LU){Float64, $(LinearAlgebra.Tridiagonal){Float64, SparseArrays.SparseVector")
 end
 
 @testset "Issue 29630" begin
@@ -574,6 +596,103 @@ end
     dl = rand(Float64, 4)
     T = Tridiagonal(dl, d, du)
     @test_throws ArgumentError SymTridiagonal{Float32}(T)
+end
+
+# Issue #38765
+@testset "Eigendecomposition with different lengths" begin
+    # length(A.ev) can be either length(A.dv) or length(A.dv) - 1
+    A = SymTridiagonal(fill(1.0, 3), fill(-1.0, 3))
+    F = eigen(A)
+    A2 = SymTridiagonal(fill(1.0, 3), fill(-1.0, 2))
+    F2 = eigen(A2)
+    test_approx_eq_modphase(F.vectors, F2.vectors)
+    @test F.values ≈ F2.values ≈ eigvals(A) ≈ eigvals(A2)
+    @test eigvecs(A) ≈ eigvecs(A2)
+    @test eigvecs(A, eigvals(A)[1:1]) ≈ eigvecs(A2, eigvals(A2)[1:1])
+end
+
+@testset "non-commutative algebra (#39701)" begin
+    for A in (SymTridiagonal(Quaternion.(randn(5), randn(5), randn(5), randn(5)), Quaternion.(randn(4), randn(4), randn(4), randn(4))),
+              Tridiagonal(Quaternion.(randn(4), randn(4), randn(4), randn(4)), Quaternion.(randn(5), randn(5), randn(5), randn(5)), Quaternion.(randn(4), randn(4), randn(4), randn(4))))
+        c = Quaternion(1,2,3,4)
+        @test A * c ≈ Matrix(A) * c
+        @test A / c ≈ Matrix(A) / c
+        @test c * A ≈ c * Matrix(A)
+        @test c \ A ≈ c \ Matrix(A)
+    end
+end
+
+@testset "adjoint of LDLt" begin
+    Sr = SymTridiagonal(randn(5), randn(4))
+    Sc = SymTridiagonal(complex.(randn(5)) .+ 1im, complex.(randn(4), randn(4)))
+    b = ones(size(Sr, 1))
+
+    F = ldlt(Sr)
+    @test F\b == F'\b
+
+    F = ldlt(Sc)
+    @test copy(Sc')\b == F'\b
+end
+
+@testset "symmetric and hermitian tridiagonals" begin
+    A = [im 0; 0 -im]
+    @test issymmetric(A)
+    @test !ishermitian(A)
+
+    # real
+    A = SymTridiagonal(randn(5), randn(4))
+    @test issymmetric(A)
+    @test ishermitian(A)
+
+    A = Tridiagonal(A.ev, A.dv, A.ev .+ 1)
+    @test !issymmetric(A)
+    @test !ishermitian(A)
+
+    # complex
+    # https://github.com/JuliaLang/julia/pull/41037#discussion_r645524081
+    S = SymTridiagonal(randn(5) .+ 0im, randn(5) .+ 0im)
+    S.ev[end] = im
+    @test issymmetric(S)
+    @test ishermitian(S)
+
+    S = SymTridiagonal(randn(5) .+ 1im, randn(4) .+ 1im)
+    @test issymmetric(S)
+    @test !ishermitian(S)
+
+    S = Tridiagonal(S.ev, S.dv, adjoint.(S.ev))
+    @test !issymmetric(S)
+    @test !ishermitian(S)
+
+    S = Tridiagonal(S.dl, real.(S.d) .+ 0im, S.du)
+    @test !issymmetric(S)
+    @test ishermitian(S)
+end
+
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    v1 = ImmutableArray([1, 2])
+    v2 = ImmutableArray([3, 4, 5])
+    v3 = ImmutableArray([6, 7])
+    T = Tridiagonal(v1, v2, v3)
+    Tsym = SymTridiagonal(v2, v1)
+
+    @test convert(AbstractArray{Float64}, T)::Tridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == T
+    @test convert(AbstractMatrix{Float64}, T)::Tridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == T
+    @test convert(AbstractArray{Float64}, Tsym)::SymTridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
+    @test convert(AbstractMatrix{Float64}, Tsym)::SymTridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
+end
+
+@testset "dot(x,A,y) for A::Tridiagonal or SymTridiagonal" begin
+    for elty in (Float32, Float64, ComplexF32, ComplexF64, Int)
+        x = fill(convert(elty, 1), 0)
+        T = Tridiagonal(x, x, x)
+        Tsym = SymTridiagonal(x, x)
+        @test dot(x, T, x) == 0.0
+        @test dot(x, Tsym, x) == 0.0
+    end
 end
 
 end # module TestTridiagonal

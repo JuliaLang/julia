@@ -84,6 +84,12 @@ end
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
 (+)(y::Period, x::TimeType) = x + y
 
+# Missing support
+(+)(x::AbstractTime, y::Missing) = missing
+(+)(x::Missing, y::AbstractTime) = missing
+(-)(x::AbstractTime, y::Missing) = missing
+(-)(x::Missing, y::AbstractTime) = missing
+
 # AbstractArray{TimeType}, AbstractArray{TimeType}
 (-)(x::OrdinalRange{T}, y::OrdinalRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)
 (-)(x::AbstractRange{T}, y::AbstractRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)

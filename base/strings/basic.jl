@@ -35,8 +35,8 @@ model allows index arithmetic to work with out-of- bounds indices as
 intermediate values so long as one never uses them to retrieve a character,
 which often helps avoid needing to code around edge cases.
 
-See also: [`codeunit`](@ref), [`ncodeunits`](@ref), [`thisind`](@ref),
-[`nextind`](@ref), [`prevind`](@ref)
+See also [`codeunit`](@ref), [`ncodeunits`](@ref), [`thisind`](@ref),
+[`nextind`](@ref), [`prevind`](@ref).
 """
 AbstractString
 
@@ -62,8 +62,8 @@ julia> ncodeunits('∫'), ncodeunits('e'), ncodeunits('ˣ')
 (3, 1, 2)
 ```
 
-See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
-[`length`](@ref), [`lastindex`](@ref)
+See also [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
+[`length`](@ref), [`lastindex`](@ref).
 """
 ncodeunits(s::AbstractString)
 
@@ -77,9 +77,11 @@ limited to these three types, but it's hard to think of widely used string
 encodings that don't use one of these units. `codeunit(s)` is the same as
 `typeof(codeunit(s,1))` when `s` is a non-empty string.
 
-See also: [`ncodeunits`](@ref)
+See also [`ncodeunits`](@ref).
 """
 codeunit(s::AbstractString)
+
+const CodeunitType = Union{Type{UInt8},Type{UInt16},Type{UInt32}}
 
 """
     codeunit(s::AbstractString, i::Integer) -> Union{UInt8, UInt16, UInt32}
@@ -100,7 +102,7 @@ julia> typeof(a)
 UInt8
 ```
 
-See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
+See also [`ncodeunits`](@ref), [`checkbounds`](@ref).
 """
 @propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
     throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
@@ -116,8 +118,8 @@ In order for `isvalid(s, i)` to be an O(1) function, the encoding of `s` must be
 [self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code). This
 is a basic assumption of Julia's generic string support.
 
-See also: [`getindex`](@ref), [`iterate`](@ref), [`thisind`](@ref),
-[`nextind`](@ref), [`prevind`](@ref), [`length`](@ref)
+See also [`getindex`](@ref), [`iterate`](@ref), [`thisind`](@ref),
+[`nextind`](@ref), [`prevind`](@ref), [`length`](@ref).
 
 # Examples
 ```jldoctest
@@ -150,7 +152,7 @@ be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
 then a bounds error is raised. The `iterate` function, as part of the iteration
 protocol may assume that `i` is the start of a character in `s`.
 
-See also: [`getindex`](@ref), [`checkbounds`](@ref)
+See also [`getindex`](@ref), [`checkbounds`](@ref).
 """
 @propagate_inbounds iterate(s::AbstractString, i::Integer) = typeof(i) === Int ?
     throw(MethodError(iterate, (s, i))) : iterate(s, Int(i))
@@ -174,14 +176,14 @@ julia> sizeof("∀")
 3
 ```
 """
-sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
+sizeof(s::AbstractString) = ncodeunits(s)::Int * sizeof(codeunit(s)::CodeunitType)
 firstindex(s::AbstractString) = 1
-lastindex(s::AbstractString) = thisind(s, ncodeunits(s))
-isempty(s::AbstractString) = iszero(ncodeunits(s))
+lastindex(s::AbstractString) = thisind(s, ncodeunits(s)::Int)
+isempty(s::AbstractString) = iszero(ncodeunits(s)::Int)
 
 function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
-    @inbounds return isvalid(s, i) ? iterate(s, i)[1] : string_index_err(s, i)
+    @inbounds return isvalid(s, i) ? (iterate(s, i)::NTuple{2,Any})[1] : string_index_err(s, i)
 end
 
 getindex(s::AbstractString, i::Colon) = s
@@ -204,9 +206,9 @@ end
 ## bounds checking ##
 
 checkbounds(::Type{Bool}, s::AbstractString, i::Integer) =
-    1 ≤ i ≤ ncodeunits(s)
+    1 ≤ i ≤ ncodeunits(s)::Int
 checkbounds(::Type{Bool}, s::AbstractString, r::AbstractRange{<:Integer}) =
-    isempty(r) || (1 ≤ minimum(r) && maximum(r) ≤ ncodeunits(s))
+    isempty(r) || (1 ≤ minimum(r) && maximum(r) ≤ ncodeunits(s)::Int)
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Real}) =
     all(i -> checkbounds(Bool, s, i), I)
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Integer}) =
@@ -373,8 +375,8 @@ value `0`.
     the string because it counts the value on the fly. This is in contrast to
     the method for arrays, which is a constant-time operation.
 
-See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`lastindex`](@ref),
-[`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
+See also [`isvalid`](@ref), [`ncodeunits`](@ref), [`lastindex`](@ref),
+[`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref).
 
 # Examples
 ```jldoctest
@@ -382,12 +384,12 @@ julia> length("jμΛIα")
 5
 ```
 """
-length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s))
+length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s)::Int)
 
 function length(s::AbstractString, i::Int, j::Int)
     @boundscheck begin
-        0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
+        0 < i ≤ ncodeunits(s)::Int+1 || throw(BoundsError(s, i))
+        0 ≤ j < ncodeunits(s)::Int+1 || throw(BoundsError(s, j))
     end
     n = 0
     for k = i:j
@@ -434,7 +436,7 @@ ERROR: BoundsError: attempt to access 2-codeunit String at index [-1]
 thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
 
 function thisind(s::AbstractString, i::Int)
-    z = ncodeunits(s) + 1
+    z = ncodeunits(s)::Int + 1
     i == z && return i
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds while 1 < i && !(isvalid(s, i)::Bool)
@@ -594,6 +596,15 @@ true
 julia> isascii("αβγ")
 false
 ```
+For example, `isascii` can be used as a predicate function for [`filter`](@ref) or [`replace`](@ref)
+to remove or replace non-ASCII characters, respectively:
+```jldoctest
+julia> filter(isascii, "abcdeγfgh") # discard non-ASCII chars
+"abcdefgh"
+
+julia> replace("abcdeγfgh", !isascii=>' ') # replace non-ASCII chars with spaces
+"abcde fgh"
+```
 """
 isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
 isascii(s::AbstractString) = all(isascii, s)
@@ -602,9 +613,9 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
 ## string map, filter ##
 
 function map(f, s::AbstractString)
-    out = StringVector(max(4, sizeof(s)÷sizeof(codeunit(s))))
+    out = StringVector(max(4, sizeof(s)::Int÷sizeof(codeunit(s)::CodeunitType)))
     index = UInt(1)
-    for c in s
+    for c::AbstractChar in s
         c′ = f(c)
         isa(c′, AbstractChar) || throw(ArgumentError(
             "map(f, s::AbstractString) requires f to return AbstractChar; " *
@@ -674,13 +685,16 @@ cases where `v` contains non-ASCII characters.)
 
 # Examples
 ```jldoctest
-julia> r = reverse("Julia")
-"ailuJ"
+julia> s = "Julia🚀"
+"Julia🚀"
 
-julia> for i in 1:length(r)
-           print(r[reverseind("Julia", i)])
+julia> r = reverse(s)
+"🚀ailuJ"
+
+julia> for i in eachindex(s)
+           print(r[reverseind(r, i)])
        end
-Julia
+Julia🚀
 ```
 """
 reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
@@ -690,7 +704,7 @@ reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
 
 Repeat a string `r` times. This can be written as `s^r`.
 
-See also: [`^`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer))
+See also [`^`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer)).
 
 # Examples
 ```jldoctest
@@ -705,7 +719,7 @@ repeat(s::AbstractString, r::Integer) = repeat(String(s), r)
 
 Repeat a string or character `n` times. This can also be written as `repeat(s, n)`.
 
-See also: [`repeat`](@ref)
+See also [`repeat`](@ref).
 
 # Examples
 ```jldoctest
@@ -735,7 +749,7 @@ end
 length(s::CodeUnits) = ncodeunits(s.s)
 sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
 size(s::CodeUnits) = (length(s),)
-elsize(s::CodeUnits{T}) where {T} = sizeof(T)
+elsize(s::Type{<:CodeUnits{T}}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
 @inline iterate(s::CodeUnits, i=1) = (i % UInt) - 1 < length(s) ? (@inbounds s[i], i + 1) : nothing
@@ -756,7 +770,7 @@ for new string types if necessary.
 # Examples
 ```jldoctest
 julia> codeunits("Juλia")
-6-element Base.CodeUnits{UInt8,String}:
+6-element Base.CodeUnits{UInt8, String}:
  0x4a
  0x75
  0xce

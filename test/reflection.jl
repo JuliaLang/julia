@@ -42,6 +42,13 @@ end
 test_code_reflections(test_ir_reflection, code_lowered)
 test_code_reflections(test_ir_reflection, code_typed)
 
+io = IOBuffer()
+Base.print_statement_costs(io, map, (typeof(sqrt), Tuple{Int}))
+str = String(take!(io))
+@test occursin("map(f, t::Tuple{Any})", str)
+@test occursin("sitofp", str)
+@test occursin(r"20 .*sqrt_llvm.*::Float64", str)
+
 end # module ReflectionTest
 
 # isbits, isbitstype
@@ -106,6 +113,9 @@ not_const = 1
 
 @test ismutable(1) == false
 @test ismutable([]) == true
+@test ismutabletype(Int) == false
+@test ismutabletype(Vector{Any}) == true
+@test ismutabletype(Union{Int, Vector{Any}}) == false
 
 ## find bindings tests
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base
@@ -214,7 +224,7 @@ let ex = :(a + b)
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825(::Array{T,N}, ::Array, ::Vector{T} where T)")
+                 "foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} in")
 
 mutable struct TLayout
     x::Int8
@@ -225,6 +235,8 @@ tlayout = TLayout(5,7,11)
 @test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
 @test hasfield(TLayout, :y)
 @test !hasfield(TLayout, :a)
+@test hasfield(Complex, :re)
+@test !hasfield(Complex, :qxq)
 @test hasproperty(tlayout, :x)
 @test !hasproperty(tlayout, :p)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
@@ -449,6 +461,11 @@ fLargeTable() = 4
 @test_throws MethodError fLargeTable(Val(1), Val(1))
 @test fLargeTable(Val(1), 1) == 1
 @test fLargeTable(1, Val(1)) == 2
+fLargeTable(::Union, ::Union) = "a"
+@test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "a"
+fLargeTable(::Union, ::Union) = "b"
+@test length(methods(fLargeTable)) == 205
+@test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
 # issue #15280
 function f15280(x) end
@@ -559,10 +576,6 @@ end
 @test !isstructtype(Int)
 @test isstructtype(TLayout)
 
-@test Base.parameter_upper_bound(ReflectionExample, 1) === AbstractFloat
-@test Base.parameter_upper_bound(ReflectionExample, 2) === Any
-@test Base.parameter_upper_bound(ReflectionExample{T, N} where T where N <: Real, 2) === Real
-
 let
     wrapperT(T) = Base.typename(T).wrapper
     @test @inferred wrapperT(ReflectionExample{Float64, Int64}) == ReflectionExample
@@ -629,10 +642,10 @@ let
     x22979 = (1, 2.0, 3.0 + im)
     T22979 = Tuple{typeof(f22979), typeof.(x22979)...}
     world = Core.Compiler.get_world_counter()
-    mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[1]
-    instance = Core.Compiler.specialize_method(m, mtypes, msp)
+    match = Base._methods_by_ftype(T22979, -1, world)[1]
+    instance = Core.Compiler.specialize_method(match)
     cinfo_generated = Core.Compiler.get_staged(instance)
-    @test_throws ErrorException Base.uncompressed_ir(m)
+    @test_throws ErrorException Base.uncompressed_ir(match.method)
 
     test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
 
@@ -870,6 +883,7 @@ _test_at_locals2(1,1,0.5f0)
     _dump_function(f31687_parent, Tuple{},
                    #=native=#false, #=wrapper=#false, #=strip=#false,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
+                   #=binary=#false,
                    params)
 end
 
@@ -905,4 +919,49 @@ end
     @test length(methods(f, (Int,), TestMod33403.Sub)) == 0
 
     @test length(methods(g, ())) == 1
+end
+
+module BodyFunctionLookup
+f1(x, y; a=1) = error("oops")
+f2(f::Function, args...; kwargs...) = f1(args...; kwargs...)
+end
+
+@testset "bodyfunction" begin
+    m = first(methods(BodyFunctionLookup.f1))
+    f = Base.bodyfunction(m)
+    @test occursin("f1#", String(nameof(f)))
+    m = first(methods(BodyFunctionLookup.f2))
+    f = Base.bodyfunction(m)
+    @test f !== Core._apply_iterate
+    @test f !== Core._apply
+    @test occursin("f2#", String(nameof(f)))
+end
+
+
+@testset "code_typed(; world)" begin
+    mod = @eval module $(gensym()) end
+
+    @eval mod foo() = 1
+    world1 = Base.get_world_counter()
+    @test only(code_typed(mod.foo, ())).second == Int
+    @test only(code_typed(mod.foo, (); world=world1)).second == Int
+
+    @eval mod foo() = 2.
+    world2 = Base.get_world_counter()
+    @test only(code_typed(mod.foo, ())).second == Float64
+    @test only(code_typed(mod.foo, (); world=world1)).second == Int
+    @test only(code_typed(mod.foo, (); world=world2)).second == Float64
+end
+
+@testset "default_tt" begin
+    m = Module()
+    @eval m f1() = return
+    @test Base.default_tt(m.f1) == Tuple{}
+    @eval m f2(a) = return
+    @test Base.default_tt(m.f2) == Tuple{Any}
+    @eval m f3(a::Integer) = return
+    @test Base.default_tt(m.f3) == Tuple{Integer}
+    @eval m f4() = return
+    @eval m f4(a) = return
+    @test Base.default_tt(m.f4) == Tuple
 end

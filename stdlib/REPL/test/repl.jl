@@ -90,7 +90,7 @@ end
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -104,11 +104,23 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_wr
     let cmd = "\"Hello REPL\""
         write(stdin_write, "$(curmod_prefix)inc || wait($(curmod_prefix)b); r = $cmd; notify($(curmod_prefix)c); r\r")
     end
-    inc = true
-    notify(b)
-    wait(c)
+    let t = @async begin
+            inc = true
+            notify(b)
+            wait(c)
+        end
+        while (d = readline(stdout_read)) != ""
+            # first line [optional]: until 80th char of input
+            # second line: until end of input
+            # third line: "Hello REPL"
+            # last line: blank
+            # last+1 line: next prompt
+        end
+        wait(t)
+    end
 
     # Latex completions
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "\x32\\alpha\t")
     readuntil(stdout_read, "α")
     # Bracketed paste in search mode
@@ -139,6 +151,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_wr
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
             @test samefile(".", tmpdir)
+            write(stdin_write, "\b")
 
             # Test using `cd` to move to the home directory
             write(stdin_write, ";")
@@ -148,6 +161,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_wr
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
             @test samefile(".", homedir_pwd)
+            write(stdin_write, "\b")
 
             # Test using `-` to jump backward to tmpdir
             write(stdin_write, ";")
@@ -157,6 +171,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_wr
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
             @test samefile(".", tmpdir)
+            write(stdin_write, "\b")
 
             # Test using `~` (Base.expanduser) in `cd` commands
             if !Sys.iswindows()
@@ -167,6 +182,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_wr
                 readuntil(stdout_read, "\n")
                 readuntil(stdout_read, "\n")
                 @test samefile(".", homedir_pwd)
+                write(stdin_write, "\b")
             end
         finally
             cd(origpwd)
@@ -196,6 +212,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_wr
         s = readuntil(stdout_read, "\n\n")
         @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
               startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] ")
+        write(stdin_write, "\b")
     end
 
     # issue #27293
@@ -219,6 +236,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_wr
             close(proc_stdout)
             # check for the correct, expanded response
             @test occursin(expanduser("~"), fetch(get_stdout))
+            write(stdin_write, "\b")
         end
     end
 
@@ -270,6 +288,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_wr
         end
         close(proc_stdout)
         @test fetch(get_stdout) == "HI\n"
+        write(stdin_write, "\b")
     end
 
     # Issue #7001
@@ -435,6 +454,8 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         # gets displayed by intercepting the display
         repl.specialdisplay = REPL.REPLDisplay(repl)
 
+        errormonitor(@async write(devnull, stdout_read)) # redirect stdout to devnull so we drain the output pipe
+
         repl.interface = REPL.setup_interface(repl)
         repl_mode = repl.interface.modes[1]
         shell_mode = repl.interface.modes[2]
@@ -445,8 +466,12 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
                                                        :help  => help_mode))
-
-        REPL.hist_from_file(hp, IOBuffer(fakehistory), "fakehistorypath")
+        hist_path = tempname()
+        write(hist_path, fakehistory)
+        REPL.hist_from_file(hp, hist_path)
+        f = open(hist_path, read=true, write=true, create=true)
+        hp.history_file = f
+        seekend(f)
         REPL.history_reset_state(hp)
 
         histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
@@ -725,6 +750,32 @@ fake_repl() do stdin_write, stdout_read, repl
     readuntil(stdout_read, "begin")
     @test readuntil(stdout_read, "end", keep=true) == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
 
+    # Test switching repl modes
+    sendrepl2("""\e[200~
+            julia> A = 1
+            1
+
+            shell> echo foo
+            foo
+
+            shell> echo foo
+                   foo
+            foo foo
+
+            help?> Int
+            Dummy docstring
+
+                Some text
+
+                julia> error("If this error throws, the paste handler has failed to ignore this docstring example")
+
+            julia> B = 2
+            2\e[201~
+             """)
+    wait(c)
+    @test Main.A == 1
+    @test Main.B == 2
+
     # Close repl
     write(stdin_write, '\x04')
     Base.wait(repltask)
@@ -773,12 +824,12 @@ end
 
 Base.exit_on_sigint(true)
 
-let exename = Base.julia_cmd()
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # Test REPL in dumb mode
     with_fake_pty() do pts, ptm
         nENV = copy(ENV)
         nENV["TERM"] = "dumb"
-        p = run(detach(setenv(`$exename --startup-file=no -q`, nENV)), pts, pts, pts, wait=false)
+        p = run(detach(setenv(`$exename -q`, nENV)), pts, pts, pts, wait=false)
         Base.close_stdio(pts)
         output = readuntil(ptm, "julia> ", keep=true)
         if ccall(:jl_running_on_valgrind, Cint,()) == 0
@@ -790,7 +841,7 @@ let exename = Base.julia_cmd()
 
         output = readuntil(ptm, ' ', keep=true)
         if Sys.iswindows()
-	    # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
+        # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
             @test output == "1\n\njulia> "
         else
             @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
@@ -816,7 +867,7 @@ let exename = Base.julia_cmd()
     end
 
     # Test stream mode
-    p = open(`$exename --startup-file=no -q`, "r+")
+    p = open(`$exename -q`, "r+")
     write(p, "1\nexit()\n")
     @test read(p, String) == "1\n"
 end # let exename
@@ -826,7 +877,7 @@ mutable struct Error19864 <: Exception; end
 function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
-    fake_response = (Any[(Error19864(), Ptr{Cvoid}[])], true)
+    fake_response = (Base.ExceptionStack([(exception=Error19864(),backtrace=Ptr{Cvoid}[])]),true)
     REPL.print_response(buf, fake_response, false, false, nothing)
     return String(take!(buf))
 end
@@ -1016,13 +1067,16 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "TestShowTypeREPL.TypeA\n")
     @test endswith(readline(stdout_read), "\r\e[7CTestShowTypeREPL.TypeA\r\e[29C")
     readline(stdout_read)
-    readline(stdout_read)
+    @test readline(stdout_read) == ""
     @eval Main using .TestShowTypeREPL
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "TypeA\n")
     @test endswith(readline(stdout_read), "\r\e[7CTypeA\r\e[12C")
     readline(stdout_read)
+    @test readline(stdout_read) == ""
 
     # Close REPL ^D
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
@@ -1052,7 +1106,7 @@ for (line, expr) in Pair[
 end
 
 # PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
-for line in ["′", "abstract", "type"]
+for line in ["′", "type"]
     @test occursin("No documentation found.",
         sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
 end
@@ -1064,6 +1118,12 @@ end
 # PR 35277
 @test occursin("identical", sprint(show, help_result("===")))
 @test occursin("broadcast", sprint(show, help_result(".<=")))
+
+# Issue 39427
+@test occursin("does not exist", sprint(show, help_result(":=")))
+
+# Issue #40563
+@test occursin("does not exist", sprint(show, help_result("..")))
 
 # Issue #25930
 
@@ -1141,10 +1201,13 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "Expr(:call, GlobalRef(Base.Math, :float), Core.SlotNumber(1))\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
+    @test readline(stdout_read) == ""
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "ans\n")
     readline(stdout_read)
-    readline(stdout_read)
     @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
+    @test readline(stdout_read) == ""
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
@@ -1157,10 +1220,15 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "struct Errs end\n")
     readline(stdout_read)
     readline(stdout_read)
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "Base.show(io::IO, ::Errs) = throw(Errs())\n")
     readline(stdout_read)
     readline(stdout_read)
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "Errs()\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     wait(repltask)
     @test istaskdone(repltask)
@@ -1173,7 +1241,8 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     write(stdin_write, "?;\n")
     readline(stdout_read)
-    @test endswith(readline(stdout_read),";")
+    @test endswith(readline(stdout_read), "search: ;")
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
@@ -1186,6 +1255,7 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "global x\n")
     readline(stdout_read)
     @test !occursin("ERROR", readline(stdout_read))
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
@@ -1212,15 +1282,15 @@ end
 # AST transformations (softscope, Revise, OhMyREPL, etc.)
 @testset "AST Transformation" begin
     backend = REPL.REPLBackend()
-    @async REPL.start_repl_backend(backend)
+    errormonitor(@async REPL.start_repl_backend(backend))
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == (2, false)
+    @test reply == Pair{Any, Bool}(2, false)
     twice(ex) = Expr(:tuple, ex, ex)
     push!(backend.ast_transforms, twice)
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == ((2, 2), false)
+    @test reply == Pair{Any, Bool}((2, 2), false)
     put!(backend.repl_channel, (nothing, -1))
     Base.wait(backend.backend_task)
 end
@@ -1232,12 +1302,12 @@ frontend_task = @async begin
         @testset "AST Transformations Async" begin
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == (2, false)
+            @test reply == Pair{Any, Bool}(2, false)
             twice(ex) = Expr(:tuple, ex, ex)
             push!(backend.ast_transforms, twice)
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == ((2, 2), false)
+            @test reply == Pair{Any, Bool}((2, 2), false)
         end
     catch e
         Base.rethrow(e)
@@ -1252,40 +1322,47 @@ macro throw_with_linenumbernode(err)
     Expr(:block, LineNumberNode(42, Symbol("test.jl")), :(() -> throw($err)))
 end
 
-@testset "last shown line infos" begin
-    out_stream = IOBuffer()
-    term = REPL.TTYTerminal("dumb", IOBuffer(), out_stream, IOBuffer())
-    repl = REPL.LineEditREPL(term, false)
-    repl.specialdisplay = REPL.REPLDisplay(repl)
+@testset "Install missing packages via hooks" begin
+    @testset "Parse AST for packages" begin
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo, Bar"))
+        @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo, Bar"))
+        @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo.bar, Foo.baz"))
+        @test mods == [:Foo]
 
-    REPL.print_response(repl, (methods(+), false), true, false)
-    seekstart(out_stream)
-    @test count(
-        contains(
-            "To edit a specific method, type the corresponding number into the REPL and " *
-            "press Ctrl+Q"
-        ),
-        eachline(out_stream),
-    ) == 1
-    take!(out_stream)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo end"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false if false using Foo end end"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo, Bar end"))
+        @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo: bar end"))
+        @test mods == [:Foo]
 
-    err = ErrorException("Foo")
-    bt = try
-        @throw_with_linenumbernode(err)()
-    catch
-        Base.catch_stack()
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo.bar as baz"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using .Foo"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base: nope"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Main"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Core"))
+        @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line(":(using Foo)"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("ex = :(using Foo)"))
+        @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
+        @test isempty(mods)
     end
-
-    repl.backendref = REPL.REPLBackendRef(Channel(1), Channel(1))
-    put!(repl.backendref.response_channel, (bt, true))
-
-    REPL.print_response(repl, (err, true), true, false)
-    seekstart(out_stream)
-    @test count(
-        contains(
-            "To edit a specific method, type the corresponding number into the REPL and " *
-            "press Ctrl+Q"
-        ),
-        eachline(out_stream),
-    ) == 1
 end

@@ -4,6 +4,10 @@ The following sections explain a few aspects of idiomatic Julia coding style. No
 are absolute; they are only suggestions to help familiarize you with the language and to help
 you choose among alternative designs.
 
+## Indentation
+
+Use 4 spaces per indentation level.
+
 ## Write functions, not just scripts
 
 Writing code as a series of steps at the top level is a quick way to get started solving a problem,
@@ -130,6 +134,32 @@ a = Vector{Union{Int,AbstractString,Tuple,Array}}(undef, n)
 In this case `Vector{Any}(undef, n)` is better. It is also more helpful to the compiler to annotate specific
 uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 
+## Prefer exported methods over direct field access
+
+Idiomatic Julia code should generally treat a module's exported methods as the
+interface to its types. An object's fields are generally considered
+implementation details and user code should only access them directly if this
+is stated to be the API. This has several benefits:
+
+- Package developers are freer to change the implementation without breaking
+  user code.
+- Methods can be passed to higher-order constructs like [`map`](@ref) (e.g.
+  `map(imag, zs)`) rather than `[z.im for z in zs]`).
+- Methods can be defined on abstract types.
+- Methods can describe a conceptual operation that can be shared across
+  disparate types (e.g. `real(z)` works on Complex numbers or Quaternions).
+
+Julia's dispatch system encourages this style because `play(x::MyType)` only
+defines the `play` method on that particular type, leaving other types to
+have their own implementation.
+
+Similarly, non-exported functions are typically internal and subject to change,
+unless the documentations states otherwise. Names sometimes are given a `_` prefix
+(or suffix) to further suggest that something is "internal" or an
+implementation-detail, but it is not a rule.
+
+Counter-examples to this rule include [`NamedTuple`](@ref), [`RegexMatch`](@ref match), [`StatStruct`](@ref stat).
+
 ## Use naming conventions consistent with Julia `base/`
 
   * modules and type names use capitalization and camel case: `module SparseArrays`, `struct UnitRange`.
@@ -137,6 +167,7 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
     words squashed together ([`isequal`](@ref), [`haskey`](@ref)). When necessary, use underscores
     as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch`](@ref)
     as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers.
+  * functions mutating at least one of their arguments end in `!`.
   * conciseness is valued, but avoid abbreviation ([`indexin`](@ref) rather than `indxin`) as
     it becomes difficult to remember whether and how particular words are abbreviated.
 
@@ -314,8 +345,7 @@ to behave in a certain way, and overly customizing its behavior can make it hard
 ## Avoid type piracy
 
 "Type piracy" refers to the practice of extending or redefining methods in Base
-or other packages on types that you have not defined. In some cases, you can get away with
-type piracy with little ill effect. In extreme cases, however, you can even crash Julia
+or other packages on types that you have not defined. In extreme cases, you can crash Julia
 (e.g. if your method extension or redefinition causes invalid input to be passed to a
 `ccall`). Type piracy can complicate reasoning about code, and may introduce
 incompatibilities that are hard to predict and diagnose.

@@ -9,9 +9,9 @@ tuple-like collection of values, where each entry has a unique name, represented
 can be modified in place after construction.
 
 Accessing the value associated with a name in a named tuple can be done using field
-access syntax, e.g. `x.a`, or using [`getindex`](@ref), e.g. `x[:a]`. A tuple of the
-names can be obtained using [`keys`](@ref), and a tuple of the values can be obtained
-using [`values`](@ref).
+access syntax, e.g. `x.a`, or using [`getindex`](@ref), e.g. `x[:a]` or `x[(:a, :b)]`.
+A tuple of the names can be obtained using [`keys`](@ref), and a tuple of the values
+can be obtained using [`values`](@ref).
 
 !!! note
     Iteration over `NamedTuple`s produces the *values* without the names. (See example
@@ -30,6 +30,9 @@ julia> x.a
 julia> x[:a]
 1
 
+julia> x[(:a,)]
+(a = 1,)
+
 julia> keys(x)
 (:a, :b)
 
@@ -42,7 +45,7 @@ julia> collect(x)
  2
 
 julia> collect(pairs(x))
-2-element Vector{Pair{Symbol,Int64}}:
+2-element Vector{Pair{Symbol, Int64}}:
  :a => 1
  :b => 2
 ```
@@ -76,6 +79,9 @@ julia> (; t.x)
 
 !!! compat "Julia 1.5"
     Implicit names from identifiers and dot expressions are available as of Julia 1.5.
+
+!!! compat "Julia 1.7"
+    Use of `getindex` methods with multiple `Symbol`s is available as of Julia 1.7.
 """
 Core.NamedTuple
 
@@ -104,18 +110,30 @@ end
 NamedTuple{names, T}(itr) where {names, T <: Tuple} = NamedTuple{names, T}(T(itr))
 NamedTuple{names}(itr) where {names} = NamedTuple{names}(Tuple(itr))
 
+NamedTuple(itr) = (; itr...)
+
+# avoids invalidating Union{}(...)
+NamedTuple{names, Union{}}(itr::Tuple) where {names} = throw(MethodError(NamedTuple{names, Union{}}, (itr,)))
+
 end # if Base
 
 length(t::NamedTuple) = nfields(t)
 iterate(t::NamedTuple, iter=1) = iter > nfields(t) ? nothing : (getfield(t, iter), iter + 1)
+rest(t::NamedTuple) = t
+@inline rest(t::NamedTuple{names}, i::Int) where {names} = NamedTuple{rest(names,i)}(t)
 firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
 getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
+@inline getindex(t::NamedTuple, idxs::Tuple{Vararg{Symbol}}) = NamedTuple{idxs}(t)
+@inline getindex(t::NamedTuple, idxs::AbstractVector{Symbol}) = NamedTuple{Tuple(idxs)}(t)
 indexed_iterate(t::NamedTuple, i::Int, state=1) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
 empty(::NamedTuple) = NamedTuple()
+
+prevind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)-1
+nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
 convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tuple} = nt
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
@@ -147,7 +165,8 @@ function show(io::IO, t::NamedTuple)
         typeinfo = get(io, :typeinfo, Any)
         print(io, "(")
         for i = 1:n
-            print(io, fieldname(typeof(t),i), " = ")
+            show_sym(io, fieldname(typeof(t), i))
+            print(io, " = ")
             show(IOContext(io, :typeinfo =>
                            t isa typeinfo <: NamedTuple ? fieldtype(typeinfo, i) : Any),
                  getfield(t, i))
@@ -161,7 +180,9 @@ function show(io::IO, t::NamedTuple)
     end
 end
 
-eltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
+eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
+nteltype(::Type) = Any
+nteltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
 
 ==(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) == Tuple(b)
 ==(a::NamedTuple, b::NamedTuple) = false
@@ -174,8 +195,8 @@ _nt_names(::Type{T}) where {names,T<:NamedTuple{names}} = names
 
 hash(x::NamedTuple, h::UInt) = xor(objectid(_nt_names(x)), hash(Tuple(x), h))
 
+(<)(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) < Tuple(b)
 isless(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = isless(Tuple(a), Tuple(b))
-# TODO: case where one argument's names are a prefix of the other's
 
 same_names(::NamedTuple{names}...) where {names} = true
 same_names(::NamedTuple...) = false
@@ -247,7 +268,9 @@ merge(a::NamedTuple,     b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple)     = b
 
-merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
+merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, getfield(b, :data))
+
+merge(a::NamedTuple, b::Iterators.Zip{<:Tuple{Any,Any}}) = merge(a, NamedTuple{Tuple(b.is[1])}(b.is[2]))
 
 merge(a::NamedTuple, b::NamedTuple, cs::NamedTuple...) = merge(merge(a, b), cs...)
 
@@ -267,7 +290,8 @@ function merge(a::NamedTuple, itr)
     names = Symbol[]
     vals = Any[]
     inds = IdDict{Symbol,Int}()
-    for (k::Symbol, v) in itr
+    for (k, v) in itr
+        k = k::Symbol
         oldind = get(inds, k, 0)
         if oldind > 0
             vals[oldind] = v
@@ -360,13 +384,13 @@ can also be declared via `@NamedTuple` as:
 
 ```jldoctest
 julia> @NamedTuple{a::Float64, b::String}
-NamedTuple{(:a, :b),Tuple{Float64,String}}
+NamedTuple{(:a, :b), Tuple{Float64, String}}
 
 julia> @NamedTuple begin
            a::Float64
            b::String
        end
-NamedTuple{(:a, :b),Tuple{Float64,String}}
+NamedTuple{(:a, :b), Tuple{Float64, String}}
 ```
 
 !!! compat "Julia 1.5"

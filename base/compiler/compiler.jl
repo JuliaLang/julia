@@ -1,14 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compiler
+getfield(Core, :eval)(Core, :(baremodule Compiler
 
 using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
-             _apply, _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance, CodeInstance
+             _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
+             MethodInstance, CodeInstance, MethodMatch, PartialOpaque,
+             TypeofVararg
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
+const swapproperty! = Core.swapfield!
+const modifyproperty! = Core.modifyfield!
+const replaceproperty! = Core.replacefield!
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 
@@ -18,9 +23,10 @@ eval(m, x) = Core.eval(m, x)
 include(x) = Core.include(Compiler, x)
 include(mod, x) = Core.include(mod, x)
 
-#############
-# from Base #
-#############
+# The @inline/@noinline macros that can be applied to a function declaration are not available
+# until after array.jl, and so we will mark them within a function body instead.
+macro inline()   Expr(:meta, :inline)   end
+macro noinline() Expr(:meta, :noinline) end
 
 # essential files and libraries
 include("essentials.jl")
@@ -78,6 +84,13 @@ using .Iterators: zip, enumerate
 using .Iterators: Flatten, Filter, product  # for generators
 include("namedtuple.jl")
 
+ntuple(f, ::Val{0}) = ()
+ntuple(f, ::Val{1}) = (@inline; (f(1),))
+ntuple(f, ::Val{2}) = (@inline; (f(1), f(2)))
+ntuple(f, ::Val{3}) = (@inline; (f(1), f(2), f(3)))
+ntuple(f, ::Val{n}) where {n} = ntuple(f, n::Int)
+ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
+
 # core docsystem
 include("docs/core.jl")
 
@@ -91,17 +104,22 @@ using .Order
 include("sort.jl")
 using .Sort
 
+# We don't include some.jl, but this definition is still useful.
+something(x::Nothing, y...) = something(y...)
+something(x::Any, y...) = x
+
 ############
 # compiler #
 ############
 
+include("compiler/cicache.jl")
 include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
+include("compiler/methodtable.jl")
 
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
-include("compiler/cicache.jl")
 
 include("compiler/typeutils.jl")
 include("compiler/typelimits.jl")
@@ -121,4 +139,3 @@ Core.eval(Core, :(_parse = Compiler.fl_parse))
 
 end # baremodule Compiler
 ))
-

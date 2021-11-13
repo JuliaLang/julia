@@ -499,4 +499,22 @@ end
     end
 end
 
+@testset "Missing arithmetic" begin
+    for t ∈ [Date, Time, Day, Month, Week, Year, Hour, Microsecond, Millisecond, Minute, Nanosecond, Second]
+        @test ismissing(t(1) + missing)
+        @test ismissing(missing + t(1))
+        @test ismissing(t(1) - missing)
+        @test ismissing(missing - t(1))
+    end
+end
+
+@testset "Diff of dates" begin
+    for t ∈ [Day, Week, Hour, Minute]
+        a = DateTime(2021,1,1):t(1):DateTime(2021,2,1)
+        d = diff(a)
+        @test d == diff(collect(a))
+        @test eltype(d) === typeof(a[1] - a[2])
+    end
+end
+
 end

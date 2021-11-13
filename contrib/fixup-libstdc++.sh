@@ -3,7 +3,7 @@
 
 # Run as: fixup-libstdc++.sh <libdir> <private_libdir>
 
-if [ -z "$1" ]; then
+if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <libdir> <private_libdir>"
     exit 1
 fi
@@ -11,8 +11,8 @@ fi
 libdir="$1"
 private_libdir="$2"
 
-if [ ! -f "$libdir/libjulia.so" ]; then
-    echo "ERROR: Could not open $libdir/libjulia.so" >&2
+if [ ! -f "$private_libdir/libjulia-internal.so" ]; then
+    echo "ERROR: Could not open $private_libdir/libjulia-internal.so" >&2
     exit 2
 fi
 
@@ -24,7 +24,7 @@ find_shlib ()
 }
 
 # Discover libstdc++ location and name
-LIBSTD=$(find_shlib "$libdir/libjulia.so" "libstdc++.so")
+LIBSTD=$(find_shlib "$private_libdir/libjulia-internal.so" "libstdc++.so")
 LIBSTD_NAME=$(basename $LIBSTD)
 LIBSTD_DIR=$(dirname $LIBSTD)
 

@@ -74,26 +74,29 @@ const SpawnIOs = Vector{Any} # convenience name for readability
 # handle marshalling of `Cmd` arguments from Julia to C
 @noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs)
     loop = eventloop()
-    iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
-        let h = rawhandle(io)
-            h === C_NULL     ? (0x00, UInt(0)) :
-            h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
-            h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
-            error("invalid spawn handle $h from $io")
-        end
-        for io in stdio]
-    handle = Libc.malloc(_sizeof_uv_process)
-    disassociate_julia_struct(handle) # ensure that data field is set to C_NULL
-    err = ccall(:jl_spawn, Int32,
-              (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
-               Ptr{Tuple{Cint, UInt}}, Int,
-               UInt32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
-        file, cmd.exec, loop, handle,
-        iohandles, length(iohandles),
-        cmd.flags,
-        cmd.env === nothing ? C_NULL : cmd.env,
-        isempty(cmd.dir) ? C_NULL : cmd.dir,
-        @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
+    GC.@preserve stdio begin
+        iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
+            let h = rawhandle(io)
+                h === C_NULL     ? (0x00, UInt(0)) :
+                h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
+                h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
+                error("invalid spawn handle $h from $io")
+            end
+            for io in stdio]
+        handle = Libc.malloc(_sizeof_uv_process)
+        disassociate_julia_struct(handle) # ensure that data field is set to C_NULL
+        (; exec, flags, env, dir) = cmd
+        err = ccall(:jl_spawn, Int32,
+                  (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
+                   Ptr{Tuple{Cint, UInt}}, Int,
+                   UInt32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
+            file, exec, loop, handle,
+            iohandles, length(iohandles),
+            flags,
+            env === nothing ? C_NULL : env,
+            isempty(dir) ? C_NULL : dir,
+            @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
+    end
     if err != 0
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
         throw(_UVError("could not spawn " * repr(cmd), err))
@@ -209,10 +212,10 @@ function setup_stdio(stdio::PipeEndpoint, child_readable::Bool)
         rd, wr = link_pipe(!child_readable, child_readable)
         try
             open_pipe!(stdio, child_readable ? wr : rd)
-        catch ex
+        catch
             close_pipe_sync(rd)
             close_pipe_sync(wr)
-            rethrow(ex)
+            rethrow()
         end
         child = child_readable ? rd : wr
         return (child, true)
@@ -251,18 +254,19 @@ function setup_stdio(stdio::FileRedirect, child_readable::Bool)
     return (io, true)
 end
 
-# incrementally move data between an IOBuffer and a system Pipe
+# incrementally move data between an arbitrary IO and a system Pipe,
+# including copying the EOF (shutdown) when finished
 # TODO: probably more efficient (when valid) to use `stdio` directly as the
 #       PipeEndpoint buffer field in some cases
-function setup_stdio(stdio::Union{IOBuffer, BufferStream}, child_readable::Bool)
+function setup_stdio(stdio::IO, child_readable::Bool)
     parent = PipeEndpoint()
     rd, wr = link_pipe(!child_readable, child_readable)
     try
         open_pipe!(parent, child_readable ? wr : rd)
-    catch ex
+    catch
         close_pipe_sync(rd)
         close_pipe_sync(wr)
-        rethrow(ex)
+        rethrow()
     end
     child = child_readable ? rd : wr
     try
@@ -271,22 +275,17 @@ function setup_stdio(stdio::Union{IOBuffer, BufferStream}, child_readable::Bool)
             @async try
                 write(in, out)
             catch ex
-                @warn "Process error" exception=(ex, catch_backtrace())
+                @warn "Process I/O error" exception=(ex, catch_backtrace())
             finally
                 close(parent)
+                child_readable || closewrite(stdio)
             end
         end
-    catch ex
+    catch
         close_pipe_sync(child)
-        rethrow(ex)
+        rethrow()
     end
     return (child, true)
-end
-
-function setup_stdio(io, child_readable::Bool)
-    # if there is no specialization,
-    # assume that rawhandle is defined for it
-    return (io, false)
 end
 
 close_stdio(stdio::OS_HANDLE) = close_pipe_sync(stdio)
@@ -383,9 +382,10 @@ end
 """
     open(f::Function, command, args...; kwargs...)
 
-Similar to `open(command, args...; kwargs...)`, but calls `f(stream)` on the resulting process
-stream, then closes the input stream and waits for the process to complete.
-Returns the value returned by `f`.
+Similar to `open(command, args...; kwargs...)`, but calls `f(stream)` on the
+resulting process stream, then closes the input stream and waits for the process
+to complete. Return the value returned by `f` on success. Throw an error if the
+process failed, or if the process attempts to print anything to stdout.
 """
 function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
     P = open(cmds, args...; kwargs...)
@@ -393,9 +393,13 @@ function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
         f(P)
     catch
         kill(P)
+        close(P)
         rethrow()
-    finally
-        close(P.in)
+    end
+    close(P.in)
+    if !eof(P.out)
+        close(P.out)
+        throw(_UVError("open(do)", UV_EPIPE))
     end
     success(P) || pipeline_error(P)
     return ret
@@ -418,7 +422,7 @@ end
 
 Run `command` and return the resulting output as a `String`.
 """
-read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
+read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))::String
 
 """
     run(command, args...; wait::Bool = true)
@@ -476,7 +480,7 @@ function test_success(proc::Process)
         #TODO: this codepath is not currently tested
         throw(_UVError("could not start process " * repr(proc.cmd), proc.exitcode))
     end
-    return proc.exitcode == 0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
+    return proc.exitcode == 0 && proc.termsignal == 0
 end
 
 function success(x::Process)
@@ -546,7 +550,7 @@ Returns successfully if the process has already exited, but throws an
 error if killing the process failed for other reasons (e.g. insufficient
 permissions).
 """
-function kill(p::Process, signum::Integer)
+function kill(p::Process, signum::Integer=SIGTERM)
     iolock_begin()
     if process_running(p)
         @assert p.handle != C_NULL
@@ -558,9 +562,8 @@ function kill(p::Process, signum::Integer)
     iolock_end()
     nothing
 end
-kill(ps::Vector{Process}) = foreach(kill, ps)
-kill(ps::ProcessChain) = foreach(kill, ps.processes)
-kill(p::Process) = kill(p, SIGTERM)
+kill(ps::Vector{Process}, signum::Integer=SIGTERM) = for p in ps; kill(p, signum); end
+kill(ps::ProcessChain, signum::Integer=SIGTERM) = kill(ps.processes, signum)
 
 """
     getpid(process) -> Int32

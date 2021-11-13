@@ -74,7 +74,7 @@ end
 ## Libuv error handling ##
 
 struct IOError <: Exception
-    msg::AbstractString
+    msg::String
     code::Int32
     IOError(msg::AbstractString, code::Integer) = new(msg, code)
 end
@@ -107,6 +107,7 @@ end
 function uv_alloc_buf end
 function uv_readcb end
 function uv_writecb_task end
+function uv_shutdowncb_task end
 function uv_return_spawn end
 function uv_asynccb end
 function uv_timercb end
@@ -115,6 +116,16 @@ function reinit_stdio()
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
+    opts = JLOptions()
+    if opts.color != 0
+        have_color = (opts.color == 1)
+        if !isa(stdout, TTY)
+            global stdout = IOContext(stdout, :color => have_color)
+        end
+        if !isa(stderr, TTY)
+            global stderr = IOContext(stderr, :color => have_color)
+        end
+    end
     nothing
 end
 

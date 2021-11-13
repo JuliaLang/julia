@@ -40,6 +40,11 @@ for structuring and organizing programs.
     an explicit method argument. When the current `this` object is the receiver of a method call,
     it can be omitted altogether, writing just `meth(arg1,arg2)`, with `this` implied as the receiving
     object.
+!!! note
+    All the examples in this chapter assume that you are defining methods for a function in the *same*
+    module. If you want to add methods to a function in *another* module, you have to `import` it or
+    use the name qualified with module names. See the section on [namespace management](@ref
+    namespace-management).
 
 ## Defining Methods
 
@@ -165,7 +170,7 @@ f (generic function with 2 methods)
 This output tells us that `f` is a function object with two methods. To find out what the signatures
 of those methods are, use the [`methods`](@ref) function:
 
-```julia-repl
+```jldoctest fofxy
 julia> methods(f)
 # 2 methods for generic function "f":
 [1] f(x::Float64, y::Float64) in Main at none:1
@@ -184,12 +189,21 @@ meaning that it is unconstrained since all values in Julia are instances of the 
 julia> f(x,y) = println("Whoa there, Nelly.")
 f (generic function with 3 methods)
 
+julia> methods(f)
+# 3 methods for generic function "f":
+[1] f(x::Float64, y::Float64) in Main at none:1
+[2] f(x::Number, y::Number) in Main at none:1
+[3] f(x, y) in Main at none:1
+
 julia> f("foo", 1)
 Whoa there, Nelly.
 ```
 
 This catch-all is less specific than any other possible method definition for a pair of parameter
 values, so it will only be called on pairs of arguments to which no other method definition applies.
+
+Note that in the signature of the third method, there is no type specified for the arguments `x` and `y`.
+This is a shortened way of expressing `f(x::Any, y::Any)`.
 
 Although it seems a simple concept, multiple dispatch on the types of values is perhaps the single
 most powerful and central feature of the Julia language. Core operations typically have dozens
@@ -243,8 +257,8 @@ julia> g(2, 3.0)
 
 julia> g(2.0, 3.0)
 ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-  g(x, y::Float64) in Main at none:1
   g(x::Float64, y) in Main at none:1
+  g(x, y::Float64) in Main at none:1
 Possible fix, define
   g(::Float64, ::Float64)
 ```
@@ -532,38 +546,19 @@ Here are a few common design patterns that come up sometimes when using dispatch
 ### Extracting the type parameter from a super-type
 
 
-Here is the correct code template for returning the element-type `T`
-of any arbitrary subtype of `AbstractArray`:
+Here is a correct code template for returning the element-type `T`
+of any arbitrary subtype of `AbstractArray` that has well-defined
+element type:
 
 ```julia
 abstract type AbstractArray{T, N} end
 eltype(::Type{<:AbstractArray{T}}) where {T} = T
 ```
-using so-called triangular dispatch.  Note that if `T` is a `UnionAll`
-type, as e.g. `eltype(Array{T} where T <: Integer)`, then `Any` is
-returned (as does the version of `eltype` in `Base`).
 
-Another way, which used to be the only correct way before the advent of
-triangular dispatch in Julia v0.6, is:
-
-```julia
-abstract type AbstractArray{T, N} end
-eltype(::Type{AbstractArray}) = Any
-eltype(::Type{AbstractArray{T}}) where {T} = T
-eltype(::Type{AbstractArray{T, N}}) where {T, N} = T
-eltype(::Type{A}) where {A<:AbstractArray} = eltype(supertype(A))
-```
-
-Another possibility is the following, which could be useful to adapt
-to cases where the parameter `T` would need to be matched more
-narrowly:
-```julia
-eltype(::Type{AbstractArray{T, N} where {T<:S, N<:M}}) where {M, S} = Any
-eltype(::Type{AbstractArray{T, N} where {T<:S}}) where {N, S} = Any
-eltype(::Type{AbstractArray{T, N} where {N<:M}}) where {M, T} = T
-eltype(::Type{AbstractArray{T, N}}) where {T, N} = T
-eltype(::Type{A}) where {A <: AbstractArray} = eltype(supertype(A))
-```
+using so-called triangular dispatch.  Note that `UnionAll` types, for
+example `eltype(AbstractArray{T} where T <: Integer)`, do not match the
+above method. The implementation of `eltype` in `Base` adds a fallback
+method to `Any` for such cases.
 
 
 One common mistake is to try and get the element-type by using introspection:
@@ -581,6 +576,25 @@ struct BitVector <: AbstractArray{Bool, 1}; end
 Here we have created a type `BitVector` which has no parameters,
 but where the element-type is still fully specified, with `T` equal to `Bool`!
 
+
+Another mistake is to try to walk up the type hierarchy using
+`supertype`:
+```julia
+eltype_wrong(::Type{AbstractArray{T}}) where {T} = T
+eltype_wrong(::Type{AbstractArray{T, N}}) where {T, N} = T
+eltype_wrong(::Type{A}) where {A<:AbstractArray} = eltype_wrong(supertype(A))
+```
+
+While this works for declared types, it fails for types without
+supertypes:
+
+```julia-repl
+julia> eltype_wrong(Union{AbstractArray{Int}, AbstractArray{Float64}})
+ERROR: MethodError: no method matching supertype(::Type{Union{AbstractArray{Float64,N} where N, AbstractArray{Int64,N} where N}})
+Closest candidates are:
+  supertype(::DataType) at operators.jl:43
+  supertype(::UnionAll) at operators.jl:48
+```
 
 ### Building a similar type with a different type parameter
 
@@ -666,7 +680,7 @@ other functions such as `map` can dispatch on this information to pick
 the best algorithm (see [Abstract Array Interface](@ref man-interface-array)).
 This means that each subtype does not need to implement a custom version of `map`,
 since the generic definitions + trait classes will enable the system to select the fastest version.
-Here a toy implementation of `map` illustrating the trait-based dispatch:
+Here is a toy implementation of `map` illustrating the trait-based dispatch:
 
 ```julia
 map(f, a::AbstractArray, b::AbstractArray) = map(Base.IndexStyle(a, b), f, a, b)
@@ -885,8 +899,7 @@ purpose of documentation or code readability. The syntax for this is an empty `f
 without a tuple of arguments:
 
 ```julia
-function emptyfunc
-end
+function emptyfunc end
 ```
 
 ## [Method design and the avoidance of ambiguities](@id man-method-design-ambiguities)

@@ -19,7 +19,7 @@ end
       if Base.DARWIN_FRAMEWORK
           return occursin(Regex("^$(Base.DARWIN_FRAMEWORK_NAME)(?:_debug)?\$"), basename(dl))
       else
-          return occursin(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
+          return occursin(Regex("^libjulia-internal(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
       end
     end) == 1 # look for something libjulia-like (but only one)
 
@@ -29,9 +29,8 @@ end
 
 cd(@__DIR__) do
 
-# Find the library directory by finding the path of libjulia (or libjulia-debug, as the case may be)
-# and then adding on /julia to that directory path to get the private library directory, if we need
-# to (where "need to" is defined as private_libdir/julia/libccalltest.dlext exists
+# Find the library directory by finding the path of libjulia-internal (or libjulia-internal-debug,
+# as the case may be) to get the private library directory
 private_libdir = if Base.DARWIN_FRAMEWORK
     if ccall(:jl_is_debugbuild, Cint, ()) != 0
         dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
@@ -39,13 +38,9 @@ private_libdir = if Base.DARWIN_FRAMEWORK
         joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
     end
 elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
-    dirname(abspath(Libdl.dlpath("libjulia-debug")))
+    dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
 else
-    dirname(abspath(Libdl.dlpath("libjulia")))
-end
-
-if isfile(joinpath(private_libdir,"julia","libccalltest."*Libdl.dlext))
-    private_libdir = joinpath(private_libdir, "julia")
+    dirname(abspath(Libdl.dlpath("libjulia-internal")))
 end
 
 @test !isempty(Libdl.find_library(["libccalltest"], [private_libdir]))

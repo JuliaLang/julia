@@ -3,7 +3,7 @@
 ## Functions to compute the reduced shape
 
 # for reductions that expand 0 dims to 1
-reduced_index(i::OneTo) = OneTo(1)
+reduced_index(i::OneTo{T}) where {T} = OneTo(one(T))
 reduced_index(i::Union{Slice, IdentityUnitRange}) = oftype(i, first(i):first(i))
 reduced_index(i::AbstractUnitRange) =
     throw(ArgumentError(
@@ -125,7 +125,7 @@ function _reducedim_init(f, op, fv, fop, A, region)
 end
 
 # initialization when computing minima and maxima requires a little care
-for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
+for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min, :(-Inf), :typemin))
     @eval function reducedim_init(f, op::typeof($f1), A::AbstractArray, region)
         # First compute the reduce indices. This will throw an ArgumentError
         # if any region is invalid
@@ -144,11 +144,23 @@ for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
             # otherwise use the min/max of the first slice as initial value
             v0 = mapreduce(f, $f2, A1)
 
-            # but NaNs need to be avoided as initial values
-            v0 = v0 != v0 ? typeof(v0)($initval) : v0
-
             T = _realtype(f, promote_union(eltype(A)))
             Tr = v0 isa T ? T : typeof(v0)
+
+            # but NaNs and missing need to be avoided as initial values
+            if (v0 == v0) === false
+                # v0 is NaN
+                v0 = $initval
+            elseif isunordered(v0)
+                # v0 is missing or a third-party unordered value
+                Tnm = nonmissingtype(Tr)
+                # TODO: Some types, like BigInt, don't support typemin/typemax.
+                # So a Matrix{Union{BigInt, Missing}} can still error here.
+                v0 = $typeextreme(Tnm)
+            end
+            # v0 may have changed type.
+            Tr = v0 isa T ? T : typeof(v0)
+
             return reducedim_initarray(A, region, v0, Tr)
         end
     end
@@ -181,7 +193,7 @@ end
 
 has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = false
 has_fast_linear_indexing(a::Array) = true
-has_fast_linear_indexing(::Number) = true  # for Broadcasted
+has_fast_linear_indexing(::Union{Number,Ref,AbstractChar}) = true  # 0d objects, for Broadcasted
 has_fast_linear_indexing(bc::Broadcast.Broadcasted) =
     all(has_fast_linear_indexing, bc.args)
 
@@ -283,7 +295,7 @@ reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
 """
     mapreduce(f, op, A::AbstractArray...; dims=:, [init])
 
-Evaluates to the same as `reduce(op, map(f, A); dims=dims, init=init)`, but is generally
+Evaluates to the same as `reduce(op, map(f, A...); dims=dims, init=init)`, but is generally
 faster because the intermediate array is avoided.
 
 !!! compat "Julia 1.2"
@@ -369,6 +381,9 @@ dimensions.
 !!! compat "Julia 1.5"
     `dims` keyword was added in Julia 1.5.
 
+!!! compat "Julia 1.6"
+    `init` keyword was added in Julia 1.6.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -386,8 +401,11 @@ julia> count(<=(2), A, dims=2)
  0
 ```
 """
-count(A::AbstractArrayOrBroadcasted; dims=:) = count(identity, A, dims=dims)
-count(f, A::AbstractArrayOrBroadcasted; dims=:) = mapreduce(_bool(f), add_sum, A, dims=dims, init=0)
+count(A::AbstractArrayOrBroadcasted; dims=:, init=0) = count(identity, A; dims, init)
+count(f, A::AbstractArrayOrBroadcasted; dims=:, init=0) = _count(f, A, dims, init)
+
+_count(f, A::AbstractArrayOrBroadcasted, dims::Colon, init) = _simple_count(f, A, init)
+_count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_sum, A; dims, init)
 
 """
     count!([f=identity,] r, A)
@@ -572,6 +590,8 @@ Compute the maximum value of an array over the given dimensions. See also the
 [`max(a,b)`](@ref) function to take the maximum of two or more arguments,
 which can be applied elementwise to arrays via `max.(a,b)`.
 
+See also: [`maximum!`](@ref), [`extrema`](@ref), [`findmax`](@ref), [`argmax`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -594,7 +614,7 @@ maximum(A::AbstractArray; dims)
 """
     maximum(f, A::AbstractArray; dims)
 
-Compute the maximum value from of calling the function `f` on each element of an array over the given
+Compute the maximum value by calling the function `f` on each element of an array over the given
 dimensions.
 
 # Examples
@@ -647,6 +667,8 @@ Compute the minimum value of an array over the given dimensions. See also the
 [`min(a,b)`](@ref) function to take the minimum of two or more arguments,
 which can be applied elementwise to arrays via `min.(a,b)`.
 
+See also: [`minimum!`](@ref), [`extrema`](@ref), [`findmin`](@ref), [`argmin`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -669,7 +691,7 @@ minimum(A::AbstractArray; dims)
 """
     minimum(f, A::AbstractArray; dims)
 
-Compute the minimum value from of calling the function `f` on each element of an array over the given
+Compute the minimum value by calling the function `f` on each element of an array over the given
 dimensions.
 
 # Examples
@@ -742,7 +764,7 @@ all(A::AbstractArray; dims)
 """
     all(p, A; dims)
 
-Determine whether predicate p returns true for all elements along the given dimensions of an array.
+Determine whether predicate `p` returns `true` for all elements along the given dimensions of an array.
 
 # Examples
 ```jldoctest
@@ -814,7 +836,7 @@ any(::AbstractArray; dims)
 """
     any(p, A; dims)
 
-Determine whether predicate p returns true for any elements along the given dimensions of an array.
+Determine whether predicate `p` returns `true` for any elements along the given dimensions of an array.
 
 # Examples
 ```jldoctest
@@ -920,7 +942,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             for i in axes(A,1)
                 k, kss = y::Tuple
                 tmpAv = A[i,IA]
-                if tmpRi == zi || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
+                if tmpRi == zi || f(tmpRv, tmpAv)
                     tmpRv = tmpAv
                     tmpRi = k
                 end
@@ -937,7 +959,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
                 tmpAv = A[i,IA]
                 tmpRv = Rval[i,IR]
                 tmpRi = Rind[i,IR]
-                if tmpRi == zi || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
+                if tmpRi == zi || f(tmpRv, tmpAv)
                     Rval[i,IR] = tmpAv
                     Rind[i,IR] = k
                 end
@@ -953,18 +975,18 @@ end
 
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
-`NaN` is treated as less than all other values.
+`NaN` is treated as less than all other values except `missing`.
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    findminmax!(isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
 end
 
 """
     findmin(A; dims) -> (minval, index)
 
 For an array input, returns the value and index of the minimum over the given dimensions.
-`NaN` is treated as less than all other values.
+`NaN` is treated as less than all other values except `missing`.
 
 # Examples
 ```jldoctest
@@ -977,7 +999,7 @@ julia> findmin(A, dims=1)
 ([1.0 2.0], CartesianIndex{2}[CartesianIndex(1, 1) CartesianIndex(1, 2)])
 
 julia> findmin(A, dims=2)
-([1.0; 3.0], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1)])
+([1.0; 3.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1);;])
 ```
 """
 findmin(A::AbstractArray; dims=:) = _findmin(A, dims)
@@ -990,30 +1012,28 @@ function _findmin(A, region)
         end
         (similar(A, ri), zeros(eltype(keys(A)), ri))
     else
-        findminmax!(isless, fill!(similar(A, ri), first(A)),
+        findminmax!(isgreater, fill!(similar(A, ri), first(A)),
                     zeros(eltype(keys(A)), ri), A)
     end
 end
-
-isgreater(a, b) = isless(b,a)
 
 """
     findmax!(rval, rind, A) -> (maxval, index)
 
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
-`NaN` is treated as greater than all other values.
+`NaN` is treated as greater than all other values except `missing`.
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    findminmax!(isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
 end
 
 """
     findmax(A; dims) -> (maxval, index)
 
 For an array input, returns the value and index of the maximum over the given dimensions.
-`NaN` is treated as greater than all other values.
+`NaN` is treated as greater than all other values except `missing`.
 
 # Examples
 ```jldoctest
@@ -1026,7 +1046,7 @@ julia> findmax(A, dims=1)
 ([3.0 4.0], CartesianIndex{2}[CartesianIndex(2, 1) CartesianIndex(2, 2)])
 
 julia> findmax(A, dims=2)
-([2.0; 4.0], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2)])
+([2.0; 4.0;;], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2);;])
 ```
 """
 findmax(A::AbstractArray; dims=:) = _findmax(A, dims)
@@ -1039,7 +1059,7 @@ function _findmax(A, region)
         end
         similar(A, ri), zeros(eltype(keys(A)), ri)
     else
-        findminmax!(isgreater, fill!(similar(A, ri), first(A)),
+        findminmax!(isless, fill!(similar(A, ri), first(A)),
                     zeros(eltype(keys(A)), ri), A)
     end
 end
@@ -1050,7 +1070,7 @@ reducedim1(R, A) = length(axes1(R)) == 1
     argmin(A; dims) -> indices
 
 For an array input, return the indices of the minimum elements over the given dimensions.
-`NaN` is treated as less than all other values.
+`NaN` is treated as less than all other values except `missing`.
 
 # Examples
 ```jldoctest
@@ -1075,7 +1095,7 @@ argmin(A::AbstractArray; dims=:) = findmin(A; dims=dims)[2]
     argmax(A; dims) -> indices
 
 For an array input, return the indices of the maximum elements over the given dimensions.
-`NaN` is treated as greater than all other values.
+`NaN` is treated as greater than all other values except `missing`.
 
 # Examples
 ```jldoctest

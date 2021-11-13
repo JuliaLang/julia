@@ -3,7 +3,7 @@
 function inflate_ir(ci::CodeInfo, linfo::MethodInstance)
     sptypes = sptypes_from_meth_instance(linfo)
     if ci.inferred
-        argtypes, _ = matching_cache_argtypes(linfo, nothing)
+        argtypes, _ = matching_cache_argtypes(linfo, nothing, false)
     else
         argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
     end
@@ -21,7 +21,7 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
         elseif isa(stmt, GotoIfNot)
             code[i] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
         elseif isa(stmt, PhiNode)
-            code[i] = PhiNode(Any[block_for_inst(cfg, edge) for edge in stmt.edges], stmt.values)
+            code[i] = PhiNode(Int32[block_for_inst(cfg, Int(edge)) for edge in stmt.edges], stmt.values)
         elseif isa(stmt, Expr) && stmt.head === :enter
             stmt.args[1] = block_for_inst(cfg, stmt.args[1])
             code[i] = stmt
@@ -29,9 +29,10 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
             code[i] = stmt
         end
     end
-    ssavaluetypes = ci.ssavaluetypes
     nstmts = length(code)
-    ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:(ci.ssavaluetypes::Int) ]
+    ssavaluetypes = let ssavaluetypes = ci.ssavaluetypes
+        ssavaluetypes isa Vector{Any} ? copy(ssavaluetypes) : Any[ Any for i = 1:(ssavaluetypes::Int) ]
+    end
     stmts = InstructionStream(code, ssavaluetypes, Any[nothing for i = 1:nstmts], copy(ci.codelocs), copy(ci.ssaflags))
     ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), argtypes, Any[], sptypes)
     return ir
@@ -40,15 +41,15 @@ end
 function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     @assert isempty(ir.new_nodes)
     # All but the first `nargs` slots will now be unused
-    resize!(ci.slotflags, nargs + 1)
+    resize!(ci.slotflags, nargs)
     stmts = ir.stmts
     ci.code, ci.ssavaluetypes, ci.codelocs, ci.ssaflags, ci.linetable =
         stmts.inst, stmts.type, stmts.line, stmts.flag, ir.linetable
     for metanode in ir.meta
         push!(ci.code, metanode)
         push!(ci.codelocs, 1)
-        push!(ci.ssavaluetypes, Any)
-        push!(ci.ssaflags, 0x00)
+        push!(ci.ssavaluetypes::Vector{Any}, Any)
+        push!(ci.ssaflags, IR_FLAG_NULL)
     end
     # Translate BB Edges to statement edges
     # (and undo normalization for now)
@@ -59,7 +60,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         elseif isa(stmt, GotoIfNot)
             stmt = GotoIfNot(stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
         elseif isa(stmt, PhiNode)
-            stmt = PhiNode(Any[last(ir.cfg.blocks[edge::Int].stmts) for edge in stmt.edges], stmt.values)
+            stmt = PhiNode(Int32[last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
         elseif isa(stmt, Expr) && stmt.head === :enter
             stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]::Int].stmts)
         end

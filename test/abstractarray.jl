@@ -93,6 +93,11 @@ end
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 2)) == false
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
     @test checkbounds(Bool, A, trues(1, 5), :, 2) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(5, 4), trues(2)) == false
+    @test checkbounds(Bool, A, trues(6, 4), trues(3)) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(4)) == false
 end
 
 @testset "array of CartesianIndex" begin
@@ -225,6 +230,58 @@ end
     end
 end
 
+@testset "LinearIndices" begin
+    @testset "constructors" begin
+        for oinds in [
+            (2, 3),
+            (UInt8(2), 3),
+            (2, UInt8(3)),
+            (2, 1:3),
+            (Base.OneTo(2), 1:3)
+        ]
+            R = LinearIndices(oinds)
+            @test size(R) == (2, 3)
+            @test axes(R) == (Base.OneTo(2), Base.OneTo(3))
+            @test R[begin] == 1
+            @test R[end] == 6
+        end
+
+        for oinds in [(2, ), (2, 3), (2, 3, 4)]
+            R = CartesianIndices(oinds)
+            @test size(R) == oinds
+        end
+    end
+
+    @testset "IdentityUnitRange" begin
+        function _collect(A)
+            rst = eltype(A)[]
+            for i in A
+                push!(rst, i)
+            end
+            rst
+        end
+        function _simd_collect(A)
+            rst = eltype(A)[]
+            @simd for i in A
+                push!(rst, i)
+            end
+            rst
+        end
+
+        for oinds in [
+            (Base.IdentityUnitRange(0:1),),
+            (Base.IdentityUnitRange(0:1), Base.IdentityUnitRange(0:2)),
+            (Base.IdentityUnitRange(0:1), Base.OneTo(3)),
+        ]
+            R = LinearIndices(oinds)
+            @test axes(R) === oinds
+            @test _collect(R) == _simd_collect(R) == vec(collect(R))
+        end
+        R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
+        @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+    end
+end
+
 # token type on which to dispatch testing methods in order to avoid potential
 # name conflicts elsewhere in the base test suite
 mutable struct TestAbstractArray end
@@ -242,10 +299,10 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
     B = T(A)
     @test A == B
     # Test indexing up to 5 dimensions
-    trailing5 = CartesianIndex(ntuple(x->1, max(ndims(B)-5, 0)))
-    trailing4 = CartesianIndex(ntuple(x->1, max(ndims(B)-4, 0)))
-    trailing3 = CartesianIndex(ntuple(x->1, max(ndims(B)-3, 0)))
-    trailing2 = CartesianIndex(ntuple(x->1, max(ndims(B)-2, 0)))
+    trailing5 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-5, 0)))
+    trailing4 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-4, 0)))
+    trailing3 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-3, 0)))
+    trailing2 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-2, 0)))
     i=0
     for i5 = 1:size(B, 5)
         for i4 = 1:size(B, 4)
@@ -362,10 +419,10 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         N = prod(shape)
         A = reshape(Vector(1:N), shape)
         B = T(A)
-        trailing5 = CartesianIndex(ntuple(x->1, max(ndims(B)-5, 0)))
-        trailing4 = CartesianIndex(ntuple(x->1, max(ndims(B)-4, 0)))
-        trailing3 = CartesianIndex(ntuple(x->1, max(ndims(B)-3, 0)))
-        trailing2 = CartesianIndex(ntuple(x->1, max(ndims(B)-2, 0)))
+        trailing5 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-5, 0)))
+        trailing4 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-4, 0)))
+        trailing3 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-3, 0)))
+        trailing2 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-2, 0)))
         idxs = rand(1:N, 3, 3, 3)
         @test B[idxs] == A[idxs] == idxs
         @test B[vec(idxs)] == A[vec(idxs)] == vec(idxs)
@@ -401,6 +458,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
             @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] ==
                 B[LinearIndices(mask1)[findall(mask1)], LinearIndices(mask2)[findall(mask2)], trailing2]
             @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[findall(mask1)]
+
+            if ndims(B) > 1
+                maskfront = bitrand(shape[1:end-1])
+                Bslice = B[ntuple(i->(:), ndims(B)-1)..., 1]
+                @test B[maskfront,1] == Bslice[maskfront]
+                @test size(B[maskfront, 1:1]) == (sum(maskfront), 1)
+            end
         end
     end
 end
@@ -450,6 +514,9 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test convert(Matrix, Y) == Y
     @test convert(Matrix, view(Y, 1:2, 1:2)) == Y
     @test_throws MethodError convert(Matrix, X)
+
+    # convert(::Type{Union{}}, A::AbstractMatrix)
+    @test_throws MethodError convert(Union{}, X)
 end
 
 mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
@@ -534,6 +601,31 @@ function test_get(::Type{TestAbstractArray})
     @test get(TSlow([]), (), 0) == 0
     @test get(TSlow([1]), (), 0) == 1
     @test get(TSlow(fill(1)), (), 0) == 1
+
+    global c = 0
+    f() = (global c = c+1; 0)
+    @test get(f, A, ()) == 0
+    @test c == 1
+    @test get(f, B, ()) == 0
+    @test c == 2
+    @test get(f, A, (1,)) == get(f, A, 1) == A[1] == 1
+    @test c == 2
+    @test get(f, B, (1,)) == get(f, B, 1) == B[1] == 1
+    @test c == 2
+    @test get(f, A, (25,)) == get(f, A, 25) == 0
+    @test c == 4
+    @test get(f, B, (25,)) == get(f, B, 25) == 0
+    @test c == 6
+    @test get(f, A, (1,1,1)) == A[1,1,1] == 1
+    @test get(f, B, (1,1,1)) == B[1,1,1] == 1
+    @test get(f, A, (1,1,3)) == 0
+    @test c == 7
+    @test get(f, B, (1,1,3)) == 0
+    @test c == 8
+    @test get(f, TSlow([]), ()) == 0
+    @test c == 9
+    @test get(f, TSlow([1]), ()) == 1
+    @test get(f, TSlow(fill(1)), ()) == 1
 end
 
 function test_cat(::Type{TestAbstractArray})
@@ -541,16 +633,24 @@ function test_cat(::Type{TestAbstractArray})
     b_int = reshape([1:27...], 3, 3, 3)
     b_float = reshape(Float64[1:27...], 3, 3, 3)
     b2hcat = Array{Float64}(undef, 3, 6, 3)
+    b2vcat = Array{Float64}(undef, 6, 3, 3)
     b1 = reshape([1:9...], 3, 3)
     b2 = reshape([10:18...], 3, 3)
     b3 = reshape([19:27...], 3, 3)
     b2hcat[:, :, 1] = hcat(b1, b1)
     b2hcat[:, :, 2] = hcat(b2, b2)
     b2hcat[:, :, 3] = hcat(b3, b3)
+    b2vcat[:, :, 1] = vcat(b1, b1)
+    b2vcat[:, :, 2] = vcat(b2, b2)
+    b2vcat[:, :, 3] = vcat(b3, b3)
     b3hcat = Array{Float64}(undef, 3, 9, 3)
     b3hcat[:, :, 1] = hcat(b1, b1, b1)
     b3hcat[:, :, 2] = hcat(b2, b2, b2)
     b3hcat[:, :, 3] = hcat(b3, b3, b3)
+    b3vcat = Array{Float64}(undef, 9, 3, 3)
+    b3vcat[:, :, 1] = vcat(b1, b1, b1)
+    b3vcat[:, :, 2] = vcat(b2, b2, b2)
+    b3vcat[:, :, 3] = vcat(b3, b3, b3)
     B = TSlow(b_int)
     B1 = TSlow([1:24...])
     B2 = TSlow([1:25...])
@@ -561,14 +661,20 @@ function test_cat(::Type{TestAbstractArray})
     i = rand(1:10)
 
     @test cat(;dims=i) == Any[]
+    @test Base.typed_hcat(Float64) == Vector{Float64}()
+    @test Base.typed_vcat(Float64) == Vector{Float64}()
     @test vcat() == Any[]
     @test hcat() == Any[]
+    @test vcat(1, 1.0, 3, 3.0) == [1.0, 1.0, 3.0, 3.0]
     @test hcat(1, 1.0, 3, 3.0) == [1.0 1.0 3.0 3.0]
     @test_throws ArgumentError hcat(B1, B2)
     @test_throws ArgumentError vcat(C1, C2)
 
     @test vcat(B) == B
     @test hcat(B) == B
+    @test Base.typed_vcat(Float64, B) == TSlow(b_float)
+    @test Base.typed_vcat(Float64, B, B) == TSlow(b2vcat)
+    @test Base.typed_vcat(Float64, B, B, B) == TSlow(b3vcat)
     @test Base.typed_hcat(Float64, B) == TSlow(b_float)
     @test Base.typed_hcat(Float64, B, B) == TSlow(b2hcat)
     @test Base.typed_hcat(Float64, B, B, B) == TSlow(b3hcat)
@@ -614,6 +720,12 @@ function test_cat(::Type{TestAbstractArray})
     # 36041
     @test_throws MethodError cat(["a"], ["b"], dims=[1, 2])
     @test cat([1], [1], dims=[1, 2]) == I(2)
+
+    # inferrability
+    As = [zeros(2, 2) for _ = 1:2]
+    @test @inferred(cat(As...; dims=Val(3))) == zeros(2, 2, 2)
+    cat3v(As) = cat(As...; dims=Val(3))
+    @test @inferred(cat3v(As)) == zeros(2, 2, 2)
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -751,6 +863,11 @@ end
 @testset "ndims and friends" begin
     @test ndims(Diagonal(rand(1:5,5))) == 2
     @test ndims(Diagonal{Float64}) == 2
+    @test ndims(Diagonal) == 2
+    @test ndims(Vector) == 1
+    @test ndims(Matrix) == 2
+    @test ndims(Array{<:Any, 0}) == 0
+    @test_throws MethodError ndims(Array)
 end
 
 @testset "Issue #17811" begin
@@ -773,6 +890,18 @@ end
 @testset "to_shape" begin
     @test Base.to_shape(()) === ()
     @test Base.to_shape(1) === 1
+    @test Base.to_shape(big(1)) === Base.to_shape(1)
+    @test Base.to_shape(Int8(1)) === Base.to_shape(1)
+end
+
+@testset "issue #39923: similar" begin
+    for ax in [(big(2), big(3)), (big(2), 3), (UInt64(2), 3), (2, UInt32(3)),
+        (big(2), Base.OneTo(3)), (Base.OneTo(2), Base.OneTo(big(3)))]
+
+        A = similar(ones(), Int, ax)
+        @test axes(A) === (Base.OneTo(2), Base.OneTo(3))
+        @test eltype(A) === Int
+    end
 end
 
 @testset "issue #19267" begin
@@ -784,6 +913,13 @@ end
     @test ndims((1:3)[:,:,1:1,:]) == 4
     @test ndims((1:3)[:,:,1:1]) == 3
     @test ndims((1:3)[:,:,1:1,:,:,[1]]) == 6
+end
+
+@testset "issue #38192" begin
+    img = cat([1 2; 3 4], [1 5; 6 7]; dims=3)
+    mask = img[:,:,1] .== img[:,:,2]
+    img[mask,2] .= 0
+    @test img == cat([1 2; 3 4], [0 5; 6 7]; dims=3)
 end
 
 @testset "dispatch loop introduced in #19305" begin
@@ -1141,3 +1277,303 @@ end
     @test last(itr, 1) == [itr[end]]
     @test_throws ArgumentError last(itr, -6)
 end
+
+@testset "Base.rest" begin
+    a = reshape(1:4, 2, 2)'
+    @test Base.rest(a) == a[:]
+    _, st = iterate(a)
+    @test Base.rest(a, st) == [3, 2, 4]
+end
+
+@testset "issue #37741, non-int cat" begin
+    @test [1; 1:BigInt(5)] == [1; 1:5]
+    @test [1:BigInt(5); 1] == [1:5; 1]
+end
+
+@testset "Base.isstored" begin
+    a = rand(3, 4, 5)
+    @test Base.isstored(a, 1, 2, 3)
+    @test_throws BoundsError Base.isstored(a, 4, 4, 5)
+    @test_throws BoundsError Base.isstored(a, 3, 5, 5)
+    @test_throws BoundsError Base.isstored(a, 3, 4, 6)
+end
+
+mutable struct TestPushArray{T, N} <: AbstractArray{T, N}
+    data::Array{T}
+end
+Base.push!(tpa::TestPushArray{T}, a::T) where T = push!(tpa.data, a)
+Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
+
+@testset "push! and pushfirst!" begin
+    a_orig = [1]
+    tpa = TestPushArray{Int, 2}(a_orig)
+    push!(tpa, 2, 3, 4, 5, 6)
+    @test tpa.data == collect(1:6)
+    a_orig = [1]
+    tpa = TestPushArray{Int, 2}(a_orig)
+    pushfirst!(tpa, 6, 5, 4, 3, 2)
+    @test tpa.data == reverse(collect(1:6))
+end
+
+@testset "splatting into hvcat" begin
+    t = (1, 2)
+    @test [t...; 3 4] == [1 2; 3 4]
+    @test [0 t...; t... 0] == [0 1 2; 1 2 0]
+    @test_throws ArgumentError [t...; 3 4 5]
+
+    @test Int[t...; 3 4] == [1 2; 3 4]
+    @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
+    @test_throws ArgumentError Int[t...; 3 4 5]
+end
+
+@testset "issue #39896, modified getindex " begin
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3),
+            Base.IdentityUnitRange(Base.OneTo(4)))
+            @test arr[inds] == arr[collect(inds)]
+            @test arr[inds] isa AbstractVector{eltype(arr)}
+        end
+    end
+    # Test that ranges and arrays behave identically for indices with 1-based axes
+    for r in (1:10, 1:1:10, Base.OneTo(10),
+        Base.IdentityUnitRange(Base.OneTo(10)), Base.IdentityUnitRange(1:10))
+        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3),
+            Base.IdentityUnitRange(Base.OneTo(4)))
+            @test r[inds] == r[collect(inds)] == collect(r)[inds] == collect(r)[collect(inds)]
+        end
+    end
+    for arr = ([1], reshape([1.0],1,1), reshape(['a'],1,1,1))
+        @test arr[true:true] == [arr[1]]
+        @test arr[true:true] isa AbstractVector{eltype(arr)}
+        @test arr[false:false] == []
+        @test arr[false:false] isa AbstractVector{eltype(arr)}
+    end
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        @test_throws BoundsError arr[true:true]
+        @test_throws BoundsError arr[false:false]
+    end
+end
+
+using Base: typed_hvncat
+@testset "hvncat" begin
+    a = fill(1, (2,3,2,4,5))
+    b = fill(2, (1,1,2,4,5))
+    c = fill(3, (1,2,2,4,5))
+    d = fill(4, (1,1,1,4,5))
+    e = fill(5, (1,1,1,4,5))
+    f = fill(6, (1,1,1,4,5))
+    g = fill(7, (2,3,1,4,5))
+    h = fill(8, (3,3,3,1,2))
+    i = fill(9, (3,2,3,3,2))
+    j = fill(10, (3,1,3,3,2))
+
+    result = [a; b c ;;; d e f ; g ;;;;; h ;;;; i j]
+    @test size(result) == (3,3,3,4,7)
+    @test result == [a; [b ;; c] ;;; [d e f] ; g ;;;;; h ;;;; i ;; j]
+    @test result == cat(cat([a ; b c], [d e f ; g], dims = 3), cat(h, [i j], dims = 4), dims = 5)
+
+    # terminating semicolons extend dimensions
+    @test [1;] == [1]
+    @test [1;;] == fill(1, (1,1))
+
+    for v in (1, fill(1), fill(1,1,1), fill(1, 1, 1, 1))
+        @test_throws ArgumentError [v; v;; v]
+        @test_throws ArgumentError [v; v;; v; v; v]
+        @test_throws ArgumentError [v; v; v;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v;; v; v;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v; v;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v;; v; v; v]
+        # ensure a wrong shape with the right number of elements doesn't pass through
+        @test_throws ArgumentError [v; v;; v; v;;; v; v; v; v]
+
+        @test [v; v;; v; v] == fill(1, ndims(v) == 3 ? (2, 2, 1) : (2,2))
+        @test [v; v;; v; v;;;] == fill(1, 2, 2, 1)
+        @test [v; v;; v; v] == fill(1, ndims(v) == 3 ? (2, 2, 1) : (2,2))
+        @test [v v; v v;;;] == fill(1, 2, 2, 1)
+        @test [v; v;; v; v;;; v; v;; v; v;;] == fill(1, 2, 2, 2)
+        @test [v; v; v;; v; v; v;;; v; v; v;; v; v; v;;] == fill(1, 3, 2, 2)
+        @test [v v; v v;;; v v; v v] == fill(1, 2, 2, 2)
+        @test [v v v; v v v;;; v v v; v v v] == fill(1, 2, 3, 2)
+    end
+
+    # mixed scalars and arrays work, for numbers and strings
+    for v = (1, "test")
+        @test [v v;;; fill(v, 1, 2)] == fill(v, 1, 2, 2)
+    end
+
+    # output dimensions are maximum of input dimensions and concatenation dimension
+    begin
+        v1 = fill(1, 1, 1)
+        v2 = fill(1, 1, 1, 1, 1)
+        v3 = fill(1, 1, 2, 1, 1)
+        @test [v1 ;;; v2] == [1 ;;; 1 ;;;;]
+        @test [v2 ;;; v1] == [1 ;;; 1 ;;;;]
+        @test [v3 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 v1 ;;; v3] == [1 1 ;;; 1 1 ;;;;]
+        @test [v2 v1 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 v1 ;;; v1 v2] == [1 1 ;;; 1 1 ;;;;]
+        @test [v2 ;;; 1] == [1 ;;; 1 ;;;;]
+        @test [1 ;;; v2] == [1 ;;; 1 ;;;;]
+        @test [v3 ;;; 1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 1 ;;; v3] == [1 1 ;;; 1 1 ;;;;]
+        @test [v2 1 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 1 ;;; v1 v2] == [1 1 ;;; 1 1 ;;;;]
+    end
+
+    # dims form
+    for v ∈ ((), (1,), ([1],), (1, [1]), ([1], 1), ([1], [1]))
+        # reject dimension < 0
+        @test_throws ArgumentError hvncat(-1, v...)
+
+        # reject shape tuple with no elements
+        @test_throws ArgumentError hvncat(((),), true, v...)
+    end
+
+    # reject dims or shape with negative or zero values
+    for v1 ∈ (-1, 0, 1)
+        for v2 ∈ (-1, 0, 1)
+            v1 == v2 == 1 && continue
+            for v3 ∈ ((), (1,), ([1],), (1, [1]), ([1], 1), ([1], [1]))
+                @test_throws ArgumentError hvncat((v1, v2), true, v3...)
+                @test_throws str->(occursin("`shape` argument must consist of positive integers", str) ||
+                                   occursin("reducing over an empty collection is not allowed", str)) hvncat(((v1,), (v2,)), true, v3...)
+            end
+        end
+    end
+
+    for v ∈ ((1, [1]), ([1], 1), ([1], [1]))
+        # reject shape with more than one end value
+        @test_throws ArgumentError hvncat(((1, 1),), true, v...)
+    end
+
+    for v ∈ ((1, 2, 3), (1, 2, [3]), ([1], [2], [3]))
+        # reject shape with more values in later level
+        @test_throws ArgumentError hvncat(((2, 1), (1, 1, 1)), true, v...)
+    end
+
+    # reject shapes that don't nest evenly between levels (e.g. 1 + 2 does not fit into 2)
+    @test_throws ArgumentError hvncat(((1, 2, 1), (2, 2), (4,)), true, [1 2], [3], [4], [1 2; 3 4])
+
+    # zero-length arrays are handled appropriately
+    @test [zeros(Int, 1, 2, 0) ;;; 1 3] == [1 3;;;]
+    @test [[] ;;; [] ;;; []] == Array{Any}(undef, 0, 1, 3)
+    @test [[] ; 1 ;;; 2 ; []] == [1 ;;; 2]
+    @test [[] ; [] ;;; [] ; []] == Array{Any}(undef, 0, 1, 2)
+    @test [[] ; 1 ;;; 2] == [1 ;;; 2]
+    @test [[] ; [] ;;; [] ;;; []] == Array{Any}(undef, 0, 1, 3)
+    z = zeros(Int, 0, 0, 0)
+    [z z ; z ;;; z ;;; z] == Array{Int}(undef, 0, 0, 0)
+
+    for v1 ∈ (zeros(Int, 0, 0), zeros(Int, 0, 0, 0, 0), zeros(Int, 0, 0, 0, 0, 0, 0, 0))
+        for v2 ∈ (1, [1])
+            for v3 ∈ (2, [2])
+                @test_throws ArgumentError [v1 ;;; v2]
+                @test_throws ArgumentError [v1 ;;; v2 v3]
+                @test_throws ArgumentError [v1 v1 ;;; v2 v3]
+            end
+        end
+    end
+    v1 = zeros(Int, 0, 0, 0)
+    for v2 ∈ (1, [1])
+        for v3 ∈ (2, [2])
+            # current behavior, not potentially dangerous.
+            # should throw error like above loop
+            @test [v1 ;;; v2 v3] == [v2 v3;;;]
+            @test_throws ArgumentError [v1 ;;; v2]
+            @test_throws ArgumentError [v1 v1 ;;; v2 v3]
+        end
+    end
+
+    # 0-dimension behaviors
+    # exactly one argument, placed in an array
+    # if already an array, copy, with type conversion as necessary
+    @test_throws ArgumentError hvncat(0)
+    @test hvncat(0, 1) == fill(1)
+    @test hvncat(0, [1]) == [1]
+    @test_throws ArgumentError hvncat(0, 1, 1)
+    @test_throws ArgumentError typed_hvncat(Float64, 0)
+    @test typed_hvncat(Float64, 0, 1) == fill(1.0)
+    @test typed_hvncat(Float64, 0, [1]) == Float64[1.0]
+    @test_throws ArgumentError typed_hvncat(Float64, 0, 1, 1)
+    @test_throws ArgumentError hvncat((), true) == []
+    @test hvncat((), true, 1) == fill(1)
+    @test hvncat((), true, [1]) == [1]
+    @test_throws ArgumentError hvncat((), true, 1, 1)
+    @test_throws ArgumentError typed_hvncat(Float64, (), true) == Float64[]
+    @test typed_hvncat(Float64, (), true, 1) == fill(1.0)
+    @test typed_hvncat(Float64, (), true, [1]) == [1.0]
+    @test_throws ArgumentError typed_hvncat(Float64, (), true, 1, 1)
+
+    # 1-dimension behaviors
+    # int form
+    @test hvncat(1) == []
+    @test hvncat(1, 1) == [1]
+    @test hvncat(1, [1]) == [1]
+    @test hvncat(1, [1 2; 3 4]) == [1 2; 3 4]
+    @test hvncat(1, 1, 1) == [1 ; 1]
+    @test typed_hvncat(Float64, 1) == Float64[]
+    @test typed_hvncat(Float64, 1, 1) == Float64[1.0]
+    @test typed_hvncat(Float64, 1, [1]) == Float64[1.0]
+    @test typed_hvncat(Float64, 1, 1, 1) == Float64[1.0 ; 1.0]
+    # dims form
+    @test_throws ArgumentError hvncat((1,), true)
+    @test hvncat((2,), true, 1, 1) == [1; 1]
+    @test hvncat((2,), true, [1], [1]) == [1; 1]
+    @test_throws ArgumentError hvncat((2,), true, 1)
+    @test typed_hvncat(Float64, (2,), true, 1, 1) == Float64[1.0; 1.0]
+    @test typed_hvncat(Float64, (2,), true, [1], [1]) == Float64[1.0; 1.0]
+    @test_throws ArgumentError typed_hvncat(Float64, (2,), true, 1)
+    # row_first has no effect with just one dimension of the dims form
+    @test hvncat((2,), false, 1, 1) == [1; 1]
+    @test typed_hvncat(Float64, (2,), false, 1, 1) == Float64[1.0; 1.0]
+    # shape form
+    @test hvncat(((2,),), true, 1, 1) == [1 1]
+    @test hvncat(((2,),), true, [1], [1]) == [1 1]
+    @test_throws ArgumentError hvncat(((2,),), true, 1)
+    @test hvncat(((2,),), false, 1, 1) == [1; 1]
+    @test hvncat(((2,),), false, [1], [1]) == [1; 1]
+    @test typed_hvncat(Float64, ((2,),), true, 1, 1) == Float64[1.0 1.0]
+    @test typed_hvncat(Float64, ((2,),), true, [1], [1]) == Float64[1.0 1.0]
+    @test_throws ArgumentError typed_hvncat(Float64, ((2,),), true, 1)
+    @test typed_hvncat(Float64, ((2,),), false, 1, 1) == Float64[1.0; 1.0]
+    @test typed_hvncat(Float64, ((2,),), false, [1], [1]) == Float64[1.0; 1.0]
+
+    # zero-value behaviors for int form above dimension zero
+    # e.g. [;;], [;;;], though that isn't valid syntax
+    @test [] == hvncat(1) isa Array{Any, 1}
+    @test Array{Any, 2}(undef, 0, 0) == hvncat(2) isa Array{Any, 2}
+    @test Array{Any, 3}(undef, 0, 0, 0) == hvncat(3) isa Array{Any, 3}
+    @test Int[] == typed_hvncat(Int, 1) isa Array{Int, 1}
+    @test Array{Int, 2}(undef, 0, 0) == typed_hvncat(Int, 2) isa Array{Int, 2}
+    @test Array{Int, 3}(undef, 0, 0, 0) == typed_hvncat(Int, 3) isa Array{Int, 3}
+end
+
+@testset "keepat!" begin
+    a = [1:6;]
+    @test a === keepat!(a, 1:5)
+    @test a == 1:5
+    @test keepat!(a, [2, 4]) == [2, 4]
+    @test isempty(keepat!(a, []))
+
+    a = [1:6;]
+    @test_throws BoundsError keepat!(a, 1:10) # make sure this is not a no-op
+    @test_throws BoundsError keepat!(a, 2:10)
+    @test_throws ArgumentError keepat!(a, [2, 4, 3])
+
+    b = BitVector([1, 1, 1, 0, 0])
+    @test b === keepat!(b, 1:5)
+    @test b == [1, 1, 1, 0, 0]
+    @test keepat!(b, 2:4) == [1, 1, 0]
+    @test_throws BoundsError keepat!(a, -1:10)
+    @test_throws ArgumentError keepat!(a, [2, 1])
+    @test isempty(keepat!(a, []))
+end
+
+@testset "reshape methods for AbstractVectors" begin
+    r = Base.IdentityUnitRange(3:4)
+    @test reshape(r, :) === reshape(r, (:,)) === r
+end
+
+@test haskey([1, 2, 3], 1)
+@test !haskey([1, 2, 3], 4)

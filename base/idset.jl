@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Like Set, but using IdDict
 mutable struct IdSet{T} <: AbstractSet{T}
     dict::IdDict{T,Nothing}

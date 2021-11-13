@@ -55,30 +55,44 @@ public:
                     remapType(Ty->getReturnType()), Params, Ty->isVarArg());
         }
         else if (auto Ty = dyn_cast<StructType>(SrcTy)) {
-            if (!Ty->isOpaque()) {
+            if (Ty->isLiteral()) {
+                // Since a literal type has to have the body when it is created,
+                // we need to remap the element types first. This is safe only
+                // for literal types (i.e., no self-reference) and thus treated
+                // separately.
+                assert(!Ty->hasName()); // literal type has no name.
+                SmallVector<Type *, 4> NewElTys;
+                NewElTys.reserve(Ty->getNumElements());
+                for (auto E: Ty->elements())
+                    NewElTys.push_back(remapType(E));
+                DstTy = StructType::get(Ty->getContext(), NewElTys, Ty->isPacked());
+            } else if (!Ty->isOpaque()) {
+                // If the struct type is not literal and not opaque, it can have
+                // self-referential fields (i.e., pointer type of itself as a
+                // field).
+                StructType *DstTy_ = StructType::create(Ty->getContext());
+                if (Ty->hasName()) {
+                    auto Name = std::string(Ty->getName());
+                    Ty->setName(Name + ".bad");
+                    DstTy_->setName(Name);
+                }
+                // To avoid infinite recursion, shove the placeholder of the DstTy before
+                // recursing into the element types:
+                MappedTypes[SrcTy] = DstTy_;
+
                 auto Els = Ty->getNumElements();
                 SmallVector<Type *, 4> NewElTys(Els);
                 for (unsigned i = 0; i < Els; ++i)
                     NewElTys[i] = remapType(Ty->getElementType(i));
-                if (Ty->hasName()) {
-                    auto Name = std::string(Ty->getName());
-                    Ty->setName(Name + ".bad");
-                    DstTy = StructType::create(
-                            Ty->getContext(), NewElTys, Name, Ty->isPacked());
-                }
-                else
-                    DstTy = StructType::get(
-                            Ty->getContext(), NewElTys, Ty->isPacked());
+                DstTy_->setBody(NewElTys, Ty->isPacked());
+                DstTy = DstTy_;
             }
         }
         else if (auto Ty = dyn_cast<ArrayType>(SrcTy))
             DstTy = ArrayType::get(
                     remapType(Ty->getElementType()), Ty->getNumElements());
         else if (auto Ty = dyn_cast<VectorType>(SrcTy))
-            DstTy = VectorType::get(
-                    remapType(Ty->getElementType()),
-                    Ty->getNumElements(),
-                    Ty->isScalable());
+            DstTy = VectorType::get(remapType(Ty->getElementType()), Ty);
 
         if (DstTy != SrcTy)
             LLVM_DEBUG(
@@ -311,7 +325,7 @@ bool RemoveAddrspacesPass::runOnModule(Module &M)
 
         Function *NF = Function::Create(
                 NFTy, F->getLinkage(), F->getAddressSpace(), Name, &M);
-        NF->copyAttributesFrom(F);
+        // no need to copy attributes here, that's done by CloneFunctionInto
         VMap[F] = NF;
     }
 
@@ -331,7 +345,11 @@ bool RemoveAddrspacesPass::runOnModule(Module &M)
         for (auto MD : MDs)
             NGV->addMetadata(
                     MD.first,
+#if JL_LLVM_VERSION >= 130000
+                    *MapMetadata(MD.second, VMap));
+#else
                     *MapMetadata(MD.second, VMap, RF_MoveDistinctMDs));
+#endif
 
         copyComdat(NGV, GV);
 
@@ -358,12 +376,32 @@ bool RemoveAddrspacesPass::runOnModule(Module &M)
                 NF,
                 F,
                 VMap,
+#if JL_LLVM_VERSION >= 130000
+                CloneFunctionChangeType::GlobalChanges,
+#else
                 /*ModuleLevelChanges=*/true,
+#endif
                 Returns,
                 "",
                 nullptr,
                 &TypeRemapper,
                 &Materializer);
+
+        // CloneFunctionInto unconditionally copies the attributes from F to NF,
+        // without considering e.g. the byval attribute type.
+        AttributeList Attrs = F->getAttributes();
+        LLVMContext &C = F->getContext();
+        for (unsigned i = 0; i < Attrs.getNumAttrSets(); ++i) {
+            for (Attribute::AttrKind TypedAttr :
+                 {Attribute::ByVal, Attribute::StructRet, Attribute::ByRef}) {
+                if (Type *Ty = Attrs.getAttribute(i, TypedAttr).getValueAsType()) {
+                    Attrs = Attrs.replaceAttributeType(C, i, TypedAttr,
+                                                       TypeRemapper.remapType(Ty));
+                    break;
+                }
+            }
+        }
+        NF->setAttributes(Attrs);
 
         if (F->hasPersonalityFn())
             NF->setPersonalityFn(MapValue(F->getPersonalityFn(), VMap));
@@ -455,7 +493,7 @@ Pass *createRemoveJuliaAddrspacesPass()
     return new RemoveJuliaAddrspacesPass();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveJuliaAddrspacesPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveJuliaAddrspacesPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createRemoveJuliaAddrspacesPass());
 }

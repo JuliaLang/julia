@@ -21,20 +21,20 @@ The individual components of the factorization `F::LDLt` can be accessed via `ge
 # Examples
 ```jldoctest
 julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
-3×3 SymTridiagonal{Float64,Vector{Float64}}:
+3×3 SymTridiagonal{Float64, Vector{Float64}}:
  3.0  1.0   ⋅
  1.0  4.0  2.0
   ⋅   2.0  5.0
 
 julia> F = ldlt(S)
-LDLt{Float64,SymTridiagonal{Float64,Vector{Float64}}}
+LDLt{Float64, SymTridiagonal{Float64, Vector{Float64}}}
 L factor:
-3×3 UnitLowerTriangular{Float64,SymTridiagonal{Float64,Vector{Float64}}}:
+3×3 UnitLowerTriangular{Float64, SymTridiagonal{Float64, Vector{Float64}}}:
  1.0        ⋅         ⋅
  0.333333  1.0        ⋅
  0.0       0.545455  1.0
 D factor:
-3×3 Diagonal{Float64,Vector{Float64}}:
+3×3 Diagonal{Float64, Vector{Float64}}:
  3.0   ⋅        ⋅
   ⋅   3.66667   ⋅
   ⋅    ⋅       3.90909
@@ -77,6 +77,9 @@ function getproperty(F::LDLt, d::Symbol)
     end
 end
 
+adjoint(F::LDLt{<:Real,<:SymTridiagonal}) = F
+adjoint(F::LDLt) = LDLt(copy(adjoint(F.data)))
+
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LDLt)
     summary(io, F); println(io)
     println(io, "L factor:")
@@ -94,7 +97,7 @@ Same as [`ldlt`](@ref), but saves space by overwriting the input `S`, instead of
 # Examples
 ```jldoctest
 julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
-3×3 SymTridiagonal{Float64,Vector{Float64}}:
+3×3 SymTridiagonal{Float64, Vector{Float64}}:
  3.0  1.0   ⋅
  1.0  4.0  2.0
   ⋅   2.0  5.0
@@ -105,7 +108,7 @@ julia> ldltS === S
 false
 
 julia> S
-3×3 SymTridiagonal{Float64,Vector{Float64}}:
+3×3 SymTridiagonal{Float64, Vector{Float64}}:
  3.0       0.333333   ⋅
  0.333333  3.66667   0.545455
   ⋅        0.545455  3.90909
@@ -115,7 +118,8 @@ function ldlt!(S::SymTridiagonal{T,V}) where {T,V}
     n = size(S,1)
     d = S.dv
     e = S.ev
-    @inbounds @simd for i = 1:n-1
+    @inbounds for i in 1:n-1
+        iszero(d[i]) && throw(ZeroPivotException(i))
         e[i] /= d[i]
         d[i+1] -= e[i]^2*d[i]
     end
@@ -132,7 +136,7 @@ factorization `F = ldlt(S)` is to solve the linear system of equations `Sx = b` 
 # Examples
 ```jldoctest
 julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
-3×3 SymTridiagonal{Float64,Vector{Float64}}:
+3×3 SymTridiagonal{Float64, Vector{Float64}}:
  3.0  1.0   ⋅
  1.0  4.0  2.0
   ⋅   2.0  5.0

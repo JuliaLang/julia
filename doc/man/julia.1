@@ -25,7 +25,7 @@
 
 .\" from the front page of https://julialang.org/
 .SH NAME
-julia - high-level, high-performance dynamic programming language for technical computing
+julia - a high-level, high-performance dynamic programming language for technical computing
 
 .SH SYNOPSIS
 julia [option] [program] [args..]
@@ -146,6 +146,10 @@ Run time-intensive code optimizations
 Set the optimization level to <n>
 
 .TP
+--min-optlevel=<n>
+Set the minimum optimization level to <n>, overriding per-module settings
+
+.TP
 -g
 Enable generation of full debug info
 
@@ -158,8 +162,8 @@ Set the level of debug info generation to <n>
 Control whether inlining is permitted (overrides functions declared as @inline)
 
 .TP
---check-bounds={yes|no}
-Emit bounds checks always or never (ignoring declarations)
+--check-bounds={yes|no|auto}
+Emit bounds checks always, never, or respect @inbounds declarations
 
 .TP
 --math-mode={ieee|user}

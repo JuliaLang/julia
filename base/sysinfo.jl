@@ -122,7 +122,7 @@ end
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
+    global STDLIB = abspath(BINDIR::String, "..", "share", "julia", "stdlib", vers)
     nothing
 end
 
@@ -286,8 +286,8 @@ end
 
 Get the maximum resident set size utilized in bytes.
 See also:
-    - man page of getrusage(2) on Linux and FreeBSD.
-    - windows api `GetProcessMemoryInfo`
+    - man page of `getrusage`(2) on Linux and FreeBSD.
+    - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
 
@@ -499,7 +499,7 @@ function which(program_name::String)
         # If we have been given just a program name (not a relative or absolute
         # path) then we should search `PATH` for it here:
         pathsep = iswindows() ? ';' : ':'
-        path_dirs = abspath.(split(get(ENV, "PATH", ""), pathsep))
+        path_dirs = map(abspath, eachsplit(get(ENV, "PATH", ""), pathsep))
 
         # On windows we always check the current directory as well
         if iswindows()
@@ -516,7 +516,7 @@ function which(program_name::String)
             program_path = joinpath(path_dir, pname)
             # If we find something that matches our name and we can execute
             if isfile(program_path) && isexecutable(program_path)
-                return realpath(program_path)
+                return program_path
             end
         end
     end

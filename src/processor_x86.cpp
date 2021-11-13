@@ -6,9 +6,6 @@
 
 extern "C" JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
-#if defined _MSC_VER
-    __cpuid(CPUInfo, InfoType);
-#else
     asm volatile (
 #if defined(__i386__) && defined(__PIC__)
         "xchg %%ebx, %%esi;"
@@ -24,14 +21,10 @@ extern "C" JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
         "=d" (CPUInfo[3]) :
         "a" (InfoType)
         );
-#endif
 }
 
 extern "C" JL_DLLEXPORT void jl_cpuidex(int32_t CPUInfo[4], int32_t InfoType, int32_t subInfoType)
 {
-#if defined _MSC_VER
-    __cpuidex(CPUInfo, InfoType, subInfoType);
-#else
     asm volatile (
 #if defined(__i386__) && defined(__PIC__)
         "xchg %%ebx, %%esi;"
@@ -48,7 +41,6 @@ extern "C" JL_DLLEXPORT void jl_cpuidex(int32_t CPUInfo[4], int32_t InfoType, in
         "a" (InfoType),
         "c" (subInfoType)
         );
-#endif
 }
 
 namespace X86 {
@@ -79,6 +71,7 @@ enum class CPU : uint32_t {
     intel_corei7_icelake_client,
     intel_corei7_icelake_server,
     intel_corei7_tigerlake,
+    intel_corei7_sapphirerapids,
     intel_knights_landing,
     intel_knights_mill,
 
@@ -209,6 +202,9 @@ constexpr auto icelake = cannonlake | get_feature_masks(avx512bitalg, vaes, avx5
 constexpr auto icelake_server = icelake | get_feature_masks(pconfig, wbnoinvd);
 constexpr auto tigerlake = icelake | get_feature_masks(avx512vp2intersect, movdiri,
                                                        movdir64b, shstk);
+constexpr auto sapphirerapids = icelake_server |
+    get_feature_masks(amx_tile, amx_int8, amx_bf16, avx512bf16, serialize, cldemote, waitpkg,
+                      ptwrite, tsxldtrk, enqcmd, shstk, avx512vp2intersect, movdiri, movdir64b);
 
 constexpr auto k8_sse3 = get_feature_masks(sse3, cx16);
 constexpr auto amdfam10 = k8_sse3 | get_feature_masks(sse4a, lzcnt, popcnt, sahf);
@@ -252,14 +248,15 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"knm", CPU::intel_knights_mill, CPU::generic, 0, Feature::knm},
     {"skylake-avx512", CPU::intel_corei7_skylake_avx512, CPU::generic, 0, Feature::skx},
     {"cascadelake", CPU::intel_corei7_cascadelake, CPU::generic, 0, Feature::cascadelake},
-    {"cooperlake", CPU::intel_corei7_cooperlake, CPU::intel_corei7_cascadelake,
-     90000, Feature::cooperlake},
+    {"cooperlake", CPU::intel_corei7_cooperlake, CPU::generic, 0, Feature::cooperlake},
     {"cannonlake", CPU::intel_corei7_cannonlake, CPU::generic, 0, Feature::cannonlake},
     {"icelake-client", CPU::intel_corei7_icelake_client, CPU::generic, 0, Feature::icelake},
     {"icelake-server", CPU::intel_corei7_icelake_server, CPU::generic, 0,
      Feature::icelake_server},
     {"tigerlake", CPU::intel_corei7_tigerlake, CPU::intel_corei7_icelake_client, 100000,
      Feature::tigerlake},
+    {"sapphirerapids", CPU::intel_corei7_sapphirerapids, CPU::intel_corei7_icelake_server, 120000,
+     Feature::sapphirerapids},
 
     {"athlon64", CPU::amd_athlon_64, CPU::generic, 0, Feature::generic},
     {"athlon-fx", CPU::amd_athlon_fx, CPU::generic, 0, Feature::generic},
@@ -282,7 +279,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"bdver4", CPU::amd_bdver4, CPU::generic, 0, Feature::bdver4},
 
     {"znver1", CPU::amd_znver1, CPU::generic, 0, Feature::znver1},
-    {"znver2", CPU::amd_znver2, CPU::amd_znver1, 90000, Feature::znver2},
+    {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
@@ -293,13 +290,9 @@ const int SIG_AMD = 0x68747541; // Auth
 
 static uint64_t get_xcr0(void)
 {
-#if defined _MSC_VER
-    return _xgetbv(_XCR_XFEATURE_ENABLED_MASK);
-#else
     uint32_t eax, edx;
     asm volatile ("xgetbv" : "=a" (eax), "=d" (edx) : "c" (0));
     return (uint64_t(edx) << 32) | eax;
-#endif
 }
 
 static CPU get_intel_processor_name(uint32_t family, uint32_t model, uint32_t brand_id,
@@ -418,6 +411,10 @@ static CPU get_intel_processor_name(uint32_t family, uint32_t model, uint32_t br
         case 0x8c:
         case 0x8d:
             return CPU::intel_corei7_tigerlake;
+
+            // Sapphire Rapids
+        case 0x8f:
+            return CPU::intel_corei7_sapphirerapids;
 
         case 0x1c: // Most 45 nm Intel Atom processors
         case 0x26: // 45 nm Atom Lincroft
@@ -539,11 +536,13 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
     case 22:
         return CPU::amd_btver2;
     case 23:
-        if ((model >= 0x30 && model <= 0x3f) || model == 0x71)
+        // Known models:
+        // Zen: 1, 17
+        // Zen+: 8, 24
+        // Zen2: 96, 113
+        if (model >= 0x30)
             return CPU::amd_znver2;
-        if (model <= 0x0f)
-            return CPU::amd_znver1;
-        return CPU::amd_btver1;
+        return CPU::amd_znver1;
     }
 }
 
@@ -957,9 +956,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     // This can happen with virtualization.
     features.push_back("+64bit");
 #endif
-#if JL_LLVM_VERSION >= 90000
     features.push_back("+cx8");
-#endif
     return std::make_pair(std::move(name), std::move(features));
 }
 
@@ -1002,21 +999,21 @@ jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
     return parse_sysimg(hdl, sysimg_init_cb);
 }
 
-std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
 {
     ensure_jit_target(imaging);
     flags = jit_targets[0].en.flags;
     return get_llvm_target_vec(jit_targets[0]);
 }
 
-const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
+extern "C" JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
 {
     static const auto res = get_llvm_target_str(TargetData<feature_sz>{"generic", "",
             {feature_masks, 0}, {{}, 0}, 0});
     return res;
 }
 
-std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
@@ -1092,4 +1089,15 @@ extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
         // Report a failure only if user is trying to enable FTZ/DAZ.
         return isZero;
     }
+}
+
+// X86 does not support default NaNs
+extern "C" JL_DLLEXPORT int32_t jl_get_default_nans(void)
+{
+    return 0;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault)
+{
+    return isDefault;
 }

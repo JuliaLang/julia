@@ -201,7 +201,7 @@ extract_exception(e) = isa(e, RemoteException) ? e.captured.ex : e
 
 function process_batch_errors!(p, f, results, on_error, retry_delays, retry_check)
     # Handle all the ones in error in another pmap, with batch size set to 1
-    reprocess = []
+    reprocess = Tuple{Int,BatchProcessingError}[]
     for (idx, v) in enumerate(results)
         if isa(v, BatchProcessingError)
             push!(reprocess, (idx,v))
@@ -210,18 +210,20 @@ function process_batch_errors!(p, f, results, on_error, retry_delays, retry_chec
 
     if length(reprocess) > 0
         errors = [x[2] for x in reprocess]
-        exceptions = [x.ex for x in errors]
+        exceptions = Any[x.ex for x in errors]
         state = iterate(retry_delays)
         state !== nothing && (state = state[2])
-        if (length(retry_delays) > 0) &&
-                (retry_check === nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
-            # BatchProcessingError.data is a tuple of original args
-            error_processed = pmap(x->f(x...), p, [x.data for x in errors];
-                    on_error = on_error, retry_delays = collect(retry_delays)[2:end], retry_check = retry_check)
-        elseif on_error !== nothing
-            error_processed = map(on_error, exceptions)
-        else
-            throw(CompositeException(exceptions))
+        error_processed = let state=state
+            if (length(retry_delays)::Int > 0) &&
+                    (retry_check === nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
+                # BatchProcessingError.data is a tuple of original args
+                pmap(x->f(x...), p, Any[x.data for x in errors];
+                        on_error = on_error, retry_delays = collect(retry_delays)[2:end::Int], retry_check = retry_check)
+            elseif on_error !== nothing
+                map(on_error, exceptions)
+            else
+                throw(CompositeException(exceptions))
+            end
         end
 
         for (idx, v) in enumerate(error_processed)
@@ -239,7 +241,7 @@ and `tail`: an iterator over the remaining elements.
 
 ```jldoctest
 julia> b, c = Distributed.head_and_tail(1:10, 3)
-([1, 2, 3], Base.Iterators.Rest{UnitRange{Int64},Int64}(1:10, 3))
+([1, 2, 3], Base.Iterators.Rest{UnitRange{Int64}, Int64}(1:10, 3))
 
 julia> collect(c)
 7-element Vector{Int64}:

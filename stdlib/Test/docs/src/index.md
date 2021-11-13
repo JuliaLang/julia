@@ -19,7 +19,8 @@ Base.runtests
 The `Test` module provides simple *unit testing* functionality. Unit testing is a way to
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
-of specifying the behaviors your code should have when complete.
+of specifying the behaviors your code should have when complete. You may also want to look at the
+documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
@@ -42,9 +43,13 @@ If the condition is true, a `Pass` is returned:
 ```jldoctest testfoo
 julia> @test foo("bar") == 9
 Test Passed
+  Expression: foo("bar") == 9
+   Evaluated: 9 == 9
 
 julia> @test foo("fizz") >= 10
 Test Passed
+  Expression: foo("fizz") >= 10
+   Evaluated: 16 >= 10
 ```
 
 If the condition is false, then a `Fail` is returned and an exception is thrown:
@@ -83,6 +88,7 @@ to check that this occurs:
 ```jldoctest testfoo
 julia> @test_throws MethodError foo(:cat)
 Test Passed
+  Expression: foo(:cat)
       Thrown: MethodError
 ```
 
@@ -102,6 +108,7 @@ or could not be evaluated due to an error, the test set will then throw a `TestS
 
 ```@docs
 Test.@testset
+Test.TestSetException
 ```
 
 We can put our tests for the `foo(x)` function in a test set:
@@ -133,8 +140,44 @@ Test Summary: | Pass  Total
 Foo Tests     |    8      8
 ```
 
+As well as call functions:
+
+```jldoctest testfoo
+julia> f(x) = @test isone(x)
+f (generic function with 1 method)
+
+julia> @testset f(1)
+Test Summary: | Pass  Total
+f             |    1      1
+Test.DefaultTestSet("f", Any[], 1, false, false)
+```
+
+This can be used to allow for factorization of test sets, making it easier to run individual
+test sets by running the associated functions instead.
+Note that in the case of functions, the test set will be given the name of the called function.
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
-summary. If we do have a test failure, only the details for the failed test sets will be shown:
+summary, unless the `verbose=true` option is passed:
+
+```jldoctest testfoo
+julia> @testset verbose = true "Foo Tests" begin
+           @testset "Animals" begin
+               @test foo("cat") == 9
+               @test foo("dog") == foo("cat")
+           end
+           @testset "Arrays $i" for i in 1:3
+               @test foo(zeros(i)) == i^2
+               @test foo(fill(1.0, i)) == i^2
+           end
+       end;
+Test Summary: | Pass  Total
+Foo Tests     |    8      8
+  Animals     |    2      2
+  Arrays 1    |    2      2
+  Arrays 2    |    2      2
+  Arrays 3    |    2      2
+```
+
+If we do have a test failure, only the details for the failed test sets will be shown:
 
 ```julia-repl
 julia> @testset "Foo Tests" begin
@@ -172,6 +215,8 @@ checks using either `@test a ≈ b` (where `≈`, typed via tab completion of `\
 ```jldoctest
 julia> @test 1 ≈ 0.999999999
 Test Passed
+  Expression: 1 ≈ 0.999999999
+   Evaluated: 1 ≈ 0.999999999
 
 julia> @test 1 ≈ 0.999999
 Test Failed at none:1
@@ -179,6 +224,15 @@ Test Failed at none:1
    Evaluated: 1 ≈ 0.999999
 ERROR: There was an error during testing
 ```
+You can specify relative and absolute tolerances by setting the `rtol` and `atol` keyword arguments of `isapprox`, respectively,
+after the `≈` comparison:
+```jldoctest
+julia> @test 1 ≈ 0.999999  rtol=1e-5
+Test Passed
+  Expression: ≈(1, 0.999999, rtol = 1.0e-5)
+   Evaluated: ≈(1, 0.999999; rtol = 1.0e-5)
+```
+Note that this is not a specific feature of the `≈` but rather a general feature of the `@test` macro: `@test a <op> b key=val` is transformed by the macro into `@test op(a, b, key=val)`. It is, however, particularly useful for `≈` tests.
 
 ```@docs
 Test.@inferred
@@ -265,6 +319,18 @@ And using that testset looks like:
         @test true
     end
 end
+```
+
+## Test utilities
+
+```@docs
+Test.GenericArray
+Test.GenericDict
+Test.GenericOrder
+Test.GenericSet
+Test.GenericString
+Test.detect_ambiguities
+Test.detect_unbound_args
 ```
 
 ```@meta

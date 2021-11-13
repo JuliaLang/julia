@@ -6,7 +6,7 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 
 ## Learning Julia
 
-[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](https://docs.julialang.org) covers the language and core library features, and is searchable.
+[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike.
 
 ## Before filing an issue
 
@@ -90,7 +90,7 @@ from Julia's root directory. This will rebuild the Julia system image, then inst
 
 > **Note**
 >
-> When making changes to any of Julia's documentation it is recommended that you run `make docs` to check the your changes are valid and do not produce any errors before opening a pull request.
+> When making changes to any of Julia's documentation it is recommended that you run `make docs` to check that your changes are valid and do not produce any errors before opening a pull request.
 
 Below are outlined the three most common types of documentation changes and the steps required to perform them. Please note that the following instructions do not cover the full range of features provided by Documenter.jl. Refer to [Documenter's documentation](https://juliadocs.github.io/Documenter.jl/stable) if you encounter anything that is not covered by the sections below.
 
@@ -158,7 +158,9 @@ Examples written within docstrings can be used as testcases known as "doctests" 
     "DOCSTRING TEST"
     ```
 
-A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you need to run `make -C doc doctest=true` from the root directory. It is recommended to add the header `# Examples` above the doctests.
+A doctest needs to match an interactive REPL including the `julia>` prompt. It is recommended to add the header `# Examples` above the doctests.
+
+To run doctests you need to run `make -C doc doctest=true` from the root directory. You can use `make -C doc doctest=true revise=true` if you are modifying the doctests and don't want to rebuild Julia after each change (see details below about the Revise.jl workflow).
 
 #### News-worthy changes
 
@@ -189,7 +191,7 @@ Note: These instructions are for adding to or improving functionality in the bas
 
 Add new code to Julia's base libraries as follows (this is the "basic" approach; see a more efficient approach in the next section):
 
- 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `ui/`.
+ 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `cli/`.
 
  2. Add any new files to `sysimg.jl` in order to build them into the Julia system image.
 
@@ -206,8 +208,6 @@ Note: You can run specific test files with `make`:
 or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.jl`:
 
     ./usr/bin/julia test/runtests.jl bitarray math
-
-Make sure that [Travis](https://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](https://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
 
 #### Modifying base more efficiently with Revise.jl
 
@@ -248,6 +248,51 @@ process before running the corresponding test. This can be useful as a shortcut
 on the command line (since tests aren't always designed to be run outside the
 runtest harness).
 
+### Contributing to patch releases
+
+The process of creating a patch release is roughly as follows:
+
+1. Create a new branch (e.g. `backports-release-1.6`) against the relevant minor release
+   branch (e.g. `release-1.6`). Usually a corresponding pull request is created as well.
+
+2. Add commits, nominally from `master` (hence "backports"), to that branch.
+   See below for more information on this process.
+
+3. Run the [BaseBenchmarks.jl](https://github.com/JuliaCI/BaseBenchmarks.jl) benchmark
+   suite and [PkgEval.jl](https://github.com/JuliaCI/PkgEval.jl) package ecosystem
+   exerciser against that branch. Nominally BaseBenchmarks.jl and PkgEval.jl are
+   invoked via [Nanosoldier.jl](https://github.com/JuliaCI/Nanosoldier.jl) from
+   the pull request associated with the backports branch. Fix any issues.
+
+4. Once all test and benchmark reports look good, merge the backports branch into
+   the corresponding release branch (e.g. merge `backports-release-1.6` into
+   `release-1.6`).
+
+5. Open a pull request that bumps the version of the relevant minor release to the
+   next patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37718).
+
+6. Ping `@JuliaLang/releases` to tag the patch release and update the website.
+
+7. Open a pull request that bumps the version of the relevant minor release to the
+   next prerelase patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37724).
+
+Step 2 above, i.e. backporting commits to the `backports-release-X.Y` branch, has largely
+been automated via [`Backporter`](https://github.com/KristofferC/Backporter): Backporter
+searches for merged pull requests with the relevant `backport-X.Y` tag, and attempts to
+cherry-pick the commits from those pull requests onto the `backports-release-X.Y` branch.
+Some commits apply successfully without intervention, others not so much. The latter
+commits require "manual" backporting, with which help is generally much appreciated.
+Backporter generates a report identifying those commits it managed to backport automatically
+and those that require manual backporting; this report is usually copied into the first
+post of the pull request associated with `backports-release-X.Y` and maintained as
+additional commits are automatically and/or manually backported.
+
+When contributing a manual backport, if you have the necessary permissions, please push the
+backport directly to the `backports-release-X.Y` branch. If you lack the relevant
+permissions, please open a pull request against the `backports-release-X.Y` branch with the
+manual backport. Once the manual backport is live on the `backports-release-X.Y` branch,
+please remove the `backport-X.Y` tag from the originating pull request for the commits.
+
 ### Code Formatting Guidelines
 
 #### General Formatting Guidelines for Julia code contributions
@@ -266,11 +311,11 @@ runtest harness).
 #### General Formatting Guidelines For C code contributions
 
  - 4 spaces per indentation level, no tabs
- - space between if and ( (if (x) ...)
- - newline before opening { in function definitions
- - f(void) for 0-argument function declarations
- - newline between } and else instead of } else {
- - if one part of an if..else chain uses { } then all should
+ - space between `if` and `(` (`if (x) ...`)
+ - newline before opening `{` in function definitions
+ - `f(void)` for 0-argument function declarations
+ - newline between `}` and `else` instead of `} else {`
+ - if one part of an `if..else` chain uses `{ }` then all should
  - no whitespace at the end of a line
 
 ### Git Recommendations For Pull Requests
@@ -289,6 +334,11 @@ runtest harness).
    - To remove whitespace relative to the `master` branch, run
      `git rebase --whitespace=fix master`.
 
+#### Git Recommendations For Pull Request Reviewers
+
+- When merging, we generally like `squash+merge`. Unless it is the rare case of a PR with carefully staged individual commits that you want in the history separately, in which case `merge` is acceptable, but usually prefer `squash+merge`.
+
+
 ## Resources
 
 * Julia
@@ -299,7 +349,7 @@ runtest harness).
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia
-  - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/research/julia-fresh-approach-BEKS.pdf)
+  - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/assets/research/julia-fresh-approach-BEKS.pdf)
   - [Julia: Dynamism and Performance Reconciled by Design](http://janvitek.org/pubs/oopsla18b.pdf)
   - [All Julia Publications](https://julialang.org/research)
 

@@ -96,7 +96,7 @@ as assignments, branches, and calls:
 ```jldoctest
 julia> Meta.lower(@__MODULE__, :( [1+2, sin(0.5)] ))
 :($(Expr(:thunk, CodeInfo(
-    @ none within `top-level scope'
+    @ none within `top-level scope`
 1 ─ %1 = 1 + 2
 │   %2 = sin(0.5)
 │   %3 = Base.vect(%1, %2)

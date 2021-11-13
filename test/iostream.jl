@@ -93,6 +93,7 @@ end
         #  with resizing of b
         b = view(UInt8[0, 0, 0], 1:0)
         @test_throws MethodError readbytes!(file, b, 2)
+        @test !islocked(file.lock) # Issue #37218
         @test isempty(b)
     end
 end
@@ -165,4 +166,9 @@ end
     open(f, "r") do io
         @test length(readavailable(io)) > 0
     end
+end
+
+@testset "inference" begin
+    @test all(T -> T <: Union{UInt, Int}, Base.return_types(unsafe_write, (IO, Ptr{UInt8}, UInt)))
+    @test all(T -> T === Bool, Base.return_types(eof, (IO,)))
 end

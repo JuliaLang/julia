@@ -37,7 +37,7 @@ private:
     Function *queueRootFunc;
     Function *poolAllocFunc;
     Function *bigAllocFunc;
-    CallInst *ptlsStates;
+    Instruction *pgcstack;
 
     bool doInitialization(Module &M) override;
     bool doFinalization(Module &M) override;
@@ -60,8 +60,6 @@ private:
 
     // Lowers a `julia.queue_gc_root` intrinsic.
     Value *lowerQueueGCRoot(CallInst *target, Function &F);
-
-    Instruction *getPgcstack(Instruction *ptlsStates);
 };
 
 Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
@@ -73,8 +71,8 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     AllocaInst *gcframe = new AllocaInst(
         T_prjlvalue,
         0,
-        ConstantInt::get(T_int32, nRoots + 2));
-    gcframe->setAlignment(Align(16));
+        ConstantInt::get(T_int32, nRoots + 2),
+        Align(16));
     gcframe->insertAfter(target);
     gcframe->takeName(target);
 
@@ -107,22 +105,21 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     StoreInst *inst = builder.CreateAlignedStore(
                 ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
                 builder.CreateBitCast(
-                        builder.CreateConstGEP1_32(gcframe, 0),
+                        builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0),
                         T_size->getPointerTo()),
-                sizeof(void*));
+                Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    Value *pgcstack = builder.Insert(getPgcstack(ptlsStates));
     inst = builder.CreateAlignedStore(
-            builder.CreateAlignedLoad(pgcstack, sizeof(void*)),
+            builder.CreateAlignedLoad(pgcstack, Align(sizeof(void*))),
             builder.CreatePointerCast(
-                    builder.CreateConstGEP1_32(gcframe, 1),
+                    builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1),
                     PointerType::get(T_ppjlvalue, 0)),
-            sizeof(void*));
+            Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
             gcframe,
             builder.CreateBitCast(pgcstack, PointerType::get(PointerType::get(T_prjlvalue, 0), 0)),
-            sizeof(void*));
+            Align(sizeof(void*)));
 }
 
 void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
@@ -133,15 +130,14 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(target);
     Instruction *gcpop =
-        cast<Instruction>(builder.CreateConstGEP1_32(gcframe, 1));
-    Instruction *inst = builder.CreateAlignedLoad(gcpop, sizeof(void*));
+        cast<Instruction>(builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1));
+    Instruction *inst = builder.CreateAlignedLoad(gcpop, Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
         inst,
-        builder.CreateBitCast(
-            builder.Insert(getPgcstack(ptlsStates)),
+        builder.CreateBitCast(pgcstack,
             PointerType::get(T_prjlvalue, 0)),
-        sizeof(void*));
+        Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
 }
 
@@ -159,7 +155,7 @@ Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
     index = builder.CreateAdd(index, ConstantInt::get(T_int32, 2));
 
     // Lower the intrinsic as a GEP.
-    auto gep = builder.CreateGEP(gcframe, index);
+    auto gep = builder.CreateInBoundsGEP(T_prjlvalue, gcframe, index);
     gep->takeName(target);
     return gep;
 }
@@ -169,16 +165,6 @@ Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
     assert(target->getNumArgOperands() == 1);
     target->setCalledFunction(queueRootFunc);
     return target;
-}
-
-Instruction *FinalLowerGC::getPgcstack(Instruction *ptlsStates)
-{
-    Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
-    return GetElementPtrInst::Create(
-        nullptr,
-        ptlsStates,
-        ArrayRef<Value*>(offset),
-        "jl_pgcstack");
 }
 
 Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
@@ -232,16 +218,17 @@ bool FinalLowerGC::doInitialization(Module &M) {
 
 bool FinalLowerGC::doFinalization(Module &M)
 {
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
+    queueRootFunc = poolAllocFunc = bigAllocFunc = nullptr;
     auto used = M.getGlobalVariable("llvm.compiler.used");
     if (!used)
         return false;
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
     SmallPtrSet<Constant*, 16> InitAsSet(
         functionList,
         functionList + sizeof(functionList) / sizeof(void*));
     bool changed = false;
     SmallVector<Constant*, 16> init;
-    ConstantArray *CA = dyn_cast<ConstantArray>(used->getInitializer());
+    ConstantArray *CA = cast<ConstantArray>(used->getInitializer());
     for (auto &Op : CA->operands()) {
         Constant *C = cast_or_null<Constant>(Op);
         if (InitAsSet.count(C->stripPointerCasts())) {
@@ -282,13 +269,13 @@ bool FinalLowerGC::runOnFunction(Function &F)
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!ptls_getter)
-        return true;
+    if (!pgcstack_getter)
+        return false;
 
-    // Look for a call to 'julia.ptls_states'.
-    ptlsStates = getPtls(F);
-    if (!ptlsStates)
-        return true;
+    // Look for a call to 'julia.get_pgcstack'.
+    pgcstack = getPGCstack(F);
+    if (!pgcstack)
+        return false;
 
     // Acquire intrinsic functions.
     auto newGCFrameFunc = getOrNull(jl_intrinsics::newGCFrame);
@@ -307,7 +294,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
                 continue;
             }
 
-            auto callee = CI->getCalledValue();
+            Value *callee = CI->getCalledOperand();
 
             if (callee == newGCFrameFunc) {
                 replaceInstruction(CI, lowerNewGCFrame(CI, F), it);
@@ -346,7 +333,7 @@ Pass *createFinalLowerGCPass()
     return new FinalLowerGC();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createFinalLowerGCPass());
 }

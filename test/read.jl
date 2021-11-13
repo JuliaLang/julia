@@ -98,30 +98,27 @@ s = io(text)
 close(s)
 push!(l, ("PipeEndpoint", io))
 
-#FIXME See https://github.com/JuliaLang/julia/issues/14747
-#      Reading from open(::Command) seems to deadlock on Linux/Travis
-#=
-if !Sys.iswindows()
 
-# Windows type command not working?
-# See "could not spawn `type 'C:\Users\appveyor\AppData\Local\Temp\1\jul3516.tmp\file.txt'`"
-#https://ci.appveyor.com/project/StefanKarpinski/julia/build/1.0.12733/job/hpwjs4hmf03vs5ag#L1244
-
-# Pipe
+# Pipe (#14747)
 io = (text) -> begin
     write(filename, text)
-    open(`$(Sys.iswindows() ? "type" : "cat") $filename`)[1]
-#    Was open(`echo -n $text`)[1]
-#    See https://github.com/JuliaLang/julia/issues/14747
+    # we can skip using shell_escape_wincmd, since ", ^, and % aren't legal in
+    # a filename, so unconditionally wrapping in " is sufficient (okay, that's
+    # a lie, since ^ and % actually are legal, but DOS is broken)
+    if Sys.iswindows()
+        cmd = Cmd(["cmd.exe", "/c type \"$(replace(filename, '/' => '\\'))\""])
+        cmd = Cmd(cmd; windows_verbatim=true)
+        cmd = pipeline(cmd, stderr=devnull)
+    else
+        cmd = `cat $filename`
+    end
+    open(cmd)
 end
 s = io(text)
 @test isa(s, IO)
-@test isa(s, Pipe)
+@test isa(s, Base.Process)
 close(s)
-push!(l, ("Pipe", io))
-
-end
-=#
+push!(l, ("Process", io))
 
 
 open_streams = []
@@ -140,7 +137,6 @@ end
 verbose = false
 
 for (name, f) in l
-    local f
     local function io(text=text)
         local s = f(text)
         push!(open_streams, s)
@@ -300,6 +296,12 @@ for (name, f) in l
 
         cleanup()
 
+        verbose && println("$name readeach...")
+        @test collect(readeach(io(), Char)) == Vector{Char}(text)
+        @test collect(readeach(io(), UInt8)) == Vector{UInt8}(text)
+
+        cleanup()
+
         verbose && println("$name countlines...")
         @test countlines(io()) == countlines(IOBuffer(text))
 
@@ -313,9 +315,9 @@ for (name, f) in l
     text = old_text
     write(filename, text)
 
-    if !(typeof(io()) in [Base.PipeEndpoint, Pipe, TCPSocket])
+    if !isa(io(), Union{Base.PipeEndpoint, Base.AbstractPipe, TCPSocket})
         verbose && println("$name position...")
-        @test (s = io(); read!(s, Vector{UInt8}(undef, 4)); position(s))  == 4
+        @test (s = io(); read!(s, Vector{UInt8}(undef, 4)); position(s)) == 4
 
         verbose && println("$name seek...")
         for n = 0:length(text)-1
@@ -459,7 +461,7 @@ rm(f)
 io = Base.Filesystem.open(f, Base.Filesystem.JL_O_WRONLY | Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL, 0o000)
 @test write(io, "abc") == 3
 close(io)
-if !Sys.iswindows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
+if !Sys.iswindows() && Libc.geteuid() != 0 # root user
     # msvcrt _wchmod documentation states that all files are readable,
     # so we don't test that it correctly set the umask on windows
     @test_throws SystemError open(f)
@@ -509,7 +511,7 @@ close(f1)
 close(f2)
 @test eof(f1)
 @test_throws Base.IOError eof(f2)
-if get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
+if Libc.geteuid() != 0 # root user
     @test_throws SystemError open(f, "r+")
     @test_throws Base.IOError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 else
@@ -610,4 +612,12 @@ let p = Pipe()
     @test read(p.out, 49) == data[end-48:end]
     wait(t)
     close(p)
+end
+
+@testset "issue #27412" for itr in [eachline(IOBuffer("a")), readeach(IOBuffer("a"), Char)]
+    @test !isempty(itr)
+    # check that the earlier isempty did not consume the iterator
+    @test !isempty(itr)
+    first(itr) # consume the iterator
+    @test  isempty(itr) # now it is empty
 end

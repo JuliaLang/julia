@@ -44,8 +44,8 @@ end
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
-SubString(s::AbstractString) = SubString(s, 1, lastindex(s))
-SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
+SubString(s::AbstractString) = SubString(s, 1, lastindex(s)::Int)
+SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s)::Int)
 
 @propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
 @propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)
@@ -62,7 +62,7 @@ function String(s::SubString{String})
 end
 
 ncodeunits(s::SubString) = s.ncodeunits
-codeunit(s::SubString) = codeunit(s.string)
+codeunit(s::SubString) = codeunit(s.string)::CodeunitType
 length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 
 function codeunit(s::SubString, i::Integer)
@@ -75,7 +75,7 @@ function iterate(s::SubString, i::Integer=firstindex(s))
     @boundscheck checkbounds(s, i)
     y = iterate(s.string, s.offset + i)
     y === nothing && return nothing
-    c, i = y
+    c, i = y::Tuple{AbstractChar,Int}
     return c, i - s.offset
 end
 
@@ -87,7 +87,7 @@ end
 function isvalid(s::SubString, i::Integer)
     ib = true
     @boundscheck ib = checkbounds(Bool, s, i)
-    @inbounds return ib && isvalid(s.string, s.offset + i)
+    @inbounds return ib && isvalid(s.string, s.offset + i)::Bool
 end
 
 byte_string_classify(s::SubString{String}) =
@@ -177,6 +177,10 @@ end
 string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)
 
+function Symbol(s::SubString{String})
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int), s, sizeof(s))
+end
+
 @inline function __unsafe_string!(out, c::Char, offs::Integer) # out is a (new) String (or StringVector)
     x = bswap(reinterpret(UInt32, c))
     n = ncodeunits(c)
@@ -201,7 +205,13 @@ end
     return n
 end
 
-function string(a::Union{Char, String, SubString{String}}...)
+@inline function __unsafe_string!(out, s::Symbol, offs::Integer)
+    n = sizeof(s)
+    GC.@preserve s out unsafe_copyto!(pointer(out, offs), unsafe_convert(Ptr{UInt8},s), n)
+    return n
+end
+
+function string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
     for v in a
         if v isa Char
@@ -248,4 +258,4 @@ function filter(f, s::Union{String, SubString{String}})
     return String(out)
 end
 
-getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)
+getindex(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)

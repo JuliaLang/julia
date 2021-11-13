@@ -17,7 +17,7 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 # Examples
 ```jldoctest
 julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-Eigen{Float64,Float64,Matrix{Float64},Vector{Float64}}
+Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}}
 values:
 3-element Vector{Float64}:
   1.0
@@ -83,7 +83,7 @@ julia> B = [0 1; 1 0]
  1  0
 
 julia> F = eigen(A, B)
-GeneralizedEigen{ComplexF64,ComplexF64,Matrix{ComplexF64},Vector{ComplexF64}}
+GeneralizedEigen{ComplexF64, ComplexF64, Matrix{ComplexF64}, Vector{ComplexF64}}
 values:
 2-element Vector{ComplexF64}:
  0.0 - 1.0im
@@ -201,7 +201,7 @@ accept a `sortby` keyword.
 # Examples
 ```jldoctest
 julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-Eigen{Float64,Float64,Matrix{Float64},Vector{Float64}}
+Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}}
 values:
 3-element Vector{Float64}:
   1.0
@@ -235,6 +235,14 @@ function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     AA = copy_oftype(A, eigtype(T))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     return eigen!(AA; permute=permute, scale=scale, sortby=sortby)
+end
+function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
+    AA = copy_oftype(A, eigtype(T))
+    isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
+    A = eigen!(AA; permute, scale, sortby)
+    values = convert(AbstractVector{isreal(A.values) ? Float16 : Complex{Float16}}, A.values)
+    vectors = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectors)
+    return Eigen(values, vectors)
 end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
@@ -612,6 +620,16 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,Generaliz
     show(io, mime, F.values)
     println(io, "\nvectors:")
     show(io, mime, F.vectors)
+end
+
+function Base.hash(F::Eigen, h::UInt)
+    return hash(F.values, hash(F.vectors, hash(Eigen, h)))
+end
+function Base.:(==)(A::Eigen, B::Eigen)
+    return A.values == B.values && A.vectors == B.vectors
+end
+function Base.isequal(A::Eigen, B::Eigen)
+    return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
 end
 
 # Conversion methods

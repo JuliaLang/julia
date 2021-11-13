@@ -1,36 +1,51 @@
-Julia v1.6 Release Notes
+Julia v1.8 Release Notes
 ========================
+
 
 New language features
 ---------------------
 
-* Types written with `where` syntax can now be used to define constructors, e.g.
-  `(Foo{T} where T)(x) = ...`.
+* `Module(:name, false, false)` can be used to create a `module` that contains no names (it does not import `Base` or `Core` and does not contain a reference to itself). ([#40110, #42154])
+* `@inline` and `@noinline` annotations can be used within a function body to give an extra
+  hint about the inlining cost to the compiler. ([#41312])
+* `@inline` and `@noinline` annotations can now be applied to a function callsite or block
+  to enforce the involved function calls to be (or not to be) inlined. ([#41312])
+* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
+* New function `eachsplit(str)` for iteratively performing `split(str)`.
+* `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
+* `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
+  no errors were thrown. ([#42211])
 
 Language changes
 ----------------
 
+* Newly created Task objects (`@spawn`, `@async`, etc.) now adopt the world-age for methods from their parent
+  Task upon creation, instead of using the global latest world at start. This is done to enable inference to
+  eventually optimize these calls. Places that wish for the old behavior may use `Base.invokelatest`. ([#41449])
+* `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
+  i.e. `@time "Evaluating foo" foo()` ([#42431])
+* New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
+* `last(collection)` will now work on any collection that supports `Iterators.reverse` and `first`, rather than being
+  restricted to indexable collections.
+* Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
+  to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
 
 Compiler/Runtime improvements
 -----------------------------
 
-* All platforms can now use `@executable_path` within `jl_load_dynamic_library()`.
-  This allows executable-relative paths to be embedded within executables on all
-  platforms, not just MacOS, which the syntax is borrowed from. ([#35627])
-* Constant propogation now occurs through keyword arguments ([#35976])
-* The precompilation cache is now created atomically ([#36416]). Invoking _n_
-  Julia processes simultaneously may create _n_ temporary caches.
+* The LLVM-based compiler has been separated from the run-time library into a new library,
+  `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
+  In deployments that do not need the compiler (e.g. system images where all needed code
+  is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
 
 Command-line option changes
 ---------------------------
 
-* There is no longer a concept of "home project": starting `julia --project=dir`
-  is now exactly equivalent to starting `julia` and then doing `pkg> activate
-  $dir` and `julia --project` is exactly equivalent to doing that where
-  `dir = Base.current_project()`. In particular, this means that if you do
-  `pkg> activate` after starting `julia` with the `--project` option (or with
-  `JULIA_PROJECT` set) it will take you to the default active project, which is
-  `@v1.5` unless you have modified `LOAD_PATH`. ([#36434])
+* New option `--strip-metadata` to remove docstrings, source location information, and local
+  variable names when building a system image ([#42513]).
+* New option `--strip-ir` to remove the compiler's IR (intermediate representation) of source
+  code when building a system image. The resulting image will only work if `--compile=all` is
+  used, or if all needed code is precompiled ([#42925]).
 
 Multi-threading changes
 -----------------------
@@ -39,97 +54,101 @@ Multi-threading changes
 Build system changes
 --------------------
 
-* Windows Installer now has the option to 'Add Julia to Path'. To unselect this option
-  from the commandline simply remove the tasks you do not want to be installed: e.g.
-  `./julia-installer.exe /TASKS="desktopicon,startmenu,addtopath"`, adds a desktop
-  icon, a startmenu group icon, and adds Julia to system PATH.
 
 New library functions
 ---------------------
 
-* New function `Base.kron!` and corresponding overloads for various matrix types for performing Kronecker product in-place. ([#31069]).
-* New function `Base.Threads.foreach(f, channel::Channel)` for multithreaded `Channel` consumption. ([#34543]).
-* `Iterators.map` is added. It provides another syntax `Iterators.map(f, iterators...)`
-  for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
-* New function `sincospi` for simultaneously computing `sinpi(x)` and `cospi(x)` more
-  efficiently ([#35816]).
+* `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 
 New library features
 --------------------
 
-* The `redirect_*` functions can now be called on `IOContext` objects.
+* `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
+  contains "some message" regardless of the specific exception type.
+  Regular expressions, lists of strings, and matching functions are also supported. ([#41888])
+* `@testset foo()` can now be used to create a test set from a given function. The name of the test set
+  is the name of the called function. The called function can contain `@test` and other `@testset`
+  definitions, including to other function calls, while recording all intermediate test results. ([#42518])
 
 Standard library changes
 ------------------------
 
-* The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
-* The function `isapprox(x,y)` now accepts the `norm` keyword argument also for numeric (i.e., non-array) arguments `x` and `y` ([#35883]).
-* `view`, `@view`, and `@views` now work on `AbstractString`s, returning a `SubString` when appropriate ([#35879]).
-* All `AbstractUnitRange{<:Integer}`s now work with `SubString`, `view`, `@view` and `@views` on strings ([#35879]).
-* `sum`, `prod`, `maximum`, and `minimum` now support `init` keyword argument ([#36188], [#35839]).
-* `unique(f, itr; seen=Set{T}())` now allows you to declare the container type used for
-  keeping track of values returned by `f` on elements of `itr` ([#36280]).
-* `Libdl` has been moved to `Base.Libc.Libdl`, however it is still accessible as an stdlib ([#35628]).
-* `first` and `last` functions now accept an integer as second argument to get that many
-  leading or trailing elements of any iterable ([#34868]).
-* `intersect` on `CartesianIndices` now returns `CartesianIndices` instead of `Vector{<:CartesianIndex}` ([#36643]).
+* `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
+* `precision` and `setprecision` now accept a `base` keyword ([#42428]).
+* The `length` function on certain ranges of certain specific element types no longer checks for integer
+  overflow in most cases. The new function `checked_length` is now available, which will try to use checked
+  arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
+  constructing the range. ([#40382])
+* TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
+* Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
+* `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
+
+#### InteractiveUtils
+* A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
+
+#### Package Manager
 
 #### LinearAlgebra
-* New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
-* `UniformScaling` can now be indexed into using ranges to return dense matrices and vectors ([#24359]).
-* New function `LinearAlgebra.BLAS.get_num_threads()` for getting the number of BLAS threads. ([#36360])
 
 #### Markdown
 
+#### Printf
+* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
+
+#### Profile
+* Profiling now records sample metadata including thread and task. `Profile.print()` has a new `groupby` kwarg that allows
+  grouping by thread, task, or nested thread/task, task/thread, and `threads` and `tasks` kwargs to allow filtering.
+  Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
+  each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
+  profiling data consumers, but can be included with the `include_meta` kwarg. ([#41742])
 
 #### Random
 
-
 #### REPL
-
-* The `AbstractMenu` extension interface of `REPL.TerminalMenus` has been extensively
-  overhauled. The new interface does not rely on global configuration variables, is more
-  consistent in delegating printing of the navigation/selection markers, and provides
-  improved support for dynamic menus.  These changes are compatible with the previous
-  (deprecated) interface, so are non-breaking.
-
-  The new API offers several enhancements:
-
-  + Menus are configured in their constructors via keyword arguments
-  + For custom menu types, the new `Config` and `MultiSelectConfig` replace the global `CONFIG` Dict
-  + `request(menu; cursor=1)` allows you to control the initial cursor position in the menu (defaults to first item)
-  + `MultiSelectMenu` allows you to pass a list of initially-selected items with the `selected` keyword argument
-  + `writeLine` was deprecated to `writeline`, and `writeline` methods are not expected to print the cursor indicator.
-    The old `writeLine` continues to work, and any of its method extensions should print the cursor indicator as before.
-  + `printMenu` has been deprecated to `printmenu`, and it both accepts a state input and returns a state output
-    that controls the number of terminal lines erased when the menu is next refreshed. This plus related changes
-    makes `printmenu` work properly when the number of menu items might change depending on user choices.
-  + `numoptions`, returning the number of items in the menu, has been added as an alternative to implementing `options`
-  + `suppress_output` (primarily a testing option) has been added as a keyword argument to `request`,
-    rather than a configuration option
+* `RadioMenu` now supports optional `keybindings` to directly select options ([#41576]).
+* ` ?(x, y` followed by TAB displays all methods that can be called
+  with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
+  `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
+  argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
+  to allow any compatible methods.
 
 #### SparseArrays
 
-* Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns, and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
-
 #### Dates
-* `Quarter` period is defined ([#35519]).
+
+#### Downloads
 
 #### Statistics
 
-
 #### Sockets
 
+#### Tar
 
 #### Distributed
 
-
 #### UUIDs
-* Change `uuid1` and `uuid4` to use `Random.RandomDevice()` as default random number generator ([#35872]).
-* Added `parse(::Type{UUID}, ::AbstractString)` method
+
+#### Mmap
+
+#### DelimitedFiles
+
+#### Logging
+* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
+  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
+
+#### Unicode
+* Added function `isequal_normalized` to check for Unicode equivalence without
+  explicitly constructing normalized strings ([#42493]).
+* The `Unicode.normalize` function now accepts a `chartransform` keyword that can
+  be used to supply custom character mappings, and a `Unicode.julia_chartransform`
+  function is provided to reproduce the mapping used in identifier normalization
+  by the Julia parser ([#42561]).
+
 
 Deprecated or removed
 ---------------------
+
 
 External dependencies
 ---------------------

@@ -60,7 +60,7 @@ julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
  -10.0   2.3   4.0
 
 julia> factorize(A)
-LU{Float64,Matrix{Float64}}
+LU{Float64, Matrix{Float64}}
 L factor:
 3×3 Matrix{Float64}:
   1.0    0.0       0.0
@@ -84,14 +84,14 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
  -4.0  -3.0   5.0
 
 julia> factorize(B)
-BunchKaufman{Float64,Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}}
 D factor:
-3×3 Tridiagonal{Float64,Vector{Float64}}:
+3×3 Tridiagonal{Float64, Vector{Float64}}:
  -1.64286   0.0   ⋅
   0.0      -2.8  0.0
    ⋅        0.0  5.0
 U factor:
-3×3 UnitUpperTriangular{Float64,Matrix{Float64}}:
+3×3 UnitUpperTriangular{Float64, Matrix{Float64}}:
  1.0  0.142857  -0.8
   ⋅   1.0       -0.6
   ⋅    ⋅         1.0
@@ -115,7 +115,7 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
  -4.0  -3.0   5.0
 
 julia> sB = Symmetric(B)
-3×3 Symmetric{Float64,Matrix{Float64}}:
+3×3 Symmetric{Float64, Matrix{Float64}}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
@@ -133,7 +133,7 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
  -4.0  -3.0   5.0
 
 julia> sB = Symmetric(B)
-3×3 Symmetric{Float64,Matrix{Float64}}:
+3×3 Symmetric{Float64, Matrix{Float64}}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
@@ -410,10 +410,11 @@ LinearAlgebra.nullspace
 Base.kron
 Base.kron!
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})
+Base.cis(::AbstractMatrix)
 Base.:^(::AbstractMatrix, ::Number)
 Base.:^(::Number, ::AbstractMatrix)
 LinearAlgebra.log(::StridedMatrix)
-LinearAlgebra.sqrt(::StridedMatrix{<:Real})
+LinearAlgebra.sqrt(::StridedMatrix)
 LinearAlgebra.cos(::StridedMatrix{<:Real})
 LinearAlgebra.sin(::StridedMatrix{<:Real})
 LinearAlgebra.sincos(::StridedMatrix{<:Real})
@@ -576,6 +577,7 @@ LinearAlgebra.BLAS.trmv
 LinearAlgebra.BLAS.trsv!
 LinearAlgebra.BLAS.trsv
 LinearAlgebra.BLAS.set_num_threads
+LinearAlgebra.BLAS.get_num_threads
 ```
 
 ## LAPACK functions

@@ -23,7 +23,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  2.0  0.0  0.0  0.0
 
 julia> F = svd(A)
-SVD{Float64,Float64,Matrix{Float64}}
+SVD{Float64, Float64, Matrix{Float64}}
 U factor:
 4×4 Matrix{Float64}:
  0.0  1.0  0.0   0.0
@@ -72,6 +72,11 @@ function SVD{T}(U::AbstractArray, S::AbstractVector{Tr}, Vt::AbstractArray) wher
         convert(AbstractArray{T}, Vt))
 end
 
+SVD{T}(F::SVD) where {T} = SVD(
+    convert(AbstractMatrix{T}, F.U),
+    convert(AbstractVector{real(T)}, F.S),
+    convert(AbstractMatrix{T}, F.Vt))
+Factorization{T}(F::SVD) where {T} = SVD{T}(F)
 
 # iteration for destructuring into components
 Base.iterate(S::SVD) = (S.U, Val(:S))
@@ -88,24 +93,37 @@ default_svd_alg(A) = DivideAndConquer()
 
 `svd!` is the same as [`svd`](@ref), but saves space by
 overwriting the input `A`, instead of creating a copy. See documentation of [`svd`](@ref) for details.
-```
 """
-function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T<:BlasFloat
-    m,n = size(A)
+function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T<:BlasFloat}
+    m, n = size(A)
     if m == 0 || n == 0
-        u,s,vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
+        u, s, vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
     else
-        u,s,vt = _svd!(A,full,alg)
+        u, s, vt = _svd!(A, full, alg)
     end
-    SVD(u,s,vt)
+    SVD(u, s, vt)
+end
+function svd!(A::StridedVector{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T<:BlasFloat}
+    m = length(A)
+    normA = norm(A)
+    if iszero(normA)
+        return SVD(Matrix{T}(I, m, full ? m : 1), [normA], ones(T, 1, 1))
+    elseif !full
+        normalize!(A)
+        return SVD(reshape(A, (m, 1)), [normA], ones(T, 1, 1))
+    else
+        u, s, vt = _svd!(reshape(A, (m, 1)), full, alg)
+        return SVD(u, s, vt)
+    end
 end
 
-
-_svd!(A::StridedMatrix{T}, full::Bool, alg::Algorithm) where T<:BlasFloat = throw(ArgumentError("Unsupported value for `alg` keyword."))
-_svd!(A::StridedMatrix{T}, full::Bool, alg::DivideAndConquer) where T<:BlasFloat = LAPACK.gesdd!(full ? 'A' : 'S', A)
-function _svd!(A::StridedMatrix{T}, full::Bool, alg::QRIteration) where T<:BlasFloat
+_svd!(A::StridedMatrix{T}, full::Bool, alg::Algorithm) where {T<:BlasFloat} =
+    throw(ArgumentError("Unsupported value for `alg` keyword."))
+_svd!(A::StridedMatrix{T}, full::Bool, alg::DivideAndConquer) where {T<:BlasFloat} =
+    LAPACK.gesdd!(full ? 'A' : 'S', A)
+function _svd!(A::StridedMatrix{T}, full::Bool, alg::QRIteration) where {T<:BlasFloat}
     c = full ? 'A' : 'S'
-    u,s,vt = LAPACK.gesvd!(c, c, A)
+    u, s, vt = LAPACK.gesvd!(c, c, A)
 end
 
 
@@ -154,8 +172,12 @@ julia> Uonly == U
 true
 ```
 """
-function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T
+function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T}
     svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
+end
+function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T <: Union{Float16,Complex{Float16}}}
+    A = svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
+    return SVD{T}(A)
 end
 function svd(x::Number; full::Bool = false, alg::Algorithm = default_svd_alg(x))
     SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
@@ -191,7 +213,7 @@ See also [`svdvals`](@ref) and [`svd`](@ref).
 ```
 """
 svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = isempty(A) ? zeros(real(T), 0) : LAPACK.gesdd!('N', A)[2]
-svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
+svdvals!(A::StridedVector{T}) where {T<:BlasFloat} = svdvals!(reshape(A, (length(A), 1)))
 
 """
     svdvals(A)
@@ -215,14 +237,19 @@ julia> svdvals(A)
  0.0
 ```
 """
-svdvals(A::AbstractMatrix{T}) where T = svdvals!(copy_oftype(A, eigtype(T)))
+svdvals(A::AbstractMatrix{T}) where {T} = svdvals!(copy_oftype(A, eigtype(T)))
+svdvals(A::AbstractVector{T}) where {T} = [convert(eigtype(T), norm(A))]
+svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
+svdvals(A::AbstractVector{<:BlasFloat}) = [norm(A)]
 svdvals(x::Number) = abs(x)
 svdvals(S::SVD{<:Any,T}) where {T} = (S.S)::Vector{T}
 
-# SVD least squares
+### SVD least squares ###
 function ldiv!(A::SVD{T}, B::StridedVecOrMat) where T
+    m, n = size(A)
     k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
-    view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
+    mul!(view(B, 1:n, :), view(A.Vt, 1:k, :)', view(A.S, 1:k) .\ (view(A.U, :, 1:k)' * _cut_B(B, 1:m)))
+    return B
 end
 
 function inv(F::SVD{T}) where T
@@ -235,6 +262,10 @@ end
 
 size(A::SVD, dim::Integer) = dim == 1 ? size(A.U, dim) : size(A.Vt, dim)
 size(A::SVD) = (size(A, 1), size(A, 2))
+
+function adjoint(F::SVD)
+    return SVD(F.Vt', F.S, F.U')
+end
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::SVD{<:Any,<:Any,<:AbstractArray})
     summary(io, F); println(io)
@@ -288,7 +319,7 @@ julia> B = [0. 1.; 1. 0.]
  1.0  0.0
 
 julia> F = svd(A, B)
-GeneralizedSVD{Float64,Matrix{Float64}}
+GeneralizedSVD{Float64, Matrix{Float64}}
 U factor:
 2×2 Matrix{Float64}:
  1.0  0.0
@@ -302,11 +333,11 @@ Q factor:
  1.0  0.0
  0.0  1.0
 D1 factor:
-2×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+2×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:
  0.707107   ⋅
   ⋅        0.707107
 D2 factor:
-2×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+2×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:
  0.707107   ⋅
   ⋅        0.707107
 R0 factor:
@@ -358,7 +389,6 @@ Base.iterate(S::GeneralizedSVD, ::Val{:done}) = nothing
 
 `svd!` is the same as [`svd`](@ref), but modifies the arguments
 `A` and `B` in-place, instead of making copies. See documentation of [`svd`](@ref) for details.
-```
 """
 function svd!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
@@ -496,7 +526,6 @@ end
 Return the generalized singular values from the generalized singular value
 decomposition of `A` and `B`, saving space by overwriting `A` and `B`.
 See also [`svd`](@ref) and [`svdvals`](@ref).
-```
 """
 function svdvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0

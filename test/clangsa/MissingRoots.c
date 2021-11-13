@@ -1,6 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// RUN: clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%shlibext -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CPPFLAGS} ${CFLAGS} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -Xclang -verify -x c %s
+// RUN: clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%shlibext -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CPPFLAGS} ${CFLAGS} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -Xclang -verify -x c %s
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -239,18 +239,18 @@ void pushargs_as_args()
   JL_GC_POP();
 }
 
-static jl_typemap_entry_t *call_cache[10] JL_GLOBALLY_ROOTED;
+static jl_typemap_entry_t *this_call_cache[10] JL_GLOBALLY_ROOTED;
 void global_array2() {
   jl_value_t *val = NULL;
   JL_GC_PUSH1(&val);
-  val = (jl_value_t*)call_cache[1]->func.linfo;
+  val = (jl_value_t*)this_call_cache[1]->func.linfo;
   JL_GC_POP();
 }
 
 void global_array3() {
   jl_value_t *val = NULL;
   jl_typemap_entry_t *tm = NULL;
-  tm = call_cache[1];
+  tm = this_call_cache[1];
   val = (jl_value_t*)tm->func.linfo;
   look_at_value(val);
 }
@@ -329,7 +329,7 @@ jl_module_t *propagation(jl_module_t *m JL_PROPAGATES_ROOT);
 void module_member(jl_module_t *m)
 {
     for(int i=(int)m->usings.len-1; i >= 0; --i) {
-      jl_module_t *imp = (jl_module_t*)m->usings.items[i];
+      jl_module_t *imp = propagation(m);
       jl_gc_safepoint();
       look_at_value((jl_value_t*)imp);
       jl_module_t *prop = propagation(imp);
@@ -409,10 +409,10 @@ void stack_rooted(jl_value_t *lb JL_MAYBE_UNROOTED, jl_value_t *ub JL_MAYBE_UNRO
     JL_GC_POP();
 }
 
-void JL_NORETURN throw_internal(jl_value_t *e JL_MAYBE_UNROOTED)
+JL_DLLEXPORT jl_value_t *jl_totally_used_function(int i)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->sig_exception = e;
-    jl_gc_unsafe_enter(ptls);
-    look_at_value(e);
+    jl_value_t *v = jl_box_int32(i); // expected-note{{Started tracking value here}}
+    jl_safepoint(); // expected-note{{Value may have been GCed here}}
+    return v; // expected-warning{{Return value may have been GCed}}
+              // expected-note@-1{{Return value may have been GCed}}
 }

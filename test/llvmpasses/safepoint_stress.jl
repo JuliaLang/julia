@@ -1,13 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: julia --startup-file=no %s | opt -load libjulia%shlibext -LateLowerGCFrame -FinalLowerGC -S - | FileCheck %s
+# RUN: julia --startup-file=no %s | opt -load libjulia-internal%shlibext -LateLowerGCFrame -FinalLowerGC -S - | FileCheck %s
 
 println("""
 declare {} addrspace(10)* @alloc()
 declare void @one_arg_boxed({} addrspace(10)*)
 declare {}*** @julia.ptls_states()
+declare {}*** @julia.get_pgcstack()
 
 define void @stress(i64 %a, i64 %b) {
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
 """)
 
