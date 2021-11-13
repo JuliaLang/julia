@@ -302,6 +302,21 @@ function _reformat_sp(
     end
 end
 
+@eval @inline function frameaddr()
+    sp = Core.Intrinsics.llvmcall(
+        ($"""
+        declare i8* @llvm.frameaddress(i32)
+        define private i$(Sys.WORD_SIZE) @frameaddr() {
+            %1 = call i8* @llvm.frameaddress(i32 0)
+            %2 = ptrtoint i8* %1 to i$(Sys.WORD_SIZE)
+            ret i$(Sys.WORD_SIZE) %2
+        }""", "frameaddr"),
+        UInt,
+        Tuple{},
+    )
+    return Ptr{Cvoid}(sp)
+end
+
 """
     withframeaddress(f)
 
@@ -309,7 +324,7 @@ Call function `f` with an address `ptr::Ptr{Cvoid}` of an independent frame
 immediately outer to `f`.
 """
 @noinline function withframeaddress(f)
-    sp = ccall("llvm.frameaddress", llvmcall, Ptr{Cvoid}, (Int32,), 0)
+    sp = frameaddr()
     @noinline f(sp)
 end
 
