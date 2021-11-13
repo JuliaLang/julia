@@ -12,11 +12,10 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
-#include <iostream>
-
 #include "codegen_shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
+#include "jl_internal_funcs.inc"
 
 using namespace llvm;
 
@@ -26,7 +25,7 @@ JuliaPassContext::JuliaPassContext()
     : T_size(nullptr), T_int8(nullptr), T_int32(nullptr),
         T_pint8(nullptr), T_jlvalue(nullptr), T_prjlvalue(nullptr),
         T_ppjlvalue(nullptr), T_pjlvalue(nullptr), T_pjlvalue_der(nullptr),
-        T_ppjlvalue_der(nullptr), ptls_getter(nullptr), gc_flush_func(nullptr),
+        T_ppjlvalue_der(nullptr), pgcstack_getter(nullptr), gc_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), write_barrier_func(nullptr), module(nullptr)
@@ -42,7 +41,7 @@ void JuliaPassContext::initFunctions(Module &M)
 {
     module = &M;
 
-    ptls_getter = M.getFunction("julia.ptls_states");
+    pgcstack_getter = M.getFunction("julia.get_pgcstack");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
     gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
@@ -64,37 +63,22 @@ void JuliaPassContext::initAll(Module &M)
     T_pint8 = PointerType::get(T_int8, 0);
     T_int32 = Type::getInt32Ty(ctx);
 
-    // Find 'jl_value_t' by searching through the module's
-    // identified struct types. This is a much more robust way
-    // to find 'jl_value_t' than an ad-hoc search through
-    // intrinsics that may or may not be defined in the module.
-    T_jlvalue = nullptr;
-    for (auto type : M.getIdentifiedStructTypes()) {
-        if (type->hasName() && type->getName() == "jl_value_t") {
-            T_jlvalue = type;
-            break;
-        }
-    }
-
-    // If 'jl_value_t' doesn't exist yet then we'll just define it.
-    if (!T_jlvalue) {
-        T_jlvalue = StructType::create(ctx, "jl_value_t");
-    }
-
     // Construct derived types.
+    T_jlvalue = StructType::get(ctx);
     T_pjlvalue = PointerType::get(T_jlvalue, 0);
     T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
     T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
     T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
     T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+    T_pppjlvalue = PointerType::get(T_ppjlvalue, 0);
 }
 
-llvm::CallInst *JuliaPassContext::getPtls(llvm::Function &F) const
+llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
 {
     for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
-         ptls_getter && I != E; ++I) {
+         pgcstack_getter && I != E; ++I) {
         if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
-            if (callInst->getCalledValue() == ptls_getter) {
+            if (callInst->getCalledOperand() == pgcstack_getter) {
                 return callInst;
             }
         }
@@ -226,9 +210,9 @@ namespace jl_intrinsics {
 }
 
 namespace jl_well_known {
-    static const char *GC_BIG_ALLOC_NAME = "jl_gc_big_alloc";
-    static const char *GC_POOL_ALLOC_NAME = "jl_gc_pool_alloc";
-    static const char *GC_QUEUE_ROOT_NAME = "jl_gc_queue_root";
+    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
+    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc);
+    static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
 
     using jl_intrinsics::addGCAllocAttributes;
 

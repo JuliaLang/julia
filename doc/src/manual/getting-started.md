@@ -3,6 +3,8 @@
 Julia installation is straightforward, whether using precompiled binaries or compiling from source.
 Download and install Julia by following the instructions at [https://julialang.org/downloads/](https://julialang.org/downloads/).
 
+If you are coming to Julia from one of the following languages, then you should start by reading the section on noteworthy differences from [MATLAB](@ref Noteworthy-differences-from-MATLAB), [R](@ref Noteworthy-differences-from-R), [Python](@ref Noteworthy-differences-from-Python), [C/C++](@ref Noteworthy-differences-from-C/C) or [Common Lisp](@ref Noteworthy-differences-from-Common-Lisp). This will help you avoid some common pitfalls since Julia differs from those languages in many subtle ways.
+
 The easiest way to learn and experiment with Julia is by starting an interactive session (also
 known as a read-eval-print loop or "REPL") by double-clicking the Julia executable or running
 `julia` from the command line:
@@ -59,7 +61,7 @@ bar
 The `--` delimiter can be used to separate command-line arguments intended for the script file from arguments intended for Julia:
 
 ```
-$ julia --color=yes -O -- foo.jl arg1 arg2..
+$ julia --color=yes -O -- script.jl arg1 arg2..
 ```
 
 See also [Scripting](@ref man-scripting) for more information on writing Julia scripts.
@@ -95,46 +97,26 @@ There are various ways to run Julia code and provide options, similar to those a
 julia [switches] -- [programfile] [args...]
 ```
 
-|Switch                                 |Description|
-|:---                                   |:---|
-|`-v`, `--version`                      |Display version information|
-|`-h`, `--help`                         |Print command-line options (this message).|
-|`--project[={<dir>\|@.}]`              |Set <dir> as the home project/environment. The default @. option will search through parent directories until a Project.toml or JuliaProject.toml file is found.|
-|`-J`, `--sysimage <file>`              |Start up with the given system image file|
-|`-H`, `--home <dir>`                   |Set location of `julia` executable|
-|`--startup-file={yes\|no}`             |Load `~/.julia/config/startup.jl`|
-|`--handle-signals={yes\|no}`           |Enable or disable Julia's default signal handlers|
-|`--sysimage-native-code={yes\|no}`     |Use native code from system image if available|
-|`--compiled-modules={yes\|no}`         |Enable or disable incremental precompilation of modules|
-|`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
-|`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
-|`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
-|`-t`, `--threads {N\|auto`}            |Enable N threads; `auto` currently sets N to the number of local CPU threads but this might change in the future|
-|`-p`, `--procs {N\|auto`}              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
-|`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
-|`-i`                                   |Interactive mode; REPL runs and `isinteractive()` is true|
-|`-q`, `--quiet`                        |Quiet startup: no banner, suppress REPL warnings|
-|`--banner={yes\|no\|auto}`             |Enable or disable startup banner|
-|`--color={yes\|no\|auto}`              |Enable or disable color text|
-|`--history-file={yes\|no}`             |Load or save history|
-|`--depwarn={yes\|no\|error}`           |Enable or disable syntax and method deprecation warnings (`error` turns warnings into errors)|
-|`--warn-overwrite={yes\|no}`           |Enable or disable method overwrite warnings|
-|`-C`, `--cpu-target <target>`          |Limit usage of CPU features up to `<target>`; set to `help` to see the available options|
-|`-O`, `--optimize={0,1,2,3}`           |Set the optimization level (default level is 2 if unspecified or 3 if used without a level)|
-|`-g`, `-g <level>`                     |Enable / Set the level of debug info generation (default level is 1 if unspecified or 2 if used without a level)|
-|`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
-|`--check-bounds={yes\|no}`             |Emit bounds checks always or never (ignoring declarations)|
-|`--math-mode={ieee,fast}`              |Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)|
-|`--code-coverage={none\|user\|all}`    |Count executions of source lines|
-|`--code-coverage`                      |equivalent to `--code-coverage=user`|
-|`--track-allocation={none\|user\|all}` |Count bytes allocated by each source line|
-|`--track-allocation`                   |equivalent to `--track-allocation=user`|
-
-!!! compat "Julia 1.1"
-    In Julia 1.0, the default `--project=@.` option did not search up from the root
-    directory of a Git repository for the `Project.toml` file. From Julia 1.1 forward, it
-    does.
+A detailed list of all the available switches can be found at [Command-line Options](@ref
+command-line-options).
 
 ## Resources
 
-A curated list of useful learning resources to help new users get started can be found on the [learning](https://julialang.org/learning/) page of the main Julia web site.
+A curated list of useful learning resources to help new users get started can be found on the [learning](https://julialang.org/learning/) page of the main Julia website.
+
+You can use the REPL as a learning resource by switching into the help mode.
+Switch to help mode by pressing `?` at an empty `julia> ` prompt, before typing
+anything else. Typing a keyword in help mode will fetch the documentation for
+it, along with examples. Similarly for most functions or other objects you
+might encounter!
+
+```
+help?> begin
+search: begin disable_sigint reenable_sigint
+
+  begin
+
+  begin...end denotes a block of code.
+```
+
+If you already know Julia a bit, you might want to peek ahead at [Performance Tips](@ref man-performance-tips) and [Workflow Tips](@ref man-workflow-tips).

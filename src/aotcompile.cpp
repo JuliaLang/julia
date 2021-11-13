@@ -2,15 +2,14 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#include "options.h"
 
 // target support
 #include <llvm/ADT/Triple.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
+#include <llvm/Analysis/TargetTransformInfo.h>
+#include <llvm/IR/DataLayout.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Target/TargetMachine.h>
-#include <llvm/IR/DataLayout.h>
-#include <llvm/Analysis/TargetTransformInfo.h>
-#include <llvm/Analysis/TargetLibraryInfo.h>
 
 // analysis passes
 #include <llvm/Analysis/Passes.h>
@@ -21,13 +20,13 @@
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Vectorize.h>
-#if defined(JL_ASAN_ENABLED)
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
-#endif
+#include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
+#include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
@@ -37,21 +36,11 @@
 #endif
 #endif
 
-// for outputting assembly
+// for outputting code
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/Bitcode/BitcodeWriterPass.h>
 #include "llvm/Object/ArchiveWriter.h"
 #include <llvm/IR/IRPrintingPasses.h>
-#include <llvm/CodeGen/AsmPrinter.h>
-#include <llvm/CodeGen/MachineModuleInfo.h>
-#include <llvm/CodeGen/TargetPassConfig.h>
-#include <llvm/MC/MCAsmInfo.h>
-#include <llvm/MC/MCStreamer.h>
-#include <llvm/MC/MCAsmBackend.h>
-#include <llvm/MC/MCCodeEmitter.h>
-#if JL_LLVM_VERSION >= 100000
-#include <llvm/Support/CodeGen.h>
-#endif
 
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -64,35 +53,16 @@ namespace llvm {
     extern Pass *createLowerSimdLoopPass();
 }
 
-#if JL_LLVM_VERSION < 100000
-static const TargetMachine::CodeGenFileType CGFT_ObjectFile = TargetMachine::CGFT_ObjectFile;
-static const TargetMachine::CodeGenFileType CGFT_AssemblyFile = TargetMachine::CGFT_AssemblyFile;
-#endif
-
-
 #include "julia.h"
 #include "julia_internal.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
 
-// MSVC's link.exe requires each function declaration to have a Comdat section
-// So rather than litter the code with conditionals,
-// all global values that get emitted call this function
-// and it decides whether the definition needs a Comdat section and adds the appropriate declaration
 template<class T> // for GlobalObject's
 static T *addComdat(T *G)
 {
 #if defined(_OS_WINDOWS_)
     if (!G->isDeclaration()) {
-        // Add comdat information to make MSVC link.exe happy
-        // it's valid to emit this for ld.exe too,
-        // but makes it very slow to link for no benefit
-#if defined(_COMPILER_MICROSOFT_)
-        Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
-        // ELF only supports Comdat::Any
-        jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
-        G->setComdat(jl_Comdat);
-#endif
         // add __declspec(dllexport) to everything marked for export
         if (G->getLinkage() == GlobalValue::ExternalLinkage)
             G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
@@ -113,7 +83,7 @@ typedef struct {
 } jl_native_code_desc_t;
 
 extern "C" JL_DLLEXPORT
-void jl_get_function_id(void *native_code, jl_code_instance_t *codeinst,
+void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
         int32_t *func_idx, int32_t *specfunc_idx)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -126,8 +96,8 @@ void jl_get_function_id(void *native_code, jl_code_instance_t *codeinst,
     }
 }
 
-extern "C"
-int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p)
+extern "C" JL_DLLEXPORT
+int32_t jl_get_llvm_gv_impl(void *native_code, jl_value_t *p)
 {
     // map a jl_value_t memory location to a GlobalVariable
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -141,7 +111,7 @@ int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p)
 }
 
 extern "C" JL_DLLEXPORT
-Module* jl_get_llvm_module(void *native_code)
+Module* jl_get_llvm_module_impl(void *native_code)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
@@ -151,7 +121,7 @@ Module* jl_get_llvm_module(void *native_code)
 }
 
 extern "C" JL_DLLEXPORT
-GlobalValue* jl_get_llvm_function(void *native_code, uint32_t idx)
+GlobalValue* jl_get_llvm_function_impl(void *native_code, uint32_t idx)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
@@ -161,7 +131,7 @@ GlobalValue* jl_get_llvm_function(void *native_code, uint32_t idx)
 }
 
 extern "C" JL_DLLEXPORT
-LLVMContext* jl_get_llvm_context(void *native_code)
+LLVMContext* jl_get_llvm_context_impl(void *native_code)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
@@ -248,53 +218,92 @@ static void makeSafeName(GlobalObject &G)
         G.setName(StringRef(SafeName.data(), SafeName.size()));
 }
 
+static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance_t *mi, size_t world, jl_code_instance_t **ci_out, jl_code_info_t **src_out)
+{
+    jl_value_t *ci = cgparams.lookup(mi, world, world);
+    JL_GC_PROMISE_ROOTED(ci);
+    jl_code_instance_t *codeinst = NULL;
+    if (ci != jl_nothing) {
+        codeinst = (jl_code_instance_t*)ci;
+        *src_out = (jl_code_info_t*)codeinst->inferred;
+        jl_method_t *def = codeinst->def->def.method;
+        if ((jl_value_t*)*src_out == jl_nothing)
+            *src_out = NULL;
+        if (*src_out && jl_is_method(def))
+            *src_out = jl_uncompress_ir(def, codeinst, (jl_array_t*)*src_out);
+    }
+    if (*src_out == NULL || !jl_is_code_info(*src_out)) {
+        if (cgparams.lookup != jl_rettype_inferred) {
+            jl_error("Refusing to automatically run type inference with custom cache lookup.");
+        }
+        else {
+            *src_out = jl_type_infer(mi, world, 0);
+            if (*src_out) {
+                codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
+                if ((*src_out)->inferred && !codeinst->inferred)
+                    codeinst->inferred = jl_nothing;
+            }
+        }
+    }
+    *ci_out = codeinst;
+}
 
 // takes the running content that has collected in the shadow module and dump it to disk
-// this builds the object file portion of the sysimage files for fast startup
+// this builds the object file portion of the sysimage files for fast startup, and can
+// also be used be extern consumers like GPUCompiler.jl to obtain a module containing
+// all reachable & inferrrable functions. The `policy` flag switches between the default
+// mode `0`, the extern mode `1`, and imaging mode `2`.
 extern "C" JL_DLLEXPORT
-void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
+void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy)
 {
+    if (cgparams == NULL)
+        cgparams = &jl_default_cgparams;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     jl_codegen_params_t params;
-    params.params = &cgparams;
+    params.params = cgparams;
     std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
-    JL_LOCK(&codegen_lock);
+    JL_LOCK(&jl_codegen_lock);
+    uint64_t compiler_start_time = 0;
+    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    if (measure_compile_time_enabled)
+        compiler_start_time = jl_hrtime();
+
+    CompilationPolicy policy = (CompilationPolicy) _policy;
+    if (policy == CompilationPolicy::ImagingMode)
+        imaging_mode = 1;
+    std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
 
     // compile all methods for the current world and type-inference world
-    size_t compile_for[] = { jl_typeinf_world, jl_world_counter };
+    size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
     for (int worlds = 0; worlds < 2; worlds++) {
         params.world = compile_for[worlds];
         if (!params.world)
             continue;
+        // Don't emit methods for the typeinf_world with extern policy
+        if (policy != CompilationPolicy::Default && params.world == jl_typeinf_world)
+            continue;
         size_t i, l;
         for (i = 0, l = jl_array_len(methods); i < l; i++) {
-            mi = (jl_method_instance_t*)jl_array_ptr_ref(methods, i);
+            // each item in this list is either a MethodInstance indicating something
+            // to compile, or an svec(rettype, sig) describing a C-callable alias to create.
+            jl_value_t *item = jl_array_ptr_ref(methods, i);
+            if (jl_is_simplevector(item)) {
+                if (worlds == 1)
+                    jl_compile_extern_c(clone.get(), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                continue;
+            }
+            mi = (jl_method_instance_t*)item;
             src = NULL;
             // if this method is generally visible to the current compilation world,
             // and this is either the primary world, or not applicable in the primary world
             // then we want to compile and emit this
             if (mi->def.method->primary_world <= params.world && params.world <= mi->def.method->deleted_world) {
                 // find and prepare the source code to compile
-                jl_value_t *ci = jl_rettype_inferred(mi, params.world, params.world);
                 jl_code_instance_t *codeinst = NULL;
-                if (ci != jl_nothing) {
-                    codeinst = (jl_code_instance_t*)ci;
-                    src = (jl_code_info_t*)codeinst->inferred;
-                    jl_method_t *def = codeinst->def->def.method;
-                    if ((jl_value_t*)src == jl_nothing)
-                        src = NULL;
-                    if (src && jl_is_method(def))
-                        src = jl_uncompress_ir(def, codeinst, (jl_array_t*)src);
-                }
-                if (src == NULL || !jl_is_code_info(src)) {
-                    src = jl_type_infer(mi, params.world, 0);
-                    codeinst = jl_get_method_inferred(mi, src->rettype, src->min_world, src->max_world);
-                    if (src->inferred && !codeinst->inferred)
-                        codeinst->inferred = jl_nothing;
-                }
+                jl_ci_cache_lookup(*cgparams, mi, params.world, &codeinst, &src);
                 if (src && !emitted.count(codeinst)) {
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
@@ -304,8 +313,9 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
                 }
             }
         }
+
         // finally, make sure all referenced methods also get compiled or fixed up
-        jl_compile_workqueue(emitted, params);
+        jl_compile_workqueue(emitted, params, policy);
     }
     JL_GC_POP();
 
@@ -319,8 +329,6 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
 
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have
-    ValueToValueMapTy VMap;
-    std::unique_ptr<Module> clone(CloneModule(*shadow_output, VMap));
     for (auto &def : emitted) {
         jl_merge_module(clone.get(), std::move(std::get<0>(def.second)));
         jl_code_instance_t *this_code = def.first;
@@ -345,6 +353,11 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
         }
         data->jl_fvar_map[this_code] = std::make_tuple(func_id, cfunc_id);
     }
+    if (params._shared_module) {
+        std::unique_ptr<Module> shared(params._shared_module);
+        params._shared_module = NULL;
+        jl_merge_module(clone.get(), std::move(shared));
+    }
 
     // now get references to the globals in the merged module
     // and set them to be internalized and initialized at startup
@@ -367,22 +380,27 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
-    for (GlobalObject &G : clone->global_objects()) {
-        if (!G.isDeclaration()) {
-            G.setLinkage(Function::InternalLinkage);
-            makeSafeName(G);
-            addComdat(&G);
+    if (policy == CompilationPolicy::Default) {
+        for (GlobalObject &G : clone->global_objects()) {
+            if (!G.isDeclaration()) {
+                G.setLinkage(Function::InternalLinkage);
+                makeSafeName(G);
+                addComdat(&G);
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-            // Add unwind exception personalities to functions to handle async exceptions
-            if (Function *F = dyn_cast<Function>(&G))
-                F->setPersonalityFn(juliapersonality_func);
+                // Add unwind exception personalities to functions to handle async exceptions
+                if (Function *F = dyn_cast<Function>(&G))
+                    F->setPersonalityFn(juliapersonality_func);
 #endif
+            }
         }
     }
 
     data->M = std::move(clone);
-
-    JL_UNLOCK(&codegen_lock); // Might GC
+    if (measure_compile_time_enabled)
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    if (policy == CompilationPolicy::ImagingMode)
+        imaging_mode = 0;
+    JL_UNLOCK(&jl_codegen_lock); // Might GC
     return (void*)data;
 }
 
@@ -412,8 +430,8 @@ static void reportWriterError(const ErrorInfoBase &E)
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
-extern "C"
-void jl_dump_native(void *native_code,
+extern "C" JL_DLLEXPORT
+void jl_dump_native_impl(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
         const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len)
@@ -457,10 +475,10 @@ void jl_dump_native(void *native_code,
     addTargetPasses(&PM, TM.get());
 
     // set up optimization passes
-    SmallVector<char, 128> bc_Buffer;
-    SmallVector<char, 128> obj_Buffer;
-    SmallVector<char, 128> asm_Buffer;
-    SmallVector<char, 128> unopt_bc_Buffer;
+    SmallVector<char, 0> bc_Buffer;
+    SmallVector<char, 0> obj_Buffer;
+    SmallVector<char, 0> asm_Buffer;
+    SmallVector<char, 0> unopt_bc_Buffer;
     raw_svector_ostream bc_OS(bc_Buffer);
     raw_svector_ostream obj_OS(obj_Buffer);
     raw_svector_ostream asm_OS(asm_Buffer);
@@ -473,8 +491,10 @@ void jl_dump_native(void *native_code,
 
     if (unopt_bc_fname)
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
-    if (bc_fname || obj_fname || asm_fname)
+    if (bc_fname || obj_fname || asm_fname) {
         addOptimizationPasses(&PM, jl_options.opt_level, true, true);
+        addMachinePasses(&PM, TM.get(), jl_options.opt_level);
+    }
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
     if (obj_fname)
@@ -503,7 +523,7 @@ void jl_dump_native(void *native_code,
 
         // reflect the address of the jl_RTLD_DEFAULT_handle variable
         // back to the caller, so that we can check for consistency issues
-        GlobalValue *jlRTLD_DEFAULT_var = data->M->getNamedValue("jl_RTLD_DEFAULT_handle");
+        GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(data->M.get());
         addComdat(new GlobalVariable(*data->M,
                                      jlRTLD_DEFAULT_var->getType(),
                                      true,
@@ -531,13 +551,6 @@ void jl_dump_native(void *native_code,
     sysimage->setTargetTriple(data->M->getTargetTriple());
     sysimage->setDataLayout(data->M->getDataLayout());
     data->M.reset(); // free memory for data->M
-
-    addComdat(new GlobalVariable(*sysimage,
-                                 T_size,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size, globalUnique + 1),
-                                 "jl_globalUnique"));
 
     if (sysimg_data) {
         Constant *data = ConstantDataArray::get(Context,
@@ -569,40 +582,44 @@ void jl_dump_native(void *native_code,
     delete data;
 }
 
-// clones the contents of the module `m` to the shadow_output collector
-// TODO: this should be deprecated
-void jl_add_to_shadow(Module *m)
-{
-    ValueToValueMapTy VMap;
-    std::unique_ptr<Module> clone(CloneModule(*m, VMap));
-    jl_merge_module(shadow_output, std::move(clone));
-}
-
-
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 {
     PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
     PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
 }
 
+
+void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel)
+{
+    // TODO: don't do this on CPUs that natively support Float16
+    PM->add(createDemoteFloat16Pass());
+    if (optlevel > 1)
+        PM->add(createGVNPass());
+}
+
+
+
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
                            bool lower_intrinsics, bool dump_native)
 {
+    // Note: LLVM 12 disabled the hoisting of common instruction
+    //       before loop vectorization (https://reviews.llvm.org/D84108).
+    //
+    // TODO: CommonInstruction hoisting/sinking enables AllocOpt
+    //       to merge allocations and sometimes eliminate them,
+    //       since AllocOpt does not handle PhiNodes.
+    //       Enable this instruction hoisting because of this and Union benchmarks.
+    auto simplifyCFGOptions = SimplifyCFGOptions().hoistCommonInsts(true);
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
     PM->add(createVerifierPass());
 #endif
 
-#if defined(JL_ASAN_ENABLED)
-    PM->add(createAddressSanitizerFunctionPass());
-#endif
-#if defined(JL_MSAN_ENABLED)
-    PM->add(llvm::createMemorySanitizerPass(true));
-#endif
+    PM->add(createConstantMergePass());
     if (opt_level < 2) {
-        PM->add(createCFGSimplificationPass());
+        PM->add(createCFGSimplificationPass(simplifyCFGOptions));
         if (opt_level == 1) {
             PM->add(createSROAPass());
             PM->add(createInstructionCombiningPass());
@@ -612,17 +629,31 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         }
         PM->add(createMemCpyOptPass());
         PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
+        PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (lower_intrinsics) {
             PM->add(createBarrierNoopPass());
             PM->add(createLowerExcHandlersPass());
             PM->add(createGCInvariantVerifierPass(false));
+            PM->add(createRemoveNIPass());
             PM->add(createLateLowerGCFramePass());
             PM->add(createFinalLowerGCPass());
             PM->add(createLowerPTLSPass(dump_native));
         }
+        else {
+            PM->add(createRemoveNIPass());
+        }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
+#if defined(_COMPILER_ASAN_ENABLED_)
+        PM->add(createAddressSanitizerFunctionPass());
+#endif
+#if defined(_COMPILER_MSAN_ENABLED_)
+        PM->add(createMemorySanitizerPass(true));
+#endif
+#if defined(_COMPILER_TSAN_ENABLED_)
+        PM->add(createThreadSanitizerLegacyPassPass());
+#endif
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
@@ -632,7 +663,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createBasicAAWrapperPass());
     }
 
-    PM->add(createCFGSimplificationPass());
+    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
     PM->add(createDeadCodeEliminationPass());
     PM->add(createSROAPass());
 
@@ -646,12 +677,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAllocOptPass());
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass());
+    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
     if (dump_native)
         PM->add(createMultiVersioningPass());
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createJumpThreadingPass());
+    PM->add(createCorrelatedValuePropagationPass());
 
     PM->add(createReassociatePass());
 
@@ -675,8 +707,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
     PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
     PM->add(createLICMPass());
+    PM->add(createJuliaLICMPass());
     PM->add(createLoopUnswitchPass());
     PM->add(createLICMPass());
+    PM->add(createJuliaLICMPass());
+    PM->add(createInductiveRangeCheckEliminationPass());
     // Subsequent passes not stripping metadata from terminator
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createIndVarSimplifyPass());
@@ -701,6 +736,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // loops over Union-typed arrays to vectorize.
     PM->add(createInstructionCombiningPass());
     PM->add(createJumpThreadingPass());
+    PM->add(createCorrelatedValuePropagationPass());
     PM->add(createDeadStoreEliminationPass());
 
     // More dead allocation (store) deletion before loop optimization
@@ -709,12 +745,21 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
     // this helps significantly with cleaning up iteration
-    PM->add(createCFGSimplificationPass());
+    PM->add(createCFGSimplificationPass()); // See note above, don't hoist instructions before LV
     PM->add(createLoopDeletionPass());
     PM->add(createInstructionCombiningPass());
     PM->add(createLoopVectorizePass());
     PM->add(createLoopLoadEliminationPass());
-    PM->add(createCFGSimplificationPass());
+    // Cleanup after LV pass
+    PM->add(createInstructionCombiningPass());
+    PM->add(createCFGSimplificationPass( // Aggressive CFG simplification
+        SimplifyCFGOptions()
+            .forwardSwitchCondToPhi(true)
+            .convertSwitchToLookupTable(true)
+            .needCanonicalLoops(false)
+            .hoistCommonInsts(true)
+            // .sinkCommonInsts(true) // FIXME: Causes assertion in llvm-late-lowering
+    ));
     PM->add(createSLPVectorizerPass());
     // might need this after LLVM 11:
     //PM->add(createVectorCombinePass());
@@ -728,16 +773,37 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createBarrierNoopPass());
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
+        // Needed **before** LateLowerGCFrame on LLVM < 12
+        // due to bug in `CreateAlignmentAssumption`.
+        PM->add(createRemoveNIPass());
         PM->add(createLateLowerGCFramePass());
         PM->add(createFinalLowerGCPass());
+        // We need these two passes and the instcombine below
+        // after GC lowering to let LLVM do some constant propagation on the tags.
+        // and remove some unnecessary write barrier checks.
+        PM->add(createGVNPass());
+        PM->add(createSCCPPass());
         // Remove dead use of ptls
         PM->add(createDeadCodeEliminationPass());
         PM->add(createLowerPTLSPass(dump_native));
+        PM->add(createInstructionCombiningPass());
         // Clean up write barrier and ptls lowering
         PM->add(createCFGSimplificationPass());
     }
+    else {
+        PM->add(createRemoveNIPass());
+    }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
+#if defined(_COMPILER_ASAN_ENABLED_)
+    PM->add(createAddressSanitizerFunctionPass());
+#endif
+#if defined(_COMPILER_MSAN_ENABLED_)
+    PM->add(createMemorySanitizerPass(true));
+#endif
+#if defined(_COMPILER_TSAN_ENABLED_)
+    PM->add(createThreadSanitizerLegacyPassPass());
+#endif
 }
 
 // An LLVM module pass that just runs all julia passes in order. Useful for
@@ -758,6 +824,7 @@ public:
         TPMAdapter Adapter(TPM);
         addTargetPasses(&Adapter, jl_TargetMachine);
         addOptimizationPasses(&Adapter, OptLevel);
+        addMachinePasses(&Adapter, jl_TargetMachine, OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
@@ -779,10 +846,10 @@ void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level, int lower_
 // --- native code info, and dump function to IR and ASM ---
 // Get pointer to llvm::Function instance, compiling if necessary
 // for use in reflection from Julia.
-// this is paired with jl_dump_function_ir, jl_dump_method_asm, jl_dump_llvm_asm in particular ways:
+// this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
+void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
             mi->def.method->generator == NULL) {
@@ -795,6 +862,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         PM = new legacy::PassManager();
         addTargetPasses(PM, jl_TargetMachine);
         addOptimizationPasses(PM, jl_options.opt_level);
+        addMachinePasses(PM, jl_TargetMachine, jl_options.opt_level);
     }
 
     // get the source code for this function
@@ -828,12 +896,21 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         output.params = &params;
         std::unique_ptr<Module> m;
         jl_llvm_functions_t decls;
-        JL_LOCK(&codegen_lock);
+        JL_LOCK(&jl_codegen_lock);
+        uint64_t compiler_start_time = 0;
+        uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+        if (measure_compile_time_enabled)
+            compiler_start_time = jl_hrtime();
         std::tie(m, decls) = jl_emit_code(mi, src, jlrettype, output);
 
         Function *F = NULL;
         if (m) {
             // if compilation succeeded, prepare to return the result
+            // For imaging mode, global constants are currently private without initializer
+            // which isn't legal. Convert them to extern linkage so that the code can compile
+            // and will better match what's actually in sysimg.
+            for (auto &global : output.globals)
+                global.second->setLinkage(GlobalValue::ExternalLinkage);
             if (optimize)
                 PM->run(*m.get());
             const std::string *fname;
@@ -847,95 +924,13 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
             m.release(); // the return object `llvmf` will be the owning pointer
         }
         JL_GC_POP();
-        JL_UNLOCK(&codegen_lock); // Might GC
+        if (measure_compile_time_enabled)
+            jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+        JL_UNLOCK(&jl_codegen_lock); // Might GC
         if (F)
             return F;
     }
 
     const char *mname = name_from_method_instance(mi);
     jl_errorf("unable to compile source for function %s", mname);
-}
-
-/// addPassesToX helper drives creation and initialization of TargetPassConfig.
-static MCContext *
-addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
-    TargetPassConfig *PassConfig = TM->createPassConfig(PM);
-    PassConfig->setDisableVerify(false);
-    PM.add(PassConfig);
-#if JL_LLVM_VERSION >= 100000
-    MachineModuleInfoWrapperPass *MMIWP =
-        new MachineModuleInfoWrapperPass(TM);
-    PM.add(MMIWP);
-#else
-    MachineModuleInfo *MMI = new MachineModuleInfo(TM);
-    PM.add(MMI);
-#endif
-    if (PassConfig->addISelPasses())
-        return NULL;
-    PassConfig->addMachinePasses();
-    PassConfig->setInitialized();
-#if JL_LLVM_VERSION >= 100000
-    return &MMIWP->getMMI().getContext();
-#else
-    return &MMI->getContext();
-#endif
-}
-
-void jl_strip_llvm_debug(Module *m);
-
-
-// get a native assembly for llvm::Function
-// TODO: implement debuginfo handling
-extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_llvm_asm(void *F, const char* asm_variant, const char *debuginfo)
-{
-    // precise printing via IR assembler
-    SmallVector<char, 4096> ObjBufferSV;
-    { // scope block
-        Function *f = (Function*)F;
-        llvm::raw_svector_ostream asmfile(ObjBufferSV);
-        assert(!f->isDeclaration());
-        std::unique_ptr<Module> m(f->getParent());
-        for (auto &f2 : m->functions()) {
-            if (f != &f2 && !f->isDeclaration())
-                f2.deleteBody();
-        }
-        jl_strip_llvm_debug(m.get());
-        legacy::PassManager PM;
-        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(jl_TargetMachine);
-        MCContext *Context = addPassesToGenerateCode(TM, PM);
-        if (Context) {
-            const MCSubtargetInfo &STI = *TM->getMCSubtargetInfo();
-            const MCAsmInfo &MAI = *TM->getMCAsmInfo();
-            const MCRegisterInfo &MRI = *TM->getMCRegisterInfo();
-            const MCInstrInfo &MII = *TM->getMCInstrInfo();
-            unsigned OutputAsmDialect = MAI.getAssemblerDialect();
-            if (!strcmp(asm_variant, "att"))
-                OutputAsmDialect = 0;
-            if (!strcmp(asm_variant, "intel"))
-                OutputAsmDialect = 1;
-            MCInstPrinter *InstPrinter = TM->getTarget().createMCInstPrinter(
-                TM->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
-             std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
-                STI, MRI, TM->Options.MCOptions));
-            std::unique_ptr<MCCodeEmitter> MCE;
-#if JL_LLVM_VERSION >= 100000
-            auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
-#else
-            auto FOut = llvm::make_unique<formatted_raw_ostream>(asmfile);
-#endif
-            std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
-                *Context, std::move(FOut), true,
-                true, InstPrinter,
-                std::move(MCE), std::move(MAB),
-                false));
-            std::unique_ptr<AsmPrinter> Printer(
-                TM->getTarget().createAsmPrinter(*TM, std::move(S)));
-            if (Printer) {
-                PM.add(Printer.release());
-                PM.run(*m);
-            }
-        }
-    }
-    return jl_pchar_to_string(ObjBufferSV.data(), ObjBufferSV.size());
 }

@@ -1,99 +1,51 @@
-Julia v1.5 Release Notes
+Julia v1.8 Release Notes
 ========================
+
 
 New language features
 ---------------------
-* Macro calls `@foo {...}` can now also be written `@foo{...}` (without the space) ([#34498]).
-* `⨟` is now parsed as a binary operator with times precedence. It can be entered in the REPL
-  with `\bbsemi` followed by <kbd>TAB</kbd> ([#34722]).
 
-* `±` and `∓` are now unary operators as well, like `+` or `-`. Attention has to be paid in
-  macros and matrix constructors, which are whitespace sensitive, because expressions like
-  `[a ±b]` now get parsed as `[a ±(b)]` instead of `[±(a, b)]`. ([#34200])
-
-* Passing an identifier `x` by itself as a keyword argument or named tuple element
-  is equivalent to `x=x`, implicitly using the name of the variable as the keyword
-  or named tuple field name.
-  Similarly, passing an `a.b` expression uses `b` as the keyword or field name ([#29333]).
-
-* Packages can now provide custom hints to help users resolve errors by using the
-  `register_error_hint` function. Packages that define custom exception types
-  can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])
-
-* Support for Unicode 13.0.0 (via utf8proc 2.5) ([#35282]).
-
-* The compiler optimization level can now be set per-module using the experimental macro
-  `Base.Experimental.@optlevel n`. For code that is not performance-critical, setting
-  this to 0 or 1 can provide significant latency improvements ([#34896]).
+* `Module(:name, false, false)` can be used to create a `module` that contains no names (it does not import `Base` or `Core` and does not contain a reference to itself). ([#40110, #42154])
+* `@inline` and `@noinline` annotations can be used within a function body to give an extra
+  hint about the inlining cost to the compiler. ([#41312])
+* `@inline` and `@noinline` annotations can now be applied to a function callsite or block
+  to enforce the involved function calls to be (or not to be) inlined. ([#41312])
+* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
+* New function `eachsplit(str)` for iteratively performing `split(str)`.
+* `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
+* `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
+  no errors were thrown. ([#42211])
 
 Language changes
 ----------------
 
-* The interactive REPL now uses "soft scope" for top-level expressions: an assignment inside a
-  scope block such as a `for` loop automatically assigns to a global variable if one has been
-  defined already. This matches the behavior of Julia versions 0.6 and prior, as well as
-  [IJulia](https://github.com/JuliaLang/IJulia.jl).
-  Note that this only affects expressions interactively typed or pasted directly into the
-  default REPL ([#28789], [#33864]).
-
-* Outside of the REPL (e.g. in a file), assigning to a variable within a top-level scope
-  block is considered ambiguous if a global variable with the same name exists.
-  A warning is given if that happens, to alert you that the code will work differently
-  than in the REPL.
-  A new command line option `--warn-scope` controls this warning ([#33864]).
-
-* Converting arbitrary tuples to `NTuple`, e.g. `convert(NTuple, (1, ""))` now gives an error,
-  where it used to be incorrectly allowed. This is because `NTuple` refers only to homogeneous
-  tuples (this meaning has not changed) ([#34272]).
-
-* In docstrings, a level-1 markdown header "Extended help" is now
-  interpreted as a marker dividing "brief help" from "extended help."
-  The REPL help mode only shows the brief help (the content before the
-  "Extended help" header) by default; prepend the expression with '?'
-  (in addition to the one that enters the help mode) to see the full
-  docstring. ([#25930])
-
-* The syntax `(;)` (which was deprecated in v1.4) now creates an empty named tuple ([#30115]).
-
-* `@inline` macro can now be applied to short-form anonymous functions ([#34953]).
-
-* In triple-quoted string literals, whitespace stripping is now done before processing
-  escape sequences instead of after. For example, the syntax
-  ```
-  """
-    a\n b"""
-  ```
-  used to yield the string " a\nb", since the single space before `b` set the indent level.
-  Now the result is "a\n b", since the space before `b` is no longer considered to occur
-  at the start of a line. The old behavior is considered a bug ([#35001]).
-
-* The line number of function definitions is now added by the parser as an
-  additional `LineNumberNode` at the start of each function body ([#35138]).
+* Newly created Task objects (`@spawn`, `@async`, etc.) now adopt the world-age for methods from their parent
+  Task upon creation, instead of using the global latest world at start. This is done to enable inference to
+  eventually optimize these calls. Places that wish for the old behavior may use `Base.invokelatest`. ([#41449])
+* `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
+  i.e. `@time "Evaluating foo" foo()` ([#42431])
+* New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
+* `last(collection)` will now work on any collection that supports `Iterators.reverse` and `first`, rather than being
+  restricted to indexable collections.
+* Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
+  to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
 
 Compiler/Runtime improvements
 -----------------------------
 
-* Immutable structs (including tuples) that contain references can now be allocated
-  on the stack, and allocated inline within arrays and other structs ([#33886]).
-  This significantly reduces the number of heap allocations in some workloads.
-  Code that requires assumptions about object layout and addresses (usually for
-  interoperability with C or other languages) might need to be updated; for
-  example any object that needs a stable address should be a `mutable struct`.
+* The LLVM-based compiler has been separated from the run-time library into a new library,
+  `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
+  In deployments that do not need the compiler (e.g. system images where all needed code
+  is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
 
 Command-line option changes
 ---------------------------
 
-* Deprecation warnings are no longer shown by default. i.e. if the `--depwarn=...` flag is
-  not passed it defaults to `--depwarn=no`. The warnings are printed from tests run by
-  `Pkg.test()`. ([#35362]).
-
-* Color now defaults to on when stdout and stderr are TTYs ([#34347])
-
-* `-t N`, `--threads N` starts Julia with `N` threads. This option takes precedence over
-  `JULIA_NUM_THREADS`. The specified number of threads also propagates to worker
-  processes spawned using the `-p`/`--procs` or `--machine-file` command line arguments.
-  In order to set number of threads for worker processes spawned with `addprocs` use the
-  `exeflags` keyword argument, e.g. `` addprocs(...; exeflags=`--threads 4`) `` ([#35108]).
+* New option `--strip-metadata` to remove docstrings, source location information, and local
+  variable names when building a system image ([#42513]).
+* New option `--strip-ir` to remove the compiler's IR (intermediate representation) of source
+  code when building a system image. The resulting image will only work if `--compile=all` is
+  used, or if all needed code is precompiled ([#42925]).
 
 Multi-threading changes
 -----------------------
@@ -105,101 +57,106 @@ Build system changes
 
 New library functions
 ---------------------
-* The `@ccall` macro has been added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the capability to specify an LLVM calling convention. ([#32748])
-* New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
-  argument.  They don't have the restriction for `combine` to be a `Function` and also
-  provide one-argument method that returns a closure.  The old methods of `merge` and
-  `merge!` are still available for backward compatibility ([#34296]).
-* The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
+
 * The new `Libc.mkfifo` function wraps `mkfifo` C function on Unix platforms ([#34587]).
-* Add function `ismutable` and deprecate `isimmutable` to check whether something is mutable.([#34652])
-* `include` now accepts an optional `mapexpr` first argument to transform the parsed
-  expressions before they are evaluated ([#34595]).
-* New function `bitreverse` for reversing the order of bits in a fixed-width integer ([#34791]).
-* New function `bitrotate(x, k)` for rotating the bits in a fixed-width integer ([#33937]).
-* One argument methods `startswith(x)` and `endswith(x)` have been added, returning partially-applied versions of the functions, similar to existing methods like `isequal(x)` ([#33193]).
-* New function `contains(haystack, needle)` and its one argument partially applied form have been added, it acts like `occursin(needle, haystack)`([#35132]).
+* `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 
 New library features
 --------------------
-* Function composition now works also on one argument `∘(f) = f` (#34251)
-* `@NamedTuple{key1::Type1, ...}` macro for convenient `NamedTuple` declarations ([#34548]).
 
-* `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`) ([#32305]).
-* `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
-* `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
-* `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
-* `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
-* `pop!(collection, key, [default])` now has a method for `Vector` to remove an element at an arbitrary index ([#35513]).
-* In `splice!` with no replacement, values to be removed can now be specified with an
-  arbitrary iterable (instead of a `UnitRange`) ([#34524]).
-* The `@view` and `@views` macros now support the `a[begin]` syntax that was introduced in Julia 1.4 ([#35289]).
-* `open` for files now accepts a keyword argument `lock` controlling whether file operations
-  will acquire locks for safe multi-threaded access. Setting it to `false` provides better
-  performance when only one thread will access the file.
-* The introspection macros (`@which`, `@code_typed`, etc.) now work with `do`-block syntax ([#35283]) and with dot syntax ([#35522]).
+* `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
+  contains "some message" regardless of the specific exception type.
+  Regular expressions, lists of strings, and matching functions are also supported. ([#41888])
+* `@testset foo()` can now be used to create a test set from a given function. The name of the test set
+  is the name of the called function. The called function can contain `@test` and other `@testset`
+  definitions, including to other function calls, while recording all intermediate test results. ([#42518])
 
 Standard library changes
 ------------------------
-* A 1-d `Zip` iterator (where `Base.IteratorSize` is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error with truncated iterators) ([#29927]).
-* The `@timed` macro now returns a `NamedTuple` ([#34149])
-* New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
-* Sorting-related functions such as `sort` that take the keyword arguments `lt`, `rev`, `order`
-  and `by` now do not discard `order` if `by` or `lt` are passed. In the former case, the
-  order from `order` is used to compare the values of `by(element)`. In the latter case,
-  any order different from `Forward` or `Reverse` will raise an error about the
-  ambiguity.
-* `close` on a file (`IOStream`) can now throw an exception if an error occurs when trying
-  to flush buffered data to disk ([#35303]).
+
+* `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
+* `precision` and `setprecision` now accept a `base` keyword ([#42428]).
+* The `length` function on certain ranges of certain specific element types no longer checks for integer
+  overflow in most cases. The new function `checked_length` is now available, which will try to use checked
+  arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
+  constructing the range. ([#40382])
+* TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
+* Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
+* `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
+
+#### InteractiveUtils
+* A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
+
+#### Package Manager
 
 #### LinearAlgebra
-* The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
-* `normalize` now supports multidimensional arrays ([#34239])
-* `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
-* The BLAS submodule now supports the level-2 BLAS subroutine `spmv!` ([#34320]).
-* The BLAS submodule now supports the level-1 BLAS subroutine `rot!` ([#35124]).
-* New generic `rotate!(x, y, c, s)` and `reflect!(x, y, c, s)` functions ([#35124]).
 
 #### Markdown
 
+#### Printf
+* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
+
+#### Profile
+* Profiling now records sample metadata including thread and task. `Profile.print()` has a new `groupby` kwarg that allows
+  grouping by thread, task, or nested thread/task, task/thread, and `threads` and `tasks` kwargs to allow filtering.
+  Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
+  each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
+  profiling data consumers, but can be included with the `include_meta` kwarg. ([#41742])
 
 #### Random
 
-* `randn!(::MersenneTwister, ::Array{Float64})` is faster, and as a result, for a given state of the RNG,
-  the corresponding generated numbers have changed ([#35078]).
-
 #### REPL
-
+* `RadioMenu` now supports optional `keybindings` to directly select options ([#41576]).
+* ` ?(x, y` followed by TAB displays all methods that can be called
+  with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
+  `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
+  argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
+  to allow any compatible methods.
 
 #### SparseArrays
-* `lu!` accepts `UmfpackLU` as an argument to make use of its symbolic factorization.
-* The `trim` keyword argument for the functions `fkeep!`, `tril!`, `triu!`,
-  `droptol!`,`dropzeros!` and `dropzeros` has been removed in favour of always
-  trimming. Calling these with `trim=false` could result in invalid sparse
-  arrays.
 
 #### Dates
-* The `eps` function now accepts `TimeType` types ([#31487]).
-* The `zero` function now accepts `TimeType` types ([#35554]).
 
+#### Downloads
 
 #### Statistics
 
-
 #### Sockets
 
+#### Tar
+
 #### Distributed
-* `launch_on_machine` now supports and parses ipv6 square-bracket notation ([#34430])
+
+#### UUIDs
+
+#### Mmap
+
+#### DelimitedFiles
+
+#### Logging
+* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
+  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
+
+#### Unicode
+* Added function `isequal_normalized` to check for Unicode equivalence without
+  explicitly constructing normalized strings ([#42493]).
+* The `Unicode.normalize` function now accepts a `chartransform` keyword that can
+  be used to supply custom character mappings, and a `Unicode.julia_chartransform`
+  function is provided to reproduce the mapping used in identifier normalization
+  by the Julia parser ([#42561]).
+
 
 Deprecated or removed
 ---------------------
 
+
 External dependencies
 ---------------------
 
+
 Tooling Improvements
 ---------------------
-
 
 
 <!--- generated by NEWS-update.jl: -->

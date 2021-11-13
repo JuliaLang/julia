@@ -49,6 +49,8 @@ Base.:(~)
 Base.:(&)
 Base.:(|)
 Base.xor
+Base.nand
+Base.nor
 Base.:(!)
 &&
 ||
@@ -65,8 +67,10 @@ Base.tan(::Number)
 Base.Math.sind
 Base.Math.cosd
 Base.Math.tand
+Base.Math.sincosd
 Base.Math.sinpi
 Base.Math.cospi
+Base.Math.sincospi
 Base.sinh(::Number)
 Base.cosh(::Number)
 Base.tanh(::Number)
@@ -152,15 +156,16 @@ Base.copysign
 Base.sign
 Base.signbit
 Base.flipsign
-Base.sqrt(::Real)
+Base.sqrt(::Number)
 Base.isqrt
 Base.Math.cbrt
-Base.real(::Complex)
+Base.real
 Base.imag
 Base.reim
 Base.conj
 Base.angle
 Base.cis
+Base.cispi
 Base.binomial
 Base.factorial
 Base.gcd
@@ -173,6 +178,7 @@ Base.nextprod
 Base.invmod
 Base.powermod
 Base.ndigits
+Base.add_sum
 Base.widemul
 Base.Math.evalpoly
 Base.Math.@evalpoly
@@ -197,7 +203,7 @@ and
 \oplus `⊕`
 
 The complete list is in the parser code:
-https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm
+<https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm>
 
 Those that are parsed like `*` (in terms of precedence) include
 `* / ÷ % & ⋅ ∘ × |\\| ∩ ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ ⊓ ∗ ∙ ∤ ⅋ ≀ ⊼ ⋄ ⋆ ⋇ ⋉ ⋊ ⋋ ⋌ ⋏ ⋒ ⟑ ⦸ ⦼ ⦾ ⦿ ⧶ ⧷ ⨇ ⨰ ⨱ ⨲ ⨳ ⨴ ⨵ ⨶ ⨷ ⨸ ⨻ ⨼ ⨽ ⩀ ⩃ ⩄ ⩋ ⩍ ⩎ ⩑ ⩓ ⩕ ⩘ ⩚ ⩜ ⩞ ⩟ ⩠ ⫛ ⊍ ▷ ⨝ ⟕ ⟖ ⟗`

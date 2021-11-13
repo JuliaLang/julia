@@ -2,7 +2,7 @@
 
 using Serialization: serialize_cycle, deserialize_cycle, writetag,
                      serialize_typename, deserialize_typename,
-                     TYPENAME_TAG, reset_state, serialize_type
+                     TYPENAME_TAG, TASK_TAG, reset_state, serialize_type
 using Serialization.__deserialized_types__
 
 import Serialization: object_number, lookup_object_number, remember_object
@@ -123,7 +123,7 @@ end
 # d) is a bits type
 function syms_2b_sent(s::ClusterSerializer, identifier)
     lst = Symbol[]
-    check_syms = get(s.glbs_in_tnobj, identifier, [])
+    check_syms = get(s.glbs_in_tnobj, identifier, Symbol[])
     for sym in check_syms
         v = getfield(Main, sym)
 

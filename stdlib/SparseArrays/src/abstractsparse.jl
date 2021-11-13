@@ -39,7 +39,7 @@ Returns `true` if `S` is sparse, and `false` otherwise.
 # Examples
 ```jldoctest
 julia> sv = sparsevec([1, 4], [2.3, 2.2], 10)
-10-element SparseVector{Float64,Int64} with 2 stored entries:
+10-element SparseVector{Float64, Int64} with 2 stored entries:
   [1 ]  =  2.3
   [4 ]  =  2.2
 
@@ -50,17 +50,19 @@ julia> issparse(Array(sv))
 false
 ```
 """
-issparse(A::AbstractArray) = false
+function issparse(A::AbstractArray)
+    # Handle wrapper arrays: sparse if it is wrapping a sparse array.
+    # This gets compiled away during specialization.
+    p = parent(A)
+    if p === A
+        # have reached top of wrapping without finding a sparse array, assume it is not.
+        return false
+    else
+        return issparse(p)
+    end
+end
+issparse(A::DenseArray) = false
 issparse(S::AbstractSparseArray) = true
-issparse(S::LinearAlgebra.Adjoint{<:Any,<:AbstractSparseArray}) = true
-issparse(S::LinearAlgebra.Transpose{<:Any,<:AbstractSparseArray}) = true
-
-issparse(S::LinearAlgebra.Symmetric{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinearAlgebra.Hermitian{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinearAlgebra.LowerTriangular{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinearAlgebra.UnitLowerTriangular{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinearAlgebra.UpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinearAlgebra.UnitUpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
 
 indtype(S::AbstractSparseArray{<:Any,Ti}) where {Ti} = Ti
 
@@ -103,7 +105,7 @@ function findprev(f::Function, v::AbstractSparseArray, i)
 end
 
 """
-    findnz(A)
+    findnz(A::SparseMatrixCSC)
 
 Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of the stored
 ("structurally non-zero") values in sparse matrix `A`, and `V` is a vector of the values.
@@ -111,14 +113,15 @@ Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of t
 # Examples
 ```jldoctest
 julia> A = sparse([1 2 0; 0 0 3; 0 4 0])
-3×3 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1, 1]  =  1
-  [1, 2]  =  2
-  [3, 2]  =  4
-  [2, 3]  =  3
+3×3 SparseMatrixCSC{Int64, Int64} with 4 stored entries:
+ 1  2  ⋅
+ ⋅  ⋅  3
+ ⋅  4  ⋅
 
 julia> findnz(A)
 ([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])
 ```
 """
 function findnz end
+
+widelength(x::AbstractSparseArray) = prod(Int64.(size(x)))

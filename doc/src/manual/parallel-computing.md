@@ -1,26 +1,34 @@
 # Parallel Computing
 
-For newcomers to multi-threading and parallel computing it can be useful to first appreciate
-the different levels of parallelism offered by Julia. We can divide them in three main categories :
+Julia supports these four categories of concurrent and parallel programming:
 
-1. Asyncronous Programming with Julia Tasks (Co-routines)
-2. Multi-Threading
-3. Multi-Core and Distributed Processing
+1. **Asynchronous "tasks", or coroutines**:
 
-We will first consider Julia [Tasks (aka Coroutines)](@ref man-tasks) and other modules that rely on the Julia runtime library, that allow us to suspend and resume computations with full control of inter-`Tasks` communication without having to manually interface with the operating system's scheduler.
-Julia also supports communication between `Tasks` through operations like [`wait`](@ref) and [`fetch`](@ref).
-Communication and data synchronization is managed through [`Channel`](@ref)s, which are the conduits
-that provide inter-`Tasks` communication.
+    Julia Tasks allow suspending and resuming computations
+    for I/O, event handling, producer-consumer processes, and similar patterns.
+    Tasks can synchronize through operations like [`wait`](@ref) and [`fetch`](@ref), and
+    communicate via [`Channel`](@ref)s. While strictly not parallel computing by themselves,
+    Julia lets you schedule [`Task`](@ref)s on several threads.
 
-Julia also supports [experimental multi-threading](@ref man-multithreading), where execution is forked and an anonymous function is run across all
-threads.
-Known as the fork-join approach, parallel threads execute independently, and must ultimately be joined in Julia's main thread to allow serial execution to continue.
-Multi-threading is supported using the [`Base.Threads`](@ref lib-multithreading) module that is still considered experimental, as Julia is
-not yet fully thread-safe. In particular segfaults seem to occur during I/O operations and task switching.
-As an up-to-date reference, keep an eye on [the issue tracker](https://github.com/JuliaLang/julia/issues?q=is%3Aopen+is%3Aissue+label%3Amultithreading).
-Multi-Threading should only be used if you take into consideration global variables, locks and
-atomics, all of which are explained later.
+2. **Multi-threading**:
 
-In the end we will present Julia's approach to distributed and parallel computing. With scientific computing
-in mind, Julia natively implements interfaces to distribute a process across multiple cores or machines.
-Also we will mention useful external packages for distributed programming like `MPI.jl` and `DistributedArrays.jl`.
+    Julia's [multi-threading](@ref man-multithreading) provides the ability to schedule Tasks
+    simultaneously on more than one thread or CPU core, sharing memory. This is usually the easiest way
+    to get parallelism on one's PC or on a single large multi-core server. Julia's multi-threading
+    is composable. When one multi-threaded function calls another multi-threaded function, Julia
+    will schedule all the threads globally on available resources, without oversubscribing.
+
+3. **Distributed computing**:
+
+    Distributed computing runs multiple Julia processes with separate memory spaces. These can be on the same
+    computer or multiple computers. The [`Distributed`](@ref man-distributed) standard library provides the capability for remote execution
+    of a Julia function. With this basic building block, it is possible to build many different kinds of
+    distributed computing abstractions. Packages like [`DistributedArrays.jl`](https://github.com/JuliaParallel/DistributedArrays.jl)
+    are an example of such an abstraction. On the other hand, packages like [`MPI.jl`](https://github.com/JuliaParallel/MPI.jl) and
+    [`Elemental.jl`](https://github.com/JuliaParallel/Elemental.jl) provide access to the existing MPI ecosystem of libraries.
+
+4. **GPU computing**:
+
+    The Julia GPU compiler provides the ability to run Julia code natively on GPUs. There
+    is a rich ecosystem of Julia packages that target GPUs. The [JuliaGPU.org](https://juliagpu.org)
+    website provides a list of capabilities, supported GPUs, related packages and documentation.

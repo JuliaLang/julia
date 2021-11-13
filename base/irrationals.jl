@@ -5,7 +5,16 @@
 """
     AbstractIrrational <: Real
 
-Number type representing an exact irrational value.
+Number type representing an exact irrational value, which is automatically rounded to the correct precision in
+arithmetic operations with other numeric quantities.
+
+Subtypes `MyIrrational <: AbstractIrrational` should implement at least `==(::MyIrrational, ::MyIrrational)`,
+`hash(x::MyIrrational, h::UInt)`, and `convert(::Type{F}, x::MyIrrational) where {F <: Union{BigFloat,Float32,Float64}}`.
+
+If a subtype is used to represent values that may occasionally be rational (e.g. a square-root type that represents `√n`
+for integers `n` will give a rational result when `n` is a perfect square), then it should also implement
+`isinteger`, `iszero`, `isone`, and `==` with `Real` values (since all of these default to `false` for
+`AbstractIrrational` types), as well as defining [`hash`](@ref) to equal that of the corresponding `Rational`.
 """
 abstract type AbstractIrrational <: Real end
 
@@ -13,7 +22,9 @@ abstract type AbstractIrrational <: Real end
     Irrational{sym} <: AbstractIrrational
 
 Number type representing an exact irrational value denoted by the
-symbol `sym`.
+symbol `sym`, such as [`π`](@ref pi), [`ℯ`](@ref) and [`γ`](@ref Base.MathConstants.eulergamma).
+
+See also [`@irrational`], [`AbstractIrrational`](@ref).
 """
 struct Irrational{sym} <: AbstractIrrational end
 
@@ -33,8 +44,8 @@ promote_rule(::Type{<:AbstractIrrational}, ::Type{<:AbstractIrrational}) = Float
 promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Real} = promote_type(Float64, T)
 promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number} = promote_type(promote_type(S, real(T)), T)
 
-AbstractFloat(x::AbstractIrrational) = Float64(x)
-Float16(x::AbstractIrrational) = Float16(Float32(x))
+AbstractFloat(x::AbstractIrrational) = Float64(x)::Float64
+Float16(x::AbstractIrrational) = Float16(Float32(x)::Float32)
 Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
 @pure function Rational{T}(x::AbstractIrrational) where T<:Integer
@@ -51,11 +62,11 @@ Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
         p += 32
     end
 end
-(::Type{Rational{BigInt}})(x::AbstractIrrational) = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(BigInt, x) instead"))
+Rational{BigInt}(x::AbstractIrrational) = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(BigInt, x) instead"))
 
 @pure function (t::Type{T})(x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
     setprecision(BigFloat, 256) do
-        T(BigFloat(x), r)
+        T(BigFloat(x)::BigFloat, r)
     end
 end
 
@@ -151,11 +162,11 @@ end
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
 """
-	@irrational sym val def
-	@irrational(sym, val, def)
+    @irrational sym val def
+    @irrational(sym, val, def)
 
 Define a new `Irrational` value, `sym`, with pre-computed `Float64` value `val`,
-and arbitrary-precision definition in terms of `BigFloat`s given be the expression `def`.
+and arbitrary-precision definition in terms of `BigFloat`s given by the expression `def`.
 """
 macro irrational(sym, val, def)
     esym = esc(sym)
@@ -192,7 +203,7 @@ big(::Type{<:AbstractIrrational}) = BigFloat
 function alignment(io::IO, x::AbstractIrrational)
     m = match(r"^(.*?)(=.*)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-    (length(m.captures[1]), length(m.captures[2]))
+    (length(something(m.captures[1])), length(something(m.captures[2])))
 end
 
 # inv

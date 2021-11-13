@@ -10,6 +10,7 @@
 module Experimental
 
 using Base: Threads, sync_varname
+using Base.Meta
 
 """
     Const(A::Array)
@@ -28,9 +29,9 @@ Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
 @eval Base.getindex(A::Const, i1::Int) =
-    (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
+    (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
 @eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =
-  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+  (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 """
     @aliasscope expr
@@ -52,30 +53,34 @@ macro aliasscope(body)
 end
 
 
-function sync_end(refs)
-    local c_ex
-    defined = false
-    t = current_task()
-    cond = Threads.Condition()
-    lock(cond)
-    nremaining = length(refs)
-    for r in refs
-        schedule(Task(()->begin
-            try
-                wait(r)
-                lock(cond)
-                nremaining -= 1
-                nremaining == 0 && notify(cond)
-                unlock(cond)
-            catch e
-                lock(cond)
-                notify(cond, e; error=true)
-                unlock(cond)
-            end
-        end))
+function sync_end(c::Channel{Any})
+    if !isready(c)
+        # there must be at least one item to begin with
+        close(c)
+        return
     end
-    wait(cond)
-    unlock(cond)
+    nremaining::Int = 0
+    while true
+        event = take!(c)
+        if event === :__completion__
+            nremaining -= 1
+            if nremaining == 0
+                break
+            end
+        else
+            nremaining += 1
+            schedule(Task(()->begin
+                try
+                    wait(event)
+                    put!(c, :__completion__)
+                catch e
+                    close(c, e)
+                end
+            end))
+        end
+    end
+    close(c)
+    nothing
 end
 
 """
@@ -92,7 +97,7 @@ during error handling.
 macro sync(block)
     var = esc(sync_varname)
     quote
-        let $var = Any[]
+        let $var = Channel(Inf)
             v = $(esc(block))
             sync_end($var)
             v
@@ -110,10 +115,212 @@ parent module.
 Supported values are 0, 1, 2, and 3.
 
 The effective optimization level is the minimum of that specified on the
-command line and in per-module settings.
+command line and in per-module settings. If a `--min-optlevel` value is
+set on the command line, that is enforced as a lower bound.
 """
 macro optlevel(n::Int)
     return Expr(:meta, :optlevel, n)
 end
+
+"""
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no}
+
+Set compiler options for code in the enclosing module. Options correspond directly to
+command-line options with the same name, where applicable. The following options
+are currently supported:
+
+  * `optimize`: Set optimization level.
+  * `compile`: Toggle native code compilation. Currently only `min` is supported, which
+    requests the minimum possible amount of compilation.
+  * `infer`: Enable or disable type inference. If disabled, implies [`@nospecialize`](@ref).
+"""
+macro compiler_options(args...)
+    opts = Expr(:block)
+    for ex in args
+        if isa(ex, Expr) && ex.head === :(=) && length(ex.args) == 2
+            if ex.args[1] === :optimize
+                push!(opts.args, Expr(:meta, :optlevel, ex.args[2]::Int))
+            elseif ex.args[1] === :compile
+                a = ex.args[2]
+                a = #a === :no  ? 0 :
+                    #a === :yes ? 1 :
+                    #a === :all ? 2 :
+                    a === :min ? 3 : error("invalid argument to \"compile\" option")
+                push!(opts.args, Expr(:meta, :compile, a))
+            elseif ex.args[1] === :infer
+                a = ex.args[2]
+                a = a === false || a === :no  ? 0 :
+                    a === true  || a === :yes ? 1 : error("invalid argument to \"infer\" option")
+                push!(opts.args, Expr(:meta, :infer, a))
+            else
+                error("unknown option \"$(ex.args[1])\"")
+            end
+        else
+            error("invalid option syntax")
+        end
+    end
+    return opts
+end
+
+"""
+    Experimental.@force_compile
+
+Force compilation of the block or function (Julia's built-in interpreter is blocked from executing it).
+
+# Examples
+
+```
+julia> occursin("interpreter", string(stacktrace(begin
+           # with forced compilation
+           Base.Experimental.@force_compile
+           backtrace()
+       end, true)))
+false
+
+julia> occursin("interpreter", string(stacktrace(begin
+           # without forced compilation
+           backtrace()
+       end, true)))
+true
+```
+"""
+macro force_compile() Expr(:meta, :force_compile) end
+
+# UI features for errors
+
+"""
+    Experimental.register_error_hint(handler, exceptiontype)
+
+Register a "hinting" function `handler(io, exception)` that can
+suggest potential ways for users to circumvent errors.  `handler`
+should examine `exception` to see whether the conditions appropriate
+for a hint are met, and if so generate output to `io`.
+Packages should call `register_error_hint` from within their
+`__init__` function.
+
+For specific exception types, `handler` is required to accept additional arguments:
+
+- `MethodError`: provide `handler(io, exc::MethodError, argtypes, kwargs)`,
+  which splits the combined arguments into positional and keyword arguments.
+
+When issuing a hint, the output should typically start with `\\n`.
+
+If you define custom exception types, your `showerror` method can
+support hints by calling [`Experimental.show_error_hints`](@ref).
+
+# Example
+
+```
+julia> module Hinter
+
+       only_int(x::Int)      = 1
+       any_number(x::Number) = 2
+
+       function __init__()
+           Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
+               if exc.f == only_int
+                    # Color is not necessary, this is just to show it's possible.
+                    print(io, "\\nDid you mean to call ")
+                    printstyled(io, "`any_number`?", color=:cyan)
+               end
+           end
+       end
+
+       end
+```
+
+Then if you call `Hinter.only_int` on something that isn't an `Int` (thereby triggering a `MethodError`), it issues the hint:
+
+```
+julia> Hinter.only_int(1.0)
+ERROR: MethodError: no method matching only_int(::Float64)
+Did you mean to call `any_number`?
+Closest candidates are:
+    ...
+```
+
+!!! compat "Julia 1.5"
+    Custom error hints are available as of Julia 1.5.
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+    To insulate yourself against changes, consider putting any registrations inside an
+    `if isdefined(Base.Experimental, :register_error_hint) ... end` block.
+"""
+function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
+    list = get!(Vector{Any}, _hint_handlers, exct)
+    push!(list, handler)
+    return nothing
+end
+
+const _hint_handlers = IdDict{Type,Vector{Any}}()
+
+"""
+    Experimental.show_error_hints(io, ex, args...)
+
+Invoke all handlers from [`Experimental.register_error_hint`](@ref) for the particular
+exception type `typeof(ex)`. `args` must contain any other arguments expected by
+the handler for that type.
+
+!!! compat "Julia 1.5"
+    Custom error hints are available as of Julia 1.5.
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+function show_error_hints(io, ex, args...)
+    hinters = get!(()->[], _hint_handlers, typeof(ex))
+    for handler in hinters
+        try
+            Base.invokelatest(handler, io, ex, args...)
+        catch err
+            tn = typeof(handler).name
+            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+        end
+    end
+end
+
+# OpaqueClosure
+include("opaque_closure.jl")
+
+"""
+    Experimental.@overlay mt [function def]
+
+Define a method and add it to the method table `mt` instead of to the global method table.
+This can be used to implement a method override mechanism. Regular compilation will not
+consider these methods, and you should customize the compilation flow to look in these
+method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
+
+"""
+macro overlay(mt, def)
+    def = macroexpand(__module__, def) # to expand @inline, @generated, etc
+    if !isexpr(def, [:function, :(=)])
+        error("@overlay requires a function Expr")
+    end
+    if isexpr(def.args[1], :call)
+        def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
+    elseif isexpr(def.args[1], :where)
+        def.args[1].args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1].args[1])
+    else
+        error("@overlay requires a function Expr")
+    end
+    esc(def)
+end
+
+let new_mt(name::Symbol, mod::Module) = begin
+        ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, "@MethodTable")
+        ccall(:jl_new_method_table, Any, (Any, Any), name, mod)
+    end
+    @eval macro MethodTable(name::Symbol)
+        esc(:(const $name = $$new_mt($(quot(name)), $(__module__))))
+    end
+end
+
+"""
+    Experimental.@MethodTable(name)
+
+Create a new MethodTable in the current module, bound to `name`. This method table can be
+used with the [`Experimental.@overlay`](@ref) macro to define methods for a function without
+adding them to the global method table.
+"""
+:@MethodTable
 
 end

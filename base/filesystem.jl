@@ -4,6 +4,22 @@
 
 module Filesystem
 
+const S_IFDIR  = 0o040000  # directory
+const S_IFCHR  = 0o020000  # character device
+const S_IFBLK  = 0o060000  # block device
+const S_IFREG  = 0o100000  # regular file
+const S_IFIFO  = 0o010000  # fifo (named pipe)
+const S_IFLNK  = 0o120000  # symbolic link
+const S_IFSOCK = 0o140000  # socket file
+const S_IFMT   = 0o170000
+
+const S_ISUID = 0o4000  # set UID bit
+const S_ISGID = 0o2000  # set GID bit
+const S_ENFMT = S_ISGID # file locking enforcement
+const S_ISVTX = 0o1000  # sticky bit
+const S_IRWXU = 0o0700  # mask for owner permissions
+const S_IRUSR = 0o0400  # read by owner
+
 const S_IRUSR = 0o400
 const S_IWUSR = 0o200
 const S_IXUSR = 0o100
@@ -42,7 +58,7 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror
+    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
 
 import .Base.RefValue
 
@@ -53,6 +69,9 @@ end
 # Average buffer size including null terminator for several filesystem operations.
 # On Windows we use the MAX_PATH = 260 value on Win32.
 const AVG_PATH = Sys.iswindows() ? 260 : 512
+
+# helper function to clean up libuv request
+uv_fs_req_cleanup(req) = ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
 
 include("path.jl")
 include("stat.jl")
@@ -73,6 +92,7 @@ if OS_HANDLE !== RawFD
 end
 
 rawhandle(file::File) = file.handle
+setup_stdio(file::File, ::Bool) = (file, false)
 
 # Filesystem.open, not Base.open
 function open(path::AbstractString, flags::Integer, mode::Integer=0)
@@ -83,8 +103,8 @@ function open(path::AbstractString, flags::Integer, mode::Integer=0)
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32, Int32, Ptr{Cvoid}),
                     C_NULL, req, path, flags, mode, C_NULL)
         handle = ccall(:uv_fs_get_result, Cssize_t, (Ptr{Cvoid},), req)
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-        uv_error("open", ret)
+        uv_fs_req_cleanup(req)
+        ret < 0 && uv_error("open($(repr(path)), $flags, $mode)", ret)
     finally # conversion to Cstring could cause an exception
         Libc.free(req)
     end
@@ -219,26 +239,26 @@ const SEEK_END = Int32(2)
 
 function seek(f::File, n::Integer)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, n, SEEK_SET)
-    systemerror("seek", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("seek")
     return f
 end
 
 function seekend(f::File)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, 0, SEEK_END)
-    systemerror("seekend", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("seekend")
     return f
 end
 
 function skip(f::File, n::Integer)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, n, SEEK_CUR)
-    systemerror("skip", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("skip")
     return f
 end
 
 function position(f::File)
     check_open(f)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, 0, SEEK_CUR)
-    systemerror("lseek", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("lseek")
     return ret
 end
 

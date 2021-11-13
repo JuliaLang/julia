@@ -24,13 +24,12 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/PromoteMemToReg.h>
 
-#if JL_LLVM_VERSION >= 100000
 #include <llvm/InitializePasses.h>
-#endif
 
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
+#include "llvm-pass-helpers.h"
 
 #include <map>
 #include <set>
@@ -39,19 +38,7 @@
 
 using namespace llvm;
 
-extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false);
-
 namespace {
-
-static void copyMetadata(Instruction *dest, const Instruction *src)
-{
-    dest->copyMetadata(*src);
-}
-
-static bool isBundleOperand(CallInst *call, unsigned idx)
-{
-    return call->isBundleOperand(idx);
-}
 
 static void removeGCPreserve(CallInst *call, Instruction *val)
 {
@@ -75,13 +62,8 @@ static bool hasObjref(Type *ty)
 {
     if (auto ptrty = dyn_cast<PointerType>(ty))
         return ptrty->getAddressSpace() == AddressSpace::Tracked;
-#if JL_LLVM_VERSION >= 110000
     if (isa<ArrayType>(ty) || isa<VectorType>(ty))
-        return GetElementPtrInst::getTypeAtIndex(ty, (uint64_t)0);
-#else
-    if (auto seqty = dyn_cast<SequentialType>(ty))
-        return hasObjref(seqty->getElementType());
-#endif
+        return hasObjref(GetElementPtrInst::getTypeAtIndex(ty, (uint64_t)0));
     if (auto structty = dyn_cast<StructType>(ty)) {
         for (auto elty: structty->elements()) {
             if (hasObjref(elty)) {
@@ -117,7 +99,7 @@ static bool hasObjref(Type *ty)
  * * Handle jl_box*
  */
 
-struct AllocOpt : public FunctionPass {
+struct AllocOpt : public FunctionPass, public JuliaPassContext {
     static char ID;
     AllocOpt()
         : FunctionPass(ID)
@@ -125,28 +107,12 @@ struct AllocOpt : public FunctionPass {
         llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
     }
 
-    LLVMContext *ctx;
-
     const DataLayout *DL;
 
-    Function *alloc_obj;
-    Function *ptr_from_objref;
     Function *lifetime_start;
     Function *lifetime_end;
-    Function *gc_preserve_begin;
-    Function *typeof_func;
-    Function *write_barrier_func;
 
-    Type *T_int8;
-    Type *T_int32;
     Type *T_int64;
-    Type *T_size;
-    Type *T_pint8;
-    Type *T_prjlvalue;
-    Type *T_pjlvalue;
-    Type *T_pprjlvalue;
-
-    MDNode *tbaa_tag;
 
 private:
     bool doInitialization(Module &m) override;
@@ -186,6 +152,7 @@ private:
     void removeAlloc(CallInst *orig_inst);
     void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref);
     void splitOnStack(CallInst *orig_inst);
+    void optimizeTag(CallInst *orig_inst);
 
     Function &F;
     AllocOpt &pass;
@@ -287,8 +254,9 @@ private:
         bool refload:1;
         // There are objects fields being stored
         bool refstore:1;
-        // There are memset call
-        bool hasmemset:1;
+        // There are typeof call
+        // This can be optimized without optimizing out the allocation itself
+        bool hastypeof:1;
         // There are store/load/memset on this object with offset or size (or value for memset)
         // that cannot be statically computed.
         // This is a weaker form of `addrescaped` since `hasload` can still be used
@@ -302,6 +270,7 @@ private:
             haspreserve = false;
             refload = false;
             refstore = false;
+            hastypeof = false;
             hasunknownmem = false;
             uses.clear();
             preserves.clear();
@@ -354,8 +323,11 @@ void Optimizer::optimizeAll()
         auto orig = item.first;
         size_t sz = item.second;
         checkInst(orig);
-        if (use_info.escaped)
+        if (use_info.escaped) {
+            if (use_info.hastypeof)
+                optimizeTag(orig);
             continue;
+        }
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
             // No one took the address, no one reads anything and there's no meaningful
@@ -371,7 +343,8 @@ void Optimizer::optimizeAll()
             if (field.hasobjref) {
                 has_ref = true;
                 // This can be relaxed a little based on hasload
-                if (field.hasaggr || field.multiloc) {
+                // TODO: add support for hasaggr load/store
+                if (field.hasaggr || field.multiloc || field.size != sizeof(void*)) {
                     has_refaggr = true;
                     break;
                 }
@@ -382,13 +355,12 @@ void Optimizer::optimizeAll()
             splitOnStack(orig);
             continue;
         }
-        if (has_ref) {
-            if (use_info.memops.size() != 1 || has_refaggr ||
-                use_info.memops.begin()->second.size != sz) {
-                continue;
-            }
-            // The object only has a single field that's a reference with only one kind of access.
+        if (has_refaggr) {
+            if (use_info.hastypeof)
+                optimizeTag(orig);
+            continue;
         }
+        // The object has no fields with mix reference access
         moveToStack(orig, sz, has_ref);
     }
 }
@@ -411,7 +383,7 @@ bool Optimizer::isSafepoint(Instruction *inst)
         return false;
     if (auto callee = call->getCalledFunction()) {
         // Known functions emitted in codegen that are not safepoints
-        if (callee == pass.ptr_from_objref || callee->getName() == "memcmp") {
+        if (callee == pass.pointer_from_objref_func || callee->getName() == "memcmp") {
             return false;
         }
     }
@@ -442,7 +414,7 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     auto call = dyn_cast<CallInst>(I);
     if (!call)
         return -1;
-    if (call->getCalledValue() != pass.alloc_obj)
+    if (call->getCalledOperand() != pass.alloc_obj_func)
         return -1;
     assert(call->getNumArgOperands() == 3);
     size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
@@ -463,6 +435,7 @@ Optimizer::AllocUseInfo::getField(uint32_t offset, uint32_t size, Type *elty)
         if (it->first + it->second.size >= offset + size) {
             if (it->second.elty != elty)
                 it->second.elty = nullptr;
+            assert(it->second.elty == nullptr || (it->first == offset && it->second.size == size));
             return *it;
         }
         if (it->first + it->second.size > offset) {
@@ -473,7 +446,7 @@ Optimizer::AllocUseInfo::getField(uint32_t offset, uint32_t size, Type *elty)
     else {
         it = memops.begin();
     }
-    // Now fine the last slot that overlaps with the current memory location.
+    // Now find the last slot that overlaps with the current memory location.
     // Also set `lb` if we didn't find any above.
     for (; it != end && it->first < offset + size; ++it) {
         if (lb == end)
@@ -512,8 +485,8 @@ bool Optimizer::AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_
     memop.isaggr = isa<StructType>(elty) || isa<ArrayType>(elty) || isa<VectorType>(elty);
     memop.isobjref = hasObjref(elty);
     auto &field = getField(offset, size, elty);
-    if (field.first != offset || field.second.size != size)
-        field.second.multiloc = true;
+    if (field.second.hasobjref != memop.isobjref)
+        field.second.multiloc = true; // can't split this field, since it contains a mix of references and bits
     if (!isstore)
         field.second.hasload = true;
     if (memop.isobjref) {
@@ -594,12 +567,11 @@ void Optimizer::checkInst(Instruction *I)
         if (auto call = dyn_cast<CallInst>(inst)) {
             // TODO handle `memcmp`
             // None of the intrinsics should care if the memory is stack or heap allocated.
-            auto callee = call->getCalledValue();
+            auto callee = call->getCalledOperand();
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
                 if (auto id = II->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
                         assert(call->getNumArgOperands() == 4);
-                        use_info.hasmemset = true;
                         if (cur.offset == UINT32_MAX ||
                             !isa<ConstantInt>(call->getArgOperand(2)) ||
                             !isa<ConstantInt>(call->getArgOperand(1)) ||
@@ -614,7 +586,7 @@ void Optimizer::checkInst(Instruction *I)
                     use_info.addrescaped = true;
                     return true;
                 }
-                if (pass.gc_preserve_begin == callee) {
+                if (pass.gc_preserve_begin_func == callee) {
                     for (auto user: call->users())
                         use_info.uses.insert(cast<Instruction>(user));
                     use_info.preserves.insert(call);
@@ -622,15 +594,20 @@ void Optimizer::checkInst(Instruction *I)
                     return true;
                 }
             }
-            if (pass.ptr_from_objref == callee) {
+            if (pass.pointer_from_objref_func == callee) {
                 use_info.addrescaped = true;
                 return true;
             }
-            if (pass.typeof_func == callee || pass.write_barrier_func == callee)
+            if (pass.typeof_func == callee) {
+                use_info.hastypeof = true;
+                assert(use->get() == I);
+                return true;
+            }
+            if (pass.write_barrier_func == callee)
                 return true;
             auto opno = use->getOperandNo();
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
-            if (!isBundleOperand(call, opno) ||
+            if (!call->isBundleOperand(opno) ||
                 call->getOperandBundleForOperand(opno).getTagName() != "jl_roots") {
                 use_info.escaped = true;
                 return false;
@@ -649,6 +626,21 @@ void Optimizer::checkInst(Instruction *I)
                                                                cur.offset, storev->getType(),
                                                                true, *pass.DL))
                 use_info.hasunknownmem = true;
+            return true;
+        }
+        if (isa<AtomicCmpXchgInst>(inst) || isa<AtomicRMWInst>(inst)) {
+            // Only store value count
+            if (use->getOperandNo() != isa<AtomicCmpXchgInst>(inst) ? AtomicCmpXchgInst::getPointerOperandIndex() : AtomicRMWInst::getPointerOperandIndex()) {
+                use_info.escaped = true;
+                return false;
+            }
+            use_info.hasload = true;
+            auto storev = isa<AtomicCmpXchgInst>(inst) ? cast<AtomicCmpXchgInst>(inst)->getNewValOperand() : cast<AtomicRMWInst>(inst)->getValOperand();
+            if (cur.offset == UINT32_MAX || !use_info.addMemOp(inst, use->getOperandNo(),
+                                                               cur.offset, storev->getType(),
+                                                               true, *pass.DL))
+                use_info.hasunknownmem = true;
+            use_info.refload = true;
             return true;
         }
         if (isa<AddrSpaceCastInst>(inst) || isa<BitCastInst>(inst)) {
@@ -899,19 +891,9 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         SmallVector<Intrinsic::IITDescriptor, 8> Table;
         getIntrinsicInfoTableEntries(ID, Table);
         ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
-#if JL_LLVM_VERSION >= 90000
         auto res = Intrinsic::matchIntrinsicSignature(newfType, TableRef, overloadTys);
         assert(res == Intrinsic::MatchIntrinsicTypes_Match);
         (void)res;
-#else
-        bool res = Intrinsic::matchIntrinsicType(oldfType->getReturnType(), TableRef, overloadTys);
-        assert(!res);
-        for (auto Ty : newfType->params()) {
-            res = Intrinsic::matchIntrinsicType(Ty, TableRef, overloadTys);
-            assert(!res);
-        }
-        (void)res;
-#endif
         bool matchvararg = Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
         assert(!matchvararg);
         (void)matchvararg;
@@ -922,7 +904,7 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     auto newCall = CallInst::Create(newF, args, "", call);
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
-    newCall->setAttributes(AttributeList::get(*pass.ctx, old_attrs.getFnAttributes(),
+    newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), old_attrs.getFnAttributes(),
                                               old_attrs.getRetAttributes(), {}));
     newCall->setDebugLoc(call->getDebugLoc());
     call->replaceAllUsesWith(newCall);
@@ -961,7 +943,12 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
     else {
-        buff = prolog_builder.CreateAlloca(Type::getIntNTy(*pass.ctx, sz * 8));
+        Type *buffty;
+        if (pass.DL->isLegalInteger(sz * 8))
+            buffty = Type::getIntNTy(pass.getLLVMContext(), sz * 8);
+        else
+            buffty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), sz);
+        buff = prolog_builder.CreateAlloca(buffty);
         buff->setAlignment(Align(align));
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
@@ -1010,8 +997,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             user->replaceUsesOfWith(orig_i, new_i);
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
-            auto callee = call->getCalledValue();
-            if (pass.ptr_from_objref == callee) {
+            auto callee = call->getCalledOperand();
+            if (pass.pointer_from_objref_func == callee) {
                 call->replaceAllUsesWith(new_i);
                 call->eraseFromParent();
                 return;
@@ -1022,7 +1009,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
                 return;
             }
             // Also remove the preserve intrinsics so that it can be better optimized.
-            if (pass.gc_preserve_begin == callee) {
+            if (pass.gc_preserve_begin_func == callee) {
                 if (has_ref) {
                     call->replaceUsesOfWith(orig_i, buff);
                 }
@@ -1064,7 +1051,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
                                                      gep->getName(), gep);
             new_gep->setIsInBounds(gep->isInBounds());
             new_gep->takeName(gep);
-            copyMetadata(new_gep, gep);
+            new_gep->copyMetadata(*gep);
             push_frame(gep, new_gep);
         }
         else {
@@ -1126,8 +1113,8 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
             return;
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
-            auto callee = call->getCalledValue();
-            if (pass.gc_preserve_begin == callee) {
+            auto callee = call->getCalledOperand();
+            if (pass.gc_preserve_begin_func == callee) {
                 removeGCPreserve(call, orig_i);
                 return;
             }
@@ -1172,6 +1159,28 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
     }
 }
 
+// Unable to optimize out the allocation, do store to load forwarding on the tag instead.
+void Optimizer::optimizeTag(CallInst *orig_inst)
+{
+    auto tag = orig_inst->getArgOperand(2);
+    // `julia.typeof` is only legal on the original pointer, no need to scan recursively
+    size_t last_deleted = removed.size();
+    for (auto user: orig_inst->users()) {
+        if (auto call = dyn_cast<CallInst>(user)) {
+            auto callee = call->getCalledOperand();
+            if (pass.typeof_func == callee) {
+                call->replaceAllUsesWith(tag);
+                // Push to the removed instructions to trigger `finalize` to
+                // return the correct result.
+                // Also so that we don't have to worry about iterator invalidation...
+                removed.push_back(call);
+            }
+        }
+    }
+    while (last_deleted < removed.size())
+        removed[last_deleted++]->replaceUsesOfWith(orig_inst, UndefValue::get(orig_inst->getType()));
+}
+
 void Optimizer::splitOnStack(CallInst *orig_inst)
 {
     auto tag = orig_inst->getArgOperand(2);
@@ -1199,8 +1208,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         else if (field.elty && !field.multiloc) {
             allocty = field.elty;
         }
-        else {
-            allocty = Type::getIntNTy(*pass.ctx, field.size * 8);
+        else if (pass.DL->isLegalInteger(field.size * 8)) {
+            allocty = Type::getIntNTy(pass.getLLVMContext(), field.size * 8);
+        } else {
+            allocty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), field.size);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
         insertLifetime(prolog_builder.CreateBitCast(slot.slot, pass.T_pint8),
@@ -1276,16 +1287,22 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             assert(slot.offset <= offset && slot.offset + slot.size >= offset);
             IRBuilder<> builder(load);
             Value *val;
-            auto load_ty = load->getType();
+            Type *load_ty = load->getType();
+            LoadInst *newload;
             if (slot.isref) {
                 assert(slot.offset == offset);
-                val = builder.CreateLoad(pass.T_prjlvalue, slot.slot);
+                newload = builder.CreateLoad(pass.T_prjlvalue, slot.slot);
                 // Assume the addrspace is correct.
-                val = builder.CreateBitCast(val, load_ty);
+                val = builder.CreateBitCast(newload, load_ty);
             }
             else {
-                val = builder.CreateLoad(load_ty, slot_gep(slot, offset, load_ty, builder));
+                newload = builder.CreateLoad(load_ty, slot_gep(slot, offset, load_ty, builder));
+                val = newload;
             }
+            // TODO: should we use `load->clone()`, or manually copy any other metadata?
+            newload->setAlignment(load->getAlign());
+            // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
+            newload->setOrdering(AtomicOrdering::NotAtomic);
             load->replaceAllUsesWith(val);
             load->eraseFromParent();
             return;
@@ -1302,6 +1319,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             IRBuilder<> builder(store);
             auto store_val = store->getValueOperand();
             auto store_ty = store_val->getType();
+            StoreInst *newstore;
             if (slot.isref) {
                 assert(slot.offset == offset);
                 if (!isa<PointerType>(store_ty)) {
@@ -1316,16 +1334,37 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 }
                 if (cast<PointerType>(store_ty)->getAddressSpace() != AddressSpace::Tracked)
                     store_val = builder.CreateAddrSpaceCast(store_val, pass.T_prjlvalue);
-                builder.CreateStore(store_val, slot.slot);
+                newstore = builder.CreateStore(store_val, slot.slot);
             }
             else {
-                builder.CreateStore(store_val, slot_gep(slot, offset, store_ty, builder));
+                newstore = builder.CreateStore(store_val, slot_gep(slot, offset, store_ty, builder));
             }
+            // TODO: should we use `store->clone()`, or manually copy any other metadata?
+            newstore->setAlignment(store->getAlign());
+            // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
+            newstore->setOrdering(AtomicOrdering::NotAtomic);
             store->eraseFromParent();
             return;
         }
+        else if (isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            auto slot_idx = find_slot(offset);
+            auto &slot = slots[slot_idx];
+            assert(slot.offset <= offset && slot.offset + slot.size >= offset);
+            IRBuilder<> builder(user);
+            Value *newptr;
+            if (slot.isref) {
+                assert(slot.offset == offset);
+                newptr = slot.slot;
+            }
+            else {
+                Value *Val = isa<AtomicCmpXchgInst>(user) ? cast<AtomicCmpXchgInst>(user)->getNewValOperand() : cast<AtomicRMWInst>(user)->getValOperand();
+                newptr = slot_gep(slot, offset, Val->getType(), builder);
+            }
+            *use = newptr;
+        }
         else if (auto call = dyn_cast<CallInst>(user)) {
-            auto callee = call->getCalledValue();
+            auto callee = call->getCalledOperand();
+            assert(callee); // makes it clear for clang analyser that `callee` is not NULL
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
                 if (Intrinsic::ID id = intrinsic->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
@@ -1352,7 +1391,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                     val = ConstantExpr::getIntToPtr(val, pass.T_pjlvalue);
                                     ptr = ConstantExpr::getAddrSpaceCast(val, pass.T_prjlvalue);
                                 }
-                                builder.CreateStore(ptr, slot.slot);
+                                StoreInst *store = builder.CreateAlignedStore(ptr, slot.slot, Align(sizeof(void*)));
+                                store->setOrdering(AtomicOrdering::NotAtomic);
                                 continue;
                             }
                             auto ptr8 = builder.CreateBitCast(slot.slot, pass.T_pint8);
@@ -1361,11 +1401,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                                                           offset - slot.offset);
                             auto sub_size = std::min(slot.offset + slot.size, offset + size) -
                                 std::max(offset, slot.offset);
-#if JL_LLVM_VERSION >= 100000
+                            // TODO: alignment computation
                             builder.CreateMemSet(ptr8, val_arg, sub_size, MaybeAlign(0));
-#else
-                            builder.CreateMemSet(ptr8, val_arg, sub_size, 0);
-#endif
                         }
                         call->eraseFromParent();
                         return;
@@ -1383,7 +1420,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.gc_preserve_begin == callee) {
+            if (pass.gc_preserve_begin_func == callee) {
                 SmallVector<Value*,8> operands;
                 for (auto &arg: call->arg_operands()) {
                     if (arg.get() == orig_i || isa<Constant>(arg.get()))
@@ -1394,9 +1431,12 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 for (auto &slot: slots) {
                     if (!slot.isref)
                         continue;
-                    operands.push_back(builder.CreateLoad(pass.T_prjlvalue, slot.slot));
+                    LoadInst *ref = builder.CreateAlignedLoad(pass.T_prjlvalue, slot.slot, Align(sizeof(void*)));
+                    // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
+                    ref->setOrdering(AtomicOrdering::NotAtomic);
+                    operands.push_back(ref);
                 }
-                auto new_call = builder.CreateCall(pass.gc_preserve_begin, operands);
+                auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
                 new_call->takeName(call);
                 new_call->setAttributes(call->getAttributes());
                 call->replaceAllUsesWith(new_call);
@@ -1404,7 +1444,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 return;
             }
             // remove from operand bundle
-            assert(isBundleOperand(call, use->getOperandNo()));
+            assert(call->isBundleOperand(use->getOperandNo()));
             assert(call->getOperandBundleForOperand(use->getOperandNo()).getTagName() ==
                    "jl_roots");
             SmallVector<OperandBundleDef,2> bundles;
@@ -1422,7 +1462,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 for (auto &slot: slots) {
                     if (!slot.isref)
                         continue;
-                    operands.push_back(builder.CreateLoad(pass.T_prjlvalue, slot.slot));
+                    LoadInst *ref = builder.CreateAlignedLoad(pass.T_prjlvalue, slot.slot, Align(sizeof(void*)));
+                    // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
+                    ref->setOrdering(AtomicOrdering::NotAtomic);
+                    operands.push_back(ref);
                 }
                 bundle = OperandBundleDef("jl_roots", std::move(operands));
                 break;
@@ -1466,42 +1509,23 @@ cleanup:
 
 bool AllocOpt::doInitialization(Module &M)
 {
-    ctx = &M.getContext();
-    DL = &M.getDataLayout();
-
-    alloc_obj = M.getFunction("julia.gc_alloc_obj");
-    if (!alloc_obj)
+    initAll(M);
+    if (!alloc_obj_func)
         return false;
 
-    ptr_from_objref = M.getFunction("julia.pointer_from_objref");
-    gc_preserve_begin = M.getFunction("llvm.julia.gc_preserve_begin");
-    typeof_func = M.getFunction("julia.typeof");
-    write_barrier_func = M.getFunction("julia.write_barrier");
+    DL = &M.getDataLayout();
 
-    T_prjlvalue = alloc_obj->getReturnType();
-    T_pjlvalue = PointerType::get(cast<PointerType>(T_prjlvalue)->getElementType(), 0);
-    T_pprjlvalue = PointerType::get(T_prjlvalue, 0);
-
-    T_int8 = Type::getInt8Ty(*ctx);
-    T_int32 = Type::getInt32Ty(*ctx);
-    T_int64 = Type::getInt64Ty(*ctx);
-    T_size = sizeof(void*) == 8 ? T_int64 : T_int32;
-    T_pint8 = PointerType::get(T_int8, 0);
+    T_int64 = Type::getInt64Ty(getLLVMContext());
 
     lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
     lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
-
-    MDNode *tbaa_data;
-    MDNode *tbaa_data_scalar;
-    std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child("jtbaa_data");
-    tbaa_tag = tbaa_make_child("jtbaa_tag", tbaa_data_scalar).first;
 
     return true;
 }
 
 bool AllocOpt::runOnFunction(Function &F)
 {
-    if (!alloc_obj)
+    if (!alloc_obj_func)
         return false;
     Optimizer optimizer(F, *this);
     optimizer.initialize();
@@ -1521,7 +1545,7 @@ Pass *createAllocOptPass()
     return new AllocOpt();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createAllocOptPass());
 }

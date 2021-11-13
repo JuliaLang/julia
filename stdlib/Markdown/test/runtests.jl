@@ -85,6 +85,8 @@ let text =
 
         And *another* paragraph.
 
+    \tAnd a third paragraph indented with a *tab*.
+
     This isn't part of the footnote.
     """,
     md = Markdown.parse(text)
@@ -97,7 +99,7 @@ let text =
     @test md.content[2].id == "1"
     @test md.content[3].id == "note"
 
-    @test length(md.content[3].text) == 4
+    @test length(md.content[3].text) == 5
 
     let expected =
             """
@@ -115,6 +117,8 @@ let text =
                 ```
 
                 And *another* paragraph.
+
+                And a third paragraph indented with a *tab*.
 
 
             This isn't part of the footnote.
@@ -137,6 +141,8 @@ let text =
                    some.code
 
                And *another* paragraph.
+
+               And a third paragraph indented with a *tab*.
 
 
             This isn't part of the footnote.
@@ -266,6 +272,42 @@ end
     | L |
 """) == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
 
+# Issue #38275
+function test_list_wrap(str, lenmin, lenmax)
+    strs = split(str, '\n')
+    l = length.(strs)
+    for i = 1:length(l)-1
+        if l[i] != 0 && l[i+1] != 0    # the next line isn't blank, so this line should be "full"
+            lenmin <= l[i] <= lenmax || return false
+        else
+            l[i] <= lenmax || return false   # this line isn't too long (but there is no min)
+        end
+    end
+    # Check consistent indentation
+    rngs = findfirst.((". ",), strs)
+    k = last(rngs[1])
+    rex = Regex('^' * " "^k * "\\w")
+    for (i, rng) in enumerate(rngs)
+        isa(rng, AbstractRange) && last(rng) == k && continue  # every numbered line starts the text at the same position
+        rng === nothing && (isempty(strs[i]) || match(rex, strs[i]) !== nothing) && continue  # every unnumbered line is indented to text in numbered lines
+        return false
+    end
+    return true
+end
+
+let doc =
+    md"""
+    1. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+    2. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+    """
+    str = sprint(term, doc, 50)
+    @test test_list_wrap(str, 40, 50)
+    str = sprint(term, doc, 60)
+    @test test_list_wrap(str, 50, 60)
+    str = sprint(term, doc, 80)
+    @test test_list_wrap(str, 70, 80)
+end
+
 # HTML output
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
 @test md"something ***" |> html == "<p>something ***</p>\n"
@@ -334,7 +376,7 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n\n    •    list2"
+        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •  list1\n\n    •  list2"
     @test sprint(show, "text/markdown", book) ==
         """
         # Title
@@ -487,6 +529,12 @@ foo()
                                                           ["hgh",Bold("jhj"),"ge"],
                                                           "f"]],
                                                   [:l, :r, :r]))
+@test md"""
+    |   | b |
+    |:--|--:|
+    | 1 |   |""" == MD(Table(Any[[Any[],"b"],
+                                 ["1",Any[]]], [:l, :r]))
+
 @test md"""
 no|table
 no error
@@ -671,6 +719,8 @@ let t_1 =
         !!! note
             foo bar baz
 
+        \tsecond tab-indented paragraph
+
         !!! warning "custom title"
             - foo
             - bar
@@ -714,6 +764,7 @@ let t_1 =
     @test m_2.content[1].category == "note"
     @test m_2.content[1].title == "Note"
     @test isa(m_2.content[1].content[1], Markdown.Paragraph)
+    @test isa(m_2.content[1].content[2], Markdown.Paragraph)
 
     @test isa(m_2.content[2], Markdown.Admonition)
     @test m_2.content[2].category == "warning"
@@ -810,6 +861,8 @@ let t_1 =
             !!! note
                 foo bar baz
 
+                second tab-indented paragraph
+
 
             !!! warning "custom title"
                   * foo
@@ -838,6 +891,8 @@ let t_1 =
             """
             .. note::
                foo bar baz
+
+               second tab-indented paragraph
 
 
             .. warning:: custom title
@@ -1137,4 +1192,71 @@ end
 let m = Markdown.parse("---"), io = IOBuffer()
     show(io, "text/latex", m)
     @test String(take!(io)) == "\\rule{\\textwidth}{1pt}\n"
+end
+
+# issue #16194: interpolation in md"..." strings
+@testset "issue #16194: interpolation in md\"...\" strings" begin
+    x = "X"
+    contains_X(md) = occursin(x, sprint(show, MIME("text/plain"), md))
+    @test contains_X(md"# $x") # H1
+    @test contains_X(md"## $x") # H2
+    @test contains_X(md"### $x") # H3
+    @test contains_X(md"x = $x") # Paragraph
+    @test contains_X(md"- $x") # List
+    @test contains_X(md"[$x](..)") # Link
+    @test contains_X(md"**$x**") # Bold
+    @test contains_X(md"*$x*") # Italic
+    @test contains_X( # Table
+        md"""
+        | name |
+        |------|
+        |  $x  |
+        """)
+end
+
+@testset "issue 40080: empty list item breaks display()" begin
+    d = TextDisplay(devnull)
+    display(d, md"""
+               1. hello
+               2.
+               """)
+end
+
+@testset "issue #37232: linebreaks" begin
+    s = @md_str """
+       Misc:\\
+       - line\\
+       """
+    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line"
+end
+
+@testset "pullrequest #41552: a code block has \\end{verbatim}" begin
+    s1 = md"""
+         ```tex
+         \begin{document}
+         \end{document}
+         ```
+         """
+    s2 = md"""
+         ```tex
+         \begin{verbatim}
+         \end{verbatim}
+         ```
+         """
+    @test Markdown.latex(s1) == """
+                                \\begin{verbatim}
+                                \\begin{document}
+                                \\end{document}
+                                \\end{verbatim}
+                                """
+    @test_throws ErrorException Markdown.latex(s2)
+end
+
+@testset "issue #42139: autolink" begin
+    # ok
+    @test md"<mailto:foo@bar.com>" |> html == """<p><a href="mailto:foo@bar.com">mailto:foo@bar.com</a></p>\n"""
+    # not ok
+    @test md"<mailto foo@bar.com>" |> html == """<p>&lt;mailto foo@bar.com&gt;</p>\n"""
+    # see issue #42139
+    @test md"<一轮红日初升>" |> html == """<p>&lt;一轮红日初升&gt;</p>\n"""
 end

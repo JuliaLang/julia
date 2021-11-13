@@ -8,7 +8,7 @@ behave as expected.
 ## Complex Numbers
 
 The global constant [`im`](@ref) is bound to the complex number *i*, representing the principal
-square root of -1. (Using mathematicians' `i` or engineers' `j` for this global constant were rejected since they are such popular index variable names.) Since Julia allows numeric literals to be [juxtaposed with identifiers as coefficients](@ref man-numeric-literal-coefficients),
+square root of -1. (Using mathematicians' `i` or engineers' `j` for this global constant was rejected since they are such popular index variable names.) Since Julia allows numeric literals to be [juxtaposed with identifiers as coefficients](@ref man-numeric-literal-coefficients),
 this binding suffices to provide convenient syntax for complex numbers, similar to the traditional
 mathematical notation:
 
@@ -36,7 +36,7 @@ julia> (-1 + 2im)^2
 -3 - 4im
 
 julia> (-1 + 2im)^2.5
-2.729624464784009 - 6.9606644595719im
+2.7296244647840084 - 6.960664459571898im
 
 julia> (-1 + 2im)^(1 + 1im)
 -0.27910381075826657 + 0.08708053414102428im
@@ -124,7 +124,7 @@ julia> sqrt(1 + 2im)
 1.272019649514069 + 0.7861513777574233im
 
 julia> cos(1 + 2im)
-2.0327230070196656 - 3.0518977991518im
+2.0327230070196656 - 3.0518977991517997im
 
 julia> exp(1 + 2im)
 -1.1312043837568135 + 2.4717266720048188im
@@ -269,10 +269,10 @@ Constructing infinite rational values is acceptable:
 julia> 5//0
 1//0
 
-julia> -3//0
+julia> x = -3//0
 -1//0
 
-julia> typeof(ans)
+julia> typeof(x)
 Rational{Int64}
 ```
 

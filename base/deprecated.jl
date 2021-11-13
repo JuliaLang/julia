@@ -17,9 +17,9 @@
 """
     @deprecate old new [ex=true]
 
-The first argument `old` is the signature of the deprecated method, the second one
-`new` is the call which replaces it. `@deprecate` exports `old` unless the optional
-third argument is `false`.
+Deprecate method `old` and specify the replacement call `new`. Prevent `@deprecate` from
+exporting `old` by setting `ex` to `false`. `@deprecate` defines a new method with the same
+signature as `old`.
 
 !!! compat "Julia 1.5"
     As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
@@ -76,12 +76,12 @@ macro deprecate(old, new, ex=true)
     end
 end
 
-function depwarn(msg, funcsym)
+function depwarn(msg, funcsym; force::Bool=false)
     opts = JLOptions()
     if opts.depwarn == 2
         throw(ErrorException(msg))
     end
-    deplevel = opts.depwarn == 1 ? CoreLogging.Warn : CoreLogging.BelowMinLevel
+    deplevel = force || opts.depwarn == 1 ? CoreLogging.Warn : CoreLogging.BelowMinLevel
     @logmsg(
         deplevel,
         msg,
@@ -117,12 +117,14 @@ function firstcaller(bt::Vector, funcsyms)
             end
             found = lkup.func in funcsyms
             # look for constructor type name
-            if !found && lkup.linfo isa Core.MethodInstance
+            if !found
                 li = lkup.linfo
-                ft = ccall(:jl_first_argument_datatype, Any, (Any,), li.def.sig)
-                if isa(ft, DataType) && ft.name === Type.body.name
-                    ft = unwrap_unionall(ft.parameters[1])
-                    found = (isa(ft, DataType) && ft.name.name in funcsyms)
+                if li isa Core.MethodInstance
+                    ft = ccall(:jl_first_argument_datatype, Any, (Any,), (li.def::Method).sig)
+                    if isa(ft, DataType) && ft.name === Type.body.name
+                        ft = unwrap_unionall(ft.parameters[1])
+                        found = (isa(ft, DataType) && ft.name.name in funcsyms)
+                    end
                 end
             end
         end
@@ -164,39 +166,17 @@ macro deprecate_moved(old, new, export_old=true)
         Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
 end
 
-# BEGIN 0.7 deprecations
-
-function promote_eltype_op end
-
-# END 0.7 deprecations
-
 # BEGIN 1.0 deprecations
 
-# @deprecate one(i::CartesianIndex) oneunit(i)
-# @deprecate one(::Type{I}) where I<:CartesianIndex oneunit(I)
+@deprecate one(i::CartesianIndex)                    oneunit(i)
+@deprecate one(I::Type{CartesianIndex{N}}) where {N} oneunit(I)
 
-@deprecate reindex(V, idxs, subidxs) reindex(idxs, subidxs) false
-@deprecate substrides(parent::AbstractArray, strds::Tuple, I::Tuple) substrides(strds, I) false
-
-# TODO: deprecate these
-one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
-one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
-
-MPFR.BigFloat(x, prec::Int) = BigFloat(x; precision=prec)
-MPFR.BigFloat(x, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
-MPFR.BigFloat(x::Real, prec::Int) = BigFloat(x; precision=prec)
-MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
+@deprecate BigFloat(x, prec::Int)                               BigFloat(x; precision=prec)
+@deprecate BigFloat(x, prec::Int, rounding::RoundingMode)       BigFloat(x, rounding; precision=prec)
+@deprecate BigFloat(x::Real, prec::Int)                         BigFloat(x; precision=prec)
+@deprecate BigFloat(x::Real, prec::Int, rounding::RoundingMode) BigFloat(x, rounding; precision=prec)
 
 # END 1.0 deprecations
-
-# BEGIN 1.3 deprecations
-
-@eval Threads begin
-    Base.@deprecate_binding RecursiveSpinLock ReentrantLock
-    Base.@deprecate_binding Mutex ReentrantLock
-end
-
-# END 1.3 deprecations
 
 # BEGIN 1.5 deprecations
 
@@ -219,15 +199,74 @@ false
 """
 isimmutable(@nospecialize(x)) = !ismutable(x)
 export isimmutable
-
+# Note isimmutable is not @deprecated out of performance concerns
 
 macro get!(h, key0, default)
     f, l = __source__.file, __source__.line
-    depwarn("`@get!(dict, key, default)` at $f:$l is deprecated, use `get!(()->default, dict, key)` instead.", Symbol("@get!"))
+    @warn "`@get!(dict, key, default)` at $f:$l is deprecated, use `get!(()->default, dict, key)` instead."
     return quote
         get!(()->$(esc(default)), $(esc(h)), $(esc(key0)))
     end
 end
 
+pointer(V::SubArray{<:Any,<:Any,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple) = pointer(V, CartesianIndex(is))
 
 # END 1.5 deprecations
+
+# BEGIN 1.6 deprecations
+
+# These changed from SimpleVector to `MethodMatch`. These definitions emulate
+# being a SimpleVector to ease transition for packages that make explicit
+# use of (internal) APIs that return raw method matches.
+iterate(match::Core.MethodMatch, field::Int=1) =
+    field > nfields(match) ? nothing : (getfield(match, field), field+1)
+getindex(match::Core.MethodMatch, field::Int) =
+    getfield(match, field)
+
+
+# these were internal functions, but some packages seem to be relying on them
+tuple_type_head(T::Type) = fieldtype(T, 1)
+tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
+function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
+    @_pure_meta
+    Tuple{S, T.parameters...}
+end
+function parameter_upper_bound(t::UnionAll, idx)
+    @_pure_meta
+    return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
+end
+
+# these were internal functions, but some packages seem to be relying on them
+@deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes) false
+cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not recursively calls itself
+
+@deprecate unsafe_indices(A) axes(A) false
+@deprecate unsafe_length(r) length(r) false
+
+# these were internal type aliases, but some pacakges seem to be relying on them
+const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                        Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,Vararg{T,N}}
+
+# END 1.6 deprecations
+
+# BEGIN 1.7 deprecations
+
+# the plan is to eventually overload getproperty to access entries of the dict
+@noinline function getproperty(x::Pairs, s::Symbol)
+    depwarn("use values(kwargs) and keys(kwargs) instead of kwargs.data and kwargs.itr", :getproperty, force=true)
+    return getfield(x, s)
+end
+
+# This function was marked as experimental and not exported.
+@deprecate catch_stack(task=current_task(); include_bt=true) current_exceptions(task; backtrace=include_bt) false
+
+# END 1.7 deprecations
+
+# BEGIN 1.8 deprecations
+
+@deprecate var"@_inline_meta"   var"@inline"   false
+@deprecate var"@_noinline_meta" var"@noinline" false
+
+# END 1.8 deprecations

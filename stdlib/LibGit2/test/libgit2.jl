@@ -47,9 +47,9 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         return "Process output found:\n\"\"\"\n$str\n\"\"\""
     end
     out = IOBuffer()
-    with_fake_pty() do pty_slave, pty_master
-        p = run(detach(cmd), pty_slave, pty_slave, pty_slave, wait=false)
-        Base.close_stdio(pty_slave)
+    with_fake_pty() do pts, ptm
+        p = run(detach(cmd), pts, pts, pts, wait=false)
+        Base.close_stdio(pts)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
@@ -79,25 +79,25 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         end
 
         for (challenge, response) in challenges
-            write(out, readuntil(pty_master, challenge, keep=true))
-            if !isopen(pty_master)
+            write(out, readuntil(ptm, challenge, keep=true))
+            if !isopen(ptm)
                 error("Could not locate challenge: \"$challenge\". ",
                       format_output(out))
             end
-            write(pty_master, response)
+            write(ptm, response)
         end
 
-        # Capture output from process until `pty_slave` is closed
+        # Capture output from process until `pts` is closed
         try
-            write(out, pty_master)
+            write(out, ptm)
         catch ex
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
-                rethrow() # ignore EIO from master after slave dies
+                rethrow() # ignore EIO from `ptm` after `pts` dies
             end
         end
 
         status = fetch(timer)
-        close(pty_master)
+        close(ptm)
         if status != :success
             if status == :timeout
                 error("Process timed out possibly waiting for a response. ",
@@ -111,7 +111,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
     nothing
 end
 
-const LIBGIT2_MIN_VER = v"0.23.0"
+const LIBGIT2_MIN_VER = v"1.0.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
 
 const KEY_DIR = joinpath(@__DIR__, "keys")
@@ -124,18 +124,21 @@ end
 
 function get_global_dir()
     buf = Ref(LibGit2.Buffer())
-    LibGit2.@check ccall((:git_libgit2_opts, :libgit2), Cint,
-                         (Cint, Cint, Ptr{LibGit2.Buffer}),
-                         LibGit2.Consts.GET_SEARCH_PATH, LibGit2.Consts.CONFIG_LEVEL_GLOBAL, buf)
+
+    LibGit2.@check @ccall "libgit2".git_libgit2_opts(
+        LibGit2.Consts.GET_SEARCH_PATH::Cint;
+        LibGit2.Consts.CONFIG_LEVEL_GLOBAL::Cint,
+        buf::Ptr{LibGit2.Buffer})::Cint
     path = unsafe_string(buf[].ptr)
     LibGit2.free(buf)
     return path
 end
 
 function set_global_dir(dir)
-    LibGit2.@check ccall((:git_libgit2_opts, :libgit2), Cint,
-                         (Cint, Cint, Cstring),
-                         LibGit2.Consts.SET_SEARCH_PATH, LibGit2.Consts.CONFIG_LEVEL_GLOBAL, dir)
+    LibGit2.@check @ccall "libgit2".git_libgit2_opts(
+        LibGit2.Consts.SET_SEARCH_PATH::Cint;
+        LibGit2.Consts.CONFIG_LEVEL_GLOBAL::Cint,
+        dir::Cstring)::Cint
     return
 end
 
@@ -596,6 +599,23 @@ end
         github_regex_test("https://username@github.com/$user/$repo", user, repo)
         github_regex_test("ssh://git@github.com/$user/$repo", user, repo)
         @test !occursin(LibGit2.GITHUB_REGEX, "git@notgithub.com/$user/$repo.git")
+    end
+
+    @testset "UserPasswordCredential/url constructor" begin
+        user_pass_cred = LibGit2.UserPasswordCredential("user", "*******")
+        url = "https://github.com"
+        expected_cred = LibGit2.GitCredential("https", "github.com", nothing, "user", "*******")
+
+        cred = LibGit2.GitCredential(user_pass_cred, url)
+        @test cred == expected_cred
+
+        # Shredding the UserPasswordCredential shouldn't result in information being lost
+        # inside of a GitCredential.
+        Base.shred!(user_pass_cred)
+        @test cred == expected_cred
+
+        Base.shred!(cred)
+        Base.shred!(expected_cred)
     end
 end
 
@@ -1723,6 +1743,19 @@ mktempdir() do dir
         end
     end
 
+    @testset "checkout_head" begin
+        LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
+            # modify file
+            repo_file = open(joinpath(cache_repo,test_file), "a")
+            println(repo_file, commit_msg1 * randstring(10))
+            close(repo_file)
+            # and checkout HEAD once more
+            LibGit2.checkout_head(repo, options=LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE))
+            @test LibGit2.headname(repo) == master_branch
+            @test !LibGit2.isdirty(repo)
+        end
+    end
+
     @testset "checkout/headname" begin
         LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
             LibGit2.checkout!(repo, string(commit_oid1))
@@ -1730,7 +1763,6 @@ mktempdir() do dir
             @test LibGit2.headname(repo) == "(detached from $(string(commit_oid1)[1:7]))"
         end
     end
-
 
     if Sys.isunix()
         @testset "checkout/proptest" begin
@@ -1969,7 +2001,12 @@ mktempdir() do dir
             end
 
             LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
-                @test length(collect(LibGit2.GitConfigIter(cfg, r"credential.*"))) == 3
+                iter = LibGit2.GitConfigIter(cfg, r"credential.*\.helper")
+                @test LibGit2.split_cfg_entry.(iter) == [
+                    ("credential", "", "helper", "!echo first"),
+                    ("credential", "https://mygithost", "helper", ""),
+                    ("credential", "", "helper", "!echo second"),
+                ]
 
                 expected = [
                     GitCredentialHelper(`echo first`),
@@ -2110,6 +2147,50 @@ mktempdir() do dir
                     Base.shred!(filled_b)
                     Base.shred!(filled_without_path_a)
                     Base.shred!(filled_without_path_b)
+                end
+            end
+        end
+
+        @testset "approve/reject with UserPasswordCredential" begin
+            # In order to use the "store" credential helper `git` needs to be installed and
+            # on the path.
+            if GIT_INSTALLED
+                config_path = joinpath(dir, config_file)
+                isfile(config_path) && rm(config_path)
+
+                credential_path = joinpath(dir, ".git-credentials")
+                isfile(credential_path) && rm(credential_path)
+
+                LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                    query = LibGit2.GitCredential("https", "mygithost")
+                    filled = LibGit2.GitCredential("https", "mygithost", nothing, "alice", "1234")
+                    user_pass_cred = LibGit2.UserPasswordCredential("alice", "1234")
+                    url = "https://mygithost"
+
+                    # Requires `git` to be installed and available on the path.
+                    LibGit2.set!(cfg, "credential.helper", "store --file \"$credential_path\"")
+                    helper = only(LibGit2.credential_helpers(cfg, query))
+
+                    @test !isfile(credential_path)
+
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                        @test result == query
+                    end
+
+                    LibGit2.approve(cfg, user_pass_cred, url)
+                    @test isfile(credential_path)
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                        @test result == filled
+                    end
+
+                    LibGit2.reject(cfg, user_pass_cred, url)
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                        @test result == query
+                    end
+
+                    Base.shred!(query)
+                    Base.shred!(filled)
+                    Base.shred!(user_pass_cred)
                 end
             end
         end
@@ -2383,6 +2464,76 @@ mktempdir() do dir
 
             Base.shred!(valid_cred)
             Base.shred!(valid_p_cred)
+        end
+
+        @testset "SSH known host checking" begin
+            CHECK_MATCH    = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_MATCH
+            CHECK_MISMATCH = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_MISMATCH
+            CHECK_NOTFOUND = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_NOTFOUND
+            CHECK_FAILURE  = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_FAILURE
+
+            # randomly generated hashes matching no hosts
+            random_key = "\0\0\0\assh-rsa\0\0\0\x01#\0\0\0\x81\0¿\x95\xbe9\xfc9g\n:\xcf&\x06YA\xb5`\x97\xc13A\xbf;T+C\xc9Ut J>\xc5ҍ\xc4_S\x8a \xc1S\xeb\x15FH\xd2a\x04.D\xeeb\xac\x8f\xdb\xcc\xef\xc4l G\x9bR\xafp\x17s<=\x12\xab\x04ڳif\\A\x9ba0\xde%\xdei\x04\xc3\r\xb3\x81w\x88\xec\xc0f\x15A;AÝ\xc0r\xa1\u5fe\xd3\xf6)8\x8e\xa3\xcbc\xee\xdd\$\x04\x0f\xc1\xb4\x1f\xcc\xecK\xe0\x99" |> codeunits |> collect
+            # hashes of the unique github.com fingerprint
+            github_key = "\0\0\0\assh-rsa\0\0\0\x01#\0\0\x01\x01\0\xab`;\x85\x11\xa6vy\xbd\xb5@\xdb;\xd2\x03K\0J\xe96\xd0k\xe3\xd7`\xf0\x8f˪\xdbN\xb4\xedóǑ\xc7\n\xae\x9at\xc9Xi\xe4wD!«\xea\x92\xe5T0_8\xb5\xfdAK2\b\xe5t\xc37\xe3 \x93e\x18F,vRɋ1\xe1n}\xa6R;\xd2\0t*dD\xd8?\xcd^\x172\xd06sǷ\x81\x15UH{U\xf0\xc4IO8)\xec\xe6\x0f\x94%Z\x95˚\xf57\xd7\xfc\x8c\x7f\xe4\x9e\xf3\x18GN\xf2\x92\t\x92\x05\"e\xb0\xa0n\xa6mJ\x16\x7f\xd9\xf3\xa4\x8a\x1aJ0~\xc1\xea\xaaQI\xa9i\xa6\xac]V\xa5\xefb~Q}\x81\xfbdO[t\\OG\x8e\xcd\b*\x94\x92\xf7D\xaa\xd3&\xf7l\x8cM\xc9\x10\vƫyF\x1d&W\xcbo\x06\xde\xc9.kd\xa6V/\xf0\xe3 \x84\xea\x06\xce\x0e\xa9\xd3ZX;\xfb\0\xbaӌ\x9d\x19p<T\x98\x92\xe5\xaaxܕ\xe2PQ@i" |> codeunits |> collect
+            # hashes of the middle github.com fingerprint
+            gitlab_key = "\0\0\0\vssh-ed25519\0\0\0 \a\xee\br\x95N:\xae\xc6\xfbz\bέtn\x12.\x9dA\xb6\x7f\xe79\xe1\xc7\x13\x95\x0e\xcd\x17_" |> codeunits |> collect
+
+            # various known hosts files
+            no_file = tempname()
+            empty_file = tempname(); touch(empty_file)
+            known_hosts = joinpath(@__DIR__, "known_hosts")
+            wrong_hosts = tempname()
+            open(wrong_hosts, write=true) do io
+                for line in eachline(known_hosts)
+                    words = split(line)
+                    words[1] = words[1] == "github.com" ? "gitlab.com" :
+                               words[1] == "gitlab.com" ? "github.com" :
+                               words[1]
+                    println(io, join(words, " "))
+                end
+            end
+
+            @testset "unknown host" begin
+                host = "unknown.host"
+                for key in [github_key, gitlab_key, random_key],
+                    files in [[no_file], [empty_file], [known_hosts]]
+                    check = LibGit2.ssh_knownhost_check(files, host, key)
+                    @test check == CHECK_NOTFOUND
+                end
+            end
+
+            @testset "known hosts" begin
+                for (host, key) in [
+                        "github.com" => github_key,
+                        "gitlab.com" => gitlab_key,
+                    ]
+                    for files in [[no_file], [empty_file]]
+                        check = LibGit2.ssh_knownhost_check(files, host, key)
+                        @test check == CHECK_NOTFOUND
+                    end
+                    for files in [
+                            [known_hosts],
+                            [empty_file, known_hosts],
+                            [known_hosts, empty_file],
+                            [known_hosts, wrong_hosts],
+                        ]
+                        check = LibGit2.ssh_knownhost_check(files, host, key)
+                        @test check == CHECK_MATCH
+                    end
+                    for files in [
+                            [wrong_hosts],
+                            [empty_file, wrong_hosts],
+                            [wrong_hosts, empty_file],
+                            [wrong_hosts, known_hosts],
+                        ]
+                        check = LibGit2.ssh_knownhost_check(files, host, key)
+                        @test check == CHECK_MISMATCH
+                    end
+                end
+            end
+
+            rm(empty_file)
         end
 
         @testset "HTTPS credential prompt" begin
@@ -3043,7 +3194,7 @@ mktempdir() do dir
                             deserialize(f)
                         end
                         @test err.code == LibGit2.Error.ERROR
-                        @test lowercase(err.msg) == lowercase("invalid Content-Type: text/plain")
+                        @test occursin(r"invalid content-type: '?text/plain'?"i, err.msg)
                     end
 
                     # OpenSSL s_server should still be running

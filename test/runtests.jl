@@ -10,11 +10,28 @@ using Base: Experimental
 include("choosetests.jl")
 include("testenv.jl")
 
-tests, net_on, exit_on_error, use_revise, seed = choosetests(ARGS)
+(; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
 tests = unique(tests)
+
+if Sys.islinux()
+    const SYS_rrcall_check_presence = 1008
+    global running_under_rr() = 0 == ccall(:syscall, Int,
+        (Int, Int, Int, Int, Int, Int, Int),
+        SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
+else
+    global running_under_rr() = false
+end
 
 if use_revise
     using Revise
+    union!(Revise.stdlib_names, Symbol.(STDLIBS))
+    # Remote-eval the following to initialize Revise in workers
+    const revise_init_expr = quote
+        using Revise
+        const STDLIBS = $STDLIBS
+        union!(Revise.stdlib_names, Symbol.(STDLIBS))
+        revise_trackall()
+    end
 end
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
@@ -57,6 +74,7 @@ end
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
 move_to_node1("threads")
+move_to_node1("Distributed")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 
@@ -73,6 +91,16 @@ prepend!(tests, linalg_tests)
 
 import LinearAlgebra
 cd(@__DIR__) do
+    # `net_on` implies that we have access to the loopback interface which is
+    # necessary for Distributed multi-processing. There are some test
+    # environments that do not allow access to loopback, so we must disable
+    # addprocs when `net_on` is false. Note that there exist build environments,
+    # including Nix, where `net_on` is false but we still have access to the
+    # loopback interface. It would be great to make this check more specific to
+    # identify those situations somehow. See
+    #   * https://github.com/JuliaLang/julia/issues/6722
+    #   * https://github.com/JuliaLang/julia/pull/29384
+    #   * https://github.com/JuliaLang/julia/pull/40348
     n = 1
     if net_on
         n = min(Sys.CPU_THREADS, length(tests))
@@ -84,16 +112,8 @@ cd(@__DIR__) do
     @everywhere include("testdefs.jl")
 
     if use_revise
-        @everywhere begin
-            Revise.track(Core.Compiler)
-            Revise.track(Base)
-            for (id, mod) in Base.loaded_modules
-                if id.name in STDLIBS
-                    Revise.track(mod)
-                end
-            end
-            Revise.revise()
-        end
+        Base.invokelatest(revise_trackall)
+        Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
     #pretty print the information about gc and mem usage
@@ -136,25 +156,39 @@ cd(@__DIR__) do
         finally
             unlock(print_lock)
         end
+        nothing
     end
 
     global print_testworker_started = (name, wrkr)->begin
+        pid = running_under_rr() ? remotecall_fetch(getpid, wrkr) : 0
+        at = lpad("($wrkr)", name_align - textwidth(name) + 1, " ")
         lock(print_lock)
         try
-            printstyled(name, color=:white)
-            printstyled(lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
-                " "^elapsed_align, "started at $(now())\n", color=:white)
+            printstyled(name, at, " |", " "^elapsed_align,
+                    "started at $(now())",
+                    (pid > 0 ? " on pid $pid" : ""),
+                    "\n", color=:white)
         finally
             unlock(print_lock)
         end
+        nothing
     end
 
-    function print_testworker_errored(name, wrkr)
+    function print_testworker_errored(name, wrkr, @nospecialize(e))
         lock(print_lock)
         try
             printstyled(name, color=:red)
             printstyled(lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
                 " "^elapsed_align, " failed at $(now())\n", color=:red)
+            if isa(e, Test.TestSetException)
+                for t in e.errors_and_fails
+                    show(t)
+                    println()
+                end
+            elseif e !== nothing
+                Base.showerror(stdout, e)
+            end
+            println()
         finally
             unlock(print_lock)
         end
@@ -202,18 +236,17 @@ cd(@__DIR__) do
                     while length(tests) > 0
                         test = popfirst!(tests)
                         running_tests[test] = now()
-                        local resp
                         wrkr = p
-                        try
-                            resp = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
-                        catch e
-                            isa(e, InterruptException) && return
-                            resp = Any[e]
-                        end
+                        resp = try
+                                remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                            catch e
+                                isa(e, InterruptException) && return
+                                Any[CapturedException(e, catch_backtrace())]
+                            end
                         delete!(running_tests, test)
                         push!(results, (test, resp))
-                        if resp[1] isa Exception
-                            print_testworker_errored(test, wrkr)
+                        if length(resp) == 1
+                            print_testworker_errored(test, wrkr, exit_on_error ? nothing : resp[1])
                             if exit_on_error
                                 skipped = length(tests)
                                 empty!(tests)
@@ -223,6 +256,9 @@ cd(@__DIR__) do
                                 rmprocs(wrkr, waitfor=30)
                                 p = addprocs_with_testenv(1)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
+                                if use_revise
+                                    Distributed.remotecall_eval(Main, p, revise_init_expr)
+                                end
                             end
                         else
                             print_testworker_stats(test, wrkr, resp)
@@ -233,6 +269,9 @@ cd(@__DIR__) do
                                     rmprocs(wrkr, waitfor=30)
                                     p = addprocs_with_testenv(1)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
+                                    if use_revise
+                                        Distributed.remotecall_eval(Main, p, revise_init_expr)
+                                    end
                                 else # single process testing
                                     error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                                 end
@@ -256,12 +295,16 @@ cd(@__DIR__) do
             # to the overall aggregator
             isolate = true
             t == "SharedArrays" && (isolate = false)
-            local resp
-            try
-                resp = eval(Expr(:call, () -> runtests(t, test_path(t), isolate, seed=seed))) # runtests is defined by the include above
+            resp = try
+                    Base.invokelatest(runtests, t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                catch e
+                    isa(e, InterruptException) && rethrow()
+                    Any[CapturedException(e, catch_backtrace())]
+                end
+            if length(resp) == 1
+                print_testworker_errored(t, 1, resp[1])
+            else
                 print_testworker_stats(t, 1, resp)
-            catch e
-                resp = Any[e]
             end
             push!(results, (t, resp))
         end
@@ -307,6 +350,7 @@ cd(@__DIR__) do
     Errored, and execution continues until the summary at the end of the test
     run, where the test file is printed out as the "failed expression".
     =#
+    Test.TESTSET_PRINT_ENABLE[] = false
     o_ts = Test.DefaultTestSet("Overall")
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
@@ -316,29 +360,15 @@ cd(@__DIR__) do
             Test.push_testset(resp)
             Test.record(o_ts, resp)
             Test.pop_testset()
-        elseif isa(resp, Tuple{Int,Int})
+        elseif isa(resp, Test.TestSetException)
             fake = Test.DefaultTestSet(testname)
-            for i in 1:resp[1]
-                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
+            for i in 1:resp.pass
+                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(@__LINE__, @__FILE__)))
             end
-            for i in 1:resp[2]
+            for i in 1:resp.broken
                 Test.record(fake, Test.Broken(:test, nothing))
             end
-            Test.push_testset(fake)
-            Test.record(o_ts, fake)
-            Test.pop_testset()
-        elseif isa(resp, RemoteException) && isa(resp.captured.ex, Test.TestSetException)
-            println("Worker $(resp.pid) failed running test $(testname):")
-            Base.showerror(stdout, resp.captured)
-            println()
-            fake = Test.DefaultTestSet(testname)
-            for i in 1:resp.captured.ex.pass
-                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
-            end
-            for i in 1:resp.captured.ex.broken
-                Test.record(fake, Test.Broken(:test, nothing))
-            end
-            for t in resp.captured.ex.errors_and_fails
+            for t in resp.errors_and_fails
                 Test.record(fake, t)
             end
             Test.push_testset(fake)
@@ -353,7 +383,7 @@ cd(@__DIR__) do
             # the test runner itself had some problem, so we may have hit a segfault,
             # deserialization errors or something similar.  Record this testset as Errored.
             fake = Test.DefaultTestSet(testname)
-            Test.record(fake, Test.Error(:test_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
+            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
@@ -367,6 +397,7 @@ cd(@__DIR__) do
         Test.record(o_ts, fake)
         Test.pop_testset()
     end
+    Test.TESTSET_PRINT_ENABLE[] = true
     println()
     Test.print_test_results(o_ts, 1)
     if !o_ts.anynonpass

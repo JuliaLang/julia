@@ -37,15 +37,19 @@ end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
 @propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
-@propagate_inbounds SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
+@propagate_inbounds SubString(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
 @propagate_inbounds function SubString(s::SubString, i::Int, j::Int)
     @boundscheck i ≤ j && checkbounds(s, i:j)
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
-SubString(s::AbstractString) = SubString(s, 1, lastindex(s))
-SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
+SubString(s::AbstractString) = SubString(s, 1, lastindex(s)::Int)
+SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s)::Int)
+
+@propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
+@propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)
+@propagate_inbounds maybeview(s::AbstractString, args...) = getindex(s, args...)
 
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
@@ -58,7 +62,7 @@ function String(s::SubString{String})
 end
 
 ncodeunits(s::SubString) = s.ncodeunits
-codeunit(s::SubString) = codeunit(s.string)
+codeunit(s::SubString) = codeunit(s.string)::CodeunitType
 length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 
 function codeunit(s::SubString, i::Integer)
@@ -71,7 +75,7 @@ function iterate(s::SubString, i::Integer=firstindex(s))
     @boundscheck checkbounds(s, i)
     y = iterate(s.string, s.offset + i)
     y === nothing && return nothing
-    c, i = y
+    c, i = y::Tuple{AbstractChar,Int}
     return c, i - s.offset
 end
 
@@ -83,7 +87,7 @@ end
 function isvalid(s::SubString, i::Integer)
     ib = true
     @boundscheck ib = checkbounds(Bool, s, i)
-    @inbounds return ib && isvalid(s.string, s.offset + i)
+    @inbounds return ib && isvalid(s.string, s.offset + i)::Bool
 end
 
 byte_string_classify(s::SubString{String}) =
@@ -94,6 +98,11 @@ isvalid(s::SubString{String}) = isvalid(String, s)
 
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
+
+function ==(a::Union{String, SubString{String}}, b::Union{String, SubString{String}})
+    s = sizeof(a)
+    s == sizeof(b) && 0 == _memcmp(a, b, s)
+end
 
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
@@ -113,6 +122,11 @@ end
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
 
+function hash(s::SubString{String}, h::UInt)
+    h += memhash_seed
+    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
+end
+
 """
     reverse(s::AbstractString) -> AbstractString
 
@@ -131,13 +145,21 @@ and encoding. If they return a string with a different encoding, they must also 
 ```jldoctest
 julia> reverse("JuliaLang")
 "gnaLailuJ"
+```
 
-julia> reverse("ax̂e") # combining characters can lead to surprising results
+!!! note
+    The examples below may be rendered differently on different systems.
+    The comments indicate how they're supposed to be rendered
+
+Combining characters can lead to surprising results:
+
+```jldoctest
+julia> reverse("ax̂e") # hat is above x in the input, above e in the output
 "êxa"
 
 julia> using Unicode
 
-julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
+julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes; hat is above x in both in- and output
 "ex̂a"
 ```
 """
@@ -154,6 +176,10 @@ end
 
 string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)
+
+function Symbol(s::SubString{String})
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int), s, sizeof(s))
+end
 
 @inline function __unsafe_string!(out, c::Char, offs::Integer) # out is a (new) String (or StringVector)
     x = bswap(reinterpret(UInt32, c))
@@ -179,7 +205,13 @@ end
     return n
 end
 
-function string(a::Union{Char, String, SubString{String}}...)
+@inline function __unsafe_string!(out, s::Symbol, offs::Integer)
+    n = sizeof(s)
+    GC.@preserve s out unsafe_copyto!(pointer(out, offs), unsafe_convert(Ptr{UInt8},s), n)
+    return n
+end
+
+function string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
     for v in a
         if v isa Char
@@ -213,4 +245,17 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
     return out
 end
 
-getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)
+function filter(f, s::Union{String, SubString{String}})
+    out = StringVector(sizeof(s))
+    offset = 1
+    for c in s
+        if f(c)
+            offset += __unsafe_string!(out, c, offset)
+        end
+    end
+    resize!(out, offset-1)
+    sizehint!(out, offset-1)
+    return String(out)
+end
+
+getindex(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)

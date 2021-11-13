@@ -251,5 +251,25 @@ if bc_opt == bc_default || bc_opt == bc_off
     @test occursin("vector.body", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
 end
 
+# Boundschecking removal of indices with different type, see #40281
+getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)
+typed_40281 = sprint((io, args...) -> code_warntype(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
+if bc_opt == bc_default || bc_opt == bc_off
+    @test occursin("arrayref(false", typed_40281)
+    @test !occursin("arrayref(true", typed_40281)
+end
+
+@testset "pass inbounds meta to getindex on CartesianIndices (#42115)" begin
+    @inline getindex_42115(r, i, j) = @inbounds getindex(r, i, j)
+
+    R = CartesianIndices((5, 5))
+    if bc_opt == bc_on
+        @test_throws BoundsError getindex_42115(R, -1, -1)
+        @test_throws BoundsError getindex_42115(R, 1, -1)
+    else
+        @test getindex_42115(R, -1, -1) == CartesianIndex(-1, -1)
+        @test getindex_42115(R, 1, -1) == CartesianIndex(1, -1)
+    end
+end
 
 end

@@ -23,29 +23,29 @@
 
 struct ABI_ARMLayout : AbiLayout {
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &abi, LLVMContext &ctx) override
 {
     return false;
 }
 
 #define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type)
 
-Type *get_llvm_fptype(jl_datatype_t *dt) const
+Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    if (dt->mutabl || jl_datatype_nfields(dt) != 0)
+    if (dt->name->mutabl || jl_datatype_nfields(dt) != 0)
         return NULL;
     Type *lltype;
     // Check size first since it's cheaper.
     switch (jl_datatype_size(dt)) {
     case 2:
-        lltype = T_float16;
+        lltype = Type::getHalfTy(ctx);
         break;
     case 4:
-        lltype = T_float32;
+        lltype = Type::getFloatTy(ctx);
         break;
     case 8:
-        lltype = T_float64;
+        lltype = Type::getDoubleTy(ctx);
         break;
     default:
         return NULL;
@@ -58,10 +58,10 @@ Type *get_llvm_fptype(jl_datatype_t *dt) const
 // fundamental type.
 //
 // Returns the corresponding LLVM type.
-Type *isLegalHAType(jl_datatype_t *dt) const
+Type *isLegalHAType(jl_datatype_t *dt, LLVMContext &ctx) const
 {
     // single- or double-precision floating-point type
-    if (Type *fp = get_llvm_fptype(dt))
+    if (Type *fp = get_llvm_fptype(dt, ctx))
         return fp;
 
     // NOT SUPPORTED: 64- or 128-bit containerized vectors
@@ -74,7 +74,7 @@ Type *isLegalHAType(jl_datatype_t *dt) const
 //
 // Legality of the HA is determined by a nonzero return value.
 // In case of a non-legal HA, the value of 'base' is undefined.
-size_t isLegalHA(jl_datatype_t *dt, Type *&base) const
+size_t isLegalHA(jl_datatype_t *dt, Type *&base, LLVMContext &ctx) const
 {
     // Homogeneous aggregates are only used for VFP registers,
     // so use that definition of legality (section 6.1.2.1)
@@ -92,10 +92,10 @@ size_t isLegalHA(jl_datatype_t *dt, Type *&base) const
         for (size_t i = 0; i < parent_members; ++i) {
             jl_datatype_t *fdt = (jl_datatype_t*)jl_field_type(dt,i);
 
-            Type *T = isLegalHAType(fdt);
+            Type *T = isLegalHAType(fdt, ctx);
             if (T)
                 total_members++;
-            else if (size_t field_members = isLegalHA(fdt, T))
+            else if (size_t field_members = isLegalHA(fdt, T, ctx))
                 // recursive application (expanding nested composite types)
                 total_members += field_members;
             else
@@ -120,7 +120,7 @@ size_t isLegalHA(jl_datatype_t *dt, Type *&base) const
 // Determine if an argument can be passed through a coprocessor register.
 //
 // All the out parameters should be default to `false`.
-void classify_cprc(jl_datatype_t *dt, bool *vfp) const
+void classify_cprc(jl_datatype_t *dt, bool *vfp, LLVMContext &ctx) const
 {
     // Based on section 6.1 of the Procedure Call Standard
 
@@ -128,7 +128,7 @@ void classify_cprc(jl_datatype_t *dt, bool *vfp) const
     // - A half-precision floating-point type.
     // - A single-precision floating-point type.
     // - A double-precision floating-point type.
-    if (get_llvm_fptype(dt)) {
+    if (get_llvm_fptype(dt, ctx)) {
         *vfp = true;
         return;
     }
@@ -137,14 +137,14 @@ void classify_cprc(jl_datatype_t *dt, bool *vfp) const
 
     // - A Homogeneous Aggregate
     Type *base = NULL;
-    if (isLegalHA(dt, base)) {
+    if (isLegalHA(dt, base, ctx)) {
         *vfp = true;
         return;
     }
 }
 
-void classify_return_arg(jl_datatype_t *dt, bool *reg,
-                         bool *onstack, bool *need_rewrite) const
+void classify_return_arg(jl_datatype_t *dt, bool *reg, bool *onstack,
+                         bool *need_rewrite, LLVMContext &ctx) const
 {
     // Based on section 5.4 of the Procedure Call Standard
 
@@ -152,7 +152,7 @@ void classify_return_arg(jl_datatype_t *dt, bool *reg,
     //   Any result whose type would satisfy the conditions for a VFP CPRC is
     //   returned in the appropriate number of consecutive VFP registers
     //   starting with the lowest numbered register (s0, d0, q0).
-    classify_cprc(dt, reg);
+    classify_cprc(dt, reg, ctx);
     if (*reg)
         return;
 
@@ -196,12 +196,12 @@ void classify_return_arg(jl_datatype_t *dt, bool *reg,
         *onstack = true;
 }
 
-bool use_sret(jl_datatype_t *dt) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
 {
     bool reg = false;
     bool onstack = false;
     bool need_rewrite = false;
-    classify_return_arg(dt, &reg, &onstack, &need_rewrite);
+    classify_return_arg(dt, &reg, &onstack, &need_rewrite, ctx);
 
     return onstack;
 }
@@ -218,7 +218,7 @@ bool use_sret(jl_datatype_t *dt) override
 //
 // All the out parameters should be default to `false`.
 void classify_arg(jl_datatype_t *dt, bool *reg,
-                  bool *onstack, bool *need_rewrite) const
+                  bool *onstack, bool *need_rewrite, LLVMContext &ctx) const
 {
     // Based on section 5.5 of the Procedure Call Standard
 
@@ -226,7 +226,7 @@ void classify_arg(jl_datatype_t *dt, bool *reg,
     //   If the argument is a CPRC and there are sufficient unallocated
     //   co-processor registers of the appropriate class, the argument is
     //   allocated to co-processor registers.
-    classify_cprc(dt, reg);
+    classify_cprc(dt, reg, ctx);
     if (*reg)
         return;
 
@@ -239,18 +239,18 @@ void classify_arg(jl_datatype_t *dt, bool *reg,
     *need_rewrite = true;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
 {
-    if (Type *fptype = get_llvm_fptype(dt))
+    if (Type *fptype = get_llvm_fptype(dt, ctx))
         return fptype;
 
     bool reg = false;
     bool onstack = false;
     bool need_rewrite = false;
     if (isret)
-        classify_return_arg(dt, &reg, &onstack, &need_rewrite);
+        classify_return_arg(dt, &reg, &onstack, &need_rewrite, ctx);
     else
-        classify_arg(dt, &reg, &onstack, &need_rewrite);
+        classify_arg(dt, &reg, &onstack, &need_rewrite, ctx);
 
     if (!need_rewrite)
         return NULL;
@@ -276,7 +276,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
     if (align > 8)
         align = 8;
 
-    Type *T = Type::getIntNTy(jl_LLVMContext, align*8);
+    Type *T = Type::getIntNTy(ctx, align*8);
     return ArrayType::get(T, (jl_datatype_size(dt) + align - 1) / align);
 }
 

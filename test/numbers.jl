@@ -38,6 +38,24 @@ const ≣ = isequal # convenient for comparing NaNs
     @test xor(true,  false) == true
     @test xor(false, true)  == true
     @test xor(true,  true)  == false
+
+    @test false ⊼ false == true
+    @test true ⊼ false == true
+    @test false ⊼ true == true
+    @test true ⊼ true == false
+    @test nand(false, false) == true
+    @test nand(true, false) == true
+    @test nand(false, true) == true
+    @test nand(true, true) == false
+
+    @test false ⊽ false == true
+    @test true ⊽ false == false
+    @test false ⊽ true == false
+    @test true ⊽ true == false
+    @test nor(false, false) == true
+    @test nor(true, false) == false
+    @test nor(false, true) == false
+    @test nor(true, true) == false
 end
 @testset "bool operator" begin
     @test Bool(false) == false
@@ -415,14 +433,25 @@ end
     @test repr(-NaN) == "NaN"
     @test repr(Float64(pi)) == "3.141592653589793"
     # issue 6608
-    @test sprint(show, 666666.6, context=:compact => true) == "666667.0"
+    @test sprint(show, 666666.6, context=:compact => true) == "6.66667e5"
     @test sprint(show, 666666.049, context=:compact => true) == "666666.0"
     @test sprint(show, 666665.951, context=:compact => true) == "666666.0"
     @test sprint(show, 66.66666, context=:compact => true) == "66.6667"
-    @test sprint(show, -666666.6, context=:compact => true) == "-666667.0"
+    @test sprint(show, -666666.6, context=:compact => true) == "-6.66667e5"
     @test sprint(show, -666666.049, context=:compact => true) == "-666666.0"
     @test sprint(show, -666665.951, context=:compact => true) == "-666666.0"
     @test sprint(show, -66.66666, context=:compact => true) == "-66.6667"
+    @test sprint(show, -498796.2749933266, context=:compact => true) == "-4.98796e5"
+    @test sprint(show, 123456.78, context=:compact=>true) == "1.23457e5"
+
+    # issue 37941
+    @test sprint(show, MIME("text/plain"), Float16(0.0)) == "Float16(0.0)"
+    @test sprint(show, MIME("text/plain"), -Float16(0.0)) == "Float16(-0.0)"
+    @test sprint(show, MIME("text/plain"), Float16(5.0)) == "Float16(5.0)"
+    @test sprint(show, MIME("text/plain"), -Float16(5.0)) == "Float16(-5.0)"
+    @test sprint(show, MIME("text/plain"), Float16(Inf)) == "Inf16"
+    @test sprint(show, MIME("text/plain"), -Float16(Inf)) == "-Inf16"
+    @test sprint(show, MIME("text/plain"), Float16(NaN)) == "NaN16"
 
     @test repr(1.0f0) == "1.0f0"
     @test repr(-1.0f0) == "-1.0f0"
@@ -460,7 +489,7 @@ end
     @test sign(-1//0) == -1
     @test isa(sign(2//3), Rational{Int})
     @test isa(2//3 + 2//3im, Complex{Rational{Int}})
-    @test isa(sign(2//3 + 2//3im), Complex{Float64})
+    @test isa(sign(2//3 + 2//3im), ComplexF64)
     @test sign(one(UInt)) == 1
     @test sign(zero(UInt)) == 0
 
@@ -1680,8 +1709,7 @@ end
     @test isa(0b0000000000000000000000000000000000000000000000000000000000000000,UInt64)
     @test isa(0b00000000000000000000000000000000000000000000000000000000000000000,UInt128)
     @test isa(0b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,UInt128)
-    # remove BigInt unsigned integer literals #11105
-    @test_throws Meta.ParseError Meta.parse("0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+    @test isa(0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,BigInt)
     @test isa(0b11111111,UInt8)
     @test isa(0b111111111,UInt16)
     @test isa(0b1111111111111111,UInt16)
@@ -1691,8 +1719,7 @@ end
     @test isa(0b1111111111111111111111111111111111111111111111111111111111111111,UInt64)
     @test isa(0b11111111111111111111111111111111111111111111111111111111111111111,UInt128)
     @test isa(0b11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,UInt128)
-    # remove BigInt unsigned integer literals #11105
-    @test_throws Meta.ParseError Meta.parse("0b111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
+    @test isa(0b111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,BigInt)
 end
 @testset "octal literals" begin
     @test 0o10 == 0x8
@@ -1708,8 +1735,7 @@ end
     @test isa(0o000000000000000000000,UInt64)
     @test isa(0o0000000000000000000000,UInt64)
     @test isa(0o000000000000000000000000000000000000000000,UInt128)
-    # remove BigInt unsigned integer literals #11105
-    @test_throws Meta.ParseError Meta.parse("0o00000000000000000000000000000000000000000000")
+    @test isa(0o00000000000000000000000000000000000000000000,BigInt)
     @test isa(0o11,UInt8)
     @test isa(0o111,UInt8)
     @test isa(0o11111,UInt16)
@@ -1721,9 +1747,8 @@ end
     @test isa(0o111111111111111111111111111111111111111111,UInt128)
     @test isa(0o1111111111111111111111111111111111111111111,UInt128)
     @test isa(0o3777777777777777777777777777777777777777777,UInt128)
-    @test_throws Meta.ParseError Meta.parse("0o4000000000000000000000000000000000000000000")
-    # remove BigInt unsigned integer literals #11105
-    @test_throws Meta.ParseError Meta.parse("0o11111111111111111111111111111111111111111111")
+    @test isa(0o11111111111111111111111111111111111111111111,BigInt)
+    @test 0o4000000000000000000000000000000000000000000 == 340282366920938463463374607431768211456
     @test isa(0o077, UInt8)
     @test isa(0o377, UInt8)
     @test isa(0o400, UInt16)
@@ -1739,7 +1764,6 @@ end
     @test isa(0o0000000000000000000000000000000000000000000, UInt128)
     @test isa(0o1000000000000000000000000000000000000000000, UInt128)
     @test isa(0o2000000000000000000000000000000000000000000, UInt128)
-    @test_throws Meta.ParseError Meta.parse("0o4000000000000000000000000000000000000000000")
 
     @test String([0o110, 0o145, 0o154, 0o154, 0o157, 0o054, 0o040, 0o127, 0o157, 0o162, 0o154, 0o144, 0o041]) == "Hello, World!"
 
@@ -1754,8 +1778,7 @@ end
     @test isa(0x0000000000000000,UInt64)
     @test isa(0x00000000000000000,UInt128)
     @test isa(0x00000000000000000000000000000000,UInt128)
-    # remove BigInt unsigned integer literals #11105
-    @test_throws Meta.ParseError Meta.parse("0x000000000000000000000000000000000")
+    @test isa(0x000000000000000000000000000000000,BigInt)
 
     @test isa(0x11,UInt8)
     @test isa(0x111,UInt16)
@@ -1766,8 +1789,7 @@ end
     @test isa(0x1111111111111111,UInt64)
     @test isa(0x11111111111111111,UInt128)
     @test isa(0x11111111111111111111111111111111,UInt128)
-    # remove BigInt unsigned integer literals #11105
-    @test_throws Meta.ParseError Meta.parse("0x111111111111111111111111111111111")
+    @test isa(0x111111111111111111111111111111111,BigInt)
 end
 @testset "minus sign and unsigned literals" begin
     # "-" is not part of unsigned literals
@@ -1781,13 +1803,17 @@ end
     @test -0o0000000000000000000001 == -(0o0000000000000000000001)
     @test -0b00000000000000000000000000000000000000000000000000000000000000001 ==
         -(0b00000000000000000000000000000000000000000000000000000000000000001)
+    @test -0x000000000000000000000000000000001 == -(0x000000000000000000000000000000001)
+    @test -0o0000000000000000000000000000000000000000001 ==
+        -(0o0000000000000000000000000000000000000000001)
+    @test -0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001 ==
+        -(0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
 
     @test isa(-0x00,UInt8)
     @test isa(-0x0000000000000000,UInt64)
     @test isa(-0x00000000000000000,UInt128)
     @test isa(-0x00000000000000000000000000000000,UInt128)
-    # remove BigInt unsigned integer literals #11105
-    @test_throws Meta.ParseError Meta.parse("-0x000000000000000000000000000000000")
+    @test isa(-0x000000000000000000000000000000000,BigInt)
 end
 @testset "Float32 literals" begin
     @test isa(1f0,Float32)
@@ -2013,8 +2039,9 @@ end
 end
 @testset "nextprod" begin
     @test_throws ArgumentError nextprod([2,3,5],Int128(typemax(Int))+1)
-    @test nextprod([2,3,5],30) == 30
+    @test nextprod([2,3,5],30) == nextprod((2,3,5),30) == 30
     @test nextprod([2,3,5],33) == 36
+    @test nextprod([3,5],33) == nextprod(3:2:5,33) == 45
 end
 @testset "nextfloat/prevfloat" begin
     @test nextfloat(0.0) == 5.0e-324
@@ -2280,6 +2307,23 @@ end
         @test_throws BoundsError getindex(x, 1, 0)
     end
 end
+@testset "get(x::Number, ...)" begin
+    for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
+        @test get(x, 1, 99) == x
+        @test get(x, (), 99) == x
+        @test get(x, (1,), 99) == x
+        @test get(x, 2, 99) == 99
+        @test get(x, 0, pi) == pi
+        @test get(x, (1,2), pi) == pi
+        c = Ref(0)
+        @test get(() -> c[]+=1, x, 1) == x
+        @test get(() -> c[]+=1, x, ()) == x
+        @test get(() -> c[]+=1, x, (1,1,1)) == x
+        @test get(() -> c[]+=1, x, 2) == 1
+        @test get(() -> c[]+=1, x, -1) == 2
+        @test get(() -> c[]+=1, x, (3,2,1)) == 3
+    end
+end
 @testset "copysign and flipsign" begin
     # copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
     # flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, x)
@@ -2400,7 +2444,12 @@ end
     @test size(1) == ()
     @test length(1) == 1
     @test firstindex(1) == 1
+    @test firstindex(1, 1) == 1
+    @test_throws BoundsError firstindex(1,0)
     @test lastindex(1) == 1
+    @test lastindex(1, 1) == 1
+    @test 1[end,end] == 1
+    @test_throws BoundsError lastindex(1,0)
     @test eltype(Integer) == Integer
 end
 
@@ -2474,6 +2523,17 @@ end
     @test rem(T(-1.5), T(2), RoundNearest) == 0.5
     @test rem(T(-1.5), T(2), RoundDown)    == 0.5
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
+    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp]
+        @test isnan(rem(T(1), T(0), mode))
+        @test isnan(rem(T(Inf), T(2), mode))
+        @test isnan(rem(T(1), T(NaN), mode))
+        # FIXME: The broken case erroneously returns -Inf
+        @test rem(T(4), floatmin(T) * 2, mode) == 0 broken=(T == BigFloat && mode == RoundUp)
+    end
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundToZero),  -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearest), -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundDown),    0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),      0.0)
 end
 
 @testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
@@ -2506,6 +2566,14 @@ end
     @test rem2pi(T(-4), RoundNearest) ≈ 2pi-4
     @test rem2pi(T(-4), RoundDown)    ≈ 2pi-4
     @test rem2pi(T(-4), RoundUp)      == -4
+    @test rem2pi(T(8), RoundToZero)  ≈ 8-2pi
+    @test rem2pi(T(8), RoundNearest) ≈ 8-2pi
+    @test rem2pi(T(8), RoundDown)    ≈ 8-2pi
+    @test rem2pi(T(8), RoundUp)      ≈ 8-4pi
+    @test rem2pi(T(-8), RoundToZero)  ≈ -8+2pi
+    @test rem2pi(T(-8), RoundNearest) ≈ -8+2pi
+    @test rem2pi(T(-8), RoundDown)    ≈ -8+4pi
+    @test rem2pi(T(-8), RoundUp)      ≈ -8+2pi
 end
 
 import Base.^
@@ -2521,7 +2589,7 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     @test x^p == 1
     @test x^2 == 2
     @test [x, x, x].^2 == [2, 2, 2]
-    for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, Complex{Float64})
+    for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, ComplexF64)
         for p in -4:4
             v = eval(:($T(2)^$p))
             @test 2.0^p == v
@@ -2584,6 +2652,10 @@ end
     @test !isone(triu(fill(1, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
     @test isone(Matrix(1I, 5, 5))
+    @test !isone(view(rand(5,5), [1,3,4], :))
+    Dv = view(Diagonal([1,1, 1]), [1,2], 1:2)
+    @test isone(Dv)
+    @test (@allocated isone(Dv)) == 0
     @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end
 
@@ -2675,4 +2747,32 @@ end
             end
         end
     end
+end
+
+@testset "constructor inferability for $T" for T in [AbstractFloat, #=BigFloat,=# Float16,
+        Float32, Float64, Integer, Bool, Signed, BigInt, Int128, Int16, Int32, Int64, Int8,
+        Unsigned, UInt128, UInt16, UInt32, UInt64, UInt8]
+    @test all(R -> R<:T, Base.return_types(T))
+end
+@testset "constructor inferability for BigFloat" begin
+    T = BigFloat
+    @test_broken all(R -> R<:T, Base.return_types(T))
+    @test all(m -> m.file == Symbol("deprecated.jl"),
+        collect(methods(T))[findall(R -> !(R<:T), Base.return_types(T))])
+end
+
+@testset "generic isfinite" begin
+    @test invoke(isfinite, Tuple{Number}, 0.0) == true
+    @test invoke(isfinite, Tuple{Number}, NaN) == false
+    @test invoke(isfinite, Tuple{Number}, Inf) == false
+end
+
+struct MyRealFld <: Real
+    x::Real
+end
+@testset "fallback error throwing for fld/cld" begin
+    a = MyRealFld(2.0)
+    b = MyRealFld(3.0)
+    @test_throws MethodError fld(a, b)
+    @test_throws MethodError cld(a, b)
 end

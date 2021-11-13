@@ -123,7 +123,7 @@ typedef enum {
 } jl_cpu_feature_t;
 #undef JL_FEATURE_DEF_NAME
 
-int jl_test_cpu_feature(jl_cpu_feature_t feature);
+JL_DLLEXPORT int jl_test_cpu_feature(jl_cpu_feature_t feature);
 
 static const uint32_t jl_sysimg_tag_mask = 0x80000000u;
 static const uint32_t jl_sysimg_val_mask = ~((uint32_t)0x80000000u);
@@ -166,6 +166,10 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);
 
+JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);
+JL_DLLEXPORT int32_t jl_get_zero_subnormals(void);
+JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault);
+JL_DLLEXPORT int32_t jl_get_default_nans(void);
 #ifdef __cplusplus
 }
 
@@ -173,7 +177,7 @@ JL_DLLEXPORT void jl_dump_host_cpu(void);
 #include <string>
 #include <vector>
 
-extern bool jl_processor_print_help;
+extern JL_DLLEXPORT bool jl_processor_print_help;
 
 /**
  * Returns the CPU name and feature string to be used by LLVM JIT.
@@ -181,14 +185,14 @@ extern bool jl_processor_print_help;
  * If the detected/specified CPU name is not available on the LLVM version specified,
  * a fallback CPU name will be used. Unsupported features will be ignored.
  */
-std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags);
+extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags);
 
 /**
  * Returns the CPU name and feature string to be used by LLVM disassembler.
  *
  * This will return a generic CPU name and a full feature string.
  */
-const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void);
+extern "C" JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void);
 
 struct jl_target_spec_t {
     // LLVM target name
@@ -205,8 +209,7 @@ struct jl_target_spec_t {
 /**
  * Return the list of targets to clone
  */
-std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void);
+extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void);
 std::string jl_get_cpu_name_llvm(void);
 std::string jl_get_cpu_features_llvm(void);
-std::string jl_format_filename(llvm::StringRef output_pattern);
 #endif

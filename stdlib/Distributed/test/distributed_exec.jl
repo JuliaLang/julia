@@ -63,7 +63,7 @@ let
     count_condition = Condition()
 
     function remote_wait(c)
-        @async begin
+        @async_logerr begin
             count += 1
             remote(take!)(c)
             count -= 1
@@ -87,7 +87,7 @@ let
         @test count == testcount
         put!(c, "foo")
         testcount -= 1
-        wait(count_condition)
+        (count == testcount) || wait(count_condition)
         @test count == testcount
         @test isready(pool) == true
     end
@@ -106,7 +106,7 @@ let
         @test count == testcount
         put!(c, "foo")
         testcount -= 1
-        wait(count_condition)
+        (count == testcount) || wait(count_condition)
         @test count == testcount
         @test isready(pool) == true
     end
@@ -132,6 +132,39 @@ end
 testf(id_me)
 testf(id_other)
 
+function poll_while(f::Function; timeout_seconds::Integer = 120)
+    start_time = time_ns()
+    while f()
+        sleep(1)
+        if ( ( time_ns() - start_time )/1e9 ) > timeout_seconds
+            @error "Timed out" timeout_seconds
+            return false
+        end
+    end
+    return true
+end
+
+function _getenv_include_thread_unsafe()
+    environment_variable_name = "JULIA_TEST_INCLUDE_THREAD_UNSAFE"
+    default_value = "false"
+    environment_variable_value = strip(get(ENV, environment_variable_name, default_value))
+    b = parse(Bool, environment_variable_value)::Bool
+    return b
+end
+const _env_include_thread_unsafe = _getenv_include_thread_unsafe()
+function include_thread_unsafe()
+    if Threads.nthreads() > 1
+        if _env_include_thread_unsafe
+            return true
+        end
+        msg = "Skipping a thread-unsafe test because `Threads.nthreads() > 1`"
+        @warn msg Threads.nthreads()
+        Test.@test_broken false
+        return false
+    end
+    return true
+end
+
 # Distributed GC tests for Futures
 function test_futures_dgc(id)
     f = remotecall(myid, id)
@@ -143,8 +176,7 @@ function test_futures_dgc(id)
     @test fetch(f) == id
     @test f.v !== nothing
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
-
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid))
 
     # if unfetched, it should be deleted after a finalize
     f = remotecall(myid, id)
@@ -153,7 +185,7 @@ function test_futures_dgc(id)
     @test f.v === nothing
     finalize(f)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid))
 end
 
 test_futures_dgc(id_me)
@@ -243,7 +275,7 @@ function test_remoteref_dgc(id)
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == false
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid))
 end
 test_remoteref_dgc(id_me)
 test_remoteref_dgc(id_other)
@@ -256,10 +288,14 @@ let wid1 = workers()[1],
     fstore = RemoteChannel(wid2)
 
     put!(fstore, rr)
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    if include_thread_unsafe()
+        @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    end
     finalize(rr) # finalize locally
     yield() # flush gc msgs
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    if include_thread_unsafe()
+        @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    end
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
     sleep(0.5) # to ensure that wid2 messages have been executed on wid1
     @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == false
@@ -267,7 +303,7 @@ end
 
 # Tests for issue #23109 - should not hang.
 f = @spawnat :any rand(1, 1)
-@sync begin
+@Base.Experimental.sync begin
     for _ in 1:10
         @async fetch(f)
     end
@@ -275,7 +311,7 @@ end
 
 wid1, wid2 = workers()[1:2]
 f = @spawnat wid1 rand(1,1)
-@sync begin
+@Base.Experimental.sync begin
     @async fetch(f)
     @async remotecall_fetch(()->fetch(f), wid2)
 end
@@ -439,7 +475,7 @@ catch ex
     # test showerror
     err_str = sprint(showerror, ex)
     err_one_str = sprint(showerror, ex.exceptions[1])
-    @test err_str == err_one_str * "\n\n...and 4 more exception(s).\n"
+    @test err_str == err_one_str * "\n\n...and 4 more exceptions.\n"
 end
 @test sprint(showerror, CompositeException()) == "CompositeException()\n"
 
@@ -853,6 +889,13 @@ end
         return :OK
     end, id_other, rc_unbuffered) == :OK
 
+# github issue 33972
+rc_unbuffered_other = RemoteChannel(()->Channel{Int}(0), id_other)
+close(rc_unbuffered_other)
+try; take!(rc_unbuffered_other); catch; end
+@test !remotecall_fetch(rc -> islocked(Distributed.lookup_ref(remoteref_id(rc)).synctake),
+                        id_other, rc_unbuffered_other)
+
 # github PR #14456
 n = DoFullTest ? 6 : 5
 for i = 1:10^n
@@ -1005,30 +1048,8 @@ end
 
 # Test addprocs enable_threaded_blas parameter
 
-const get_num_threads = function() # anonymous so it will be serialized when called
-    blas = LinearAlgebra.BLAS.vendor()
-    # Wrap in a try to catch unsupported blas versions
-    try
-        if blas == :openblas
-            return ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ())
-        elseif blas == :openblas64
-            return ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ())
-        elseif blas == :mkl
-            return ccall((:MKL_Get_Max_Num_Threads, Base.libblas_name), Cint, ())
-        end
-
-        # OSX BLAS looks at an environment variable
-        if Sys.isapple()
-            return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
-        end
-    catch
-    end
-
-    return nothing
-end
-
 function get_remote_num_threads(processes_added)
-    return [remotecall_fetch(get_num_threads, proc_id) for proc_id in processes_added]
+    return [remotecall_fetch(BLAS.get_num_threads, proc_id) for proc_id in processes_added]
 end
 
 function test_blas_config(pid, expected)
@@ -1041,12 +1062,11 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    master_blas_thread_count = get_num_threads()
+    master_blas_thread_count = BLAS.get_num_threads()
     if master_blas_thread_count === nothing
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    @test master_blas_thread_count <= 8 # check that Base set the environment variable in __init__ before LinearAlgebra dlopen'd it
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)
@@ -1055,7 +1075,7 @@ function test_add_procs_threaded_blas()
     end
 
     # Master thread should not have changed
-    @test get_num_threads() == master_blas_thread_count
+    @test BLAS.get_num_threads() == master_blas_thread_count
 
     # Threading disabled in children by default
     thread_counts_by_process = get_remote_num_threads(processes_added)
@@ -1069,9 +1089,9 @@ function test_add_procs_threaded_blas()
         test_blas_config(proc_id, true)
     end
 
-    @test get_num_threads() == master_blas_thread_count
+    @test BLAS.get_num_threads() == master_blas_thread_count
 
-    # BLAS.set_num_threads(`num`) doesn't  cause get_num_threads to return `num`
+    # BLAS.set_num_threads(`num`) doesn't  cause BLAS.get_num_threads to return `num`
     # depending on the machine, the BLAS version, and BLAS configuration, so
     # we need a very lenient test.
     thread_counts_by_process = get_remote_num_threads(processes_added)
@@ -1083,6 +1103,7 @@ end
 test_add_procs_threaded_blas()
 
 #19687
+if false ### TODO: The logic that is supposed to implement this is racy - Disabled for now
 # ensure no race conditions between rmprocs and addprocs
 for i in 1:5
     p = addprocs_with_testenv(1)[1]
@@ -1111,6 +1132,7 @@ if DoFullTest
     while any(in(procs()), pids)
         sleep(0.1)
     end
+end
 end
 
 # Test addprocs/rmprocs from master node only
@@ -1397,6 +1419,13 @@ let thrown = false
     @test thrown
 end
 
+# issue #34333
+let
+    @test fetch(remotecall(Float64, id_other, 1)) == Float64(1)
+    @test fetch(remotecall_wait(Float64, id_other, 1)) == Float64(1)
+    @test remotecall_fetch(Float64, id_other, 1) == Float64(1)
+end
+
 #19463
 function foo19463()
     w1 = workers()[1]
@@ -1481,12 +1510,18 @@ let
         mkdir(tmp_dir2)
         write(tmp_file, "23.32 + 32 + myid() + include(\"testfile2\")")
         write(tmp_file2, "myid() * 2")
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile"))"),
-                     include("testfile"))
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile2"))"),
-                     include("testfile2"))
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "2", "testfile"))"),
-                     include("2/testfile"))
+        function test_include_fails_to_open_file(fname)
+            try
+                include(fname)
+            catch exc
+                path = joinpath(@__DIR__, fname)
+                @test exc isa SystemError
+                @test exc.prefix == "opening file $(repr(path))"
+            end
+        end
+        test_include_fails_to_open_file("testfile")
+        test_include_fails_to_open_file("testfile2")
+        test_include_fails_to_open_file(joinpath("2", "testfile2"))
         @test include(tmp_file) == 58.32
         @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
     finally
@@ -1672,6 +1707,23 @@ end
 let (h, t) = Distributed.head_and_tail(Int[], 0)
     @test h == []
     @test collect(t) == []
+end
+
+# issue #35937
+let e = @test_throws RemoteException pmap(1) do _
+            wait(@async error(42))
+        end
+    # check that the inner TaskFailedException is correctly formed & can be printed
+    es = sprint(showerror, e.value)
+    @test contains(es, ":\nTaskFailedException\nStacktrace:\n")
+    @test contains(es, "\n\n    nested task error:")
+    @test contains(es, "\n\n    nested task error: 42\n")
+end
+
+# issue #27429, propagate relative `include` path to workers
+@everywhere include("includefile.jl")
+for p in procs()
+    @test @fetchfrom(p, i27429) == 27429
 end
 
 include("splitrange.jl")

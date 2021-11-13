@@ -609,3 +609,18 @@ let s = join(rand('a':'z', 1024)), io = IOBuffer()
     s2 = deserialize(io)
     @test Base.summarysize(s2) < 2*sizeof(s)
 end
+
+# issue #39895
+@eval Main begin
+    using Test, Serialization
+    let g = gensym(:g)
+        closure = eval(:(f -> $g(x) = f(x)))
+        inc(x) = x + 1
+        b = IOBuffer()
+        serialize(b, closure(inc))
+        seekstart(b)
+        f = deserialize(b)
+        # this should not crash
+        @test_broken f(1) == 2
+    end
+end

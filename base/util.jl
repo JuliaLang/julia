@@ -45,12 +45,13 @@ const disable_text_style = Dict{Symbol,String}(
 
 # Create a docstring with an automatically generated list
 # of colors.
-available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
-const possible_formatting_symbols = [:normal, :bold, :default]
-available_text_colors = cat(
-    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
-    sort!(setdiff(  available_text_colors, possible_formatting_symbols));
-    dims=1)
+let color_syms = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors))),
+    formatting_syms = [:normal, :bold, :default]
+    global const available_text_colors = cat(
+        sort!(intersect(color_syms, formatting_syms), rev=true),
+        sort!(setdiff(  color_syms, formatting_syms));
+        dims=1)
+end
 
 const available_text_colors_docstring =
     string(join([string("`:", key,"`")
@@ -66,9 +67,11 @@ Printing with the color `:nothing` will print the string without modifications.
 """
 text_colors
 
-function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
+function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}, io::IO, args...;
+        bold::Bool = false, underline::Bool = false, blink::Bool = false,
+        reverse::Bool = false, hidden::Bool = false)
     buf = IOBuffer()
-    iscolor = get(io, :color, false)
+    iscolor = get(io, :color, false)::Bool
     try f(IOContext(buf, io), args...)
     finally
         str = String(take!(buf))
@@ -76,12 +79,25 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
             print(io, str)
         else
             bold && color === :bold && (color = :nothing)
+            underline && color === :underline && (color = :nothing)
+            blink && color === :blink && (color = :nothing)
+            reverse && color === :reverse && (color = :nothing)
+            hidden && color === :hidden && (color = :nothing)
             enable_ansi  = get(text_colors, color, text_colors[:default]) *
-                               (bold ? text_colors[:bold] : "")
-            disable_ansi = (bold ? disable_text_style[:bold] : "") *
+                               (bold ? text_colors[:bold] : "") *
+                               (underline ? text_colors[:underline] : "") *
+                               (blink ? text_colors[:blink] : "") *
+                               (reverse ? text_colors[:reverse] : "") *
+                               (hidden ? text_colors[:hidden] : "")
+
+            disable_ansi = (hidden ? disable_text_style[:hidden] : "") *
+                           (reverse ? disable_text_style[:reverse] : "") *
+                           (blink ? disable_text_style[:blink] : "") *
+                           (underline ? disable_text_style[:underline] : "") *
+                           (bold ? disable_text_style[:bold] : "") *
                                get(disable_text_style, color, text_colors[:default])
             first = true
-            for line in split(str, '\n')
+            for line in eachsplit(str, '\n')
                 first || print(buf, '\n')
                 first = false
                 isempty(line) && continue
@@ -93,18 +109,27 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
 end
 
 """
-    printstyled([io], xs...; bold::Bool=false, color::Union{Symbol,Int}=:normal)
+    printstyled([io], xs...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Symbol,Int}=:normal)
 
 Print `xs` in a color specified as a symbol or integer, optionally in bold.
 
-`color` may take any of the values $(Base.available_text_colors_docstring)
+Keyword `color` may take any of the values $(Base.available_text_colors_docstring)
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
-If the keyword `bold` is given as `true`, the result will be printed in bold.
+
+Keywords `bold=true`, `underline=true`, `blink=true` are self-explanatory.
+Keyword `reverse=true` prints with foreground and background colors exchanged,
+and `hidden=true` should be invisibe in the terminal but can still be copied.
+These properties can be used in any combination.
+
+See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
+
+!!! compat "Julia 1.7"
+    Keywords except `color` and `bold` were added in Julia 1.7.
 """
-printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    with_output_color(print, color, io, msg...; bold=bold)
-printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    printstyled(stdout, msg...; bold=bold, color=color)
+printstyled(io::IO, msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+    with_output_color(print, color, io, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
+printstyled(msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+    printstyled(stdout, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
     Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
@@ -153,13 +178,14 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                   elseif opts.check_bounds == 2
                       "no" # off
                   else
-                      "" # "default"
+                      "" # default = "auto"
                   end
         isempty(check_bounds) || push!(addflags, "--check-bounds=$check_bounds")
     end
     opts.can_inline == 0 && push!(addflags, "--inline=no")
     opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
+    opts.opt_level_min == 0 || push!(addflags, "--min-optlevel=$(opts.opt_level_min)")
     push!(addflags, "-g$(opts.debug_level)")
     if opts.code_coverage != 0
         # Forward the code-coverage flag only if applicable (if the filename is pid-dependent)
@@ -185,6 +211,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     end
     if opts.startupfile == 2
         push!(addflags, "--startup-file=no")
+    end
+    if opts.use_sysimage_native_code == 0
+        push!(addflags, "--sysimage-native-code=no")
     end
     return `$julia -C$cpu_target -J$image_file $addflags`
 end
@@ -305,7 +334,13 @@ if Sys.iswindows()
         succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
              CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
-        @assert succeeded
+        if !succeeded
+            credbuf = resize!(credbuf, credbufsize[])
+            succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
+                (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
+                 CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
+            @assert succeeded
+        end
 
         # Step 2: Create the actual dialog
         #      2.1: Set up the window
@@ -363,6 +398,8 @@ end
 
 unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
 
+_crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
+    unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
 _crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
     unsafe_crc32c(a, length(a) % Csize_t, crc)
 
@@ -384,6 +421,8 @@ _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
 _crc32c(uuid::UUID, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
+_crc32c(x::UInt64, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt64}, Csize_t), crc, x, 8)
 
 """
     @kwdef typedef
@@ -422,6 +461,7 @@ Stacktrace:
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
     expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
+    expr = expr::Expr
     T = expr.args[2]
     if T isa Expr && T.head === :<:
         T = T.args[1]
@@ -437,12 +477,13 @@ macro kwdef(expr)
         if T isa Symbol
             kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
         elseif T isa Expr && T.head === :curly
+            T = T::Expr
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
             S = T.args[1]
             P = T.args[2:end]
-            Q = [U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
+            Q = Any[U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
             kwdefs = quote
                 ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
@@ -517,7 +558,7 @@ to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)
@@ -529,6 +570,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
     seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
+    ENV2["JULIA_DEPOT_PATH"] = mktempdir(; cleanup = true)
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))

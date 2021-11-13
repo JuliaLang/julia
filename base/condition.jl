@@ -5,7 +5,7 @@
 @noinline function concurrency_violation()
     # can be useful for debugging
     #try; error(); catch; ccall(:jlbacktrace, Cvoid, ()); end
-    error("concurrency violation detected")
+    throw(ConcurrencyViolationError("lock must be held"))
 end
 
 """
@@ -58,7 +58,7 @@ islocked(::AlwaysLockedST) = true
     GenericCondition
 
 Abstract implementation of a condition object
-for synchonizing tasks objects with a given lock.
+for synchronizing tasks objects with a given lock.
 """
 struct GenericCondition{L<:AbstractLock}
     waitq::InvasiveLinkedList{Task}
@@ -76,7 +76,25 @@ trylock(c::GenericCondition) = trylock(c.lock)
 islocked(c::GenericCondition) = islocked(c.lock)
 
 lock(f, c::GenericCondition) = lock(f, c.lock)
-unlock(f, c::GenericCondition) = unlock(f, c.lock)
+
+# have waiter wait for c
+function _wait2(c::GenericCondition, waiter::Task)
+    ct = current_task()
+    assert_havelock(c)
+    push!(c.waitq, waiter)
+    # since _wait2 is similar to schedule, we should observe the sticky bit now
+    if waiter.sticky && Threads.threadid(waiter) == 0
+        # Issue #41324
+        # t.sticky && tid == 0 is a task that needs to be co-scheduled with
+        # the parent task. If the parent (current_task) is not sticky we must
+        # set it to be sticky.
+        # XXX: Ideally we would be able to unset this
+        ct.sticky = true
+        tid = Threads.threadid()
+        ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
+    end
+    return
+end
 
 """
     wait([x])
@@ -84,7 +102,8 @@ unlock(f, c::GenericCondition) = unlock(f, c.lock)
 Block the current task until some event occurs, depending on the type of the argument:
 
 * [`Channel`](@ref): Wait for a value to be appended to the channel.
-* [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
+* [`Condition`](@ref): Wait for [`notify`](@ref) on a condition and return the `val`
+  parameter passed to `notify`.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
   can be used to determine success or failure.
 * [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, a
@@ -99,8 +118,7 @@ proceeding.
 """
 function wait(c::GenericCondition)
     ct = current_task()
-    assert_havelock(c)
-    push!(c.waitq, ct)
+    _wait2(c, ct)
     token = unlockall(c.lock)
     try
         return wait()
