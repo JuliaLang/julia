@@ -87,12 +87,20 @@ end
 function Base.notify(ev::OneWayEvent)
     state = @atomic ev.state
     while state !== OWE_NOTIFYING
+        # Spin until we successfully update the state to OWE_NOTIFYING:
         state, ok = @atomicreplace(ev.state, state => OWE_NOTIFYING)
         if ok
             if state == OWE_WAITING
+                # OWE_WAITING -> OWE_NOTIFYING transition means that the waiter task is
+                # already waiting or about to call `wait`. The notifier task must wake up
+                # the waiter task.
                 schedule(ev.task)
             else
                 @assert state == OWE_EMPTY
+                # Since we are assuming that there is only one notifier task (for
+                # simplicity), we know that the other possible case here is OWE_EMPTY.
+                # We do not need to do anything because we know that the waiter task has
+                # not called `wait(ev::OneWayEvent)` yet.
             end
             break
         end
@@ -102,9 +110,17 @@ end
 
 function Base.wait(ev::OneWayEvent)
     ev.task = current_task()
-    _, ok = @atomicreplace(ev.state, OWE_EMPTY => OWE_WAITING)
+    state, ok = @atomicreplace(ev.state, OWE_EMPTY => OWE_WAITING)
     if ok
+        # OWE_EMPTY -> OWE_WAITING transition means that the notifier task is guaranteed to
+        # invoke OWE_WAITING -> OWE_NOTIFYING transition.  The waiter task must call
+        # `wait()` immediately.  In particular, it MUST NOT invoke any function that may
+        # yield to the scheduler at this point in code.
         wait()
+    else
+        @assert state == OWE_NOTIFYING
+        # Otherwise, the `state` must have already been moved to OWE_NOTIFYING by the
+        # notifier task.
     end
     return
 end
