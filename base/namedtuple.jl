@@ -220,7 +220,7 @@ function _foldl_impl(
             ex = :(op($ex, $(QuoteNode(n)) => vals[$i]))
         end
         quote
-            @_inline_meta
+            @inline
             vals = Tuple(itr.data)
             $ex
         end
@@ -333,7 +333,7 @@ end
 mergewith(combine, a::NamedTuple, b::NamedTuple) = mergewith(combine, a, pairs(b))
 function mergewith(combine, a::NamedTuple, b)
     return _foldl_impl(a, b) do nt, (k, v)
-        @_inline_meta
+        @inline
         merge(nt, (; k => haskey(nt, k) ? combine(nt[k], v) : v))
     end
 end
