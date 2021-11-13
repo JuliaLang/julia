@@ -59,7 +59,6 @@ static void jl_try_throw_sigint(void)
 
 void __cdecl crt_sig_handler(int sig, int num)
 {
-    jl_task_t *ct = jl_current_task;
     CONTEXT Context;
     switch (sig) {
     case SIGFPE:
@@ -92,7 +91,7 @@ void __cdecl crt_sig_handler(int sig, int num)
         RtlCaptureContext(&Context);
         if (sig == SIGILL)
             jl_show_sigill(&Context);
-        jl_critical_error(sig, &Context);
+        jl_critical_error(sig, &Context, jl_get_current_task());
         raise(sig);
     }
 }
@@ -226,7 +225,8 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
 
 LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
-    jl_ptls_t ptls = jl_current_task->ptls;
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_INT_DIVIDE_BY_ZERO:
@@ -313,7 +313,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
         jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
-        jl_critical_error(0, ExceptionInfo->ContextRecord);
+        jl_critical_error(0, ExceptionInfo->ContextRecord, ct);
         static int recursion = 0;
         if (recursion++)
             exit(1);

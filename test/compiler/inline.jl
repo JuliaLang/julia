@@ -392,3 +392,147 @@ let f(x) = (x...,)
     # the the original apply call is not union-split, but the inserted `iterate` call is.
     @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
 end
+
+import Core.Compiler: argextype, singleton_type
+
+code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
+get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
+
+# check if `x` is a dynamic call of a given function
+function iscall((src, f)::Tuple{Core.CodeInfo,Function}, @nospecialize(x))
+    return iscall(x) do @nospecialize x
+        singleton_type(argextype(x, src, Any[])) === f
+    end
+end
+iscall(pred, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
+
+# check if `x` is a statically-resolved call of a function whose name is `sym`
+isinvoke(sym::Symbol, @nospecialize(x)) = isinvoke(mi->mi.def.name===sym, x)
+isinvoke(pred, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.args[1]::Core.MethodInstance)
+
+# https://github.com/JuliaLang/julia/issues/42754
+# inline union-split constant-prop'ed results
+mutable struct X42754
+    # NOTE in order to confuse `fieldtype_tfunc`, we need to have at least two fields with different types
+    a::Union{Nothing, Int}
+    b::Symbol
+end
+let code = get_code((X42754, Union{Nothing,Int})) do x, a
+        # this `setproperty` call would be union-split and constant-prop will happen for
+        # each signature: inlining would fail if we don't use constant-prop'ed source
+        # since the approximate inlining cost of `convert(fieldtype(X, sym), a)` would
+        # end up very high if we don't propagate `sym::Const(:a)`
+        x.a = a
+        x
+    end
+    @test all(code) do @nospecialize(x)
+        isinvoke(x, :setproperty!) && return false
+        if Meta.isexpr(x, :call)
+            f = x.args[1]
+            isa(f, GlobalRef) && f.name === :setproperty! && return false
+        end
+        return true
+    end
+end
+
+import Base: @constprop
+
+# test union-split callsite with successful and unsuccessful constant-prop' results
+@constprop :aggressive @inline f42840(xs, a::Int) = xs[a]             # should be successful, and inlined
+@constprop :none @noinline f42840(xs::AbstractVector, a::Int) = xs[a] # should be unsuccessful, but still statically resolved
+let src = code_typed1((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
+             f42840(xs, 2)
+         end
+    @test count(src.code) do @nospecialize x
+        iscall((src, getfield), x) # `(xs::Tuple{Int,Int,Int})[a::Const(2)]` => `getfield(xs, 2)`
+    end == 1
+    @test count(src.code) do @nospecialize x
+        isinvoke(:f42840, x)
+    end == 1
+end
+# a bit weird, but should handle this kind of case as well
+@constprop :aggressive @noinline g42840(xs, a::Int) = xs[a]         # should be successful, but only statically resolved
+@constprop :none @inline g42840(xs::AbstractVector, a::Int) = xs[a] # should be unsuccessful, still inlined
+let src = code_typed1((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
+        g42840(xs, 2)
+    end
+    @test count(src.code) do @nospecialize x
+        iscall((src, Base.arrayref), x) # `(xs::Vector{Int})[a::Const(2)]` => `Base.arrayref(true, xs, 2)`
+    end == 1
+    @test count(src.code) do @nospecialize x
+        isinvoke(:g42840, x)
+    end == 1
+end
+
+# test single, non-dispatchtuple callsite inlining
+
+@constprop :none @inline test_single_nondispatchtuple(@nospecialize(t)) =
+    isa(t, DataType) && t.name === Type.body.name
+let
+    code = get_code((Any,)) do x
+        test_single_nondispatchtuple(x)
+    end
+    @test all(code) do @nospecialize(x)
+        isinvoke(x, :test_single_nondispatchtuple) && return false
+        if Meta.isexpr(x, :call)
+            f = x.args[1]
+            isa(f, GlobalRef) && f.name === :test_single_nondispatchtuple && return false
+        end
+        return true
+    end
+end
+
+@constprop :aggressive @inline test_single_nondispatchtuple(c, @nospecialize(t)) =
+    c && isa(t, DataType) && t.name === Type.body.name
+let
+    code = get_code((Any,)) do x
+        test_single_nondispatchtuple(true, x)
+    end
+    @test all(code) do @nospecialize(x)
+        isinvoke(x, :test_single_nondispatchtuple) && return false
+        if Meta.isexpr(x, :call)
+            f = x.args[1]
+            isa(f, GlobalRef) && f.name === :test_single_nondispatchtuple && return false
+        end
+        return true
+    end
+end
+
+# force constant-prop' for `setproperty!`
+let m = Module()
+    code = @eval m begin
+        # if we don't force constant-prop', `T = fieldtype(Foo, ::Symbol)` will be union-split to
+        # `Union{Type{Any},Type{Int}` and it will make `convert(T, nothing)` too costly
+        # and it leads to inlining failure
+        mutable struct Foo
+            val
+            _::Int
+        end
+
+        function setter(xs)
+            for x in xs
+                x.val = nothing
+            end
+        end
+
+        $get_code(setter, (Vector{Foo},))
+    end
+
+    @test !any(x->isinvoke(x, :setproperty!), code)
+end
+
+# validate inlining processing
+
+@constprop :none @inline validate_unionsplit_inlining(@nospecialize(t)) = throw("invalid inlining processing detected")
+@constprop :none @noinline validate_unionsplit_inlining(i::Integer) = (println(IOBuffer(), "prevent inlining"); false)
+let
+    invoke(xs) = validate_unionsplit_inlining(xs[1])
+    @test invoke(Any[10]) === false
+end
+
+@constprop :aggressive @inline validate_unionsplit_inlining(c, @nospecialize(t)) = c && throw("invalid inlining processing detected")
+@constprop :aggressive @noinline validate_unionsplit_inlining(c, i::Integer) = c && (println(IOBuffer(), "prevent inlining"); false)
+let
+    invoke(xs) = validate_unionsplit_inlining(true, xs[1])
+    @test invoke(Any[10]) === false
+end

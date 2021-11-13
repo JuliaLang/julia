@@ -125,7 +125,7 @@ typedef struct _jl_ast_context_t {
 
 static jl_ast_context_t jl_ast_main_ctx;
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #else
 #define jl_ast_ctx(fl_ctx) container_of(fl_ctx, jl_ast_context_t, fl)

@@ -1,0 +1,36 @@
+From a5b5fd28ed03cb1ab524d24dc534c1fa167bf5a1 Mon Sep 17 00:00:00 2001
+From: Alex Arslan <ararslan@comcast.net>
+Date: Fri, 5 Nov 2021 16:58:41 -0700
+Subject: [PATCH] Fix table indexing in `dwarf_search_unwind_table`
+
+`table_len` is used as an index into `table`, assuming it represents the
+number of entries. However, it is defined as the number of entries
+multiplied by `sizeof(unw_word_t)`. This is accounted for in other
+places that use `table_len`, e.g. in `lookup`, which divides out the
+size of `unw_word_t`, but the indexing expression uses `table_len`
+directly. So when `table` has say 2 entries, we're actually looking at
+index 15 rather than 1 in the comparison. This can cause the conditional
+to erroneously evaluate to true, allowing the following line to
+segfault.
+
+This was observed with JIT compiled code from Julia with LLVM on
+FreeBSD.
+
+Co-Authored-By: Jameson Nash <vtjnash@gmail.com>
+---
+ src/dwarf/Gfind_proc_info-lsb.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/dwarf/Gfind_proc_info-lsb.c b/src/dwarf/Gfind_proc_info-lsb.c
+index 5e27a501..af4cbce8 100644
+--- a/src/dwarf/Gfind_proc_info-lsb.c
++++ b/src/dwarf/Gfind_proc_info-lsb.c
+@@ -866,7 +866,7 @@ dwarf_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+   if (as == unw_local_addr_space)
+     {
+       e = lookup (table, table_len, ip - ip_base);
+-      if (e && &e[1] < &table[table_len])
++      if (e && &e[1] < &table[table_len / sizeof (unw_word_t)])
+ 	last_ip = e[1].start_ip_offset + ip_base;
+       else
+ 	last_ip = di->end_ip;

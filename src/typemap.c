@@ -259,28 +259,28 @@ static int is_cache_leaf(jl_value_t *ty, int tparam)
     return (jl_is_concrete_type(ty) && (tparam || !jl_is_kind(ty)));
 }
 
-static jl_typemap_t **mtcache_hash_lookup_bp(jl_array_t *cache JL_PROPAGATES_ROOT, jl_value_t *ty) JL_NOTSAFEPOINT
+static _Atomic(jl_typemap_t*) *mtcache_hash_lookup_bp(jl_array_t *cache JL_PROPAGATES_ROOT, jl_value_t *ty) JL_NOTSAFEPOINT
 {
     if (cache == (jl_array_t*)jl_an_empty_vec_any)
         return NULL;
-    jl_typemap_t **pml = jl_table_peek_bp(cache, ty);
+    _Atomic(jl_typemap_t*) *pml = jl_table_peek_bp(cache, ty);
     JL_GC_PROMISE_ROOTED(pml); // clang-sa doesn't trust our JL_PROPAGATES_ROOT claim
     return pml;
 }
 
-static void mtcache_hash_insert(jl_array_t **cache, jl_value_t *parent, jl_value_t *key, jl_typemap_t *val)
+static void mtcache_hash_insert(_Atomic(jl_array_t*) *cache, jl_value_t *parent, jl_value_t *key, jl_typemap_t *val)
 {
     int inserted = 0;
-    jl_array_t *a = *cache;
+    jl_array_t *a = jl_atomic_load_relaxed(cache);
     if (a == (jl_array_t*)jl_an_empty_vec_any) {
         a = jl_alloc_vec_any(16);
-        *cache = a;
+        jl_atomic_store_release(cache, a);
         jl_gc_wb(parent, a);
     }
     a = jl_eqtable_put(a, key, val, &inserted);
     assert(inserted);
     if (a != *cache) {
-        *cache = a;
+        jl_atomic_store_release(cache, a);
         jl_gc_wb(parent, a);
     }
 }
@@ -299,7 +299,7 @@ static jl_typemap_t *mtcache_hash_lookup(jl_array_t *cache JL_PROPAGATES_ROOT, j
 static int jl_typemap_array_visitor(jl_array_t *a, jl_typemap_visitor_fptr fptr, void *closure)
 {
     size_t i, l = jl_array_len(a);
-    jl_typemap_t **data = (jl_typemap_t **)jl_array_data(a);
+    _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_data(a);
     for (i = 1; i < l; i += 2) {
         jl_value_t *d = jl_atomic_load_relaxed(&data[i]);
         JL_GC_PROMISE_ROOTED(d);
@@ -394,7 +394,7 @@ static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, 
 {
     JL_GC_PUSH1(&a);
     size_t i, l = jl_array_len(a);
-    jl_typemap_t **data = (jl_typemap_t **)jl_array_data(a);
+    _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_data(a);
     unsigned height = tparam & 2 ? jl_supertype_height((jl_datatype_t*)ty) : 0;
     for (i = 0; i < l; i += 2) {
         jl_value_t *t = jl_atomic_load_relaxed(&data[i]);
@@ -845,7 +845,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                     if (!ty || !jl_has_empty_intersection((jl_value_t*)jl_type_type, ty)) {
                         // couldn't figure out unique `a0` initial point, so scan all for matches
                         size_t i, l = jl_array_len(tname);
-                        jl_typemap_t **data = (jl_typemap_t **)jl_array_ptr_data(tname);
+                        _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_ptr_data(tname);
                         JL_GC_PUSH1(&tname);
                         for (i = 1; i < l; i += 2) {
                             jl_typemap_t *ml = jl_atomic_load_relaxed(&data[i]);
@@ -884,7 +884,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                 else {
                     // doing subtype, but couldn't figure out unique `ty`, so scan all for supertypes
                     size_t i, l = jl_array_len(name1);
-                    jl_typemap_t **data = (jl_typemap_t **)jl_array_ptr_data(name1);
+                    _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_ptr_data(name1);
                     JL_GC_PUSH1(&name1);
                     for (i = 1; i < l; i += 2) {
                         jl_typemap_t *ml = jl_atomic_load_relaxed(&data[i]);
@@ -1034,7 +1034,7 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
             else {
                 // couldn't figure out unique `name` initial point, so must scan all for matches
                 size_t i, l = jl_array_len(tname);
-                jl_typemap_t **data = (jl_typemap_t **)jl_array_ptr_data(tname);
+                _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_ptr_data(tname);
                 JL_GC_PUSH1(&tname);
                 for (i = 1; i < l; i += 2) {
                     jl_typemap_t *ml_or_cache = data[i];
@@ -1122,10 +1122,10 @@ static jl_typemap_level_t *jl_method_convert_list_to_cache(
 }
 
 static void jl_typemap_list_insert_(
-        jl_typemap_t *map, jl_typemap_entry_t **pml, jl_value_t *parent,
+        jl_typemap_t *map, _Atomic(jl_typemap_entry_t*) *pml, jl_value_t *parent,
         jl_typemap_entry_t *newrec)
 {
-    jl_typemap_entry_t *l = *pml;
+    jl_typemap_entry_t *l = jl_atomic_load_relaxed(pml);
     while ((jl_value_t*)l != jl_nothing) {
         if (newrec->isleafsig || !l->isleafsig)
             if (newrec->issimplesig || !l->issimplesig)
@@ -1141,37 +1141,39 @@ static void jl_typemap_list_insert_(
 }
 
 static void jl_typemap_insert_generic(
-        jl_typemap_t *map, jl_typemap_t **pml, jl_value_t *parent,
+        jl_typemap_t *map, _Atomic(jl_typemap_t*) *pml, jl_value_t *parent,
         jl_typemap_entry_t *newrec, int8_t offs)
 {
-    if (jl_typeof(*pml) == (jl_value_t*)jl_typemap_level_type) {
-        jl_typemap_level_insert_(map, (jl_typemap_level_t*)*pml, newrec, offs);
+    jl_typemap_t *ml = jl_atomic_load_relaxed(pml);
+    if (jl_typeof(ml) == (jl_value_t*)jl_typemap_level_type) {
+        jl_typemap_level_insert_(map, (jl_typemap_level_t*)ml, newrec, offs);
         return;
     }
 
-    unsigned count = jl_typemap_list_count_locked((jl_typemap_entry_t*)*pml);
+    unsigned count = jl_typemap_list_count_locked((jl_typemap_entry_t*)ml);
     if (count > MAX_METHLIST_COUNT) {
-        *pml = (jl_typemap_t*)jl_method_convert_list_to_cache(
-            map, (jl_typemap_entry_t *)*pml,
-            offs);
-        jl_gc_wb(parent, *pml);
-        jl_typemap_level_insert_(map, (jl_typemap_level_t*)*pml, newrec, offs);
+        ml = (jl_typemap_t*)jl_method_convert_list_to_cache(
+            map, (jl_typemap_entry_t*)ml, offs);
+        jl_atomic_store_release(pml, ml);
+        jl_gc_wb(parent, ml);
+        jl_typemap_level_insert_(map, (jl_typemap_level_t*)ml, newrec, offs);
         return;
     }
 
-    jl_typemap_list_insert_(map, (jl_typemap_entry_t **)pml,
+    jl_typemap_list_insert_(map, (_Atomic(jl_typemap_entry_t*)*)pml,
         parent, newrec);
 }
 
 static void jl_typemap_array_insert_(
-        jl_typemap_t *map, jl_array_t **cache, jl_value_t *key, jl_typemap_entry_t *newrec,
+        jl_typemap_t *map, _Atomic(jl_array_t*) *pcache, jl_value_t *key, jl_typemap_entry_t *newrec,
         jl_value_t *parent, int8_t offs)
 {
-    jl_typemap_t **pml = mtcache_hash_lookup_bp(*cache, key);
+    jl_array_t *cache = jl_atomic_load_relaxed(pcache);
+    _Atomic(jl_typemap_t*) *pml = mtcache_hash_lookup_bp(cache, key);
     if (pml != NULL)
-        jl_typemap_insert_generic(map, pml, (jl_value_t*)*cache, newrec, offs+1);
+        jl_typemap_insert_generic(map, pml, (jl_value_t*)cache, newrec, offs+1);
     else
-        mtcache_hash_insert(cache, parent, key, (jl_typemap_t*)newrec);
+        mtcache_hash_insert(pcache, parent, key, (jl_typemap_t*)newrec);
 }
 
 static void jl_typemap_level_insert_(
@@ -1276,7 +1278,7 @@ jl_typemap_entry_t *jl_typemap_alloc(
     newrec->simplesig = simpletype;
     newrec->func.value = newvalue;
     newrec->guardsigs = guardsigs;
-    newrec->next = (jl_typemap_entry_t*)jl_nothing;
+    jl_atomic_store_relaxed(&newrec->next, (jl_typemap_entry_t*)jl_nothing);
     newrec->min_world = min_world;
     newrec->max_world = max_world;
     newrec->va = isva;
@@ -1285,10 +1287,11 @@ jl_typemap_entry_t *jl_typemap_alloc(
     return newrec;
 }
 
-void jl_typemap_insert(jl_typemap_t **cache, jl_value_t *parent,
+void jl_typemap_insert(_Atomic(jl_typemap_t *) *pcache, jl_value_t *parent,
         jl_typemap_entry_t *newrec, int8_t offs)
 {
-    jl_typemap_insert_generic(*cache, cache, parent, newrec, offs);
+    jl_typemap_t *cache = jl_atomic_load_relaxed(pcache);
+    jl_typemap_insert_generic(cache, pcache, parent, newrec, offs);
 }
 
 #ifdef __cplusplus

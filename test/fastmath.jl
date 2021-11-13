@@ -249,3 +249,13 @@ end
     @test (@fastmath "a" * "b") == "ab"
     @test (@fastmath "a" ^ 2) == "aa"
 end
+
+
+@testset "exp overflow and underflow" begin
+    for T in (Float32,Float64)
+        for func in (@fastmath exp2,exp,exp10)
+            @test func(T(2000)) == T(Inf)
+            @test func(T(-2000)) == T(0)
+        end
+    end
+end

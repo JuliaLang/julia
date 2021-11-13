@@ -568,17 +568,27 @@ end
 function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::MethodCallResult,
                                          @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch,
                                          sv::InferenceState)
-    const_prop_entry_heuristic(interp, result, sv) || return nothing
-    method = match.method
-    nargs::Int = method.nargs
-    method.isva && (nargs -= 1)
-    if length(argtypes) < nargs
+    if !InferenceParams(interp).ipo_constant_propagation
+        add_remark!(interp, sv, "[constprop] Disabled by parameter")
         return nothing
     end
-    const_prop_argument_heuristic(interp, argtypes) || const_prop_rettype_heuristic(interp, result.rt) || return nothing
-    allconst = is_allconst(argtypes)
+    method = match.method
     force = force_const_prop(interp, f, method)
-    force || const_prop_function_heuristic(interp, f, argtypes, nargs, allconst) || return nothing
+    force || const_prop_entry_heuristic(interp, result, sv) || return nothing
+    nargs::Int = method.nargs
+    method.isva && (nargs -= 1)
+    length(argtypes) < nargs && return nothing
+    if !(const_prop_argument_heuristic(interp, argtypes) || const_prop_rettype_heuristic(interp, result.rt))
+        add_remark!(interp, sv, "[constprop] Disabled by argument and rettype heuristics")
+        return nothing
+    end
+    allconst = is_allconst(argtypes)
+    if !force
+        if !const_prop_function_heuristic(interp, f, argtypes, nargs, allconst)
+            add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
+            return nothing
+        end
+    end
     force |= allconst
     mi = specialize_method(match, !force)
     if mi === nothing
@@ -594,8 +604,13 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
 end
 
 function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult, sv::InferenceState)
-    call_result_unused(sv) && result.edgecycle && return false
-    return is_improvable(result.rt) && InferenceParams(interp).ipo_constant_propagation
+    if call_result_unused(sv) && result.edgecycle
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (edgecycle with unused result)")
+        return false
+    end
+    is_improvable(result.rt) && return true
+    add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable return type)")
+    return false
 end
 
 # see if propagating constants may be worthwhile
@@ -670,14 +685,14 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
         # but highly worthwhile to inline promote of a constant
         length(argtypes) > 2 || return false
         t1 = widenconst(argtypes[2])
-        all_same = true
         for i in 3:length(argtypes)
-            if widenconst(argtypes[i]) !== t1
-                all_same = false
-                break
+            at = argtypes[i]
+            ty = isvarargtype(at) ? unwraptv(at) : widenconst(at)
+            if ty !== t1
+                return true
             end
         end
-        return !all_same
+        return false
     end
     return true
 end
@@ -756,10 +771,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     if isa(tti, DataType) && tti.name === NamedTuple_typename
         # A NamedTuple iteration is the same as the iteration of its Tuple parameter:
         # compute a new `tti == unwrap_unionall(tti0)` based on that Tuple type
-        tti = tti.parameters[2]
-        while isa(tti, TypeVar)
-            tti = tti.ub
-        end
+        tti = unwraptv(tti.parameters[2])
         tti0 = rewrap_unionall(tti, tti0)
     end
     if isa(tti, Union)
@@ -1141,7 +1153,8 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
             end
         end
     end
-    return isa(rt, TypeVar) ? rt.ub : rt
+    @assert !isa(rt, TypeVar) "unhandled TypeVar"
+    return rt
 end
 
 function abstract_call_unionall(argtypes::Vector{Any})
@@ -1242,9 +1255,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(abstract_call_builtin(interp, f, fargs, argtypes, sv, max_methods), false)
     elseif f === Core.kwfunc
         if la == 2
-            ft = widenconst(argtypes[2])
-            if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
-                return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
+            aty = argtypes[2]
+            if !isvarargtype(aty)
+                ft = widenconst(aty)
+                if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
+                    return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
+                end
             end
         end
         return CallMeta(Any, false)
@@ -1264,8 +1280,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(typevar_tfunc(n, lb_var, ub_var), false)
     elseif f === UnionAll
         return CallMeta(abstract_call_unionall(argtypes), false)
-    elseif f === Tuple && la == 2 && !isconcretetype(widenconst(argtypes[2]))
-        return CallMeta(Tuple, false)
+    elseif f === Tuple && la == 2
+        aty = argtypes[2]
+        ty = isvarargtype(aty) ? unwrapva(aty) : widenconst(aty)
+        if !isconcretetype(ty)
+            return CallMeta(Tuple, false)
+        end
     elseif is_return_type(f)
         return return_type_tfunc(interp, argtypes, sv)
     elseif la == 2 && istopfunction(f, :!)
@@ -1405,7 +1425,7 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
         spsig = linfo.def.sig
         if isa(spsig, UnionAll)
             if !isempty(linfo.sparam_vals)
-                sparam_vals = Any[isa(v, Core.TypeofVararg) ? TypeVar(:N, Union{}, Any) :
+                sparam_vals = Any[isvarargtype(v) ? TypeVar(:N, Union{}, Any) :
                                   v for v in  linfo.sparam_vals]
                 T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
@@ -1419,10 +1439,7 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
             end
         end
     end
-    while isa(T, TypeVar)
-        T = T.ub
-    end
-    return T
+    return unwraptv(T)
 end
 
 function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::VarTable, sv::InferenceState)
@@ -1636,7 +1653,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     else
         t = abstract_eval_value_expr(interp, e, vtypes, sv)
     end
-    @assert !isa(t, TypeVar)
+    @assert !isa(t, TypeVar) "unhandled TypeVar"
     if isa(t, DataType) && isdefined(t, :instance)
         # replace singleton types with their equivalent Const object
         t = Const(t.instance)
@@ -1721,7 +1738,8 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
         fields = copy(rt.fields)
         haveconst = false
         for i in 1:length(fields)
-            a = widenreturn(fields[i], bestguess, nslots, slottypes, changes)
+            a = fields[i]
+            a = isvarargtype(a) ? a : widenreturn(a, bestguess, nslots, slottypes, changes)
             if !haveconst && has_const_info(a)
                 # TODO: consider adding && const_prop_profitable(a) here?
                 haveconst = true

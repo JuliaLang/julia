@@ -227,6 +227,8 @@ end
 end
 @inline function exp_impl_fast(x::Float64, base)
     T = Float64
+    x >= MAX_EXP(base, T) && return Inf
+    x <= -SUBNORM_EXP(base, T) && return 0.0
     N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
     N = reinterpret(UInt64, N_float) % Int32
     N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
@@ -261,6 +263,8 @@ end
 
 @inline function exp_impl_fast(x::Float32, base)
     T = Float32
+    x >= MAX_EXP(base, T) && return Inf32
+    x <= -SUBNORM_EXP(base, T) && return 0f0
     N_float = round(x*LogBINV(base, T))
     N = unsafe_trunc(Int32, N_float)
     r = muladd(N_float, LogBU(base, T), x)
