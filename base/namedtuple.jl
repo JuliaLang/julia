@@ -230,7 +230,7 @@ function _foldl_impl(
 end
 
 # dispatch to the generic method with longer named tuple
-_foldl_impl(op, init, itr::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple{<:Any,<:Any16}}) =
+_foldl_impl(op, init, itr::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple{<:Any,<:Any32}}) =
     invoke(_foldl_impl, Tuple{Any,Any,Any}, op, init, itr)
 
 @pure function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
