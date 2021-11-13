@@ -407,8 +407,8 @@ srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 Make a FIFO special file (a named pipe) at `path`.  Return `path` as-is on success.
 
-!!! compat "Julia 1.5"
-    `mkfifo` requires at least Julia 1.5.
+!!! compat "Julia 1.8"
+    `mkfifo` requires at least Julia 1.8.
 """
 function mkfifo(
     path::AbstractString,
