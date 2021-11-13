@@ -1203,7 +1203,7 @@ end
     @test mapslices(nnz, sparse(1.0I, 3, 3), dims=1) == [1 1 1]
 
     r = rand(Int8, 4,5,2)
-    @test mapslices(transpose, r, dims=(1,3)) == permutedims(r, (3,2,1))
+    @test @inferred(mapslices(transpose, r, dims=(1,3))) == permutedims(r, (3,2,1))
     @test vec(mapslices(repr, r, dims=(2,1))) == map(repr, eachslice(r, dims=3))
     @test mapslices(cumsum, sparse(r[:,:,1]), dims=1) == cumsum(r[:,:,1], dims=1)
     @test mapslices(prod, sparse(r[:,:,1]), dims=1) == prod(r[:,:,1], dims=1)
@@ -1212,8 +1212,8 @@ end
     @test_throws ArgumentError mapslices(identity, rand(2,3), dims=0) # previously BoundsError
     @test_throws ArgumentError mapslices(identity, rand(2,3), dims=(1,3)) # previously BoundsError
     @test_throws DimensionMismatch mapslices(x -> x * x', rand(2,3), dims=1) # explicitly caught
-    @test mapslices(hcat, [1 2; 3 4], dims=1) == [1 2; 3 4] # previously an error, now allowed
-    @test mapslices(identity, [1 2; 3 4], dims=(2,2)) == [1 2; 3 4] # previously an error
+    @test @inferred(mapslices(hcat, [1 2; 3 4], dims=1)) == [1 2; 3 4] # previously an error, now allowed
+    @test @inferred(mapslices(identity, [1 2; 3 4], dims=(2,2))) == [1 2; 3 4] # previously an error
 end
 
 @testset "single multidimensional index" begin

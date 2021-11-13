@@ -2853,19 +2853,20 @@ function mapslices(f, A::AbstractArray; dims)
     Aslice = A[idx1...]
     r1 = f(Aslice)
 
-    if r1 isa AbstractArray && ndims(r1) > 0
+    res1 = if r1 isa AbstractArray && ndims(r1) > 0
         n = sum(dim_mask)
         if ndims(r1) > n && any(ntuple(d -> size(r1,d+n)>1, ndims(r1)-n))
             s = size(r1)[1:n]
             throw(DimensionMismatch("cannot assign slice f(x) of size $(size(r1)) into output of size $s"))
         end
-        res1 = r1
+        r1
     else
         # If the result of f on a single slice is a scalar then we add singleton
         # dimensions. When adding the dimensions, we have to respect the
         # index type of the input array (e.g. in the case of OffsetArrays)
-        res1 = similar(Aslice, typeof(r1), reduced_indices(Aslice, 1:ndims(Aslice)))
-        res1[begin] = r1
+        _res1 = similar(Aslice, typeof(r1), reduced_indices(Aslice, 1:ndims(Aslice)))
+        _res1[begin] = r1
+        _res1
     end
 
     # Determine result size and allocate. We always pad ndims(res1) out to length(dims):
