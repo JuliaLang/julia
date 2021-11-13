@@ -678,7 +678,7 @@ end
 """
     Compute the location of padding in a type. Recursive for nested types.
 """
-function padding(T, baseoffset = 0)
+function padding(T, baseoffset = UInt(0))
     pads = Padding[]
     last_end::Int = baseoffset
     for i = 1:fieldcount(T)
@@ -690,8 +690,8 @@ function padding(T, baseoffset = 0)
         end
         last_end = offset + sizeof(fT)
     end
-    if 0 < last_end < sizeof(T)
-        push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - last_end))
+    if 0 < last_end - baseoffset < sizeof(T)
+        push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - last_end - baseoffset))
     end
     return pads
 end
