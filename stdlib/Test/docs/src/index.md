@@ -19,7 +19,8 @@ Base.runtests
 The `Test` module provides simple *unit testing* functionality. Unit testing is a way to
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
-of specifying the behaviors your code should have when complete.
+of specifying the behaviors your code should have when complete. You may also want to look at the
+documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
@@ -139,6 +140,21 @@ Test Summary: | Pass  Total
 Foo Tests     |    8      8
 ```
 
+As well as call functions:
+
+```jldoctest testfoo
+julia> f(x) = @test isone(x)
+f (generic function with 1 method)
+
+julia> @testset f(1)
+Test Summary: | Pass  Total
+f             |    1      1
+Test.DefaultTestSet("f", Any[], 1, false, false)
+```
+
+This can be used to allow for factorization of test sets, making it easier to run individual
+test sets by running the associated functions instead.
+Note that in the case of functions, the test set will be given the name of the called function.
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
 summary, unless the `verbose=true` option is passed:
 

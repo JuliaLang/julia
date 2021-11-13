@@ -49,16 +49,12 @@ A `CodeInfo` object may be obtained with
 ci = (@code_typed convert(Int, UInt(1)))[1]
 ```
 
-## The inlining algorithm (inline_worthy)
+## The inlining algorithm (`inline_worthy`)
 
-Much of the hardest work for inlining runs in
-`inlining_pass`. However, if your question is "why didn't my function
-inline?" then you will most likely be interested in `isinlineable` and
-its primary callee, `inline_worthy`. `isinlineable` handles a number
-of special cases (e.g., critical functions like `next` and `done`,
-incorporating a bonus for functions that return tuples, etc.). The
-main decision-making happens in `inline_worthy`, which returns `true`
-if the function should be inlined.
+Much of the hardest work for inlining runs in `ssa_inlining_pass!`.
+However, if your question is "why didn't my function inline?"
+then you will most likely be interested in `inline_worthy`,
+which makes a decision to inline the function call or not.
 
 `inline_worthy` implements a cost-model, where "cheap" functions get
 inlined; more specifically, we inline functions if their anticipated
@@ -90,7 +86,7 @@ input and output types were inferred in advance) is assigned a fixed
 cost (currently 20 cycles). In contrast, a `:call` expression, for
 functions other than intrinsics/builtins, indicates that the call will
 require dynamic dispatch, in which case we assign a cost set by
-`Params.inline_nonleaf_penalty` (currently set at 1000). Note
+`Params.inline_nonleaf_penalty` (currently set at `1000`). Note
 that this is not a "first-principles" estimate of the raw cost of
 dynamic dispatch, but a mere heuristic indicating that dynamic
 dispatch is extremely expensive.

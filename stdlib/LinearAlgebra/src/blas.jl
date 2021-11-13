@@ -669,7 +669,7 @@ for (fname, elty) in ((:dgemv_,:Float64),
             sX = stride(X,1)
             pX = pointer(X, sX > 0 ? firstindex(X) : lastindex(X))
             sY = stride(Y,1)
-            pY = pointer(Y, sY > 0 ? firstindex(X) : lastindex(X))
+            pY = pointer(Y, sY > 0 ? firstindex(Y) : lastindex(Y))
             GC.@preserve X Y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},

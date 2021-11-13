@@ -209,6 +209,13 @@
                                 "\n"
                                 (indented-block (cdr (cadddr e)) ilvl))
                         "")
+                    (if (length> e 5)
+                        (let ((els (cadddddr e)))
+                          (if (and (pair? els) (eq? (car els) 'block))
+                              (string (string.rep "    " ilvl) "else\n"
+                                      (indented-block (cdr els) ilvl))
+                              ""))
+                        "")
                     (if (length> e 4)
                         (let ((fin (caddddr e)))
                           (if (and (pair? fin) (eq? (car fin) 'block))
@@ -289,7 +296,7 @@
 ;; predicates and accessors
 
 (define (quoted? e)
-  (memq (car e) '(quote top core globalref outerref line break inert meta inbounds loopinfo)))
+  (memq (car e) '(quote top core globalref outerref line break inert meta inbounds inline noinline loopinfo)))
 (define (quotify e) `',e)
 (define (unquote e)
   (if (and (pair? e) (memq (car e) '(quote inert)))

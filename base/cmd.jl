@@ -167,6 +167,7 @@ rawhandle(x::OS_HANDLE) = x
 if OS_HANDLE !== RawFD
     rawhandle(x::RawFD) = Libc._get_osfhandle(x)
 end
+setup_stdio(stdio::Union{DevNull,OS_HANDLE,RawFD}, ::Bool) = (stdio, false)
 
 const Redirectable = Union{IO, FileRedirect, RawFD, OS_HANDLE}
 const StdIOSet = NTuple{3, Redirectable}
@@ -268,7 +269,7 @@ function addenv(cmd::Cmd, env::Dict; inherit::Bool = true)
             merge!(new_env, ENV)
         end
     else
-        for (k, v) in split.(cmd.env, "=")
+        for (k, v) in eachsplit.(cmd.env, "=")
             new_env[string(k)::String] = string(v)::String
         end
     end
@@ -283,7 +284,7 @@ function addenv(cmd::Cmd, pairs::Pair{<:AbstractString}...; inherit::Bool = true
 end
 
 function addenv(cmd::Cmd, env::Vector{<:AbstractString}; inherit::Bool = true)
-    return addenv(cmd, Dict(k => v for (k, v) in split.(env, "=")); inherit)
+    return addenv(cmd, Dict(k => v for (k, v) in eachsplit.(env, "=")); inherit)
 end
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)

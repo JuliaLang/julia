@@ -105,6 +105,14 @@ end
     @test errors[1].kind === Core.Compiler.SSAVALUETYPES_MISMATCH_UNINFERRED
 end
 
+@testset "SSAFLAGS_MISMATCH" begin
+    c = copy(c0)
+    empty!(c.ssaflags)
+    errors = Core.Compiler.validate_code(c)
+    @test length(errors) == 1
+    @test errors[1].kind === Core.Compiler.SSAFLAGS_MISMATCH
+end
+
 @testset "SIGNATURE_NARGS_MISMATCH" begin
     old_sig = mi.def.sig
     mi.def.sig = Tuple{1,2}

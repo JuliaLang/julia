@@ -84,15 +84,15 @@ function _require_callback(mod::Base.PkgId)
     end
 end
 
-const REF_ID = Ref(1)
-next_ref_id() = (id = REF_ID[]; REF_ID[] = id+1; id)
+const REF_ID = Threads.Atomic{Int}(1)
+next_ref_id() = Threads.atomic_add!(REF_ID, 1)
 
 struct RRID
     whence::Int
     id::Int
 
-    RRID() = RRID(myid(),next_ref_id())
-    RRID(whence, id) = new(whence,id)
+    RRID() = RRID(myid(), next_ref_id())
+    RRID(whence, id) = new(whence, id)
 end
 
 hash(r::RRID, h::UInt) = hash(r.whence, hash(r.id, h))

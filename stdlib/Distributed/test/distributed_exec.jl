@@ -132,6 +132,39 @@ end
 testf(id_me)
 testf(id_other)
 
+function poll_while(f::Function; timeout_seconds::Integer = 120)
+    start_time = time_ns()
+    while f()
+        sleep(1)
+        if ( ( time_ns() - start_time )/1e9 ) > timeout_seconds
+            @error "Timed out" timeout_seconds
+            return false
+        end
+    end
+    return true
+end
+
+function _getenv_include_thread_unsafe()
+    environment_variable_name = "JULIA_TEST_INCLUDE_THREAD_UNSAFE"
+    default_value = "false"
+    environment_variable_value = strip(get(ENV, environment_variable_name, default_value))
+    b = parse(Bool, environment_variable_value)::Bool
+    return b
+end
+const _env_include_thread_unsafe = _getenv_include_thread_unsafe()
+function include_thread_unsafe()
+    if Threads.nthreads() > 1
+        if _env_include_thread_unsafe
+            return true
+        end
+        msg = "Skipping a thread-unsafe test because `Threads.nthreads() > 1`"
+        @warn msg Threads.nthreads()
+        Test.@test_broken false
+        return false
+    end
+    return true
+end
+
 # Distributed GC tests for Futures
 function test_futures_dgc(id)
     f = remotecall(myid, id)
@@ -143,8 +176,7 @@ function test_futures_dgc(id)
     @test fetch(f) == id
     @test f.v !== nothing
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
-
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid))
 
     # if unfetched, it should be deleted after a finalize
     f = remotecall(myid, id)
@@ -153,7 +185,7 @@ function test_futures_dgc(id)
     @test f.v === nothing
     finalize(f)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid))
 end
 
 test_futures_dgc(id_me)
@@ -243,7 +275,7 @@ function test_remoteref_dgc(id)
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == false
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid))
 end
 test_remoteref_dgc(id_me)
 test_remoteref_dgc(id_other)
@@ -256,10 +288,14 @@ let wid1 = workers()[1],
     fstore = RemoteChannel(wid2)
 
     put!(fstore, rr)
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    if include_thread_unsafe()
+        @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    end
     finalize(rr) # finalize locally
     yield() # flush gc msgs
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    if include_thread_unsafe()
+        @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    end
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
     sleep(0.5) # to ensure that wid2 messages have been executed on wid1
     @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == false
@@ -1041,7 +1077,6 @@ function test_add_procs_threaded_blas()
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    @test master_blas_thread_count <= 8 # check that Base set the environment variable in __init__ before LinearAlgebra dlopen'd it
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)

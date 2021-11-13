@@ -578,6 +578,7 @@ export
     codeunits,
     digits,
     digits!,
+    eachsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -805,7 +806,7 @@ export
 
 # I/O and events
     close,
-    shutdown,
+    closewrite,
     countlines,
     eachline,
     readeach,
@@ -894,6 +895,7 @@ export
     chown,
     cp,
     ctime,
+    diskstat,
     download,
     filemode,
     filesize,
@@ -993,6 +995,7 @@ export
 
     # profiling
     @time,
+    @showtime,
     @timed,
     @timev,
     @elapsed,
