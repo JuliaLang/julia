@@ -1,5 +1,7 @@
 #include "llvm-alloc-helpers.h"
 
+#include <llvm-c/Types.h>
+
 #include "codegen_shared.h"
 
 #include "julia_assert.h"
@@ -303,9 +305,11 @@ bool jl_alloc::getAllocIdInfo(AllocIdInfo &info, llvm::CallInst *call, llvm::Fun
         auto sz = call->getArgOperand(1);
         if (auto size = dyn_cast<ConstantInt>(sz)) {
             info.object.size = size->getZExtValue();
-        } else {
-            info.object.size = -1;
+            if (info.object.size < IntegerType::MAX_INT_BITS / 8 && info.object.size < INT32_MAX) {
+                return true;
+            }
         }
+        info.object.size = -1;
         return true;
     } else if (auto cexpr = dyn_cast<ConstantExpr>(callee)) {
         if (cexpr->getNumOperands() == 1) {

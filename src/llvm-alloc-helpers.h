@@ -147,7 +147,7 @@ namespace jl_alloc {
                 int dims[3];
             } array;
             struct {
-                std::int64_t size;
+                ssize_t size;
             } object;
         };
     };

@@ -124,7 +124,6 @@ struct Optimizer {
 private:
     bool isSafepoint(Instruction *inst);
     Instruction *getFirstSafepoint(BasicBlock *bb);
-    ssize_t getGCAllocSize(Instruction *I);
     void pushInstruction(Instruction *I);
 
     void insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert);
@@ -135,10 +134,10 @@ private:
 
     void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
                                  Instruction *orig_i, Instruction *new_i);
-    void removeAlloc(CallInst *orig_inst);
-    void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref);
-    void splitOnStack(CallInst *orig_inst);
-    void optimizeTag(CallInst *orig_inst);
+    void removeAlloc(CallInst *orig_inst, llvm::Value *tag);
+    void moveToStack(CallInst *orig_inst, llvm::Value *tag, size_t sz, bool has_ref);
+    void splitOnStack(CallInst *orig_inst, llvm::Value *tag);
+    void optimizeTag(CallInst *orig_inst, llvm::Value *tag);
 
     Function &F;
     AllocOpt &pass;
@@ -182,7 +181,7 @@ private:
         typedef SmallVector<Frame,4> Stack;
     };
 
-    SetVector<std::pair<CallInst*,size_t>> worklist;
+    std::map<CallInst*, jl_alloc::AllocIdInfo> worklist;
     SmallVector<CallInst*,6> removed;
     AllocUseInfo use_info;
     CheckInst::Stack check_stack;
@@ -193,9 +192,13 @@ private:
 
 void Optimizer::pushInstruction(Instruction *I)
 {
-    ssize_t sz = getGCAllocSize(I);
-    if (sz != -1) {
-        worklist.insert(std::make_pair(cast<CallInst>(I), sz));
+    if (auto call = dyn_cast<CallInst>(I)) {
+        jl_alloc::AllocIdInfo info;
+        if (jl_alloc::getAllocIdInfo(info, call, pass.alloc_obj_func)) {
+            if (info.isarray || info.object.size != -1) {
+                worklist.insert(std::make_pair(call, info));
+            }
+        }
     }
 }
 
@@ -211,13 +214,16 @@ void Optimizer::initialize()
 void Optimizer::optimizeAll()
 {
     while (!worklist.empty()) {
-        auto item = worklist.pop_back_val();
+        auto it = worklist.begin();
+        auto item = *it;
+        worklist.erase(it);
         auto orig = item.first;
-        size_t sz = item.second;
         checkInst(orig);
+        // dbgs() << *orig << "\n";
+        // dbgs() << "e: " << use_info.escaped << " a: " << use_info.addrescaped << " l: " << use_info.hasload << " p: " << use_info.haspreserve << " r: " << use_info.refstore << "\n";
         if (use_info.escaped) {
             if (use_info.hastypeof)
-                optimizeTag(orig);
+                optimizeTag(orig, item.second.type);
             continue;
         }
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
@@ -225,7 +231,11 @@ void Optimizer::optimizeAll()
             // No one took the address, no one reads anything and there's no meaningful
             // preserve of fields (either no preserve/ccall or no object reference fields)
             // We can just delete all the uses.
-            removeAlloc(orig);
+            removeAlloc(orig, item.second.type);
+            continue;
+        }
+        if (item.second.isarray) {
+            // We do not currently support stack allocation of arrays
             continue;
         }
         bool has_ref = false;
@@ -244,16 +254,17 @@ void Optimizer::optimizeAll()
         }
         if (!use_info.hasunknownmem && !use_info.addrescaped && !has_refaggr) {
             // No one actually care about the memory layout of this object, split it.
-            splitOnStack(orig);
+            splitOnStack(orig, item.second.type);
             continue;
         }
         if (has_refaggr) {
             if (use_info.hastypeof)
-                optimizeTag(orig);
+                optimizeTag(orig, item.second.type);
             continue;
         }
         // The object has no fields with mix reference access
-        moveToStack(orig, sz, has_ref);
+        // Note that this needs to be changed once stack-based arrays are supported
+        moveToStack(orig, item.second.type, item.second.object.size, has_ref);
     }
 }
 
@@ -299,20 +310,6 @@ Instruction *Optimizer::getFirstSafepoint(BasicBlock *bb)
     }
     first_safepoint[bb] = first;
     return first;
-}
-
-ssize_t Optimizer::getGCAllocSize(Instruction *I)
-{
-    auto call = dyn_cast<CallInst>(I);
-    if (!call)
-        return -1;
-    if (call->getCalledOperand() != pass.alloc_obj_func)
-        return -1;
-    assert(call->getNumArgOperands() == 3);
-    size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
-    if (sz < IntegerType::MAX_INT_BITS / 8 && sz < INT32_MAX)
-        return sz;
-    return -1;
 }
 
 void Optimizer::checkInst(Instruction *I)
@@ -544,9 +541,9 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
 
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
-void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
+void Optimizer::moveToStack(CallInst *orig_inst, llvm::Value *tag, size_t sz, bool has_ref)
 {
-    auto tag = orig_inst->getArgOperand(2);
+    // auto tag = orig_inst->getArgOperand(2);
     removed.push_back(orig_inst);
     // The allocation does not escape or get used in a phi node so none of the derived
     // SSA from it are live when we run the allocation again.
@@ -704,9 +701,9 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
 
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
-void Optimizer::removeAlloc(CallInst *orig_inst)
+void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag)
 {
-    auto tag = orig_inst->getArgOperand(2);
+    // auto tag = orig_inst->getArgOperand(2);
     removed.push_back(orig_inst);
     auto simple_remove = [&] (Instruction *orig_i) {
         if (orig_i->user_empty()) {
@@ -791,9 +788,9 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
 }
 
 // Unable to optimize out the allocation, do store to load forwarding on the tag instead.
-void Optimizer::optimizeTag(CallInst *orig_inst)
+void Optimizer::optimizeTag(CallInst *orig_inst, llvm::Value *tag)
 {
-    auto tag = orig_inst->getArgOperand(2);
+    // auto tag = orig_inst->getArgOperand(2);
     // `julia.typeof` is only legal on the original pointer, no need to scan recursively
     size_t last_deleted = removed.size();
     for (auto user: orig_inst->users()) {
@@ -812,9 +809,9 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
         removed[last_deleted++]->replaceUsesOfWith(orig_inst, UndefValue::get(orig_inst->getType()));
 }
 
-void Optimizer::splitOnStack(CallInst *orig_inst)
+void Optimizer::splitOnStack(CallInst *orig_inst, llvm::Value *tag)
 {
-    auto tag = orig_inst->getArgOperand(2);
+    // auto tag = orig_inst->getArgOperand(2);
     removed.push_back(orig_inst);
     IRBuilder<> prolog_builder(&F.getEntryBlock().front());
     struct SplitSlot {
@@ -1141,8 +1138,8 @@ cleanup:
 bool AllocOpt::doInitialization(Module &M)
 {
     initAll(M);
-    if (!alloc_obj_func)
-        return false;
+    // if (!alloc_obj_func)
+    //     return false;
 
     DL = &M.getDataLayout();
 
@@ -1156,8 +1153,8 @@ bool AllocOpt::doInitialization(Module &M)
 
 bool AllocOpt::runOnFunction(Function &F)
 {
-    if (!alloc_obj_func)
-        return false;
+    // if (!alloc_obj_func)
+    //     return false;
     Optimizer optimizer(F, *this);
     optimizer.initialize();
     optimizer.optimizeAll();
