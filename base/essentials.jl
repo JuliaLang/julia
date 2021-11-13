@@ -440,6 +440,59 @@ julia> reinterpret(Float32, UInt32[1 2 3 4 5])
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 
 """
+    Base.unsafe_bitcast(T::Type, x::S) -> y::T
+
+Interpret the bit representation of `x` of type `S` as the bit representation of
+type `T`.
+
+The `unsafe_` prefix reflects that:
+
+* The invariance imposed by the constructor of `T` is not imposed for the value
+  `y`.
+* If `S` fields are padded, values of some fields of `T` may be undefined.
+* The bit representation `y` may not be usable across Julia processes.
+  Invoking `unsafe_bitcast(S, y)` when `y` is produced in a different Julia
+  process is undefined behavior unless `S` and its-subcomponents do not contain
+  `Union` fields.
+
+The roundtrip is guaranteed to be `===`-identical:
+
+    unsafe_bitcast(typeof(x), unsafe_bitcast(T, x)) === x
+
+The target type `T` and the source type `S` both must be concrete and have
+identical size. Both `T` and `S` must not contain boxed Julia values. They
+can contain `Union` fields.
+
+# Examples
+```julia
+julia> x = Some{Union{UInt64,Nothing}}(0);
+
+julia> y = Base.unsafe_bitcast(UInt128, x);
+
+julia> Base.unsafe_bitcast(typeof(x), y) === x
+true
+```
+"""
+function unsafe_bitcast(::Type{T}, x::S) where {T,S}
+    isconcretetype(T) || throw(ArgumentError("output type $T is not concrete"))
+    datatype_pointerfree(T) ||
+        throw(ArgumentError("output type $T may contain a boxed object"))
+    datatype_pointerfree(S) ||
+        throw(ArgumentError("input type $S may contain a boxed object"))
+    sizeof(T) == sizeof(S) || throw(ArgumentError("different input and output sizes"))
+    output = Ref{T}()
+    input = Ref{S}(x)
+    tko = @_gc_preserve_begin output
+    tki = @_gc_preserve_begin input
+    po = Ptr{UInt8}(pointer_from_objref(output))
+    pi = Ptr{UInt8}(pointer_from_objref(input))
+    _memcpy!(po, pi, sizeof(S))
+    @_gc_preserve_end tki
+    @_gc_preserve_end tko
+    return output[]
+end
+
+"""
     sizeof(T::DataType)
     sizeof(obj)
 

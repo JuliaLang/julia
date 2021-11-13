@@ -7616,3 +7616,31 @@ end
     @test a == 1
     @test b == Core.svec(2, 3)
 end
+
+@inline bitroundtrip(L::Type, x) = Base.unsafe_bitcast(typeof(x), Base.unsafe_bitcast(L, x))
+@inline bitroundtrip(x) = bitroundtrip(NTuple{sizeof(typeof(x)),UInt8}, x)
+
+primitive type Bits256 256 end
+
+@testset "unsafe_bitcast" begin
+    @testset for x in [
+        Int8(123),
+        Int16(12345),
+        Int32(123456789),
+        Int64(123456789),
+        Int128(123456789),
+        Some{Union{Int,Nothing}}(123456789),
+        Some{Union{Int,Nothing}}(nothing),
+        NTuple{5,Some{Union{Int,Nothing}}}((Some(i) for i in 1:5)),
+    ]
+        @testset for U in [UInt8, UInt16, UInt16, UInt32, UInt64, UInt128, Bits256]
+            NT = NTuple{cld(sizeof(x), sizeof(U)), U}
+            if sizeof(NT) == sizeof(x)
+                @test bitroundtrip(NT, x) === x
+            end
+            pads = ntuple(UInt8, sizeof(NT) - sizeof(x))
+            @test bitroundtrip(NT, (x, pads)) === (x, pads)
+        end
+    end
+    @test_throws "not concrete" Base.unsafe_bitcast(Union{Int,Nothing}, 0)
+end
