@@ -369,8 +369,8 @@ argument `d`.
 !!! compat "Julia 1.5"
     `mergewith` requires Julia 1.5 or later.
 
-!!! compat "Julia 1.6"
-    `mergewith` on `NamedTuple` requires Julia 1.6 or later.
+!!! compat "Julia 1.8"
+    `mergewith` on `NamedTuple` requires Julia 1.8 or later.
 
 # Examples
 ```jldoctest
