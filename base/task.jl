@@ -672,6 +672,10 @@ If a second argument `val` is provided, it will be passed to the task (via the r
 [`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
 the woken task.
 
+!!! warning
+    It is incorrect to use `schedule` on an arbitrary `Task` that has already been started.
+    See [the API reference](@id low-level-schedule-wait) for more information.
+
 # Examples
 ```jldoctest
 julia> a5() = sum(i for i in 1:1000);
