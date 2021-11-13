@@ -363,7 +363,7 @@ JL_DLLEXPORT void *(jl_symbol_name)(jl_sym_t *s)
 // WARNING: THIS FUNCTION IS NEVER CALLED BUT INLINE BY CCALL
 JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 {
-    return a->data;
+    return a->data + a->offset;
 }
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 {

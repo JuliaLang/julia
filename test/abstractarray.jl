@@ -1577,3 +1577,11 @@ end
 
 @test haskey([1, 2, 3], 1)
 @test !haskey([1, 2, 3], 4)
+
+@testset "Array pointer offset" begin
+    v = [1,3]
+    p1 = pointer(v)
+    popfirst!(v)
+    p2 = pointer(v)
+    @test p1 != p2
+end
