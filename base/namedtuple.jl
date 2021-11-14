@@ -214,20 +214,28 @@ function _foldl_impl(
     init,
     itr::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple{names}},
 ) where {names}
-    if length(names) < 32
-        if @generated
-            ex = :init
-            for (i, n) in enumerate(names)
-                ex = :(op($ex, $(QuoteNode(n)) => vals[$i]))
-            end
-            quote
-                @inline
-                vals = Tuple(values(itr))
-                return $ex
-            end
-        end
-    end
+    length(names) < 32 && return _foldl_generated(op, init, itr)
     return invoke(_foldl_impl, Tuple{Any,Any,Any}, op, init, itr)
+end
+
+function _foldl_generated(
+    op,
+    init,
+    itr::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple{names}},
+) where {names}
+    if @generated
+        ex = :init
+        for (i, n) in enumerate(names)
+            ex = :(op($ex, $(QuoteNode(n)) => vals[$i]))
+        end
+        quote
+            @inline
+            vals = Tuple(values(itr))
+            return $ex
+        end
+    else
+        return invoke(_foldl_impl, Tuple{Any,Any,Any}, op, init, itr)
+    end
 end
 
 @pure function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
