@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <pthread.h>
+#include <time.h>
 #include <errno.h>
 #if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
 #define MAP_ANONYMOUS MAP_ANON
@@ -364,11 +365,25 @@ static pthread_cond_t signal_caught_cond;
 
 static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_sec += 1;
     pthread_mutex_lock(&in_signal_lock);
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
     jl_atomic_store_release(&ptls2->signal_request, 1);
     pthread_kill(ptls2->system_id, SIGUSR2);
-    pthread_cond_wait(&signal_caught_cond, &in_signal_lock);  // wait for thread to acknowledge
+    // wait for thread to acknowledge
+    int err = pthread_cond_timedwait(&signal_caught_cond, &in_signal_lock, &ts);
+    if (err == ETIMEDOUT) {
+        sig_atomic_t request = 1;
+        if (jl_atomic_cmpswap(&ptls2->signal_request, &request, 0)) {
+            *ctx = NULL;
+            pthread_mutex_unlock(&in_signal_lock);
+            return;
+        }
+        err = pthread_cond_wait(&signal_caught_cond, &in_signal_lock);
+    }
+    assert(!err);
     assert(jl_atomic_load_acquire(&ptls2->signal_request) == 0);
     *ctx = signal_context;
 }
@@ -750,6 +765,8 @@ static void *signal_listener(void *arg)
             for (int i = jl_n_threads; i-- > 0; ) {
                 // notify thread to stop
                 jl_thread_suspend_and_get_state(i, &signal_context);
+                if (signal_context == NULL)
+                    continue;
 
                 // do backtrace on thread contexts for critical signals
                 // this part must be signal-handler safe
