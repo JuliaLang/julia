@@ -256,7 +256,7 @@ new
 Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
-Base.splat
+Base.Splat
 Base.Fix1
 Base.Fix2
 ```

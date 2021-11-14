@@ -300,7 +300,7 @@ the `zip` iterator is a tuple of values of its subiterators.
     `zip` orders the calls to its subiterators in such a way that stateful iterators will
     not advance when another iterator finishes in the current iteration.
 
-See also: [`enumerate`](@ref), [`splat`](@ref Base.splat).
+See also: [`enumerate`](@ref), [`Splat`](@ref Base.Splat).
 
 # Examples
 ```jldoctest
