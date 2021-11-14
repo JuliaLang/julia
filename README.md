@@ -115,7 +115,7 @@ You can read about [getting
 started](https://docs.julialang.org/en/v1/manual/getting-started/)
 in the manual.
 
-In case this default build path did not work, detailed build instructions
+Detailed build instructions, should they be necessary,
 are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/).
 
 ### Uninstalling Julia
@@ -134,7 +134,7 @@ The Julia source code is organized as follows:
 | `base/`           | source code for the Base module (part of Julia's standard library) |
 | `stdlib/`         | source code for other standard library packages                    |
 | `cli/`            | source for the command line interface/REPL                         |
-| `contrib/`        | editor support for Julia source, miscellaneous scripts             |
+| `contrib/`        | miscellaneous scripts                                              |
 | `deps/`           | external dependencies                                              |
 | `doc/src/`        | source for the user manual                                         |
 | `src/`            | source for Julia language core                                     |
@@ -157,7 +157,8 @@ Support for editing Julia is available for many
 [Sublime Text](https://github.com/JuliaEditorSupport/Julia-sublime), and many
 others.
 
-Supported IDEs include: [julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode) (VS
-Code plugin), [Juno](http://junolab.org/) (Atom plugin). [Jupyter](https://jupyter.org/)
-notebooks are available through the [IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
-[Pluto](https://github.com/fonsp/Pluto.jl) notebooks through the Pluto.jl package.
+For users who prefer IDEs, we recommend using VS Code with the
+[julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode) plugin.
+For notebook users, [Jupyter](https://jupyter.org/) notebook support is available through the
+[IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
+the [Pluto.jl](https://github.com/fonsp/Pluto.jl) package provides Pluto notebooks.
