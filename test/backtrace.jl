@@ -324,13 +324,25 @@ withframeaddress
     @noinline f(Ptr{Cvoid}(sp))
 end
 
+@noinline noinlinecall(f) = @noinline f()
+
 function sandwiched_backtrace()
     local ptr1, ptr2, bt
     withframeaddress() do p1
         ptr1 = p1
-        bt = ccall(:jl_backtrace_from_here, Ref{Base.SimpleVector}, (Cint, Cint), true, 0)
-        withframeaddress() do p2
-            ptr2 = p2
+        noinlinecall() do
+            bt = ccall(
+                :jl_backtrace_from_here,
+                Ref{Base.SimpleVector},
+                (Cint, Cint),
+                true,
+                0,
+            )
+            noinlinecall() do
+                withframeaddress() do p2
+                    ptr2 = p2
+                end
+            end
         end
     end
     return ptr1, ptr2, bt
