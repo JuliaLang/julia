@@ -423,7 +423,7 @@ function mkfifo(
         systemerror("mkfifo", ret == -1)
         return path
     else
-        systemerror("mkfifo", ENOTSUP)
+        error("not supported on this platform")
     end
 end
 
