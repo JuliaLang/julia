@@ -40,6 +40,7 @@ struct CompositeException <: Exception
 end
 length(c::CompositeException) = length(c.exceptions)
 push!(c::CompositeException, ex) = push!(c.exceptions, ex)
+pushfirst!(c::CompositeException, ex) = pushfirst!(c.exceptions, ex)
 isempty(c::CompositeException) = isempty(c.exceptions)
 iterate(c::CompositeException, state...) = iterate(c.exceptions, state...)
 eltype(::Type{CompositeException}) = Any
@@ -353,6 +354,29 @@ end
 
 ## lexically-scoped waiting for multiple items
 
+struct ScheduledAfterSyncException <: Exception
+    values::Vector{Any}
+end
+
+function showerror(io::IO, ex::ScheduledAfterSyncException)
+    print(io, "ScheduledAfterSyncException: ")
+    if isempty(ex.values)
+        print(io, "(no values)")
+        return
+    end
+    show(io, ex.values[1])
+    if length(ex.values) == 1
+        print(io, " is")
+    elseif length(ex.values) == 2
+        print(io, " and one more ")
+        print(io, nameof(typeof(ex.values[2])))
+        print(io, " are")
+    else
+        print(io, " and ", length(ex.values) - 1, " more objects are")
+    end
+    print(io, " registered after the end of a `@sync` block")
+end
+
 function sync_end(c::Channel{Any})
     local c_ex
     while isready(c)
@@ -377,6 +401,25 @@ function sync_end(c::Channel{Any})
         end
     end
     close(c)
+
+    # Capture all waitable objects scheduled after the end of `@sync` and
+    # include them in the exception. This way, the user can check what was
+    # scheduled by examining at the exception object.
+    local racy
+    for r in c
+        if !@isdefined(racy)
+            racy = []
+        end
+        push!(racy, r)
+    end
+    if @isdefined(racy)
+        if !@isdefined(c_ex)
+            c_ex = CompositeException()
+        end
+        # Since this is a clear programming error, show this exception first:
+        pushfirst!(c_ex, ScheduledAfterSyncException(racy))
+    end
+
     if @isdefined(c_ex)
         throw(c_ex)
     end
