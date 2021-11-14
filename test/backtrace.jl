@@ -308,7 +308,8 @@ end
 Call function `f` with an address `ptr::Ptr{Cvoid}` of an independent frame
 immediately outer to `f`.
 """
-@noinline function withframeaddress(f)
+withframeaddress
+@eval @noinline function withframeaddress(f)
     sp = Core.Intrinsics.llvmcall(
         ($"""
         declare i8* @llvm.frameaddress(i32)
