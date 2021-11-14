@@ -1201,14 +1201,8 @@ used to implement specialized methods.
 """
 <(x) = Fix2(<, x)
 
-struct Splat{F} <: Function
-    f::F
-end
-(s::Splat)(args) = s.f(args...)
-string(s::Splat) = string("splat(", s.f, ')')
-
 """
-    splat(f)
+    Splat(f)
 
 Equivalent to
 ```julia
@@ -1221,20 +1215,25 @@ passes a tuple as that single argument. Additionally has pretty printing.
 
 # Example usage:
 ```jldoctest
-julia> map(Base.splat(+), zip(1:3,4:6))
+julia> map(Base.Splat(+), zip(1:3,4:6))
 3-element Vector{Int64}:
  5
  7
  9
 
-julia> my_add = Base.splat(+)
-splat(+)
+julia> my_add = Base.Splat(+)
+Splat(+)
 
 julia> my_add((1,2,3))
 6
 ```
 """
-splat(f) = Splat(f)
+struct Splat{F} <: Function
+    f::F
+end
+(s::Splat)(args) = s.f(args...)
+print(io::IO, s::Splat) = print(io, "Splat(", s.f, ')')
+show(io::IO, s::Splat) = print(io, s)
 
 ## in and related operators
 
