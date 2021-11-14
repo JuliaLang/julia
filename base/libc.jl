@@ -423,7 +423,9 @@ function mkfifo(
         systemerror("mkfifo", ret == -1)
         return path
     else
-        error("not supported on this platform")
+        # Using normal `error` because `systemerror("mkfifo", ENOTSUP)` does not
+        # seem to work on Windows.
+        error("mkfifo: Operation not supported")
     end
 end
 
