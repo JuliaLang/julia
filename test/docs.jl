@@ -1504,3 +1504,12 @@ end
 # Issue #13109
 eval(Expr(:block, Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), nothing, "...", Expr(:module, false, :MBareModuleEmpty, Expr(:block)))))
 @test docstrings_equal(@doc(MBareModuleEmpty), doc"...")
+
+# issue #41727
+"struct docstring"
+struct S41727
+    "x is $(2*2)"
+    x
+end
+@test S41727(1) isa S41727
+@test string(@repl S41727.x) == "x is 4\n"
