@@ -349,7 +349,6 @@ function Float16(x::BigFloat) :: Float16
         end
     end
     if (resi & 0x1fff == 0x1000) # if we are halfway between 2 Float16 values
-This conversation was marked as resolved by vchuravy
         # adjust the value by 1 ULP in the direction that will make Float16(res) give the right answer
         res = nextfloat(res, cmp(x, res))
     end
