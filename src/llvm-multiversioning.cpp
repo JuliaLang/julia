@@ -47,7 +47,7 @@ namespace {
 
 // These are valid detail cloning conditions in the target flags.
 constexpr uint32_t clone_mask =
-    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH;
+    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU;
 
 struct MultiVersioning;
 
@@ -468,6 +468,9 @@ uint32_t CloneCtx::collect_func_info(Function &F)
                     auto name = callee->getName();
                     if (name.startswith("llvm.muladd.") || name.startswith("llvm.fma.")) {
                         flag |= JL_TARGET_CLONE_MATH;
+                    }
+                    else if (name.startswith("julia.cpu.")) {
+                        flag |= JL_TARGET_CLONE_CPU;
                     }
                 }
             }

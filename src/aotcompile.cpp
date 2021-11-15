@@ -645,6 +645,10 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
+        PM->add(createCPUFeaturesPass());
+        // minimal clean-up to get rid of CPU feature checks
+        PM->add(createInstSimplifyLegacyPass());
+        PM->add(createCFGSimplificationPass(simplifyCFGOptions));
 #if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
@@ -680,6 +684,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createCFGSimplificationPass(simplifyCFGOptions));
     if (dump_native)
         PM->add(createMultiVersioningPass());
+    PM->add(createCPUFeaturesPass());
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createJumpThreadingPass());
