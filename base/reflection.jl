@@ -483,7 +483,7 @@ Determine whether type `T` was declared as a mutable type
 !!! compat "Julia 1.7"
     This function requires at least Julia 1.7.
 """
-function ismutabletype(@nospecialize(t::Type))
+function ismutabletype(@nospecialize t)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     return isa(t, DataType) && t.name.flags & 0x2 == 0x2
@@ -496,7 +496,7 @@ end
 Determine whether type `T` was declared as a struct type
 (i.e. using the `struct` or `mutable struct` keyword).
 """
-function isstructtype(@nospecialize(t::Type))
+function isstructtype(@nospecialize t)
     @_pure_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
@@ -511,7 +511,7 @@ end
 Determine whether type `T` was declared as a primitive type
 (i.e. using the `primitive` keyword).
 """
-function isprimitivetype(@nospecialize(t::Type))
+function isprimitivetype(@nospecialize t)
     @_pure_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
@@ -543,7 +543,7 @@ julia> isbitstype(Complex)
 false
 ```
 """
-isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && (t.flags & 0x8) == 0x8)
+isbitstype(@nospecialize t) = (@_pure_meta; isa(t, DataType) && (t.flags & 0x8) == 0x8)
 
 """
     isbits(x)
@@ -1199,7 +1199,7 @@ end
 Similar to [`code_typed`](@ref), except the argument is a tuple type describing
 a full signature to query.
 """
-function code_typed_by_type(@nospecialize(tt::Type);
+function code_typed_by_type(@nospecialize(tt#=::Type=#);
                             optimize=true,
                             debuginfo::Symbol=:default,
                             world = get_world_counter(),
@@ -1276,7 +1276,7 @@ function print_statement_costs(io::IO, @nospecialize(f), @nospecialize(t); kwarg
     print_statement_costs(io, tt; kwargs...)
 end
 
-function print_statement_costs(io::IO, @nospecialize(tt::Type);
+function print_statement_costs(io::IO, @nospecialize(tt#=::Type=#);
                                world = get_world_counter(),
                                interp = Core.Compiler.NativeInterpreter(world))
     matches = _methods_by_ftype(tt, -1, world)
@@ -1306,7 +1306,7 @@ end
 
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
-function _which(@nospecialize(tt::Type), world=get_world_counter())
+function _which(@nospecialize(tt#=::Type=#), world=get_world_counter())
     min_valid = RefValue{UInt}(typemin(UInt))
     max_valid = RefValue{UInt}(typemax(UInt))
     match = ccall(:jl_gf_invoke_lookup_worlds, Any,
@@ -1341,7 +1341,7 @@ end
 
 Returns the method that would be called by the given type signature (as a tuple type).
 """
-function which(@nospecialize(tt::Type))
+function which(@nospecialize(tt#=::Type=#))
     return _which(tt).method
 end
 
