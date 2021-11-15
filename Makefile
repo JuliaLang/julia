@@ -456,7 +456,7 @@ endif
 	-ls stdlib/srccache/*.tar.gz >> light-source-dist.tmp
 	-ls stdlib/*/StdlibArtifacts.toml >> light-source-dist.tmp
 
-	# Include all git-traked filenames
+	# Include all git-tracked filenames
 	git ls-files >> light-source-dist.tmp
 	
 	# Include documentation filenames
