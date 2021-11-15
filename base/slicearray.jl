@@ -215,9 +215,9 @@ size(s::Slices) = map(length, s.axes)
     return map(l -> l === (:) ? (:) : c[l], s.slicemap)
 end
 
-getindex(s::Slices{P,SM,AX,S,N}, I::Vararg{Int,N}) where {P,SM,AX,S,N} =
+Base.@propagate_inbounds getindex(s::Slices{P,SM,AX,S,N}, I::Vararg{Int,N}) where {P,SM,AX,S,N} =
     view(s.parent, _slice_index(s, I...)...)
-setindex!(s::Slices{P,SM,AX,S,N}, val, I::Vararg{Int,N}) where {P,SM,AX,S,N} =
+Base.@propagate_inbounds setindex!(s::Slices{P,SM,AX,S,N}, val, I::Vararg{Int,N}) where {P,SM,AX,S,N} =
     s.parent[_slice_index(s, I...)...] = val
 
 parent(s::Slices) = s.parent
