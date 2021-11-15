@@ -536,8 +536,8 @@ julia> var1 = let x
        end
 4
 ```
-Whereas assignments might reassign a new value to an existing value location, `let` always creates a 
-new location. This difference is usually not important, and is only detectable in the case of 
+Whereas assignments might reassign a new value to an existing value location, `let` always creates a
+new location. This difference is usually not important, and is only detectable in the case of
 variables that outlive their scope via closures. The `let` syntax accepts a comma-separated series of
 assignments and variable names:
 
