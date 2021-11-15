@@ -104,21 +104,26 @@ function _check_dllist()
     names = [get!(() -> _dlname(x), _dlname_cache, x) for x in paths]
     dict = Dict{String, String}() # name => path
     for (name, path) in zip(names, paths)
+        # Test if there is a duplicity (name already in `dict`)
         oldpath = get!(dict, name, path)
-        if path != oldpath && _dlabspath(path) != _dlabspath(oldpath)
-            name ∈ _suppressed_warnings && continue
-            @warn """Detected possible duplicate library loaded: $(name)
+        path == oldpath && continue
+        # Test if already suppressed
+        name ∈ _suppressed_warnings && continue
+        # Show the warning only once (suppress in the future)
+        push!(_suppressed_warnings, name)
+        # Test if absolute paths are equal
+        _dlabspath(path) == _dlabspath(oldpath) && continue
+        @warn """Detected possible duplicate library loaded: $(name)
 This may lead to unexpected behavior!
 $(path)
 $(oldpath)
 To suppress this warning, you can use the following argument:
-dlopen([name_or_path]; suppress_warnings = ["$(name)"])""" maxlog=1
-        end
+dlopen([name_or_path]; suppress_warnings = ["$(name)"])"""
     end
 end
 
 """
-    dlopen(libfile::AbstractString [, flags::Integer]; throw_error:Bool = true)
+    dlopen(libfile::AbstractString [, flags::Integer]; throw_error:Bool = true, suppress_warnings::Vector{String} = String[])
 
 Load a shared library, returning an opaque handle.
 
@@ -148,6 +153,12 @@ If the library cannot be found, this method throws an error, unless the keyword 
      From Julia 1.6 on, this method replaces paths starting with `@executable_path/` with
      the path to the Julia executable, allowing for relocatable relative-path loads. In
      Julia 1.5 and earlier, this only worked on macOS.
+
+!!! note
+     From Julia 1.8 on, this method detects when a library with the same name is loaded
+     multiple times from different files because it may lead to unexpected behavior. In such
+     a case, the method produces a warning. The warning be suppressed by adding the name of
+     the library into a newly introduced keyword argument `suppress_warnings`.
 """
 function dlopen end
 
