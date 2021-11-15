@@ -698,7 +698,7 @@ end
 isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
 using .Main.SizedArrays
 @testset "non-number eltype" begin
-    @testset "sum for SymTridiagonal with" begin
+    @testset "sum for SymTridiagonal" begin
         dv = [SizedArray{(2,2)}(rand(1:2048,2,2)) for i in 1:10]
         ev = [SizedArray{(2,2)}(rand(1:2048,2,2)) for i in 1:10]
         S = SymTridiagonal(dv, ev)

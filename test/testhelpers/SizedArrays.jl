@@ -35,6 +35,6 @@ function *(S1::SizedArray, S2::SizedArray)
     0 < ndims(S1) < 3 && 0 < ndims(S2) < 3 && size(S1, 2) == size(S2, 1) || throw(ArgumentError("size mismatch!"))
     data = S1.data * S2.data
     SZ = ndims(data) == 1 ? (size(S1, 1), ) : (size(S1, 1), size(S2, 2))
-    SizedArray{SZ}(S1.data * S2.data)
+    SizedArray{SZ}(data)
 end
 end
