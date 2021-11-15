@@ -970,7 +970,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         end
         if nounion === Union{} || (nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype)
             # reached a fixpoint or iterator failed/gave invalid answer
-            if typeintersect(stateordonet_widened, Nothing) === Union{}
+            if !hasintersect(stateordonet_widened, Nothing)
                 # ... but cannot terminate
                 if !may_have_terminated
                     #  ... and cannot have terminated prior to this loop
@@ -1497,7 +1497,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
     elseif f === nothing
         # non-constant function, but the number of arguments is known
         # and the ft is not a Builtin or IntrinsicFunction
-        if typeintersect(widenconst(ft), Union{Builtin, Core.OpaqueClosure}) != Union{}
+        if hasintersect(widenconst(ft), Union{Builtin, Core.OpaqueClosure})
             add_remark!(interp, sv, "Could not identify method table for call")
             return CallMeta(Any, false)
         end

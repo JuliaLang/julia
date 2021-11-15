@@ -75,7 +75,7 @@ function instanceof_tfunc(@nospecialize(t))
     t = widenconst(t)
     if t === Bottom
         return Bottom, true, true, false # runtime unreachable
-    elseif t === typeof(Bottom) || typeintersect(t, Type) === Bottom
+    elseif t === typeof(Bottom) || !hasintersect(t, Type)
         return Bottom, true, false, false # literal Bottom or non-Type
     elseif isType(t)
         tp = t.parameters[1]
@@ -246,7 +246,7 @@ function egal_tfunc(@nospecialize(x), @nospecialize(y))
         return Const(false)
     elseif isa(xx, Const) && isa(yy, Const)
         return Const(xx.val === yy.val)
-    elseif typeintersect(widenconst(xx), widenconst(yy)) === Bottom
+    elseif !hasintersect(widenconst(xx), widenconst(yy))
         return Const(false)
     elseif (isa(xx, Const) && y === typeof(xx.val) && isdefined(y, :instance)) ||
            (isa(yy, Const) && x === typeof(yy.val) && isdefined(x, :instance))
@@ -258,9 +258,9 @@ add_tfunc(===, 2, 2, egal_tfunc, 1)
 
 function isdefined_nothrow(argtypes::Array{Any, 1})
     length(argtypes) == 2 || return false
-    return typeintersect(widenconst(argtypes[1]), Module) === Union{} ?
-        (argtypes[2] ⊑ Symbol || argtypes[2] ⊑ Int) :
-         argtypes[2] ⊑ Symbol
+    return hasintersect(widenconst(argtypes[1]), Module) ?
+           argtypes[2] ⊑ Symbol :
+           (argtypes[2] ⊑ Symbol || argtypes[2] ⊑ Int)
 end
 isdefined_tfunc(arg1, sym, order) = (@nospecialize; isdefined_tfunc(arg1, sym))
 function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
@@ -275,8 +275,9 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
     a1 = unwrap_unionall(a1)
     if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
-            Symbol <: widenconst(sym) || return Bottom
-            if isa(sym, Const) && isa(sym.val, Symbol) && isa(arg1, Const) && isdefined(arg1.val, sym.val)
+            hasintersect(widenconst(sym), Symbol) || return Bottom
+            if isa(sym, Const) && isa(sym.val, Symbol) && isa(arg1, Const) &&
+               isdefined(arg1.val::Module, sym.val::Symbol)
                 return Const(true)
             end
         elseif isa(sym, Const)
@@ -314,11 +315,8 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
             end
         end
     elseif isa(a1, Union)
-        t = Bottom
-        for u in uniontypes(a1)
-            t = tmerge(t, isdefined_tfunc(u, sym))
-        end
-        return t
+        return tmerge(isdefined_tfunc(a1.a, sym),
+                      isdefined_tfunc(a1.b, sym))
     end
     return Bool
 end
@@ -341,7 +339,7 @@ function sizeof_nothrow(@nospecialize(x))
     if t === Bottom
         # x must be an instance (not a Type) or is the Bottom type object
         x = widenconst(x)
-        return typeintersect(x, Type) === Union{}
+        return !hasintersect(x, Type)
     end
     x = unwrap_unionall(t)
     if isconcrete
@@ -599,9 +597,7 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
     if t === Bottom
         # check if t could be equivalent to typeof(Bottom), since that's valid in `isa`, but the set of `v` is empty
         # if `t` cannot have instances, it's also invalid on the RHS of isa
-        if typeintersect(widenconst(tt), Type) === Union{}
-            return Union{}
-        end
+        hasintersect(widenconst(tt), Type) || return Union{}
         return Const(false)
     end
     if !has_free_typevars(t)
@@ -617,7 +613,7 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
             end
             v = widenconst(v)
             isdispatchelem(v) && return Const(false)
-            if typeintersect(v, t) === Bottom
+            if !hasintersect(v, t)
                 # similar to `isnotbrokensubtype` check above, `typeintersect(v, t)`
                 # can't be trusted for kind types so we do an extra check here
                 if !iskindtype(v)
@@ -640,7 +636,7 @@ function subtype_tfunc(@nospecialize(a), @nospecialize(b))
                 return Const(true)
             end
         else
-            if isexact_a || (b !== Bottom && typeintersect(a, b) === Union{})
+            if isexact_a || (b !== Bottom && !hasintersect(a, b))
                 return Const(false)
             end
         end
@@ -673,7 +669,7 @@ function fieldcount_noerror(@nospecialize t)
             return nothing
         end
         t = t::DataType
-    elseif t == Union{}
+    elseif t === Union{}
         return 0
     end
     if !(t isa DataType)
@@ -1297,7 +1293,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
                 end
             else
                 if !isType(ai)
-                    if !isa(ai, Type) || typeintersect(ai, Type) !== Bottom || typeintersect(ai, TypeVar) !== Bottom
+                    if !isa(ai, Type) || hasintersect(ai, Type) || hasintersect(ai, TypeVar)
                         hasnonType = true
                     else
                         return Bottom
