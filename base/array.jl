@@ -2324,7 +2324,9 @@ julia> findall(falses(3))
 Int64[]
 ```
 """
-findall(A) = findall(identity, A)
+function findall(A)
+    collect(first(p) for p in pairs(A) if last(p))
+end
 
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
 function findall(A::AbstractArray{Bool})
