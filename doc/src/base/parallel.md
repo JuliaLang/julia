@@ -39,6 +39,7 @@ Base.Condition
 Base.Threads.Condition
 Base.Threads.Event
 Base.notify
+Base.reset(::Base.Threads.Event)
 
 Base.Semaphore
 Base.acquire

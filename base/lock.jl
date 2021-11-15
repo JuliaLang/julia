@@ -16,6 +16,8 @@ should naturally be supported, but beware of inverting the try/lock order or
 missing the try block entirely (e.g. attempting to return with the lock still
 held):
 
+This provides a acquire/release memory ordering on lock/unlock calls.
+
 ```
 lock(l)
 try
@@ -287,6 +289,8 @@ end
 Create a counting semaphore that allows at most `sem_size`
 acquires to be in use at any time.
 Each acquire must be matched with a release.
+
+This provides a acquire & release memory ordering on acquire/release calls.
 """
 mutable struct Semaphore
     sem_size::Int
@@ -335,28 +339,61 @@ end
 
 
 """
-    Event()
+    Event([autoreset=false])
 
 Create a level-triggered event source. Tasks that call [`wait`](@ref) on an
 `Event` are suspended and queued until [`notify`](@ref) is called on the `Event`.
 After `notify` is called, the `Event` remains in a signaled state and
-tasks will no longer block when waiting for it.
+tasks will no longer block when waiting for it, until `reset` is called.
+
+If `autoreset` is true, at most one task will be released from `wait` for
+each call to `notify`.
+
+This provides an acquire & release memory ordering on notify/wait.
 
 !!! compat "Julia 1.1"
     This functionality requires at least Julia 1.1.
+
+!!! compat "Julia 1.8"
+    The `autoreset` functionality and memory ordering guarantee requires at least Julia 1.8.
 """
 mutable struct Event
     notify::Threads.Condition
-    set::Bool
-    Event() = new(Threads.Condition(), false)
+    autoreset::Bool
+    @atomic set::Bool
+    Event(autoreset::Bool=false) = new(Threads.Condition(), autoreset, false)
 end
 
 function wait(e::Event)
-    e.set && return
-    lock(e.notify)
+    if e.autoreset
+        (@atomicswap :acquire_release e.set = false) && return
+    else
+        (@atomic e.set) && return # full barrier also
+    end
+    lock(e.notify) # acquire barrier
     try
-        while !e.set
-            wait(e.notify)
+        if e.autoreset
+            (@atomicswap :acquire_release e.set = false) && return
+        else
+            e.set && return
+        end
+        wait(e.notify)
+    finally
+        unlock(e.notify) # release barrier
+    end
+    nothing
+end
+
+function notify(e::Event)
+    lock(e.notify) # acquire barrier
+    try
+        if e.autoreset
+            if notify(e.notify, all=false) == 0
+                @atomic :release e.set = true
+            end
+        elseif !e.set
+            @atomic :release e.set = true
+            notify(e.notify)
         end
     finally
         unlock(e.notify)
@@ -364,16 +401,14 @@ function wait(e::Event)
     nothing
 end
 
-function notify(e::Event)
-    lock(e.notify)
-    try
-        if !e.set
-            e.set = true
-            notify(e.notify)
-        end
-    finally
-        unlock(e.notify)
-    end
+"""
+    reset(::Event)
+
+Reset an Event back into an un-set state. Then any future calls to `wait` will
+block until `notify` is called again.
+"""
+function reset(e::Event)
+    @atomic e.set = false # full barrier
     nothing
 end
 

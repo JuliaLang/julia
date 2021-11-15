@@ -1095,7 +1095,7 @@ isdone(itr::ReadEachIterator, state...) = eof(itr.stream)
 # not in base.
 
 """
-    mark(s)
+    mark(s::IO)
 
 Add a mark at the current position of stream `s`. Return the marked position.
 
@@ -1106,7 +1106,7 @@ function mark(io::IO)
 end
 
 """
-    unmark(s)
+    unmark(s::IO)
 
 Remove a mark from stream `s`. Return `true` if the stream was marked, `false` otherwise.
 
@@ -1119,7 +1119,7 @@ function unmark(io::IO)
 end
 
 """
-    reset(s)
+    reset(s::IO)
 
 Reset a stream `s` to a previously marked position, and remove the mark. Return the
 previously marked position. Throw an error if the stream is not marked.
@@ -1135,7 +1135,7 @@ function reset(io::T) where T<:IO
 end
 
 """
-    ismarked(s)
+    ismarked(s::IO)
 
 Return `true` if stream `s` is marked.
 

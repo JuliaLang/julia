@@ -586,21 +586,6 @@ function test_thread_too_few_iters()
 end
 test_thread_too_few_iters()
 
-let e = Event(), started = Event()
-    done = false
-    t = @async (notify(started); wait(e); done = true)
-    wait(started)
-    sleep(0.1)
-    @test done == false
-    notify(e)
-    wait(t)
-    @test done == true
-    blocked = true
-    wait(@async (wait(e); blocked = false))
-    @test !blocked
-end
-
-
 @testset "InvasiveLinkedList" begin
     @test eltype(Base.InvasiveLinkedList{Integer}) == Integer
     @test eltype(Base.LinkedList{Integer}) == Integer

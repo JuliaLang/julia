@@ -2,10 +2,12 @@
 
 using Test
 
+using Base.Threads
+
 # simple sanity tests for locks under cooperative concurrent access
 let lk = ReentrantLock()
-    c1 = Base.Event()
-    c2 = Base.Event()
+    c1 = Event()
+    c2 = Event()
     @test trylock(lk)
     @test trylock(lk)
     t1 = @async (notify(c1); lock(lk); unlock(lk); trylock(lk))
@@ -21,6 +23,50 @@ let lk = ReentrantLock()
     unlock(lk)
     @test t1.queue !== lk.cond_wait.waitq
     @test fetch(t1)
+end
+
+let e = Event(), started1 = Event(false), started2 = Event(false)
+    for i = 1:3
+        done1 = false
+        done2 = false
+        t1 = @async (notify(started1); wait(e); done1 = true)
+        t2 = @async (notify(started2); wait(e); done2 = true)
+        wait(started1)
+        wait(started2)
+        sleep(0.1)
+        @test !done1 && !done2
+        notify(e)
+        wait(t1)
+        @test done1
+        wait(t2)
+        @test done2
+        wait(e)
+        notify(e)
+        reset(e)
+    end
+end
+
+let e = Event(true), started1 = Event(true), started2 = Event(true), done = Event(true)
+    for i = 1:3
+        done1 = false
+        done2 = false
+        t1 = @async (notify(started1); wait(e); done1 = true; notify(done))
+        t2 = @async (notify(started2); wait(e); done2 = true; notify(done))
+        wait(started1)
+        wait(started2)
+        sleep(0.1)
+        @test !done1 && !done2
+        notify(e)
+        wait(done)
+        @test done1 ⊻ done2
+        done1 ? wait(t1) : wait(t2)
+        notify(e)
+        wait(t1)
+        @test done1
+        wait(t2)
+        @test done2
+        wait(done)
+    end
 end
 
 let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`
@@ -156,7 +202,6 @@ let idle=UvTestIdle()
     close(idle)
 end
 
-using Base.Threads
 @threads for i = 1:1
     let idle=UvTestIdle()
         wait(idle)
