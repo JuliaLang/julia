@@ -144,7 +144,7 @@ extern JITEventListener *CreateJuliaJITEventListener();
 bool imaging_mode = false;
 
 // shared llvm state
-JL_DLLEXPORT LLVMContext &jl_LLVMContext = *(new LLVMContext());
+static LLVMContext &jl_LLVMContext = *(new LLVMContext());
 TargetMachine *jl_TargetMachine;
 static DataLayout &jl_data_layout = *(new DataLayout(""));
 #define jl_Module ctx.f->getParent()
@@ -4790,7 +4790,7 @@ static Value *get_current_task(jl_codectx_t &ctx)
 // Get PTLS through current task.
 static Value *get_current_ptls(jl_codectx_t &ctx)
 {
-    return get_current_ptls_from_task(ctx.builder, get_current_task(ctx));
+    return get_current_ptls_from_task(ctx.builder, get_current_task(ctx), tbaa_gcframe);
 }
 
 // Store world age at the entry block of the function. This function should be
@@ -7689,7 +7689,7 @@ void jl_compile_workqueue(
 
 // --- initialization ---
 
-std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false)
+static std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false)
 {
     MDBuilder mbuilder(jl_LLVMContext);
     if (tbaa_root == nullptr) {
