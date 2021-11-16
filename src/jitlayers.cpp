@@ -1134,7 +1134,7 @@ void add_named_global(StringRef name, void *addr)
 }
 
 extern "C" JL_DLLEXPORT
-size_t jl_jit_total_bytes(void)
+size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
 }
