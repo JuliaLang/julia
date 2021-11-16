@@ -186,6 +186,11 @@ Julia function. The arguments to [`@cfunction`](@ref) are:
     function on 32-bit Windows, but can be used on WIN64 (where `stdcall` is unified with the
     C calling convention).
 
+!!! note
+    Callback functions exposed via `@cfunction` should not throw errors, as that will
+    return control to the Julia runtime and may leave the library invoking the function in
+    an undefined state.
+
 A classic example is the standard C library `qsort` function, declared as:
 
 ```c
