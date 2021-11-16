@@ -103,7 +103,6 @@ size(r::Reverse) = size(r.itr)
 IteratorSize(::Type{Reverse{T}}) where {T} = IteratorSize(T)
 IteratorEltype(::Type{Reverse{T}}) where {T} = IteratorEltype(T)
 last(r::Reverse) = first(r.itr) # the first shall be last
-first(r::Reverse) = last(r.itr) # and the last shall be first
 
 # reverse-order array iterators: assumes more-specialized Reverse for eachindex
 @propagate_inbounds function iterate(A::Reverse{<:AbstractArray}, state=(reverse(eachindex(A.itr)),))
@@ -119,7 +118,7 @@ reverse(r::Reverse) = r.itr
 reverse(x::Union{Number,AbstractChar}) = x
 reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
 
-iterate(r::Reverse{<:Tuple}, i::Int = length(r.itr)) = i < 1 ? nothing : (r.itr[i], i-1)
+iterate(r::Reverse{<:Union{Tuple, NamedTuple}}, i::Int = length(r.itr)) = i < 1 ? nothing : (r.itr[i], i-1)
 
 # enumerate
 
@@ -790,7 +789,7 @@ end
 
 IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
 eltype(::Type{TakeWhile{I,P}} where P) where {I} = eltype(I)
-IteratorEltype(::Type{TakeWhile{I}} where P) where {I} = IteratorEltype(I)
+IteratorEltype(::Type{TakeWhile{I, P}} where P) where {I} = IteratorEltype(I)
 
 
 # dropwhile

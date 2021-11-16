@@ -313,6 +313,12 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
                 end
             end
         end
+    elseif isa(a1, Union)
+        t = Bottom
+        for u in uniontypes(a1)
+            t = tmerge(t, isdefined_tfunc(u, sym))
+        end
+        return t
     end
     return Bool
 end
@@ -1429,29 +1435,29 @@ end
 
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
-function tuple_tfunc(atypes::Vector{Any})
-    atypes = anymap(widenconditional, atypes)
+function tuple_tfunc(argtypes::Vector{Any})
+    argtypes = anymap(widenconditional, argtypes)
     all_are_const = true
-    for i in 1:length(atypes)
-        if !isa(atypes[i], Const)
+    for i in 1:length(argtypes)
+        if !isa(argtypes[i], Const)
             all_are_const = false
             break
         end
     end
     if all_are_const
-        return Const(ntuple(i -> atypes[i].val, length(atypes)))
+        return Const(ntuple(i -> argtypes[i].val, length(argtypes)))
     end
-    params = Vector{Any}(undef, length(atypes))
+    params = Vector{Any}(undef, length(argtypes))
     anyinfo = false
-    for i in 1:length(atypes)
-        x = atypes[i]
+    for i in 1:length(argtypes)
+        x = argtypes[i]
         if has_struct_const_info(x)
             anyinfo = true
         else
             if !isvarargtype(x)
                 x = widenconst(x)
             end
-            atypes[i] = x
+            argtypes[i] = x
         end
         if isa(x, Const)
             params[i] = typeof(x.val)
@@ -1473,7 +1479,7 @@ function tuple_tfunc(atypes::Vector{Any})
     typ = Tuple{params...}
     # replace a singleton type with its equivalent Const object
     isdefined(typ, :instance) && return Const(typ.instance)
-    return anyinfo ? PartialStruct(typ, atypes) : typ
+    return anyinfo ? PartialStruct(typ, argtypes) : typ
 end
 
 function arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(a), @nospecialize i...)

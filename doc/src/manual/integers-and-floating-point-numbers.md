@@ -173,8 +173,18 @@ UInt128
 As for hexadecimal literals, binary and octal literals produce unsigned integer types. The size
 of the binary data item is the minimal needed size, if the leading digit of the literal is not
 `0`. In the case of leading zeros, the size is determined by the minimal needed size for a
-literal, which has the same length but leading digit `1`. That allows the user to control
-the size.
+literal, which has the same length but leading digit `1`. It means that:
+
+- `0x1` and `0x12` are `UInt8` literals,
+- `0x123` and `0x1234` are `UInt16` literals,
+- `0x12345` and `0x12345678` are `UInt32` literals,
+- `0x123456789` and `0x1234567890adcdef` are `UInt64` literals, etc.
+
+Even if there are leading zero digits which don’t contribute to the value, they count for
+determining storage size of a literal. So `0x01` is a `UInt8` while `0x0001` is a `UInt16`.
+
+That allows the user to control the size.
+
 Values which cannot be stored in `UInt128` cannot be written as such literals.
 
 Binary, octal, and hexadecimal literals may be signed by a `-` immediately preceding the
@@ -534,7 +544,7 @@ most books on scientific computation, and also in the following references:
     abstraction of real numbers.
   * Also recommended is Bruce Dawson's [series of blog posts on floating-point numbers](https://randomascii.wordpress.com/2012/05/20/thats-not-normalthe-performance-of-odd-floats/).
   * For an excellent, in-depth discussion of floating-point numbers and issues of numerical accuracy
-    encountered when computing with them, see David Goldberg's paper [What Every Computer Scientist Should Know About Floating-Point Arithmetic](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.22.6768&rep=rep1&type=pdf).
+    encountered when computing with them, see David Goldberg's paper [What Every Computer Scientist Should Know About Floating-Point Arithmetic](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.22.6768&rep=rep1&type=pdf).
   * For even more extensive documentation of the history of, rationale for, and issues with floating-point
     numbers, as well as discussion of many other topics in numerical computing, see the [collected writings](https://people.eecs.berkeley.edu/~wkahan/)
     of [William Kahan](https://en.wikipedia.org/wiki/William_Kahan), commonly known as the "Father

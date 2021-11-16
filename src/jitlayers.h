@@ -23,7 +23,7 @@ extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM);
+void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
 Module *jl_create_llvm_module(StringRef name);

@@ -6,29 +6,21 @@ Support for sparse arrays. Provides `AbstractSparseArray` and subtypes.
 module SparseArrays
 
 using Base: ReshapedArray, promote_op, setindex_shape_check, to_shape, tail,
-    require_one_based_indexing
+    require_one_based_indexing, promote_eltype
 using Base.Sort: Forward
 using LinearAlgebra
-using LinearAlgebra: AdjOrTrans
+using LinearAlgebra: AdjOrTrans, matprod
 
 import Base: +, -, *, \, /, &, |, xor, ==, zero
 import LinearAlgebra: mul!, ldiv!, rdiv!, cholesky, adjoint!, diag, eigen, dot,
     issymmetric, istril, istriu, lu, tr, transpose!, tril!, triu!, isbanded,
-    cond, diagm, factorize, ishermitian, norm, opnorm, lmul!, rmul!, tril, triu, matprod
+    cond, diagm, factorize, ishermitian, norm, opnorm, lmul!, rmul!, tril, triu
 
-import Base: acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
-    atan, atand, atanh, broadcast!, conj!, cos, cosc, cosd, cosh, cospi, cot,
-    cotd, coth, count, csc, cscd, csch,
-    exp10, exp2, findprev, findnext, floor, hash, argmin, inv,
-    log10, log2, sec, secd, sech, show,
-    sin, sinc, sind, sinh, sinpi, dropdims, sum, summary, tan,
-    tand, tanh, trunc, abs, abs2,
-    broadcast, ceil, complex, conj, convert, copy, copyto!, adjoint,
-    exp, expm1, findall, findmax, findmin, float, getindex,
-    vcat, hcat, hvcat, cat, imag, argmax, kron, kron!, length, log, log1p, max, min,
-    maximum, minimum, one, promote_eltype, real, reshape, rot180,
-    rotl90, rotr90, round, setindex!, similar, size, transpose,
-    vec, permute!, map, map!, Array, diff, circshift!, circshift
+import Base: adjoint, argmin, argmax, Array, broadcast, circshift!, complex, Complex,
+    conj, conj!, convert, copy, copy!, copyto!, count, diff, findall, findmax, findmin,
+    float, getindex, imag, inv, kron, kron!, length, map, maximum, minimum, permute!, real,
+    rot180, rotl90, rotr90, setindex!, show, similar, size, sum, transpose,
+    vcat, hcat, hvcat, cat, vec
 
 using Random: default_rng, AbstractRNG, randsubseq, randsubseq!
 

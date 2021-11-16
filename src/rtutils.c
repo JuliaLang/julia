@@ -1368,27 +1368,6 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
     JL_GC_POP();
 }
 
-#if 0
-void jl_depwarn(const char *msg, jl_value_t *sym)
-{
-    static jl_value_t *depwarn_func = NULL;
-    if (!depwarn_func && jl_base_module) {
-        depwarn_func = jl_get_global(jl_base_module, jl_symbol("depwarn"));
-    }
-    if (!depwarn_func) {
-        jl_safe_printf("WARNING: %s\n", msg);
-        return;
-    }
-    jl_value_t **depwarn_args;
-    JL_GC_PUSHARGS(depwarn_args, 3);
-    depwarn_args[0] = depwarn_func;
-    depwarn_args[1] = jl_cstr_to_string(msg);
-    depwarn_args[2] = sym;
-    jl_apply(depwarn_args, 3);
-    JL_GC_POP();
-}
-#endif
-
 #ifdef __cplusplus
 }
 #endif

@@ -523,7 +523,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       m, n, A, max(1,stride(A,2)), tau, work, lwork, info)
                 chklapackerror(info[])
                 if i == 1
-                    lwork = BlasInt(real(work[1]))
+                    lwork = max(BlasInt(1),BlasInt(real(work[1])))
                     resize!(work, lwork)
                 end
             end
@@ -552,7 +552,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       m, n, A, max(1,stride(A,2)), tau, work, lwork, info)
                 chklapackerror(info[])
                 if i == 1
-                    lwork = BlasInt(real(work[1]))
+                    lwork = max(BlasInt(m), BlasInt(real(work[1])))
                     resize!(work, lwork)
                 end
             end

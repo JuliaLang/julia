@@ -2172,8 +2172,10 @@ end
 _isless_fm(a, b)    =  b == b && ( a != a || isless(a, b) )
 _isgreater_fm(a, b) =  b == b && ( a != a || isless(b, a) )
 
-findmin(A::AbstractSparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = _findr(_isless_fm, A, region, Tv)
-findmax(A::AbstractSparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = _findr(_isgreater_fm, A, region, Tv)
+findmin(A::AbstractSparseMatrixCSC{Tv}, region::Union{Integer,Tuple{Integer},NTuple{2,Integer}}) where {Tv} =
+    _findr(_isless_fm, A, region, Tv)
+findmax(A::AbstractSparseMatrixCSC{Tv}, region::Union{Integer,Tuple{Integer},NTuple{2,Integer}}) where {Tv} =
+    _findr(_isgreater_fm, A, region, Tv)
 findmin(A::AbstractSparseMatrixCSC) = (r=findmin(A,(1,2)); (r[1][1], r[2][1]))
 findmax(A::AbstractSparseMatrixCSC) = (r=findmax(A,(1,2)); (r[1][1], r[2][1]))
 

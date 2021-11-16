@@ -205,7 +205,24 @@ JL_DLLEXPORT uint16_t __gnu_f2h_ieee(float param)
 
 JL_DLLEXPORT uint16_t __truncdfhf2(double param)
 {
-    return float_to_half((float)param);
+    float res = (float)param;
+    uint32_t resi;
+    memcpy(&resi, &res, sizeof(res));
+    if ((resi&0x7fffffffu) < 0x38800000u){ // if Float16(res) is subnormal
+        // shift so that the mantissa lines up where it would for normal Float16
+        uint32_t shift = 113u-((resi & 0x7f800000u)>>23u);
+        if (shift<23u) {
+            resi |= 0x00800000; // set implicit bit
+            resi >>= shift;
+        }
+    }
+    if ((resi & 0x1fffu) == 0x1000u) { // if we are halfway between 2 Float16 values
+        memcpy(&resi, &res, sizeof(res));
+        // adjust the value by 1 ULP in the direction that will make Float16(res) give the right answer
+        resi += (fabs(res) < fabs(param)) - (fabs(param) < fabs(res));
+        memcpy(&res, &resi, sizeof(res));
+    }
+    return float_to_half(res);
 }
 
 #endif
@@ -434,7 +451,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
 JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym)
 {
     JL_TYPECHK(fence, symbol, order_sym);
-    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 0, 0);
+    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 1, 1);
     if (order > jl_memory_order_monotonic)
         jl_fence();
     return jl_nothing;

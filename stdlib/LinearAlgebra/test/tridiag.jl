@@ -695,4 +695,35 @@ end
     end
 end
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+@testset "non-number eltype" begin
+    @testset "sum for SymTridiagonal" begin
+        dv = [SizedArray{(2,2)}(rand(1:2048,2,2)) for i in 1:10]
+        ev = [SizedArray{(2,2)}(rand(1:2048,2,2)) for i in 1:10]
+        S = SymTridiagonal(dv, ev)
+        Sdense = Matrix(S)
+        @test Sdense == collect(S)
+        @test sum(S) == sum(Sdense)
+        @test sum(S, dims = 1) == sum(Sdense, dims = 1)
+        @test sum(S, dims = 2) == sum(Sdense, dims = 2)
+    end
+    @testset "issymmetric/ishermitian for Tridiagonal" begin
+        @test !issymmetric(Tridiagonal([[1 2;3 4]], [[1 2;2 3], [1 2;2 3]], [[1 2;3 4]]))
+        @test !issymmetric(Tridiagonal([[1 3;2 4]], [[1 2;3 4], [1 2;3 4]], [[1 2;3 4]]))
+        @test issymmetric(Tridiagonal([[1 3;2 4]], [[1 2;2 3], [1 2;2 3]], [[1 2;3 4]]))
+
+        @test ishermitian(Tridiagonal([[1 3;2 4].+im], [[1 2;2 3].+0im, [1 2;2 3].+0im], [[1 2;3 4].-im]))
+        @test !ishermitian(Tridiagonal([[1 3;2 4].+im], [[1 2;2 3].+0im, [1 2;2 3].+0im], [[1 2;3 4].+im]))
+        @test !ishermitian(Tridiagonal([[1 3;2 4].+im], [[1 2;2 3].+im, [1 2;2 3].+0im], [[1 2;3 4].-im]))
+    end
+    @testset "== between Tridiagonal and SymTridiagonal" begin
+        dv = [SizedArray{(2,2)}([1 2;3 4]) for i in 1:4]
+        ev = [SizedArray{(2,2)}([3 4;1 2]) for i in 1:4]
+        S = SymTridiagonal(dv, ev)
+        Sdense = Matrix(S)
+        @test S == Tridiagonal(diag(Sdense, -1), diag(Sdense),  diag(Sdense, 1)) == S
+        @test S !== Tridiagonal(diag(Sdense, 1), diag(Sdense),  diag(Sdense, 1)) !== S
+    end
+end
 end # module TestTridiagonal

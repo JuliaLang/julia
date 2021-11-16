@@ -25,6 +25,10 @@ Language changes
 * `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
   i.e. `@time "Evaluating foo" foo()` ([#42431])
 * New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
+* `last(collection)` will now work on any collection that supports `Iterators.reverse` and `first`, rather than being
+  restricted to indexable collections.
+* Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
+  to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -37,6 +41,11 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* New option `--strip-metadata` to remove docstrings, source location information, and local
+  variable names when building a system image ([#42513]).
+* New option `--strip-ir` to remove the compiler's IR (intermediate representation) of source
+  code when building a system image. The resulting image will only work if `--compile=all` is
+  used, or if all needed code is precompiled ([#42925]).
 
 Multi-threading changes
 -----------------------

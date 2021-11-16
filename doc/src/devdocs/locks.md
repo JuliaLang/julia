@@ -1,4 +1,4 @@
-# Proper maintenance and care of multi-threading locks
+# [Proper maintenance and care of multi-threading locks](@id dev-locks)
 
 The following strategies are used to ensure that the code is dead-lock free (generally by addressing
 the 4th Coffman condition: circular wait).

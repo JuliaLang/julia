@@ -65,6 +65,7 @@ function choosetests(choices = [])
     exit_on_error = false
     use_revise = false
     seed = rand(RandomDevice(), UInt128)
+    force_net = false
     dryrun = false
 
     for (i, t) in enumerate(choices)
@@ -77,6 +78,8 @@ function choosetests(choices = [])
             use_revise = true
         elseif startswith(t, "--seed=")
             seed = parse(UInt128, t[8:end])
+        elseif t == "--force-net"
+            force_net = true
         elseif t == "--help-list"
             dryrun = true
         elseif t == "--help"
@@ -107,9 +110,13 @@ function choosetests(choices = [])
 
     unhandled = copy(skip_tests)
 
-    if tests == ["all"] || isempty(tests)
-        tests = TESTNAMES
+    requested_all     = "all"     in tests
+    requested_default = "default" in tests
+    if isempty(tests) || requested_all || requested_default
+        append!(tests, TESTNAMES)
     end
+    filter!(x -> x != "all",     tests)
+    filter!(x -> x != "default", tests)
 
     function filtertests!(tests, name, files=[name])
        flt = x -> (x != name && !(x in files))
@@ -121,6 +128,9 @@ function choosetests(choices = [])
            prepend!(tests, files)
        end
     end
+
+    explicit_pkg     = "Pkg"            in tests
+    explicit_libgit2 = "LibGit2/online" in tests
 
     filtertests!(tests, "unicode", ["unicode/utf8"])
     filtertests!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
@@ -137,7 +147,7 @@ function choosetests(choices = [])
     if startswith(string(Sys.ARCH), "arm")
         # Remove profile from default tests on ARM since it currently segfaults
         # Allow explicitly adding it for testing
-        @warn "Skipping Profile tests"
+        @warn "Skipping Profile tests because the architecture is ARM"
         filter!(x -> (x != "Profile"), tests)
     end
 
@@ -146,7 +156,12 @@ function choosetests(choices = [])
     net_on = true
     try
         ipa = getipaddr()
-    catch
+    catch ex
+        if force_net
+            msg = "Networking is unavailable, and the `--force-net` option was passed"
+            @error msg
+            rethrow()
+        end
         @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
         net_on = false
     end
@@ -163,8 +178,6 @@ function choosetests(choices = [])
     filter!(!in(tests), unhandled)
     filter!(!in(skip_tests), tests)
 
-    explicit_pkg3    =  "Pkg/pkg"       in tests
-    explicit_libgit2 =  "LibGit2/online" in tests
     new_tests = String[]
     for test in tests
         if test in STDLIBS
@@ -180,8 +193,9 @@ function choosetests(choices = [])
     end
     filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
     append!(tests, new_tests)
-    explicit_pkg3    || filter!(x -> x != "Pkg/pkg",       tests)
-    explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
+
+    requested_all || explicit_pkg     || filter!(x -> x != "Pkg",            tests)
+    requested_all || explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
 
     # Filter out tests from the test groups in the stdlibs
     filter!(!in(tests), unhandled)
