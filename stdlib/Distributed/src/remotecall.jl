@@ -270,7 +270,10 @@ function start_gc_msgs_task()
                     # this might miss events
                     wait(any_gc_flag)
                 end
-                flush_gc_msgs() # handles throws internally
+                # Use invokelatest() so that custom message transport streams
+                # for workers can be defined in a newer world age than the Task
+                # which runs the loop here.
+                invokelatest(flush_gc_msgs) # handles throws internally
             end
         end
     )
