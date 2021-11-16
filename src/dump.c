@@ -322,7 +322,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
             int j = 0;
             for (i = 0; i < jl_array_len(s->loaded_modules_array); i++) {
                 jl_module_t *mi = (jl_module_t*)jl_array_ptr_ref(s->loaded_modules_array, i);
-                if (!module_in_worklist(mi)) {
+                if (mi != jl_main_module && !module_in_worklist(mi)) {
                     if (m == mi) {
                         write_int32(s->s, j);
                         return;
@@ -1089,7 +1089,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
     for (i = 0; i < len; i++) {
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(a, i);
         assert(jl_is_module(m));
-        if (!module_in_worklist(m)) {
+        if (m != jl_main_module && !module_in_worklist(m)) {
             const char *modname = jl_symbol_name(m->name);
             size_t l = strlen(modname);
             write_int32(s, l);
@@ -1151,7 +1151,7 @@ static void write_module_path(ios_t *s, jl_module_t *depmod) JL_NOTSAFEPOINT
 
 // serialize the global _require_dependencies array of pathnames that
 // are include dependencies
-static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *mod_array)
+static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp)
 {
     int64_t initial_pos = 0;
     int64_t pos = 0;
@@ -1211,20 +1211,19 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *
         JL_GC_PUSH1(&prefs_list);
         if (jl_base_module) {
             // Toplevel module is the module we're currently compiling, use it to get our preferences hash
-            jl_value_t * toplevel = (jl_value_t*)jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
             jl_value_t * prefs_hash_func = jl_get_global(jl_base_module, jl_symbol("get_preferences_hash"));
             jl_value_t * get_compiletime_prefs_func = jl_get_global(jl_base_module, jl_symbol("get_compiletime_preferences"));
 
-            if (toplevel && prefs_hash_func && get_compiletime_prefs_func) {
+            if (prefs_hash_func && get_compiletime_prefs_func) {
                 // Temporary invoke in newest world age
                 size_t last_age = ct->world_age;
                 ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
 
-                // call get_compiletime_prefs(__toplevel__)
-                jl_value_t *args[3] = {get_compiletime_prefs_func, (jl_value_t*)toplevel, NULL};
+                // call prefs_list = get_compiletime_prefs(Main)
+                jl_value_t *args[3] = {get_compiletime_prefs_func, (jl_value_t*)jl_main_module, NULL};
                 prefs_list = (jl_value_t*)jl_apply(args, 2);
 
-                // Call get_preferences_hash(__toplevel__, prefs_list)
+                // Call get_preferences_hash(prefs_list)
                 args[0] = prefs_hash_func;
                 args[2] = prefs_list;
                 prefs_hash = (jl_value_t*)jl_apply(args, 3);
@@ -2262,7 +2261,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     // write description on contents
     write_work_list(&f);
     // write binary blob from caller
-    int64_t srctextpos = write_dependency_list(&f, &udeps, mod_array);
+    int64_t srctextpos = write_dependency_list(&f, &udeps);
     // write description of requirements for loading
     // this can return errors during deserialize,
     // best to keep it early (before any actual initialization)
@@ -2291,7 +2290,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     for (i = 0; i < len; i++) {
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
         assert(jl_is_module(m));
-        if (m->parent == m) // some toplevel modules (really just Base) aren't actually
+        if (m->parent == m) // some toplevel modules (really just Base) aren't actually toplevel
             jl_collect_lambdas_from_mod(lambdas, m);
     }
     jl_collect_methtable_from_mod(lambdas, jl_type_type_mt);

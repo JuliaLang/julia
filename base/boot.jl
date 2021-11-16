@@ -199,7 +199,7 @@ export
     # method reflection
     applicable, invoke,
     # constants
-    nothing, Main
+    nothing, Main, __precompile__
 
 const getproperty = getfield
 const setproperty! = setfield!
@@ -819,5 +819,7 @@ struct Pair{A, B}
     Pair{A, B}(a::A, b::B) where {A, B} = new(a, b)
     Pair{Any, Any}(@nospecialize(a::Any), @nospecialize(b::Any)) = new(a, b)
 end
+
+function __precompile__ end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

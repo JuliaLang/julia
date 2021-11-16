@@ -687,9 +687,10 @@ append!(empty!(DEPOT_PATH), saved_depot_path)
 Base.ACTIVE_PROJECT[] = saved_active_project
 
 # issue #28190
-module Foo; import Libdl; end
-import .Foo.Libdl; import Libdl
-@test Foo.Libdl === Libdl
+@show Foo
+module Foo28190; import Libdl; end
+import .Foo28190.Libdl; import Libdl
+@test Foo28190.Libdl === Libdl
 
 @testset "include with mapexpr" begin
     let exprs = Any[]
@@ -743,19 +744,5 @@ end
         raw_manifest = Base.parsed_toml(manifest_file)
         @test Base.is_v1_format_manifest(raw_manifest) == false
         @test Base.get_deps(raw_manifest) == deps
-    end
-end
-
-@testset "error message loading pkg bad module name" begin
-    mktempdir() do tmp
-        old_loadpath = copy(LOAD_PATH)
-        try
-            push!(LOAD_PATH, tmp)
-            write(joinpath(tmp, "BadCase.jl"), "module badcase end")
-            @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
-                                        check for typos in package module name") (@eval using BadCase)
-        finally
-            copy!(LOAD_PATH, old_loadpath)
-        end
     end
 end

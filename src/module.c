@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, uint8_t default_names)
+jl_module_t *jl_new_module_(jl_sym_t *name, uint8_t default_names)
 {
     jl_task_t *ct = jl_current_task;
     const jl_uuid_t uuid_zero = {0, 0};
@@ -56,20 +56,6 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 uint32_t jl_module_next_counter(jl_module_t *m)
 {
     return jl_atomic_fetch_add(&m->counter, 1);
-}
-
-JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports, uint8_t default_names)
-{
-    // TODO: should we prohibit this during incremental compilation?
-    jl_module_t *m = jl_new_module_(name, default_names);
-    JL_GC_PUSH1(&m);
-    m->parent = jl_main_module; // TODO: this is a lie
-    jl_gc_wb(m, m->parent);
-    if (std_imports)
-        jl_add_standard_imports(m);
-    JL_GC_POP();
-    // TODO: should we somehow try to gc-root this correctly?
-    return (jl_value_t*)m;
 }
 
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on)

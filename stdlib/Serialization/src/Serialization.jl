@@ -363,7 +363,7 @@ end
 function serialize_mod_names(s::AbstractSerializer, m::Module)
     p = parentmodule(m)
     if p === m || m === Base
-        key = Base.root_module_key(m)
+        key = Base.PkgId(m)
         serialize(s, key.uuid === nothing ? nothing : key.uuid.value)
         serialize(s, Symbol(key.name))
     else

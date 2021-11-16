@@ -340,7 +340,7 @@ to get the file name part of the path.
 """
 function pathof(m::Module)
     @lock require_lock begin
-    pkgid = get(module_keys, m, nothing)
+    pkgid = PkgId(m)
     pkgid === nothing && return nothing
     origin = get(pkgorigins, pkgid, nothing)
     origin === nothing && return nothing
@@ -757,6 +757,7 @@ end
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
 function _include_from_serialized(path::String, depmods::Vector{Any})
+    assert_havelock(require_lock)
     sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
     if isa(sv, Exception)
         return sv
@@ -950,7 +951,7 @@ Specify whether the file calling this function is precompilable, defaulting to `
 If a module or file is *not* safely precompilable, it should call `__precompile__(false)` in
 order to throw an error if Julia attempts to precompile it.
 """
-@noinline function __precompile__(isprecompilable::Bool=true)
+@noinline function Core.__precompile__(isprecompilable::Bool=true)
     if !isprecompilable && ccall(:jl_generating_output, Cint, ()) != 0
         throw(PrecompilableError())
     end
@@ -1071,16 +1072,15 @@ function require(uuidkey::PkgId)
 end
 
 const loaded_modules = Dict{PkgId,Module}()
-const module_keys = IdDict{Module,PkgId}() # the reverse
 
-is_root_module(m::Module) = @lock require_lock haskey(module_keys, m)
-root_module_key(m::Module) = @lock require_lock module_keys[m]
+function PkgId(m::Module)
+    name = String(nameof(moduleroot(m)))
+    uuid = UUID(ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), m))
+    UInt128(uuid) == 0 ? PkgId(name) : PkgId(uuid, name)
+end
 
-function register_root_module(m::Module)
-    # n.b. This is called from C after creating a new module in `Base.__toplevel__`,
-    # instead of adding them to the binding table there.
-    @lock require_lock begin
-    key = PkgId(m, String(nameof(m)))
+function register_root_module(m::Module, key::PkgId=PkgId(m))
+    assert_havelock(require_lock)
     if haskey(loaded_modules, key)
         oldm = loaded_modules[key]
         if oldm !== m
@@ -1088,20 +1088,13 @@ function register_root_module(m::Module)
         end
     end
     loaded_modules[key] = m
-    module_keys[m] = key
-    end
     nothing
 end
 
+@lock require_lock begin
 register_root_module(Core)
 register_root_module(Base)
 register_root_module(Main)
-
-# This is used as the current module when loading top-level modules.
-# It has the special behavior that modules evaluated in it get added
-# to the loaded_modules table instead of getting bindings.
-baremodule __toplevel__
-using Base
 end
 
 # get a top-level Module from the given key
@@ -1116,9 +1109,8 @@ loaded_modules_array() = @lock require_lock collect(values(loaded_modules))
 function unreference_module(key::PkgId)
     if haskey(loaded_modules, key)
         m = pop!(loaded_modules, key)
-        # need to ensure all modules are GC rooted; will still be referenced
-        # in module_keys
     end
+    nothing
 end
 
 # Returns `nothing` or the name of the newly-created cachefile
@@ -1192,21 +1184,17 @@ function _require(pkg::PkgId)
 
         # just load the file normally via include
         # for unknown dependencies
+        newm = Module(Symbol(pkg.name), false)
         uuid = pkg.uuid
-        uuid = (uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, uuid))
-        old_uuid = ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), __toplevel__)
-        if uuid !== old_uuid
-            ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
+        if uuid !== nothing
+            ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), newm, uuid)
         end
+        register_root_module(newm, pkg)
         unlock(require_lock)
         try
-            include(__toplevel__, path)
-            return
+            eval(newm, :(baremodule $(nameof(newm)); $include($newm, $path); end))
         finally
             lock(require_lock)
-            if uuid !== old_uuid
-                ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
-            end
         end
     finally
         toplevel_load[] = last
@@ -1362,20 +1350,26 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     Base._track_dependencies[] = true
     get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
     append!(empty!(Base._concrete_dependencies), concrete_deps)
-    uuid_tuple = pkg.uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, pkg.uuid)
-
-    ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
     if source !== nothing
         task_local_storage()[:SOURCE_PATH] = source
     end
 
+    newm = Module(Symbol(pkg.name), false)
+    uuid = pkg.uuid
+    if uuid !== nothing
+        ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), newm, uuid)
+        # HACK for preferences
+        ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Main, uuid)
+    end
+    @lock require_lock register_root_module(newm, pkg)
     try
-        Base.include(Base.__toplevel__, input)
+        eval(newm, :(baremodule $(nameof(newm)); $include($newm, $input); end))
     catch ex
         precompilableerror(ex) || rethrow()
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
         exit(125) # we define status = 125 means PrecompileableError
     end
+    nothing
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
