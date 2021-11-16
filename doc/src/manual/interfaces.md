@@ -17,6 +17,7 @@ to generically build upon those behaviors.
 | `eltype(IterType)`             | `Any`                  | The type of the first entry of the tuple returned by `iterate()`                      |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim])`            | (*undefined*)          | The number of items in each dimension, if known                                       |
+| `Base.isdone(iter)`            | `missing`              | Fast-path hint for iterator completion. Should be defined for mutable iterators, or else `isempty(iter)` will call `iterate(iter[, state])` and may mutate the iterator. |
 
 | Value returned by `IteratorSize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
