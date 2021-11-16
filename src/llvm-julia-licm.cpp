@@ -126,6 +126,7 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                         jl_alloc::AllocUseInfo use_info;
                         jl_alloc::CheckInst::Stack check_stack;
                         jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
+                        use_info.reset();
                         jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()).with_ignore_return(true));
                         if (use_info.escaped || use_info.addrescaped || use_info.hasunknownmem) {
                             continue;

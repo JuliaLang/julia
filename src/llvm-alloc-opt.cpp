@@ -134,10 +134,13 @@ private:
 
     void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
                                  Instruction *orig_i, Instruction *new_i);
-    void removeAlloc(CallInst *orig_inst, llvm::Value *tag);
+    void removeAlloc(CallInst *orig_inst, llvm::Value *tag, bool is_array);
     void moveToStack(CallInst *orig_inst, llvm::Value *tag, size_t sz, bool has_ref);
     void splitOnStack(CallInst *orig_inst, llvm::Value *tag);
     void optimizeTag(CallInst *orig_inst, llvm::Value *tag);
+
+    void optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info);
+    void getArrayOps();
 
     Function &F;
     AllocOpt &pass;
@@ -183,7 +186,8 @@ private:
 
     std::map<CallInst*, jl_alloc::AllocIdInfo> worklist;
     SmallVector<CallInst*,6> removed;
-    AllocUseInfo use_info;
+    AllocUseInfo use_info, array_info;
+    bool array_length_clobbered;
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
     ReplaceUses::Stack replace_stack;
@@ -219,20 +223,34 @@ void Optimizer::optimizeAll()
         worklist.erase(it);
         auto orig = item.first;
         checkInst(orig);
-        // dbgs() << *orig << "\n";
-        // dbgs() << "e: " << use_info.escaped << " a: " << use_info.addrescaped << " l: " << use_info.hasload << " p: " << use_info.haspreserve << " r: " << use_info.refstore << "\n";
         if (use_info.escaped) {
             if (use_info.hastypeof)
                 optimizeTag(orig, item.second.type);
             continue;
         }
-        if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
-                                                           !use_info.refstore)) {
-            // No one took the address, no one reads anything and there's no meaningful
-            // preserve of fields (either no preserve/ccall or no object reference fields)
-            // We can just delete all the uses.
-            removeAlloc(orig, item.second.type);
+        if (item.second.isarray) {
+            getArrayOps();
+            if (!array_length_clobbered) {
+                optimizeArrayDims(orig, item.second);
+            }
+        }
+        if (use_info.hasboundscheck) {
             continue;
+        }
+        if (!use_info.addrescaped && (!use_info.haspreserve ||
+                                                           !use_info.refstore)) {
+            if (!use_info.hasload) {
+                // No one took the address, no one reads anything and there's no meaningful
+                // preserve of fields (either no preserve/ccall or no object reference fields)
+                // We can just delete all the uses.
+                removeAlloc(orig, item.second.type, item.second.isarray);
+                continue;
+            } else if (item.second.isarray) {
+                if (!array_length_clobbered && !array_info.escaped && !array_info.hasload) {
+                    removeAlloc(orig, item.second.type, item.second.isarray);
+                    continue;
+                }
+            }
         }
         if (item.second.isarray) {
             // We do not currently support stack allocation of arrays
@@ -314,6 +332,8 @@ Instruction *Optimizer::getFirstSafepoint(BasicBlock *bb)
 
 void Optimizer::checkInst(Instruction *I)
 {
+    use_info.reset();
+    check_stack.clear();
     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass, *pass.DL};
     jl_alloc::runEscapeAnalysis(I, required);
 }
@@ -701,7 +721,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, llvm::Value *tag, size_t sz, bo
 
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
-void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag)
+void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag, bool is_array)
 {
     // auto tag = orig_inst->getArgOperand(2);
     removed.push_back(orig_inst);
@@ -769,8 +789,17 @@ void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag)
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user) ||
                  isa<GetElementPtrInst>(user)) {
             push_frame(user);
+        } else if (is_array && isa<LoadInst>(user)) {
+            push_frame(user);
         }
         else {
+            dbgs() << "failed inst at removeAlloc: " << *user << "\n";
+            dbgs() << "while remove allocation " << *orig_inst << "\n";
+            dbgs() << "use_info\n";
+            use_info.dump();
+            dbgs() << "array info\n";
+            array_info.dump();
+            dbgs().flush();
             abort();
         }
     };
@@ -783,6 +812,154 @@ void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag)
                 return;
             cur = replace_stack.back();
             replace_stack.pop_back();
+        }
+    }
+}
+
+void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info) {
+    assert(info.isarray);
+    if (info.array.dimcount) {
+        // We can compute the length and dimensions of the array from the allocation
+        // This can save on a memory read which opens up more opts
+        llvm::Value *length = nullptr, *dims[3] = {nullptr, nullptr, nullptr};
+        for (int i = 0; i < info.array.dimcount; i++) {
+            dims[i] = orig_inst->getArgOperand(i + 1);
+        }
+        switch (info.array.dimcount) {
+            case 1:
+                length = dims[0];
+                break;
+            case 2: {
+                IRBuilder<> builder(orig_inst);
+                // our array dimensions cannot be multiplied to > maxint,
+                // the allocation should throw an error if this happens
+                length = builder.CreateMul(dims[0], dims[1], "arraylen", true, true);
+                break;
+            }
+            case 3:
+            {
+                IRBuilder<> builder(orig_inst);
+                length = builder.CreateMul(dims[0], dims[1], "arraylen2d", true, true);
+                length = builder.CreateMul(length, dims[2], "arraylen", true, true);
+            }
+            default:
+                assert(false);
+        }
+        // Now we need to identify reads to dimensions and length
+
+        // Some conditionals can be folded away since we know length/dimensions >= 0
+        auto fold_conditionals = [&](Instruction *inst){
+            for (auto &use : inst->uses()) {
+                if (auto cmp = dyn_cast<CmpInst>(use.get())) {
+                    if (cmp->getNumOperands() == 2) {
+                        if (cmp->getOperand(0) == inst) {
+                            if (auto cint = dyn_cast<ConstantInt>(cmp->getOperand(1))) {
+                                ssize_t bound = cint->getSExtValue();
+                                if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLT)
+                                    || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SLE
+                                    || cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ))) {
+                                        cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
+                                } else if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE)
+                                            || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT
+                                            || cmp->getPredicate() == CmpInst::Predicate::ICMP_NE))) {
+                                                cmp->replaceAllUsesWith(ConstantInt::getTrue(cmp->getContext()));
+                                            }
+                            }
+                        } else {
+                            assert(cmp->getOperand(1) == inst);
+                            if (auto cint = dyn_cast<ConstantInt>(cmp->getOperand(0))) {
+                                ssize_t bound = cint->getSExtValue();
+                                if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLT)
+                                    || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SLE
+                                    || cmp->getPredicate() == CmpInst::Predicate::ICMP_NE))) {
+                                        cmp->replaceAllUsesWith(ConstantInt::getTrue(cmp->getContext()));
+                                } else if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE)
+                                            || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT
+                                            || cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ))) {
+                                                cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
+                                            }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        for (auto &field : use_info.memops) {
+            for (auto &access : field.second.accesses) {
+                std::size_t offset = access.offset;
+                switch (offset) {
+                    case 0:
+                        // This is an access to array data
+                        break;
+                    case 8:
+                        // This is an access to array length
+                        // TODO need to check that this is never clobbered for 1d array
+                        fold_conditionals(access.inst);
+                        access.inst->replaceAllUsesWith(length);
+                        // DCE can eliminate the now-redundant load
+                        break;
+                    case 24:
+                        // This is an access to dim 1
+                        // TODO need to check that this is never clobbered for 1d array
+                        assert(dims[0]);
+                        fold_conditionals(access.inst);
+                        access.inst->replaceAllUsesWith(dims[0]);
+                        break;
+                    case 32:
+                        // This is an access to dim 2
+                        if (!dims[1]) {
+                            break;
+                        }
+                        assert(dims[1]);
+                        fold_conditionals(access.inst);
+                        access.inst->replaceAllUsesWith(dims[1]);
+                        break;
+                    case 40:
+                        // This is an access to dim 3
+                        if (!dims[2]) {
+                            break;
+                        }
+                        assert(dims[2]);
+                        fold_conditionals(access.inst);
+                        access.inst->replaceAllUsesWith(dims[2]);
+                        break;
+                    default:
+                        // Unknown access, let's leave it alone
+                        break;
+                }
+            }
+        }
+    }
+}
+
+void Optimizer::getArrayOps() {
+    array_info.reset();
+    array_length_clobbered = false;
+    for (auto &field : use_info.memops) {
+        for (auto &access : field.second.accesses) {
+            std::size_t offset = access.offset;
+            switch (offset) {
+                case 0: {
+                    //We don't clear the array_info so that we can accumulate all of the memops into one
+                    check_stack.clear();
+                    jl_alloc::EscapeAnalysisRequiredArgs required{array_info, check_stack, pass, *pass.DL};
+                    jl_alloc::runEscapeAnalysis(access.inst, required);
+                    break;
+                }
+                case 8:
+                case 24:
+                {
+                    if (isa<StoreInst>(access.inst)) {
+                        array_length_clobbered = true;
+                    }
+                    break;
+                }
+                case 32:
+                case 40:
+                    assert(!isa<StoreInst>(access.inst));
+                default:
+                    break;
+            }
         }
     }
 }

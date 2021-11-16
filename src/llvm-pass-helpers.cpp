@@ -49,6 +49,7 @@ void JuliaPassContext::initFunctions(Module &M)
     typeof_func = M.getFunction("julia.typeof");
     write_barrier_func = M.getFunction("julia.write_barrier");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
+    bounds_check_func = M.getFunction("ijl_bounds_error_ints");
 }
 
 void JuliaPassContext::initAll(Module &M)

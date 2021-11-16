@@ -990,6 +990,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
                 if (DebugInfo) {
                     errorobj = std::move(DebugInfo);
                     // Yes, we've checked, and yes LLVM want us to check again.
+                    static_cast<bool>(errorobj);
                     assert(errorobj);
                     debugobj = errorobj->getBinary();
                 }
