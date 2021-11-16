@@ -526,7 +526,7 @@ file, if it behaves differently than it did in the REPL, then you will get a war
 ### Let Blocks
 
 `let` statements create a new *hard scope* block (see above) and introduce new variable
-bindings each time they run. The variable needs not be immediately assigned:
+bindings each time they run. The variable need not be immediately assigned:
 ```jldoctest
 julia> var1 = let x
            for i in 1:5
