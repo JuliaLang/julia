@@ -444,6 +444,7 @@ Base.@macroexpand1
 Base.code_lowered
 Base.code_typed
 Base.precompile
+Base.jit_total_bytes
 ```
 
 ## Meta
