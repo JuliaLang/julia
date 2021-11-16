@@ -188,8 +188,7 @@ Julia function. The arguments to [`@cfunction`](@ref) are:
 
 !!! note
     Callback functions exposed via `@cfunction` should not throw errors, as that will
-    return control to the Julia runtime and may leave the library invoking the function in
-    an undefined state.
+    return control to the Julia runtime unexpectedly and may leave the program in an undefined state.
 
 A classic example is the standard C library `qsort` function, declared as:
 
