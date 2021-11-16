@@ -693,7 +693,7 @@ static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, jl_cgval_t *argv)
 {
     const jl_cgval_t &ord = argv[0];
     if (ord.constant && jl_is_symbol(ord.constant)) {
-        enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, false, false);
+        enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, true);
         if (order == jl_memory_order_invalid) {
             emit_atomic_error(ctx, "invalid atomic ordering");
             return jl_cgval_t(); // unreachable
