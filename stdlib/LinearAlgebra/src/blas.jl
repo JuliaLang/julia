@@ -1207,7 +1207,7 @@ respectively, and so on.
 The scalar input `α` must be real.
 
 The array inputs `x` and `AP` must all be of `Float32` or `Float64` type.
-Return the updated `A`.
+Return the updated `AP`.
 """
 spr!
 
