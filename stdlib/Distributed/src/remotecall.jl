@@ -251,7 +251,10 @@ const any_gc_flag = Condition()
 function start_gc_msgs_task()
     @async while true
         wait(any_gc_flag)
-        flush_gc_msgs()
+        # Use invokelatest() so that custom message transport streams
+        # for workers can be defined in a newer world age than the Task
+        # which runs the loop here.
+        invokelatest(flush_gc_msgs) # handles throws internally
     end
 end
 
