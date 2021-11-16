@@ -43,6 +43,8 @@ using namespace llvm;
 extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr,
                                                   bool isConstant=false);
 
+extern Optional<bool> always_have_fma();
+
 namespace {
 
 // These are valid detail cloning conditions in the target flags.
@@ -470,7 +472,14 @@ uint32_t CloneCtx::collect_func_info(Function &F)
                         flag |= JL_TARGET_CLONE_MATH;
                     }
                     else if (name.startswith("julia.cpu.")) {
-                        flag |= JL_TARGET_CLONE_CPU;
+                        if (name == "julia.cpu.have_fma") {
+                            // for some platforms we know they always do (or don't) support
+                            // FMA. in those cases we don't need to clone the function.
+                            if (!always_have_fma().hasValue())
+                                flag |= JL_TARGET_CLONE_CPU;
+                        } else {
+                            flag |= JL_TARGET_CLONE_CPU;
+                        }
                     }
                 }
             }

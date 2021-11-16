@@ -7,7 +7,8 @@
 // The following intrinsics are supported:
 // - julia.cpu.have_fma: returns 1 if the platform supports hardware-accelerated FMA
 //
-// XXX: can / do we want to make this a codegen pass to enable querying TargetPassConfig?
+// XXX: can / do we want to make this a codegen pass to enable querying TargetPassConfig
+//      instead of using the global target machine?
 
 #include "llvm-version.h"
 
@@ -26,20 +27,40 @@ using namespace llvm;
 
 extern TargetMachine *jl_TargetMachine;
 
-namespace {
+// whether this platform unconditionally (i.e. without needing multiversioning) supports FMA
+Optional<bool> always_have_fma() {
+#ifdef _CPU_AARCH64_
+    return true;
+#else
+    return {};
+#endif
+}
 
-static void lowerHaveFMA(Function &F, Instruction *I) {
-    Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
+bool have_fma(Function &F) {
+    auto unconditional = always_have_fma();
+    if (unconditional.hasValue())
+        return unconditional.getValue();
 
-    Attribute CPUAttr = F.getFnAttribute("target-cpu");
     Attribute FSAttr = F.getFnAttribute("target-features");
-
-    StringRef CPU =
-        CPUAttr.isValid() ? CPUAttr.getValueAsString() : jl_TargetMachine->getTargetCPU();
     StringRef FS =
         FSAttr.isValid() ? FSAttr.getValueAsString() : jl_TargetMachine->getTargetFeatureString();
 
-    if (TheTriple.getArch() == Triple::x86_64 && FS.find("+fma") != StringRef::npos)
+    SmallVector<StringRef, 6> Features;
+    FS.split(Features, ',');
+    for (StringRef Feature : Features)
+#if defined _CPU_ARM_
+      if (Feature == "+vfp4")
+        return true;
+#else
+      if (Feature == "+fma" || Feature == "+fma4")
+        return true;
+#endif
+
+    return false;
+}
+
+void lowerHaveFMA(Function &F, Instruction *I) {
+    if (have_fma(F))
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 1));
     else
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 0));
@@ -47,7 +68,7 @@ static void lowerHaveFMA(Function &F, Instruction *I) {
     return;
 }
 
-static bool lowerCPUFeatures(Module &M)
+bool lowerCPUFeatures(Module &M)
 {
     SmallVector<Instruction*,6> Materialized;
     if (auto have_fma = M.getFunction("julia.cpu.have_fma")) {
@@ -67,7 +88,6 @@ static bool lowerCPUFeatures(Module &M)
     } else {
         return false;
     }
-}
 }
 
 struct CPUFeatures : PassInfoMixin<CPUFeatures> {
