@@ -228,7 +228,7 @@ void Optimizer::optimizeAll()
             optimizeArrayLengthCmpInsts(orig);
         }
         if (use_info.escaped) {
-            if (use_info.hastypeof)
+            if (use_info.hastypeof && !item.second.isarray)
                 optimizeTag(orig, item.second.type);
             continue;
         }
@@ -239,11 +239,11 @@ void Optimizer::optimizeAll()
             }
         }
         if (use_info.hasboundscheck || use_info.returned) {
-            if (use_info.hastypeof)
+            if (use_info.hastypeof && !item.second.isarray)
                 optimizeTag(orig, item.second.type);
             continue;
         }
-        if (!use_info.addrescaped && (!use_info.haspreserve ||
+        if (!item.second.isarray && !use_info.addrescaped && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
             if (!use_info.hasload || (item.second.isarray && !array_info.escaped && !array_info.hasload)) {
                 // No one took the address, no one reads anything and there's no meaningful
@@ -967,11 +967,11 @@ void Optimizer::optimizeArrayLengthCmpInsts(CallInst *orig_inst) {
                             } else if ((bound == 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE) // icmp sge 0, len -> 0 >= len -> 0 == len
                                         || (bound == 1 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT)) { // icmp sgt 1, len -> 1 > len -> 0 == len
                                 cmp->setPredicate(CmpInst::Predicate::ICMP_EQ);
-                                cmp->setOperand(1, ConstantInt::get(cint->getType(), 0));
+                                cmp->setOperand(0, ConstantInt::get(cint->getType(), 0));
                             } else if ((bound == 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLT) // icmp slt 0, len -> 0 < len -> 0 != len
                                         || (bound == 1 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLE)) { // icmp sle 1, len -> 1 <= len -> 0 != len
                                 cmp->setPredicate(CmpInst::Predicate::ICMP_NE);
-                                cmp->setOperand(1, ConstantInt::get(cint->getType(), 0));
+                                cmp->setOperand(0, ConstantInt::get(cint->getType(), 0));
                             }
                         }
                     }
