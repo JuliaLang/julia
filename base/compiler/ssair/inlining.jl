@@ -1195,7 +1195,6 @@ function analyze_single_call!(
     else
         fully_covered &= atype <: signature_union
     end
-    end
 
     # If we only have one case and that case is fully covered, we may either
     # be able to do the inlining now (for constant cases), or push it directly
