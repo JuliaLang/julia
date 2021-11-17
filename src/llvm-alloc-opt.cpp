@@ -141,6 +141,7 @@ private:
 
     void optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info);
     void getArrayOps();
+    void optimizeArrayLengthCmpInsts(CallInst *orig_inst);
 
     Function &F;
     AllocOpt &pass;
@@ -223,6 +224,9 @@ void Optimizer::optimizeAll()
         worklist.erase(it);
         auto orig = item.first;
         checkInst(orig);
+        if (item.second.isarray) {
+            optimizeArrayLengthCmpInsts(orig);
+        }
         if (use_info.escaped) {
             if (use_info.hastypeof)
                 optimizeTag(orig, item.second.type);
@@ -234,22 +238,19 @@ void Optimizer::optimizeAll()
                 optimizeArrayDims(orig, item.second);
             }
         }
-        if (use_info.hasboundscheck) {
+        if (use_info.hasboundscheck || use_info.returned) {
+            if (use_info.hastypeof)
+                optimizeTag(orig, item.second.type);
             continue;
         }
         if (!use_info.addrescaped && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
-            if (!use_info.hasload) {
+            if (!use_info.hasload || (item.second.isarray && !array_info.escaped && !array_info.hasload)) {
                 // No one took the address, no one reads anything and there's no meaningful
                 // preserve of fields (either no preserve/ccall or no object reference fields)
                 // We can just delete all the uses.
                 removeAlloc(orig, item.second.type, item.second.isarray);
                 continue;
-            } else if (item.second.isarray) {
-                if (!array_length_clobbered && !array_info.escaped && !array_info.hasload) {
-                    removeAlloc(orig, item.second.type, item.second.isarray);
-                    continue;
-                }
             }
         }
         if (item.second.isarray) {
@@ -847,43 +848,6 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
         }
         // Now we need to identify reads to dimensions and length
 
-        // Some conditionals can be folded away since we know length/dimensions >= 0
-        auto fold_conditionals = [&](Instruction *inst){
-            for (auto &use : inst->uses()) {
-                if (auto cmp = dyn_cast<CmpInst>(use.get())) {
-                    if (cmp->getNumOperands() == 2) {
-                        if (cmp->getOperand(0) == inst) {
-                            if (auto cint = dyn_cast<ConstantInt>(cmp->getOperand(1))) {
-                                ssize_t bound = cint->getSExtValue();
-                                if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLT)
-                                    || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SLE
-                                    || cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ))) {
-                                        cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
-                                } else if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE)
-                                            || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT
-                                            || cmp->getPredicate() == CmpInst::Predicate::ICMP_NE))) {
-                                                cmp->replaceAllUsesWith(ConstantInt::getTrue(cmp->getContext()));
-                                            }
-                            }
-                        } else {
-                            assert(cmp->getOperand(1) == inst);
-                            if (auto cint = dyn_cast<ConstantInt>(cmp->getOperand(0))) {
-                                ssize_t bound = cint->getSExtValue();
-                                if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLT)
-                                    || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SLE
-                                    || cmp->getPredicate() == CmpInst::Predicate::ICMP_NE))) {
-                                        cmp->replaceAllUsesWith(ConstantInt::getTrue(cmp->getContext()));
-                                } else if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE)
-                                            || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT
-                                            || cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ))) {
-                                                cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
-                                            }
-                            }
-                        }
-                    }
-                }
-            }
-        };
         for (auto &field : use_info.memops) {
             for (auto &access : field.second.accesses) {
                 std::size_t offset = access.offset;
@@ -894,7 +858,6 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                     case 8:
                         // This is an access to array length
                         // TODO need to check that this is never clobbered for 1d array
-                        fold_conditionals(access.inst);
                         access.inst->replaceAllUsesWith(length);
                         // DCE can eliminate the now-redundant load
                         break;
@@ -902,7 +865,6 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                         // This is an access to dim 1
                         // TODO need to check that this is never clobbered for 1d array
                         assert(dims[0]);
-                        fold_conditionals(access.inst);
                         access.inst->replaceAllUsesWith(dims[0]);
                         break;
                     case 32:
@@ -911,7 +873,6 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                             break;
                         }
                         assert(dims[1]);
-                        fold_conditionals(access.inst);
                         access.inst->replaceAllUsesWith(dims[1]);
                         break;
                     case 40:
@@ -920,7 +881,6 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                             break;
                         }
                         assert(dims[2]);
-                        fold_conditionals(access.inst);
                         access.inst->replaceAllUsesWith(dims[2]);
                         break;
                     default:
@@ -961,6 +921,68 @@ void Optimizer::getArrayOps() {
                     break;
             }
         }
+    }
+}
+
+void Optimizer::optimizeArrayLengthCmpInsts(CallInst *orig_inst) {
+    // Some conditionals can be folded away since we know length/dimensions >= 0
+    const auto &dtree = getDomTree();
+    auto fold_conditionals = [&](Value *inst){
+        for (auto user : inst->users()) {
+            if (auto cmp = dyn_cast<CmpInst>(user)) {
+                if (cmp->getNumOperands() == 2 && dtree.dominates(orig_inst, cmp)) {
+                    if (cmp->getOperand(0) == inst) {
+                        if (auto cint = dyn_cast<ConstantInt>(cmp->getOperand(1))) {
+                            ssize_t bound = cint->getSExtValue();
+                            if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLT) // icmp slt len, 0 -> len < 0 -> false
+                                || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SLE // icmp sle len, -1 -> len <= -1 -> false
+                                || cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ))) { // icmp eq len, -1 -> len == -1 -> false
+                                    cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
+                            } else if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE) // icmp sge len, 0 -> len >= 0 -> true
+                                        || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT // icmp sgt len, -1 -> len > -1 -> true
+                                        || cmp->getPredicate() == CmpInst::Predicate::ICMP_NE))) { // icmp ne len, -1 -> len != -1 -> true
+                                            cmp->replaceAllUsesWith(ConstantInt::getTrue(cmp->getContext()));
+                            } else if ((bound == 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT) // icmp sgt len, 0 -> len > 0 -> len != 0
+                                        || (bound == 1 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE)) { // icmp sge len, 1 -> len >= 1 -> len != 0
+                                cmp->setPredicate(CmpInst::Predicate::ICMP_NE);
+                                cmp->setOperand(1, ConstantInt::get(cint->getType(), 0));
+                            } else if ((bound == 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLE) // icmp sle len, 0 -> len <= 0 -> len == 0
+                                        || (bound == 1 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLT)) { // icmp slt len, 1 -> len < 1 -> len == 0
+                                cmp->setPredicate(CmpInst::Predicate::ICMP_EQ);
+                                cmp->setOperand(1, ConstantInt::get(cint->getType(), 0));
+                            }
+                        }
+                    } else {
+                        assert(cmp->getOperand(1) == inst);
+                        if (auto cint = dyn_cast<ConstantInt>(cmp->getOperand(0))) {
+                            ssize_t bound = cint->getSExtValue();
+                            if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLE) // icmp sle 0, len -> 0 <= len -> true
+                                || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SLT // icmp slt -1, len -> -1 < len -> true
+                                || cmp->getPredicate() == CmpInst::Predicate::ICMP_NE))) { // icmp ne -1, len -> -1 != len -> true
+                                    cmp->replaceAllUsesWith(ConstantInt::getTrue(cmp->getContext()));
+                            } else if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT) // icmp sgt 0, len -> 0 > len -> false
+                                        || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE // icmp sge -1, len -> -1 >= len -> false
+                                        || cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ))) { // icmp eq -1, len -> -1 == len -> false
+                                            cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
+                            } else if ((bound == 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE) // icmp sge 0, len -> 0 >= len -> 0 == len
+                                        || (bound == 1 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT)) { // icmp sgt 1, len -> 1 > len -> 0 == len
+                                cmp->setPredicate(CmpInst::Predicate::ICMP_EQ);
+                                cmp->setOperand(1, ConstantInt::get(cint->getType(), 0));
+                            } else if ((bound == 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLT) // icmp slt 0, len -> 0 < len -> 0 != len
+                                        || (bound == 1 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SLE)) { // icmp sle 1, len -> 1 <= len -> 0 != len
+                                cmp->setPredicate(CmpInst::Predicate::ICMP_NE);
+                                cmp->setOperand(1, ConstantInt::get(cint->getType(), 0));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    //arg 0 is array type
+    for (unsigned i = 1; i < orig_inst->getNumArgOperands(); i++) {
+        fold_conditionals(orig_inst->getArgOperand(i));
     }
 }
 

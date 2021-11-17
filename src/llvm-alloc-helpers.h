@@ -63,6 +63,8 @@ namespace jl_alloc {
         bool escaped:1;
         // Address is leaked to functions that doesn't care where the object is allocated.
         bool addrescaped:1;
+        // Allocation is returned from function
+        bool returned:1;
         // There are reader of the memory
         bool hasload:1;
         // There are uses in gc_preserve intrinsics or ccall roots
@@ -86,6 +88,7 @@ namespace jl_alloc {
         {
             escaped = false;
             addrescaped = false;
+            returned = false;
             hasload = false;
             haspreserve = false;
             refload = false;
@@ -123,19 +126,11 @@ namespace jl_alloc {
         //will not be considered. Defaults to nullptr, which means all uses of the allocation
         //are considered
         const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set;
-        //Whether or not to consider returns to escape the function. Defaults to false,
-        //which means a return of an allocation does cause an escape.
-        bool ignore_return;
 
         EscapeAnalysisOptionalArgs() = default;
 
         EscapeAnalysisOptionalArgs &with_valid_set(decltype(valid_set) valid_set) {
             this->valid_set = valid_set;
-            return *this;
-        }
-
-        EscapeAnalysisOptionalArgs &with_ignore_return(decltype(ignore_return) ignore_return) {
-            this->ignore_return = ignore_return;
             return *this;
         }
     };
