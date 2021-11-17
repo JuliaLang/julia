@@ -619,6 +619,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
     PM->add(createConstantMergePass());
     if (opt_level < 2) {
+        if (!dump_native) {
+            // we won't be multiversioning, so lower CPU feature checks early on
+            // so that we can avoid an additional CFG simplification pass at the end.
+            PM->add(createCPUFeaturesPass());
+            if (opt_level == 1)
+                PM->add(createInstSimplifyLegacyPass());
+        }
         PM->add(createCFGSimplificationPass(simplifyCFGOptions));
         if (opt_level == 1) {
             PM->add(createSROAPass());
@@ -643,12 +650,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createRemoveNIPass());
         }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
-        if (dump_native)
+        if (dump_native) {
             PM->add(createMultiVersioningPass());
-        PM->add(createCPUFeaturesPass());
-        // minimal clean-up to get rid of CPU feature checks
-        PM->add(createInstSimplifyLegacyPass());
-        PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+            PM->add(createCPUFeaturesPass());
+            // minimal clean-up to get rid of CPU feature checks
+            if (opt_level == 1) {
+                PM->add(createInstSimplifyLegacyPass());
+                PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+            }
+        }
 #if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
