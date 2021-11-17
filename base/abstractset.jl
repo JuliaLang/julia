@@ -29,7 +29,7 @@ julia> union([1, 2], [3])
  2
  3
 
-julia> union([4 2 3], 1:3, 3.0)
+julia> union([4 2 3 4 4], 1:3, 3.0)
 4-element Vector{Float64}:
  4.0
  2.0
@@ -136,7 +136,7 @@ julia> intersect([1, 4, 4, 5, 6], [6, 4, 6, 7, 8])
 julia> intersect(1:16, 7:99)
 7:16
 
-julia> (0, 0.0) ∩ (-0.0, 0) 
+julia> (0, 0.0) ∩ (-0.0, 0)
 1-element Vector{Real}:
  0
 
