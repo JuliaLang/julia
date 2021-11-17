@@ -16,18 +16,6 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[frame.currpc])
 
-# check if this return type is improvable (i.e. whether it's possible that with
-# more information, we might get a more precise type)
-function is_improvable(@nospecialize(rtype))
-    if isa(rtype, Type)
-        # Could always be improved to Const or PartialStruct, unless we're
-        # already at Bottom
-        return rtype !== Union{}
-    end
-    # Could be improved to `Const` or a more precise wrapper
-    return isa(rtype, PartialStruct) || isa(rtype, InterConditional)
-end
-
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, @nospecialize(atype),
                                   sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
@@ -666,9 +654,30 @@ function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodC
         add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (edgecycle with unused result)")
         return false
     end
-    is_improvable(result.rt) && return true
-    add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable return type)")
-    return false
+    # check if this return type is improvable (i.e. whether it's possible that with more
+    # information, we might get a more precise type)
+    rt = result.rt
+    if isa(rt, Type)
+        # could always be improved to `Const`, `PartialStruct` or just a more precise type,
+        # unless we're already at `Bottom`
+        if rt === Bottom
+            add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (erroneous result)")
+            return false
+        else
+            return true
+        end
+    elseif isa(rt, PartialStruct) || isa(rt, InterConditional)
+        # could be improved to `Const` or a more precise wrapper
+        return true
+    elseif isa(rt, LimitedAccuracy)
+        # optimizations like inlining are disabled for limited frames,
+        # thus there won't be much benefit in constant-prop' here
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
+        return false
+    else
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable return type)")
+        return false
+    end
 end
 
 # determines heuristically whether if constant propagation can be worthwhile
@@ -970,7 +979,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         end
         if nounion === Union{} || (nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype)
             # reached a fixpoint or iterator failed/gave invalid answer
-            if typeintersect(stateordonet_widened, Nothing) === Union{}
+            if !hasintersect(stateordonet_widened, Nothing)
                 # ... but cannot terminate
                 if !may_have_terminated
                     #  ... and cannot have terminated prior to this loop
@@ -1497,7 +1506,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
     elseif f === nothing
         # non-constant function, but the number of arguments is known
         # and the ft is not a Builtin or IntrinsicFunction
-        if typeintersect(widenconst(ft), Union{Builtin, Core.OpaqueClosure}) != Union{}
+        if hasintersect(widenconst(ft), Union{Builtin, Core.OpaqueClosure})
             add_remark!(interp, sv, "Could not identify method table for call")
             return CallMeta(Any, false)
         end
