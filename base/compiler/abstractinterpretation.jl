@@ -16,18 +16,6 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[frame.currpc])
 
-# check if this return type is improvable (i.e. whether it's possible that with
-# more information, we might get a more precise type)
-function is_improvable(@nospecialize(rtype))
-    if isa(rtype, Type)
-        # Could always be improved to Const or PartialStruct, unless we're
-        # already at Bottom
-        return rtype !== Union{}
-    end
-    # Could be improved to `Const` or a more precise wrapper
-    return isa(rtype, PartialStruct) || isa(rtype, InterConditional)
-end
-
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, @nospecialize(atype),
                                   sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
@@ -666,9 +654,30 @@ function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodC
         add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (edgecycle with unused result)")
         return false
     end
-    is_improvable(result.rt) && return true
-    add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable return type)")
-    return false
+    # check if this return type is improvable (i.e. whether it's possible that with more
+    # information, we might get a more precise type)
+    rt = result.rt
+    if isa(rt, Type)
+        # could always be improved to `Const`, `PartialStruct` or just a more precise type,
+        # unless we're already at `Bottom`
+        if rt === Bottom
+            add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (erroneous result)")
+            return false
+        else
+            return true
+        end
+    elseif isa(rt, PartialStruct) || isa(rt, InterConditional)
+        # could be improved to `Const` or a more precise wrapper
+        return true
+    elseif isa(rt, LimitedAccuracy)
+        # optimizations like inlining are disabled for limited frames,
+        # thus there won't be much benefit in constant-prop' here
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
+        return false
+    else
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable return type)")
+        return false
+    end
 end
 
 # determines heuristically whether if constant propagation can be worthwhile
