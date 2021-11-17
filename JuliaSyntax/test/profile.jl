@@ -1,6 +1,6 @@
 using Tokenize
 
-nt = @timed @eval(collect(Tokenize.tokenize("foo + bar")))
+nt = @timed @eval(collect(Tokenize.tokenize("foo + bar", Tokens.RawToken)))
 println("First run took $(nt.time) seconds with $(nt.bytes/1e6) MB allocated")
 
 srcdir = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "..")
@@ -17,7 +17,7 @@ end
 let time_taken = 0.0, allocated = 0.0
     for file in allfiles
         content = IOBuffer(read(file, String))
-        nt = @timed collect(Tokenize.tokenize(content, Tokens.RawToken))
+        nt = @timed for t in Tokenize.tokenize(content, Tokens.RawToken) end
         time_taken += nt.time
         allocated += nt.bytes
     end
@@ -27,7 +27,7 @@ end
 let time_taken = 0.0, allocated = 0.0
     for file in allfiles
         content = IOBuffer(read(file, String))
-        nt = @timed collect(Tokenize.tokenize(content, Tokens.RawToken))
+        nt = @timed for t in Tokenize.tokenize(content, Tokens.RawToken) end
         time_taken += nt.time
         allocated += nt.bytes
     end
