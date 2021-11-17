@@ -153,7 +153,7 @@ function intersect(s::AbstractSet, itr, itrs...)
         min_length = itrs_lengths[min_idx]
         # do nothing if s is longer than the rest or itr is already the shortest
         if length(itr) > min_length >= length(s)
-            new_itrs = (itrs[1:min_idx-1]..., itr, itrs[min_idx+1:end]...)
+            new_itrs = setindex(itrs, itr, min_idx)
             return intersect(s, itrs[min_idx], new_itrs...)
         end
     end
