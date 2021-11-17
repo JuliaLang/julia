@@ -5,7 +5,7 @@
 // specific CPU features.
 //
 // The following intrinsics are supported:
-// - julia.cpu.have_fma: returns 1 if the platform supports hardware-accelerated FMA
+// - julia.cpu.have_fma.$typ: returns 1 if the platform supports hardware-accelerated FMA
 //
 // XXX: can / do we want to make this a codegen pass to enable querying TargetPassConfig
 //      instead of using the global target machine?
@@ -14,6 +14,7 @@
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Target/TargetMachine.h>
@@ -28,20 +29,27 @@ using namespace llvm;
 extern TargetMachine *jl_TargetMachine;
 
 // whether this platform unconditionally (i.e. without needing multiversioning) supports FMA
-Optional<bool> always_have_fma() {
+Optional<bool> always_have_fma(Function &intr) {
+    auto intr_name = intr.getName();
+    auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
+
 #ifdef _CPU_AARCH64_
-    return true;
+    return typ == "f32" || typ == "f64";
 #else
+    (void)typ;
     return {};
 #endif
 }
 
-bool have_fma(Function &F) {
-    auto unconditional = always_have_fma();
+bool have_fma(Function &intr, Function &caller) {
+    auto unconditional = always_have_fma(intr);
     if (unconditional.hasValue())
         return unconditional.getValue();
 
-    Attribute FSAttr = F.getFnAttribute("target-features");
+    auto intr_name = intr.getName();
+    auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
+
+    Attribute FSAttr = caller.getFnAttribute("target-features");
     StringRef FS =
         FSAttr.isValid() ? FSAttr.getValueAsString() : jl_TargetMachine->getTargetFeatureString();
 
@@ -50,17 +58,19 @@ bool have_fma(Function &F) {
     for (StringRef Feature : Features)
 #if defined _CPU_ARM_
       if (Feature == "+vfp4")
-        return true;
+        return typ == "f32" || typ == "f64";
+      else if (Feature == "+vfp4sp")
+        return typ == "f32";
 #else
       if (Feature == "+fma" || Feature == "+fma4")
-        return true;
+        return typ == "f32" || typ == "f64";
 #endif
 
     return false;
 }
 
-void lowerHaveFMA(Function &F, Instruction *I) {
-    if (have_fma(F))
+void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) {
+    if (have_fma(intr, caller))
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 1));
     else
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 0));
@@ -71,12 +81,17 @@ void lowerHaveFMA(Function &F, Instruction *I) {
 bool lowerCPUFeatures(Module &M)
 {
     SmallVector<Instruction*,6> Materialized;
-    if (auto have_fma = M.getFunction("julia.cpu.have_fma")) {
-        for (Use &U: have_fma->uses()) {
-            User *RU = U.getUser();
-            Instruction *I = cast<Instruction>(RU);
-            lowerHaveFMA(*I->getParent()->getParent(), I);
-            Materialized.push_back(I);
+
+    for (auto &F: M.functions()) {
+        auto FN = F.getName();
+
+        if (FN.startswith("julia.cpu.have_fma.")) {
+            for (Use &U: F.uses()) {
+                User *RU = U.getUser();
+                CallInst *I = cast<CallInst>(RU);
+                lowerHaveFMA(F, *I->getParent()->getParent(), I);
+                Materialized.push_back(I);
+            }
         }
     }
 
