@@ -195,7 +195,7 @@ function typejoin_union_tuple(T::Type)
         elseif U isa Union
             ci = typejoin(U.a, U.b)
         else
-            ci = U
+            ci = promote_typejoin_union(U)
         end
         if i == lr && Core.Compiler.isvarargtype(pi)
             c[i] = isdefined(pi, :N) ? Vararg{ci, pi.N} : Vararg{ci}
