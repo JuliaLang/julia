@@ -65,28 +65,6 @@ function Lexer(io::IO_t, T::Type{TT} = Token) where {IO_t,TT <: AbstractToken}
 end
 Lexer(str::AbstractString, T::Type{TT} = Token) where TT <: AbstractToken = Lexer(IOBuffer(str), T)
 
-function Base.copy(l::Lexer{IO_t, TT}) where IO_t where TT
-    return Lexer{IO_t, TT}(
-        l.io,
-        l.io_startpos,
-
-        l.token_start_row,
-        l.token_start_col,
-        l.token_startpos,
-
-        l.current_row,
-        l.current_col,
-        l.current_pos,
-
-        l.last_token,
-        IOBuffer(),
-        l.chars,
-        l.charspos,
-        l.doread,
-        l.dotop
-    )
-end
-
 @inline token_type(l::Lexer{IO_t, TT}) where {IO_t, TT} = TT
 
 """
@@ -272,10 +250,10 @@ Returns a `Token` of kind `kind` with contents `str` and starts a new `Token`.
 """
 function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR) where IO_t
     suffix = false
-    if (kind == Tokens.IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE)
-        str = String(take!(l.charstore))
-    elseif kind == Tokens.ERROR
+    if kind in (Tokens.ERROR, Tokens.STRING, Tokens.TRIPLE_STRING, Tokens.CMD, Tokens.TRIPLE_CMD)
         str = String(l.io.data[(l.token_startpos + 1):position(l)])
+    elseif (kind == Tokens.IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE)
+        str = String(take!(l.charstore))
     elseif optakessuffix(kind)
         str = ""
         while isopsuffix(peekchar(l))
@@ -850,17 +828,18 @@ function read_string(l::Lexer, kind::Tokens.Kind)
                 return false
             elseif c == '('
                 o = 1
-                l2 = copy(l)
+                last_token = l.last_token
+                token_start_row = l.token_start_row
+                token_start_col = l.token_start_col
+                token_startpos = l.token_startpos
                 while o > 0
-                    prevpos_io = position(l2.io)
-                    t = next_token(l2)
-                    seek(l.io, prevpos_io)
-
-                    while position(l) < position(l2)
-                        readchar(l)
-                    end
+                    t = next_token(l)
 
                     if Tokens.kind(t) == Tokens.ENDMARKER
+                        l.last_token = last_token
+                        l.token_start_row = token_start_row
+                        l.token_start_col = token_start_col
+                        l.token_startpos = token_startpos
                         return false
                     elseif Tokens.kind(t) == Tokens.LPAREN
                         o += 1
@@ -868,6 +847,10 @@ function read_string(l::Lexer, kind::Tokens.Kind)
                         o -= 1
                     end
                 end
+                l.last_token = last_token
+                l.token_start_row = token_start_row
+                l.token_start_col = token_start_col
+                l.token_startpos = token_startpos
             end
         end
     end
