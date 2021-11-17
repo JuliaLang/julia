@@ -360,10 +360,7 @@ end
 channel_type(rr::RemoteChannel{T}) where {T} = T
 
 function serialize(s::ClusterSerializer, f::Future)
-    @lock f.lock begin
-        v_cache = @atomic f.v
-        serialize(s, f, v_cache === nothing)
-    end
+    @lock f.lock serialize(s, f, f.v === nothing)
 end
 serialize(s::ClusterSerializer, rr::RemoteChannel) = serialize(s, rr, true)
 function serialize(s::ClusterSerializer, rr::AbstractRemoteRef, addclient)
