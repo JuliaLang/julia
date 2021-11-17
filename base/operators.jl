@@ -905,7 +905,7 @@ When used with anonymous functions, parentheses are typically required around th
 
 # Examples
 ```jldoctest
-julia> [1:5;] |> (x->x.^2) |> sum |> inv
+julia> [1:5;] .|> (x -> x^2) |> sum |> inv
 0.01818181818181818
 ```
 """
