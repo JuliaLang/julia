@@ -1192,6 +1192,9 @@ function analyze_single_call!(
         item === nothing && return
         push!(cases, InliningCase(match.spec_types, item))
         fully_covered = atype <: match.spec_types
+    else
+        fully_covered &= atype <: signature_union
+    end
     end
 
     # If we only have one case and that case is fully covered, we may either
