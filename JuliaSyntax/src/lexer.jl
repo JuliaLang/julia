@@ -714,7 +714,7 @@ function lex_digit(l::Lexer, kind)
             kind = Tokens.HEX_INT
             isfloat = false
             readchar(l)
-            !(ishex(ppc) || ppc =='.') && return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
+            !(ishex(ppc) || ppc == '.') && return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
             accept_number(l, ishex)
             if accept(l, '.')
                 accept_number(l, ishex)
@@ -1025,10 +1025,10 @@ function lex_identifier(l::Lexer{IO_t,T}, c) where {IO_t,T}
     if T == Token
         readon(l)
     end
-    h = simple_hash(c, 0)
+    h = simple_hash(c, UInt64(0))
     while true
         pc, ppc = dpeekchar(l)
-        if !is_identifier_char(pc) || (pc == '!' && ppc == '=')
+        if (pc == '!' && ppc == '=') || !is_identifier_char(pc)
             break
         end
         c = readchar(l)
@@ -1038,22 +1038,11 @@ function lex_identifier(l::Lexer{IO_t,T}, c) where {IO_t,T}
     return emit(l, get(kw_hash, h, IDENTIFIER))
 end
 
-# This creates a hash using 5 bit per lower case ASCII char.
-# It checks its input to be between 'a' and 'z' (because only those chars)
-# are valid in keywords, and returns a sentinel value for invalid inputs
-# or when the hash is about to overflow.
-function simple_hash(c, h)
-    h == UInt64(0xff) && return h
-    # only 'a' - 'z' actually need to be hashed
-    'a' <= c <= 'z' || return UInt64(0xff)
-    # catch possible overflow by checking the 10 high bits
-    (h & (UInt64(0x3ff) << (64 - 10))) > 0 && return UInt64(0xff)
-    UInt64(h) << 5 + UInt8(c - 'a' + 1)
-end
+@inline simple_hash(c::Char, h::UInt64) = hash(c, h)
 
 function simple_hash(str)
     ind = 1
-    h = 0
+    h = UInt64(0)
     while ind <= length(str)
         h = simple_hash(str[ind], h)
         ind = nextind(str, ind)
