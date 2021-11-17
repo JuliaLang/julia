@@ -817,3 +817,33 @@ let
     invoke(xs) = validate_unionsplit_inlining(true, xs[1])
     @test invoke(Any[10]) === false
 end
+
+# issue 43104
+
+@inline isGoodType(@nospecialize x::Type) =
+    x !== Any && !(@noinline Base.has_free_typevars(x))
+let # aggressive static dispatch of single, abstract method match
+    src = code_typed((Type, Any,)) do x, y
+        isGoodType(x), isGoodType(y)
+    end |> only |> first
+    # both callsite should be inlined
+    @test count(isinvoke(:has_free_typevars), src.code) == 2
+    # `isGoodType(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
+    @test count(iscall((src,isGoodType)), src.code) == 1
+end
+
+@noinline function checkBadType!(@nospecialize x::Type)
+    if x === Any || Base.has_free_typevars(x)
+        println(x)
+    end
+    return nothing
+end
+let # aggressive inlining of single, abstract method match
+    src = code_typed((Type, Any,)) do x, y
+        checkBadType!(x), checkBadType!(y)
+    end |> only |> first
+    # both callsite should be resolved statically
+    @test count(isinvoke(:checkBadType!), src.code) == 2
+    # `checkBadType!(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
+    @test count(iscall((src,checkBadType!)), src.code) == 1
+end
