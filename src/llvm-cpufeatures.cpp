@@ -5,7 +5,10 @@
 // specific CPU features.
 //
 // The following intrinsics are supported:
-// - julia.cpu.have_fma.$typ: returns 1 if the platform supports hardware-accelerated FMA
+// - julia.cpu.have_fma.$typ: returns 1 if the platform supports hardware-accelerated FMA.
+//
+// Some of these intrinsics are overloaded, i.e., they are suffixed with a type name.
+// To extend support, make sure codegen (in intrinsics.cpp) knows how to emit them.
 //
 // XXX: can / do we want to make this a codegen pass to enable querying TargetPassConfig
 //      instead of using the global target machine?

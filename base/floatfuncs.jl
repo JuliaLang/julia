@@ -412,11 +412,8 @@ fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 
 # Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back
 # onto a broken system libm; if so, use a software emulated fma
-have_fma(::Type) = false
-have_fma(::Type{Float32}) = ccall("extern julia.cpu.have_fma.f32", llvmcall, Int, ()) == 1
-have_fma(::Type{Float64}) = ccall("extern julia.cpu.have_fma.f64", llvmcall, Int, ()) == 1
-fma(x::Float32, y::Float32, z::Float32) = have_fma(Float32) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
-fma(x::Float64, y::Float64, z::Float64) = have_fma(Float64) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
+fma(x::Float32, y::Float32, z::Float32) = Core.Intrinsics.have_fma(Float32) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
+fma(x::Float64, y::Float64, z::Float64) = Core.Intrinsics.have_fma(Float64) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
 
 function fma(a::Float16, b::Float16, c::Float16)
     Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.
