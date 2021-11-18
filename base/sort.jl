@@ -332,7 +332,7 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
     searchsortedfirst(a, x; by=<transform>, lt=<comparison>, rev=false)
 
 Return the index of the first value in `a` greater than or equal to `x`, according to the
-specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
+specified order. Return `lastindex(a) + 1` if `x` is greater than all values in `a`.
 `a` is assumed to be sorted.
 
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
@@ -360,8 +360,8 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
     searchsortedlast(a, x; by=<transform>, lt=<comparison>, rev=false)
 
 Return the index of the last value in `a` less than or equal to `x`, according to the
-specified order. Return `0` if `x` is less than all values in `a`. `a` is assumed to
-be sorted.
+specified order. Return `firstindex(a) - 1` if `x` is less than all values in `a`. `a` is
+assumed to be sorted.
 
 # Examples
 ```jldoctest
