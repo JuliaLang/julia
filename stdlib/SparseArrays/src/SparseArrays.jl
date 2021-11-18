@@ -38,21 +38,9 @@ include("linalg.jl")
 include("deprecated.jl")
 
 
-# temporarily moved here and commented out from from base/linalg/diagonal.jl, base/linalg/tridiag.jl
-# and base/linalg/bidiag.jl due to their usage of spzeros
-similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
-similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
-similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
-similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
-
 zero(a::AbstractSparseArray) = spzeros(eltype(a), size(a)...)
 
-const BiTriSym = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
-function *(A::BiTriSym, B::BiTriSym)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    mul!(similar(A, TS, size(A)...), A, B)
-end
-
-LinearAlgebra.diagzero(D::Diagonal{<:AbstractSparseMatrix{T}},i,j) where {T} = spzeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+LinearAlgebra.diagzero(D::Diagonal{<:AbstractSparseMatrix{T}},i,j) where {T} =
+    spzeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
 end

@@ -3,7 +3,7 @@
 module TestTriangular
 
 debug = false
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
     mul!, rdiv!, rmul!, lmul!
@@ -687,18 +687,6 @@ LinearAlgebra.sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
 
 let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
     @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
-end
-
-@testset "similar should preserve underlying storage type" begin
-    local m, n = 4, 3
-    sparsemat = sprand(m, m, 0.5)
-    for TriType in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
-        trisparsemat = TriType(sparsemat)
-        @test isa(similar(trisparsemat), typeof(trisparsemat))
-        @test isa(similar(trisparsemat, Float32), TriType{Float32,<:SparseMatrixCSC{Float32}})
-        @test isa(similar(trisparsemat, (n, n)), typeof(sparsemat))
-        @test isa(similar(trisparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
-    end
 end
 
 isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))

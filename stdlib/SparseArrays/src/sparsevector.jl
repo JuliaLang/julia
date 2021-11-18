@@ -4,6 +4,7 @@
 
 import Base: sort, findall, copy!
 import LinearAlgebra: promote_to_array_type, promote_to_arrays_
+using LinearAlgebra: _SpecialArrays, _DenseConcatGroup
 
 ### The SparseVector
 
@@ -1062,30 +1063,16 @@ vcat(X::Union{Vector,SparseVector}...) = vcat(map(sparse, X)...)
 
 ### Concatenation of un/annotated sparse/special/dense vectors/matrices
 
-# TODO: These methods and definitions should be moved to a more appropriate location,
-# particularly some future equivalent of base/linalg/special.jl dedicated to interactions
-# between a broader set of matrix types.
-
-# TODO: A definition similar to the third exists in base/linalg/bidiag.jl. These definitions
-# should be consolidated in a more appropriate location, e.g. base/linalg/special.jl.
 const _SparseArrays = Union{SparseVector, AbstractSparseMatrixCSC, Adjoint{<:Any,<:SparseVector}, Transpose{<:Any,<:SparseVector}}
-const _SpecialArrays = Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
 const _SparseConcatArrays = Union{_SpecialArrays, _SparseArrays}
 
 const _Symmetric_SparseConcatArrays{T,A<:_SparseConcatArrays} = Symmetric{T,A}
 const _Hermitian_SparseConcatArrays{T,A<:_SparseConcatArrays} = Hermitian{T,A}
 const _Triangular_SparseConcatArrays{T,A<:_SparseConcatArrays} = LinearAlgebra.AbstractTriangular{T,A}
 const _Annotated_SparseConcatArrays = Union{_Triangular_SparseConcatArrays, _Symmetric_SparseConcatArrays, _Hermitian_SparseConcatArrays}
-
-const _Symmetric_DenseArrays{T,A<:Matrix} = Symmetric{T,A}
-const _Hermitian_DenseArrays{T,A<:Matrix} = Hermitian{T,A}
-const _Triangular_DenseArrays{T,A<:Matrix} = LinearAlgebra.AbstractTriangular{T,A}
-const _Annotated_DenseArrays = Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
-const _Annotated_Typed_DenseArrays{T} = Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
-
-const _SparseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
-const _DenseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _Annotated_DenseArrays}
-const _TypedDenseConcatGroup{T} = Union{Vector{T}, Adjoint{T,Vector{T}}, Transpose{T,Vector{T}}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
+# It's important that _SparseConcatGroup is a larger union than _DenseConcatGroup to make
+# sparse cat-methods less specific and to kick in only if there is some sparse array present
+const _SparseConcatGroup = Union{_DenseConcatGroup, _SparseConcatArrays, _Annotated_SparseConcatArrays}
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
 _makesparse(x::Number) = x
@@ -1123,22 +1110,7 @@ _hvcat_rows(::Tuple{}, X::_SparseConcatGroup...) = ()
 
 # make sure UniformScaling objects are converted to sparse matrices for concatenation
 promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}) = SparseMatrixCSC
-promote_to_array_type(A::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = Matrix
 promote_to_arrays_(n::Int, ::Type{SparseMatrixCSC}, J::UniformScaling) = sparse(J, n, n)
-
-# Concatenations strictly involving un/annotated dense matrices/vectors should yield dense arrays
-Base._cat(dims, xs::_DenseConcatGroup...) = Base.cat_t(promote_eltype(xs...), xs...; dims=dims)
-vcat(A::Vector...) = Base.typed_vcat(promote_eltype(A...), A...)
-vcat(A::_DenseConcatGroup...) = Base.typed_vcat(promote_eltype(A...), A...)
-hcat(A::Vector...) = Base.typed_hcat(promote_eltype(A...), A...)
-hcat(A::_DenseConcatGroup...) = Base.typed_hcat(promote_eltype(A...), A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(promote_eltype(xs...), rows, xs...)
-# For performance, specially handle the case where the matrices/vectors have homogeneous eltype
-Base._cat(dims, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.cat_t(T, xs...; dims=dims)
-vcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_vcat(T, A...)
-hcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hcat(T, A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hvcat(T, rows, xs...)
-
 
 ### math functions
 
