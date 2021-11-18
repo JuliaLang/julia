@@ -139,7 +139,7 @@ For more informations see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@cod
 The aforementioned functions and macros take the keyword argument `debuginfo` that controls the level
 debug information printed.
 
-```
+```julia-repl
 julia> @code_typed debuginfo=:source +(1,1)
 CodeInfo(
     @ int.jl:53 within `+'
