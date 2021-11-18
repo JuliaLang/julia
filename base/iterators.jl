@@ -119,7 +119,7 @@ reverse(r::Reverse) = r.itr
 reverse(x::Union{Number,AbstractChar}) = x
 reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
 
-iterate(r::Reverse{<:Tuple}, i::Int = length(r.itr)) = i < 1 ? nothing : (r.itr[i], i-1)
+iterate(r::Reverse{<:Union{Tuple, NamedTuple}}, i::Int = length(r.itr)) = i < 1 ? nothing : (r.itr[i], i-1)
 
 # enumerate
 
@@ -160,6 +160,7 @@ size(e::Enumerate) = size(e.itr)
     n === nothing && return n
     (i, n[1]), (i+1, n[2])
 end
+last(e::Enumerate) = (length(e.itr), e.itr[end])
 
 eltype(::Type{Enumerate{I}}) where {I} = Tuple{Int, eltype(I)}
 
@@ -251,6 +252,10 @@ IteratorSize(::Type{<:Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, <:Base.AbstractUnitRange, <:Tuple}}) = HasLength()
 
 reverse(v::Pairs) = Pairs(getfield(v, :data), reverse(getfield(v, :itr)))
+function last(v::Pairs{K, V}) where {K, V}
+    idx = last(getfield(v, :itr))
+    return Pair{K, V}(idx, v[idx])
+end
 
 haskey(v::Pairs, key) = (key in getfield(v, :itr))
 keys(v::Pairs) = getfield(v, :itr)
@@ -398,7 +403,8 @@ zip_iteratoreltype() = HasEltype()
 zip_iteratoreltype(a) = a
 zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
-reverse(z::Zip) = Zip(Base.map(reverse, z.is))
+reverse(z::Zip) = Zip(Base.map(reverse, z.is)) # n.b. we assume all iterators are the same length
+last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
 
 # filter
 
@@ -457,6 +463,7 @@ IteratorEltype(::Type{Filter{F,I}}) where {F,I} = IteratorEltype(I)
 IteratorSize(::Type{<:Filter}) = SizeUnknown()
 
 reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
+last(f::Filter) = first(reverse(f))
 
 # Accumulate -- partial reductions of a function over an iterator
 
@@ -883,6 +890,7 @@ function iterate(it::Cycle, state)
 end
 
 reverse(it::Cycle) = Cycle(reverse(it.xs))
+last(it::Cycle) = last(it.xs)
 
 # Repeated - repeat an object infinitely many times
 
@@ -921,6 +929,7 @@ IteratorSize(::Type{<:Repeated}) = IsInfinite()
 IteratorEltype(::Type{<:Repeated}) = HasEltype()
 
 reverse(it::Union{Repeated,Take{<:Repeated}}) = it
+last(it::Union{Repeated,Take{<:Repeated}}) = first(it)
 
 # Product -- cartesian product of iterators
 struct ProductIterator{T<:Tuple}
@@ -1052,6 +1061,7 @@ end
 end
 
 reverse(p::ProductIterator) = ProductIterator(Base.map(reverse, p.iterators))
+last(p::ProductIterator) = Base.map(last, p.iterators)
 
 # flatten an iterator of iterators
 
@@ -1131,6 +1141,7 @@ length(f::Flatten{Tuple{}}) = 0
 end
 
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
+last(f::Flatten) = last(last(f.it))
 
 """
     partition(collection, n)

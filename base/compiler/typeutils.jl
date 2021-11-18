@@ -175,6 +175,8 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
     return a # TODO: improve this bound?
 end
 
+hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
+
 function tvar_extent(@nospecialize t)
     while t isa TypeVar
         t = t.ub

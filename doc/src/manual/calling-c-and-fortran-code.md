@@ -186,6 +186,10 @@ Julia function. The arguments to [`@cfunction`](@ref) are:
     function on 32-bit Windows, but can be used on WIN64 (where `stdcall` is unified with the
     C calling convention).
 
+!!! note
+    Callback functions exposed via `@cfunction` should not throw errors, as that will
+    return control to the Julia runtime unexpectedly and may leave the program in an undefined state.
+
 A classic example is the standard C library `qsort` function, declared as:
 
 ```c
@@ -1004,12 +1008,12 @@ hn = Vector{UInt8}(undef, 256)
 err = ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
 ```
 
-For more information, please see the [LLVM Language Reference](http://llvm.org/docs/LangRef.html#calling-conventions).
+For more information, please see the [LLVM Language Reference](https://llvm.org/docs/LangRef.html#calling-conventions).
 
 There is one additional special calling convention [`llvmcall`](@ref Base.llvmcall),
 which allows inserting calls to LLVM intrinsics directly.
 This can be especially useful when targeting unusual platforms such as GPGPUs.
-For example, for [CUDA](http://llvm.org/docs/NVPTXUsage.html), we need to be able to read the thread index:
+For example, for [CUDA](https://llvm.org/docs/NVPTXUsage.html), we need to be able to read the thread index:
 
 ```julia
 ccall("llvm.nvvm.read.ptx.sreg.tid.x", llvmcall, Int32, ())

@@ -565,7 +565,10 @@ exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
 """
     cis(A::AbstractMatrix)
 
-Compute ``\\exp(i A)`` for a square matrix ``A``.
+More efficient method for `exp(im*A)` of square matrix `A`
+(especially if `A` is `Hermitian` or real-`Symmetric`).
+
+See also [`cispi`](@ref), [`sincos`](@ref), [`exp`](@ref).
 
 !!! compat "Julia 1.7"
     Support for using `cis` with matrices was added in Julia 1.7.
@@ -1380,6 +1383,7 @@ function factorize(A::StridedMatrix{T}) where T
 end
 factorize(A::Adjoint)   =   adjoint(factorize(parent(A)))
 factorize(A::Transpose) = transpose(factorize(parent(A)))
+factorize(a::Number)    = a # same as how factorize behaves on Diagonal types
 
 ## Moore-Penrose pseudoinverse
 

@@ -70,6 +70,11 @@ n = 5 # should be odd
         else
             @test logabsdet(A)[2] ≈ sign(det(A))
         end
+        # logabsdet for Number"
+        x = A[1, 1] # getting a number of type elty
+        X = fill(x, 1, 1)
+        @test logabsdet(x)[1] ≈ logabsdet(X)[1]
+        @test logabsdet(x)[2] ≈ logabsdet(X)[2]
     end
 end
 

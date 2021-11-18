@@ -1060,3 +1060,7 @@ end
 
 # issue #41656
 @test success(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
+
+@testset "Base/timing.jl" begin
+    @test Base.jit_total_bytes() >= 0
+end

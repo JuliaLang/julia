@@ -195,7 +195,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                     val = OldSSAValue(val.id)
                 end
                 edge_typ = widenconst(compact_exprtype(compact, val))
-                typeintersect(edge_typ, typeconstraint) === Union{} && continue
+                hasintersect(edge_typ, typeconstraint) || continue
                 push!(possible_predecessors, n)
             end
             for n in possible_predecessors

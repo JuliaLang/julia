@@ -634,7 +634,7 @@ static const auto jlegalx_func = new JuliaFunction{
 static const auto jl_alloc_obj_func = new JuliaFunction{
     "julia.gc_alloc_obj",
     [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
-                {T_pint8, T_size, T_prjlvalue}, false); },
+                {T_ppjlvalue, T_size, T_prjlvalue}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet::get(C, makeArrayRef({Attribute::getWithAllocSizeArgs(C, 1, None)})), // returns %1 bytes
             Attributes(C, {Attribute::NoAlias, Attribute::NonNull}),
@@ -1131,7 +1131,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
-static Instruction *tbaa_decorate(MDNode *md, Instruction *inst);
+Instruction *tbaa_decorate(MDNode *md, Instruction *inst);
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
 {
@@ -4792,19 +4792,7 @@ static Value *get_current_task(jl_codectx_t &ctx)
 // Get PTLS through current task.
 static Value *get_current_ptls(jl_codectx_t &ctx)
 {
-    const int ptls_offset = offsetof(jl_task_t, ptls);
-    Value *pptls = ctx.builder.CreateInBoundsGEP(
-        T_pjlvalue, get_current_task(ctx),
-        ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
-        "ptls_field");
-    LoadInst *ptls_load = ctx.builder.CreateAlignedLoad(
-        emit_bitcast(ctx, pptls, T_ppjlvalue), Align(sizeof(void *)), "ptls_load");
-    // Note: Corresponding store (`t->ptls = ptls`) happens in `ctx_switch` of tasks.c.
-    tbaa_decorate(tbaa_gcframe, ptls_load);
-    // Using `CastInst::Create` to get an `Instruction*` without explicit cast:
-    auto ptls = CastInst::Create(Instruction::BitCast, ptls_load, T_ppjlvalue, "ptls");
-    ctx.builder.Insert(ptls);
-    return ptls;
+    return get_current_ptls_from_task(ctx.builder, get_current_task(ctx));
 }
 
 // Store world age at the entry block of the function. This function should be
@@ -6436,8 +6424,11 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             Type *vtype = julia_type_to_llvm(ctx, jt, &isboxed);
             assert(!isboxed);
             assert(!type_is_ghost(vtype) && "constants should already be handled");
-            // CreateAlloca is OK during prologue setup
-            Value *lv = ctx.builder.CreateAlloca(vtype, NULL, jl_symbol_name(s));
+            Value *lv = new AllocaInst(vtype, 0, jl_symbol_name(s), /*InsertBefore*/ctx.pgcstack);
+            if (CountTrackedPointers(vtype).count) {
+                StoreInst *SI = new StoreInst(Constant::getNullValue(vtype), lv, false, Align(sizeof(void*)));
+                SI->insertAfter(ctx.pgcstack);
+            }
             varinfo.value = mark_julia_slot(lv, jt, NULL, tbaa_stack);
             alloc_def_flag(ctx, varinfo);
             if (ctx.debug_enabled && varinfo.dinfo) {

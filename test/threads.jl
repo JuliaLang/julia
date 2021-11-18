@@ -2,6 +2,27 @@
 
 using Test
 
+# simple sanity tests for locks under cooperative concurrent access
+let lk = ReentrantLock()
+    c1 = Base.Event()
+    c2 = Base.Event()
+    @test trylock(lk)
+    @test trylock(lk)
+    t1 = @async (notify(c1); lock(lk); unlock(lk); trylock(lk))
+    t2 = @async (notify(c2); trylock(lk))
+    wait(c1)
+    wait(c2)
+    @test t1.queue === lk.cond_wait.waitq
+    @test t2.queue !== lk.cond_wait.waitq
+    @test istaskdone(t2)
+    @test !fetch(t2)
+    unlock(lk)
+    @test t1.queue === lk.cond_wait.waitq
+    unlock(lk)
+    @test t1.queue !== lk.cond_wait.waitq
+    @test fetch(t1)
+end
+
 let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`
     for test_nthreads in (1, 2, 4, 4) # run once to try single-threaded mode, then try a couple times to trigger bad races
         new_env = copy(ENV)
@@ -147,3 +168,39 @@ end
 
 # We don't need the watchdog anymore
 close(proc.in)
+
+# https://github.com/JuliaLang/julia/pull/42973
+@testset "spawn and wait *a lot* of tasks in @profile" begin
+    # Not using threads_exec.jl for better isolation, reproducibility, and a
+    # tighter timeout.
+    script = "profile_spawnmany_exec.jl"
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no $script`
+    @testset for n in [20000, 200000, 2000000]
+        proc = run(ignorestatus(setenv(cmd, "NTASKS" => n; dir = @__DIR__)); wait = false)
+        done = Threads.Atomic{Bool}(false)
+        timeout = false
+        timer = Timer(100) do _
+            timeout = true
+            for sig in [Base.SIGTERM, Base.SIGHUP, Base.SIGKILL]
+                for _ in 1:1000
+                    kill(proc, sig)
+                    if done[]
+                        if sig != Base.SIGTERM
+                            @warn "Terminating `$script` required signal $sig"
+                        end
+                        return
+                    end
+                    sleep(0.001)
+                end
+            end
+        end
+        try
+            wait(proc)
+        finally
+            done[] = true
+            close(timer)
+        end
+        @test success(proc)
+        @test !timeout
+    end
+end
