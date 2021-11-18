@@ -36,8 +36,8 @@ is_interactive = false
     isinteractive() -> Bool
 
 Determine whether Julia is running an interactive session. Returns `true` when the code
-is run from the REPL or when julia has been started with the `-i` command line flag. 
-Notably it returns `false` when called from the startup file in a REPL session started without 
+is run from the REPL or when julia has been started with the `-i` command line flag.
+Notably it returns `false` when called from the startup file in a REPL session started without
 the `-i` command line flag.
 """
 isinteractive() = (is_interactive::Bool)
