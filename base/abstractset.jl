@@ -169,9 +169,9 @@ end
 intersect(s) = union(s)
 function intersect(s::AbstractSet, itr)
     if haslength(itr) && hasfastin(itr) && length(s) < length(itr)
-        return mapfilter(_in(itr), push!, s, emptymutable(s))
+        return mapfilter(∈(itr), push!, s, emptymutable(s))
     else
-        return mapfilter(_in(s), push!, itr, emptymutable(s))
+        return mapfilter(∈(s), push!, itr, emptymutable(s))
     end
 end
 
