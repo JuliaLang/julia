@@ -1012,7 +1012,7 @@ end
     @test isequal(identity.(Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
                   [[1, 2],[missing, 1]])
     @test broadcast(i -> ((x=i, y=(i==1 ? 1 : "a")), 3), 1:4) isa
-        Vector{Tuple{NamedTuple{(:x, :y)}, Int64}}
+        Vector{Tuple{NamedTuple{(:x, :y)}, Int}}
 end
 
 @testset "Issue #28382: eltype inconsistent with getindex" begin

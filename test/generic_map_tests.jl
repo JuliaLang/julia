@@ -76,7 +76,7 @@ function generic_map_tests(mapf, inplace_mapf=nothing)
                   [[1, 2],[missing, 1]])
     @test map(x -> x < 0 ? false : x, Int[]) isa Vector{Integer}
     @test map(i -> ((x=i, y=(i==1 ? 1 : "a")), 3), 1:4) isa
-        Vector{Tuple{NamedTuple{(:x, :y)}, Int64}}
+        Vector{Tuple{NamedTuple{(:x, :y)}, Int}}
 end
 
 function testmap_equivalence(mapf, f, c...)
