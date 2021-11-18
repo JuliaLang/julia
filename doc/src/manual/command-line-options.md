@@ -19,7 +19,7 @@ The following is a complete list of command-line switches available when launchi
 |`-t`, `--threads {N\|auto`}            |Enable N threads; `auto` currently sets N to the number of local CPU threads but this might change in the future|
 |`-p`, `--procs {N\|auto`}              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
-|`-i`                                   |Interactive mode; REPL runs and `isinteractive()` is true|
+|`-i`                                   |Interactive mode; Run REPL after script execution and force `isinteractive()` to return true in all scripts including the startup file|
 |`-q`, `--quiet`                        |Quiet startup: no banner, suppress REPL warnings|
 |`--banner={yes\|no\|auto}`             |Enable or disable startup banner|
 |`--color={yes\|no\|auto}`              |Enable or disable color text|
