@@ -36,7 +36,10 @@ Optional<bool> always_have_fma(Function &intr) {
     auto intr_name = intr.getName();
     auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
 
-#ifdef _CPU_AARCH64_
+#if defined(_OS_WINDOWS_)
+    // FMA on Windows is weirdly broken (#43088)
+    return false;
+#elif defined(_CPU_AARCH64_)
     return typ == "f32" || typ == "f64";
 #else
     (void)typ;
