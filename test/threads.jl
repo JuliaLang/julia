@@ -2,6 +2,27 @@
 
 using Test
 
+# simple sanity tests for locks under cooperative concurrent access
+let lk = ReentrantLock()
+    c1 = Base.Event()
+    c2 = Base.Event()
+    @test trylock(lk)
+    @test trylock(lk)
+    t1 = @async (notify(c1); lock(lk); unlock(lk); trylock(lk))
+    t2 = @async (notify(c2); trylock(lk))
+    wait(c1)
+    wait(c2)
+    @test t1.queue === lk.cond_wait.waitq
+    @test t2.queue !== lk.cond_wait.waitq
+    @test istaskdone(t2)
+    @test !fetch(t2)
+    unlock(lk)
+    @test t1.queue === lk.cond_wait.waitq
+    unlock(lk)
+    @test t1.queue !== lk.cond_wait.waitq
+    @test fetch(t1)
+end
+
 let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`
     for test_nthreads in (1, 2, 4, 4) # run once to try single-threaded mode, then try a couple times to trigger bad races
         new_env = copy(ENV)
