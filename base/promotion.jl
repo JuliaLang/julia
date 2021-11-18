@@ -168,19 +168,17 @@ function promote_typejoin_union(::Type{T}) where T
         return Any # TODO: compute more precise bounds
     elseif T isa Union
         return promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
-    elseif T <: Tuple
-        return typejoin_union_tuple(T)
-    else
+    elseif T isa DataType
+        T <: Tuple && return typejoin_union_tuple(T)
         return T
+    else
+        error("unreachable") # not a type??
     end
 end
 
-function typejoin_union_tuple(T::Type)
+function typejoin_union_tuple(T::DataType)
     @_pure_meta
     u = Base.unwrap_unionall(T)
-    u isa Union && return typejoin(
-            typejoin_union_tuple(Base.rewrap_unionall(u.a, T)),
-            typejoin_union_tuple(Base.rewrap_unionall(u.b, T)))
     p = (u::DataType).parameters
     lr = length(p)::Int
     if lr == 0
@@ -194,6 +192,8 @@ function typejoin_union_tuple(T::Type)
             ci = Union{}
         elseif U isa Union
             ci = typejoin(U.a, U.b)
+        elseif U isa UnionAll
+            return Any # TODO: compute more precise bounds
         else
             ci = promote_typejoin_union(U)
         end
