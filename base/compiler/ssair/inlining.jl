@@ -1302,7 +1302,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         if isa(info, OpaqueClosureCallInfo)
             # ignore the `@noinline` annotation for opaque closure call as we force the constant-prop'
             # for this opaque closure call in `const_prop_methodinstance_heuristic` ?
-            # flag &= ~IR_FLAG_NOINLINEe
+            # flag &= ~IR_FLAG_NOINLINE
             result = info.result
             if isa(result, InferenceResult)
                 handle_const_opaque_closure_call!(
