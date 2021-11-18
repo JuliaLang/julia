@@ -114,7 +114,7 @@ end
 
 # Fallback method of `iterate(::Reverse{T})` which assumes the collection has `getindex(::T) and `reverse(eachindex(::T))`
 # don't propagate inbounds for this just in case
-function iterate(A::Reverse state=(reverse(eachindex(A.itr)),))
+function iterate(A::Reverse, state=(reverse(eachindex(A.itr)),))
     y = iterate(state...)
     y === nothing && return y
     idx, itrs = y
