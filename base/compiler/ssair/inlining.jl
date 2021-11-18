@@ -615,7 +615,7 @@ end
 
 # This assumes the caller has verified that all arguments to the _apply_iterate call are Tuples.
 function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int,
-        argexprs::Vector{Any}, argtypes::Vector{Any}, arginfos::Vector{Any},
+        argexprs::Vector{Any}, argtypes::Vector{Any}, arginfos::Vector{MaybeAbstractIterationInfo},
         arg_start::Int, istate::InliningState)
 
     flag = ir.stmts[idx][:flag]
@@ -637,9 +637,9 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
                         push!(def_argtypes, Const(p))
                     end
                 else
-                    ti = widenconst(def_type)
+                    ti = widenconst(def_type)::DataType
                     if ti.name === NamedTuple_typename
-                        ti = ti.parameters[2]
+                        ti = ti.parameters[2]::DataType
                     end
                     for p in ti.parameters
                         if isa(p, DataType) && isdefined(p, :instance)
@@ -969,7 +969,7 @@ function inline_apply!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sig::
         end
         # Try to figure out the signature of the function being called
         # and if rewrite_apply_exprargs can deal with this form
-        infos = Any[]
+        infos = MaybeAbstractIterationInfo[]
         for i = (arg_start + 1):length(argtypes)
             thisarginfo = nothing
             if !is_valid_type_for_apply_rewrite(argtypes[i], state.params)
@@ -1176,7 +1176,7 @@ function analyze_single_call!(
             if length(infos) > 1
                 (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any),
                     atype, only_method.sig)::SimpleVector
-                match = MethodMatch(metharg, methsp, only_method, true)
+                match = MethodMatch(metharg, methsp::SimpleVector, only_method, true)
             else
                 meth = meth::MethodLookupResult
                 @assert length(meth) == 1
