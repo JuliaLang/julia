@@ -672,17 +672,13 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
                 state1 = insert_node!(ir, idx, NewInstruction(new_stmt, call.rt))
                 new_sig = with_atype(call_sig(ir, new_stmt)::Signature)
                 info = call.info
-                handled = false
                 if isa(info, ConstCallInfo)
-                    if !is_stmt_noinline(flag) && maybe_handle_const_call!(
+                    maybe_handle_const_call!(
                         ir, state1.id, new_stmt, info, new_sig,
-                        istate, flag, todo)
-                        handled = true
-                    else
-                        info = info.call
-                    end
+                        istate, flag, todo) && @goto analyzed
+                    info = info.call # cascade to the non-constant handling
                 end
-                if !handled && (isa(info, MethodMatchInfo) || isa(info, UnionSplitInfo))
+                if isa(info, MethodMatchInfo) || isa(info, UnionSplitInfo)
                     info = isa(info, MethodMatchInfo) ?
                         MethodMatchInfo[info] : info.matches
                     # See if we can inline this call to `iterate`
@@ -690,6 +686,7 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
                         ir, todo, state1.id, new_stmt,
                         new_sig, info, istate, flag)
                 end
+                @label analyzed
                 if i != length(thisarginfo.each)
                     valT = getfield_tfunc(call.rt, Const(1))
                     val_extracted = insert_node!(ir, idx, NewInstruction(
@@ -723,6 +720,7 @@ end
 function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
     mi = todo.mi
     (; match, argtypes) = todo.spec::DelayedInliningSpec
+    et = state.et
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     isconst, src = false, nothing
@@ -730,7 +728,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
         inferred_src = match.src
         if isa(inferred_src, Const)
             if !is_inlineable_constant(inferred_src.val)
-                return compileable_specialization(state.et, match)
+                return compileable_specialization(et, match)
             end
             isconst, src = true, quoted(inferred_src.val)
         else
@@ -750,11 +748,15 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
         end
     end
 
-    et = state.et
-
     if isconst && et !== nothing
         push!(et, mi)
         return ConstantCase(src)
+    end
+
+    # the duplicated check might have been done already within `analyze_method!`, but still
+    # we need it here too since we may come here directly using a constant-prop' result
+    if !state.params.inlining || is_stmt_noinline(flag)
+        return compileable_specialization(et, match)
     end
 
     src = inlining_policy(state.interp, src, flag, mi, argtypes)
@@ -816,9 +818,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
 
     # See if there exists a specialization for this method signature
     mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
-    if !isa(mi, MethodInstance)
-        return compileable_specialization(et, match)
-    end
+    isa(mi, MethodInstance) || return compileable_specialization(et, match)
 
     todo = InliningTodo(mi, match, argtypes)
     # If we don't have caches here, delay resolving this MethodInstance
@@ -1010,7 +1010,7 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, (; match, result):
 
     argtypes = invoke_rewrite(sig.argtypes)
 
-    if isa(result, InferenceResult) && !is_stmt_noinline(flag)
+    if isa(result, InferenceResult)
         (; mi) = item = InliningTodo(result, argtypes)
         validate_sparams(mi.sparam_vals) || return nothing
         if argtypes_to_type(argtypes) <: mi.def.sig
@@ -1300,6 +1300,9 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         end
 
         if isa(info, OpaqueClosureCallInfo)
+            # ignore the `@noinline` annotation for opaque closure call as we force the constant-prop'
+            # for this opaque closure call in `const_prop_methodinstance_heuristic` ?
+            # flag &= ~IR_FLAG_NOINLINEe
             result = info.result
             if isa(result, InferenceResult)
                 handle_const_opaque_closure_call!(
@@ -1323,11 +1326,9 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         # if inference arrived here with constant-prop'ed result(s),
         # we can perform a specialized analysis for just this case
         if isa(info, ConstCallInfo)
-            if !is_stmt_noinline(flag)
-                maybe_handle_const_call!(
-                    ir, idx, stmt, info, sig,
-                    state, flag, todo) && continue
-            end
+            maybe_handle_const_call!(
+                ir, idx, stmt, info, sig,
+                state, flag, todo) && continue
             info = info.call # cascade to the non-constant handling
         end
 
