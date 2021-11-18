@@ -122,11 +122,12 @@ calls and expand argument types automatically:
 
 ```julia-repl
 julia> @code_llvm +(1,1)
-
-define i64 @"julia_+_130862"(i64, i64) {
+;  @ int.jl:87 within `+`
+; Function Attrs: sspstrong uwtable
+define i64 @"julia_+_476"(i64 signext %0, i64 signext %1) #0 {
 top:
-    %2 = add i64 %1, %0
-    ret i64 %2
+  %2 = add i64 %1, %0
+  ret i64 %2
 }
 ```
 
