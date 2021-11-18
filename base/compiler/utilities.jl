@@ -140,12 +140,12 @@ function retrieve_code_info(linfo::MethodInstance)
     return nothing
 end
 
-function get_compileable_sig(method::Method, @nospecialize(atypes), sparams::SimpleVector)
-    isa(atypes, DataType) || return nothing
-    mt = ccall(:jl_method_table_for, Any, (Any,), atypes)
+function get_compileable_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
+    isa(atype, DataType) || return nothing
+    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
     mt === nothing && return nothing
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
-        mt, atypes, sparams, method)
+        mt, atype, sparams, method)
 end
 
 isa_compileable_sig(@nospecialize(atype), method::Method) =
@@ -153,14 +153,14 @@ isa_compileable_sig(@nospecialize(atype), method::Method) =
 
 # eliminate UnionAll vars that might be degenerate due to having identical bounds,
 # or a concrete upper bound and appearing covariantly.
-function subst_trivial_bounds(@nospecialize(atypes))
-    if !isa(atypes, UnionAll)
-        return atypes
+function subst_trivial_bounds(@nospecialize(atype))
+    if !isa(atype, UnionAll)
+        return atype
     end
-    v = atypes.var
+    v = atype.var
     if isconcretetype(v.ub) || v.lb === v.ub
         subst = try
-            atypes{v.ub}
+            atype{v.ub}
         catch
             # Note in rare cases a var bound might not be valid to substitute.
             nothing
@@ -169,39 +169,39 @@ function subst_trivial_bounds(@nospecialize(atypes))
             return subst_trivial_bounds(subst)
         end
     end
-    return UnionAll(v, subst_trivial_bounds(atypes.body))
+    return UnionAll(v, subst_trivial_bounds(atype.body))
 end
 
-# If removing trivial vars from atypes results in an equivalent type, use that
+# If removing trivial vars from atype results in an equivalent type, use that
 # instead. Otherwise we can get a case like issue #38888, where a signature like
 #   f(x::S) where S<:Int
 # gets cached and matches a concrete dispatch case.
-function normalize_typevars(method::Method, @nospecialize(atypes), sparams::SimpleVector)
-    at2 = subst_trivial_bounds(atypes)
-    if at2 !== atypes && at2 == atypes
-        atypes = at2
+function normalize_typevars(method::Method, @nospecialize(atype), sparams::SimpleVector)
+    at2 = subst_trivial_bounds(atype)
+    if at2 !== atype && at2 == atype
+        atype = at2
         sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
         sparams = sp_[2]::SimpleVector
     end
-    return atypes, sparams
+    return atype, sparams
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
-    if isa(atypes, UnionAll)
-        atypes, sparams = normalize_typevars(method, atypes, sparams)
+function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
+    if isa(atype, UnionAll)
+        atype, sparams = normalize_typevars(method, atype, sparams)
     end
     if compilesig
-        new_atypes = get_compileable_sig(method, atypes, sparams)
-        new_atypes === nothing && return nothing
-        atypes = new_atypes
+        new_atype = get_compileable_sig(method, atype, sparams)
+        new_atype === nothing && return nothing
+        atype = new_atype
     end
     if preexisting
         # check cached specializations
         # for an existing result stored there
-        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)::Union{Nothing,MethodInstance}
+        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atype)::Union{Nothing,MethodInstance}
     end
-    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
+    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atype, sparams)
 end
 
 function specialize_method(match::MethodMatch; kwargs...)

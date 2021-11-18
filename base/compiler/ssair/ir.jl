@@ -372,13 +372,8 @@ getindex(it::UseRefIterator) = it.use[1].stmt
 #    use::Int
 #end
 
-struct OOBToken
-end
-
-struct UndefToken
-end
-const undef_token = UndefToken()
-
+struct OOBToken end; const OOB_TOKEN = OOBToken()
+struct UndefToken end; const UNDEF_TOKEN = UndefToken()
 
 function getindex(x::UseRef)
     stmt = x.stmt
@@ -386,43 +381,43 @@ function getindex(x::UseRef)
         rhs = stmt.args[2]
         if isa(rhs, Expr)
             if is_relevant_expr(rhs)
-                x.op > length(rhs.args) && return OOBToken()
+                x.op > length(rhs.args) && return OOB_TOKEN
                 return rhs.args[x.op]
             end
         end
-        x.op == 1 || return OOBToken()
+        x.op == 1 || return OOB_TOKEN
         return rhs
     elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
-        x.op > length(stmt.args) && return OOBToken()
+        x.op > length(stmt.args) && return OOB_TOKEN
         return stmt.args[x.op]
     elseif isa(stmt, GotoIfNot)
-        x.op == 1 || return OOBToken()
+        x.op == 1 || return OOB_TOKEN
         return stmt.cond
     elseif isa(stmt, DetachNode) || isa(stmt, ReattachNode) || isa(stmt, SyncNode)
         x.op == 1 || return OOBToken()
         return stmt.syncregion
     elseif isa(stmt, ReturnNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        x.op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, PiNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        x.op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, UpsilonNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        x.op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, PhiNode)
-        x.op > length(stmt.values) && return OOBToken()
-        isassigned(stmt.values, x.op) || return UndefToken()
+        x.op > length(stmt.values) && return OOB_TOKEN
+        isassigned(stmt.values, x.op) || return UNDEF_TOKEN
         return stmt.values[x.op]
     elseif isa(stmt, PhiCNode)
-        x.op > length(stmt.values) && return OOBToken()
-        isassigned(stmt.values, x.op) || return UndefToken()
+        x.op > length(stmt.values) && return OOB_TOKEN
+        isassigned(stmt.values, x.op) || return UNDEF_TOKEN
         return stmt.values[x.op]
     else
-        return OOBToken()
+        return OOB_TOKEN
     end
 end
 
@@ -503,8 +498,8 @@ iterate(it::UseRefIterator) = (it.use[1].op = 0; iterate(it, nothing))
     while true
         use.op += 1
         y = use[]
-        y === OOBToken() && return nothing
-        y === UndefToken() || return it.use
+        y === OOB_TOKEN && return nothing
+        y === UNDEF_TOKEN || return it.use
     end
 end
 
