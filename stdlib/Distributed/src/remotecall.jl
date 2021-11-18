@@ -675,7 +675,7 @@ end
 
 function set_future_cache(r::Future, v)
     _, ok = @atomicreplace r.v nothing => Some(v)
-    @assert ok "internal consistency error detected for Future"
+    ok || error("internal consistency error detected for Future")
 end
 
 function put_future(rid, v, caller)
