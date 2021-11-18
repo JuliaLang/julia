@@ -77,7 +77,9 @@ function test_existing_ref(r::AbstractRemoteRef)
             if fv_cache === nothing && rv_cache !== nothing
                 # we have recd the value from another source, probably a deserialized ref, send a del_client message
                 send_del_client(r)
-                @atomicreplace found.v nothing => rv_cache
+                @lock found.lock begin
+                    @atomicreplace found.v nothing => rv_cache
+                end
             end
         end
         return found::typeof(r)
@@ -360,7 +362,8 @@ end
 channel_type(rr::RemoteChannel{T}) where {T} = T
 
 function serialize(s::ClusterSerializer, f::Future)
-    @lock f.lock serialize(s, f, f.v === nothing)
+    v_cache = @atomic f.v
+    serialize(s, f, v_cache === nothing)
 end
 serialize(s::ClusterSerializer, rr::RemoteChannel) = serialize(s, rr, true)
 function serialize(s::ClusterSerializer, rr::AbstractRemoteRef, addclient)
