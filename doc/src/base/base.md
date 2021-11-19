@@ -41,7 +41,7 @@ ans
 Base.active_project
 ```
 
-## [Keywords](@id base-keywords)
+## [Keywords](@id Keywords)
 
 This is the list of reserved keywords in Julia:
 `baremodule`, `begin`, `break`, `catch`, `const`, `continue`, `do`,

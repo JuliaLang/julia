@@ -1,4 +1,4 @@
-# [gdb debugging tips](@id dev-debug)
+# [gdb debugging tips](@id gdb-debugging-tips)
 
 ## Displaying Julia variables
 

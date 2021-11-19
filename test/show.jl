@@ -239,6 +239,15 @@ end
 @test repr(:(-(;x))) == ":(-(; x))"
 @test repr(:(+(1, 2;x))) == ":(+(1, 2; x))"
 @test repr(:(1:2...)) == ":(1:2...)"
+
+@test repr(:(1 := 2)) == ":(1 := 2)"
+@test repr(:(1 ≔ 2)) == ":(1 ≔ 2)"
+@test repr(:(1 ⩴ 2)) == ":(1 ⩴ 2)"
+@test repr(:(1 ≕ 2)) == ":(1 ≕ 2)"
+
+@test repr(:(∓ 1)) == ":(∓1)"
+@test repr(:(± 1)) == ":(±1)"
+
 for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:ref, :f, Expr(:(=), :x, 1)),
            Expr(:vect, 1, 2, Expr(:kw, :x, 1)),
@@ -258,6 +267,7 @@ end
 @test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
 @test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
 @test repr(Expr(:import, Expr(:(.), ))) == ":(\$(Expr(:import, :(\$(Expr(:.))))))"
+
 
 @test repr(Expr(:using, Expr(:(.), :A))) == ":(using A)"
 @test repr(Expr(:using, Expr(:(.), :A),

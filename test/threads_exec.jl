@@ -27,6 +27,27 @@ end
 # (expected test duration is about 18-180 seconds)
 Timer(t -> killjob("KILLING BY THREAD TEST WATCHDOG\n"), 1200)
 
+# basic lock check
+if nthreads() > 1
+    let lk = Base.Threads.SpinLock()
+        c1 = Base.Event()
+        c2 = Base.Event()
+        @test trylock(lk)
+        @test !trylock(lk)
+        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
+        t2 = Threads.@spawn (notify(c2); trylock(lk))
+        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
+        wait(c1)
+        wait(c2)
+        @test !fetch(t2)
+        @test istaskdone(t2)
+        @test !istaskdone(t1)
+        unlock(lk)
+        @test fetch(t1)
+        @test istaskdone(t1)
+    end
+end
+
 # threading constructs
 
 let a = zeros(Int, 2 * nthreads())

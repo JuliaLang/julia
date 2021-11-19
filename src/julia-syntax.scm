@@ -1654,17 +1654,13 @@
 (define (expand-or e)
   (let ((e (cdr (flatten-ex '|\|\|| e))))
     (let loop ((tail e))
-      (if (null? tail)
-          '(false)
-          (if (null? (cdr tail))
-              (car tail)
-              (if (symbol-like? (car tail))
-                  `(if ,(car tail) ,(car tail)
-                       ,(loop (cdr tail)))
-                  (let ((g (make-ssavalue)))
-                    `(block (= ,g ,(car tail))
-                            (if ,g ,g
-                                ,(loop (cdr tail)))))))))))
+      (cond ((null? tail)
+             '(false))
+            ((null? (cdr tail))
+             (car tail))
+            (else `(if ,(car tail)
+                       (true)
+                       ,(loop (cdr tail))))))))
 
 (define (expand-for lhss itrs body)
   (define (outer? x) (and (pair? x) (eq? (car x) 'outer)))
@@ -3120,14 +3116,20 @@
 (define (free-vars e)
   (table.keys (free-vars- e (table))))
 
-(define (analyze-vars-lambda e env captvars sp new-sp (methsig #f))
+(define (vinfo-to-table vi)
+  (let ((tab (table)))
+    (for-each (lambda (v) (put! tab (car v) v))
+              vi)
+    tab))
+
+(define (analyze-vars-lambda e env captvars sp new-sp methsig tab)
   (let* ((args (lam:args e))
          (locl (caddr e))
          (allv (nconc (map arg-name args) locl))
          (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
                       ;; add variables referenced in declared types for free vars
                       (dv (apply nconc (map (lambda (v)
-                                              (let ((vi (var-info-for v env)))
+                                              (let ((vi (get tab v #f)))
                                                 (if vi (free-vars (vinfo:type vi)) '())))
                                             fv))))
                  (append (diff dv fv) fv)))
@@ -3147,15 +3149,17 @@
                                                  (not (memq (vinfo:name v) new-sp))
                                                  (not (memq (vinfo:name v) glo))))
                                 env)
-                        (map make-var-info capt-sp))))
-    (analyze-vars (lam:body e)
-                  (append vi
+                        (map make-var-info capt-sp)))
+         (new-env (append vi
                           ;; new environment: add our vars
                           (filter (lambda (v)
                                     (and (not (memq (vinfo:name v) allv))
                                          (not (memq (vinfo:name v) glo))))
-                                  env))
-                  cv (delete-duplicates (append new-sp sp)))
+                                  env))))
+    (analyze-vars (lam:body e)
+                  new-env
+                  cv (delete-duplicates (append new-sp sp))
+                  (vinfo-to-table new-env))
     ;; mark all the vars we capture as captured
     (for-each (lambda (v) (vinfo:set-capt! v #t))
               cv)
@@ -3170,36 +3174,36 @@
 ;; in-place to
 ;;   (var-info-lst captured-var-infos ssavalues static_params)
 ;; where var-info-lst is a list of var-info records
-(define (analyze-vars e env captvars sp)
+(define (analyze-vars e env captvars sp tab)
   (if (or (atom? e) (quoted? e))
       (begin
         (if (symbol? e)
-            (let ((vi (var-info-for e env)))
+            (let ((vi (get tab e #f)))
               (if vi
                   (vinfo:set-read! vi #t))))
         e)
       (case (car e)
         ((local-def) ;; a local that we know has an assignment that dominates all usages
-         (let ((vi (var-info-for (cadr e) env)))
+         (let ((vi (get tab (cadr e) #f)))
               (vinfo:set-never-undef! vi #t)))
         ((=)
-         (let ((vi (and (symbol? (cadr e)) (var-info-for (cadr e) env))))
+         (let ((vi (and (symbol? (cadr e)) (get tab (cadr e) #f))))
            (if vi ; if local or captured
                (begin (if (vinfo:asgn vi)
                           (vinfo:set-sa! vi #f)
                           (vinfo:set-sa! vi #t))
                       (vinfo:set-asgn! vi #t))))
-         (analyze-vars (caddr e) env captvars sp))
+         (analyze-vars (caddr e) env captvars sp tab))
         ((call)
-         (let ((vi (var-info-for (cadr e) env)))
+         (let ((vi (get tab (cadr e) #f)))
            (if vi
                (vinfo:set-called! vi #t))
-           (for-each (lambda (x) (analyze-vars x env captvars sp))
+           (for-each (lambda (x) (analyze-vars x env captvars sp tab))
                      (cdr e))))
         ((decl)
          ;; handle var::T declaration by storing the type in the var-info
          ;; record. for non-symbols or globals, emit a type assertion.
-         (let ((vi (var-info-for (cadr e) env)))
+         (let ((vi (get tab (cadr e) #f)))
            (if vi
                (begin (if (not (equal? (vinfo:type vi) '(core Any)))
                           (error (string "multiple type declarations for \""
@@ -3209,31 +3213,31 @@
                                          "\" declared in inner scope")))
                       (vinfo:set-type! vi (caddr e))))))
         ((lambda)
-         (analyze-vars-lambda e env captvars sp '()))
+         (analyze-vars-lambda e env captvars sp '() #f tab))
         ((with-static-parameters)
          ;; (with-static-parameters func_expr sp_1 sp_2 ...)
          (assert (eq? (car (cadr e)) 'lambda))
          (analyze-vars-lambda (cadr e) env captvars sp
-                              (cddr e)))
+                              (cddr e) #f tab))
         ((method)
          (if (length= e 2)
-             (let ((vi (var-info-for (method-expr-name e) env)))
+             (let ((vi (get tab (method-expr-name e) #f)))
                (if vi
                    (begin (if (vinfo:asgn vi)
                               (vinfo:set-sa! vi #f)
                               (vinfo:set-sa! vi #t))
                           (vinfo:set-asgn! vi #t)))
                e)
-             (begin (analyze-vars (caddr e) env captvars sp)
+             (begin (analyze-vars (caddr e) env captvars sp tab)
                     (assert (eq? (car (cadddr e)) 'lambda))
                     (analyze-vars-lambda (cadddr e) env captvars sp
                                          (method-expr-static-parameters e)
-                                         (caddr e)))))
+                                         (caddr e) tab))))
         ((module toplevel) e)
-        (else (for-each (lambda (x) (analyze-vars x env captvars sp))
+        (else (for-each (lambda (x) (analyze-vars x env captvars sp tab))
                         (cdr e))))))
 
-(define (analyze-variables! e) (analyze-vars e '() '() '()) e)
+(define (analyze-variables! e) (analyze-vars e '() '() '() (table)) e)
 
 ;; pass 4: closure conversion
 

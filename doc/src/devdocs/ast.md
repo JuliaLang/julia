@@ -595,7 +595,7 @@ A unique'd container describing the shared metadata for a single method.
 ### MethodInstance
 
 A unique'd container describing a single callable signature for a Method.
-See especially [Proper maintenance and care of multi-threading locks](@ref dev-locks)
+See especially [Proper maintenance and care of multi-threading locks](@ref Proper-maintenance-and-care-of-multi-threading-locks)
 for important details on how to modify these fields safely.
 
   * `specTypes`

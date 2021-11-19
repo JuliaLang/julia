@@ -2,6 +2,27 @@
 
 using Test
 
+# simple sanity tests for locks under cooperative concurrent access
+let lk = ReentrantLock()
+    c1 = Base.Event()
+    c2 = Base.Event()
+    @test trylock(lk)
+    @test trylock(lk)
+    t1 = @async (notify(c1); lock(lk); unlock(lk); trylock(lk))
+    t2 = @async (notify(c2); trylock(lk))
+    wait(c1)
+    wait(c2)
+    @test t1.queue === lk.cond_wait.waitq
+    @test t2.queue !== lk.cond_wait.waitq
+    @test istaskdone(t2)
+    @test !fetch(t2)
+    unlock(lk)
+    @test t1.queue === lk.cond_wait.waitq
+    unlock(lk)
+    @test t1.queue !== lk.cond_wait.waitq
+    @test fetch(t1)
+end
+
 let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`
     for test_nthreads in (1, 2, 4, 4) # run once to try single-threaded mode, then try a couple times to trigger bad races
         new_env = copy(ENV)
@@ -153,9 +174,11 @@ close(proc.in)
     # Not using threads_exec.jl for better isolation, reproducibility, and a
     # tighter timeout.
     script = "profile_spawnmany_exec.jl"
-    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no $script`
+    cmd_base = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no $script`
     @testset for n in [20000, 200000, 2000000]
-        proc = run(ignorestatus(setenv(cmd, "NTASKS" => n; dir = @__DIR__)); wait = false)
+        cmd = ignorestatus(setenv(cmd_base, "NTASKS" => n; dir = @__DIR__))
+        cmd = pipeline(cmd; stdout = stderr, stderr)
+        proc = run(cmd; wait = false)
         done = Threads.Atomic{Bool}(false)
         timeout = false
         timer = Timer(100) do _
@@ -179,7 +202,15 @@ close(proc.in)
             done[] = true
             close(timer)
         end
-        @test success(proc)
+        if ( !success(proc) ) || ( timeout )
+            @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
+        end
+        if Sys.iswindows()
+            # Known failure: https://github.com/JuliaLang/julia/issues/43124
+            @test_skip success(proc)
+        else
+            @test success(proc)
+        end
         @test !timeout
     end
 end
