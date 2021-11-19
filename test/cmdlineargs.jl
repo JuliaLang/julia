@@ -345,9 +345,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test popfirst!(got) == "        0 g(x) = x + 123456"
         @test popfirst!(got) == "        - function f(x)"
         if Sys.WORD_SIZE == 64
-            @test popfirst!(got) == "       48     []"
+            @test popfirst!(got) == "        0     []"
         else
-            @test popfirst!(got) == "       32     []"
+            @test popfirst!(got) == "        0     []"
         end
         if Sys.WORD_SIZE == 64
             # P64 pools with 64 bit tags

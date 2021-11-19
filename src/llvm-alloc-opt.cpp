@@ -139,9 +139,10 @@ private:
     void splitOnStack(CallInst *orig_inst, llvm::Value *tag);
     void optimizeTag(CallInst *orig_inst, llvm::Value *tag);
 
+    void getArrayOps(int dimcount);
     void optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info);
-    void getArrayOps();
     void optimizeArrayLengthCmpInsts(CallInst *orig_inst);
+    void splitArrayOnStack(CallInst *orig_inst);
 
     Function &F;
     AllocOpt &pass;
@@ -189,6 +190,7 @@ private:
     SmallVector<CallInst*,6> removed;
     AllocUseInfo use_info, array_info;
     bool array_length_clobbered;
+    bool array_only_data_ops;
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
     ReplaceUses::Stack replace_stack;
@@ -233,19 +235,32 @@ void Optimizer::optimizeAll()
             continue;
         }
         if (item.second.isarray) {
-            getArrayOps();
+            getArrayOps(item.second.array.dimcount);
             if (!array_length_clobbered) {
                 optimizeArrayDims(orig, item.second);
             }
+            if (array_info.escaped) {
+                continue;
+            }
+            if (use_info.hastypeof) {
+                //typeof for arrays is not currently supported
+                continue;
+            }
         }
         if (use_info.hasboundscheck || use_info.returned) {
-            if (use_info.hastypeof && !item.second.isarray)
+            if (use_info.hastypeof)
                 optimizeTag(orig, item.second.type);
             continue;
         }
-        if (!item.second.isarray && !use_info.addrescaped && (!use_info.haspreserve ||
-                                                           !use_info.refstore)) {
-            if (!use_info.hasload || (item.second.isarray && !array_info.escaped && !array_info.hasload)) {
+        auto not_removable = [&](jl_alloc::AllocUseInfo &info){
+            return info.addrescaped || (info.haspreserve && info.refstore);
+        };
+        if (!not_removable(use_info)) {
+            bool can_remove = !use_info.hasload;
+            bool array_can_remove = item.second.isarray && !array_info.hasload;
+            array_can_remove = array_can_remove && !not_removable(array_info);
+            can_remove = can_remove || array_can_remove;
+            if (can_remove) {
                 // No one took the address, no one reads anything and there's no meaningful
                 // preserve of fields (either no preserve/ccall or no object reference fields)
                 // We can just delete all the uses.
@@ -253,37 +268,47 @@ void Optimizer::optimizeAll()
                 continue;
             }
         }
-        if (item.second.isarray) {
-            // We do not currently support stack allocation of arrays
-            continue;
-        }
-        bool has_ref = false;
-        bool has_refaggr = false;
-        for (auto memop: use_info.memops) {
-            auto &field = memop.second;
-            if (field.hasobjref) {
-                has_ref = true;
-                // This can be relaxed a little based on hasload
-                // TODO: add support for hasaggr load/store
-                if (field.hasaggr || field.multiloc || field.size != sizeof(void*)) {
-                    has_refaggr = true;
-                    break;
+        auto get_refaggr = [&](jl_alloc::AllocUseInfo &info) {
+            bool has_ref = false;
+            bool has_refaggr = false;
+            for (auto memop: use_info.memops) {
+                auto &field = memop.second;
+                if (field.hasobjref) {
+                    has_ref = true;
+                    // This can be relaxed a little based on hasload
+                    // TODO: add support for hasaggr load/store
+                    if (field.hasaggr || field.multiloc || field.size != sizeof(void*)) {
+                        has_refaggr = true;
+                        break;
+                    }
                 }
             }
-        }
-        if (!use_info.hasunknownmem && !use_info.addrescaped && !has_refaggr) {
-            // No one actually care about the memory layout of this object, split it.
-            splitOnStack(orig, item.second.type);
+            return std::pair<bool, bool>{has_ref, has_refaggr};
+        };
+        auto has_ref = get_refaggr(use_info);
+        if (item.second.isarray) {
+            if (!use_info.hasunknownmem && !use_info.addrescaped
+                && !array_info.hasunknownmem && !array_info.addrescaped
+                && !has_ref.second && !get_refaggr(array_info).second) {
+                splitArrayOnStack(orig);
+                continue;
+            }
             continue;
-        }
-        if (has_refaggr) {
-            if (use_info.hastypeof)
-                optimizeTag(orig, item.second.type);
-            continue;
+        } else {
+            if (!use_info.hasunknownmem && !use_info.addrescaped && !has_ref.second) {
+                // No one actually care about the memory layout of this object, split it.
+                splitOnStack(orig, item.second.type);
+                continue;
+            }
+            if (has_ref.second) {
+                if (use_info.hastypeof)
+                    optimizeTag(orig, item.second.type);
+                continue;
+            }
         }
         // The object has no fields with mix reference access
         // Note that this needs to be changed once stack-based arrays are supported
-        moveToStack(orig, item.second.type, item.second.object.size, has_ref);
+        moveToStack(orig, item.second.type, item.second.object.size, has_ref.first);
     }
 }
 
@@ -842,6 +867,7 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                 IRBuilder<> builder(orig_inst);
                 length = builder.CreateMul(dims[0], dims[1], "arraylen2d", true, true);
                 length = builder.CreateMul(length, dims[2], "arraylen", true, true);
+                break;
             }
             default:
                 assert(false);
@@ -857,13 +883,11 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                         break;
                     case 8:
                         // This is an access to array length
-                        // TODO need to check that this is never clobbered for 1d array
                         access.inst->replaceAllUsesWith(length);
                         // DCE can eliminate the now-redundant load
                         break;
                     case 24:
                         // This is an access to dim 1
-                        // TODO need to check that this is never clobbered for 1d array
                         assert(dims[0]);
                         access.inst->replaceAllUsesWith(dims[0]);
                         break;
@@ -892,9 +916,10 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
     }
 }
 
-void Optimizer::getArrayOps() {
+void Optimizer::getArrayOps(int dimcount) {
     array_info.reset();
     array_length_clobbered = false;
+    array_only_data_ops = true;
     for (auto &field : use_info.memops) {
         for (auto &access : field.second.accesses) {
             std::size_t offset = access.offset;
@@ -909,15 +934,22 @@ void Optimizer::getArrayOps() {
                 case 8:
                 case 24:
                 {
-                    if (isa<StoreInst>(access.inst)) {
+                    if (!isa<LoadInst>(access.inst)) {
                         array_length_clobbered = true;
                     }
+                    array_only_data_ops = false;
                     break;
                 }
                 case 32:
                 case 40:
-                    assert(!isa<StoreInst>(access.inst));
+                    //Array owned sometimes results in a GEP that looks like a dim access
+                    //offset / 8 -> value ranges from 4-5
+                    //4-5 - 2 -> value ranges from 2-3
+                    //if computed dimensional position is bigger than number of dimensions
+                    //then this is probably an array access and we can't optimize it
+                    assert(offset / 8 - 2 > dimcount || isa<LoadInst>(access.inst));
                 default:
+                    array_only_data_ops = false;
                     break;
             }
         }
@@ -986,6 +1018,73 @@ void Optimizer::optimizeArrayLengthCmpInsts(CallInst *orig_inst) {
     }
 }
 
+void Optimizer::splitArrayOnStack(CallInst *orig_inst) {
+    struct SplitSlot {
+        SmallVector<Instruction*, 2> instructions;
+        llvm::AllocaInst *alloca = nullptr;
+        llvm::Instruction *load = nullptr;
+        std::size_t size;
+    };
+    if (use_info.haspreserve || array_info.haspreserve) {
+        return;
+    }
+    DenseMap<std::size_t, SplitSlot> slots;
+    IRBuilder<> allocaBuilder(&F.getEntryBlock().front());
+    for (auto &memop : array_info.memops) {
+        if (!memop.second.hasload && (!memop.second.hasobjref || (!array_info.haspreserve && !use_info.haspreserve))) {
+            continue;
+        }
+        for (auto &op : memop.second.accesses) {
+            auto &slot = slots[op.offset];
+            if ((!isa<StoreInst>(op.inst) || cast<StoreInst>(op.inst)->getPointerOperandType() == pass.T_prjlvalue) && !slot.load) {
+                slot.load = op.inst;
+                slot.size = op.size;
+            }
+            slot.instructions.push_back(op.inst);
+        }
+    }
+    auto materialize = [&](AllocaInst *alloc, Instruction *inst){
+        assert(isa<StoreInst>(inst) || alloc->getType()->getPointerElementType() == inst->getType());
+        if (auto load = dyn_cast<LoadInst>(inst)) {
+            load->setOperand(load->getPointerOperandIndex(), alloc);
+            load->setOrdering(AtomicOrdering::NotAtomic);
+        } else if (auto store = dyn_cast<StoreInst>(inst)) {
+            store->setOperand(store->getPointerOperandIndex(), alloc);
+            store->setOrdering(AtomicOrdering::NotAtomic);
+        } else if (auto cxc = dyn_cast<AtomicCmpXchgInst>(inst)) {
+            cxc->setOperand(cxc->getPointerOperandIndex(), alloc);
+        } else if (auto rmw = dyn_cast<AtomicRMWInst>(inst)) {
+            rmw->setOperand(rmw->getPointerOperandIndex(), alloc);
+        } else if (auto call = dyn_cast<CallInst>(inst)) {
+            auto callee = call->getCalledOperand();
+            if (callee == pass.write_barrier_func) {
+                call->eraseFromParent();
+            } else {
+                assert(false);
+            }
+        }
+    };
+    auto &dtree = getDomTree();
+    for (auto &slot : slots) {
+        if (!slot.second.load) {
+            for (auto &inst : slot.second.instructions) {
+                assert(isa<StoreInst>(inst));
+                inst->eraseFromParent();
+            }
+        } else {
+            auto alloca_inst = allocaBuilder.CreateAlloca(slot.second.load->getType());
+            // Lifetime insertion is currently broken
+            // insertLifetime(allocaBuilder.CreateBitCast(alloca_inst, pass.T_pint8),
+            //             ConstantInt::get(pass.T_int64, slot.second.size), orig_inst);
+            for (auto &inst : slot.second.instructions) {
+                materialize(alloca_inst, inst);
+            }
+            //MemToReg promotion is also broken
+            // PromoteMemToReg({alloca_inst}, dtree);
+        }
+    }
+}
+
 // Unable to optimize out the allocation, do store to load forwarding on the tag instead.
 void Optimizer::optimizeTag(CallInst *orig_inst, llvm::Value *tag)
 {
@@ -1020,7 +1119,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst, llvm::Value *tag)
         uint32_t size;
     };
     SmallVector<SplitSlot,8> slots;
-    for (auto memop: use_info.memops) {
+    for (auto &memop: use_info.memops) {
         auto offset = memop.first;
         auto &field = memop.second;
         // If the field has no reader and is not a object reference field that we

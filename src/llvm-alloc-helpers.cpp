@@ -306,48 +306,6 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
 bool jl_alloc::getAllocIdInfo(AllocIdInfo &info, llvm::CallInst *call, llvm::Function *alloc_obj_func) {
     auto callee = call->getCalledOperand();
     if (callee == alloc_obj_func) {
-        if (call->getNumArgOperands() != 3) {
-            // dbgs() << "Error was not 3 ops\n";
-            // dbgs().flush();
-            // fprintf(stderr, "hi you must print me0\n");
-            abort();
-        } else {
-            // dbgs() << "call1: " << *call << "\n";
-            // dbgs() << "gnao1: " << call->getNumArgOperands() << "\n";
-            // dbgs().flush();
-            // fprintf(stderr, "hi you must print me1\n");
-            assert(0 < call->getNumArgOperands());
-            // dbgs() << "call: " << *call << "\n";
-            // dbgs() << "gnao: " << call->getNumArgOperands() << "\n";
-            // dbgs().flush();
-            // fprintf(stderr, "hi you must print me2\n");
-            call->getArgOperand(0);
-            // dbgs() << "end\n\n";
-            // fprintf(stderr, "hi you must print me3\n");
-            // dbgs().flush();
-        }
-        // if (true) {
-        // dbgs() << "Allocation: " << *call << "\n";
-        // dbgs().flush();
-        // dbgs() << "Num operands: " << call->getNumArgOperands() << "\n";
-        // dbgs().flush();
-        // for (auto &op : call->arg_operands()) {
-        //     dbgs() << "Operand: " << *op << "\n";
-        // }
-        // if (call->getNumArgOperands() > 0) {
-        // dbgs() << "0: " << *call->getArgOperand(0) << "\n";
-        // dbgs().flush();
-        // }
-        // if(call->getNumArgOperands() > 1) {
-        // dbgs() << "1: " << *call->getArgOperand(1) << "\n";
-        // dbgs().flush();
-        // }
-        // if(call->getNumArgOperands() > 2) {
-        // dbgs() << "2: " << *call->getArgOperand(2) << "\n";
-        // dbgs().flush();
-        // }
-        // dbgs() << "\n\n\n\n";
-        // }
         info.isarray = false;
         auto sz = call->getArgOperand(1);
         info.type = call->getArgOperand(2);
@@ -362,8 +320,6 @@ bool jl_alloc::getAllocIdInfo(AllocIdInfo &info, llvm::CallInst *call, llvm::Fun
     } else if (auto cexpr = dyn_cast<ConstantExpr>(callee)) {
         if (cexpr->getNumOperands() == 1) {
             if (auto cint = dyn_cast<ConstantInt>(cexpr->getOperand(0))) {
-                info.isarray = true;
-                // assert(call->getNumArgOperands() >= 2);
                 std::size_t faddr = cint->getZExtValue();
                 if (faddr == reinterpret_cast<std::uintptr_t>(jl_alloc_array_1d)) {
                     assert(call->getNumArgOperands() == 2);
@@ -380,6 +336,7 @@ bool jl_alloc::getAllocIdInfo(AllocIdInfo &info, llvm::CallInst *call, llvm::Fun
                 } else {
                     return false;
                 }
+                info.isarray = true;
                 info.type = call->getArgOperand(0);
                 return true;
             }
