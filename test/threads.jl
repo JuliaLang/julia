@@ -203,10 +203,11 @@ close(proc.in)
             close(timer)
         end
         if Sys.iswindows() && (n >= 2000000)
-            # Known failure https://github.com/JuliaLang/julia/issues/43124
+            # https://github.com/JuliaLang/julia/issues/43124
+            @test_skip proc.exitcode == 0
+            @test_skip proc.termsignal == 0
             @test_skip success(proc)
         else
-            # Not using `@test success(proc)` to get more information upon failure
             @test proc.exitcode == 0
             @test proc.termsignal == 0
             @test success(proc)
