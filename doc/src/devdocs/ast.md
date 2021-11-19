@@ -78,10 +78,10 @@ call. Finally, chains of comparisons have their own special expression structure
 | `[x y]`                  | `(hcat x y)`                                      |
 | `[x y; z t]`             | `(vcat (row x y) (row z t))`                      |
 | `[x;y;; z;t;;;]`         | `(ncat 3 (nrow 2 (nrow 1 x y) (nrow 1 z t)))`     |
-| `[x for y in z, a in b]` | `(comprehension x (= y z) (= a b))`               |
-| `T[x for y in z]`        | `(typed_comprehension T x (= y z))`               |
+| `[x for y in z, a in b]` | `(comprehension (generator x (= y z) (= a b)))`   |
+| `T[x for y in z]`        | `(typed_comprehension T (generator x (= y z)))`   |
 | `(a, b, c)`              | `(tuple a b c)`                                   |
-| `(a; b; c)`              | `(block a (block b c))`                           |
+| `(a; b; c)`              | `(block a b c)`                                   |
 
 ### Macros
 
