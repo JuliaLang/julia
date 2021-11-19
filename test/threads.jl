@@ -202,16 +202,9 @@ close(proc.in)
             done[] = true
             close(timer)
         end
-        if Sys.iswindows()
-            if !success(proc)
-                @error """
-                Failed test: "spawn and wait *a lot* of tasks in @profile" (n = $n)
-
-                If you notice this error message, please share the test output in
-                https://github.com/JuliaLang/julia/issues/43124.  The error and
-                backtrace should be printed above.
-                """ proc.exitcode proc.termsignal
-            end
+        if Sys.iswindows() && (n >= 2000000)
+            # Known failure https://github.com/JuliaLang/julia/issues/43124
+            @test_skip success(proc)
         else
             @test success(proc)
         end
