@@ -239,19 +239,30 @@ pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 length(v::Pairs) = length(getfield(v, :itr))
 axes(v::Pairs) = axes(getfield(v, :itr))
 size(v::Pairs) = size(getfield(v, :itr))
-@propagate_inbounds function iterate(v::Pairs{K, V}, state...) where {K, V}
-    x = iterate(getfield(v, :itr), state...)
-    x === nothing && return x
-    indx, n = x
-    item = getfield(v, :data)[indx]
-    return (Pair{K, V}(indx, item), n)
+
+@propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
+    return Pair{K, V}(idx, getfield(p, :data)[idx])
 end
+
+@propagate_inbounds function iterate(p::Pairs{K, V}, state...) where {K, V}
+    x = iterate(getfield(p, :itr), state...)
+    x === nothing && return x
+    idx, next = x
+    return (_pairs_elt(p, idx), next)
+end
+
+@propagate_inbounds function iterate(r::Reverse{<:Pairs}, state=(reverse(getfield(r.itr, :itr)),))
+    x = iterate(state...)
+    x === nothing && return x
+    idx, next = x
+    return (_pairs_elt(r.itr, idx), (state[1], next))
+end
+
 @inline isdone(v::Pairs, state...) = isdone(getfield(v, :itr), state...)
 
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, <:Base.AbstractUnitRange, <:Tuple}}) = HasLength()
 
-reverse(v::Pairs) = Pairs(getfield(v, :data), reverse(getfield(v, :itr)))
 function last(v::Pairs{K, V}) where {K, V}
     idx = last(getfield(v, :itr))
     return Pair{K, V}(idx, v[idx])
