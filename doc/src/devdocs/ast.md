@@ -130,11 +130,11 @@ instead of `:import`.
 Julia supports more number types than many scheme implementations, so not all numbers are represented
 directly as scheme numbers in the AST.
 
-| Input                   | AST                                                     |
-|:----------------------- |:------------------------------------------------------- |
-| `11111111111111111111`  | `(macrocall @int128_str (null) "11111111111111111111")` |
-| `0xfffffffffffffffff`   | `(macrocall @uint128_str (null) "0xfffffffffffffffff")` |
-| `1111...many digits...` | `(macrocall @big_str (null) "1111....")`                |
+| Input                   | AST                                                      |
+|:----------------------- |:-------------------------------------------------------- |
+| `11111111111111111111`  | `(macrocall @int128_str nothing "11111111111111111111")` |
+| `0xfffffffffffffffff`   | `(macrocall @uint128_str nothing "0xfffffffffffffffff")` |
+| `1111...many digits...` | `(macrocall @big_str nothing "1111....")`                |
 
 ### Block forms
 
