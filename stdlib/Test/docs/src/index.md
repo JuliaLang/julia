@@ -149,7 +149,7 @@ f (generic function with 1 method)
 julia> @testset f(1)
 Test Summary: | Pass  Total
 f             |    1      1
-Test.DefaultTestSet("f", Any[], 1, false, false)
+Test.DefaultTestSet("f", Test.FallbackTestSet(), Any[], 1, false, false)
 ```
 
 This can be used to allow for factorization of test sets, making it easier to run individual
