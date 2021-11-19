@@ -1841,6 +1841,16 @@ end
         0
     end == Any[Int]
 
+    # slot as SSA
+    isaT(x, T) = isa(x, T)
+    @test Base.return_types((Any,Int)) do a, b
+        c = a
+        if isaT(c, typeof(b))
+            return c # c::Int
+        end
+        return 0
+    end |> only === Int
+
     # with Base functions
     @test Base.return_types((Any,)) do a
         Base.Fix2(isa, Int)(a) && return a # a::Int
@@ -2121,6 +2131,12 @@ end
     @test Base.return_types((Any,Int,)) do x, y
         ifelse(isa(x, Int), x, y)
     end |> only == Int
+
+    # slot as SSA
+    @test Base.return_types((Any,Vector{Any})) do x, y
+        z = x
+        ifelselike(isa(z, Int), z, length(y))
+    end |> only === Int
 end
 
 # Equivalence of Const(T.instance) and T for singleton types

@@ -280,7 +280,7 @@ function from_interprocedural!(@nospecialize(rt), sv::InferenceState, arginfo::A
         if maybecondinfo === nothing
             rt = widenconditional(rt)
         else
-            rt = from_interconditional(rt, arginfo, maybecondinfo)
+            rt = from_interconditional(rt, sv, arginfo, maybecondinfo)
         end
     end
     @assert !(rt isa InterConditional) "invalid lattice element returned from inter-procedural context"
@@ -295,7 +295,7 @@ function collect_limitations!(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
-function from_interconditional(@nospecialize(typ), (; fargs, argtypes)::ArgInfo, @nospecialize(maybecondinfo))
+function from_interconditional(@nospecialize(typ), sv::InferenceState, (; fargs, argtypes)::ArgInfo, @nospecialize(maybecondinfo))
     fargs === nothing && return widenconditional(typ)
     slot = 0
     vtype = elsetype = Any
@@ -303,7 +303,7 @@ function from_interconditional(@nospecialize(typ), (; fargs, argtypes)::ArgInfo,
     for i in 1:length(fargs)
         # find the first argument which supports refinement,
         # and intersect all equivalent arguments with it
-        arg = fargs[i]
+        arg = ssa_def_slot(fargs[i], sv)
         arg isa SlotNumber || continue # can't refine
         old = argtypes[i]
         old isa Type || continue # unlikely to refine
@@ -590,7 +590,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
                 return nothing
             end
         end
-        inf_result = InferenceResult(mi, arginfo, va_override)
+        inf_result = InferenceResult(mi, (arginfo, sv), va_override)
         if !any(inf_result.overridden_by_const)
             add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
             return nothing
@@ -630,7 +630,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         add_remark!(interp, sv, "[constprop] Disabled by argument and rettype heuristics")
         return nothing
     end
-    all_overridden = is_all_overridden(arginfo)
+    all_overridden = is_all_overridden(arginfo, sv)
     if !force && !const_prop_function_heuristic(interp, f, arginfo, nargs, all_overridden, sv)
         add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
         return nothing
@@ -682,11 +682,11 @@ end
 
 # determines heuristically whether if constant propagation can be worthwhile
 # by checking if any of given `argtypes` is "interesting" enough to be propagated
-function const_prop_argument_heuristic(_::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, _::InferenceState)
+function const_prop_argument_heuristic(_::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState)
     for i in 1:length(argtypes)
         a = argtypes[i]
         if isa(a, Conditional) && fargs !== nothing
-            is_const_prop_profitable_conditional(a, fargs) && return true
+            is_const_prop_profitable_conditional(a, fargs, sv) && return true
         else
             a = widenconditional(a)
             has_nontrivial_const_info(a) && is_const_prop_profitable_arg(a) && return true
@@ -710,8 +710,8 @@ function is_const_prop_profitable_arg(@nospecialize(arg))
     return isa(val, Symbol) || isa(val, Type) || (!isa(val, String) && !ismutable(val))
 end
 
-function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{Any})
-    slotid = find_constrained_arg(cnd, fargs)
+function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{Any}, sv::InferenceState)
+    slotid = find_constrained_arg(cnd, fargs, sv)
     if slotid !== nothing
         return true
     end
@@ -721,18 +721,22 @@ function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{An
     return isa(widenconditional(cnd), Const)
 end
 
-function find_constrained_arg(cnd::Conditional, fargs::Vector{Any})
-    slot = cnd.var
-    return findfirst(fargs) do @nospecialize(x)
-        x === slot
+function find_constrained_arg(cnd::Conditional, fargs::Vector{Any}, sv::InferenceState)
+    slot = slot_id(cnd.var)
+    for i in 1:length(fargs)
+        arg = ssa_def_slot(fargs[i], sv)
+        if isa(arg, SlotNumber) && slot_id(arg) == slot
+            return i
+        end
     end
+    return nothing
 end
 
 # checks if all argtypes has additional information other than what `Type` can provide
-function is_all_overridden((; fargs, argtypes)::ArgInfo)
+function is_all_overridden((; fargs, argtypes)::ArgInfo, sv::InferenceState)
     for a in argtypes
         if isa(a, Conditional) && fargs !== nothing
-            is_const_prop_profitable_conditional(a, fargs) || return false
+            is_const_prop_profitable_conditional(a, fargs, sv) || return false
         else
             a = widenconditional(a)
             is_forwardable_argtype(a) || return false
