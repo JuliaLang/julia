@@ -209,6 +209,7 @@ close(proc.in)
             # Not using `@test success(proc)` to get more information upon failure
             @test proc.exitcode == 0
             @test proc.termsignal == 0
+            @test success(proc)
         end
         @test !timeout
     end
