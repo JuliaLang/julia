@@ -202,14 +202,13 @@ close(proc.in)
             done[] = true
             close(timer)
         end
+        if ( !success(proc) ) || ( timeout )
+            @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
+        end
         if Sys.iswindows() && (n >= 2000000)
-            # https://github.com/JuliaLang/julia/issues/43124
-            @test_skip proc.exitcode == 0
-            @test_skip proc.termsignal == 0
+            # Known failure: https://github.com/JuliaLang/julia/issues/43124
             @test_skip success(proc)
         else
-            @test proc.exitcode == 0
-            @test proc.termsignal == 0
             @test success(proc)
         end
         @test !timeout
