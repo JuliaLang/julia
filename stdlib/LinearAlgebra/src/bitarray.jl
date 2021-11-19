@@ -92,22 +92,29 @@ qr(A::BitMatrix) = qr(float(A))
 
 ## kron
 
-function kron(a::BitVector, b::BitVector)
+@inline function kron!(R::BitVector, a::BitVector, b::BitVector)
     m = length(a)
     n = length(b)
-    R = falses(n * m)
+    @boundscheck length(R) == n*m || throw(DimensionMismatch())
     Rc = R.chunks
     bc = b.chunks
     for j = 1:m
         a[j] && Base.copy_chunks!(Rc, (j-1)*n+1, bc, 1, n)
     end
-    R
+    return R
 end
 
-function kron(a::BitMatrix, b::BitMatrix)
+function kron(a::BitVector, b::BitVector)
+    m = length(a)
+    n = length(b)
+    R = falses(n * m)
+    return @inbounds kron!(R, a, b)
+end
+
+function kron!(R::BitMatrix, a::BitMatrix, b::BitMatrix)
     mA,nA = size(a)
     mB,nB = size(b)
-    R = falses(mA*mB, nA*nB)
+    @boundscheck size(R) == (mA*mB, nA*nB) || throw(DimensionMismatch())
 
     for i = 1:mA
         ri = (1:mB) .+ ((i-1)*mB)
@@ -118,7 +125,14 @@ function kron(a::BitMatrix, b::BitMatrix)
             end
         end
     end
-    R
+    return R
+end
+
+function kron(a::BitMatrix, b::BitMatrix)
+    mA,nA = size(a)
+    mB,nB = size(b)
+    R = falses(mA*mB, nA*nB)
+    return @inbounds kron!(R, a, b)
 end
 
 ## Structure query functions

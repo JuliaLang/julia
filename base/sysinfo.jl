@@ -114,9 +114,15 @@ function __init__()
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+    __init_build()
+    nothing
+end
+# Populate the paths needed by sysimg compilation, e.g. `generate_precompile.jl`,
+# without pulling in anything unnecessary like `CPU_NAME`
+function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
+    global STDLIB = abspath(BINDIR::String, "..", "share", "julia", "stdlib", vers)
     nothing
 end
 
@@ -242,14 +248,14 @@ end
 """
     Sys.free_memory()
 
-Get the total free memory in RAM in kilobytes.
+Get the total free memory in RAM in bytes.
 """
 free_memory() = ccall(:uv_get_free_memory, UInt64, ())
 
 """
     Sys.total_memory()
 
-Get the total memory in RAM (including that which is currently used) in kilobytes.
+Get the total memory in RAM (including that which is currently used) in bytes.
 """
 total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 
@@ -280,8 +286,8 @@ end
 
 Get the maximum resident set size utilized in bytes.
 See also:
-    - man page of getrusage(2) on Linux and FreeBSD.
-    - windows api `GetProcessMemoryInfo`
+    - man page of `getrusage`(2) on Linux and FreeBSD.
+    - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
 
@@ -438,16 +444,18 @@ const WINDOWS_VISTA_VER = v"6.0"
     Sys.isexecutable(path::String)
 
 Return `true` if the given `path` has executable permissions.
+
+!!! note
+    Prior to Julia 1.6, this did not correctly interrogate filesystem
+    ACLs on Windows, therefore it would return `true` for any
+    file.  From Julia 1.6 on, it correctly determines whether the
+    file is marked as executable or not.
 """
 function isexecutable(path::String)
-    if iswindows()
-        return isfile(path)
-    else
-        # We use `access()` and `X_OK` to determine if a given path is
-        # executable by the current user.  `X_OK` comes from `unistd.h`.
-        X_OK = 0x01
-        ccall(:access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
-    end
+    # We use `access()` and `X_OK` to determine if a given path is
+    # executable by the current user.  `X_OK` comes from `unistd.h`.
+    X_OK = 0x01
+    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
 end
 isexecutable(path::AbstractString) = isexecutable(String(path))
 
@@ -491,7 +499,7 @@ function which(program_name::String)
         # If we have been given just a program name (not a relative or absolute
         # path) then we should search `PATH` for it here:
         pathsep = iswindows() ? ';' : ':'
-        path_dirs = abspath.(split(get(ENV, "PATH", ""), pathsep))
+        path_dirs = map(abspath, eachsplit(get(ENV, "PATH", ""), pathsep))
 
         # On windows we always check the current directory as well
         if iswindows()
@@ -508,7 +516,7 @@ function which(program_name::String)
             program_path = joinpath(path_dir, pname)
             # If we find something that matches our name and we can execute
             if isfile(program_path) && isexecutable(program_path)
-                return realpath(program_path)
+                return program_path
             end
         end
     end

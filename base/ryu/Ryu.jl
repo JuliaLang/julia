@@ -64,7 +64,7 @@ Various options for the output format include:
   * `hash`: whether the decimal point should be written, even if no additional digits are needed for precision
   * `precision`: minimum number of significant digits to be included in the decimal string; extra `'0'` characters will be added for padding if necessary
   * `decchar`: decimal point character to be used
-  * `trimtrailingzeros`: whether trailing zeros should be removed
+  * `trimtrailingzeros`: whether trailing zeros of fractional part should be removed
 """
 function writefixed(x::T,
     precision::Integer,
@@ -108,12 +108,12 @@ function writeexp(x::T,
     return String(resize!(buf, pos - 1))
 end
 
-function Base.show(io::IO, x::T, forceuntyped::Bool=false) where {T <: Base.IEEEFloat}
-    compact = get(io, :compact, false)
+function Base.show(io::IO, x::T, forceuntyped::Bool=false, fromprint::Bool=false) where {T <: Base.IEEEFloat}
+    compact = get(io, :compact, false)::Bool
     buf = Base.StringVector(neededdigits(T))
     typed = !forceuntyped && !compact && get(io, :typeinfo, Any) != typeof(x)
     pos = writeshortest(buf, 1, x, false, false, true, -1,
-        x isa Float32 ? UInt8('f') : UInt8('e'), false, UInt8('.'), typed, compact)
+        (x isa Float32 && !fromprint) ? UInt8('f') : UInt8('e'), false, UInt8('.'), typed, compact)
     write(io, resize!(buf, pos - 1))
     return
 end
@@ -121,10 +121,10 @@ end
 function Base.string(x::T) where {T <: Base.IEEEFloat}
     buf = Base.StringVector(neededdigits(T))
     pos = writeshortest(buf, 1, x, false, false, true, -1,
-        x isa Float32 ? UInt8('f') : UInt8('e'), false, UInt8('.'), false, false)
+        UInt8('e'), false, UInt8('.'), false, false)
     return String(resize!(buf, pos - 1))
 end
 
-Base.print(io::IO, x::Union{Float16, Float32}) = show(io, x, true)
+Base.print(io::IO, x::Union{Float16, Float32}) = show(io, x, true, true)
 
 end # module

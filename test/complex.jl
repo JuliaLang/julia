@@ -4,9 +4,22 @@ using LinearAlgebra
 
 @test reim(2 + 3im) == (2, 3)
 
+import Base: zero, real
+struct TestQuaternion{T} <: Number
+    scalar::T
+    i_component::T
+    j_component::T
+    k_component::T
+end
+zero(::Type{TestQuaternion{T}}) where {T} =
+    TestQuaternion(zero(T), zero(T), zero(T), zero(T))
+real(quaternion::TestQuaternion) = quaternion.scalar
+
 for T in (Int64, Float64)
     @test real(T) == T
     @test real(Complex{T}) == T
+    # TestQuaternions are neither real or complex
+    @test real(TestQuaternion{T}) == T
     @test complex(T) == Complex{T}
     @test complex(Complex{T}) == Complex{T}
 end
@@ -110,6 +123,8 @@ end
             @test atanh(x) ≈ atanh(big(x))
             @test cis(real(x)) ≈ cis(real(big(x)))
             @test cis(x) ≈ cis(big(x))
+            @test cispi(real(x)) ≈ cispi(real(big(x)))
+            @test cispi(x) ≈ cispi(big(x))
             @test cos(x) ≈ cos(big(x))
             @test cosh(x) ≈ cosh(big(x))
             @test exp(x) ≈ exp(big(x))
@@ -228,9 +243,12 @@ end
     @test isequal(sqrt(complex(-Inf, NaN)), complex( NaN, Inf))
 
     @test isequal(sqrt(complex( NaN, 0.0)), complex( NaN, NaN))
-    @test isequal(sqrt(complex( NaN, 0.0)), complex( NaN, NaN))
+    @test isequal(sqrt(complex( NaN,-0.0)), complex( NaN, NaN))
     @test isequal(sqrt(complex( NaN, Inf)), complex( Inf, Inf))
     @test isequal(sqrt(complex( NaN,-Inf)), complex( Inf,-Inf))
+
+    # odd binary exponent
+    @test isequal(sqrt(complex(1.0e160, 0.0)), complex(1.0e80, 0.0))
 end
 
 @testset "log(conj(z)) == conj(log(z))" begin
@@ -737,6 +755,8 @@ end
     @test isequal(atanh(complex( Inf, Inf)),complex(0.0, pi/2))
     @test isequal(atanh(complex( Inf,-Inf)),complex(0.0,-pi/2))
     @test isequal(atanh(complex( Inf, NaN)),complex(0.0, NaN))
+    # very big but not infinite
+    @test isequal(atanh(complex(4e200, NaN)),complex(NaN, NaN))
 
     @test isequal(atanh(complex(-Inf, 0.0)),complex(-0.0, pi/2))
     @test isequal(atanh(complex(-Inf,-0.0)),complex(-0.0,-pi/2))
@@ -815,9 +835,9 @@ end
 @test complex.([1.0, 1.0], 1.0) == [complex(1.0, 1.0), complex(1.0, 1.0)]
 # robust division of Float64
 # hard complex divisions from Fig 6 of arxiv.1210.4539
-z7 = Complex{Float64}(3.898125604559113300e289, 8.174961907852353577e295)
-z9 = Complex{Float64}(0.001953125, -0.001953125)
-z10 = Complex{Float64}( 1.02951151789360578e-84, 6.97145987515076231e-220)
+z7 = ComplexF64(3.898125604559113300e289, 8.174961907852353577e295)
+z9 = ComplexF64(0.001953125, -0.001953125)
+z10 = ComplexF64( 1.02951151789360578e-84, 6.97145987515076231e-220)
 harddivs = ((1.0+im*1.0, 1.0+im*2^1023.0, 2^-1023.0-im*2^-1023.0), #1
       (1.0+im*1.0, 2^-1023.0+im*2^-1023.0, 2^1023.0+im*0.0), #2
       (2^1023.0+im*2^-1023.0, 2^677.0+im*2^-677.0, 2^346.0-im*2^-1008.0), #3
@@ -850,8 +870,8 @@ end
 
 # division of non-Float64
 function cdiv_test(a,b)
-    c=convert(Complex{Float64},a)/convert(Complex{Float64},b)
-    50 <= sb_accuracy(c,convert(Complex{Float64},a/b))
+    c=convert(ComplexF64,a)/convert(ComplexF64,b)
+    50 <= sb_accuracy(c,convert(ComplexF64,a/b))
 end
 @test cdiv_test(complex(1//2, 3//4), complex(17//13, 4//5))
 @test cdiv_test(complex(1,2), complex(8997,2432))
@@ -900,6 +920,21 @@ end
     @test cis(1.0+0.0im) ≈ 0.54030230586813971740093660744297660373231042061+0.84147098480789650665250232163029899962256306079im
     @test cis(pi) ≈ -1.0+0.0im
     @test cis(pi/2) ≈ 0.0+1.0im
+    @test cispi(false) == 1
+    @test cispi(true) == -1
+    @test cispi(-1) == -1
+    @test cispi(0) == 1
+    @test cispi(1) == -1
+    @test cispi(2) == 1
+    @test cispi(0.0) == cispi(0)
+    @test cispi(1.0) == cispi(1)
+    @test cispi(2.0) == cispi(2)
+    @test cispi(0.5) == im
+    @test cispi(1.5) == -im
+    @test cispi(0.25) ≈ cis(π/4)
+    @test cispi(0.0+0.0im) == cispi(0)
+    @test cispi(1.0+0.0im) == cispi(1)
+    @test cispi(2.0+0.0im) == cispi(2)
 end
 
 @testset "exp2" begin
@@ -940,7 +975,7 @@ end
 @test typeof(Int8(1) - im) == Complex{Int8}
 
 # issue #10926
-@test typeof(π - 1im) == Complex{Float64}
+@test typeof(π - 1im) == ComplexF64
 
 @testset "issue #15969" begin
     # specialized muladd for complex types
@@ -978,6 +1013,8 @@ end
         @test log1p(z) ≈ log(1 + z)
         @test exp2(z) ≈ exp(z * log(2))
         @test exp10(z) ≈ exp(z * log(10))
+        @test isequal(z^true, z)
+        @test isequal(z^0, complex(1.0,0.0))
     end
 end
 
@@ -992,7 +1029,7 @@ end
     a = [1.0 + 1e-10im, 2.0e-15 - 2.0e-5im, 1.0e-15 + 2im, 1.0 + 2e-15im]
     @test sprint((io, x) -> show(io, MIME("text/plain"), x), a) ==
         join([
-            "4-element Array{Complex{Float64},1}:",
+            "4-element Vector{ComplexF64}:",
             "     1.0 + 1.0e-10im",
             " 2.0e-15 - 2.0e-5im",
             " 1.0e-15 + 2.0im",
@@ -1049,6 +1086,10 @@ end
         @test isequal(one(T) / complex(-zero(T), T(-Inf)), complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(-one(T),  T(-Inf)), complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
+
+        # divide complex by complex Inf
+        @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T))) broken=(T==Float64)
+        @test isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T))) broken=(T in (Float32, Float64))
     end
 end
 
@@ -1152,3 +1193,16 @@ end
 
 # real(C) with C a Complex Unionall
 @test real(Complex{<:AbstractFloat}) == AbstractFloat
+
+# complex with non-concrete eltype
+@test_throws ErrorException complex(Union{Complex{Int}, Nothing}[])
+
+@testset "ispow2 and iseven/isodd" begin
+    @test ispow2(4+0im)
+    @test ispow2(0.25+0im)
+    @test !ispow2(4+5im)
+    @test !ispow2(7+0im)
+    @test iseven(6+0im) && !isodd(6+0im)
+    @test !iseven(7+0im) && isodd(7+0im)
+    @test !iseven(6+1im) && !isodd(7+1im)
+end

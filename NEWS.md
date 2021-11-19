@@ -1,22 +1,49 @@
-Julia v1.4 Release Notes
+Julia v1.8 Release Notes
 ========================
+
 
 New language features
 ---------------------
 
-* Structs with all isbits and isbitsunion fields are now stored inline in arrays ([#32448]).
-
-* `import` now allows quoted symbols, e.g. `import Base.:+` ([#33158]).
-
-* Function composition now supports multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
-and splatting `∘(fs...)` for composing an iterable collection of functions ([#33568]).
+* `Module(:name, false, false)` can be used to create a `module` that contains no names (it does not import `Base` or `Core` and does not contain a reference to itself). ([#40110, #42154])
+* `@inline` and `@noinline` annotations can be used within a function body to give an extra
+  hint about the inlining cost to the compiler. ([#41312])
+* `@inline` and `@noinline` annotations can now be applied to a function callsite or block
+  to enforce the involved function calls to be (or not to be) inlined. ([#41312])
+* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
+* New function `eachsplit(str)` for iteratively performing `split(str)`.
+* `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
+* `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
+  no errors were thrown. ([#42211])
 
 Language changes
 ----------------
 
-* Calling `show` or `repr` on an `undef`/`UndefInitializer()` array initializer now shows valid Julia code ([#33211]).
+* Newly created Task objects (`@spawn`, `@async`, etc.) now adopt the world-age for methods from their parent
+  Task upon creation, instead of using the global latest world at start. This is done to enable inference to
+  eventually optimize these calls. Places that wish for the old behavior may use `Base.invokelatest`. ([#41449])
+* `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
+  i.e. `@time "Evaluating foo" foo()` ([#42431])
+* New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
+* Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
+  to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
 
-* Calling `show` or `repr` on a 0-dimensional `AbstractArray` now shows valid code for creating an equivalent 0-dimensional array, instead of only showing the contained value. ([#33206])
+Compiler/Runtime improvements
+-----------------------------
+
+* The LLVM-based compiler has been separated from the run-time library into a new library,
+  `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
+  In deployments that do not need the compiler (e.g. system images where all needed code
+  is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
+
+Command-line option changes
+---------------------------
+
+* New option `--strip-metadata` to remove docstrings, source location information, and local
+  variable names when building a system image ([#42513]).
+* New option `--strip-ir` to remove the compiler's IR (intermediate representation) of source
+  code when building a system image. The resulting image will only work if `--compile=all` is
+  used, or if all needed code is precompiled ([#42925]).
 
 Multi-threading changes
 -----------------------
@@ -24,63 +51,97 @@ Multi-threading changes
 
 Build system changes
 --------------------
-* Windows build installer has switched to Inno Setup. Installer command line parameters have thus changed. For example, to extract the installer to a specific directory, the command line parameter is now `/DIR=x:\dirname`. Use `julia-installer.exe /?` to list all new command line parameters.
+
 
 New library functions
 ---------------------
 
-* The `splitpath` function now accepts any `AbstractString` whereas previously it only accepted paths of type `String` ([#33012]).
-* The `tempname` function now takes an optional `parent::AbstractString` argument to give it a directory in which to attempt to produce a temporary path name ([#33090]).
-* The `tempname` function now takes a `cleanup::Bool` keyword argument defaulting to `true`, which causes the process to try to ensure that any file or directory at the path returned by `tempname` is deleted upon process exit ([#33090]).
-* The `readdir` function now takes a `join::Bool` keyword argument defaulting to `false`, which when set causes `readdir` to join its directory argument with each listed name ([#33113]).
-* `readdir` output is now guaranteed to be sorted. The `sort` keyword allows opting out of sorting to get names in OS-native order ([#33542]).
-* The new `only(x)` function returns the one-and-only element of a collection `x`, and throws an `ArgumentError` if `x` contains zero or multiple elements. ([#33129])
-* `takewhile` and `dropwhile` have been added to the Iterators submodule ([#33437]).
+* `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 
+New library features
+--------------------
+
+* `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
+  contains "some message" regardless of the specific exception type.
+  Regular expressions, lists of strings, and matching functions are also supported. ([#41888])
+* `@testset foo()` can now be used to create a test set from a given function. The name of the test set
+  is the name of the called function. The called function can contain `@test` and other `@testset`
+  definitions, including to other function calls, while recording all intermediate test results. ([#42518])
 
 Standard library changes
 ------------------------
 
-* The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
+* `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
+* `precision` and `setprecision` now accept a `base` keyword ([#42428]).
+* The `length` function on certain ranges of certain specific element types no longer checks for integer
+  overflow in most cases. The new function `checked_length` is now available, which will try to use checked
+  arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
+  constructing the range. ([#40382])
+* TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
+* Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
+* `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
 
-* `div` now accepts a rounding mode as the third argument, consistent with the corresponding argument to `rem`. Support for rounding division, by passing one of the RoundNearest modes to this function, was added. For future compatibility, library authors should now extend this function, rather than extending the two-argument `fld`/`cld`/`div` directly. ([#33040])
+#### InteractiveUtils
+* A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
 
-* Verbose `display` of `Char` (`text/plain` output) now shows the codepoint value in standard-conforming `"U+XXXX"` format ([#33291]).
-
-* `Iterators.partition` now uses views (or smartly re-computed ranges) for partitions of all `AbstractArray`s ([#33533]).
-
-* Sets are now displayed less compactly in the REPL, as a column of elements, like vectors
-  and dictionaries ([#33300]).
-
-#### Libdl
+#### Package Manager
 
 #### LinearAlgebra
 
-* `qr` and `qr!` functions support `blocksize` keyword argument ([#33053]).
+#### Markdown
 
-* `dot` now admits a 3-argument method `dot(x, A, y)` to compute generalized dot products `dot(x, A*y)`, but without computing and storing the intermediate result `A*y` ([#32739]).
+#### Printf
+* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
 
-* `ldlt` and non-pivoted `lu` now throw a new `ZeroPivotException` type ([#33372]).
-
-* `cond(A, p)` with `p=1` or `p=Inf` now computes the exact condition number instead of an estimate ([#33547]).
+#### Profile
+* Profiling now records sample metadata including thread and task. `Profile.print()` has a new `groupby` kwarg that allows
+  grouping by thread, task, or nested thread/task, task/thread, and `threads` and `tasks` kwargs to allow filtering.
+  Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
+  each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
+  profiling data consumers, but can be included with the `include_meta` kwarg. ([#41742])
 
 #### Random
 
-* `AbstractRNG`s now behave like scalars when used in broadcasting ([#33213]).
-
-* Products involving sparse arrays now allow more general sparse `eltype`s, such as `StaticArrays` ([#33205])
-
-* The performance of `rand(::Tuple)` is improved in some cases ([#32208]). As a consequence, the
-  stream of generated values produced for a given seed has changed.
+#### REPL
+* `RadioMenu` now supports optional `keybindings` to directly select options ([#41576]).
+* ` ?(x, y` followed by TAB displays all methods that can be called
+  with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
+  `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
+  argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
+  to allow any compatible methods.
 
 #### SparseArrays
 
 #### Dates
 
+#### Downloads
+
 #### Statistics
 
-
 #### Sockets
+
+#### Tar
+
+#### Distributed
+
+#### UUIDs
+
+#### Mmap
+
+#### DelimitedFiles
+
+#### Logging
+* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
+  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
+
+#### Unicode
+* Added function `isequal_normalized` to check for Unicode equivalence without
+  explicitly constructing normalized strings ([#42493]).
+* The `Unicode.normalize` function now accepts a `chartransform` keyword that can
+  be used to supply custom character mappings, and a `Unicode.julia_chartransform`
+  function is provided to reproduce the mapping used in identifier normalization
+  by the Julia parser ([#42561]).
 
 
 Deprecated or removed
@@ -89,6 +150,7 @@ Deprecated or removed
 
 External dependencies
 ---------------------
+
 
 Tooling Improvements
 ---------------------

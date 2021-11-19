@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 struct BitPerm_19352
     p::NTuple{8,UInt8}
     function BitPerm(p::NTuple{8,UInt8})
@@ -28,13 +31,18 @@ end
     @test convert(Tuple{Int, Int, Float64}, (1, 2, 3)) === (1, 2, 3.0)
 
     @test convert(Tuple{Float64, Int, UInt8}, (1.0, 2, 0x3)) === (1.0, 2, 0x3)
-    @test convert(NTuple, (1.0, 2, 0x3)) === (1.0, 2, 0x3)
+    @test convert(Tuple{Vararg{Real}}, (1.0, 2, 0x3)) === (1.0, 2, 0x3)
+    @test convert(Tuple{Vararg{Integer}}, (1.0, 2, 0x3)) === (1, 2, 0x3)
     @test convert(Tuple{Vararg{Int}}, (1.0, 2, 0x3)) === (1, 2, 3)
     @test convert(Tuple{Int, Vararg{Int}}, (1.0, 2, 0x3)) === (1, 2, 3)
-    @test convert(Tuple{Vararg{T}} where T<:Integer, (1.0, 2, 0x3)) === (1, 2, 0x3)
-    @test convert(Tuple{T, Vararg{T}} where T<:Integer, (1.0, 2, 0x3)) === (1, 2, 0x3)
     @test convert(NTuple{3, Int}, (1.0, 2, 0x3)) === (1, 2, 3)
     @test convert(Tuple{Int, Int, Float64}, (1.0, 2, 0x3)) === (1, 2, 3.0)
+
+    @test convert(Tuple{Vararg{AbstractFloat}}, (2,)) == (2.0,)
+    @test convert(Tuple{Int, Vararg{AbstractFloat}}, (-9.0+0im, 2,)) == (-9, 2.0,)
+    let x = @inferred(convert(Tuple{Integer, UInt8, UInt16, UInt32, Int, Vararg{Real}}, (2.0, 3, 5, 6.0, 42, 3.0+0im)))
+        @test x == (2, 0x03, 0x0005, 0x00000006, 42, 3.0)
+    end
 
     @test_throws MethodError convert(Tuple{Int}, ())
     @test_throws MethodError convert(Tuple{Any}, ())
@@ -53,6 +61,19 @@ end
     @test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
     # issue #26589
     @test_throws MethodError convert(NTuple{4}, (1.0,2.0,3.0,4.0,5.0))
+    # issue #31824
+    @test convert(NTuple, (1, 1.0)) === (1, 1.0)
+    let T = Tuple{Vararg{T}} where T<:Integer, v = (1.0, 2, 0x3)
+        @test convert(T, v) === (1, 2, 0x3)
+    end
+    let T = Tuple{T, Vararg{T}} where T<:Integer, v = (1.0, 2, 0x3)
+        @test convert(T, v) === (1, 2, 0x3)
+    end
+    function f31824(input...)
+        b::NTuple = input
+        return b
+    end
+    @test f31824(1, 2, 3) === (1, 2, 3)
 
     # PR #15516
     @test Tuple{Char,Char}("za") === ('z','a')
@@ -78,11 +99,13 @@ end
         @test BitPerm_19352(0,2,4,6,1,3,5,7).p[2] == 0x02
     end
 
-    @testset "ninitialized" begin
-        @test Tuple{Int,Any}.ninitialized == 2
-        @test Tuple.ninitialized == 0
-        @test Tuple{Int,Vararg{Any}}.ninitialized == 1
-        @test Tuple{Any,Any,Vararg{Any}}.ninitialized == 2
+    @testset "n_uninitialized" begin
+        @test Tuple.name.n_uninitialized == 0
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Int,Any}) == 2
+        @test Core.Compiler.datatype_min_ninitialized(Tuple) == 0
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Int,Vararg{Any}}) == 1
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Any,Any,Vararg{Any}}) == 2
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Any,Any,Vararg{Any,3}}) == 5
     end
 
     @test empty((1, 2.0, "c")) === ()
@@ -157,6 +180,15 @@ end
     @testset "Multidimensional indexing (issue #20453)" begin
         @test_throws MethodError (1,)[]
         @test_throws MethodError (1,1,1)[1,1]
+    end
+
+    @testset "get() method for Tuple (Issue #40809)" begin
+        @test get((5, 6, 7), 1, 0) == 5
+        @test get((), 5, 0) == 0
+        @test get((1,), 3, 0) == 0
+        @test get(()->0, (5, 6, 7), 1) == 5
+        @test get(()->0, (), 4) == 0
+        @test get(()->0, (1,), 3) == 0
     end
 end
 
@@ -251,7 +283,17 @@ end
     @test mapfoldl(abs, =>, (-1,-2,-3,-4), init=-10) == ((((-10=>1)=>2)=>3)=>4)
     @test mapfoldl(abs, =>, (), init=-10) == -10
     @test mapfoldl(abs, Pair{Any,Any}, (-30:-1...,)) == mapfoldl(abs, Pair{Any,Any}, [-30:-1...,])
-    @test_throws ArgumentError mapfoldl(abs, =>, ())
+    @test_throws "reducing over an empty collection" mapfoldl(abs, =>, ())
+end
+
+@testset "filter" begin
+    @test filter(isodd, (1,2,3)) == (1, 3)
+    @test filter(isequal(2), (true, 2.0, 3)) === (2.0,)
+    @test filter(Returns(true), ()) == ()
+    @test filter(identity, (true,)) === (true,)
+    longtuple = ntuple(identity, 20)
+    @test filter(iseven, longtuple) == ntuple(i->2i, 10)
+    @test filter(x -> x<2, (longtuple..., 1.5)) === (1, 1.5)
 end
 
 @testset "comparison and hash" begin
@@ -319,6 +361,24 @@ end
     @test prod(()) === 1
     @test prod((1,2,3)) === 6
 
+    # issue 39182
+    @test sum((0xe1, 0x1f)) === sum([0xe1, 0x1f])
+    @test sum((Int8(3),)) === Int(3)
+    @test sum((UInt8(3),)) === UInt(3)
+    @test sum((3,)) === Int(3)
+    @test sum((3.0,)) === 3.0
+    @test sum(("a",)) == sum(["a"])
+    @test sum((0xe1, 0x1f), init=0x0) == sum([0xe1, 0x1f], init=0x0)
+
+    # issue 39183
+    @test prod((Int8(100), Int8(100))) === 10000
+    @test prod((Int8(3),)) === Int(3)
+    @test prod((UInt8(3),)) === UInt(3)
+    @test prod((3,)) === Int(3)
+    @test prod((3.0,)) === 3.0
+    @test prod(("a",)) == prod(["a"])
+    @test prod((0xe1, 0x1f), init=0x1) == prod([0xe1, 0x1f], init=0x1)
+
     @testset "all" begin
         @test all(()) === true
         @test all((false,)) === false
@@ -344,6 +404,17 @@ end
         @test any((true,true,false)) === true
         @test any((true,true,true)) === true
     end
+end
+
+@testset "accumulate" begin
+    @test @inferred(cumsum(())) == ()
+    @test @inferred(cumsum((1, 2, 3))) == (1, 3, 6)
+    @test @inferred(cumprod((1, 2, 3))) == (1, 2, 6)
+    @test @inferred(accumulate(+, (1, 2, 3); init=10)) == (11, 13, 16)
+    op(::Nothing, ::Any) = missing
+    op(::Missing, ::Any) = nothing
+    @test @inferred(accumulate(op, (1, 2, 3, 4); init = nothing)) ===
+          (missing, nothing, missing, nothing)
 end
 
 @testset "ntuple" begin
@@ -446,6 +517,27 @@ end
     @test findprev(isequal(1), (1, 1), 1) == 1
     @test findnext(isequal(1), (2, 3), 1) === nothing
     @test findprev(isequal(1), (2, 3), 2) === nothing
+
+    @testset "issue 32568" begin
+        @test findnext(isequal(1), (1, 2), big(1)) isa Int
+        @test findprev(isequal(1), (1, 2), big(2)) isa Int
+        @test findnext(isequal(1), (1, 1), UInt(2)) isa Int
+        @test findprev(isequal(1), (1, 1), UInt(1)) isa Int
+    end
+
+    # recursive implementation should allow constant-folding for small tuples
+    @test Base.return_types() do
+        findfirst(==(2), (1.0,2,3f0))
+    end == Any[Int]
+    @test Base.return_types() do
+        findfirst(==(0), (1.0,2,3f0))
+    end == Any[Nothing]
+    @test Base.return_types() do
+        findlast(==(2), (1.0,2,3f0))
+    end == Any[Int]
+    @test Base.return_types() do
+        findlast(==(0), (1.0,2,3f0))
+    end == Any[Nothing]
 end
 
 @testset "properties" begin
@@ -458,3 +550,133 @@ end
 
 # tuple_type_tail on non-normalized vararg tuple
 @test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real
+@test Base.tuple_type_tail(Tuple{Vararg{Int}}) == Tuple{Vararg{Int}}
+
+@testset "setindex" begin
+    @test Base.setindex((1, ), 2, 1) === (2, )
+    @test Base.setindex((1, 2), 3, 1) === (3, 2)
+    @test_throws BoundsError Base.setindex((), 1, 1)
+    @test_throws BoundsError Base.setindex((1, ), 2, 2)
+    @test_throws BoundsError Base.setindex((1, 2), 2, 0)
+    @test_throws BoundsError Base.setindex((1, 2, 3), 2, -1)
+
+    @test_throws BoundsError Base.setindex((1, 2), 2, 3)
+    @test_throws BoundsError Base.setindex((1, 2), 2, 4)
+
+    @test Base.setindex((1, 2, 4), 4, true) === (4, 2, 4)
+    @test_throws BoundsError Base.setindex((1, 2), 2, false)
+
+    f() = Base.setindex((1:1, 2:2, 3:3), 9, 1)
+    @test @inferred(f()) == (9, 2:2, 3:3)
+end
+
+@testset "inferrable range indexing with constant values" begin
+    whole(t) = t[1:end]
+    tail(t) = t[2:end]
+    ttail(t) = t[3:end]
+    front(t) = t[1:end-1]
+    ffront(t) = t[1:end-2]
+
+    @test @inferred( whole(())) == ()
+    @test @inferred(  tail(())) == ()
+    @test @inferred( ttail(())) == ()
+    @test @inferred( front(())) == ()
+    @test @inferred(ffront(())) == ()
+
+    @test @inferred( whole((1,))) == (1,)
+    @test @inferred(  tail((1,))) == ()
+    @test @inferred( ttail((1,))) == ()
+    @test @inferred( front((1,))) == ()
+    @test @inferred(ffront((1,))) == ()
+
+    @test @inferred( whole((1,2.0))) == (1,2.0)
+    @test @inferred(  tail((1,2.0))) == (2.0,)
+    @test @inferred( ttail((1,2.0))) == ()
+    @test @inferred( front((1,2.0))) == (1.0,)
+    @test @inferred(ffront((1,2.0))) == ()
+
+    @test @inferred( whole((1,2.0,3//1))) == (1,2.0,3//1)
+    @test @inferred(  tail((1,2.0,3//1))) == (2.0,3//1)
+    @test @inferred( ttail((1,2.0,3//1))) == (3//1,)
+    @test @inferred( front((1,2.0,3//1))) == (1,2.0)
+    @test @inferred(ffront((1,2.0,3//1))) == (1,)
+
+    @test @inferred( whole((1,2.0,3//1,0x04))) == (1,2.0,3//1,0x04)
+    @test @inferred(  tail((1,2.0,3//1,0x04))) == (2.0,3//1,0x04)
+    @test @inferred( ttail((1,2.0,3//1,0x04))) == (3//1,0x04)
+    @test @inferred( front((1,2.0,3//1,0x04))) == (1,2.0,3//1)
+    @test @inferred(ffront((1,2.0,3//1,0x04))) == (1,2.0)
+
+    @test (1,)[0:-1] == ()
+    @test (1,)[1:0] == ()
+    @test (1,)[2:1] == ()
+    @test (1,2.0)[0:-1] == ()
+    @test (1,2.0)[1:0] == ()
+    @test (1,2.0)[2:1] == ()
+    @test (1,2.0)[3:2] == ()
+
+    @test_throws BoundsError (1,)[2:2]
+    @test_throws BoundsError (1,)[1:2]
+    @test_throws BoundsError (1,)[0:1]
+    @test_throws BoundsError (1,)[0:0]
+    @test_throws BoundsError (1,2.0)[3:3]
+    @test_throws BoundsError (1,2.0)[1:3]
+    @test_throws BoundsError (1,2.0)[0:2]
+    @test_throws BoundsError (1,2.0)[0:1]
+    @test_throws BoundsError (1,2.0)[0:0]
+end
+
+@testset "Base.rest" begin
+    t = (1, 2.0, 0x03, 4f0)
+    @test Base.rest(t) === t
+    @test Base.rest(t, 2) === (2.0, 0x03, 4f0)
+
+    a = [1 2; 3 4]
+    @test Base.rest(a) == a[:]
+    @test pointer(Base.rest(a)) != pointer(a)
+    @test Base.rest(a, 3) == [2, 4]
+
+    itr = (-i for i in a)
+    @test Base.rest(itr) == itr
+    _, st = iterate(itr)
+    r = Base.rest(itr, st)
+    @test r isa Iterators.Rest
+    @test collect(r) == -[3, 2, 4]
+end
+
+# issue #38837
+f38837(xs) = map((F,x)->F(x), (Float32, Float64), xs)
+@test @inferred(f38837((1,2))) === (1.0f0, 2.0)
+
+@testset "indexing with UnitRanges" begin
+    f(t) = t[3:end-2]
+    @test @inferred(f(Tuple(1:10))) === Tuple(3:8)
+    @test @inferred(f((true, 2., 3, 4f0, 0x05, 6, 7.))) === (3, 4f0, 0x05)
+
+    f2(t) = t[Base.OneTo(5)]
+    @test @inferred(f2(Tuple(1:10))) === Tuple(1:5)
+    @test @inferred(f2((true, 2., 3, 4f0, 0x05, 6, 7.))) === (true, 2., 3, 4f0, 0x05)
+
+    @test @inferred((t -> t[1:end])(Tuple(1:15))) === Tuple(1:15)
+    @test @inferred((t -> t[2:end])(Tuple(1:15))) === Tuple(2:15)
+    @test @inferred((t -> t[3:end])(Tuple(1:15))) === Tuple(3:15)
+    @test @inferred((t -> t[1:end-1])(Tuple(1:15))) === Tuple(1:14)
+    @test @inferred((t -> t[1:end-2])(Tuple(1:15))) === Tuple(1:13)
+    @test @inferred((t -> t[3:2])(Tuple(1:15))) === ()
+
+    @test_throws BoundsError (1, 2)[1:4]
+    @test_throws BoundsError (1, 2)[0:2]
+    @test_throws ArgumentError (1, 2)[OffsetArrays.IdOffsetRange(1:2, -1)]
+end
+
+# https://github.com/JuliaLang/julia/issues/40814
+@test Base.return_types(NTuple{3,Int}, (Vector{Int},)) == Any[NTuple{3,Int}]
+
+# issue #42457
+f42457(a::NTuple{3,Int}, b::Tuple)::Bool = Base.isequal(a, Base.inferencebarrier(b)::Tuple)
+@test f42457((1, 1, 1), (1, 1, 1))
+@test !isempty(methods(Base._isequal, (NTuple{3, Int}, Tuple)))
+g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
+@test only(Base.return_types(g42457, (NTuple{3, Int}, Tuple))) === Union{Float64, Int}
+@test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple))) === Union{Float64, Int}
+@test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple{4}))) === Float64

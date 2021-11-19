@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
+
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
@@ -14,14 +16,12 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/InstVisitor.h>
-#include <llvm/IR/CallSite.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia.h"
 
@@ -51,8 +51,11 @@ struct PropagateJuliaAddrspaces : public FunctionPass, public InstVisitor<Propag
 public:
     bool runOnFunction(Function &F) override;
     Value *LiftPointer(Value *V, Type *LocTy = nullptr, Instruction *InsertPt=nullptr);
-    void visitStoreInst(StoreInst &SI);
+    void visitMemop(Instruction &I, Type *T, unsigned OpIndex);
     void visitLoadInst(LoadInst &LI);
+    void visitStoreInst(StoreInst &SI);
+    void visitAtomicCmpXchgInst(AtomicCmpXchgInst &SI);
+    void visitAtomicRMWInst(AtomicRMWInst &SI);
     void visitMemSetInst(MemSetInst &MI);
     void visitMemTransferInst(MemTransferInst &MTI);
 
@@ -229,24 +232,31 @@ Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction 
     return CollapseCastsAndLift(V, InsertPt);
 }
 
-void PropagateJuliaAddrspaces::visitLoadInst(LoadInst &LI) {
-    unsigned AS = LI.getPointerAddressSpace();
+void PropagateJuliaAddrspaces::visitMemop(Instruction &I, Type *T, unsigned OpIndex) {
+    Value *Original = I.getOperand(OpIndex);
+    unsigned AS = Original->getType()->getPointerAddressSpace();
     if (!isSpecialAS(AS))
         return;
-    Value *Replacement = LiftPointer(LI.getPointerOperand(), LI.getType(), &LI);
+    Value *Replacement = LiftPointer(Original, T, &I);
     if (!Replacement)
         return;
-    LI.setOperand(LoadInst::getPointerOperandIndex(), Replacement);
+    I.setOperand(OpIndex, Replacement);
+}
+
+void PropagateJuliaAddrspaces::visitLoadInst(LoadInst &LI) {
+    visitMemop(LI, LI.getType(), LoadInst::getPointerOperandIndex());
 }
 
 void PropagateJuliaAddrspaces::visitStoreInst(StoreInst &SI) {
-    unsigned AS = SI.getPointerAddressSpace();
-    if (!isSpecialAS(AS))
-        return;
-    Value *Replacement = LiftPointer(SI.getPointerOperand(), SI.getValueOperand()->getType(), &SI);
-    if (!Replacement)
-        return;
-    SI.setOperand(StoreInst::getPointerOperandIndex(), Replacement);
+    visitMemop(SI, SI.getValueOperand()->getType(), StoreInst::getPointerOperandIndex());
+}
+
+void PropagateJuliaAddrspaces::visitAtomicCmpXchgInst(AtomicCmpXchgInst &SI) {
+    visitMemop(SI, SI.getNewValOperand()->getType(), AtomicCmpXchgInst::getPointerOperandIndex());
+}
+
+void PropagateJuliaAddrspaces::visitAtomicRMWInst(AtomicRMWInst &SI) {
+    visitMemop(SI, SI.getType(), AtomicRMWInst::getPointerOperandIndex());
 }
 
 void PropagateJuliaAddrspaces::visitMemSetInst(MemSetInst &MI) {
@@ -296,7 +306,7 @@ Pass *createPropagateJuliaAddrspaces() {
     return new PropagateJuliaAddrspaces();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddPropagateJuliaAddrspaces(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddPropagateJuliaAddrspaces_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createPropagateJuliaAddrspaces());
 }

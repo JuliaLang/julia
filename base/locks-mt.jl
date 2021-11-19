@@ -26,22 +26,20 @@ Test-and-test-and-set spin locks are quickest up to about 30ish
 contending threads. If you have more contention than that, different
 synchronization approaches should be considered.
 """
-struct SpinLock <: AbstractLock
-    handle::Atomic{Int}
-    SpinLock() = new(Atomic{Int}(0))
+mutable struct SpinLock <: AbstractLock
+    # we make this much larger than necessary to minimize false-sharing
+    @atomic owned::Int
+    SpinLock() = new(0)
 end
 
 # Note: this cannot assert that the lock is held by the correct thread, because we do not
 # track which thread locked it. Users beware.
-Base.assert_havelock(l::SpinLock) = islocked(l) ? nothing : concurrency_violation()
+Base.assert_havelock(l::SpinLock) = islocked(l) ? nothing : Base.concurrency_violation()
 
 function lock(l::SpinLock)
     while true
-        if l.handle[] == 0
-            p = atomic_xchg!(l.handle, 1)
-            if p == 0
-                return
-            end
+        if @inline trylock(l)
+            return
         end
         ccall(:jl_cpu_pause, Cvoid, ())
         # Temporary solution before we have gc transition support in codegen.
@@ -50,18 +48,26 @@ function lock(l::SpinLock)
 end
 
 function trylock(l::SpinLock)
-    if l.handle[] == 0
-        return atomic_xchg!(l.handle, 1) == 0
+    if l.owned == 0
+        GC.disable_finalizers()
+        p = @atomicswap :acquire l.owned = 1
+        if p == 0
+            return true
+        end
+        GC.enable_finalizers()
     end
     return false
 end
 
 function unlock(l::SpinLock)
-    l.handle[] = 0
+    if (@atomicswap :release l.owned = 0) == 0
+        error("unlock count must match lock count")
+    end
+    GC.enable_finalizers()
     ccall(:jl_cpu_wake, Cvoid, ())
     return
 end
 
 function islocked(l::SpinLock)
-    return l.handle[] != 0
+    return l.owned != 0
 end

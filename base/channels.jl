@@ -7,6 +7,9 @@ Representation of a channel passing objects of type `T`.
 """
 abstract type AbstractChannel{T} end
 
+push!(c::AbstractChannel, v) = (put!(c, v); c)
+popfirst!(c::AbstractChannel) = take!(c)
+
 """
     Channel{T=Any}(size::Int=0)
 
@@ -24,16 +27,17 @@ Other constructors:
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 
 !!! compat "Julia 1.3"
-  The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
+    The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
 """
 mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
     cond_wait::Threads.Condition                 # waiting for data to become maybe available
     cond_put::Threads.Condition                  # waiting for a writeable slot
-    state::Symbol
+    @atomic state::Symbol
     excp::Union{Exception, Nothing}      # exception to be thrown when state !== :open
 
     data::Vector{T}
+    @atomic n_avail_items::Int           # Available items for taking, can be read without lock
     sz_max::Int                          # maximum size of channel
 
     function Channel{T}(sz::Integer = 0) where T
@@ -43,7 +47,7 @@ mutable struct Channel{T} <: AbstractChannel{T}
         lock = ReentrantLock()
         cond_put, cond_take = Threads.Condition(lock), Threads.Condition(lock)
         cond_wait = (sz == 0 ? Threads.Condition(lock) : cond_take) # wait is distinct from take iff unbuffered
-        return new(cond_take, cond_wait, cond_put, :open, nothing, Vector{T}(), sz)
+        return new(cond_take, cond_wait, cond_put, :open, nothing, Vector{T}(), 0, sz)
     end
 end
 
@@ -108,9 +112,9 @@ true
 ```
 
 !!! compat "Julia 1.3"
-  The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
-  In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
-  those constructors are deprecated.
+    The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
+    In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
+    those constructors are deprecated.
 
 ```jldoctest
 julia> chnl = Channel{Char}(1, spawn=true) do ch
@@ -118,7 +122,7 @@ julia> chnl = Channel{Char}(1, spawn=true) do ch
                put!(ch, c)
            end
        end
-Channel{Char}(sz_max:1,sz_curr:1)
+Channel{Char}(1) (2 items available)
 
 julia> String(collect(chnl))
 "hello world"
@@ -163,6 +167,8 @@ isbuffered(c::Channel) = c.sz_max==0 ? false : true
 
 function check_channel_state(c::Channel)
     if !isopen(c)
+        # if the monotonic load succeed, now do an acquire fence
+        (@atomic :acquire c.state) === :open && concurrency_violation()
         excp = c.excp
         excp !== nothing && throw(excp)
         throw(closed_exception())
@@ -179,8 +185,8 @@ Close a channel. An exception (optionally given by `excp`), is thrown by:
 function close(c::Channel, excp::Exception=closed_exception())
     lock(c)
     try
-        c.state = :closed
         c.excp = excp
+        @atomic :release c.state = :closed
         notify_error(c.cond_take, excp)
         notify_error(c.cond_wait, excp)
         notify_error(c.cond_put, excp)
@@ -189,7 +195,7 @@ function close(c::Channel, excp::Exception=closed_exception())
     end
     nothing
 end
-isopen(c::Channel) = (c.state === :open)
+isopen(c::Channel) = ((@atomic :monotonic c.state) === :open)
 
 """
     bind(chnl::Channel, task::Task)
@@ -228,24 +234,24 @@ false
 ```jldoctest
 julia> c = Channel(0);
 
-julia> task = @async (put!(c,1);error("foo"));
+julia> task = @async (put!(c, 1); error("foo"));
 
-julia> bind(c,task);
+julia> bind(c, task);
 
 julia> take!(c)
 1
 
-julia> put!(c,1);
-ERROR: foo
+julia> put!(c, 1);
+ERROR: TaskFailedException
 Stacktrace:
+[...]
+    nested task error: foo
 [...]
 ```
 """
 function bind(c::Channel, task::Task)
-    # TODO: implement "schedulewait" and deprecate taskdone_hook
-    #T = Task(() -> close_chnl_on_taskdone(task, c))
-    #schedulewait(task, T)
-    register_taskdone_hook(task, tsk -> close_chnl_on_taskdone(tsk, c))
+    T = Task(() -> close_chnl_on_taskdone(task, c))
+    _wait2(task, T)
     return c
 end
 
@@ -277,36 +283,25 @@ end
 
 function close_chnl_on_taskdone(t::Task, c::Channel)
     isopen(c) || return
-    cleanup = () -> try
-            isopen(c) || return
-            if istaskfailed(t)
-                excp = task_result(t)
-                if excp isa Exception
-                    close(c, excp)
-                    return
-                end
-            end
-            close(c)
+    lock(c)
+    try
+        isopen(c) || return
+        if istaskfailed(t)
+            close(c, TaskFailedException(t))
             return
-        finally
-            unlock(c)
         end
-    if trylock(c)
-        # can't use `lock`, since attempts to task-switch to wait for it
-        # will just silently fail and leave us with broken state
-        cleanup()
-    else
-        # so schedule this to happen once we are finished destroying our task
-        # (on a new Task)
-        @async (lock(c); cleanup())
+        close(c)
+    finally
+        unlock(c)
     end
     nothing
 end
 
 struct InvalidStateException <: Exception
-    msg::AbstractString
+    msg::String
     state::Symbol
 end
+showerror(io::IO, ex::InvalidStateException) = print(io, "InvalidStateException: ", ex.msg)
 
 """
     put!(c::Channel, v)
@@ -325,17 +320,36 @@ function put!(c::Channel{T}, v) where T
     return isbuffered(c) ? put_buffered(c, v) : put_unbuffered(c, v)
 end
 
+# Atomically update channel n_avail, *assuming* we hold the channel lock.
+function _increment_n_avail(c, inc)
+    # We hold the channel lock so it's safe to non-atomically read and
+    # increment c.n_avail_items
+    newlen = c.n_avail_items + inc
+    # Atomically store c.n_avail_items to prevent data races with other threads
+    # reading this outside the lock.
+    @atomic :monotonic c.n_avail_items = newlen
+end
+
 function put_buffered(c::Channel, v)
     lock(c)
+    did_buffer = false
     try
+        # Increment channel n_avail eagerly (before push!) to count data in the
+        # buffer as well as offers from tasks which are blocked in wait().
+        _increment_n_avail(c, 1)
         while length(c.data) == c.sz_max
             check_channel_state(c)
             wait(c.cond_put)
         end
+        check_channel_state(c)
         push!(c.data, v)
+        did_buffer = true
         # notify all, since some of the waiters may be on a "fetch" call.
         notify(c.cond_take, nothing, true, false)
     finally
+        # Decrement the available items if this task had an exception before pushing the
+        # item to the buffer (e.g., during `wait(c.cond_put)`):
+        did_buffer || _increment_n_avail(c, -1)
         unlock(c)
     end
     return v
@@ -344,22 +358,23 @@ end
 function put_unbuffered(c::Channel, v)
     lock(c)
     taker = try
+        _increment_n_avail(c, 1)
         while isempty(c.cond_take.waitq)
             check_channel_state(c)
             notify(c.cond_wait)
             wait(c.cond_put)
         end
+        check_channel_state(c)
         # unfair scheduled version of: notify(c.cond_take, v, false, false); yield()
         popfirst!(c.cond_take.waitq)
     finally
+        _increment_n_avail(c, -1)
         unlock(c)
     end
     schedule(taker, v)
     yield()  # immediately give taker a chance to run, but don't block the current task
     return v
 end
-
-push!(c::Channel, v) = put!(c, v)
 
 """
     fetch(c::Channel)
@@ -400,14 +415,13 @@ function take_buffered(c::Channel)
             wait(c.cond_take)
         end
         v = popfirst!(c.data)
+        _increment_n_avail(c, -1)
         notify(c.cond_put, nothing, false, false) # notify only one, since only one slot has become available for a put!.
         return v
     finally
         unlock(c)
     end
 end
-
-popfirst!(c::Channel) = take!(c)
 
 # 0-size channel
 function take_unbuffered(c::Channel{T}) where T
@@ -431,9 +445,14 @@ For unbuffered channels returns `true` if there are tasks waiting
 on a [`put!`](@ref).
 """
 isready(c::Channel) = n_avail(c) > 0
-n_avail(c::Channel) = isbuffered(c) ? length(c.data) : length(c.cond_put.waitq)
+isempty(c::Channel) = n_avail(c) == 0
+function n_avail(c::Channel)
+    # Lock-free equivalent to `length(c.data) + length(c.cond_put.waitq)`
+    @atomic :monotonic c.n_avail_items
+end
 
 lock(c::Channel) = lock(c.cond_take)
+lock(f, c::Channel) = lock(f, c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)
 trylock(c::Channel) = trylock(c.cond_take)
 
@@ -453,7 +472,24 @@ end
 
 eltype(::Type{Channel{T}}) where {T} = T
 
-show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
+show(io::IO, c::Channel) = print(io, typeof(c), "(", c.sz_max, ")")
+
+function show(io::IO, ::MIME"text/plain", c::Channel)
+    show(io, c)
+    if !(get(io, :compact, false)::Bool)
+        if !isopen(c)
+            print(io, " (closed)")
+        else
+            n = n_avail(c)
+            if n == 0
+                print(io, " (empty)")
+            else
+                s = n == 1 ? "" : "s"
+                print(io, " (", n, " item$s available)")
+            end
+        end
+    end
+end
 
 function iterate(c::Channel, state=nothing)
     try

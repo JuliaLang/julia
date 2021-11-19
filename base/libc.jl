@@ -5,7 +5,7 @@ module Libc
 Interface to libc, the C standard library.
 """ Libc
 
-import Base: transcode, windowserror
+import Base: transcode, windowserror, show
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
@@ -37,6 +37,8 @@ dup(x::RawFD) = ccall((@static Sys.iswindows() ? :_dup : :dup), RawFD, (RawFD,),
 dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
                 (RawFD, RawFD), src, target))
+
+show(io::IO, fd::RawFD) = print(io, "RawFD(", bitcast(UInt32, fd), ')')  # avoids invalidation via show_default
 
 # Wrapper for an OS file descriptor (for Windows)
 if Sys.iswindows()
@@ -129,7 +131,7 @@ Suspends execution for `s` seconds.
 This function does not yield to Julia's scheduler and therefore blocks
 the Julia thread that it is running on for the duration of the sleep time.
 
-See also: [`sleep`](@ref)
+See also [`sleep`](@ref).
 """
 systemsleep
 
@@ -313,14 +315,15 @@ function FormatMessage end
 if Sys.iswindows()
     GetLastError() = ccall(:GetLastError, stdcall, UInt32, ())
 
-    function FormatMessage(e=GetLastError())
+    FormatMessage(e) = FormatMessage(UInt32(e))
+    function FormatMessage(e::UInt32=GetLastError())
         FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
         FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
         FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
         FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
         lpMsgBuf = Ref{Ptr{UInt16}}()
         lpMsgBuf[] = 0
-        len = ccall(:FormatMessageW, stdcall, UInt32, (Cint, Ptr{Cvoid}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Cvoid}),
+        len = ccall(:FormatMessageW, stdcall, UInt32, (UInt32, Ptr{Cvoid}, UInt32, UInt32, Ptr{Ptr{UInt16}}, UInt32, Ptr{Cvoid}),
                     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
@@ -397,6 +400,86 @@ rand(::Type{Float64}) = rand(UInt32) * 2.0^-32
 
 Interface to the C `srand(seed)` function.
 """
-srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
+srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
+
+struct Cpasswd
+   username::Cstring
+   uid::Culong
+   gid::Culong
+   shell::Cstring
+   homedir::Cstring
+   gecos::Cstring
+   Cpasswd() = new(C_NULL, typemax(Culong), typemax(Culong), C_NULL, C_NULL, C_NULL)
+end
+mutable struct Cgroup
+    groupname::Cstring # group name
+    gid::Culong        # group ID
+    mem::Ptr{Cstring}  # group members
+    Cgroup() = new(C_NULL, typemax(Culong), C_NULL)
+end
+struct Passwd
+    username::String
+    uid::UInt
+    gid::UInt
+    shell::String
+    homedir::String
+    gecos::String
+end
+struct Group
+    groupname::String
+    gid::UInt
+    mem::Vector{String}
+end
+
+function getpwuid(uid::Unsigned, throw_error::Bool=true)
+    ref_pd = Ref(Cpasswd())
+    ret = ccall(:jl_os_get_passwd, Cint, (Ref{Cpasswd}, Culong), ref_pd, uid)
+    if ret != 0
+        throw_error && Base.uv_error("getpwuid", ret)
+        return
+    end
+    pd = ref_pd[]
+    pd = Passwd(
+        pd.username == C_NULL ? "" : unsafe_string(pd.username),
+        pd.uid,
+        pd.gid,
+        pd.shell == C_NULL ? "" : unsafe_string(pd.shell),
+        pd.homedir == C_NULL ? "" : unsafe_string(pd.homedir),
+        pd.gecos == C_NULL ? "" : unsafe_string(pd.gecos),
+    )
+    ccall(:uv_os_free_passwd, Cvoid, (Ref{Cpasswd},), ref_pd)
+    return pd
+end
+function getgrgid(gid::Unsigned, throw_error::Bool=true)
+    ref_gp = Ref(Cgroup())
+    ret = ccall(:jl_os_get_group, Cint, (Ref{Cgroup}, Culong), ref_gp, gid)
+    if ret != 0
+        throw_error && Base.uv_error("getgrgid", ret)
+        return
+    end
+    gp = ref_gp[]
+    members = String[]
+    if gp.mem != C_NULL
+        while true
+            mem = unsafe_load(gp.mem, length(members) + 1)
+            mem == C_NULL && break
+            push!(members, unsafe_string(mem))
+        end
+    end
+    gp = Group(
+         gp.groupname == C_NULL ? "" : unsafe_string(gp.groupname),
+         gp.gid,
+         members,
+    )
+    ccall(:jl_os_free_group, Cvoid, (Ref{Cgroup},), ref_gp)
+    return gp
+end
+
+getuid() = ccall(:jl_getuid, Culong, ())
+geteuid() = ccall(:jl_geteuid, Culong, ())
+
+# Include dlopen()/dlpath() code
+include("libdl.jl")
+using .Libdl
 
 end # module

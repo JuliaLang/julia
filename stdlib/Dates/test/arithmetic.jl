@@ -150,6 +150,12 @@ end
         @test Dates.second(dt2) == 45
         @test Dates.millisecond(dt2) == 500
     end
+    @testset "DateTime-Quarter arithmetic" begin
+        dt = Dates.DateTime(1999, 12, 27)
+        @test dt + Dates.Quarter(1) == Dates.DateTime(2000, 3, 27)
+        @test dt + Dates.Quarter(-1) == Dates.DateTime(1999, 9, 27)
+    end
+
     @testset "DateTime-Month arithmetic" begin
         dt = Dates.DateTime(1999, 12, 27)
         @test dt + Dates.Month(1) == Dates.DateTime(2000, 1, 27)
@@ -265,6 +271,11 @@ end
         @test dt - Dates.Year(1) == Dates.Date(1999, 2, 28)
         @test dt + Dates.Year(4) == Dates.Date(2004, 2, 29)
         @test dt - Dates.Year(4) == Dates.Date(1996, 2, 29)
+    end
+    @testset "Date-Quarter arithmetic" begin
+        dt = Dates.Date(1999, 12, 27)
+        @test dt + Dates.Quarter(1) == Dates.Date(2000, 3, 27)
+        @test dt - Dates.Quarter(1) == Dates.Date(1999, 9, 27)
     end
     @testset "Date-Month arithmetic" begin
         dt = Dates.Date(1999, 12, 27)
@@ -485,6 +496,24 @@ end
     @testset "TimeZone" begin
         # best we can get in Dates as there is no other tz functionality
         @test ((a, b) -> now(typeof(a))).(UTC(), [1,2,3]) isa Vector{DateTime}
+    end
+end
+
+@testset "Missing arithmetic" begin
+    for t ∈ [Date, Time, Day, Month, Week, Year, Hour, Microsecond, Millisecond, Minute, Nanosecond, Second]
+        @test ismissing(t(1) + missing)
+        @test ismissing(missing + t(1))
+        @test ismissing(t(1) - missing)
+        @test ismissing(missing - t(1))
+    end
+end
+
+@testset "Diff of dates" begin
+    for t ∈ [Day, Week, Hour, Minute]
+        a = DateTime(2021,1,1):t(1):DateTime(2021,2,1)
+        d = diff(a)
+        @test d == diff(collect(a))
+        @test eltype(d) === typeof(a[1] - a[2])
     end
 end
 

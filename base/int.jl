@@ -44,6 +44,40 @@ const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UIn
 
 const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
 
+# >> this use of `unsigned` is defined somewhere else << the docstring should migrate there
+"""
+    unsigned(T::Integer)
+
+Convert an integer bitstype to the unsigned type of the same size.
+# Examples
+```jldoctest
+julia> unsigned(Int16)
+UInt16
+julia> unsigned(UInt64)
+UInt64
+```
+""" unsigned
+
+"""
+    signed(T::Integer)
+
+Convert an integer bitstype to the signed type of the same size.
+# Examples
+```jldoctest
+julia> signed(UInt16)
+Int16
+julia> signed(UInt64)
+Int64
+```
+"""
+signed(::Type{Bool}) = Int
+signed(::Type{UInt8}) = Int8
+signed(::Type{UInt16}) = Int16
+signed(::Type{UInt32}) = Int32
+signed(::Type{UInt64}) = Int64
+signed(::Type{UInt128}) = Int128
+signed(::Type{T}) where {T<:Signed} = T
+
 ## integer comparisons ##
 
 (<)(x::T, y::T) where {T<:BitSigned}  = slt_int(x, y)
@@ -59,9 +93,12 @@ inv(x::Integer) = float(one(x)) / float(x)
 (/)(x::BitInteger, y::BitInteger) = float(x) / float(y)
 
 """
-    isodd(x::Integer) -> Bool
+    isodd(x::Number) -> Bool
 
-Return `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
+Return `true` if `x` is an odd integer (that is, an integer not divisible by 2), and `false` otherwise.
+
+!!! compat "Julia 1.7"
+    Non-`Integer` arguments require Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -72,12 +109,16 @@ julia> isodd(10)
 false
 ```
 """
-isodd(n::Integer) = rem(n, 2) != 0
+isodd(n::Number) = isreal(n) && isodd(real(n))
+isodd(n::Real) = isinteger(n) && !iszero(rem(Integer(n), 2))
 
 """
-    iseven(x::Integer) -> Bool
+    iseven(x::Number) -> Bool
 
-Return `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
+Return `true` if `x` is an even integer (that is, an integer divisible by 2), and `false` otherwise.
+
+!!! compat "Julia 1.7"
+    Non-`Integer` arguments require Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -88,7 +129,8 @@ julia> iseven(10)
 true
 ```
 """
-iseven(n::Integer) = !isodd(n)
+iseven(n::Number) = isreal(n) && iseven(real(n))
+iseven(n::Real) = isinteger(n) && iszero(rem(Integer(n), 2))
 
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
@@ -118,6 +160,8 @@ when `abs` is applied to the minimum representable value of a signed
 integer. That is, when `x == typemin(typeof(x))`, `abs(x) == x < 0`,
 not `-x` as might be expected.
 
+See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref).
+
 # Examples
 ```jldoctest
 julia> abs(-3)
@@ -138,10 +182,12 @@ abs(x::Signed) = flipsign(x,x)
 ~(n::Integer) = -n-1
 
 """
-    unsigned(x) -> Unsigned
+    unsigned(x)
 
 Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
 unsigned without checking for negative values.
+
+See also: [`signed`](@ref), [`sign`](@ref), [`signbit`](@ref).
 
 # Examples
 ```jldoctest
@@ -155,7 +201,7 @@ julia> signed(unsigned(-2))
 -2
 ```
 """
-unsigned(x) = convert(Unsigned, x)
+unsigned(x) = x % typeof(convert(Unsigned, zero(x)))
 unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 
 """
@@ -163,8 +209,10 @@ unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 
 Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
 signed without checking for overflow.
+
+See also: [`unsigned`](@ref), [`sign`](@ref), [`signbit`](@ref).
 """
-signed(x) = convert(Signed, x)
+signed(x) = x % typeof(convert(Signed, zero(x)))
 signed(x::BitUnsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
 
 div(x::BitSigned, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
@@ -200,6 +248,8 @@ exceptions, see note below).
     type, and so rounding error may occur. In particular, if the exact result is very
     close to `y`, then it may be rounded to `y`.
 
+See also: [`rem`](@ref), [`div`](@ref), [`fld`](@ref), [`mod1`](@ref), [`invmod`](@ref).
+
 ```jldoctest
 julia> mod(8, 3)
 2
@@ -215,6 +265,10 @@ julia> mod(eps(), 3)
 
 julia> mod(-eps(), 3)
 3.0
+
+julia> mod.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ 1  2  0  1  2  0  1  2  0  1  2
 ```
 """
 function mod(x::T, y::T) where T<:Integer
@@ -239,6 +293,8 @@ rem(x::T, y::T) where {T<:BitUnsigned64} = checked_urem_int(x, y)
 
 Bitwise not.
 
+See also: [`!`](@ref), [`&`](@ref), [`|`](@ref).
+
 # Examples
 ```jldoctest
 julia> ~4
@@ -254,10 +310,13 @@ false
 (~)(x::BitInteger)             = not_int(x)
 
 """
-    &(x, y)
+    x & y
 
 Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
-returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
+returning [`missing`](@ref) if one operand is `missing` and the other is `true`. Add parentheses for
+function application form: `(&)(x, y)`.
+
+See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
 
 # Examples
 ```jldoctest
@@ -277,10 +336,12 @@ false
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
 
 """
-    |(x, y)
+    x | y
 
 Bitwise or. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `false`.
+
+See also: [`&`](@ref), [`xor`](@ref), [`||`](@ref).
 
 # Examples
 ```jldoctest
@@ -335,9 +396,12 @@ Number of ones in the binary representation of `x`.
 ```jldoctest
 julia> count_ones(7)
 3
+
+julia> count_ones(Int32(-1))
+32
 ```
 """
-count_ones(x::BitInteger) = Int(ctpop_int(x))
+count_ones(x::BitInteger) = (ctpop_int(x) % Int)::Int
 
 """
     leading_zeros(x::Integer) -> Integer
@@ -350,7 +414,7 @@ julia> leading_zeros(Int32(1))
 31
 ```
 """
-leading_zeros(x::BitInteger) = Int(ctlz_int(x))
+leading_zeros(x::BitInteger) = (ctlz_int(x) % Int)::Int
 
 """
     trailing_zeros(x::Integer) -> Integer
@@ -363,7 +427,7 @@ julia> trailing_zeros(2)
 1
 ```
 """
-trailing_zeros(x::BitInteger) = Int(cttz_int(x))
+trailing_zeros(x::BitInteger) = (cttz_int(x) % Int)::Int
 
 """
     count_zeros(x::Integer) -> Integer
@@ -374,6 +438,9 @@ Number of zeros in the binary representation of `x`.
 ```jldoctest
 julia> count_zeros(Int32(2 ^ 16 - 1))
 16
+
+julia> count_zeros(-1)
+0
 ```
 """
 count_zeros(x::Integer) = count_ones(~x)
@@ -452,6 +519,37 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
     end
 end
 
+## integer bitwise rotations ##
+
+"""
+    bitrotate(x::Base.BitInteger, k::Integer)
+
+`bitrotate(x, k)` implements bitwise rotation.
+It returns the value of `x` with its bits rotated left `k` times.
+A negative value of `k` will rotate to the right instead.
+
+!!! compat "Julia 1.5"
+    This function requires Julia 1.5 or later.
+
+See also: [`<<`](@ref), [`circshift`](@ref), [`BitArray`](@ref).
+
+```jldoctest
+julia> bitrotate(UInt8(114), 2)
+0xc9
+
+julia> bitstring(bitrotate(0b01110010, 2))
+"11001001"
+
+julia> bitstring(bitrotate(0b01110010, -2))
+"10011100"
+
+julia> bitstring(bitrotate(0b01110010, 8))
+"01110010"
+```
+"""
+bitrotate(x::T, k::Integer) where {T <: BitInteger} =
+    (x << ((sizeof(T) << 3 - 1) & k)) | (x >>> ((sizeof(T) << 3 - 1) & -k))
+
 # @doc isn't available when running in Core at this point.
 # Tuple syntax for documentation two function signatures at the same time
 # doesn't work either at this point.
@@ -477,6 +575,8 @@ if nameof(@__MODULE__) === :Base
 end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x
+rem(x::Signed, ::Type{Unsigned}) = x % unsigned(typeof(x))
+rem(x::Unsigned, ::Type{Signed}) = x % signed(typeof(x))
 rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
@@ -489,12 +589,26 @@ unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
     trunc(x; sigdigits::Integer= [, base = 10])
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
-is less than or equal to `x`.
+is less than or equal to the absolute value of `x`.
 
 `trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
-`digits`, `sigdigits` and `base` work as for [`round`](@ref).
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
+
+See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref), [`unsafe_trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> trunc(2.22)
+2.0
+
+julia> trunc(-2.22, digits=1)
+-2.2
+
+julia> trunc(Int, -2.22)
+-2
+```
 """
 function trunc end
 
@@ -509,7 +623,7 @@ equal to `x`.
 `floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
-`digits`, `sigdigits` and `base` work as for [`round`](@ref).
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function floor end
 
@@ -524,7 +638,7 @@ equal to `x`.
 `ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
 representable.
 
-`digits`, `sigdigits` and `base` work as for [`round`](@ref).
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function ceil end
 
@@ -539,8 +653,8 @@ floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
     @int128_str str
     @int128_str(str)
 
-`@int128_str` parses a string into a Int128
-Throws an `ArgumentError` if the string is not a valid integer
+`@int128_str` parses a string into a Int128.
+Throws an `ArgumentError` if the string is not a valid integer.
 """
 macro int128_str(s)
     return parse(Int128, s)
@@ -550,8 +664,8 @@ end
     @uint128_str str
     @uint128_str(str)
 
-`@uint128_str` parses a string into a UInt128
-Throws an `ArgumentError` if the string is not a valid integer
+`@uint128_str` parses a string into a UInt128.
+Throws an `ArgumentError` if the string is not a valid integer.
 """
 macro uint128_str(s)
     return parse(UInt128, s)
@@ -637,6 +751,8 @@ function typemin end
 
 The highest value representable by the given (real) numeric `DataType`.
 
+See also: [`floatmax`](@ref), [`typemin`](@ref), [`eps`](@ref).
+
 # Examples
 ```jldoctest
 julia> typemax(Int8)
@@ -644,6 +760,12 @@ julia> typemax(Int8)
 
 julia> typemax(UInt32)
 0xffffffff
+
+julia> typemax(Float64)
+Inf
+
+julia> floatmax(Float32)  # largest finite floating point number
+3.4028235f38
 ```
 """
 function typemax end
@@ -859,4 +981,38 @@ for op in (:+, :-, :*, :&, :|, :xor)
         not_sametype((a, b), (aT, bT))
         return $op(aT, bT)
     end
+end
+
+const _mask1_uint128 = (UInt128(0x5555555555555555) << 64) | UInt128(0x5555555555555555)
+const _mask2_uint128 = (UInt128(0x3333333333333333) << 64) | UInt128(0x3333333333333333)
+const _mask4_uint128 = (UInt128(0x0f0f0f0f0f0f0f0f) << 64) | UInt128(0x0f0f0f0f0f0f0f0f)
+
+"""
+    bitreverse(x)
+
+Reverse the order of bits in integer `x`. `x` must have a fixed bit width,
+e.g. be an `Int16` or `Int32`.
+
+!!! compat "Julia 1.5"
+    This function requires Julia 1.5 or later.
+
+# Examples
+```jldoctest
+julia> bitreverse(0x8080808080808080)
+0x0101010101010101
+
+julia> reverse(bitstring(0xa06e)) == bitstring(bitreverse(0xa06e))
+true
+```
+"""
+function bitreverse(x::BitInteger)
+    # TODO: consider using llvm.bitreverse intrinsic
+    z = unsigned(x)
+    mask1 = _mask1_uint128 % typeof(z)
+    mask2 = _mask2_uint128 % typeof(z)
+    mask4 = _mask4_uint128 % typeof(z)
+    z = ((z & mask1) << 1) | ((z >> 1) & mask1)
+    z = ((z & mask2) << 2) | ((z >> 2) & mask2)
+    z = ((z & mask4) << 4) | ((z >> 4) & mask4)
+    return bswap(z) % typeof(x)
 end

@@ -19,12 +19,15 @@
 #       zero argument or result as insignificant.
 # arcp: Allow Reciprocal - Allow optimizations to use the reciprocal
 #       of an argument rather than perform division.
+# fast: Fast - Allow algebraically equivalent transformations that may
+#       dramatically change results in floating point (e.g.
+#       reassociate). This flag implies all the others.
 
 module FastMath
 
 export @fastmath
 
-import Core.Intrinsics: sqrt_llvm, neg_float_fast,
+import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
     add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
@@ -103,19 +106,20 @@ function make_fastmath(expr::Expr)
             # simple assignment
             expr = :($var = $op($var, $rhs))
         elseif isa(var, Expr) && var.head === :ref
+            var = var::Expr
             # array reference
             arr = var.args[1]
             inds = var.args[2:end]
             arrvar = gensym()
-            indvars = Any[gensym() for i in inds]
+            indvars = Any[gensym() for _ in inds]
             expr = quote
                 $(Expr(:(=), arrvar, arr))
-                $(Expr(:(=), Expr(:tuple, indvars...), Expr(:tuple, inds...)))
+                $(Expr(:(=), Base.exprarray(:tuple, indvars), Base.exprarray(:tuple, inds)))
                 $arrvar[$(indvars...)] = $op($arrvar[$(indvars...)], $rhs)
             end
         end
     end
-    Expr(make_fastmath(expr.head), map(make_fastmath, expr.args)...)
+    Base.exprarray(make_fastmath(expr.head), Base.mapany(make_fastmath, expr.args))
 end
 function make_fastmath(symb::Symbol)
     fast_symb = get(fast_op, symb, :nothing)
@@ -154,7 +158,7 @@ end
 
 # Basic arithmetic
 
-const FloatTypes = Union{Float32,Float64}
+const FloatTypes = Union{Float16,Float32,Float64}
 
 sub_fast(x::FloatTypes) = neg_float_fast(x)
 
@@ -269,6 +273,9 @@ end
 
 
 # Math functions
+exp2_fast(x::Union{Float32,Float64})  = Base.Math.exp2_fast(x)
+exp_fast(x::Union{Float32,Float64})   = Base.Math.exp_fast(x)
+exp10_fast(x::Union{Float32,Float64}) = Base.Math.exp10_fast(x)
 
 # builtins
 
@@ -277,29 +284,7 @@ pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Fl
 pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already via llvm.powi
 @inline pow_fast(x, v::Val) = Base.literal_pow(^, x, v)
 
-sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
-
-# libm
-
-const libm = Base.libm_name
-
-for f in (:acosh, :asinh, :atanh, :cbrt,
-          :cosh, :exp2, :expm1, :log10, :log1p, :log2,
-          :log, :sinh, :tanh)
-    f_fast = fast_op[f]
-    @eval begin
-        $f_fast(x::Float32) =
-            ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
-        $f_fast(x::Float64) =
-            ccall(($(string(f)),libm), Float64, (Float64,), x)
-    end
-end
-
-pow_fast(x::Float32, y::Float32) =
-    ccall(("powf",libm), Float32, (Float32,Float32), x, y)
-pow_fast(x::Float64, y::Float64) =
-    ccall(("pow",libm), Float64, (Float64,Float64), x, y)
-
+sqrt_fast(x::FloatTypes) = sqrt_llvm_fast(x)
 sincos_fast(v::FloatTypes) = sincos(v)
 
 @inline function sincos_fast(v::Float16)

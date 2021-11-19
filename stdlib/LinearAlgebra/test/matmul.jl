@@ -152,7 +152,7 @@ end
     for vf in (copy(vvf), view(vvf, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test mul!(C, vf, transpose(vf)) == vf*vf'
         C .= C0 = rand(eltype(C), size(C))
-        @test mul!(C, vf, transpose(vf), 2, 3) == 2vf*vf' .+ 3C0
+        @test mul!(C, vf, transpose(vf), 2, 3) ≈ 2vf*vf' .+ 3C0
     end
 end
 
@@ -203,6 +203,27 @@ end
     Asub = view(Ai, 1:2:5, 1:2:4)
     @test *(adjoint(Asub), Asub) == *(adjoint(Aref), Aref)
     @test *(Asub, adjoint(Asub)) == *(Aref, adjoint(Aref))
+end
+
+@testset "matrix x matrix with negative stride" begin
+    M = reshape(map(Float64,1:77),7,11)
+    N = reshape(map(Float64,1:63),9,7)
+    U = view(M,7:-1:1,11:-2:1)
+    V = view(N,7:-1:2,7:-1:1)
+    @test U*V ≈ Matrix(U) * Matrix(V)
+end
+
+@testset "dot product of subarrays of vectors (floats, negative stride, issue #37767)" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = Vector{T}(3:2:7)
+        b = Vector{T}(1:10)
+        v = view(b,7:-2:3)
+        @test dot(a,Vector(v)) ≈ 67.0
+        @test dot(a,v) ≈ 67.0
+        @test dot(v,a) ≈ 67.0
+        @test dot(Vector(v),Vector(v)) ≈ 83.0
+        @test dot(v,v) ≈ 83.0
+    end
 end
 
 @testset "Complex matrix x real MatOrVec etc (issue #29224)" for T1 in (Float32,Float64)
@@ -290,6 +311,110 @@ end
     for A in (A5x5, view(A5x5, :, :)), b in (b5,  view(b5, :)), C in (C5x6, view(C5x6, :, :))
         @test_throws DimensionMismatch mul!(A, Diagonal(b), C)
     end
+end
+
+@testset "muladd" begin
+    A23 = reshape(1:6, 2,3) .+ 0
+    B34 = reshape(1:12, 3,4) .+ im
+    u2 = [10,20]
+    v3 = [3,5,7] .+ im
+    w4 = [11,13,17,19im]
+
+    @testset "matrix-matrix" begin
+        @test muladd(A23, B34, 0) == A23 * B34
+        @test muladd(A23, B34, 100) == A23 * B34 .+ 100
+        @test muladd(A23, B34, u2) == A23 * B34 .+ u2
+        @test muladd(A23, B34, w4') == A23 * B34 .+ w4'
+        @test_throws DimensionMismatch muladd(B34, A23, 1)
+        @test muladd(ones(1,3), ones(3,4), ones(1,4)) == fill(4.0,1,4)
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3,4), ones(9,4))
+
+        # broadcasting fallback method allows trailing dims
+        @test muladd(A23, B34, ones(2,4,1)) == A23 * B34 + ones(2,4,1)
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3,4), ones(9,4,1))
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3,4), ones(1,4,9))
+        # and catches z::Array{T,0}
+        @test muladd(A23, B34, fill(0)) == A23 * B34
+    end
+    @testset "matrix-vector" begin
+        @test muladd(A23, v3, 0) == A23 * v3
+        @test muladd(A23, v3, 100) == A23 * v3 .+ 100
+        @test muladd(A23, v3, u2) == A23 * v3 .+ u2
+        @test muladd(A23, v3, im) isa Vector{Complex{Int}}
+        @test muladd(ones(1,3), ones(3), ones(1)) == [4]
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3), ones(7))
+
+        # fallback
+        @test muladd(A23, v3, ones(2,1,1)) == A23 * v3 + ones(2,1,1)
+        @test_throws DimensionMismatch muladd(A23, v3, ones(2,2))
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3), ones(7,1))
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3), ones(1,7))
+        @test muladd(A23, v3, fill(0)) == A23 * v3
+    end
+    @testset "adjoint-matrix" begin
+        @test muladd(v3', B34, 0) isa Adjoint
+        @test muladd(v3', B34, 2im) == v3' * B34 .+ 2im
+        @test muladd(v3', B34, w4') == v3' * B34 .+ w4'
+
+        # via fallback
+        @test muladd(v3', B34, ones(1,4)) == (B34' * v3 + ones(4,1))'
+        @test_throws DimensionMismatch muladd(v3', B34, ones(7,4))
+        @test_throws DimensionMismatch muladd(v3', B34, ones(1,4,7))
+        @test muladd(v3', B34, fill(0)) == v3' * B34 # does not make an Adjoint
+    end
+    @testset "vector-adjoint" begin
+        @test muladd(u2, v3', 0) isa Matrix
+        @test muladd(u2, v3', 99) == u2 * v3' .+ 99
+        @test muladd(u2, v3', A23) == u2 * v3' .+ A23
+
+        @test muladd(u2, v3', ones(2,3,1)) == u2 * v3' + ones(2,3,1)
+        @test_throws DimensionMismatch muladd(u2, v3', ones(2,3,4))
+        @test_throws DimensionMismatch muladd([1], v3', ones(7,3))
+        @test muladd(u2, v3', fill(0)) == u2 * v3'
+    end
+    @testset "dot" begin # all use muladd(::Any, ::Any, ::Any)
+        @test muladd(u2', u2, 0) isa Number
+        @test muladd(v3', v3, im) == dot(v3,v3) + im
+        @test muladd(u2', u2, [1]) == [dot(u2,u2) + 1]
+        @test_throws DimensionMismatch muladd(u2', u2, [1,1]) == [dot(u2,u2) + 1]
+        @test muladd(u2', u2, fill(0)) == dot(u2,u2)
+    end
+    @testset "arrays of arrays" begin
+        vofm = [rand(1:9,2,2) for _ in 1:3]
+        Mofm = [rand(1:9,2,2) for _ in 1:3, _ in 1:3]
+
+        @test muladd(vofm', vofm, vofm[1]) == vofm' * vofm .+ vofm[1] # inner
+        @test muladd(vofm, vofm', Mofm) == vofm * vofm' .+ Mofm       # outer
+        @test muladd(vofm', Mofm, vofm') == vofm' * Mofm .+ vofm'     # bra-mat
+        @test muladd(Mofm, Mofm, vofm) == Mofm * Mofm .+ vofm         # mat-mat
+        @test muladd(Mofm, vofm, vofm) == Mofm * vofm .+ vofm         # mat-vec
+    end
+end
+
+@testset "muladd & structured matrices" begin
+    A33 = reshape(1:9, 3,3) .+ im
+    v3 = [3,5,7im]
+
+    # no special treatment
+    @test muladd(Symmetric(A33), Symmetric(A33), 1) == Symmetric(A33) * Symmetric(A33) .+ 1
+    @test muladd(Hermitian(A33), Hermitian(A33), v3) == Hermitian(A33) * Hermitian(A33) .+ v3
+    @test muladd(adjoint(A33), transpose(A33), A33) == A33' * transpose(A33) .+ A33
+
+    u1 = muladd(UpperTriangular(A33), UpperTriangular(A33), Diagonal(v3))
+    @test u1 isa UpperTriangular
+    @test u1 == UpperTriangular(A33) * UpperTriangular(A33) + Diagonal(v3)
+
+    # diagonal
+    @test muladd(Diagonal(v3), Diagonal(A33), Diagonal(v3)).diag == ([1,5,9] .+ im .+ 1) .* v3
+
+    # uniformscaling
+    @test muladd(Diagonal(v3), I, I).diag == v3 .+ 1
+    @test muladd(2*I, 3*I, I).λ == 7
+    @test muladd(A33, A33', I) == A33 * A33' + I
+
+    # https://github.com/JuliaLang/julia/issues/38426
+    @test @evalpoly(A33, 1.0*I, 1.0*I) == I + A33
+    @test @evalpoly(A33, 1.0*I, 1.0*I, 1.0*I) == I + A33 + A33^2
 end
 
 # issue #6450
@@ -392,6 +517,13 @@ end
         @test_throws ArgumentError mul!(a, b, a)
         @test_throws ArgumentError mul!(a, a, a)
     end
+end
+
+@testset "#35163" begin
+    # typemax(Int32) * Int32(1) + Int32(1) * Int32(1) should wrap around
+    # not promote to Int64, convert to Int32 and throw inexacterror
+    val = mul!(Int32[1], fill(typemax(Int32), 1, 1), Int32[1], Int32(1), Int32(1))
+    @test val[1] == typemin(Int32)
 end
 
 # Number types that lack conversion to the destination type
@@ -543,7 +675,7 @@ end
     @test  transpose(Xv2)*Xv2     ≈ XtX
     @test (transpose(Xv3)*Xv3)[1] ≈ XtX
     @test  Xv1'*Xv1     ≈ XcX
-    @test Xv2'*Xv2 ≈ norm(Xv2)^2
+    @test  Xv2'*Xv2     ≈ XcX
     @test (Xv3'*Xv3)[1] ≈ XcX
     @test (Xv1*transpose(Xv1))[1] ≈ XXt
     @test  Xv2*transpose(Xv2)     ≈ XXt
@@ -609,6 +741,16 @@ end
     @test D ≈ C
 end
 
+@testset "size zero types in matrix mult (see issue 39362)" begin
+    A = [missing missing; missing missing]
+    v = [missing, missing]
+    @test (A * v == v) === missing
+    M = fill(1.0, 2, 2)
+    a = fill(missing, 2, 1)
+    @test (a' * M * a == fill(missing,1,1)) === missing
+end
+
+
 @testset "multiplication of empty matrices without calling zero" begin
     r, c = rand(0:9, 2)
     A = collect(Number, rand(r, c))
@@ -616,6 +758,111 @@ end
     C = A * B
     @test size(C) == (r, 0)
     @test_throws MethodError zero(eltype(C))
+end
+
+@testset "Issue #33873: genmatmul! with empty operands" begin
+    @test Matrix{Any}(undef, 0, 2) * Matrix{Any}(undef, 2, 3) == Matrix{Any}(undef, 0, 3)
+    @test_throws MethodError Matrix{Any}(undef, 2, 0) * Matrix{Any}(undef, 0, 3)
+    @test Matrix{Int}(undef, 2, 0) * Matrix{Int}(undef, 0, 3) == zeros(Int, 2, 3)
+end
+
+@testset "3-arg *, order by type" begin
+    x = [1, 2im]
+    y = [im, 20, 30+40im]
+    z = [-1, 200+im, -3]
+    A = [1 2 3im; 4 5 6+im]
+    B = [-10 -20; -30 -40]
+    a = 3 + im * round(Int, 10^6*(pi-3))
+    b = 123
+
+    @test x'*A*y == (x'*A)*y == x'*(A*y)
+    @test y'*A'*x == (y'*A')*x == y'*(A'*x)
+    @test y'*transpose(A)*x == (y'*transpose(A))*x == y'*(transpose(A)*x)
+
+    @test B*A*y == (B*A)*y == B*(A*y)
+
+    @test a*A*y == (a*A)*y == a*(A*y)
+    @test A*y*a == (A*y)*a == A*(y*a)
+
+    @test a*B*A == (a*B)*A == a*(B*A)
+    @test B*A*a == (B*A)*a == B*(A*a)
+
+    @test a*y'*z == (a*y')*z == a*(y'*z)
+    @test y'*z*a == (y'*z)*a == y'*(z*a)
+
+    @test a*y*z' == (a*y)*z' == a*(y*z')
+    @test y*z'*a == (y*z')*a == y*(z'*a)
+
+    @test a*x'*A == (a*x')*A == a*(x'*A)
+    @test x'*A*a == (x'*A)*a == x'*(A*a)
+    @test a*x'*A isa Adjoint{<:Any, <:Vector}
+
+    @test a*transpose(x)*A == (a*transpose(x))*A == a*(transpose(x)*A)
+    @test transpose(x)*A*a == (transpose(x)*A)*a == transpose(x)*(A*a)
+    @test a*transpose(x)*A isa Transpose{<:Any, <:Vector}
+
+    @test x'*B*A == (x'*B)*A == x'*(B*A)
+    @test x'*B*A isa Adjoint{<:Any, <:Vector}
+
+    @test y*x'*A == (y*x')*A == y*(x'*A)
+    y31 = reshape(y,3,1)
+    @test y31*x'*A == (y31*x')*A == y31*(x'*A)
+
+    vm = [rand(1:9,2,2) for _ in 1:3]
+    Mm = [rand(1:9,2,2) for _ in 1:3, _ in 1:3]
+
+    @test vm' * Mm * vm == (vm' * Mm) * vm == vm' * (Mm * vm)
+    @test Mm * Mm' * vm == (Mm * Mm') * vm == Mm * (Mm' * vm)
+    @test vm' * Mm * Mm == (vm' * Mm) * Mm == vm' * (Mm * Mm)
+    @test Mm * Mm' * Mm == (Mm * Mm') * Mm == Mm * (Mm' * Mm)
+end
+
+@testset "3-arg *, order by size" begin
+    M44 = randn(4,4)
+    M24 = randn(2,4)
+    M42 = randn(4,2)
+    @test M44*M44*M44 ≈ (M44*M44)*M44 ≈ M44*(M44*M44)
+    @test M42*M24*M44 ≈ (M42*M24)*M44 ≈ M42*(M24*M44)
+    @test M44*M42*M24 ≈ (M44*M42)*M24 ≈ M44*(M42*M24)
+end
+
+@testset "4-arg *, by type" begin
+    y = [im, 20, 30+40im]
+    z = [-1, 200+im, -3]
+    a = 3 + im * round(Int, 10^6*(pi-3))
+    b = 123
+    M = rand(vcat(1:9, im.*[1,2,3]), 3,3)
+    N = rand(vcat(1:9, im.*[1,2,3]), 3,3)
+
+    @test a * b * M * y == (a*b) * (M*y)
+    @test a * b * M * N == (a*b) * (M*N)
+    @test a * M * N * y == (a*M) * (N*y)
+    @test a * y' * M * z == (a*y') * (M*z)
+    @test a * y' * M * N == (a*y') * (M*N)
+
+    @test M * y * a * b == (M*y) * (a*b)
+    @test M * N * a * b == (M*N) * (a*b)
+    @test M * N * y * a == (a*M) * (N*y)
+    @test y' * M * z * a == (a*y') * (M*z)
+    @test y' * M * N * a == (a*y') * (M*N)
+
+    @test M * N * conj(M) * y == (M*N) * (conj(M)*y)
+    @test y' * M * N * conj(M) == (y'*M) * (N*conj(M))
+    @test y' * M * N * z == (y'*M) * (N*z)
+end
+
+@testset "4-arg *, by size" begin
+    for shift in 1:5
+        s1,s2,s3,s4,s5 = circshift(3:7, shift)
+        a=randn(s1,s2); b=randn(s2,s3); c=randn(s3,s4); d=randn(s4,s5)
+
+        # _quad_matmul
+        @test *(a,b,c,d) ≈ (a*b) * (c*d)
+
+        # _tri_matmul(A,B,B,δ)
+        @test *(11.1,b,c,d) ≈ (11.1*b) * (c*d)
+        @test *(a,b,c,99.9) ≈ (a*b) * (c*99.9)
+    end
 end
 
 end # module TestMatmul

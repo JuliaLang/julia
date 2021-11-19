@@ -22,6 +22,8 @@ export
     AbstractVector,
     AbstractVecOrMat,
     Array,
+    AbstractMatch,
+    AbstractPattern,
     AbstractDict,
     BigFloat,
     BigInt,
@@ -38,6 +40,7 @@ export
     ComplexF64,
     ComplexF32,
     ComplexF16,
+    ComposedFunction,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -67,6 +70,7 @@ export
     Rational,
     Regex,
     RegexMatch,
+    Returns,
     RoundFromZero,
     RoundDown,
     RoundingMode,
@@ -165,6 +169,10 @@ export
     ≢,
     xor,
     ⊻,
+    nand,
+    nor,
+    ⊼,
+    ⊽,
     %,
     ÷,
     &,
@@ -196,6 +204,7 @@ export
 
 # scalar math
     @evalpoly,
+    evalpoly,
     abs,
     abs2,
     acos,
@@ -219,10 +228,13 @@ export
     atanh,
     big,
     binomial,
+    bitreverse,
+    bitrotate,
     bswap,
     cbrt,
     ceil,
     cis,
+    cispi,
     clamp,
     cld,
     cmp,
@@ -326,6 +338,7 @@ export
     sinc,
     sincos,
     sincosd,
+    sincospi,
     sind,
     sinh,
     sinpi,
@@ -378,6 +391,7 @@ export
     first,
     hcat,
     hvcat,
+    hvncat,
     indexin,
     argmax,
     argmin,
@@ -436,6 +450,7 @@ export
     zeros,
 
 # search, find, match and related functions
+    contains,
     eachmatch,
     endswith,
     findall,
@@ -452,12 +467,15 @@ export
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    insorted,
     startswith,
 
 # linear algebra
+    var"'", # to enable syntax a' for adjoint
     adjoint,
     transpose,
     kron,
+    kron!,
 
 # bitarrays
     falses,
@@ -467,6 +485,7 @@ export
     append!,
     insert!,
     pop!,
+    popat!,
     prepend!,
     push!,
     resize!,
@@ -481,9 +500,11 @@ export
     any,
     firstindex,
     collect,
+    count!,
     count,
     delete!,
     deleteat!,
+    keepat!,
     eltype,
     empty!,
     empty,
@@ -501,6 +522,7 @@ export
     in,
     intersect!,
     intersect,
+    isdisjoint,
     isempty,
     issubset,
     issetequal,
@@ -513,7 +535,9 @@ export
     mapfoldr,
     mapreduce,
     merge!,
+    mergewith!,
     merge,
+    mergewith,
     pairs,
     reduce,
     setdiff!,
@@ -549,11 +573,14 @@ export
     bytes2hex,
     chomp,
     chop,
+    chopprefix,
+    chopsuffix,
     codepoint,
     codeunit,
     codeunits,
     digits,
     digits!,
+    eachsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -637,8 +664,10 @@ export
     identity,
     isbits,
     isequal,
-    isimmutable,
+    ismutable,
+    ismutabletype,
     isless,
+    isunordered,
     ifelse,
     objectid,
     sizeof,
@@ -651,6 +680,7 @@ export
     istaskstarted,
     istaskfailed,
     lock,
+    @lock,
     notify,
     ReentrantLock,
     schedule,
@@ -663,6 +693,7 @@ export
     timedwait,
     asyncmap,
     asyncmap!,
+    errormonitor,
 
 # channels
     take!,
@@ -673,9 +704,11 @@ export
 
 # missing values
     coalesce,
+    @coalesce,
     ismissing,
     missing,
     skipmissing,
+    @something,
     something,
     isnothing,
     nonmissingtype,
@@ -688,6 +721,7 @@ export
 # errors
     backtrace,
     catch_backtrace,
+    current_exceptions,
     error,
     rethrow,
     retry,
@@ -700,6 +734,9 @@ export
     convert,
     getproperty,
     setproperty!,
+    swapproperty!,
+    modifyproperty!,
+    replaceproperty!,
     fieldoffset,
     fieldname,
     fieldnames,
@@ -769,8 +806,10 @@ export
 
 # I/O and events
     close,
+    closewrite,
     countlines,
     eachline,
+    readeach,
     eof,
     fd,
     fdio,
@@ -786,6 +825,7 @@ export
     bytesavailable,
     ntoh,
     open,
+    peek,
     pipeline,
     Pipe,
     PipeBuffer,
@@ -800,6 +840,7 @@ export
     readline,
     readlines,
     readuntil,
+    redirect_stdio,
     redirect_stderr,
     redirect_stdin,
     redirect_stdout,
@@ -854,10 +895,12 @@ export
     chown,
     cp,
     ctime,
+    diskstat,
     download,
     filemode,
     filesize,
     gperm,
+    hardlink,
     isblockdev,
     ischardev,
     isdir,
@@ -891,7 +934,7 @@ export
     uperm,
     walkdir,
 
-# external processes ## TODO: whittle down these exports.
+# external processes
     detach,
     getpid,
     ignorestatus,
@@ -900,11 +943,13 @@ export
     process_running,
     run,
     setenv,
+    addenv,
     success,
     withenv,
 
 # C interface
     @cfunction,
+    @ccall,
     cglobal,
     disable_sigint,
     pointer,
@@ -938,6 +983,7 @@ export
     @s_str,    # regex substitution string
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
+    @NamedTuple,
 
     # documentation
     @text_str,
@@ -949,6 +995,7 @@ export
 
     # profiling
     @time,
+    @showtime,
     @timed,
     @timev,
     @elapsed,
@@ -978,6 +1025,9 @@ export
     @polly,
 
     @assert,
+    @atomic,
+    @atomicswap,
+    @atomicreplace,
     @__dot__,
     @enum,
     @label,

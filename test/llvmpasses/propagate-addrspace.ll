@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia%shlibext -PropagateJuliaAddrspaces -dce -S %s | FileCheck %s
+; RUN: opt -load libjulia-internal%shlibext -PropagateJuliaAddrspaces -dce -S %s | FileCheck %s
 
 define i64 @simple() {
 ; CHECK-LABEL: @simple

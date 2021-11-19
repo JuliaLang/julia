@@ -43,6 +43,9 @@ struct Base64DecodePipe <: IO
     end
 end
 
+Base.isreadable(pipe::Base64DecodePipe) = !isempty(pipe.rest) || isreadable(pipe.io)
+Base.iswritable(::Base64DecodePipe) = false
+
 function Base.unsafe_read(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
     p = read_until_end(pipe, ptr, n)
     if p < ptr + n
@@ -123,7 +126,7 @@ function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb
     return filled
 end
 
-Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)
+Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)::Bool
 Base.close(pipe::Base64DecodePipe) = nothing
 
 # Decode data from (b1, b2, b3, b5, buffer, input) into (ptr, rest).
@@ -196,7 +199,7 @@ See also [`base64encode`](@ref).
 # Examples
 ```jldoctest
 julia> b = base64decode("SGVsbG8h")
-6-element Array{UInt8,1}:
+6-element Vector{UInt8}:
  0x48
  0x65
  0x6c

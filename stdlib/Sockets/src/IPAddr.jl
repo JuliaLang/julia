@@ -238,7 +238,7 @@ function parse(::Type{IPv6}, str::AbstractString)
 end
 
 #
-# This support IPv4 addresses in the common dot (IPv4) or colon (IPv6)
+# This supports IP addresses in the common dot (IPv4) or colon (IPv6)
 # separated formats. Most other common formats use a standard integer encoding
 # of the appropriate size and should use the appropriate constructor
 #

@@ -6,7 +6,7 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 
 ## Learning Julia
 
-[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](https://docs.julialang.org/en/latest) covers the language and core library features, and is searchable.
+[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike.
 
 ## Before filing an issue
 
@@ -43,7 +43,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
   - Try some simple debugging techniques to help isolate the problem.
     - Try running the code with the debug build of Julia with `make debug`, which produces the `usr/bin/julia-debug`.
     - Consider running `julia-debug` with a debugger such as `gdb` or `lldb`. Obtaining even a simple [backtrace](http://www.unknownroad.com/rtfm/gdbtut/gdbsegfault.html) is very useful.
-    - If Julia segfaults, try following [these debugging tips](https://docs.julialang.org/en/latest/devdocs/backtraces#Reporting-and-analyzing-crashes-(segfaults)-1) to help track down the specific origin of the bug.
+    - If Julia segfaults, try following [these debugging tips](https://docs.julialang.org/en/v1/devdocs/backtraces/) to help track down the specific origin of the bug.
 
 2. If the problem is caused by a Julia package rather than core Julia, file a bug report with the relevant package author rather than here.
 
@@ -56,28 +56,6 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ## Submitting contributions
 
-### Contributing a Julia package
-
-Julia has a built-in [package manager](https://julialang.github.io/Pkg.jl/v1/) based on `git`. A number of [packages](https://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The manual provides instructions on [creating Julia packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/).
-
-For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
-
-### Package Compatibility Across Releases
-
-Sometimes, you might find that while your package works
-on the current release, it might not work on the upcoming release or nightly.
-This is due to the fact that some Julia functions (after some discussion)
-could be deprecated or removed altogether. This may cause your package to break or
-throw a number of deprecation warnings on usage. Therefore it is highly recommended
-to port your package to latest Julia release.
-
-However, porting a package to the latest release may cause the package to break on
-earlier Julia releases. To maintain compatibility across releases, use
-[`Compat.jl`](https://github.com/JuliaLang/Compat.jl). Find the fix for your package
-from the README, and specify the minimum version of Compat that provides the fix
-in your REQUIRE file. To find the correct minimum version, refer to
-[this guide](https://github.com/JuliaLang/Compat.jl/#tagging-the-correct-minimum-version-of-compat).
-
 ### Writing tests
 
 There are never enough tests. Track [code coverage at Coveralls](https://coveralls.io/r/JuliaLang/julia), and help improve it.
@@ -86,7 +64,7 @@ There are never enough tests. Track [code coverage at Coveralls](https://coveral
 
 2. Browse through the source files and find some untested functionality (highlighted in red) that you think you might be able to write a test for.
 
-3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. https://docs.julialang.org/en/latest/stdlib/Test/ may be helpful in explaining how the testing infrastructure works.
+3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. https://docs.julialang.org/en/v1/stdlib/Test/ may be helpful in explaining how the testing infrastructure works.
 
 4. Run `make test-all` to rebuild Julia and run your new test(s). If you had to fix a bug or add functionality in `base`, this will ensure that your test passes and that you have not introduced extraneous whitespace.
 
@@ -112,7 +90,7 @@ from Julia's root directory. This will rebuild the Julia system image, then inst
 
 > **Note**
 >
-> When making changes to any of Julia's documentation it is recommended that you run `make docs` to check the your changes are valid and do not produce any errors before opening a pull request.
+> When making changes to any of Julia's documentation it is recommended that you run `make docs` to check that your changes are valid and do not produce any errors before opening a pull request.
 
 Below are outlined the three most common types of documentation changes and the steps required to perform them. Please note that the following instructions do not cover the full range of features provided by Documenter.jl. Refer to [Documenter's documentation](https://juliadocs.github.io/Documenter.jl/stable) if you encounter anything that is not covered by the sections below.
 
@@ -180,7 +158,9 @@ Examples written within docstrings can be used as testcases known as "doctests" 
     "DOCSTRING TEST"
     ```
 
-A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you need to run `make -C doc doctest=true` from the root directory. It is recommended to add the header `# Examples` above the doctests.
+A doctest needs to match an interactive REPL including the `julia>` prompt. It is recommended to add the header `# Examples` above the doctests.
+
+To run doctests you need to run `make -C doc doctest=true` from the root directory. You can use `make -C doc doctest=true revise=true` if you are modifying the doctests and don't want to rebuild Julia after each change (see details below about the Revise.jl workflow).
 
 #### News-worthy changes
 
@@ -211,7 +191,7 @@ Note: These instructions are for adding to or improving functionality in the bas
 
 Add new code to Julia's base libraries as follows (this is the "basic" approach; see a more efficient approach in the next section):
 
- 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `ui/`.
+ 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `cli/`.
 
  2. Add any new files to `sysimg.jl` in order to build them into the Julia system image.
 
@@ -228,8 +208,6 @@ Note: You can run specific test files with `make`:
 or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.jl`:
 
     ./usr/bin/julia test/runtests.jl bitarray math
-
-Make sure that [Travis](https://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](https://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
 
 #### Modifying base more efficiently with Revise.jl
 
@@ -270,6 +248,51 @@ process before running the corresponding test. This can be useful as a shortcut
 on the command line (since tests aren't always designed to be run outside the
 runtest harness).
 
+### Contributing to patch releases
+
+The process of creating a patch release is roughly as follows:
+
+1. Create a new branch (e.g. `backports-release-1.6`) against the relevant minor release
+   branch (e.g. `release-1.6`). Usually a corresponding pull request is created as well.
+
+2. Add commits, nominally from `master` (hence "backports"), to that branch.
+   See below for more information on this process.
+
+3. Run the [BaseBenchmarks.jl](https://github.com/JuliaCI/BaseBenchmarks.jl) benchmark
+   suite and [PkgEval.jl](https://github.com/JuliaCI/PkgEval.jl) package ecosystem
+   exerciser against that branch. Nominally BaseBenchmarks.jl and PkgEval.jl are
+   invoked via [Nanosoldier.jl](https://github.com/JuliaCI/Nanosoldier.jl) from
+   the pull request associated with the backports branch. Fix any issues.
+
+4. Once all test and benchmark reports look good, merge the backports branch into
+   the corresponding release branch (e.g. merge `backports-release-1.6` into
+   `release-1.6`).
+
+5. Open a pull request that bumps the version of the relevant minor release to the
+   next patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37718).
+
+6. Ping `@JuliaLang/releases` to tag the patch release and update the website.
+
+7. Open a pull request that bumps the version of the relevant minor release to the
+   next prerelase patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37724).
+
+Step 2 above, i.e. backporting commits to the `backports-release-X.Y` branch, has largely
+been automated via [`Backporter`](https://github.com/KristofferC/Backporter): Backporter
+searches for merged pull requests with the relevant `backport-X.Y` tag, and attempts to
+cherry-pick the commits from those pull requests onto the `backports-release-X.Y` branch.
+Some commits apply successfully without intervention, others not so much. The latter
+commits require "manual" backporting, with which help is generally much appreciated.
+Backporter generates a report identifying those commits it managed to backport automatically
+and those that require manual backporting; this report is usually copied into the first
+post of the pull request associated with `backports-release-X.Y` and maintained as
+additional commits are automatically and/or manually backported.
+
+When contributing a manual backport, if you have the necessary permissions, please push the
+backport directly to the `backports-release-X.Y` branch. If you lack the relevant
+permissions, please open a pull request against the `backports-release-X.Y` branch with the
+manual backport. Once the manual backport is live on the `backports-release-X.Y` branch,
+please remove the `backport-X.Y` tag from the originating pull request for the commits.
+
 ### Code Formatting Guidelines
 
 #### General Formatting Guidelines for Julia code contributions
@@ -288,11 +311,11 @@ runtest harness).
 #### General Formatting Guidelines For C code contributions
 
  - 4 spaces per indentation level, no tabs
- - space between if and ( (if (x) ...)
- - newline before opening { in function definitions
- - f(void) for 0-argument function declarations
- - newline between } and else instead of } else {
- - if one part of an if..else chain uses { } then all should
+ - space between `if` and `(` (`if (x) ...`)
+ - newline before opening `{` in function definitions
+ - `f(void)` for 0-argument function declarations
+ - newline between `}` and `else` instead of `} else {`
+ - if one part of an `if..else` chain uses `{ }` then all should
  - no whitespace at the end of a line
 
 ### Git Recommendations For Pull Requests
@@ -311,17 +334,22 @@ runtest harness).
    - To remove whitespace relative to the `master` branch, run
      `git rebase --whitespace=fix master`.
 
+#### Git Recommendations For Pull Request Reviewers
+
+- When merging, we generally like `squash+merge`. Unless it is the rare case of a PR with carefully staged individual commits that you want in the history separately, in which case `merge` is acceptable, but usually prefer `squash+merge`.
+
+
 ## Resources
 
 * Julia
   - **Homepage:** <https://julialang.org>
   - **Community:** <https://julialang.org/community/>
   - **Source code:** <https://github.com/JuliaLang/julia>
-  - **Documentation:** <https://docs.julialang.org/>
+  - **Documentation:** <https://docs.julialang.org>
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia
-  - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/research/julia-fresh-approach-BEKS.pdf)
+  - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/assets/research/julia-fresh-approach-BEKS.pdf)
   - [Julia: Dynamism and Performance Reconciled by Design](http://janvitek.org/pubs/oopsla18b.pdf)
   - [All Julia Publications](https://julialang.org/research)
 

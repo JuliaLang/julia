@@ -24,3 +24,5 @@ pinv
 givens
 structuredbroadcast
 addmul
+ldlt
+factorization

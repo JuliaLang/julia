@@ -1,8 +1,8 @@
 const MANTISSA_MASK = Base.significand_mask(Float64)
 const EXP_MASK = Base.exponent_mask(Float64) >> Base.significand_bits(Float64)
 
-memcpy(d, doff, s, soff, n) = ccall(:memcpy, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Int), d + doff - 1, s + soff - 1, n)
-memmove(d, doff, s, soff, n) = ccall(:memmove, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Int), d + doff - 1, s + soff - 1, n)
+memcpy(d, doff, s, soff, n) = (ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), d + doff - 1, s + soff - 1, n); nothing)
+memmove(d, doff, s, soff, n) = (ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), d + doff - 1, s + soff - 1, n); nothing)
 
 # Note: these are smaller than the values given in Figure 4 from the paper
 # see https://github.com/ulfjack/ryu/issues/119
@@ -195,6 +195,20 @@ Compute `(m * mul) >> j % 10^9` where `mul = mula + mulb<<64 + mulc<<128`, and `
     return (v % UInt32) - UInt32(1000000000) * shifted
 end
 
+@inline function append_sign(x, plus, space, buf, pos)
+    if signbit(x) && !isnan(x)  # suppress minus sign for signaling NaNs
+        buf[pos] = UInt8('-')
+        pos += 1
+    elseif plus
+        buf[pos] = UInt8('+')
+        pos += 1
+    elseif space
+        buf[pos] = UInt8(' ')
+        pos += 1
+    end
+    return pos
+end
+
 @inline function append_n_digits(olength, digits, buf, pos)
     i = 0
     while digits >= 10000
@@ -353,10 +367,11 @@ end
 """
 function pow5invsplit_lookup end
 for T in (Float64, Float32, Float16)
-    e2_max = exponent_max(T) - precision(T) - 2
+    e2_max = exponent_max(T) - precision(T) - 1
     i_max = log10pow2(e2_max)
-    table = [pow5invsplit(T, i) for i = 0:i_max]
-    @eval pow5invsplit_lookup(::Type{$T}, i) = @inbounds($table[i+1])
+    table_sym = Symbol("pow5invsplit_table_", string(T))
+    @eval const $table_sym = Tuple(Any[pow5invsplit($T, i) for i = 0:$i_max])
+    @eval pow5invsplit_lookup(::Type{$T}, i) = @inbounds($table_sym[i+1])
 end
 
 
@@ -382,8 +397,9 @@ function pow5split_lookup end
 for T in (Float64, Float32, Float16)
     e2_min = 1 - exponent_bias(T) - significand_bits(T) - 2
     i_max = 1 - e2_min - log10pow5(-e2_min)
-    table = [pow5split(T, i) for i = 0:i_max]
-    @eval pow5split_lookup(::Type{$T}, i) = @inbounds($table[i+1])
+    table_sym = Symbol("pow5split_table_", string(T))
+    @eval const $table_sym = Tuple(Any[pow5split($T, i) for i = 0:$i_max])
+    @eval pow5split_lookup(::Type{$T}, i) = @inbounds($table_sym[i+1])
 end
 
 const DIGIT_TABLE = UInt8[

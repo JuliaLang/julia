@@ -30,7 +30,12 @@ function GitCredential(cfg::GitConfig, url::AbstractString)
     fill!(cfg, parse(GitCredential, url))
 end
 
-GitCredential(cred::UserPasswordCredential, url::AbstractString) = parse(GitCredential, url)
+function GitCredential(user_pass_cred::UserPasswordCredential, url::AbstractString)
+    cred = parse(GitCredential, url)
+    cred.username = user_pass_cred.user
+    cred.password = deepcopy(user_pass_cred.pass)
+    return cred
+end
 
 Base.:(==)(c1::GitCredential, c2::GitCredential) = (c1.protocol, c1.host, c1.path, c1.username, c1.password, c1.use_http_path) ==
                                                    (c2.protocol, c2.host, c2.path, c2.username, c2.password, c2.use_http_path)
@@ -102,11 +107,11 @@ end
 
 function Base.read!(io::IO, cred::GitCredential)
     # https://git-scm.com/docs/git-credential#IOFMT
-    while !eof(io)
-        key = readuntil(io, '=')
+    while !(eof(io)::Bool)
+        key::AbstractString = readuntil(io, '=')
         if key == "password"
             value = Base.SecretBuffer()
-            while !eof(io) && (c = read(io, UInt8)) != UInt8('\n')
+            while !(eof(io)::Bool) && (c = read(io, UInt8)) != UInt8('\n')
                 write(value, c)
             end
             seekstart(value)
@@ -222,21 +227,11 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
         ismatch(url, cred) || continue
 
         # An empty credential.helper resets the list to empty
-        isempty(value) && empty!(helpers)
-
-        # Due to a bug in libgit2 iteration we may read credential helpers out of order.
-        # See: https://github.com/libgit2/libgit2/issues/4361
-        #
-        # Typically the ordering doesn't matter but does in this particular case. Disabling
-        # credential helpers avoids potential issues with using the wrong credentials or
-        # writing credentials to the wrong helper.
         if isempty(value)
-            @warn """Resetting the helper list is currently unsupported:
-                     ignoring all git credential helpers""" maxlog=1
-            return GitCredentialHelper[]
+            empty!(helpers)
+        else
+            Base.push!(helpers, parse(GitCredentialHelper, value))
         end
-
-        Base.push!(helpers, parse(GitCredentialHelper, value))
     end
 
     return helpers

@@ -70,7 +70,7 @@ end
 function term(io::IO, md::List, columns)
     for (i, point) in enumerate(md.items)
         print(io, ' '^2margin, isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
-        print_wrapped(io, width = columns-(4margin+2), pre = ' '^(2margin+2),
+        print_wrapped(io, width = columns-(4margin+2), pre = ' '^(2margin+3),
                           i = 2margin+2) do io
             term(io, point, columns - 10)
         end
@@ -108,6 +108,10 @@ function term(io::IO, md::Code, columns)
             i < lastindex(L) && println(io)
         end
     end
+end
+
+function term(io::IO, tex::LaTeX, columns)
+    printstyled(io, ' '^margin, tex.formula, color=:magenta)
 end
 
 term(io::IO, br::LineBreak, columns) = nothing # line breaks already printed between subsequent elements
@@ -160,6 +164,10 @@ end
 
 function terminline(io::IO, code::Code)
     printstyled(io, code.code, color=:cyan)
+end
+
+function terminline(io::IO, tex::LaTeX)
+    printstyled(io, tex.formula, color=:magenta)
 end
 
 terminline(io::IO, x) = show(io, MIME"text/plain"(), x)

@@ -14,12 +14,12 @@ end
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-haskey(d::AbstractDict, k) = in(k, keys(d))
+haskey(d, k) = in(k, keys(d))
 
 function in(p::Pair, a::AbstractDict, valcmp=(==))
-    v = get(a,p[1],secret_table_token)
+    v = get(a, p.first, secret_table_token)
     if v !== secret_table_token
-        return valcmp(v, p[2])
+        return valcmp(v, p.second)
     end
     return false
 end
@@ -31,9 +31,13 @@ function in(p, a::AbstractDict)
 end
 
 function summary(io::IO, t::AbstractDict)
-    n = length(t)
     showarg(io, t, true)
-    print(io, " with ", n, (n==1 ? " entry" : " entries"))
+    if Base.IteratorSize(t) isa HasLength
+        n = length(t)
+        print(io, " with ", n, (n==1 ? " entry" : " entries"))
+    else
+        print(io, "(...)")
+    end
 end
 
 struct KeySet{K, T <: AbstractDict{K}} <: AbstractSet{K}
@@ -45,7 +49,7 @@ struct ValueIterator{T<:AbstractDict}
 end
 
 function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
-    print(io, T.name, " for a ")
+    print(io, T.name.name, " for a ")
     summary(io, iter.dict)
 end
 
@@ -61,6 +65,8 @@ function iterate(v::Union{KeySet,ValueIterator}, state...)
     y === nothing && return nothing
     return (y[1][isa(v, KeySet) ? 1 : 2], y[2])
 end
+
+copy(v::KeySet) = copymutable(v)
 
 in(k, v::KeySet) = get(v.dict, k, secret_table_token) !== secret_table_token
 
@@ -86,14 +92,14 @@ return the elements in the same order.
 # Examples
 ```jldoctest
 julia> D = Dict('a'=>2, 'b'=>3)
-Dict{Char,Int64} with 2 entries:
+Dict{Char, Int64} with 2 entries:
   'a' => 2
   'b' => 3
 
 julia> collect(keys(D))
-2-element Array{Char,1}:
- 'a'
- 'b'
+2-element Vector{Char}:
+ 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
 ```
 """
 keys(a::AbstractDict) = KeySet(a)
@@ -112,12 +118,12 @@ return the elements in the same order.
 # Examples
 ```jldoctest
 julia> D = Dict('a'=>2, 'b'=>3)
-Dict{Char,Int64} with 2 entries:
+Dict{Char, Int64} with 2 entries:
   'a' => 2
   'b' => 3
 
 julia> collect(values(D))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  3
 ```
@@ -130,6 +136,38 @@ values(a::AbstractDict) = ValueIterator(a)
 Return an iterator over `key => value` pairs for any
 collection that maps a set of keys to a set of values.
 This includes arrays, where the keys are the array indices.
+
+# Examples
+```jldoctest
+julia> a = Dict(zip(["a", "b", "c"], [1, 2, 3]))
+Dict{String, Int64} with 3 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+
+julia> pairs(a)
+Dict{String, Int64} with 3 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+
+julia> foreach(println, pairs(["a", "b", "c"]))
+1 => "a"
+2 => "b"
+3 => "c"
+
+julia> (;a=1, b=2, c=3) |> pairs |> collect
+3-element Vector{Pair{Symbol, Int64}}:
+ :a => 1
+ :b => 2
+ :c => 3
+
+julia> (;a=1, b=2, c=3) |> collect
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
 """
 pairs(collection) = Generator(=>, keys(collection), values(collection))
 
@@ -168,7 +206,7 @@ julia> d2 = Dict(1 => 4, 4 => 5);
 julia> merge!(d1, d2);
 
 julia> d1
-Dict{Int64,Int64} with 3 entries:
+Dict{Int64, Int64} with 3 entries:
   4 => 5
   3 => 4
   1 => 4
@@ -184,11 +222,21 @@ function merge!(d::AbstractDict, others::AbstractDict...)
 end
 
 """
-    merge!(combine, d::AbstractDict, others::AbstractDict...)
+    mergewith!(combine, d::AbstractDict, others::AbstractDict...) -> d
+    mergewith!(combine)
+    merge!(combine, d::AbstractDict, others::AbstractDict...) -> d
 
 Update collection with pairs from the other collections.
 Values with the same key will be combined using the
-combiner function.
+combiner function.  The curried form `mergewith!(combine)` returns the
+function `(args...) -> mergewith!(combine, args...)`.
+
+Method `merge!(combine::Union{Function,Type}, args...)` as an alias of
+`mergewith!(combine, args...)` is still available for backward
+compatibility.
+
+!!! compat "Julia 1.5"
+    `mergewith!` requires Julia 1.5 or later.
 
 # Examples
 ```jldoctest
@@ -196,36 +244,48 @@ julia> d1 = Dict(1 => 2, 3 => 4);
 
 julia> d2 = Dict(1 => 4, 4 => 5);
 
-julia> merge!(+, d1, d2);
+julia> mergewith!(+, d1, d2);
 
 julia> d1
-Dict{Int64,Int64} with 3 entries:
+Dict{Int64, Int64} with 3 entries:
   4 => 5
   3 => 4
   1 => 6
 
-julia> merge!(-, d1, d1);
+julia> mergewith!(-, d1, d1);
 
 julia> d1
-Dict{Int64,Int64} with 3 entries:
+Dict{Int64, Int64} with 3 entries:
   4 => 0
   3 => 0
   1 => 0
+
+julia> foldl(mergewith!(+), [d1, d2]; init=Dict{Int64, Int64}())
+Dict{Int64, Int64} with 3 entries:
+  4 => 5
+  3 => 0
+  1 => 4
 ```
 """
-function merge!(combine::Function, d::AbstractDict, others::AbstractDict...)
-    for other in others
-        for (k,v) in other
-            d[k] = haskey(d, k) ? combine(d[k], v) : v
-        end
-    end
-    return d
+function mergewith!(combine, d::AbstractDict, others::AbstractDict...)
+    foldl(mergewith!(combine), others; init = d)
 end
+
+function mergewith!(combine, d1::AbstractDict, d2::AbstractDict)
+    for (k, v) in d2
+        d1[k] = haskey(d1, k) ? combine(d1[k], v) : v
+    end
+    return d1
+end
+
+mergewith!(combine) = (args...) -> mergewith!(combine, args...)
+
+merge!(combine::Callable, args...) = mergewith!(combine, args...)
 
 """
     keytype(type)
 
-Get the key type of an dictionary type. Behaves similarly to [`eltype`](@ref).
+Get the key type of a dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest
@@ -239,7 +299,7 @@ keytype(a::AbstractDict) = keytype(typeof(a))
 """
     valtype(type)
 
-Get the value type of an dictionary type. Behaves similarly to [`eltype`](@ref).
+Get the value type of a dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest
@@ -257,27 +317,28 @@ Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
 the merged collections. If the same key is present in another collection, the
 value for that key will be the value it has in the last collection listed.
+See also [`mergewith`](@ref) for custom handling of values with the same key.
 
 # Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
-Dict{String,Float64} with 2 entries:
+Dict{String, Float64} with 2 entries:
   "bar" => 42.0
   "foo" => 0.0
 
 julia> b = Dict("baz" => 17, "bar" => 4711)
-Dict{String,Int64} with 2 entries:
+Dict{String, Int64} with 2 entries:
   "bar" => 4711
   "baz" => 17
 
 julia> merge(a, b)
-Dict{String,Float64} with 3 entries:
+Dict{String, Float64} with 3 entries:
   "bar" => 4711.0
   "baz" => 17.0
   "foo" => 0.0
 
 julia> merge(b, a)
-Dict{String,Float64} with 3 entries:
+Dict{String, Float64} with 3 entries:
   "bar" => 42.0
   "baz" => 17.0
   "foo" => 0.0
@@ -287,33 +348,48 @@ merge(d::AbstractDict, others::AbstractDict...) =
     merge!(_typeddict(d, others...), others...)
 
 """
+    mergewith(combine, d::AbstractDict, others::AbstractDict...)
+    mergewith(combine)
     merge(combine, d::AbstractDict, others::AbstractDict...)
 
 Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
 the merged collections. Values with the same key will be combined using the
-combiner function.
+combiner function.  The curried form `mergewith(combine)` returns the function
+`(args...) -> mergewith(combine, args...)`.
+
+Method `merge(combine::Union{Function,Type}, args...)` as an alias of
+`mergewith(combine, args...)` is still available for backward compatibility.
+
+!!! compat "Julia 1.5"
+    `mergewith` requires Julia 1.5 or later.
 
 # Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
-Dict{String,Float64} with 2 entries:
+Dict{String, Float64} with 2 entries:
   "bar" => 42.0
   "foo" => 0.0
 
 julia> b = Dict("baz" => 17, "bar" => 4711)
-Dict{String,Int64} with 2 entries:
+Dict{String, Int64} with 2 entries:
   "bar" => 4711
   "baz" => 17
 
-julia> merge(+, a, b)
-Dict{String,Float64} with 3 entries:
+julia> mergewith(+, a, b)
+Dict{String, Float64} with 3 entries:
   "bar" => 4753.0
   "baz" => 17.0
   "foo" => 0.0
+
+julia> ans == mergewith(+)(a, b)
+true
 ```
 """
-merge(combine::Function, d::AbstractDict, others::AbstractDict...) =
+mergewith(combine, d::AbstractDict, others::AbstractDict...) =
+    mergewith!(combine, _typeddict(d, others...), others...)
+mergewith(combine) = (args...) -> mergewith(combine, args...)
+merge(combine::Callable, d::AbstractDict, others::AbstractDict...) =
     merge!(combine, _typeddict(d, others...), others...)
 
 promoteK(K) = K
@@ -335,13 +411,13 @@ The function `f` is passed `key=>value` pairs.
 # Example
 ```jldoctest
 julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
-Dict{Int64,String} with 3 entries:
+Dict{Int64, String} with 3 entries:
   2 => "b"
   3 => "c"
   1 => "a"
 
 julia> filter!(p->isodd(p.first), d)
-Dict{Int64,String} with 2 entries:
+Dict{Int64, String} with 2 entries:
   3 => "c"
   1 => "a"
 ```
@@ -377,34 +453,21 @@ The function `f` is passed `key=>value` pairs.
 # Examples
 ```jldoctest
 julia> d = Dict(1=>"a", 2=>"b")
-Dict{Int64,String} with 2 entries:
+Dict{Int64, String} with 2 entries:
   2 => "b"
   1 => "a"
 
 julia> filter(p->isodd(p.first), d)
-Dict{Int64,String} with 1 entry:
+Dict{Int64, String} with 1 entry:
   1 => "a"
 ```
 """
 function filter(f, d::AbstractDict)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = empty(d)
-    try
-        for pair in d
-            if f(pair)
-                df[pair.first] = pair.second
-            end
-        end
-    catch e
-        if isa(e, MethodError) && e.f === f
-            depwarn("In `filter(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter)
-            for (k, v) in d
-                if f(k, v)
-                    df[k] = v
-                end
-            end
-        else
-            rethrow()
+    for pair in d
+        if f(pair)
+            df[pair.first] = pair.second
         end
     end
     return df
@@ -439,14 +502,13 @@ function isequal(l::AbstractDict, r::AbstractDict)
 end
 
 function ==(l::AbstractDict, r::AbstractDict)
-    l === r && return true
     if isa(l,IdDict) != isa(r,IdDict)
         return false
     end
     length(l) != length(r) && return false
     anymissing = false
     for pair in l
-        isin = in(pair, r, ==)
+        isin = in(pair, r)
         if ismissing(isin)
             anymissing = true
         elseif !isin
@@ -478,6 +540,14 @@ end
 getindex(t::AbstractDict, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
 setindex!(t::AbstractDict, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
 
+get!(t::AbstractDict, key, default) = get!(() -> default, t, key)
+function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V
+    haskey(t, key) && return t[key]
+    val = default()
+    t[key] = val
+    return val
+end
+
 push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
 push!(t::AbstractDict, p::Pair, q::Pair) = push!(push!(t, p), q)
 push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
@@ -496,44 +566,6 @@ end
 # hashing objects by identity
 _tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 
-"""
-    IdDict([itr])
-
-`IdDict{K,V}()` constructs a hash table using object-id as hash and
-`===` as equality with keys of type `K` and values of type `V`.
-
-See [`Dict`](@ref) for further help.
-"""
-mutable struct IdDict{K,V} <: AbstractDict{K,V}
-    ht::Vector{Any}
-    count::Int
-    ndel::Int
-    IdDict{K,V}() where {K, V} = new{K,V}(Vector{Any}(undef, 32), 0, 0)
-
-    function IdDict{K,V}(itr) where {K, V}
-        d = IdDict{K,V}()
-        for (k,v) in itr; d[k] = v; end
-        d
-    end
-
-    function IdDict{K,V}(pairs::Pair...) where {K, V}
-        d = IdDict{K,V}()
-        sizehint!(d, length(pairs))
-        for (k,v) in pairs; d[k] = v; end
-        d
-    end
-
-    IdDict{K,V}(d::IdDict{K,V}) where {K, V} = new{K,V}(copy(d.ht), d.count, d.ndel)
-end
-
-IdDict() = IdDict{Any,Any}()
-IdDict(kv::Tuple{}) = IdDict()
-
-IdDict(ps::Pair{K,V}...)           where {K,V} = IdDict{K,V}(ps)
-IdDict(ps::Pair{K}...)             where {K}   = IdDict{K,Any}(ps)
-IdDict(ps::(Pair{K,V} where K)...) where {V}   = IdDict{Any,V}(ps)
-IdDict(ps::Pair...)                            = IdDict{Any,Any}(ps)
-
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 
 dict_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
@@ -549,179 +581,25 @@ function dict_with_eltype(DT_apply::F, kv::Generator, t) where F
     return grow_to!(dict_with_eltype(DT_apply, T), kv)
 end
 
-function IdDict(kv)
-    try
-        dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
-    catch
-        if !applicable(iterate, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
-            throw(ArgumentError(
-                "IdDict(kv): kv needs to be an iterator of tuples or pairs"))
-        else
-            rethrow()
-        end
-    end
-end
-
-empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
-
-function rehash!(d::IdDict, newsz = length(d.ht))
-    d.ht = ccall(:jl_idtable_rehash, Vector{Any}, (Any, Csize_t), d.ht, newsz)
-    d
-end
-
-function sizehint!(d::IdDict, newsz)
-    newsz = _tablesz(newsz*2)  # *2 for keys and values in same array
-    oldsz = length(d.ht)
-    # grow at least 25%
-    if newsz < (oldsz*5)>>2
-        return d
-    end
-    rehash!(d, newsz)
-end
-
-function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
-    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
-    if !(val isa V) # avoid a dynamic call
-        val = convert(V, val)
-    end
-    if d.ndel >= ((3*length(d.ht))>>2)
-        rehash!(d, max(length(d.ht)>>1, 32))
-        d.ndel = 0
-    end
-    inserted = RefValue{Cint}(0)
-    d.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any, Ptr{Cint}), d.ht, key, val, inserted)
-    d.count += inserted[]
-    return d
-end
-
-function get(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
-    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, default)
-    val === default ? default : val::V
-end
-function getindex(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
-    val === secret_table_token && throw(KeyError(key))
-    return val::V
-end
-
-function pop!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
-    found = RefValue{Cint}(0)
-    val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any, Ptr{Cint}), d.ht, key, default, found)
-    if found[] === Cint(0)
-        return default
-    else
-        d.count -= 1
-        d.ndel += 1
-        return val::V
-    end
-end
-
-function pop!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = pop!(d, key, secret_table_token)
-    val === secret_table_token && throw(KeyError(key))
-    return val::V
-end
-
-function delete!(d::IdDict{K}, @nospecialize(key)) where K
-    pop!(d, key, secret_table_token)
-    d
-end
-
-function empty!(d::IdDict)
-    resize!(d.ht, 32)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), d.ht, 0, sizeof(d.ht))
-    d.ndel = 0
-    d.count = 0
-    return d
-end
-
-_oidd_nextind(a, i) = reinterpret(Int, ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
-
-function iterate(d::IdDict{K,V}, idx=0) where {K, V}
-    idx = _oidd_nextind(d.ht, idx)
-    idx == -1 && return nothing
-    return (Pair{K, V}(d.ht[idx + 1]::K, d.ht[idx + 2]::V), idx + 2)
-end
-
-length(d::IdDict) = d.count
-
-copy(d::IdDict) = typeof(d)(d)
-
-get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
-
-function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
-    if val === secret_table_token
-        val = default()
-    end
-    return val
-end
-
-function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
-    if val === secret_table_token
-        val = default()
-        setindex!(d, val, key)
-    end
-    return val
-end
-
-in(@nospecialize(k), v::KeySet{<:Any,<:IdDict}) = get(v.dict, k, secret_table_token) !== secret_table_token
-
-# For some AbstractDict types, it is safe to implement filter!
-# by deleting keys during iteration.
-filter!(f, d::IdDict) = filter_in_one_pass!(f, d)
-
-# Like Set, but using IdDict
-mutable struct IdSet{T} <: AbstractSet{T}
-    dict::IdDict{T,Nothing}
-
-    IdSet{T}() where {T} = new(IdDict{T,Nothing}())
-    IdSet{T}(s::IdSet{T}) where {T} = new(copy(s.dict))
-end
-
-IdSet{T}(itr) where {T} = union!(IdSet{T}(), itr)
-IdSet() = IdSet{Any}()
-
-copymutable(s::IdSet) = typeof(s)(s)
-copy(s::IdSet) = typeof(s)(s)
-
-isempty(s::IdSet) = isempty(s.dict)
-length(s::IdSet)  = length(s.dict)
-in(@nospecialize(x), s::IdSet) = haskey(s.dict, x)
-push!(s::IdSet, @nospecialize(x)) = (s.dict[x] = nothing; s)
-pop!(s::IdSet, @nospecialize(x)) = (pop!(s.dict, x); x)
-pop!(s::IdSet, @nospecialize(x), @nospecialize(default)) = (x in s ? pop!(s, x) : default)
-delete!(s::IdSet, @nospecialize(x)) = (delete!(s.dict, x); s)
-
-sizehint!(s::IdSet, newsz) = (sizehint!(s.dict, newsz); s)
-empty!(s::IdSet) = (empty!(s.dict); s)
-
-filter!(f, d::IdSet) = unsafe_filter!(f, d)
-
-function iterate(s::IdSet, state...)
-    y = iterate(s.dict, state...)
-    y === nothing && return nothing
-    ((k, _), i) = y
-    return (k, i)
-end
-
 """
     map!(f, values(dict::AbstractDict))
 
 Modifies `dict` by transforming each value from `val` to `f(val)`.
-Note that the type of `dict` cannot be changed: if `f(val)` is not an instance of the key type
-of `dict` then it will be converted to the key type if possible and otherwise raise an error.
+Note that the type of `dict` cannot be changed: if `f(val)` is not an instance of the value type
+of `dict` then it will be converted to the value type if possible and otherwise raise an error.
+
+!!! compat "Julia 1.2"
+    `map!(f, values(dict::AbstractDict))` requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
 julia> d = Dict(:a => 1, :b => 2)
-Dict{Symbol,Int64} with 2 entries:
+Dict{Symbol, Int64} with 2 entries:
   :a => 1
   :b => 2
 
 julia> map!(v -> v-1, values(d))
-Base.ValueIterator for a Dict{Symbol,Int64} with 2 entries. Values:
+ValueIterator for a Dict{Symbol, Int64} with 2 entries. Values:
   0
   1
 ```

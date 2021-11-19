@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, FileWatching
-using Base: uv_error
+using Base: uv_error, Experimental
 
 # This script does the following
 # Sets up N unix pipes (or WSA sockets)
@@ -12,7 +12,7 @@ using Base: uv_error
 # Writable ends are always tested for write-ability before a write
 
 n = 20
-intvls = [2, .2, .1, .005]
+intvls = [2, .2, .1, .005, .00001]
 
 pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
 for i in 1:n
@@ -22,9 +22,15 @@ for i in 1:n
         uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
     end
     Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
-    FDmax = Sys.iswindows() ? 0x7fff : (n + 60) # expectations on reasonable values
-    @test 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax
-    @test 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    FDmax = Sys.iswindows() ? 0x7fff : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
+    fd_in_limits =
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    # Dump out what file descriptors are open for easier debugging of failure modes
+    if !fd_in_limits && Sys.islinux()
+        run(`ls -la /proc/$(getpid())/fd`)
+    end
+    @test fd_in_limits
 end
 
 function pfd_tst_reads(idx, intvl)
@@ -64,15 +70,14 @@ end
 
 # Odd numbers trigger reads, even numbers timeout
 for (i, intvl) in enumerate(intvls)
-    @sync begin
+    @Experimental.sync begin
         global ready = 0
         global ready_c = Condition()
-        t = Vector{Task}(undef, n)
         for idx in 1:n
             if isodd(idx)
-                t[idx] = @async pfd_tst_reads(idx, intvl)
+                @async pfd_tst_reads(idx, intvl)
             else
-                t[idx] = @async pfd_tst_timeout(idx, intvl)
+                @async pfd_tst_timeout(idx, intvl)
             end
         end
 
@@ -96,9 +101,6 @@ for (i, intvl) in enumerate(intvls)
             end
         end
         notify(ready_c, all=true)
-        for idx in 1:n
-            Base.wait(t[idx])
-        end
     end
 end
 

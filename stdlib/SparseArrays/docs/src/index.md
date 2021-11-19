@@ -17,7 +17,7 @@ type of the stored values, and `Ti` is the integer type for storing column point
 row indices. The internal representation of `SparseMatrixCSC` is as follows:
 
 ```julia
-struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrixCSC{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column j is in colptr[j]:(colptr[j+1]-1)
@@ -44,23 +44,23 @@ In some applications, it is convenient to store explicit zero values in a `Spars
 *are* accepted by functions in `Base` (but there is no guarantee that they will be preserved in
 mutating operations). Such explicitly stored zeros are treated as structural nonzeros by many
 routines. The [`nnz`](@ref) function returns the number of elements explicitly stored in the
-sparse data structure, including structural nonzeros. In order to count the exact number of
+sparse data structure, including non-structural zeros. In order to count the exact number of
 numerical nonzeros, use [`count(!iszero, x)`](@ref), which inspects every stored element of a sparse
 matrix. [`dropzeros`](@ref), and the in-place [`dropzeros!`](@ref), can be used to
 remove stored zeros from the sparse matrix.
 
 ```jldoctest
 julia> A = sparse([1, 1, 2, 3], [1, 3, 2, 3], [0, 1, 2, 0])
-3×3 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1, 1]  =  0
-  [2, 2]  =  2
-  [1, 3]  =  1
-  [3, 3]  =  0
+3×3 SparseMatrixCSC{Int64, Int64} with 4 stored entries:
+ 0  ⋅  1
+ ⋅  2  ⋅
+ ⋅  ⋅  0
 
 julia> dropzeros(A)
-3×3 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
-  [2, 2]  =  2
-  [1, 3]  =  1
+3×3 SparseMatrixCSC{Int64, Int64} with 2 stored entries:
+ ⋅  ⋅  1
+ ⋅  2  ⋅
+ ⋅  ⋅  ⋅
 ```
 
 ## Sparse Vector Storage
@@ -89,7 +89,7 @@ sparse array instead, you can use the same name with an `sp` prefix:
 
 ```jldoctest
 julia> spzeros(3)
-3-element SparseVector{Float64,Int64} with 0 stored entries
+3-element SparseVector{Float64, Int64} with 0 stored entries
 ```
 
 The [`sparse`](@ref) function is often a handy way to construct sparse arrays. For
@@ -105,14 +105,12 @@ such that `R[I[k]] = V[k]`.
 julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
-5×18 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1,  4]  =  1
-  [4,  7]  =  2
-  [5,  9]  =  3
-  [3, 18]  =  -5
+5×18 SparseMatrixCSC{Int64, Int64} with 4 stored entries:
+⠀⠈⠀⡀⠀⠀⠀⠀⠠
+⠀⠀⠀⠀⠁⠀⠀⠀⠀
 
 julia> R = sparsevec(I,V)
-5-element SparseVector{Int64,Int64} with 4 stored entries:
+5-element SparseVector{Int64, Int64} with 4 stored entries:
   [1]  =  1
   [3]  =  -5
   [4]  =  2
@@ -129,7 +127,7 @@ julia> findnz(S)
 ([1, 4, 5, 3], [4, 7, 9, 18], [1, 2, 3, -5])
 
 julia> findall(!iszero, S)
-4-element Array{CartesianIndex{2},1}:
+4-element Vector{CartesianIndex{2}}:
  CartesianIndex(1, 4)
  CartesianIndex(4, 7)
  CartesianIndex(5, 9)
@@ -139,7 +137,7 @@ julia> findnz(R)
 ([1, 3, 4, 5], [1, -5, 2, 3])
 
 julia> findall(!iszero, R)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  3
  4
@@ -151,15 +149,15 @@ the [`sparse`](@ref) function:
 
 ```jldoctest
 julia> sparse(Matrix(1.0I, 5, 5))
-5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
-  [4, 4]  =  1.0
-  [5, 5]  =  1.0
+5×5 SparseMatrixCSC{Float64, Int64} with 5 stored entries:
+ 1.0   ⋅    ⋅    ⋅    ⋅
+  ⋅   1.0   ⋅    ⋅    ⋅
+  ⋅    ⋅   1.0   ⋅    ⋅
+  ⋅    ⋅    ⋅   1.0   ⋅
+  ⋅    ⋅    ⋅    ⋅   1.0
 
 julia> sparse([1.0, 0.0, 1.0])
-3-element SparseVector{Float64,Int64} with 2 stored entries:
+3-element SparseVector{Float64, Int64} with 2 stored entries:
   [1]  =  1.0
   [3]  =  1.0
 ```
@@ -195,11 +193,11 @@ section of the standard library reference.
 | Sparse                     | Dense                  | Description                                                                                                                                                           |
 |:-------------------------- |:---------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`spzeros(m,n)`](@ref)     | [`zeros(m,n)`](@ref)   | Creates a *m*-by-*n* matrix of zeros. ([`spzeros(m,n)`](@ref) is empty.)                                                                                              |
-| [`sparse(I, n, n)`](@ref)  | [`Matrix(I,n,n)`](@ref)| Creates a *n*-by-*n* identity matrix.                                                                                                                                 |
-| [`Array(S)`](@ref)         | [`sparse(A)`](@ref)    | Interconverts between dense and sparse formats.                                                                                                                       |
+| [`sparse(I,n,n)`](@ref)  | [`Matrix(I,n,n)`](@ref)| Creates a *n*-by-*n* identity matrix.                                                                                                                                 |
+| [`sparse(A)`](@ref)        | [`Array(S)`](@ref)   | Interconverts between dense and sparse formats.                                                                                                                       |
 | [`sprand(m,n,d)`](@ref)    | [`rand(m,n)`](@ref)    | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed uniformly on the half-open interval ``[0, 1)``.                            |
 | [`sprandn(m,n,d)`](@ref)   | [`randn(m,n)`](@ref)   | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed according to the standard normal (Gaussian) distribution.                  |
-| [`sprandn(m,n,d,X)`](@ref) | [`randn(m,n,X)`](@ref) | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed according to the *X* distribution. (Requires the `Distributions` package.) |
+| [`sprandn(rng,m,n,d)`](@ref) | [`randn(rng,m,n)`](@ref) | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements generated with the `rng` random number generator                                   |
 
 # [Sparse Arrays](@id stdlib-sparse-arrays)
 

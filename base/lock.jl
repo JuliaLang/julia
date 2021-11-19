@@ -1,19 +1,47 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
+
 # Advisory reentrant lock
 """
     ReentrantLock()
 
-Creates a re-entrant lock for synchronizing [`Task`](@ref)s.
-The same task can acquire the lock as many times as required.
-Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
+Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
+acquire the lock as many times as required. Each [`lock`](@ref) must be matched
+with an [`unlock`](@ref).
+
+Calling 'lock' will also inhibit running of finalizers on that thread until the
+corresponding 'unlock'. Use of the standard lock pattern illustrated below
+should naturally be supported, but beware of inverting the try/lock order or
+missing the try block entirely (e.g. attempting to return with the lock still
+held):
+
+```
+lock(l)
+try
+    <atomic work>
+finally
+    unlock(l)
+end
+```
 """
 mutable struct ReentrantLock <: AbstractLock
-    locked_by::Union{Task, Nothing}
-    cond_wait::GenericCondition{Threads.SpinLock}
-    reentrancy_cnt::Int
+    # offset = 16
+    @atomic locked_by::Union{Task, Nothing}
+    # offset32 = 20, offset64 = 24
+    reentrancy_cnt::UInt32
+    # offset32 = 24, offset64 = 28
+    @atomic havelock::UInt8 # 0x0 = none, 0x1 = lock, 0x2 = conflict
+    # offset32 = 28, offset64 = 32
+    cond_wait::ThreadSynchronizer # 2 words
+    # offset32 = 36, offset64 = 48
+    # sizeof32 = 20, sizeof64 = 32
+    # now add padding to make this a full cache line to minimize false sharing between objects
+    _::NTuple{Int === Int32 ? 2 : 3, Int}
+    # offset32 = 44, offset64 = 72 == sizeof+offset
+    # sizeof32 = 28, sizeof64 = 56
 
-    ReentrantLock() = new(nothing, GenericCondition{Threads.SpinLock}(), 0)
+    ReentrantLock() = new(nothing, 0x0000_0000, 0x00, ThreadSynchronizer())
 end
 
 assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
@@ -25,7 +53,7 @@ Check whether the `lock` is held by any task/thread.
 This should not be used for synchronization (see instead [`trylock`](@ref)).
 """
 function islocked(rl::ReentrantLock)
-    return rl.reentrancy_cnt != 0
+    return rl.havelock != 0
 end
 
 """
@@ -38,21 +66,26 @@ return `false`.
 
 Each successful `trylock` must be matched by an [`unlock`](@ref).
 """
-function trylock(rl::ReentrantLock)
-    t = current_task()
-    lock(rl.cond_wait)
-    if rl.reentrancy_cnt == 0
-        rl.locked_by = t
-        rl.reentrancy_cnt = 1
-        got = true
-    elseif t === notnothing(rl.locked_by)
-        rl.reentrancy_cnt += 1
-        got = true
-    else
-        got = false
+@inline function trylock(rl::ReentrantLock)
+    ct = current_task()
+    if rl.locked_by === ct
+        #@assert rl.havelock !== 0x00
+        rl.reentrancy_cnt += 0x0000_0001
+        return true
     end
-    unlock(rl.cond_wait)
-    return got
+    return _trylock(rl, ct)
+end
+@noinline function _trylock(rl::ReentrantLock, ct::Task)
+    GC.disable_finalizers()
+    if (@atomicreplace :acquire rl.havelock 0x00 => 0x01).success
+        #@assert rl.locked_by === nothing
+        #@assert rl.reentrancy_cnt === 0
+        rl.reentrancy_cnt = 0x0000_0001
+        @atomic :release rl.locked_by = ct
+        return true
+    end
+    GC.enable_finalizers()
+    return false
 end
 
 """
@@ -64,26 +97,23 @@ wait for it to become available.
 
 Each `lock` must be matched by an [`unlock`](@ref).
 """
-function lock(rl::ReentrantLock)
-    t = current_task()
-    lock(rl.cond_wait)
-    while true
-        if rl.reentrancy_cnt == 0
-            rl.locked_by = t
-            rl.reentrancy_cnt = 1
-            break
-        elseif t === notnothing(rl.locked_by)
-            rl.reentrancy_cnt += 1
-            break
-        end
+@inline function lock(rl::ReentrantLock)
+    trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
+        c = rl.cond_wait
+        lock(c.lock)
         try
-            wait(rl.cond_wait)
-        catch
-            unlock(rl.cond_wait)
-            rethrow()
+            while true
+                if (@atomicreplace rl.havelock 0x01 => 0x02).old == 0x00 # :sequentially_consistent ? # now either 0x00 or 0x02
+                    # it was unlocked, so try to lock it ourself
+                    _trylock(rl, current_task()) && break
+                else # it was locked, so now wait for the release to notify us
+                    wait(c)
+                end
+            end
+        finally
+            unlock(c.lock)
         end
-    end
-    unlock(rl.cond_wait)
+    end)(rl)
     return
 end
 
@@ -95,53 +125,42 @@ Releases ownership of the `lock`.
 If this is a recursive lock which has been acquired before, decrement an
 internal counter and return immediately.
 """
-function unlock(rl::ReentrantLock)
-    t = current_task()
-    rl.reentrancy_cnt == 0 && error("unlock count must match lock count")
-    rl.locked_by === t || error("unlock from wrong thread")
-    lock(rl.cond_wait)
-    rl.reentrancy_cnt -= 1
-    if rl.reentrancy_cnt == 0
-        rl.locked_by = nothing
-        if !isempty(rl.cond_wait.waitq)
-            try
-                notify(rl.cond_wait)
-            catch
-                unlock(rl.cond_wait)
-                rethrow()
+@inline function unlock(rl::ReentrantLock)
+    rl.locked_by === current_task() ||
+        error(rl.reentrancy_cnt == 0x0000_0000 ? "unlock count must match lock count" : "unlock from wrong thread")
+    (@noinline function _unlock(rl::ReentrantLock)
+        n = rl.reentrancy_cnt - 0x0000_0001
+        rl.reentrancy_cnt = n
+        if n == 0x0000_00000
+            @atomic :monotonic rl.locked_by = nothing
+            if (@atomicswap :release rl.havelock = 0x00) == 0x02
+                (@noinline function notifywaiters(rl)
+                    cond_wait = rl.cond_wait
+                    lock(cond_wait)
+                    try
+                        notify(cond_wait)
+                    finally
+                        unlock(cond_wait)
+                    end
+                end)(rl)
             end
+            return true
         end
-    end
-    unlock(rl.cond_wait)
-    return
+        return false
+    end)(rl) && GC.enable_finalizers()
+    nothing
 end
 
 function unlockall(rl::ReentrantLock)
-    t = current_task()
-    n = rl.reentrancy_cnt
-    rl.locked_by === t || error("unlock from wrong thread")
-    n == 0 && error("unlock count must match lock count")
-    lock(rl.cond_wait)
-    rl.reentrancy_cnt = 0
-    rl.locked_by = nothing
-    if !isempty(rl.cond_wait.waitq)
-        try
-            notify(rl.cond_wait)
-        catch
-            unlock(rl.cond_wait)
-            rethrow()
-        end
-    end
-    unlock(rl.cond_wait)
+    n = @atomicswap :not_atomic rl.reentrancy_cnt = 0x0000_0001
+    unlock(rl)
     return n
 end
 
-function relockall(rl::ReentrantLock, n::Int)
-    t = current_task()
+function relockall(rl::ReentrantLock, n::UInt32)
     lock(rl)
-    n1 = rl.reentrancy_cnt
-    rl.reentrancy_cnt = n
-    n1 == 1 || concurrency_violation()
+    old = @atomicswap :not_atomic rl.reentrancy_cnt = n
+    old == 0x0000_0001 || concurrency_violation()
     return
 end
 
@@ -154,6 +173,9 @@ available.
 
 When this function returns, the `lock` has been released, so the caller should
 not attempt to `unlock` it.
+
+!!! compat "Julia 1.7"
+    Using a [`Channel`](@ref) as the second argument requires Julia 1.7 or later.
 """
 function lock(f, l::AbstractLock)
     lock(l)
@@ -175,6 +197,22 @@ function trylock(f, l::AbstractLock)
     return false
 end
 
+"""
+    @lock l expr
+
+Macro version of `lock(f, l::AbstractLock)` but with `expr` instead of `f` function.
+Expands to:
+```julia
+lock(l)
+try
+    expr
+finally
+    unlock(l)
+end
+```
+This is similar to using [`lock`](@ref) with a `do` block, but avoids creating a closure
+and thus can improve the performance.
+"""
 macro lock(l, expr)
     quote
         temp = $(esc(l))
@@ -187,6 +225,13 @@ macro lock(l, expr)
     end
 end
 
+"""
+    @lock_nofail l expr
+
+Equivalent to `@lock l expr` for cases in which we can guarantee that the function
+will not throw any error. In this case, avoiding try-catch can improve the performance.
+See [`@lock`](@ref).
+"""
 macro lock_nofail(l, expr)
     quote
         temp = $(esc(l))
@@ -203,6 +248,22 @@ end
 
     A thread-safe version of [`Base.Condition`](@ref).
 
+    To call [`wait`](@ref) or [`notify`](@ref) on a `Threads.Condition`, you must first call
+    [`lock`](@ref) on it. When `wait` is called, the lock is atomically released during
+    blocking, and will be reacquired before `wait` returns. Therefore idiomatic use
+    of a `Threads.Condition` `c` looks like the following:
+
+    ```
+    lock(c)
+    try
+        while !thing_we_are_waiting_for
+            wait(c)
+        end
+    finally
+        unlock(c)
+    end
+    ```
+
     !!! compat "Julia 1.2"
         This functionality requires at least Julia 1.2.
     """
@@ -211,16 +272,14 @@ end
     """
     Special note for [`Threads.Condition`](@ref):
 
-    The caller must be holding the [`lock`](@ref) that owns `c` before calling this method.
+    The caller must be holding the [`lock`](@ref) that owns a `Threads.Condition` before calling this method.
     The calling task will be blocked until some other task wakes it,
-    usually by calling [`notify`](@ref)` on the same Condition object.
+    usually by calling [`notify`](@ref) on the same `Threads.Condition` object.
     The lock will be atomically released when blocking (even if it was locked recursively),
     and will be reacquired before returning.
     """
     wait(c::Condition)
 end
-
-const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
 
 """
     Semaphore(sem_size)
@@ -279,7 +338,7 @@ end
     Event()
 
 Create a level-triggered event source. Tasks that call [`wait`](@ref) on an
-`Event` are suspended and queued until `notify` is called on the `Event`.
+`Event` are suspended and queued until [`notify`](@ref) is called on the `Event`.
 After `notify` is called, the `Event` remains in a signaled state and
 tasks will no longer block when waiting for it.
 

@@ -7,7 +7,6 @@
 // LLVM pass to clone function for different archs
 
 #include "llvm-version.h"
-#include "support/dtypes.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
@@ -29,6 +28,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "processor.h"
+#include "support/dtypes.h"
 
 #include <map>
 #include <memory>
@@ -403,7 +403,12 @@ void CloneCtx::clone_function(Function *F, Function *new_f, ValueToValueMapTy &v
         vmap[&*J] = &*DestI++;
     }
     SmallVector<ReturnInst*,8> Returns;
+#if JL_LLVM_VERSION >= 130000
+    // We are cloning into the same module
+    CloneFunctionInto(new_f, F, vmap, CloneFunctionChangeType::GlobalChanges, Returns);
+#else
     CloneFunctionInto(new_f, F, vmap, true, Returns);
+#endif
 }
 
 // Clone all clone_all targets. Makes sure that the base targets are all available.
@@ -625,7 +630,7 @@ void CloneCtx::add_features(Function *F, StringRef name, StringRef features, uin
 {
     auto attr = F->getFnAttribute("target-features");
     if (attr.isStringAttribute()) {
-        std::string new_features = attr.getValueAsString();
+        std::string new_features(attr.getValueAsString());
         new_features += ",";
         new_features += features;
         F->addFnAttr("target-features", new_features);
@@ -843,15 +848,6 @@ template<typename T>
 inline T *CloneCtx::add_comdat(T *G) const
 {
 #if defined(_OS_WINDOWS_)
-    // Add comdat information to make MSVC link.exe happy
-    // it's valid to emit this for ld.exe too,
-    // but makes it very slow to link for no benefit
-#if defined(_COMPILER_MICROSOFT_)
-    Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
-    // ELF only supports Comdat::Any
-    jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
-    G->setComdat(jl_Comdat);
-#endif
     // add __declspec(dllexport) to everything marked for export
     if (G->getLinkage() == GlobalValue::ExternalLinkage)
         G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
@@ -1082,7 +1078,7 @@ Pass *createMultiVersioningPass()
     return new MultiVersioning();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createMultiVersioningPass());
 }

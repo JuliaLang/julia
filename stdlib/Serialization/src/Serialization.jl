@@ -9,7 +9,7 @@ module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec, SimpleVector
-using Base: unaliascopy, unwrap_unionall, require_one_based_indexing
+using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
@@ -22,7 +22,8 @@ mutable struct Serializer{I<:IO} <: AbstractSerializer
     table::IdDict{Any,Any}
     pending_refs::Vector{Int}
     known_object_data::Dict{UInt64,Any}
-    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}())
+    version::Int
+    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}(), ser_version)
 end
 
 Serializer(io::IO) = Serializer{typeof(io)}(io)
@@ -31,7 +32,7 @@ Serializer(io::IO) = Serializer{typeof(io)}(io)
 
 const n_int_literals = 33
 const n_reserved_slots = 24
-const n_reserved_tags = 11
+const n_reserved_tags = 8
 
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
@@ -57,6 +58,8 @@ const TAGS = Any[
     Symbol, # FULL_GLOBALREF_TAG
     Symbol, # HEADER_TAG
     Symbol, # IDDICT_TAG
+    Symbol, # SHARED_REF_TAG
+    ReturnNode, GotoIfNot,
     fill(Symbol, n_reserved_tags)...,
 
     (), Bool, Any, Bottom, Core.TypeofBottom, Type, svec(), Tuple{}, false, true, nothing,
@@ -76,7 +79,10 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 9 # do not make changes without bumping the version #!
+const ser_version = 16 # do not make changes without bumping the version #!
+
+format_version(::AbstractSerializer) = ser_version
+format_version(s::Serializer) = s.version
 
 const NTAGS = length(TAGS)
 
@@ -104,7 +110,7 @@ const TUPLE_TAG = sertag(Tuple)
 const SIMPLEVECTOR_TAG = sertag(SimpleVector)
 const SYMBOL_TAG = sertag(Symbol)
 const INT8_TAG = sertag(Int8)
-const ARRAY_TAG = sertag(Array)
+const ARRAY_TAG = findfirst(==(Array), TAGS)%Int32
 const EXPR_TAG = sertag(Expr)
 const MODULE_TAG = sertag(Module)
 const METHODINSTANCE_TAG = sertag(Core.MethodInstance)
@@ -135,6 +141,7 @@ const REF_OBJECT_TAG       = Int32(o0+13)
 const FULL_GLOBALREF_TAG   = Int32(o0+14)
 const HEADER_TAG           = Int32(o0+15)
 const IDDICT_TAG           = Int32(o0+16)
+const SHARED_REF_TAG       = Int32(o0+17)
 
 writetag(s::IO, tag) = (write(s, UInt8(tag)); nothing)
 
@@ -232,12 +239,12 @@ function serialize_array_data(s::IO, a)
     require_one_based_indexing(a)
     isempty(a) && return 0
     if eltype(a) === Bool
-        last = a[1]
+        last = a[1]::Bool
         count = 1
         for i = 2:length(a)
-            if a[i] != last || count == 127
+            if a[i]::Bool != last || count == 127
                 write(s, UInt8((UInt8(last) << 7) | count))
-                last = a[i]
+                last = a[i]::Bool
                 count = 1
             else
                 count += 1
@@ -284,6 +291,10 @@ end
 
 function serialize(s::AbstractSerializer, ss::String)
     len = sizeof(ss)
+    if len > 7
+        serialize_cycle(s, ss) && return
+        writetag(s.io, SHARED_REF_TAG)
+    end
     if len <= 255
         writetag(s.io, STRING_TAG)
         write(s.io, UInt8(len))
@@ -406,24 +417,37 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.slot_syms)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
+    serialize(s, meth.is_for_opaque_closure)
+    serialize(s, meth.constprop)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
         serialize(s, nothing)
     end
     if isdefined(meth, :generator)
-        serialize(s, Base._uncompressed_ast(meth, meth.generator.inferred)) # XXX: what was this supposed to do?
+        serialize(s, meth.generator)
     else
         serialize(s, nothing)
+    end
+    if isdefined(meth, :recursion_relation)
+        serialize(s, method.recursion_relation)
+    else
+        serialize(s, nothing)
+    end
+    if isdefined(meth, :external_mt)
+        error("cannot serialize Method objects with external method tables")
     end
     nothing
 end
 
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
-    isa(linfo.def, Module) || error("can only serialize toplevel MethodInstance objects")
     writetag(s.io, METHODINSTANCE_TAG)
-    serialize(s, linfo.uninferred)
+    if isdefined(linfo, :uninferred)
+        serialize(s, linfo.uninferred)
+    else
+        writetag(s.io, UNDEFREF_TAG)
+    end
     serialize(s, nothing)  # for backwards compat
     serialize(s, linfo.sparam_vals)
     serialize(s, Any)  # for backwards compat
@@ -437,11 +461,19 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
-    state = [t.code, t.storage, t.state, t.result, t.exception]
     writetag(s.io, TASK_TAG)
-    for fld in state
-        serialize(s, fld)
+    serialize(s, t.code)
+    serialize(s, t.storage)
+    serialize(s, t.state)
+    if t._isexception && (stk = Base.current_exceptions(t); !isempty(stk))
+        # the exception stack field is hidden inside the task, so if there
+        # is any information there make a CapturedException from it instead.
+        # TODO: Handle full exception chain, not just the first one.
+        serialize(s, CapturedException(stk[1].exception, stk[1].backtrace))
+    else
+        serialize(s, t.result)
     end
+    serialize(s, t._isexception)
 end
 
 function serialize(s::AbstractSerializer, g::GlobalRef)
@@ -478,9 +510,9 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, primary.parameters)
     serialize(s, primary.types)
     serialize(s, isdefined(primary, :instance))
-    serialize(s, primary.abstract)
-    serialize(s, primary.mutable)
-    serialize(s, primary.ninitialized)
+    serialize(s, t.flags & 0x1 == 0x1) # .abstract
+    serialize(s, t.flags & 0x2 == 0x2) # .mutable
+    serialize(s, Int32(length(primary.types) - t.n_uninitialized))
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
@@ -631,7 +663,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         serialize_type(s, t)
         write(s.io, x)
     else
-        if t.mutable && nf > 0
+        if ismutable(x)
             serialize_cycle(s, x) && return
             serialize_type(s, t, true)
         else
@@ -679,18 +711,63 @@ function writeheader(s::AbstractSerializer)
     nothing
 end
 
+function readheader(s::AbstractSerializer)
+    # Tag already read
+    io = s.io
+    m1 = read(io, UInt8)
+    m2 = read(io, UInt8)
+    if m1 != UInt8('J') || m2 != UInt8('L')
+        error("Unsupported serialization format (got header magic bytes $m1 $m2)")
+    end
+    version    = read(io, UInt8)
+    flags      = read(io, UInt8)
+    reserved1  = read(io, UInt8)
+    reserved2  = read(io, UInt8)
+    reserved3  = read(io, UInt8)
+    endianflag = flags & 0x3
+    wordflag   = (flags >> 2) & 0x3
+    wordsize = wordflag == 0 ? 4 :
+               wordflag == 1 ? 8 :
+               error("Unknown word size flag in header")
+    endian_bom = endianflag == 0 ? 0x04030201 :
+                 endianflag == 1 ? 0x01020304 :
+                 error("Unknown endianness flag in header")
+    # Check protocol compatibility.
+    endian_bom == ENDIAN_BOM  || error("Serialized byte order mismatch ($(repr(endian_bom)))")
+    # We don't check wordsize == sizeof(Int) here, as Int is encoded concretely
+    # as Int32 or Int64, which should be enough to correctly deserialize a range
+    # of data structures between Julia versions.
+    if version > ser_version
+        error("""Cannot read stream serialized with a newer version of Julia.
+                 Got data version $version > current version $ser_version""")
+    end
+    s.version = version
+    return
+end
+
 """
     serialize(stream::IO, value)
 
 Write an arbitrary value to a stream in an opaque format, such that it can be read back by
-[`deserialize`](@ref). The read-back value will be as identical as possible to the original.
-In general, this process will not work if the reading and writing are done by different
-versions of Julia, or an instance of Julia with a different system image. `Ptr` values are
-serialized as all-zero bit patterns (`NULL`).
+[`deserialize`](@ref). The read-back value will be as identical as possible to the original,
+but note that `Ptr` values are serialized as all-zero bit patterns (`NULL`).
 
 An 8-byte identifying header is written to the stream first. To avoid writing the header,
 construct a `Serializer` and use it as the first argument to `serialize` instead.
 See also [`Serialization.writeheader`](@ref).
+
+The data format can change in minor (1.x) Julia releases, but files written by prior 1.x
+versions will remain readable. The main exception to this is when the definition of a
+type in an external package changes. If that occurs, it may be necessary to specify
+an explicit compatible version of the affected package in your environment.
+Renaming functions, even private functions, inside packages can also put existing files
+out of sync. Anonymous functions require special care: because their names are automatically
+generated, minor code changes can cause them to be renamed.
+Serializing anonymous functions should be avoided in files intended for long-term storage.
+
+In some cases, the word size (32- or 64-bit) of the reading and writing machines must match.
+In rarer cases the OS or architecture must also match, for example when using packages
+that contain platform-dependent code.
 """
 function serialize(s::IO, x)
     ss = Serializer(s)
@@ -715,8 +792,8 @@ serialize(filename::AbstractString, x) = open(io->serialize(io, x), filename, "w
 
 Read a value written by [`serialize`](@ref). `deserialize` assumes the binary data read from
 `stream` is correct and has been serialized by a compatible implementation of [`serialize`](@ref).
-It has been designed with simplicity and performance as a goal and does not validate
-the data read. Malformed data can result in process termination. The caller has to ensure
+`deserialize` is designed for simplicity and performance, and so does not validate
+the data read. Malformed data can result in process termination. The caller must ensure
 the integrity and correctness of data read from `stream`.
 """
 deserialize(s::IO) = deserialize(Serializer(s))
@@ -802,6 +879,11 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         push!(s.pending_refs, slot)
         t = deserialize(s)
         return deserialize(s, t)
+    elseif b == SHARED_REF_TAG
+        slot = s.counter; s.counter += 1
+        obj = deserialize(s)
+        s.table[slot] = obj
+        return obj
     elseif b == SYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, UInt8)::UInt8))
     elseif b == SHORTINT64_TAG
@@ -832,9 +914,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
     elseif b == LONGSYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
     elseif b == HEADER_TAG
-        for _ = 1:7
-            read(s.io, UInt8)
-        end
+        readheader(s)
         return deserialize(s)
     elseif b == INT8_TAG
         return read(s.io, Int8)
@@ -871,7 +951,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_dict(s, t)
     end
     t = desertag(b)::DataType
-    if t.mutable && length(t.types) > 0  # manual specialization of fieldcount
+    if ismutabletype(t) && length(t.types) > 0  # manual specialization of fieldcount
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
     end
@@ -888,7 +968,7 @@ function deserialize_symbol(s::AbstractSerializer, len::Int)
     return sym
 end
 
-deserialize_tuple(s::AbstractSerializer, len) = ntuple(i->deserialize(s), len)
+deserialize_tuple(s::AbstractSerializer, len) = ntupleany(i->deserialize(s), len)
 
 function deserialize_svec(s::AbstractSerializer)
     n = read(s.io, Int32)
@@ -944,8 +1024,23 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     end
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
-    template = deserialize(s)
+    is_for_opaque_closure = false
+    constprop = 0x00
+    template_or_is_opaque = deserialize(s)
+    if isa(template_or_is_opaque, Bool)
+        is_for_opaque_closure = template_or_is_opaque
+        if format_version(s) >= 14
+            constprop = deserialize(s)::UInt8
+        end
+        template = deserialize(s)
+    else
+        template = template_or_is_opaque
+    end
     generator = deserialize(s)
+    recursion_relation = nothing
+    if format_version(s) >= 15
+        recursion_relation = deserialize(s)
+    end
     if makenew
         meth.module = mod
         meth.name = name
@@ -954,6 +1049,8 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.sig = sig
         meth.nargs = nargs
         meth.isva = isva
+        meth.is_for_opaque_closure = is_for_opaque_closure
+        meth.constprop = constprop
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
@@ -964,15 +1061,16 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         end
         meth.slot_syms = slot_syms
         if generator !== nothing
-            linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
-            linfo.specTypes = Tuple
-            linfo.inferred = generator
-            linfo.def = meth
-            meth.generator = linfo
+            meth.generator = generator
         end
-        mt = ccall(:jl_method_table_for, Any, (Any,), sig)
-        if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
-            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
+        if recursion_relation !== nothing
+            meth.recursion_relation = recursion_relation
+        end
+        if !is_for_opaque_closure
+            mt = ccall(:jl_method_table_for, Any, (Any,), sig)
+            if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
+                ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
+            end
         end
         remember_object(s, meth, lnumber)
     end
@@ -982,7 +1080,10 @@ end
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
-    linfo.uninferred = deserialize(s)::CodeInfo
+    tag = Int32(read(s.io, UInt8)::UInt8)
+    if tag != UNDEFREF_TAG
+        linfo.uninferred = handle_deserialize(s, tag)::CodeInfo
+    end
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
         # for reading files prior to v1.2
@@ -991,23 +1092,48 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo.sparam_vals = deserialize(s)::SimpleVector
     _rettype = deserialize(s)  # for backwards compat
     linfo.specTypes = deserialize(s)
-    linfo.def = deserialize(s)::Module
+    linfo.def = deserialize(s)
     return linfo
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
-    _meth = deserialize(s)
-    if _meth isa Module
-        # pre v1.2, skip
-        _meth = deserialize(s)
+    mod = deserialize(s)
+    if mod isa Module
+        method = deserialize(s)
+    else
+        # files post v1.2 and pre v1.6 are broken
+        method = mod
+        mod = Main
     end
-    return Core.LineInfoNode(_meth::Symbol, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+end
+
+function deserialize(s::AbstractSerializer, ::Type{PhiNode})
+    edges = deserialize(s)
+    if edges isa Vector{Any}
+        edges = Vector{Int32}(edges)
+    end
+    values = deserialize(s)::Vector{Any}
+    return PhiNode(edges, values)
 end
 
 function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     deserialize_cycle(s, ci)
-    ci.code = deserialize(s)::Vector{Any}
+    code = deserialize(s)::Vector{Any}
+    ci.code = code
+    # allow older-style IR with return and gotoifnot Exprs
+    for i in 1:length(code)
+        stmt = code[i]
+        if isa(stmt, Expr)
+            ex = stmt::Expr
+            if ex.head === :return
+                code[i] = ReturnNode(isempty(ex.args) ? nothing : ex.args[1])
+            elseif ex.head === :gotoifnot
+                code[i] = GotoIfNot(ex.args[1], ex.args[2])
+            end
+        end
+    end
     ci.codelocs = deserialize(s)::Vector{Int32}
     _x = deserialize(s)
     if _x isa Array || _x isa Int
@@ -1020,7 +1146,13 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.ssavaluetypes = deserialize(s)
         ci.linetable = deserialize(s)
     end
-    ci.ssaflags = deserialize(s)
+    ssaflags = deserialize(s)
+    if length(ssaflags) ≠ length(code)
+        # make sure the length of `ssaflags` matches that of `code`
+        # so that the latest inference doesn't throw on IRs serialized from old versions
+        ssaflags = UInt8[0x00 for _ in 1:length(code)]
+    end
+    ci.ssaflags = ssaflags
     if pre_12
         ci.slotflags = deserialize(s)
     else
@@ -1047,6 +1179,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci.inlineable = deserialize(s)
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
+    if format_version(s) >= 14
+        ci.constprop = deserialize(s)::UInt8
+    end
     return ci
 end
 
@@ -1100,7 +1235,7 @@ function deserialize_array(s::AbstractSerializer)
     end
     A = Array{elty, length(dims)}(undef, dims)
     s.table[slot] = A
-    sizehint!(s.table, s.counter + div(length(A),4))
+    sizehint!(s.table, s.counter + div(length(A)::Int,4))
     deserialize_fillarray!(A, s)
     return A
 end
@@ -1138,8 +1273,8 @@ function deserialize_typename(s::AbstractSerializer, number)
     else
         # reuse the same name for the type, if possible, for nicer debugging
         tn_name = isdefined(__deserialized_types__, name) ? gensym() : name
-        tn = ccall(:jl_new_typename_in, Ref{Core.TypeName}, (Any, Any),
-                   tn_name, __deserialized_types__)
+        tn = ccall(:jl_new_typename_in, Ref{Core.TypeName}, (Any, Any, Cint, Cint),
+                   tn_name, __deserialized_types__, false, false)
         makenew = true
     end
     remember_object(s, tn, number)
@@ -1149,18 +1284,19 @@ function deserialize_typename(s::AbstractSerializer, number)
     super = deserialize(s)::Type
     parameters = deserialize(s)::SimpleVector
     types = deserialize(s)::SimpleVector
+    attrs = Core.svec()
     has_instance = deserialize(s)::Bool
     abstr = deserialize(s)::Bool
     mutabl = deserialize(s)::Bool
     ninitialized = deserialize(s)::Int32
 
     if makenew
-        tn.names = names
+        Core.setfield!(tn, :names, names)
         # TODO: there's an unhanded cycle in the dependency graph at this point:
         # while deserializing super and/or types, we may have encountered
         # tn.wrapper and throw UndefRefException before we get to this point
-        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
-                    tn, tn.module, super, parameters, names, types,
+        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
+                    tn, tn.module, super, parameters, names, types, attrs,
                     abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
@@ -1196,6 +1332,8 @@ function deserialize_typename(s::AbstractSerializer, number)
                 tn.mt.kwsorter = kws
             end
         end
+    elseif makenew
+        tn.mt = Symbol.name.mt
     end
     return tn::Core.TypeName
 end
@@ -1270,9 +1408,26 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
     deserialize_cycle(s, t)
     t.code = deserialize(s)
     t.storage = deserialize(s)
-    t.state = deserialize(s)
+    state = deserialize(s)
+    if state === :runnable
+        t._state = Base.task_state_runnable
+    elseif state === :done
+        t._state = Base.task_state_done
+    elseif state === :failed
+        t._state = Base.task_state_failed
+    else
+        @assert false
+    end
     t.result = deserialize(s)
-    t.exception = deserialize(s)
+    exc = deserialize(s)
+    if exc === nothing
+        t._isexception = false
+    elseif exc isa Bool
+        t._isexception = exc
+    else
+        t._isexception = true
+        t.result = exc
+    end
     t
 end
 
@@ -1288,29 +1443,9 @@ function deserialize(s::AbstractSerializer, t::DataType)
     if nf == 0 && t.size > 0
         # bits type
         return read(s.io, t)
-    end
-    if nf == 0
-        return ccall(:jl_new_struct, Any, (Any,Any...), t)
-    elseif isbitstype(t)
-        if nf == 1
-            f1 = deserialize(s)
-            return ccall(:jl_new_struct, Any, (Any,Any...), t, f1)
-        elseif nf == 2
-            f1 = deserialize(s)
-            f2 = deserialize(s)
-            return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2)
-        elseif nf == 3
-            f1 = deserialize(s)
-            f2 = deserialize(s)
-            f3 = deserialize(s)
-            return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3)
-        else
-            flds = Any[ deserialize(s) for i = 1:nf ]
-            return ccall(:jl_new_structv, Any, (Any,Ptr{Cvoid},UInt32), t, flds, nf)
-        end
-    else
+    elseif ismutabletype(t)
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
-        t.mutable && deserialize_cycle(s, x)
+        deserialize_cycle(s, x)
         for i in 1:nf
             tag = Int32(read(s.io, UInt8)::UInt8)
             if tag != UNDEFREF_TAG
@@ -1318,6 +1453,21 @@ function deserialize(s::AbstractSerializer, t::DataType)
             end
         end
         return x
+    elseif nf == 0
+        return ccall(:jl_new_struct_uninit, Any, (Any,), t)
+    else
+        na = nf
+        vflds = Vector{Any}(undef, nf)
+        for i in 1:nf
+            tag = Int32(read(s.io, UInt8)::UInt8)
+            if tag != UNDEFREF_TAG
+                f = handle_deserialize(s, tag)
+                na >= i && (vflds[i] = f)
+            else
+                na >= i && (na = i - 1) # rest of tail must be undefined values
+            end
+        end
+        return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), t, vflds, na)
     end
 end
 

@@ -3,6 +3,8 @@
 // This LLVM pass verifies invariants required for correct GC root placement.
 // See the devdocs for a description of these invariants.
 
+#include "llvm-version.h"
+
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
@@ -17,14 +19,12 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/InstVisitor.h>
-#include <llvm/IR/CallSite.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia.h"
 
@@ -55,13 +55,17 @@ public:
 
     bool runOnFunction(Function &F) override;
     void visitAddrSpaceCastInst(AddrSpaceCastInst &I);
-    void visitStoreInst(StoreInst &SI);
     void visitLoadInst(LoadInst &LI);
+    void visitStoreInst(StoreInst &SI);
+    void visitAtomicCmpXchgInst(AtomicCmpXchgInst &SI);
+    void visitAtomicRMWInst(AtomicRMWInst &SI);
     void visitReturnInst(ReturnInst &RI);
     void visitGetElementPtrInst(GetElementPtrInst &GEP);
     void visitIntToPtrInst(IntToPtrInst &IPI);
     void visitPtrToIntInst(PtrToIntInst &PII);
     void visitCallInst(CallInst &CI);
+
+    void checkStoreInst(Type *VTy, unsigned AS, Value &SI);
 };
 
 void GCInvariantVerifier::visitAddrSpaceCastInst(AddrSpaceCastInst &I) {
@@ -80,8 +84,7 @@ void GCInvariantVerifier::visitAddrSpaceCastInst(AddrSpaceCastInst &I) {
           "Illegal address space cast from decayed ptr", &I);
 }
 
-void GCInvariantVerifier::visitStoreInst(StoreInst &SI) {
-    Type *VTy = SI.getValueOperand()->getType();
+void GCInvariantVerifier::checkStoreInst(Type *VTy, unsigned AS, Value &SI) {
     if (VTy->isPointerTy()) {
         /* We currently don't obey this for arguments. That's ok - they're
            externally rooted. */
@@ -90,12 +93,23 @@ void GCInvariantVerifier::visitStoreInst(StoreInst &SI) {
               AS != AddressSpace::Derived,
               "Illegal store of decayed value", &SI);
     }
-    VTy = SI.getPointerOperand()->getType();
-    if (VTy->isPointerTy()) {
-        unsigned AS = cast<PointerType>(VTy)->getAddressSpace();
-        Check(AS != AddressSpace::CalleeRooted,
-              "Illegal store to callee rooted value", &SI);
-    }
+    Check(AS != AddressSpace::CalleeRooted,
+          "Illegal store to callee rooted value", &SI);
+}
+
+void GCInvariantVerifier::visitStoreInst(StoreInst &SI) {
+    Type *VTy = SI.getValueOperand()->getType();
+    checkStoreInst(VTy, SI.getPointerAddressSpace(), SI);
+}
+
+void GCInvariantVerifier::visitAtomicRMWInst(AtomicRMWInst &SI) {
+    Type *VTy = SI.getValOperand()->getType();
+    checkStoreInst(VTy, SI.getPointerAddressSpace(), SI);
+}
+
+void GCInvariantVerifier::visitAtomicCmpXchgInst(AtomicCmpXchgInst &SI) {
+    Type *VTy = SI.getNewValOperand()->getType();
+    checkStoreInst(VTy, SI.getPointerAddressSpace(), SI);
 }
 
 void GCInvariantVerifier::visitLoadInst(LoadInst &LI) {
@@ -189,7 +203,7 @@ Pass *createGCInvariantVerifierPass(bool Strong) {
     return new GCInvariantVerifier(Strong);
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass(LLVMPassManagerRef PM, LLVMBool Strong)
+extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_impl(LLVMPassManagerRef PM, LLVMBool Strong)
 {
     unwrap(PM)->add(createGCInvariantVerifierPass(Strong));
 }

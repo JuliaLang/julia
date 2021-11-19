@@ -12,6 +12,10 @@ function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test abs((det(ca) - det(a))/det(ca)) <= tol # Ad hoc, but statistically verified, revisit
     @test logdet(ca) ≈ logdet(a)
     @test logdet(ca) ≈ log(det(ca))  # logdet is less likely to overflow
+    logabsdet_ca = logabsdet(ca)
+    logabsdet_a = logabsdet(a)
+    @test logabsdet_ca[1] ≈ logabsdet_a[1]
+    @test logabsdet_ca[2] ≈ logabsdet_a[2]
     @test isposdef(ca)
     @test_throws ErrorException ca.Z
     @test size(ca) == size(a)
@@ -39,7 +43,7 @@ end
     n1 = div(n, 2)
     n2 = 2*n1
 
-    Random.seed!(1234321)
+    Random.seed!(12344)
 
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
@@ -62,7 +66,13 @@ end
         κ     = cond(apd, 1) #condition number
 
         unary_ops_tests(apd, capd, ε*κ*n)
-
+        if eltya != Int
+            @test Factorization{eltya}(capd) === capd
+            if eltya <: Real
+                @test Array(Factorization{complex(eltya)}(capd)) ≈ Array(factorize(complex(apd)))
+                @test eltype(Factorization{complex(eltya)}(capd)) == complex(eltya)
+            end
+        end
         @testset "throw for non-square input" begin
             A = rand(eltya, 2, 3)
             @test_throws DimensionMismatch cholesky(A)
@@ -260,6 +270,8 @@ end
         @test_throws RankDeficientException cholesky!(copy(M), Val(true))
         @test_throws RankDeficientException cholesky(M, Val(true); check = true)
         @test_throws RankDeficientException cholesky!(copy(M), Val(true); check = true)
+        @test !LinearAlgebra.issuccess(cholesky(M, Val(true); check = false))
+        @test !LinearAlgebra.issuccess(cholesky!(copy(M), Val(true); check = false))
         C = cholesky(M, Val(true); check = false)
         @test_throws RankDeficientException chkfullrank(C)
         C = cholesky!(copy(M), Val(true); check = false)
@@ -279,20 +291,30 @@ end
     @test sum(sum(norm, U'*U - XX)) < eps()
 end
 
+struct WrappedVector{T} <: AbstractVector{T}
+    data::Vector{T}
+end
+Base.copy(v::WrappedVector) = WrappedVector(copy(v.data))
+Base.size(v::WrappedVector) = size(v.data)
+Base.getindex(v::WrappedVector, i::Integer) = getindex(v.data, i)
+Base.setindex!(v::WrappedVector, val, i::Integer) = setindex!(v.data, val, i)
 
 @testset "cholesky up- and downdates" begin
     A = complex.(randn(10,5), randn(10, 5))
     v = complex.(randn(5), randn(5))
+    w = WrappedVector(v)
     for uplo in (:U, :L)
         AcA = A'*A
         BcB = AcA + v*v'
         BcB = (BcB + BcB')/2
         F = cholesky(Hermitian(AcA, uplo))
         G = cholesky(Hermitian(BcB, uplo))
-        @test Base.getproperty(LinearAlgebra.lowrankupdate(F, v), uplo) ≈ Base.getproperty(G, uplo)
-        @test_throws DimensionMismatch LinearAlgebra.lowrankupdate(F, Vector{eltype(v)}(undef,length(v)+1))
-        @test Base.getproperty(LinearAlgebra.lowrankdowndate(G, v), uplo) ≈ Base.getproperty(F, uplo)
-        @test_throws DimensionMismatch LinearAlgebra.lowrankdowndate(G, Vector{eltype(v)}(undef,length(v)+1))
+        @test getproperty(lowrankupdate(F, v), uplo) ≈ getproperty(G, uplo)
+        @test getproperty(lowrankupdate(F, w), uplo) ≈ getproperty(G, uplo)
+        @test_throws DimensionMismatch lowrankupdate(F, Vector{eltype(v)}(undef,length(v)+1))
+        @test getproperty(lowrankdowndate(G, v), uplo) ≈ getproperty(F, uplo)
+        @test getproperty(lowrankdowndate(G, w), uplo) ≈ getproperty(F, uplo)
+        @test_throws DimensionMismatch lowrankdowndate(G, Vector{eltype(v)}(undef,length(v)+1))
     end
 end
 
@@ -338,7 +360,7 @@ end
     CD = cholesky(D)
     CM = cholesky(Matrix(D))
     @test CD isa Cholesky{Float64}
-    @test CD.U == Diagonal(.√d) == CM.U
+    @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
@@ -351,8 +373,8 @@ end
     D = complex(D)
     CD = cholesky(D)
     CM = cholesky(Matrix(D))
-    @test CD isa Cholesky{Complex{Float64}}
-    @test CD.U == Diagonal(.√d) == CM.U
+    @test CD isa Cholesky{ComplexF64}
+    @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
@@ -398,5 +420,98 @@ end
     C = cholesky(B, Val(true), check=false)
     @test B ≈ Matrix(C)
 end
+
+@testset "CholeskyPivoted and Factorization" begin
+    A = randn(8,8)
+    B = A'A
+    C = cholesky(B, Val(true), check=false)
+    @test CholeskyPivoted{eltype(C)}(C) === C
+    @test Factorization{eltype(C)}(C) === C
+    @test Array(CholeskyPivoted{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), Val(true), check=false))
+    @test Array(Factorization{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), Val(true), check=false))
+    @test eltype(Factorization{complex(eltype(C))}(C)) == complex(eltype(C))
+end
+
+@testset "REPL printing of CholeskyPivoted" begin
+    A = randn(8,8)
+    B = A'A
+    C = cholesky(B, Val(true), check=false)
+    cholstring = sprint((t, s) -> show(t, "text/plain", s), C)
+    rankstring = "$(C.uplo) factor with rank $(rank(C)):"
+    factorstring = sprint((t, s) -> show(t, "text/plain", s), C.uplo == 'U' ? C.U : C.L)
+    permstring   = sprint((t, s) -> show(t, "text/plain", s), C.p)
+    @test cholstring == "$(summary(C))\n$rankstring\n$factorstring\npermutation:\n$permstring"
+end
+
+@testset "destructuring for Cholesky[Pivoted]" begin
+    for val in (true, false)
+        A = rand(8, 8)
+        B = A'A
+        C = cholesky(B, Val(val), check=false)
+        l, u = C
+        @test l == C.L
+        @test u == C.U
+    end
+end
+
+@testset "issue #37356, diagonal elements of hermitian generic matrix" begin
+    B = Hermitian(hcat([one(BigFloat) + im]))
+    @test Matrix(cholesky(B)) ≈ B
+    C = Hermitian(hcat([one(BigFloat) + im]), :L)
+    @test Matrix(cholesky(C)) ≈ C
+end
+
+@testset "constructing a Cholesky factor from a triangular matrix" begin
+    A = [1.0 2.0; 3.0 4.0]
+    let
+        U = UpperTriangular(A)
+        C = Cholesky(U)
+        @test C isa Cholesky{Float64}
+        @test C.U == U
+        @test C.L == U'
+    end
+    let
+        L = LowerTriangular(A)
+        C = Cholesky(L)
+        @test C isa Cholesky{Float64}
+        @test C.L == L
+        @test C.U == L'
+    end
+end
+
+@testset "adjoint of Cholesky" begin
+    A = randn(5, 5)
+    A = A'A
+    F = cholesky(A)
+    b = ones(size(A, 1))
+    @test F\b == F'\b
+end
+
+@testset "Float16" begin
+    A = Float16[4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+    B = cholesky(A)
+    B32 = cholesky(Float32.(A))
+    @test B isa Cholesky{Float16, Matrix{Float16}}
+    @test B.U isa UpperTriangular{Float16, Matrix{Float16}}
+    @test B.L isa LowerTriangular{Float16, Matrix{Float16}}
+    @test B.UL isa UpperTriangular{Float16, Matrix{Float16}}
+    @test B.U ≈ B32.U
+    @test B.L ≈ B32.L
+    @test B.UL ≈ B32.UL
+end
+
+@testset "det and logdet" begin
+    A = [4083 3825 5876 2048 4470 5490;
+         3825 3575 5520 1920 4200 5140;
+         5876 5520 8427 2940 6410 7903;
+         2048 1920 2940 1008 2240 2740;
+         4470 4200 6410 2240 4875 6015;
+         5490 5140 7903 2740 6015 7370]
+    B = cholesky(A, Val(true), check=false)
+    @test det(B)  ==  0.0
+    @test det(B)  ≈  det(A) atol=eps()
+    @test logdet(B)  ==  -Inf
+    @test logabsdet(B)[1] == -Inf
+ end
 
 end # module TestCholesky

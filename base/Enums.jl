@@ -25,11 +25,17 @@ Base.isless(x::T, y::T) where {T<:Enum} = isless(basetype(T)(x), basetype(T)(y))
 
 Base.Symbol(x::Enum) = namemap(typeof(x))[Integer(x)]::Symbol
 
-Base.print(io::IO, x::Enum) = print(io, Symbol(x))
+function _symbol(x::Enum)
+    names = namemap(typeof(x))
+    x = Integer(x)
+    get(() -> Symbol("<invalid #$x>"), names, x)::Symbol
+end
+
+Base.print(io::IO, x::Enum) = print(io, _symbol(x))
 
 function Base.show(io::IO, x::Enum)
-    sym = Symbol(x)
-    if !get(io, :compact, false)
+    sym = _symbol(x)
+    if !(get(io, :compact, false)::Bool)
         from = get(io, :module, Main)
         def = typeof(x).name.module
         if from === nothing || !Base.isvisible(sym, def, from)
@@ -47,13 +53,17 @@ function Base.show(io::IO, ::MIME"text/plain", x::Enum)
     show(io, Integer(x))
 end
 
-function Base.show(io::IO, ::MIME"text/plain", t::Type{<:Enum})
-    print(io, "Enum ")
-    Base.show_datatype(io, t)
-    print(io, ":")
-    for x in instances(t)
-        print(io, "\n", Symbol(x), " = ")
-        show(io, Integer(x))
+function Base.show(io::IO, m::MIME"text/plain", t::Type{<:Enum})
+    if isconcretetype(t)
+        print(io, "Enum ")
+        Base.show_datatype(io, t)
+        print(io, ":")
+        for x in instances(t)
+            print(io, "\n", Symbol(x), " = ")
+            show(io, Integer(x))
+        end
+    else
+        invoke(show, Tuple{IO, MIME"text/plain", Type}, io, m, t)
     end
 end
 
@@ -106,7 +116,8 @@ end
 
 `BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
-perform these conversions automatically.
+perform these conversions automatically. In case the enum is created with a non-default
+`BaseType`, `Integer(value1)` will return the integer `value1` with the type `BaseType`.
 
 To list all the instances of an enum use `instances`, e.g.
 
@@ -115,7 +126,7 @@ julia> instances(Fruit)
 (apple, orange, kiwi)
 ```
 """
-macro enum(T, syms...)
+macro enum(T::Union{Symbol,Expr}, syms...)
     if isempty(syms)
         throw(ArgumentError("no arguments given for Enum $T"))
     end
@@ -130,7 +141,7 @@ macro enum(T, syms...)
     elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    values = basetype[]
+    values = Vector{basetype}()
     seen = Set{Symbol}()
     namemap = Dict{basetype,Symbol}()
     lo = hi = 0
@@ -159,6 +170,7 @@ macro enum(T, syms...)
         else
             throw(ArgumentError(string("invalid argument for Enum ", typename, ": ", s)))
         end
+        s = s::Symbol
         if !Base.isidentifier(s)
             throw(ArgumentError("invalid name for Enum $typename; \"$s\" is not a valid identifier"))
         end

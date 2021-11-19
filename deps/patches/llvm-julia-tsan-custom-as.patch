@@ -1,0 +1,28 @@
+From bd41be423127b8946daea805290ad2eb19e66be4 Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Sat, 19 May 2018 11:56:55 -0400
+Subject: [PATCH] [TSAN] Allow for custom address spaces
+
+Julia uses addressspaces for GC and we want these to be sanitized as well.
+---
+ lib/Transforms/Instrumentation/ThreadSanitizer.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/lib/Transforms/Instrumentation/ThreadSanitizer.cpp b/lib/Transforms/Instrumentation/ThreadSanitizer.cpp
+index ec6904486e1..9d673353f43 100644
+--- a/lib/Transforms/Instrumentation/ThreadSanitizer.cpp
++++ b/lib/Transforms/Instrumentation/ThreadSanitizer.cpp
+@@ -296,7 +296,9 @@ static bool shouldInstrumentReadWriteFromAddress(const Module *M, Value *Addr) {
+   // with them.
+   if (Addr) {
+     Type *PtrTy = cast<PointerType>(Addr->getType()->getScalarType());
+-    if (PtrTy->getPointerAddressSpace() != 0)
++    auto AS = PtrTy->getPointerAddressSpace();
++    // Allow for custom addresspaces
++    if (AS != 0 && AS < 10)
+       return false;
+   }
+ 
+-- 
+2.17.0
+

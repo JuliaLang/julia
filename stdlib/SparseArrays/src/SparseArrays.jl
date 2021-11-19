@@ -6,28 +6,21 @@ Support for sparse arrays. Provides `AbstractSparseArray` and subtypes.
 module SparseArrays
 
 using Base: ReshapedArray, promote_op, setindex_shape_check, to_shape, tail,
-    require_one_based_indexing
+    require_one_based_indexing, promote_eltype
 using Base.Sort: Forward
 using LinearAlgebra
+using LinearAlgebra: AdjOrTrans, matprod
 
-import Base: +, -, *, \, /, &, |, xor, ==
+import Base: +, -, *, \, /, &, |, xor, ==, zero
 import LinearAlgebra: mul!, ldiv!, rdiv!, cholesky, adjoint!, diag, eigen, dot,
-    issymmetric, istril, istriu, lu, tr, transpose!, tril!, triu!,
-    cond, diagm, factorize, ishermitian, norm, opnorm, lmul!, rmul!, tril, triu, matprod
+    issymmetric, istril, istriu, lu, tr, transpose!, tril!, triu!, isbanded,
+    cond, diagm, factorize, ishermitian, norm, opnorm, lmul!, rmul!, tril, triu
 
-import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
-    atan, atand, atanh, broadcast!, conj!, cos, cosc, cosd, cosh, cospi, cot,
-    cotd, coth, count, csc, cscd, csch,
-    exp10, exp2, findprev, findnext, floor, hash, argmin, inv,
-    log10, log2, sec, secd, sech, show,
-    sin, sinc, sind, sinh, sinpi, dropdims, sum, summary, tan,
-    tand, tanh, trunc, abs, abs2,
-    broadcast, ceil, complex, conj, convert, copy, copyto!, adjoint,
-    exp, expm1, findall, findmax, findmin, float, getindex,
-    vcat, hcat, hvcat, cat, imag, argmax, kron, length, log, log1p, max, min,
-    maximum, minimum, one, promote_eltype, real, reshape, rot180,
-    rotl90, rotr90, round, setindex!, similar, size, transpose,
-    vec, permute!, map, map!, Array, diff, circshift!, circshift
+import Base: adjoint, argmin, argmax, Array, broadcast, circshift!, complex, Complex,
+    conj, conj!, convert, copy, copy!, copyto!, count, diff, findall, findmax, findmin,
+    float, getindex, imag, inv, kron, kron!, length, map, maximum, minimum, permute!, real,
+    rot180, rotl90, rotr90, setindex!, show, similar, size, sum, transpose,
+    vcat, hcat, hvcat, cat, vec
 
 using Random: default_rng, AbstractRNG, randsubseq, randsubseq!
 
@@ -52,10 +45,14 @@ similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzero
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
+zero(a::AbstractSparseArray) = spzeros(eltype(a), size(a)...)
+
 const BiTriSym = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
 function *(A::BiTriSym, B::BiTriSym)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(A, TS, size(A)...), A, B)
 end
+
+LinearAlgebra.diagzero(D::Diagonal{<:AbstractSparseMatrix{T}},i,j) where {T} = spzeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
 end

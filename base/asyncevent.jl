@@ -8,21 +8,21 @@
 Create a async condition that wakes up tasks waiting for it
 (by calling [`wait`](@ref) on the object)
 when notified from C by a call to `uv_async_send`.
-Waiting tasks are woken with an error when the object is closed (by [`close`](@ref).
+Waiting tasks are woken with an error when the object is closed (by [`close`](@ref)).
 Use [`isopen`](@ref) to check whether it is still active.
 """
 mutable struct AsyncCondition
     handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
     isopen::Bool
-    set::Bool
+    @atomic set::Bool
 
     function AsyncCondition()
         this = new(Libc.malloc(_sizeof_uv_async), ThreadSynchronizer(), true, false)
         iolock_begin()
         associate_julia_struct(this.handle, this)
         err = ccall(:uv_async_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
-            eventloop(), this, uv_jl_asynccb::Ptr{Cvoid})
+            eventloop(), this, @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},)))
         if err != 0
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
@@ -43,10 +43,13 @@ the async condition object itself.
 """
 function AsyncCondition(cb::Function)
     async = AsyncCondition()
-    @async while _trywait(async)
-            cb(async)
-            isopen(async) || return
-        end
+    t = @task while _trywait(async)
+        cb(async)
+        isopen(async) || return
+    end
+    lock(async.cond)
+    _wait2(async.cond, t)
+    unlock(async.cond)
     return async
 end
 
@@ -57,22 +60,26 @@ end
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object).
 
-Waiting tasks are woken after an initial delay of `delay` seconds, and then repeating with the given
-`interval` in seconds. If `interval` is equal to `0`, the timer is only triggered once. When
-the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
-to check whether a timer is still active.
+Waiting tasks are woken after an initial delay of at least `delay` seconds, and then repeating after
+at least `interval` seconds again elapse. If `interval` is equal to `0`, the timer is only triggered
+once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
+[`isopen`](@ref) to check whether a timer is still active.
+
+Note: `interval` is subject to accumulating time skew. If you need precise events at a particular
+absolute time, create a new timer at each expiration with the difference to the next time computed.
 """
 mutable struct Timer
     handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
     isopen::Bool
-    set::Bool
+    @atomic set::Bool
 
     function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
         interval ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $interval seconds"))
-        timeout = UInt64(round(timeout * 1000)) + 1
-        interval = UInt64(round(interval * 1000))
+        # libuv has a tendency to timeout 1 ms early, so we need +1 on the timeout (in milliseconds), unless it is zero
+        timeoutms = ceil(UInt64, timeout * 1000) + !iszero(timeout)
+        intervalms = ceil(UInt64, interval * 1000)
         loop = eventloop()
 
         this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false)
@@ -83,7 +90,8 @@ mutable struct Timer
         finalizer(uvfinalize, this)
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), loop)
         err = ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
-            this, uv_jl_timercb::Ptr{Cvoid}, timeout, interval)
+            this, @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},)),
+            timeoutms, intervalms)
         @assert err == 0
         iolock_end()
         return this
@@ -120,7 +128,7 @@ function _trywait(t::Union{Timer, AsyncCondition})
         end
         iolock_end()
     end
-    t.set = false
+    @atomic :monotonic t.set = false
     return set
 end
 
@@ -178,7 +186,7 @@ function uv_asynccb(handle::Ptr{Cvoid})
     async = @handle_as handle AsyncCondition
     lock(async.cond)
     try
-        async.set = true
+        @atomic :monotonic async.set = true
         notify(async.cond, true)
     finally
         unlock(async.cond)
@@ -190,7 +198,7 @@ function uv_timercb(handle::Ptr{Cvoid})
     t = @handle_as handle Timer
     lock(t.cond)
     try
-        t.set = true
+        @atomic :monotonic t.set = true
         if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
             # timer is stopped now
             close(t)
@@ -218,18 +226,18 @@ end
 """
     Timer(callback::Function, delay; interval = 0)
 
-Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) and
-calls the function `callback`.
+Create a timer that runs the function `callback` at each timer expiration.
 
-Waiting tasks are woken and the function `callback` is called after an initial delay of `delay` seconds,
-and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the timer
-is only triggered once. The function `callback` is called with a single argument, the timer itself.
-When the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
-to check whether a timer is still active.
+Waiting tasks are woken and the function `callback` is called after an initial delay of `delay`
+seconds, and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the
+callback is only run once. The function `callback` is called with a single argument, the timer
+itself. Stop a timer by calling `close`. The `cb` may still be run one final time, if the timer has
+already expired.
 
 # Examples
 
-Here the first number is printed after a delay of two seconds, then the following numbers are printed quickly.
+Here the first number is printed after a delay of two seconds, then the following numbers are
+printed quickly.
 
 ```julia-repl
 julia> begin
@@ -247,46 +255,62 @@ julia> begin
 """
 function Timer(cb::Function, timeout::Real; interval::Real=0.0)
     timer = Timer(timeout, interval=interval)
-    @async while _trywait(timer)
+    t = @task while _trywait(timer)
+        try
             cb(timer)
-            isopen(timer) || return
+        catch err
+            write(stderr, "Error in Timer:\n")
+            showerror(stderr, err, catch_backtrace())
+            return
         end
+        isopen(timer) || return
+    end
+    lock(timer.cond)
+    _wait2(timer.cond, t)
+    unlock(timer.cond)
     return timer
 end
 
 """
-    timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+    timedwait(callback::Function, timeout::Real; pollint::Real=0.1)
 
-Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
-`testcb` is polled every `pollint` seconds.
+Waits until `callback` returns `true` or `timeout` seconds have passed, whichever is earlier.
+`callback` is polled every `pollint` seconds. The minimum value for `timeout` and `pollint`
+is `0.001`, that is, 1 millisecond.
 
-Returns :ok, :timed_out, or :error
+Returns :ok or :timed_out
 """
-function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
-    pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
-    start = time()
+function timedwait(testcb::Function, timeout::Real; pollint::Real=0.1)
+    pollint >= 1e-3 || throw(ArgumentError("pollint must be ≥ 1 millisecond"))
+    start = time_ns()
+    ns_timeout = 1e9 * timeout
     done = Channel(1)
     function timercb(aw)
         try
             if testcb()
-                put!(done, :ok)
-            elseif (time() - start) > secs
-                put!(done, :timed_out)
+                put!(done, (:ok, nothing))
+            elseif (time_ns() - start) > ns_timeout
+                put!(done, (:timed_out, nothing))
             end
         catch e
-            put!(done, :error)
+            put!(done, (:error, CapturedException(e, catch_backtrace())))
         finally
             isready(done) && close(aw)
         end
         nothing
     end
 
-    if !testcb()
-        t = Timer(timercb, pollint, interval = pollint)
-        ret = fetch(done)::Symbol
-        close(t)
-    else
-        ret = :ok
+    try
+        testcb() && return :ok
+    catch e
+        throw(CapturedException(e, catch_backtrace()))
     end
+
+    t = Timer(timercb, pollint, interval = pollint)
+    ret, e = fetch(done)
+    close(t)
+
+    ret === :error && throw(e)
+
     return ret
 end

@@ -17,27 +17,27 @@ Iterating the decomposition produces the components `F.T`, `F.Z`, and `F.values`
 # Examples
 ```jldoctest
 julia> A = [5. 7.; -2. -4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
 julia> F = schur(A)
-Schur{Float64,Array{Float64,2}}
+Schur{Float64, Matrix{Float64}}
 T factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0   9.0
  0.0  -2.0
 Z factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   0.961524  0.274721
  -0.274721  0.961524
 eigenvalues:
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   3.0
  -2.0
 
 julia> F.vectors * F.Schur * F.vectors'
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
@@ -69,27 +69,27 @@ Same as [`schur`](@ref) but uses the input argument `A` as workspace.
 # Examples
 ```jldoctest
 julia> A = [5. 7.; -2. -4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
 julia> F = schur!(A)
-Schur{Float64,Array{Float64,2}}
+Schur{Float64, Matrix{Float64}}
 T factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0   9.0
  0.0  -2.0
 Z factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   0.961524  0.274721
  -0.274721  0.961524
 eigenvalues:
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   3.0
  -2.0
 
 julia> A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0   9.0
  0.0  -2.0
 ```
@@ -104,32 +104,39 @@ be obtained from the `Schur` object `F` with either `F.Schur` or `F.T` and the
 orthogonal/unitary Schur vectors can be obtained with `F.vectors` or `F.Z` such that
 `A = F.vectors * F.Schur * F.vectors'`. The eigenvalues of `A` can be obtained with `F.values`.
 
+For real `A`, the Schur factorization is "quasitriangular", which means that it
+is upper-triangular except with 2×2 diagonal blocks for any conjugate pair
+of complex eigenvalues; this allows the factorization to be purely real even
+when there are complex eigenvalues.  To obtain the (complex) purely upper-triangular
+Schur factorization from a real quasitriangular factorization, you can use
+`Schur{Complex}(schur(A))`.
+
 Iterating the decomposition produces the components `F.T`, `F.Z`, and `F.values`.
 
 # Examples
 ```jldoctest
 julia> A = [5. 7.; -2. -4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
 julia> F = schur(A)
-Schur{Float64,Array{Float64,2}}
+Schur{Float64, Matrix{Float64}}
 T factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0   9.0
  0.0  -2.0
 Z factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   0.961524  0.274721
  -0.274721  0.961524
 eigenvalues:
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   3.0
  -2.0
 
 julia> F.vectors * F.Schur * F.vectors'
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
@@ -142,11 +149,47 @@ true
 schur(A::StridedMatrix{<:BlasFloat}) = schur!(copy(A))
 schur(A::StridedMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
 
-schur(A::Symmetric) = schur(copyto!(similar(parent(A)), A))
-schur(A::Hermitian) = schur(copyto!(similar(parent(A)), A))
-schur(A::UpperTriangular) = schur(copyto!(similar(parent(A)), A))
-schur(A::LowerTriangular) = schur(copyto!(similar(parent(A)), A))
-schur(A::Tridiagonal) = schur(Matrix(A))
+schur(A::AbstractMatrix{T}) where {T} = schur!(copy_to_array(A, eigtype(T)))
+function schur(A::RealHermSymComplexHerm)
+    F = eigen(A; sortby=nothing)
+    return Schur(typeof(F.vectors)(Diagonal(F.values)), F.vectors, F.values)
+end
+function schur(A::Union{UnitUpperTriangular{T},UpperTriangular{T}}) where {T}
+    t = eigtype(T)
+    Z = Matrix{t}(undef, size(A)...)
+    copyto!(Z, A)
+    return Schur(Z, Matrix{t}(I, size(A)), convert(Vector{t}, diag(A)))
+end
+function schur(A::Union{UnitLowerTriangular{T},LowerTriangular{T}}) where {T}
+    t = eigtype(T)
+    # double flip the matrix A
+    Z = Matrix{t}(undef, size(A)...)
+    copyto!(Z, A)
+    reverse!(reshape(Z, :))
+    # construct "reverse" identity
+    n = size(A, 1)
+    J = zeros(t, n, n)
+    for i in axes(J, 2)
+       J[n+1-i, i] = oneunit(t)
+    end
+    return Schur(Z, J, convert(Vector{t}, diag(A)))
+end
+function schur(A::Bidiagonal{T}) where {T}
+    t = eigtype(T)
+    if A.uplo == 'U'
+        return Schur(Matrix{t}(A), Matrix{t}(I, size(A)), Vector{t}(A.dv))
+    else # A.uplo == 'L'
+        # construct "reverse" identity
+        n = size(A, 1)
+        J = zeros(t, n, n)
+        for i in axes(J, 2)
+            J[n+1-i, i] = oneunit(t)
+        end
+        dv = reverse!(Vector{t}(A.dv))
+        ev = reverse!(Vector{t}(A.ev))
+        return Schur(Matrix{t}(Bidiagonal(dv, ev, 'U')), J, dv)
+    end
+end
 
 function getproperty(F::Schur, d::Symbol)
     if d === :Schur
@@ -170,6 +213,48 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Schur)
     println(io, "\neigenvalues:")
     show(io, mime, F.values)
 end
+
+# convert a (standard-form) quasi-triangular real Schur factorization into a
+# triangular complex Schur factorization.
+#
+# Based on the "triangularize" function from GenericSchur.jl,
+# released under the MIT "Expat" license by @RalphAS
+function Schur{CT}(S::Schur{<:Real}) where {CT<:Complex}
+    Tr = S.T
+    T = CT.(Tr)
+    Z = CT.(S.Z)
+    n = size(T,1)
+    for j=n:-1:2
+        if !iszero(Tr[j,j-1])
+            # We want a unitary similarity transform from
+            # ┌   ┐      ┌     ┐
+            # │a b│      │w₁  x│
+            # │c a│ into │0  w₂│ where bc < 0 (a,b,c real)
+            # └   ┘      └     ┘
+            # If we write it as
+            # ┌     ┐
+            # │u  v'│
+            # │-v u'│
+            # └     ┘
+            # and make the Ansatz that u is real (so v is imaginary),
+            # we arrive at a Givens rotation:
+            # θ = atan(sqrt(-Tr[j,j-1]/Tr[j-1,j]))
+            # s,c = sin(θ), cos(θ)
+            s = sqrt(abs(Tr[j,j-1]))
+            c = sqrt(abs(Tr[j-1,j]))
+            r = hypot(s,c)
+            G = Givens(j-1,j,complex(c/r),im*(-s/r))
+            lmul!(G,T)
+            rmul!(T,G')
+            rmul!(Z,G')
+        end
+    end
+    return Schur(triu!(T),Z,diag(T))
+end
+
+Schur{Complex}(S::Schur{<:Complex}) = S
+Schur{T}(S::Schur{T}) where {T} = S
+Schur{T}(S::Schur) where {T} = Schur(T.(S.T), T.(S.Z), T <: Real && !(eltype(S.values) <: Real) ? complex(T).(S.values) : T.(S.values))
 
 """
     ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
@@ -267,6 +352,10 @@ Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
 """
 schur(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schur!(copy(A),copy(B))
 function schur(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return schur!(copy_oftype(A, S), copy_oftype(B, S))
+end
+function schur(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
     return schur!(copy_oftype(A, S), copy_oftype(B, S))
 end
