@@ -370,7 +370,9 @@ end
 function fma_emulated(a::Float64, b::Float64,c::Float64)
     abhi, ablo = twomul(a,b)
     if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || issubnormal(a) || issubnormal(b)
-        (isfinite(a) && isfinite(b) && isfinite(c)) || return abhi+c
+        if !isfinite(c)
+            return (isfinite(a) && isfinite(b)) ? c : abhi+c
+        end
         (iszero(a) || iszero(b)) && return abhi+c
         bias = exponent(a) + exponent(b)
         c_denorm = ldexp(c, -bias)

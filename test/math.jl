@@ -1296,6 +1296,8 @@ end
                 @test func(floatmax(T), T(2), -floatmax(T)) === floatmax(T)
                 @test func(floatmax(T), T(1), eps(floatmax((T)))) === T(Inf)
                 @test func(T(Inf), T(Inf), T(Inf)) === T(Inf)
+                @test func(floatmax(T), floatmax(T), -T(Inf)) === -T(Inf)
+                @test func(floatmax(T), -floatmax(T), T(Inf)) === T(Inf)
                 @test isnan_type(T, func(T(Inf), T(1), -T(Inf)))
                 @test isnan_type(T, func(T(Inf), T(0), -T(0)))
                 @test func(-zero(T), zero(T), -zero(T)) === -zero(T)
