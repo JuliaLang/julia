@@ -146,10 +146,9 @@ Set{Float64} with 1 element:
 ```
 """
 function intersect(s::AbstractSet, itr, itrs...)
+    # heuristics to try to `intersect` with the shortest Set on the left
     if length(s)>50 && haslength(itr) && all(haslength, itrs)
-        itrs_lengths = map(length, itrs)
-        min_idx = argmin(itrs_lengths)
-        min_length = itrs_lengths[min_idx]
+        min_length, min_idx = findmin(length, itrs)
         if length(itr) > min_length
             new_itrs = setindex(itrs, itr, min_idx)
             return intersect(s, itrs[min_idx], new_itrs...)
