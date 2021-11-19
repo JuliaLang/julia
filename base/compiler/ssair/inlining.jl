@@ -637,9 +637,9 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
                         push!(def_argtypes, Const(p))
                     end
                 else
-                    ti = widenconst(def_type)::DataType
+                    ti = widenconst(def_type)::DataType # checked by `is_valid_type_for_apply_rewrite`
                     if ti.name === NamedTuple_typename
-                        ti = ti.parameters[2]::DataType
+                        ti = ti.parameters[2]::DataType # checked by `is_valid_type_for_apply_rewrite`
                     end
                     for p in ti.parameters
                         if isa(p, DataType) && isdefined(p, :instance)
