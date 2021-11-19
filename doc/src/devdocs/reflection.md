@@ -65,7 +65,7 @@ recursive application of [`subtypes`](@ref) may be used to inspect the full type
 ## DataType layout
 
 The internal representation of a `DataType` is critically important when interfacing with C code
-and several functions are available to inspect these details. [`isbits(T::DataType)`](@ref) returns
+and several functions are available to inspect these details. [`isbitstype(T::DataType)`](@ref) returns
 true if `T` is stored with C-compatible alignment. [`fieldoffset(T::DataType, i::Integer)`](@ref)
 returns the (byte) offset for field *i* relative to the start of the type.
 
