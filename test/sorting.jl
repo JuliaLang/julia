@@ -672,4 +672,12 @@ end
     end
 end
 
+@testset "searchsortedfirst/last with generalized indexing" begin
+    o = OffsetVector(1:3, -2)
+    @test searchsortedfirst(o, 4) == lastindex(o) + 1
+    @test searchsortedfirst(o, 1.5) == 0
+    @test searchsortedlast(o, 0) == firstindex(o) - 1
+    @test searchsortedlast(o, 1.5) == -1
+end
+
 end
