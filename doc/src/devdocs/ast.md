@@ -157,7 +157,7 @@ parses as:
 ```
 (if a (block (line 2) b)
     (elseif (block (line 3) c) (block (line 4) d)
-            (block (line 5 e))))
+            (block (line 6 e))))
 ```
 
 A `while` loop parses as `(while condition body)`.
