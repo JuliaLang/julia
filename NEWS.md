@@ -111,6 +111,9 @@ Standard library changes
   argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
   to allow any compatible methods.
 
+* New `err` global variable in `Main` set when an expression throws an exception, akin to `ans`. Typing `err` reprints
+  the exception information.
+
 #### SparseArrays
 
 #### Dates

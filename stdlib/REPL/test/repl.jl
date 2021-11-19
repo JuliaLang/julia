@@ -885,13 +885,13 @@ end
 
 # Test containers in error messages are limited #18726
 let io = IOBuffer()
-    Base.display_error(io,
-        try
+    Base.display_error(io, Base.ExceptionStack(Any[(exception =
+        (try
             [][trues(6000)]
             @assert false
         catch e
             e
-        end, [])
+        end), backtrace = [])]))
     @test length(String(take!(io))) < 1500
 end
 
@@ -1365,4 +1365,41 @@ end
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
         @test isempty(mods)
     end
+end
+
+# err should reprint error if deeper than top-level
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    # initialize `err` to `nothing`
+    write(stdin_write, "global err = nothing\n")
+    readline(stdout_read)
+    readline(stdout_read) == "\e[0m"
+    readuntil(stdout_read, "julia> ", keep=true)
+    # generate top-level error
+    write(stdin_write, "foobar\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: foobar not defined"
+    @test readline(stdout_read) == ""
+    readuntil(stdout_read, "julia> ", keep=true)
+    # check that top-level error did not change `err`
+    write(stdin_write, "err\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0m"
+    readuntil(stdout_read, "julia> ", keep=true)
+    # generate deeper error
+    write(stdin_write, "foo() = foobar\n")
+    readline(stdout_read)
+    readuntil(stdout_read, "julia> ", keep=true)
+    write(stdin_write, "foo()\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: foobar not defined"
+    readuntil(stdout_read, "julia> ", keep=true)
+    # check that deeper error did set `err`
+    write(stdin_write, "err\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0m1-element ExceptionStack:"
+    @test readline(stdout_read) == "UndefVarError: foobar not defined"
+    @test readline(stdout_read) == "Stacktrace:"
 end
