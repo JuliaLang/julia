@@ -1312,11 +1312,12 @@ show_unquoted(io::IO, ex, indent::Int, prec::Int, ::Int) = show_unquoted(io, ex,
 const indent_width = 4
 const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(===),:(=>)])
 const uni_syms = Set{Symbol}([:(::), :(<:), :(>:)])
-const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
+const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜), :(∓), :(±)])
 const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
     :(.=), :(.+=), :(.-=), :(.*=), :(./=), :(.\=), :(.^=), :(.&=), :(.|=), :(.÷=), :(.%=), :(.>>>=), :(.>>=), :(.<<=),
-    :(&&), :(||), :(<:), :($=), :(⊻=), :(>:), :(-->)])
+    :(&&), :(||), :(<:), :($=), :(⊻=), :(>:), :(-->),
+    :(:=), :(≔), :(⩴), :(≕)])
 const expr_infix = Set{Symbol}([:(:), :(->), :(::)])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
