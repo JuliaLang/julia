@@ -2056,6 +2056,32 @@ end
 x6074 = 6074
 @test @X6074() == 6074
 
+# issue #43151
+macro X43151_nested()
+    quote my_value = "from_nested_macro" end
+end
+macro X43151_parent()
+    quote
+        my_value = "from_parent_macro"
+        @X43151_nested()
+        my_value
+    end
+end
+@test @X43151_parent() == "from_parent_macro"
+
+# also issue #43151
+macro X43151_nested_escaping()
+    quote $(esc(:my_value)) = "from_nested_macro" end
+end
+macro X43151_parent_escaping()
+    quote
+        my_value = "from_parent_macro"
+        @X43151_nested_escaping()
+        my_value
+    end
+end
+@test @X43151_parent_escaping() == "from_nested_macro"
+
 # issue #5536
 test5536(a::Union{Real, AbstractArray}...) = "Splatting"
 test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
