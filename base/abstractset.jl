@@ -11,36 +11,30 @@ copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
     union(s, itrs...)
     ∪(s, itrs...)
 
-Construct an object containing all distinct elements from all of the arguments.
+Construct the union of sets. Maintain order with arrays.
 
-The first argument controls what kind of container is returned.
-If this is an array, it maintains the order in which elements first appear.
-
-Unicode `∪` can be typed by writing `\\cup` then pressing tab in the Julia REPL, and in many editors.
-This is an infix operator, allowing `s ∪ itr`.
-
-See also [`unique`](@ref), [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
+See also: [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
 
 # Examples
 ```jldoctest
-julia> union([1, 2], [3])
-3-element Vector{Int64}:
+julia> union([1, 2], [3, 4])
+4-element Vector{Int64}:
  1
  2
  3
+ 4
 
-julia> union([4 2 3 4 4], 1:3, 3.0)
-4-element Vector{Float64}:
- 4.0
- 2.0
- 3.0
- 1.0
+julia> union([1, 2], [2, 4])
+3-element Vector{Int64}:
+ 1
+ 2
+ 4
 
-julia> (0, 0.0) ∪ (-0.0, NaN)
-3-element Vector{Real}:
-   0
-  -0.0
- NaN
+julia> union([4, 2], 1:2)
+3-element Vector{Int64}:
+ 4
+ 2
+ 1
 
 julia> union(Set([1, 2]), 2:3)
 Set{Int64} with 3 elements:
@@ -59,14 +53,14 @@ const ∪ = union
 """
     union!(s::Union{AbstractSet,AbstractVector}, itrs...)
 
-Construct the [`union`](@ref) of passed in sets and overwrite `s` with the result.
+Construct the union of passed in sets and overwrite `s` with the result.
 Maintain order with arrays.
 
 # Examples
 ```jldoctest
-julia> a = Set([3, 4, 5]);
+julia> a = Set([1, 3, 4, 5]);
 
-julia> union!(a, 1:2:7);
+julia> union!(a, 1:2:8);
 
 julia> a
 Set{Int64} with 5 elements:
@@ -108,15 +102,10 @@ end
     intersect(s, itrs...)
     ∩(s, itrs...)
 
-Construct the set containing those elements which appear in all of the arguments.
+Construct the intersection of sets.
+Maintain order with arrays.
 
-The first argument controls what kind of container is returned.
-If this is an array, it maintains the order in which elements first appear.
-
-Unicode `∩` can be typed by writing `\\cap` then pressing tab in the Julia REPL, and in many editors.
-This is an infix operator, allowing `s ∩ itr`.
-
-See also [`setdiff`](@ref), [`isdisjoint`](@ref), [`issubset`](@ref Base.issubset), [`issetequal`](@ref).
+See also: [`setdiff`](@ref), [`isdisjoint`](@ref), [`issubset`](@ref Base.issubset), [`issetequal`](@ref).
 
 !!! compat "Julia 1.8"
     As of Julia 1.8 intersect returns a result with the eltype of the
@@ -128,31 +117,22 @@ julia> intersect([1, 2, 3], [3, 4, 5])
 1-element Vector{Int64}:
  3
 
-julia> intersect([1, 4, 4, 5, 6], [6, 4, 6, 7, 8])
+julia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])
 2-element Vector{Int64}:
  4
  6
 
-julia> intersect(1:16, 7:99)
-7:16
-
-julia> (0, 0.0) ∩ (-0.0, 0)
-1-element Vector{Real}:
- 0
-
-julia> intersect(Set([1, 2]), BitSet([2, 3]), 1.0:10.0)
-Set{Float64} with 1 element:
-  2.0
+julia> intersect(Set([1, 2]), BitSet([2, 3]))
+Set{Int64} with 1 element:
+  2
 ```
 """
 function intersect(s::AbstractSet, itr, itrs...)
-    # determine if swap order is useful and viable
     if length(s)>50 && haslength(itr) && all(haslength, itrs)
         itrs_lengths = map(length, itrs)
         min_idx = argmin(itrs_lengths)
         min_length = itrs_lengths[min_idx]
-        # do nothing if s is longer than the rest or itr is already the shortest
-        if length(itr) > min_length >= length(s)
+        if length(itr) > min_length
             new_itrs = setindex(itrs, itr, min_idx)
             return intersect(s, itrs[min_idx], new_itrs...)
         end
@@ -169,9 +149,9 @@ end
 intersect(s) = union(s)
 function intersect(s::AbstractSet, itr)
     if haslength(itr) && hasfastin(itr) && length(s) < length(itr)
-        return mapfilter(∈(itr), push!, s, emptymutable(s))
+        return mapfilter(in(itr), push!, s, emptymutable(s, promote_eltype(s, itr)))
     else
-        return mapfilter(∈(s), push!, itr, emptymutable(s))
+        return mapfilter(in(s), push!, itr, emptymutable(s, promote_eltype(s, itr)))
     end
 end
 
