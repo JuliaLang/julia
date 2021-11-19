@@ -108,7 +108,7 @@ Doc string syntax:
 f(x) = x
 ```
 
-parses as `(macrocall (|.| Core '@doc) (line) "some docs" (= (call f x) (block x)))`.
+parses as `(macrocall @doc (line) "some docs" (= (call f x) (block (line) x)))`.
 
 ### Imports and such
 
