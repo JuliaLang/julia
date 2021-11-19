@@ -206,7 +206,9 @@ close(proc.in)
             # Known failure https://github.com/JuliaLang/julia/issues/43124
             @test_skip success(proc)
         else
-            @test success(proc)
+            # Not using `@test success(proc)` to get more information upon failure
+            @test proc.exitcode == 0
+            @test proc.termsignal == 0
         end
         @test !timeout
     end
