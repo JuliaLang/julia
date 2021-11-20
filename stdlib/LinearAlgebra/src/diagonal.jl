@@ -381,14 +381,18 @@ end
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
     require_one_based_indexing(A, B)
-    d = length(D.diag)
+    dd = D.diag
+    d = length(dd)
     m, n = size(A, 1), size(A, 2)
     m′, n′ = size(B, 1), size(B, 2)
     m == d || throw(DimensionMismatch("right hand side has $m rows but D is $d by $d"))
     (m, n) == (m′, n′) || throw(DimensionMismatch("expect output to be $m by $n, but got $m′ by $n′"))
     j = findfirst(iszero, D.diag)
     isnothing(j) || throw(SingularException(j))
-    B .= D.diag .\ A
+    @inbounds for j = 1:n, i = 1:m
+        B[i, j] = dd[i] \ A[i, j]
+    end
+    B
 end
 
 # Optimizations for \, / between Diagonals
