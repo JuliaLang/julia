@@ -97,12 +97,11 @@ function choosetests(choices = [])
 
                   Or prefix a name with `-` (such as `-core`) to skip a particular test.
                 """)
-            tests = []
-            net_on = false
-            exit_on_error = false
-            use_revise = false
-            seed = UInt128(0)
-            return (; tests, net_on, exit_on_error, use_revise, seed)
+            return (; tests = [],
+                      net_on = false,
+                      exit_on_error = false,
+                      use_revise = false,
+                      seed = UInt128(0))
         elseif startswith(t, "--")
             error("unknown option: $t")
         elseif startswith(t, "-")
