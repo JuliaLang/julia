@@ -746,7 +746,7 @@ end
     end
 end
 
-@testset "error message loading pkg bad module name"
+@testset begin "error message loading pkg bad module name"
     mktempdir() do tmp
         old_loadpath = copy(LOAD_PATH)
         try
