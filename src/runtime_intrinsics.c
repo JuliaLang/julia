@@ -15,7 +15,9 @@
 const unsigned int host_char_bit = 8;
 
 // float16 intrinsics
-// TODO: use LLVM's compiler-rt
+// TODO: use LLVM's compiler-rt on all platforms (Xcode already links compiler-rt)
+
+#if !defined(_OS_DARWIN_)
 
 static inline float half_to_float(uint16_t ival) JL_NOTSAFEPOINT
 {
@@ -185,8 +187,6 @@ static inline uint16_t float_to_half(float param) JL_NOTSAFEPOINT
     }
     return h;
 }
-
-#if !defined(_OS_DARWIN_)   // xcode already links compiler-rt
 
 JL_DLLEXPORT float __gnu_h2f_ieee(uint16_t param)
 {
