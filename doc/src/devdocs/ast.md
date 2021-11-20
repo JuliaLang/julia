@@ -53,8 +53,6 @@ call. Finally, chains of comparisons have their own special expression structure
 | `a&&b`      | `(&& a b)`                |
 | `x += 1`    | `(+= x 1)`                |
 | `a ? 1 : 2` | `(if a 1 2)`              |
-| `a:b`       | `(call : a b)`            |
-| `a:b:c`     | `(call : a b c)`          |
 | `a,b`       | `(tuple a b)`             |
 | `a==b`      | `(call == a b)`           |
 | `1<i<=n`    | `(comparison 1 < i <= n)` |
