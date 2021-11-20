@@ -1118,6 +1118,12 @@ import ..Sort: sort!
 import ...Order: lt, DirectOrdering
 
 const Floats = Union{Float32,Float64}
+const FPSortable = Union{ # Mixed Float32 and Float64 are not allowed.
+    AbstractVector{Union{Float32, Missing}},
+    AbstractVector{Union{Float64, Missing}},
+    AbstractVector{Float32},
+    AbstractVector{Float64},
+    AbstractVector{Missing}}
 
 struct Left <: Ordering end
 struct Right <: Ordering end
@@ -1229,10 +1235,10 @@ end
 fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
     sort!(v, first(axes(v,1)), last(axes(v,1)), a, o)
 
-sort!(v::AbstractVector{<:Union{Floats, Missing}}, a::Algorithm, o::DirectOrdering) =
-    fpsort!(v,a,o)
-sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Union{Floats, Missing}}}) =
-    fpsort!(v,a,o)
+sort!(v::FPSortable, a::Algorithm, o::DirectOrdering) =
+    fpsort!(v, a, o)
+sort!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable}) =
+    fpsort!(v, a, o)
 
 end # module Sort.Float
 
