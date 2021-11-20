@@ -181,11 +181,14 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
                             (cast<ConstantInt>(call->getArgOperand(2))->getLimitedValue() >=
                              UINT32_MAX - cur.offset))
                             required.use_info.hasunknownmem = true;
+                        required.use_info.intrinsics.push_back({II, cur.offset});
                         return true;
                     }
                     if (id == Intrinsic::lifetime_start || id == Intrinsic::lifetime_end ||
-                        isa<DbgInfoIntrinsic>(II))
+                        isa<DbgInfoIntrinsic>(II)) {
+                        required.use_info.intrinsics.push_back({II, cur.offset});
                         return true;
+                    }
                     required.use_info.addrescaped = true;
                     return true;
                 }
@@ -290,9 +293,12 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
             return;
         }
         if (!options.valid_set || options.valid_set->contains(inst->getParent())) {
-            if (!check_inst(inst, use))
-                return;
-            required.use_info.uses.insert(inst);
+            if (check_inst(inst, use)) {
+                // return;
+                required.use_info.uses.insert(inst);
+            } else if (inst->getParent() == I->getParent()) {
+                required.use_info.escapeswithinbb = true;
+            }
         }
         if (cur.use_it == cur.use_end) {
             if (required.check_stack.empty())

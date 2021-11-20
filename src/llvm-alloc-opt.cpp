@@ -142,7 +142,7 @@ private:
     void getArrayOps(int dimcount);
     void optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info);
     void optimizeArrayLengthCmpInsts(CallInst *orig_inst);
-    void splitArrayOnStack(CallInst *orig_inst);
+    void splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag);
 
     Function &F;
     AllocOpt &pass;
@@ -229,16 +229,16 @@ void Optimizer::optimizeAll()
         if (item.second.isarray) {
             optimizeArrayLengthCmpInsts(orig);
         }
-        if (use_info.escaped) {
-            if (use_info.hastypeof && !item.second.isarray)
-                optimizeTag(orig, item.second.type);
-            continue;
-        }
         if (item.second.isarray) {
-            getArrayOps(item.second.array.dimcount);
-            if (!array_length_clobbered) {
-                optimizeArrayDims(orig, item.second);
+            if (use_info.escaped) {
+                array_length_clobbered = true;
+            } else {
+                getArrayOps(item.second.array.dimcount);
             }
+            // dbgs() << "looking at " << *orig << "\n";
+            // dbgs() << "got array ops\n";
+            // array_info.dump();
+            optimizeArrayDims(orig, item.second);
             if (array_info.escaped) {
                 continue;
             }
@@ -246,6 +246,11 @@ void Optimizer::optimizeAll()
                 //typeof for arrays is not currently supported
                 continue;
             }
+        }
+        if (use_info.escaped) {
+            if (use_info.hastypeof && !item.second.isarray)
+                optimizeTag(orig, item.second.type);
+            continue;
         }
         if (use_info.hasboundscheck || use_info.returned) {
             if (use_info.hastypeof)
@@ -290,7 +295,7 @@ void Optimizer::optimizeAll()
             if (!use_info.hasunknownmem && !use_info.addrescaped
                 && !array_info.hasunknownmem && !array_info.addrescaped
                 && !has_ref.second && !get_refaggr(array_info).second) {
-                splitArrayOnStack(orig);
+                splitArrayOnStack(orig, item.second.type);
                 continue;
             }
             continue;
@@ -844,6 +849,10 @@ void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag, bool is_array
 
 void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info) {
     assert(info.isarray);
+    // dbgs() << "use info\n";
+    // use_info.dump();
+    // dbgs() << "array info\n";
+    // array_info.dump();
     if (info.array.dimcount) {
         // We can compute the length and dimensions of the array from the allocation
         // This can save on a memory read which opens up more opts
@@ -882,14 +891,54 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                         // This is an access to array data
                         break;
                     case 8:
-                        // This is an access to array length
-                        access.inst->replaceAllUsesWith(length);
-                        // DCE can eliminate the now-redundant load
+                        if (info.array.dimcount > 1 || !array_length_clobbered) {
+                            // This is an access to array length
+                            access.inst->replaceAllUsesWith(length);
+                            // DCE can eliminate the now-redundant load
+                        }
+                        break;
+                    case 16:
+                        //This is an access to array flags
+                        if (!use_info.escapeswithinbb && !array_info.escapeswithinbb) {
+                            if (isa<LoadInst>(access.inst)) {
+                                // dbgs() << "looking at: " << *access.inst << "\n";
+                                for (auto user : access.inst->users()) {
+                                    if (auto binop = dyn_cast<BinaryOperator>(user)) {
+                                        // dbgs() << "binop: " << *binop << "\n";
+                                        if (binop->getOpcode() == BinaryOperator::And) {
+                                            if (auto cint = dyn_cast<ConstantInt>(binop->getOperand(1))) {
+                                                // dbgs() << "cint: " << *cint << "\n";
+                                                if (cint->getSExtValue() == 3) {
+                                                    // This is an access to the jl_array_t::how field
+                                                    for (auto cuser : binop->users()) {
+                                                        if (auto cmp = dyn_cast<CmpInst>(cuser)) {
+                                                            // dbgs() << "cmp: " << *cmp << "\n";
+                                                            if (cmp->getNumOperands() == 2 && cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ && cmp->getParent() == orig_inst->getParent()) {
+                                                                if (auto cint2 = dyn_cast<ConstantInt>(cmp->getOperand(1))) {
+                                                                    // dbgs() << "cint2: " << *cmp << "\n";
+                                                                    if (cint2->getSExtValue() == 3 || cint->getSExtValue() == 1) {
+                                                                        //At the end of this chain we know that the value is either 0 or 2 immediately
+                                                                        //after allocation. Thus we can simply replace this instruction with false
+                                                                        cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         break;
                     case 24:
-                        // This is an access to dim 1
-                        assert(dims[0]);
-                        access.inst->replaceAllUsesWith(dims[0]);
+                        if (info.array.dimcount > 1 || !array_length_clobbered) {
+                            // This is an access to dim 1
+                            assert(dims[0]);
+                            access.inst->replaceAllUsesWith(dims[0]);
+                        }
                         break;
                     case 32:
                         // This is an access to dim 2
@@ -920,6 +969,7 @@ void Optimizer::getArrayOps(int dimcount) {
     array_info.reset();
     array_length_clobbered = false;
     array_only_data_ops = true;
+    // use_info.dump();
     for (auto &field : use_info.memops) {
         for (auto &access : field.second.accesses) {
             std::size_t offset = access.offset;
@@ -1018,7 +1068,7 @@ void Optimizer::optimizeArrayLengthCmpInsts(CallInst *orig_inst) {
     }
 }
 
-void Optimizer::splitArrayOnStack(CallInst *orig_inst) {
+void Optimizer::splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag) {
     struct SplitSlot {
         SmallVector<Instruction*, 2> instructions;
         llvm::AllocaInst *alloca = nullptr;
@@ -1065,6 +1115,13 @@ void Optimizer::splitArrayOnStack(CallInst *orig_inst) {
         }
     };
     auto &dtree = getDomTree();
+    SmallVector<std::pair<IntrinsicInst*, uint32_t>, 1> memsets;
+    for (auto &intrinsic : array_info.intrinsics) {
+        if (intrinsic.first->getIntrinsicID() == Intrinsic::memset) {
+            assert(!array_info.hasunknownmem);
+            memsets.push_back(intrinsic);
+        }
+    }
     for (auto &slot : slots) {
         if (!slot.second.load) {
             for (auto &inst : slot.second.instructions) {
@@ -1079,10 +1136,19 @@ void Optimizer::splitArrayOnStack(CallInst *orig_inst) {
             for (auto &inst : slot.second.instructions) {
                 materialize(alloca_inst, inst);
             }
+            for (auto &mset : memsets) {
+                IRBuilder<> builder(mset.first);
+                auto val_arg = mset.first->getArgOperand(1);
+                auto size_arg = cast<ConstantInt>(mset.first->getArgOperand(2));
+                if (mset.second <= slot.first && static_cast<uint64_t>(mset.second) + size_arg->getLimitedValue(UINT32_MAX) >= slot.first + (alloca_inst->getAllocatedType()->getScalarSizeInBits() / CHAR_BIT)) {
+                    builder.CreateMemSet(alloca_inst, val_arg, pass.DL->getTypeAllocSize(slot.second.load->getType()), MaybeAlign(0));
+                }
+            }
             //MemToReg promotion is also broken
             // PromoteMemToReg({alloca_inst}, dtree);
         }
     }
+    removeAlloc(orig_inst, tag, true);
 }
 
 // Unable to optimize out the allocation, do store to load forwarding on the tag instead.

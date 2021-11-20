@@ -618,6 +618,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 
     PM->add(createConstantMergePass());
+    PM->add(createAnnotateArrayAllocPass());
     if (opt_level < 2) {
         if (!dump_native) {
             // we won't be multiversioning, so lower CPU feature checks early on
@@ -731,6 +732,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createIndVarSimplifyPass());
     PM->add(createLoopDeletionPass());
+    PM->add(createLoopIdiomPass());
     PM->add(createSimpleLoopUnrollPass());
 
     // Run our own SROA on heap objects before LLVM's

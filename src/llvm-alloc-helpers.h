@@ -5,6 +5,7 @@
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/IntrinsicInst.h>
 
 #include <utility>
 #include <map>
@@ -59,6 +60,7 @@ namespace jl_alloc {
         llvm::SmallSet<llvm::Instruction*,16> uses;
         llvm::SmallSet<llvm::CallInst*,4> preserves;
         std::map<uint32_t,Field> memops;
+        llvm::SmallVector<std::pair<llvm::IntrinsicInst*, uint32_t>, 1> intrinsics; //instr, offset
         // Completely unknown use
         bool escaped:1;
         // Address is leaked to functions that doesn't care where the object is allocated.
@@ -84,6 +86,8 @@ namespace jl_alloc {
         // This is a weaker form of `addrescaped` since `hasload` can still be used
         // to see if the memory is actually being used
         bool hasunknownmem:1;
+        // There is an escape within the same basic block as the allocation
+        bool escapeswithinbb:1;
         void reset()
         {
             escaped = false;
@@ -96,9 +100,11 @@ namespace jl_alloc {
             hastypeof = false;
             hasunknownmem = false;
             hasboundscheck = false;
+            escapeswithinbb = false;
             uses.clear();
             preserves.clear();
             memops.clear();
+            intrinsics.clear();
         }
         void dump();
         bool addMemOp(llvm::Instruction *inst, unsigned opno, uint32_t offset, llvm::Type *elty,
