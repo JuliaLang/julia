@@ -362,22 +362,12 @@ end
 channel_type(rr::RemoteChannel{T}) where {T} = T
 
 function serialize(s::ClusterSerializer, f::Future)
-    serialize_type(s, typeof(f))
-    serialize(s, f.where)
-    serialize(s, remoteref_id(f))
-    value = @atomic f.v
-    if value === nothing
-        p = worker_id_from_socket(s.io)
-        (p !== rr.where) && send_add_client(rr, p)
-    end
-    serialize(s, value)
+    v_cache = @atomic f.v
+    serialize(s, f, v_cache === nothing)
 end
-function serialize(s::ClusterSerializer, f::RemoteChannel)
-    p = worker_id_from_socket(s.io)
-    (p !== rr.where) && send_add_client(rr, p)
-    invoke(serialize, Tuple{AbstractSerializer, Any}, s, f)
-end
-serialize(s::AbstractSerializer, ::AbstractLock) = error("Locks cannot be serialized")
+serialize(s::ClusterSerializer, rr::RemoteChannel) = serialize(s, rr, true)
+function serialize(s::ClusterSerializer, rr::AbstractRemoteRef, addclient)
+    if addclient
         p = worker_id_from_socket(s.io)
         (p !== rr.where) && send_add_client(rr, p)
     end
