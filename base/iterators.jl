@@ -113,6 +113,15 @@ first(r::Reverse) = last(r.itr) # and the last shall be first
     (A.itr[idx], (state[1], itrs))
 end
 
+# Fallback method of `iterate(::Reverse{T})` which assumes the collection has `getindex(::T) and `reverse(eachindex(::T))`
+# don't propagate inbounds for this just in case
+function iterate(A::Reverse, state=(reverse(eachindex(A.itr)),))
+    y = iterate(state...)
+    y === nothing && return y
+    idx, itrs = y
+    (A.itr[idx], (state[1], itrs))
+end
+
 reverse(R::AbstractRange) = Base.reverse(R) # copying ranges is cheap
 reverse(G::Generator) = Generator(G.f, reverse(G.iter))
 reverse(r::Reverse) = r.itr
