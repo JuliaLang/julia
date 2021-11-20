@@ -752,8 +752,8 @@ end
         try
             push!(LOAD_PATH, tmp)
             write(joinpath(tmp, "BadCase.jl"), "module badcase end")
-            @test_throws ErrorException("loading package `BadCase` did not define the expected module `BadCase`, \
-                                        check for typos in module name") (@eval using BadCase)
+            @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
+                                        check for typos in package module name") (@eval using BadCase)
         finally
             copy!(LOAD_PATH, old_loadpath)
         end
