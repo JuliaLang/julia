@@ -818,6 +818,9 @@ function const_prop_methodinstance_heuristic(
             # since the inliner will try to find this constant result
             # if these constant arguments arrive there
             return true
+        elseif is_stmt_noinline(flag)
+            # this call won't be inlined, thus this constant-prop' will most likely be unfruitful
+            return false
         else
             code = get(code_cache(interp), mi, nothing)
             if isdefined(code, :inferred) && inlining_policy(
