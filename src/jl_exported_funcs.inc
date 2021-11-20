@@ -460,7 +460,6 @@
     XX(jl_task_stack_buffer) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
-    XX(jl_threading_enabled) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
     XX(jl_too_few_args) \
