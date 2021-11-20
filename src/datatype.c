@@ -242,6 +242,7 @@ int jl_struct_try_layout(jl_datatype_t *dt)
         return 1;
     else if (!jl_has_fixed_layout(dt))
         return 0;
+    // jl_has_fixed_layout also ensured that dt->types is assigned now
     jl_compute_field_offsets(dt);
     assert(dt->layout);
     return 1;
@@ -316,7 +317,7 @@ int jl_pointer_egal(jl_value_t *t)
         return 1;
     if (t == (jl_value_t*)jl_bool_type)
         return 1;
-    if (jl_is_mutable_datatype(t) && // excludes abstract types
+    if (jl_is_mutable_datatype(jl_unwrap_unionall(t)) && // excludes abstract types
         t != (jl_value_t*)jl_string_type && // technically mutable, but compared by contents
         t != (jl_value_t*)jl_simplevector_type &&
         !jl_is_kind(t))
@@ -338,6 +339,10 @@ int jl_pointer_egal(jl_value_t *t)
             // pointer value.
             return 1;
         }
+    }
+    if (jl_is_uniontype(t)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)t;
+        return jl_pointer_egal(u->a) && jl_pointer_egal(u->b);
     }
     return 0;
 }

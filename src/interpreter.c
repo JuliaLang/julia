@@ -430,7 +430,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         if (ip >= ns)
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         if (toplevel)
-            ct->world_age = jl_world_counter;
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
         size_t next_ip = ip + 1;

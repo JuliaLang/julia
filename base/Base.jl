@@ -212,8 +212,6 @@ let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
         if Base.DARWIN_FRAMEWORK
             push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-        else
-            push!(DL_LOAD_PATH, "@loader_path/julia")
         end
         push!(DL_LOAD_PATH, "@loader_path")
     end
@@ -316,7 +314,7 @@ let SOURCE_PATH = ""
 end
 
 # reduction along dims
-include("reducedim.jl")  # macros in this file relies on string.jl
+include("reducedim.jl")  # macros in this file rely on string.jl
 include("accumulate.jl")
 
 include("permuteddimsarray.jl")
@@ -461,10 +459,6 @@ end
 
 if is_primary_base_module
 function __init__()
-    # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
-    if !haskey(ENV, "OPENBLAS_MAIN_FREE")
-        ENV["OPENBLAS_MAIN_FREE"] = "1"
-    end
     # for the few uses of Libc.rand in Base:
     Libc.srand()
     # Base library init

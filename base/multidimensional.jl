@@ -125,11 +125,9 @@ module IteratorsMD
 
     # comparison
     @inline isless(I1::CartesianIndex{N}, I2::CartesianIndex{N}) where {N} = _isless(0, I1.I, I2.I)
-    @inline function _isless(ret, I1::Tuple{Int,Vararg{Int,N}}, I2::Tuple{Int,Vararg{Int,N}}) where {N}
+    @inline function _isless(ret, I1::Tuple{Int,Vararg{Int}}, I2::Tuple{Int,Vararg{Int}})
         newret = ifelse(ret==0, icmp(last(I1), last(I2)), ret)
-        t1, t2 = Base.front(I1), Base.front(I2)
-        # avoid dynamic dispatch by telling the compiler relational invariants
-        return isa(t1, Tuple{}) ? _isless(newret, (), ()) : _isless(newret, t1, t2::Tuple{Int,Vararg{Int}})
+        return _isless(newret, Base.front(I1), Base.front(I2))
     end
     _isless(ret, ::Tuple{}, ::Tuple{}) = ifelse(ret==1, true, false)
     icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
@@ -433,15 +431,13 @@ module IteratorsMD
         valid = __is_valid_range(I, rng) && state[1] != last(rng)
         return valid, (I, )
     end
-    @inline function __inc(state::Tuple{Int,Int,Vararg{Int,N}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt,N}}) where {N}
+    @inline function __inc(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
         I = state[1] + step(rng)
         if __is_valid_range(I, rng) && state[1] != last(rng)
             return true, (I, tail(state)...)
         end
-        t1, t2 = tail(state), tail(indices)
-        # avoid dynamic dispatch by telling the compiler relational invariants
-        valid, I = isa(t1, Tuple{Int}) ? __inc(t1, t2::Tuple{OrdinalRangeInt}) : __inc(t1, t2::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
+        valid, I = __inc(tail(state), tail(indices))
         return valid, (first(rng), I...)
     end
 
@@ -546,15 +542,13 @@ module IteratorsMD
         valid = __is_valid_range(I, rng) && state[1] != first(rng)
         return valid, (I,)
     end
-    @inline function __dec(state::Tuple{Int,Int,Vararg{Int,N}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt,N}}) where {N}
+    @inline function __dec(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
         I = state[1] - step(rng)
         if __is_valid_range(I, rng) && state[1] != first(rng)
             return true, (I, tail(state)...)
         end
-        t1, t2 = tail(state), tail(indices)
-        # avoid dynamic dispatch by telling the compiler relational invariants
-        valid, I = isa(t1, Tuple{Int}) ? __dec(t1, t2::Tuple{OrdinalRangeInt}) : __dec(t1, t2::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
+        valid, I = __dec(tail(state), tail(indices))
         return valid, (last(rng), I...)
     end
 
@@ -1477,7 +1471,7 @@ end
 end
 
 ## fill! contiguous views of BitArrays with a single value
-function fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}}}, x)
+function fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, x)
     B = V.parent
     I0 = V.indices[1]
     l0 = length(I0)
@@ -1486,7 +1480,7 @@ function fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}
     return V
 end
 
-fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, x) =
+fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, x) =
     _unsafe_fill_indices!(V.parent, x, V.indices...)
 
 @generated function _unsafe_fill_indices!(B::BitArray, x,
@@ -1672,7 +1666,7 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
             else
                 j_d = i_d
             end) begin
-                if (@nref $N A j) != (@nref $N A i)
+                if !isequal((@nref $N A j), (@nref $N A i))
                     collided[k] = true
                 end
             end
@@ -1702,7 +1696,7 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
                         j_d = i_d
                     end
                 end begin
-                    if (@nref $N A j) != (@nref $N A i)
+                    if !isequal((@nref $N A j), (@nref $N A i))
                         nowcollided[k] = true
                     end
                 end

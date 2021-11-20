@@ -14,10 +14,7 @@ JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
 JL_DLLEXPORT int32_t jl_get_llvm_gv_fallback(void *native_code, jl_value_t *p) UNAVAILABLE
-JL_DLLEXPORT void jl_write_malloc_log_fallback(void) UNAVAILABLE
-JL_DLLEXPORT void jl_write_coverage_data_fallback(const char *output) UNAVAILABLE
 
-JL_DLLEXPORT void jl_clear_malloc_data_fallback(void) UNAVAILABLE
 JL_DLLEXPORT int jl_extern_c_fallback(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
         char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
@@ -64,6 +61,11 @@ JL_DLLEXPORT void jl_teardown_codegen_fallback(void)
 {
 }
 
+JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
+{
+    return 0;
+}
+
 JL_DLLEXPORT void jl_lock_profile_fallback(void)
 {
 }
@@ -102,3 +104,31 @@ JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr)
 {
     return 0;
 }
+
+JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddPropagateJuliaAddrspaces_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddRemoveJuliaAddrspacesPass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddCombineMulAddPass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddLowerExcHandlersPass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddLateLowerGCFramePass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraJuliaLICMPass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddAllocOptPass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddLowerPTLSPass_fallback(void *PM, bool_t imaging_mode) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddRemoveNIPass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_fallback(void *PM, bool_t Strong) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_fallback(void *PM) UNAVAILABLE

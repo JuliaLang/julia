@@ -594,6 +594,10 @@ end
         @test findprev(b, T(1)) isa keytype(b)
         @test findprev(b, T(2)) isa keytype(b)
     end
+
+    @testset "issue 43078" begin
+        @test_throws TypeError findall([1])
+    end
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
@@ -791,6 +795,10 @@ let A, B, C, D
 
     # With hash collisions
     @test map(x -> x.x, unique(map(HashCollision, B), dims=1)) == C
+
+    # With NaNs:
+    E = [1 NaN 3; 1 NaN 3; 1 NaN 3];
+    @test isequal(unique(E, dims=1), [1  NaN  3])
 end
 
 @testset "large matrices transpose" begin

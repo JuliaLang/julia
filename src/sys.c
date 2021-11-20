@@ -48,11 +48,6 @@
 #include <xmmintrin.h>
 #endif
 
-#if defined _MSC_VER
-#include <io.h>
-#include <intrin.h>
-#endif
-
 #ifdef _COMPILER_MSAN_ENABLED_
 #include <sanitizer/msan_interface.h>
 #endif
@@ -688,7 +683,7 @@ JL_DLLEXPORT jl_value_t *jl_environ(int i)
 
 // -- child process status --
 
-#if defined _MSC_VER || defined _OS_WINDOWS_
+#if defined _OS_WINDOWS_
 /* Native Woe32 API.  */
 #include <process.h>
 #define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
@@ -865,12 +860,11 @@ JL_DLLEXPORT int jl_dllist(jl_array_t *list)
     } while (cb < cbNeeded);
     for (i = 0; i < cbNeeded / sizeof(HMODULE); i++) {
         const char *path = jl_pathname_for_handle(hMods[i]);
-        // XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
         if (path == NULL)
             continue;
         jl_array_grow_end((jl_array_t*)list, 1);
         jl_value_t *v = jl_cstr_to_string(path);
-        free(path);
+        free((char*)path);
         jl_array_ptr_set(list, jl_array_dim0(list) - 1, v);
     }
     free(hMods);
@@ -920,11 +914,6 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 #else
     return (size_t)0;
 #endif
-}
-
-JL_DLLEXPORT int jl_threading_enabled(void)
-{
-    return 1;
 }
 
 #ifdef __cplusplus

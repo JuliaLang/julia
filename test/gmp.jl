@@ -366,28 +366,24 @@ end
     @test_throws InexactError convert(BigInt, 2.1)
     @test_throws InexactError convert(BigInt, big(2.1))
 end
-@testset "issue #13367" begin
-    @test trunc(BigInt,2.1) == 2
-    @test round(BigInt,2.1) == 2
-    @test floor(BigInt,2.1) == 2
-    @test ceil(BigInt,2.1) == 3
+@testset "truncation" begin
+    # cf. issue #13367
+    for T = (Float16, Float32, Float64)
+        @test trunc(BigInt, T(2.1)) == 2
+        @test unsafe_trunc(BigInt, T(2.1)) == 2
+        @test round(BigInt, T(2.1)) == 2
+        @test floor(BigInt, T(2.1)) == 2
+        @test ceil(BigInt, T(2.1)) == 3
 
-    @test trunc(BigInt,2.1f0) == 2
-    @test round(BigInt,2.1f0) == 2
-    @test floor(BigInt,2.1f0) == 2
-    @test ceil(BigInt,2.1f0) == 3
-
-    @test_throws InexactError trunc(BigInt,Inf)
-    @test_throws InexactError round(BigInt,Inf)
-    @test_throws InexactError floor(BigInt,Inf)
-    @test_throws InexactError ceil(BigInt,Inf)
-
-    @test string(big(3), base = 2) == "11"
-    @test string(big(9), base = 8) == "11"
-    @test string(-big(9), base = 8) == "-11"
-    @test string(big(12), base = 16) == "c"
+        @test_throws InexactError trunc(BigInt, T(Inf))
+        @test_throws InexactError round(BigInt, T(Inf))
+        @test_throws InexactError floor(BigInt, T(Inf))
+        @test_throws InexactError ceil(BigInt, T(Inf))
+    end
 end
-@testset "Issue #18849" begin
+
+@testset "string(::BigInt)" begin
+    # cf. issue #18849"
     # bin, oct, dec, hex should not call sizeof on BigInts
     # when padding is desired
     padding = 4
@@ -412,14 +408,19 @@ end
     @test string(-high, pad = padding, base = 8) == "-4000000"
     @test string(-high, pad = padding, base = 10) == "-1048576"
     @test string(-high, pad = padding, base = 16) == "-100000"
-end
 
-# respect 0-padding on big(0)
-for base in (2, 8, 10, 16)
-    local base
-    @test string(big(0), base=base, pad=0) == ""
+    # cf. issue #13367
+    @test string(big(3), base = 2) == "11"
+    @test string(big(9), base = 8) == "11"
+    @test string(-big(9), base = 8) == "-11"
+    @test string(big(12), base = 16) == "c"
+
+    # respect 0-padding on big(0)
+    for base in (2, 8, 10, 16)
+        @test string(big(0), base=base, pad=0) == ""
+    end
+    @test string(big(0), base = rand(2:62), pad = 0) == ""
 end
-@test string(big(0), base = rand(2:62), pad = 0) == ""
 
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2

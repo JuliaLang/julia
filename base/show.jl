@@ -993,10 +993,17 @@ function show_datatype(io::IO, @nospecialize(x::DataType), wheres::Vector=TypeVa
     # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
     if istuple
         if n > 3 && all(@nospecialize(i) -> (parameters[1] === i), parameters)
-            print(io, "NTuple{", n, ", ", parameters[1], "}")
+            print(io, "NTuple{", n, ", ")
+            show(io, parameters[1])
+            print(io, "}")
         else
             print(io, "Tuple{")
-            join(io, parameters, ", ")
+            # join(io, params, ", ") params but `show` it
+            first = true
+            for param in parameters
+                first ? (first = false) : print(io, ", ")
+                show(io, param)
+            end
             print(io, "}")
         end
     else
@@ -1096,7 +1103,20 @@ function show(io::IO, m::Module)
     if is_root_module(m)
         print(io, nameof(m))
     else
-        print(io, join(fullname(m),"."))
+        print_fullname(io, m)
+    end
+end
+# The call to print_fullname above was originally `print(io, join(fullname(m),"."))`,
+# which allocates. The method below provides the same behavior without allocating.
+# See https://github.com/JuliaLang/julia/pull/42773 for perf information.
+function print_fullname(io::IO, m::Module)
+    mp = parentmodule(m)
+    if m === Main || m === Base || m === Core || mp === m
+        print(io, nameof(m))
+    else
+        print_fullname(io, mp)
+        print(io, '.')
+        print(io, nameof(m))
     end
 end
 
@@ -1292,11 +1312,12 @@ show_unquoted(io::IO, ex, indent::Int, prec::Int, ::Int) = show_unquoted(io, ex,
 const indent_width = 4
 const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(===),:(=>)])
 const uni_syms = Set{Symbol}([:(::), :(<:), :(>:)])
-const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
+const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜), :(∓), :(±)])
 const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
     :(.=), :(.+=), :(.-=), :(.*=), :(./=), :(.\=), :(.^=), :(.&=), :(.|=), :(.÷=), :(.%=), :(.>>>=), :(.>>=), :(.<<=),
-    :(&&), :(||), :(<:), :($=), :(⊻=), :(>:), :(-->)])
+    :(&&), :(||), :(<:), :($=), :(⊻=), :(>:), :(-->),
+    :(:=), :(≔), :(⩴), :(≕)])
 const expr_infix = Set{Symbol}([:(:), :(->), :(::)])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
@@ -2132,11 +2153,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :line && 1 <= nargs <= 2
         show_linenumber(io, args...)
 
-    elseif head === :try && 3 <= nargs <= 4
+    elseif head === :try && 3 <= nargs <= 5
         iob = IOContext(io, beginsym=>false)
         show_block(iob, "try", args[1], indent, quote_level)
         if is_expr(args[3], :block)
             show_block(iob, "catch", args[2] === false ? Any[] : args[2], args[3]::Expr, indent, quote_level)
+        end
+        if nargs >= 5 && is_expr(args[5], :block)
+            show_block(iob, "else", Any[], args[5]::Expr, indent, quote_level)
         end
         if nargs >= 4 && is_expr(args[4], :block)
             show_block(iob, "finally", Any[], args[4]::Expr, indent, quote_level)

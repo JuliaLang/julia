@@ -14,7 +14,7 @@ end
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-haskey(d::AbstractDict, k) = in(k, keys(d))
+haskey(d, k) = in(k, keys(d))
 
 function in(p::Pair, a::AbstractDict, valcmp=(==))
     v = get(a, p.first, secret_table_token)
@@ -136,6 +136,38 @@ values(a::AbstractDict) = ValueIterator(a)
 Return an iterator over `key => value` pairs for any
 collection that maps a set of keys to a set of values.
 This includes arrays, where the keys are the array indices.
+
+# Examples
+```jldoctest
+julia> a = Dict(zip(["a", "b", "c"], [1, 2, 3]))
+Dict{String, Int64} with 3 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+
+julia> pairs(a)
+Dict{String, Int64} with 3 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+
+julia> foreach(println, pairs(["a", "b", "c"]))
+1 => "a"
+2 => "b"
+3 => "c"
+
+julia> (;a=1, b=2, c=3) |> pairs |> collect
+3-element Vector{Pair{Symbol, Int64}}:
+ :a => 1
+ :b => 2
+ :c => 3
+
+julia> (;a=1, b=2, c=3) |> collect
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
 """
 pairs(collection) = Generator(=>, keys(collection), values(collection))
 

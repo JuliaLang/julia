@@ -8,9 +8,12 @@ Random number generation in Julia uses the [Xoshiro256++](https://prng.di.unimi.
 by default, with per-`Task` state.
 Other RNG types can be plugged in by inheriting the `AbstractRNG` type; they can then be used to
 obtain multiple streams of random numbers.
-Besides the default `TaskLocalRNG` type, the `Random` package also provides `MersenneTwister`,
-`RandomDevice` (which exposes OS-provided entropy), and `Xoshiro` (for explicitly-managed
-Xoshiro256++ streams).
+
+The PRNGs (pseudorandom number generators) exported by the `Random` package are:
+* `TaskLocalRNG`: a token that represents use of the currently active Task-local stream, deterministically seeded from the parent task, or by `RandomDevice` (with system randomness) at program start
+* `Xoshiro`: generates a high-quality stream of random numbers with a small state vector and high performance using the Xoshiro256++ algorithm
+* `RandomDevice`: for OS-provided entropy. This may be used for cryptographically secure random numbers (CS(P)RNG).
+* `MersenneTwister`: an alternate high-quality PRNG which was the default in older versions of Julia, and is also quite fast, but requires much more space to store the state vector and generate a random sequence.
 
 Most functions related to random generation accept an optional `AbstractRNG` object as first argument.
 Some also accept dimension specifications `dims...` (which can also be given as a tuple) to generate

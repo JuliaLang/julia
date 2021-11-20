@@ -268,7 +268,7 @@ static void _compile_all_deq(jl_array_t *found)
         src = m->source;
         assert(src);
         // TODO: we could now enable storing inferred function pointers in the `unspecialized` cache
-        //src = jl_type_infer(mi, jl_world_counter, 1);
+        //src = jl_type_infer(mi, jl_atomic_load_acquire(&jl_world_counter), 1);
         //if (ucache->invoke != NULL)
         //    continue;
 
@@ -387,7 +387,7 @@ static void *jl_precompile(int all)
             size_t min_world = 0;
             size_t max_world = ~(size_t)0;
             if (!jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->def.method))
-                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_world_counter, &min_world, &max_world, 0);
+                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world, 0);
             if (mi)
                 jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
         }

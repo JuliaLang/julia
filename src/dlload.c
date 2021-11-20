@@ -9,7 +9,6 @@
 #include "julia.h"
 #include "julia_internal.h"
 #ifdef _OS_WINDOWS_
-#include <windows.h>
 #include <direct.h>
 #else
 #include <unistd.h>
@@ -58,17 +57,7 @@ static int endswith_extension(const char *path) JL_NOTSAFEPOINT
 }
 
 #ifdef _OS_WINDOWS_
-#ifdef _MSC_VER
-#if (_MSC_VER >= 1930) || (_MSC_VER < 1800)
-#error This version of MSVC has not been tested.
-#elif _MSC_VER >= 1900 // VC++ 2015 / 2017 / 2019
-#define CRTDLL_BASENAME "vcruntime140"
-#elif _MSC_VER >= 1800 // VC++ 2013
-#define CRTDLL_BASENAME "msvcr120"
-#endif
-#else
 #define CRTDLL_BASENAME "msvcrt"
-#endif
 
 JL_DLLEXPORT const char *jl_crtdll_basename = CRTDLL_BASENAME;
 const char *jl_crtdll_name = CRTDLL_BASENAME ".dll";
@@ -166,6 +155,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     uv_stat_t stbuf;
     void *handle;
     int abspath;
+    int is_atpath;
     // number of extensions to try — if modname already ends with the
     // standard extension, then we don't try adding additional extensions
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
@@ -191,16 +181,30 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     }
 
     abspath = jl_isabspath(modname);
+    is_atpath = 0;
+
+    // Detect if our `modname` is something like `@rpath/libfoo.dylib`
+#ifdef _OS_DARWIN_
+    size_t nameLen = strlen(modname);
+    const char *const atPaths[] = {"@executable_path/", "@loader_path/", "@rpath/"};
+    for (i = 0; i < sizeof(atPaths)/sizeof(char*); ++i) {
+        size_t atLen = strlen(atPaths[i]);
+        if (nameLen >= atLen && 0 == strncmp(modname, atPaths[i], atLen)) {
+            is_atpath = 1;
+        }
+    }
+#endif
 
     /*
       this branch permutes all base paths in DL_LOAD_PATH with all extensions
       note: skip when !jl_base_module to avoid UndefVarError(:DL_LOAD_PATH),
             and also skip for absolute paths
+            and also skip for `@`-paths on macOS
       We also do simple string replacement here for elements starting with `@executable_path/`.
       While these exist as OS concepts on Darwin, we want to use them on other platforms
       such as Windows, so we emulate them here.
     */
-    if (!abspath && jl_base_module != NULL) {
+    if (!abspath && !is_atpath && jl_base_module != NULL) {
         jl_binding_t *b = jl_get_module_binding(jl_base_module, jl_symbol("DL_LOAD_PATH"));
         jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? jl_atomic_load_relaxed(&b->value) : NULL);
         if (DL_LOAD_PATH != NULL) {

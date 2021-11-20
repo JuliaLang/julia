@@ -254,6 +254,8 @@ end
     end
     @test intersect(Set([1]), BitSet()) isa Set{Int}
     @test intersect(BitSet([1]), Set()) isa Set{Any}
+    @test intersect(BitSet([1]), Set([1])) isa BitSet
+    @test intersect(BitSet([1]), Set([1]), Set([1])) isa BitSet
     @test intersect([1], BitSet()) isa Vector{Int}
     # intersect must uniquify
     @test intersect([1, 2, 1]) == intersect!([1, 2, 1]) == [1, 2]
@@ -276,6 +278,10 @@ end
             @test eltype(intersect(a, a, b)) == Float64
         end
     end
+
+    # 3-argument version is correctly covered
+    @test intersect(Set([1,2]), Set([2]), Set([1,2,3])) == Set([2])
+    @test intersect(Set([1,2]), Set([2]), Set([1.,2,3])) == Set([2.])
 end
 
 @testset "setdiff" begin

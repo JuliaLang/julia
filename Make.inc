@@ -41,6 +41,7 @@ USE_SYSTEM_LIBM:=0
 USE_SYSTEM_OPENLIBM:=0
 UNTRUSTED_SYSTEM_LIBM:=0
 USE_SYSTEM_DSFMT:=0
+USE_SYSTEM_LIBBLASTRAMPOLINE:=0
 USE_SYSTEM_BLAS:=0
 USE_SYSTEM_LAPACK:=0
 USE_SYSTEM_GMP:=0
@@ -54,6 +55,7 @@ USE_SYSTEM_NGHTTP2:=0
 USE_SYSTEM_CURL:=0
 USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
+USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
 USE_SYSTEM_P7ZIP:=0
 
@@ -448,32 +450,14 @@ endif
 
 # Compiler specific stuff
 
-ifeq ($(USEMSVC), 1)
-USEGCC := 0
-USECLANG := 0
-USEICC := 0
-else
-USEMSVC := 0
 ifeq ($(USECLANG), 1)
 USEGCC := 0
-USEICC := 0
-else
-ifeq ($(USEICC), 1)
-USEGCC := 0
-USECLANG := 0
 else  # default to gcc
 USEGCC := 1
 USECLANG := 0
-USEICC := 0
-endif
-endif
 endif
 
-ifeq ($(USEIFC), 1)
-FC := ifort
-else
 FC := $(CROSS_COMPILE)gfortran
-endif
 
 ifeq ($(OS), FreeBSD)
 USEGCC := 0
@@ -529,19 +513,6 @@ JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
-ifeq ($(USEICC),1)
-ifeq ($(SANITIZE),1)
-$(error Sanitizers only supported with clang. Try setting SANITIZE=0)
-endif
-CC  := icc
-CXX := icpc
-JCFLAGS := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
-JCPPFLAGS :=
-JCXXFLAGS := -pipe $(fPIC) -fno-rtti -std=c++14
-DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector
-SHIPFLAGS := -O3 -g -falign-functions
-endif
-
 ifeq ($(USECCACHE), 1)
 # Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
 CC_ARG   := $(CC)
@@ -577,29 +548,14 @@ FC_ARG := $(shell echo $(FC) | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
-ifneq ($(USEMSVC),1)
 CPP := $(CC) -E
 AR := $(CROSS_COMPILE)ar
 AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
-else #USEMSVC
-CPP := $(CC) -EP
-AR := lib
-ifeq ($(ARCH),x86_64)
-AS := ml64
-else
-AS := ml
-endif #ARCH
-LD := link
-endif #USEMSVC
 RANLIB := $(CROSS_COMPILE)ranlib
 OBJCOPY := $(CROSS_COMPILE)objcopy
 
-ifneq ($(USEMSVC), 1)
 CPP_STDOUT := $(CPP) -P
-else
-CPP_STDOUT := $(CPP) -E
-endif
 
 # file extensions
 ifeq ($(OS), WINNT)
@@ -634,7 +590,7 @@ define SONAME_FLAGS
 endef
 endif
 
-ifeq ($(OS)$(USEMSVC),WINNT0)
+ifeq ($(OS),WINNT)
 define IMPLIB_FLAGS
   -Wl,--out-implib,$(build_libdir)/$(notdir $1).a
 endef
@@ -985,7 +941,6 @@ JCXXFLAGS += -D_FILE_OFFSET_BITS=64
 endif
 
 # Set some ARCH-specific flags
-ifneq ($(USEICC),1)
 ifeq ($(ISX86),1)
 CC += -m$(BINARY)
 CXX += -m$(BINARY)
@@ -993,7 +948,6 @@ FC += -m$(BINARY)
 CC_ARG += -m$(BINARY)
 CXX_ARG += -m$(BINARY)
 FC_ARG += -m$(BINARY)
-endif
 endif
 
 ifeq ($(OS),WINNT)
@@ -1073,6 +1027,12 @@ ifeq ($(USE_SYSTEM_PATCHELF), 1)
 PATCHELF := patchelf
 else
 PATCHELF := $(build_depsbindir)/patchelf
+endif
+
+ifeq ($(USE_SYSTEM_LIBWHICH), 1)
+LIBWHICH := libwhich
+else
+LIBWHICH := $(build_depsbindir)/libwhich
 endif
 
 # On aarch64 and powerpc64le, we assume the page size is 64K.  Our binutils linkers
@@ -1244,19 +1204,19 @@ else ifeq ($(OS), Darwin)
   RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
   RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
-  RPATH_LIB := -Wl,-rpath,'@loader_path/julia/' -Wl,-rpath,'@loader_path/'
+  RPATH_LIB := -Wl,-rpath,'@loader_path/'
 else
   RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
   RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_shlibdir)
-  RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
+  RPATH_LIB := -Wl,-rpath,'$$ORIGIN/' -Wl,-z,origin
 endif
 
 # --whole-archive
 ifeq ($(OS), Darwin)
   WHOLE_ARCHIVE := -Xlinker -all_load
   NO_WHOLE_ARCHIVE :=
-else ifneq ($(USEMSVC), 1)
+else
   WHOLE_ARCHIVE := -Wl,--whole-archive
   NO_WHOLE_ARCHIVE := -Wl,--no-whole-archive
 endif
@@ -1311,17 +1271,12 @@ JLIBLDFLAGS := -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULI
 endif
 
 ifeq ($(OS), WINNT)
-ifneq ($(USEMSVC), 1)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic
 JLDFLAGS := -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
-endif
-else #USEMSVC
-OSLIBS += kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib shell32.lib winmm.lib userenv.lib secur32.lib
-JLDFLAGS := -stack:8388608
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0502
 UNTRUSTED_SYSTEM_LIBM := 1
@@ -1383,11 +1338,6 @@ $(error BUILD_CUSTOM_LIBCXX is currently only supported with Clang. Try setting 
 endif
 endif # Clang
 CUSTOM_LD_LIBRARY_PATH := LD_LIBRARY_PATH="$(build_libdir)"
-ifeq ($(USEICC),1)
-CXXFLAGS += -cxxlib-nostd -static-intel
-CLDFLAGS += -static-intel
-LDFLAGS += -cxxlib-nostd -static-intel
-endif
 endif
 
 # Some special restrictions on BB usage:

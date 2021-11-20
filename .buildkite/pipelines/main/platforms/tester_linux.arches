@@ -1,9 +1,25 @@
-# PLATFORM      ARCH        ARCH_LABEL      ROOTFS_ARCH      ALLOW_FAIL      TIMEOUT      ROOTFS_TAG      ROOTFS_TREE
-# linux         aarch64     aarch64         aarch64          false           60           v3.2            0566841e29f0f9880541c26a6595fd5ce0beb5ff
-# linux         armv7l      armv7l          armv7l           false           60           v3.2            fb359370b052a47ce5c84cc6b4a7a03ed7053b25
-linux           32          32              i686             false           60           v3.2            209c4db679a515befd7fb50ecc6bfbecf7ec3d32
-# linux         ppc64le     ppc64le         powerpc64le      false           60           v3.2            c03a0158b19d48ac84b426834fce0d3584cdd0c7
-linux           64          64_rr           x86_64           false           180          v3.2            474bf61a926b2d7fcf202284d59d4b11a04601d7
-linux           64          64_st           x86_64           false           60           v3.2            474bf61a926b2d7fcf202284d59d4b11a04601d7
-linux           64          64_mt           x86_64           false           60           v3.2            474bf61a926b2d7fcf202284d59d4b11a04601d7
-musl            64          64              x86_64           true            60           v3.19           e6a2730e37c386c46915b2650d6aaaa398195152
+# PLATFORM    LABEL         GROUP    ALLOW_FAIL    ARCH        ARCH_ROOTFS    MAKE_FLAGS     TIMEOUT_BK    TIMEOUT_RR     RETRIES    IS_RR    IS_ST    IS_MT    ROOTFS_TAG    ROOTFS_HASH
+linux         32_g1         g1       .             32          i686           .              .             .              .          .        .        .        v4.8          b6dffc772ab4c2cd7fd4f83459308f6f0d89b957
+linux         32_g2         g2       .             32          i686           .              .             .              3          .        .        .        v4.8          b6dffc772ab4c2cd7fd4f83459308f6f0d89b957
+
+linux         64_g1_mt      g1       .             64          x86_64         .              .             .              .          .        .        yes      v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
+linux         64_g2_mt      g2       .             64          x86_64         .              .             .              3          .        .        yes      v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
+
+linux         64_g1_st      g1       .             64          x86_64         .              .             .              .          .        yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
+linux         64_g2_st      g2       .             64          x86_64         .              .             .              3          .        yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
+
+linux         64_g1_rrst    g1       .             64          x86_64         .              300           240            .          yes      yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
+linux         64_g2_rrst    g2       .             64          x86_64         .              180           120            3          yes      yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
+linux         64_g3_st      g3       .             64          x86_64         .              .             .              3          .        yes      .        v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a
+
+# linux       aarch64_g1    g1       true          aarch64     aarch64        .              .             .              .          .        .        .        ----          ----------------------------------------
+# linux       aarch64_g2    g2       true          aarch64     aarch64        .              .             .              .          .        .        .        ----          ----------------------------------------
+
+# linux       armv7l_g1     g1       true          armv7l      armv7l         .              .             .              .          .        .        .        ----          ----------------------------------------
+# linux       armv7l_g2     g2       true          armv7l      armv7l         .              .             .              .          .        .        .        ----          ----------------------------------------
+
+# linux       ppc64le_g1    g1       true          ppc64le     powerpc64le    .              .             .              .          .        .        .        ----          ----------------------------------------
+# linux       ppc64le_g2    g2       true          ppc64le     powerpc64le    .              .             .              .          .        .        .        ----          ----------------------------------------
+
+musl          64_g1         g1       true          64          x86_64         .              .             .              .          .        .        .        v4.8          d13a47c87c38005bd5d97132e51789cafd852f90
+musl          64_g2         g2       true          64          x86_64         .              .             .              .          .        .        .        v4.8          d13a47c87c38005bd5d97132e51789cafd852f90

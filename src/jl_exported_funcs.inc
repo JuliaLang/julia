@@ -145,6 +145,7 @@
     XX(jl_expand_with_loc) \
     XX(jl_expand_with_loc_warn) \
     XX(jl_field_index) \
+    XX(jl_field_isdefined) \
     XX(jl_gc_add_finalizer) \
     XX(jl_gc_add_finalizer_th) \
     XX(jl_gc_add_ptr_finalizer) \
@@ -459,7 +460,6 @@
     XX(jl_task_stack_buffer) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
-    XX(jl_threading_enabled) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
     XX(jl_too_few_args) \
@@ -518,7 +518,6 @@
 
 // use YY instead of XX to avoid jl -> ijl renaming in libjulia-codegen
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
-    YY(jl_clear_malloc_data) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
     YY(jl_extern_c) \
@@ -529,8 +528,6 @@
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
     YY(jl_get_llvm_gv) \
-    YY(jl_write_malloc_log) \
-    YY(jl_write_coverage_data) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \
@@ -541,6 +538,7 @@
     YY(jl_generate_fptr_for_unspecialized) \
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
+    YY(jl_jit_total_bytes) \
     YY(jl_lock_profile) \
     YY(jl_unlock_profile) \
     YY(jl_create_native) \
@@ -550,4 +548,18 @@
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
+    YY(LLVMExtraAddLowerSimdLoopPass) \
+    YY(LLVMExtraAddFinalLowerGCPass) \
+    YY(LLVMExtraAddPropagateJuliaAddrspaces) \
+    YY(LLVMExtraAddRemoveJuliaAddrspacesPass) \
+    YY(LLVMExtraAddCombineMulAddPass) \
+    YY(LLVMExtraAddMultiVersioningPass) \
+    YY(LLVMExtraAddLowerExcHandlersPass) \
+    YY(LLVMExtraAddLateLowerGCFramePass) \
+    YY(LLVMExtraJuliaLICMPass) \
+    YY(LLVMExtraAddAllocOptPass) \
+    YY(LLVMExtraAddLowerPTLSPass) \
+    YY(LLVMExtraAddRemoveNIPass) \
+    YY(LLVMExtraAddGCInvariantVerifierPass) \
+    YY(LLVMExtraAddDemoteFloat16Pass) \
 
