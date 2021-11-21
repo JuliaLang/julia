@@ -1,6 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "llvm-version.h"
 #include "platform.h"
 #if defined(_OS_WINDOWS_)
 // use ELF because RuntimeDyld COFF i686 support didn't exist
@@ -63,6 +62,9 @@
 #include <llvm/IR/Verifier.h> // for llvmcall validation
 #include <llvm/IR/PassTimingInfo.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
+
+// Included after LLVM support to avoid redefinition warnings
+#include "llvm-version.h"
 
 // C API
 #include <llvm-c/Types.h>
