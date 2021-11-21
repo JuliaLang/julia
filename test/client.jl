@@ -46,7 +46,7 @@ end
 
 @testset "display_error(io, er, bt) works" begin
     errio = IOBuffer()
-    Base.invokelatest(Base.display_error, errio, ErrorException, [])
+    Base.display_error(errio, ErrorException, [])
     err_str = String(take!(errio))
     @test occursin(r"""
         ERROR: ErrorException
