@@ -363,21 +363,29 @@ channel_type(rr::RemoteChannel{T}) where {T} = T
 
 function serialize(s::ClusterSerializer, f::Future)
     v_cache = @atomic f.v
-    serialize(s, f, v_cache === nothing)
-end
-serialize(s::ClusterSerializer, rr::RemoteChannel) = serialize(s, rr, true)
-function serialize(s::ClusterSerializer, rr::AbstractRemoteRef, addclient)
-    if addclient
+    if v_cache === nothing
         p = worker_id_from_socket(s.io)
-        (p !== rr.where) && send_add_client(rr, p)
+        (p !== f.where) && send_add_client(f, p)
     end
+    invoke(serialize, Tuple{ClusterSerializer, Any}, s, f.where)
+    invoke(serialize, Tuple{ClusterSerializer, Any}, s, f.whence)
+    invoke(serialize, Tuple{ClusterSerializer, Any}, s, f.id)
+    invoke(serialize, Tuple{ClusterSerializer, Any}, s, v_cache)
+end
+
+function serialize(s::ClusterSerializer, rr::RemoteChannel)
+    p = worker_id_from_socket(s.io)
+    (p !== rr.where) && send_add_client(rr, p)
     invoke(serialize, Tuple{ClusterSerializer, Any}, s, rr)
 end
 
 function deserialize(s::ClusterSerializer, t::Type{<:Future})
-    f = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, t)
-    fv_cache = @atomic f.v
-    f2 = Future(f.where, RRID(f.whence, f.id), fv_cache) # ctor adds to client_refs table
+    where = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, Int)
+    whence = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, Int)
+    id = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, Int)
+    v_cache = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, Union{Some{Any}, Nothing})
+
+    f2 = Future(where, RRID(whence, id), v_cache) # ctor adds to client_refs table
 
     # 1) send_add_client() is not executed when the ref is being serialized
     #    to where it exists, hence do it here.
