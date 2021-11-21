@@ -113,11 +113,14 @@ JL_USED_FUNC void AllocUseInfo::dump()
 {
     jl_safe_printf("escaped: %d\n", escaped);
     jl_safe_printf("addrescaped: %d\n", addrescaped);
+    jl_safe_printf("escapeswithinbb: %d\n", escapeswithinbb);
     jl_safe_printf("hasload: %d\n", hasload);
     jl_safe_printf("haspreserve: %d\n", haspreserve);
     jl_safe_printf("refload: %d\n", refload);
     jl_safe_printf("refstore: %d\n", refstore);
     jl_safe_printf("hasunknownmem: %d\n", hasunknownmem);
+    jl_safe_printf("returned: %d\n", returned);
+    jl_safe_printf("hasboundscheck: %d\n", hasboundscheck);
     jl_safe_printf("Uses: %d\n", (unsigned)uses.size());
     for (auto inst: uses)
         llvm_dump(inst);

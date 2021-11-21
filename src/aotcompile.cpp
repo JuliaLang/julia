@@ -618,7 +618,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 
     PM->add(createConstantMergePass());
-    PM->add(createAnnotateArrayAllocPass());
     if (opt_level < 2) {
         if (!dump_native) {
             // we won't be multiversioning, so lower CPU feature checks early on

@@ -139,7 +139,7 @@ private:
     void splitOnStack(CallInst *orig_inst, llvm::Value *tag);
     void optimizeTag(CallInst *orig_inst, llvm::Value *tag);
 
-    void getArrayOps(int dimcount);
+    void getArrayOps(CallInst *orig_inst, int dimcount);
     void optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info);
     void optimizeArrayLengthCmpInsts(CallInst *orig_inst);
     void splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag);
@@ -190,6 +190,7 @@ private:
     SmallVector<CallInst*,6> removed;
     AllocUseInfo use_info, array_info;
     bool array_length_clobbered;
+    bool array_length_clobbered_within_bb;
     bool array_only_data_ops;
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
@@ -232,8 +233,9 @@ void Optimizer::optimizeAll()
         if (item.second.isarray) {
             if (use_info.escaped) {
                 array_length_clobbered = true;
+                array_length_clobbered_within_bb = use_info.escapeswithinbb;
             } else {
-                getArrayOps(item.second.array.dimcount);
+                getArrayOps(orig, item.second.array.dimcount);
             }
             // dbgs() << "looking at " << *orig << "\n";
             // dbgs() << "got array ops\n";
@@ -824,13 +826,13 @@ void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag, bool is_array
             push_frame(user);
         }
         else {
-            dbgs() << "failed inst at removeAlloc: " << *user << "\n";
-            dbgs() << "while remove allocation " << *orig_inst << "\n";
-            dbgs() << "use_info\n";
-            use_info.dump();
-            dbgs() << "array info\n";
-            array_info.dump();
-            dbgs().flush();
+            // dbgs() << "failed inst at removeAlloc: " << *user << "\n";
+            // dbgs() << "while remove allocation " << *orig_inst << "\n";
+            // dbgs() << "use_info\n";
+            // use_info.dump();
+            // dbgs() << "array info\n";
+            // array_info.dump();
+            // dbgs().flush();
             abort();
         }
     };
@@ -849,10 +851,13 @@ void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag, bool is_array
 
 void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info) {
     assert(info.isarray);
-    // dbgs() << "use info\n";
-    // use_info.dump();
-    // dbgs() << "array info\n";
-    // array_info.dump();
+    dbgs() << "looking at " << *orig_inst << "\n";
+    dbgs() << "use info\n";
+    use_info.dump();
+    if (!use_info.escaped) {
+        dbgs() << "array info\n";
+        array_info.dump();
+    }
     if (info.array.dimcount) {
         // We can compute the length and dimensions of the array from the allocation
         // This can save on a memory read which opens up more opts
@@ -891,7 +896,7 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                         // This is an access to array data
                         break;
                     case 8:
-                        if (info.array.dimcount > 1 || !array_length_clobbered) {
+                        if (info.array.dimcount > 1 || !array_length_clobbered || (!array_length_clobbered_within_bb && access.inst->getParent() == orig_inst->getParent())) {
                             // This is an access to array length
                             access.inst->replaceAllUsesWith(length);
                             // DCE can eliminate the now-redundant load
@@ -899,23 +904,18 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                         break;
                     case 16:
                         //This is an access to array flags
-                        if (!use_info.escapeswithinbb && !array_info.escapeswithinbb) {
+                        if (!use_info.escaped || !use_info.escapeswithinbb) {
                             if (isa<LoadInst>(access.inst)) {
-                                // dbgs() << "looking at: " << *access.inst << "\n";
                                 for (auto user : access.inst->users()) {
                                     if (auto binop = dyn_cast<BinaryOperator>(user)) {
-                                        // dbgs() << "binop: " << *binop << "\n";
                                         if (binop->getOpcode() == BinaryOperator::And) {
                                             if (auto cint = dyn_cast<ConstantInt>(binop->getOperand(1))) {
-                                                // dbgs() << "cint: " << *cint << "\n";
                                                 if (cint->getSExtValue() == 3) {
                                                     // This is an access to the jl_array_t::how field
                                                     for (auto cuser : binop->users()) {
                                                         if (auto cmp = dyn_cast<CmpInst>(cuser)) {
-                                                            // dbgs() << "cmp: " << *cmp << "\n";
-                                                            if (cmp->getNumOperands() == 2 && cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ && cmp->getParent() == orig_inst->getParent()) {
+                                                            if (cmp->getNumOperands() == 2 && cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ && (!use_info.escaped || cmp->getParent() == orig_inst->getParent())) {
                                                                 if (auto cint2 = dyn_cast<ConstantInt>(cmp->getOperand(1))) {
-                                                                    // dbgs() << "cint2: " << *cmp << "\n";
                                                                     if (cint2->getSExtValue() == 3 || cint->getSExtValue() == 1) {
                                                                         //At the end of this chain we know that the value is either 0 or 2 immediately
                                                                         //after allocation. Thus we can simply replace this instruction with false
@@ -934,7 +934,7 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                         }
                         break;
                     case 24:
-                        if (info.array.dimcount > 1 || !array_length_clobbered) {
+                        if (info.array.dimcount > 1 || !array_length_clobbered || (!array_length_clobbered_within_bb && access.inst->getParent() == orig_inst->getParent())) {
                             // This is an access to dim 1
                             assert(dims[0]);
                             access.inst->replaceAllUsesWith(dims[0]);
@@ -965,9 +965,10 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
     }
 }
 
-void Optimizer::getArrayOps(int dimcount) {
+void Optimizer::getArrayOps(CallInst *orig_inst, int dimcount) {
     array_info.reset();
     array_length_clobbered = false;
+    array_length_clobbered_within_bb = false;
     array_only_data_ops = true;
     // use_info.dump();
     for (auto &field : use_info.memops) {
@@ -986,6 +987,9 @@ void Optimizer::getArrayOps(int dimcount) {
                 {
                     if (!isa<LoadInst>(access.inst)) {
                         array_length_clobbered = true;
+                        if (access.inst->getParent() == orig_inst->getParent()) {
+                            array_length_clobbered_within_bb = true;
+                        }
                     }
                     array_only_data_ops = false;
                     break;
@@ -1105,13 +1109,8 @@ void Optimizer::splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag) {
             cxc->setOperand(cxc->getPointerOperandIndex(), alloc);
         } else if (auto rmw = dyn_cast<AtomicRMWInst>(inst)) {
             rmw->setOperand(rmw->getPointerOperandIndex(), alloc);
-        } else if (auto call = dyn_cast<CallInst>(inst)) {
-            auto callee = call->getCalledOperand();
-            if (callee == pass.write_barrier_func) {
-                call->eraseFromParent();
-            } else {
-                assert(false);
-            }
+        } else {
+            assert(false && "Unexpected memop encountered!");
         }
     };
     auto &dtree = getDomTree();
@@ -1123,12 +1122,7 @@ void Optimizer::splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag) {
         }
     }
     for (auto &slot : slots) {
-        if (!slot.second.load) {
-            for (auto &inst : slot.second.instructions) {
-                assert(isa<StoreInst>(inst));
-                inst->eraseFromParent();
-            }
-        } else {
+        if (slot.second.load) {
             auto alloca_inst = allocaBuilder.CreateAlloca(slot.second.load->getType());
             // Lifetime insertion is currently broken
             // insertLifetime(allocaBuilder.CreateBitCast(alloca_inst, pass.T_pint8),
@@ -1147,6 +1141,7 @@ void Optimizer::splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag) {
             //MemToReg promotion is also broken
             // PromoteMemToReg({alloca_inst}, dtree);
         }
+        //If we're not materializing a slot anyways, removeAlloc will remove the redundant stores
     }
     removeAlloc(orig_inst, tag, true);
 }
