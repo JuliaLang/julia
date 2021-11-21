@@ -367,10 +367,8 @@ function serialize(s::ClusterSerializer, f::Future)
         p = worker_id_from_socket(s.io)
         (p !== f.where) && send_add_client(f, p)
     end
-    invoke(serialize, Tuple{ClusterSerializer, Any}, s, f.where)
-    invoke(serialize, Tuple{ClusterSerializer, Any}, s, f.whence)
-    invoke(serialize, Tuple{ClusterSerializer, Any}, s, f.id)
-    invoke(serialize, Tuple{ClusterSerializer, Any}, s, v_cache)
+    fc = Future((f.where, f.whence, f.id, v_cache)) # copy to be used for serialization (contains a reset lock)
+    invoke(serialize, Tuple{ClusterSerializer, Any}, s, fc)
 end
 
 function serialize(s::ClusterSerializer, rr::RemoteChannel)
@@ -380,12 +378,8 @@ function serialize(s::ClusterSerializer, rr::RemoteChannel)
 end
 
 function deserialize(s::ClusterSerializer, t::Type{<:Future})
-    where = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, Int)
-    whence = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, Int)
-    id = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, Int)
-    v_cache = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, Union{Some{Any}, Nothing})
-
-    f2 = Future(where, RRID(whence, id), v_cache) # ctor adds to client_refs table
+    fc = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, t) # deserialized copy
+    f2 = Future(fc.where, RRID(fc.whence, fc.id), fc.v) # ctor adds to client_refs table
 
     # 1) send_add_client() is not executed when the ref is being serialized
     #    to where it exists, hence do it here.
