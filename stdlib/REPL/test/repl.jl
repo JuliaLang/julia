@@ -1402,4 +1402,6 @@ fake_repl() do stdin_write, stdout_read, repl
     @test readline(stdout_read) == "\e[0m1-element ExceptionStack:"
     @test readline(stdout_read) == "UndefVarError: foobar not defined"
     @test readline(stdout_read) == "Stacktrace:"
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
 end

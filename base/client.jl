@@ -106,7 +106,7 @@ end
 display_error(stack::ExceptionStack) = display_error(stderr, stack)
 
 # these forms are depended on by packages outside Julia
-function display_error(io::IO, exception, backtrace)
+function display_error(io::IO, er, bt)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
     println(io)
