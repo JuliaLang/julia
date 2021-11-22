@@ -1004,11 +1004,13 @@ function lex_cmd(l::Lexer, doemit=true)
     end
 end
 
+const MAX_KW_LENGTH = 10
 function lex_identifier(l::Lexer{IO_t,T}, c) where {IO_t,T}
     if T == Token
         readon(l)
     end
     h = simple_hash(c, UInt64(0))
+    n = 1
     while true
         pc, ppc = dpeekchar(l)
         if (pc == '!' && ppc == '=') || !is_identifier_char(pc)
@@ -1016,12 +1018,23 @@ function lex_identifier(l::Lexer{IO_t,T}, c) where {IO_t,T}
         end
         c = readchar(l)
         h = simple_hash(c, h)
+        n += 1
     end
 
-    return emit(l, get(kw_hash, h, IDENTIFIER))
+    if n > MAX_KW_LENGTH
+        emit(l, IDENTIFIER)
+    else
+        emit(l, get(kw_hash, h, IDENTIFIER))
+    end
 end
 
-@inline simple_hash(c::Char, h::UInt64) = hash(c, h)
+# This creates a hash for chars in [a-z] using 5 bit per char.
+# Requires an additional input-length check somewhere, because
+# this only works up to ~12 chars.
+@inline function simple_hash(c::Char, h::UInt64)
+    bytehash = (clamp(c - 'a' + 1, -1, 30) % UInt8) & 0x1f
+    h << 5 + bytehash
+end
 
 function simple_hash(str)
     ind = 1
