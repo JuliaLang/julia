@@ -8,7 +8,6 @@ module BLAS
 import ..axpy!, ..axpby!
 import Base: copyto!
 using Base: require_one_based_indexing, USE_BLAS64
-using ..LinearAlgebra.LAPACK.chk_uplo
 
 export
 # Level 1
@@ -76,7 +75,7 @@ const libblas = libblastrampoline
 const liblapack = libblastrampoline
 
 import LinearAlgebra
-import LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1, axpy!
+using LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1, axpy!
 
 include("lbt.jl")
 
@@ -159,6 +158,13 @@ function check()
     end
 end
 
+"Check that upper/lower (for special matrices) is correctly specified"
+function chkuplo(uplo::AbstractChar)
+    if !(uplo == 'U' || uplo == 'L')
+        throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
+    end
+    uplo
+end
 
 # Level 1
 ## copy
