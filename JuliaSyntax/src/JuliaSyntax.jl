@@ -4,7 +4,20 @@ module JuliaSyntax
 # Token stream utilities
 
 import Tokenize
-using Tokenize.Tokens: RawToken
+using Tokenize.Tokens: Tokens, RawToken
+
+include("token_kinds.jl")
+
+"""
+    TK"s"
+
+The full token kind of a string "s".  For example, TK")" is the kind of the
+right parenthesis token.
+"""
+macro TK_str(str)
+    name = Symbol(str)
+    return :(TokenKinds.$name)
+end
 
 """
 We define a token type which is more suited to parsing than the basic token
@@ -67,7 +80,7 @@ Base.eltype(::Type{TokenStream}) = SyntaxToken
 function Base.iterate(ts::TokenStream, end_state=false)
     end_state && return nothing
     t = take_token!(ts)
-    return t, kind(t) == Tokens.ENDMARKER
+    return t, kind(t) == TK"ENDMARKER"
 end
 
 function _read_raw_token(lexer::Tokenize.Lexers.Lexer)
@@ -76,11 +89,11 @@ function _read_raw_token(lexer::Tokenize.Lexers.Lexer)
         # We lex whitespace slightly differently from Tokenize.jl, as newlines
         # are syntactically significant
         if Tokenize.Lexers.accept(lexer, '\n')
-            return Tokenize.Lexers.emit(lexer, Tokens.NEWLINE_WS)
+            return Tokenize.Lexers.emit(lexer, TK"NEWLINE_WS")
         else
             Tokenize.Lexers.readon(lexer)
             Tokenize.Lexers.accept_batch(lexer, c->isspace(c) && c != '\n')
-            return Tokenize.Lexers.emit(lexer, Tokens.WHITESPACE)
+            return Tokenize.Lexers.emit(lexer, TK"WHITESPACE")
         end
     else
         return Tokenize.Lexers.next_token(lexer) 
@@ -91,7 +104,7 @@ function _read_token(lexer::Tokenize.Lexers.Lexer)
     # No token - do the actual work of taking a token from the lexer
     leading_trivia = EMPTY_RAW_TOKEN
     raw = _read_raw_token(lexer) 
-    if Tokens.exactkind(raw) == Tokens.WHITESPACE
+    if Tokens.exactkind(raw) == TK"WHITESPACE"
         leading_trivia = raw
         raw = _read_raw_token(lexer) 
     end
@@ -112,7 +125,7 @@ end
 # * Newlines tokens are gobbled (TODO!)
 function require_token(ts::TokenStream)
     tok = peek_token(ts)
-    if kind(tok) == Tokens.ENDMARKER
+    if kind(tok) == TK"ENDMARKER"
         error("incomplete: premature end of input")
     end
     return tok
@@ -194,14 +207,14 @@ put_back!(ps::ParseState, tok::RawToken) = put_back!(ps.tokens, tok)
 
 function is_closing_token(ps::ParseState, tok)
     k = kind(tok)
-    return k in (Tokens.ELSE, Tokens.ELSEIF, Tokens.CATCH, Tokens.FINALLY,
-                 Tokens.COMMA, Tokens.LPAREN, Tokens.RSQUARE, Tokens.RBRACE,
-                 Tokens.SEMICOLON, Tokens.ENDMARKER) ||
-        k == Tokens.END && !ps.end_symbol
+    return k in (TK"else", TK"elseif", TK"catch", TK"finally",
+                 TK",", TK"(", TK"]", TK"}", TK";",
+                 TK"ENDMARKER") ||
+        k == TK"END" && !ps.end_symbol
 end
 
 function has_whitespace_prefix(tok::SyntaxToken)
-    tok.leading_trivia.kind == Tokens.WHITESPACE
+    tok.leading_trivia.kind == TK"WHITESPACE"
 end
 
 
@@ -209,24 +222,24 @@ end
 function parse_atom(ps::ParseState; checked::Bool=true)
     tok = require_token(ps)
     tok_kind = kind(tok)
-    if tok_kind == Tokens.COLON # symbol/expression quote
+    if tok_kind == TK":" # symbol/expression quote
         take_token!(ps)
         next = peek_token(ps)
-        if is_closing_token(ps, next) && (kind(next) != Tokens.KEYWORD ||
+        if is_closing_token(ps, next) && (kind(next) != TK"KEYWORD" ||
                                           has_whitespace_prefix(next))
             return Symbol(":") # FIXME: CST NODE ???
         elseif has_whitespace_prefix(next)
             error("whitespace not allowed after \":\" used for quoting")
-        elseif kind(next) == Tokens.NEWLINE_WS
+        elseif kind(next) == TK"NEWLINE_WS"
             error("newline not allowed after \":\" used for quoting")
         else
             # Being inside quote makes `end` non-special again. issue #27690
             ps1 = ParseState(ps, end_symbol=false)
             return Expr(:quote, parse_atom(ps1, checked=false))
         end
-    elseif tok_kind == Tokens.EQ # misplaced =
+    elseif tok_kind == TK"=" # misplaced =
         error("unexpected `=`")
-    elseif tok_kind == Tokens.IDENTIFIER
+    elseif tok_kind == TK"IDENTIFIER"
         if checked
             # FIXME: Check identifier names
         end
