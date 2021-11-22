@@ -45,6 +45,7 @@ Command-line option changes
 * New option `--strip-ir` to remove the compiler's IR (intermediate representation) of source
   code when building a system image. The resulting image will only work if `--compile=all` is
   used, or if all needed code is precompiled ([#42925]).
+* When the program file is `-` the code to be executed is read from standard in ([#43191]).
 
 Multi-threading changes
 -----------------------

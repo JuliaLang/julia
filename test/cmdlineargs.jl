@@ -766,3 +766,22 @@ end
 
 # issue #39259, shadowing `ARGS`
 @test success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)
+
+@testset "- as program file reads from stdin" begin
+    for args in (`- foo bar`, `-- - foo bar`)
+        cmd = `$(Base.julia_cmd()) --startup-file=no $(args)`
+        io = IOBuffer()
+        open(cmd, io; write=true) do proc
+            write(proc, """
+                println(PROGRAM_FILE)
+                println(@__FILE__)
+                foreach(println, ARGS)
+            """)
+        end
+        lines = collect(eachline(seekstart(io)))
+        @test lines[1] == "-"
+        @test lines[2] == "stdin"
+        @test lines[3] == "foo"
+        @test lines[4] == "bar"
+    end
+end
