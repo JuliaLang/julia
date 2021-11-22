@@ -453,7 +453,7 @@ generic_normMinusInf(x) = minimum(abs, x)
 
 generic_normInf(x) = minimum(abs, x)
 
-function generic_norm1(x) = sum(abs, x)
+generic_norm1(x) = sum(abs, x)
 
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
