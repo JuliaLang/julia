@@ -6,8 +6,9 @@ Interface to BLAS subroutines.
 module BLAS
 
 import ..axpy!, ..axpby!
-import Base: copyto!, USE_BLAS64
-using Base: require_one_based_indexing
+import Base: copyto!
+using Base: require_one_based_indexing, USE_BLAS64
+using ..LinearAlgebra.LAPACK.chk_uplo
 
 export
 # Level 1
@@ -149,7 +150,7 @@ function check()
     config = get_config()
 
     # Ensure that one of our loaded libraries satisfies our interface requirement
-    interface = Base.USE_BLAS64 ? :ilp64 : :lp64
+    interface = USE_BLAS64 ? :ilp64 : :lp64
     if !any(lib.interface == interface for lib in config.loaded_libs)
         interfacestr = uppercase(string(interface))
         @error("No loaded BLAS libraries were built with $(interfacestr) support")
@@ -799,9 +800,7 @@ for (fname, elty, lib) in ((:dsymv_,:Float64,libblastrampoline),
         function symv!(uplo::AbstractChar, alpha::Union{($elty), Bool},
                        A::AbstractMatrix{$elty}, x::AbstractVector{$elty},
                        beta::Union{($elty), Bool}, y::AbstractVector{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
@@ -863,9 +862,7 @@ for (fname, elty) in ((:zhemv_,:ComplexF64),
                       (:chemv_,:ComplexF32))
     @eval begin
         function hemv!(uplo::AbstractChar, α::Union{$elty, Bool}, A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, β::Union{$elty, Bool}, y::AbstractVector{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
@@ -967,9 +964,7 @@ end
 function hpmv!(uplo::AbstractChar,
                α::Number, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
                β::Number, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasComplex}
-    if uplo ∉ ('U', 'L')
-        throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-    end
+    chkuplo(uplo)
     require_one_based_indexing(AP, x, y)
     N = length(x)
     if N != length(y)
@@ -1018,9 +1013,7 @@ for (fname, elty) in ((:dsbmv_,:Float64),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function sbmv!(uplo::AbstractChar, k::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, x, y)
             chkstride1(A)
             ccall((@blasfunc($fname), libblastrampoline), Cvoid,
@@ -1124,9 +1117,7 @@ end
 function spmv!(uplo::AbstractChar,
                α::Real, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
                β::Real, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasReal}
-    if uplo ∉ ('U', 'L')
-        throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-    end
+    chkuplo(uplo)
     require_one_based_indexing(AP, x, y)
     N = length(x)
     if N != length(y)
@@ -1197,9 +1188,7 @@ end
 function spr!(uplo::AbstractChar,
               α::Real, x::Union{DenseArray{T}, AbstractVector{T}},
               AP::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasReal}
-    if uplo ∉ ('U', 'L')
-        throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-    end
+    chkuplo(uplo)
     require_one_based_indexing(AP, x)
     N = length(x)
     if 2*length(AP) < N*(N + 1)
@@ -1244,9 +1233,7 @@ for (fname, elty) in ((:zhbmv_,:ComplexF64),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function hbmv!(uplo::AbstractChar, k::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, x, y)
             chkstride1(A)
             ccall((@blasfunc($fname), libblastrampoline), Cvoid,
@@ -1303,9 +1290,7 @@ for (fname, elty) in ((:dtrmv_,:Float64),
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION A(LDA,*),X(*)
         function trmv!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if n != length(x)
@@ -1361,9 +1346,7 @@ for (fname, elty) in ((:dtrsv_,:Float64),
                 #       .. Array Arguments ..
                 #       DOUBLE PRECISION A(LDA,*),X(*)
         function trsv!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if n != length(x)
@@ -1432,9 +1415,7 @@ for (fname, elty, lib) in ((:dsyr_,:Float64,libblastrampoline),
                            (:csyr_,:ComplexF32,libblastrampoline))
     @eval begin
         function syr!(uplo::AbstractChar, α::$elty, x::AbstractVector{$elty}, A::AbstractMatrix{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if length(x) != n
@@ -1465,9 +1446,7 @@ for (fname, elty, relty) in ((:zher_,:ComplexF64, :Float64),
                              (:cher_,:ComplexF32, :Float32))
     @eval begin
         function her!(uplo::AbstractChar, α::$relty, x::AbstractVector{$elty}, A::AbstractMatrix{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if length(x) != n
@@ -1577,9 +1556,7 @@ for (mfname, elty) in ((:dsymm_,:Float64),
         function symm!(side::AbstractChar, uplo::AbstractChar, alpha::Union{($elty), Bool},
                        A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty},
                        beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
@@ -1653,9 +1630,7 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
         function hemm!(side::AbstractChar, uplo::AbstractChar, alpha::Union{($elty), Bool},
                        A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty},
                        beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
@@ -1750,9 +1725,7 @@ for (fname, elty) in ((:dsyrk_,:Float64),
         function syrk!(uplo::AbstractChar, trans::AbstractChar,
                       alpha::Union{($elty), Bool}, A::AbstractVecOrMat{$elty},
                       beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, C)
             n = checksquare(C)
             nn = size(A, trans == 'N' ? 1 : 2)
@@ -1809,9 +1782,7 @@ for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
         function herk!(uplo::AbstractChar, trans::AbstractChar,
                         α::Union{$relty, Bool}, A::AbstractVecOrMat{$elty},
                         β::Union{$relty, Bool}, C::AbstractMatrix{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, C)
             n = checksquare(C)
             nn = size(A, trans == 'N' ? 1 : 2)
@@ -1856,9 +1827,7 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
         function syr2k!(uplo::AbstractChar, trans::AbstractChar,
                         alpha::($elty), A::AbstractVecOrMat{$elty}, B::AbstractVecOrMat{$elty},
                         beta::($elty), C::AbstractMatrix{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, B, C)
             n = checksquare(C)
             nn = size(A, trans == 'N' ? 1 : 2)
@@ -1926,9 +1895,7 @@ for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:Comple
         function her2k!(uplo::AbstractChar, trans::AbstractChar, alpha::($elty1),
                         A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1},
                         beta::($elty2), C::AbstractMatrix{$elty1})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, B, C)
             n = checksquare(C)
             nn = size(A, trans == 'N' ? 1 : 2)
@@ -2044,9 +2011,7 @@ for (mmname, smname, elty) in
         #       DOUBLE PRECISION A(LDA,*),B(LDB,*)
         function trmm!(side::AbstractChar, uplo::AbstractChar, transa::AbstractChar, diag::AbstractChar, alpha::Number,
                        A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, B)
             m, n = size(B)
             nA = checksquare(A)
@@ -2077,9 +2042,7 @@ for (mmname, smname, elty) in
         #       DOUBLE PRECISION A(LDA,*),B(LDB,*)
         function trsm!(side::AbstractChar, uplo::AbstractChar, transa::AbstractChar, diag::AbstractChar,
                        alpha::$elty, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
-            if uplo ∉ ('U', 'L')
-                throw(ArgumentError("uplo argument must be either 'U' or 'L', got $uplo"))
-            end
+            chkuplo(uplo)
             require_one_based_indexing(A, B)
             m, n = size(B)
             k = checksquare(A)
