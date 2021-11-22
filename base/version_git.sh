@@ -85,11 +85,11 @@ if [ -z "$fork_master_timestamp" ]; then
 fi
 
 build_system_directory="../.buildkite"
-if [[ -d "${build_system_directory:?}" ]]; then
+if [[ -d "${build_system_directory:?}/.git" ]]; then
     build_system_commit=$(git -C "${build_system_directory:?}" rev-parse HEAD)
     build_system_commit_short=$(git -C "${build_system_directory:?}" rev-parse --short HEAD)
 else
-    echo "Warning: The build system directory does not exist: ${build_system_directory:?}" >&2
+    echo "Warning: The build system directory does not exist or is not a Git repo: ${build_system_directory:?}" >&2
     build_system_commit=""
     build_system_commit_short=""
 fi
