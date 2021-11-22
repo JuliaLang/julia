@@ -451,7 +451,7 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 # special cases of norm; note that they don't need to handle isempty(x)
 generic_normMinusInf(x) = minimum(abs, x)
 
-generic_normInf(x) = minimum(abs, x)
+generic_normInf(x) = maximum(abs, x)
 
 generic_norm1(x) = sum(abs, x)
 
