@@ -449,11 +449,11 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 # Dot products and norms
 
 # special cases of norm; note that they don't need to handle isempty(x)
-generic_normMinusInf(x) = minimum(abs, x)
+generic_normMinusInf(x) = mapreduce(norm, min, x)
 
-generic_normInf(x) = maximum(abs, x)
+generic_normInf(x) = mapreduce(norm, max, x)
 
-generic_norm1(x) = sum(abs, x)
+generic_norm1(x) = mapreduce(norm, +, x)
 
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
