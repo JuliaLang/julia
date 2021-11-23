@@ -13,14 +13,6 @@
     #error Only LLVM versions >= 11.0.0 are supported by Julia
 #endif
 
-#ifndef LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING
-#define LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING 0
-#endif
-
-#ifndef LLVM_ENABLE_STATS
-#define LLVM_ENABLE_STATS 0
-#endif
-
 #ifdef __cplusplus
 #if defined(__GNUC__) && (__GNUC__ >= 9)
 // Added in GCC 9, this warning is annoying
