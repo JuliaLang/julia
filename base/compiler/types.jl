@@ -62,10 +62,10 @@ struct OptimizationParams
 
     function OptimizationParams(;
             inlining::Bool = inlining_enabled(),
-            inline_cost_threshold::Int = 100,
+            inline_cost_threshold::Int = 110,
             inline_nonleaf_penalty::Int = 1000,
             inline_tupleret_bonus::Int = 250,
-            inline_error_path_cost::Int = 20,
+            inline_error_path_cost::Int = 10,
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,

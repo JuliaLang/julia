@@ -58,7 +58,7 @@ function add_tfunc(f::Function, minarg::Int, maxarg::Int, @nospecialize(tfunc), 
     push!(T_FFUNC_COST, cost)
 end
 
-add_tfunc(throw, 1, 1, (@nospecialize(x)) -> Bottom, 0)
+add_tfunc(throw, 1, 1, (@nospecialize(x)) -> Bottom, 1)
 
 # the inverse of typeof_tfunc
 # returns (type, isexact, isconcrete, istype)
@@ -1187,7 +1187,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
     end
     return Type{<:ft}
 end
-add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
+add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 20)
 
 # Like `valid_tparam`, but in the type domain.
 function valid_tparam_type(T::DataType)
