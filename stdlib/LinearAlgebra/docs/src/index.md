@@ -414,7 +414,7 @@ Base.cis(::AbstractMatrix)
 Base.:^(::AbstractMatrix, ::Number)
 Base.:^(::Number, ::AbstractMatrix)
 LinearAlgebra.log(::StridedMatrix)
-LinearAlgebra.sqrt(::StridedMatrix{<:Real})
+LinearAlgebra.sqrt(::StridedMatrix)
 LinearAlgebra.cos(::StridedMatrix{<:Real})
 LinearAlgebra.sin(::StridedMatrix{<:Real})
 LinearAlgebra.sincos(::StridedMatrix{<:Real})
@@ -577,6 +577,7 @@ LinearAlgebra.BLAS.trmv
 LinearAlgebra.BLAS.trsv!
 LinearAlgebra.BLAS.trsv
 LinearAlgebra.BLAS.set_num_threads
+LinearAlgebra.BLAS.get_num_threads
 ```
 
 ## LAPACK functions

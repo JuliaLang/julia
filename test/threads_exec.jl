@@ -27,6 +27,27 @@ end
 # (expected test duration is about 18-180 seconds)
 Timer(t -> killjob("KILLING BY THREAD TEST WATCHDOG\n"), 1200)
 
+# basic lock check
+if nthreads() > 1
+    let lk = Base.Threads.SpinLock()
+        c1 = Base.Event()
+        c2 = Base.Event()
+        @test trylock(lk)
+        @test !trylock(lk)
+        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
+        t2 = Threads.@spawn (notify(c2); trylock(lk))
+        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
+        wait(c1)
+        wait(c2)
+        @test !fetch(t2)
+        @test istaskdone(t2)
+        @test !istaskdone(t1)
+        unlock(lk)
+        @test fetch(t1)
+        @test istaskdone(t1)
+    end
+end
+
 # threading constructs
 
 let a = zeros(Int, 2 * nthreads())
@@ -496,15 +517,6 @@ if cfunction_closure
     test_thread_cfunction()
 end
 
-# Compare the two ways of checking if threading is enabled.
-# `jl_tls_states` should only be defined on non-threading build.
-if ccall(:jl_threading_enabled, Cint, ()) == 0
-    @test nthreads() == 1
-    cglobal(:jl_tls_states) != C_NULL
-else
-    @test_throws ErrorException cglobal(:jl_tls_states)
-end
-
 function test_thread_range()
     a = zeros(Int, nthreads())
     @threads for i in 1:threadid()
@@ -738,8 +750,7 @@ end
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
 catch ex
-    @test ex isa LoadError
-    @test ex.error isa ArgumentError
+    @test ex isa ArgumentError
 end
 
 @testset "@spawn interpolation" begin
@@ -841,6 +852,19 @@ fib34666(x) =
     end
 @test fib34666(25) == 75025
 
+# issue #41324
+@testset "Co-schedule" begin
+    parent = Threads.@spawn begin
+        @test current_task().sticky == false
+        child = @async begin end
+        @test current_task().sticky == true
+        @test Threads.threadid() == Threads.threadid(child)
+        wait(child)
+    end
+    wait(parent)
+    @test parent.sticky == true
+end
+
 function jitter_channel(f, k, delay, ntasks, schedule)
     x = Channel(ch -> foreach(i -> put!(ch, i), 1:k), 1)
     y = Channel(k) do ch
@@ -874,4 +898,118 @@ end
         Threads.foreach(x -> put!(ys, x), inner)
     end
     @test sort!(collect(ys)) == 1:3
+end
+
+# reproducible multi-threaded rand()
+
+using Random
+
+function reproducible_rand(r, i)
+    if i == 0
+        return UInt64(0)
+    end
+    r1 = rand(r, UInt64)*hash(i)
+    t1 = Threads.@spawn reproducible_rand(r, i-1)
+    t2 = Threads.@spawn reproducible_rand(r, i-1)
+    r2 = rand(r, UInt64)
+    return r1 + r2 + fetch(t1) + fetch(t2)
+end
+
+@testset "Task-local random" begin
+    r = Random.TaskLocalRNG()
+    Random.seed!(r, 23)
+    val = reproducible_rand(r, 10)
+    for i = 1:4
+        Random.seed!(r, 23)
+        @test reproducible_rand(r, 10) == val
+    end
+end
+
+# @spawn racying with sync_end
+
+hidden_spawn(f) = Threads.@spawn f()
+
+function sync_end_race()
+    y = Ref(:notset)
+    local t
+    @sync begin
+        for _ in 1:6  # tweaked to maximize `nerror` below
+            Threads.@spawn nothing
+        end
+        t = hidden_spawn() do
+            Threads.@spawn y[] = :completed
+        end
+    end
+    try
+        wait(t)
+    catch
+        return :notscheduled
+    end
+    return y[]
+end
+
+function check_sync_end_race()
+    @sync begin
+        done = Threads.Atomic{Bool}(false)
+        try
+            # `Threads.@spawn` must fail to be scheduled or complete its execution:
+            ncompleted = 0
+            nnotscheduled = 0
+            nerror = 0
+            for i in 1:1000
+                y = try
+                    yield()
+                    sync_end_race()
+                catch err
+                    if err isa CompositeException
+                        if err.exceptions[1] isa Base.ScheduledAfterSyncException
+                            nerror += 1
+                            continue
+                        end
+                    end
+                    rethrow()
+                end
+                y in (:completed, :notscheduled) || return (; i, y)
+                ncompleted += y === :completed
+                nnotscheduled += y === :notscheduled
+            end
+            # Useful for tuning the test:
+            @debug "`check_sync_end_race` done" nthreads() ncompleted nnotscheduled nerror
+        finally
+            done[] = true
+        end
+    end
+    return nothing
+end
+
+@testset "Racy `@spawn`" begin
+    @test check_sync_end_race() === nothing
+end
+
+# issue #41546, thread-safe package loading
+@testset "package loading" begin
+    ch = Channel{Bool}(nthreads())
+    barrier = Base.Event()
+    old_act_proj = Base.ACTIVE_PROJECT[]
+    try
+        pushfirst!(LOAD_PATH, "@")
+        Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
+        @sync begin
+            for _ in 1:nthreads()
+                Threads.@spawn begin
+                    put!(ch, true)
+                    wait(barrier)
+                    @eval using TestPkg
+                end
+            end
+            for _ in 1:nthreads()
+                take!(ch)
+            end
+            notify(barrier)
+        end
+        @test Base.root_module(@__MODULE__, :TestPkg) isa Module
+    finally
+        Base.ACTIVE_PROJECT[] = old_act_proj
+        popfirst!(LOAD_PATH)
+    end
 end

@@ -69,6 +69,18 @@ ee = typemax(Int64)
             @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
         end
     end
+    @testset "division" begin
+        oz = big(1 // 0)
+        zo = big(0 // 1)
+
+        @test_throws DivideError() oz / oz
+        @test oz == oz / one(oz)
+        @test -oz == oz / (-one(oz))
+        @test zero(oz) == one(oz) / oz
+        @test_throws DivideError() zo / zo
+        @test one(zo) / zo == big(1//0)
+        @test -one(zo) / zo == big(-1//0)
+    end
 end
 @testset "div, fld, mod, rem" begin
     for i = -10:10, j = [-10:-1; 1:10]
@@ -212,6 +224,9 @@ let a, b
     a = rand(1:100, 10000)
     b = map(BigInt, a)
     @test sum(a) == sum(b)
+    @test 0 == sum(BigInt[]) isa BigInt
+    @test prod(b) == foldl(*, b)
+    @test 1 == prod(BigInt[]) isa BigInt
 end
 
 @testset "Iterated arithmetic" begin
@@ -224,10 +239,15 @@ end
     g = parse(BigInt,"-1")
 
     @test +(a, b) == parse(BigInt,"327547")
+    @test 327547 == sum((a, b)) isa BigInt
     @test +(a, b, c) == parse(BigInt,"3426495623485904783805894")
+    @test 3426495623485904783805894 == sum((a, b, c)) isa BigInt
     @test +(a, b, c, d) == parse(BigInt,"3426495623485903384821764")
+    @test 3426495623485903384821764 == sum((a, b, c, d)) isa BigInt
     @test +(a, b, c, d, f) == parse(BigInt,"2413804710837418037418307081437318690130968843290370569228")
+    @test 2413804710837418037418307081437318690130968843290370569228 == sum((a, b, c, d, f)) isa BigInt
     @test +(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437318690130968843290370569227")
+    @test 2413804710837418037418307081437318690130968843290370569227 == sum((a, b, c, d, f, g)) isa BigInt
 
     @test *(a, b) == parse(BigInt,"3911455620")
     @test *(a, b, c) == parse(BigInt,"13402585563389346256121263521460140")
@@ -346,28 +366,24 @@ end
     @test_throws InexactError convert(BigInt, 2.1)
     @test_throws InexactError convert(BigInt, big(2.1))
 end
-@testset "issue #13367" begin
-    @test trunc(BigInt,2.1) == 2
-    @test round(BigInt,2.1) == 2
-    @test floor(BigInt,2.1) == 2
-    @test ceil(BigInt,2.1) == 3
+@testset "truncation" begin
+    # cf. issue #13367
+    for T = (Float16, Float32, Float64)
+        @test trunc(BigInt, T(2.1)) == 2
+        @test unsafe_trunc(BigInt, T(2.1)) == 2
+        @test round(BigInt, T(2.1)) == 2
+        @test floor(BigInt, T(2.1)) == 2
+        @test ceil(BigInt, T(2.1)) == 3
 
-    @test trunc(BigInt,2.1f0) == 2
-    @test round(BigInt,2.1f0) == 2
-    @test floor(BigInt,2.1f0) == 2
-    @test ceil(BigInt,2.1f0) == 3
-
-    @test_throws InexactError trunc(BigInt,Inf)
-    @test_throws InexactError round(BigInt,Inf)
-    @test_throws InexactError floor(BigInt,Inf)
-    @test_throws InexactError ceil(BigInt,Inf)
-
-    @test string(big(3), base = 2) == "11"
-    @test string(big(9), base = 8) == "11"
-    @test string(-big(9), base = 8) == "-11"
-    @test string(big(12), base = 16) == "c"
+        @test_throws InexactError trunc(BigInt, T(Inf))
+        @test_throws InexactError round(BigInt, T(Inf))
+        @test_throws InexactError floor(BigInt, T(Inf))
+        @test_throws InexactError ceil(BigInt, T(Inf))
+    end
 end
-@testset "Issue #18849" begin
+
+@testset "string(::BigInt)" begin
+    # cf. issue #18849"
     # bin, oct, dec, hex should not call sizeof on BigInts
     # when padding is desired
     padding = 4
@@ -392,14 +408,19 @@ end
     @test string(-high, pad = padding, base = 8) == "-4000000"
     @test string(-high, pad = padding, base = 10) == "-1048576"
     @test string(-high, pad = padding, base = 16) == "-100000"
-end
 
-# respect 0-padding on big(0)
-for base in (2, 8, 10, 16)
-    local base
-    @test string(big(0), base=base, pad=0) == ""
+    # cf. issue #13367
+    @test string(big(3), base = 2) == "11"
+    @test string(big(9), base = 8) == "11"
+    @test string(-big(9), base = 8) == "-11"
+    @test string(big(12), base = 16) == "c"
+
+    # respect 0-padding on big(0)
+    for base in (2, 8, 10, 16)
+        @test string(big(0), base=base, pad=0) == ""
+    end
+    @test string(big(0), base = rand(2:62), pad = 0) == ""
 end
-@test string(big(0), base = rand(2:62), pad = 0) == ""
 
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2

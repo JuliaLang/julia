@@ -33,6 +33,7 @@ export
     sbmv!,
     sbmv,
     spmv!,
+    spr!,
     symv!,
     symv,
     trsv!,
@@ -79,7 +80,7 @@ import LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismat
 include("lbt.jl")
 
 """
-get_config()
+    get_config()
 
 Return an object representing the current `libblastrampoline` configuration.
 
@@ -91,7 +92,7 @@ get_config() = lbt_get_config()
 # We hard-lock `vendor()` to `openblas(64)` here to satisfy older code, but all new code should use
 # `get_config()` since it is now possible to have multiple vendors loaded at once.
 function vendor()
-    Base.depwarn("`vendor()` is deprecated, use `BLAS.get_config()` and inspect the output instead", :vendor)
+    Base.depwarn("`vendor()` is deprecated, use `BLAS.get_config()` and inspect the output instead", :vendor; force=true)
     if USE_BLAS64
         return :openblas64
     else
@@ -218,15 +219,21 @@ end
 
 """
     scal!(n, a, X, incx)
+    scal!(a, X)
 
 Overwrite `X` with `a*X` for the first `n` elements of array `X` with stride `incx`. Returns `X`.
+
+If `n` and `incx` are not provided, `length(X)` and `stride(X,1)` are used.
 """
 function scal! end
 
 """
     scal(n, a, X, incx)
+    scal(a, X)
 
 Return `X` scaled by `a` for the first `n` elements of array `X` with stride `incx`.
+
+If `n` and `incx` are not provided, `length(X)` and `stride(X,1)` are used.
 """
 function scal end
 
@@ -242,9 +249,12 @@ for (fname, elty) in ((:dscal_,:Float64),
                   n, DA, DX, incx)
             DX
         end
+
+        scal!(DA::$elty, DX::AbstractArray{$elty}) = scal!(length(DX),DA,DX,stride(DX,1))
     end
 end
 scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
+scal(DA, DX) = scal!(DA, copy(DX))
 
 ## dot
 
@@ -655,13 +665,19 @@ for (fname, elty) in ((:dgemv_,:Float64),
                 throw(DimensionMismatch("the transpose of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             end
             chkstride1(A)
-            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+            lda = stride(A,2)
+            lda >= max(1, size(A,1)) || error("`stride(A,2)` must be at least `max(1, size(A,1))`")
+            sX = stride(X,1)
+            pX = pointer(X, sX > 0 ? firstindex(X) : lastindex(X))
+            sY = stride(Y,1)
+            pY = pointer(Y, sY > 0 ? firstindex(Y) : lastindex(Y))
+            GC.@preserve X Y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Clong),
                  trans, size(A,1), size(A,2), alpha,
-                 A, max(1,stride(A,2)), X, stride(X,1),
-                 beta, Y, stride(Y,1), 1)
+                 A, lda, pX, sX,
+                 beta, pY, sY, 1)
             Y
         end
         function gemv(trans::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, X::AbstractVector{$elty})
@@ -1129,6 +1145,71 @@ The array inputs `x`, `y` and `AP` must all be of `Float32` or `Float64` type.
 Return the updated `y`.
 """
 spmv!
+
+### spr!, (SP) symmetric packed matrix-vector operation defined as A := alpha*x*x' + A
+for (fname, elty) in ((:dspr_, :Float64),
+                      (:sspr_, :Float32))
+    @eval begin
+        function spr!(uplo::AbstractChar,
+                      n::Integer,
+                      α::$elty,
+                      x::Union{Ptr{$elty}, AbstractArray{$elty}},
+                      incx::Integer,
+                      AP::Union{Ptr{$elty}, AbstractArray{$elty}})
+
+            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+                  (Ref{UInt8},     # uplo,
+                   Ref{BlasInt},   # n,
+                   Ref{$elty},     # α,
+                   Ptr{$elty},     # x,
+                   Ref{BlasInt},   # incx,
+                   Ptr{$elty},     # AP,
+                   Clong),         # length of uplo
+                  uplo,
+                  n,
+                  α,
+                  x,
+                  incx,
+                  AP,
+                  1)
+            return AP
+        end
+    end
+end
+
+function spr!(uplo::AbstractChar,
+              α::Real, x::Union{DenseArray{T}, AbstractVector{T}},
+              AP::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasReal}
+    require_one_based_indexing(AP, x)
+    N = length(x)
+    if 2*length(AP) < N*(N + 1)
+        throw(DimensionMismatch("Packed symmetric matrix A has size smaller than length(x) = $(N)."))
+    end
+    return spr!(uplo, N, convert(T, α), x, stride(x, 1), AP)
+end
+
+"""
+    spr!(uplo, α, x, AP)
+
+Update matrix `A` as `α*A*x*x'`, where `A` is a symmetric matrix provided
+in packed format `AP` and `x` is a vector.
+
+With `uplo = 'U'`, the array AP must contain the upper triangular part of the
+symmetric matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[1, 2]` and `A[2, 2]`
+respectively, and so on.
+
+With `uplo = 'L'`, the array AP must contain the lower triangular part of the
+symmetric matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[2, 1]` and `A[3, 1]`
+respectively, and so on.
+
+The scalar input `α` must be real.
+
+The array inputs `x` and `AP` must all be of `Float32` or `Float64` type.
+Return the updated `AP`.
+"""
+spr!
 
 ### hbmv, (HB) Hermitian banded matrix-vector multiplication
 for (fname, elty) in ((:zhbmv_,:ComplexF64),

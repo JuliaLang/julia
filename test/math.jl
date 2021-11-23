@@ -53,6 +53,11 @@ end
     @test occursin("3.14159", sprint(show, MIME"text/plain"(), π))
     @test repr(Any[pi ℯ; ℯ pi]) == "Any[π ℯ; ℯ π]"
     @test string(pi) == "π"
+
+    @test sin(π) === sinpi(1) == tan(π) == sinpi(1 // 1) == 0
+    @test cos(π) === cospi(1) == sec(π) == cospi(1 // 1) == -1
+    @test csc(π) == 1/0 && cot(π) == -1/0
+    @test sincos(π) === sincospi(1) == (0, -1)
 end
 
 @testset "frexp,ldexp,significand,exponent" begin
@@ -141,14 +146,18 @@ end
 # We compare to BigFloat instead of hard-coding
 # values, assuming that BigFloat has an independently tested implementation.
 @testset "basic math functions" begin
-    @testset "$T" for T in (Float32, Float64)
+    @testset "$T" for T in (Float16, Float32, Float64)
         x = T(1//3)
         y = T(1//2)
         yi = 4
         @testset "Random values" begin
-            @test x^y ≈ big(x)^big(y)
+            @test x^y === T(big(x)^big(y))
             @test x^1 === x
-            @test x^yi ≈ big(x)^yi
+            @test x^yi === T(big(x)^yi)
+            # test for large negative exponent where error compensation matters
+            @test 0.9999999955206014^-1.0e8 == 1.565084574870928
+            @test (-x)^yi == x^yi
+            @test (-x)^(yi+1) == -(x^(yi+1))
             @test acos(x) ≈ acos(big(x))
             @test acosh(1+x) ≈ acosh(big(1+x))
             @test asin(x) ≈ asin(big(x))
@@ -192,15 +201,17 @@ end
             @test atan(T(1),T(1)) ≈ T(pi)/4 atol=eps(T)
             @test isequal(cbrt(T(0)), T(0))
             @test isequal(cbrt(T(1)), T(1))
-            @test isequal(cbrt(T(1000000000)), T(1000))
+            @test isequal(cbrt(T(1000000000))^3, T(1000)^3)
             @test isequal(cos(T(0)), T(1))
             @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
-            @test exp(T(1)) ≈ T(ℯ) atol=10*eps(T)
+            @test exp(T(1)) ≈ T(ℯ) atol=2*eps(T)
             @test isequal(exp10(T(1)), T(10))
             @test isequal(exp2(T(1)), T(2))
             @test isequal(expm1(T(0)), T(0))
-            @test expm1(T(1)) ≈ T(ℯ)-1 atol=10*eps(T)
+            @test isequal(expm1(-floatmax(T)), -one(T))
+            @test isequal(expm1(floatmax(T)), T(Inf))
+            @test expm1(T(1)) ≈ T(ℯ)-1 atol=2*eps(T)
             @test isequal(hypot(T(3),T(4)), T(5))
             @test isequal(hypot(floatmax(T),T(1)),floatmax(T))
             @test isequal(hypot(floatmin(T)*sqrt(eps(T)),T(0)),floatmin(T)*sqrt(eps(T)))
@@ -219,7 +230,7 @@ end
             @test sin(T(pi)) ≈ T(0) atol=eps(T)
             @test isequal(sqrt(T(0)), T(0))
             @test isequal(sqrt(T(1)), T(1))
-            @test isequal(sqrt(T(100000000)), T(10000))
+            @test isequal(sqrt(T(100000000))^2, T(10000)^2)
             @test isequal(tan(T(0)), T(0))
             @test tan(T(pi)/4) ≈ T(1) atol=eps(T)
             @test isequal(sec(T(pi)), -one(T))
@@ -228,6 +239,13 @@ end
             @test isequal(cscd(T(90)), one(T))
             @test isequal(sech(log(one(T))), one(T))
             @test isequal(csch(zero(T)), T(Inf))
+            @test zero(T)^y === zero(T)
+            @test zero(T)^zero(T) === one(T)
+            @test zero(T)^(-y) === T(Inf)
+            @test zero(T)^T(NaN) === T(NaN)
+            @test one(T)^y === one(T)
+            @test one(T)^zero(T) === one(T)
+            @test one(T)^T(NaN) === one(T)
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x
@@ -286,48 +304,40 @@ end
             @test tanh(T(Inf)) === T(1)
         end
     end
-end
-
-@testset "exp function" for T in (Float64, Float32)
-    @testset "$T accuracy" begin
-        X = map(T, vcat(-10:0.0002:10, -80:0.001:80, 2.0^-27, 2.0^-28, 2.0^-14, 2.0^-13))
-        for x in X
-            y, yb = exp(x), exp(big(x))
-            @test abs(y-yb) <= 1.0*eps(T(yb))
-        end
-    end
-    @testset "$T edge cases" begin
-        @test isnan_type(T, exp(T(NaN)))
-        @test exp(T(-Inf)) === T(0.0)
-        @test exp(T(Inf)) === T(Inf)
-        @test exp(T(0.0)) === T(1.0) # exact
-        @test exp(T(5000.0)) === T(Inf)
-        @test exp(T(-5000.0)) === T(0.0)
+    @testset "Float16 expm1" begin
+        T=Float16
+        @test isequal(expm1(T(0)), T(0))
+        @test isequal(expm1(-floatmax(T)), -one(T))
+        @test isequal(expm1(floatmax(T)), T(Inf))
+        @test expm1(T(1)) ≈ T(ℯ)-1 atol=2*eps(T)
     end
 end
 
-@testset "exp10 function" begin
-    @testset "accuracy" begin
-        X = map(Float64, vcat(-10:0.00021:10, -35:0.0023:100, -300:0.001:300))
-        for x in X
-            y, yb = exp10(x), exp10(big(x))
-            @test abs(y-yb) <= 1.2*eps(Float64(yb))
+@testset "exponential functions" for T in (Float64, Float32, Float16)
+    for (func, invfunc) in ((exp2, log2), (exp, log), (exp10, log10))
+        @testset "$T $func accuracy" begin
+            minval, maxval = invfunc(floatmin(T)),prevfloat(invfunc(floatmax(T)))
+            # Test range and extensively test numbers near 0.
+            X = Iterators.flatten((minval:T(.1):maxval,
+                                   minval/100:T(.0021):maxval/100,
+                                   minval/10000:T(.000021):maxval/10000,
+                                   nextfloat(zero(T)),
+                                   T(-100):T(1):T(100) ))
+            for x in X
+                y, yb = func(x), func(widen(x))
+                if isfinite(eps(T(yb)))
+                    @test abs(y-yb) <= 1.2*eps(T(yb))
+                end
+            end
         end
-        X = map(Float32, vcat(-10:0.00021:10, -35:0.0023:35, -35:0.001:35))
-        for x in X
-            y, yb = exp10(x), exp10(big(x))
-            @test abs(y-yb) <= 1.2*eps(Float32(yb))
+        @testset "$T $func edge cases" begin
+            @test func(T(-Inf)) === T(0.0)
+            @test func(T(Inf)) === T(Inf)
+            @test func(T(NaN)) === T(NaN)
+            @test func(T(0.0)) === T(1.0) # exact
+            @test func(T(5000.0)) === T(Inf)
+            @test func(T(-5000.0)) === T(0.0)
         end
-    end
-    @testset "$T edge cases" for T in (Float64, Float32)
-        @test isnan_type(T, exp10(T(NaN)))
-        @test exp10(T(-Inf)) === T(0.0)
-        @test exp10(T(Inf)) === T(Inf)
-        @test exp10(T(0.0)) === T(1.0) # exact
-        @test exp10(T(1.0)) === T(10.0)
-        @test exp10(T(3.0)) === T(1000.0)
-        @test exp10(T(5000.0)) === T(Inf)
-        @test exp10(T(-5000.0)) === T(0.0)
     end
 end
 
@@ -341,6 +351,35 @@ end
     @test Array(acosh.(STAA)) == acosh.(TAA)
     @test Array(acsch.(STAA)) == acsch.(TAA)
     @test Array(acoth.(STAA)) == acoth.(TAA)
+    @test sind(TAA) == sin(deg2rad.(TAA))
+    @test cosd(TAA) == cos(deg2rad.(TAA))
+    @test tand(TAA) == tan(deg2rad.(TAA))
+    @test asind(TAA) == rad2deg.(asin(TAA))
+    @test acosd(TAA) == rad2deg.(acos(TAA))
+    @test atand(TAA) == rad2deg.(atan(TAA))
+    @test asecd(TAA) == rad2deg.(asec(TAA))
+    @test acscd(TAA) == rad2deg.(acsc(TAA))
+    @test acotd(TAA) == rad2deg.(acot(TAA))
+
+    m = rand(3,2) # not square matrix
+    ex = @test_throws DimensionMismatch sind(m)
+    @test startswith(ex.value.msg, "matrix is not square")
+    ex = @test_throws DimensionMismatch cosd(m)
+    @test startswith(ex.value.msg, "matrix is not square")
+    ex = @test_throws DimensionMismatch tand(m)
+    @test startswith(ex.value.msg, "matrix is not square")
+    ex = @test_throws DimensionMismatch asind(m)
+    @test startswith(ex.value.msg, "matrix is not square")
+    ex = @test_throws DimensionMismatch acosd(m)
+    @test startswith(ex.value.msg, "matrix is not square")
+    ex = @test_throws DimensionMismatch atand(m)
+    @test startswith(ex.value.msg, "matrix is not square")
+    ex = @test_throws DimensionMismatch asecd(m)
+    @test startswith(ex.value.msg, "matrix is not square")
+    ex = @test_throws DimensionMismatch acscd(m)
+    @test startswith(ex.value.msg, "matrix is not square")
+    ex = @test_throws DimensionMismatch acotd(m)
+    @test startswith(ex.value.msg, "matrix is not square")
 end
 
 @testset "check exp2(::Integer) matches exp2(::Float)" begin
@@ -614,14 +653,14 @@ end
 end
 
 @testset "modf" begin
-    @testset "$elty" for elty in (Float16, Float32, Float64)
-        @test modf( convert(elty,1.2) )[1] ≈ convert(elty,0.2)
-        @test modf( convert(elty,1.2) )[2] ≈ convert(elty,1.0)
-        @test modf( convert(elty,1.0) )[1] ≈ convert(elty,0.0)
-        @test modf( convert(elty,1.0) )[2] ≈ convert(elty,1.0)
-        @test isequal(modf( convert(elty,-Inf) ), (-0.0, -Inf))
-        @test isequal(modf( convert(elty,Inf) ), (0.0, Inf))
-        @test isequal(modf( convert(elty,NaN) ), (NaN, NaN))
+    @testset "$T" for T in (Float16, Float32, Float64)
+        @test modf(T(1.25)) === (T(0.25), T(1.0))
+        @test modf(T(1.0))  === (T(0.0), T(1.0))
+        @test modf(T(-Inf)) === (T(-0.0), T(-Inf))
+        @test modf(T(Inf))  === (T(0.0), T(Inf))
+        @test modf(T(NaN))  === (T(NaN), T(NaN))
+        @test modf(T(-0.0)) === (T(-0.0), T(-0.0))
+        @test modf(T(-1.0)) === (T(-0.0), T(-1.0))
     end
 end
 
@@ -1245,5 +1284,33 @@ end
     x = BadFloatWrapper(1.9)
     for f in (sin, cos, tan, sinh, cosh, tanh, atan, acos, asin, asinh, acosh, atanh, exp, log1p, expm1, log) #exp2, exp10 broken for now
         @test_throws MethodError f(x)
+    end
+end
+
+@testset "fma" begin
+    if !(@static Sys.iswindows() && Int===Int64) # windows fma currently seems broken somehow.
+        for func in (fma, Base.fma_emulated)
+            @test func(nextfloat(1.),nextfloat(1.),-1.0) === 4.440892098500626e-16
+            @test func(nextfloat(1f0),nextfloat(1f0),-1f0) === 2.3841858f-7
+            @testset "$T" for T in (Float32, Float64)
+                @test func(floatmax(T), T(2), -floatmax(T)) === floatmax(T)
+                @test func(floatmax(T), T(1), eps(floatmax((T)))) === T(Inf)
+                @test func(T(Inf), T(Inf), T(Inf)) === T(Inf)
+                @test func(floatmax(T), floatmax(T), -T(Inf)) === -T(Inf)
+                @test func(floatmax(T), -floatmax(T), T(Inf)) === T(Inf)
+                @test isnan_type(T, func(T(Inf), T(1), -T(Inf)))
+                @test isnan_type(T, func(T(Inf), T(0), -T(0)))
+                @test func(-zero(T), zero(T), -zero(T)) === -zero(T)
+                for _ in 1:2^18
+                    a, b, c = reinterpret.(T, rand(Base.uinttype(T), 3))
+                    @test isequal(func(a, b, c), fma(a, b, c)) || (a,b,c)
+                end
+            end
+            @test func(floatmax(Float64), nextfloat(1.0), -floatmax(Float64)) === 3.991680619069439e292
+            @test func(floatmax(Float32), nextfloat(1f0), -floatmax(Float32)) === 4.0564817f31
+            @test func(1.6341681540852291e308, -2., floatmax(Float64)) == -1.4706431733081426e308 # case where inv(a)*c*a == Inf
+            @test func(-2., 1.6341681540852291e308, floatmax(Float64)) == -1.4706431733081426e308 # case where inv(b)*c*b == Inf
+            @test func(-1.9369631f13, 2.1513551f-7, -1.7354427f-24) == -4.1670958f6
+        end
     end
 end

@@ -1,12 +1,7 @@
-#define JL_EXPORTED_FUNCS(XX) \
-    XX(jl_) \
-    XX(jl_abs_float) \
-    XX(jl_abs_float_withtype) \
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
+#define JL_RUNTIME_EXPORTED_FUNCS(XX) \
     XX(jl_active_task_stack) \
-    XX(jl_add_float) \
-    XX(jl_add_int) \
-    XX(jl_add_optimization_passes) \
-    XX(jl_add_ptr) \
     XX(jl_add_standard_imports) \
     XX(jl_alignment) \
     XX(jl_alloc_array_1d) \
@@ -16,8 +11,8 @@
     XX(jl_alloc_svec) \
     XX(jl_alloc_svec_uninit) \
     XX(jl_alloc_vec_any) \
-    XX(jl_and_int) \
     XX(jl_apply_array_type) \
+    XX(jl_apply_cmpswap_type) \
     XX(jl_apply_generic) \
     XX(jl_apply_tuple_type) \
     XX(jl_apply_tuple_type_v) \
@@ -28,7 +23,6 @@
     XX(jl_argument_method_table) \
     XX(jl_array_cconvert_cstring) \
     XX(jl_array_copy) \
-    XX(jl_array_data_owner) \
     XX(jl_array_del_at) \
     XX(jl_array_del_beg) \
     XX(jl_array_del_end) \
@@ -50,9 +44,13 @@
     XX(jl_array_to_string) \
     XX(jl_array_typetagdata) \
     XX(jl_arrayunset) \
-    XX(jl_ashr_int) \
-    XX(jl_astaggedvalue) \
     XX(jl_atexit_hook) \
+    XX(jl_atomic_bool_cmpswap_bits) \
+    XX(jl_atomic_cmpswap_bits) \
+    XX(jl_atomic_error) \
+    XX(jl_atomic_new_bits) \
+    XX(jl_atomic_store_bits) \
+    XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
     XX(jl_binding_owner) \
@@ -81,8 +79,6 @@
     XX(jl_box_uint8) \
     XX(jl_box_uint8pointer) \
     XX(jl_box_voidpointer) \
-    XX(jl_breakpoint) \
-    XX(jl_bswap_int) \
     XX(jl_call) \
     XX(jl_call0) \
     XX(jl_call1) \
@@ -96,19 +92,7 @@
     XX(jl_cglobal) \
     XX(jl_cglobal_auto) \
     XX(jl_checked_assignment) \
-    XX(jl_checked_sadd_int) \
-    XX(jl_checked_sdiv_int) \
-    XX(jl_checked_smul_int) \
-    XX(jl_checked_srem_int) \
-    XX(jl_checked_ssub_int) \
-    XX(jl_checked_uadd_int) \
-    XX(jl_checked_udiv_int) \
-    XX(jl_checked_umul_int) \
-    XX(jl_checked_urem_int) \
-    XX(jl_checked_usub_int) \
     XX(jl_clear_implicit_imports) \
-    XX(jl_clear_malloc_data) \
-    XX(jl_clock_now) \
     XX(jl_close_uv) \
     XX(jl_code_for_staged) \
     XX(jl_compile_hint) \
@@ -117,35 +101,19 @@
     XX(jl_compute_fieldtypes) \
     XX(jl_copy_ast) \
     XX(jl_copy_code_info) \
-    XX(jl_copysign_float) \
-    XX(jl_cpuid) \
-    XX(jl_cpuidex) \
-    XX(jl_cpu_pause) \
     XX(jl_cpu_threads) \
-    XX(jl_cpu_wake) \
     XX(jl_crc32c_sw) \
-    XX(jl_create_native) \
     XX(jl_create_system_image) \
     XX(jl_cstr_to_string) \
-    XX(jl_ctlz_int) \
-    XX(jl_ctpop_int) \
-    XX(jl_cttz_int) \
     XX(jl_current_exception) \
     XX(jl_debug_method_invalidation) \
     XX(jl_declare_constant) \
     XX(jl_defines_or_exports_p) \
     XX(jl_deprecate_binding) \
-    XX(jl_div_float) \
     XX(jl_dlclose) \
     XX(jl_dlopen) \
     XX(jl_dlsym) \
-    XX(jl_dump_compiles) \
-    XX(jl_dump_fptr_asm) \
-    XX(jl_dump_function_ir) \
     XX(jl_dump_host_cpu) \
-    XX(jl_dump_llvm_asm) \
-    XX(jl_dump_method_asm) \
-    XX(jl_egal) \
     XX(jl_egal__bits) \
     XX(jl_egal__special) \
     XX(jl_eh_restore_state) \
@@ -154,8 +122,6 @@
     XX(jl_enter_threaded_region) \
     XX(jl_environ) \
     XX(jl_eof_error) \
-    XX(jl_eq_float) \
-    XX(jl_eq_int) \
     XX(jl_eqtable_get) \
     XX(jl_eqtable_nextind) \
     XX(jl_eqtable_pop) \
@@ -172,93 +138,17 @@
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
     XX(jl_expand) \
+    XX(jl_resolve_globals_in_ir) \
     XX(jl_expand_and_resolve) \
     XX(jl_expand_stmt) \
     XX(jl_expand_stmt_with_loc) \
     XX(jl_expand_with_loc) \
     XX(jl_expand_with_loc_warn) \
-    XX(jl_extern_c) \
-    XX(jl_f__abstracttype) \
-    XX(jl_f__apply) \
-    XX(jl_f__apply_iterate) \
-    XX(jl_f__apply_pure) \
-    XX(jl_f__call_in_world) \
-    XX(jl_f__call_latest) \
-    XX(jl_f_applicable) \
-    XX(jl_f_apply_type) \
-    XX(jl_f_arrayref) \
-    XX(jl_f_arrayset) \
-    XX(jl_f_arraysize) \
-    XX(jl_f_const_arrayref) \
-    XX(jl_f__equiv_typedef) \
-    XX(jl_f__expr) \
-    XX(jl_f_fieldtype) \
-    XX(jl_f_getfield) \
     XX(jl_field_index) \
     XX(jl_field_isdefined) \
-    XX(jl_f_ifelse) \
-    XX(jl_finalize) \
-    XX(jl_finalize_th) \
-    XX(jl_find_free_typevars) \
-    XX(jl_f_intrinsic_call) \
-    XX(jl_f_invoke) \
-    XX(jl_f_invoke_kwsorter) \
-    XX(jl_first_argument_datatype) \
-    XX(jl_f_is) \
-    XX(jl_f_isa) \
-    XX(jl_f_isdefined) \
-    XX(jl_f_issubtype) \
-    XX(jl_flipsign_int) \
-    XX(jl_floor_llvm) \
-    XX(jl_floor_llvm_withtype) \
-    XX(jl_fl_parse) \
-    XX(jl_flush_cstdio) \
-    XX(jl_fma_float) \
-    XX(jl_f_new_module) \
-    XX(jl_f_nfields) \
-    XX(jl_forceclose_uv) \
-    XX(jl_format_filename) \
-    XX(jl_fpext) \
-    XX(jl_fpiseq) \
-    XX(jl_fpislt) \
-    XX(jl_f__primitivetype) \
-    XX(jl_fptosi) \
-    XX(jl_fptoui) \
-    XX(jl_fptr_args) \
-    XX(jl_fptr_const_return) \
-    XX(jl_fptr_interpret_call) \
-    XX(jl_fptr_sparam) \
-    XX(jl_fptrunc) \
-    XX(jl_free) \
-    XX(jl_free_stack) \
-    XX(jl_fs_access) \
-    XX(jl_fs_chmod) \
-    XX(jl_fs_chown) \
-    XX(jl_fs_close) \
-    XX(jl_f_setfield) \
-    XX(jl_f__setsuper) \
-    XX(jl_f_sizeof) \
-    XX(jl_fs_read) \
-    XX(jl_fs_read_byte) \
-    XX(jl_fs_rename) \
-    XX(jl_fs_sendfile) \
-    XX(jl_fs_symlink) \
-    XX(jl_fstat) \
-    XX(jl_f__structtype) \
-    XX(jl_fs_unlink) \
-    XX(jl_f_svec) \
-    XX(jl_fs_write) \
-    XX(jl_f_throw) \
-    XX(jl_ftruncate) \
-    XX(jl_f_tuple) \
-    XX(jl_f_typeassert) \
-    XX(jl_f__typebody) \
-    XX(jl_f_typeof) \
-    XX(jl_f__typevar) \
     XX(jl_gc_add_finalizer) \
     XX(jl_gc_add_finalizer_th) \
     XX(jl_gc_add_ptr_finalizer) \
-    XX(jl_gc_alloc) \
     XX(jl_gc_alloc_0w) \
     XX(jl_gc_alloc_1w) \
     XX(jl_gc_alloc_2w) \
@@ -293,9 +183,6 @@
     XX(jl_gc_pool_alloc) \
     XX(jl_gc_queue_multiroot) \
     XX(jl_gc_queue_root) \
-    XX(jl_gc_safe_enter) \
-    XX(jl_gc_safe_leave) \
-    XX(jl_gc_safepoint) \
     XX(jl_gc_schedule_foreign_sweepfunc) \
     XX(jl_gc_set_cb_notify_external_alloc) \
     XX(jl_gc_set_cb_notify_external_free) \
@@ -305,13 +192,10 @@
     XX(jl_gc_set_cb_task_scanner) \
     XX(jl_gc_sync_total_bytes) \
     XX(jl_gc_total_hrtime) \
-    XX(jl_gc_unsafe_enter) \
-    XX(jl_gc_unsafe_leave) \
     XX(jl_gdblookup) \
     XX(jl_generating_output) \
     XX(jl_generic_function_def) \
     XX(jl_gensym) \
-    XX(jl_getaddrinfo) \
     XX(jl_getallocationgranularity) \
     XX(jl_get_ARCH) \
     XX(jl_get_backtrace) \
@@ -319,7 +203,6 @@
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
-    XX(jl_get_cfunction_trampoline) \
     XX(jl_get_cpu_name) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
@@ -327,8 +210,6 @@
     XX(jl_get_fenv_consts) \
     XX(jl_get_field) \
     XX(jl_get_field_offset) \
-    XX(jl_get_fieldtypes) \
-    XX(jl_get_function_id) \
     XX(jl_get_global) \
     XX(jl_get_image_file) \
     XX(jl_get_JIT) \
@@ -336,11 +217,6 @@
     XX(jl_get_julia_bindir) \
     XX(jl_get_keyword_sorter) \
     XX(jl_get_kwsorter) \
-    XX(jl_get_llvm_context) \
-    XX(jl_get_llvmf_defn) \
-    XX(jl_get_llvm_function) \
-    XX(jl_get_llvm_module) \
-    XX(jl_get_LLVM_VERSION) \
     XX(jl_get_method_inferred) \
     XX(jl_get_module_binding) \
     XX(jl_get_module_compile) \
@@ -353,13 +229,13 @@
     XX(jl_get_nth_field_checked) \
     XX(jl_get_nth_field_noalloc) \
     XX(jl_getpagesize) \
+    XX(jl_get_pgcstack) \
     XX(jl_getpid) \
     XX(jl_get_ptls_states) \
     XX(jl_get_root_symbol) \
     XX(jl_get_safe_restore) \
     XX(jl_get_size) \
     XX(jl_get_task_tid) \
-    XX(jl_gettimeofday) \
     XX(jl_get_tls_world_age) \
     XX(jl_get_UNAME) \
     XX(jl_get_world_counter) \
@@ -375,13 +251,14 @@
     XX(jl_has_typevar) \
     XX(jl_has_typevar_from_unionall) \
     XX(jl_hrtime) \
-    XX(jl_id_char) \
-    XX(jl_id_start_char) \
     XX(jl_idtable_rehash) \
     XX(jl_infer_thunk) \
-    XX(jl_init_restored_modules) \
+    XX(jl_init) \
     XX(jl_init__threading) \
+    XX(jl_init_restored_modules) \
+    XX(jl_init_with_image) \
     XX(jl_init_with_image__threading) \
+    XX(jl_init_options) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
@@ -419,12 +296,7 @@
     XX(jl_is_unary_and_binary_operator) \
     XX(jl_is_unary_operator) \
     XX(jl_lazy_load_and_lookup) \
-    XX(jl_le_float) \
     XX(jl_lisp_prompt) \
-    XX(jl_LLVMCreateDisasm) \
-    XX(jl_LLVMDisasmInstruction) \
-    XX(jl_LLVMFlipSign) \
-    XX(jl_LLVMSMod) \
     XX(jl_load) \
     XX(jl_load_) \
     XX(jl_load_and_lookup) \
@@ -432,9 +304,7 @@
     XX(jl_load_file_string) \
     XX(jl_lookup_code_address) \
     XX(jl_lseek) \
-    XX(jl_lshr_int) \
     XX(jl_lstat) \
-    XX(jl_lt_float) \
     XX(jl_macroexpand) \
     XX(jl_macroexpand1) \
     XX(jl_malloc) \
@@ -449,7 +319,6 @@
     XX(jl_method_table_insert) \
     XX(jl_methtable_lookup) \
     XX(jl_mi_cache_insert) \
-    XX(jl_mmap) \
     XX(jl_module_build_id) \
     XX(jl_module_export) \
     XX(jl_module_exports_p) \
@@ -462,16 +331,8 @@
     XX(jl_module_using) \
     XX(jl_module_usings) \
     XX(jl_module_uuid) \
-    XX(jl_muladd_float) \
-    XX(jl_mul_float) \
-    XX(jl_mul_int) \
     XX(jl_native_alignment) \
     XX(jl_nb_available) \
-    XX(jl_ne_float) \
-    XX(jl_neg_float) \
-    XX(jl_neg_float_withtype) \
-    XX(jl_neg_int) \
-    XX(jl_ne_int) \
     XX(jl_new_array) \
     XX(jl_new_bits) \
     XX(jl_new_code_info_uninit) \
@@ -493,13 +354,10 @@
     XX(jl_next_from_addrinfo) \
     XX(jl_no_exc_handler) \
     XX(jl_normalize_to_compilable_sig) \
-    XX(jl_not_int) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
     XX(jl_obvious_subtype) \
     XX(jl_operator_precedence) \
-    XX(jl_op_suffix_char) \
-    XX(jl_or_int) \
     XX(jl_parse) \
     XX(jl_parse_all) \
     XX(jl_parse_input_line) \
@@ -513,6 +371,7 @@
     XX(jl_pop_handler) \
     XX(jl_preload_sysimg_so) \
     XX(jl_prepend_cwd) \
+    XX(jl_print_backtrace) \
     XX(jl_printf) \
     XX(jl_process_events) \
     XX(jl_profile_clear_data) \
@@ -527,15 +386,12 @@
     XX(jl_ptrarrayref) \
     XX(jl_ptr_to_array) \
     XX(jl_ptr_to_array_1d) \
-    XX(jl_pwrite) \
     XX(jl_queue_work) \
     XX(jl_raise_debugger) \
     XX(jl_readuntil) \
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
-    XX(jl_rem_float) \
-    XX(jl_repl_raise_sigtstp) \
     XX(jl_reshape_array) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
@@ -545,14 +401,11 @@
     XX(jl_rethrow) \
     XX(jl_rethrow_other) \
     XX(jl_rettype_inferred) \
-    XX(jl_rint_llvm) \
-    XX(jl_rint_llvm_withtype) \
     XX(jl_running_on_valgrind) \
     XX(jl_safe_printf) \
     XX(jl_save_incremental) \
     XX(jl_save_system_image) \
     XX(jl_SC_CLK_TCK) \
-    XX(jl_sdiv_int) \
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
     XX(jl_set_errno) \
@@ -565,58 +418,19 @@
     XX(jl_set_module_uuid) \
     XX(jl_set_next_task) \
     XX(jl_set_nth_field) \
-    XX(jl_set_ptls_states_getter) \
     XX(jl_set_safe_restore) \
     XX(jl_set_sysimg_so) \
     XX(jl_set_task_tid) \
     XX(jl_set_typeinf_func) \
     XX(jl_set_zero_subnormals) \
-    XX(jl_sext_int) \
-    XX(jl_shl_int) \
     XX(jl_sigatomic_begin) \
     XX(jl_sigatomic_end) \
     XX(jl_sig_throw) \
-    XX(jl_sitofp) \
-    XX(jl_sizeof_ios_t) \
-    XX(jl_sizeof_jl_options) \
-    XX(jl_sizeof_mode_t) \
-    XX(jl_sizeof_off_t) \
-    XX(jl_sizeof_stat) \
-    XX(jl_sizeof_uv_fs_t) \
-    XX(jl_sle_int) \
-    XX(jl_slt_int) \
-    XX(jl_smod_int) \
-    XX(jl_sockaddr_from_addrinfo) \
-    XX(jl_sockaddr_host4) \
-    XX(jl_sockaddr_host6) \
-    XX(jl_sockaddr_is_ip4) \
-    XX(jl_sockaddr_is_ip6) \
-    XX(jl_sockaddr_port4) \
-    XX(jl_sockaddr_port6) \
-    XX(jl_sockaddr_set_port) \
     XX(jl_spawn) \
     XX(jl_specializations_get_linfo) \
     XX(jl_specializations_lookup) \
-    XX(jl_sqrt_llvm) \
-    XX(jl_sqrt_llvm_fast) \
-    XX(jl_sqrt_llvm_fast_withtype) \
-    XX(jl_sqrt_llvm_withtype) \
-    XX(jl_srem_int) \
-    XX(jl_stat) \
-    XX(jl_stat_blksize) \
-    XX(jl_stat_blocks) \
-    XX(jl_stat_ctime) \
-    XX(jl_stat_dev) \
-    XX(jl_stat_gid) \
     XX(jl_static_show) \
     XX(jl_static_show_func_sig) \
-    XX(jl_stat_ino) \
-    XX(jl_stat_mode) \
-    XX(jl_stat_mtime) \
-    XX(jl_stat_nlink) \
-    XX(jl_stat_rdev) \
-    XX(jl_stat_size) \
-    XX(jl_stat_uid) \
     XX(jl_stderr_obj) \
     XX(jl_stderr_stream) \
     XX(jl_stdin_stream) \
@@ -625,13 +439,6 @@
     XX(jl_stored_inline) \
     XX(jl_string_ptr) \
     XX(jl_string_to_array) \
-    XX(jl_strtod_c) \
-    XX(jl_strtof_c) \
-    XX(jl_sub_float) \
-    XX(jl_sub_int) \
-    XX(jl_sub_ptr) \
-    XX(jl_substrtod) \
-    XX(jl_substrtof) \
     XX(jl_subtype) \
     XX(jl_subtype_env) \
     XX(jl_subtype_env_size) \
@@ -641,36 +448,24 @@
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
     XX(jl_svec_isassigned) \
-    XX(jl_svec_len) \
     XX(jl_svec_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \
     XX(jl_symbol_lookup) \
     XX(jl_symbol_n) \
-    XX(jl_symbol_name) \
     XX(jl_tagged_gensym) \
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
     XX(jl_task_stack_buffer) \
-    XX(jl_tcp_bind) \
-    XX(jl_tcp_connect) \
-    XX(jl_tcp_getpeername) \
-    XX(jl_tcp_getsockname) \
-    XX(jl_tcp_quickack) \
-    XX(jl_tcp_reuseport) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
-    XX(jl_threading_enabled) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
     XX(jl_too_few_args) \
     XX(jl_too_many_args) \
     XX(jl_toplevel_eval) \
     XX(jl_toplevel_eval_in) \
-    XX(jl_trunc_int) \
-    XX(jl_trunc_llvm) \
-    XX(jl_trunc_llvm_withtype) \
     XX(jl_try_substrtod) \
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
@@ -683,22 +478,13 @@
     XX(jl_typeinf_end) \
     XX(jl_type_intersection) \
     XX(jl_type_intersection_with_env) \
-    XX(jl_typemax_uint) \
     XX(jl_type_morespecific) \
     XX(jl_type_morespecific_no_subtype) \
     XX(jl_typename_str) \
-    XX(jl_typeof) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
-    XX(jl_type_to_llvm) \
     XX(jl_type_union) \
     XX(jl_type_unionall) \
-    XX(jl_udiv_int) \
-    XX(jl_udp_bind) \
-    XX(jl_udp_send) \
-    XX(jl_uitofp) \
-    XX(jl_ule_int) \
-    XX(jl_ult_int) \
     XX(jl_unbox_bool) \
     XX(jl_unbox_float32) \
     XX(jl_unbox_float64) \
@@ -716,37 +502,6 @@
     XX(jl_uncompress_argnames) \
     XX(jl_uncompress_ir) \
     XX(jl_undefined_var_error) \
-    XX(jl_urem_int) \
-    XX(jl_uv_associate_julia_struct) \
-    XX(jl_uv_buf_base) \
-    XX(jl_uv_buf_len) \
-    XX(jl_uv_buf_set_base) \
-    XX(jl_uv_buf_set_len) \
-    XX(jl_uv_connect_handle) \
-    XX(jl_uv_disassociate_julia_struct) \
-    XX(jl_uv_file_handle) \
-    XX(jl_uv_flush) \
-    XX(jl_uv_fs_t_path) \
-    XX(jl_uv_fs_t_ptr) \
-    XX(jl_uv_handle) \
-    XX(jl_uv_handle_data) \
-    XX(jl_uv_handle_type) \
-    XX(jl_uv_interface_addresses) \
-    XX(jl_uv_interface_address_is_internal) \
-    XX(jl_uv_interface_address_sockaddr) \
-    XX(jl_uv_process_data) \
-    XX(jl_uv_process_pid) \
-    XX(jl_uv_putb) \
-    XX(jl_uv_putc) \
-    XX(jl_uv_puts) \
-    XX(jl_uv_req_data) \
-    XX(jl_uv_req_set_data) \
-    XX(jl_uv_sizeof_interface_address) \
-    XX(jl_uv_unix_fd_is_watched) \
-    XX(jl_uv_write) \
-    XX(jl_uv_writecb) \
-    XX(jl_uv_write_handle) \
-    XX(jl_valueof) \
     XX(jl_value_ptr) \
     XX(jl_ver_is_release) \
     XX(jl_ver_major) \
@@ -756,6 +511,55 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
-    XX(jl_xor_int) \
     XX(jl_yield) \
-    XX(jl_zext_int)
+
+#define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
+    XX(jl_setjmp)
+
+// use YY instead of XX to avoid jl -> ijl renaming in libjulia-codegen
+#define JL_CODEGEN_EXPORTED_FUNCS(YY) \
+    YY(jl_dump_function_ir) \
+    YY(jl_dump_method_asm) \
+    YY(jl_extern_c) \
+    YY(jl_get_llvm_context) \
+    YY(jl_get_llvmf_defn) \
+    YY(jl_get_llvm_function) \
+    YY(jl_get_llvm_module) \
+    YY(jl_get_LLVM_VERSION) \
+    YY(jl_dump_native) \
+    YY(jl_get_llvm_gv) \
+    YY(jl_dump_function_asm) \
+    YY(jl_LLVMCreateDisasm) \
+    YY(jl_LLVMDisasmInstruction) \
+    YY(jl_init_codegen) \
+    YY(jl_getFunctionInfo) \
+    YY(jl_register_fptrs) \
+    YY(jl_generate_fptr) \
+    YY(jl_generate_fptr_for_unspecialized) \
+    YY(jl_compile_extern_c) \
+    YY(jl_teardown_codegen) \
+    YY(jl_jit_total_bytes) \
+    YY(jl_lock_profile) \
+    YY(jl_unlock_profile) \
+    YY(jl_create_native) \
+    YY(jl_dump_compiles) \
+    YY(jl_dump_fptr_asm) \
+    YY(jl_get_function_id) \
+    YY(jl_type_to_llvm) \
+    YY(jl_getUnwindInfo) \
+    YY(jl_get_libllvm) \
+    YY(LLVMExtraAddLowerSimdLoopPass) \
+    YY(LLVMExtraAddFinalLowerGCPass) \
+    YY(LLVMExtraAddPropagateJuliaAddrspaces) \
+    YY(LLVMExtraAddRemoveJuliaAddrspacesPass) \
+    YY(LLVMExtraAddCombineMulAddPass) \
+    YY(LLVMExtraAddMultiVersioningPass) \
+    YY(LLVMExtraAddLowerExcHandlersPass) \
+    YY(LLVMExtraAddLateLowerGCFramePass) \
+    YY(LLVMExtraJuliaLICMPass) \
+    YY(LLVMExtraAddAllocOptPass) \
+    YY(LLVMExtraAddLowerPTLSPass) \
+    YY(LLVMExtraAddRemoveNIPass) \
+    YY(LLVMExtraAddGCInvariantVerifierPass) \
+    YY(LLVMExtraAddDemoteFloat16Pass) \
+

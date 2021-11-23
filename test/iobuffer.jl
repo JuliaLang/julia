@@ -9,7 +9,7 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 @testset "Read/write empty IOBuffer" begin
     io = IOBuffer()
     @test eof(io)
-    @test_throws EOFError read(io,UInt8)
+    @test_throws EOFError read(io, UInt8)
     @test write(io,"abc") === 3
     @test isreadable(io)
     @test iswritable(io)
@@ -18,7 +18,7 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
     @test position(io) == 3
     @test eof(io)
     seek(io, 0)
-    @test read(io,UInt8) == convert(UInt8, 'a')
+    @test read(io, UInt8) == convert(UInt8, 'a')
     a = Vector{UInt8}(undef, 2)
     @test read!(io, a) == a
     @test a == UInt8['b','c']
@@ -34,22 +34,24 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
     truncate(io, 10)
     @test position(io) == 0
     @test all(io.data .== 0)
-    @test write(io,Int16[1,2,3,4,5,6]) === 12
+    @test write(io, Int16[1, 2, 3, 4, 5, 6]) === 12
     seek(io, 2)
     truncate(io, 10)
     @test ioslength(io) == 10
     io.readable = false
-    @test_throws ArgumentError read!(io,UInt8[0])
+    @test_throws ArgumentError read!(io, UInt8[0])
     truncate(io, 0)
     @test write(io,"boston\ncambridge\n") > 0
     @test String(take!(io)) == "boston\ncambridge\n"
     @test String(take!(io)) == ""
     @test write(io, ComplexF64(0)) === 16
     @test write(io, Rational{Int64}(1//2)) === 16
-    close(io)
-    @test_throws ArgumentError write(io,UInt8[0])
-    @test_throws ArgumentError seek(io,0)
+    @test closewrite(io) === nothing
+    @test_throws ArgumentError write(io, UInt8[0])
     @test eof(io)
+    @test close(io) === nothing
+    @test_throws ArgumentError write(io, UInt8[0])
+    @test_throws ArgumentError seek(io, 0)
 end
 
 @testset "Read/write readonly IOBuffer" begin
@@ -237,7 +239,7 @@ end
     @test isreadable(bstream)
     @test iswritable(bstream)
     @test bytesavailable(bstream) == 0
-    @test sprint(show, bstream) == "BufferStream() bytes waiting:$(bytesavailable(bstream.buffer)), isopen:true"
+    @test sprint(show, bstream) == "BufferStream(bytes waiting=$(bytesavailable(bstream.buffer)), isopen=true)"
     a = rand(UInt8,10)
     write(bstream,a)
     @test !eof(bstream)
@@ -251,9 +253,10 @@ end
     @test !eof(bstream)
     read!(bstream,c)
     @test c == a[3:10]
-    @test close(bstream) === nothing
+    @test closewrite(bstream) === nothing
     @test eof(bstream)
     @test bytesavailable(bstream) == 0
+    @test close(bstream) === nothing
     flag = Ref{Bool}(false)
     event = Base.Event()
     bstream = Base.BufferStream()

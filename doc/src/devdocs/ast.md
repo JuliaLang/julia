@@ -63,23 +63,25 @@ call. Finally, chains of comparisons have their own special expression structure
 
 ### Bracketed forms
 
-| Input                    | AST                                  |
-|:------------------------ |:------------------------------------ |
-| `a[i]`                   | `(ref a i)`                          |
-| `t[i;j]`                 | `(typed_vcat t i j)`                 |
-| `t[i j]`                 | `(typed_hcat t i j)`                 |
-| `t[a b; c d]`            | `(typed_vcat t (row a b) (row c d))` |
-| `a{b}`                   | `(curly a b)`                        |
-| `a{b;c}`                 | `(curly a (parameters c) b)`         |
-| `[x]`                    | `(vect x)`                           |
-| `[x,y]`                  | `(vect x y)`                         |
-| `[x;y]`                  | `(vcat x y)`                         |
-| `[x y]`                  | `(hcat x y)`                         |
-| `[x y; z t]`             | `(vcat (row x y) (row z t))`         |
-| `[x for y in z, a in b]` | `(comprehension x (= y z) (= a b))`  |
-| `T[x for y in z]`        | `(typed_comprehension T x (= y z))`  |
-| `(a, b, c)`              | `(tuple a b c)`                      |
-| `(a; b; c)`              | `(block a (block b c))`              |
+| Input                    | AST                                               |
+|:------------------------ |:------------------------------------------------- |
+| `a[i]`                   | `(ref a i)`                                       |
+| `t[i;j]`                 | `(typed_vcat t i j)`                              |
+| `t[i j]`                 | `(typed_hcat t i j)`                              |
+| `t[a b; c d]`            | `(typed_vcat t (row a b) (row c d))`              |
+| `t[a b;;; c d]`          | `(typed_ncat t 3 (row a b) (row c d))`            |
+| `a{b}`                   | `(curly a b)`                                     |
+| `a{b;c}`                 | `(curly a (parameters c) b)`                      |
+| `[x]`                    | `(vect x)`                                        |
+| `[x,y]`                  | `(vect x y)`                                      |
+| `[x;y]`                  | `(vcat x y)`                                      |
+| `[x y]`                  | `(hcat x y)`                                      |
+| `[x y; z t]`             | `(vcat (row x y) (row z t))`                      |
+| `[x;y;; z;t;;;]`         | `(ncat 3 (nrow 2 (nrow 1 x y) (nrow 1 z t)))`     |
+| `[x for y in z, a in b]` | `(comprehension x (= y z) (= a b))`               |
+| `T[x for y in z]`        | `(typed_comprehension T x (= y z))`               |
+| `(a, b, c)`              | `(tuple a b c)`                                   |
+| `(a; b; c)`              | `(block a (block b c))`                           |
 
 ### Macros
 
@@ -436,6 +438,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
 
+  * `undefcheck`
+
+    Temporary node inserted by the compiler and will be processed in `type_lift_pass!`.
+
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
@@ -505,14 +511,45 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The calling convention for the call.
 
-      * `args[6:length(args[3])]` : arguments
+      * `args[6:5+length(args[3])]` : arguments
 
         The values for all the arguments (with types of each given in args[3]).
 
-      * `args[(length(args[3]) + 1):end]` : gc-roots
+      * `args[6+length(args[3])+1:end]` : gc-roots
 
         The additional objects that may need to be gc-rooted for the duration of the call.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
+
+  * `new_opaque_closure`
+
+    Constructs a new opaque closure. The fields are:
+
+      * `args[1]` : signature
+
+        The function signature of the opaque closure. Opaque closures don't participate in dispatch, but the input types can be restricted.
+
+      * `args[2]` : isva
+
+        Indicates whether the closure accepts varargs.
+
+      * `args[3]` : lb
+
+        Lower bound on the output type. (Defaults to `Union{}`)
+
+      * `args[4]` : ub
+
+        Upper bound on the output type. (Defaults to `Any`)
+
+      * `args[5]` : method
+
+        The actual method as an `opaque_closure_method` expression.
+
+      * `args[6:end]` : captures
+
+        The values captured by the opaque closure.
+
+    !!! compat "Julia 1.7"
+        Opaque closures were added in Julia 1.7
 
 
 ### [Method](@id ast-lowered-method)
@@ -557,7 +594,8 @@ A unique'd container describing the shared metadata for a single method.
 
 ### MethodInstance
 
-A unique'd container describing a single callable signature for a Method. See especially [Proper maintenance and care of multi-threading locks](@ref)
+A unique'd container describing a single callable signature for a Method.
+See especially [Proper maintenance and care of multi-threading locks](@ref Proper-maintenance-and-care-of-multi-threading-locks)
 for important details on how to modify these fields safely.
 
   * `specTypes`

@@ -172,10 +172,10 @@ end
 
 ### BitInteger
 
-# there are three implemented samplers for unit ranges, the two first of which
-# assume that Float64 (i.e. 52 random bits) is the native type for the RNG:
-# 1) "Fast" (SamplerRangeFast), which is most efficient when the underlying RNG produces
-#    rand(Float64) "fast enough".
+# there are three implemented samplers for unit ranges, the second one
+# assumes that Float64 (i.e. 52 random bits) is the native type for the RNG:
+# 1) "Fast" (SamplerRangeFast), which is most efficient when the range length is close
+#    (or equal) to a power of 2 from below.
 #    The tradeoff is faster creation of the sampler, but more consumption of entropy bits.
 # 2) "Slow" (SamplerRangeInt) which tries to use as few entropy bits as possible, at the
 #    cost of a bigger upfront price associated with the creation of the sampler.
@@ -224,20 +224,32 @@ function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt32,T}) where T
     (x + a % UInt32) % T
 end
 
+has_fast_64(rng::AbstractRNG) = rng_native_52(rng) != Float64
+# for MersenneTwister, both options have very similar performance
+
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt64,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = bw <= 52 ? rand(rng, LessThan(m, Masked(mask, UInt52Raw()))) :
-                   rand(rng, LessThan(m, Masked(mask, uniform(UInt64))))
+    if !has_fast_64(rng) && bw <= 52
+        x = rand(rng, LessThan(m, Masked(mask, UInt52Raw())))
+    else
+        x = rand(rng, LessThan(m, Masked(mask, uniform(UInt64))))
+    end
     (x + a % UInt64) % T
 end
 
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt128,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = bw <= 52  ?
-        rand(rng, LessThan(m % UInt64, Masked(mask % UInt64, UInt52Raw()))) % UInt128 :
-    bw <= 104 ?
-        rand(rng, LessThan(m, Masked(mask, UInt104Raw()))) :
-        rand(rng, LessThan(m, Masked(mask, uniform(UInt128))))
+    if has_fast_64(rng)
+        x = bw <= 64 ?
+            rand(rng, LessThan(m % UInt64, Masked(mask % UInt64, uniform(UInt64)))) % UInt128 :
+            rand(rng, LessThan(m, Masked(mask, uniform(UInt128))))
+    else
+        x = bw <= 52  ?
+            rand(rng, LessThan(m % UInt64, Masked(mask % UInt64, UInt52Raw()))) % UInt128 :
+        bw <= 104 ?
+            rand(rng, LessThan(m, Masked(mask, UInt104Raw()))) :
+            rand(rng, LessThan(m, Masked(mask, uniform(UInt128))))
+    end
     x % T + a
 end
 
@@ -346,45 +358,56 @@ end
 
 ### BigInt
 
-struct SamplerBigInt <: Sampler{BigInt}
+struct SamplerBigInt{SP<:Sampler{Limb}} <: Sampler{BigInt}
     a::BigInt         # first
     m::BigInt         # range length - 1
     nlimbs::Int       # number of limbs in generated BigInt's (z ∈ [0, m])
     nlimbsmax::Int    # max number of limbs for z+a
-    mask::Limb        # applied to the highest limb
+    highsp::SP        # sampler for the highest limb of z
 end
 
-function SamplerBigInt(r::AbstractUnitRange{BigInt})
+function SamplerBigInt(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition=Val(Inf)
+                       ) where {RNG<:AbstractRNG}
     m = last(r) - first(r)
-    m < 0 && throw(ArgumentError("range must be non-empty"))
-    nd = ndigits(m, base=2)
-    nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
-    highbits > 0 && (nlimbs += 1)
-    mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)
+    m.size < 0 && throw(ArgumentError("range must be non-empty"))
+    nlimbs = Int(m.size)
+    hm = nlimbs == 0 ? Limb(0) : GC.@preserve m unsafe_load(m.d, nlimbs)
+    highsp = Sampler(RNG, Limb(0):hm, N)
     nlimbsmax = max(nlimbs, abs(last(r).size), abs(first(r).size))
-    return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, mask)
+    return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, highsp)
 end
 
-Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{BigInt}, ::Repetition) = SamplerBigInt(r)
+Sampler(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition) where {RNG<:AbstractRNG} =
+    SamplerBigInt(RNG, r, N)
 
 rand(rng::AbstractRNG, sp::SamplerBigInt) =
     rand!(rng, BigInt(nbits = sp.nlimbsmax*8*sizeof(Limb)), sp)
 
 function rand!(rng::AbstractRNG, x::BigInt, sp::SamplerBigInt)
+    nlimbs = sp.nlimbs
+    nlimbs == 0 && return MPZ.set!(x, sp.a)
     MPZ.realloc2!(x, sp.nlimbsmax*8*sizeof(Limb))
+    @assert x.alloc >= nlimbs
+    # we randomize x ∈ [0, m] with rejection sampling:
+    # 1. the first nlimbs-1 limbs of x are uniformly randomized
+    # 2. the high limb hx of x is sampled from 0:hm where hm is the
+    #    high limb of m
+    # We repeat 1. and 2. until x <= m
+    hm = GC.@preserve sp unsafe_load(sp.m.d, nlimbs)
     GC.@preserve x begin
-        limbs = UnsafeView(x.d, sp.nlimbs)
+        limbs = UnsafeView(x.d, nlimbs-1)
         while true
             rand!(rng, limbs)
-            limbs[end] &= sp.mask
-            MPZ.mpn_cmp(x, sp.m, sp.nlimbs) <= 0 && break
+            hx = limbs[nlimbs] = rand(rng, sp.highsp)
+            hx < hm && break # avoid calling mpn_cmp most of the time
+            MPZ.mpn_cmp(x, sp.m, nlimbs) <= 0 && break
         end
         # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)
-        x.size = sp.nlimbs
-        while x.size > 0
-            limbs[x.size] != 0 && break
-            x.size -= 1
+        while nlimbs > 0
+            limbs[nlimbs] != 0 && break
+            nlimbs -= 1
         end
+        x.size = nlimbs
     end
     MPZ.add!(x, sp.a)
 end

@@ -165,7 +165,8 @@ function show(io::IO, t::NamedTuple)
         typeinfo = get(io, :typeinfo, Any)
         print(io, "(")
         for i = 1:n
-            print(io, fieldname(typeof(t),i), " = ")
+            show_sym(io, fieldname(typeof(t), i))
+            print(io, " = ")
             show(IOContext(io, :typeinfo =>
                            t isa typeinfo <: NamedTuple ? fieldtype(typeinfo, i) : Any),
                  getfield(t, i))
@@ -267,7 +268,7 @@ merge(a::NamedTuple,     b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple)     = b
 
-merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
+merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, getfield(b, :data))
 
 merge(a::NamedTuple, b::Iterators.Zip{<:Tuple{Any,Any}}) = merge(a, NamedTuple{Tuple(b.is[1])}(b.is[2]))
 

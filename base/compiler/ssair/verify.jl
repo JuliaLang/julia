@@ -111,7 +111,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
             end
         elseif isexpr(terminator, :enter)
             @label enter_check
-            if length(block.succs) != 2 || (block.succs != [terminator.args[1], idx+1] && block.succs != [idx+1, terminator.args[1]])
+            if length(block.succs) != 2 || (block.succs != Int[terminator.args[1], idx+1] && block.succs != Int[idx+1, terminator.args[1]])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 error("")
             end
@@ -201,6 +201,10 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     if stmt.args[1] isa SSAValue
                         @verify_error "SSAValue as assignment LHS"
                         error("")
+                    end
+                    if stmt.args[2] isa GlobalRef
+                        # undefined GlobalRef as assignment RHS is OK
+                        continue
                     end
                 elseif stmt.head === :gc_preserve_end
                     # We allow gc_preserve_end tokens to span across try/catch

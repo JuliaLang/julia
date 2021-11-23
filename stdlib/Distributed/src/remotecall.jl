@@ -84,20 +84,24 @@ end
 
 function finalize_ref(r::AbstractRemoteRef)
     if r.where > 0 # Handle the case of the finalizer having been called manually
-        if islocked(client_refs)
-            # delay finalizer for later, when it's not already locked
+        if trylock(client_refs.lock) # trylock doesn't call wait which causes yields
+            try
+                delete!(client_refs.ht, r) # direct removal avoiding locks
+                if isa(r, RemoteChannel)
+                    send_del_client_no_lock(r)
+                else
+                    # send_del_client only if the reference has not been set
+                    r.v === nothing && send_del_client_no_lock(r)
+                    r.v = nothing
+                end
+                r.where = 0
+            finally
+                unlock(client_refs.lock)
+            end
+        else
             finalizer(finalize_ref, r)
             return nothing
         end
-        delete!(client_refs, r)
-        if isa(r, RemoteChannel)
-            send_del_client(r)
-        else
-            # send_del_client only if the reference has not been set
-            r.v === nothing && send_del_client(r)
-            r.v = nothing
-        end
-        r.where = 0
     end
     nothing
 end
@@ -229,13 +233,18 @@ del_client(rr::AbstractRemoteRef) = del_client(remoteref_id(rr), myid())
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
     lock(client_refs) do
-        rv = get(pg.refs, id, false)
-        if rv !== false
-            delete!(rv.clientset, client)
-            if isempty(rv.clientset)
-                delete!(pg.refs, id)
-                #print("$(myid()) collected $id\n")
-            end
+        _del_client(pg, id, client)
+    end
+    nothing
+end
+
+function _del_client(pg, id, client)
+    rv = get(pg.refs, id, false)
+    if rv !== false
+        delete!(rv.clientset, client)
+        if isempty(rv.clientset)
+            delete!(pg.refs, id)
+            #print("$(myid()) collected $id\n")
         end
     end
     nothing
@@ -247,23 +256,68 @@ function del_clients(pairs::Vector)
     end
 end
 
-const any_gc_flag = Condition()
+# The task below is coalescing the `flush_gc_msgs` call
+# across multiple producers, see `send_del_client`,
+# and `send_add_client`.
+# XXX: Is this worth the additional complexity?
+#      `flush_gc_msgs` has to iterate over all connected workers.
+const any_gc_flag = Threads.Condition()
 function start_gc_msgs_task()
-    errormonitor(@async while true
-        wait(any_gc_flag)
-        flush_gc_msgs()
-    end)
+    errormonitor(
+        Threads.@spawn begin
+            while true
+                lock(any_gc_flag) do
+                    # this might miss events
+                    wait(any_gc_flag)
+                end
+                # Use invokelatest() so that custom message transport streams
+                # for workers can be defined in a newer world age than the Task
+                # which runs the loop here.
+                invokelatest(flush_gc_msgs) # handles throws internally
+            end
+        end
+    )
 end
 
+# Function can be called within a finalizer
 function send_del_client(rr)
     if rr.where == myid()
         del_client(rr)
     elseif id_in_procs(rr.where) # process only if a valid worker
-        w = worker_from_id(rr.where)
-        push!(w.del_msgs, (remoteref_id(rr), myid()))
-        w.gcflag = true
+        process_worker(rr)
+    end
+end
+
+function send_del_client_no_lock(rr)
+    # for gc context to avoid yields
+    if rr.where == myid()
+        _del_client(PGRP, remoteref_id(rr), myid())
+    elseif id_in_procs(rr.where) # process only if a valid worker
+        process_worker(rr)
+    end
+end
+
+function publish_del_msg!(w::Worker, msg)
+    lock(w.msg_lock) do
+        push!(w.del_msgs, msg)
+        @atomic w.gcflag = true
+    end
+    lock(any_gc_flag) do
         notify(any_gc_flag)
     end
+end
+
+function process_worker(rr)
+    w = worker_from_id(rr.where)::Worker
+    msg = (remoteref_id(rr), myid())
+
+    # Needs to aquire a lock on the del_msg queue
+    T = Threads.@spawn begin
+        publish_del_msg!($w, $msg)
+    end
+    Base.errormonitor(T)
+
+    return
 end
 
 function add_client(id, client)
@@ -288,9 +342,13 @@ function send_add_client(rr::AbstractRemoteRef, i)
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
-        push!(w.add_msgs, (remoteref_id(rr), i))
-        w.gcflag = true
-        notify(any_gc_flag)
+        lock(w.msg_lock) do
+            push!(w.add_msgs, (remoteref_id(rr), i))
+            @atomic w.gcflag = true
+        end
+        lock(any_gc_flag) do
+            notify(any_gc_flag)
+        end
     end
 end
 
@@ -348,10 +406,7 @@ end
 # make a thunk to call f on args in a way that simulates what would happen if
 # the function were sent elsewhere
 function local_remotecall_thunk(f, args, kwargs)
-    if isempty(args) && isempty(kwargs)
-        return f
-    end
-    return ()->f(args...; kwargs...)
+    return ()->invokelatest(f, args...; kwargs...)
 end
 
 function remotecall(f, w::LocalProcess, args...; kwargs...)
@@ -544,7 +599,7 @@ fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
 Wait for and get a value from a [`RemoteChannel`](@ref). Exceptions raised are the
 same as for a [`Future`](@ref). Does not remove the item fetched.
 """
-fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
+fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)::eltype(r)
 
 isready(rv::RemoteValue, args...) = isready(rv.c, args...)
 
@@ -607,7 +662,15 @@ function take_ref(rid, caller, args...)
         lock(rv.synctake)
     end
 
-    v=take!(rv, args...)
+    v = try
+        take!(rv, args...)
+    catch e
+        # avoid unmatched unlock when exception occurs
+        # github issue #33972
+        synctake && unlock(rv.synctake)
+        rethrow(e)
+    end
+
     isa(v, RemoteException) && (myid() == caller) && throw(v)
 
     if synctake
@@ -623,7 +686,7 @@ end
 Fetch value(s) from a [`RemoteChannel`](@ref) `rr`,
 removing the value(s) in the process.
 """
-take!(rr::RemoteChannel, args...) = call_on_owner(take_ref, rr, myid(), args...)
+take!(rr::RemoteChannel, args...) = call_on_owner(take_ref, rr, myid(), args...)::eltype(rr)
 
 # close and isopen are not supported on Future
 

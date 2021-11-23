@@ -106,6 +106,11 @@ mutable struct PromptState <: ModeState
     refresh_wait::Union{Timer,Nothing}
 end
 
+struct Modifiers
+    shift::Bool
+end
+Modifiers() = Modifiers(false)
+
 options(s::PromptState) =
     if isdefined(s.p, :repl) && isdefined(s.p.repl, :options)
         # we can't test isa(s.p.repl, LineEditREPL) as LineEditREPL is defined
@@ -321,7 +326,7 @@ function show_completions(s::PromptState, completions::Vector{String})
         for col = 0:num_cols
             idx = row + col*entries_per_col
             if idx <= length(completions)
-                cmove_col(terminal(s), (colmax+2)*col)
+                cmove_col(terminal(s), (colmax+2)*col+1)
                 print(terminal(s), completions[idx])
             end
         end
@@ -786,23 +791,32 @@ function edit_insert(s::PromptState, c::StringLike)
         after = options(s).auto_refresh_time_delay
         termbuf = terminal(s)
         w = width(termbuf)
-        delayup = !eof(buf) || old_wait
         offset = s.ias.curs_row == 1 || s.indent < 0 ?
             sizeof(prompt_string(s.p.prompt)::String) : s.indent
         offset += position(buf) - beginofline(buf) # size of current line
-        if offset + textwidth(str) <= w
+        spinner = '\0'
+        delayup = !eof(buf) || old_wait
+        if offset + textwidth(str) <= w && !(after == 0 && delayup)
             # Avoid full update when appending characters to the end
             # and an update of curs_row isn't necessary (conservatively estimated)
             write(termbuf, str)
+            spinner = ' ' # temporarily clear under the cursor
         elseif after == 0
             refresh_line(s)
             delayup = false
-        else
+        else # render a spinner for each key press
+            if old_wait || length(str) != 1
+                spinner = spin_seq[mod1(position(buf) - w, length(spin_seq))]
+            else
+                spinner = str[end]
+            end
             delayup = true
         end
         if delayup
-            write(termbuf, spin_seq[mod1(position(buf) - w, length(spin_seq))])
-            cmove_left(termbuf)
+            if spinner != '\0'
+                write(termbuf, spinner)
+                cmove_left(termbuf)
+            end
             s.refresh_wait = Timer(after) do t
                 s.refresh_wait === t || return
                 s.refresh_wait = nothing
@@ -1898,6 +1912,10 @@ mode(s::PromptState) = s.p          # ::Prompt
 mode(s::SearchState) = @assert false
 mode(s::PrefixSearchState) = s.histprompt.parent_prompt   # ::Prompt
 
+setmodifiers!(s::MIState, m::Modifiers) = setmodifiers!(mode(s), m)
+setmodifiers!(p::Prompt, m::Modifiers) = setmodifiers!(p.complete, m)
+setmodifiers!(c) = nothing
+
 # Search Mode completions
 function complete_line(s::SearchState, repeats)
     completions, partial, should_complete = complete_line(s.histprompt.complete, s)
@@ -2165,6 +2183,11 @@ function edit_tab(s::MIState, jump_spaces::Bool=false, delete_trailing::Bool=jum
     return refresh_line(s)
 end
 
+function shift_tab_completion(s::MIState)
+    setmodifiers!(s, Modifiers(true))
+    return complete_line(s)
+end
+
 # return true iff the content of the buffer is modified
 # return false when only the position changed
 function edit_insert_tab(buf::IOBuffer, jump_spaces::Bool=false, delete_trailing::Bool=jump_spaces)
@@ -2200,6 +2223,8 @@ const default_keymap =
 AnyDict(
     # Tab
     '\t' => (s::MIState,o...)->edit_tab(s, true),
+    # Shift-tab
+    "\e[Z" => (s::MIState,o...)->shift_tab_completion(s),
     # Enter
     '\r' => (s::MIState,o...)->begin
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)

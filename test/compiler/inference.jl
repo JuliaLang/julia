@@ -44,6 +44,45 @@ let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
     @test t <: Core.Compiler.limit_type_size(t, c, Union{}, 1, 100)
 end
 
+# obtain Vararg with 2 undefined fields
+let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
+    @test Core.Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Tuple
+end
+
+# issue #42835
+@test !Core.Compiler.type_more_complex(Int, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Int, Type{Int}, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Type{Int}, Core.svec(Type{Int}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Int, Core.svec(Type{Int}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Int}}}, Type{Type{Int}}, Core.svec(Type{Type{Int}}), 1, 1, 1)
+
+@test  Core.Compiler.type_more_complex(ComplexF32, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(ComplexF32, Any, Core.svec(Type{ComplexF32}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(ComplexF32, Type{ComplexF32}, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{ComplexF32}, Any, Core.svec(Type{Type{ComplexF32}}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{ComplexF32}, Type{Type{ComplexF32}}, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{ComplexF32}, ComplexF32, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{ComplexF32}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{ComplexF32}}, Type{ComplexF32}, Core.svec(Type{ComplexF32}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{ComplexF32}}, ComplexF32, Core.svec(ComplexF32), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{ComplexF32}}}, Type{Type{ComplexF32}}, Core.svec(Type{ComplexF32}), 1, 1, 1)
+
+# n.b. Type{Type{Union{}} === Type{Core.TypeofBottom}
+@test !Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Type{Type{Union{}}}, Core.svec(Type{Type{Union{}}}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Type{Union{}}}}}, Type{Type{Type{Union{}}}}, Core.svec(Type{Type{Type{Union{}}}}), 1, 1, 1)
+
+@test !Core.Compiler.type_more_complex(Type{1}, Type{2}, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
+@test_broken Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+
+
 let # 40336
     t = Type{Type{Int}}
     c = Type{Int}
@@ -235,6 +274,15 @@ barTuple2() = fooTuple{tuple(:y)}()
 @test Core.Compiler.getfield_tfunc(
           Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
           Core.Compiler.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
+
+# assert robustness of `getfield_tfunc`
+struct GetfieldRobustness
+    field::String
+end
+@test Base.return_types((GetfieldRobustness,String,)) do obj, s
+    t = (10, s) # to form `PartialStruct`
+    getfield(obj, t)
+end |> only === Union{}
 
 # issue #12476
 function f12476(a)
@@ -677,8 +725,8 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Real}}, Type{Int32}}, Const(:x)) == Const(Real)
     @test fieldtype_tfunc(Const(Union{Base.RefValue{<:Real}, Type{Int32}}), Const(:x)) == Const(Real)
     @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type{<:Real}
-    @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Type
-    @test fieldtype_tfunc(Type{<:Tuple}, Any) == Type
+    @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Any
+    @test fieldtype_tfunc(Type{<:Tuple}, Any) == Any
     @test fieldtype_nothrow(Type{Base.RefValue{<:Real}}, Const(:x))
     @test !fieldtype_nothrow(Type{Union{}}, Const(:x))
     @test !fieldtype_nothrow(Union{Type{Base.RefValue{T}}, Int32} where {T<:Real}, Const(:x))
@@ -1105,6 +1153,11 @@ end
     @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:y)) === Const(true)
     @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:z)) === Const(false)
 end
+struct UnionIsdefinedA; x; end
+struct UnionIsdefinedB; x; end
+@test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
+@test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
+@test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Bool
 
 @noinline map3_22347(f, t::Tuple{}) = ()
 @noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)
@@ -1524,7 +1577,6 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base
-    @test opt.nargs == 3
 end
 
 # approximate static parameters due to unions
@@ -1551,9 +1603,9 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test @inferred f_pure_add()
 
 # inference of `T.mutable`
-@test Core.Compiler.getfield_tfunc(Const(Int), Const(:mutable)) == Const(false)
-@test Core.Compiler.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
-@test Core.Compiler.getfield_tfunc(DataType, Const(:mutable)) == Bool
+@test Core.Compiler.getfield_tfunc(Const(Int.name), Const(:flags)) == Const(0x4)
+@test Core.Compiler.getfield_tfunc(Const(Vector{Int}.name), Const(:flags)) == Const(0x2)
+@test Core.Compiler.getfield_tfunc(Core.TypeName, Const(:flags)) == UInt8
 
 # getfield on abstract named tuples. issue #32698
 import Core.Compiler.getfield_tfunc
@@ -1789,6 +1841,16 @@ end
         0
     end == Any[Int]
 
+    # slot as SSA
+    isaT(x, T) = isa(x, T)
+    @test Base.return_types((Any,Int)) do a, b
+        c = a
+        if isaT(c, typeof(b))
+            return c # c::Int
+        end
+        return 0
+    end |> only === Int
+
     # with Base functions
     @test Base.return_types((Any,)) do a
         Base.Fix2(isa, Int)(a) && return a # a::Int
@@ -1806,6 +1868,18 @@ end
         Meta.isexpr(x, :call) && return x # x::Expr
         return nothing
     end == Any[Union{Nothing,Expr}]
+
+    # handle the edge case
+    let ts = @eval Module() begin
+            edgecase(_) = $(Core.Compiler.InterConditional(2, Int, Any))
+            # create cache
+            Base.return_types(edgecase, (Any,))
+            Base.return_types((Any,)) do x
+                edgecase(x) ? x : nothing # ::Any
+            end
+        end
+        @test ts == Any[Any]
+    end
 end
 
 @testset "branching on conditional object" begin
@@ -1823,14 +1897,84 @@ end
         return c, d # ::Tuple{Int,Int}
     end == Any[Tuple{Int,Int}]
 
-    # shouldn't use the old constraint when the subject of condition has changed
+    # should invalidate old constraint when the subject of condition has changed
     @test Base.return_types((Union{Nothing,Int},)) do a
-        b = a === nothing
-        c = b ? 0 : a # c::Int
+        cond = a === nothing
+        r1 = cond ? 0 : a # r1::Int
         a = 0
-        d = b ? a : 1 # d::Int, not d::Union{Nothing,Int}
-        return c, d # ::Tuple{Int,Int}
+        r2 = cond ? a : 1 # r2::Int, not r2::Union{Nothing,Int}
+        return r1, r2 # ::Tuple{Int,Int}
     end == Any[Tuple{Int,Int}]
+end
+
+# https://github.com/JuliaLang/julia/issues/42090#issuecomment-911824851
+# `PartialStruct` shoudln't wrap `Conditional`
+let M = Module()
+    @eval M begin
+        struct BePartialStruct
+            val::Int
+            cond
+        end
+    end
+
+    rt = @eval M begin
+        Base.return_types((Union{Nothing,Int},)) do a
+            cond = a === nothing
+            obj = $(Expr(:new, M.BePartialStruct, 42, :cond))
+            r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
+            a = $(gensym(:anyvar))::Any
+            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constrait invalidation here)
+            return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
+        end |> only
+    end
+    @test rt == Tuple{Union{Nothing,Int},Any}
+end
+
+@testset "conditional constraint propagation from non-`Conditional` object" begin
+    @test Base.return_types((Bool,)) do b
+        if b
+            return !b ? nothing : 1 # ::Int
+        else
+            return 0
+        end
+    end == Any[Int]
+
+    @test Base.return_types((Any,)) do b
+        if b
+            return b # ::Bool
+        else
+            return nothing
+        end
+    end == Any[Union{Bool,Nothing}]
+end
+
+@testset "`from_interprocedural!`: translate inter-procedural information" begin
+    # TODO come up with a test case to check the functionality of `collect_limitations!`
+    # one heavy test case would be to use https://github.com/aviatesk/JET.jl and
+    # check `julia /path/to/JET/jet /path/to/JET/src/JET.jl` doesn't result in errors
+    # because of nested `LimitedAccuracy`es
+
+    # `InterConditional` handling: `abstract_invoke`
+    ispositive(a) = isa(a, Int) && a > 0
+    @test Base.return_types((Any,)) do a
+        if Base.@invoke ispositive(a::Any)
+            return a
+        end
+        return 0
+    end |> only == Int
+    # the `fargs = nothing` edge case
+    @test Base.return_types((Any,)) do a
+        Core.Compiler.return_type(invoke, Tuple{typeof(ispositive), Type{Tuple{Any}}, Any})
+    end |> only == Type{Bool}
+
+    # `InterConditional` handling: `abstract_call_opaque_closure`
+    @test Base.return_types((Any,)) do a
+        f = Base.Experimental.@opaque a -> isa(a, Int) && a > 0
+        if f(a)
+            return a
+        end
+        return 0
+    end |> only === Int
 end
 
 function f25579(g)
@@ -1933,6 +2077,67 @@ function _g_ifelse_isa_()
     ifelse(isa(x, Nothing), 1, x)
 end
 @test Base.return_types(_g_ifelse_isa_, ()) == [Int]
+
+@testset "Conditional forwarding" begin
+    # forward `Conditional` if it conveys a constraint on any other argument
+    ifelselike(cnd, x, y) = cnd ? x : y
+
+    @test Base.return_types((Any,Int,)) do x, y
+        ifelselike(isa(x, Int), x, y)
+    end |> only == Int
+
+    # should work nicely with union-split
+    @test Base.return_types((Union{Int,Nothing},)) do x
+        ifelselike(isa(x, Int), x, 0)
+    end |> only == Int
+
+    @test Base.return_types((Any,Int)) do x, y
+        ifelselike(!isa(x, Int), y, x)
+    end |> only == Int
+
+    @test Base.return_types((Any,Int)) do x, y
+        a = ifelselike(x === 0, x, 0) # ::Const(0)
+        if a == 0
+            return y
+        else
+            return nothing # dead branch
+        end
+    end |> only == Int
+
+    # pick up the first if there are multiple constrained arguments
+    @test Base.return_types((Any,)) do x
+        ifelselike(isa(x, Int), x, x)
+    end |> only == Any
+
+    # just propagate multiple constraints
+    ifelselike2(cnd1, cnd2, x, y, z) = cnd1 ? x : cnd2 ? y : z
+    @test Base.return_types((Any,Any)) do x, y
+        ifelselike2(isa(x, Int), isa(y, Int), x, y, 0)
+    end |> only == Int
+
+    # work with `invoke`
+    @test Base.return_types((Any,Any)) do x, y
+        Base.@invoke ifelselike(isa(x, Int), x, y::Int)
+    end |> only == Int
+
+    # don't be confused with vararg method
+    vacond(cnd, va...) = cnd ? va : 0
+    @test Base.return_types((Any,)) do x
+        # at runtime we will see `va::Tuple{Tuple{Int,Int}, Tuple{Int,Int}}`
+        vacond(isa(x, Tuple{Int,Int}), x, x)
+    end |> only == Union{Int,Tuple{Any,Any}}
+
+    # demonstrate extra constraint propagation for Base.ifelse
+    @test Base.return_types((Any,Int,)) do x, y
+        ifelse(isa(x, Int), x, y)
+    end |> only == Int
+
+    # slot as SSA
+    @test Base.return_types((Any,Vector{Any})) do x, y
+        z = x
+        ifelselike(isa(z, Int), z, length(y))
+    end |> only === Int
+end
 
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
@@ -2192,12 +2397,10 @@ code28279 = code_lowered(f28279, (Bool,))[1].code
 oldcode28279 = deepcopy(code28279)
 ssachangemap = fill(0, length(code28279))
 labelchangemap = fill(0, length(code28279))
-worklist = Int[]
 let i
     for i in 1:length(code28279)
         stmt = code28279[i]
         if isa(stmt, GotoIfNot)
-            push!(worklist, i)
             ssachangemap[i] = 1
             if i < length(code28279)
                 labelchangemap[i + 1] = 1
@@ -2654,7 +2857,7 @@ const DenseIdx = Union{IntRange,Integer}
     foo_26724((result..., length(r)), I...)
 @test @inferred(foo_26724((), 1:4, 1:5, 1:6)) === (4, 5, 6)
 
-# Non uniformity in expresions with PartialTypeVar
+# Non uniformity in expressions with PartialTypeVar
 @test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
 let N = TypeVar(:N)
     @test Core.Compiler.apply_type_nothrow([Core.Compiler.Const(NTuple),
@@ -2846,6 +3049,21 @@ function symcmp36230(vec)
 end
 @test Base.return_types(symcmp36230, (Vector{Any},)) == Any[Bool]
 
+function foo42190(r::Union{Nothing,Int}, n::Int)
+    while r !== nothing && r < n
+        return r # `r::Int`
+    end
+    return n
+end
+@test Base.return_types(foo42190, (Union{Nothing, Int}, Int)) == Any[Int]
+function bar42190(r::Union{Nothing,Int}, n::Int)
+    while r === nothing || r < n
+        return n
+    end
+    return r # `r::Int`
+end
+@test Base.return_types(bar42190, (Union{Nothing, Int}, Int)) == Any[Int]
+
 # Issue #36531, double varargs in abstract_iteration
 f36531(args...) = tuple((args...)...)
 @test @inferred(f36531(1,2,3)) == (1,2,3)
@@ -2857,9 +3075,24 @@ partial_return_2(x) = Val{partial_return_1(x)[2]}
 
 @test Base.return_types(partial_return_2, (Int,)) == Any[Type{Val{1}}]
 
-# Precision of abstract_iteration
+# Soundness and precision of abstract_iteration
+f41839() = (1:100...,)
+@test NTuple{100,Int} <: only(Base.return_types(f41839, ())) <: Tuple{Vararg{Int}}
 f_splat(x) = (x...,)
 @test Base.return_types(f_splat, (Pair{Int,Int},)) == Any[Tuple{Int, Int}]
+@test Base.return_types(f_splat, (UnitRange{Int},)) == Any[Tuple{Vararg{Int}}]
+struct Itr41839_1 end # empty or infinite
+Base.iterate(::Itr41839_1) = rand(Bool) ? (nothing, nothing) : nothing
+Base.iterate(::Itr41839_1, ::Nothing) = (nothing, nothing)
+@test Base.return_types(f_splat, (Itr41839_1,)) == Any[Tuple{}]
+struct Itr41839_2 end # empty or failing
+Base.iterate(::Itr41839_2) = rand(Bool) ? (nothing, nothing) : nothing
+Base.iterate(::Itr41839_2, ::Nothing) = error()
+@test Base.return_types(f_splat, (Itr41839_2,)) == Any[Tuple{}]
+struct Itr41839_3 end
+Base.iterate(::Itr41839_3 ) = rand(Bool) ? nothing : (nothing, 1)
+Base.iterate(::Itr41839_3 , i) = i < 16 ? (i, i + 1) : nothing
+@test only(Base.return_types(f_splat, (Itr41839_3,))) <: Tuple{Vararg{Union{Nothing, Int}}}
 
 # issue #32699
 f32699(a) = (id = a[1],).id
@@ -2935,7 +3168,8 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Vararg{Symbol}}) == Symbol
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Vararg{Integer}}) == Integer
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Vararg}) == Integer
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Vararg}) == Integer
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Any, Vararg}) == Union{}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Vararg}) == Expr
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Vararg}) == Expr
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Any, Vararg}) == Expr
@@ -2946,11 +3180,12 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Vararg}) == Int
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Vararg}) == Int
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Vararg}) == Int
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Any, Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Union{Type, TypeVar}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Union{Type, TypeVar}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Union{Type, TypeVar}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Union{Type, TypeVar}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Any, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Any, Any, Any, Any, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Any
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Any, Vararg}) == Union{}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Vararg}) == Any
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Vararg}) == Any
@@ -2988,14 +3223,14 @@ end
 # Some very limited testing of timing the type inference (#37749).
 @testset "Core.Compiler.Timings" begin
     # Functions that call each other
-    @eval module M
+    @eval module M1
         i(x) = x+5
         i2(x) = x+2
         h(a::Array) = i2(a[1]::Integer) + i(a[1]::Integer) + 2
         g(y::Integer, x) = h(Any[y]) + Int(x)
     end
     timing1 = time_inference() do
-        @eval M.g(2, 3.0)
+        @eval M1.g(2, 3.0)
     end
     @test occursin(r"Core.Compiler.Timings.Timing\(InferenceFrameInfo for Core.Compiler.Timings.ROOT\(\)\) with \d+ children", sprint(show, timing1))
     # The last two functions to be inferred should be `i` and `i2`, inferred at runtime with
@@ -3007,11 +3242,11 @@ end
     @test isa(stacktrace(timing1.children[1].bt), Vector{Base.StackTraces.StackFrame})
     # Test that inference has cached some of the Method Instances
     timing2 = time_inference() do
-        @eval M.g(2, 3.0)
+        @eval M1.g(2, 3.0)
     end
     @test length(flatten_times(timing2)) < length(flatten_times(timing1))
     # Printing of InferenceFrameInfo for mi.def isa Module
-    @eval module M
+    @eval module M2
         i(x) = x+5
         i2(x) = x+2
         h(a::Array) = i2(a[1]::Integer) + i(a[1]::Integer) + 2
@@ -3021,7 +3256,7 @@ end
     timingmod = time_inference() do
         @eval @testset "Outer" begin
             @testset "Inner" begin
-                for i = 1:2 M.g(2, 3.0) end
+                for i = 1:2 M2.g(2, 3.0) end
             end
         end
     end
@@ -3108,9 +3343,9 @@ g38888() = S38888(Base.inferencebarrier(3), nothing)
 f_inf_error_bottom(x::Vector) = isempty(x) ? error(x[1]) : x
 @test Core.Compiler.return_type(f_inf_error_bottom, Tuple{Vector{Any}}) == Vector{Any}
 
-# @aggressive_constprop
+# @constprop :aggressive
 @noinline g_nonaggressive(y, x) = Val{x}()
-@noinline @Base.aggressive_constprop g_aggressive(y, x) = Val{x}()
+@noinline Base.@constprop :aggressive g_aggressive(y, x) = Val{x}()
 
 f_nonaggressive(x) = g_nonaggressive(x, 1)
 f_aggressive(x) = g_aggressive(x, 1)
@@ -3119,6 +3354,12 @@ f_aggressive(x) = g_aggressive(x, 1)
 # render the annotation effectless.
 @test Base.return_types(f_nonaggressive, Tuple{Int})[1] == Val
 @test Base.return_types(f_aggressive, Tuple{Int})[1] == Val{1}
+
+# @constprop :none
+@noinline Base.@constprop :none g_noaggressive(flag::Bool) = flag ? 1 : 1.0
+ftrue_noaggressive() = g_noaggressive(true)
+@test only(Base.return_types(ftrue_noaggressive, Tuple{})) == Union{Int,Float64}
+
 
 function splat_lotta_unions()
     a = Union{Tuple{Int},Tuple{String,Vararg{Int}},Tuple{Int,Vararg{Int}}}[(2,)][1]
@@ -3270,3 +3511,334 @@ end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
         true
     end
 end
+
+# Make sure that const prop doesn't fall into cycles that aren't problematic
+# in the type domain
+f_recurse(x) = x > 1000000 ? x : f_recurse(x+1)
+@test Base.return_types() do
+    f_recurse(1)
+end |> first === Int
+
+# issue #39915
+function f33915(a_tuple, which_ones)
+    rest = f33915(Base.tail(a_tuple), Base.tail(which_ones))
+    if first(which_ones)
+        (first(a_tuple), rest...)
+    else
+        rest
+    end
+end
+f33915(a_tuple::Tuple{}, which_ones::Tuple{}) = ()
+g39915(a_tuple) = f33915(a_tuple, (true, false, true, false))
+@test Base.return_types() do
+    g39915((1, 1.0, "a", :a))
+end |> first === Tuple{Int, String}
+
+# issue #40742
+@test Base.return_types(string, (Vector{Tuple{:x}},)) == Any[String]
+
+# issue #40804
+@test Base.return_types(()) do; ===(); end == Any[Union{}]
+@test Base.return_types(()) do; typeassert(); end == Any[Union{}]
+
+primitive type UInt24ish 24 end
+f34288(x) = Core.Intrinsics.checked_sdiv_int(x, Core.Intrinsics.trunc_int(UInt24ish, 0))
+@test Base.return_types(f34288, (UInt24ish,)) == Any[UInt24ish]
+
+# Inference of PhiNode showing up in lowered AST
+function f_convert_me_to_ir(b, x)
+    a = b ? sin(x) : cos(x)
+    return a
+end
+
+let
+    # Test the presence of PhiNodes in lowered IR by taking the above function,
+    # running it through SSA conversion and then putting it into an opaque
+    # closure.
+    mi = Core.Compiler.specialize_method(first(methods(f_convert_me_to_ir)),
+        Tuple{Bool, Float64}, Core.svec())
+    ci = Base.uncompressed_ast(mi.def)
+    ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
+    sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
+        Core.Compiler.NativeInterpreter())
+    ir = Core.Compiler.convert_to_ircode(ci, sv)
+    ir = Core.Compiler.slot2reg(ir, ci, sv)
+    ir = Core.Compiler.compact!(ir)
+    Core.Compiler.replace_code_newstyle!(ci, ir, 4)
+    ci.ssavaluetypes = length(ci.code)
+    @test any(x->isa(x, Core.PhiNode), ci.code)
+    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
+        Expr(:opaque_closure_method, nothing, 2, LineNumberNode(0, nothing), ci)))(b, 1.0)
+    @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
+
+    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
+        Expr(:opaque_closure_method, nothing, 2, LineNumberNode(0, nothing), ci)))(true, 1.0)
+    @test Base.return_types(oc, Tuple{}) == Any[Float64]
+end
+
+@testset "constant prop' on `invoke` calls" begin
+    m = Module()
+
+    # simple cases
+    @eval m begin
+        f(a::Any,    sym::Bool) = sym ? Any : :any
+        f(a::Number, sym::Bool) = sym ? Number : :number
+    end
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Any, true::Bool)
+    end) == Any[Type{Any}]
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Number, true::Bool)
+    end) == Any[Type{Number}]
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Any, false::Bool)
+    end) == Any[Symbol]
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Number, false::Bool)
+    end) == Any[Symbol]
+
+    # https://github.com/JuliaLang/julia/issues/41024
+    @eval m begin
+        # mixin, which expects common field `x::Int`
+        abstract type AbstractInterface end
+        Base.getproperty(x::AbstractInterface, sym::Symbol) =
+            sym === :x ? getfield(x, sym)::Int :
+            return getfield(x, sym) # fallback
+
+        # extended mixin, which expects additional field `y::Rational{Int}`
+        abstract type AbstractInterfaceExtended <: AbstractInterface end
+        Base.getproperty(x::AbstractInterfaceExtended, sym::Symbol) =
+            sym === :y ? getfield(x, sym)::Rational{Int} :
+            return Base.@invoke getproperty(x::AbstractInterface, sym::Symbol)
+    end
+    @test (@eval m Base.return_types((AbstractInterfaceExtended,)) do x
+        x.x
+    end) == Any[Int]
+end
+
+@testset "fieldtype for unions" begin # e.g. issue #40177
+    f40177(::Type{T}) where {T} = fieldtype(T, 1)
+    for T in [
+        Union{Tuple{Val}, Tuple{Tuple}},
+        Union{Base.RefValue{T}, Type{Int32}} where T<:Real,
+        Union{Tuple{Vararg{Symbol}}, Tuple{Float64, Vararg{Float32}}},
+    ]
+        @test @inferred(f40177(T)) == fieldtype(T, 1)
+    end
+end
+
+# issue #41908
+f41908(x::Complex{T}) where {String<:T<:String} = 1
+g41908() = f41908(Any[1][1])
+@test only(Base.return_types(g41908, ())) <: Int
+
+# issue #42022
+let x = Tuple{Int,Any}[
+        #= 1=# (0, Expr(:(=), Core.SlotNumber(3), 1))
+        #= 2=# (0, Expr(:enter, 18))
+        #= 3=# (2, Expr(:(=), Core.SlotNumber(3), 2.0))
+        #= 4=# (2, Expr(:enter, 12))
+        #= 5=# (4, Expr(:(=), Core.SlotNumber(3), '3'))
+        #= 6=# (4, Core.GotoIfNot(Core.SlotNumber(2), 9))
+        #= 7=# (4, Expr(:leave, 2))
+        #= 8=# (0, Core.ReturnNode(1))
+        #= 9=# (4, Expr(:call, GlobalRef(Main, :throw)))
+        #=10=# (4, Expr(:leave, 1))
+        #=11=# (2, Core.GotoNode(16))
+        #=12=# (4, Expr(:leave, 1))
+        #=13=# (2, Expr(:(=), Core.SlotNumber(4), Expr(:the_exception)))
+        #=14=# (2, Expr(:call, GlobalRef(Main, :rethrow)))
+        #=15=# (2, Expr(:pop_exception, Core.SSAValue(4)))
+        #=16=# (2, Expr(:leave, 1))
+        #=17=# (0, Core.GotoNode(22))
+        #=18=# (2, Expr(:leave, 1))
+        #=19=# (0, Expr(:(=), Core.SlotNumber(5), Expr(:the_exception)))
+        #=20=# (0, nothing)
+        #=21=# (0, Expr(:pop_exception, Core.SSAValue(2)))
+        #=22=# (0, Core.ReturnNode(Core.SlotNumber(3)))
+    ]
+    handler_at = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    @test handler_at == first.(x)
+end
+
+@test only(Base.return_types((Bool,)) do y
+        x = 1
+        try
+            x = 2.0
+            try
+                x = '3'
+                y ? (return 1) : throw()
+            catch ex1
+                rethrow()
+            end
+        catch ex2
+            nothing
+        end
+        return x
+    end) === Union{Int, Float64, Char}
+
+# issue #42097
+struct Foo42097{F} end
+Foo42097(f::F, args) where {F} = Foo42097{F}()
+Foo42097(A) = Foo42097(Base.inferencebarrier(+), Base.inferencebarrier(1)...)
+foo42097() = Foo42097([1]...)
+@test foo42097() isa Foo42097{typeof(+)}
+
+# eliminate unbound `TypeVar`s on `argtypes` construction
+let
+    a0(a01, a02, a03, a04, a05, a06, a07, a08, a09, a10, va...) = nothing
+    method = only(methods(a0))
+    unbound = TypeVar(:Unbound, Integer)
+    specTypes = Tuple{typeof(a0),
+               # TypeVar
+        #=01=# Bound,                  # => Integer
+        #=02=# unbound,                # => Integer (invalid `TypeVar` widened beforehand)
+               # DataType
+        #=03=# Type{Bound},            # => Type{Bound} where Bound<:Integer
+        #=04=# Type{unbound},          # => Type
+        #=05=# Vector{Bound},          # => Vector{Bound} where Bound<:Integer
+        #=06=# Vector{unbound},        # => Any
+               # UnionAll
+        #=07=# Type{<:Bound},          # => Type{<:Bound} where Bound<:Integer
+        #=08=# Type{<:unbound},        # => Any
+               # Union
+        #=09=# Union{Nothing,Bound},   # => Union{Nothing,Bound} where Bound<:Integer
+        #=10=# Union{Nothing,unbound}, # => Any
+               # Vararg
+        #=va=# Bound, unbound,         # => Tuple{Integer,Integer} (invalid `TypeVar` widened beforehand)
+        } where Bound<:Integer
+    argtypes = Core.Compiler.most_general_argtypes(method, specTypes, true)
+    popfirst!(argtypes)
+    @test argtypes[1] == Integer
+    @test argtypes[2] == Integer
+    @test argtypes[3] == Type{Bound} where Bound<:Integer
+    @test argtypes[4] == Type
+    @test argtypes[5] == Vector{Bound} where Bound<:Integer
+    @test argtypes[6] == Any
+    @test argtypes[7] == Type{<:Bound} where Bound<:Integer
+    @test argtypes[8] == Any
+    @test argtypes[9] == Union{Nothing,Bound} where Bound<:Integer
+    @test argtypes[10] == Any
+    @test argtypes[11] == Tuple{Integer,Integer}
+end
+
+# make sure not to call `widenconst` on `TypeofVararg` objects
+@testset "unhandled Vararg" begin
+    struct UnhandledVarargCond
+        val::Bool
+    end
+    function Base.:+(a::UnhandledVarargCond, xs...)
+        if a.val
+            return nothing
+        else
+            s = 0
+            for x in xs
+                s += x
+            end
+            return s
+        end
+    end
+    @test Base.return_types((Vector{Int},)) do xs
+        +(UnhandledVarargCond(false), xs...)
+    end |> only === Int
+
+    @test (Base.return_types((Vector{Any},)) do xs
+        Core.kwfunc(xs...)
+    end; true)
+
+    @test Base.return_types((Vector{Vector{Int}},)) do xs
+        Tuple(xs...)
+    end |> only === Tuple{Vararg{Int}}
+end
+
+# issue #42646
+@test only(Base.return_types(getindex, (Array{undef}, Int))) >: Union{} # check that it does not throw
+
+# form PartialStruct for extra type information propagation
+struct FieldTypeRefinement{S,T}
+    s::S
+    t::T
+end
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Any,Int}(s, s)
+    o.s
+end |> only == Int
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Int,Any}(s, s)
+    o.t
+end |> only == Int
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Any,Any}(s, s)
+    o.s, o.t
+end |> only == Tuple{Int,Int}
+@test Base.return_types((Int,)) do a
+    s1 = Some{Any}(a)
+    s2 = Some{Any}(s1)
+    s2.value.value
+end |> only == Int
+
+# issue #42986
+@testset "narrow down `Union` using `isdefined` checks" begin
+    # basic functionality
+    @test Base.return_types((Union{Nothing,Core.CodeInstance},)) do x
+        if isdefined(x, :inferred)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Core.CodeInstance
+
+    @test Base.return_types((Union{Nothing,Core.CodeInstance},)) do x
+        if isdefined(x, :not_exist)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Union{}
+
+    # even when isdefined is malformed, we can filter out types with no fields
+    @test Base.return_types((Union{Nothing, Core.CodeInstance},)) do x
+        if isdefined(x, 5)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Core.CodeInstance
+
+    struct UnionNarrowingByIsdefinedA; x; end
+    struct UnionNarrowingByIsdefinedB; x; end
+    struct UnionNarrowingByIsdefinedC; x; end
+
+    # > 2 types in the union
+    @test  Base.return_types((Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB, UnionNarrowingByIsdefinedC},)) do x
+        if isdefined(x, :x)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB, UnionNarrowingByIsdefinedC}
+
+    # > 2 types in the union and some aren't defined
+    @test  Base.return_types((Union{UnionNarrowingByIsdefinedA, Core.CodeInstance, UnionNarrowingByIsdefinedC},)) do x
+        if isdefined(x, :x)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedC}
+
+    # should respect `Const` information still
+    @test Base.return_types((Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB},)) do x
+        if isdefined(x, :x)
+            return x
+        else
+            return nothing # dead branch
+        end
+    end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB}
+end
+
+# issue #43130
+@test Base.return_types((Any,Type)) do uw, ti
+    (uw isa DataType && ti <: uw.name.wrapper) || return nothing
+    uw
+end[] === Union{DataType, Nothing}

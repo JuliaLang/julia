@@ -12,31 +12,54 @@ extern "C" {
 #ifdef DEFINE_BUILTIN_GLOBALS
 #define DECLARE_BUILTIN(name) \
     JL_CALLABLE(jl_f_##name); \
-    jl_value_t *jl_builtin_##name
+    JL_DLLEXPORT jl_value_t *jl_builtin_##name; \
+    JL_DLLEXPORT jl_fptr_args_t jl_f_##name##_addr = &jl_f_##name
 #else
 #define DECLARE_BUILTIN(name) \
     JL_CALLABLE(jl_f_##name); \
-    extern jl_value_t *jl_builtin_##name
+    JL_DLLEXPORT extern jl_value_t *jl_builtin_##name; \
+    JL_DLLEXPORT extern jl_fptr_args_t jl_f_##name##_addr
 #endif
 
-DECLARE_BUILTIN(throw);      DECLARE_BUILTIN(is);
-DECLARE_BUILTIN(typeof);     DECLARE_BUILTIN(sizeof);
-DECLARE_BUILTIN(issubtype);  DECLARE_BUILTIN(isa);
+DECLARE_BUILTIN(applicable);
+DECLARE_BUILTIN(_apply_iterate);
 DECLARE_BUILTIN(_apply_pure);
-DECLARE_BUILTIN(_call_latest); DECLARE_BUILTIN(_apply_iterate);
+DECLARE_BUILTIN(apply_type);
+DECLARE_BUILTIN(arrayref);
+DECLARE_BUILTIN(arrayset);
+DECLARE_BUILTIN(arraysize);
 DECLARE_BUILTIN(_call_in_world);
-DECLARE_BUILTIN(isdefined);  DECLARE_BUILTIN(nfields);
-DECLARE_BUILTIN(tuple);      DECLARE_BUILTIN(svec);
-DECLARE_BUILTIN(getfield);   DECLARE_BUILTIN(setfield);
-DECLARE_BUILTIN(fieldtype);  DECLARE_BUILTIN(arrayref);
+DECLARE_BUILTIN(_call_latest);
+DECLARE_BUILTIN(replacefield);
 DECLARE_BUILTIN(const_arrayref);
-DECLARE_BUILTIN(arrayset);   DECLARE_BUILTIN(arraysize);
-DECLARE_BUILTIN(apply_type); DECLARE_BUILTIN(applicable);
-DECLARE_BUILTIN(invoke);     DECLARE_BUILTIN(_expr);
-DECLARE_BUILTIN(typeassert); DECLARE_BUILTIN(ifelse);
-DECLARE_BUILTIN(_typevar);   DECLARE_BUILTIN(_typebody);
+DECLARE_BUILTIN(_expr);
+DECLARE_BUILTIN(fieldtype);
+DECLARE_BUILTIN(getfield);
+DECLARE_BUILTIN(ifelse);
+DECLARE_BUILTIN(invoke);
+DECLARE_BUILTIN(is);
+DECLARE_BUILTIN(isa);
+DECLARE_BUILTIN(isdefined);
+DECLARE_BUILTIN(issubtype);
+DECLARE_BUILTIN(modifyfield);
+DECLARE_BUILTIN(nfields);
+DECLARE_BUILTIN(setfield);
+DECLARE_BUILTIN(sizeof);
+DECLARE_BUILTIN(svec);
+DECLARE_BUILTIN(swapfield);
+DECLARE_BUILTIN(throw);
+DECLARE_BUILTIN(tuple);
+DECLARE_BUILTIN(typeassert);
+DECLARE_BUILTIN(_typebody);
+DECLARE_BUILTIN(typeof);
+DECLARE_BUILTIN(_typevar);
 
 JL_CALLABLE(jl_f_invoke_kwsorter);
+#ifdef DEFINE_BUILTIN_GLOBALS
+JL_DLLEXPORT jl_fptr_args_t jl_f_invoke_kwsorter_addr = &jl_f_invoke_kwsorter;
+#else
+JL_DLLEXPORT extern jl_fptr_args_t jl_f_invoke_kwsorter_addr;
+#endif
 JL_CALLABLE(jl_f__structtype);
 JL_CALLABLE(jl_f__abstracttype);
 JL_CALLABLE(jl_f__primitivetype);

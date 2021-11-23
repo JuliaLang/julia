@@ -78,7 +78,7 @@ Argument-type declarations **normally have no impact on performance**: regardles
 * **Correctness:** Type declarations can be useful if your function only returns correct results for certain argument types.  For example, if we omitted argument types and wrote `fib(n) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)`, then `fib(1.5)` would silently give us the nonsensical answer `1.0`.
 * **Clarity:** Type declarations can serve as a form of documentation about the expected arguments.
 
-However, it is a **common mistake to overly restrict the argument types**, which can unnecessarily limit the applicability of the function and prevent it from being re-used in circumstances you did not anticipate.    For example, the `fib(n::Integer)` function above works equally well for `Int` arguments (machine integers) and `BigInt` arbitrary-precision integers (see [BigFloats and BigInts](@ref)), which is especially useful because Fibonacci numbers grow exponentially rapidly and will quickly overflow any fixed-precision type like `Int` (see [Overflow behavior](@ref)).  If we had declared our function as `fib(n::Int)`, however, the application to `BigInt` would have been prevented for no reason.   In general, you should use the most general applicable abstract types for arguments, and **when in doubt, omit the argument types**.  You can always add argument-type specifications later if they become necessary, and you don't sacrifice performance or functionality by omitting them.
+However, it is a **common mistake to overly restrict the argument types**, which can unnecessarily limit the applicability of the function and prevent it from being re-used in circumstances you did not anticipate.    For example, the `fib(n::Integer)` function above works equally well for `Int` arguments (machine integers) and `BigInt` arbitrary-precision integers (see [BigFloats and BigInts](@ref BigFloats-and-BigInts)), which is especially useful because Fibonacci numbers grow exponentially rapidly and will quickly overflow any fixed-precision type like `Int` (see [Overflow behavior](@ref)).  If we had declared our function as `fib(n::Int)`, however, the application to `BigInt` would have been prevented for no reason.   In general, you should use the most general applicable abstract types for arguments, and **when in doubt, omit the argument types**.  You can always add argument-type specifications later if they become necessary, and you don't sacrifice performance or functionality by omitting them.
 
 ## The `return` Keyword
 
@@ -180,7 +180,7 @@ end
 ```
 
 This is a *convention* in the sense that `nothing` is not a Julia keyword
-but a only singleton object of type `Nothing`.
+but only a singleton object of type `Nothing`.
 Also, you may notice that the `printx` function example above is contrived,
 because `println` already returns `nothing`, so that the `return` line is redundant.
 
@@ -352,12 +352,26 @@ Named tuples are very similar to tuples, except that fields can additionally be 
 using dot syntax (`x.a`) in addition to the regular indexing syntax
 (`x[1]`).
 
-## Multiple Return Values
+## [Destructuring Assignment and Multiple Return Values](@id destructuring-assignment)
 
-In Julia, one returns a tuple of values to simulate returning multiple values. However, tuples
-can be created and destructured without needing parentheses, thereby providing an illusion that
-multiple values are being returned, rather than a single tuple value. For example, the following
-function returns a pair of values:
+A comma-separated list of variables (optionally wrapped in parentheses) can appear on the
+left side of an assignment: the value on the right side is _destructured_ by iterating
+over and assigning to each variable in turn:
+
+```jldoctest
+julia> (a,b,c) = 1:3
+1:3
+
+julia> b
+2
+```
+
+The value on the right should be an iterator (see [Iteration interface](@ref man-interface-iteration))
+at least as long as the number of variables on the left (any excess elements of the
+iterator are ignored).
+
+This can be used to return multiple values from functions by returning a tuple or
+other iterable value. For example, the following function returns two values:
 
 ```jldoctest foofunc
 julia> function foo(a,b)
@@ -374,8 +388,7 @@ julia> foo(2,3)
 (5, 6)
 ```
 
-A typical usage of such a pair of return values, however, extracts each value into a variable.
-Julia supports simple tuple "destructuring" that facilitates this:
+Destructuring assignment extracts each value into a variable:
 
 ```jldoctest foofunc
 julia> x, y = foo(2,3)
@@ -388,15 +401,96 @@ julia> y
 6
 ```
 
-You can also return multiple values using the `return` keyword:
+Another common use is for swapping variables:
+```jldoctest foofunc
+julia> y, x = x, y
+(5, 6)
 
-```julia
-function foo(a,b)
-    return a+b, a*b
-end
+julia> x
+6
+
+julia> y
+5
 ```
 
-This has the exact same effect as the previous definition of `foo`.
+If only a subset of the elements of the iterator are required, a common convention is to assign ignored elements to a variable
+consisting of only underscores `_` (which is an otherwise invalid variable name, see
+[Allowed Variable Names](@ref man-allowed-variable-names)):
+
+```jldoctest
+julia> _, _, _, d = 1:10
+1:10
+
+julia> d
+4
+```
+
+Other valid left-hand side expressions can be used as elements of the assignment list, which will call [`setindex!`](@ref) or [`setproperty!`](@ref), or recursively destructure individual elements of the iterator:
+
+```jldoctest
+julia> X = zeros(3);
+
+julia> X[1], (a,b) = (1, (2, 3))
+(1, (2, 3))
+
+julia> X
+3-element Vector{Float64}:
+ 1.0
+ 0.0
+ 0.0
+
+julia> a
+2
+
+julia> b
+3
+```
+
+!!! compat "Julia 1.6"
+    `...` with assignment requires Julia 1.6
+
+If the last symbol in the assignment list is suffixed by `...` (known as _slurping_), then
+it will be assigned a collection or lazy iterator of the remaining elements of the
+right-hand side iterator:
+
+```jldoctest
+julia> a, b... = "hello"
+"hello"
+
+julia> a
+'h': ASCII/Unicode U+0068 (category Ll: Letter, lowercase)
+
+julia> b
+"ello"
+
+julia> a, b... = Iterators.map(abs2, 1:4)
+Base.Generator{UnitRange{Int64}, typeof(abs2)}(abs2, 1:4)
+
+julia> a
+1
+
+julia> b
+Base.Iterators.Rest{Base.Generator{UnitRange{Int64}, typeof(abs2)}, Int64}(Base.Generator{UnitRange{Int64}, typeof(abs2)}(abs2, 1:4), 1)
+```
+
+See [`Base.rest`](@ref) for details on the precise handling and customization for specific iterators.
+
+## Property destructuring
+
+Instead of destructuring based on iteration, the right side of assignments can also be destructured using property names.
+This follows the syntax for NamedTuples, and works by assigning to each variable on the left a
+property of the right side of the assignment with the same name using `getproperty`:
+
+```jldoctest
+julia> (; b, a) = (a=1, b=2, c=3)
+(a = 1, b = 2, c = 3)
+
+julia> a
+1
+
+julia> b
+2
+```
 
 ## Argument destructuring
 
@@ -404,7 +498,7 @@ The destructuring feature can also be used within a function argument.
 If a function argument name is written as a tuple (e.g. `(x, y)`) instead of just
 a symbol, then an assignment `(x, y) = argument` will be inserted for you:
 
-```julia
+```julia-repl
 julia> minmax(x, y) = (y < x) ? (y, x) : (x, y)
 
 julia> gap((min, max)) = max - min
@@ -416,7 +510,25 @@ julia> gap(minmax(10, 2))
 Notice the extra set of parentheses in the definition of `gap`. Without those, `gap`
 would be a two-argument function, and this example would not work.
 
-For anonymous functions, destructuring a single tuple requires an extra comma:
+Similarly, property destructuring can also be used for function arguments:
+
+```julia-repl
+julia> foo((; x, y)) = x + y
+foo (generic function with 1 method)
+
+julia> foo((x=1, y=2))
+3
+
+julia> struct A
+           x
+           y
+       end
+
+julia> foo(A(3, 4))
+7
+```
+
+For anonymous functions, destructuring a single argument requires an extra comma:
 
 ```
 julia> map(((x,y),) -> x + y, [(1,2), (3,4)])

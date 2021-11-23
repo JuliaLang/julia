@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 15 # do not make changes without bumping the version #!
+const ser_version = 16 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -418,7 +418,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
     serialize(s, meth.is_for_opaque_closure)
-    serialize(s, meth.aggressive_constprop)
+    serialize(s, meth.constprop)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
@@ -433,6 +433,9 @@ function serialize(s::AbstractSerializer, meth::Method)
         serialize(s, method.recursion_relation)
     else
         serialize(s, nothing)
+    end
+    if isdefined(meth, :external_mt)
+        error("cannot serialize Method objects with external method tables")
     end
     nothing
 end
@@ -462,11 +465,11 @@ function serialize(s::AbstractSerializer, t::Task)
     serialize(s, t.code)
     serialize(s, t.storage)
     serialize(s, t.state)
-    if t._isexception && (stk = Base.catch_stack(t); !isempty(stk))
+    if t._isexception && (stk = Base.current_exceptions(t); !isempty(stk))
         # the exception stack field is hidden inside the task, so if there
         # is any information there make a CapturedException from it instead.
         # TODO: Handle full exception chain, not just the first one.
-        serialize(s, CapturedException(stk[1][1], stk[1][2]))
+        serialize(s, CapturedException(stk[1].exception, stk[1].backtrace))
     else
         serialize(s, t.result)
     end
@@ -507,9 +510,9 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, primary.parameters)
     serialize(s, primary.types)
     serialize(s, isdefined(primary, :instance))
-    serialize(s, primary.abstract)
-    serialize(s, primary.mutable)
-    serialize(s, primary.ninitialized)
+    serialize(s, t.flags & 0x1 == 0x1) # .abstract
+    serialize(s, t.flags & 0x2 == 0x2) # .mutable
+    serialize(s, Int32(length(primary.types) - t.n_uninitialized))
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
@@ -660,7 +663,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         serialize_type(s, t)
         write(s.io, x)
     else
-        if t.mutable
+        if ismutable(x)
             serialize_cycle(s, x) && return
             serialize_type(s, t, true)
         else
@@ -746,14 +749,25 @@ end
     serialize(stream::IO, value)
 
 Write an arbitrary value to a stream in an opaque format, such that it can be read back by
-[`deserialize`](@ref). The read-back value will be as identical as possible to the original.
-In general, this process will not work if the reading and writing are done by different
-versions of Julia, or an instance of Julia with a different system image. `Ptr` values are
-serialized as all-zero bit patterns (`NULL`).
+[`deserialize`](@ref). The read-back value will be as identical as possible to the original,
+but note that `Ptr` values are serialized as all-zero bit patterns (`NULL`).
 
 An 8-byte identifying header is written to the stream first. To avoid writing the header,
 construct a `Serializer` and use it as the first argument to `serialize` instead.
 See also [`Serialization.writeheader`](@ref).
+
+The data format can change in minor (1.x) Julia releases, but files written by prior 1.x
+versions will remain readable. The main exception to this is when the definition of a
+type in an external package changes. If that occurs, it may be necessary to specify
+an explicit compatible version of the affected package in your environment.
+Renaming functions, even private functions, inside packages can also put existing files
+out of sync. Anonymous functions require special care: because their names are automatically
+generated, minor code changes can cause them to be renamed.
+Serializing anonymous functions should be avoided in files intended for long-term storage.
+
+In some cases, the word size (32- or 64-bit) of the reading and writing machines must match.
+In rarer cases the OS or architecture must also match, for example when using packages
+that contain platform-dependent code.
 """
 function serialize(s::IO, x)
     ss = Serializer(s)
@@ -778,8 +792,8 @@ serialize(filename::AbstractString, x) = open(io->serialize(io, x), filename, "w
 
 Read a value written by [`serialize`](@ref). `deserialize` assumes the binary data read from
 `stream` is correct and has been serialized by a compatible implementation of [`serialize`](@ref).
-It has been designed with simplicity and performance as a goal and does not validate
-the data read. Malformed data can result in process termination. The caller has to ensure
+`deserialize` is designed for simplicity and performance, and so does not validate
+the data read. Malformed data can result in process termination. The caller must ensure
 the integrity and correctness of data read from `stream`.
 """
 deserialize(s::IO) = deserialize(Serializer(s))
@@ -937,7 +951,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_dict(s, t)
     end
     t = desertag(b)::DataType
-    if t.mutable && length(t.types) > 0  # manual specialization of fieldcount
+    if ismutabletype(t) && length(t.types) > 0  # manual specialization of fieldcount
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
     end
@@ -1011,12 +1025,12 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
-    aggressive_constprop = false
+    constprop = 0x00
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
         if format_version(s) >= 14
-            aggressive_constprop = deserialize(s)::Bool
+            constprop = deserialize(s)::UInt8
         end
         template = deserialize(s)
     else
@@ -1036,7 +1050,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.nargs = nargs
         meth.isva = isva
         meth.is_for_opaque_closure = is_for_opaque_closure
-        meth.aggressive_constprop = aggressive_constprop
+        meth.constprop = constprop
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
@@ -1132,7 +1146,13 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.ssavaluetypes = deserialize(s)
         ci.linetable = deserialize(s)
     end
-    ci.ssaflags = deserialize(s)
+    ssaflags = deserialize(s)
+    if length(ssaflags) ≠ length(code)
+        # make sure the length of `ssaflags` matches that of `code`
+        # so that the latest inference doesn't throw on IRs serialized from old versions
+        ssaflags = UInt8[0x00 for _ in 1:length(code)]
+    end
+    ci.ssaflags = ssaflags
     if pre_12
         ci.slotflags = deserialize(s)
     else
@@ -1160,7 +1180,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
     if format_version(s) >= 14
-        ci.aggressive_constprop = deserialize(s)::Bool
+        ci.constprop = deserialize(s)::UInt8
     end
     return ci
 end
@@ -1253,8 +1273,8 @@ function deserialize_typename(s::AbstractSerializer, number)
     else
         # reuse the same name for the type, if possible, for nicer debugging
         tn_name = isdefined(__deserialized_types__, name) ? gensym() : name
-        tn = ccall(:jl_new_typename_in, Ref{Core.TypeName}, (Any, Any),
-                   tn_name, __deserialized_types__)
+        tn = ccall(:jl_new_typename_in, Ref{Core.TypeName}, (Any, Any, Cint, Cint),
+                   tn_name, __deserialized_types__, false, false)
         makenew = true
     end
     remember_object(s, tn, number)
@@ -1264,18 +1284,19 @@ function deserialize_typename(s::AbstractSerializer, number)
     super = deserialize(s)::Type
     parameters = deserialize(s)::SimpleVector
     types = deserialize(s)::SimpleVector
+    attrs = Core.svec()
     has_instance = deserialize(s)::Bool
     abstr = deserialize(s)::Bool
     mutabl = deserialize(s)::Bool
     ninitialized = deserialize(s)::Int32
 
     if makenew
-        tn.names = names
+        Core.setfield!(tn, :names, names)
         # TODO: there's an unhanded cycle in the dependency graph at this point:
         # while deserializing super and/or types, we may have encountered
         # tn.wrapper and throw UndefRefException before we get to this point
-        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
-                    tn, tn.module, super, parameters, names, types,
+        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
+                    tn, tn.module, super, parameters, names, types, attrs,
                     abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
@@ -1422,7 +1443,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
     if nf == 0 && t.size > 0
         # bits type
         return read(s.io, t)
-    elseif t.mutable
+    elseif ismutabletype(t)
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
         deserialize_cycle(s, x)
         for i in 1:nf

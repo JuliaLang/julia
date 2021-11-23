@@ -244,7 +244,7 @@ function update_level!(nodes::Vector{DomTreeNode}, node::BBNumber, level::Int)
 end
 
 """
-The main Semi-NCA algrithm. Matches Figure 2.8 in [LG05]. Note that the
+The main Semi-NCA algorithm. Matches Figure 2.8 in [LG05]. Note that the
 pseudocode in [LG05] is not entirely accurate. The best way to understand
 what's happening is to read [LT79], then the description of SLT in [LG05]
 (warning: inconsistent notation), then the description of Semi-NCA.
@@ -593,7 +593,7 @@ function naive_idoms(blocks::Vector{BasicBlock})
             if isempty(blocks[n].preds)
                 continue
             end
-            firstp, rest = Iterators.peel(Iterators.filter(p->p != 0, blocks[n].preds))
+            firstp, rest = Iterators.peel(Iterators.filter(p->p != 0, blocks[n].preds))::NTuple{2,Any}
             new_doms = copy(dominators[firstp])
             for p in rest
                 intersect!(new_doms, dominators[p])

@@ -166,6 +166,14 @@ julia> """Contains "quote" characters"""
 "Contains \"quote\" characters"
 ```
 
+Long lines in strings can be broken up by preceding the newline with a backslash (`\`):
+
+```jldoctest
+julia> "This is a long \
+       line"
+"This is a long line"
+```
+
 If you want to extract a character from a string, you index into it:
 
 ```jldoctest helloworldstring
@@ -474,17 +482,17 @@ of the concatenated strings, e.g.:
 julia> a, b = "\xe2\x88", "\x80"
 ("\xe2\x88", "\x80")
 
-julia> c = a*b
+julia> c = string(a, b)
 "∀"
 
 julia> collect.([a, b, c])
-3-element Array{Array{Char,1},1}:
+3-element Vector{Vector{Char}}:
  ['\xe2\x88']
  ['\x80']
  ['∀']
 
 julia> length.([a, b, c])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  1
  1
@@ -639,6 +647,15 @@ julia> """
 "Hello,\nworld."
 ```
 
+If the newline is removed using a backslash, dedentation will be respected as well:
+
+```jldoctest
+julia> """
+         Averylong\
+         word"""
+"Averylongword"
+```
+
 Trailing whitespace is left unaltered.
 
 Triple-quoted string literals can contain `"` characters without escaping.
@@ -750,8 +767,8 @@ Further documentation is given in the [Metaprogramming](@ref meta-non-standard-s
 
 ## [Regular Expressions](@id man-regex-literals)
 
-Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](http://www.pcre.org/)
-library (a description of the syntax can be found [here](http://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
+Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](https://www.pcre.org/)
+library (a description of the syntax can be found [here](https://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
 regular expressions are used to find regular patterns in strings; the other connection is that
 regular expressions are themselves input as strings, which are parsed into a state machine that
 can be used to efficiently search for patterns in strings. In Julia, regular expressions are input
@@ -801,7 +818,7 @@ else
 end
 ```
 
-If a regular expression does match, the value returned by [`match`](@ref) is a `RegexMatch`
+If a regular expression does match, the value returned by [`match`](@ref) is a [`RegexMatch`](@ref)
 object. These objects record how the expression matches, including the substring that the pattern
 matches and any captured substrings, if there are any. This example only captures the portion
 of the substring that matches, but perhaps we want to capture any non-blank text after the comment
@@ -882,10 +899,10 @@ julia> m.offsets
 ```
 
 It is convenient to have captures returned as an array so that one can use destructuring syntax
-to bind them to local variables:
+to bind them to local variables. As a convenience, the `RegexMatch` object implements iterator methods that pass through to the `captures` field, so you can destructure the match object directly:
 
 ```jldoctest acdmatch
-julia> first, second, third = m.captures; first
+julia> first, second, third = m; first
 "a"
 ```
 
@@ -922,7 +939,7 @@ julia> replace("a", r"." => s"\g<0>1")
 
 You can modify the behavior of regular expressions by some combination of the flags `i`, `m`,
 `s`, and `x` after the closing double quote mark. These flags have the same meaning as they do
-in Perl, as explained in this excerpt from the [perlre manpage](http://perldoc.perl.org/perlre.html#Modifiers):
+in Perl, as explained in this excerpt from the [perlre manpage](https://perldoc.perl.org/perlre#Modifiers):
 
 ```
 i   Do case-insensitive pattern matching.

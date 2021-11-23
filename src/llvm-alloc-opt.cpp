@@ -24,9 +24,7 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/PromoteMemToReg.h>
 
-#if JL_LLVM_VERSION >= 100000
 #include <llvm/InitializePasses.h>
-#endif
 
 #include "codegen_shared.h"
 #include "julia.h"
@@ -64,13 +62,8 @@ static bool hasObjref(Type *ty)
 {
     if (auto ptrty = dyn_cast<PointerType>(ty))
         return ptrty->getAddressSpace() == AddressSpace::Tracked;
-#if JL_LLVM_VERSION >= 110000
     if (isa<ArrayType>(ty) || isa<VectorType>(ty))
         return hasObjref(GetElementPtrInst::getTypeAtIndex(ty, (uint64_t)0));
-#else
-    if (auto seqty = dyn_cast<SequentialType>(ty))
-        return hasObjref(seqty->getElementType());
-#endif
     if (auto structty = dyn_cast<StructType>(ty)) {
         for (auto elty: structty->elements()) {
             if (hasObjref(elty)) {
@@ -635,6 +628,21 @@ void Optimizer::checkInst(Instruction *I)
                 use_info.hasunknownmem = true;
             return true;
         }
+        if (isa<AtomicCmpXchgInst>(inst) || isa<AtomicRMWInst>(inst)) {
+            // Only store value count
+            if (use->getOperandNo() != isa<AtomicCmpXchgInst>(inst) ? AtomicCmpXchgInst::getPointerOperandIndex() : AtomicRMWInst::getPointerOperandIndex()) {
+                use_info.escaped = true;
+                return false;
+            }
+            use_info.hasload = true;
+            auto storev = isa<AtomicCmpXchgInst>(inst) ? cast<AtomicCmpXchgInst>(inst)->getNewValOperand() : cast<AtomicRMWInst>(inst)->getValOperand();
+            if (cur.offset == UINT32_MAX || !use_info.addMemOp(inst, use->getOperandNo(),
+                                                               cur.offset, storev->getType(),
+                                                               true, *pass.DL))
+                use_info.hasunknownmem = true;
+            use_info.refload = true;
+            return true;
+        }
         if (isa<AddrSpaceCastInst>(inst) || isa<BitCastInst>(inst)) {
             push_inst(inst);
             return true;
@@ -1156,6 +1164,7 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
 {
     auto tag = orig_inst->getArgOperand(2);
     // `julia.typeof` is only legal on the original pointer, no need to scan recursively
+    size_t last_deleted = removed.size();
     for (auto user: orig_inst->users()) {
         if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
@@ -1168,6 +1177,8 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
             }
         }
     }
+    while (last_deleted < removed.size())
+        removed[last_deleted++]->replaceUsesOfWith(orig_inst, UndefValue::get(orig_inst->getType()));
 }
 
 void Optimizer::splitOnStack(CallInst *orig_inst)
@@ -1289,11 +1300,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 val = newload;
             }
             // TODO: should we use `load->clone()`, or manually copy any other metadata?
-#if JL_LLVM_VERSION >= 100000
             newload->setAlignment(load->getAlign());
-#else
-            newload->setAlignment(load->getAlignment());
-#endif
             // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
             newload->setOrdering(AtomicOrdering::NotAtomic);
             load->replaceAllUsesWith(val);
@@ -1333,15 +1340,27 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 newstore = builder.CreateStore(store_val, slot_gep(slot, offset, store_ty, builder));
             }
             // TODO: should we use `store->clone()`, or manually copy any other metadata?
-#if JL_LLVM_VERSION >= 100000
             newstore->setAlignment(store->getAlign());
-#else
-            newstore->setAlignment(store->getAlignment());
-#endif
             // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
             newstore->setOrdering(AtomicOrdering::NotAtomic);
             store->eraseFromParent();
             return;
+        }
+        else if (isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            auto slot_idx = find_slot(offset);
+            auto &slot = slots[slot_idx];
+            assert(slot.offset <= offset && slot.offset + slot.size >= offset);
+            IRBuilder<> builder(user);
+            Value *newptr;
+            if (slot.isref) {
+                assert(slot.offset == offset);
+                newptr = slot.slot;
+            }
+            else {
+                Value *Val = isa<AtomicCmpXchgInst>(user) ? cast<AtomicCmpXchgInst>(user)->getNewValOperand() : cast<AtomicRMWInst>(user)->getValOperand();
+                newptr = slot_gep(slot, offset, Val->getType(), builder);
+            }
+            *use = newptr;
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
@@ -1383,11 +1402,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                             auto sub_size = std::min(slot.offset + slot.size, offset + size) -
                                 std::max(offset, slot.offset);
                             // TODO: alignment computation
-#if JL_LLVM_VERSION >= 100000
                             builder.CreateMemSet(ptr8, val_arg, sub_size, MaybeAlign(0));
-#else
-                            builder.CreateMemSet(ptr8, val_arg, sub_size, 0);
-#endif
                         }
                         call->eraseFromParent();
                         return;
@@ -1530,7 +1545,7 @@ Pass *createAllocOptPass()
     return new AllocOpt();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createAllocOptPass());
 }

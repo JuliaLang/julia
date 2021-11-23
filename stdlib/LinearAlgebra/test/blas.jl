@@ -314,6 +314,49 @@ Random.seed!(100)
             end
         end
 
+        # spr!
+        if elty in (Float32, Float64)
+            @testset "spr! $elty" begin
+                α = rand(elty)
+                M = rand(elty, n, n)
+                AL = Symmetric(M, :L)
+                AU = Symmetric(M, :U)
+                x = rand(elty, n)
+
+                function pack(A, uplo)
+                    AP = elty[]
+                    for j in 1:n
+                        for i in (uplo==:L ? (j:n) : (1:j))
+                            push!(AP, A[i,j])
+                        end
+                    end
+                    return AP
+                end
+
+                ALP_result_julia_lower = pack(α*x*x' + AL, :L)
+                ALP_result_blas_lower = pack(AL, :L)
+                BLAS.spr!('L', α, x, ALP_result_blas_lower)
+                @test ALP_result_julia_lower ≈ ALP_result_blas_lower
+                ALP_result_blas_lower = append!(pack(AL, :L), ones(elty, 10))
+                BLAS.spr!('L', α, x, ALP_result_blas_lower)
+                @test ALP_result_julia_lower ≈ ALP_result_blas_lower[1:end-10]
+                ALP_result_blas_lower = reshape(pack(AL, :L), 1, length(ALP_result_julia_lower), 1)
+                BLAS.spr!('L', α, x, ALP_result_blas_lower)
+                @test ALP_result_julia_lower ≈ vec(ALP_result_blas_lower)
+
+                AUP_result_julia_upper = pack(α*x*x' + AU, :U)
+                AUP_result_blas_upper = pack(AU, :U)
+                BLAS.spr!('U', α, x, AUP_result_blas_upper)
+                @test AUP_result_julia_upper ≈ AUP_result_blas_upper
+                AUP_result_blas_upper = append!(pack(AU, :U), ones(elty, 10))
+                BLAS.spr!('U', α, x, AUP_result_blas_upper)
+                @test AUP_result_julia_upper ≈ AUP_result_blas_upper[1:end-10]
+                AUP_result_blas_upper = reshape(pack(AU, :U), 1, length(AUP_result_julia_upper), 1)
+                BLAS.spr!('U', α, x, AUP_result_blas_upper)
+                @test AUP_result_julia_upper ≈ vec(AUP_result_blas_upper)
+            end
+        end
+
         #trsm
         A = triu(rand(elty,n,n))
         B = rand(elty,(n,n))
@@ -370,6 +413,41 @@ Random.seed!(100)
         @test all(o4cp .== z4)
         @test all(BLAS.gemv('N', U4, o4) .== v41)
         @test all(BLAS.gemv('N', U4, o4) .== v41)
+        @testset "non-standard strides" begin
+            if elty <: Complex
+                A = elty[1+2im 3+4im 5+6im 7+8im; 2+3im 4+5im 6+7im 8+9im; 3+4im 5+6im 7+8im 9+10im]
+                v = elty[1+2im, 2+3im, 3+4im, 4+5im, 5+6im]
+                dest = view(ones(elty, 7), 6:-2:2)
+                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(v, 1:3:4), elty(3), dest) == elty[-31+154im, -35+178im, -39+202im]
+                @test BLAS.gemv('N', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[15-41im, 17-49im]
+                @test BLAS.gemv('N', view(A, 1:0, 1:2), view(v, 1:2)) == elty[]
+                dest = view(ones(elty, 5), 4:-2:2)
+                @test BLAS.gemv!('T', elty(2), view(A, :, 2:2:4), view(v, 1:2:5), elty(3), dest) == elty[-45+202im, -69+370im]
+                @test BLAS.gemv('T', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[14-38im, 18-54im]
+                @test BLAS.gemv('T', view(A, 2:3, 2:1), view(v, 1:2)) == elty[]
+                dest = view(ones(elty, 5), 4:-2:2)
+                @test BLAS.gemv!('C', elty(2), view(A, :, 2:2:4), view(v, 5:-2:1), elty(3), dest) == elty[179+6im, 347+30im]
+                @test BLAS.gemv('C', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[-40-6im, -56-10im]
+                @test BLAS.gemv('C', view(A, 2:3, 2:1), view(v, 1:2)) == elty[]
+            else
+                A = elty[1 2 3 4; 5 6 7 8; 9 10 11 12]
+                v = elty[1, 2, 3, 4, 5]
+                dest = view(ones(elty, 7), 6:-2:2)
+                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(v, 1:3:4), elty(3), dest) == elty[39, 79, 119]
+                @test BLAS.gemv('N', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[-19, -31]
+                @test BLAS.gemv('N', view(A, 1:0, 1:2), view(v, 1:2)) == elty[]
+                for trans = ('T', 'C')
+                    dest = view(ones(elty, 5), 4:-2:2)
+                    @test BLAS.gemv!(trans, elty(2), view(A, :, 2:2:4), view(v, 1:2:5), elty(3), dest) == elty[143, 179]
+                    @test BLAS.gemv(trans, elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[-22, -25]
+                    @test BLAS.gemv(trans, view(A, 2:3, 2:1), view(v, 1:2)) == elty[]
+                end
+            end
+            for trans = ('N', 'T', 'C')
+                @test_throws ErrorException BLAS.gemv(trans, view(A, 1:2:3, 1:2), view(v, 1:2))
+                @test_throws ErrorException BLAS.gemv(trans, view(A, 1:2, 2:-1:1), view(v, 1:2))
+            end
+        end
     end
     @testset "gemm" begin
         @test all(BLAS.gemm('N', 'N', I4, I4) .== I4)
@@ -459,6 +537,7 @@ Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setin
 Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
 
 Base.strides(A::WrappedArray) = strides(A.A)
+Base.elsize(::Type{WrappedArray{T,N}}) where {T,N} = Base.elsize(Array{T,N})
 
 @testset "strided interface adjtrans" begin
     x = WrappedArray([1, 2, 3, 4])
@@ -514,6 +593,11 @@ end
         BLAS.axpby!(elty(2), x, elty(3), y)
         @test y == WrappedArray(elty[19, 50, 30, 56])
         @test BLAS.iamax(x) == 2
+
+        M = fill(elty(1.0), 3, 3)
+        BLAS.scal!(elty(2), view(M,:,2))
+        BLAS.scal!(elty(3), view(M,3,:))
+        @test M == elty[1. 2. 1.; 1. 2. 1.; 3. 6. 3.]
     # Level 2
         A = WrappedArray(elty[1 2; 3 4])
         x = WrappedArray(elty[1, 2])

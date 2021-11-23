@@ -141,7 +141,7 @@ function Base.setindex!(p::AbstractPlatform, v::String, k::String)
     return p
 end
 
-# Hash definitino to ensure that it's stable
+# Hash definition to ensure that it's stable
 function Base.hash(p::Platform, h::UInt)
     h += 0x506c6174666f726d % UInt
     h = hash(p.tags, h)
@@ -706,7 +706,7 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         libstdcxx_version = get_field(m, libstdcxx_version_mapping)
         cxxstring_abi = get_field(m, cxxstring_abi_mapping)
         function split_tags(tagstr)
-            tag_fields = filter(!isempty, split(tagstr, "-"))
+            tag_fields = split(tagstr, "-"; keepempty=false)
             if isempty(tag_fields)
                 return Pair{String,String}[]
             end

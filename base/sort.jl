@@ -68,7 +68,7 @@ function issorted(itr, order::Ordering)
 end
 
 """
-    issorted(v, lt=isless, by=identity, rev:Bool=false, order::Ordering=Forward)
+    issorted(v, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Test whether a vector is in sorted order. The `lt`, `by` and `rev` keywords modify what
 order is considered to be sorted just as they do for [`sort`](@ref).
@@ -307,6 +307,8 @@ according to the order specified by the `by`, `lt` and `rev` keywords, assuming 
 is already sorted in that order. Return an empty range located at the insertion point
 if `a` does not contain values equal to `x`.
 
+See also: [`insorted`](@ref), [`searchsortedfirst`](@ref), [`sort`](@ref), [`findall`](@ref).
+
 # Examples
 ```jldoctest
 julia> searchsorted([1, 2, 4, 5, 5, 7], 4) # single match
@@ -330,8 +332,10 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
     searchsortedfirst(a, x; by=<transform>, lt=<comparison>, rev=false)
 
 Return the index of the first value in `a` greater than or equal to `x`, according to the
-specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
+specified order. Return `lastindex(a) + 1` if `x` is greater than all values in `a`.
 `a` is assumed to be sorted.
+
+See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -356,8 +360,8 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
     searchsortedlast(a, x; by=<transform>, lt=<comparison>, rev=false)
 
 Return the index of the last value in `a` less than or equal to `x`, according to the
-specified order. Return `0` if `x` is less than all values in `a`. `a` is assumed to
-be sorted.
+specified order. Return `firstindex(a) - 1` if `x` is less than all values in `a`. `a` is
+assumed to be sorted.
 
 # Examples
 ```jldoctest
@@ -379,13 +383,14 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 """ searchsortedlast
 
 """
-    insorted(a, x; by=<transform>, lt=<comparison>, rev=false)
+    insorted(a, x; by=<transform>, lt=<comparison>, rev=false) -> Bool
 
 Determine whether an item is in the given sorted collection, in the sense that
 it is [`==`](@ref) to one of the values of the collection according to the order
 specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already
-sorted in that order, see [`sort`](@ref) for the keywords. See also
-[`in`](@ref). Returns a `Bool` value.
+sorted in that order, see [`sort`](@ref) for the keywords.
+
+See also [`in`](@ref).
 
 # Examples
 ```jldoctest
@@ -664,7 +669,8 @@ Sort the vector `v` in place. [`QuickSort`](@ref) is used by default for numeric
 [`MergeSort`](@ref) is used for other arrays. You can specify an algorithm to use via the `alg`
 keyword (see [Sorting Algorithms](@ref) for available algorithms). The `by` keyword lets you provide
 a function that will be applied to each element before comparison; the `lt` keyword allows
-providing a custom "less than" function; use `rev=true` to reverse the sorting order. These
+providing a custom "less than" function (note that for every `x` and `y`, only one of `lt(x,y)`
+and `lt(y,x)` can return `true`); use `rev=true` to reverse the sorting order. These
 options are independent and can be used together in all possible combinations: if both `by`
 and `lt` are specified, the `lt` function is applied to the result of the `by` function;
 `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
@@ -721,14 +727,14 @@ end
 function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybereverse)
     offs = 1 - minval
 
-    where = fill(0, rangelen)
+    counts = fill(0, rangelen)
     @inbounds for i = eachindex(x)
-        where[x[i] + offs] += 1
+        counts[x[i] + offs] += 1
     end
 
     idx = firstindex(x)
     @inbounds for i = maybereverse(1:rangelen)
-        lastidx = idx + where[i] - 1
+        lastidx = idx + counts[i] - 1
         val = i-offs
         for j = idx:lastidx
             x[j] = val
@@ -877,7 +883,7 @@ using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be 
 if the sorting algorithm is unstable, meaning that indices of equal elements appear in
 ascending order.
 
-See also [`sortperm!`](@ref).
+See also [`sortperm!`](@ref), [`partialsortperm`](@ref), [`invperm`](@ref), [`indexin`](@ref).
 
 # Examples
 ```jldoctest
@@ -969,22 +975,22 @@ function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     offs = 1 - minval
     n = length(x)
 
-    where = fill(0, rangelen+1)
-    where[1] = 1
+    counts = fill(0, rangelen+1)
+    counts[1] = 1
     @inbounds for i = 1:n
-        where[x[i] + offs + 1] += 1
+        counts[x[i] + offs + 1] += 1
     end
 
-    #cumsum!(where, where)
-    @inbounds for i = 2:length(where)
-        where[i] += where[i-1]
+    #cumsum!(counts, counts)
+    @inbounds for i = 2:length(counts)
+        counts[i] += counts[i-1]
     end
 
     P = Vector{Int}(undef, n)
     @inbounds for i = 1:n
         label = x[i] + offs
-        P[where[label]] = i
-        where[label] += 1
+        P[counts[label]] = i
+        counts[label] += 1
     end
 
     return P
@@ -1092,7 +1098,7 @@ function sort!(A::AbstractArray;
 
     1 <= k <= nd || throw(ArgumentError("dimension out of range"))
 
-    remdims = ntuple(i -> i == k ? 1 : size(A, i), nd)
+    remdims = ntuple(i -> i == k ? 1 : axes(A, i), nd)
     for idx in CartesianIndices(remdims)
         Av = view(A, ntuple(i -> i == k ? Colon() : idx[i], nd)...)
         sort!(Av, alg, ordr)
@@ -1112,6 +1118,12 @@ import ..Sort: sort!
 import ...Order: lt, DirectOrdering
 
 const Floats = Union{Float32,Float64}
+const FPSortable = Union{ # Mixed Float32 and Float64 are not allowed.
+    AbstractVector{Union{Float32, Missing}},
+    AbstractVector{Union{Float64, Missing}},
+    AbstractVector{Float32},
+    AbstractVector{Float64},
+    AbstractVector{Missing}}
 
 struct Left <: Ordering end
 struct Right <: Ordering end
@@ -1223,10 +1235,10 @@ end
 fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
     sort!(v, first(axes(v,1)), last(axes(v,1)), a, o)
 
-sort!(v::AbstractVector{<:Union{Floats, Missing}}, a::Algorithm, o::DirectOrdering) =
-    fpsort!(v,a,o)
-sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Union{Floats, Missing}}}) =
-    fpsort!(v,a,o)
+sort!(v::FPSortable, a::Algorithm, o::DirectOrdering) =
+    fpsort!(v, a, o)
+sort!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable}) =
+    fpsort!(v, a, o)
 
 end # module Sort.Float
 

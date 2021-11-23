@@ -33,6 +33,8 @@ Base.isvalid(::Any, ::Any)
 Base.isvalid(::AbstractString, ::Integer)
 Base.match
 Base.eachmatch
+Base.RegexMatch
+Base.keys(::RegexMatch)
 Base.isless(::AbstractString, ::AbstractString)
 Base.:(==)(::AbstractString, ::AbstractString)
 Base.cmp(::AbstractString, ::AbstractString)
@@ -46,7 +48,7 @@ Base.findlast(::AbstractChar, ::AbstractString)
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
 Base.occursin
 Base.reverse(::Union{String,SubString{String}})
-Base.replace(s::AbstractString, ::Pair)
+Base.replace(s::AbstractString, ::Pair...)
 Base.split
 Base.rsplit
 Base.strip
@@ -64,6 +66,8 @@ Base.uppercasefirst
 Base.lowercasefirst
 Base.join
 Base.chop
+Base.chopprefix
+Base.chopsuffix
 Base.chomp
 Base.thisind
 Base.nextind

@@ -18,6 +18,33 @@ For similar reasons, automated translation to Julia would also typically generat
 
 On the other hand, language *interoperability* is extremely useful: we want to exploit existing high-quality code in other languages from Julia (and vice versa)!  The best way to enable this is not a transpiler, but rather via easy inter-language calling facilities.  We have worked hard on this, from the built-in `ccall` intrinsic (to call C and Fortran libraries) to [JuliaInterop](https://github.com/JuliaInterop) packages that connect Julia to Python, Matlab, C++, and more.
 
+## [Public API](@id man-api)
+
+### How does Julia define its public API?
+
+The only interfaces that are stable with respect to [SemVer](https://semver.org/) of `julia`
+version are the Julia `Base` and standard libraries interfaces described in
+[the documentation](https://docs.julialang.org/) and not marked as unstable (e.g.,
+experimental and internal).  Functions, types, and constants are not part of the public
+API if they are not included in the documentation, _even if they have docstrings_.
+
+### There is a useful undocumented function/type/constant. Can I use it?
+
+Updating Julia may break your code if you use non-public API.  If the code is
+self-contained, it may be a good idea to copy it into your project.  If you want to rely on
+a complex non-public API, especially when using it from a stable package, it is a good idea
+to open an [issue](https://github.com/JuliaLang/julia/issues) or
+[pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning it
+into a public API.  However, we do not discourage the attempt to create packages that expose
+stable public interfaces while relying on non-public implementation details of `julia` and
+buffering the differences across different `julia` versions.
+
+### The documentation is not accurate enough. Can I rely on the existing behavior?
+
+Please open an [issue](https://github.com/JuliaLang/julia/issues) or
+[pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning the
+existing behavior into a public API.
+
 ## Sessions and the REPL
 
 ### How do I delete an object in memory?
@@ -714,6 +741,32 @@ julia> remotecall_fetch(anon_bar, 2)
 1
 ```
 
+## Troubleshooting "method not matched": parametric type invariance and `MethodError`s
+
+### Why doesn't it work to declare `foo(bar::Vector{Real}) = 42` and then call `foo([1])`?
+
+As you'll see if you try this, the result is a `MethodError`:
+
+```jldoctest
+julia> foo(x::Vector{Real}) = 42
+foo (generic function with 1 method)
+
+julia> foo([1])
+ERROR: MethodError: no method matching foo(::Vector{Int64})
+Closest candidates are:
+  foo(!Matched::Vector{Real}) at none:1
+```
+
+This is because `Vector{Real}` is not a supertype of `Vector{Int}`! You can solve this problem with something
+like `foo(bar::Vector{T}) where {T<:Real}` (or the short form `foo(bar::Vector{<:Real})` if the static parameter `T`
+is not needed in the body of the function). The `T` is a wild card: you first specify that it must be a
+subtype of Real, then specify the function takes a Vector of with elements of that type.
+
+This same issue goes for any composite type `Comp`, not just `Vector`. If `Comp` has a parameter declared of
+type `Y`, then another type `Comp2` with a parameter of type `X<:Y` is not a subtype of `Comp`. This is
+type-invariance (by contrast, Tuple is type-covariant in its parameters). See [Parametric Composite
+Types](@ref man-parametric-composite-types) for more explanation of these.
+
 ### Why does Julia use `*` for string concatenation? Why not `+` or something else?
 
 The [main argument](@ref man-concatenation) against `+` is that string concatenation is not
@@ -781,9 +834,10 @@ no values and no subtypes (except itself). You will generally not need to use th
 
 ### Why does `x += y` allocate memory when `x` and `y` are arrays?
 
-In Julia, `x += y` gets replaced during parsing by `x = x + y`. For arrays, this has the consequence
+In Julia, `x += y` gets replaced during lowering by `x = x + y`. For arrays, this has the consequence
 that, rather than storing the result in the same location in memory as `x`, it allocates a new
-array to store the result.
+array to store the result. If you prefer to mutate `x`, use `x .+= y` to update each element
+individually.
 
 While this behavior might surprise some, the choice is deliberate. The main reason is the presence
 of immutable objects within Julia, which cannot change their value once created.  Indeed, a
@@ -816,8 +870,8 @@ After a call like `x = 5; y = power_by_squaring(x, 4)`, you would get the expect
     `x`, after the call you'd have (in general) `y != x`, but for mutable `x` you'd have `y == x`.
 
 Because supporting generic programming is deemed more important than potential performance optimizations
-that can be achieved by other means (e.g., using explicit loops), operators like `+=` and `*=`
-work by rebinding new values.
+that can be achieved by other means (e.g., using broadcasting or explicit loops), operators like `+=` and
+`*=` work by rebinding new values.
 
 ## [Asynchronous IO and concurrent synchronous writes](@id faq-async-io)
 
@@ -869,7 +923,7 @@ julia> @sync for i in 1:3
 
 ## Arrays
 
-### What are the differences between zero-dimensional arrays and scalars?
+### [What are the differences between zero-dimensional arrays and scalars?](@id faq-array-0dim)
 
 Zero-dimensional arrays are arrays of the form `Array{T,0}`. They behave similar
 to scalars, but there are important differences. They deserve a special mention

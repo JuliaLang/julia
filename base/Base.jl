@@ -20,19 +20,43 @@ include(path::String) = include(Base, path)
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 
+# The @inline/@noinline macros that can be applied to a function declaration are not available
+# until after array.jl, and so we will mark them within a function body instead.
+macro inline()   Expr(:meta, :inline)   end
+macro noinline() Expr(:meta, :noinline) end
+
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
-getproperty(x::Module, f::Symbol) = getfield(x, f)
-setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
-getproperty(x::Type, f::Symbol) = getfield(x, f)
-setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
-getproperty(x::Tuple, f::Int) = getfield(x, f)
+getproperty(x::Module, f::Symbol) = (@inline; getfield(x, f))
+setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v) # to get a decent error
+getproperty(x::Type, f::Symbol) = (@inline; getfield(x, f))
+setproperty!(x::Type, f::Symbol, v) = error("setfield! fields of Types should not be changed")
+getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
 setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
-getproperty(x, f::Symbol) = getfield(x, f)
-dotgetproperty(x, f) = getproperty(x, f)
+getproperty(x, f::Symbol) = (@inline; getfield(x, f))
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
+
+dotgetproperty(x, f) = getproperty(x, f)
+
+getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
+setproperty!(x::Module, f::Symbol, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
+getproperty(x::Type, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
+setproperty!(x::Type, f::Symbol, v, order::Symbol) = error("setfield! fields of Types should not be changed")
+getproperty(x::Tuple, f::Int, order::Symbol) = (@inline; getfield(x, f, order))
+setproperty!(x::Tuple, f::Int, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
+
+getproperty(x, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
+setproperty!(x, f::Symbol, v, order::Symbol) = (@inline; setfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
+
+swapproperty!(x, f::Symbol, v, order::Symbol=:notatomic) =
+    (@inline; Core.swapfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
+modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
+    (@inline; Core.modifyfield!(x, f, op, v, order))
+replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
+    (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
+
 
 include("coreio.jl")
 
@@ -79,6 +103,9 @@ include("options.jl")
 include("promotion.jl")
 include("tuple.jl")
 include("expr.jl")
+Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B} = (@inline; Pair{A, B}(convert(A, a)::A, convert(B, b)::B))
+#Pair{Any, B}(@nospecialize(a::Any), b) where {B} = (@inline; Pair{Any, B}(a, Base.convert(B, b)::B))
+#Pair{A, Any}(a, @nospecialize(b::Any)) where {A} = (@inline; Pair{A, Any}(Base.convert(A, a)::A, b))
 include("pair.jl")
 include("traits.jl")
 include("range.jl")
@@ -185,8 +212,6 @@ let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
         if Base.DARWIN_FRAMEWORK
             push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-        else
-            push!(DL_LOAD_PATH, "@loader_path/julia")
         end
         push!(DL_LOAD_PATH, "@loader_path")
     end
@@ -213,12 +238,11 @@ include("methodshow.jl")
 include("cartesian.jl")
 using .Cartesian
 include("multidimensional.jl")
-include("permuteddimsarray.jl")
-using .PermutedDimsArrays
 
 include("broadcast.jl")
 using .Broadcast
-using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!
+using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!,
+                  broadcast_preserving_zero_d, andand, oror
 
 # missing values
 include("missing.jl")
@@ -290,8 +314,11 @@ let SOURCE_PATH = ""
 end
 
 # reduction along dims
-include("reducedim.jl")  # macros in this file relies on string.jl
+include("reducedim.jl")  # macros in this file rely on string.jl
 include("accumulate.jl")
+
+include("permuteddimsarray.jl")
+using .PermutedDimsArrays
 
 # basic data structures
 include("ordering.jl")
@@ -424,24 +451,14 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
     Core.svec(1, 2) == Core.svec(3, 4)
     any(t->t[1].line > 1, [(LineNumberNode(2,:none), :(1+1))])
 
+    # Code loading uses this
+    sortperm(mtime.(readdir(".")), rev=true)
+
     break   # only actually need to do this once
 end
 
 if is_primary_base_module
 function __init__()
-    # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
-    if !haskey(ENV, "OPENBLAS_MAIN_FREE") && !haskey(ENV, "GOTOBLAS_MAIN_FREE")
-        ENV["OPENBLAS_MAIN_FREE"] = "1"
-    end
-    # And try to prevent openblas from starting too many threads, unless/until specifically requested
-    if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
-        cpu_threads = Sys.CPU_THREADS::Int
-        if cpu_threads > 8 # always at most 8
-            ENV["OPENBLAS_NUM_THREADS"] = "8"
-        elseif haskey(ENV, "JULIA_CPU_THREADS") # or exactly as specified
-            ENV["OPENBLAS_NUM_THREADS"] = cpu_threads
-        end # otherwise, trust that openblas will pick CPU_THREADS anyways, without any intervention
-    end
     # for the few uses of Libc.rand in Base:
     Libc.srand()
     # Base library init

@@ -59,6 +59,11 @@
         @test joinpath(S("foo"), S(homedir())) == homedir()
         @test joinpath(S(abspath("foo")), S(homedir())) == homedir()
 
+        for str in map(S, [sep, "a$(sep)b", "a$(sep)b$(sep)c", "a$(sep)b$(sep)c$(sep)d"])
+            @test str == joinpath(splitpath(str))
+            @test joinpath(splitpath(str)) == joinpath(splitpath(str)...)
+        end
+
         if Sys.iswindows()
             @test joinpath(S("foo"),S("bar:baz")) == "bar:baz"
             @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "D:bar"
@@ -74,6 +79,11 @@
             @test joinpath(S("\\\\server"), S("share"), S("a"), S("b")) == "\\\\server\\share\\a\\b"
             @test joinpath(S("\\\\server\\share"),S("a")) == "\\\\server\\share\\a"
             @test joinpath(S("\\\\server\\share\\"), S("a")) == "\\\\server\\share\\a"
+
+            for str in map(S, ["c:\\", "c:\\a", "c:\\a\\b", "c:\\a\\b\\c", "c:\\a\\b\\c\\d"])
+                @test str == joinpath(splitpath(str))
+                @test joinpath(splitpath(str)) == joinpath(splitpath(str)...)
+            end
 
         elseif Sys.isunix()
             @test joinpath(S("foo"),S("bar:baz")) == "foo$(sep)bar:baz"

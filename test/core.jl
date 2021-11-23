@@ -997,6 +997,8 @@ end
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
+@test Module(:anonymous, false, true).Core == Core
+@test_throws UndefVarError Module(:anonymous, false, false).Core
 
 # exception from __init__()
 let didthrow =
@@ -1099,9 +1101,9 @@ end
 let strct = LoadError("yofile", 0, "bad")
     @test nfields(strct) == 3 # sanity test
     @test_throws BoundsError(strct, 10) getfield(strct, 10)
-    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
-    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
-    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
     @test strct.file == "yofile"
     @test strct.line === 0
     @test strct.error == "bad"
@@ -1123,7 +1125,7 @@ let mstrct = TestMutable("melm", 1, nothing)
     @test_throws BoundsError(mstrct, 4) setfield!(mstrct, 4, "")
 end
 let strct = LoadError("yofile", 0, "bad")
-    @test_throws(ErrorException("setfield! immutable struct of type LoadError cannot be changed"),
+    @test_throws(ErrorException("setfield!: immutable struct of type LoadError cannot be changed"),
                  ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), strct, 0, ""))
 end
 let mstrct = TestMutable("melm", 1, nothing)
@@ -3643,7 +3645,7 @@ end
 
 end
 
-# don't allow redefining types if ninitialized changes
+# don't allow redefining types if n_uninitialized changes
 struct NInitializedTestType
     a
 end
@@ -5646,11 +5648,9 @@ f_isdefined_unionvar(y, t) = (t > 0 && (x = (t == 1 ? 1 : y)); @isdefined x)
 @test !f_isdefined_unionvar(1, 0)
 f_isdefined_splat(x...) = @isdefined x
 @test f_isdefined_splat(1, 2, 3)
-let err = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
+let e = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
     __source__ = LineNumberNode(@__LINE__() - 1, Symbol(@__FILE__))
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    e = err.error::MethodError
+    e::MethodError
     @test e.f === getfield(@__MODULE__, Symbol("@isdefined"))
     @test e.args === (__source__, @__MODULE__, :(:x))
 end
@@ -7219,13 +7219,28 @@ end
 struct B33954
     x::Q33954{B33954}
 end
-@test_broken isbitstype(Tuple{B33954})
-@test_broken isbitstype(B33954)
+@test isbitstype(Tuple{B33954})
+@test isbitstype(B33954)
+
+struct A41503{d}
+    e::d
+end
+struct B41503{j,k} <: AbstractArray{A41503{B41503{Any,k}},Any}
+    l::k
+end
+@test !isbitstype(B41503{Any,Any})
+@test_broken isbitstype(B41503{Any,Int})
 
 struct B40050 <: Ref{Tuple{B40050}}
 end
 @test string((B40050(),)) == "($B40050(),)"
 @test_broken isbitstype(Tuple{B40050})
+
+# issue #41654
+struct X41654 <: Ref{X41654}
+end
+@test isbitstype(X41654)
+@test ('a'=>X41654(),)[1][2] isa X41654
 
 # Issue #34206/34207
 function mre34206(a, n)
@@ -7532,7 +7547,7 @@ end
 struct S38224
     i::Union{Int,Missing}
 end
-@test S38224.zeroinit
+@test S38224.flags & 0x10 == 0x10 # .zeroinit
 for _ in 1:5
     let a = Vector{S38224}(undef, 1000000)
         @test all(x->ismissing(x.i), a)
@@ -7564,3 +7579,40 @@ const T35130 = Tuple{Vector{Int}, <:Any}
 end
 h35130(x) = A35130(Any[x][1]::Vector{T35130})
 @test h35130(T35130[([1],1)]) isa A35130
+
+# issue #41503
+let S = Tuple{Tuple{Tuple{K, UInt128} where K<:Tuple{Int64}, Int64}},
+    T = Tuple{Tuple{Tuple{Tuple{Int64}, UInt128}, Int64}}
+    @test pointer_from_objref(T) === pointer_from_objref(S)
+    @test isbitstype(T)
+end
+
+# avoid impossible normalization (don't try to form Tuple{Complex{String}} here)
+@test Tuple{Complex{T} where String<:T<:String} == Tuple{Complex{T} where String<:T<:String}
+
+# control over compilation/interpreter
+@testset "Experimental.@force_compile" begin
+    function trim_after_eval(str::AbstractString)
+        rng = findfirst("eval(", str)
+        @test !isempty(rng)
+        return str[1:first(rng)-1]
+    end
+    btc = eval(quote
+        Base.Experimental.@force_compile
+        backtrace()
+    end)
+    bti = eval(quote
+        backtrace()
+    end)
+    @test !occursin(r"(interpreter|do_call)", trim_after_eval(string(stacktrace(btc, true))))
+    @test  occursin(r"(interpreter|do_call)", trim_after_eval(string(stacktrace(bti, true))))
+end
+
+@testset "rest(svec, ...)" begin
+    x = Core.svec(1, 2, 3)
+    a..., = x
+    @test a == Core.svec(1, 2, 3)
+    a, b... = x
+    @test a == 1
+    @test b == Core.svec(2, 3)
+end

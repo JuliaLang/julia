@@ -36,7 +36,7 @@ elseif Sys.iswindows()
 
     function splitdrive(path::String)
         m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)
-        String(m.captures[1]), String(m.captures[2])
+        String(something(m.captures[1])), String(something(m.captures[2]))
     end
 else
     error("path primitives for this OS need to be defined")
@@ -159,7 +159,7 @@ julia> dirname("/home/myuser/")
 "/home/myuser"
 ```
 
-See also: [`basename`](@ref)
+See also [`basename`](@ref).
 """
  dirname(path::AbstractString) = splitdir(path)[1]
 
@@ -181,15 +181,15 @@ julia> basename("/home/myuser/")
 ""
 ```
 
-See also: [`dirname`](@ref)
+See also [`dirname`](@ref).
 """
 basename(path::AbstractString) = splitdir(path)[2]
 
 """
     splitext(path::AbstractString) -> (AbstractString, AbstractString)
 
-If the last component of a path contains a dot, split the path into everything before the
-dot and everything including and after the dot. Otherwise, return a tuple of the argument
+If the last component of a path contains one or more dots, split the path into everything before the
+last dot and everything including and after the dot. Otherwise, return a tuple of the argument
 unmodified and the empty string. "splitext" is short for "split extension".
 
 # Examples
@@ -197,15 +197,18 @@ unmodified and the empty string. "splitext" is short for "split extension".
 julia> splitext("/home/myuser/example.jl")
 ("/home/myuser/example", ".jl")
 
-julia> splitext("/home/myuser/example")
-("/home/myuser/example", "")
+julia> splitext("/home/myuser/example.tar.gz")
+("/home/myuser/example.tar", ".gz")
+
+julia> splitext("/home/my.user/example")
+("/home/my.user/example", "")
 ```
 """
 function splitext(path::String)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
     m === nothing && return (path,"")
-    a*m.captures[1], String(m.captures[2])
+    (a*something(m.captures[1])), String(something(m.captures[2]))
 end
 
 # NOTE: deprecated in 1.4
@@ -251,16 +254,19 @@ function splitpath(p::String)
     return out
 end
 
-joinpath(path::AbstractString)::String = path
-
 if Sys.iswindows()
 
-function joinpath(path::AbstractString, paths::AbstractString...)::String
-    result_drive, result_path = splitdrive(path)
+function joinpath(paths::Union{Tuple, AbstractVector})::String
+    assertstring(x) = x isa AbstractString || throw(ArgumentError("path component is not a string: $(repr(x))"))
 
-    local p_drive, p_path
-    for p in paths
-        p_drive, p_path = splitdrive(p)
+    isempty(paths) && throw(ArgumentError("collection of path components must be non-empty"))
+    assertstring(paths[1])
+    result_drive, result_path = splitdrive(paths[1])
+
+    p_path = ""
+    for i in firstindex(paths)+1:lastindex(paths)
+        assertstring(paths[i])
+        p_drive, p_path = splitdrive(paths[i])
 
         if startswith(p_path, ('\\', '/'))
             # second path is absolute
@@ -296,8 +302,15 @@ end
 
 else
 
-function joinpath(path::AbstractString, paths::AbstractString...)::String
-    for p in paths
+function joinpath(paths::Union{Tuple, AbstractVector})::String
+    assertstring(x) = x isa AbstractString || throw(ArgumentError("path component is not a string: $(repr(x))"))
+
+    isempty(paths) && throw(ArgumentError("collection of path components must be non-empty"))
+    assertstring(paths[1])
+    path = paths[1]
+    for i in firstindex(paths)+1:lastindex(paths)
+        p = paths[i]
+        assertstring(p)
         if isabspath(p)
             path = p
         elseif isempty(path) || path[end] == '/'
@@ -311,8 +324,12 @@ end
 
 end # os-test
 
+joinpath(paths::AbstractString...)::String = joinpath(paths)
+
 """
     joinpath(parts::AbstractString...) -> String
+    joinpath(parts::Vector{AbstractString}) -> String
+    joinpath(parts::Tuple{AbstractString}) -> String
 
 Join path components into a full path. If some argument is an absolute path or
 (on Windows) has a drive specification that doesn't match the drive computed for
@@ -328,26 +345,35 @@ letter casing, hence `joinpath("C:\\A","c:b") = "C:\\A\\b"`.
 julia> joinpath("/home/myuser", "example.jl")
 "/home/myuser/example.jl"
 ```
+
+```jldoctest
+julia> joinpath(["/home/myuser", "example.jl"])
+"/home/myuser/example.jl"
+```
 """
 joinpath
 
 """
     normpath(path::AbstractString) -> String
 
-Normalize a path, removing "." and ".." entries.
+Normalize a path, removing "." and ".." entries and changing "/" to the canonical path separator
+for the system.
 
 # Examples
 ```jldoctest
 julia> normpath("/home/myuser/../example.jl")
 "/home/example.jl"
+
+julia> normpath("Documents/Julia") == joinpath("Documents", "Julia")
+true
 ```
 """
 function normpath(path::String)
     isabs = isabspath(path)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
-    parts = split(path, path_separator_re)
-    filter!(x->!isempty(x) && x!=".", parts)
+    parts = split(path, path_separator_re; keepempty=false)
+    filter!(!=("."), parts)
     while true
         clean = true
         for j = 1:length(parts)-1

@@ -145,6 +145,47 @@ in a string using an `AbstractPattern`.
 """
 abstract type AbstractMatch end
 
+"""
+    RegexMatch
+
+A type representing a single match to a `Regex` found in a string.
+Typically created from the [`match`](@ref) function.
+
+The `match` field stores the substring of the entire matched string.
+The `captures` field stores the substrings for each capture group, indexed by number.
+To index by capture group name, the entire match object should be indexed instead,
+as shown in the examples.
+The location of the start of the match is stored in the `offset` field.
+The `offsets` field stores the locations of the start of each capture group,
+with 0 denoting a group that was not captured.
+
+This type can be used as an iterator over the capture groups of the `Regex`,
+yielding the substrings captured in each group.
+Because of this, the captures of a match can be destructured.
+If a group was not captured, `nothing` will be yielded instead of a substring.
+
+Methods that accept a `RegexMatch` object are defined for [`iterate`](@ref),
+[`length`](@ref), [`eltype`](@ref), [`keys`](@ref keys(::RegexMatch)), [`haskey`](@ref), and
+[`getindex`](@ref), where keys are the the names or numbers of a capture group.
+See [`keys`](@ref keys(::RegexMatch)) for more information.
+
+# Examples
+```jldoctest
+julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30 in the morning")
+RegexMatch("11:30", hour="11", minute="30", 3=nothing)
+
+julia> hr, min, ampm = m;
+
+julia> hr
+"11"
+
+julia> m["minute"]
+"30"
+
+julia> m.match
+"11:30"
+```
+"""
 struct RegexMatch <: AbstractMatch
     match::SubString{String}
     captures::Vector{Union{Nothing,SubString{String}}}
@@ -153,6 +194,28 @@ struct RegexMatch <: AbstractMatch
     regex::Regex
 end
 
+"""
+    keys(m::RegexMatch) -> Vector
+
+Return a vector of keys for all capture groups of the underlying regex.
+A key is included even if the capture group fails to match.
+That is, `idx` will be in the return value even if `m[idx] == nothing`.
+
+Unnamed capture groups will have integer keys corresponding to their index.
+Named capture groups will have string keys.
+
+!!! compat "Julia 1.6"
+    This method was added in Julia 1.6
+
+# Examples
+```jldoctest
+julia> keys(match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30"))
+3-element Vector{Any}:
+  "hour"
+  "minute"
+ 3
+```
+"""
 function keys(m::RegexMatch)
     idx_to_capture_name = PCRE.capture_names(m.regex.regex)
     return map(eachindex(m.captures)) do i
@@ -272,10 +335,24 @@ function endswith(s::SubString, r::Regex)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
 
+function chopprefix(s::AbstractString, prefix::Regex)
+    m = match(prefix, s, firstindex(s), PCRE.ANCHORED)
+    m === nothing && return SubString(s)
+    return SubString(s, ncodeunits(m.match) + 1)
+end
+
+function chopsuffix(s::AbstractString, suffix::Regex)
+    m = match(suffix, s, firstindex(s), PCRE.ENDANCHORED)
+    m === nothing && return SubString(s)
+    isempty(m.match) && return SubString(s)
+    return SubString(s, firstindex(s), prevind(s, m.offset))
+end
+
+
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
-Search for the first match of the regular expression `r` in `s` and return a `RegexMatch`
+Search for the first match of the regular expression `r` in `s` and return a [`RegexMatch`](@ref)
 object containing the match, or nothing if the match failed. The matching substring can be
 retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
 `m.captures` The optional `idx` argument specifies an index at which to start the search.
@@ -465,6 +542,7 @@ end
 Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
 
+# Examples
 ```jldoctest
 julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
 s"Hello \\g<name>, it's \\1"
@@ -501,6 +579,7 @@ Construct a substitution string, used for regular expression substitutions.  Wit
 string, sequences of the form `\\N` refer to the Nth capture group in the regex, and
 `\\g<groupname>` refers to a named capture group with name `groupname`.
 
+# Examples
 ```jldoctest
 julia> msg = "#Hello# from Julia";
 
@@ -526,13 +605,20 @@ _free_pat_replacer(r::RegexAndMatchData) = PCRE.free_match_data(r.match_data)
 
 replace_err(repl) = error("Bad replacement string: $repl")
 
-function _write_capture(io, re::RegexAndMatchData, group)
+function _write_capture(io::IO, group::Int, str, r, re::RegexAndMatchData)
     len = PCRE.substring_length_bynumber(re.match_data, group)
+    # in the case of an optional group that doesn't match, len == 0
+    len == 0 && return
     ensureroom(io, len+1)
     PCRE.substring_copy_bynumber(re.match_data, group,
         pointer(io.data, io.ptr), len+1)
     io.ptr += len
     io.size = max(io.size, io.ptr - 1)
+    nothing
+end
+function _write_capture(io::IO, group::Int, str, r, re)
+    group == 0 || replace_err("pattern is not a Regex")
+    return print(io, SubString(str, r))
 end
 
 
@@ -540,7 +626,7 @@ const SUB_CHAR = '\\'
 const GROUP_CHAR = 'g'
 const KEEP_ESC = [SUB_CHAR, GROUP_CHAR, '0':'9'...]
 
-function _replace(io, repl_s::SubstitutionString, str, r, re::RegexAndMatchData)
+function _replace(io, repl_s::SubstitutionString, str, r, re)
     LBRACKET = '<'
     RBRACKET = '>'
     repl = unescape_string(repl_s.string, KEEP_ESC)
@@ -564,7 +650,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re::RegexAndMatchData)
                         break
                     end
                 end
-                _write_capture(io, re, group)
+                _write_capture(io, group, str, r, re)
             elseif repl[next_i] == GROUP_CHAR
                 i = nextind(repl, next_i)
                 if i > e || repl[i] != LBRACKET
@@ -577,15 +663,16 @@ function _replace(io, repl_s::SubstitutionString, str, r, re::RegexAndMatchData)
                     i = nextind(repl, i)
                     i > e && replace_err(repl)
                 end
-                #  TODO: avoid this allocation
                 groupname = SubString(repl, groupstart, prevind(repl, i))
                 if all(isdigit, groupname)
-                    _write_capture(io, re, parse(Int, groupname))
-                else
+                    group = parse(Int, groupname)
+                elseif re isa RegexAndMatchData
                     group = PCRE.substring_number_from_name(re.re.regex, groupname)
                     group < 0 && replace_err("Group $groupname not found in regex $(re.re)")
-                    _write_capture(io, re, group)
+                else
+                    group = -1
                 end
+                _write_capture(io, group, str, r, re)
                 i = nextind(repl, i)
             else
                 replace_err(repl)

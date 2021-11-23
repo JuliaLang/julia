@@ -30,11 +30,11 @@ and therefore its arguments must be statically typed.
 
 ### Alias Analysis
 
-Julia currently uses LLVM's [Type Based Alias Analysis](http://llvm.org/docs/LangRef.html#tbaa-metadata).
+Julia currently uses LLVM's [Type Based Alias Analysis](https://llvm.org/docs/LangRef.html#tbaa-metadata).
 To find the comments that document the inclusion relationships, look for `static MDNode*` in
 `src/codegen.cpp`.
 
-The `-O` option enables LLVM's [Basic Alias Analysis](http://llvm.org/docs/AliasAnalysis.html#the-basicaa-pass).
+The `-O` option enables LLVM's [Basic Alias Analysis](https://llvm.org/docs/AliasAnalysis.html#the-basic-aa-pass).
 
 ## Building Julia with a different version of LLVM
 
@@ -42,7 +42,7 @@ The default version of LLVM is specified in `deps/Versions.make`. You can overri
 a file called `Make.user` in the top-level directory and adding a line to it such as:
 
 ```
-LLVM_VER = 6.0.1
+LLVM_VER = 12.0.1
 ```
 
 Besides the LLVM release numerals, you can also use `LLVM_VER = svn` to build against the latest
@@ -85,12 +85,6 @@ cc -shared -o sys.so sys.o
 ```
 This system image can then be loaded by `julia` as usual.
 
-Alternatively, you can
-use `--output-jit-bc jit.bc` to obtain a trace of all IR passed to the JIT.
-This is useful for code that cannot be run as part of the sysimg generation
-process (e.g. because it creates unserializable state). However, the resulting
-`jit.bc` does not include sysimage data, and can thus not be used as such.
-
 It is also possible to dump an LLVM IR module for just one Julia function,
 using:
 ```julia
@@ -108,7 +102,7 @@ above.
 Improving LLVM code generation usually involves either changing Julia lowering to be more friendly
 to LLVM's passes, or improving a pass.
 
-If you are planning to improve a pass, be sure to read the [LLVM developer policy](http://llvm.org/docs/DeveloperPolicy.html).
+If you are planning to improve a pass, be sure to read the [LLVM developer policy](https://llvm.org/docs/DeveloperPolicy.html).
 The best strategy is to create a code example in a form where you can use LLVM's `opt` tool to
 study it and the pass of interest in isolation.
 

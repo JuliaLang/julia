@@ -8,6 +8,8 @@ export
     chown,
     cp,
     cptree,
+    diskstat,
+    hardlink,
     mkdir,
     mkpath,
     mktemp,
@@ -33,6 +35,8 @@ export
     pwd() -> AbstractString
 
 Get the current working directory.
+
+See also: [`cd`](@ref), [`tempdir`](@ref).
 
 # Examples
 ```julia-repl
@@ -66,6 +70,8 @@ end
     cd(dir::AbstractString=homedir())
 
 Set the current working directory.
+
+See also: [`pwd`](@ref), [`mkdir`](@ref), [`mkpath`](@ref), [`mktempdir`](@ref).
 
 # Examples
 ```julia-repl
@@ -188,22 +194,19 @@ end
 """
     mkpath(path::AbstractString; mode::Unsigned = 0o777)
 
-Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
-`0o777`, modified by the current file creation mask. Unlike [`mkdir`](@ref), `mkpath`
-does not error if `path` (or parts of it) already exists.
-Return `path`.
+Create all intermediate directories in the `path` as required. Directories are created with
+the permissions `mode` which defaults to `0o777` and is modified by the current file
+creation mask. Unlike [`mkdir`](@ref), `mkpath` does not error if `path` (or parts of it)
+already exists. Return `path`.
+
+If `path` includes a filename you will probably want to use `mkpath(dirname(path))` to
+avoid creating a directory using the filename.
 
 # Examples
 ```julia-repl
-julia> mkdir("testingdir")
-"testingdir"
+julia> cd(mktempdir())
 
-julia> cd("testingdir")
-
-julia> pwd()
-"/home/JuliaUser/testingdir"
-
-julia> mkpath("my/test/dir")
+julia> mkpath("my/test/dir") # creates three directories
 "my/test/dir"
 
 julia> readdir()
@@ -219,6 +222,13 @@ julia> readdir()
 julia> readdir("test")
 1-element Array{String,1}:
  "dir"
+
+julia> mkpath("intermediate_dir/actually_a_directory.txt") # creates two directories
+"intermediate_dir/actually_a_directory.txt"
+
+julia> isdir("intermediate_dir/actually_a_directory.txt")
+true
+
 ```
 """
 function mkpath(path::AbstractString; mode::Integer = 0o777)
@@ -311,12 +321,12 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
             if Base.samefile(src, dst)
                 abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
                 abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
-                throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir.",
+                throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir. ",
                                            "This is not supported.\n  ",
                                            "`src` refers to: $(abs_src)\n  ",
                                            "`dst` refers to: $(abs_dst)\n")))
             end
-            rm(dst; recursive=true)
+            rm(dst; recursive=true, force=true)
         else
             throw(ArgumentError(string("'$dst' exists. `force=true` ",
                                        "is required to remove '$dst' before $(txt).")))
@@ -354,6 +364,13 @@ If `follow_symlinks=false`, and `src` is a symbolic link, `dst` will be created 
 symbolic link. If `follow_symlinks=true` and `src` is a symbolic link, `dst` will be a copy
 of the file or directory `src` refers to.
 Return `dst`.
+
+!!! note
+    The `cp` function is different from the `cp` command. The `cp` function always operates on
+    the assumption that `dst` is a file, while the command does different things depending
+    on whether `dst` is a directory or a file.
+    Using `force=true` when `dst` is a directory will result in loss of all the contents present
+    in the `dst` directory, and `dst` will become a file that has the contents of `src` instead.
 """
 function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
                                                       follow_symlinks::Bool=false)
@@ -673,6 +690,8 @@ the temporary directory is automatically deleted when the process exits.
     The `cleanup` keyword argument was added in Julia 1.3. Relatedly, starting from 1.3,
     Julia will remove the temporary paths created by `mktempdir` when the Julia process
     exits, unless `cleanup` is explicitly set to `false`.
+
+See also: [`mktemp`](@ref), [`mkdir`](@ref).
 """
 function mktempdir(parent::AbstractString=tempdir();
     prefix::AbstractString=temp_prefix, cleanup::Bool=true)
@@ -707,6 +726,8 @@ end
 
 Apply the function `f` to the result of [`mktemp(parent)`](@ref) and remove the
 temporary file upon completion.
+
+See also: [`mktempdir`](@ref).
 """
 function mktemp(fn::Function, parent::AbstractString=tempdir())
     (tmp_path, tmp_io) = mktemp(parent, cleanup=false)
@@ -729,6 +750,8 @@ end
 
 Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
 temporary directory all of its contents upon completion.
+
+See also: [`mktemp`](@ref), [`mkdir`](@ref).
 
 !!! compat "Julia 1.2"
     The `prefix` keyword argument was added in Julia 1.2.
@@ -989,6 +1012,26 @@ if Sys.iswindows()
 end
 
 """
+    hardlink(src::AbstractString, dst::AbstractString)
+
+Creates a hard link to an existing source file `src` with the name `dst`. The
+destination, `dst`, must not exist.
+
+See also: [`symlink`](@ref).
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
+"""
+function hardlink(src::AbstractString, dst::AbstractString)
+    err = ccall(:jl_fs_hardlink, Int32, (Cstring, Cstring), src, dst)
+    if err < 0
+        msg = "hardlink($(repr(src)), $(repr(dst)))"
+        uv_error(msg, err)
+    end
+    return nothing
+end
+
+"""
     symlink(target::AbstractString, link::AbstractString; dir_target = false)
 
 Creates a symbolic link to `target` with the name `link`.
@@ -1009,6 +1052,8 @@ denoted by `isabspath(target)` returning `false`) a symlink will be used, else
 a junction point will be used.  Best practice for creating symlinks on Windows
 is to create them only after the files/directories they reference are already
 created.
+
+See also: [`hardlink`](@ref).
 
 !!! note
     This function raises an error under operating systems that do not support
@@ -1123,4 +1168,58 @@ function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
     err < 0 && uv_error("chown($(repr(path)), $owner, $group)", err)
     path
+end
+
+
+# - http://docs.libuv.org/en/v1.x/fs.html#c.uv_fs_statfs (libuv function docs)
+# - http://docs.libuv.org/en/v1.x/fs.html#c.uv_statfs_t (libuv docs of the returned struct)
+"""
+    DiskStat
+
+Stores information about the disk in bytes. Populate by calling `diskstat`.
+"""
+struct DiskStat
+    ftype::UInt64
+    bsize::UInt64
+    blocks::UInt64
+    bfree::UInt64
+    bavail::UInt64
+    files::UInt64
+    ffree::UInt64
+    fspare::NTuple{4, UInt64} # reserved
+end
+
+function Base.getproperty(stats::DiskStat, field::Symbol)
+    total = Int64(getfield(stats, :bsize) * getfield(stats, :blocks))
+    available = Int64(getfield(stats, :bsize) * getfield(stats, :bavail))
+    field === :total && return total
+    field === :available && return available
+    field === :used && return total - available
+    return getfield(stats, field)
+end
+
+@eval Base.propertynames(stats::DiskStat) =
+    $((fieldnames(DiskStat)[1:end-1]..., :available, :total, :used))
+
+Base.show(io::IO, x::DiskStat) =
+    print(io, "DiskStat(total=$(x.total), used=$(x.used), available=$(x.available))")
+
+"""
+    diskstat(path=pwd())
+
+Returns statistics in bytes about the disk that contains the file or directory pointed at by
+`path`. If no argument is passed, statistics about the disk that contains the current
+working directory are returned.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
+"""
+function diskstat(path::AbstractString=pwd())
+    req = zeros(UInt8, _sizeof_uv_fs)
+    err = ccall(:uv_fs_statfs, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                C_NULL, req, path, C_NULL)
+    err < 0 && uv_error("diskstat($(repr(path)))", err)
+    statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
+
+    return unsafe_load(reinterpret(Ptr{DiskStat}, statfs_ptr))
 end

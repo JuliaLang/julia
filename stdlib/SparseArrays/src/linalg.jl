@@ -79,10 +79,10 @@ end
     (T = promote_op(matprod, eltype(adjA), eltype(x)); mul!(similar(x, T, size(adjA, 1)), adjA, x, true, false))
 *(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::AdjOrTransDenseMatrix) =
     (T = promote_op(matprod, eltype(adjA), eltype(B)); mul!(similar(B, T, (size(adjA, 1), size(B, 2))), adjA, B, true, false))
-*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::DenseInputVector) =
-    (T = promote_op(matprod, eltype(transA), eltype(x)); mul!(similar(x, T, size(transA, 1)), transA, x, true, false))
-*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::AdjOrTransDenseMatrix) =
-    (T = promote_op(matprod, eltype(transA), eltype(B)); mul!(similar(B, T, (size(transA, 1), size(B, 2))), transA, B, true, false))
+*(tA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::DenseInputVector) =
+    (T = promote_op(matprod, eltype(tA), eltype(x)); mul!(similar(x, T, size(tA, 1)), tA, x, true, false))
+*(tA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::AdjOrTransDenseMatrix) =
+    (T = promote_op(matprod, eltype(tA), eltype(B)); mul!(similar(B, T, (size(tA, 1), size(B, 2))), tA, B, true, false))
 
 function mul!(C::StridedVecOrMat, X::AdjOrTransDenseMatrix, A::AbstractSparseMatrixCSC, α::Number, β::Number)
     mX, nX = size(X)
@@ -138,8 +138,8 @@ for (T, t) in ((Adjoint, adjoint), (Transpose, transpose))
 end
 *(X::AdjOrTransDenseMatrix, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) =
     (T = promote_op(matprod, eltype(X), eltype(adjA)); mul!(similar(X, T, (size(X, 1), size(adjA, 2))), X, adjA, true, false))
-*(X::AdjOrTransDenseMatrix, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}) =
-    (T = promote_op(matprod, eltype(X), eltype(transA)); mul!(similar(X, T, (size(X, 1), size(transA, 2))), X, transA, true, false))
+*(X::AdjOrTransDenseMatrix, tA::Transpose{<:Any,<:AbstractSparseMatrixCSC}) =
+    (T = promote_op(matprod, eltype(X), eltype(tA)); mul!(similar(X, T, (size(X, 1), size(tA, 2))), X, tA, true, false))
 
 function (*)(D::Diagonal, A::AbstractSparseMatrixCSC)
     T = Base.promote_op(*, eltype(D), eltype(A))
@@ -869,9 +869,7 @@ function nzrangelo(A, i)
 end
 ## end of symmetric/Hermitian
 
-\(A::Transpose{<:Real,<:Hermitian{<:Real,<:AbstractSparseMatrixCSC}}, B::Vector) = A.parent \ B
 \(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:AbstractSparseMatrixCSC}}, B::Vector) = copy(A) \ B
-\(A::Transpose{<:Number,<:Symmetric{<:Number,<:AbstractSparseMatrixCSC}}, B::Vector) = A.parent \ B
 
 function rdiv!(A::AbstractSparseMatrixCSC{T}, D::Diagonal{T}) where T
     dd = D.diag
@@ -891,11 +889,6 @@ function rdiv!(A::AbstractSparseMatrixCSC{T}, D::Diagonal{T}) where T
     A
 end
 
-rdiv!(A::AbstractSparseMatrixCSC{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
-    (D = adjD.parent; rdiv!(A, conj(D)))
-rdiv!(A::AbstractSparseMatrixCSC{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
-    (D = transD.parent; rdiv!(A, D))
-
 function ldiv!(D::Diagonal{T}, A::AbstractSparseMatrixCSC{T}) where {T}
     # require_one_based_indexing(A)
     if size(A, 1) != length(D.diag)
@@ -912,10 +905,6 @@ function ldiv!(D::Diagonal{T}, A::AbstractSparseMatrixCSC{T}) where {T}
     end
     A
 end
-ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, A::AbstractSparseMatrixCSC{T}) where {T} =
-    (D = adjD.parent; ldiv!(conj(D), A))
-ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, A::AbstractSparseMatrixCSC{T}) where {T} =
-    (D = transD.parent; ldiv!(D, A))
 
 ## triu, tril
 
@@ -935,16 +924,15 @@ function triu(S::AbstractSparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     end
     rowval = Vector{Ti}(undef, nnz)
     nzval = Vector{Tv}(undef, nnz)
-    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = max(k+1,1) : n
         c1 = getcolptr(S)[col]
-        for c2 in nzrange(A, col)
-            rowvals(A)[c2] = rowvals(S)[c1]
-            nonzeros(A)[c2] = nonzeros(S)[c1]
+        for c2 in colptr[col]:colptr[col+1]-1
+            rowval[c2] = rowvals(S)[c1]
+            nzval[c2] = nonzeros(S)[c1]
             c1 += 1
         end
     end
-    A
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
 function tril(S::AbstractSparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
@@ -965,17 +953,16 @@ function tril(S::AbstractSparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     end
     rowval = Vector{Ti}(undef, nnz)
     nzval = Vector{Tv}(undef, nnz)
-    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = 1 : min(n, m+k)
         c1 = getcolptr(S)[col+1]-1
-        l2 = getcolptr(A)[col+1]-1
-        for c2 = 0 : l2 - getcolptr(A)[col]
-            rowvals(A)[l2 - c2] = rowvals(S)[c1]
-            nonzeros(A)[l2 - c2] = nonzeros(S)[c1]
+        l2 = colptr[col+1]-1
+        for c2 = 0 : l2 - colptr[col]
+            rowval[l2 - c2] = rowvals(S)[c1]
+            nzval[l2 - c2] = nonzeros(S)[c1]
             c1 -= 1
         end
     end
-    A
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
 ## diff
@@ -1340,7 +1327,6 @@ end
 
 ## kron
 @inline function kron!(C::SparseMatrixCSC, A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC)
-    nnzC = nnz(A)*nnz(B)
     mA, nA = size(A); mB, nB = size(B)
     mC, nC = mA*mB, nA*nB
 
@@ -1348,11 +1334,9 @@ end
     nzvalC = nonzeros(C)
     colptrC = getcolptr(C)
 
-    @boundscheck begin
-        length(colptrC) == nC+1 || throw(DimensionMismatch("expect C to be preallocated with $(nC+1) colptrs "))
-        length(rowvalC) == nnzC || throw(DimensionMismatch("expect C to be preallocated with $(nnzC) rowvals"))
-        length(nzvalC) == nnzC || throw(DimensionMismatch("expect C to be preallocated with $(nnzC) nzvals"))
-    end
+    nnzC = nnz(A)*nnz(B)
+    resize!(nzvalC, nnzC)
+    resize!(rowvalC, nnzC)
 
     col = 1
     @inbounds for j = 1:nA
@@ -1379,18 +1363,23 @@ end
     end
     return C
 end
-
+@inline function kron!(C::SparseMatrixCSC, A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}, B::AbstractSparseMatrixCSC)
+    return kron!(C, copy(A), B)
+end
+@inline function kron!(C::SparseMatrixCSC, A::AbstractSparseMatrixCSC, B::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC})
+    return kron!(C, A, copy(B))
+end
+@inline function kron!(C::SparseMatrixCSC, A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}, B::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC})
+    return kron!(C, copy(A), copy(B))
+end
 @inline function kron!(z::SparseVector, x::SparseVector, y::SparseVector)
-    nnzx = nnz(x); nnzy = nnz(y); nnzz = nnz(z);
+    nnzx = nnz(x); nnzy = nnz(y);
     nzind = nonzeroinds(z)
     nzval = nonzeros(z)
 
-    @boundscheck begin
-        nnzval = length(nzval); nnzind = length(nzind)
-        nnzz = nnzx*nnzy
-        nnzval == nnzz || throw(DimensionMismatch("expect z to be preallocated with $nnzz nonzeros"))
-        nnzind == nnzz || throw(DimensionMismatch("expect z to be preallocated with $nnzz nonzeros"))
-    end
+    nnzz = nnzx*nnzy
+    resize!(nzind, nnzz)
+    resize!(nzval, nnzz)
 
     @inbounds for i = 1:nnzx, j = 1:nnzy
         this_ind = (i-1)*nnzy+j
@@ -1402,18 +1391,18 @@ end
 
 # sparse matrix ⊗ sparse matrix
 function kron(A::AbstractSparseMatrixCSC{T1,S1}, B::AbstractSparseMatrixCSC{T2,S2}) where {T1,S1,T2,S2}
-    nnzC = nnz(A)*nnz(B)
     mA, nA = size(A); mB, nB = size(B)
     mC, nC = mA*mB, nA*nB
     Tv = typeof(one(T1)*one(T2))
     Ti = promote_type(S1,S2)
-    colptrC = Vector{Ti}(undef, nC+1)
-    rowvalC = Vector{Ti}(undef, nnzC)
-    nzvalC  = Vector{Tv}(undef, nnzC)
-    colptrC[1] = 1
-    # skip sparse_check
-    C = SparseMatrixCSC{Tv, Ti}(mC, nC, colptrC, rowvalC, nzvalC)
+    C = spzeros(Tv, Ti, mC, nC)
+    sizehint!(C, nnz(A)*nnz(B))
     return @inbounds kron!(C, A, B)
+end
+kron(A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}, B::AbstractSparseMatrixCSC) = kron(copy(A), B)
+kron(A::AbstractSparseMatrixCSC, B::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}) = kron(A, copy(B))
+function kron(A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}, B::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC})
+    return kron(copy(A), copy(B))
 end
 
 # sparse vector ⊗ sparse vector
@@ -1431,21 +1420,29 @@ Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::AbstractSparseMatrixCSC, x
 Base.@propagate_inbounds kron!(C::SparseMatrixCSC, x::SparseVector, A::AbstractSparseMatrixCSC) = kron!(C, SparseMatrixCSC(x), A)
 
 kron(A::AbstractSparseMatrixCSC, x::SparseVector) = kron(A, SparseMatrixCSC(x))
+kron(A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}, x::SparseVector) =
+    kron(copy(A), x)
 kron(x::SparseVector, A::AbstractSparseMatrixCSC) = kron(SparseMatrixCSC(x), A)
+kron(x::SparseVector, A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}) =
+    kron(x, copy(A))
 
 # sparse vec/mat ⊗ vec/mat and vice versa
 Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Union{SparseVector,AbstractSparseMatrixCSC}, B::VecOrMat) = kron!(C, A, sparse(B))
 Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::VecOrMat, B::Union{SparseVector,AbstractSparseMatrixCSC}) = kron!(C, sparse(A), B)
 
-kron(A::Union{SparseVector,AbstractSparseMatrixCSC}, B::VecOrMat) = kron(A, sparse(B))
-kron(A::VecOrMat, B::Union{SparseVector,AbstractSparseMatrixCSC}) = kron(sparse(A), B)
+kron(A::Union{SparseVector,AbstractSparseMatrixCSC,AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}}, B::VecOrMat) =
+    kron(A, sparse(B))
+kron(A::VecOrMat, B::Union{SparseVector,AbstractSparseMatrixCSC,AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}}) =
+    kron(sparse(A), B)
 
 # sparse vec/mat ⊗ Diagonal and vice versa
 Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Diagonal{T}, B::Union{SparseVector{S}, AbstractSparseMatrixCSC{S}}) where {T<:Number, S<:Number} = kron!(C, sparse(A), B)
 Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}}, B::Diagonal{S}) where {T<:Number, S<:Number} = kron!(C, A, sparse(B))
 
-kron(A::Diagonal{T}, B::Union{SparseVector{S}, AbstractSparseMatrixCSC{S}}) where {T<:Number, S<:Number} = kron(sparse(A), B)
-kron(A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}}, B::Diagonal{S}) where {T<:Number, S<:Number} = kron(A, sparse(B))
+kron(A::Diagonal{T}, B::Union{SparseVector{S}, AbstractSparseMatrixCSC{S}, AdjOrTrans{S,<:AbstractSparseMatrixCSC}}) where {T<:Number, S<:Number} =
+    kron(sparse(A), B)
+kron(A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}, AdjOrTrans{S,<:AbstractSparseMatrixCSC}}, B::Diagonal{S}) where {T<:Number, S<:Number} =
+    kron(A, sparse(B))
 
 # sparse outer product
 kron!(C::SparseMatrixCSC, A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = broadcast!(*, C, A, B)
@@ -1578,7 +1575,7 @@ for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             if m == n
                 if istril(A)
                     if istriu(A)
-                        return \($xformop(Diagonal(Vector(diag(A)))), B)
+                        return \(Diagonal(($xformop.(diag(A)))), B)
                     else
                         return \($xformop(LowerTriangular(A)), B)
                     end

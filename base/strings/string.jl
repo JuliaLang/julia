@@ -25,7 +25,7 @@ function Base.showerror(io::IO, exc::StringIndexError)
     end
 end
 
-const ByteArray = Union{Vector{UInt8},Vector{Int8}}
+const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, FastContiguousSubArray{UInt8,1,CodeUnits{UInt8,String}}, FastContiguousSubArray{UInt8,1,Vector{UInt8}}, FastContiguousSubArray{Int8,1,Vector{Int8}}}
 
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
 
@@ -252,7 +252,7 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     return reinterpret(Char, u)
 end
 
-getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
+getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 
 @inline function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""

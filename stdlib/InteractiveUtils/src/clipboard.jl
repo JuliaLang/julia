@@ -37,23 +37,27 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
                 `xsel --input --clipboard` :
                 `xsel -c`,
             :xclip => `xclip -silent -in -selection clipboard`,
+            :wlclipboard => `wl-copy`
         )
     const _clipboard_paste = Dict(
             :xsel  => Sys.islinux() ?
                 `xsel --nodetach --output --clipboard` :
                 `xsel -p`,
             :xclip => `xclip -quiet -out -selection clipboard`,
+            :wlclipboard => `wl-paste`
         )
     function clipboardcmd()
         global _clipboardcmd
         _clipboardcmd !== nothing && return _clipboardcmd
-        for cmd in (:xclip, :xsel)
-            success(pipeline(`which $cmd`, devnull)) && return _clipboardcmd = cmd
+        for cmd in (:xclip, :xsel, :wlclipboard)
+            # wl-clipboard ships wl-copy/paste individually
+            c = cmd == :wlclipboard ? Symbol("wl-copy") : cmd
+            success(pipeline(`which $c`, devnull)) && return _clipboardcmd = cmd
         end
         pkgs = @static if Sys.KERNEL === :FreeBSD
             "x11/xsel or x11/xclip"
         else
-            "xsel or xclip"
+            "xsel or xclip or wl-clipboard"
         end
         error("no clipboard command found, please install $pkgs")
     end

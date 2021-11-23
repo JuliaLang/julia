@@ -104,6 +104,13 @@ be obtained from the `Schur` object `F` with either `F.Schur` or `F.T` and the
 orthogonal/unitary Schur vectors can be obtained with `F.vectors` or `F.Z` such that
 `A = F.vectors * F.Schur * F.vectors'`. The eigenvalues of `A` can be obtained with `F.values`.
 
+For real `A`, the Schur factorization is "quasitriangular", which means that it
+is upper-triangular except with 2×2 diagonal blocks for any conjugate pair
+of complex eigenvalues; this allows the factorization to be purely real even
+when there are complex eigenvalues.  To obtain the (complex) purely upper-triangular
+Schur factorization from a real quasitriangular factorization, you can use
+`Schur{Complex}(schur(A))`.
+
 Iterating the decomposition produces the components `F.T`, `F.Z`, and `F.values`.
 
 # Examples
@@ -142,7 +149,7 @@ true
 schur(A::StridedMatrix{<:BlasFloat}) = schur!(copy(A))
 schur(A::StridedMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
 
-schur(A::AbstractMatrix{T}) where {T} = schur!(copyto!(Matrix{eigtype(T)}(undef, size(A)...), A))
+schur(A::AbstractMatrix{T}) where {T} = schur!(copy_to_array(A, eigtype(T)))
 function schur(A::RealHermSymComplexHerm)
     F = eigen(A; sortby=nothing)
     return Schur(typeof(F.vectors)(Diagonal(F.values)), F.vectors, F.values)
@@ -206,6 +213,48 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Schur)
     println(io, "\neigenvalues:")
     show(io, mime, F.values)
 end
+
+# convert a (standard-form) quasi-triangular real Schur factorization into a
+# triangular complex Schur factorization.
+#
+# Based on the "triangularize" function from GenericSchur.jl,
+# released under the MIT "Expat" license by @RalphAS
+function Schur{CT}(S::Schur{<:Real}) where {CT<:Complex}
+    Tr = S.T
+    T = CT.(Tr)
+    Z = CT.(S.Z)
+    n = size(T,1)
+    for j=n:-1:2
+        if !iszero(Tr[j,j-1])
+            # We want a unitary similarity transform from
+            # ┌   ┐      ┌     ┐
+            # │a b│      │w₁  x│
+            # │c a│ into │0  w₂│ where bc < 0 (a,b,c real)
+            # └   ┘      └     ┘
+            # If we write it as
+            # ┌     ┐
+            # │u  v'│
+            # │-v u'│
+            # └     ┘
+            # and make the Ansatz that u is real (so v is imaginary),
+            # we arrive at a Givens rotation:
+            # θ = atan(sqrt(-Tr[j,j-1]/Tr[j-1,j]))
+            # s,c = sin(θ), cos(θ)
+            s = sqrt(abs(Tr[j,j-1]))
+            c = sqrt(abs(Tr[j-1,j]))
+            r = hypot(s,c)
+            G = Givens(j-1,j,complex(c/r),im*(-s/r))
+            lmul!(G,T)
+            rmul!(T,G')
+            rmul!(Z,G')
+        end
+    end
+    return Schur(triu!(T),Z,diag(T))
+end
+
+Schur{Complex}(S::Schur{<:Complex}) = S
+Schur{T}(S::Schur{T}) where {T} = S
+Schur{T}(S::Schur) where {T} = Schur(T.(S.T), T.(S.Z), T <: Real && !(eltype(S.values) <: Real) ? complex(T).(S.values) : T.(S.values))
 
 """
     ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
@@ -303,6 +352,10 @@ Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
 """
 schur(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schur!(copy(A),copy(B))
 function schur(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return schur!(copy_oftype(A, S), copy_oftype(B, S))
+end
+function schur(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
     return schur!(copy_oftype(A, S), copy_oftype(B, S))
 end

@@ -192,10 +192,10 @@ end
         a = rand(n,n)
         atri = typ(a)
         b = rand(n,n)
-        qrb = qr(b,Val(true))
+        qrb = qr(b, ColumnNorm())
         @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
         @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        qrb = qr(b,Val(false))
+        qrb = qr(b, NoPivot())
         @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
         @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
     end
@@ -432,6 +432,45 @@ end
             @test (a == b) == (Matrix(a) == Matrix(b)) == (b == a) == (Matrix(b) == Matrix(a))
         end
     end
+end
+
+@testset "BiTriSym*Q' and Q'*BiTriSym" begin
+    dl = [1, 1, 1];
+    d = [1, 1, 1, 1];
+    Tri = Tridiagonal(dl, d, dl)
+    Bi = Bidiagonal(d, dl, :L)
+    Sym = SymTridiagonal(d, dl)
+    F = qr(ones(4, 1))
+    A = F.Q'
+    @test Tri*A ≈ Matrix(Tri)*A
+    @test A*Tri ≈ A*Matrix(Tri)
+    @test Bi*A ≈ Matrix(Bi)*A
+    @test A*Bi ≈ A*Matrix(Bi)
+    @test Sym*A ≈ Matrix(Sym)*A
+    @test A*Sym ≈ A*Matrix(Sym)
+end
+
+@testset "Ops on SymTridiagonal ev has the same length as dv" begin
+    x = rand(3)
+    y = rand(3)
+    z = rand(2)
+
+    S = SymTridiagonal(x, y)
+    T = Tridiagonal(z, x, z)
+    Bu = Bidiagonal(x, z, :U)
+    Bl = Bidiagonal(x, z, :L)
+
+    Ms = Matrix(S)
+    Mt = Matrix(T)
+    Mbu = Matrix(Bu)
+    Mbl = Matrix(Bl)
+
+    @test S + T ≈ Ms + Mt
+    @test T + S ≈ Mt + Ms
+    @test S + Bu ≈ Ms + Mbu
+    @test Bu + S ≈ Mbu + Ms
+    @test S + Bl ≈ Ms + Mbl
+    @test Bl + S ≈ Mbl + Ms
 end
 
 end # module TestSpecial

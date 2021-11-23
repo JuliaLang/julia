@@ -523,7 +523,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       m, n, A, max(1,stride(A,2)), tau, work, lwork, info)
                 chklapackerror(info[])
                 if i == 1
-                    lwork = BlasInt(real(work[1]))
+                    lwork = max(BlasInt(1),BlasInt(real(work[1])))
                     resize!(work, lwork)
                 end
             end
@@ -552,7 +552,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       m, n, A, max(1,stride(A,2)), tau, work, lwork, info)
                 chklapackerror(info[])
                 if i == 1
-                    lwork = BlasInt(real(work[1]))
+                    lwork = max(BlasInt(m), BlasInt(real(work[1])))
                     resize!(work, lwork)
                 end
             end
@@ -3775,8 +3775,8 @@ for (stev, stebz, stegr, stein, elty) in
             require_one_based_indexing(dv, ev)
             chkstride1(dv, ev)
             n = length(dv)
-            if length(ev) != n - 1
-                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
+            if length(ev) != n - 1 && length(ev) != n
+                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than or equal to dv's length, $n)"))
             end
             Zmat = similar(dv, $elty, (n, job != 'N' ? n : 0))
             work = Vector{$elty}(undef, max(1, 2n-2))
@@ -3835,7 +3835,7 @@ for (stev, stebz, stegr, stein, elty) in
                 eev = copy(ev)
                 eev[n] = zero($elty)
             else
-                throw(DimensionMismatch("ev has length $(length(ev)) but should be either $(length(dv) - 1) or $(length(dv))"))
+                throw(DimensionMismatch("ev has length $ne but needs one less than or equal to dv's length, $n)"))
             end
 
             abstol = Vector{$elty}(undef, 1)
@@ -3878,10 +3878,15 @@ for (stev, stebz, stegr, stein, elty) in
             require_one_based_indexing(dv, ev_in, w_in, iblock_in, isplit_in)
             chkstride1(dv, ev_in, w_in, iblock_in, isplit_in)
             n = length(dv)
-            if length(ev_in) != n - 1
-                throw(DimensionMismatch("ev_in has length $(length(ev_in)) but needs one less than dv's length, $n)"))
+            ne = length(ev_in)
+            if ne == n - 1
+                ev = [ev_in; zero($elty)]
+            elseif ne == n
+                ev = copy(ev_in)
+                ev[n] = zero($elty)
+            else
+                throw(DimensionMismatch("ev_in has length $ne but needs one less than or equal to dv's length, $n)"))
             end
-            ev = [ev_in; zeros($elty,1)]
             ldz = n #Leading dimension
             #Number of eigenvalues to find
             if !(1 <= length(w_in) <= n)
@@ -5958,9 +5963,9 @@ for (gees, gges, elty) in
             alphar = similar(A, $elty, n)
             alphai = similar(A, $elty, n)
             beta = similar(A, $elty, n)
-            ldvsl = jobvsl == 'V' ? n : 1
+            ldvsl = jobvsl == 'V' ? max(1, n) : 1
             vsl = similar(A, $elty, ldvsl, n)
-            ldvsr = jobvsr == 'V' ? n : 1
+            ldvsr = jobvsr == 'V' ? max(1, n) : 1
             vsr = similar(A, $elty, ldvsr, n)
             work = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -6053,9 +6058,9 @@ for (gees, gges, elty, relty) in
             sdim = BlasInt(0)
             alpha = similar(A, $elty, n)
             beta = similar(A, $elty, n)
-            ldvsl = jobvsl == 'V' ? n : 1
+            ldvsl = jobvsl == 'V' ? max(1, n) : 1
             vsl = similar(A, $elty, ldvsl, n)
-            ldvsr = jobvsr == 'V' ? n : 1
+            ldvsr = jobvsr == 'V' ? max(1, n) : 1
             vsr = similar(A, $elty, ldvsr, n)
             work = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)

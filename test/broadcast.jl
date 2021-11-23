@@ -914,6 +914,12 @@ end
     # hit the `foldl` branch:
     @test IndexStyle(bcraw) == IndexCartesian()
     @test reduce(paren, bcraw) == foldl(paren, xs)
+
+    # issue #41055
+    bc = Broadcast.instantiate(Broadcast.broadcasted(Base.literal_pow, Ref(^), [1,2], Ref(Val(2))))
+    @test sum(bc, dims=1, init=0) == [5]
+    bc = Broadcast.instantiate(Broadcast.broadcasted(*, ['a','b'], 'c'))
+    @test prod(bc, dims=1, init="") == ["acbc"]
 end
 
 # treat Pair as scalar:
@@ -985,10 +991,6 @@ end
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
         Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
-    @test isequal([1, 2] + [3.0, missing], [4.0, missing])
-    @test Core.Compiler.return_type(+, Tuple{Vector{Int},
-                                             Vector{Union{Float64, Missing}}}) ==
-        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
         Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
@@ -1009,6 +1011,8 @@ end
     @test typeof.([iszero, iszero]) == [typeof(iszero), typeof(iszero)]
     @test isequal(identity.(Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
                   [[1, 2],[missing, 1]])
+    @test broadcast(i -> ((x=i, y=(i==1 ? 1 : "a")), 3), 1:4) isa
+        Vector{Tuple{NamedTuple{(:x, :y)}, Int}}
 end
 
 @testset "Issue #28382: eltype inconsistent with getindex" begin
@@ -1045,6 +1049,24 @@ end
     end
 end
 
-# issue 40309
-@test Base.broadcasted_kwsyntax(+, [1], [2]) isa Broadcast.Broadcasted{<:Any, <:Any, typeof(+)}
-@test Broadcast.BroadcastFunction(+)(2:3, 2:3) === 4:2:6
+@testset "Issue #40309: still gives a range after #40320" begin
+    @test Base.broadcasted_kwsyntax(+, [1], [2]) isa Broadcast.Broadcasted{<:Any, <:Any, typeof(+)}
+    @test Broadcast.BroadcastFunction(+)(2:3, 2:3) == 4:2:6
+    @test Broadcast.BroadcastFunction(+)(2:3, 2:3) isa AbstractRange
+end
+
+@testset "#42063" begin
+    buf = IOBuffer()
+    @test println.(buf, [1,2,3]) == [nothing, nothing, nothing]
+    @test String(take!(buf)) == "1\n2\n3\n"
+end
+
+@testset "Memory allocation inconsistency in broadcasting #41565" begin
+    function test(y)
+        y .= 0 .- y ./ (y.^2) # extra allocation
+        return y
+    end
+    arr = rand(1000)
+    @allocated test(arr)
+    @test (@allocated test(arr)) == 0
+end

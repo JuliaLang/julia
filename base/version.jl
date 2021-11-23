@@ -100,17 +100,17 @@ const VERSION_REGEX = r"^
 $"ix
 
 function split_idents(s::AbstractString)
-    idents = split(s, '.')
+    idents = eachsplit(s, '.')
     pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
     return tuple(pidents...)::VerTuple
 end
 
 function tryparse(::Type{VersionNumber}, v::AbstractString)
     v == "∞" && return typemax(VersionNumber)
-    m = match(VERSION_REGEX, v)
+    m = match(VERSION_REGEX, String(v)::String)
     m === nothing && return nothing
     major, minor, patch, minus, prerl, plus, build = m.captures
-    major = parse(VInt, major)
+    major = parse(VInt, major::AbstractString)
     minor = minor !== nothing ? parse(VInt, minor) : VInt(0)
     patch = patch !== nothing ? parse(VInt, patch) : VInt(0)
     if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'

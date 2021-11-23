@@ -12,6 +12,10 @@ function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test abs((det(ca) - det(a))/det(ca)) <= tol # Ad hoc, but statistically verified, revisit
     @test logdet(ca) ≈ logdet(a)
     @test logdet(ca) ≈ log(det(ca))  # logdet is less likely to overflow
+    logabsdet_ca = logabsdet(ca)
+    logabsdet_a = logabsdet(a)
+    @test logabsdet_ca[1] ≈ logabsdet_a[1]
+    @test logabsdet_ca[2] ≈ logabsdet_a[2]
     @test isposdef(ca)
     @test_throws ErrorException ca.Z
     @test size(ca) == size(a)
@@ -39,7 +43,7 @@ end
     n1 = div(n, 2)
     n2 = 2*n1
 
-    Random.seed!(12343)
+    Random.seed!(12344)
 
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
@@ -474,5 +478,40 @@ end
         @test C.U == L'
     end
 end
+
+@testset "adjoint of Cholesky" begin
+    A = randn(5, 5)
+    A = A'A
+    F = cholesky(A)
+    b = ones(size(A, 1))
+    @test F\b == F'\b
+end
+
+@testset "Float16" begin
+    A = Float16[4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+    B = cholesky(A)
+    B32 = cholesky(Float32.(A))
+    @test B isa Cholesky{Float16, Matrix{Float16}}
+    @test B.U isa UpperTriangular{Float16, Matrix{Float16}}
+    @test B.L isa LowerTriangular{Float16, Matrix{Float16}}
+    @test B.UL isa UpperTriangular{Float16, Matrix{Float16}}
+    @test B.U ≈ B32.U
+    @test B.L ≈ B32.L
+    @test B.UL ≈ B32.UL
+end
+
+@testset "det and logdet" begin
+    A = [4083 3825 5876 2048 4470 5490;
+         3825 3575 5520 1920 4200 5140;
+         5876 5520 8427 2940 6410 7903;
+         2048 1920 2940 1008 2240 2740;
+         4470 4200 6410 2240 4875 6015;
+         5490 5140 7903 2740 6015 7370]
+    B = cholesky(A, Val(true), check=false)
+    @test det(B)  ==  0.0
+    @test det(B)  ≈  det(A) atol=eps()
+    @test logdet(B)  ==  -Inf
+    @test logabsdet(B)[1] == -Inf
+ end
 
 end # module TestCholesky
