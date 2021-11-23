@@ -75,7 +75,7 @@ const libblas = libblastrampoline
 const liblapack = libblastrampoline
 
 import LinearAlgebra
-using LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1, axpy!
+using LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1
 
 include("lbt.jl")
 
