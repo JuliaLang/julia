@@ -869,6 +869,29 @@ end
     Random.seed!(seed)
     @test a == rand()
     @test b == rand()
+
+    # Even when seed!() is called within a testset A, subsequent testsets
+    # should start with the same "global RNG state" as what A started with,
+    # such that the test `refvalue == rand(Int)` below succeeds.
+    # Currently, this means that Random.GLOBAL_SEED has to be restored,
+    # in addition to the state of Random.default_rng().
+    GLOBAL_SEED_orig = Random.GLOBAL_SEED
+    local refvalue
+    @testset "GLOBAL_SEED is also preserved (setup)" begin
+        @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
+        refvalue = rand(Int)
+        Random.seed!()
+        @test GLOBAL_SEED_orig != Random.GLOBAL_SEED
+    end
+    @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
+    @testset "GLOBAL_SEED is also preserved (forloop)" for _=1:3
+        @test refvalue == rand(Int)
+        Random.seed!()
+    end
+    @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
+    @testset "GLOBAL_SEED is also preserved (beginend)" begin
+        @test refvalue == rand(Int)
+    end
 end
 
 @testset "InterruptExceptions #21043" begin
