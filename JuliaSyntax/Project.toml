@@ -7,6 +7,7 @@ version = "0.1.0"
 Tokenize = "0796e94c-ce3b-5d07-9a54-7f471281c624"
 
 [compat]
+Tokenize = "0.5"
 julia = "1.4"
 
 [extras]
