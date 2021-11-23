@@ -899,3 +899,13 @@ end
     @test last(Iterators.map(identity, 1:3)) == 3
     @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3)))) == 2
 end
+
+@testset "unfoldr" begin
+    @test collect(unfoldr(x -> x < 5 ? (x, x+1) : nothing, 0)) == 0:4
+    @test collect(unfoldr(("some words in a string", 1)) do (str, start)
+                start ≥ lastindex(str) && return nothing
+                idx = findnext(==(' '), str, start)
+                isnothing(idx) && return (str[start:end], (str, lastindex(str)))
+                return str[start:idx-1], (str, idx+1)
+            end) == split("some words in a string")
+end

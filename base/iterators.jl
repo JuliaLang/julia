@@ -22,7 +22,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition, unfoldr
 
 """
     Iterators.map(f, iterators...)
@@ -1427,5 +1427,50 @@ only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 )
+
+"""
+    unfoldr(f, init)
+
+Iterate values generated from an initial state and a function.
+
+`f` takes a single value and returns `nothing` if it is done emitting elements or `(element, nextstate)` if it is not.
+
+The "dual" of `foldr`: `foldr` reduces an iterable to a summary value, `unfoldr` builds an iterable from an initial value.
+
+# Examples
+
+```jldoctest
+julia> using Base.Iterators: unfoldr
+
+julia> collect(unfoldr(x -> x > 0 ? (x, x-1) : nothing, 5))
+5-element Vector{Int64}:
+ 5
+ 4
+ 3
+ 2
+ 1
+
+julia> # Same output as digits(6, base=2):
+
+julia> unfoldr(6) do n
+           n ≠ 0 ? reverse(divrem(n, 2)) : nothing
+       end |> collect
+3-element Vector{Int64}:
+ 0
+ 1
+ 1
+```
+"""
+unfoldr(f, init) = Unfold(f, init)
+
+struct Unfold{F, T}
+    f::F
+    init::T
+end
+
+iterate(uf::Unfold, state = uf.init) = uf.f(state)
+
+IteratorSize(::Type{<:Unfold}) = Base.SizeUnknown()
+IteratorEltype(::Type{<:Unfold}) = Base.EltypeUnknown()
 
 end
