@@ -82,6 +82,8 @@ Standard library changes
 * TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
 * Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
 * `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
+* `Some`containers now support broadcast as zero dimensional immutable containers. `Some(x)`
+   should be preferred to `Ref(x)` when you wish to exempt `x` from broadcasting ([#35778]).
 
 #### InteractiveUtils
 * A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])

@@ -614,8 +614,9 @@ Base.@propagate_inbounds Base.getindex(bc::Broadcasted) = bc[CartesianIndex(())]
 
 Index into `A` with `I`, collapsing broadcasted indices to their singleton indices as appropriate.
 """
-Base.@propagate_inbounds _broadcast_getindex(A::Union{Ref,AbstractArray{<:Any,0},Number}, I) = A[] # Scalar-likes can just ignore all indices
+Base.@propagate_inbounds _broadcast_getindex(A::Union{Ref,Some,AbstractArray{<:Any,0},Number}, I) = A[] # Scalar-likes can just ignore all indices
 Base.@propagate_inbounds _broadcast_getindex(::Ref{Type{T}}, I) where {T} = T
+Base.@propagate_inbounds _broadcast_getindex(::Some{Type{T}}, I) where {T} = T
 # Tuples are statically known to be singleton or vector-like
 Base.@propagate_inbounds _broadcast_getindex(A::Tuple{Any}, I) = A[1]
 Base.@propagate_inbounds _broadcast_getindex(A::Tuple, I) = A[I[1]]
@@ -661,6 +662,20 @@ Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted{<:Any,<:An
     args = _getindex(tail(tail(bc.args)), I)
     return _broadcast_getindex_evalf(bc.f, T, S, args...)
 end
+Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted{<:Any,<:Any,<:Any,<:Tuple{Some{Type{T}},Vararg{Any}}}, I) where {T}
+    args = _getindex(tail(bc.args), I)
+    return _broadcast_getindex_evalf(bc.f, T, args...)
+end
+Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted{<:Any,<:Any,<:Any,<:Tuple{Any,Some{Type{T}},Vararg{Any}}}, I) where {T}
+    arg1 = _broadcast_getindex(bc.args[1], I)
+    args = _getindex(tail(tail(bc.args)), I)
+    return _broadcast_getindex_evalf(bc.f, arg1, T, args...)
+end
+Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted{<:Any,<:Any,<:Any,<:Tuple{Some{Type{T}},Some{Type{S}},Vararg{Any}}}, I) where {T,S}
+    args = _getindex(tail(tail(bc.args)), I)
+    return _broadcast_getindex_evalf(bc.f, T, S, args...)
+end
+
 
 # Utilities for _broadcast_getindex
 Base.@propagate_inbounds _getindex(args::Tuple, I) = (_broadcast_getindex(args[1], I), _getindex(tail(args), I)...)
@@ -691,15 +706,15 @@ julia> Broadcast.broadcastable([1,2,3]) # like `identity` since arrays already s
  3
 
 julia> Broadcast.broadcastable(Int) # Types don't support axes, indexing, or iteration but are commonly used as scalars
-Base.RefValue{Type{Int64}}(Int64)
+Base.Some{Type{Int64}}(Int64)
 
 julia> Broadcast.broadcastable("hello") # Strings break convention of matching iteration and act like a scalar instead
-Base.RefValue{String}("hello")
+Base.Some{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO}) = Ref(x)
-broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
-broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted}) = x
+broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO}) = Some(x)
+broadcastable(::Type{T}) where {T} = Some{Type{T}}(T)
+broadcastable(x::Union{AbstractArray,Number,AbstractChar,Some,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
 broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
@@ -722,7 +737,7 @@ combine_eltypes(f, args::Tuple) =
 """
     broadcast(f, As...)
 
-Broadcast the function `f` over the arrays, tuples, collections, [`Ref`](@ref)s and/or scalars `As`.
+Broadcast the function `f` over the arrays, tuples, collections, [`Some`](@ref)s and/or scalars `As`.
 
 Broadcasting applies the function `f` over the elements of the container arguments and the
 scalars themselves in `As`. Singleton and missing dimensions are expanded to match the
@@ -781,7 +796,7 @@ julia> abs.((1, -2))
 julia> broadcast(+, 1.0, (0, -2.0))
 (1.0, -1.0)
 
-julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
+julia> (+).([[0,2], [1,3]], Some{Vector{Int}}([1,-1]))
 2-element Vector{Vector{Int64}}:
  [1, 1]
  [2, 2]

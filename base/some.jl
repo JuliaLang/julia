@@ -1,22 +1,39 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    Some{T}
+    Some{T} <: AbstractArray{T,0}
 
 A wrapper type used in `Union{Some{T}, Nothing}` to distinguish between the absence
 of a value ([`nothing`](@ref)) and the presence of a `nothing` value (i.e. `Some(nothing)`).
 
 Use [`something`](@ref) to access the value wrapped by a `Some` object.
 """
-struct Some{T}
+struct Some{T} <: AbstractArray{T,0}
     value::T
 end
 
 Some(::Type{T}) where {T} = Some{Type{T}}(T)
 
-promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T, S<:T} = Some{T}
+eltype(x::Type{<:Some{T}}) where {T} = @isdefined(T) ? T : Any
+size(x::Some) = ()
+axes(x::Some) = ()
+length(x::Some) = 1
+isempty(x::Some) = false
+ndims(x::Some) = 0
+ndims(::Type{<:Some}) = 0
+iterate(r::Some) = (r.value, nothing)
+getindex(r::Some) = r.value
+iterate(r::Some, s) = nothing
+IteratorSize(::Type{<:Some}) = HasShape{0}()
 
 nonnothingtype(::Type{T}) where {T} = typesplit(T, Nothing)
+function nonnothingtype_checked(T::Type)
+    R = nonnothingtype(T)
+    R >: T && error("could not compute non-nothing type")
+    return R
+end
+
+promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T, S<:T} = Some{T}
 promote_rule(T::Type{Nothing}, S::Type) = Union{S, Nothing}
 function promote_rule(T::Type{>:Nothing}, S::Type)
     R = nonnothingtype(T)
@@ -24,12 +41,6 @@ function promote_rule(T::Type{>:Nothing}, S::Type)
     T = R
     R = promote_type(T, S)
     return Union{R, Nothing}
-end
-
-function nonnothingtype_checked(T::Type)
-    R = nonnothingtype(T)
-    R >: T && error("could not compute non-nothing type")
-    return R
 end
 
 convert(::Type{T}, x::T) where {T>:Nothing} = x

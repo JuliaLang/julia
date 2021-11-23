@@ -427,6 +427,13 @@ end
 @test (+).(Ref(1), Ref(2)) == 3
 @test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
 
+# Some as 0-dimensional array for broadcast
+@test (-).(C_NULL, C_NULL)::UInt == 0
+@test (+).(1, Some(2)) == 3
+@test (+).(Some(1), Some(2)) == 3
+@test (+).([[0,2], [1,3]], Some{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
+
+
 # Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722),
 # and similarly for broadcast!(f, A, numbers...) (#19799).
 @test let z = 1; A = broadcast!(() -> z += 1, zeros(2)); A[1] != A[2]; end
@@ -573,6 +580,11 @@ let io = IOBuffer()
     broadcast(x -> print(io, x), [Ref(1.0)])
     @test String(take!(io)) == "Base.RefValue{Float64}(1.0)"
 end
+@test getindex.([Some(1), Some(2)]) == [1, 2]
+let io = IOBuffer()
+    broadcast(x -> print(io, x), [Some(1.0)])
+    @test String(take!(io)) == "Some(1.0)"
+end
 
 # Test that broadcast's promotion mechanism handles closures accepting more than one argument.
 # (See issue #19641 and referenced issues and pull requests.)
@@ -635,7 +647,7 @@ end
     @test broadcast(foo, "x", [1, 2, 3]) == ["hello", "hello", "hello"]
 
     @test isequal(
-        [Set([1]), Set([2])] .∪ Ref(Set([3])),
+        [Set([1]), Set([2])] .∪ Some(Set([3])),
         [Set([1, 3]), Set([2, 3])])
 end
 
@@ -916,7 +928,7 @@ end
     @test reduce(paren, bcraw) == foldl(paren, xs)
 
     # issue #41055
-    bc = Broadcast.instantiate(Broadcast.broadcasted(Base.literal_pow, Ref(^), [1,2], Ref(Val(2))))
+    bc = Broadcast.instantiate(Broadcast.broadcasted(Base.literal_pow, Some(^), [1,2], Some(Val(2))))
     @test sum(bc, dims=1, init=0) == [5]
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, ['a','b'], 'c'))
     @test prod(bc, dims=1, init="") == ["acbc"]
