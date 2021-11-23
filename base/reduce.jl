@@ -318,8 +318,8 @@ reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
-reduce_empty(::typeof(max), T::Type{<:AbstractFloat}) = typemin(T)
-reduce_empty(::typeof(min), T::Type{<:AbstractFloat}) = typemax(T)
+reduce_empty(::typeof(max), T) = typemin(T)
+reduce_empty(::typeof(min), T) = typemax(T)
 
 reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error()
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
