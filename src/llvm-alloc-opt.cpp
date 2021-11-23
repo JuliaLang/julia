@@ -237,9 +237,6 @@ void Optimizer::optimizeAll()
             } else {
                 getArrayOps(orig, item.second.array.dimcount);
             }
-            // dbgs() << "looking at " << *orig << "\n";
-            // dbgs() << "got array ops\n";
-            // array_info.dump();
             optimizeArrayDims(orig, item.second);
             if (array_info.escaped) {
                 continue;
@@ -826,13 +823,6 @@ void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag, bool is_array
             push_frame(user);
         }
         else {
-            // dbgs() << "failed inst at removeAlloc: " << *user << "\n";
-            // dbgs() << "while remove allocation " << *orig_inst << "\n";
-            // dbgs() << "use_info\n";
-            // use_info.dump();
-            // dbgs() << "array info\n";
-            // array_info.dump();
-            // dbgs().flush();
             abort();
         }
     };
@@ -851,13 +841,6 @@ void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag, bool is_array
 
 void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info) {
     assert(info.isarray);
-    dbgs() << "looking at " << *orig_inst << "\n";
-    dbgs() << "use info\n";
-    use_info.dump();
-    if (!use_info.escaped) {
-        dbgs() << "array info\n";
-        array_info.dump();
-    }
     if (info.array.dimcount) {
         // We can compute the length and dimensions of the array from the allocation
         // This can save on a memory read which opens up more opts
