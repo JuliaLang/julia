@@ -453,7 +453,7 @@ generic_normMinusInf(x) = float(mapreduce(norm, min, x))
 
 generic_normInf(x) = float(mapreduce(norm, max, x))
 
-generic_norm1(x) = float(mapreduce(norm, +, x))
+generic_norm1(x) = mapreduce(float ∘ norm, +, x)
 
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
