@@ -350,7 +350,7 @@ mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
 mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 
 mapreduce_empty(::typeof(abs),  ::typeof(max), T) = abs(zero(T))
-mapreduce_empty(::typeof(abs),  ::typeof(min), T::Type{<:AbstractFloat}) = typemax(T)
+mapreduce_empty(::typeof(abs),  ::typeof(min), T) = typemax(abs(zero(T)))
 mapreduce_empty(::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 mapreduce_empty(::typeof(abs2),  ::typeof(min), T::Type{<:AbstractFloat}) = typemax(T)
 
