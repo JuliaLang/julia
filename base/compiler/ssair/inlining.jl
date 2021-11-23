@@ -1191,7 +1191,7 @@ function analyze_single_call!(
         item = analyze_method!(match, argtypes, flag, state)
         item === nothing && return
         push!(cases, InliningCase(match.spec_types, item))
-        fully_covered = atype <: match.spec_types
+        fully_covered = match.fully_covers
     else
         fully_covered &= atype <: signature_union
     end
@@ -1242,17 +1242,15 @@ function maybe_handle_const_call!(
 
     # if the signature is fully covered and there is only one applicable method,
     # we can try to inline it even if the signature is not a dispatch tuple
-    if atype <: signature_union
-        if length(cases) == 0 && length(results) == 1
-            (; mi) = item = InliningTodo(results[1]::InferenceResult, argtypes)
-            state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
-            validate_sparams(mi.sparam_vals) || return true
-            item === nothing && return true
-            push!(cases, InliningCase(mi.specTypes, item))
-            fully_covered = true
-        end
+    if length(cases) == 0 && length(results) == 1
+        (; mi) = item = InliningTodo(results[1]::InferenceResult, argtypes)
+        state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
+        validate_sparams(mi.sparam_vals) || return true
+        item === nothing && return true
+        push!(cases, InliningCase(mi.specTypes, item))
+        fully_covered = atype <: mi.specTypes
     else
-        fully_covered = false
+        fully_covered &= atype <: signature_union
     end
 
     # If we only have one case and that case is fully covered, we may either

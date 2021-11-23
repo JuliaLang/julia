@@ -832,6 +832,19 @@ let # aggressive inlining of single, abstract method match
     @test count(iscall((src,isGoodType)), src.code) == 1
 end
 
+@inline isGoodType2(cnd, @nospecialize x::Type) =
+    x !== Any && !(@noinline (cnd ? Core.Compiler.isType : Base.has_free_typevars)(x))
+let # aggressive inlining of single, abstract method match (with constant-prop'ed)
+    src = code_typed((Type, Any,)) do x, y
+        isGoodType2(true, x), isGoodType2(true, y)
+    end |> only |> first
+    # both callsite should be inlined with constant-prop'ed result
+    @test count(isinvoke(:isType), src.code) == 2
+    @test count(isinvoke(:has_free_typevars), src.code) == 0
+    # `isGoodType(y::Any)` isn't fully convered, thus a runtime type check and fallback dynamic dispatch should be inserted
+    @test count(iscall((src,isGoodType2)), src.code) == 1
+end
+
 @noinline function checkBadType!(@nospecialize x::Type)
     if x === Any || Base.has_free_typevars(x)
         println(x)
