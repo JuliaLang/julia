@@ -639,7 +639,7 @@ The article is available online at ArXiv at the link
 
 Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
 
-See also [`LinearAlgebra.norm`](@ref).
+See also `norm` in the [`LinearAlgebra`](@ref man-linalg) standard library.
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
