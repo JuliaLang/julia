@@ -1,16 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    This struct keeps track of all uses of some mutable struct allocated
-    in the current function. `uses` are all instances of `getfield` on the
-    struct. `defs` are all instances of `setfield!` on the struct. The terminology
-    refers to the uses/defs of the ``slot bundle'' that the mutable struct represents.
+    du::SSADefUse
 
-    In addition we keep track of all instances of a foreigncall preserve of this mutable
-    struct. Somewhat counterintuitively, we don't actually need to make sure that the
-    struct itself is live (or even allocated) at a ccall site. If there are no other places
-    where the struct escapes (and thus e.g. where its address is taken), it need not be
-    allocated. We do however, need to make sure to preserve any elements of this struct.
+This struct keeps track of all uses of some mutable struct allocated in the current function.
+`du.uses::Vector{Int}` are all instances of `getfield` on the struct.
+`du.defs::Vector{Int}` are all instances of `setfield!` on the struct.
+The terminology refers to the uses/defs of the "slot bundle" that the mutable struct represents.
+
+In addition we keep track of all instances of a `:foreigncall` preserve of this mutable struct.
+Somewhat counterintuitively, we don't actually need to make sure that the struct itself is
+live (or even allocated) at a `ccall` site. If there are no other places where the struct
+escapes (and thus e.g. where its address is taken), it need not be allocated.
+We do however, need to make sure to preserve any elements of this struct.
 """
 struct SSADefUse
     uses::Vector{Int}
@@ -18,6 +20,8 @@ struct SSADefUse
     ccall_preserve_uses::Vector{Int}
 end
 SSADefUse() = SSADefUse(Int[], Int[], Int[])
+
+compute_live_ins(cfg::CFG, du::SSADefUse) = compute_live_ins(cfg, du.defs, du.uses)
 
 function try_compute_field_stmt(compact::IncrementalCompact, stmt::Expr)
     field = stmt.args[3]
@@ -74,13 +78,13 @@ function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector
     def == 0 ? phinodes[curblock] : val_for_def_expr(ir, def, fidx)
 end
 
-function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use_idx::Int)
-    def, stmtblock, curblock = find_def_for_use(ir, domtree, allblocks, du, use_idx)
+function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use::Int)
+    def, useblock, curblock = find_def_for_use(ir, domtree, allblocks, du, use)
     if def == 0
         if !haskey(phinodes, curblock)
             # If this happens, we need to search the predecessors for defs. Which
             # one doesn't matter - if it did, we'd have had a phinode
-            return compute_value_for_block(ir, domtree, allblocks, du, phinodes, fidx, first(ir.cfg.blocks[stmtblock].preds))
+            return compute_value_for_block(ir, domtree, allblocks, du, phinodes, fidx, first(ir.cfg.blocks[useblock].preds))
         end
         # The use is the phinode
         return phinodes[curblock]
@@ -574,10 +578,10 @@ end
 
 `getfield` elimination pass, a.k.a. Scalar Replacements of Aggregates optimization.
 
-This pass is based on a local alias analysis that collects field information by def-use chain walking.
+This pass is based on a local field analysis by def-use chain walking.
 It looks for struct allocation sites ("definitions"), and `getfield` calls as well as
 `:foreigncall`s that preserve the structs ("usages"). If "definitions" have enough information,
-then this pass will replace corresponding usages with lifted values.
+then this pass will replace corresponding usages with forwarded values.
 `mutable struct`s require additional cares and need to be handled separately from immutables.
 For `mutable struct`s, `setfield!` calls account for "definitions" also, and the pass should
 give up the lifting conservatively when there are any "intermediate usages" that may escape
@@ -585,7 +589,7 @@ the mutable struct (e.g. non-inlined generic function call that takes the mutabl
 its argument).
 
 In a case when all usages are fully eliminated, `struct` allocation may also be erased as
-a result of dead code elimination.
+a result of succeeding dead code elimination.
 """
 function sroa_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
@@ -806,7 +810,8 @@ function sroa_pass!(ir::IRCode)
         # Find the type for this allocation
         defexpr = ir[SSAValue(idx)]
         isexpr(defexpr, :new) || continue
-        typ = ir.stmts[idx][:type]
+        newidx = idx
+        typ = ir.stmts[newidx][:type]
         if isa(typ, UnionAll)
             typ = unwrap_unionall(typ)
         end
@@ -841,17 +846,17 @@ function sroa_pass!(ir::IRCode)
         for fidx in 1:ndefuse
             du = fielddefuse[fidx]
             isempty(du.uses) && continue
-            push!(du.defs, idx)
+            push!(du.defs, newidx)
             ldu = compute_live_ins(ir.cfg, du)
             phiblocks = Int[]
             if !isempty(ldu.live_in_bbs)
-                phiblocks = idf(ir.cfg, ldu, domtree)
+                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, domtree)
             end
             allblocks = sort(vcat(phiblocks, ldu.def_bbs))
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
                 for use in du.uses
-                    has_safe_def(ir, domtree, allblocks, du, idx, use) || @goto skip
+                    has_safe_def(ir, domtree, allblocks, du, newidx, use) || @goto skip
                 end
             end
         end
@@ -864,9 +869,8 @@ function sroa_pass!(ir::IRCode)
                 phiblocks, allblocks = blocks[fidx]
                 phinodes = IdDict{Int, SSAValue}()
                 for b in phiblocks
-                    n = PhiNode()
                     phinodes[b] = insert_node!(ir, first(ir.cfg.blocks[b].stmts),
-                        NewInstruction(n, ftyp))
+                        NewInstruction(PhiNode(), ftyp))
                 end
                 # Now go through all uses and rewrite them
                 for stmt in du.uses
@@ -887,12 +891,12 @@ function sroa_pass!(ir::IRCode)
                 end
             end
             for stmt in du.defs
-                stmt == idx && continue
+                stmt == newidx && continue
                 ir[SSAValue(stmt)] = nothing
             end
         end
         isempty(defuse.ccall_preserve_uses) && continue
-        push!(intermediaries, idx)
+        push!(intermediaries, newidx)
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
             useexpr = ir[SSAValue(use)]::Expr
