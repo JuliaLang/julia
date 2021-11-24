@@ -147,7 +147,6 @@ let src = code_typed1((Bool,)) do cond
     end
     @test !any(isnew, src.code)
 end
-# FIXME to handle this case, we need a more strong alias analysis
 let src = code_typed1((Bool,)) do cond
         r = Ref{Any}()
         if cond
@@ -157,7 +156,7 @@ let src = code_typed1((Bool,)) do cond
         end
         return r[]
     end
-    @test_broken !any(isnew, src.code)
+    @test !any(isnew, src.code)
 end
 let src = code_typed1((Bool,)) do cond
         r = Ref{Any}()
