@@ -175,7 +175,7 @@ If set to `1`, this will ignore incorrect hashes in artifacts. This should be us
 
 ### `JULIA_PKG_OFFLINE`
 
-If set to `true`, this will enable offline mode: see [`Pkg.offline`](https://pkgdocs.julialang.org/dev/api/#Pkg.offline).
+If set to `true`, this will enable offline mode: see [`Pkg.offline`](https://pkgdocs.julialang.org/v1/api/#Pkg.offline).
 
 !!! compat "Julia 1.5"
     Pkg's offline mode requires Julia 1.5 or later.
