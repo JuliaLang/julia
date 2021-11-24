@@ -105,10 +105,10 @@ _realtype(T::Type) = T
 _realtype(::Union{typeof(abs),typeof(abs2)}, T) = _realtype(T)
 _realtype(::Any, T) = T
 
-function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::AbstractArray, region)
+function reducedim_init(f::F, op::Union{typeof(+),typeof(add_sum)}, A::AbstractArray, region) where {F}
     _reducedim_init(f, op, zero, sum, A, region)
 end
-function reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::AbstractArray, region)
+function reducedim_init(f::F, op::Union{typeof(*),typeof(mul_prod)}, A::AbstractArray, region) where {F}
     _reducedim_init(f, op, one, prod, A, region)
 end
 function _reducedim_init(f, op, fv, fop, A, region)
@@ -126,7 +126,7 @@ end
 
 # initialization when computing minima and maxima requires a little care
 for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min, :(-Inf), :typemin))
-    @eval function reducedim_init(f, op::typeof($f1), A::AbstractArray, region)
+    @eval function reducedim_init(f::F, op::typeof($f1), A::AbstractArray, region) where {F}
         # First compute the reduce indices. This will throw an ArgumentError
         # if any region is invalid
         ri = reduced_indices(A, region)
@@ -248,7 +248,7 @@ _firstslice(i::OneTo) = OneTo(1)
 _firstslice(i::Slice) = Slice(_firstslice(i.indices))
 _firstslice(i) = i[firstindex(i):firstindex(i)]
 
-function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
+function _mapreducedim!(f::F, op::OP, R::AbstractArray, A::AbstractArrayOrBroadcasted) where {F, OP}
     lsiz = check_reducedims(R,A)
     isempty(A) && return R
 
@@ -286,10 +286,10 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     return R
 end
 
-mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted) =
+mapreducedim!(f::F, op::OP, R::AbstractArray, A::AbstractArrayOrBroadcasted) where {F, OP} =
     (_mapreducedim!(f, op, R, A); R)
 
-reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
+reducedim!(op::OP, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {OP, RT} =
     mapreducedim!(identity, op, R, A)
 
 """
@@ -319,21 +319,21 @@ julia> mapreduce(isodd, |, a, dims=1)
  1  1  1  1
 ```
 """
-mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
+mapreduce(f::F, op::OP, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) where {F, OP} =
     _mapreduce_dim(f, op, init, A, dims)
-mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
+mapreduce(f::F, op::OP, A::AbstractArrayOrBroadcasted...; kw...) where {F, OP} =
     reduce(op, map(f, A...); kw...)
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
+_mapreduce_dim(f::F, op::OP, nt, A::AbstractArrayOrBroadcasted, ::Colon) where {F, OP} =
     mapfoldl_impl(f, op, nt, A)
 
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
+_mapreduce_dim(f::F, op::OP, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) where {F, OP} =
     _mapreduce(f, op, IndexStyle(A), A)
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
+_mapreduce_dim(f::F, op::OP, nt, A::AbstractArrayOrBroadcasted, dims) where {F, OP} =
     mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
 
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
+_mapreduce_dim(f::F, op::OP, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) where {F, OP} =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 """
@@ -402,10 +402,10 @@ julia> count(<=(2), A, dims=2)
 ```
 """
 count(A::AbstractArrayOrBroadcasted; dims=:, init=0) = count(identity, A; dims, init)
-count(f, A::AbstractArrayOrBroadcasted; dims=:, init=0) = _count(f, A, dims, init)
+count(f::F, A::AbstractArrayOrBroadcasted; dims=:, init=0) where {F} = _count(f, A, dims, init)
 
-_count(f, A::AbstractArrayOrBroadcasted, dims::Colon, init) = _simple_count(f, A, init)
-_count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_sum, A; dims, init)
+_count(f::F, A::AbstractArrayOrBroadcasted, dims::Colon, init) where {F} = _simple_count(f, A, init)
+_count(f::F, A::AbstractArrayOrBroadcasted, dims, init) where {F} = mapreduce(_bool(f), add_sum, A; dims, init)
 
 """
     count!([f=identity,] r, A)
@@ -434,7 +434,7 @@ julia> count!(<=(2), [1; 1], A)
 ```
 """
 count!(r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) = count!(identity, r, A; init=init)
-count!(f, r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) =
+count!(f::F, r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) where {F} =
     mapreducedim!(_bool(f), add_sum, initarray!(r, add_sum, init, A), A)
 
 """
@@ -887,19 +887,19 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
     @eval begin
         # User-facing methods with keyword arguments
         @inline ($fname)(a::AbstractArray; dims=:, kw...) = ($_fname)(a, dims; kw...)
-        @inline ($fname)(f, a::AbstractArray; dims=:, kw...) = ($_fname)(f, a, dims; kw...)
+        @inline ($fname)(f::F, a::AbstractArray; dims=:, kw...) where {F} = ($_fname)(f, a, dims; kw...)
 
         # Underlying implementations using dispatch
         ($_fname)(a, ::Colon; kw...) = ($_fname)(identity, a, :; kw...)
-        ($_fname)(f, a, ::Colon; kw...) = mapreduce(f, $op, a; kw...)
+        ($_fname)(f::F, a, ::Colon; kw...) where {F} = mapreduce(f, $op, a; kw...)
     end
 end
 
 any(a::AbstractArray; dims=:)              = _any(a, dims)
-any(f::Function, a::AbstractArray; dims=:) = _any(f, a, dims)
+any(f::F, a::AbstractArray; dims=:) where {F<:Function} = _any(f, a, dims)
 _any(a, ::Colon)                           = _any(identity, a, :)
 all(a::AbstractArray; dims=:)              = _all(a, dims)
-all(f::Function, a::AbstractArray; dims=:) = _all(f, a, dims)
+all(f::F, a::AbstractArray; dims=:) where {F<:Function} = _all(f, a, dims)
 _all(a, ::Colon)                           = _all(identity, a, :)
 
 for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
@@ -908,12 +908,12 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
     fname! = Symbol(fname, '!')
     _fname = Symbol('_', fname)
     @eval begin
-        $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+        $(fname!)(f::F, r::AbstractArray, A::AbstractArray; init::Bool=true) where {F<:Function} =
             mapreducedim!(f, $(op), initarray!(r, $(op), init, A), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
         $(_fname)(A, dims; kw...)    = $(_fname)(identity, A, dims; kw...)
-        $(_fname)(f, A, dims; kw...) = mapreduce(f, $(op), A; dims=dims, kw...)
+        $(_fname)(f::F, A, dims; kw...) where {F} = mapreduce(f, $(op), A; dims=dims, kw...)
     end
 end
 
