@@ -136,6 +136,7 @@ need wine (>=1.7.5), a system compiler, and some downloaders.
 **On Ubuntu** (on other Linux systems the dependency names are likely to be similar):
 ```sh
 apt-get install wine-stable gcc wget p7zip-full winbind mingw-w64 gfortran-mingw-w64
+dpkg --add-architecture i386 && apt-get update && apt-get install wine32 # add sudo to each if needed
 # switch all of the following to their "-posix" variants (interactively):
 for pkg in i686-w64-mingw32-g++ i686-w64-mingw32-gcc i686-w64-mingw32-gfortran x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gfortran; do sudo update-alternatives --config $pkg; done
 ```
