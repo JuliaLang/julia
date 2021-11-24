@@ -93,23 +93,50 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{I
     end
 end
 
+# even when the allocation contains an uninitialized field, we try an extra effort to check
+# if this load at `idx` have any "safe" `setfield!` calls that define the field
+function has_safe_def(
+    ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse,
+    newidx::Int, idx::Int, inclusive::Bool = false)
+    def = first(find_def_for_use(ir, domtree, allblocks, du, idx, inclusive))
+
+    # this field is supposed to be defined at the `:new` site (but it's not and thus this load will throw)
+    def == newidx && return false
+
+    def ≠ 0 && return true # found a "safe" definition
+
+    # we may be able to replace this load with `PhiNode` if all the predecessors have "safe" definitions
+    idxblock = block_for_inst(ir, idx)
+    for pred in ir.cfg.blocks[idxblock].preds
+        lastidx = last(ir.cfg.blocks[pred].stmts)
+        # NOTE `lastidx` isn't a load, thus we can use inclusive coondition within the `find_def_for_use`
+        has_safe_def(ir, domtree, allblocks, du, newidx, lastidx, true) || return false
+    end
+    return true
+end
+
 # find the first dominating def for the given use
-function find_def_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, use_idx::Int)
-    stmtblock = block_for_inst(ir.cfg, use_idx)
-    curblock = find_curblock(domtree, allblocks, stmtblock)
+function find_def_for_use(
+    ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, use::Int, inclusive::Bool=false)
+    useblock = block_for_inst(ir.cfg, use)
+    curblock = find_curblock(domtree, allblocks, useblock)
     local def = 0
     for idx in du.defs
         if block_for_inst(ir.cfg, idx) == curblock
-            if curblock != stmtblock
+            if curblock != useblock
                 # Find the last def in this block
                 def = max(def, idx)
             else
                 # Find the last def before our use
-                def = max(def, idx >= use_idx ? 0 : idx)
+                if inclusive
+                    def = max(def, idx ≤ use ? idx : 0)
+                else
+                    def = max(def, idx < use ? idx : 0)
+                end
             end
         end
     end
-    return def, stmtblock, curblock
+    return def, useblock, curblock
 end
 
 function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#),
@@ -833,16 +860,8 @@ function sroa_pass!(ir::IRCode)
             allblocks = sort(vcat(phiblocks, ldu.def_bbs))
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
-                # even if the allocation contains an uninitialized field, we try an extra effort
-                # to check if all uses have any "solid" `setfield!` calls that define the field
-                # although we give up the cases below:
-                # `def == idx`: this field can only defined at the allocation site (thus this case will throw)
-                # `def == 0`: this field comes from `PhiNode`
-                # we may be able to traverse control flows of PhiNode values, but it sounds
-                # more complicated than beneficial under the current implementation
                 for use in du.uses
-                    def = find_def_for_use(ir, domtree, allblocks, du, use)[1]
-                    (def == 0 || def == newidx) && @goto skip
+                    has_safe_def(ir, domtree, allblocks, du, newidx, use) || @goto skip
                 end
             end
         end
