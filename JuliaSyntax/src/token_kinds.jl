@@ -4,6 +4,7 @@
     COMMENT, # aadsdsa, #= fdsf #=
     WHITESPACE, # '\n   \t'
     IDENTIFIER, # foo, Σxx
+    VAR_IDENTIFIER, # var"#1"
     AT_SIGN, # @
     COMMA, #,
     SEMICOLON, # ;
