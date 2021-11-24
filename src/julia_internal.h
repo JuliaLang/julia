@@ -549,7 +549,6 @@ JL_DLLEXPORT jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b);
 
 extern uv_loop_t *jl_io_loop;
 void jl_uv_flush(uv_stream_t *stream);
-void jl_uv_call_close_callback(jl_value_t *val);
 
 typedef struct jl_typeenv_t {
     jl_tvar_t *var;

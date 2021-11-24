@@ -12,9 +12,9 @@ Waiting tasks are woken with an error when the object is closed (by [`close`](@r
 Use [`isopen`](@ref) to check whether it is still active.
 """
 mutable struct AsyncCondition
-    handle::Ptr{Cvoid}
+    @atomic handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
-    isopen::Bool
+    @atomic isopen::Bool
     @atomic set::Bool
 
     function AsyncCondition()
@@ -69,9 +69,9 @@ Note: `interval` is subject to accumulating time skew. If you need precise event
 absolute time, create a new timer at each expiration with the difference to the next time computed.
 """
 mutable struct Timer
-    handle::Ptr{Cvoid}
+    @atomic handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
-    isopen::Bool
+    @atomic isopen::Bool
     @atomic set::Bool
 
     function Timer(timeout::Real; interval::Real = 0.0)
@@ -138,12 +138,13 @@ function wait(t::Union{Timer, AsyncCondition})
 end
 
 
-isopen(t::Union{Timer, AsyncCondition}) = t.isopen
+isopen(t::Union{Timer, AsyncCondition}) = t.isopen && t.handle != C_NULL
 
 function close(t::Union{Timer, AsyncCondition})
     iolock_begin()
-    if t.handle != C_NULL && isopen(t)
-        t.isopen = false
+    if isopen(t)
+        @atomic :monotonic t.isopen = false
+        preserve_handle(t)
         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
     end
     iolock_end()
@@ -154,13 +155,11 @@ function uvfinalize(t::Union{Timer, AsyncCondition})
     iolock_begin()
     lock(t.cond)
     try
-        if t.handle != C_NULL
+        if isopen(t)
             disassociate_julia_struct(t.handle) # not going to call the usual close hooks
-            if t.isopen
-                t.isopen = false
-                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
-            end
-            t.handle = C_NULL
+            @atomic :monotonic t.isopen = false
+            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
+            @atomic :monotonic t.handle = C_NULL
             notify(t.cond, false)
         end
     finally
@@ -173,8 +172,9 @@ end
 function _uv_hook_close(t::Union{Timer, AsyncCondition})
     lock(t.cond)
     try
-        t.isopen = false
-        t.handle = C_NULL
+        @atomic :monotonic t.isopen = false
+        unpreserve_handle(t)
+        @atomic :monotonic t.handle = C_NULL
         notify(t.cond, t.set)
     finally
         unlock(t.cond)
