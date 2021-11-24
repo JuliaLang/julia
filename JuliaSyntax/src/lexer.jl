@@ -252,7 +252,7 @@ function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR)
     suffix = false
     if kind in (Tokens.ERROR, Tokens.STRING, Tokens.TRIPLE_STRING, Tokens.CMD, Tokens.TRIPLE_CMD)
         str = String(l.io.data[(l.token_startpos + 1):position(l)])
-    elseif (kind == Tokens.IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE)
+    elseif (kind == Tokens.IDENTIFIER || kind == Tokens.VAR_IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE)
         str = String(take!(l.charstore))
     elseif optakessuffix(kind)
         str = ""
@@ -790,6 +790,16 @@ function lex_quote(l::Lexer, doemit=true)
     end
 end
 
+# Lex var"..." identifiers.
+# The prefix `var"` has been consumed
+function lex_var(l::Lexer)
+    if read_string(l, Tokens.STRING)
+        return emit(l, Tokens.VAR_IDENTIFIER)
+    else
+        return emit_error(l, Tokens.EOF_VAR)
+    end
+end
+
 function string_terminated(l, kind::Tokens.Kind)
     if kind == Tokens.STRING && l.chars[1] == '"'
         return true
@@ -1024,7 +1034,11 @@ function lex_identifier(l::Lexer{IO_t,T}, c) where {IO_t,T}
     if n > MAX_KW_LENGTH
         emit(l, IDENTIFIER)
     else
-        emit(l, get(kw_hash, h, IDENTIFIER))
+        if h == var_kw_hash && accept(l, '"')
+            return lex_var(l)
+        else
+            return emit(l, get(kw_hash, h, IDENTIFIER))
+        end
     end
 end
 
@@ -1088,5 +1102,6 @@ Tokens.FALSE,
 ]
 
 const kw_hash = Dict(simple_hash(lowercase(string(kw))) => kw for kw in kws)
+const var_kw_hash = simple_hash("var")
 
 end # module

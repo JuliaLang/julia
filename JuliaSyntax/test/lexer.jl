@@ -182,6 +182,12 @@ end
     @test tok("somtext falsething", 3).kind == T.IDENTIFIER
 end
 
+@testset "tokenizing var identifiers" begin
+    t = tok("var\"#1\"")
+    @test t.kind == T.VAR_IDENTIFIER && untokenize(t) == "var\"#1\""
+    t = tok("var\"  \"")
+    @test t.kind == T.VAR_IDENTIFIER && untokenize(t) == "var\"  \""
+end
 
 @testset "tokenizing juxtaposed numbers and dotted operators/identifiers" begin
     @test (t->t.val=="1234"    && t.kind == Tokens.INTEGER )(tok("1234 .+1"))
