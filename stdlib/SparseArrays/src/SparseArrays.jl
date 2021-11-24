@@ -27,7 +27,8 @@ using Random: default_rng, AbstractRNG, randsubseq, randsubseq!
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
     SparseMatrixCSC, SparseVector, blockdiag, droptol!, dropzeros!, dropzeros,
     issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm,
-    sprand, sprandn, spzeros, nnz, permute, findnz
+    sprand, sprandn, spzeros, nnz, permute, findnz,
+    sparse_hcat, sparse_vcat, sparse_hvcat
 
 include("abstractsparse.jl")
 include("sparsematrix.jl")

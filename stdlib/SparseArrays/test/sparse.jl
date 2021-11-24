@@ -262,19 +262,27 @@ end
         # Test concatenating pairwise combinations of special matrices with sparse matrices,
         # dense matrices, or dense vectors
         spmat = spdiagm(0 => fill(1., N))
+        dmat  = Array(spmat)
         spvec = sparse(fill(1., N))
+        dvec  = Array(spvec)
         for specialmat in specialmats
             # --> Tests applicable only to pairs of matrices
             @test issparse(vcat(specialmat, spmat))
             @test issparse(vcat(spmat, specialmat))
+            @test sparse_vcat(specialmat, dmat)::SparseMatrixCSC == vcat(specialmat, spmat)
+            @test sparse_vcat(dmat, specialmat)::SparseMatrixCSC == vcat(spmat, specialmat)
             # --> Tests applicable also to pairs including vectors
-            for specialmat in specialmats, othermatorvec in (spmat, spvec)
-                @test issparse(hcat(specialmat, othermatorvec))
-                @test issparse(hcat(othermatorvec, specialmat))
-                @test issparse(hvcat((2,), specialmat, othermatorvec))
-                @test issparse(hvcat((2,), othermatorvec, specialmat))
-                @test issparse(cat(specialmat, othermatorvec; dims=(1,2)))
-                @test issparse(cat(othermatorvec, specialmat; dims=(1,2)))
+            for specialmat in specialmats, (smatorvec, dmatorvec) in ((spmat, dmat), (spvec, dvec))
+                @test issparse(hcat(specialmat, smatorvec))
+                @test sparse_hcat(specialmat, dmatorvec)::SparseMatrixCSC == hcat(specialmat, smatorvec)
+                @test issparse(hcat(smatorvec, specialmat))
+                @test sparse_hcat(dmatorvec, specialmat)::SparseMatrixCSC == hcat(smatorvec, specialmat)
+                @test issparse(hvcat((2,), specialmat, smatorvec))
+                @test sparse_hvcat((2,), specialmat, dmatorvec)::SparseMatrixCSC == hvcat((2,), specialmat, smatorvec)
+                @test issparse(hvcat((2,), smatorvec, specialmat))
+                @test sparse_hvcat((2,), dmatorvec, specialmat)::SparseMatrixCSC == hvcat((2,), smatorvec, specialmat)
+                @test issparse(cat(specialmat, smatorvec; dims=(1,2)))
+                @test issparse(cat(smatorvec, specialmat; dims=(1,2)))
             end
         end
     end
@@ -300,8 +308,8 @@ end
         symtridiagmat = SymTridiagonal(1:N, 1:(N-1))
         sparseconcatmats = testfull ? (spmat, diagmat, bidiagmat, tridiagmat, symtridiagmat) : (spmat, diagmat)
         # Concatenations involving strictly these types, un/annotated, should yield dense arrays
-        densevec = fill(1., N)
-        densemat = fill(1., N, N)
+        densevec = Array(spvec)
+        densemat = Array(spmat)
         # Annotated collections
         annodmats = [annot(densemat) for annot in annotations]
         annospcmats = [annot(spmat) for annot in annotations]
@@ -320,6 +328,14 @@ end
             for othermat in (densemat, annodmats..., sparseconcatmats...)
                 @test issparse(vcat(annospcmat, othermat))
                 @test issparse(vcat(othermat, annospcmat))
+            end
+            for (smat, dmat) in zip(annospcmats, annodmats), specialmat in sparseconcatmats
+                @test sparse_hcat(dmat, specialmat)::SparseMatrixCSC == hcat(smat, specialmat)
+                @test sparse_hcat(specialmat, dmat)::SparseMatrixCSC == hcat(specialmat, smat)
+                @test sparse_vcat(dmat, specialmat)::SparseMatrixCSC == vcat(smat, specialmat)
+                @test sparse_vcat(specialmat, dmat)::SparseMatrixCSC == vcat(specialmat, smat)
+                @test sparse_hvcat((2,), dmat, specialmat)::SparseMatrixCSC == hvcat((2,), smat, specialmat)
+                @test sparse_hvcat((2,), specialmat, dmat)::SparseMatrixCSC == hvcat((2,), specialmat, smat)
             end
             # --> Tests applicable to pairs including other vectors or matrices
             for other in (spvec, densevec, densemat, annodmats..., sparseconcatmats...)
@@ -357,30 +373,30 @@ end
         E = SparseMatrixCSC(rand(1,3))
         F = SparseMatrixCSC(rand(3,1))
         α = rand()
-        @test (hcat(A, 2I))::SparseMatrixCSC == hcat(A, Matrix(2I, 3, 3))
+        @test (hcat(A, 2I, I(3)))::SparseMatrixCSC == hcat(A, Matrix(2I, 3, 3), Matrix(I, 3, 3))
         @test (hcat(E, α))::SparseMatrixCSC == hcat(E, [α])
         @test (hcat(E, α, 2I))::SparseMatrixCSC == hcat(E, [α], fill(2, 1, 1))
-        @test (vcat(A, 2I))::SparseMatrixCSC == vcat(A, Matrix(2I, 4, 4))
+        @test (vcat(A, 2I))::SparseMatrixCSC == (vcat(A, 2I(4)))::SparseMatrixCSC == vcat(A, Matrix(2I, 4, 4))
         @test (vcat(F, α))::SparseMatrixCSC == vcat(F, [α])
-        @test (vcat(F, α, 2I))::SparseMatrixCSC == vcat(F, [α], fill(2, 1, 1))
+        @test (vcat(F, α, 2I))::SparseMatrixCSC == (vcat(F, α, 2I(1)))::SparseMatrixCSC == vcat(F, [α], fill(2, 1, 1))
         @test (hcat(C, 2I))::SparseMatrixCSC == C
         @test_throws DimensionMismatch hcat(C, α)
         @test (vcat(D, 2I))::SparseMatrixCSC == D
         @test_throws DimensionMismatch vcat(D, α)
         @test (hcat(I, 3I, A, 2I))::SparseMatrixCSC == hcat(Matrix(I, 3, 3), Matrix(3I, 3, 3), A, Matrix(2I, 3, 3))
         @test (vcat(I, 3I, A, 2I))::SparseMatrixCSC == vcat(Matrix(I, 4, 4), Matrix(3I, 4, 4), A, Matrix(2I, 4, 4))
-        @test (hvcat((2,1,2), B, 2I, I, 3I, 4I))::SparseMatrixCSC ==
+        @test (hvcat((2,1,2), B, 2I, I(6), 3I, 4I))::SparseMatrixCSC ==
             hvcat((2,1,2), B, Matrix(2I, 3, 3), Matrix(I, 6, 6), Matrix(3I, 3, 3), Matrix(4I, 3, 3))
-        @test hvcat((3,1), C, C, I, 3I)::SparseMatrixCSC == hvcat((2,1), C, C, Matrix(3I, 6,6))
+        @test hvcat((3,1), C, C, I, 3I)::SparseMatrixCSC == hvcat((2,1), C, C, Matrix(3I, 6, 6))
         @test hvcat((2,2,2), I, 2I, 3I, 4I, C, C)::SparseMatrixCSC ==
-            hvcat((2,2,2), Matrix(I, 3, 3), Matrix(2I, 3,3 ), Matrix(3I, 3,3), Matrix(4I, 3,3), C, C)
-        @test hvcat((2,2,4), C, C, I, 2I, 3I, 4I, 5I, D)::SparseMatrixCSC ==
-            hvcat((2,2,4), C, C, Matrix(I, 3, 3), Matrix(2I,3,3),
-                Matrix(3I, 2, 2), Matrix(4I, 2, 2), Matrix(5I,2,2), D)
-        @test (hvcat((2,3,2), B, 2I, C, C, I, 3I, 4I))::SparseMatrixCSC ==
+            hvcat((2,2,2), Matrix(I, 3, 3), Matrix(2I, 3, 3), Matrix(3I, 3, 3), Matrix(4I, 3, 3), C, C)
+        @test hvcat((2,2,4), C, C, I(3), 2I, 3I, 4I, 5I, D)::SparseMatrixCSC ==
+            hvcat((2,2,4), C, C, Matrix(I, 3, 3), Matrix(2I, 3, 3),
+                Matrix(3I, 2, 2), Matrix(4I, 2, 2), Matrix(5I, 2, 2), D)
+        @test (hvcat((2,3,2), B, 2I(3), C, C, I, 3I, 4I))::SparseMatrixCSC ==
             hvcat((2,2,2), B, Matrix(2I, 3, 3), C, C, Matrix(3I, 3, 3), Matrix(4I, 3, 3))
-        @test hvcat((3,2,1), C, C, I, B ,3I, 2I)::SparseMatrixCSC ==
-            hvcat((2,2,1), C, C, B, Matrix(3I,3,3), Matrix(2I,6,6))
+        @test hvcat((3,2,1), C, C, I, B, 3I(3), 2I)::SparseMatrixCSC ==
+            hvcat((2,2,1), C, C, B, Matrix(3I, 3, 3), Matrix(2I, 6, 6))
         @test (hvcat((1,2), A, E, α))::SparseMatrixCSC == hvcat((1,2), A, E, [α]) == hvcat((1,2), A, E, α*I)
         @test (hvcat((2,2), α, E, F, 3I))::SparseMatrixCSC == hvcat((2,2), [α], E, F, Matrix(3I, 3, 3))
         @test (hvcat((2,2), 3I, F, E, α))::SparseMatrixCSC == hvcat((2,2), Matrix(3I, 3, 3), F, E, [α])

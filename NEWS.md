@@ -141,6 +141,12 @@ Standard library changes
 
 #### SparseArrays
 
+* New sparse concatenation functions `sparse_hcat`, `sparse_vcat`, and `sparse_hvcat` return
+  `SparseMatrixCSC` output independent from the types of the input arguments. They make
+  concatenation behavior available, in which the presence of some special "sparse" matrix
+  argument resulted in sparse output by multiple dispatch. This is no longer possible after
+  making `LinearAlgebra.jl` independent from `SparseArrays.jl` ([#43127]).
+
 #### Dates
 
 #### Downloads

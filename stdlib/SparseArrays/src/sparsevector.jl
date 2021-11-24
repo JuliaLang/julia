@@ -1112,6 +1112,55 @@ _hvcat_rows(::Tuple{}, X::_SparseConcatGroup...) = ()
 promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}) = SparseMatrixCSC
 promote_to_arrays_(n::Int, ::Type{SparseMatrixCSC}, J::UniformScaling) = sparse(J, n, n)
 
+"""
+    sparse_hcat(A...)
+
+Concatenate along dimension 2. Return a SparseMatrixCSC object.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8. It mimicks previous concatenation behavior, where
+    the concatenation with specialized "sparse" matrix types from LinearAlgebra.jl
+    automatically yielded sparse output even in the absence of any SparseArray argument.
+"""
+sparse_hcat(Xin::Union{AbstractVecOrMat,Number}...) = cat(map(_makesparse, Xin)..., dims=Val(2))
+function sparse_hcat(X::Union{AbstractVecOrMat,UniformScaling,Number}...)
+    LinearAlgebra._hcat(X...; array_type = SparseMatrixCSC)
+end
+
+"""
+    sparse_vcat(A...)
+
+Concatenate along dimension 1. Return a SparseMatrixCSC object.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8. It mimicks previous concatenation behavior, where
+    the concatenation with specialized "sparse" matrix types from LinearAlgebra.jl
+    automatically yielded sparse output even in the absence of any SparseArray argument.
+"""
+sparse_vcat(Xin::Union{AbstractVecOrMat,Number}...) = cat(map(_makesparse, Xin)..., dims=Val(1))
+function sparse_vcat(X::Union{AbstractVecOrMat,UniformScaling,Number}...)
+    LinearAlgebra._vcat(X...; array_type = SparseMatrixCSC)
+end
+
+"""
+    sparse_hvcat(rows::Tuple{Vararg{Int}}, values...)
+
+Sparse horizontal and vertical concatenation in one call. This function is called
+for block matrix syntax. The first argument specifies the number of
+arguments to concatenate in each block row.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8. It mimicks previous concatenation behavior, where
+    the concatenation with specialized "sparse" matrix types from LinearAlgebra.jl
+    automatically yielded sparse output even in the absence of any SparseArray argument.
+"""
+function sparse_hvcat(rows::Tuple{Vararg{Int}}, Xin::Union{AbstractVecOrMat,Number}...)
+    hvcat(rows, map(_makesparse, Xin)...)
+end
+function sparse_hvcat(rows::Tuple{Vararg{Int}}, X::Union{AbstractVecOrMat,UniformScaling,Number}...)
+    LinearAlgebra._hvcat(rows, X...; array_type = SparseMatrixCSC)
+end
+
 ### math functions
 
 ### Unary Map
