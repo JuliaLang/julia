@@ -32,8 +32,8 @@ else
 end
 ```
 
-When chaining conditionals (including `if`/`elseif`/`end`), the `@static` must be repeated for
-each level (parentheses optional, but recommended for readability):
+When chaining conditionals (not including `if`/`elseif`/`end`), the `@static` must be repeated 
+for each level (parentheses optional, but recommended for readability):
 
 ```julia
 @static Sys.iswindows() ? :a : (@static Sys.isapple() ? :b : :c)
