@@ -56,13 +56,13 @@ julia> u == F.U && s == F.S && v == F.V
 true
 ```
 """
-struct SVD{T,Tr,M<:AbstractArray{T},V<:AbstractVector{Tr}} <: Factorization{T}
+struct SVD{T,Tr,M<:AbstractArray{T},TDiag<:AbstractVector{Tr}} <: Factorization{T}
     U::M
-    S::V
+    S::TDiag
     Vt::M
-    function SVD{T,Tr,M,V}(U, S, Vt) where {T,Tr,M<:AbstractArray{T},V<:AbstractVector{Tr}}
+    function SVD{T,Tr,M,TDiag}(U, S, Vt) where {T,Tr,M<:AbstractArray{T},TDiag<:AbstractVector{Tr}}
         require_one_based_indexing(U, S, Vt)
-        new{T,Tr,M,V}(U, S, Vt)
+        new{T,Tr,M,TDiag}(U, S, Vt)
     end
 end
 SVD(U::AbstractArray{T}, S::AbstractVector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD{T,Tr,typeof(U),typeof(S)}(U, S, Vt)
