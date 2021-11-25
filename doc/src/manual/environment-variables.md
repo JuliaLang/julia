@@ -162,6 +162,10 @@ Sets the maximum number of different instances of a single package that are to b
 
 ## Pkg.jl
 
+### `JULIA_CI`
+
+If set to `true`, this indicates to the package server that any package operations are part of a continuous integration (CI) system for the purposes of gathering package usage statistics.
+
 ### `JULIA_NUM_PRECOMPILE_TASKS`
 
 The number of parallel tasks to use when precompiling packages. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
