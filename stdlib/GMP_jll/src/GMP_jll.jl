@@ -20,14 +20,14 @@ libgmpxx_handle = C_NULL
 libgmpxx_path = ""
 
 if Sys.iswindows()
-    const libgmp = "libgmp-10.dll"
-    const libgmpxx = "libgmpxx-4.dll"
+    const libgmp = "libgmp.dll"
+    const libgmpxx = "libgmpxx.dll"
 elseif Sys.isapple()
-    const libgmp = "@rpath/libgmp.10.dylib"
-    const libgmpxx = "@rpath/libgmpxx.4.dylib"
+    const libgmp = "@rpath/libgmp.dylib"
+    const libgmpxx = "@rpath/libgmpxx.dylib"
 else
-    const libgmp = "libgmp.so.10"
-    const libgmpxx = "libgmpxx.so.4"
+    const libgmp = "libgmp.so"
+    const libgmpxx = "libgmpxx.so"
 end
 
 function __init__()

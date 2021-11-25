@@ -20,9 +20,9 @@ libz_path = ""
 if Sys.iswindows()
     const libz = "libz.dll"
 elseif Sys.isapple()
-    const libz = "@rpath/libz.1.dylib"
+    const libz = "@rpath/libz.dylib"
 else
-    const libz = "libz.so.1"
+    const libz = "libz.so"
 end
 
 function __init__()

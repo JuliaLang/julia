@@ -18,11 +18,11 @@ libpcre2_8_handle = C_NULL
 libpcre2_8_path = ""
 
 if Sys.iswindows()
-    const libpcre2_8 = "libpcre2-8-0.dll"
+    const libpcre2_8 = "libpcre2-8.dll"
 elseif Sys.isapple()
-    const libpcre2_8 = "@rpath/libpcre2-8.0.dylib"
+    const libpcre2_8 = "@rpath/libpcre2-8.dylib"
 else
-    const libpcre2_8 = "libpcre2-8.so.0"
+    const libpcre2_8 = "libpcre2-8.so"
 end
 
 function __init__()

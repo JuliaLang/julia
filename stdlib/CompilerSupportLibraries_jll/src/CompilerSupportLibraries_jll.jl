@@ -41,10 +41,10 @@ elseif Sys.isapple()
     const libstdcxx = "@rpath/libstdc++.6.dylib"
     const libgomp = "@rpath/libgomp.1.dylib"
 else
-    const libgcc_s = "libgcc_s.so.1"
-    const libgfortran = string("libgfortran.so.", libgfortran_version(HostPlatform()).major)
-    const libstdcxx = "libstdc++.so.6"
-    const libgomp = "libgomp.so.1"
+    const libgcc_s = "libgcc_s.so"
+    const libgfortran = "libgfortran.so"
+    const libstdcxx = "libstdc++.so"
+    const libgomp = "libgomp.so"
 end
 
 function __init__()

@@ -18,11 +18,11 @@ libmpfr_handle = C_NULL
 libmpfr_path = ""
 
 if Sys.iswindows()
-    const libmpfr = "libmpfr-6.dll"
+    const libmpfr = "libmpfr.dll"
 elseif Sys.isapple()
-    const libmpfr = "@rpath/libmpfr.6.dylib"
+    const libmpfr = "@rpath/libmpfr.dylib"
 else
-    const libmpfr = "libmpfr.so.6"
+    const libmpfr = "libmpfr.so"
 end
 
 function __init__()

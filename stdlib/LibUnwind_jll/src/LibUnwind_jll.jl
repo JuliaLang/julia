@@ -18,7 +18,7 @@ artifact_dir = ""
 libunwind_handle = C_NULL
 libunwind_path = ""
 
-const libunwind = "libunwind.so.8"
+const libunwind = "libunwind.so"
 
 function __init__()
     # We only do something on Linux/FreeBSD

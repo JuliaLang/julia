@@ -21,9 +21,9 @@ libssh2_path = ""
 if Sys.iswindows()
     const libssh2 = "libssh2.dll"
 elseif Sys.isapple()
-    const libssh2 = "@rpath/libssh2.1.dylib"
+    const libssh2 = "@rpath/libssh2.dylib"
 else
-    const libssh2 = "libssh2.so.1"
+    const libssh2 = "libssh2.so"
 end
 
 function __init__()

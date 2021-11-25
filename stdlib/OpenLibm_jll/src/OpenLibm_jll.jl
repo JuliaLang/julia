@@ -20,9 +20,9 @@ libopenlibm_path = ""
 if Sys.iswindows()
     const libopenlibm = "libopenlibm.dll"
 elseif Sys.isapple()
-    const libopenlibm = "@rpath/libopenlibm.3.dylib"
+    const libopenlibm = "@rpath/libopenlibm.dylib"
 else
-    const libopenlibm = "libopenlibm.so.3"
+    const libopenlibm = "libopenlibm.so"
 end
 
 function __init__()

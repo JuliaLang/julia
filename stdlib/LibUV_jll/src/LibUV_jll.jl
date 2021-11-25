@@ -23,7 +23,7 @@ if Sys.iswindows()
 elseif Sys.isapple()
     const libuv = "@rpath/libuv.2.dylib"
 else
-    const libuv = "libuv.so.2"
+    const libuv = "libuv.so"
 end
 
 function __init__()
