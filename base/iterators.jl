@@ -1433,7 +1433,10 @@ only(x::NamedTuple) = throw(
 
 Iterate values generated from an initial state and a function.
 
-`f` takes a single value and returns `nothing` if it is done emitting elements or `(element, nextstate)` if it is not.
+`f` takes a single value (the state) and returns `(element, nextstate)` or, if it has finished emitting elements, `nothing`.
+
+`Iterators.map` or a generator like `(√x + 2 for x in 1:10)` are iterable or lazy analogs of `for` loops.
+`unfold` is the iterable or lazy analog of the `while` loop.
 
 The "dual" of `foldr`: `foldr` reduces an iterable to a summary value, `unfold` builds an iterable from an initial value.
 
@@ -1460,6 +1463,35 @@ julia> unfold(6) do n
  1
  1
 ```
+
+# Extended help
+
+The interface for `f` is very similar to the interface required by `iterate`, but `unfold` is simpler to use because it does not require you to define a type.
+You can use this to your advantage when prototyping or writing one-off iterators.
+You may want to define an iterator type instead if you'd like to define `IteratorSize` or `IteratorEltype`; for readability; or if you want to dispatch on the type of your iterator.
+
+`unfold` is related to a `while` loop because:
+
+```julia
+collect(unfold(f, initialstate))
+```
+
+is roughly the same as:
+
+```julia
+acc = []
+state = initialstate
+while true
+    x = f(state)
+    x ≡ nothing && break
+    element, state = x
+    push!(acc, element)
+end
+```
+
+But the `unfold` version may produce a more strictly typed vector and can be easily modified to return a lazy collection by removing `collect()`.
+
+In Haskell and some other functional programming environments, this function is known as `unfoldr`.
 """
 unfold(f, init) = Unfold(f, init)
 
