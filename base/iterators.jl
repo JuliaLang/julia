@@ -22,7 +22,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition, unfoldr
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition, unfold
 
 """
     Iterators.map(f, iterators...)
@@ -1429,20 +1429,20 @@ only(x::NamedTuple) = throw(
 )
 
 """
-    unfoldr(f, init)
+    unfold(f, init)
 
 Iterate values generated from an initial state and a function.
 
 `f` takes a single value and returns `nothing` if it is done emitting elements or `(element, nextstate)` if it is not.
 
-The "dual" of `foldr`: `foldr` reduces an iterable to a summary value, `unfoldr` builds an iterable from an initial value.
+The "dual" of `foldr`: `foldr` reduces an iterable to a summary value, `unfold` builds an iterable from an initial value.
 
 # Examples
 
 ```jldoctest
-julia> using Base.Iterators: unfoldr
+julia> using Base.Iterators: unfold
 
-julia> collect(unfoldr(x -> x > 0 ? (x, x-1) : nothing, 5))
+julia> collect(unfold(x -> x > 0 ? (x, x-1) : nothing, 5))
 5-element Vector{Int64}:
  5
  4
@@ -1452,7 +1452,7 @@ julia> collect(unfoldr(x -> x > 0 ? (x, x-1) : nothing, 5))
 
 julia> # Same output as digits(6, base=2):
 
-julia> unfoldr(6) do n
+julia> unfold(6) do n
            n ≠ 0 ? reverse(divrem(n, 2)) : nothing
        end |> collect
 3-element Vector{Int64}:
@@ -1461,7 +1461,7 @@ julia> unfoldr(6) do n
  1
 ```
 """
-unfoldr(f, init) = Unfold(f, init)
+unfold(f, init) = Unfold(f, init)
 
 struct Unfold{F, T}
     f::F
