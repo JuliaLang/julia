@@ -719,7 +719,7 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
     elseif isa(before, OldSSAValue)
         pos = before.id
         if pos < compact.idx
-            renamed = compact.ssa_rename[pos]
+            renamed = compact.ssa_rename[pos]::AnySSAValue
             count_added_node!(compact, inst.stmt)
             line = something(inst.line, compact.result[renamed.id][:line])
             node = add!(compact.new_new_nodes, renamed.id, attach_after)
