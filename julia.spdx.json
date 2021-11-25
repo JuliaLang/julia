@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-bc23e123-6728-4ec3-ac07-8b671d27875c",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-6b8c89c8-1d6b-4574-9716-25d5fbc93fa3",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-11-11T06:52:04Z"
+        "created": "2021-11-25T07:33:19Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -385,6 +385,18 @@
             "copyrightText": "Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>",
             "summary": "A small utility to modify the dynamic linker and RPATH of ELF executables.",
             "comment": "PATCHELF is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+        },
+        {
+            "name": "objconv",
+            "SPDXID": "SPDXRef-objconv",
+            "downloadLocation": "https://www.agner.org/optimize/objconv.zip",
+            "filesAnalyzed": false,
+            "homepage": "https://www.agner.org/optimize/#objconv",
+            "licenseConcluded": "GPL-3.0-or-later",
+            "licenseDeclared": "GPL-3.0-or-later",
+            "copyrightText": "By Agner Fog © 2018",
+            "summary": "A utility for cross-platform development of function libraries, for converting and modifying object files and for dumping and disassembling object and executable files for all x86 and x86-64 platforms.",
+            "comment": "OBJCONV is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
         }
     ],
     "relationships": [
@@ -530,6 +542,11 @@
         },
         {
             "spdxElementId": "SPDXRef-patchelf",
+            "relationshipType": "BUILD_TOOL_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-objconv",
             "relationshipType": "BUILD_TOOL_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         }
