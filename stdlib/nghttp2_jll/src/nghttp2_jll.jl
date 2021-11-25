@@ -18,9 +18,9 @@ libnghttp2_handle = C_NULL
 libnghttp2_path = ""
 
 if Sys.iswindows()
-    const libnghttp2 = "libnghttp2.dll"
+    const libnghttp2 = "libnghttp2-14.dll"
 elseif Sys.isapple()
-    const libnghttp2 = "@rpath/libnghttp2.dylib"
+    const libnghttp2 = "@rpath/libnghttp2.14.dylib"
 else
     const libnghttp2 = "libnghttp2.so"
 end
