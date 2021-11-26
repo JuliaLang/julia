@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-5e61f006-6d99-4c92-b004-87f85474008a",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-b3cf5f58-e5e2-467e-8227-ad1c978ab76d",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-11-26T19:17:56Z"
+        "created": "2021-11-26T19:41:09Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -362,6 +362,18 @@
             "summary": "utf8proc is a small, clean C library that provides Unicode normalization, case-folding, and other operations for data in the UTF-8 encoding."
         },
         {
+            "name": "7-Zip",
+            "SPDXID": "SPDXRef-7zip",
+            "downloadLocation": "https://sourceforge.net/projects/p7zip/files/p7zip",
+            "filesAnalyzed": false,
+            "homepage": "https://www.7-zip.org",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "LGPL-3.0-or-later",
+            "licenseDeclared": "LGPL-3.0-or-later AND BSD-3",
+            "copyrightText": "Copyright (C) 1999-2021 Igor Pavlov",
+            "summary": "7-Zip is a file archiver with a high compression ratio."
+        },
+        {
             "name": "zlib",
             "SPDXID": "SPDXRef-zlib",
             "downloadLocation": "git+https://github.com/madler/zlib.git",
@@ -402,6 +414,7 @@
             "name": "libwhich",
             "SPDXID": "SPDXRef-libwhich",
             "downloadLocation": "git+https://github.com/vtjnash/libwhich.git",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/libwhich.version",
             "filesAnalyzed": false,
             "homepage": "https://github.com/vtjnash/libwhich",
             "licenseConcluded": "MIT",
@@ -548,8 +561,13 @@
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
+            "spdxElementId": "SPDXRef-7zip",
+            "relationshipType": "RUNTIME_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
             "spdxElementId": "SPDXRef-zlib",
-            "relationshipType": "DISTRIBUTION_ARTIFACT",
+            "relationshipType": "RUNTIME_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
