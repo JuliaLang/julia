@@ -321,7 +321,8 @@ withframeaddress
         UInt,
         Tuple{},
     )
-    @noinline f(Ptr{Cvoid}(sp))
+    @noinline g(x) = f(x)
+    g(Ptr{Cvoid}(sp))
 end
 
 function sandwiched_backtrace()
