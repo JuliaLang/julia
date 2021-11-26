@@ -34,7 +34,7 @@ else
 end
 ```
 
-When nesting conditionals, the `@static` must be repeated for each level 
+When nesting conditionals, the `@static` must be repeated for each level
 (parentheses optional, but recommended for readability):
 
 ```julia
