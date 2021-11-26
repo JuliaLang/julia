@@ -699,8 +699,10 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     iszero(n) && pad < 1 && return ""
     nd1 = ndigits(n, base=base)
     nd  = max(nd1, pad)
-    sv  = Base.StringVector(nd + isneg(n))
+    sv  = Base.StringVector(nd + isneg(n) + 1) # +1 for final '\0'
     GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, base, n)
+    null = pop!(sv) # '\0' terminator
+    @assert iszero(null)
     @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8
     end
