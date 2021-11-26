@@ -246,6 +246,7 @@ end
             @test one(T)^y === one(T)
             @test one(T)^zero(T) === one(T)
             @test one(T)^T(NaN) === one(T)
+            @test isnan(T(NaN)^T(-.5))
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x

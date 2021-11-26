@@ -957,7 +957,7 @@ function ^(x::Float64, y::Float64)
     y == yint && return x^yint
     x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     x == 1 && return 1.0
-    !isfinite(x) && return x*(y>0)
+    !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*Inf*(!(y>0))
     logxhi,logxlo = Base.Math._log_ext(x)
     xyhi = logxhi*y
@@ -970,7 +970,7 @@ function ^(x::T, y::T) where T <: Union{Float16, Float32}
     y == yint && return x^yint
     x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     x == 1 && return one(T)
-    !isfinite(x) && return x*(y>0)
+    !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*T(Inf)*(!(y>0))
     return T(exp2(log2(abs(widen(x))) * y))
 end
