@@ -1050,6 +1050,7 @@ const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 function require(uuidkey::PkgId)
     @lock require_lock begin
+    just_loaded_pkg = false
     if !root_module_exists(uuidkey)
         cachefile = _require(uuidkey)
         if cachefile !== nothing
@@ -1059,6 +1060,11 @@ function require(uuidkey::PkgId)
         for callback in package_callbacks
             invokelatest(callback, uuidkey)
         end
+        just_loaded_pkg = true
+    end
+    if just_loaded_pkg && !root_module_exists(uuidkey)
+        error("package `$(uuidkey.name)` did not define the expected \
+              module `$(uuidkey.name)`, check for typos in package module name")
     end
     return root_module(uuidkey)
     end

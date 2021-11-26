@@ -745,3 +745,17 @@ end
         @test Base.get_deps(raw_manifest) == deps
     end
 end
+
+@testset "error message loading pkg bad module name" begin
+    mktempdir() do tmp
+        old_loadpath = copy(LOAD_PATH)
+        try
+            push!(LOAD_PATH, tmp)
+            write(joinpath(tmp, "BadCase.jl"), "module badcase end")
+            @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
+                                        check for typos in package module name") (@eval using BadCase)
+        finally
+            copy!(LOAD_PATH, old_loadpath)
+        end
+    end
+end
