@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-6b8c89c8-1d6b-4574-9716-25d5fbc93fa3",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-5e61f006-6d99-4c92-b004-87f85474008a",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-11-25T07:33:19Z"
+        "created": "2021-11-26T19:17:56Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -397,6 +397,18 @@
             "copyrightText": "By Agner Fog © 2018",
             "summary": "A utility for cross-platform development of function libraries, for converting and modifying object files and for dumping and disassembling object and executable files for all x86 and x86-64 platforms.",
             "comment": "OBJCONV is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+        },
+        {
+            "name": "libwhich",
+            "SPDXID": "SPDXRef-libwhich",
+            "downloadLocation": "git+https://github.com/vtjnash/libwhich.git",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/vtjnash/libwhich",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2017 Jameson Nash",
+            "summary": "Like `which`, for dynamic libraries",
+            "comment": "LIBWHICH is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
         }
     ],
     "relationships": [
@@ -547,6 +559,11 @@
         },
         {
             "spdxElementId": "SPDXRef-objconv",
+            "relationshipType": "BUILD_TOOL_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-libwhich",
             "relationshipType": "BUILD_TOOL_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         }
