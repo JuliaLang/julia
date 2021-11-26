@@ -1,6 +1,13 @@
 using JuliaSyntax
 using Test
 
-@testset "JuliaSyntax.jl" begin
+#@testset "JuliaSyntax.jl" begin
     # Write your tests here.
-end
+#end
+
+
+code = """
+[1,2, 3]
+"""
+
+
