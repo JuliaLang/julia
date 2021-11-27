@@ -210,7 +210,7 @@ close(proc.in)
             @test_skip success(proc)
         else
             @test success(proc)
+            @test !timeout
         end
-        @test !timeout
     end
 end
