@@ -995,10 +995,7 @@ f(x::T, y::T) where {T} = ...
 f(x, y) = f(promote(x, y)...)
 ```
 
-One risk with this design is the possibility that if there is no
-suitable promotion method converting `x` and `y` to the same type, the
-second method will recurse on itself infinitely and trigger a stack
-overflow.
+One risk with this design is the possibility that if there is no suitable promotion method converting x and y to the same type, the second method will recurse on itself infinitely and trigger a stack overflow or there is no way the conversion can't happen (in case of user defined data types) as they the needed promote rules are not defined as mentioned [here](https://docs.julialang.org/en/v1/manual/conversion-and-promotion/#Defining-Promotion-Rules).
 
 ### Dispatch on one argument at a time
 
