@@ -513,23 +513,21 @@ end
 # we're attempting to represent.
 # Union{T} where T is a degenerate case and is equal to T.ub, but we don't want
 # to print them that way, so filter those out from our aliases completely.
-function makeproper(io::IO, x::Type)
-    properx = x
-    x = unwrap_unionall(x)
+function makeproper(io::IO, @nospecialize(x::Type))
     if io isa IOContext
         for (key, val) in io.dict
             if key === :unionall_env && val isa TypeVar
-                properx = UnionAll(val, properx)
+                x = UnionAll(val, x)
             end
         end
     end
-    has_free_typevars(properx) && return Any
-    return properx
+    has_free_typevars(x) && return Any
+    return x
 end
 
 function make_typealias(@nospecialize(x::Type))
-    Any === x && return
-    x <: Tuple && return
+    Any === x && return nothing
+    x <: Tuple && return nothing
     mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
@@ -704,12 +702,12 @@ function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
     return wheres
 end
 
-function show_wheres(io::IO, wheres::Vector)
+function show_wheres(io::IO, wheres::Vector{TypeVar})
     isempty(wheres) && return
     io = IOContext(io)
     n = length(wheres)
     for i = 1:n
-        p = wheres[i]::TypeVar
+        p = wheres[i]
         print(io, n == 1 ? " where " : i == 1 ? " where {" : ", ")
         show(io, p)
         io = IOContext(io, :unionall_env => p)
@@ -718,7 +716,7 @@ function show_wheres(io::IO, wheres::Vector)
     nothing
 end
 
-function show_typealias(io::IO, x::Type)
+function show_typealias(io::IO, @nospecialize(x::Type))
     properx = makeproper(io, x)
     alias = make_typealias(properx)
     alias === nothing && return false
@@ -985,7 +983,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
     nothing
 end
 
-function show_datatype(io::IO, @nospecialize(x::DataType), wheres::Vector=TypeVar[])
+function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
     n = length(parameters)
