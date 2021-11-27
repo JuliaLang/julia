@@ -2375,25 +2375,18 @@ static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const 
                                Value *nullcheck1, Value *nullcheck2)
 {
     if (jl_pointer_egal(arg1.typ) || jl_pointer_egal(arg2.typ)) {
-        assert((arg1.isboxed || arg1.constant) && (arg2.isboxed || arg2.constant) &&
-                "Expected unboxed cases to be handled earlier");
-        Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : arg1.V;
-        Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : arg2.V;
-        varg1 = maybe_decay_tracked(ctx, varg1);
-        varg2 = maybe_decay_tracked(ctx, varg2);
-        if (cast<PointerType>(varg1->getType())->getAddressSpace() != cast<PointerType>(varg2->getType())->getAddressSpace()) {
-            varg1 = decay_derived(ctx, varg1);
-            varg2 = decay_derived(ctx, varg2);
-        }
-        return ctx.builder.CreateICmpEQ(emit_bitcast(ctx, varg1, T_pint8),
-                                        emit_bitcast(ctx, varg2, T_pint8));
+        // if we can be certain we won't try to load from the pointer (because
+        // we know boxed is trivial), we can skip the separate null checks
+        // and just do the ICmpEQ test
+        if (!arg1.TIndex && !arg2.TIndex)
+            nullcheck1 = nullcheck2 = nullptr;
     }
-
     return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] {
-        Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : maybe_bitcast(ctx, value_to_pointer(ctx, arg1).V, T_pjlvalue);
-        Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : maybe_bitcast(ctx, value_to_pointer(ctx, arg2).V, T_pjlvalue);
-        varg1 = decay_derived(ctx, varg1);
-        varg2 = decay_derived(ctx, varg2);
+        Value *varg1 = decay_derived(ctx, boxed(ctx, arg1));
+        Value *varg2 = decay_derived(ctx, boxed(ctx, arg2));
+        if (jl_pointer_egal(arg1.typ) || jl_pointer_egal(arg2.typ)) {
+            return ctx.builder.CreateICmpEQ(varg1, varg2);
+        }
         Value *neq = ctx.builder.CreateICmpNE(varg1, varg2);
         return emit_guarded_test(ctx, neq, true, [&] {
             Value *dtarg = emit_typeof_boxed(ctx, arg1);
@@ -2938,28 +2931,28 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     *ret = ghostValue(ety);
                 }
                 else if (!isboxed && jl_is_uniontype(ety)) {
-                    Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
-                    Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), AT->getPointerTo());
-                    // isbits union selector bytes are stored after a->maxsize
-                    Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
-                    Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
+                    Value *data = emit_arrayptr(ctx, ary, ary_ex);
                     Value *offset = emit_arrayoffset(ctx, ary, nd);
-                    Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
-                    Value *selidx_m = emit_arraylen(ctx, ary);
-                    Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
-                    Value *ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                    Value *ptindex;
+                    if (elsz == 0) {
+                        ptindex = data;
+                    }
+                    else {
+                        Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
+                        data = emit_bitcast(ctx, data, AT->getPointerTo());
+                        // isbits union selector bytes are stored after a->maxsize
+                        Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
+                        Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
+                        Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
+                        Value *selidx_m = emit_arraylen(ctx, ary);
+                        Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
+                        ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                        data = ctx.builder.CreateInBoundsGEP(AT, data, idx);
+                    }
                     ptindex = emit_bitcast(ctx, ptindex, T_pint8);
                     ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, offset);
                     ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, idx);
-                    Instruction *tindex = tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateAlignedLoad(T_int8, ptindex, Align(1)));
-                    tindex->setMetadata(LLVMContext::MD_range, MDNode::get(jl_LLVMContext, {
-                        ConstantAsMetadata::get(ConstantInt::get(T_int8, 0)),
-                        ConstantAsMetadata::get(ConstantInt::get(T_int8, union_max)) }));
-                    AllocaInst *lv = emit_static_alloca(ctx, AT);
-                    if (al > 1)
-                        lv->setAlignment(Align(al));
-                    emit_memcpy(ctx, lv, tbaa_arraybuf, ctx.builder.CreateInBoundsGEP(AT, data, idx), tbaa_arraybuf, elsz, al, false);
-                    *ret = mark_julia_slot(lv, ety, ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), tindex), tbaa_arraybuf);
+                    *ret = emit_unionload(ctx, data, ptindex, ety, elsz, al, tbaa_arraybuf, true, union_max, tbaa_arrayselbyte);
                 }
                 else {
                     MDNode *aliasscope = (f == jl_builtin_const_arrayref) ? ctx.aliasscope : nullptr;
@@ -3045,28 +3038,31 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     if (!isboxed && jl_is_uniontype(ety)) {
                         Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
                         Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), AT->getPointerTo());
+                        Value *offset = emit_arrayoffset(ctx, ary, nd);
                         // compute tindex from val
                         jl_cgval_t rhs_union = convert_julia_type(ctx, val, ety);
                         Value *tindex = compute_tindex_unboxed(ctx, rhs_union, ety);
                         tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
-                        Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
-                        Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
-                        Value *offset = emit_arrayoffset(ctx, ary, nd);
-                        Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
-                        Value *selidx_m = emit_arraylen(ctx, ary);
-                        Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
-                        Value *ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                        Value *ptindex;
+                        if (elsz == 0) {
+                            ptindex = data;
+                        }
+                        else {
+                            Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
+                            Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
+                            Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
+                            Value *selidx_m = emit_arraylen(ctx, ary);
+                            Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
+                            ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                            data = ctx.builder.CreateInBoundsGEP(AT, data, idx);
+                        }
                         ptindex = emit_bitcast(ctx, ptindex, T_pint8);
                         ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, offset);
                         ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, idx);
                         tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateStore(tindex, ptindex));
-                        if (jl_is_datatype(val.typ) && jl_datatype_size(val.typ) == 0) {
-                            // no-op
-                        }
-                        else {
-                            // copy data
-                            Value *addr = ctx.builder.CreateInBoundsGEP(AT, data, idx);
-                            emit_unionmove(ctx, addr, tbaa_arraybuf, val, nullptr);
+                        if (elsz > 0 && (!jl_is_datatype(val.typ) || jl_datatype_size(val.typ) > 0)) {
+                            // copy data (if any)
+                            emit_unionmove(ctx, data, tbaa_arraybuf, val, nullptr);
                         }
                     }
                     else {
@@ -6634,8 +6630,11 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             Type *vtype = julia_type_to_llvm(ctx, jt, &isboxed);
             assert(!isboxed);
             assert(!type_is_ghost(vtype) && "constants should already be handled");
-            // CreateAlloca is OK during prologue setup
-            Value *lv = ctx.builder.CreateAlloca(vtype, NULL, jl_symbol_name(s));
+            Value *lv = new AllocaInst(vtype, 0, jl_symbol_name(s), /*InsertBefore*/ctx.pgcstack);
+            if (CountTrackedPointers(vtype).count) {
+                StoreInst *SI = new StoreInst(Constant::getNullValue(vtype), lv, false, Align(sizeof(void*)));
+                SI->insertAfter(ctx.pgcstack);
+            }
             varinfo.value = mark_julia_slot(lv, jt, NULL, tbaa_stack);
             alloc_def_flag(ctx, varinfo);
             if (ctx.debug_enabled && varinfo.dinfo) {

@@ -386,6 +386,7 @@ copy!(::_GLOBAL_RNG, src::Xoshiro) = copy!(default_rng(), src)
 copy(::_GLOBAL_RNG) = copy(default_rng())
 
 GLOBAL_SEED = 0
+set_global_seed!(seed) = global GLOBAL_SEED = seed
 
 function seed!(::_GLOBAL_RNG, seed=rand(RandomDevice(), UInt64, 4))
     global GLOBAL_SEED = seed

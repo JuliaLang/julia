@@ -204,3 +204,10 @@ function f_oc_noinline_call(x, y)
     return f_oc_noinline(x)(y)
 end
 @test f_oc_noinline_call(1, 2) == 3
+
+@test_throws MethodError (@opaque x->x+1)(1, 2)
+
+# https://github.com/JuliaLang/julia/issues/40409
+const GLOBAL_OPAQUE_CLOSURE = @opaque () -> 123
+call_global_opaque_closure() = GLOBAL_OPAQUE_CLOSURE()
+@test call_global_opaque_closure() == 123
