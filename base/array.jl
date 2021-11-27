@@ -2330,36 +2330,29 @@ end
 
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
 function _findall(f::Function, A::AbstractArray{Bool})
-    # Compute f for true and false only once
-    ft, ff = f(true), f(false)
-    (ft | ff) || return Vector{eltype(keys(A))}()
-    (ft & ff) && return vec(Array(keys(A)))
-    n = let
-        c = count(A)
-        ft ? c : length(A) - c
-    end
+    n = count(f, A)
     I = Vector{eltype(keys(A))}(undef, n)
-    _findall(ff, I, A)
+    _findall(f, I, A)
 end
 
-function _findall(invert::Bool, I::Vector, A::AbstractArray{Bool})
+function _findall(f::Function, I::Vector, A::AbstractArray{Bool})
     cnt = 1
     len = length(I)
     for (k, v) in pairs(A)
         cnt > len && break
         I[cnt] = k
-        cnt += v ⊻ invert
+        cnt += f(v)
     end
     I
 end
 
-function _findall(invert::Bool, I::Vector, A::AbstractVector{Bool})
+function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
     i = firstindex(A)
     cnt = 1
     len = length(I)
     @inbounds while cnt ≤ len
         I[cnt] = i
-        cnt += A[i] ⊻ invert
+        cnt += f(A[i])
         i = nextind(A, i)
     end
     I
