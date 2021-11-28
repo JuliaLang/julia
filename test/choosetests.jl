@@ -164,16 +164,26 @@ function choosetests(choices = [])
         "download",
     ]
     net_on = true
-    try
-        ipa = getipaddr()
-    catch
-        if ci_option_passed
-            @error("Networking unavailable, but `--ci` was passed")
-            rethrow()
+    JULIA_TEST_NETWORKING_AVAILABLE = get(ENV, "JULIA_TEST_NETWORKING_AVAILABLE", "") |>
+                                      strip |>
+                                      lowercase |>
+                                      s -> tryparse(Bool, s) |>
+                                      x -> x === true
+    # If the `JULIA_TEST_NETWORKING_AVAILABLE` environment variable is set to `true`, we
+    # always set `net_on` to `true`.
+    # Otherwise, we set `net_on` to true if and only if networking is actually available.
+    if !JULIA_TEST_NETWORKING_AVAILABLE
+        try
+            ipa = getipaddr()
+        catch
+            if ci_option_passed
+                @error("Networking unavailable, but `--ci` was passed")
+                rethrow()
+            end
+            net_on = false
+            @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
+            filter!(!in(net_required_for), tests)
         end
-        net_on = false
-        @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
-        filter!(!in(net_required_for), tests)
     end
 
     if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
