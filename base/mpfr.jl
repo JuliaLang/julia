@@ -15,7 +15,7 @@ import
         eps, signbit, sign, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
-        setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
+        setrounding, maxintfloat, widen, significand, frexp, iszero,
         isone, big, _string_n, decompose
 
 import ..Rounding: rounding_raw, setrounding_raw
@@ -244,7 +244,11 @@ function BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::I
     end
 end
 
-function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=DEFAULT_PRECISION[], rounding::MPFRRoundingMode=ROUNDING_MODE[])
+function Base.parse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=DEFAULT_PRECISION[], rounding::MPFRRoundingMode=ROUNDING_MODE[])
+    result = tryparse(BigFloat, s; base, precision, rounding)
+    result === nothing ? Base.throw_parse_failure(BigFloat, s) : result
+end
+function Base.tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=DEFAULT_PRECISION[], rounding::MPFRRoundingMode=ROUNDING_MODE[])
     !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base = base)
     z = BigFloat(precision=precision)
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, MPFRRoundingMode), z, s, base, rounding)

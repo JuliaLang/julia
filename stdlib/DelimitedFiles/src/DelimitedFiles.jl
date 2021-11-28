@@ -8,8 +8,6 @@ module DelimitedFiles
 
 using Mmap
 
-import Base: tryparse_internal, show
-
 export readdlm, writedlm
 
 invalid_dlm(::Type{Char})   = reinterpret(Char, 0xfffffffe)
@@ -376,9 +374,9 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill data
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
-            fail = colval(unescaped, 1, lastindex(unescaped), cells, drow, col)
+            fail = colval(unescaped, cells, drow, col)
         else
-            fail = colval(sbuff, startpos, endpos, cells, drow, col)
+            fail = colval(SubString(sbuff, startpos, endpos), cells, drow, col)
         end
         if fail
             sval = SubString(sbuff, startpos, endpos)
@@ -395,9 +393,9 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill header
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
-            colval(unescaped, 1, lastindex(unescaped), dlmstore.hdr, 1, col)
+            colval(unescaped, dlmstore.hdr, 1, col)
         else
-            colval(sbuff, startpos, endpos, dlmstore.hdr, 1, col)
+            colval(SubString(sbuff, startpos, endpos), dlmstore.hdr, 1, col)
         end
     end
 
@@ -516,54 +514,52 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
     end
 end
 
-function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Bool,2}, row::Int, col::Int)
-    n = tryparse_internal(Bool, sbuff, startpos, endpos, 0, false)
+function colval(sbuff::AbstractString, cells::Array{Bool,2}, row::Int, col::Int)
+    n = tryparse(Bool, sbuff)
     n === nothing || (cells[row, col] = n)
     n === nothing
 end
-function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int) where T<:Integer
-    n = tryparse_internal(T, sbuff, startpos, endpos, 0, false)
+function colval(sbuff::AbstractString, cells::Array{T,2}, row::Int, col::Int) where T<:Integer
+    n = tryparse(T, sbuff)
     n === nothing || (cells[row, col] = n)
     n === nothing
 end
-function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int) where T<:Union{Real,Complex}
-    n = tryparse_internal(T, sbuff, startpos, endpos, false)
+function colval(sbuff::AbstractString, cells::Array{T,2}, row::Int, col::Int) where T<:Union{Real,Complex}
+    n = tryparse(T, sbuff)
     n === nothing || (cells[row, col] = n)
     n === nothing
 end
-function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:AbstractString,2}, row::Int, col::Int)
-    cells[row, col] = SubString(sbuff, startpos, endpos)
+function colval(sbuff::AbstractString, cells::Array{<:AbstractString,2}, row::Int, col::Int)
+    cells[row, col] = sbuff
     return false
 end
-function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Any,2}, row::Int, col::Int)
+function colval(sbuff::AbstractString, cells::Array{Any,2}, row::Int, col::Int)
     # if array is of Any type, attempt parsing only the most common types: Int, Bool, Float64 and fallback to SubString
-    len = endpos-startpos+1
-    if len > 0
-        # check Inteter
-        ni64 = tryparse_internal(Int, sbuff, startpos, endpos, 0, false)
+    if !isempty(sbuff)
+        # check Integer
+        ni64 = tryparse(Int, sbuff)
         ni64 === nothing || (cells[row, col] = ni64; return false)
 
         # check Bool
-        nb = tryparse_internal(Bool, sbuff, startpos, endpos, 0, false)
+        nb = tryparse(Bool, sbuff)
         nb === nothing || (cells[row, col] = nb; return false)
 
         # check float64
-        hasvalue, valf64 = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
-                                 (Ptr{UInt8}, Csize_t, Csize_t), sbuff, startpos-1, endpos-startpos+1)
-        hasvalue && (cells[row, col] = valf64; return false)
+        valf64 = tryparse(Float64, sbuff)
+        valf64 === nothing || (cells[row, col] = valf64; return false)
     end
-    cells[row, col] = SubString(sbuff, startpos, endpos)
+    cells[row, col] = sbuff
     false
 end
-function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:AbstractChar,2}, row::Int, col::Int)
-    if startpos == endpos
-        cells[row, col] = iterate(sbuff, startpos)[1]
+function colval(sbuff::AbstractString, cells::Array{<:AbstractChar,2}, row::Int, col::Int)
+    if length(sbuff) == 1
+        cells[row, col] = first(sbuff)
         return false
     else
         return true
     end
 end
-colval(sbuff::String, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int) = true
+colval(sbuff::AbstractString, cells::Array, row::Int, col::Int) = true
 
 function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
                    ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool,
@@ -826,7 +822,7 @@ julia> rm("delim_file.txt")
 """
 writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)
 
-show(io::IO, ::MIME"text/csv", a) = writedlm(io, a, ',')
-show(io::IO, ::MIME"text/tab-separated-values", a) = writedlm(io, a, '\t')
+Base.show(io::IO, ::MIME"text/csv", a) = writedlm(io, a, ',')
+Base.show(io::IO, ::MIME"text/tab-separated-values", a) = writedlm(io, a, '\t')
 
 end # module DelimitedFiles

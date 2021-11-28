@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test
+
 @testset "integer parsing" begin
     @test parse(Int32,"0", base = 36) === Int32(0)
     @test parse(Int32,"1", base = 36) === Int32(1)
@@ -47,50 +49,27 @@ Base.iterate(::Issue29451String, i::Integer=1) = i == 1 ? ('0', 2) : nothing
         # Without a base (handles things like "0x00001111", etc)
         result = @test_throws ArgumentError parse(T, s)
         exception_without_base = result.value
-        if T == Bool
-            if s == ""
-                @test exception_without_base.msg == "input string is empty"
-            else
-                @test exception_without_base.msg == "input string only contains whitespace"
-            end
-        else
-            @test exception_without_base.msg == "input string is empty or only contains whitespace"
-        end
+        @test exception_without_base.msg == "input string is empty or only contains whitespace"
 
         # With a base
         result = @test_throws ArgumentError parse(T, s, base = 16)
         exception_with_base = result.value
-        if T == Bool
-            if s == ""
-                @test exception_with_base.msg == "input string is empty"
-            else
-                @test exception_with_base.msg == "input string only contains whitespace"
-            end
-        else
-            @test exception_with_base.msg == "input string is empty or only contains whitespace"
-        end
+        @test exception_with_base.msg == "input string is empty or only contains whitespace"
     end
 
-    # Test `tryparse_internal` with part of a string
+    # Test `tryparse` with part of a string
     let b = "                   "
-        result = @test_throws ArgumentError Base.tryparse_internal(Bool, b, 7, 11, 0, true)
-        exception_bool = result.value
-        @test exception_bool.msg == "input string only contains whitespace"
-
-        result = @test_throws ArgumentError Base.tryparse_internal(Int, b, 7, 11, 0, true)
-        exception_int = result.value
-        @test exception_int.msg == "input string is empty or only contains whitespace"
-
-        result = @test_throws ArgumentError Base.tryparse_internal(UInt128, b, 7, 11, 0, true)
-        exception_uint = result.value
-        @test exception_uint.msg == "input string is empty or only contains whitespace"
+        for T in (Bool, Int, UInt128)
+            result = @test_throws ArgumentError Base.parse(Bool, SubString(b, 7, 11))
+            exception = result.value
+            @test exception.msg == "input string is empty or only contains whitespace"
+        end
     end
 
     # Test that the entire input string appears in error messages
     let s = "     false    true     "
-        result = @test_throws(ArgumentError,
-            Base.tryparse_internal(Bool, s, firstindex(s), lastindex(s), 0, true))
-        @test result.value.msg == "invalid Bool representation: $(repr(s))"
+        result = @test_throws ArgumentError Base.parse(Bool, s)
+        @test result.value.msg == "cannot parse $(repr(s)) as Bool"
     end
 
     # Test that leading and trailing whitespace is ignored.
@@ -249,7 +228,7 @@ for T in (Int32, BigInt), base in (0,1,100)
 end
 
 # error throwing branch from #10560
-@test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
+@test_throws ArgumentError Base.parse(Bool, SubString("foo", 1, 2); base=10)
 
 @test tryparse(Float64, "1.23") === 1.23
 @test tryparse(Float32, "1.23") === 1.23f0
@@ -316,4 +295,31 @@ end
         s = case(string(sbefore, sign, vs, safter))
         @test isequal(parse(Float64, s), sign(v))
     end
+end
+
+@testset "unary ± and ∓" begin
+    @test Meta.parse("±x") == Expr(:call, :±, :x)
+    @test Meta.parse("∓x") == Expr(:call, :∓, :x)
+end
+
+@testset "test .<: and .>:" begin
+    tmp = [Int, Float64, String, Bool] .<: Union{Int, String}
+    @test tmp == Bool[1, 0, 1, 0]
+
+    tmp = [Int, Float64, String, Bool] .>: [Int, Float64, String, Bool]
+    @test tmp == Bool[1, 1, 1, 1]
+
+    tmp = @. [Int, Float64, String, Bool] <: Union{Int, String}
+    @test tmp == Bool[1, 0,1, 0]
+end
+
+@testset "Bool parsing different basese" begin
+    @test parse(Bool, "0x1")
+    @test parse(Bool, "0b1")
+    @test parse(Bool, "01")
+    @test parse(Bool, "+1")
+    @test !parse(Bool, "-0x0")
+    @test !parse(Bool, "+0b0")
+    @test !parse(Bool, "-0")
+    @test !parse(Bool, "+0")
 end
