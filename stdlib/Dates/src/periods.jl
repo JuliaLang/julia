@@ -94,9 +94,6 @@ end
 (*)(x::P, y::Real) where {P<:Period} = P(value(x) * y)
 (*)(y::Real, x::Period) = x * y
 
-(*)(A::Period, B::AbstractArray) = Broadcast.broadcast_preserving_zero_d(*, A, B)
-(*)(A::AbstractArray, B::Period) = Broadcast.broadcast_preserving_zero_d(*, A, B)
-
 # intfuncs
 Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
 Base.abs(a::T) where {T<:Period} = T(abs(value(a)))
@@ -357,6 +354,9 @@ function Base.string(x::CompoundPeriod)
 end
 Base.show(io::IO,x::CompoundPeriod) = print(io, string(x))
 
+Base.zero(::Union{CompoundPeriod,Type{CompoundPeriod}}) = CompoundPeriod()
+Base.one(::Union{CompoundPeriod,Type{CompoundPeriod}}) = 1
+
 Base.convert(::Type{T}, x::CompoundPeriod) where T<:Period =
     isconcretetype(T) ? sum(T, x.periods) : throw(MethodError(convert,(T,x)))
 
@@ -371,8 +371,15 @@ Base.convert(::Type{T}, x::CompoundPeriod) where T<:Period =
 (-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
 (-)(y::Union{Period, CompoundPeriod}, x::CompoundPeriod) = (-x) + y
 
+(*)(x::CompoundPeriod, y::Real) = CompoundPeriod(x.periods * y)
+(*)(y::Real, x::CompoundPeriod) = x * y
+
+(/)(x::CompoundPeriod, y::Real) = CompoundPeriod(x.periods / y)
+
 GeneralPeriod = Union{Period, CompoundPeriod}
 (+)(x::GeneralPeriod) = x
+(*)(A::GeneralPeriod, B::AbstractArray) = Broadcast.broadcast_preserving_zero_d(*, A, B)
+(*)(A::AbstractArray, B::GeneralPeriod) = B * A
 
 (==)(x::CompoundPeriod, y::Period) = x == CompoundPeriod(y)
 (==)(x::Period, y::CompoundPeriod) = y == x
