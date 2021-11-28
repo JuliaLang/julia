@@ -522,10 +522,11 @@ function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::Ordin
         end
         soffset = max(oneunit(L), soffset)
         if ioffset == r.offset
-            return StepRangeLen{T}(r.ref, newstep, len, soffset)
+            ret = StepRangeLen{T}(r.ref, newstep, len, soffset)
         else
-            return StepRangeLen{T}(r.ref + (ioffset-r.offset)*rstep, newstep, len, soffset)
+            ret = StepRangeLen{T}(r.ref + (ioffset-r.offset)*rstep, newstep, len, soffset)
         end
+        return withindices(ret, axes(s))
     end
 end
 

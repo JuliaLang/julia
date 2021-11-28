@@ -158,6 +158,24 @@ function _checkindices(N::Integer, indices, label)
     N == length(indices) || throw_argumenterror(N, indices, label)
 end
 
+@inline _indexedby(r::AbstractVector, ax::Tuple{Any}) = _indexedby(r, ax[1])
+@inline _indexedby(r::AbstractUnitRange{<:Integer}, ::Base.OneTo) = no_offset_view(r)
+@inline _indexedby(r::AbstractUnitRange{Bool}, ::Base.OneTo) = no_offset_view(r)
+@inline _indexedby(r::AbstractVector, ::Base.OneTo) = no_offset_view(r)
+@inline function _indexedby(r::AbstractUnitRange{<:Integer}, ax::AbstractUnitRange)
+    of = convert(eltype(r), first(ax) - 1)
+    IdOffsetRange(_subtractoffset(r, of), of)
+end
+@inline _indexedby(r::AbstractUnitRange{Bool}, ax::AbstractUnitRange) = OffsetArray(r, ax)
+@inline _indexedby(r::AbstractVector, ax::AbstractUnitRange) = OffsetArray(r, ax)
+
+# These functions are equivalent to the broadcasted operation r .- of
+# However these ensure that the result is an AbstractRange even if a specific
+# broadcasting behavior is not defined for a custom type
+_subtractoffset(r::AbstractUnitRange, of) = UnitRange(first(r) - of, last(r) - of)
+_subtractoffset(r::AbstractRange, of) = range(first(r) - of, stop = last(r) - of, step = step(r))
+
+Base.withindices(r, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) = _indexedby(r, ax)
 
 # Technically we know the length of CartesianIndices but we need to convert it first, so here we
 # don't put it in OffsetAxisKnownLength.
@@ -375,22 +393,6 @@ end
 @propagate_inbounds Base.getindex(a::OffsetRange, r::AbstractRange) = a.parent[r .- a.offsets[1]]
 @propagate_inbounds Base.getindex(a::AbstractRange, r::OffsetRange) = OffsetArray(a[parent(r)], r.offsets)
 
-@propagate_inbounds Base.getindex(r::UnitRange, s::IIUR) =
-    OffsetArray(r[s.indices], s)
-
-@propagate_inbounds Base.getindex(r::StepRange, s::IIUR) =
-    OffsetArray(r[s.indices], s)
-
-# this method is needed for ambiguity resolution
-@propagate_inbounds Base.getindex(r::StepRangeLen{T,<:Base.TwicePrecision,<:Base.TwicePrecision}, s::IIUR) where T =
-    OffsetArray(r[s.indices], s)
-
-@propagate_inbounds Base.getindex(r::StepRangeLen{T}, s::IIUR) where {T} =
-    OffsetArray(r[s.indices], s)
-
-@propagate_inbounds Base.getindex(r::LinRange, s::IIUR) =
-    OffsetArray(r[s.indices], s)
-
 function Base.show(io::IO, r::OffsetRange)
     show(io, r.parent)
     o = r.offsets[1]
@@ -429,14 +431,21 @@ function Base.replace_in_print_matrix(A::OffsetArray{<:Any,1}, i::Integer, j::In
     Base.replace_in_print_matrix(parent(A), ip, j, s)
 end
 
-function no_offset_view(A::AbstractArray)
-    if Base.has_offset_axes(A)
-        OffsetArray(A, map(r->1-first(r), axes(A)))
-    else
-        A
-    end
-end
-
 no_offset_view(A::OffsetArray) = no_offset_view(parent(A))
+if isdefined(Base, :IdentityUnitRange)
+    # valid only if Slice is distinguished from IdentityUnitRange
+    no_offset_view(a::Base.Slice{<:Base.OneTo}) = a
+    no_offset_view(a::Base.Slice) = Base.Slice(UnitRange(a))
+    no_offset_view(S::SubArray) = view(parent(S), map(no_offset_view, parentindices(S))...)
+end
+no_offset_view(a::Array) = a
+no_offset_view(i::Number) = i
+no_offset_view(A::AbstractArray) = _no_offset_view(axes(A), A)
+_no_offset_view(::Tuple{}, A::AbstractArray{T,0}) where T = A
+_no_offset_view(::Tuple{Base.OneTo, Vararg{Base.OneTo}}, A::AbstractArray) = A
+# the following method is needed for ambiguity resolution
+_no_offset_view(::Tuple{Base.OneTo, Vararg{Base.OneTo}}, A::AbstractUnitRange) = A
+_no_offset_view(::Any, A::AbstractArray) = OffsetArray(A, Origin(1))
+_no_offset_view(::Any, A::AbstractUnitRange) = UnitRange(A)
 
 end # module
