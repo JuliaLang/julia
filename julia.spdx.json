@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-b3cf5f58-e5e2-467e-8227-ad1c978ab76d",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-e5e5febd-cf98-4ce6-9927-6659141e126b",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-11-26T19:41:09Z"
+        "created": "2021-11-28T19:31:24Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -426,6 +426,11 @@
     ],
     "relationships": [
         {
+            "spdxElementId": "SPDXRef-DOCUMENT",
+            "relationshipType": "DESCRIBES",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
             "spdxElementId": "SPDXRef-JuliaPkg",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
@@ -536,7 +541,7 @@
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
-            "spdxElementId": "SPDXRef-LibBlasTrampoline",
+            "spdxElementId": "SPDXRef-NGHTTP2",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
