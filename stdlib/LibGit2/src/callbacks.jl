@@ -366,8 +366,8 @@ struct CertHostKey
     sha1    :: NTuple{20,UInt8}
     sha256  :: NTuple{32,UInt8}
     type    :: Cint
+    hostkey :: Ptr{Cchar}
     len     :: Csize_t
-    data    :: NTuple{1024,UInt8}
 end
 
 function verify_host_error(message::AbstractString)
