@@ -41,6 +41,7 @@ end
 using Tokenize.Tokens: Kind, isliteral, iskeyword
 
 kind(k::Kind) = k
+kind(raw::TzTokens.RawToken) = TzTokens.exactkind(raw)
 
 """
     K"s"
@@ -53,9 +54,52 @@ macro K_str(str)
     return :(Kinds.$name)
 end
 
+function _kind_str(k::Kind)
+    if k in (K"Identifier", K"VarIdentifier")
+        "I"
+    elseif isliteral(k)
+        "L"
+    elseif k == K"Comment"
+        "C"
+    elseif k == K"Whitespace"
+        "W"
+    elseif k == K"NewlineWs"
+        "N"
+    elseif iskeyword(k)
+        lowercase(string(k))
+    elseif TzTokens.isoperator(k)
+        string(TzTokens.UNICODE_OPS_REVERSE[k]) 
+    elseif k == K"("
+        "("
+    elseif k == K"["
+        "["
+    elseif k == K"{"
+        "{"
+    elseif k == K")"
+        ")"
+    elseif k == K"]"
+        "]"
+    elseif k == K"}"
+        "}"
+    elseif k == K"@"
+        "@"
+    elseif k == K","
+        ","
+    elseif k == K";"
+        ";"
+    else
+        lowercase(string(k))
+    end
+end
 
 """
-    A module to give Tokenize tokens better names!
+A module to giving literal names to token kinds
+
+Rules:
+* Kinds which correspond to exactly one textural form are represented with that
+  text.  This includes keywords like K"for" and operators like K"*".
+* Kinds which represent many textural forms have UpperCamelCase names. This
+  includes kinds like K"Identifier" and K"Comment".
 """
 baremodule Kinds
 
@@ -68,17 +112,18 @@ macro _K(sym)
 #     :(Kind(Tokenize.Tokens.$sym))
 end
 
-const ENDMARKER   =  @_K ENDMARKER
-const ERROR       =  @_K ERROR
-const COMMENT     =  @_K COMMENT
-const WHITESPACE  =  @_K WHITESPACE
-const IDENTIFIER  =  @_K IDENTIFIER
+const EndMarker   =  @_K ENDMARKER
+const Error       =  @_K ERROR
+const Comment     =  @_K COMMENT
+const Whitespace  =  @_K WHITESPACE
+const Identifier  =  @_K IDENTIFIER
+const VarIdentifier  =  @_K VAR_IDENTIFIER
 const var"@"      =  @_K AT_SIGN
 const var","      =  @_K COMMA
 const var";"      =  @_K SEMICOLON
 
 const BEGIN_KEYWORDS   =  @_K begin_keywords
-const KEYWORD          =  @_K KEYWORD
+const Keyword          =  @_K KEYWORD
 const var"abstract"    =  @_K ABSTRACT
 const var"baremodule"  =  @_K BAREMODULE
 const var"begin"       =  @_K BEGIN
@@ -116,26 +161,26 @@ const var"while"       =  @_K WHILE
 const END_KEYWORDS     =  @_K end_keywords
 
 const BEGIN_CSTPARSER     =  @_K begin_cstparser
-const INVISIBLE_BRACKETS  =  @_K INVISIBLE_BRACKETS
-const NOTHING             =  @_K NOTHING
-const WS                  =  @_K WS
-const SEMICOLON_WS        =  @_K SEMICOLON_WS
-const NEWLINE_WS          =  @_K NEWLINE_WS
-const EMPTY_WS            =  @_K EMPTY_WS
+const InvisibleBrackets  =  @_K INVISIBLE_BRACKETS
+const Nothing             =  @_K NOTHING
+const Ws                  =  @_K WS
+const SemicolonWs        =  @_K SEMICOLON_WS
+const NewlineWs          =  @_K NEWLINE_WS
+const EmptyWs            =  @_K EMPTY_WS
 const END_CSTPARSER       =  @_K end_cstparser
 
 const BEGIN_LITERAL  =  @_K begin_literal
-const LITERAL        =  @_K LITERAL
-const integer        =  @_K INTEGER
-const bin_int        =  @_K BIN_INT
-const hex_int        =  @_K HEX_INT
-const oct_int        =  @_K OCT_INT
-const float          =  @_K FLOAT
-const string         =  @_K STRING
-const triple_string  =  @_K TRIPLE_STRING
-const char           =  @_K CHAR
-const cmd            =  @_K CMD
-const triple_cmd     =  @_K TRIPLE_CMD
+const Literal        =  @_K LITERAL
+const Integer        =  @_K INTEGER
+const BinInt         =  @_K BIN_INT
+const HexInt         =  @_K HEX_INT
+const OctInt         =  @_K OCT_INT
+const Float          =  @_K FLOAT
+const String         =  @_K STRING
+const TripleString   =  @_K TRIPLE_STRING
+const Char           =  @_K CHAR
+const Cmd            =  @_K CMD
+const TripleCmd      =  @_K TRIPLE_CMD
 const var"true"      =  @_K TRUE
 const var"false"     =  @_K FALSE
 const END_LITERAL    =  @_K end_literal
@@ -878,12 +923,17 @@ const END_UNICODE_OPS    =  @_K end_unicode_ops
 
 const END_OPS = @_K end_ops
 
+# Cute synonyms
+const var" "      =  @_K WHITESPACE
+const var"\n"      =  @_K NEWLINE_WS
 
 # Our custom syntax tokens
 
+const BEGIN_SYNTAX_KINDS = @_K begin_syntax_kinds
 const toplevel = @_K TOPLEVEL
 const call     = @_K CALL
 const block    = @_K BLOCK
+const END_SYNTAX_KINDS = @_K end_syntax_kinds
 
 end
 
