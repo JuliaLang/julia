@@ -976,17 +976,17 @@ end
 
 @testset "verbose option" begin
     expected = """
-    Test Summary: | Pass  Total
-    Parent        |    9      9
-      Child 1     |    3      3
-        Child 1.1 |    1      1
-        Child 1.2 |    1      1
-        Child 1.3 |    1      1
-      Child 2     |    3      3
-      Child 3     |    3      3
-        Child 3.1 |    1      1
-        Child 3.2 |    1      1
-        Child 3.3 |    1      1
+    Test Summary:             | Pass  Total
+    Parent                    |    9      9
+      Child 1                 |    3      3
+        Child 1.1 (long name) |    1      1
+        Child 1.2             |    1      1
+        Child 1.3             |    1      1
+      Child 2                 |    3      3
+      Child 3                 |    3      3
+        Child 3.1             |    1      1
+        Child 3.2             |    1      1
+        Child 3.3             |    1      1
     """
 
     mktemp() do f, _
@@ -996,7 +996,7 @@ end
 
         @testset "Parent" verbose = true begin
             @testset "Child 1" verbose = true begin
-                @testset "Child 1.1" begin
+                @testset "Child 1.1 (long name)" begin
                     @test 1 == 1
                 end
 
