@@ -1,10 +1,15 @@
 #-------------------------------------------------------------------------------
 # Syntax tree types
 
-# Rules of concrete syntax:
+# Desired rules of lossless syntax trees:
 #
-# * Every byte is covered by the tree
-# * The children (including trivia) cover the span of the parent
+# * Every source byte is covered by the tree
+# * The children (including trivia) cover the full span of the parent
+# * Children occur in source order
+#
+# Additionally
+# * Nodes should be position-independent so that reparsing doesn't disturb them,
+#   and so that it's possible to pool and reuse them (especially leaf nodes!)
 
 # The rawest version of a parse tree node.
 struct RawSyntaxNode

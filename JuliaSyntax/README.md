@@ -37,19 +37,20 @@ The tree datastructure design here is hard:
 
 Let's tackle it by prototyping several important work flows:
 
-1. Precise error reporting in lowering
+* Syntax transformations
+  - Choose some macros to implement
+* Refactoring
+  - A pass to rename local variables
+* Precise error reporting in lowering
   - Syntax desugaring `[a, b] = (c, d)` should report "invalid assignment
     location `[a, b]`". But at a precise source location.
   - Try something several layers deeper inside lowering. For example "macro
     definition not allowed inside a local scope"
-
-2. Refactoring
+* Refactoring
   - A pass to rename local variables
-
-3. Incremental reparsing
+* Incremental reparsing
   - Reparse a source file, given a byte range replacement
-
-4. Formatting
+* Formatting
   - Re-indent a file
 
 
@@ -131,7 +132,8 @@ to distinguish between infix and prefix.
 # Resources
 
 * [Persistence, façades and Roslyn’s red-green trees](https://ericlippert.com/2012/06/08/red-green-trees/)
-  - [Roslyn optimization overview](https://github.com/KirillOsenkov/Bliki/wiki/Roslyn-Immutable-Trees
-* Andy Chu (the author of the OIL shell) has written some things about syntax
-  - https://github.com/oilshell/oil/wiki/Lossless-Syntax-Tree-Pattern
-  - [From AST to Lossless Syntax Tree](https://www.oilshell.org/blog/2017/02/11.html)
+  - [Roslyn optimization overview](https://github.com/KirillOsenkov/Bliki/wiki/Roslyn-Immutable-Trees)
+  - [Literate C# Usage Example](https://johtela.github.io/LiterateCS/LiterateCS/BlockBuilder.html)
+* Andy Chu (the author of the OIL shell) has written some things about this
+  - Collected links about lossless syntax in [a wiki page](https://github.com/oilshell/oil/wiki/Lossless-Syntax-Tree-Pattern)
+  - A blog post [From AST to Lossless Syntax Tree](https://www.oilshell.org/blog/2017/02/11.html)
