@@ -806,6 +806,83 @@
             QUAD_ROOT, # ∜
         end_unicode_ops,
     end_ops,
+
+    # Kinds emitted by the parser. There's two types of these:
+    # 1. Implied tokens which have a position but might have zero width in the
+    #    source text.
+    #
+    # In some cases we want to generate parse tree nodes in a standard form,
+    # but some of the leaf tokens are implied rather than existing in the
+    # source text, or the lexed tokens need to be re-kinded to represent
+    # special forms which only the parser can infer. These are "parser tokens".
+    #
+    # Some examples:
+    #
+    # Docstrings - the macro name is invisible
+    #   "doc" foo() = 1   ==>  (macrocall (core @doc) . (= (call foo) 1))
+    #
+    # String macros - the macro name does not appear in the source text, so we
+    # need a special kind of token to imply it.
+    #
+    # In these cases, we use some special kinds which can be emitted as zero
+    # width tokens to keep the parse tree more uniform.
+    begin_parser_tokens,
+        TOMBSTONE,           # Empty placeholder for kind to be filled later
+        NOTHING_LITERAL,     # A literal Julia `nothing` in the AST
+        UNQUOTED_STRING,     # An unquoted range of the source as a string
+
+        # Macro names are modelled as a special kind of identifier because the
+        # @ may not be attached to the macro name in the source (or may not be
+        # associated with a token at all in the case of implied macro calls
+        # like CORE_DOC_MACRO_NAME)
+        begin_macro_names,
+            MACRO_NAME,                  # A macro name identifier
+            VAR_MACRO_NAME,              # @var"..."
+            STRING_MACRO_NAME,           # macname"some_str"
+            CMD_MACRO_NAME,              # macname`some_str`
+            DOT_MACRO_NAME,              # The macro name of @.
+            CORE_DOC_MACRO_NAME,         # Core.@doc
+            CORE_CMD_MACRO_NAME,         # Core.@cmd
+            CORE_INT128_STR_MACRO_NAME,  # Core.@int128_str
+            CORE_UINT128_STR_MACRO_NAME, # Core.@uint128_str
+            CORE_BIG_STR_MACRO_NAME,     # Core.@big_str
+        end_macro_names,
+    end_parser_tokens,
+
+    # 2. Nonterminals which are exposed in the AST, but where the surface
+    #    syntax doesn't have a token corresponding to the node type.
+    begin_syntax_kinds,
+        BLOCK,
+        CALL,
+        COMPARISON,
+        CURLY,
+        INERT,           # QuoteNode; not quasiquote
+        STRING_INTERP,   # "a $x"
+        TOPLEVEL,
+        TUPLE,
+        REF,
+        VECT,
+        MACROCALL,
+        KW,             # the = in f(a=1)
+        PARAMETERS,     # the list after ; in f(; a=1)
+        # Concatenation syntax
+        BRACES,
+        BRACESCAT,
+        HCAT,
+        VCAT,
+        NCAT,
+        TYPED_HCAT,
+        TYPED_VCAT,
+        TYPED_NCAT,
+        ROW,
+        NROW,
+        # Comprehensions
+        GENERATOR,
+        FILTER,
+        FLATTEN,
+        COMPREHENSION,
+        TYPED_COMPREHENSION,
+    end_syntax_kinds,
 )
 
 
