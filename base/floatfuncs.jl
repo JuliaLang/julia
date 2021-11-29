@@ -409,22 +409,12 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
 end
 fma_llvm(x::Float32, y::Float32, z::Float32) = fma_float(x, y, z)
 fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
+
 # Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back
 # onto a broken system libm; if so, use a software emulated fma
-# 1.0000305f0 = 1 + 1/2^15
-# 1.0000000009313226 = 1 + 1/2^30
-# If fma_llvm() clobbers the rounding mode, the result of 0.1 + 0.2 will be 0.3
-# instead of the properly-rounded 0.30000000000000004; check after calling fma
-# TODO actually detect fma in hardware and switch on that.
-if (Sys.ARCH !== :i686 && fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
-    (fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) ==
-     1.8626451500983188e-9) && 0.1 + 0.2 == 0.30000000000000004)
-    fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x,y,z)
-    fma(x::Float64, y::Float64, z::Float64) = fma_llvm(x,y,z)
-else
-    fma(x::Float32, y::Float32, z::Float32) = fma_emulated(x,y,z)
-    fma(x::Float64, y::Float64, z::Float64) = fma_emulated(x,y,z)
-end
+fma(x::Float32, y::Float32, z::Float32) = Core.Intrinsics.have_fma(Float32) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
+fma(x::Float64, y::Float64, z::Float64) = Core.Intrinsics.have_fma(Float64) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
+
 function fma(a::Float16, b::Float16, c::Float16)
     Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.
 end

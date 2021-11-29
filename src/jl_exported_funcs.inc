@@ -32,6 +32,7 @@
     XX(jl_array_grow_end) \
     XX(jl_array_isassigned) \
     XX(jl_arraylen) \
+    XX(jl_have_fma) \
     XX(jl_array_ptr) \
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
