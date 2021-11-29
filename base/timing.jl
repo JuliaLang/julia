@@ -325,7 +325,7 @@ macro timev(msg, ex)
         )
         local diff = GC_Diff(gc_num(), stats)
         local has_msg = !isnothing($(esc(msg)))
-        has_msg && print($(esc(msg)), " : ")
+        has_msg && print($(esc(msg)), ": ")
         timev_print(elapsedtime, diff, compile_elapsedtime, !has_msg)
         val
     end
