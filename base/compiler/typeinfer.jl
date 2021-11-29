@@ -774,8 +774,8 @@ function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance,
 end
 
 # compute (and cache) an inferred AST and return the current best estimate of the result type
-function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, caller::InferenceState)
-    mi = specialize_method(method, atypes, sparams)::MethodInstance
+function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::InferenceState)
+    mi = specialize_method(method, atype, sparams)::MethodInstance
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
         if code.inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
@@ -844,8 +844,8 @@ end
 #### entry points for inferring a MethodInstance given a type signature ####
 
 # compute an inferred AST and return type
-function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, run_optimizer::Bool)
-    mi = specialize_method(method, atypes, sparams)::MethodInstance
+function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
+    mi = specialize_method(method, atype, sparams)::MethodInstance
     ccall(:jl_typeinf_begin, Cvoid, ())
     result = InferenceResult(mi)
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)
@@ -916,11 +916,11 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
 end
 
 # compute (and cache) an inferred AST and return the inferred return type
-function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector)
-    if contains_is(unwrap_unionall(atypes).parameters, Union{})
+function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector)
+    if contains_is(unwrap_unionall(atype).parameters, Union{})
         return Union{} # don't ask: it does weird and unnecessary things, if it occurs during bootstrap
     end
-    mi = specialize_method(method, atypes, sparams)::MethodInstance
+    mi = specialize_method(method, atype, sparams)::MethodInstance
     for i = 1:2 # test-and-lock-and-test
         i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
         code = get(code_cache(interp), mi, nothing)

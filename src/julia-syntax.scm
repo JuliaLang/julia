@@ -904,7 +904,7 @@
                                x))
                          fields)))
           (attrs (reverse attrs))
-          (defs        (filter (lambda (x) (not (effect-free? x))) defs))
+          (defs        (filter (lambda (x) (not (or (effect-free? x) (eq? (car x) 'string)))) defs))
           (locs        (if (and (pair? fields0) (linenum? (car fields0)))
                            (list (car fields0))
                            '()))
@@ -1654,17 +1654,13 @@
 (define (expand-or e)
   (let ((e (cdr (flatten-ex '|\|\|| e))))
     (let loop ((tail e))
-      (if (null? tail)
-          '(false)
-          (if (null? (cdr tail))
-              (car tail)
-              (if (symbol-like? (car tail))
-                  `(if ,(car tail) ,(car tail)
-                       ,(loop (cdr tail)))
-                  (let ((g (make-ssavalue)))
-                    `(block (= ,g ,(car tail))
-                            (if ,g ,g
-                                ,(loop (cdr tail)))))))))))
+      (cond ((null? tail)
+             '(false))
+            ((null? (cdr tail))
+             (car tail))
+            (else `(if ,(car tail)
+                       (true)
+                       ,(loop (cdr tail))))))))
 
 (define (expand-for lhss itrs body)
   (define (outer? x) (and (pair? x) (eq? (car x) 'outer)))
@@ -2851,9 +2847,27 @@
   (or (valid-name? e)
       (error (string "invalid identifier name \"" e "\""))))
 
+(define (push-var! tab var val) (put! tab var (cons val (get tab var #f))))
+(define (pop-var! tab var) (put! tab var (cdr (get tab var))))
+
 (define (make-scope (lam #f) (args '()) (locals '()) (globals '()) (sp '()) (renames '()) (prev #f)
                     (soft? #f) (hard? #f) (implicit-globals '()) (warn-vars #f))
-  (vector lam args locals globals sp renames prev soft? hard? implicit-globals warn-vars))
+  (let ((tab (if prev (scope:table prev) (table))))
+    (for-each (lambda (v) (push-var! tab v v)) sp)
+    (for-each (lambda (v) (push-var! tab v v)) locals)
+    (for-each (lambda (pair) (push-var! tab (car pair) (cdr pair))) renames)
+    (for-each (lambda (v) (push-var! tab v `(outerref ,v))) globals)
+    (for-each (lambda (v) (push-var! tab v v)) args)
+    (vector lam args locals globals sp renames prev soft? hard? implicit-globals warn-vars tab)))
+
+(define (pop-scope! scope)
+  (let ((tab (scope:table scope)))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:sp scope))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:locals scope))
+    (for-each (lambda (pair) (pop-var! tab (car pair))) (scope:renames scope))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:globals scope))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:args scope))))
+
 (define (scope:lam s)     (aref s 0))
 (define (scope:args s)    (aref s 1))
 (define (scope:locals s)  (aref s 2))
@@ -2865,6 +2879,7 @@
 (define (scope:hard? s)   (aref s 8))
 (define (scope:implicit-globals s) (aref s 9))
 (define (scope:warn-vars s) (aref s 10))
+(define (scope:table s)   (aref s 11))
 
 (define (var-kind var scope (exclude-top-level-globals #f))
   (if scope
@@ -2902,20 +2917,10 @@
 ;; returns lambdas in the form (lambda (args...) (locals...) body)
 (define (resolve-scopes- e scope (sp '()) (loc #f))
   (cond ((symbol? e)
-         (let lookup ((scope scope))
-           (if scope
-               (cond ((memq e (scope:args scope)) e)
-                     ((memq e (scope:globals scope)) `(outerref ,e))
-                     (else
-                      (let ((r (assq e (scope:renames scope))))
-                        (cond (r (cdr r))
-                              ((memq e (scope:locals scope)) e)
-                              ((memq e (scope:sp scope)) e)
-                              (else
-                               (lookup (scope:prev scope)))))))
-               (if (underscore-symbol? e)
-                   e
-                   `(outerref ,e)))))
+         (let ((val (and scope (get (scope:table scope) e #f))))
+           (cond (val (car val))
+                 ((underscore-symbol? e) e)
+                 (else `(outerref ,e)))))
         ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel symbolicgoto symboliclabel toplevel-only)))
          e)
         ((eq? (car e) 'global)
@@ -2953,7 +2958,9 @@
              '(true)))
         ((eq? (car e) 'lambda)
          (let* ((args (lam:argnames e))
-                (body (resolve-scopes- (lam:body e) (make-scope e args '() '() sp '() scope))))
+                (new-scope (make-scope e args '() '() sp '() scope))
+                (body (resolve-scopes- (lam:body e) new-scope)))
+           (pop-scope! new-scope)
            `(lambda ,(cadr e) ,(caddr e) ,body)))
         ((eq? (car e) 'scope-block)
          (let* ((blok            (cadr e)) ;; body of scope-block expression
@@ -3034,8 +3041,7 @@
                          (append (caddr lam) newnames newnames-def)))
            (insert-after-meta ;; return the new, expanded scope-block
             (blockify
-             (resolve-scopes- blok
-                              (make-scope lam
+             (let ((new-scope (make-scope lam
                                           '()
                                           (append locals-nondef locals-def)
                                           globals
@@ -3048,9 +3054,10 @@
                                           (if toplevel?
                                               implicit-globals
                                               (scope:implicit-globals scope))
-                                          warn-vars)
-                              '()
-                              loc))
+                                          warn-vars)))
+               (begin0
+                (resolve-scopes- blok new-scope '() loc)
+                (pop-scope! new-scope))))
             (append! (map (lambda (v) `(local ,v)) newnames)
                      (map (lambda (v) `(local-def ,v)) newnames-def)))
            ))
@@ -3120,14 +3127,20 @@
 (define (free-vars e)
   (table.keys (free-vars- e (table))))
 
-(define (analyze-vars-lambda e env captvars sp new-sp (methsig #f))
+(define (vinfo-to-table vi)
+  (let ((tab (table)))
+    (for-each (lambda (v) (put! tab (car v) v))
+              vi)
+    tab))
+
+(define (analyze-vars-lambda e env captvars sp new-sp methsig tab)
   (let* ((args (lam:args e))
          (locl (caddr e))
          (allv (nconc (map arg-name args) locl))
          (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
                       ;; add variables referenced in declared types for free vars
                       (dv (apply nconc (map (lambda (v)
-                                              (let ((vi (var-info-for v env)))
+                                              (let ((vi (get tab v #f)))
                                                 (if vi (free-vars (vinfo:type vi)) '())))
                                             fv))))
                  (append (diff dv fv) fv)))
@@ -3147,15 +3160,17 @@
                                                  (not (memq (vinfo:name v) new-sp))
                                                  (not (memq (vinfo:name v) glo))))
                                 env)
-                        (map make-var-info capt-sp))))
-    (analyze-vars (lam:body e)
-                  (append vi
+                        (map make-var-info capt-sp)))
+         (new-env (append vi
                           ;; new environment: add our vars
                           (filter (lambda (v)
                                     (and (not (memq (vinfo:name v) allv))
                                          (not (memq (vinfo:name v) glo))))
-                                  env))
-                  cv (delete-duplicates (append new-sp sp)))
+                                  env))))
+    (analyze-vars (lam:body e)
+                  new-env
+                  cv (delete-duplicates (append new-sp sp))
+                  (vinfo-to-table new-env))
     ;; mark all the vars we capture as captured
     (for-each (lambda (v) (vinfo:set-capt! v #t))
               cv)
@@ -3170,36 +3185,36 @@
 ;; in-place to
 ;;   (var-info-lst captured-var-infos ssavalues static_params)
 ;; where var-info-lst is a list of var-info records
-(define (analyze-vars e env captvars sp)
+(define (analyze-vars e env captvars sp tab)
   (if (or (atom? e) (quoted? e))
       (begin
         (if (symbol? e)
-            (let ((vi (var-info-for e env)))
+            (let ((vi (get tab e #f)))
               (if vi
                   (vinfo:set-read! vi #t))))
         e)
       (case (car e)
         ((local-def) ;; a local that we know has an assignment that dominates all usages
-         (let ((vi (var-info-for (cadr e) env)))
+         (let ((vi (get tab (cadr e) #f)))
               (vinfo:set-never-undef! vi #t)))
         ((=)
-         (let ((vi (and (symbol? (cadr e)) (var-info-for (cadr e) env))))
+         (let ((vi (and (symbol? (cadr e)) (get tab (cadr e) #f))))
            (if vi ; if local or captured
                (begin (if (vinfo:asgn vi)
                           (vinfo:set-sa! vi #f)
                           (vinfo:set-sa! vi #t))
                       (vinfo:set-asgn! vi #t))))
-         (analyze-vars (caddr e) env captvars sp))
+         (analyze-vars (caddr e) env captvars sp tab))
         ((call)
-         (let ((vi (var-info-for (cadr e) env)))
+         (let ((vi (get tab (cadr e) #f)))
            (if vi
                (vinfo:set-called! vi #t))
-           (for-each (lambda (x) (analyze-vars x env captvars sp))
+           (for-each (lambda (x) (analyze-vars x env captvars sp tab))
                      (cdr e))))
         ((decl)
          ;; handle var::T declaration by storing the type in the var-info
          ;; record. for non-symbols or globals, emit a type assertion.
-         (let ((vi (var-info-for (cadr e) env)))
+         (let ((vi (get tab (cadr e) #f)))
            (if vi
                (begin (if (not (equal? (vinfo:type vi) '(core Any)))
                           (error (string "multiple type declarations for \""
@@ -3209,31 +3224,31 @@
                                          "\" declared in inner scope")))
                       (vinfo:set-type! vi (caddr e))))))
         ((lambda)
-         (analyze-vars-lambda e env captvars sp '()))
+         (analyze-vars-lambda e env captvars sp '() #f tab))
         ((with-static-parameters)
          ;; (with-static-parameters func_expr sp_1 sp_2 ...)
          (assert (eq? (car (cadr e)) 'lambda))
          (analyze-vars-lambda (cadr e) env captvars sp
-                              (cddr e)))
+                              (cddr e) #f tab))
         ((method)
          (if (length= e 2)
-             (let ((vi (var-info-for (method-expr-name e) env)))
+             (let ((vi (get tab (method-expr-name e) #f)))
                (if vi
                    (begin (if (vinfo:asgn vi)
                               (vinfo:set-sa! vi #f)
                               (vinfo:set-sa! vi #t))
                           (vinfo:set-asgn! vi #t)))
                e)
-             (begin (analyze-vars (caddr e) env captvars sp)
+             (begin (analyze-vars (caddr e) env captvars sp tab)
                     (assert (eq? (car (cadddr e)) 'lambda))
                     (analyze-vars-lambda (cadddr e) env captvars sp
                                          (method-expr-static-parameters e)
-                                         (caddr e)))))
+                                         (caddr e) tab))))
         ((module toplevel) e)
-        (else (for-each (lambda (x) (analyze-vars x env captvars sp))
+        (else (for-each (lambda (x) (analyze-vars x env captvars sp tab))
                         (cdr e))))))
 
-(define (analyze-variables! e) (analyze-vars e '() '() '()) e)
+(define (analyze-variables! e) (analyze-vars e '() '() '() (table)) e)
 
 ;; pass 4: closure conversion
 

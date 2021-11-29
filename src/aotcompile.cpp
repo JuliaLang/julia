@@ -493,7 +493,7 @@ void jl_dump_native_impl(void *native_code,
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
     if (bc_fname || obj_fname || asm_fname) {
         addOptimizationPasses(&PM, jl_options.opt_level, true, true);
-        addMachinePasses(&PM, TM.get());
+        addMachinePasses(&PM, TM.get(), jl_options.opt_level);
     }
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
@@ -589,11 +589,12 @@ void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 }
 
 
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel)
 {
     // TODO: don't do this on CPUs that natively support Float16
     PM->add(createDemoteFloat16Pass());
-    PM->add(createGVNPass());
+    if (optlevel > 1)
+        PM->add(createGVNPass());
 }
 
 
@@ -823,7 +824,7 @@ public:
         TPMAdapter Adapter(TPM);
         addTargetPasses(&Adapter, jl_TargetMachine);
         addOptimizationPasses(&Adapter, OptLevel);
-        addMachinePasses(&Adapter, jl_TargetMachine);
+        addMachinePasses(&Adapter, jl_TargetMachine, OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
@@ -861,7 +862,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
         PM = new legacy::PassManager();
         addTargetPasses(PM, jl_TargetMachine);
         addOptimizationPasses(PM, jl_options.opt_level);
-        addMachinePasses(PM, jl_TargetMachine);
+        addMachinePasses(PM, jl_TargetMachine, jl_options.opt_level);
     }
 
     // get the source code for this function

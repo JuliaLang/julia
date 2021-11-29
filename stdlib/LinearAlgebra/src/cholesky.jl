@@ -683,6 +683,8 @@ function logdet(C::CholeskyPivoted)
     end
 end
 
+logabsdet(C::Union{Cholesky, CholeskyPivoted}) = logdet(C), one(eltype(C)) # since C is p.s.d.
+
 inv!(C::Cholesky{<:BlasFloat,<:StridedMatrix}) =
     copytri!(LAPACK.potri!(C.uplo, C.factors), C.uplo, true)
 

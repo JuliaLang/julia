@@ -1595,6 +1595,8 @@ julia> logabsdet(B)
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
 
+logabsdet(a::Number) = log(abs(a)), sign(a)
+
 """
     logdet(M)
 

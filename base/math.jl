@@ -702,7 +702,20 @@ function _hypot(x, y)
     end
     return h*scale*oneunit(axu)
 end
-_hypot(x::Float16, y::Float16) = Float16(_hypot(Float32(x), Float32(y)))
+@inline function _hypot(x::Float32, y::Float32)
+    if isinf(x) || isinf(y)
+        return Inf32
+    end
+    _x, _y = Float64(x), Float64(y)
+    return Float32(sqrt(muladd(_x, _x, _y*_y)))
+end
+@inline function _hypot(x::Float16, y::Float16)
+    if isinf(x) || isinf(y)
+        return Inf16
+    end
+    _x, _y = Float32(x), Float32(y)
+    return Float16(sqrt(muladd(_x, _x, _y*_y)))
+end
 _hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
 
 function _hypot(x...)
@@ -939,12 +952,12 @@ function modf(x::T) where T<:IEEEFloat
     return (rx, ix)
 end
 
-@inline function ^(x::Float64, y::Float64)
+function ^(x::Float64, y::Float64)
     yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
     x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     x == 1 && return 1.0
-    !isfinite(x) && return x*(y>0)
+    !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*Inf*(!(y>0))
     logxhi,logxlo = Base.Math._log_ext(x)
     xyhi = logxhi*y
@@ -952,28 +965,29 @@ end
     hi = xyhi+xylo
     return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
-@inline function ^(x::T, y::T) where T <: Union{Float16, Float32}
+function ^(x::T, y::T) where T <: Union{Float16, Float32}
     yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
     x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     x == 1 && return one(T)
-    !isfinite(x) && return x*(y>0)
+    !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*T(Inf)*(!(y>0))
     return T(exp2(log2(abs(widen(x))) * y))
 end
 
 # compensated power by squaring
-@inline function ^(x::Float64, n::Integer)
+function ^(x::Float64, n::Integer)
     n == 0 && return one(x)
     y = 1.0
     xnlo = ynlo = 0.0
     if n < 0
         rx = inv(x)
+        n==-2 && return rx*rx #keep compatability with literal_pow
         isfinite(x) && (xnlo = -fma(x, rx, -1.) * rx)
         x = rx
         n = -n
     end
-    n==3 && return x*x*x #keep compatability with literal_pow
+    n == 3 && return x*x*x # keep compatibility with literal_pow
     while n > 1
         if n&1 > 0
             yn = x*y
@@ -988,9 +1002,9 @@ end
     !isfinite(x) && return x*y
     return muladd(x, y, muladd(y, xnlo, x*ynlo))
 end
-@inline function ^(x::Float32, n::Integer)
+function ^(x::Float32, n::Integer)
     n < 0 && return inv(x)^(-n)
-    n==3 && return x*x*x #keep compatability with literal_pow
+    n == 3 && return x*x*x #keep compatibility with literal_pow
     Float32(Base.power_by_squaring(Float64(x),n))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)

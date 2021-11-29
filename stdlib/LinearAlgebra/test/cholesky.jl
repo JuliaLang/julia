@@ -12,6 +12,10 @@ function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test abs((det(ca) - det(a))/det(ca)) <= tol # Ad hoc, but statistically verified, revisit
     @test logdet(ca) ≈ logdet(a)
     @test logdet(ca) ≈ log(det(ca))  # logdet is less likely to overflow
+    logabsdet_ca = logabsdet(ca)
+    logabsdet_a = logabsdet(a)
+    @test logabsdet_ca[1] ≈ logabsdet_a[1]
+    @test logabsdet_ca[2] ≈ logabsdet_a[2]
     @test isposdef(ca)
     @test_throws ErrorException ca.Z
     @test size(ca) == size(a)
@@ -507,6 +511,7 @@ end
     @test det(B)  ==  0.0
     @test det(B)  ≈  det(A) atol=eps()
     @test logdet(B)  ==  -Inf
+    @test logabsdet(B)[1] == -Inf
 end
 
 @testset "accessing both L and U factors should avoid allocations" begin
