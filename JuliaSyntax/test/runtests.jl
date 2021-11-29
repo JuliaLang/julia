@@ -6,15 +6,18 @@ using Test
 #end
 
 
-code = """
-[1,2, 3]
-"""
+using JuliaSyntax: RawSyntaxNode, SyntaxNode, raw_flags
+using JuliaSyntax: Kind, @K_str, children, child
 
-using JuliaSyntax: RawSyntaxNode
-using JuliaSyntax: Kind, @K_str
+# Trivia nodes
+T(k, s) = RawSyntaxNode(k, s, raw_flags(trivia=true))
+# Non-trivia nodes
+N(k, s) = RawSyntaxNode(k, s)
+N(k, args::RawSyntaxNode...) = RawSyntaxNode(k, args...)
+# Non-trivia, infix form
+NI(k, args::RawSyntaxNode...) = RawSyntaxNode(k, raw_flags(infix=true), args...)
 
-const N = RawSyntaxNode
-
+# For this code:
 code = """
 for i = 1:10
     a + 2
@@ -23,31 +26,43 @@ for i = 1:10
 end
 """
 
+# We'd like to produce something the following raw tree
 t =
 N(K"for",
-    N(K"for", 3),
-    N(K" ", 1),
-    N(K"=",
-        N(K"Identifier", 1),
-        N(K" ", 1),
-        N(K"=", 1),
-        N(K" ", 1),
-        N(K"call",
-            N(K"Integer", 1),
-            N(K":", 1),
-            N(K"Integer", 2))),
-    N(K"\n", 5),
-    N(K"call",
-        N(K"Identifier", 1),
-        N(K" ", 1),
-        N(K"+", 1),
-        N(K" ", 1),
-        N(K"Integer", 1)),
-    N(K"\n", 5),
-    N(K"Comment", 4),
-    N(K"\n", 5),
+  T(K"for", 3),
+  T(K" ", 1),
+  N(K"=",
     N(K"Identifier", 1),
-    N(K"\n", 1),
-    N(K"end", 3))
+    T(K" ", 1),
+    T(K"=", 1),
+    T(K" ", 1),
+    NI(K"call",
+      N(K"Integer", 1),
+      N(K":", 1),
+      N(K"Integer", 2))),
+  T(K"\n", 5),
+  N(K"block", 
+    NI(K"call",
+      N(K"Identifier", 1),
+      T(K" ", 1),
+      N(K"+", 1),
+      T(K" ", 1),
+      N(K"Integer", 1)),
+    T(K"\n", 5),
+    T(K"Comment", 4),
+    T(K"\n", 5),
+    N(K"Identifier", 1),
+    T(K"\n", 1)),
+  T(K"end", 3))
 
-show(stdout, MIME"text/plain"(), t, code)
+println("\nRawSyntaxNode")
+show(stdout, MIME"text/plain"(), t, code, show_trivia=true)
+
+println("\nSyntaxNode")
+
+# And the following AST
+s = SyntaxNode(t, 1, code)
+
+#code = "42"
+#SyntaxNode(N(K"Integer", 2), 1, code)
+
