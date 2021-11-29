@@ -405,8 +405,8 @@ end
                                 0.153846227114512262845736, 0.13332981086846273921509,
                                 0.117754809412463995466069, 0.103239680901072952701192,
                                 0.116255524079935043668677))
-    res_hi = hi_order * x_hi
-    res_lo = fma(x_lo, hi_order, fma(hi_order, x_hi, -res_hi))
+    res_hi, res_lo = two_mul(hi_order, x_hi)
+    res_lo = fma(x_lo, hi_order, res_lo)
     ans_hi = c1hi + res_hi
     ans_lo = ((c1hi - ans_hi) + res_hi) + (res_lo + 3.80554962542412056336616e-17)
     return ans_hi, ans_lo
@@ -428,8 +428,8 @@ function _log_ext(d::Float64)
     invy = inv(mp1hi)
     xhi = (m - 1.0) * invy
     xlo = fma(-xhi, mp1lo, fma(-xhi, mp1hi, m - 1.0)) * invy
-    x2hi = xhi * xhi
-    x2lo = muladd(xhi, xlo * 2.0, fma(xhi, xhi, -x2hi))
+    x2hi, x2lo = two_mul(xhi, xhi)
+    x2lo = muladd(xhi, xlo * 2.0, x2lo)
     thi, tlo  = log_ext_kernel(x2hi, x2lo)
 
     shi = 0.6931471805582987 * e
@@ -437,10 +437,10 @@ function _log_ext(d::Float64)
     shinew = muladd(xhi, 2.0, shi)
     slo = muladd(1.6465949582897082e-12, e, muladd(xlo, 2.0, (((shi - shinew) + xhi2))))
     shi = shinew
-    x3hi = x2hi * xhi
-    x3lo = muladd(x2hi, xlo, muladd(xhi, x2lo,fma(x2hi, xhi, -x3hi)))
-    x3thi = x3hi * thi
-    x3tlo = muladd(x3hi, tlo, muladd(x3lo, thi, fma(x3hi, thi, -x3thi)))
+    x3hi, x3lo = two_mul(x2hi, xhi)
+    x3lo = muladd(x2hi, xlo, muladd(xhi, x2lo,x3lo))
+    x3thi, x3tlo = two_mul(x3hi, thi)
+    x3tlo = muladd(x3hi, tlo, muladd(x3lo, thi, x3tlo))
     anshi = x3thi + shi
     anslo = slo + x3tlo - ((anshi - shi) - x3thi)
     return anshi, anslo
