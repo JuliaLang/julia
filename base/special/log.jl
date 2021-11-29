@@ -139,10 +139,6 @@ const t_log_Float32 = (0.0,0.007782140442054949,0.015504186535965254,0.023167059
     0.6773988235918061,0.6813592248079031,0.6853040030989194,0.689233281238809,
     0.6931471805599453)
 
-# determine if hardware FMA is available
-# should probably check with LLVM, see #9855.
-const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) != 0
-
 # truncate lower order bits (up to 26)
 # ideally, this should be able to use ANDPD instructions, see #9868.
 @inline function truncbits(x::Float64)
@@ -209,18 +205,10 @@ end
     #   2(f-u1-u2) - f*(u1+u2) = 0
     #   2(f-u1) - f*u1 = (2+f)u2
     #   u2 = (2(f-u1) - f*u1)/(2+f)
-    if FMA_NATIVE
-        return u + fma(fma(-u,f,2(f-u)), g, q)
-    else
-        u1 = truncbits(u) # round to 24 bits
-        f1 = truncbits(f)
-        f2 = f-f1
-        u2 = ((2.0*(f-u1)-u1*f1)-u1*f2)*g
-        ## Step 4
-        m_hi = logbU(Float64, base)
-        m_lo = logbL(Float64, base)
-        return fma(m_hi, u1, fma(m_hi, (u2 + q), m_lo*u1))
-    end
+
+    m_hi = logbU(Float64, base)
+    m_lo = logbL(Float64, base)
+    return fma(m_hi, u, fma(m_lo, u, m_hi*fma(fma(-u,f,2(f-u)), g, q)))
 end
 
 
