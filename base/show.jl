@@ -410,6 +410,11 @@ function _show_default(io::IO, @nospecialize(x))
                                     Pair{Symbol,Any}(:typeinfo, Any))
                 f = fieldname(t, i)
                 if !isdefined(x, f)
+                    if newline
+                        println(io)
+                        write(io, " " ^ 4)
+                        newline = false
+                    end
                     print(io, undef_ref_str)
                 else
                     fx = getfield(x, i)
