@@ -147,7 +147,6 @@ let src = code_typed1((Bool,)) do cond
     end
     @test !any(isnew, src.code)
 end
-# FIXME to handle this case, we need a more strong alias analysis
 let src = code_typed1((Bool,)) do cond
         r = Ref{Any}()
         if cond
@@ -157,7 +156,22 @@ let src = code_typed1((Bool,)) do cond
         end
         return r[]
     end
-    @test_broken !any(isnew, src.code)
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Bool,Bool,Any,Any,Any)) do c1, c2, x, y, z
+        r = Ref{Any}()
+        if c1
+            if c2
+                r[] = x
+            else
+                r[] = y
+            end
+        else
+            r[] = z
+        end
+        return r[]
+    end
+    @test !any(isnew, src.code)
 end
 let src = code_typed1((Bool,)) do cond
         r = Ref{Any}()
@@ -167,6 +181,20 @@ let src = code_typed1((Bool,)) do cond
         return r[]
     end
     # N.B. `r` should be allocated since `cond` might be `false` and then it will be thrown
+    @test any(isnew, src.code)
+end
+let src = code_typed1((Bool,Bool,Any,Any)) do c1, c2, x, y
+        r = Ref{Any}()
+        if c1
+            if c2
+                r[] = x
+            end
+        else
+            r[] = y
+        end
+        return r[]
+    end
+    # N.B. `r` should be allocated since `c2` might be `false` and then it will be thrown
     @test any(isnew, src.code)
 end
 
