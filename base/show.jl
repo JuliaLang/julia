@@ -395,6 +395,7 @@ show(x) = show(stdout, x)
 # avoid inferring show_default on the type of `x`
 show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
 
+
 function _show_default(io::IO, @nospecialize(x))
     t = typeof(x)
     show(io, inferencebarrier(t)::DataType)
@@ -403,14 +404,37 @@ function _show_default(io::IO, @nospecialize(x))
     nb = sizeof(x)::Int
     if nf != 0 || nb == 0
         if !show_circular(io, x)
-            recur_io = IOContext(io, Pair{Symbol,Any}(:SHOWN_SET, x),
-                                 Pair{Symbol,Any}(:typeinfo, Any))
+            newline = false
             for i in 1:nf
+                buff = IOBuffer()
+                recur_io = IOContext(IOContext(buff, io), Pair{Symbol,Any}(:SHOWN_SET, x),
+                                    Pair{Symbol,Any}(:typeinfo, Any))
                 f = fieldname(t, i)
                 if !isdefined(x, f)
                     print(io, undef_ref_str)
                 else
-                    show(recur_io, getfield(x, i))
+                    fx = getfield(x, i)
+                    show(recur_io, fx)
+                    seek(buff, 0)
+                    buffsize = length(read(buff, String))
+                    seek(buff, 0)
+                    is_complex_struct = any(isstructtype(inferencebarrier(typeof(getfield(fx, j)))) for j ∈ 1:nfields(fx))
+                    if !is_complex_struct && buffsize < displaysize()[2] ÷ 4
+                        if newline
+                            println(io)
+                            write(io, " " ^ 4)
+                            newline = false
+                        end
+                        write(io, buff)
+                    else
+                        seek(buff, 0)
+                        println(io)
+                        for l ∈ readlines(buff; keep = true)
+                            write(io, " " ^ 4)
+                            write(io, l)
+                        end
+                        newline = true
+                    end
                 end
                 if i < nf
                     print(io, ", ")
