@@ -115,10 +115,10 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false, _lpad=true)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
-        print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        _lpad && print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         print(io, timestr, " seconds")
         parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
         parens && print(io, " (")
@@ -149,9 +149,9 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, ne
     nothing
 end
 
-function timev_print(elapsedtime, diff::GC_Diff, compile_time)
+function timev_print(elapsedtime, diff::GC_Diff, compile_time, _lpad)
     allocs = gc_alloc_count(diff)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, true)
+    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, true, _lpad)
     print("elapsed time (ns): $elapsedtime\n")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -243,8 +243,9 @@ macro time(msg, ex)
             compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
         )
         local diff = GC_Diff(gc_num(), stats)
-        isnothing($(esc(msg))) || print($(esc(msg)), " ->")
-        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
+        local has_msg = !isnothing($(esc(msg)))
+        has_msg && print($(esc(msg)), " : ")
+        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true, !has_msg)
         val
     end
 end
@@ -323,8 +324,9 @@ macro timev(msg, ex)
             compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
         )
         local diff = GC_Diff(gc_num(), stats)
-        isnothing($(esc(msg))) || print($(esc(msg)), " ->")
-        timev_print(elapsedtime, diff, compile_elapsedtime)
+        local has_msg = !isnothing($(esc(msg)))
+        has_msg && print($(esc(msg)), " : ")
+        timev_print(elapsedtime, diff, compile_elapsedtime, !has_msg)
         val
     end
 end
