@@ -38,7 +38,7 @@ function Base.:(==)(k1::Kind, k2::Kind)
 end
 =#
 
-using Tokenize.Tokens: Kind, isliteral, iskeyword
+using Tokenize.Tokens: Kind, isliteral, iskeyword, isoperator
 
 kind(k::Kind) = k
 kind(raw::TzTokens.RawToken) = TzTokens.exactkind(raw)
@@ -67,7 +67,7 @@ function _kind_str(k::Kind)
         "N"
     elseif iskeyword(k)
         lowercase(string(k))
-    elseif TzTokens.isoperator(k)
+    elseif isoperator(k)
         string(TzTokens.UNICODE_OPS_REVERSE[k]) 
     elseif k == K"("
         "("
