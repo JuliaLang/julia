@@ -462,27 +462,12 @@ norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
 function generic_norm2(x)
     maxabs = normInf(x)
-    (maxabs == 0 || isinf(maxabs)) && return maxabs
-    (v, s) = iterate(x)::Tuple
+    (ismissing(maxabs) || maxabs == 0 || isinf(maxabs)) && return maxabs
     T = typeof(maxabs)
     if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
-        sum::promote_type(Float64, T) = norm_sqr(v)
-        while true
-            y = iterate(x, s)
-            y === nothing && break
-            (v, s) = y
-            sum += norm_sqr(v)
-        end
-        return convert(T, sqrt(sum))
+        return convert(T, sqrt(mapreduce(norm_sqr, +, x)))
     else
-        sum = abs2(norm(v)/maxabs)
-        while true
-            y = iterate(x, s)
-            y === nothing && break
-            (v, s) = y
-            sum += (norm(v)/maxabs)^2
-        end
-        return convert(T, maxabs*sqrt(sum))
+        return convert(T, maxabs*sqrt(mapreduce(v -> abs2(norm(v)/maxabs), +, x)))
     end
 end
 
