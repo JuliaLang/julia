@@ -790,9 +790,10 @@ function sroa_pass!(ir::IRCode)
         # now go through analyzed mutable structs and see which ones we can eliminate
         # NOTE copy the use count here, because `simple_dce!` may modify it and we need it
         # consistent with the state of the IR here (after tracking `PhiNode` arguments,
-        # but before the DCE) for our predicate within `sroa_mutables!`
+        # but before the DCE) for our predicate within `sroa_mutables!`, but we also
+        # try an extra effort using a callback so that reference counts are updated
         used_ssas = copy(compact.used_ssas)
-        simple_dce!(compact)
+        simple_dce!(compact, (x::SSAValue) -> used_ssas[x.id] -= 1)
         ir = complete(compact)
         sroa_mutables!(ir, defuses, used_ssas)
         return ir
@@ -862,10 +863,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             isempty(du.uses) && continue
             push!(du.defs, newidx)
             ldu = compute_live_ins(ir.cfg, du)
-            phiblocks = Int[]
-            if !isempty(ldu.live_in_bbs)
-                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, domtree)
-            end
+            phiblocks = isempty(ldu.live_in_bbs) ? Int[] : iterated_dominance_frontier(ir.cfg, ldu, domtree)
             allblocks = sort(vcat(phiblocks, ldu.def_bbs))
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)

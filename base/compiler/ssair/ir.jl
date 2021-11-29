@@ -1311,7 +1311,9 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         compact.result[old_result_idx][:inst]), (compact.idx, active_bb)
 end
 
-function maybe_erase_unused!(extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, callback = x::SSAValue->nothing)
+function maybe_erase_unused!(
+    extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int,
+    callback = null_dce_callback)
     stmt = compact.result[idx][:inst]
     stmt === nothing && return false
     if compact_exprtype(compact, SSAValue(idx)) === Bottom
@@ -1404,18 +1406,20 @@ function just_fixup!(compact::IncrementalCompact)
     end
 end
 
-function simple_dce!(compact::IncrementalCompact)
+function simple_dce!(compact::IncrementalCompact, callback = null_dce_callback)
     # Perform simple DCE for unused values
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        maybe_erase_unused!(extra_worklist, compact, idx)
+        maybe_erase_unused!(extra_worklist, compact, idx, callback)
     end
     while !isempty(extra_worklist)
-        maybe_erase_unused!(extra_worklist, compact, pop!(extra_worklist))
+        maybe_erase_unused!(extra_worklist, compact, pop!(extra_worklist), callback)
     end
 end
+
+null_dce_callback(x::SSAValue) = return
 
 function non_dce_finish!(compact::IncrementalCompact)
     result_idx = compact.result_idx
