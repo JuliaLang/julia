@@ -93,6 +93,7 @@ end
 # AST interface, built on top of raw tree
 
 mutable struct SyntaxNode
+    source::SourceFile
     raw::RawSyntaxNode
     position::Int
     parent::Union{Nothing,SyntaxNode}
@@ -100,12 +101,12 @@ mutable struct SyntaxNode
     val::Any
 end
 
-function SyntaxNode(raw::RawSyntaxNode, position::Int, code::String)
+function SyntaxNode(source::SourceFile, raw::RawSyntaxNode, position::Int)
     if !haschildren(raw)
         # Leaf node
         k = raw.kind
         val_range = position:position + raw.span - 1
-        val_str = @view code[val_range]
+        val_str = source[val_range]
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
         if k == K"Integer"
@@ -117,7 +118,7 @@ function SyntaxNode(raw::RawSyntaxNode, position::Int, code::String)
         else
             error("Can't parse literal of kind $k")
         end
-        return SyntaxNode(raw, position, nothing, :leaf, val)
+        return SyntaxNode(source, raw, position, nothing, :leaf, val)
     else
         k = raw.kind
         head = k == K"call"     ? :call     :
@@ -130,7 +131,7 @@ function SyntaxNode(raw::RawSyntaxNode, position::Int, code::String)
         pos = position
         for (i,rawchild) in enumerate(children(raw))
             if !istrivia(rawchild)
-                push!(cs, SyntaxNode(rawchild, pos, code))
+                push!(cs, SyntaxNode(source, rawchild, pos))
             end
             pos += rawchild.span
         end
@@ -141,7 +142,7 @@ function SyntaxNode(raw::RawSyntaxNode, position::Int, code::String)
         if isinfix(raw)
             cs[2], cs[1] = cs[1], cs[2]
         end
-        node = SyntaxNode(raw, position, nothing, head, cs)
+        node = SyntaxNode(source, raw, position, nothing, head, cs)
         for c in cs
             c.parent = node
         end
@@ -211,15 +212,10 @@ end
 """
 Print the code, highlighting the part covered by `node` at tree `path`.
 """
-function highlight(code::String, node, path::Int...)
+function highlight(code::String, node, path::Int...; color=(40,40,70))
     node, p, span = child_position_span(node, path...)
     q = p + span
-    print(code[1:p-1])
-    first = true
-    for linepart in split(code[p:q-1], '\n')
-        first || print('\n')
-        print("\e[48;2;20;50;20m", linepart, "\e[0;0m")
-        first = false
-    end
-    print(code[q:end])
+    print(stdout, code[1:p-1])
+    _printstyled(stdout, code[p:q-1]; color)
+    print(stdout, code[q:end])
 end
