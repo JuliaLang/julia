@@ -33,6 +33,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
+#include "llvm-alloc-helpers.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
@@ -2456,14 +2457,27 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
         }
         IRBuilder<> builder(CI);
         builder.SetCurrentDebugLocation(CI->getDebugLoc());
-        auto parBits = builder.CreateAnd(EmitLoadTag(builder, parent), 3);
+        auto get_tag = [&](Value *alloc) {
+            jl_alloc::AllocIdInfo alloc_info;
+            if (auto call = dyn_cast<CallInst>(alloc)) {
+                if (jl_alloc::getAllocIdInfo(alloc_info, call, alloc_obj_func)) {
+                    if (auto type = dyn_cast<ConstantExpr>(alloc_info.type->stripPointerCasts())) {
+                        if (type->getOpcode() == Instruction::IntToPtr) {
+                            return static_cast<llvm::Value*>(type->getOperand(0));
+                        }
+                    }
+                }
+            }
+            return EmitLoadTag(builder, alloc);
+        };
+        auto parBits = builder.CreateAnd(get_tag(parent), 3);
         auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, 3));
         auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
         builder.SetInsertPoint(mayTrigTerm);
         Value *anyChldNotMarked = NULL;
         for (unsigned i = 1; i < CI->getNumArgOperands(); i++) {
             Value *child = CI->getArgOperand(i);
-            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, child), 1);
+            Value *chldBit = builder.CreateAnd(get_tag(child), 1);
             Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0));
             anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
         }
