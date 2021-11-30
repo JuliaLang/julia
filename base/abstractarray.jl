@@ -114,6 +114,9 @@ has_offset_axes(::Colon) = false
 
 Throw an `ArgumentError` if the indices of any argument start with something other than one along any axis.
 See also [`has_offset_axes`](@ref).
+
+!!! compat "Julia 1.2"
+     This function requires at least Julia 1.2.
 """
 require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError("offset arrays are not supported but got an array with index other than 1"))
 
