@@ -16,7 +16,7 @@ struct SourceFile
 end
 
 function SourceFile(code::AbstractString; filename=nothing)
-    line_starts = Int[0]
+    line_starts = Int[1]
     for i in eachindex(code)
         # The line is considered to start after the `\n`
         code[i] == '\n' && push!(line_starts, i+1)
@@ -27,6 +27,20 @@ end
 # Get line number of the given byte within the code
 function line_number(source::SourceFile, byte_index)
     searchsortedlast(source.line_starts, byte_index)
+end
+
+"""
+Get line number and character within the line at the given byte index.
+"""
+function source_location(source::SourceFile, byte_index)
+    line = searchsortedlast(source.line_starts, byte_index)
+    i = source.line_starts[line]
+    column = 1
+    while i < byte_index
+        i = nextind(source.code, i)
+        column += 1
+    end
+    line, column
 end
 
 function Base.show(io::IO, ::MIME"text/plain", source::SourceFile)
