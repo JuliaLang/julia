@@ -256,6 +256,7 @@ setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 Merge new environment mappings into the given [`Cmd`](@ref) object, returning a new `Cmd` object.
 Duplicate keys are replaced.  If `command` does not contain any environment values set already,
 it inherits the current environment at time of `addenv()` call if `inherit` is `true`.
+Keys with value `nothing` are deleted from the env.
 
 See also [`Cmd`](@ref), [`setenv`](@ref), [`ENV`](@ref).
 
@@ -274,7 +275,11 @@ function addenv(cmd::Cmd, env::Dict; inherit::Bool = true)
         end
     end
     for (k, v) in env
-        new_env[string(k)::String] = string(v)::String
+        if v === nothing
+            delete!(new_env, string(k)::String)
+        else
+            new_env[string(k)::String] = string(v)::String
+        end
     end
     return setenv(cmd, new_env)
 end
