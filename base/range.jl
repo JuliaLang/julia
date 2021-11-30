@@ -47,20 +47,25 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
-    range(start, stop, length)
-    range(start, stop; length, step)
-    range(start; length, stop, step)
-    range(;start, length, stop, step)
+    range(start[, stop]; length, stop, step=1)
 
-Construct a specialized array with evenly spaced elements and optimized storage (an [`AbstractRange`](@ref)) from the arguments.
-Mathematically a range is uniquely determined by any three of `start`, `step`, `stop` and `length`.
-Valid invocations of range are:
-* Call `range` with any three of `start`, `step`, `stop`, `length`.
-* Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
-  to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
-* Call `range` with one of `stop` or `length`. `start` and `step` will be assumed to be one.
+Given a starting value, construct a range either by length or from `start` to `stop`,
+optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
+One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
 
-See Extended Help for additional details on the returned type.
+If `length` and `stop` are provided and `step` is not, the step size will be computed
+automatically such that there are `length` linearly spaced elements in the range.
+
+If `step` and `stop` are provided and `length` is not, the overall range length will be computed
+automatically such that the elements are `step` spaced.
+
+Special care is taken to ensure intermediate values are computed rationally.
+To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
+
+`stop` may be specified as either a positional or keyword argument.
+
+!!! compat "Julia 1.1"
+    `stop` as a positional argument requires at least Julia 1.1.
 
 # Examples
 ```jldoctest
@@ -81,57 +86,7 @@ julia> range(1, 10, length=101)
 
 julia> range(1, 100, step=5)
 1:5:96
-
-julia> range(stop=10, length=5)
-6:10
-
-julia> range(stop=10, step=1, length=5)
-6:1:10
-
-julia> range(start=1, step=1, stop=10)
-1:1:10
-
-julia> range(; length = 10)
-Base.OneTo(10)
-
-julia> range(; stop = 6)
-Base.OneTo(6)
-
-julia> range(; stop = 6.5)
-1.0:1.0:6.0
 ```
-If `length` is not specified and `stop - start` is not an integer multiple of `step`, a range that ends before `stop` will be produced.
-```jldoctest
-julia> range(1, 3.5, step=2)
-1.0:2.0:3.0
-```
-
-Special care is taken to ensure intermediate values are computed rationally.
-To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
-
-!!! compat "Julia 1.1"
-    `stop` as a positional argument requires at least Julia 1.1.
-
-!!! compat "Julia 1.7"
-    The versions without keyword arguments and `start` as a keyword argument
-    require at least Julia 1.7.
-
-!!! compat "Julia 1.8"
-    The versions with `stop` as a sole keyword argument,
-    or `length` as a sole keyword argument require at least Julia 1.8.
-
-
-# Extended Help
-
-`range` will produce a `Base.OneTo` when the arguments are Integers and
-* Only `length` is provided
-* Only `stop` is provided
-
-`range` will produce a `UnitRange` when the arguments are Integers and
-* Only `start`  and `stop` are provided
-* Only `length` and `stop` are provided
-
-A `UnitRange` is not produced if `step` is provided even if specified as one.
 """
 function range end
 
