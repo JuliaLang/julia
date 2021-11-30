@@ -47,11 +47,10 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
-    range(start[, stop]; length, stop, step=1)
+    range([start, stop]; length, stop, step=1)
 
 Given a starting value, construct a range either by length or from `start` to `stop`,
-optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
-One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
+optionally with a given step (defaults to 1, a [`UnitRange`](@ref)). If `length`, `stop`, and `step` are all specified, they must agree.
 
 If `length` and `stop` are provided and `step` is not, the step size will be computed
 automatically such that there are `length` linearly spaced elements in the range.
@@ -63,6 +62,9 @@ Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
 
 `stop` may be specified as either a positional or keyword argument.
+    
+!!! compat "Julia 1.6"
+    At least one of `length` or `step` must be specified as of Julia 1.6.
 
 !!! compat "Julia 1.1"
     `stop` as a positional argument requires at least Julia 1.1.
