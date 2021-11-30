@@ -38,20 +38,21 @@ The tree datastructure design here is hard:
 Let's tackle it by prototyping several important work flows:
 
 * Syntax transformations
-  - Choose some macros to implement
+  - Choose some macros to implement. This is a basic test of mixing source
+    trees from different files while preserving precise source locations.
+* Formatting
+  - Re-indent a file. This tests the handling of syntax trivia.
 * Refactoring
-  - A pass to rename local variables
+  - A pass to rename local variables. This tests how information from further
+    down the compilation pipeline can be attached to the syntax tree and used
+    to modify the source code.
 * Precise error reporting in lowering
   - Syntax desugaring `[a, b] = (c, d)` should report "invalid assignment
     location `[a, b]`". But at a precise source location.
-  - Try something several layers deeper inside lowering. For example "macro
+  - Try something several layers deeper inside lowering? For example "macro
     definition not allowed inside a local scope"
-* Refactoring
-  - A pass to rename local variables
 * Incremental reparsing
   - Reparse a source file, given a byte range replacement
-* Formatting
-  - Re-indent a file
 
 
 ## Tree design
