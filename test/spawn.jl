@@ -817,6 +817,10 @@ end
         cmd2 = addenv(cmd, "FOO" => "foo2", "BAR" => "bar"; inherit=true)
         @test strip(String(read(cmd2))) == "foo2 bar"
     end
+    # Keys with value === nothing are deleted
+    cmd = Cmd(`$shcmd -c "echo \$FOO \$BAR"`, env=Dict("FOO" => "foo", "BAR" => "bar"))
+    cmd2 = addenv(cmd, "FOO" => nothing)
+    @test strip(String(read(cmd2))) == "bar"
 end
 
 
