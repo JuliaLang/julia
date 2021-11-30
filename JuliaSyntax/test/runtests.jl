@@ -6,8 +6,10 @@ using Test
 #end
 
 
+using JuliaSyntax: SourceFile
 using JuliaSyntax: RawSyntaxNode, SyntaxNode, raw_flags
 using JuliaSyntax: Kind, @K_str, children, child
+using JuliaSyntax: highlight
 
 # Trivia nodes
 T(k, s) = RawSyntaxNode(k, s, raw_flags(trivia=true))
@@ -26,6 +28,8 @@ for i = 1:10
 end
 """
 
+source = SourceFile(code)
+
 # We'd like to produce something the following raw tree
 t =
 N(K"for",
@@ -40,8 +44,8 @@ N(K"for",
       N(K"Integer", 1),
       N(K":", 1),
       N(K"Integer", 2))),
-  T(K"\n", 5),
   N(K"block", 
+    T(K"\n", 5),
     NI(K"call",
       N(K"Identifier", 1),
       T(K" ", 1),
@@ -61,8 +65,17 @@ show(stdout, MIME"text/plain"(), t, code, show_trivia=true)
 println("\nSyntaxNode")
 
 # And the following AST
-s = SyntaxNode(t, 1, code)
+s = SyntaxNode(source, t, 1)
 
 #code = "42"
 #SyntaxNode(N(K"Integer", 2), 1, code)
+
+# Simulate the following Undescores.jl - like macro:
+
+# @U f(x+_, y)
+#   ↦
+# f(_1 -> x+_1, y)
+
+# macro U(ex)
+# end
 
