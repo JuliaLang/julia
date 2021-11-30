@@ -757,7 +757,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 
 // method definition ----------------------------------------------------------
 
-jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
+JL_DLLEXPORT jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci)
 {
     jl_method_t *m = jl_new_method_uninit(module);
