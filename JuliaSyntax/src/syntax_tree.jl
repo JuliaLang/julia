@@ -163,16 +163,16 @@ haschildren(node::SyntaxNode) = node.head !== :leaf
 children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : ()
 
 function _show_syntax_node(io, node, indent)
-    pos_width = 20
+    pos_width = 25
     fname = node.source.filename
     if !isnothing(fname)
-        maxw = pos_width - 5
+        maxw = pos_width - 10
         if length(fname) > maxw
             fname = fname[nextind(fname, end-maxw-1):end]
         end
     end
-    lno = (line_number(node.source, node.position))
-    pos = rpad("$fname:$lno", pos_width)*" │"
+    line, col = source_location(node.source, node.position)
+    pos = rpad("$fname:$line:$col", pos_width)*" │"
     if !haschildren(node)
         line = string(pos, indent, repr(node.val))
         println(io, line)
