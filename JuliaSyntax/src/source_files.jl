@@ -11,12 +11,22 @@ struct SourceFile
     # https://en.wikipedia.org/wiki/Rope_(data_structure)
     code::String
     filename::String
-    # Probably want to maintain a map of byte_offset -> (line, column) here
-    # somewhere as well.
+    # String index of start of every line
+    line_starts::Vector{Int}
 end
 
-function SourceFile(code::AbstractString)
-    SourceFile(code, "unknown.jl")
+function SourceFile(code::AbstractString; filename="unknown.jl")
+    line_starts = Int[0]
+    for i in eachindex(code)
+        # The line is considered to start after the `\n`
+        code[i] == '\n' && push!(line_starts, i+1)
+    end
+    SourceFile(code, filename, line_starts)
+end
+
+# Get line number of the given byte within the code
+function line_number(source::SourceFile, byte_index)
+    searchsortedlast(source.line_starts, byte_index)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", source::SourceFile)
@@ -28,5 +38,9 @@ end
 
 function Base.getindex(source::SourceFile, rng::AbstractRange)
     @view source.code[rng]
+end
+
+function Base.getindex(source::SourceFile, i::Int)
+    source.code[i]
 end
 

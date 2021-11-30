@@ -154,12 +154,20 @@ haschildren(node::SyntaxNode) = node.head !== :leaf
 children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : ()
 
 function _show_syntax_node(io, node, indent)
+    pos_width = 20
+    fname = node.source.filename
+    maxw = pos_width - 5
+    if length(fname) > maxw
+        fname = node.source.filename[nextind(node.source.filename, end-maxw-1):end]
+    end
+    lno = (line_number(node.source, node.position))
+    pos = rpad("$fname:$lno", pos_width)*"│"
     if !haschildren(node)
-        line = string(rpad(node.position, 4), indent, node.val)
+        line = string(pos, indent, node.val)
         println(io, line)
         # rpad(line, 40), repr(str[node.position:node.position + node.span - 1]))
     else
-        println(io, rpad(node.position, 4), indent, '[', _kind_str(kind(node.raw)), ']')
+        println(io, pos, indent, '[', _kind_str(kind(node.raw)), ']')
         new_indent = indent*"  "
         for n in children(node)
             _show_syntax_node(io, n, new_indent)
@@ -167,10 +175,36 @@ function _show_syntax_node(io, node, indent)
     end
 end
 
+function _show_syntax_node_compact(io, node)
+    if !haschildren(node)
+        print(io, node.val)
+    else
+        print(io, "($(_kind_str(kind(node.raw))) ")
+        first = true
+        for n in children(node)
+            first || print(io, ' ')
+            _show_syntax_node_compact(io, n)
+            first = false
+        end
+        print(io, ')')
+    end
+end
+
 function Base.show(io::IO, ::MIME"text/plain", node::SyntaxNode)
     _show_syntax_node(io, node, "")
 end
 
+function Base.show(io::IO, node::SyntaxNode)
+    _show_syntax_node_compact(io, node)
+end
+
+function Base.push!(node::SyntaxNode, child::SyntaxNode)
+    if !haschildren(node)
+        error("Cannot add children")
+    end
+    args = node.val::Vector{SyntaxNode}
+    push!(args, child)
+end
 
 #-------------------------------------------------------------------------------
 # Tree utilities
