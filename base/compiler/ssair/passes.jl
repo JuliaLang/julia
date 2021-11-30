@@ -104,32 +104,27 @@ function has_safe_def(
     # found a "safe" definition
     def ≠ 0 && return true
     # we may still be able to replace this load with `PhiNode`
+    # examine if all predecessors of `block` have any "safe" definition
     block = block_for_inst(ir, idx)
     seen = BitSet(block)
-    return has_safe_def(ir, domtree, allblocks, du, newidx, block, seen)
-end
-
-# recursively examine if all predecessors of `block` have any "safe" definition
-# XXX this implementation avoids infinite cycles by maintaining a single set of seen basic blocks,
-# and obviously it doesn't handle cycles very well
-function has_safe_def(
-    ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse,
-    newidx::Int, block::Int, seen::BitSet)
-    preds = ir.cfg.blocks[block].preds
-    isempty(preds) && return false
-    for pred in preds
-        # if this block has already been examined, we should bail out to avoid infinite cycles
+    worklist = BitSet(ir.cfg.blocks[block].preds)
+    isempty(worklist) && return false
+    while !isempty(worklist)
+        pred = pop!(worklist)
+        # if this block has already been examined, bail out to avoid infinite cycles
         pred in seen && return false
         idx = last(ir.cfg.blocks[pred].stmts)
         # NOTE `idx` isn't a load, thus we can use inclusive coondition within the `find_def_for_use`
         def, _, _ = find_def_for_use(ir, domtree, allblocks, du, idx, true)
         # will throw since we already checked this `:new` site doesn't define this field
         def == newidx && return false
+        push!(seen, pred)
         # found a "safe" definition for this predecessor
         def ≠ 0 && continue
         # check for the predecessors of this predecessor
-        push!(seen, pred)
-        has_safe_def(ir, domtree, allblocks, du, newidx, pred, seen) || return false
+        for newpred in ir.cfg.blocks[pred].preds
+            push!(worklist, newpred)
+        end
     end
     return true
 end
