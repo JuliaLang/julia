@@ -1007,7 +1007,7 @@ function ^(x::Float64, n::Integer)
     n == 3 && return x*x*x # keep compatibility with literal_pow
     while n > 1
         if n&1 > 0
-            err = muladd(x*y, xnlo, x*ynlo)
+            err = muladd(y, xnlo, x*ynlo)
             y, ynlo = two_mul(x,y)
             ynlo += err
         end
