@@ -1011,9 +1011,9 @@ function ^(x::Float64, n::Integer)
             y, ynlo = two_mul(x,y)
             ynlo += err
         end
-        xn, xnlo = two_mul(x, x)
-        xnlo = muladd(x, 2*xnlo, xnlo)
-        x = xn
+        err = x*2*xnlo
+        x, xnlo = two_mul(x, x)
+        xnlo += err
         n >>>= 1
     end
     !isfinite(x) && return x*y
