@@ -10,12 +10,12 @@ struct SourceFile
     # For example a rope data structure may be good for incremental editing
     # https://en.wikipedia.org/wiki/Rope_(data_structure)
     code::String
-    filename::String
+    filename::Union{Nothing,String}
     # String index of start of every line
     line_starts::Vector{Int}
 end
 
-function SourceFile(code::AbstractString; filename="unknown.jl")
+function SourceFile(code::AbstractString; filename=nothing)
     line_starts = Int[0]
     for i in eachindex(code)
         # The line is considered to start after the `\n`
@@ -30,10 +30,11 @@ function line_number(source::SourceFile, byte_index)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", source::SourceFile)
-    header = "Source: $(source.filename)"
-    print(io, header, '\n',
-          repeat('-', textwidth(header)), '\n',
-          source.code)
+    if !isnothing(source.filename)
+        print(io, source.filename, '\n',
+              repeat('-', textwidth(source.filename)), '\n')
+    end
+    print(io, source.code)
 end
 
 function Base.getindex(source::SourceFile, rng::AbstractRange)

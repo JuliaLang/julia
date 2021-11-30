@@ -101,7 +101,7 @@ mutable struct SyntaxNode
     val::Any
 end
 
-function SyntaxNode(source::SourceFile, raw::RawSyntaxNode, position::Int)
+function SyntaxNode(source::SourceFile, raw::RawSyntaxNode, position::Integer=1)
     if !haschildren(raw)
         # Leaf node
         k = raw.kind
@@ -113,6 +113,8 @@ function SyntaxNode(source::SourceFile, raw::RawSyntaxNode, position::Int)
             val = Base.parse(Int, val_str)
         elseif k == K"Identifier"
             val = Symbol(val_str)
+        elseif k == K"String"
+            val = unescape_string(source[position+1:position+raw.span-2])
         elseif isoperator(k)
             val = Symbol(val_str)
         else
@@ -126,6 +128,8 @@ function SyntaxNode(source::SourceFile, raw::RawSyntaxNode, position::Int)
                k == K"block"    ? :block    :
                k == K"for"      ? :for      :
                k == K"="        ? :(=)      :
+               k == K"$"        ? :$        :
+               k == K"quote"    ? :quote    :
                error("Unknown head of kind $k")
         cs = SyntaxNode[]
         pos = position
@@ -150,20 +154,27 @@ function SyntaxNode(source::SourceFile, raw::RawSyntaxNode, position::Int)
     end
 end
 
+function interpolate_literal(node::SyntaxNode, val)
+    @assert node.head == :$
+    SyntaxNode(node.source, node.raw, node.position, node.parent, :leaf, val)
+end
+
 haschildren(node::SyntaxNode) = node.head !== :leaf
 children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : ()
 
 function _show_syntax_node(io, node, indent)
     pos_width = 20
     fname = node.source.filename
-    maxw = pos_width - 5
-    if length(fname) > maxw
-        fname = node.source.filename[nextind(node.source.filename, end-maxw-1):end]
+    if !isnothing(fname)
+        maxw = pos_width - 5
+        if length(fname) > maxw
+            fname = fname[nextind(fname, end-maxw-1):end]
+        end
     end
     lno = (line_number(node.source, node.position))
-    pos = rpad("$fname:$lno", pos_width)*"│"
+    pos = rpad("$fname:$lno", pos_width)*" │"
     if !haschildren(node)
-        line = string(pos, indent, node.val)
+        line = string(pos, indent, repr(node.val))
         println(io, line)
         # rpad(line, 40), repr(str[node.position:node.position + node.span - 1]))
     else
@@ -177,7 +188,7 @@ end
 
 function _show_syntax_node_compact(io, node)
     if !haschildren(node)
-        print(io, node.val)
+        print(io, repr(node.val))
     else
         print(io, "($(_kind_str(kind(node.raw))) ")
         first = true
