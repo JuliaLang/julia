@@ -110,7 +110,7 @@ function has_safe_def(
 end
 
 # recursively examine if all predecessors of `block` have any "safe" definition
-# XXX this implementation avoids infinite cycles by maintaining a sigle set of seen basic blocks,
+# XXX this implementation avoids infinite cycles by maintaining a single set of seen basic blocks,
 # and obviously it doesn't handle cycles very well
 function has_safe_def(
     ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse,
