@@ -28,7 +28,7 @@ for i = 1:10
 end
 """
 
-source = SourceFile(code)
+source = SourceFile(code, filename="none.jl")
 
 # We'd like to produce something the following raw tree
 t =
