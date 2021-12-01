@@ -120,7 +120,7 @@ JL_USED_FUNC void AllocUseInfo::dump()
     jl_safe_printf("refstore: %d\n", refstore);
     jl_safe_printf("hasunknownmem: %d\n", hasunknownmem);
     jl_safe_printf("returned: %d\n", returned);
-    jl_safe_printf("hasboundscheck: %d\n", hasboundscheck);
+    jl_safe_printf("haserror: %d\n", haserror);
     jl_safe_printf("Uses: %d\n", (unsigned)uses.size());
     for (auto inst: uses)
         llvm_dump(inst);
@@ -214,8 +214,9 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
             }
             if (required.pass.write_barrier_func == callee)
                 return true;
-            if (required.pass.bounds_check_func == callee) {
-                required.use_info.hasboundscheck = true;
+            if (isa<UnreachableInst>(inst->getParent()->getTerminator())) {
+                //We're about to leave through this function, it's an error function
+                required.use_info.haserror = true;
                 return true;
             }
             auto opno = use->getOperandNo();
@@ -327,7 +328,7 @@ bool jl_alloc::getAllocIdInfo(AllocIdInfo &info, llvm::CallInst *call, llvm::Fun
         info.object.size = -1;
         return true;
     } else if (auto cexpr = dyn_cast<ConstantExpr>(callee)) {
-        if (cexpr->getNumOperands() == 1) {
+        if (cexpr->getOpcode() == Instruction::IntToPtr) {
             if (auto cint = dyn_cast<ConstantInt>(cexpr->getOperand(0))) {
                 std::size_t faddr = cint->getZExtValue();
                 if (faddr == reinterpret_cast<std::uintptr_t>(jl_alloc_array_1d)) {

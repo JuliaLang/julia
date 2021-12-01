@@ -248,15 +248,20 @@ void Optimizer::optimizeAll()
             if (use_info.escaped) {
                 array_length_clobbered = true;
                 array_length_clobbered_within_bb = use_info.escapeswithinbb;
+                array_alloc_size_info.initialized = false;
+                array_alloc_size_info.valid = false;
             } else {
                 getArrayOps(orig, item.second.array.dimcount);
+                getArraySizeInfo(orig, item.second);
             }
             optimizeArrayDims(orig, item.second);
             if (array_info.escaped) {
+                if (use_info.hastypeof)
+                    optimizeTag(orig, item.second.type);
                 continue;
             }
         }
-        if (use_info.escaped || use_info.hasboundscheck || use_info.returned) {
+        if (use_info.escaped || use_info.haserror || use_info.returned) {
             if (use_info.hastypeof)
                 optimizeTag(orig, item.second.type);
             continue;
@@ -845,6 +850,31 @@ void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag, bool is_array
     }
 }
 
+Instruction *cloneInstructionTreeImpl(Instruction *target, BasicBlock *parent, Instruction *tree, DominatorTree &dtree) {
+    if (parent == tree->getParent() || dtree.dominates(tree, target)) {
+        return tree;
+    }
+    auto cloned = tree->clone();
+    for (unsigned i = 0; i < cloned->getNumOperands(); i++) {
+        if (auto inst = dyn_cast<Instruction>(cloned->getOperand(i))) {
+            cloned->setOperand(i, cloneInstructionTreeImpl(target, parent, inst, dtree));
+        }
+    }
+    cloned->setName(tree->getName());
+    parent->getInstList().push_back(cloned);
+    return cloned;
+}
+
+Instruction *cloneInstructionTree(Instruction *target, Instruction *tree, DominatorTree &dtree) {
+    auto parent = target->getParent();
+    auto bbend = parent->getInstList().back().clone();
+    bbend->setName(parent->getInstList().back().getName());
+    parent->getInstList().pop_back();
+    auto cloned = cloneInstructionTreeImpl(target, parent, tree, dtree);
+    parent->getInstList().push_back(bbend);
+    return cloned;
+}
+
 void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info) {
     assert(info.isarray);
     if (info.array.dimcount) {
@@ -883,6 +913,14 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                 switch (offset) {
                     case 0:
                         // This is an access to array data
+                        if ((info.array.dimcount > 1 || !use_info.escaped) && isa<LoadInst>(access.inst) && access.inst->getParent() != orig_inst->getParent()) {
+                            // This is a small hack to deduplicate all loads of this pointer
+                            // Essentially we move every single load to the same spot and hope
+                            // LLVM is observant enough to deduplicate those loads with
+                            // appropriate bitcasts/addrspacecasts
+                            auto new_load = cloneInstructionTree(orig_inst, access.inst, getDomTree());
+                            access.inst->replaceAllUsesWith(new_load);
+                        }
                         break;
                     case 8:
                         if (info.array.dimcount > 1 || !array_length_clobbered || (!array_length_clobbered_within_bb && access.inst->getParent() == orig_inst->getParent())) {
@@ -893,21 +931,20 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                         break;
                     case 16:
                         //This is an access to array flags
-                        if (!use_info.escapeswithinbb) {
+                        if (info.array.dimcount > 1 || !use_info.escapeswithinbb) {
                             if (isa<LoadInst>(access.inst)) {
                                 for (auto user : access.inst->users()) {
                                     if (auto binop = dyn_cast<BinaryOperator>(user)) {
                                         if (binop->getOpcode() == BinaryOperator::And) {
                                             if (auto cint = dyn_cast<ConstantInt>(binop->getOperand(1))) {
                                                 if (cint->getSExtValue() == 3 && (!use_info.escaped || binop->getParent() == orig_inst->getParent())) {
-                                                    getArraySizeInfo(orig_inst, info);
                                                     if (array_alloc_size_info.valid) {
                                                         binop->replaceAllUsesWith(ConstantInt::get(binop->getType(), array_alloc_size_info.how));
                                                     } else {
                                                         // This is an access to the jl_array_t::how field
                                                         for (auto cuser : binop->users()) {
                                                             if (auto cmp = dyn_cast<CmpInst>(cuser)) {
-                                                                if (cmp->getNumOperands() == 2 && cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ && (!use_info.escaped || cmp->getParent() == orig_inst->getParent())) {
+                                                                if (cmp->getNumOperands() == 2 && cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ && (info.array.dimcount > 1 || !use_info.escaped || cmp->getParent() == orig_inst->getParent())) {
                                                                     if (auto cint2 = dyn_cast<ConstantInt>(cmp->getOperand(1))) {
                                                                         if (cint2->getSExtValue() == 3 || cint->getSExtValue() == 1) {
                                                                             //At the end of this chain we know that the value is either 0 or 2 immediately

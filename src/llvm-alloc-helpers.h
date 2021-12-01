@@ -78,9 +78,9 @@ namespace jl_alloc {
         // There are typeof call
         // This can be optimized without optimizing out the allocation itself
         bool hastypeof:1;
-        // There are boundscheck call
-        // This causes an escape but can be ignored for dimensions
-        bool hasboundscheck:1;
+        // There are error call
+        // This causes an escape but can be ignored for some computations
+        bool haserror:1;
         // There are store/load/memset on this object with offset or size (or value for memset)
         // that cannot be statically computed.
         // This is a weaker form of `addrescaped` since `hasload` can still be used
@@ -99,7 +99,7 @@ namespace jl_alloc {
             refstore = false;
             hastypeof = false;
             hasunknownmem = false;
-            hasboundscheck = false;
+            haserror = false;
             escapeswithinbb = false;
             uses.clear();
             preserves.clear();
