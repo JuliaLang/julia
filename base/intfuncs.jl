@@ -1060,7 +1060,7 @@ function binomial(n::T, k::T) where T<:Integer
     end
     x = nn = n - k + one(T)
     nn += one(T)
-    rr = one(T)+one(T)
+    rr = T(2)
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt % T
@@ -1068,5 +1068,5 @@ function binomial(n::T, k::T) where T<:Integer
         rr += one(T)
         nn += one(T)
     end
-    convert(T, copysign(x, sgn))
+    copysign(x, sgn)
 end
