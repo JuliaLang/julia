@@ -487,3 +487,15 @@ end
     ci = code_typed(() -> 14 // 21)[][1]
     @test ci.code == Any[Core.ReturnNode(2 // 3)]
 end
+
+@testset "binomial" begin
+    for T in (Bool, Int8, UInt16, Int32, UInt64)
+        for x in rand(T, 1000)
+            @test binomial(x,1) == x
+            x < isqrt(typemax(T)) && @test binomial(x,2) == div(x*(x-1), 2)
+            @test binomial(x,x-1) == x
+            x < isqrt(typemax(T)) && @test binomial(x,x-2) == div(x*(x-1), 2)
+            @infered binomial(one(T),one(T))
+       end
+    end
+end
