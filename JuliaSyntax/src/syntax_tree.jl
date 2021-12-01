@@ -162,26 +162,26 @@ end
 haschildren(node::SyntaxNode) = node.head !== :leaf
 children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : ()
 
-function _show_syntax_node(io, node, indent)
-    pos_width = 25
+function _show_syntax_node(io, current_filename, node, indent)
     fname = node.source.filename
-    if !isnothing(fname)
-        maxw = pos_width - 10
-        if length(fname) > maxw
-            fname = fname[nextind(fname, end-maxw-1):end]
-        end
-    end
+    #@info "" fname print_fname current_filename[] 
     line, col = source_location(node.source, node.position)
-    pos = rpad("$fname:$line:$col", pos_width)*" │"
-    if !haschildren(node)
-        line = string(pos, indent, repr(node.val))
-        println(io, line)
-        # rpad(line, 40), repr(str[node.position:node.position + node.span - 1]))
-    else
-        println(io, pos, indent, '[', _kind_str(kind(node.raw)), ']')
+    posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(node.position,6)):$(rpad(node.position+node.raw.span,6))│"
+    nodestr = !haschildren(node) ?
+              repr(node.val) :
+              "[$(_kind_str(kind(node.raw)))]"
+    treestr = string(indent, nodestr)
+    # Add filename if it's changed from the previous node
+    if fname != current_filename[]
+        #println(io, "# ", fname)
+        treestr = string(rpad(treestr, 40), "│$fname")
+        current_filename[] = fname
+    end
+    println(io, posstr, treestr)
+    if haschildren(node)
         new_indent = indent*"  "
         for n in children(node)
-            _show_syntax_node(io, n, new_indent)
+            _show_syntax_node(io, current_filename, n, new_indent)
         end
     end
 end
@@ -202,7 +202,8 @@ function _show_syntax_node_compact(io, node)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", node::SyntaxNode)
-    _show_syntax_node(io, node, "")
+    println(io, "line:col│ byte_range  │ tree                                   │ file_name")
+    _show_syntax_node(io, Ref{Union{Nothing,String}}(nothing), node, "")
 end
 
 function Base.show(io::IO, node::SyntaxNode)
