@@ -8,8 +8,11 @@ using Test
 
 using JuliaSyntax: SourceFile
 using JuliaSyntax: RawSyntaxNode, SyntaxNode, raw_flags
-using JuliaSyntax: Kind, @K_str, children, child
+using JuliaSyntax: Kind, @K_str, children, child, setchild!
 using JuliaSyntax: highlight
+
+#-------------------------------------------------------------------------------
+# Raw syntax tree and AST layering
 
 # Trivia nodes
 T(k, s) = RawSyntaxNode(k, s, raw_flags(trivia=true))
@@ -59,18 +62,21 @@ N(K"for",
     T(K"\n", 1)),
   T(K"end", 3))
 
+# And the following AST
+s = SyntaxNode(source, t)
+
 println("\nRawSyntaxNode")
 show(stdout, MIME"text/plain"(), t, code, show_trivia=true)
 
 println("\nSyntaxNode")
-
-# And the following AST
-s = SyntaxNode(source, t)
+show(stdout, MIME"text/plain"(), s)
 
 #code = "42"
 #SyntaxNode(N(K"Integer", 2), 1, code)
 
 #-------------------------------------------------------------------------------
+# # Macros and expression interpolation
+
 # The following shows that SyntaxNode works nicely for simple macros based on
 # interpolating expressions into one another. In particular it shows how
 # precise source information from multiple files can coexist within the same
@@ -93,6 +99,8 @@ end
 function at_show2(ex::SyntaxNode)
     code = String(read(@__FILE__))
     name = sprint(JuliaSyntax._show_syntax_node_compact, ex)
+    # The following quote block is not used directly, but the text for it is
+    # re-read from `code`.
     quote_begin = (@__LINE__) + 1
     quote
         value = $ex
@@ -132,12 +140,13 @@ function at_show2(ex::SyntaxNode)
     block = SyntaxNode(source, raw, source.line_starts[quote_begin]+4)
     # Now that we have the block, we need to interpolate into it.
 
-    # Inserting a SyntaxNode `ex` is simple:
-    block.val[1].val[2] = ex
+    # Interpolating a SyntaxNode `ex` is simple:
+    setchild!(block, (1, 2), ex)
     # The interpolation of a Julia *value* should inherit the source location
     # of the $ interpolation expression. This is different to the
     # interpolation of a SyntaxNode, which should just be inserted as-is.
-    block.val[2].val[2] = JuliaSyntax.interpolate_literal(block.val[2].val[2], name)
+    setchild!(block, (2, 2),
+              JuliaSyntax.interpolate_literal(block.val[2].val[2], name))
     block
 end
 
@@ -156,4 +165,11 @@ s2 = SyntaxNode(source2, NI(K"call",
 
 # Calling at_show2, we see that the precise source information is preserved for
 # both the surrounding expression and the interpolated fragments.
+println("\nInterpolation example")
 show(stdout, MIME"text/plain"(), at_show2(s2))
+
+
+#-------------------------------------------------------------------------------
+# # Formatting
+
+

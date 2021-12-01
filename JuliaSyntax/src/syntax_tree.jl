@@ -235,6 +235,27 @@ function child(node, path::Integer...)
     return n
 end
 
+function setchild!(node::SyntaxNode, path, x)
+    n1 = child(node, path[1:end-1]...)
+    n1.val[path[end]] = x
+end
+
+# We can overload multidimensional Base.getindex / Base.setindex! for node
+# types.
+#
+# The justification for this is to view a tree as a multidimensional ragged
+# array, where descending depthwise into the tree corresponds to dimensions of
+# the array.
+#
+# However... this analogy is only good for complete trees at a given depth (=
+# dimension). But the syntax is oh-so-handy!
+function Base.getindex(node::Union{SyntaxNode,RawSyntaxNode}, path::Int...)
+    child(node, path...)
+end
+function Base.setindex!(node::SyntaxNode, x::SyntaxNode, path::Int...)
+    setchild!(node, path, x)
+end
+
 """
 Get absolute position and span of the child of `node` at the given tree `path`.
 """
