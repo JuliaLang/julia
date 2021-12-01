@@ -132,9 +132,45 @@ to distinguish between infix and prefix.
 
 # Resources
 
-* [Persistence, façades and Roslyn’s red-green trees](https://ericlippert.com/2012/06/08/red-green-trees/)
-  - [Roslyn optimization overview](https://github.com/KirillOsenkov/Bliki/wiki/Roslyn-Immutable-Trees)
-  - [Literate C# Usage Example](https://johtela.github.io/LiterateCS/LiterateCS/BlockBuilder.html)
+## C# Roslyn
+
+[Persistence, façades and Roslyn’s red-green trees](https://ericlippert.com/2012/06/08/red-green-trees/)
+* [Roslyn optimization overview](https://github.com/KirillOsenkov/Bliki/wiki/Roslyn-Immutable-Trees)
+* [Literate C# Usage Example](https://johtela.github.io/LiterateCS/LiterateCS/BlockBuilder.html)
+
+## 
+
+## Oil shell
 * Andy Chu (the author of the OIL shell) has written some things about this
   - Collected links about lossless syntax in [a wiki page](https://github.com/oilshell/oil/wiki/Lossless-Syntax-Tree-Pattern)
   - A blog post [From AST to Lossless Syntax Tree](https://www.oilshell.org/blog/2017/02/11.html)
+
+## Rust-analyzer
+
+`rust-analyzer` seems to be very close to what I'm buildin here, and has come
+to the same conclusions on green tree layout with explicit trivia nodes.  Their
+document on internals
+[here](https://github.com/rust-analyzer/rust-analyzer/blob/master/docs/dev/syntax.md)
+is great. Points of note:
+
+* They have *three* trees!
+  1. Green trees exactly like mine (pretty much all the same design
+     decisions, including trivia storage)
+  2. Untyped red syntax trees somewhat like ours, but much more minimal. For
+     example, these don't attempt to reorder children.
+  3. A typed AST layer with a type for each expression head. The AST searches
+     for children by dynamically traversing the child list each time, rather
+     than having a single canonical ordering.
+* "Parser does not see whitespace nodes. Instead, they are attached to the
+  tree in the TreeSink layer." This may be relevant to us - it's a pain to
+  attach whitespace to otherwise significant tokens, and inefficient to
+  allocate and pass around a list of whitespace trivia.
+* "In practice, incremental reparsing doesn't actually matter much for IDE
+  use-cases, parsing from scratch seems to be fast enough."
+* There's various comments about macros... Rust macro expansion seems quite
+  different from Julia (it appears it may be interleaved with parsing??)
+
+In general I think it's unclear whether we want typed ASTs in Julia and we
+particularly need to deal with the fact that `Expr` is the existing public
+interface. Could we have `Expr2` wrap `SyntaxNode`?
+
