@@ -14,7 +14,7 @@
 # The rawest version of a parse tree node.
 struct RawSyntaxNode
     kind::Kind
-    span::Int
+    span::UInt32
     flags::UInt32
     args::Union{Tuple{},Vector{RawSyntaxNode}}
     # has_diagnostics::Bool
@@ -63,15 +63,16 @@ function _show_raw_node(io, node, indent, pos, str, show_trivia)
     if !show_trivia && istrivia(node)
         return
     end
+    posstr = "$(lpad(pos, 6)):$(rpad(pos+node.span, 6)) |"
     if !haschildren(node)
-        line = string(rpad(node.span, 4), indent, _kind_str(node.kind))
+        line = string(posstr, indent, _kind_str(node.kind))
         if isnothing(str)
             println(io, line)
         else
             println(io, rpad(line, 40), repr(str[pos:pos + node.span - 1]))
         end
     else
-        println(io, rpad(node.span, 4), indent, '[', _kind_str(node.kind), "]")
+        println(io, posstr, indent, '[', _kind_str(node.kind), "]")
         new_indent = indent*"  "
         p = pos
         for a in node.args
