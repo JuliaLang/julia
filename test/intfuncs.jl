@@ -495,7 +495,7 @@ end
             x < isqrt(typemax(T)) && @test binomial(x,2) == div(x*(x-1), 2)
             @test binomial(x,x-1) == x
             x < isqrt(typemax(T)) && @test binomial(x,x-2) == div(x*(x-1), 2)
-            @infered binomial(one(T),one(T))
+            @inferred binomial(one(T),one(T))
        end
     end
 end
