@@ -491,10 +491,10 @@ end
 @testset "binomial" begin
     for T in (Bool, Int8, UInt16, Int32, UInt64)
         for x in rand(T, 1000)
-            @test binomial(x,1) == x
-            x < isqrt(typemax(T)) && @test binomial(x,2) == div(x*(x-1), 2)
-            @test binomial(x,x-1) == x
-            x < isqrt(typemax(T)) && @test binomial(x,x-2) == div(x*(x-1), 2)
+            @test binomial(x,T(1)) == x
+            x < isqrt(typemax(T)) && @test binomial(x,T(2)) == div(x*(x-1), 2)
+            @test binomial(x,T(x-1)) == x
+            x < isqrt(typemax(T)) && @test binomial(x,T(x-2)) == div(x*(x-1), 2)
             @inferred binomial(one(T),one(T))
        end
     end
