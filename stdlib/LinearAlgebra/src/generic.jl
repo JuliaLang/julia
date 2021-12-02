@@ -449,7 +449,7 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 # Dot products and norms
 
 # special cases of norm; note that they don't need to handle isempty(x)
-generic_normMinusInf(x) = float(mapreduce(norm, min, x))
+2MinusInf(x) = float(mapreduce(norm, min, x))
 
 generic_normInf(x) = float(mapreduce(norm, max, x))
 
@@ -464,44 +464,31 @@ function generic_norm2(x)
     maxabs = normInf(x)
     (ismissing(maxabs) || maxabs == 0 || isinf(maxabs)) && return maxabs
     T = typeof(maxabs)
-    if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
-        return convert(T, sqrt(mapreduce(norm_sqr, +, x)))
+    sT = promote_type(Float64, T)
+    maxabs_st = sT(maxabs)
+    if isfinite(length(x)*maxabs_st*maxabs_st) && maxabs_st*maxabs_st != 0 # Scaling not necessary
+        return convert(T, sqrt(mapreduce(v -> sT(norm_sqr(v)), +, x)))
     else
-        return convert(T, maxabs*sqrt(mapreduce(v -> abs2(norm(v)/maxabs), +, x)))
+        invmaxabs = inv(maxabs_st)
+        return convert(T, maxabs*sqrt(mapreduce(v -> abs2(sT(norm(v))*invmaxabs), +, x)))
     end
 end
 
 # Compute L_p norm ‖x‖ₚ = sum(abs(x).^p)^(1/p)
 # (Not technically a "norm" for p < 1.)
 function generic_normp(x, p)
-    (v, s) = iterate(x)::Tuple
+    T = typeof(float(first(x)))
+    spp::promote_type(Float64, T) = p
     if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? normInf(x) : normMinusInf(x)
         (maxabs == 0 || isinf(maxabs)) && return maxabs
-        T = typeof(maxabs)
-    else
-        T = typeof(float(norm(v)))
-    end
-    spp::promote_type(Float64, T) = p
-    if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
-        sum::promote_type(Float64, T) = norm(v)^spp
-        while true
-            y = iterate(x, s)
-            y === nothing && break
-            (v, s) = y
-            sum += norm(v)^spp
+        maxelnorm = maxabs^spp
+        if (isfinite(length(x)*maxelnorm) && maxelnorm != 0) # rescaling necessary
+            invmaxabs = inv(maxabs_st)
+            return convert(T, maxabs*mapreduce(v -> (norm(v)*invmaxabs)^spp, +, x)^inv(spp))
         end
-        return convert(T, sum^inv(spp))
-    else # rescaling
-        sum = (norm(v)/maxabs)^spp
-        while true
-            y = iterate(x, s)
-            y === nothing && break
-            (v, s) = y
-            sum += (norm(v)/maxabs)^spp
-        end
-        return convert(T, maxabs*sum^inv(spp))
     end
+    return convert(T, mapreduce(v -> norm(v)^spp, +, x))^inv(spp))
 end
 
 normMinusInf(x) = generic_normMinusInf(x)
