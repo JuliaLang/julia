@@ -194,12 +194,20 @@ If set to `0`, this will disable automatic precompilation by package actions whi
 
 ### `JULIA_PKG_SERVER`
 
-Used by `Pkg.jl`, for downloading packages and updating the registry. By default, `Pkg` uses `https://pkg.julialang.org` to
-fetch Julia packages. You can use this environment variable to select a different server. In addition, you can disable the use of the
-PkgServer protocol, and instead access the packages directly from their hosts (GitHub, GitLab, etc.) by setting:
-```
-export JULIA_PKG_SERVER=""
-```
+Specifies the URL of the package registry to use. By default, `Pkg` uses
+`https://pkg.julialang.org` to fetch Julia packages. In addition, you can disable the use of the PkgServer
+protocol, and instead access the packages directly from their hosts (GitHub, GitLab, etc.)
+by setting: ``` export JULIA_PKG_SERVER="" ```
+
+### `JULIA_PKG_SERVER_REGISTRY_PREFERENCE`
+
+Specifies the preferred registry flavor. Currently supported values are `conservative`
+(the default), which will only publish resources that have been processed, and `eager`,
+which will closely track the upstream repository, but may not have all resources
+available.
+
+!!! compat "Julia 1.7"
+    This only affects Julia 1.7 and above.
 
 ### `JULIA_PKG_UNPACK_REGISTRY`
 
