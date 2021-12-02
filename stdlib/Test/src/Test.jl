@@ -1299,7 +1299,7 @@ re-arrangements of `@testset`s regardless of their side-effect on the
 global RNG state.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"trigonometric identities |    4      4     [0-9\.]+ s"
 julia> @testset "trigonometric identities" begin
            θ = 2/3*π
            @test sin(-θ) ≈ -sin(θ)
@@ -1307,8 +1307,8 @@ julia> @testset "trigonometric identities" begin
            @test sin(2θ) ≈ 2*sin(θ)*cos(θ)
            @test cos(2θ) ≈ cos(θ)^2 - sin(θ)^2
        end;
-Test Summary:            | Pass  Total
-trigonometric identities |    4      4
+Test Summary:            | Pass  Total  Duration
+trigonometric identities |    4      4     0.0 s
 ```
 """
 macro testset(args...)

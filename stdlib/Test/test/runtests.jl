@@ -1078,7 +1078,7 @@ let ex = :(something_complex + [1, 2, 3])
 end
 
 @testset "verbose option" begin
-    expected = """
+    expected = r"""
     Test Summary:             | Pass  Total  Duration
     Parent                    |    9      9  \s*\d*.\d s
       Child 1                 |    3      3  \s*\d*.\d s
