@@ -982,7 +982,7 @@ mutable struct DefaultTestSet <: AbstractTestSet
     time_start::Float64
     time_end::Float64
 end
-DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = false) = DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, 0, 0)
+DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true) = DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, 0, 0)
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
@@ -1278,7 +1278,7 @@ accepts two boolean options:
 - `verbose`: if `true`, the result summary of the nested testsets is shown even
 when they all pass (the default is `false`).
 - `showtiming`: if `true`, the duration of each displayed testset is shown
-(the default is `false`).
+(the default is `true`).
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
