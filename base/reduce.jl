@@ -159,7 +159,7 @@ Like [`mapreduce`](@ref), but with guaranteed left associativity, as in [`foldl`
 If provided, the keyword argument `init` will be used exactly once. In general, it will be
 necessary to provide `init` to work with empty collections.
 """
-mapfoldl(f, op, itr; init=_InitialValue()) = mapfoldl_impl(f, op, init, itr)
+mapfoldl(f::F, op::OP, itr; init=_InitialValue()) where {F, OP} = mapfoldl_impl(f, op, init, itr)
 
 """
     foldl(op, itr; [init])
@@ -182,11 +182,11 @@ julia> accumulate(=>, (1,2,3,4))
 (1, 1 => 2, (1 => 2) => 3, ((1 => 2) => 3) => 4)
 ```
 """
-foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
+foldl(op::OP, itr; kw...) where {OP} = mapfoldl(identity, op, itr; kw...)
 
 ## foldr & mapfoldr
 
-function mapfoldr_impl(f, op, nt, itr)
+function mapfoldr_impl(f::F, op::OP, nt, itr) where {F, OP}
     op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
     return foldl_impl(op′, nt, _reverse(itr′))
 end
@@ -207,7 +207,7 @@ Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr
 provided, the keyword argument `init` will be used exactly once. In general, it will be
 necessary to provide `init` to work with empty collections.
 """
-mapfoldr(f, op, itr; init=_InitialValue()) = mapfoldr_impl(f, op, init, itr)
+mapfoldr(f::F, op::OP, itr; init=_InitialValue()) where {F, OP} = mapfoldr_impl(f, op, init, itr)
 
 
 """
@@ -226,7 +226,7 @@ julia> foldr(=>, 1:4; init=0)
 1 => (2 => (3 => (4 => 0)))
 ```
 """
-foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
+foldr(op::OP, itr; kw...) where {OP} = mapfoldr(identity, op, itr; kw...)
 
 ## reduce & mapreduce
 
@@ -261,7 +261,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
     end
 end
 
-mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
+mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) where {F, OP} =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
@@ -291,8 +291,8 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
-mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
+mapreduce(f::F, op::OP, itr; kw...) where {F, OP} = mapfoldl(f, op, itr; kw...)
+mapreduce(f::F, op::OP, itrs...; kw...) where {F, OP} = reduce(op, Generator(f, itrs...); kw...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -410,7 +410,7 @@ The default is `reduce_first(op, f(x))`.
 """
 mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
-_mapreduce(f, op, A::AbstractArrayOrBroadcasted) = _mapreduce(f, op, IndexStyle(A), A)
+_mapreduce(f::F, op::OP, A::AbstractArrayOrBroadcasted) where {F, OP} = _mapreduce(f, op, IndexStyle(A), A)
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     inds = LinearIndices(A)
@@ -435,9 +435,9 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     end
 end
 
-mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
+mapreduce(f::F, op::OP, a::Number) where {F, OP} = mapreduce_first(f, op, a)
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f, op, A)
+_mapreduce(f::F, op::OP, ::IndexCartesian, A::AbstractArrayOrBroadcasted) where {F, OP} = mapfoldl(f, op, A)
 
 """
     reduce(op, itr; [init])
@@ -472,9 +472,9 @@ julia> reduce(*, [2; 3; 4]; init=-1)
 -24
 ```
 """
-reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
+reduce(op::OP, itr; kw...) where {OP} = mapreduce(identity, op, itr; kw...)
 
-reduce(op, a::Number) = a  # Do we want this?
+reduce(op, a::Number) = a
 
 ###### Specific reduction functions ######
 
@@ -517,7 +517,7 @@ In the former case, the integers are widened to system word size and therefore
 the result is 128. In the latter case, no such widening happens and integer
 overflow results in -128.
 """
-sum(f, a; kw...) = mapreduce(f, add_sum, a; kw...)
+sum(f::F, a; kw...) where {F} = mapreduce(f, add_sum, a; kw...)
 
 """
     sum(itr; [init])
@@ -573,7 +573,7 @@ julia> prod(abs2, [2; 3; 4])
 576
 ```
 """
-prod(f, a; kw...) = mapreduce(f, mul_prod, a; kw...)
+prod(f::F, a; kw...) where {F} = mapreduce(f, mul_prod, a; kw...)
 
 """
     prod(itr; [init])
@@ -692,7 +692,7 @@ julia> maximum(sin, Real[]; init=-1.0)  # good, since output of sin is >= -1
 -1.0
 ```
 """
-maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
+maximum(f::F, a; kw...) where {F} = mapreduce(f, max, a; kw...)
 
 """
     minimum(f, itr; [init])
@@ -719,7 +719,7 @@ julia> minimum(sin, Real[]; init=1.0)  # good, since output of sin is <= 1
 1.0
 ```
 """
-minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
+minimum(f::F, a; kw...) where {F} = mapreduce(f, min, a; kw...)
 
 """
     maximum(itr; [init])
@@ -817,7 +817,7 @@ julia> findmax(cos, 0:π/2:2π)
 (1.0, 1)
 ```
 """
-findmax(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmax, pairs(domain) )
+findmax(f::F, domain) where {F} = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmax, pairs(domain) )
 _rf_findmax((fm, im), (fx, ix)) = isless(fm, fx) ? (fx, ix) : (fm, im)
 
 """
@@ -876,7 +876,7 @@ julia> findmin(cos, 0:π/2:2π)
 ```
 
 """
-findmin(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmin, pairs(domain) )
+findmin(f::F, domain) where {F} = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmin, pairs(domain) )
 _rf_findmin((fm, im), (fx, ix)) = isgreater(fm, fx) ? (fx, ix) : (fm, im)
 
 """
@@ -928,7 +928,7 @@ julia> argmax(cos, 0:π/2:2π)
 0.0
 ```
 """
-argmax(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmax, domain)[2]
+argmax(f::F, domain) where {F} = mapfoldl(x -> (f(x), x), _rf_findmax, domain)[2]
 
 """
     argmax(itr)
@@ -983,7 +983,7 @@ julia> argmin(acos, 0:0.1:1)
 1.0
 ```
 """
-argmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)[2]
+argmin(f::F, domain) where {F} = mapfoldl(x -> (f(x), x), _rf_findmin, domain)[2]
 
 """
     argmin(itr)
@@ -1123,7 +1123,7 @@ julia> any(i -> i > 0, [-1, 0])
 false
 ```
 """
-any(f, itr) = _any(f, itr, :)
+any(f::F, itr) where {F} = _any(f, itr, :)
 
 function _any(f, itr, ::Colon)
     anymissing = false
@@ -1170,7 +1170,7 @@ julia> all(i -> i > 0, [1, 2])
 true
 ```
 """
-all(f, itr) = _all(f, itr, :)
+all(f::F, itr) where {F} = _all(f, itr, :)
 
 function _all(f, itr, ::Colon)
     anymissing = false
@@ -1219,7 +1219,7 @@ julia> count(>(3), 1:7, init=0x03)
 """
 count(itr; init=0) = count(identity, itr; init)
 
-count(f, itr; init=0) = _simple_count(f, itr, init)
+count(f::F, itr; init=0) where {F} = _simple_count(f, itr, init)
 
 _simple_count(pred, itr, init) = _simple_count_helper(Generator(pred, itr), init)
 

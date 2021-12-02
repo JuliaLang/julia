@@ -465,7 +465,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # we might like to penalize non-inferrability, but
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
-                return 0
+                return 1
             elseif (f === Core.arrayref || f === Core.const_arrayref || f === Core.arrayset) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes, slottypes)
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
@@ -489,17 +489,29 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         end
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes, slottypes)
         if extyp === Union{}
-            return 0
+            return 1
         end
         return error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
-    elseif head === :foreigncall || head === :invoke || head == :invoke_modify
+    elseif head === :foreigncall
+        call = ex.args[1]
+        if call isa QuoteNode
+            if call.value === :jl_array_ptr || call.value === :jl_value_ptr
+                return 1 # getting the pointer is very cheap: these could just be intrinsics
+            end
+        end
+        extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes, slottypes)
+        error_path && return params.inline_error_path_cost
+        return extyp === Union{} ? 1 : 20
+    elseif head === :invoke || head == :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
         # run-time of the function, we omit them from
         # consideration. This way, non-inlined error branches do not
         # prevent inlining.
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes, slottypes)
-        return extyp === Union{} ? 0 : 20
+        extyp === Union{} && return 1
+        error_path && return params.inline_error_path_cost
+        return 20
     elseif head === :(=)
         if ex.args[1] isa GlobalRef
             cost = 20
@@ -534,9 +546,9 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
         # loops are generally always expensive
         # but assume that forward jumps are already counted for from
         # summing the cost of the not-taken branch
-        thiscost = dst(stmt.label) < line ? 40 : 0
+        thiscost = dst(stmt.label) < line ? 40 : 1
     elseif stmt isa GotoIfNot
-        thiscost = dst(stmt.dest) < line ? 40 : 0
+        thiscost = dst(stmt.dest) < line ? 40 : 1
     end
     return thiscost
 end
