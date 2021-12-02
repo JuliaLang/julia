@@ -1299,7 +1299,7 @@ re-arrangements of `@testset`s regardless of their side-effect on the
 global RNG state.
 
 # Examples
-```jldoctest; filter = r"trigonometric identities |    4      4     [0-9\.]+ s"
+```jldoctest; filter = r"trigonometric identities |    4      4     [0-9\\.]+ s"
 julia> @testset "trigonometric identities" begin
            θ = 2/3*π
            @test sin(-θ) ≈ -sin(θ)
