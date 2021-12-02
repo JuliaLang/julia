@@ -1078,19 +1078,19 @@ let ex = :(something_complex + [1, 2, 3])
 end
 
 @testset "verbose option" begin
-    expected = r"""
-        Test Summary: | Pass  Total  Duration
-        Parent        |    9      9  \s*\d*.\d s
-          Child 1     |    3      3  \s*\d*.\d s
-            Child 1.1 |    1      1  \s*\d*.\d s
-            Child 1.2 |    1      1  \s*\d*.\d s
-            Child 1.3 |    1      1  \s*\d*.\d s
-          Child 2     |    3      3  \s*\d*.\d s
-          Child 3     |    3      3  \s*\d*.\d s
-            Child 3.1 |    1      1  \s*\d*.\d s
-            Child 3.2 |    1      1  \s*\d*.\d s
-            Child 3.3 |    1      1  \s*\d*.\d s
-        """
+    expected = """
+    Test Summary:             | Pass  Total  Duration
+    Parent                    |    9      9  \s*\d*.\d s
+      Child 1                 |    3      3  \s*\d*.\d s
+        Child 1.1 (long name) |    1      1  \s*\d*.\d s
+        Child 1.2             |    1      1  \s*\d*.\d s
+        Child 1.3             |    1      1  \s*\d*.\d s
+      Child 2                 |    3      3  \s*\d*.\d s
+      Child 3                 |    3      3  \s*\d*.\d s
+        Child 3.1             |    1      1  \s*\d*.\d s
+        Child 3.2             |    1      1  \s*\d*.\d s
+        Child 3.3             |    1      1  \s*\d*.\d s
+    """
 
     mktemp() do f, _
         write(f,
@@ -1099,7 +1099,7 @@ end
 
         @testset "Parent" verbose = true begin
             @testset "Child 1" verbose = true begin
-                @testset "Child 1.1" begin
+                @testset "Child 1.1 (long name)" begin
                     @test 1 == 1
                 end
 

@@ -69,6 +69,7 @@ New library features
 * `@testset foo()` can now be used to create a test set from a given function. The name of the test set
   is the name of the called function. The called function can contain `@test` and other `@testset`
   definitions, including to other function calls, while recording all intermediate test results. ([#42518])
+* Keys with value `nothing` are now removed from the environment in `addenv` ([#43271]).
 
 Standard library changes
 ------------------------

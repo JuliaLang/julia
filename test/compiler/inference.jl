@@ -3836,9 +3836,3 @@ end |> only == Int
         end
     end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB}
 end
-
-# issue #43130
-@test Base.return_types((Any,Type)) do uw, ti
-    (uw isa DataType && ti <: uw.name.wrapper) || return nothing
-    uw
-end[] === Union{DataType, Nothing}
