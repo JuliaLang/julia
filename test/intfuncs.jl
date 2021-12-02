@@ -494,8 +494,8 @@ end
             x>=0 && @test binomial(x,x-T(1)) == x
             @test binomial(x,T(2)) == div(x*(x-1), 2)
             x>=0 && @test binomial(x,x-T(2)) == div(x*(x-1), 2)
-            @inferred(binomial(one(T),one(T))) isa T
         end
+        @test @inferred(binomial(one(T),one(T))) isa T
     end
     for x in ((false,false), (false,true), (true,false), (true,true))
         @test binomial(x...) == (x != (false,true))
