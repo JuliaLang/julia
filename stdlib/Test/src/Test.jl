@@ -1440,6 +1440,7 @@ function testset_forloop(args, testloop, source)
 
         end
         ts = $(testsettype)($desc; $options...)
+        ts.time_start = time()
         push_testset(ts)
         first_iteration = false
         try
