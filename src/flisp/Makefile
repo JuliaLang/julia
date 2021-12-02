@@ -50,13 +50,11 @@ endif
 FLAGS := -I$(LLTSRCDIR) $(JCFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
         -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
-ifneq ($(USEMSVC), 1)
 ifneq ($(OS), emscripten)
 FLAGS += -DUSE_COMPUTED_GOTO
 endif
 FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
 FLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
-endif
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
@@ -75,8 +73,8 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
-FLISP_SRCS := $(flisp.c cvalues.c types.c flisp.h print.c read.c equal.c:%=$(SRCDIR)/%)
-FLMAIN_SRCS := $(flmain.c flisp.h:%=$(SRCDIR)/%)
+FLISP_SRCS := $(addprefix $(SRCDIR)/,flisp.c cvalues.c types.c flisp.h print.c read.c equal.c)
+FLMAIN_SRCS := $(addprefix $(SRCDIR)/,flmain.c flisp.h)
 $(BUILDDIR)/flisp.o: $(FLISP_SRCS)
 $(BUILDDIR)/flisp.dbg.obj: $(FLISP_SRCS)
 $(BUILDDIR)/flmain.o: $(FLMAIN_SRCS)
@@ -95,11 +93,7 @@ $(BUILDDIR)/$(LIBTARGET).a: $(OBJS) | $(BUILDDIR)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $(OBJS))
 
-ifneq ($(USEMSVC), 1)
 CCLD := $(CC)
-else
-CCLD := $(LD)
-endif
 
 $(BUILDDIR)/$(EXENAME)-debug$(EXE): $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(JLDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
@@ -130,9 +124,7 @@ endif
 endif
 
 test:
-ifneq ($(USEMSVC), 1)
 	$(call spawn,./$(EXENAME)$(EXE)) unittest.lsp
-endif
 
 clean:
 	rm -f $(BUILDDIR)/*.o

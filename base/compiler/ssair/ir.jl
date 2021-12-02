@@ -351,13 +351,8 @@ getindex(it::UseRefIterator) = it.use[1].stmt
 #    use::Int
 #end
 
-struct OOBToken
-end
-
-struct UndefToken
-end
-const undef_token = UndefToken()
-
+struct OOBToken end; const OOB_TOKEN = OOBToken()
+struct UndefToken end; const UNDEF_TOKEN = UndefToken()
 
 function getindex(x::UseRef)
     stmt = x.stmt
@@ -365,40 +360,40 @@ function getindex(x::UseRef)
         rhs = stmt.args[2]
         if isa(rhs, Expr)
             if is_relevant_expr(rhs)
-                x.op > length(rhs.args) && return OOBToken()
+                x.op > length(rhs.args) && return OOB_TOKEN
                 return rhs.args[x.op]
             end
         end
-        x.op == 1 || return OOBToken()
+        x.op == 1 || return OOB_TOKEN
         return rhs
     elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
-        x.op > length(stmt.args) && return OOBToken()
+        x.op > length(stmt.args) && return OOB_TOKEN
         return stmt.args[x.op]
     elseif isa(stmt, GotoIfNot)
-        x.op == 1 || return OOBToken()
+        x.op == 1 || return OOB_TOKEN
         return stmt.cond
     elseif isa(stmt, ReturnNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        x.op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, PiNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        x.op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, UpsilonNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        x.op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, PhiNode)
-        x.op > length(stmt.values) && return OOBToken()
-        isassigned(stmt.values, x.op) || return UndefToken()
+        x.op > length(stmt.values) && return OOB_TOKEN
+        isassigned(stmt.values, x.op) || return UNDEF_TOKEN
         return stmt.values[x.op]
     elseif isa(stmt, PhiCNode)
-        x.op > length(stmt.values) && return OOBToken()
-        isassigned(stmt.values, x.op) || return UndefToken()
+        x.op > length(stmt.values) && return OOB_TOKEN
+        isassigned(stmt.values, x.op) || return UNDEF_TOKEN
         return stmt.values[x.op]
     else
-        return OOBToken()
+        return OOB_TOKEN
     end
 end
 
@@ -468,8 +463,8 @@ iterate(it::UseRefIterator) = (it.use[1].op = 0; iterate(it, nothing))
     while true
         use.op += 1
         y = use[]
-        y === OOBToken() && return nothing
-        y === UndefToken() || return it.use
+        y === OOB_TOKEN && return nothing
+        y === UNDEF_TOKEN || return it.use
     end
 end
 
@@ -724,7 +719,7 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
     elseif isa(before, OldSSAValue)
         pos = before.id
         if pos < compact.idx
-            renamed = compact.ssa_rename[pos]
+            renamed = compact.ssa_rename[pos]::AnySSAValue
             count_added_node!(compact, inst.stmt)
             line = something(inst.line, compact.result[renamed.id][:line])
             node = add!(compact.new_new_nodes, renamed.id, attach_after)
@@ -1316,7 +1311,9 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         compact.result[old_result_idx][:inst]), (compact.idx, active_bb)
 end
 
-function maybe_erase_unused!(extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, callback = x::SSAValue->nothing)
+function maybe_erase_unused!(
+    extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int,
+    callback = null_dce_callback)
     stmt = compact.result[idx][:inst]
     stmt === nothing && return false
     if compact_exprtype(compact, SSAValue(idx)) === Bottom
@@ -1409,18 +1406,20 @@ function just_fixup!(compact::IncrementalCompact)
     end
 end
 
-function simple_dce!(compact::IncrementalCompact)
+function simple_dce!(compact::IncrementalCompact, callback = null_dce_callback)
     # Perform simple DCE for unused values
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        maybe_erase_unused!(extra_worklist, compact, idx)
+        maybe_erase_unused!(extra_worklist, compact, idx, callback)
     end
     while !isempty(extra_worklist)
-        maybe_erase_unused!(extra_worklist, compact, pop!(extra_worklist))
+        maybe_erase_unused!(extra_worklist, compact, pop!(extra_worklist), callback)
     end
 end
+
+null_dce_callback(x::SSAValue) = return
 
 function non_dce_finish!(compact::IncrementalCompact)
     result_idx = compact.result_idx
@@ -1467,3 +1466,8 @@ function iterate(x::BBIdxIter, (idx, bb)::Tuple{Int, Int}=(1, 1))
     end
     return (bb, idx), (idx + 1, next_bb)
 end
+
+is_known_call(e::Expr, @nospecialize(func), ir::IRCode) =
+    is_known_call(e, func, ir, ir.sptypes, ir.argtypes)
+
+argextype(@nospecialize(x), ir::IRCode) = argextype(x, ir, ir.sptypes, ir.argtypes)

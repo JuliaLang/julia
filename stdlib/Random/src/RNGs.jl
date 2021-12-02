@@ -13,6 +13,9 @@ if Sys.iswindows()
         rand!(rd, rd.buffer)
         @inbounds return rd.buffer[1] % sp[]
     end
+
+    show(io::IO, ::RandomDevice) = print(io, RandomDevice, "()")
+
 else # !windows
     struct RandomDevice <: AbstractRNG
         unlimited::Bool
@@ -23,16 +26,29 @@ else # !windows
     rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
     rand(rd::RandomDevice, ::SamplerType{Bool}) = read(getfile(rd), UInt8) % Bool
 
-    function getfile(rd::RandomDevice)
-        devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
-        # TODO: there is a data-race, this can leak up to nthreads() copies of the file descriptors,
-        # so use a "thread-once" utility once available
-        isassigned(devrandom) || (devrandom[] = open(rd.unlimited ? "/dev/urandom" : "/dev/random"))
-        devrandom[]
+    mutable struct FileRef
+        @atomic file::Union{IOStream, Nothing}
     end
 
-    const DEV_RANDOM  = Ref{IOStream}()
-    const DEV_URANDOM = Ref{IOStream}()
+    const DEV_RANDOM  = FileRef(nothing)
+    const DEV_URANDOM = FileRef(nothing)
+
+    function getfile(rd::RandomDevice)
+        ref = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
+        fd = ref.file
+        if fd === nothing
+            fd = open(rd.unlimited ? "/dev/urandom" : "/dev/random")
+            old, ok = @atomicreplace ref.file nothing => fd
+            if !ok
+                close(fd)
+                fd = old::IOStream
+            end
+        end
+        return fd
+    end
+
+    show(io::IO, rd::RandomDevice) =
+        print(io, RandomDevice, rd.unlimited ? "()" : "(unlimited=false)")
 
 end # os-test
 
@@ -376,6 +392,7 @@ copy!(::_GLOBAL_RNG, src::Xoshiro) = copy!(default_rng(), src)
 copy(::_GLOBAL_RNG) = copy(default_rng())
 
 GLOBAL_SEED = 0
+set_global_seed!(seed) = global GLOBAL_SEED = seed
 
 function seed!(::_GLOBAL_RNG, seed=rand(RandomDevice(), UInt64, 4))
     global GLOBAL_SEED = seed
@@ -411,6 +428,10 @@ for T in BitInteger_types
 end
 
 function __init__()
+    @static if !Sys.iswindows()
+        @atomic DEV_RANDOM.file = nothing
+        @atomic DEV_URANDOM.file = nothing
+    end
     seed!(GLOBAL_RNG)
 end
 

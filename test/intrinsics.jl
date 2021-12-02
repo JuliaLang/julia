@@ -164,8 +164,17 @@ end
     @test_intrinsic Core.Intrinsics.fptoui UInt Float16(3.3) UInt(3)
 end
 
-@test Core.Intrinsics.atomic_fence(:sequentially_consistent) === nothing
+using Base.Experimental: @force_compile
+@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(:u)) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(Symbol("u", "x"))) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") Core.Intrinsics.atomic_fence(Symbol("u", "x")) === nothing
+for order in (:not_atomic, :monotonic, :acquire, :release, :acquire_release, :sequentially_consistent)
+    @test Core.Intrinsics.atomic_fence(order) === nothing
+    @test (order -> Core.Intrinsics.atomic_fence(order))(order) === nothing
+    @test Base.invokelatest(@eval () -> Core.Intrinsics.atomic_fence($(QuoteNode(order)))) === nothing
+end
 @test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) == nothing
+@test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) == nothing
 
 primitive type Int256 <: Signed 256 end
 Int256(i::Int) = Core.Intrinsics.sext_int(Int256, i)

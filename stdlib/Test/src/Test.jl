@@ -180,13 +180,32 @@ struct Error <: Result
             bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(Base.show_exception_stack, bt; context=stdout)
+            bt_str = try # try the latest world for this, since we might have eval'd new code for show
+                    Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
+                catch ex
+                    "#=ERROR showing exception stack=# " *
+                        try
+                            sprint(Base.showerror, ex, catch_backtrace(); context=stdout)
+                        catch
+                            "of type " * string(typeof(ex))
+                        end
+                end
         else
             bt_str = ""
         end
+        value = try # try the latest world for this, since we might have eval'd new code for show
+                Base.invokelatest(sprint, show, value, context = :limit => true)
+            catch ex
+                "#=ERROR showing error of type " * string(typeof(value)) * "=# " *
+                    try
+                        sprint(Base.showerror, ex, catch_backtrace(); context=stdout)
+                    catch
+                        "of type " * string(typeof(ex))
+                    end
+            end
         return new(test_type,
             string(orig_expr),
-            sprint(show, value, context = :limit => true),
+            value,
             bt_str,
             source)
     end
@@ -971,7 +990,7 @@ record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 # but do not terminate. Print a backtrace.
 function record(ts::DefaultTestSet, t::Union{Fail, Error})
     if TESTSET_PRINT_ENABLE[]
-        printstyled(ts.description, ": ", color=:white)
+        print(ts.description, ": ")
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
@@ -1030,7 +1049,7 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
     pad = total == 0 ? "" : " "
-    printstyled(rpad("Test Summary:", align, " "), " |", pad; bold=true, color=:white)
+    printstyled(rpad("Test Summary:", align, " "), " |", pad; bold=true)
     if pass_width > 0
         printstyled(lpad("Pass", pass_width, " "), "  "; bold=true, color=:green)
     end
@@ -1095,8 +1114,8 @@ end
 function get_alignment(ts::DefaultTestSet, depth::Int)
     # The minimum width at this depth is
     ts_width = 2*depth + length(ts.description)
-    # If all passing, no need to look at children
-    !ts.anynonpass && return ts_width
+    # If not verbose and all passing, no need to look at children
+    !ts.verbose && !ts.anynonpass && return ts_width
     # Return the maximum of this width and the minimum width
     # for all children (if they exist)
     isempty(ts.results) && return ts_width
@@ -1225,6 +1244,7 @@ end
     @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
+    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] foo()
 
 Starts a new test set, or multiple test sets if a `for` loop is provided.
 
@@ -1241,6 +1261,7 @@ nested testsets is shown even when they all pass (the default is `false`).
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
+If a function call is provided, its name will be used. Explicit description strings override this behavior.
 
 By default the `@testset` macro will return the testset object itself, though
 this behavior can be customized in other testset types. If a `for` loop is used
@@ -1275,24 +1296,29 @@ macro testset(args...)
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block)
-        error("Expected begin/end block or for loop as argument to @testset")
+    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block && tests.head != :call)
+
+        error("Expected function call, begin/end block or for loop as argument to @testset")
     end
 
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
     else
-        return testset_beginend(args, tests, __source__)
+        return testset_beginend_call(args, tests, __source__)
     end
 end
 
 """
-Generate the code for a `@testset` with a `begin`/`end` argument
+Generate the code for a `@testset` with a function call or `begin`/`end` argument
 """
-function testset_beginend(args, tests, source)
+function testset_beginend_call(args, tests, source)
     desc, testsettype, options = parse_testset_args(args[1:end-1])
     if desc === nothing
-        desc = "test set"
+        if tests.head === :call
+            desc = string(tests.args[1]) # use the function name as test name
+        else
+            desc = "test set"
+        end
     end
     # If we're at the top level we'll default to DefaultTestSet. Otherwise
     # default to the type of the parent testset
@@ -1314,6 +1340,7 @@ function testset_beginend(args, tests, source)
         # by wrapping the body in a function
         local RNG = default_rng()
         local oldrng = copy(RNG)
+        local oldseed = Random.GLOBAL_SEED
         try
             # RNG is re-seeded with its own seed to ease reproduce a failed test
             Random.seed!(Random.GLOBAL_SEED)
@@ -1327,6 +1354,7 @@ function testset_beginend(args, tests, source)
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         finally
             copy!(RNG, oldrng)
+            Random.set_global_seed!(oldseed)
             pop_testset()
             ret = finish(ts)
         end
@@ -1407,6 +1435,7 @@ function testset_forloop(args, testloop, source)
         local ts
         local RNG = default_rng()
         local oldrng = copy(RNG)
+        local oldseed = Random.GLOBAL_SEED
         Random.seed!(Random.GLOBAL_SEED)
         local tmprng = copy(RNG)
         try
@@ -1420,6 +1449,7 @@ function testset_forloop(args, testloop, source)
                 push!(arr, finish(ts))
             end
             copy!(RNG, oldrng)
+            Random.set_global_seed!(oldseed)
         end
         arr
     end

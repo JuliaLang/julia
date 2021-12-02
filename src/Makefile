@@ -19,14 +19,12 @@ FLAGS := \
 	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
 	-I$(LIBUV_INC) -I$(build_includedir) \
 	-I$(JULIAHOME)/deps/valgrind
-ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
 		 -Wno-comment -Wpointer-arith -Wundef
 ifeq ($(USEGCC),1) # GCC bug #25509 (void)__attribute__((warn_unused_result))
 FLAGS += -Wno-unused-result
 endif
 JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
-endif
 
 ifeq ($(USECLANG),1)
 FLAGS += -Wno-return-type-c-linkage
@@ -49,7 +47,7 @@ RUNTIME_SRCS := \
 	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
 	jlapi signal-handling safepoint timing subtype \
-	crc32c APInt-C processor ircode opaque_closure codegen-stubs
+	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage
 SRCS := jloptions runtime_ccall rtutils
 ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
@@ -64,7 +62,7 @@ RUNTIME_CODEGEN_SRCS := jitlayers aotcompile debuginfo disasm llvm-simdloop llvm
 	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering \
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt cgmemmgr llvm-remove-addrspaces \
-	llvm-remove-ni llvm-julia-licm llvm-demote-float16
+	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -86,10 +84,6 @@ else
 endif
 
 RT_LLVM_LIBS := support
-
-ifeq ($(USEMSVC), 1)
-SRCS += getopt
-endif
 
 SRCS += $(RUNTIME_SRCS)
 
@@ -299,7 +293,7 @@ $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/codegen_shared.h $(BUI
 $(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/codegen_shared.h $(SRCDIR)/llvm-pass-helpers.h
 $(BUILDDIR)/llvm-final-gc-lowering.o $(BUILDDIR)/llvm-final-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
 $(BUILDDIR)/llvm-gc-invariant-verifier.o $(BUILDDIR)/llvm-gc-invariant-verifier.dbg.obj: $(SRCDIR)/codegen_shared.h
-$(BUILDDIR)/llvm-late-gc-lowering.o $(BUILDDIR)/llvm-late-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
+$(BUILDDIR)/llvm-late-gc-lowering.o $(BUILDDIR)/llvm-late-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/codegen_shared.h
 $(BUILDDIR)/llvm-lower-handlers.o $(BUILDDIR)/llvm-lower-handlers.dbg.obj: $(SRCDIR)/codegen_shared.h
 $(BUILDDIR)/llvm-multiversioning.o $(BUILDDIR)/llvm-multiversioning.dbg.obj: $(SRCDIR)/codegen_shared.h $(SRCDIR)/processor.h
 $(BUILDDIR)/llvm-pass-helpers.o $(BUILDDIR)/llvm-pass-helpers.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/codegen_shared.h
@@ -345,11 +339,7 @@ $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
 	@echo "#endif" >> $@.$(JULIA_BUILD_MODE).tmp
 	mv $@.$(JULIA_BUILD_MODE).tmp $@
 
-ifneq ($(USEMSVC), 1)
 CXXLD = $(CXX) -shared
-else
-CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
-endif
 
 $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_LIB) -o $@ \
@@ -405,8 +395,8 @@ libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 
 clean:
 	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen* $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest*
-	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc
-	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a
+	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc $(BUILDDIR)/jl_internal_funcs.inc
+	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia_version.h
 
 clean-flisp:

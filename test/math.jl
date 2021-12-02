@@ -53,6 +53,11 @@ end
     @test occursin("3.14159", sprint(show, MIME"text/plain"(), π))
     @test repr(Any[pi ℯ; ℯ pi]) == "Any[π ℯ; ℯ π]"
     @test string(pi) == "π"
+
+    @test sin(π) === sinpi(1) == tan(π) == sinpi(1 // 1) == 0
+    @test cos(π) === cospi(1) == sec(π) == cospi(1 // 1) == -1
+    @test csc(π) == 1/0 && cot(π) == -1/0
+    @test sincos(π) === sincospi(1) == (0, -1)
 end
 
 @testset "frexp,ldexp,significand,exponent" begin
@@ -241,6 +246,7 @@ end
             @test one(T)^y === one(T)
             @test one(T)^zero(T) === one(T)
             @test one(T)^T(NaN) === one(T)
+            @test isnan(T(NaN)^T(-.5))
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x
@@ -316,10 +322,13 @@ end
             X = Iterators.flatten((minval:T(.1):maxval,
                                    minval/100:T(.0021):maxval/100,
                                    minval/10000:T(.000021):maxval/10000,
-                                   nextfloat(zero(T)) ))
+                                   nextfloat(zero(T)),
+                                   T(-100):T(1):T(100) ))
             for x in X
                 y, yb = func(x), func(widen(x))
-                @test abs(y-yb) <= 1.2*eps(T(yb))
+                if isfinite(eps(T(yb)))
+                    @test abs(y-yb) <= 1.2*eps(T(yb))
+                end
             end
         end
         @testset "$T $func edge cases" begin
@@ -1276,5 +1285,33 @@ end
     x = BadFloatWrapper(1.9)
     for f in (sin, cos, tan, sinh, cosh, tanh, atan, acos, asin, asinh, acosh, atanh, exp, log1p, expm1, log) #exp2, exp10 broken for now
         @test_throws MethodError f(x)
+    end
+end
+
+@testset "fma" begin
+    if !(@static Sys.iswindows() && Int===Int64) # windows fma currently seems broken somehow.
+        for func in (fma, Base.fma_emulated)
+            @test func(nextfloat(1.),nextfloat(1.),-1.0) === 4.440892098500626e-16
+            @test func(nextfloat(1f0),nextfloat(1f0),-1f0) === 2.3841858f-7
+            @testset "$T" for T in (Float32, Float64)
+                @test func(floatmax(T), T(2), -floatmax(T)) === floatmax(T)
+                @test func(floatmax(T), T(1), eps(floatmax((T)))) === T(Inf)
+                @test func(T(Inf), T(Inf), T(Inf)) === T(Inf)
+                @test func(floatmax(T), floatmax(T), -T(Inf)) === -T(Inf)
+                @test func(floatmax(T), -floatmax(T), T(Inf)) === T(Inf)
+                @test isnan_type(T, func(T(Inf), T(1), -T(Inf)))
+                @test isnan_type(T, func(T(Inf), T(0), -T(0)))
+                @test func(-zero(T), zero(T), -zero(T)) === -zero(T)
+                for _ in 1:2^18
+                    a, b, c = reinterpret.(T, rand(Base.uinttype(T), 3))
+                    @test isequal(func(a, b, c), fma(a, b, c)) || (a,b,c)
+                end
+            end
+            @test func(floatmax(Float64), nextfloat(1.0), -floatmax(Float64)) === 3.991680619069439e292
+            @test func(floatmax(Float32), nextfloat(1f0), -floatmax(Float32)) === 4.0564817f31
+            @test func(1.6341681540852291e308, -2., floatmax(Float64)) == -1.4706431733081426e308 # case where inv(a)*c*a == Inf
+            @test func(-2., 1.6341681540852291e308, floatmax(Float64)) == -1.4706431733081426e308 # case where inv(b)*c*b == Inf
+            @test func(-1.9369631f13, 2.1513551f-7, -1.7354427f-24) == -4.1670958f6
+        end
     end
 end

@@ -26,11 +26,9 @@ JL_DLLEXPORT EXCEPTION_DISPOSITION NTAPI __julia_personality(
 
     EXCEPTION_DISPOSITION rval;
     switch (jl_exception_handler(&ExceptionInfo)) {
-#ifndef _MSC_VER
         case EXCEPTION_EXECUTE_HANDLER:
             rval = ExceptionExecuteHandler;
             break;
-#endif
         case EXCEPTION_CONTINUE_EXECUTION:
             rval = ExceptionContinueExecution;
             break;

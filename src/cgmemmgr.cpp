@@ -210,7 +210,7 @@ static _Atomic(size_t) map_offset{0};
 // Hopefully no one will set a ulimit for this to be a problem...
 static constexpr size_t map_size_inc_default = 128 * 1024 * 1024;
 static size_t map_size = 0;
-static jl_mutex_t shared_map_lock;
+static uv_mutex_t shared_map_lock;
 
 static size_t get_map_size_inc()
 {
@@ -256,7 +256,7 @@ static void *alloc_shared_page(size_t size, size_t *id, bool exec)
     *id = off;
     size_t map_size_inc = get_map_size_inc();
     if (__unlikely(off + size > map_size)) {
-        JL_LOCK_NOGC(&shared_map_lock);
+        uv_mutex_lock(&shared_map_lock);
         size_t old_size = map_size;
         while (off + size > map_size)
             map_size += map_size_inc;
@@ -267,7 +267,7 @@ static void *alloc_shared_page(size_t size, size_t *id, bool exec)
                 abort();
             }
         }
-        JL_UNLOCK_NOGC(&shared_map_lock);
+        uv_mutex_unlock(&shared_map_lock);
     }
     return create_shared_map(size, off);
 }
@@ -305,6 +305,7 @@ ssize_t pwrite_addr(int fd, const void *buf, size_t nbyte, uintptr_t addr)
 // Use `get_self_mem_fd` which has a guard to call this only once.
 static int _init_self_mem()
 {
+    uv_mutex_init(&shared_map_lock);
     struct utsname kernel;
     uname(&kernel);
     int major, minor;

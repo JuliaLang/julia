@@ -2,6 +2,7 @@
 
 @testset "basic properties" begin
 
+    @test typemax(Char) == reinterpret(Char, typemax(UInt32))
     @test typemin(Char) == Char(0)
     @test ndims(Char) == 0
     @test getindex('a', 1) == 'a'
@@ -248,6 +249,7 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
 
 @testset "abstractchar" begin
     @test AbstractChar('x') === AbstractChar(UInt32('x')) === 'x'
+    @test convert(AbstractChar, 2.0) == Char(2)
 
     @test isascii(ASCIIChar('x'))
     @test ASCIIChar('x') < 'y'
@@ -255,6 +257,9 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
     @test ASCIIChar('x')^3 == "xxx"
     @test repr(ASCIIChar('x')) == "'x'"
     @test string(ASCIIChar('x')) == "x"
+    @test length(ASCIIChar('x')) == 1
+    @test !isempty(ASCIIChar('x'))
+    @test eltype(ASCIIChar) == ASCIIChar
     @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
     @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
 end

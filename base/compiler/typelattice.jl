@@ -92,14 +92,6 @@ struct LimitedAccuracy
     end
 end
 
-@inline function collect_limitations!(@nospecialize(typ), sv::InferenceState)
-    if isa(typ, LimitedAccuracy)
-        union!(sv.pclimitations, typ.causes)
-        return typ.typ
-    end
-    return typ
-end
-
 """
     struct NotFound end
     const NOT_FOUND = NotFound()
@@ -148,7 +140,12 @@ function maybe_extract_const_bool(c::AnyConditional)
 end
 maybe_extract_const_bool(@nospecialize c) = nothing
 
-function ⊑(@nospecialize(a), @nospecialize(b))
+"""
+    a ⊑ b -> Bool
+
+The non-strict partial order over the type inference lattice.
+"""
+@nospecialize(a) ⊑ @nospecialize(b) = begin
     if isa(b, LimitedAccuracy)
         if !isa(a, LimitedAccuracy)
             return false
@@ -240,6 +237,22 @@ function ⊑(@nospecialize(a), @nospecialize(b))
     end
 end
 
+"""
+    a ⊏ b -> Bool
+
+The strict partial order over the type inference lattice.
+This is defined as the irreflexive kernel of `⊑`.
+"""
+@nospecialize(a) ⊏ @nospecialize(b) = a ⊑ b && !⊑(b, a)
+
+"""
+    a ⋤ b -> Bool
+
+This order could be used as a slightly more efficient version of the strict order `⊏`,
+where we can safely assume `a ⊑ b` holds.
+"""
+@nospecialize(a) ⋤ @nospecialize(b) = !⊑(b, a)
+
 # Check if two lattice elements are partial order equivalent. This is basically
 # `a ⊑ b && b ⊑ a` but with extra performance optimizations.
 function is_lattice_equal(@nospecialize(a), @nospecialize(b))
@@ -283,8 +296,8 @@ widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
 widenconst(t::Type) = t
-widenconst(t::TypeVar) = t
-widenconst(t::Core.TypeofVararg) = t
+widenconst(t::TypeVar) = error("unhandled TypeVar")
+widenconst(t::TypeofVararg) = error("unhandled Vararg")
 widenconst(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)

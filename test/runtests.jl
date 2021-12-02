@@ -10,7 +10,7 @@ using Base: Experimental
 include("choosetests.jl")
 include("testenv.jl")
 
-tests, net_on, exit_on_error, use_revise, seed = choosetests(ARGS)
+(; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
 tests = unique(tests)
 
 if Sys.islinux()
@@ -102,7 +102,15 @@ cd(@__DIR__) do
     #   * https://github.com/JuliaLang/julia/pull/29384
     #   * https://github.com/JuliaLang/julia/pull/40348
     n = 1
-    if net_on
+    JULIA_TEST_USE_MULTIPLE_WORKERS = get(ENV, "JULIA_TEST_USE_MULTIPLE_WORKERS", "") |>
+                                      strip |>
+                                      lowercase |>
+                                      s -> tryparse(Bool, s) |>
+                                      x -> x === true
+    # If the `JULIA_TEST_USE_MULTIPLE_WORKERS` environment variable is set to `true`, we use
+    # multiple worker processes regardless of the value of `net_on`.
+    # Otherwise, we use multiple worker processes if and only if `net_on` is true.
+    if net_on || JULIA_TEST_USE_MULTIPLE_WORKERS
         n = min(Sys.CPU_THREADS, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)

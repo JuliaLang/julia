@@ -234,9 +234,9 @@ void sweep_stack_pools(void)
                     _jl_free_stack(ptls2, stkbuf, bufsz);
                 }
 #ifdef _COMPILER_TSAN_ENABLED_
-                if (t->tsan_state) {
-                    __tsan_destroy_fiber(t->tsan_state);
-                    t->tsan_state = NULL;
+                if (t->ctx.tsan_state) {
+                    __tsan_destroy_fiber(t->ctx.tsan_state);
+                    t->ctx.tsan_state = NULL;
                 }
 #endif
             }

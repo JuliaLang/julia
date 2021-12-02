@@ -513,23 +513,21 @@ end
 # we're attempting to represent.
 # Union{T} where T is a degenerate case and is equal to T.ub, but we don't want
 # to print them that way, so filter those out from our aliases completely.
-function makeproper(io::IO, x::Type)
-    properx = x
-    x = unwrap_unionall(x)
+function makeproper(io::IO, @nospecialize(x::Type))
     if io isa IOContext
         for (key, val) in io.dict
             if key === :unionall_env && val isa TypeVar
-                properx = UnionAll(val, properx)
+                x = UnionAll(val, x)
             end
         end
     end
-    has_free_typevars(properx) && return Any
-    return properx
+    has_free_typevars(x) && return Any
+    return x
 end
 
 function make_typealias(@nospecialize(x::Type))
-    Any === x && return
-    x <: Tuple && return
+    Any === x && return nothing
+    x <: Tuple && return nothing
     mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
@@ -704,12 +702,12 @@ function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
     return wheres
 end
 
-function show_wheres(io::IO, wheres::Vector)
+function show_wheres(io::IO, wheres::Vector{TypeVar})
     isempty(wheres) && return
     io = IOContext(io)
     n = length(wheres)
     for i = 1:n
-        p = wheres[i]::TypeVar
+        p = wheres[i]
         print(io, n == 1 ? " where " : i == 1 ? " where {" : ", ")
         show(io, p)
         io = IOContext(io, :unionall_env => p)
@@ -718,7 +716,7 @@ function show_wheres(io::IO, wheres::Vector)
     nothing
 end
 
-function show_typealias(io::IO, x::Type)
+function show_typealias(io::IO, @nospecialize(x::Type))
     properx = makeproper(io, x)
     alias = make_typealias(properx)
     alias === nothing && return false
@@ -985,7 +983,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
     nothing
 end
 
-function show_datatype(io::IO, @nospecialize(x::DataType), wheres::Vector=TypeVar[])
+function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
     n = length(parameters)
@@ -993,10 +991,17 @@ function show_datatype(io::IO, @nospecialize(x::DataType), wheres::Vector=TypeVa
     # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
     if istuple
         if n > 3 && all(@nospecialize(i) -> (parameters[1] === i), parameters)
-            print(io, "NTuple{", n, ", ", parameters[1], "}")
+            print(io, "NTuple{", n, ", ")
+            show(io, parameters[1])
+            print(io, "}")
         else
             print(io, "Tuple{")
-            join(io, parameters, ", ")
+            # join(io, params, ", ") params but `show` it
+            first = true
+            for param in parameters
+                first ? (first = false) : print(io, ", ")
+                show(io, param)
+            end
             print(io, "}")
         end
     else
@@ -1096,7 +1101,20 @@ function show(io::IO, m::Module)
     if is_root_module(m)
         print(io, nameof(m))
     else
-        print(io, join(fullname(m),"."))
+        print_fullname(io, m)
+    end
+end
+# The call to print_fullname above was originally `print(io, join(fullname(m),"."))`,
+# which allocates. The method below provides the same behavior without allocating.
+# See https://github.com/JuliaLang/julia/pull/42773 for perf information.
+function print_fullname(io::IO, m::Module)
+    mp = parentmodule(m)
+    if m === Main || m === Base || m === Core || mp === m
+        print(io, nameof(m))
+    else
+        print_fullname(io, mp)
+        print(io, '.')
+        print(io, nameof(m))
     end
 end
 
@@ -1292,11 +1310,12 @@ show_unquoted(io::IO, ex, indent::Int, prec::Int, ::Int) = show_unquoted(io, ex,
 const indent_width = 4
 const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(===),:(=>)])
 const uni_syms = Set{Symbol}([:(::), :(<:), :(>:)])
-const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
+const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜), :(∓), :(±)])
 const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
     :(.=), :(.+=), :(.-=), :(.*=), :(./=), :(.\=), :(.^=), :(.&=), :(.|=), :(.÷=), :(.%=), :(.>>>=), :(.>>=), :(.<<=),
-    :(&&), :(||), :(<:), :($=), :(⊻=), :(>:), :(-->)])
+    :(&&), :(||), :(<:), :($=), :(⊻=), :(>:), :(-->),
+    :(:=), :(≔), :(⩴), :(≕)])
 const expr_infix = Set{Symbol}([:(:), :(->), :(::)])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
@@ -2132,11 +2151,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :line && 1 <= nargs <= 2
         show_linenumber(io, args...)
 
-    elseif head === :try && 3 <= nargs <= 4
+    elseif head === :try && 3 <= nargs <= 5
         iob = IOContext(io, beginsym=>false)
         show_block(iob, "try", args[1], indent, quote_level)
         if is_expr(args[3], :block)
             show_block(iob, "catch", args[2] === false ? Any[] : args[2], args[3]::Expr, indent, quote_level)
+        end
+        if nargs >= 5 && is_expr(args[5], :block)
+            show_block(iob, "else", Any[], args[5]::Expr, indent, quote_level)
         end
         if nargs >= 4 && is_expr(args[4], :block)
             show_block(iob, "finally", Any[], args[4]::Expr, indent, quote_level)

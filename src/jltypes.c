@@ -1198,8 +1198,12 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
                 dt->has_concrete_subtype = 0;
         }
     }
-    if (dt->name == jl_type_typename)
+    if (dt->name == jl_type_typename) {
         cacheable = 0; // the cache for Type ignores parameter normalization, so it can't be used as a regular hash
+        jl_value_t *p = jl_tparam(dt, 0);
+        if (!jl_is_type(p) && !jl_is_typevar(p)) // Type{v} has no subtypes, if v is not a Type
+            dt->has_concrete_subtype = 0;
+    }
     dt->hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), l, cacheable);
     dt->cached_by_hash = cacheable ? (typekey_hash(dt->name, jl_svec_data(dt->parameters), l, 0) != 0) : (dt->hash != 0);
 }
@@ -2036,7 +2040,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_methtable_type->types = jl_svec(12, jl_symbol_type, jl_any_type, jl_any_type,
                                        jl_any_type, jl_any_type/*jl_long*/,
                                        jl_any_type, jl_any_type/*module*/,
-                                       jl_any_type/*any vector*/, jl_any_type/*long*/, jl_any_type/*int32*/,
+                                       jl_any_type/*any vector*/, jl_any_type/*voidpointer*/, jl_any_type/*int32*/,
                                        jl_any_type/*uint8*/, jl_any_type/*uint8*/);
     jl_precompute_memoized_dt(jl_methtable_type, 1);
 
@@ -2630,13 +2634,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 4, jl_long_type);
     jl_svecset(jl_methtable_type->types, 6, jl_module_type);
     jl_svecset(jl_methtable_type->types, 7, jl_array_any_type);
-#ifdef __LP64__
-    jl_svecset(jl_methtable_type->types, 8, jl_int64_type); // unsigned long
-    jl_svecset(jl_methtable_type->types, 9, jl_int64_type); // uint32_t plus alignment
-#else
-    jl_svecset(jl_methtable_type->types, 8, jl_int32_type); // DWORD
-    jl_svecset(jl_methtable_type->types, 9, jl_int32_type); // uint32_t
-#endif
+    jl_svecset(jl_methtable_type->types, 8, jl_long_type); // voidpointer
+    jl_svecset(jl_methtable_type->types, 9, jl_long_type); // uint32_t plus alignment
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 11, jl_uint8_type);
     jl_svecset(jl_method_type->types, 12, jl_method_instance_type);

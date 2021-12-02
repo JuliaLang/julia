@@ -58,24 +58,11 @@ namespace llvm {
 #include "jitlayers.h"
 #include "julia_assert.h"
 
-// MSVC's link.exe requires each function declaration to have a Comdat section
-// So rather than litter the code with conditionals,
-// all global values that get emitted call this function
-// and it decides whether the definition needs a Comdat section and adds the appropriate declaration
 template<class T> // for GlobalObject's
 static T *addComdat(T *G)
 {
 #if defined(_OS_WINDOWS_)
     if (!G->isDeclaration()) {
-        // Add comdat information to make MSVC link.exe happy
-        // it's valid to emit this for ld.exe too,
-        // but makes it very slow to link for no benefit
-#if defined(_COMPILER_MICROSOFT_)
-        Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
-        // ELF only supports Comdat::Any
-        jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
-        G->setComdat(jl_Comdat);
-#endif
         // add __declspec(dllexport) to everything marked for export
         if (G->getLinkage() == GlobalValue::ExternalLinkage)
             G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
@@ -290,7 +277,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
     std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
 
     // compile all methods for the current world and type-inference world
-    size_t compile_for[] = { jl_typeinf_world, jl_world_counter };
+    size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
     for (int worlds = 0; worlds < 2; worlds++) {
         params.world = compile_for[worlds];
         if (!params.world)
@@ -506,7 +493,7 @@ void jl_dump_native_impl(void *native_code,
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
     if (bc_fname || obj_fname || asm_fname) {
         addOptimizationPasses(&PM, jl_options.opt_level, true, true);
-        addMachinePasses(&PM, TM.get());
+        addMachinePasses(&PM, TM.get(), jl_options.opt_level);
     }
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
@@ -595,7 +582,6 @@ void jl_dump_native_impl(void *native_code,
     delete data;
 }
 
-
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 {
     PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
@@ -603,11 +589,12 @@ void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 }
 
 
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel)
 {
     // TODO: don't do this on CPUs that natively support Float16
     PM->add(createDemoteFloat16Pass());
-    PM->add(createGVNPass());
+    if (optlevel > 1)
+        PM->add(createGVNPass());
 }
 
 
@@ -632,6 +619,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
     PM->add(createConstantMergePass());
     if (opt_level < 2) {
+        if (!dump_native) {
+            // we won't be multiversioning, so lower CPU feature checks early on
+            // so that we can avoid an additional CFG simplification pass at the end.
+            PM->add(createCPUFeaturesPass());
+            if (opt_level == 1)
+                PM->add(createInstSimplifyLegacyPass());
+        }
         PM->add(createCFGSimplificationPass(simplifyCFGOptions));
         if (opt_level == 1) {
             PM->add(createSROAPass());
@@ -656,8 +650,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createRemoveNIPass());
         }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
-        if (dump_native)
+        if (dump_native) {
             PM->add(createMultiVersioningPass());
+            PM->add(createCPUFeaturesPass());
+            // minimal clean-up to get rid of CPU feature checks
+            if (opt_level == 1) {
+                PM->add(createInstSimplifyLegacyPass());
+                PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+            }
+        }
 #if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
@@ -693,6 +694,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createCFGSimplificationPass(simplifyCFGOptions));
     if (dump_native)
         PM->add(createMultiVersioningPass());
+    PM->add(createCPUFeaturesPass());
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createJumpThreadingPass());
@@ -724,6 +726,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createLoopUnswitchPass());
     PM->add(createLICMPass());
     PM->add(createJuliaLICMPass());
+    PM->add(createInductiveRangeCheckEliminationPass());
     // Subsequent passes not stripping metadata from terminator
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createIndVarSimplifyPass());
@@ -836,7 +839,7 @@ public:
         TPMAdapter Adapter(TPM);
         addTargetPasses(&Adapter, jl_TargetMachine);
         addOptimizationPasses(&Adapter, OptLevel);
-        addMachinePasses(&Adapter, jl_TargetMachine);
+        addMachinePasses(&Adapter, jl_TargetMachine, OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
@@ -874,7 +877,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
         PM = new legacy::PassManager();
         addTargetPasses(PM, jl_TargetMachine);
         addOptimizationPasses(PM, jl_options.opt_level);
-        addMachinePasses(PM, jl_TargetMachine);
+        addMachinePasses(PM, jl_TargetMachine, jl_options.opt_level);
     }
 
     // get the source code for this function

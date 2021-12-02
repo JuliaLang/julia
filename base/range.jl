@@ -360,8 +360,8 @@ function steprange_last_empty(start::Integer, step, stop)
     end
     last
 end
-# For types where x+oneunit(x) may not be well-defined
-steprange_last_empty(start, step, stop) = start - step
+# For types where x+oneunit(x) may not be well-defined use the user-given value for stop
+steprange_last_empty(start, step, stop) = stop
 
 StepRange{T}(start, step::S, stop) where {T,S} = StepRange{T,S}(start, step, stop)
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
@@ -394,7 +394,7 @@ UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
 
 unitrange_last(::Bool, stop::Bool) = stop
 unitrange_last(start::T, stop::T) where {T<:Integer} =
-    stop >= start ? stop : convert(T,start-oneunit(stop-start))
+    stop >= start ? stop : convert(T,start-oneunit(start-stop))
 unitrange_last(start::T, stop::T) where {T} =
     stop >= start ? convert(T,start+floor(stop-start)) :
                     convert(T,start-oneunit(stop-start))
@@ -692,7 +692,7 @@ function checked_length(r::OrdinalRange{T}) where T
     # s != 0, by construction, but avoids the division error later
     start = first(r)
     if s == zero(s) || isempty(r)
-        return Integer(start - start + zero(s))
+        return Integer(div(start - start, oneunit(s)))
     end
     stop = last(r)
     if isless(s, zero(s))
@@ -719,7 +719,7 @@ function length(r::OrdinalRange{T}) where T
     # s != 0, by construction, but avoids the division error later
     start = first(r)
     if s == zero(s) || isempty(r)
-        return Integer(div(start-start, oneunit(s)))
+        return Integer(div(start - start, oneunit(s)))
     end
     stop = last(r)
     if isless(s, zero(s))
@@ -734,8 +734,14 @@ end
 
 function length(r::AbstractUnitRange{T}) where T
     @inline
-    a = last(r) - first(r) # even when isempty, by construction (with overflow)
-    return Integer(a + oneunit(a))
+    start, stop = first(r), last(r)
+    a = oneunit(zero(stop) - zero(start))
+    if a isa Signed || stop >= start
+        a += stop - start # Signed are allowed to go negative
+    else
+        a = zero(a) # Unsigned don't necessarily underflow
+    end
+    return Integer(a)
 end
 
 length(r::OneTo) = Integer(r.stop - zero(r.stop))
@@ -792,7 +798,12 @@ let smallints = (Int === Int64 ?
                 Union{Int8, UInt8, Int16, UInt16})
     global length, checked_length
     # n.b. !(step isa T)
-    length(r::OrdinalRange{<:smallints}) = div(Int(last(r)) - Int(first(r)), step(r)) + 1
+    function length(r::OrdinalRange{<:smallints})
+        s = step(r)
+        s == zero(s) && return 0 # unreachable, by construction, but avoids the error case here later
+        isempty(r) && return 0
+        return div(Int(last(r)) - Int(first(r)), s) + 1
+    end
     length(r::AbstractUnitRange{<:smallints}) = Int(last(r)) - Int(first(r)) + 1
     length(r::OneTo{<:smallints}) = Int(r.stop)
     checked_length(r::OrdinalRange{<:smallints}) = length(r)
@@ -805,7 +816,7 @@ first(r::OneTo{T}) where {T} = oneunit(T)
 first(r::StepRangeLen) = unsafe_getindex(r, 1)
 first(r::LinRange) = r.start
 
-last(r::OrdinalRange{T}) where {T} = convert(T, r.stop)
+last(r::OrdinalRange{T}) where {T} = convert(T, r.stop) # via steprange_last
 last(r::StepRangeLen) = unsafe_getindex(r, length(r))
 last(r::LinRange) = r.stop
 
