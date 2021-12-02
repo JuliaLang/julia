@@ -760,13 +760,13 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
                 @test foo(fill(1., 4)) == 15
             end
         end'`), stderr=devnull), String)
-    @test occursin("""
-        Test Summary: | Pass  Fail  Total
-        Foo Tests     |    2     2      4
-          Animals     |    1     1      2
-            Felines   |    1            1
-            Canines   |          1      1
-          Arrays      |    1     1      2
+    @test occursin(r"""
+        Test Summary: | Pass  Fail  Total  Duration
+        Foo Tests     |    2     2      4  \s*\d*.\d s
+          Animals     |    1     1      2  \s*\d*.\d s
+            Felines   |    1            1  \s*\d*.\d s
+            Canines   |          1      1  \s*\d*.\d s
+          Arrays      |    1     1      2  \s*\d*.\d s
         """, msg)
 end
 
@@ -1078,19 +1078,19 @@ let ex = :(something_complex + [1, 2, 3])
 end
 
 @testset "verbose option" begin
-    expected = """
-    Test Summary: | Pass  Total
-    Parent        |    9      9
-      Child 1     |    3      3
-        Child 1.1 |    1      1
-        Child 1.2 |    1      1
-        Child 1.3 |    1      1
-      Child 2     |    3      3
-      Child 3     |    3      3
-        Child 3.1 |    1      1
-        Child 3.2 |    1      1
-        Child 3.3 |    1      1
-    """
+    expected = r"""
+        Test Summary: | Pass  Total  Duration
+        Parent        |    9      9  \s*\d*.\d s
+          Child 1     |    3      3  \s*\d*.\d s
+            Child 1.1 |    1      1  \s*\d*.\d s
+            Child 1.2 |    1      1  \s*\d*.\d s
+            Child 1.3 |    1      1  \s*\d*.\d s
+          Child 2     |    3      3  \s*\d*.\d s
+          Child 3     |    3      3  \s*\d*.\d s
+            Child 3.1 |    1      1  \s*\d*.\d s
+            Child 3.2 |    1      1  \s*\d*.\d s
+            Child 3.3 |    1      1  \s*\d*.\d s
+        """
 
     mktemp() do f, _
         write(f,
@@ -1127,75 +1127,6 @@ end
             end
 
             @testset "Child 3" verbose = true begin
-                @testset "Child 3.1" begin
-                    @test 1 == 1
-                end
-
-                @testset "Child 3.2" begin
-                    @test 1 == 1
-                end
-
-                @testset "Child 3.3" begin
-                    @test 1 == 1
-                end
-            end
-        end
-        """)
-        cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
-        result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
-        @test occursin(expected, result)
-    end
-end
-
-@testset "showtiming option" begin
-    expected = r"""
-        Test Summary: | Pass  Total  Duration
-        Parent        |    9      9  \s*\d*.\d s
-          Child 1     |    3      3  \s*\d*.\d s
-            Child 1.1 |    1      1  \s*\d*.\d s
-            Child 1.2 |    1      1  \s*\d*.\d s
-            Child 1.3 |    1      1  \s*\d*.\d s
-          Child 2     |    3      3  \s*\d*.\d s
-          Child 3     |    3      3  \s*\d*.\d s
-            Child 3.1 |    1      1  \s*\d*.\d s
-            Child 3.2 |    1      1  \s*\d*.\d s
-            Child 3.3 |    1      1  \s*\d*.\d s
-        """
-    mktemp() do f, _
-        write(f,
-        """
-        using Test
-
-        @testset "Parent" verbose = true showtiming = true begin
-            @testset "Child 1" verbose = true showtiming = true begin
-                @testset "Child 1.1" begin
-                    @test 1 == 1
-                end
-
-                @testset "Child 1.2" begin
-                    @test 1 == 1
-                end
-
-                @testset "Child 1.3" begin
-                    @test 1 == 1
-                end
-            end
-
-            @testset "Child 2" begin
-                @testset "Child 2.1" begin
-                    @test 1 == 1
-                end
-
-                @testset "Child 2.2" begin
-                    @test 1 == 1
-                end
-
-                @testset "Child 2.3" begin
-                    @test 1 == 1
-                end
-            end
-
-            @testset "Child 3" verbose = true showtiming = true begin
                 @testset "Child 3.1" begin
                     @test 1 == 1
                 end
