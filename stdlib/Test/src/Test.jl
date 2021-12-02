@@ -982,7 +982,7 @@ mutable struct DefaultTestSet <: AbstractTestSet
     time_start::Float64
     time_end::Float64
 end
-DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true) = DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, 0, 0)
+DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true) = DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), 0)
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
@@ -1355,7 +1355,6 @@ function testset_beginend_call(args, tests, source)
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         local ret
         local ts = $(testsettype)($desc; $options...)
-        ts.time_start = time()
         push_testset(ts)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
@@ -1440,7 +1439,6 @@ function testset_forloop(args, testloop, source)
 
         end
         ts = $(testsettype)($desc; $options...)
-        ts.time_start = time()
         push_testset(ts)
         first_iteration = false
         try
