@@ -489,7 +489,7 @@ end
 end
 @testset "binomial" begin
     for T in (Int8, UInt16, Int32, UInt64)
-        for x in rand(isqrt(typemax(T)):isqrt(typemax(T)), 1000)
+        for x in rand(-isqrt(typemax(T)):isqrt(typemax(T)), 1000)
             @test binomial(x,T(1)) == x
             x>=0 && @test binomial(x,x-T(1)) == x
             @test binomial(x,T(2)) == div(x*(x-1), 2)
