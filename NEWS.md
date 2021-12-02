@@ -15,6 +15,9 @@ New language features
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
   no errors were thrown. ([#42211])
+* Mutable struct fields may now be annotated as `const` to prevent changing
+  them after construction, providing for greater clarity and optimization
+  ability of these objects ([#43305]).
 
 Language changes
 ----------------

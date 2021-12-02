@@ -837,6 +837,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 write_int32(s->s, nb);
                 if (nb)
                     ios_write(s->s, (char*)tn->atomicfields, nb);
+                nb = tn->constfields ? (jl_svec_len(tn->names) + 31) / 32 * sizeof(uint32_t) : 0;
+                write_int32(s->s, nb);
+                if (nb)
+                    ios_write(s->s, (char*)tn->constfields, nb);
             }
             return;
         }
@@ -1783,6 +1787,11 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             if (nfields) {
                 tn->atomicfields = (uint32_t*)malloc(nfields);
                 ios_read(s->s, (char*)tn->atomicfields, nfields);
+            }
+            nfields = read_int32(s->s);
+            if (nfields) {
+                tn->constfields = (uint32_t*)malloc(nfields);
+                ios_read(s->s, (char*)tn->constfields, nfields);
             }
         }
         else {

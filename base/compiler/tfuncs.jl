@@ -24,19 +24,7 @@ function find_tfunc(@nospecialize f)
     end
 end
 
-const DATATYPE_NAME_FIELDINDEX = fieldindex(DataType, :name)
-const DATATYPE_PARAMETERS_FIELDINDEX = fieldindex(DataType, :parameters)
 const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
-const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
-const DATATYPE_INSTANCE_FIELDINDEX = fieldindex(DataType, :instance)
-const DATATYPE_HASH_FIELDINDEX = fieldindex(DataType, :hash)
-
-const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
-const TYPENAME_MODULE_FIELDINDEX = fieldindex(Core.TypeName, :module)
-const TYPENAME_NAMES_FIELDINDEX = fieldindex(Core.TypeName, :names)
-const TYPENAME_WRAPPER_FIELDINDEX = fieldindex(Core.TypeName, :wrapper)
-const TYPENAME_HASH_FIELDINDEX = fieldindex(Core.TypeName, :hash)
-const TYPENAME_FLAGS_FIELDINDEX = fieldindex(Core.TypeName, :flags)
 
 ##########
 # tfuncs #
@@ -305,7 +293,7 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
                 return Const(false)
             elseif isa(arg1, Const)
                 arg1v = (arg1::Const).val
-                if !ismutable(arg1v) || isdefined(arg1v, idx) || (isa(arg1v, DataType) && is_dt_const_field(idx))
+                if !ismutable(arg1v) || isdefined(arg1v, idx) || isconst(typeof(arg1v), idx)
                     return Const(isdefined(arg1v, idx))
                 end
             elseif !isvatuple(a1)
@@ -646,23 +634,6 @@ function subtype_tfunc(@nospecialize(a), @nospecialize(b))
 end
 add_tfunc(<:, 2, 2, subtype_tfunc, 10)
 
-is_dt_const_field(fld::Int) = (
-     fld == DATATYPE_NAME_FIELDINDEX ||
-     fld == DATATYPE_PARAMETERS_FIELDINDEX ||
-     fld == DATATYPE_TYPES_FIELDINDEX ||
-     fld == DATATYPE_SUPER_FIELDINDEX ||
-     fld == DATATYPE_INSTANCE_FIELDINDEX ||
-     fld == DATATYPE_HASH_FIELDINDEX
-    )
-function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
-    if fld == DATATYPE_INSTANCE_FIELDINDEX
-        return isdefined(sv, fld) ? Const(getfield(sv, fld)) : Union{}
-    elseif is_dt_const_field(fld) && isdefined(sv, fld)
-        return Const(getfield(sv, fld))
-    end
-    return nothing
-end
-
 function fieldcount_noerror(@nospecialize t)
     if t isa UnionAll || t isa Union
         t = argument_datatype(t)
@@ -801,40 +772,26 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         end
         if isa(name, Const)
             nv = name.val
-            if !(isa(nv,Symbol) || isa(nv,Int))
+            if isa(sv, Module)
+                if isa(nv, Symbol)
+                    return abstract_eval_global(sv, nv)
+                end
                 return Bottom
             end
-            if isa(sv, UnionAll)
-                if nv === :var || nv === 1
-                    return Const(sv.var)
-                elseif nv === :body || nv === 2
-                    return Const(sv.body)
-                end
-            elseif isa(sv, DataType)
-                idx = nv
-                if isa(idx, Symbol)
-                    idx = fieldindex(DataType, idx, false)
-                end
-                if isa(idx, Int)
-                    t = const_datatype_getfield_tfunc(sv, idx)
-                    t === nothing || return t
-                end
-            elseif isa(sv, Core.TypeName)
-                fld = isa(nv, Symbol) ? fieldindex(Core.TypeName, nv, false) : nv
-                if (fld == TYPENAME_NAME_FIELDINDEX ||
-                    fld == TYPENAME_MODULE_FIELDINDEX ||
-                    fld == TYPENAME_WRAPPER_FIELDINDEX ||
-                    fld == TYPENAME_HASH_FIELDINDEX ||
-                    fld == TYPENAME_FLAGS_FIELDINDEX ||
-                    (fld == TYPENAME_NAMES_FIELDINDEX && isdefined(sv, fld)))
-                    return Const(getfield(sv, fld))
-                end
+            if isa(nv, Symbol)
+                nv = fieldindex(typeof(sv), nv, false)
             end
-            if isa(sv, Module) && isa(nv, Symbol)
-                return abstract_eval_global(sv, nv)
+            if !isa(nv, Int)
+                return Bottom
             end
-            if (isa(sv, SimpleVector) || !ismutable(sv)) && isdefined(sv, nv)
+            if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
                 return Const(getfield(sv, nv))
+            end
+            if isconst(typeof(sv), nv)
+                if isdefined(sv, nv)
+                    return Const(getfield(sv, nv))
+                end
+                return Union{}
             end
         end
         s = typeof(sv)
@@ -855,11 +812,11 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         return Any
     end
     s = s::DataType
-    if s <: Tuple && name ⊑ Symbol
+    if s <: Tuple && !(Int <: widenconst(name))
         return Bottom
     end
     if s <: Module
-        if name ⊑ Int
+        if !(Symbol <: widenconst(name))
             return Bottom
         end
         return Any
@@ -919,17 +876,6 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     end
     if fld < 1 || fld > nf
         return Bottom
-    end
-    if isconstType(s00)
-        sp = s00.parameters[1]
-    elseif isa(s00, Const)
-        sp = s00.val
-    else
-        sp = nothing
-    end
-    if isa(sp, DataType)
-        t = const_datatype_getfield_tfunc(sp, fld)
-        t !== nothing && return t
     end
     R = ftypes[fld]
     if isempty(s.parameters)

@@ -378,7 +378,7 @@
   (or (symbol? e) (decl? e)))
 
 (define (eventually-decl? e)
-  (or (decl? e) (and (pair? e) (eq? (car e) 'atomic) (symdecl? (cadr e)))))
+  (or (symbol? e) (and (pair? e) (memq (car e) '(|::| atomic const)) (eventually-decl? (cadr e)))))
 
 (define (make-decl n t) `(|::| ,n ,t))
 

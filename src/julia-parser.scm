@@ -1452,17 +1452,11 @@
                (expr  (if (and (pair? assgn) (eq? (car assgn) 'tuple))
                           (cons word (cdr assgn))
                           (list word assgn))))
-          (if const
+          (if const ;; normalize `global const` and `const global`
               `(const ,expr)
               expr)))
        ((const)
-        (let ((assgn (parse-eq s)))
-          (if (not (and (pair? assgn)
-                        (or (eq? (car assgn) '=)
-                            (eq? (car assgn) 'global)
-                            (eq? (car assgn) 'local))))
-              (error "expected assignment after \"const\"")
-              `(const ,assgn))))
+        `(const ,(parse-eq s)))
 
        ((function macro)
         (let* ((loc   (line-number-node s))

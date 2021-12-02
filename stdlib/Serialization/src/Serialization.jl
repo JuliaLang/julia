@@ -1273,10 +1273,11 @@ function deserialize_typename(s::AbstractSerializer, number)
     else
         # reuse the same name for the type, if possible, for nicer debugging
         tn_name = isdefined(__deserialized_types__, name) ? gensym() : name
-        tn = ccall(:jl_new_typename_in, Ref{Core.TypeName}, (Any, Any, Cint, Cint),
+        tn = ccall(:jl_new_typename_in, Any, (Any, Any, Cint, Cint),
                    tn_name, __deserialized_types__, false, false)
         makenew = true
     end
+    tn = tn::Core.TypeName
     remember_object(s, tn, number)
     deserialize_cycle(s, tn)
 
@@ -1291,19 +1292,22 @@ function deserialize_typename(s::AbstractSerializer, number)
     ninitialized = deserialize(s)::Int32
 
     if makenew
-        Core.setfield!(tn, :names, names)
         # TODO: there's an unhanded cycle in the dependency graph at this point:
         # while deserializing super and/or types, we may have encountered
         # tn.wrapper and throw UndefRefException before we get to this point
         ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
                     tn, tn.module, super, parameters, names, types, attrs,
                     abstr, mutabl, ninitialized)
-        tn.wrapper = ndt.name.wrapper
+        @assert tn == ndt.name
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
-        if has_instance && !isdefined(ty, :instance)
-            # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
-            Core.setfield!(ty, :instance, ccall(:jl_new_struct, Any, (Any, Any...), ty))
+        if has_instance
+            ty = ty::DataType
+            if !isdefined(ty, :instance)
+                singleton = ccall(:jl_new_struct, Any, (Any, Any...), ty)
+                # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
+                ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), ty, Base.fieldindex(DataType, :instance)-1, singleton)
+            end
         end
     end
 
@@ -1313,15 +1317,16 @@ function deserialize_typename(s::AbstractSerializer, number)
         defs = deserialize(s)
         maxa = deserialize(s)::Int
         if makenew
-            tn.mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
+            mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
             if !isempty(parameters)
-                tn.mt.offs = 0
+                mt.offs = 0
             end
-            tn.mt.name = mtname
-            tn.mt.max_args = maxa
+            mt.name = mtname
+            mt.max_args = maxa
+            ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
             for def in defs
                 if isdefined(def, :sig)
-                    ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), tn.mt, def, C_NULL)
+                    ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, def, C_NULL)
                 end
             end
         end
@@ -1333,9 +1338,10 @@ function deserialize_typename(s::AbstractSerializer, number)
             end
         end
     elseif makenew
-        tn.mt = Symbol.name.mt
+        mt = Symbol.name.mt
+        ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
     end
-    return tn::Core.TypeName
+    return tn
 end
 
 function deserialize_datatype(s::AbstractSerializer, full::Bool)

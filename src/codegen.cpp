@@ -2496,6 +2496,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 bool isboxed = jl_field_isptr(uty, idx);
                 bool isatomic = jl_field_isatomic(uty, idx);
                 bool needlock = isatomic && !isboxed && jl_datatype_size(jl_field_type(uty, idx)) > MAX_ATOMIC_SIZE;
+                *ret = jl_cgval_t();
                 if (isatomic == (order == jl_memory_order_notatomic)) {
                     emit_atomic_error(ctx,
                             issetfield ?
@@ -2509,25 +2510,37 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                       : "swapfield!: non-atomic field cannot be written atomically") :
                             (isatomic ? "modifyfield!: atomic field cannot be written non-atomically"
                                       : "modifyfield!: non-atomic field cannot be written atomically"));
-                    *ret = jl_cgval_t();
-                    return true;
                 }
-                if (isatomic == (fail_order == jl_memory_order_notatomic)) {
+                else if (isatomic == (fail_order == jl_memory_order_notatomic)) {
                     emit_atomic_error(ctx,
                             (isatomic ? "replacefield!: atomic field cannot be accessed non-atomically"
                                       : "replacefield!: non-atomic field cannot be accessed atomically"));
-                    *ret = jl_cgval_t();
-                    return true;
                 }
-                *ret = emit_setfield(ctx, uty, obj, idx, val, cmp, true, true,
-                        (needlock || order <= jl_memory_order_notatomic)
-                        ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic) // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                        : get_llvm_atomic_order(order),
-                        (needlock || fail_order <= jl_memory_order_notatomic)
-                        ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic) // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                        : get_llvm_atomic_order(fail_order),
-                        needlock, issetfield, isreplacefield, isswapfield, ismodifyfield,
-                        modifyop, fname);
+                else if (!uty->name->mutabl) {
+                    std::string msg = fname + ": immutable struct of type "
+                        + std::string(jl_symbol_name(uty->name->name))
+                        + " cannot be changed";
+                    emit_error(ctx, msg);
+                }
+                else if (jl_field_isconst(uty, idx)) {
+                    std::string msg = fname + ": const field ."
+                        + std::string(jl_symbol_name((jl_sym_t*)jl_svec_ref(jl_field_names(uty), idx)))
+                        + " of type "
+                        + std::string(jl_symbol_name(uty->name->name))
+                        + " cannot be changed";
+                    emit_error(ctx, msg);
+                }
+                else {
+                    *ret = emit_setfield(ctx, uty, obj, idx, val, cmp, true,
+                            (needlock || order <= jl_memory_order_notatomic)
+                            ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic) // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                            : get_llvm_atomic_order(order),
+                            (needlock || fail_order <= jl_memory_order_notatomic)
+                            ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic) // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                            : get_llvm_atomic_order(fail_order),
+                            needlock, issetfield, isreplacefield, isswapfield, ismodifyfield,
+                            modifyop, fname);
+                }
                 return true;
             }
         }
