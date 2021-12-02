@@ -488,7 +488,7 @@ end
     @test ci.code == Any[Core.ReturnNode(2 // 3)]
 end
 @testset "binomial" begin
-    for T in (Int8, UInt16, Int32, UInt64)
+    for T in (Int8, Int16, Int32, Int64)
         for x in rand(-isqrt(typemax(T)):isqrt(typemax(T)), 1000)
             @test binomial(x,T(1)) == x
             x>=0 && @test binomial(x,x-T(1)) == x
