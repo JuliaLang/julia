@@ -477,7 +477,7 @@ end
 # Compute L_p norm ‖x‖ₚ = sum(abs(x).^p)^(1/p)
 # (Not technically a "norm" for p < 1.)
 function generic_normp(x, p)
-    T = typeof(float(first(x)))
+    T = typeof(float(norm(first(x))))
     spp::promote_type(Float64, T) = p
     if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? normInf(x) : normMinusInf(x)
