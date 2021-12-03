@@ -8,6 +8,20 @@ jl_value_t *jl_fptr_const_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **a
     return oc->captures;
 }
 
+// TODO: remove
+jl_value_t *jl_fptr_va_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+{
+    size_t defargs = oc->source->nargs;
+    jl_value_t **newargs;
+    JL_GC_PUSHARGS(newargs, defargs - 1);
+    for (size_t i = 0; i < defargs - 2; i++)
+        newargs[i] = args[i];
+    newargs[defargs - 2] = jl_f_tuple(NULL, &args[defargs - 2], nargs + 2 - defargs);
+    jl_value_t *ans = ((jl_fptr_args_t)oc->specptr)((jl_value_t*)oc, newargs, defargs - 1);
+    JL_GC_POP();
+    return ans;
+}
+
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isva,
     jl_value_t *rt_lb, jl_value_t *rt_ub, jl_value_t *source, jl_value_t **env, size_t nenv)
 {
@@ -43,11 +57,14 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isv
     oc->source = (jl_method_t*)source;
     oc->isva = jl_unbox_bool(isva);
     oc->captures = captures;
+    oc->specptr = NULL;
+    int compiled = 0;
     if (ci->invoke == jl_fptr_interpret_call) {
         oc->invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
     }
     else if (ci->invoke == jl_fptr_args) {
         oc->invoke = jl_atomic_load_relaxed(&ci->specptr.fptr1);
+        compiled = 1;
     }
     else if (ci->invoke == jl_fptr_const_return) {
         oc->invoke = (jl_fptr_args_t)jl_fptr_const_opaque_closure;
@@ -55,8 +72,12 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isv
     }
     else {
         oc->invoke = (jl_fptr_args_t)ci->invoke;
+        compiled = 1;
     }
-    oc->specptr = NULL;
+    if (oc->isva && compiled) {
+        oc->specptr = (jl_fptr_args_t)oc->invoke;
+        oc->invoke = (jl_fptr_args_t)jl_fptr_va_opaque_closure;
+    }
     oc->world = world;
     return oc;
 }
