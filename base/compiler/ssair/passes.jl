@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+function is_known_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
+    isexpr(x, :call) || return false
+    ft = argextype(x.args[1], ir)
+    return singleton_type(ft) === func
+end
+
 """
     du::SSADefUse
 
@@ -31,7 +37,7 @@ function try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr
     elseif isa(field, Int)
     # try to resolve other constants, e.g. global reference
     else
-        field = isa(ir, IncrementalCompact) ? compact_exprtype(ir, field) : argextype(field, ir)
+        field = argextype(field, ir)
         if isa(field, Const)
             field = field.val
         else
@@ -242,7 +248,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                 if is_old(compact, defssa) && isa(val, SSAValue)
                     val = OldSSAValue(val.id)
                 end
-                edge_typ = widenconst(compact_exprtype(compact, val))
+                edge_typ = widenconst(argextype(val, compact))
                 hasintersect(edge_typ, typeconstraint) || continue
                 push!(possible_predecessors, n)
             end
@@ -286,9 +292,9 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
     return leaves, visited_phinodes
 end
 
-function record_immutable_preserve!(new_preserves::Vector{Any}, compact::IncrementalCompact, def::Expr)
+function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compact::IncrementalCompact)
     for arg in (isexpr(def, :new) ? def.args : def.args[2:end])
-        if !isbitstype(widenconst(compact_exprtype(compact, arg)))
+        if !isbitstype(widenconst(argextype(arg, compact)))
             push!(new_preserves, arg)
         end
     end
@@ -316,10 +322,10 @@ function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
     isa(def, Expr) || return false
     length(def.args) >= 3 || return false
     is_known_call(def, getfield, compact) || return false
-    which = compact_exprtype(compact, def.args[3])
+    which = argextype(def.args[3], compact)
     isa(which, Const) || return false
     which.val === :captures || return false
-    oc = compact_exprtype(compact, def.args[2])
+    oc = argextype(def.args[2], compact)
     return oc ⊑ Core.OpaqueClosure
 end
 
@@ -340,7 +346,7 @@ function lift_leaves(compact::IncrementalCompact,
         cache_key = leaf
         if isa(leaf, AnySSAValue)
             (def, leaf) = walk_to_def(compact, leaf)
-            if is_tuple_call(compact, def) && 1 ≤ field < length(def.args)
+            if is_known_call(def, tuple, compact) && 1 ≤ field < length(def.args)
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             elseif isexpr(def, :new)
@@ -388,7 +394,7 @@ function lift_leaves(compact::IncrementalCompact,
                 end
                 return nothing
             else
-                typ = compact_exprtype(compact, leaf)
+                typ = argextype(leaf, compact)
                 if !isa(typ, Const)
                     # TODO: (disabled since #27126)
                     # If the leaf is an old ssa value, insert a getfield here
@@ -431,7 +437,7 @@ function lift_arg!(
         lifted = OldSSAValue(lifted.id)
     end
     if isa(lifted, GlobalRef) || isa(lifted, Expr)
-        lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted))))
+        lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, argextype(lifted, compact))))
         stmt.args[argidx] = lifted
         if isa(leaf, SSAValue) && leaf.id < compact.result_idx
             push!(compact.late_fixup, leaf.id)
@@ -481,8 +487,8 @@ function lift_comparison!(compact::IncrementalCompact,
     length(args) == 3 || return
 
     lhs, rhs = args[2], args[3]
-    vl = compact_exprtype(compact, lhs)
-    vr = compact_exprtype(compact, rhs)
+    vl = argextype(lhs, compact)
+    vr = argextype(rhs, compact)
     if isa(vl, Const)
         isa(vr, Const) && return
         cmp = vl
@@ -496,7 +502,7 @@ function lift_comparison!(compact::IncrementalCompact,
         return
     end
 
-    valtyp = widenconst(compact_exprtype(compact, val))
+    valtyp = widenconst(argextype(val, compact))
     isa(valtyp, Union) || return # bail out if there won't be a good chance for lifting
 
     leaves, visited_phinodes = collect_leaves(compact, val, valtyp)
@@ -505,7 +511,7 @@ function lift_comparison!(compact::IncrementalCompact,
     # Let's check if we evaluate the comparison for each one of the leaves
     lifted_leaves = nothing
     for leaf in leaves
-        r = egal_tfunc(compact_exprtype(compact, leaf), cmp)
+        r = egal_tfunc(argextype(leaf, compact), cmp)
         if isa(r, Const)
             if lifted_leaves === nothing
                 lifted_leaves = LiftedLeaves()
@@ -646,14 +652,14 @@ function sroa_pass!(ir::IRCode)
             4 <= length(stmt.args) <= 5 || continue
             is_setfield = true
             if length(stmt.args) == 5
-                field_ordering = compact_exprtype(compact, stmt.args[5])
+                field_ordering = argextype(stmt.args[5], compact)
             end
         elseif is_known_call(stmt, getfield, compact)
             3 <= length(stmt.args) <= 5 || continue
             if length(stmt.args) == 5
-                field_ordering = compact_exprtype(compact, stmt.args[5])
+                field_ordering = argextype(stmt.args[5], compact)
             elseif length(stmt.args) == 4
-                field_ordering = compact_exprtype(compact, stmt.args[4])
+                field_ordering = argextype(stmt.args[4], compact)
                 widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
             end
         elseif isexpr(stmt, :foreigncall)
@@ -672,17 +678,17 @@ function sroa_pass!(ir::IRCode)
                     isa(def, SSAValue) || continue
                     defidx = def.id
                     def = compact[defidx]
-                    if is_tuple_call(compact, def)
-                        record_immutable_preserve!(new_preserves, compact, def)
+                    if is_known_call(def, tuple, compact)
+                        record_immutable_preserve!(new_preserves, def, compact)
                         push!(preserved, preserved_arg.id)
                         continue
                     elseif isexpr(def, :new)
-                        typ = widenconst(compact_exprtype(compact, SSAValue(defidx)))
+                        typ = widenconst(argextype(SSAValue(defidx), compact))
                         if isa(typ, UnionAll)
                             typ = unwrap_unionall(typ)
                         end
                         if typ isa DataType && !ismutabletype(typ)
-                            record_immutable_preserve!(new_preserves, compact, def)
+                            record_immutable_preserve!(new_preserves, def, compact)
                             push!(preserved, preserved_arg.id)
                             continue
                         end
@@ -722,7 +728,7 @@ function sroa_pass!(ir::IRCode)
 
         val = stmt.args[2]
 
-        struct_typ = unwrap_unionall(widenconst(compact_exprtype(compact, val)))
+        struct_typ = unwrap_unionall(widenconst(argextype(val, compact)))
         if isa(struct_typ, Union) && struct_typ <: Tuple
             struct_typ = unswitchtupleunion(struct_typ)
         end
@@ -768,7 +774,7 @@ function sroa_pass!(ir::IRCode)
         leaves, visited_phinodes = collect_leaves(compact, val, struct_typ)
         isempty(leaves) && continue
 
-        result_t = compact_exprtype(compact, SSAValue(idx))
+        result_t = argextype(SSAValue(idx), compact)
         lifted_result = lift_leaves(compact, result_t, field, leaves)
         lifted_result === nothing && continue
         lifted_leaves, any_undef = lifted_result
@@ -1032,13 +1038,11 @@ function adce_pass!(ir::IRCode)
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
-        elseif isexpr(stmt, :call)
+        elseif is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
             # nullify safe `typeassert` calls
-            if is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
-                ty, isexact = instanceof_tfunc(compact_exprtype(compact, stmt.args[3]))
-                if isexact && compact_exprtype(compact, stmt.args[2]) ⊑ ty
-                    compact[idx] = nothing
-                end
+            ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact))
+            if isexact && argextype(stmt.args[2], compact) ⊑ ty
+                compact[idx] = nothing
             end
         end
     end

@@ -70,7 +70,7 @@ end
 # Tests for SROA
 
 import Core.Compiler: argextype, singleton_type
-const EMPTY_SPTYPES = Core.Compiler.EMPTY_SLOTTYPES
+const EMPTY_SPTYPES = Any[]
 
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
@@ -627,7 +627,7 @@ let # `sroa_pass!` should work with constant globals
     end
     @test !any(src.code) do @nospecialize(stmt)
         Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) == typeof(getfield)
     end
     @test !any(src.code) do @nospecialize(stmt)
@@ -645,7 +645,7 @@ let # `sroa_pass!` should work with constant globals
     end
     @test !any(src.code) do @nospecialize(stmt)
         Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) == typeof(getfield)
     end
     @test !any(src.code) do @nospecialize(stmt)
@@ -668,7 +668,7 @@ let
     # eliminate `typeassert(x2.x, Foo)`
     @test all(src.code) do @nospecialize stmt
         Meta.isexpr(stmt, :call) || return true
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) !== typeof(typeassert)
     end
 end

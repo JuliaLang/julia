@@ -520,7 +520,7 @@ function insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::
     node[:line] = something(inst.line, ir.stmts[pos][:line])
     flag = inst.flag
     if !inst.effect_free_computed
-        if stmt_effect_free(inst.stmt, inst.type, ir, ir.sptypes)
+        if stmt_effect_free(inst.stmt, inst.type, ir)
             flag |= IR_FLAG_EFFECT_FREE
         end
     end
@@ -765,7 +765,7 @@ function insert_node_here!(compact::IncrementalCompact, inst::NewInstruction, re
         resize!(compact, result_idx)
     end
     flag = inst.flag
-    if !inst.effect_free_computed && stmt_effect_free(inst.stmt, inst.type, compact, compact.ir.sptypes)
+    if !inst.effect_free_computed && stmt_effect_free(inst.stmt, inst.type, compact)
         flag |= IR_FLAG_EFFECT_FREE
     end
     node = compact.result[result_idx]
@@ -1316,7 +1316,7 @@ function maybe_erase_unused!(
     callback = null_dce_callback)
     stmt = compact.result[idx][:inst]
     stmt === nothing && return false
-    if compact_exprtype(compact, SSAValue(idx)) === Bottom
+    if argextype(SSAValue(idx), compact) === Bottom
         effect_free = false
     else
         effect_free = compact.result[idx][:flag] & IR_FLAG_EFFECT_FREE != 0
@@ -1466,8 +1466,3 @@ function iterate(x::BBIdxIter, (idx, bb)::Tuple{Int, Int}=(1, 1))
     end
     return (bb, idx), (idx + 1, next_bb)
 end
-
-is_known_call(e::Expr, @nospecialize(func), ir::IRCode) =
-    is_known_call(e, func, ir, ir.sptypes, ir.argtypes)
-
-argextype(@nospecialize(x), ir::IRCode) = argextype(x, ir, ir.sptypes, ir.argtypes)
