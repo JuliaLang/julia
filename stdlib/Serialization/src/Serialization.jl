@@ -1522,4 +1522,30 @@ function deserialize(s::AbstractSerializer, ::Type{Base.StackTraces.StackFrame})
     return Base.StackTraces.StackFrame(func, file, line, nothing, from_c, inlined, pointer)
 end
 
+function serialize(s::AbstractSerializer, lock::Base.AbstractLock)
+    # assert_havelock(lock)
+    serialize_cycle_header(s, lock)
+    nothing
+end
+
+function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.AbstractLock
+    lock = T()
+    deserialize_cycle(s, lock)
+    return lock
+end
+
+function serialize(s::AbstractSerializer, cond::Base.GenericCondition)
+    serialize_cycle_header(s, cond) && return
+    serialize(s, cond.lock)
+    nothing
+end
+
+function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.GenericCondition
+    lock = deserialize(s)
+    cond = T(lock)
+    deserialize_cycle(s, cond)
+    return cond
+end
+
+
 end
