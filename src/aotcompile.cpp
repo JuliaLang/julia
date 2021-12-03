@@ -592,9 +592,11 @@ void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel)
 {
     // TODO: don't do this on CPUs that natively support Float16
-    PM->add(createDemoteFloat16Pass());
-    if (optlevel > 1)
-        PM->add(createGVNPass());
+    if(TM->getTargetFeatureString().find("fp16") == llvm::StringRef::npos){
+        PM->add(createDemoteFloat16Pass());
+        if (optlevel > 1)
+            PM->add(createGVNPass());
+    }
 }
 
 
