@@ -158,7 +158,7 @@ Note that in the case of functions, the test set will be given the name of the c
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
 summary, unless the `verbose=true` option is passed:
 
-```jldoctest testfoo
+```jldoctest testfoo; filter = r"[0-9\.]+ s"
 julia> @testset verbose = true "Foo Tests" begin
            @testset "Animals" begin
                @test foo("cat") == 9
@@ -169,12 +169,12 @@ julia> @testset verbose = true "Foo Tests" begin
                @test foo(fill(1.0, i)) == i^2
            end
        end;
-Test Summary: | Pass  Total
-Foo Tests     |    8      8
-  Animals     |    2      2
-  Arrays 1    |    2      2
-  Arrays 2    |    2      2
-  Arrays 3    |    2      2
+Test Summary: | Pass  Total  Duration
+Foo Tests     |    8      8     0.0 s
+  Animals     |    2      2     0.0 s
+  Arrays 1    |    2      2     0.0 s
+  Arrays 2    |    2      2     0.0 s
+  Arrays 3    |    2      2     0.0 s
 ```
 
 If we do have a test failure, only the details for the failed test sets will be shown:
