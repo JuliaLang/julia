@@ -3,6 +3,11 @@
 #include "julia.h"
 #include "julia_internal.h"
 
+jl_value_t *jl_fptr_const_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+{
+    return oc->captures;
+}
+
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isva,
     jl_value_t *rt_lb, jl_value_t *rt_ub, jl_value_t *source, jl_value_t **env, size_t nenv)
 {
@@ -37,14 +42,21 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isv
     JL_GC_POP();
     oc->source = (jl_method_t*)source;
     oc->isva = jl_unbox_bool(isva);
-    if (ci->invoke == jl_fptr_interpret_call)
-        oc->invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
-    else if (ci->invoke == jl_fptr_args)
-        oc->invoke = jl_atomic_load_relaxed(&ci->specptr.fptr1);
-    else
-        oc->invoke = (jl_fptr_args_t)ci->invoke;
-    oc->specptr = NULL;
     oc->captures = captures;
+    if (ci->invoke == jl_fptr_interpret_call) {
+        oc->invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
+    }
+    else if (ci->invoke == jl_fptr_args) {
+        oc->invoke = jl_atomic_load_relaxed(&ci->specptr.fptr1);
+    }
+    else if (ci->invoke == jl_fptr_const_return) {
+        oc->invoke = (jl_fptr_args_t)jl_fptr_const_opaque_closure;
+        oc->captures = ci->rettype_const;
+    }
+    else {
+        oc->invoke = (jl_fptr_args_t)ci->invoke;
+    }
+    oc->specptr = NULL;
     oc->world = world;
     return oc;
 }
