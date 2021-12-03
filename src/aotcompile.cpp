@@ -676,9 +676,11 @@ void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIR
 void addMachinePasses(legacy::PassManagerBase *PM, int optlevel)
 {
     // TODO: don't do this on CPUs that natively support Float16
-    PM->add(createDemoteFloat16Pass());
-    if (optlevel > 1)
-        PM->add(createGVNPass());
+    if(TM->getTargetFeatureString().find("fp16") == llvm::StringRef::npos){
+        PM->add(createDemoteFloat16Pass());
+        if (optlevel > 1)
+            PM->add(createGVNPass());
+    }
 }
 
 // this defines the set of optimization passes defined for Julia at various optimization levels.
