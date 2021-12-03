@@ -146,10 +146,9 @@ As well as call functions:
 julia> f(x) = @test isone(x)
 f (generic function with 1 method)
 
-julia> @testset f(1)
+julia> @testset f(1);
 Test Summary: | Pass  Total  Duration
 f             |    1      1     0.0 s
-Test.DefaultTestSet("f", Any[], 1, false, false)
 ```
 
 This can be used to allow for factorization of test sets, making it easier to run individual
