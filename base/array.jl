@@ -2354,7 +2354,7 @@ function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
     len = length(I)
     while cnt ≤ len
         @inbounds I[cnt] = i
-        cnt += f(A[i])
+        cnt += f(@inbounds A[i])
         i = nextind(A, i)
     end
     cnt - 1 == len ? I : resize!(I, cnt - 1)
