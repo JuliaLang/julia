@@ -155,22 +155,51 @@ is great. Points of note:
 
 * They have *three* trees!
   1. Green trees exactly like mine (pretty much all the same design
-     decisions, including trivia storage)
-  2. Untyped red syntax trees somewhat like ours, but much more minimal. For
+     decisions, including trivia storage). Though note that the team are still
+     [toying with](https://github.com/rust-analyzer/rust-analyzer/issues/6584)
+     the idea of using the Roslyn model of trivia.
+  2. Untyped red syntax trees somewhat like mine, but much more minimal. For
      example, these don't attempt to reorder children.
   3. A typed AST layer with a type for each expression head. The AST searches
      for children by dynamically traversing the child list each time, rather
-     than having a single canonical ordering.
+     than having a single canonical ordering or remembering the placement of
+     children which the parser knew.
 * "Parser does not see whitespace nodes. Instead, they are attached to the
   tree in the TreeSink layer." This may be relevant to us - it's a pain to
   attach whitespace to otherwise significant tokens, and inefficient to
-  allocate and pass around a list of whitespace trivia.
+  allocate and pass around a dynamic list of whitespace trivia.
 * "In practice, incremental reparsing doesn't actually matter much for IDE
-  use-cases, parsing from scratch seems to be fast enough."
+  use-cases, parsing from scratch seems to be fast enough." (I wonder why
+  they've implemented incremental parsing then?)
 * There's various comments about macros... Rust macro expansion seems quite
   different from Julia (it appears it may be interleaved with parsing??)
 
 In general I think it's unclear whether we want typed ASTs in Julia and we
 particularly need to deal with the fact that `Expr` is the existing public
 interface. Could we have `Expr2` wrap `SyntaxNode`?
+
+* A related very useful set of blog posts which discuss using the rust syntax
+  tree library (rowan) for representing of a non-rust toy language is here
+  https://dev.to/cad97/lossless-syntax-trees-280c
+
+Not all the design decisions in `rust-analyzer` are finalized but the 
+[architecture document](https://github.com/rust-analyzer/rust-analyzer/blob/master/docs/dev/architecture.md)
+is a fantastic source of design inspiration.
+
+Highlights:
+* "The parser is independent of the particular tree structure and particular
+  representation of the tokens. It transforms one flat stream of events into
+  another flat stream of events."  This seems great, let's adopt it!
+* TODO
+
+
+## General resources about parsing
+
+* [Modern parser generator](https://matklad.github.io/2018/06/06/modern-parser-generator.html)
+  has a lot of practical notes on writing parsers. Highlights:
+  - Encourages writing tests for handwritten parsers as inline comments
+  - Mentions [Pratt parsers](http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/) for operator precedence.
+  - Some discussion of error recovery
+
+## `rust-analyzer`
 

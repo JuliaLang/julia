@@ -51,6 +51,22 @@ mutable struct TokenStream
     hasnext2::Bool
 end
 
+# TODO: replace TokenStream with "ParseStream"/"ParserIO"/? interface
+#
+# This would be an I/O interface for the parser
+# - Input: Provides input tokens to the parser
+# - Output: Accepts tree output events from the parser
+#
+# Such an interface can be used to decouple parsing from the input and output
+# representations as is done in rust-analyzer's TreeSink. Part of the point of
+# this is to have a place to preserve whitespace trivia outside the parser. (
+# The rust TextTreeSink is oddly named, as it appears to be used for both
+# getting tokens and emitting nodes... see
+# https://github.com/rust-analyzer/rust-analyzer/blob/4691a0647b2c96cc475d8bbe7c31fe194d1443e7/crates/syntax/src/parsing/text_tree_sink.rs )
+#
+# struct ParseStream
+# end
+
 function TokenStream(code)
     lexer = Tokenize.tokenize(code, RawToken)
     TokenStream(lexer, EMPTY_TOKEN, EMPTY_TOKEN, false, false)
