@@ -449,7 +449,7 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 # Dot products and norms
 
 # special cases of norm; note that they don't need to handle isempty(x)
-2MinusInf(x) = float(mapreduce(norm, min, x))
+generic_normMinusInf(x) = float(mapreduce(norm, min, x))
 
 generic_normInf(x) = float(mapreduce(norm, max, x))
 
