@@ -486,7 +486,7 @@ function generic_normp(x, p)
         maxabs = p > 1 ? normInf(x) : normMinusInf(x)
         (maxabs == 0 || isinf(maxabs)) && return maxabs
         max_el_norm = maxabs^spp
-        if (isfinite(length(x)*max_el_norm) && max_el_norm != 0) # rescaling necessary
+        if !(isfinite(length(x)*max_el_norm) && max_el_norm != 0) # rescaling necessary
             invmaxabs = inv(maxabs)
             if isfinite(invmaxabs)
                 return convert(T, maxabs*mapreduce(v -> (norm(v)*invmaxabs)^spp, +, x)^inv(spp))
