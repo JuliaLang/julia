@@ -2339,7 +2339,7 @@ function _findall(f::Function, I::Vector, A::AbstractArray{Bool})
     cnt = 1
     len = length(I)
     for (k, v) in pairs(A)
-        I[cnt] = k
+        @inbounds I[cnt] = k
         cnt += f(v)
         cnt == len && return I
     end
@@ -2352,8 +2352,8 @@ function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
     i = firstindex(A)
     cnt = 1
     len = length(I)
-    @inbounds while cnt ≤ len
-        I[cnt] = i
+    while cnt ≤ len
+        @inbounds I[cnt] = i
         cnt += f(A[i])
         i = nextind(A, i)
     end
