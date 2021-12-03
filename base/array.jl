@@ -2339,11 +2339,13 @@ function _findall(f::Function, I::Vector, A::AbstractArray{Bool})
     cnt = 1
     len = length(I)
     for (k, v) in pairs(A)
-        cnt > len && break
         I[cnt] = k
         cnt += f(v)
+        cnt == len && return I
     end
-    I
+    # In case of impure f, this line could potentially be hit. In that case,
+    # we can't assume I is the correct length.
+    resize!(I, cnt)
 end
 
 function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
@@ -2355,7 +2357,7 @@ function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
         cnt += f(A[i])
         i = nextind(A, i)
     end
-    I
+    cnt == len ? I : resize!(I, cnt)
 end
 
 findall(f::Function, A::AbstractArray{Bool}) = _findall(f, A)
