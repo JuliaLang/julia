@@ -313,6 +313,7 @@ makedocs(
 # Update URLs to external stdlibs (JuliaLang/julia#43199)
 for (root, _, files) in walkdir(output_path), file in joinpath.(root, files)
     endswith(file, ".html") || continue
+    local str
     str = read(file, String)
     # Index page links, update
     #   https://github.com/JuliaLang/julia/blob/master/stdlib/${STDLIB_NAME}-${STDLIB_COMMIT}/path/to.md

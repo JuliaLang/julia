@@ -233,7 +233,7 @@ byteenv(env::Union{AbstractVector{Pair{T,V}}, Tuple{Vararg{Pair{T,V}}}}) where {
     String[cstr(k*"="*string(v)) for (k,v) in env]
 
 """
-    setenv(command::Cmd, env; dir="")
+    setenv(command::Cmd, env; dir)
 
 Set environment variables to use when running the given `command`. `env` is either a
 dictionary mapping strings to strings, an array of strings of the form `"var=val"`, or
@@ -242,13 +242,15 @@ existing environment, create `env` through `copy(ENV)` and then setting `env["va
 as desired, or use [`addenv`](@ref).
 
 The `dir` keyword argument can be used to specify a working directory for the command.
+`dir` defaults to the currently set `dir` for `command` (which is the current working
+directory if not specified already).
 
 See also [`Cmd`](@ref), [`addenv`](@ref), [`ENV`](@ref), [`pwd`](@ref).
 """
-setenv(cmd::Cmd, env; dir="") = Cmd(cmd; env=byteenv(env), dir=dir)
-setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir="") =
+setenv(cmd::Cmd, env; dir=cmd.dir) = Cmd(cmd; env=byteenv(env), dir=dir)
+setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir=cmd.dir) =
     setenv(cmd, env; dir=dir)
-setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
+setenv(cmd::Cmd; dir=cmd.dir) = Cmd(cmd; dir=dir)
 
 """
     addenv(command::Cmd, env...; inherit::Bool = true)
@@ -256,6 +258,7 @@ setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 Merge new environment mappings into the given [`Cmd`](@ref) object, returning a new `Cmd` object.
 Duplicate keys are replaced.  If `command` does not contain any environment values set already,
 it inherits the current environment at time of `addenv()` call if `inherit` is `true`.
+Keys with value `nothing` are deleted from the env.
 
 See also [`Cmd`](@ref), [`setenv`](@ref), [`ENV`](@ref).
 
@@ -274,7 +277,11 @@ function addenv(cmd::Cmd, env::Dict; inherit::Bool = true)
         end
     end
     for (k, v) in env
-        new_env[string(k)::String] = string(v)::String
+        if v === nothing
+            delete!(new_env, string(k)::String)
+        else
+            new_env[string(k)::String] = string(v)::String
+        end
     end
     return setenv(cmd, new_env)
 end
