@@ -470,7 +470,10 @@ function generic_norm2(x)
         return convert(T, sqrt(mapreduce(v -> sT(norm_sqr(v)), +, x)))
     else
         invmaxabs = inv(maxabs_st)
-        return convert(T, maxabs*sqrt(mapreduce(v -> abs2(sT(norm(v))*invmaxabs), +, x)))
+        if isfinite(invmaxabs)
+            return convert(T, maxabs*sqrt(mapreduce(v -> abs2(sT(norm(v))*invmaxabs), +, x)))
+        end
+        return convert(T, maxabs*sqrt(mapreduce(v -> abs2(sT(norm(v))/maxabs_st), +, x)))
     end
 end
 
@@ -482,10 +485,13 @@ function generic_normp(x, p)
     if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? normInf(x) : normMinusInf(x)
         (maxabs == 0 || isinf(maxabs)) && return maxabs
-        maxelnorm = maxabs^spp
-        if (isfinite(length(x)*maxelnorm) && maxelnorm != 0) # rescaling necessary
+        max_el_norm = maxabs^spp
+        if (isfinite(length(x)*max_el_norm) && max_el_norm != 0) # rescaling necessary
             invmaxabs = inv(maxabs)
-            return convert(T, maxabs*mapreduce(v -> (norm(v)*invmaxabs)^spp, +, x)^inv(spp))
+            if isfinite(invmaxabs)
+                return convert(T, maxabs*mapreduce(v -> (norm(v)*invmaxabs)^spp, +, x)^inv(spp))
+            end
+            return convert(T, maxabs*mapreduce(v -> (norm(v)/maxabs)^spp, +, x)^inv(spp))
         end
     end
     return convert(T, mapreduce(v -> norm(v)^spp, +, x)^inv(spp))
