@@ -243,8 +243,9 @@ macro time(msg, ex)
             compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
         )
         local diff = GC_Diff(gc_num(), stats)
-        local has_msg = !isnothing($(esc(msg)))
-        has_msg && print($(esc(msg)), " : ")
+        local _msg = $(esc(msg))
+        local has_msg = !isnothing(_msg)
+        has_msg && print(_msg, ": ")
         time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true, !has_msg)
         val
     end
@@ -324,8 +325,9 @@ macro timev(msg, ex)
             compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
         )
         local diff = GC_Diff(gc_num(), stats)
-        local has_msg = !isnothing($(esc(msg)))
-        has_msg && print($(esc(msg)), ": ")
+        local _msg = $(esc(msg))
+        local has_msg = !isnothing(_msg)
+        has_msg && print(_msg, ": ")
         timev_print(elapsedtime, diff, compile_elapsedtime, !has_msg)
         val
     end
