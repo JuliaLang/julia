@@ -11,18 +11,35 @@
 # * Nodes should be position-independent so that reparsing doesn't disturb them,
 #   and so that it's possible to pool and reuse them (especially leaf nodes!)
 
-# The rawest version of a parse tree node.
+"""
+The rawest version of a lossless syntax tree.
+
+Design principles:
+* Tree should remember what the lexer and parser knew about the source code
+* Be position-independent so nodes can be interned and reused
+
+Design alternatives to explore:
+* Maybe allow some loss of local parser state if it can be derived again
+  quickly? Particularly in the ordering of children.
+* Store strings for tokens? (Surprisingly, rust-analyzer does this. It could be
+  efficient if the strings or nodes are interned for the parsing session?)
+* Never construct this tree? Instead serialize it to Vector{UInt8} in an
+  efficient but compact format? Could this be more flexible with storing parser
+  state and beat the interning approach? We could also store the source tokens
+  in the serialization and discard the source text. (Caveat - unclear that this
+  could deal with incremental parsing...)
+"""
 struct RawSyntaxNode
     kind::Kind
     span::UInt32
     flags::UInt32
     args::Union{Tuple{},Vector{RawSyntaxNode}}
-    # has_diagnostics::Bool
 end
 
 const _RawFlags = UInt32
 TRIVIA_FLAG = 0x00000001
 INFIX_FLAG = 0x00000002
+# DIAGNOSTICS_FLAG
 
 function raw_flags(; trivia::Bool=false, infix::Bool=false)
     flags = _RawFlags(0)
@@ -93,6 +110,11 @@ end
 #-------------------------------------------------------------------------------
 # AST interface, built on top of raw tree
 
+"""
+Design options:
+* rust-analyzer treats their version of an untyped syntax node as a cursor into
+  the green tree. They deallocate aggressively.
+"""
 mutable struct SyntaxNode
     source::SourceFile
     raw::RawSyntaxNode
