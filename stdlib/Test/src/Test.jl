@@ -1218,7 +1218,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
     end
 
     if np == 0 && nf == 0 && ne == 0 && nb == 0
-        printstyled("No tests", color=Base.info_color())
+        printstyled(lpad("None", total_width, " "), "  ", color=Base.info_color())
     else
         printstyled(lpad(string(subtotal), total_width, " "), "  ", color=Base.info_color())
     end
