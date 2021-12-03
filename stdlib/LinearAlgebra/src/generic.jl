@@ -488,7 +488,7 @@ function generic_normp(x, p)
             return convert(T, maxabs*mapreduce(v -> (norm(v)*invmaxabs)^spp, +, x)^inv(spp))
         end
     end
-    return convert(T, mapreduce(v -> norm(v)^spp, +, x))^inv(spp))
+    return convert(T, mapreduce(v -> norm(v)^spp, +, x)^inv(spp))
 end
 
 normMinusInf(x) = generic_normMinusInf(x)
