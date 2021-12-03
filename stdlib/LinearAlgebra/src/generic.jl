@@ -484,7 +484,7 @@ function generic_normp(x, p)
         (maxabs == 0 || isinf(maxabs)) && return maxabs
         maxelnorm = maxabs^spp
         if (isfinite(length(x)*maxelnorm) && maxelnorm != 0) # rescaling necessary
-            invmaxabs = inv(maxabs_st)
+            invmaxabs = inv(maxabs)
             return convert(T, maxabs*mapreduce(v -> (norm(v)*invmaxabs)^spp, +, x)^inv(spp))
         end
     end
