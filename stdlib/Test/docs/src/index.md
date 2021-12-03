@@ -113,19 +113,19 @@ Test.TestSetException
 
 We can put our tests for the `foo(x)` function in a test set:
 
-```jldoctest testfoo; filter = r"[0-9\.]+ s"
+```jldoctest testfoo; filter = r"[0-9\.]+s"
 julia> @testset "Foo Tests" begin
            @test foo("a")   == 1
            @test foo("ab")  == 4
            @test foo("abc") == 9
        end;
-Test Summary: | Pass  Total   Time
-Foo Tests     |    3      3  0.0 s
+Test Summary: | Pass  Total  Time
+Foo Tests     |    3      3  0.0s
 ```
 
 Test sets can also be nested:
 
-```jldoctest testfoo; filter = r"[0-9\.]+ s"
+```jldoctest testfoo; filter = r"[0-9\.]+s"
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @test foo("cat") == 9
@@ -136,19 +136,19 @@ julia> @testset "Foo Tests" begin
                @test foo(fill(1.0, i)) == i^2
            end
        end;
-Test Summary: | Pass  Total   Time
-Foo Tests     |    8      8  0.0 s
+Test Summary: | Pass  Total  Time
+Foo Tests     |    8      8  0.0s
 ```
 
 As well as call functions:
 
-```jldoctest testfoo; filter = r"[0-9\.]+ s"
+```jldoctest testfoo; filter = r"[0-9\.]+s"
 julia> f(x) = @test isone(x)
 f (generic function with 1 method)
 
 julia> @testset f(1);
-Test Summary: | Pass  Total   Time
-f             |    1      1  0.0 s
+Test Summary: | Pass  Total  Time
+f             |    1      1  0.0s
 ```
 
 This can be used to allow for factorization of test sets, making it easier to run individual
@@ -157,7 +157,7 @@ Note that in the case of functions, the test set will be given the name of the c
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
 summary, unless the `verbose=true` option is passed:
 
-```jldoctest testfoo; filter = r"[0-9\.]+ s"
+```jldoctest testfoo; filter = r"[0-9\.]+s"
 julia> @testset verbose = true "Foo Tests" begin
            @testset "Animals" begin
                @test foo("cat") == 9
@@ -168,17 +168,17 @@ julia> @testset verbose = true "Foo Tests" begin
                @test foo(fill(1.0, i)) == i^2
            end
        end;
-Test Summary: | Pass  Total   Time
-Foo Tests     |    8      8  0.0 s
-  Animals     |    2      2  0.0 s
-  Arrays 1    |    2      2  0.0 s
-  Arrays 2    |    2      2  0.0 s
-  Arrays 3    |    2      2  0.0 s
+Test Summary: | Pass  Total  Time
+Foo Tests     |    8      8  0.0s
+  Animals     |    2      2  0.0s
+  Arrays 1    |    2      2  0.0s
+  Arrays 2    |    2      2  0.0s
+  Arrays 3    |    2      2  0.0s
 ```
 
 If we do have a test failure, only the details for the failed test sets will be shown:
 
-```julia-repl; filter = r"[0-9\.]+ s"
+```julia-repl; filter = r"[0-9\.]+s"
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @testset "Felines" begin
@@ -198,10 +198,10 @@ Arrays: Test Failed
   Expression: foo(fill(1.0, 4)) == 15
    Evaluated: 16 == 15
 [...]
-Test Summary: | Pass  Fail  Total   Time
-Foo Tests     |    3     1      4  0.0 s
-  Animals     |    2            2  0.0 s
-  Arrays      |    1     1      2  0.0 s
+Test Summary: | Pass  Fail  Total  Time
+Foo Tests     |    3     1      4  0.0s
+  Animals     |    2            2  0.0s
+  Arrays      |    1     1      2  0.0s
 ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
 ```
 

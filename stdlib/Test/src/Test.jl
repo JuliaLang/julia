@@ -1166,9 +1166,9 @@ function get_test_counts(ts::DefaultTestSet)
     ts.anynonpass = (fails + errors + c_fails + c_errors > 0)
     dur_s = ts.time_end - ts.time_start
     duration = if dur_s < 60
-        string(round(dur_s, digits = 1), " s")
+        string(round(dur_s, digits = 1), "s")
     else
-        string(round(dur_s / 60, digits = 1), " m")
+        string(round(dur_s / 60, digits = 1), "m")
     end
     return passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration
 end
@@ -1299,7 +1299,7 @@ re-arrangements of `@testset`s regardless of their side-effect on the
 global RNG state.
 
 # Examples
-```jldoctest; filter = r"trigonometric identities |    4      4  [0-9\\.]+ s"
+```jldoctest; filter = r"trigonometric identities |    4      4  [0-9\\.]+s"
 julia> @testset "trigonometric identities" begin
            θ = 2/3*π
            @test sin(-θ) ≈ -sin(θ)
@@ -1307,8 +1307,8 @@ julia> @testset "trigonometric identities" begin
            @test sin(2θ) ≈ 2*sin(θ)*cos(θ)
            @test cos(2θ) ≈ cos(θ)^2 - sin(θ)^2
        end;
-Test Summary:            | Pass  Total   Time
-trigonometric identities |    4      4  0.2 s
+Test Summary:            | Pass  Total  Time
+trigonometric identities |    4      4  0.2s
 ```
 """
 macro testset(args...)
