@@ -102,7 +102,7 @@ endpos(t::AbstractToken) = t.endpos
 startbyte(t::AbstractToken) = t.startbyte
 endbyte(t::AbstractToken) = t.endbyte
 function untokenize(t::Token)
-    if t.kind == IDENTIFIER || t.kind == VAR_IDENTIFIER || isliteral(t.kind) || t.kind == COMMENT || t.kind == WHITESPACE || t.kind == ERROR
+    if t.kind == IDENTIFIER || t.kind == VAR_IDENTIFIER || isliteral(t.kind) || t.kind == COMMENT || t.kind == WHITESPACE || t.kind == NEWLINE_WS || t.kind == ERROR
         return t.val
     elseif iskeyword(t.kind)
         return lowercase(string(t.kind))
