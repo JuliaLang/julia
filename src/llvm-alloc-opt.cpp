@@ -144,6 +144,7 @@ private:
     void optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info);
     void optimizeArrayLengthCmpInsts(CallInst *orig_inst);
     void splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag);
+    void moveArrayToStack(CallInst *orig_inst, llvm::Value *tag);
 
     Function &F;
     AllocOpt &pass;
@@ -192,7 +193,6 @@ private:
     AllocUseInfo use_info, array_info;
     bool array_length_clobbered;
     bool array_length_clobbered_within_bb;
-    bool array_only_data_ops;
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
     ReplaceUses::Stack replace_stack;
@@ -301,12 +301,14 @@ void Optimizer::optimizeAll()
         };
         auto has_ref = get_refaggr(use_info);
         if (item.second.isarray) {
+            auto has_ref_arr = get_refaggr(array_info);
             if (!use_info.hasunknownmem && !use_info.addrescaped
                 && !array_info.hasunknownmem && !array_info.addrescaped
-                && !has_ref.second && !get_refaggr(array_info).second) {
+                && !has_ref.second && !has_ref_arr.second) {
                 splitArrayOnStack(orig, item.second.type);
                 continue;
             }
+            has_ref.first = has_ref.first || has_ref_arr.first;
         } else {
             if (!use_info.hasunknownmem && !use_info.addrescaped && !has_ref.second) {
                 // No one actually care about the memory layout of this object, split it.
@@ -321,8 +323,11 @@ void Optimizer::optimizeAll()
         }
         if (!item.second.isarray) {
             // The object has no fields with mix reference access
-            // Note that this needs to be changed once stack-based arrays are supported
             moveToStack(orig, item.second.type, item.second.object.size, has_ref.first);
+        } else if (array_alloc_size_info.valid && array_alloc_size_info.how == 0) {
+            if (!use_info.hasunknownmem && !use_info.addrescaped && !array_info.addrescaped && !has_ref.first) {
+                moveArrayToStack(orig, item.second.type);
+            }
         }
     }
 }
@@ -834,6 +839,8 @@ void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag, bool is_array
             push_frame(user);
         }
         else {
+            dbgs() << "Unknown instruction detected while removing allocation!\n";
+            dbgs() << *user << "\n";
             abort();
         }
     };
@@ -875,6 +882,37 @@ Instruction *cloneInstructionTree(Instruction *target, Instruction *tree, Domina
     return cloned;
 }
 
+void deleteUnusedInstructionTreeImpl(SmallPtrSetImpl<Instruction *> &to_check) {
+    while (!to_check.empty()) {
+        auto check = *to_check.begin();
+        to_check.erase(check);
+        if (check->isSafeToRemove() && check->use_empty()) {
+            for (auto &op : check->operands()) {
+                if (auto inst = dyn_cast<Instruction>(op.get())) {
+                    if (inst != check) {
+                        to_check.insert(inst);
+                    }
+                }
+            }
+            check->eraseFromParent();
+        }
+    }
+}
+
+void deleteUnusedInstructionTree(Instruction *check) {
+    SmallSet<Instruction *, 16> to_check;
+    //This shouldn't be called unless it's actually safe to remove this
+    //However we want to remove it even if it's not safe to remove
+    assert(check->use_empty());
+    for (auto &op : check->operands()) {
+        if (auto inst = dyn_cast<Instruction>(op.get())) {
+            to_check.insert(inst);
+        }
+    }
+    check->eraseFromParent();
+    deleteUnusedInstructionTreeImpl(to_check);
+}
+
 void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &info) {
     assert(info.isarray);
     if (info.array.dimcount) {
@@ -907,7 +945,8 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
         }
         // Now we need to identify reads to dimensions and length
 
-        for (auto &field : use_info.memops) {
+        for (auto memop_it = use_info.memops.begin(); memop_it != use_info.memops.end();) {
+            auto &field = *memop_it;
             for (auto &access : field.second.accesses) {
                 std::size_t offset = access.offset;
                 switch (offset) {
@@ -920,55 +959,29 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                             // appropriate bitcasts/addrspacecasts
                             auto new_load = cloneInstructionTree(orig_inst, access.inst, getDomTree());
                             access.inst->replaceAllUsesWith(new_load);
+                            deleteUnusedInstructionTree(access.inst);
+                            access.inst = new_load;
                         }
                         break;
                     case 8:
                         if (info.array.dimcount > 1 || !array_length_clobbered || (!array_length_clobbered_within_bb && access.inst->getParent() == orig_inst->getParent())) {
                             // This is an access to array length
                             access.inst->replaceAllUsesWith(length);
-                            // DCE can eliminate the now-redundant load
+                            deleteUnusedInstructionTree(access.inst);
+                            access.inst = nullptr;
                         }
                         break;
                     case 16:
                         //This is an access to array flags
-                        if (info.array.dimcount > 1 || !use_info.escapeswithinbb) {
-                            if (isa<LoadInst>(access.inst)) {
-                                for (auto user : access.inst->users()) {
-                                    if (auto binop = dyn_cast<BinaryOperator>(user)) {
-                                        if (binop->getOpcode() == BinaryOperator::And) {
-                                            if (auto cint = dyn_cast<ConstantInt>(binop->getOperand(1))) {
-                                                if (cint->getSExtValue() == 3 && (!use_info.escaped || binop->getParent() == orig_inst->getParent())) {
-                                                    if (array_alloc_size_info.valid) {
-                                                        binop->replaceAllUsesWith(ConstantInt::get(binop->getType(), array_alloc_size_info.how));
-                                                    } else {
-                                                        // This is an access to the jl_array_t::how field
-                                                        for (auto cuser : binop->users()) {
-                                                            if (auto cmp = dyn_cast<CmpInst>(cuser)) {
-                                                                if (cmp->getNumOperands() == 2 && cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ && (info.array.dimcount > 1 || !use_info.escaped || cmp->getParent() == orig_inst->getParent())) {
-                                                                    if (auto cint2 = dyn_cast<ConstantInt>(cmp->getOperand(1))) {
-                                                                        if (cint2->getSExtValue() == 3 || cint->getSExtValue() == 1) {
-                                                                            //At the end of this chain we know that the value is either 0 or 2 immediately
-                                                                            //after allocation. Thus we can simply replace this instruction with false
-                                                                            cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        //Array flags should have been optimized in codegen, can't do anything about it now
                         break;
                     case 24:
                         if (info.array.dimcount > 1 || !array_length_clobbered || (!array_length_clobbered_within_bb && access.inst->getParent() == orig_inst->getParent())) {
                             // This is an access to dim 1
                             assert(dims[0]);
                             access.inst->replaceAllUsesWith(dims[0]);
+                            deleteUnusedInstructionTree(access.inst);
+                            access.inst = nullptr;
                         }
                         break;
                     case 32:
@@ -978,6 +991,8 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                         }
                         assert(dims[1]);
                         access.inst->replaceAllUsesWith(dims[1]);
+                        deleteUnusedInstructionTree(access.inst);
+                        access.inst = nullptr;
                         break;
                     case 40:
                         // This is an access to dim 3
@@ -986,11 +1001,19 @@ void Optimizer::optimizeArrayDims(CallInst *orig_inst, jl_alloc::AllocIdInfo &in
                         }
                         assert(dims[2]);
                         access.inst->replaceAllUsesWith(dims[2]);
+                        deleteUnusedInstructionTree(access.inst);
+                        access.inst = nullptr;
                         break;
                     default:
                         // Unknown access, let's leave it alone
                         break;
                 }
+            }
+            field.second.accesses.erase(std::remove_if(field.second.accesses.begin(), field.second.accesses.end(), [](auto &access){ return access.inst == nullptr; }), field.second.accesses.end());
+            if (field.second.accesses.empty()) {
+                memop_it = use_info.memops.erase(memop_it);
+            } else {
+                ++memop_it;
             }
         }
     }
@@ -1010,6 +1033,7 @@ void Optimizer::getArraySizeInfo(CallInst *orig_inst, jl_alloc::AllocIdInfo &inf
                 return;
             }
         }
+        array_alloc_size_info.elsize = array_alloc_size_info.align = 0;
         array_alloc_size_info.atype = (jl_value_t*)(atype_int);
         array_alloc_size_info.eltype = jl_tparam0(array_alloc_size_info.atype);
         array_alloc_size_info.isunboxed = jl_islayout_inline(array_alloc_size_info.eltype, &array_alloc_size_info.elsize, &array_alloc_size_info.align);
@@ -1043,7 +1067,6 @@ void Optimizer::getArrayOps(CallInst *orig_inst, int dimcount) {
     array_info.reset();
     array_length_clobbered = false;
     array_length_clobbered_within_bb = false;
-    array_only_data_ops = true;
 
     //Clobber array size information
     array_alloc_size_info.initialized = false;
@@ -1069,7 +1092,6 @@ void Optimizer::getArrayOps(CallInst *orig_inst, int dimcount) {
                             array_length_clobbered_within_bb = true;
                         }
                     }
-                    array_only_data_ops = false;
                     break;
                 }
                 case 32:
@@ -1081,7 +1103,6 @@ void Optimizer::getArrayOps(CallInst *orig_inst, int dimcount) {
                     //then this is probably an array access and we can't optimize it
                     assert(offset / 8 - 2 > unsigned(dimcount) || isa<LoadInst>(access.inst));
                 default:
-                    array_only_data_ops = false;
                     break;
             }
         }
@@ -1092,9 +1113,14 @@ void Optimizer::optimizeArrayLengthCmpInsts(CallInst *orig_inst) {
     // Some conditionals can be folded away since we know length/dimensions >= 0
     const auto &dtree = getDomTree();
     auto fold_conditionals = [&](Value *inst){
+        SmallSet<Instruction*, 2> removed_cmps;
         for (auto user : inst->users()) {
             if (auto cmp = dyn_cast<CmpInst>(user)) {
-                if (cmp->getNumOperands() == 2 && dtree.dominates(orig_inst, cmp)) {
+                if (cmp->use_empty()) {
+                    continue;
+                }
+                assert(cmp->getNumOperands() == 2);
+                if (dtree.dominates(orig_inst, cmp)) {
                     if (cmp->getOperand(0) == inst) {
                         if (auto cint = dyn_cast<ConstantInt>(cmp->getOperand(1))) {
                             ssize_t bound = cint->getSExtValue();
@@ -1102,10 +1128,12 @@ void Optimizer::optimizeArrayLengthCmpInsts(CallInst *orig_inst) {
                                 || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SLE // icmp sle len, -1 -> len <= -1 -> false
                                 || cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ))) { // icmp eq len, -1 -> len == -1 -> false
                                     cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
+                                    removed_cmps.insert(cmp);
                             } else if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE) // icmp sge len, 0 -> len >= 0 -> true
                                         || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT // icmp sgt len, -1 -> len > -1 -> true
                                         || cmp->getPredicate() == CmpInst::Predicate::ICMP_NE))) { // icmp ne len, -1 -> len != -1 -> true
                                             cmp->replaceAllUsesWith(ConstantInt::getTrue(cmp->getContext()));
+                                            removed_cmps.insert(cmp);
                             } else if ((bound == 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT) // icmp sgt len, 0 -> len > 0 -> len != 0
                                         || (bound == 1 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE)) { // icmp sge len, 1 -> len >= 1 -> len != 0
                                 cmp->setPredicate(CmpInst::Predicate::ICMP_NE);
@@ -1124,10 +1152,12 @@ void Optimizer::optimizeArrayLengthCmpInsts(CallInst *orig_inst) {
                                 || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SLT // icmp slt -1, len -> -1 < len -> true
                                 || cmp->getPredicate() == CmpInst::Predicate::ICMP_NE))) { // icmp ne -1, len -> -1 != len -> true
                                     cmp->replaceAllUsesWith(ConstantInt::getTrue(cmp->getContext()));
+                                    removed_cmps.insert(cmp);
                             } else if ((bound <= 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT) // icmp sgt 0, len -> 0 > len -> false
                                         || (bound < 0 && (cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE // icmp sge -1, len -> -1 >= len -> false
                                         || cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ))) { // icmp eq -1, len -> -1 == len -> false
                                             cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
+                                            removed_cmps.insert(cmp);
                             } else if ((bound == 0 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGE) // icmp sge 0, len -> 0 >= len -> 0 == len
                                         || (bound == 1 && cmp->getPredicate() == CmpInst::Predicate::ICMP_SGT)) { // icmp sgt 1, len -> 1 > len -> 0 == len
                                 cmp->setPredicate(CmpInst::Predicate::ICMP_EQ);
@@ -1141,6 +1171,9 @@ void Optimizer::optimizeArrayLengthCmpInsts(CallInst *orig_inst) {
                     }
                 }
             }
+        }
+        for (auto cmp : removed_cmps) {
+            deleteUnusedInstructionTree(cmp);
         }
     };
 
@@ -1220,6 +1253,30 @@ void Optimizer::splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag) {
             // PromoteMemToReg({alloca_inst}, dtree);
         }
         //If we're not materializing a slot anyways, removeAlloc will remove the redundant stores
+    }
+    removeAlloc(orig_inst, tag, true);
+}
+
+void Optimizer::moveArrayToStack(CallInst *orig_inst, llvm::Value *tag) {
+    if (use_info.memops.empty()) {
+        return;
+    }
+    SmallVector<LoadInst*> loads;
+    for (auto &field : use_info.memops) {
+        for (auto &access : field.second.accesses) {
+            if (access.offset == 0) {
+                if (auto load = dyn_cast<LoadInst>(access.inst)) {
+                    loads.push_back(load);
+                    continue;
+                }
+            }
+            return;
+        }
+    }
+    IRBuilder<> builder(&orig_inst->getFunction()->front().front());
+    auto stack_array = builder.CreateAlloca(cast<PointerType>(loads.front()->getType())->getElementType(), ConstantInt::get(pass.T_size, array_alloc_size_info.numels), "stack_array");
+    for (auto load : loads) {
+        load->replaceAllUsesWith(builder.CreatePointerCast(stack_array, load->getType()));
     }
     removeAlloc(orig_inst, tag, true);
 }

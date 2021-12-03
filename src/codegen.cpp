@@ -102,6 +102,7 @@ typedef Instruction TerminatorInst;
 #include "codegen_shared.h"
 #include "processor.h"
 #include "julia_assert.h"
+#include "llvm-alloc-helpers.h"
 
 JL_STREAM *dump_emitted_mi_name_stream = NULL;
 extern "C" JL_DLLEXPORT
@@ -2790,10 +2791,21 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     PHINode *data_owner = NULL; // owner object against which the write barrier must check
                     if (isboxed || (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->layout->npointers > 0)) { // if elements are just bits, don't need a write barrier
                         Value *aryv = boxed(ctx, ary);
-                        Value *flags = emit_arrayflags(ctx, ary);
-                        // the owner of the data is ary itself except if ary->how == 3
-                        flags = ctx.builder.CreateAnd(flags, 3);
-                        Value *is_owned = ctx.builder.CreateICmpEQ(flags, ConstantInt::get(T_int16, 3));
+                        Value *is_owned;
+                        do {
+                            if (auto call = dyn_cast<CallInst>(aryv)) {
+                                jl_alloc::AllocIdInfo info;
+                                if (jl_alloc::getAllocIdInfo(info, call, nullptr)) {
+                                    //This is an array allocation function, ary->how cannot be 3
+                                    is_owned = ConstantInt::getFalse(ctx.builder.getContext());
+                                    break;
+                                }
+                            }
+                            Value *flags = emit_arrayflags(ctx, ary);
+                            // the owner of the data is ary itself except if ary->how == 3
+                            flags = ctx.builder.CreateAnd(flags, 3);
+                            is_owned = ctx.builder.CreateICmpEQ(flags, ConstantInt::get(T_int16, 3));
+                        } while (0);
                         BasicBlock *curBB = ctx.builder.GetInsertBlock();
                         BasicBlock *ownedBB = BasicBlock::Create(jl_LLVMContext, "array_owned", ctx.f);
                         BasicBlock *mergeBB = BasicBlock::Create(jl_LLVMContext, "merge_own", ctx.f);

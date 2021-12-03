@@ -730,6 +730,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // Subsequent passes not stripping metadata from terminator
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createIndVarSimplifyPass());
+    PM->add(createCFGSimplificationPass()); // See note above, don't hoist instructions before LV
     PM->add(createLoopDeletionPass());
     PM->add(createLoopIdiomPass());
     PM->add(createSimpleLoopUnrollPass());
@@ -745,6 +746,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createGVNPass());
     PM->add(createMemCpyOptPass());
     PM->add(createSCCPPass());
+    PM->add(createInductiveRangeCheckEliminationPass());
 
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
@@ -757,6 +759,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
     // More dead allocation (store) deletion before loop optimization
     // consider removing this:
+    // This is now useful for optimizing arrays whose out-of-bounds
+    // checks were eliminated by the preceding IRCE pass
     PM->add(createAllocOptPass());
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
