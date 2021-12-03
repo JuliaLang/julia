@@ -217,14 +217,14 @@ julia> @time begin
 2
 
 julia> @time "A one second sleep" sleep(1)
-A one second sleep ->  1.005750 seconds (5 allocations: 144 bytes)
+A one second sleep: 1.005750 seconds (5 allocations: 144 bytes)
 
 julia> for loop in 1:3
             @time loop sleep(1)
         end
-1 ->  1.006760 seconds (5 allocations: 144 bytes)
-2 ->  1.001263 seconds (5 allocations: 144 bytes)
-3 ->  1.003676 seconds (5 allocations: 144 bytes)
+1: 1.006760 seconds (5 allocations: 144 bytes)
+2: 1.001263 seconds (5 allocations: 144 bytes)
+3: 1.003676 seconds (5 allocations: 144 bytes)
 ```
 """
 macro time(ex)
@@ -263,7 +263,7 @@ See also [`@time`](@ref).
 
 ```julia-repl
 julia> @showtime sleep(1)
-sleep(1) ->  1.002164 seconds (4 allocations: 128 bytes)
+sleep(1): 1.002164 seconds (4 allocations: 128 bytes)
 ```
 """
 macro showtime(ex)
