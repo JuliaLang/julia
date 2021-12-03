@@ -467,13 +467,13 @@ function generic_norm2(x)
     sT = promote_type(Float64, T)
     maxabs_st = sT(maxabs)
     if isfinite(length(x)*maxabs_st*maxabs_st) && maxabs_st*maxabs_st != 0 # Scaling not necessary
-        return convert(T, sqrt(mapreduce(v -> sT(norm_sqr(v)), +, x)))
+        return convert(T, sqrt(mapreduce(v -> convert(sT, norm_sqr(v)), +, x)))
     else
         invmaxabs = inv(maxabs_st)
         if isfinite(invmaxabs)
-            return convert(T, maxabs*sqrt(mapreduce(v -> abs2(sT(norm(v))*invmaxabs), +, x)))
+            return convert(T, maxabs*sqrt(mapreduce(v -> abs2((norm(v))*invmaxabs), +, x)))
         end
-        return convert(T, maxabs*sqrt(mapreduce(v -> abs2(sT(norm(v))/maxabs_st), +, x)))
+        return convert(T, maxabs*sqrt(mapreduce(v -> abs2((norm(v))/maxabs_st), +, x)))
     end
 end
 
