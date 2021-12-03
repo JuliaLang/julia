@@ -252,7 +252,7 @@ function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR)
     suffix = false
     if kind in (Tokens.ERROR, Tokens.STRING, Tokens.TRIPLE_STRING, Tokens.CMD, Tokens.TRIPLE_CMD)
         str = String(l.io.data[(l.token_startpos + 1):position(l)])
-    elseif (kind == Tokens.IDENTIFIER || kind == Tokens.VAR_IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE)
+    elseif (kind == Tokens.IDENTIFIER || kind == Tokens.VAR_IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE || kind == Tokens.NEWLINE_WS)
         str = String(take!(l.charstore))
     elseif optakessuffix(kind)
         str = ""
@@ -313,7 +313,7 @@ function next_token(l::Lexer, start = true)
     if eof(c)
         return emit(l, Tokens.ENDMARKER)
     elseif iswhitespace(c)
-        return lex_whitespace(l)
+        return lex_whitespace(l, c)
     elseif c == '['
         return emit(l, Tokens.LSQUARE)
     elseif c == ']'
@@ -392,11 +392,22 @@ function next_token(l::Lexer, start = true)
 end
 
 
-# Lex whitespace, a whitespace char has been consumed
-function lex_whitespace(l::Lexer)
+# Lex whitespace, a whitespace char `c` has been consumed
+function lex_whitespace(l::Lexer, c)
     readon(l)
-    accept_batch(l, iswhitespace)
-    return emit(l, Tokens.WHITESPACE)
+    k = Tokens.WHITESPACE
+    while true
+        if c == '\n'
+            k = Tokens.NEWLINE_WS
+        end
+        pc = peekchar(l)
+        # stop on non whitespace and limit to a single newline in a token
+        if !iswhitespace(pc) || (k == Tokens.NEWLINE_WS && pc == '\n')
+            break
+        end
+        c = readchar(l)
+    end
+    return emit(l, k)
 end
 
 function lex_comment(l::Lexer, doemit=true)
