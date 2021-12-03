@@ -1047,7 +1047,7 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     error_width  = dig_error  > 0 ? max(length("Error"),  dig_error)  : 0
     broken_width = dig_broken > 0 ? max(length("Broken"), dig_broken) : 0
     total_width  = dig_total  > 0 ? max(length("Total"),  dig_total)  : 0
-    duration_width = max(length("Duration"), length(duration))
+    duration_width = max(length("Time"), length(duration))
     # Calculate the alignment of the test result counts by
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, 0), length("Test Summary:"))
@@ -1070,7 +1070,7 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
         printstyled(lpad("Total", total_width, " "), "  "; bold=true, color=Base.info_color())
     end
     if ts.showtiming
-        printstyled(lpad("Duration", duration_width, " "); bold=true)
+        printstyled(lpad("Time", duration_width, " "); bold=true)
     end
     println()
     # Recursively print a summary at every level
@@ -1299,7 +1299,7 @@ re-arrangements of `@testset`s regardless of their side-effect on the
 global RNG state.
 
 # Examples
-```jldoctest; filter = r"trigonometric identities |    4      4     [0-9\\.]+ s"
+```jldoctest; filter = r"trigonometric identities |    4      4  [0-9\\.]+ s"
 julia> @testset "trigonometric identities" begin
            θ = 2/3*π
            @test sin(-θ) ≈ -sin(θ)
@@ -1307,8 +1307,8 @@ julia> @testset "trigonometric identities" begin
            @test sin(2θ) ≈ 2*sin(θ)*cos(θ)
            @test cos(2θ) ≈ cos(θ)^2 - sin(θ)^2
        end;
-Test Summary:            | Pass  Total  Duration
-trigonometric identities |    4      4     0.0 s
+Test Summary:            | Pass  Total   Time
+trigonometric identities |    4      4  0.2 s
 ```
 """
 macro testset(args...)

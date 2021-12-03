@@ -119,8 +119,8 @@ julia> @testset "Foo Tests" begin
            @test foo("ab")  == 4
            @test foo("abc") == 9
        end;
-Test Summary: | Pass  Total  Duration
-Foo Tests     |    3      3     0.0 s
+Test Summary: | Pass  Total   Time
+Foo Tests     |    3      3  0.0 s
 ```
 
 Test sets can also be nested:
@@ -136,8 +136,8 @@ julia> @testset "Foo Tests" begin
                @test foo(fill(1.0, i)) == i^2
            end
        end;
-Test Summary: | Pass  Total  Duration
-Foo Tests     |    8      8     0.0 s
+Test Summary: | Pass  Total   Time
+Foo Tests     |    8      8  0.0 s
 ```
 
 As well as call functions:
@@ -147,8 +147,8 @@ julia> f(x) = @test isone(x)
 f (generic function with 1 method)
 
 julia> @testset f(1);
-Test Summary: | Pass  Total  Duration
-f             |    1      1     0.0 s
+Test Summary: | Pass  Total   Time
+f             |    1      1  0.0 s
 ```
 
 This can be used to allow for factorization of test sets, making it easier to run individual
@@ -168,12 +168,12 @@ julia> @testset verbose = true "Foo Tests" begin
                @test foo(fill(1.0, i)) == i^2
            end
        end;
-Test Summary: | Pass  Total  Duration
-Foo Tests     |    8      8     0.0 s
-  Animals     |    2      2     0.0 s
-  Arrays 1    |    2      2     0.0 s
-  Arrays 2    |    2      2     0.0 s
-  Arrays 3    |    2      2     0.0 s
+Test Summary: | Pass  Total   Time
+Foo Tests     |    8      8  0.0 s
+  Animals     |    2      2  0.0 s
+  Arrays 1    |    2      2  0.0 s
+  Arrays 2    |    2      2  0.0 s
+  Arrays 3    |    2      2  0.0 s
 ```
 
 If we do have a test failure, only the details for the failed test sets will be shown:
@@ -198,10 +198,10 @@ Arrays: Test Failed
   Expression: foo(fill(1.0, 4)) == 15
    Evaluated: 16 == 15
 [...]
-Test Summary: | Pass  Fail  Total  Duration
-Foo Tests     |    3     1      4     0.0 s
-  Animals     |    2            2     0.0 s
-  Arrays      |    1     1      2     0.0 s
+Test Summary: | Pass  Fail  Total   Time
+Foo Tests     |    3     1      4  0.0 s
+  Animals     |    2            2  0.0 s
+  Arrays      |    1     1      2  0.0 s
 ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
 ```
 

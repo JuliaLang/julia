@@ -761,7 +761,7 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
             end
         end'`), stderr=devnull), String)
     @test occursin(r"""
-        Test Summary: | Pass  Fail  Total  Duration
+        Test Summary: | Pass  Fail  Total   Time
         Foo Tests     |    2     2      4  \s*\d*.\d s
           Animals     |    1     1      2  \s*\d*.\d s
             Felines   |    1            1  \s*\d*.\d s
@@ -1079,7 +1079,7 @@ end
 
 @testset "verbose option" begin
     expected = r"""
-    Test Summary:             | Pass  Total  Duration
+    Test Summary:             | Pass  Total   Time
     Parent                    |    9      9  \s*\d*.\d s
       Child 1                 |    3      3  \s*\d*.\d s
         Child 1.1 (long name) |    1      1  \s*\d*.\d s
