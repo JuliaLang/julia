@@ -1114,8 +1114,8 @@ end
 function get_alignment(ts::DefaultTestSet, depth::Int)
     # The minimum width at this depth is
     ts_width = 2*depth + length(ts.description)
-    # If all passing, no need to look at children
-    !ts.anynonpass && return ts_width
+    # If not verbose and all passing, no need to look at children
+    !ts.verbose && !ts.anynonpass && return ts_width
     # Return the maximum of this width and the minimum width
     # for all children (if they exist)
     isempty(ts.results) && return ts_width
@@ -1340,6 +1340,7 @@ function testset_beginend_call(args, tests, source)
         # by wrapping the body in a function
         local RNG = default_rng()
         local oldrng = copy(RNG)
+        local oldseed = Random.GLOBAL_SEED
         try
             # RNG is re-seeded with its own seed to ease reproduce a failed test
             Random.seed!(Random.GLOBAL_SEED)
@@ -1353,6 +1354,7 @@ function testset_beginend_call(args, tests, source)
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         finally
             copy!(RNG, oldrng)
+            Random.set_global_seed!(oldseed)
             pop_testset()
             ret = finish(ts)
         end
@@ -1433,6 +1435,7 @@ function testset_forloop(args, testloop, source)
         local ts
         local RNG = default_rng()
         local oldrng = copy(RNG)
+        local oldseed = Random.GLOBAL_SEED
         Random.seed!(Random.GLOBAL_SEED)
         local tmprng = copy(RNG)
         try
@@ -1446,6 +1449,7 @@ function testset_forloop(args, testloop, source)
                 push!(arr, finish(ts))
             end
             copy!(RNG, oldrng)
+            Random.set_global_seed!(oldseed)
         end
         arr
     end

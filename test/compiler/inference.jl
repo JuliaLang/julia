@@ -1153,6 +1153,11 @@ end
     @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:y)) === Const(true)
     @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:z)) === Const(false)
 end
+struct UnionIsdefinedA; x; end
+struct UnionIsdefinedB; x; end
+@test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
+@test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
+@test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Bool
 
 @noinline map3_22347(f, t::Tuple{}) = ()
 @noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)
@@ -1836,6 +1841,16 @@ end
         0
     end == Any[Int]
 
+    # slot as SSA
+    isaT(x, T) = isa(x, T)
+    @test Base.return_types((Any,Int)) do a, b
+        c = a
+        if isaT(c, typeof(b))
+            return c # c::Int
+        end
+        return 0
+    end |> only === Int
+
     # with Base functions
     @test Base.return_types((Any,)) do a
         Base.Fix2(isa, Int)(a) && return a # a::Int
@@ -2116,6 +2131,12 @@ end
     @test Base.return_types((Any,Int,)) do x, y
         ifelse(isa(x, Int), x, y)
     end |> only == Int
+
+    # slot as SSA
+    @test Base.return_types((Any,Vector{Any})) do x, y
+        z = x
+        ifelselike(isa(z, Int), z, length(y))
+    end |> only === Int
 end
 
 # Equivalence of Const(T.instance) and T for singleton types
@@ -3755,3 +3776,63 @@ end |> only == Tuple{Int,Int}
     s2 = Some{Any}(s1)
     s2.value.value
 end |> only == Int
+
+# issue #42986
+@testset "narrow down `Union` using `isdefined` checks" begin
+    # basic functionality
+    @test Base.return_types((Union{Nothing,Core.CodeInstance},)) do x
+        if isdefined(x, :inferred)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Core.CodeInstance
+
+    @test Base.return_types((Union{Nothing,Core.CodeInstance},)) do x
+        if isdefined(x, :not_exist)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Union{}
+
+    # even when isdefined is malformed, we can filter out types with no fields
+    @test Base.return_types((Union{Nothing, Core.CodeInstance},)) do x
+        if isdefined(x, 5)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Core.CodeInstance
+
+    struct UnionNarrowingByIsdefinedA; x; end
+    struct UnionNarrowingByIsdefinedB; x; end
+    struct UnionNarrowingByIsdefinedC; x; end
+
+    # > 2 types in the union
+    @test  Base.return_types((Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB, UnionNarrowingByIsdefinedC},)) do x
+        if isdefined(x, :x)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB, UnionNarrowingByIsdefinedC}
+
+    # > 2 types in the union and some aren't defined
+    @test  Base.return_types((Union{UnionNarrowingByIsdefinedA, Core.CodeInstance, UnionNarrowingByIsdefinedC},)) do x
+        if isdefined(x, :x)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedC}
+
+    # should respect `Const` information still
+    @test Base.return_types((Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB},)) do x
+        if isdefined(x, :x)
+            return x
+        else
+            return nothing # dead branch
+        end
+    end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB}
+end

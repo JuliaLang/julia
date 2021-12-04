@@ -594,6 +594,10 @@ end
         @test findprev(b, T(1)) isa keytype(b)
         @test findprev(b, T(2)) isa keytype(b)
     end
+
+    @testset "issue 43078" begin
+        @test_throws TypeError findall([1])
+    end
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]

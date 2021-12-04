@@ -1409,4 +1409,4 @@ mpirun -np 4 ./julia example.jl
     patterns. For additional information on the latest MPI standard, see <https://mpi-forum.org/docs>.
 
 [^2]:
-    [Julia GPU man pages](http://juliagpu.github.io/CUDAnative.jl/stable/man/usage.html#Julia-support-1)
+    [Julia GPU man pages](https://juliagpu.github.io/CUDAnative.jl/stable/man/usage.html#Julia-support-1)

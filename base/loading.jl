@@ -1050,6 +1050,7 @@ const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 function require(uuidkey::PkgId)
     @lock require_lock begin
+    just_loaded_pkg = false
     if !root_module_exists(uuidkey)
         cachefile = _require(uuidkey)
         if cachefile !== nothing
@@ -1059,6 +1060,11 @@ function require(uuidkey::PkgId)
         for callback in package_callbacks
             invokelatest(callback, uuidkey)
         end
+        just_loaded_pkg = true
+    end
+    if just_loaded_pkg && !root_module_exists(uuidkey)
+        error("package `$(uuidkey.name)` did not define the expected \
+              module `$(uuidkey.name)`, check for typos in package module name")
     end
     return root_module(uuidkey)
     end
@@ -1339,7 +1345,7 @@ function load_path_setup_code(load_path::Bool=true)
         code *= """
         append!(empty!(Base.LOAD_PATH), $(repr(load_path)))
         ENV["JULIA_LOAD_PATH"] = $(repr(join(load_path, Sys.iswindows() ? ';' : ':')))
-        Base.ACTIVE_PROJECT[] = nothing
+        Base.set_active_project(nothing)
         """
     end
     return code
@@ -1352,7 +1358,7 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
     append!(empty!(Base.LOAD_PATH), load_path)
     ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
-    Base.ACTIVE_PROJECT[] = nothing
+    set_active_project(nothing)
     Base._track_dependencies[] = true
     get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
     append!(empty!(Base._concrete_dependencies), concrete_deps)
@@ -1915,8 +1921,9 @@ function stale_cachefile(modpath::String, cachefile::String; ignore_loaded = fal
                 f, ftime_req = chi.filename, chi.mtime
                 # Issue #13606: compensate for Docker images rounding mtimes
                 # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
+                # The `ftime != 1.0` condition below provides compatibility with Nix mtime.
                 ftime = mtime(f)
-                if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, digits=6)
+                if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, digits=6) && ftime != 1.0
                     @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
                     return true
                 end

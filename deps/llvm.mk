@@ -175,10 +175,6 @@ ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
 endif
 
-# disable ABI breaking checks: by default only enabled for asserts build, in which case
-# it is then impossible to call non-asserts LLVM libraries (like out-of-tree backends)
-LLVM_CMAKE += -DLLVM_ABI_BREAKING_CHECKS=FORCE_OFF
-
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
 	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)"
 ifeq ($(OS),Darwin)

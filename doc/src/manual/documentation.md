@@ -214,7 +214,7 @@ by typing `?` followed by the name of a function or macro, and pressing `Enter`.
 ```
 
 will show documentation for the relevant function, macro or string macro respectively. In
-[Juno](http://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
+[Juno](https://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
 under the cursor.
 
 ## Functions & Methods

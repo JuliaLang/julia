@@ -61,24 +61,29 @@ steps:
       unset JULIA_DEPOT_PATH
       unset JULIA_PKG_SERVER
 
+      # Make sure that temp files and temp directories are created in a location that is
+      # backed by real storage.
+      export TMPDIR="$(pwd)/tmp"
+      mkdir -p $${TMPDIR:?}
+
       export NETWORK_RELATED_TESTS="Artifacts Downloads download LazyArtifacts LibGit2/online Pkg"
 
       if [[   "${GROUP?}" == "all" ]]; then
-        export TESTS="all LibGit2/online --force-net"
+        export TESTS="all LibGit2/online --ci"
       elif [[   "${GROUP?}" == "all_except_pkg" ]]; then
-        export TESTS="all LibGit2/online --force-net --skip Pkg"
+        export TESTS="all LibGit2/online --ci --skip Pkg"
       elif [[   "${GROUP?}" == "g1" ]]; then
         # Group 1: ALL tests EXCEPT the network-related tests.
-        export TESTS="all --force-net --skip $${NETWORK_RELATED_TESTS:?}"
+        export TESTS="all --ci --skip $${NETWORK_RELATED_TESTS:?}"
       elif [[ "${GROUP?}" == "g2" ]]; then
         # Group 2: ONLY the network-related tests.
         # In Group 2, we use whatever the default setting is with regards to the Pkg server.
-        export TESTS="$${NETWORK_RELATED_TESTS:?} --force-net"
+        export TESTS="$${NETWORK_RELATED_TESTS:?} --ci"
       elif [[ "${GROUP?}" == "g3" ]]; then
         # Group 3: only Pkg.
         # In Group 3, we explicitly opt-out of the Pkg server.
         # The purpose of group 3 is to test the non-Pkg-server codepaths of Pkg.
-        export TESTS="Pkg --force-net"
+        export TESTS="Pkg --ci"
         export JULIA_PKG_SERVER=""
       else
         echo "Invalid value for GROUP: ${GROUP?}"

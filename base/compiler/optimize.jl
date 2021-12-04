@@ -174,29 +174,6 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
-function isinlineable(m::Method, me::OptimizationState, params::OptimizationParams, union_penalties::Bool, bonus::Int=0)
-    # compute the cost (size) of inlining this code
-    inlineable = false
-    cost_threshold = params.inline_cost_threshold
-    if m.module === _topmod(m.module)
-        # a few functions get special treatment
-        name = m.name
-        sig = m.sig
-        if ((name === :+ || name === :* || name === :min || name === :max) &&
-            isa(sig,DataType) &&
-            sig == Tuple{sig.parameters[1],Any,Any,Any,Vararg{Any}})
-            inlineable = true
-        elseif (name === :iterate || name === :unsafe_convert ||
-                name === :cconvert)
-            cost_threshold *= 4
-        end
-    end
-    if !inlineable
-        inlineable = inline_worthy(me.ir::IRCode, params, union_penalties, cost_threshold + bonus)
-    end
-    return inlineable
-end
-
 is_stmt_inline(stmt_flag::UInt8)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
 is_stmt_noinline(stmt_flag::UInt8)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
 is_stmt_throw_block(stmt_flag::UInt8) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
@@ -296,19 +273,27 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
         if src.inlineable && isdispatchtuple(specTypes)
             # obey @inline declaration if a dispatch barrier would not help
         else
-            bonus = 0
+            # compute the cost (size) of inlining this code
+            cost_threshold = default = params.inline_cost_threshold
             if result ⊑ Tuple && !isconcretetype(widenconst(result))
-                bonus = params.inline_tupleret_bonus
+                cost_threshold += params.inline_tupleret_bonus
             end
+            # if the method is declared as `@inline`, increase the cost threshold 20x
             if src.inlineable
-                # For functions declared @inline, increase the cost threshold 20x
-                bonus += params.inline_cost_threshold*19
+                cost_threshold += 19*default
             end
-            src.inlineable = isinlineable(def, opt, params, union_penalties, bonus)
+            # a few functions get special treatment
+            if def.module === _topmod(def.module)
+                name = def.name
+                if name === :iterate || name === :unsafe_convert || name === :cconvert
+                    cost_threshold += 4*default
+                end
+            end
+            src.inlineable = inline_worthy(ir, params, union_penalties, cost_threshold)
         end
     end
 
-    nothing
+    return nothing
 end
 
 # run the optimization work
@@ -393,7 +378,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     cfg = compute_basic_blocks(code)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
-    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable::Union{Vector{LineInfoNode},Vector{Any}}), sv.slottypes, meta, sv.sptypes)
+    linetable = ci.linetable
+    isa(linetable, Vector{LineInfoNode}) || (linetable = collect(LineInfoNode, linetable::Vector{Any}))
+    ir = IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
     return ir
 end
 
@@ -429,6 +416,7 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.arraylen ||   # this one is volatile
              f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
+             f === Intrinsics.have_fma ||  # this one depends on the runtime environment
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
 

@@ -43,11 +43,13 @@ using namespace llvm;
 extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr,
                                                   bool isConstant=false);
 
+extern Optional<bool> always_have_fma(Function&);
+
 namespace {
 
 // These are valid detail cloning conditions in the target flags.
 constexpr uint32_t clone_mask =
-    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH;
+    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU;
 
 struct MultiVersioning;
 
@@ -272,13 +274,13 @@ private:
     Constant *get_ptrdiff32(Constant *ptr, Constant *base) const;
     template<typename T>
     Constant *emit_offset_table(const std::vector<T*> &vars, StringRef name) const;
+    void rewrite_alias(GlobalAlias *alias, Function* F);
 
     LLVMContext &ctx;
     Type *T_size;
     Type *T_int32;
     Type *T_void;
     PointerType *T_psize;
-    PointerType *T_pvoidfunc;
     MDNode *tbaa_const;
     MultiVersioning *pass;
     std::vector<jl_target_spec_t> specs;
@@ -295,6 +297,8 @@ private:
     std::vector<std::pair<Constant*,uint32_t>> gv_relocs{};
     // Mapping from function id (i.e. 0-based index in `fvars`) to GVs to be initialized.
     std::map<uint32_t,GlobalVariable*> const_relocs;
+    // Functions that were referred to by a global alias, and might not have other uses.
+    std::set<uint32_t> alias_relocs;
     bool has_veccall{false};
     bool has_cloneall{false};
 };
@@ -342,7 +346,6 @@ CloneCtx::CloneCtx(MultiVersioning *pass, Module &M)
       T_int32(Type::getInt32Ty(ctx)),
       T_void(Type::getVoidTy(ctx)),
       T_psize(PointerType::get(T_size, 0)),
-      T_pvoidfunc(FunctionType::get(T_void, false)->getPointerTo()),
       tbaa_const(tbaa_make_child("jtbaa_const", nullptr, true).first),
       pass(pass),
       specs(jl_get_llvm_clone_targets()),
@@ -468,6 +471,16 @@ uint32_t CloneCtx::collect_func_info(Function &F)
                     auto name = callee->getName();
                     if (name.startswith("llvm.muladd.") || name.startswith("llvm.fma.")) {
                         flag |= JL_TARGET_CLONE_MATH;
+                    }
+                    else if (name.startswith("julia.cpu.")) {
+                        if (name.startswith("julia.cpu.have_fma.")) {
+                            // for some platforms we know they always do (or don't) support
+                            // FMA. in those cases we don't need to clone the function.
+                            if (!always_have_fma(*callee).hasValue())
+                                flag |= JL_TARGET_CLONE_CPU;
+                        } else {
+                            flag |= JL_TARGET_CLONE_CPU;
+                        }
                     }
                 }
             }
@@ -702,6 +715,54 @@ Constant *CloneCtx::rewrite_gv_init(const Stack& stack)
     return res;
 }
 
+// replace an alias to a function with a trampoline and (uninitialized) global variable slot
+void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
+{
+    assert(!is_vector(F->getFunctionType()));
+
+    Function *trampoline =
+        Function::Create(F->getFunctionType(), alias->getLinkage(), "", &M);
+    trampoline->copyAttributesFrom(F);
+    trampoline->takeName(alias);
+    alias->eraseFromParent();
+
+    uint32_t id;
+    GlobalVariable *slot;
+    std::tie(id, slot) = get_reloc_slot(F);
+    for (auto &grp: groups) {
+        grp.relocs.insert(id);
+        for (auto &tgt: grp.clones) {
+            tgt.relocs.insert(id);
+        }
+    }
+    alias_relocs.insert(id);
+
+    auto BB = BasicBlock::Create(ctx, "top", trampoline);
+    IRBuilder<> irbuilder(BB);
+
+    auto ptr = irbuilder.CreateLoad(F->getType(), slot);
+    ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ctx, None));
+
+    std::vector<Value *> Args;
+    for (auto &arg : trampoline->args())
+        Args.push_back(&arg);
+    auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, makeArrayRef(Args));
+    if (F->isVarArg())
+#if (defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_PPC64_))
+        abort();    // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
+#else
+        call->setTailCallKind(CallInst::TCK_MustTail);
+#endif
+    else
+        call->setTailCallKind(CallInst::TCK_Tail);
+
+    if (F->getReturnType() == T_void)
+        irbuilder.CreateRetVoid();
+    else
+        irbuilder.CreateRet(call);
+}
+
 void CloneCtx::fix_gv_uses()
 {
     auto single_pass = [&] (Function *orig_f) {
@@ -712,8 +773,14 @@ void CloneCtx::fix_gv_uses()
             auto info = uses.get_info();
             // We only support absolute pointer relocation.
             assert(info.samebits);
-            // And only for non-constant global variable initializers
-            auto val = cast<GlobalVariable>(info.val);
+            GlobalVariable *val;
+            if (auto alias = dyn_cast<GlobalAlias>(info.val)) {
+                rewrite_alias(alias, orig_f);
+                continue;
+            }
+            else {
+                val = cast<GlobalVariable>(info.val);
+            }
             assert(info.use->getOperandNo() == 0);
             assert(!val->isConstant());
             auto fid = get_func_id(orig_f);
@@ -739,8 +806,8 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F)
     auto id = get_func_id(F);
     auto &slot = const_relocs[id];
     if (!slot)
-        slot = new GlobalVariable(M, T_pvoidfunc, false, GlobalVariable::InternalLinkage,
-                                  ConstantPointerNull::get(T_pvoidfunc),
+        slot = new GlobalVariable(M, F->getType(), false, GlobalVariable::InternalLinkage,
+                                  ConstantPointerNull::get(F->getType()),
                                   F->getName() + ".reloc_slot");
     return std::make_pair(id, slot);
 }
@@ -820,10 +887,9 @@ void CloneCtx::fix_inst_uses()
                     uint32_t id;
                     GlobalVariable *slot;
                     std::tie(id, slot) = get_reloc_slot(orig_f);
-                    Instruction *ptr = new LoadInst(T_pvoidfunc, slot, "", false, insert_before);
+                    Instruction *ptr = new LoadInst(orig_f->getType(), slot, "", false, insert_before);
                     ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
                     ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ctx, None));
-                    ptr = new BitCastInst(ptr, F->getType(), "", insert_before);
                     use_i->setOperand(info.use->getOperandNo(),
                                       rewrite_inst_use(uses.get_stack(), ptr,
                                                        insert_before));
@@ -950,6 +1016,9 @@ void CloneCtx::emit_metadata()
             if (it != const_relocs.end()) {
                 values.push_back(id_v);
                 values.push_back(get_ptrdiff32(it->second, gbase));
+            }
+            if (alias_relocs.find(id) != alias_relocs.end()) {
+                shared_relocs.insert(id);
             }
         }
         values[0] = ConstantInt::get(T_int32, values.size() / 2);
