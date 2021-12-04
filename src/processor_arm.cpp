@@ -1196,7 +1196,7 @@ static void shrink_big_little(std::vector<std::pair<uint32_t,CPUID>> &list,
     }
 }
 
-#ifdef _CPU_AARCH64_ && _OS_DARWIN_
+#if defined _CPU_AARCH64_ && defined _OS_DARWIN_
 static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 {
     FeatureList<feature_sz> features = {};
