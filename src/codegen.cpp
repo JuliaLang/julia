@@ -172,6 +172,7 @@ typedef Instruction TerminatorInst;
 #include "codegen_shared.h"
 #include "processor.h"
 #include "julia_assert.h"
+#include "llvm-alloc-helpers.h"
 
 JL_STREAM *dump_emitted_mi_name_stream = NULL;
 extern "C" JL_DLLEXPORT
@@ -2901,38 +2902,49 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     // no-op
                 }
                 else {
-                    PHINode *data_owner = NULL; // owner object against which the write barrier must check
+                    Value *data_owner = NULL; // owner object against which the write barrier must check
                     if (isboxed || (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->layout->npointers > 0)) { // if elements are just bits, don't need a write barrier
                         Value *aryv = boxed(ctx, ary);
-                        Value *flags = emit_arrayflags(ctx, ary);
-                        // the owner of the data is ary itself except if ary->how == 3
-                        flags = ctx.builder.CreateAnd(flags, 3);
-                        Value *is_owned = ctx.builder.CreateICmpEQ(flags, ConstantInt::get(getInt16Ty(ctx.builder.getContext()), 3));
-                        BasicBlock *curBB = ctx.builder.GetInsertBlock();
-                        BasicBlock *ownedBB = BasicBlock::Create(ctx.builder.getContext(), "array_owned", ctx.f);
-                        BasicBlock *mergeBB = BasicBlock::Create(ctx.builder.getContext(), "merge_own", ctx.f);
-                        ctx.builder.CreateCondBr(is_owned, ownedBB, mergeBB);
-                        ctx.builder.SetInsertPoint(ownedBB);
-                        // load owner pointer
-                        Instruction *own_ptr;
-                        if (jl_is_long(ndp)) {
-                            own_ptr = ctx.builder.CreateAlignedLoad(T_prjlvalue,
-                                    ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue,
-                                        emit_bitcast(ctx, decay_derived(ctx, aryv), T_pprjlvalue),
-                                        jl_array_data_owner_offset(nd) / sizeof(jl_value_t*)),
-                                    Align(sizeof(void*)));
-                            tbaa_decorate(ctx.tbaa().tbaa_const, maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
-                        }
-                        else {
-                            own_ptr = ctx.builder.CreateCall(
-                                prepare_call(jlarray_data_owner_func),
-                                {aryv});
-                        }
-                        ctx.builder.CreateBr(mergeBB);
-                        ctx.builder.SetInsertPoint(mergeBB);
-                        data_owner = ctx.builder.CreatePHI(T_prjlvalue, 2);
-                        data_owner->addIncoming(aryv, curBB);
-                        data_owner->addIncoming(own_ptr, ownedBB);
+                        [&]() {
+                            //If we freshly allocated this array, we own the data
+                            jl_alloc::AllocIdInfo info;
+                            if (auto call = dyn_cast<CallInst>(aryv)) {
+                                if (jl_alloc::getAllocIdInfo(info, call, nullptr)) {
+                                    data_owner = aryv;
+                                    return;
+                                }
+                            }
+                            Value *flags = emit_arrayflags(ctx, ary);
+                            // the owner of the data is ary itself except if ary->how == 3
+                            flags = ctx.builder.CreateAnd(flags, 3);
+                            Value *is_owned = ctx.builder.CreateICmpEQ(flags, ConstantInt::get(getInt16Ty(ctx.builder.getContext()), 3));
+                            BasicBlock *curBB = ctx.builder.GetInsertBlock();
+                            BasicBlock *ownedBB = BasicBlock::Create(ctx.builder.getContext(), "array_owned", ctx.f);
+                            BasicBlock *mergeBB = BasicBlock::Create(ctx.builder.getContext(), "merge_own", ctx.f);
+                            ctx.builder.CreateCondBr(is_owned, ownedBB, mergeBB);
+                            ctx.builder.SetInsertPoint(ownedBB);
+                            // load owner pointer
+                            Instruction *own_ptr;
+                            if (jl_is_long(ndp)) {
+                                own_ptr = ctx.builder.CreateAlignedLoad(T_prjlvalue,
+                                        ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue,
+                                            emit_bitcast(ctx, decay_derived(ctx, aryv), T_pprjlvalue),
+                                            jl_array_data_owner_offset(nd) / sizeof(jl_value_t*)),
+                                        Align(sizeof(void*)));
+                                tbaa_decorate(ctx.tbaa().tbaa_const, maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
+                            }
+                            else {
+                                own_ptr = ctx.builder.CreateCall(
+                                    prepare_call(jlarray_data_owner_func),
+                                    {aryv});
+                            }
+                            ctx.builder.CreateBr(mergeBB);
+                            ctx.builder.SetInsertPoint(mergeBB);
+                            auto owner = ctx.builder.CreatePHI(T_prjlvalue, 2);
+                            owner->addIncoming(aryv, curBB);
+                            owner->addIncoming(own_ptr, ownedBB);
+                            data_owner = owner;
+                        }();
                     }
                     if (!isboxed && jl_is_uniontype(ety)) {
                         Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
