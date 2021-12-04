@@ -1171,7 +1171,9 @@ function get_test_counts(ts::DefaultTestSet)
         if dur_s < 60
             string(round(dur_s, digits = 1), "s")
         else
-            string(round(dur_s / 60, digits = 1), "m")
+            m, s = divrem(dur_s, 60)
+            s = lpad(string(round(s, digits = 1)), 4, "0")
+            string(round(Int, m), "m", s, "s")
         end
     end
     return passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration
