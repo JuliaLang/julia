@@ -416,6 +416,7 @@ cd(@__DIR__) do
     end
     Test.TESTSET_PRINT_ENABLE[] = true
     println()
+    o_ts.verbose = true # verbose to show timings when successful
     Test.print_test_results(o_ts, 1)
     if !o_ts.anynonpass
         println("    \033[32;1mSUCCESS\033[0m")
