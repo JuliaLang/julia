@@ -9,9 +9,10 @@ include("utils.jl")
 include("source_files.jl")
 
 include("token_kinds.jl")
-include("lexer.jl")
 
 include("syntax_tree.jl")
+include("parse_stream.jl")
+
 include("parser.jl")
 
 end

@@ -37,6 +37,7 @@ struct RawSyntaxNode
 end
 
 const _RawFlags = UInt32
+EMPTY_FLAGS = 0x00000000
 TRIVIA_FLAG = 0x00000001
 INFIX_FLAG = 0x00000002
 # DIAGNOSTICS_FLAG
@@ -48,7 +49,7 @@ function raw_flags(; trivia::Bool=false, infix::Bool=false)
     return flags::_RawFlags
 end
 
-function RawSyntaxNode(kind::Kind, span::Int, flags::_RawFlags=0x00000000)
+function RawSyntaxNode(kind::Kind, span::Int, flags::_RawFlags=EMPTY_FLAGS)
     RawSyntaxNode(kind, span, flags, ())
 end
 
@@ -80,13 +81,16 @@ function _show_raw_node(io, node, indent, pos, str, show_trivia)
     if !show_trivia && istrivia(node)
         return
     end
-    posstr = "$(lpad(pos, 6)):$(rpad(pos+node.span, 6)) |"
+    posstr = "$(lpad(pos, 6)):$(rpad(pos+node.span, 6)) │"
     if !haschildren(node)
         line = string(posstr, indent, _kind_str(node.kind))
+        if !istrivia(node)
+            line = rpad(line, 40) * "✔"
+        end
         if isnothing(str)
             println(io, line)
         else
-            println(io, rpad(line, 40), repr(str[pos:pos + node.span - 1]))
+            println(io, rpad(line, 42), ' ', repr(str[pos:pos + node.span - 1]))
         end
     else
         println(io, posstr, indent, '[', _kind_str(node.kind), "]")

@@ -40,9 +40,6 @@ end
 
 using Tokenize.Tokens: Kind, isliteral, iskeyword, isoperator
 
-kind(k::Kind) = k
-kind(raw::TzTokens.RawToken) = TzTokens.exactkind(raw)
-
 """
     K"s"
 
@@ -54,17 +51,22 @@ macro K_str(str)
     return :(Kinds.$name)
 end
 
+kind(k::Kind) = k
+kind(raw::TzTokens.RawToken) = TzTokens.exactkind(raw)
+
+is_prec_assignment(tok) = K"BEGIN_ASSIGNMENTS" < kind(tok) < K"END_ASSIGNMENTS"
+
 function _kind_str(k::Kind)
     if k in (K"Identifier", K"VarIdentifier")
-        "I"
+        "Identifier"
     elseif isliteral(k)
-        "L"
+        "Literal"
     elseif k == K"Comment"
-        "C"
+        "Comment"
     elseif k == K"Whitespace"
-        "W"
+        "Whitespace"
     elseif k == K"NewlineWs"
-        "N"
+        "NewlineWs"
     elseif iskeyword(k)
         lowercase(string(k))
     elseif isoperator(k)
@@ -932,6 +934,7 @@ const var"\n"      =  @_K NEWLINE_WS
 const BEGIN_SYNTAX_KINDS = @_K begin_syntax_kinds
 const toplevel = @_K TOPLEVEL
 const call     = @_K CALL
+const ref      = @_K REF
 const block    = @_K BLOCK
 const END_SYNTAX_KINDS = @_K end_syntax_kinds
 
