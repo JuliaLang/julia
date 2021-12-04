@@ -2332,6 +2332,7 @@ end
 function _findall(f::Function, A::AbstractArray{Bool})
     n = count(f, A)
     I = Vector{eltype(keys(A))}(undef, n)
+    isempty(I) && return I
     _findall(f, I, A)
 end
 
