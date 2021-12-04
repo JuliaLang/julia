@@ -2697,14 +2697,14 @@ function _stack_rest!(v::AbstractVector, i, n, axe, itr, state)
         axes(val) == axe || throw(DimensionMismatch(
             "expected a consistent size, got axes $(UnitRange.(axes(val))) compared to $(UnitRange.(axe)) for the first"))
         i += 1
-        if eltype(val) <: eltype(v)
+        T′ = promote_type(eltype(v), eltype(val))
+        if T′ <: eltype(v)
             if n isa Integer
                 copyto!(v, i*len+1, val, firstindex(val), len)
             else
                 append!(v, val)
             end
         else
-            T′ = promote_type(eltype(v), eltype(val))
             v′ = similar(v, T′)
             copyto!(v′, v)
             if n isa Integer
@@ -2717,7 +2717,7 @@ function _stack_rest!(v::AbstractVector, i, n, axe, itr, state)
     end
 end
 
-# this implementation is largely copied from typed_hcat, could combine them
+# this implementation is largely copied from typed_hcat
 function _typed_stack(::Type{T}, A::AbstractArray{<:AbstractArray}) where {T}
     axe = axes(first(A))
     dense = true
