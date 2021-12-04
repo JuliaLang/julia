@@ -4,7 +4,7 @@ tree. For example, normally `x -y` means `(x) - (y)`, but when parsing matrix
 literals we're in "whitespace sensitive" mode, and `[x -y]` means [(x) (-y)].
 """
 struct ParseState
-    tokens::TokenStream
+    tokens::ParseStream
     # Vesion of Julia we're parsing this code for. May be different from VERSION!
     julia_version::VersionNumber
 
@@ -23,7 +23,7 @@ struct ParseState
 end
 
 # Normal context
-function ParseState(tokens::TokenStream; julia_version=VERSION)
+function ParseState(tokens::ParseStream; julia_version=VERSION)
     ParseState(tokens, julia_version, true, false, true, false, false, false)
 end
 
@@ -188,7 +188,7 @@ end
 #-------------------------------------------------------------------------------
 
 function parse(code)
-    tokens = JuliaSyntax.TokenStream(code)
+    tokens = JuliaSyntax.ParseStream(code)
     parse_statements(tokens)
 end
 
