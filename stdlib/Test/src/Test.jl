@@ -980,9 +980,9 @@ mutable struct DefaultTestSet <: AbstractTestSet
     verbose::Bool
     showtiming::Bool
     time_start::Float64
-    time_end::Float64
+    time_end::Union{Float64,Nothing}
 end
-DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true) = DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), 0)
+DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true) = DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing)
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
@@ -1164,11 +1164,15 @@ function get_test_counts(ts::DefaultTestSet)
         end
     end
     ts.anynonpass = (fails + errors + c_fails + c_errors > 0)
-    dur_s = ts.time_end - ts.time_start
-    duration = if dur_s < 60
-        string(round(dur_s, digits = 1), "s")
+    duration = if isnothing(ts.time_end)
+        ""
     else
-        string(round(dur_s / 60, digits = 1), "m")
+        dur_s = ts.time_end - ts.time_start
+        if dur_s < 60
+            string(round(dur_s, digits = 1), "s")
+        else
+            string(round(dur_s / 60, digits = 1), "m")
+        end
     end
     return passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration
 end
