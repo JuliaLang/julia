@@ -2681,7 +2681,7 @@ function _vstack_plus(itr)
     len = length(val)
     n = haslength(itr) ? len*length(itr) : nothing
 
-    v = similar(val isa Tuple ? (1:0) : val, something(n, len))
+    v = similar(val isa Tuple ? (1:0) : val, eltype(val), something(n, len))
     copyto!(v, 1, val, firstindex(val), len)
 
     w = _stack_rest!(v, 0, n, axe, itr, state)
