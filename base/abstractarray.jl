@@ -2605,6 +2605,143 @@ end
     Ai
 end
 
+"""
+    stack(arrays)
+
+Concatenates a collection of arrays, all the same size, into one higher-dimensional array.
+
+The first dimension(s) are those of the individual arrays, followed by those from the
+container. Thus the result has size `(size(first(arrays))..., size(arrays)...)`.
+
+See also [`cat`](@ref), [`eachcol`](@ref).
+
+!!! compat "Julia 1.8"
+    This function requires at least Julia 1.8.
+
+# Examples
+```jldoctest
+julia> vecs = [[1,2], [3,4], [5,6]]
+3-element Vector{Vector{Int64}}:
+ [1, 2]
+ [3, 4]
+ [5, 6]
+
+julia> mat = stack(vecs)
+2×3 Matrix{Int64}:
+ 1  3  5
+ 2  4  6
+
+julia> mat == reduce(hcat, vecs) == hcat(vecs...)
+true
+
+julia> mat == stack(eachcol(mat))
+true
+
+julia> vec(mat) == reduce(vcat, vecs) == vcat(vecs...)
+true
+
+julia> mats = (fill(i/2,3,4) for i in (1, 10, 100) if i>pi);
+
+julia> stack(mats)
+3×4×2 Array{Float64, 3}:
+[:, :, 1] =
+ 5.0  5.0  5.0  5.0
+ 5.0  5.0  5.0  5.0
+ 5.0  5.0  5.0  5.0
+
+[:, :, 2] =
+ 50.0  50.0  50.0  50.0
+ 50.0  50.0  50.0  50.0
+ 50.0  50.0  50.0  50.0
+
+julia> ans == cat(mats..., dims=3)
+true
+```
+"""
+stack(itr) = _stack_iter(IteratorSize(itr), itr)
+stack(A::AbstractArray{<:AbstractArray}) = _typed_stack(mapreduce(eltype, promote_type, A), A)
+
+function _stack_iter(::HasShape, itr)
+    w, val = _vstack_plus(itr)
+    reshape(w, axes(val)..., axes(itr)...)
+end
+function _stack_iter(::IteratorSize, itr)
+    w, val = _vstack_plus(itr)
+    d = length(w) ÷ length(val)
+    reshape(w, axes(val)..., OneTo(d))
+end
+
+function _vstack_plus(itr)
+    z = iterate(itr)
+    isnothing(z) && throw(ArgumentError("cannot stack an empty collection"))
+    val, state = z
+    val isa Union{AbstractArray, Tuple} || throw(ArgumentError("cannot stack elements of type $(typeof(val))"))
+
+    axe = axes(val)
+    len = length(val)
+    n = haslength(itr) ? len*length(itr) : nothing
+
+    v = similar(val isa Tuple ? (1:0) : val, something(n, len))
+    copyto!(v, 1, val, firstindex(val), len)
+
+    w = _stack_rest!(v, 0, n, axe, itr, state)
+    w, val
+end
+
+function _stack_rest!(v::AbstractVector, i, n, axe, itr, state)
+    len = prod(length, axe; init=1)
+    while true
+        z = iterate(itr, state)
+        isnothing(z) && return v
+        val, state = z
+        axes(val) == axe || throw(DimensionMismatch(
+            "expected a consistent size, got axes $(UnitRange.(axes(val))) compared to $(UnitRange.(axe)) for the first"))
+        i += 1
+        if eltype(val) <: eltype(v)
+            if n isa Integer
+                copyto!(v, i*len+1, val, firstindex(val), len)
+            else
+                append!(v, val)
+            end
+        else
+            T′ = promote_type(eltype(v), eltype(val))
+            v′ = similar(v, T′)
+            copyto!(v′, v)
+            if n isa Integer
+                copyto!(v′, i*len+1, val, firstindex(val), len)
+            else
+                append!(v′, val)
+            end
+            return _stack_rest!(v′, i, n, axe, itr, state)
+        end
+    end
+end
+
+# this implementation is largely copied from typed_hcat, could combine them
+function _typed_stack(::Type{T}, A::AbstractArray{<:AbstractArray}) where {T}
+    axe = axes(first(A))
+    dense = true
+    for (j, a) in enumerate(A)
+        axes(a) == axe || throw(DimensionMismatch(
+            "expected a consistent size, got axes $(UnitRange.(axes(a))) for element $j, compared to $(UnitRange.(axe)) for the first"))
+        dense &= isa(a, DenseArray)
+    end
+    B = similar(first(A), T, axe..., axes(A)...)
+    if dense
+        off = 1
+        for a in A
+            copyto!(B, off, a, 1, length(a))
+            off += length(a)
+        end
+    else
+        colons = map(Returns(:), axe)
+        for J in CartesianIndices(A)
+            @inbounds B[colons..., Tuple(J)...] = A[J]
+        end
+    end
+    B
+end
+
 ## Reductions and accumulates ##
 
 function isequal(A::AbstractArray, B::AbstractArray)

@@ -1553,6 +1553,62 @@ using Base: typed_hvncat
     @test [["A";"B"];;"C";"D"] == ["A" "C"; "B" "D"]
 end
 
+@testset "stack" begin
+    for args in ([[1, 2]], [1:2, 3:4], [[1 2; 3 4], [5 6; 7 8]],
+                AbstractVector[1:2, [3.5, 4.5]], Vector[[1,2], [3im, 4im]],
+                [[1:2, 3:4], [5:6, 7:8]], [fill(1), fill(2)])
+        X = stack(args)
+        Y = cat(args...; dims=ndims(args[1])+1)
+        @test X == Y
+        @test typeof(X) === typeof(Y)
+
+        X2 = stack(x for x in args)
+        @test X2 == Y
+        @test typeof(X2) === typeof(Y)
+
+        X3 = stack(x for x in args if true)
+        @test X3 == Y
+        @test typeof(X3) === typeof(Y)
+    end
+    # Higher dims
+    @test size(stack([rand(2,3) for _ in 1:4, _ in 1:5])) == (2,3,4,5)
+    @test size(stack(rand(2,3) for _ in 1:4, _ in 1:5)) == (2,3,4,5)
+    @test size(stack(rand(2,3) for _ in 1:4, _ in 1:5 if true)) == (2, 3, 20)
+
+    # Tuples
+    @test stack([(1,2), (3,4)]) == [1 3; 2 4]
+    @test stack(((1,2), (3,4))) == [1 3; 2 4]
+    @test size(stack(Iterators.product(1:3, 1:4))) == (2,3,4)
+
+    # Mismatched sizes
+    @test_throws DimensionMismatch stack([1:2, 1:3])
+    @test_throws DimensionMismatch stack(x for x in [1:2, 1:3])
+    @test_throws DimensionMismatch stack([[5 6; 7 8], [1, 2, 3, 4]])
+    @test_throws DimensionMismatch stack(x for x in [[5 6; 7 8], [1, 2, 3, 4]])
+
+    # Empty
+    @test_throws ArgumentError stack([])
+    @test_throws Exception stack(empty!([1:2]))
+end
+
+@testset "tests from PR 31644" begin
+    v_v_same = [rand(128) for ii in 1:100]
+    v_v_diff = Any[rand(128), rand(Float32,128), rand(Int, 128)]
+    v_v_diff_typed = Union{Vector{Float64},Vector{Float32},Vector{Int}}[rand(128), rand(Float32,128), rand(Int, 128)]
+    for v_v in (v_v_same, v_v_diff, v_v_diff_typed)
+        # Cover all combinations of iterator traits.
+        g_v = (x for x in v_v)
+        f_g_v = Iterators.filter(x->true, g_v)
+        f_v_v = Iterators.filter(x->true, v_v);
+        hcat_expected = hcat(v_v...)
+        vcat_expected = vcat(v_v...)
+        @testset "$(typeof(data))" for data in (v_v, g_v, f_g_v, f_v_v)
+            @test stack(data) == hcat_expected
+            @test vec(stack(data)) == vcat_expected
+        end
+    end
+end
+
 @testset "keepat!" begin
     a = [1:6;]
     @test a === keepat!(a, 1:5)
