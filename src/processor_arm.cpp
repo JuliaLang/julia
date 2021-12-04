@@ -1016,7 +1016,7 @@ static CPU get_cpu_name(CPUID cpuid)
             return CPU::apple_a14;
         case 0x22: // Icestorm m1
         case 0x23: // Firestorm m1
-            return CPU::apple_m1; 
+            return CPU::apple_m1;
         default: return CPU::generic;
         }
     case 0x68: // 'h': Huaxintong Semiconductor
