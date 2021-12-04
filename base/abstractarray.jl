@@ -2661,6 +2661,43 @@ true
 stack(itr) = _stack_iter(IteratorSize(itr), itr)
 stack(A::AbstractArray{<:AbstractArray}) = _typed_stack(mapreduce(eltype, promote_type, A), A)
 
+"""
+    stack(f, args)
+
+Apply `f` to each element of `args`, and `stack` the result.
+
+See also [`mapslices`](@ref), [`mapreduce`](@ref).
+
+# Examples
+```jldoctest
+julia> stack("julia") do c
+         (c, c-32)
+       end
+2×5 Matrix{Char}:
+ 'j'  'u'  'l'  'i'  'a'
+ 'J'  'U'  'L'  'I'  'A'
+
+julia> ans == mapreduce(c -> [c, c-32], hcat, "julia")
+true
+
+julia> stack(x -> x*x', eachcol([1 2; 10 20; 100 200]))
+3×3×2 Array{Int64, 3}:
+[:, :, 1] =
+   1    10    100
+  10   100   1000
+ 100  1000  10000
+
+[:, :, 2] =
+   4    40    400
+  40   400   4000
+ 400  4000  40000
+
+julia> ans == cat([1,10,100] * [1,10,100]', [2,20,200] * [2,20,200]'; dims=3)
+true
+```
+"""
+stack(f, itr) = stack(Iterators.map(f, itr))
+
 function _stack_iter(::HasShape, itr)
     w, val = _vstack_plus(itr)
     reshape(w, axes(val)..., axes(itr)...)

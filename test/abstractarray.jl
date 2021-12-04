@@ -1581,6 +1581,10 @@ end
     @test size(stack(Iterators.product(1:3, 1:4))) == (2,3,4)
     @test stack([('a', 'b'), ('c', 'd')]) == ['a' 'c'; 'b' 'd']
 
+    # stack(f, iter)
+    @test stack(x -> [x, 2x], 3:5) == [3 4 5; 6 8 10]
+    @test stack(x -> x*x'/2, [1:2, 3:4]) == [0.5 1.0; 1.0 2.0;;; 4.5 6.0; 6.0 8.0]
+
     # Mismatched sizes
     @test_throws DimensionMismatch stack([1:2, 1:3])
     @test_throws DimensionMismatch stack(x for x in [1:2, 1:3])
