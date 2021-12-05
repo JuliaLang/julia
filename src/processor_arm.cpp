@@ -680,6 +680,42 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
 #endif
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
+static inline const CPUSpec<CPU,feature_sz> *find_cpu(uint32_t cpu)
+{
+    return ::find_cpu(cpu, cpus, ncpu_names);
+}
+
+static inline const CPUSpec<CPU,feature_sz> *find_cpu(llvm::StringRef name)
+{
+    return ::find_cpu(name, cpus, ncpu_names);
+}
+
+static inline const char *find_cpu_name(uint32_t cpu)
+{
+    return ::find_cpu_name(cpu, cpus, ncpu_names);
+}
+
+#if defined _CPU_AARCH64_ && defined _OS_DARWIN_
+static CPU get_cpu_name()
+{
+    char buffer[128];
+    size_t bufferlen = 128;
+    sysctlbyname("machdep.cpu.brand_string",&buffer,&bufferlen,NULL,0);
+    if(strcmp(buffer,"Apple M1") == 0)
+        return CPU::apple_m1; 
+    else 
+        return CPU::generic;// Firestorm core data based on https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
+}
+static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
+{
+    FeatureList<feature_sz> features = {};
+
+    auto name = (uint32_t)get_cpu_name();
+    features = find_cpu(name)->features;
+    return std::make_pair(name, features);
+}
+#else
+
 // auxval reader
 
 #ifndef AT_HWCAP
@@ -1035,42 +1071,8 @@ static CPU get_cpu_name(CPUID cpuid)
         return CPU::generic;
     }
 }
-static inline const CPUSpec<CPU,feature_sz> *find_cpu(uint32_t cpu)
-{
-    return ::find_cpu(cpu, cpus, ncpu_names);
-}
 
-static inline const CPUSpec<CPU,feature_sz> *find_cpu(llvm::StringRef name)
-{
-    return ::find_cpu(name, cpus, ncpu_names);
-}
 
-static inline const char *find_cpu_name(uint32_t cpu)
-{
-    return ::find_cpu_name(cpu, cpus, ncpu_names);
-}
-
-#if defined _CPU_AARCH64_ && defined _OS_DARWIN_
-static CPUID get_apple_cpu()
-{
-    char buffer[128];
-    size_t bufferlen = 128;
-    sysctlbyname("machdep.cpu.brand_string",&buffer,&bufferlen,NULL,0);
-    if(strcmp(buffer,"Apple M1") == 0)
-        return CPUID{0x61, 0,0x23};
-    else 
-        return CPUID{0, 0, 0}; // Firestorm core data based on https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
-}
-
-static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
-{
-    FeatureList<feature_sz> features = {};
-    CPUID info = get_apple_cpu();
-    auto name = (uint32_t)get_cpu_name(info);
-    features = find_cpu(name)->features;
-    return std::make_pair(name, features);
-}
-#else
 
 
 namespace {
