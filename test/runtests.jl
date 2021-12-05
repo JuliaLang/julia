@@ -207,6 +207,7 @@ cd(@__DIR__) do
 
     local stdin_monitor
     all_tasks = Task[]
+    o_ts_duration = nothing
     try
         # Monitor stdin and kill this task on ^C
         # but don't do this on Windows, because it may deadlock in the kernel
@@ -237,7 +238,7 @@ cd(@__DIR__) do
                 end
             end
         end
-        @Experimental.sync begin
+        o_ts_duration = @elapsed @Experimental.sync begin
             for p in workers()
                 @async begin
                     push!(all_tasks, current_task())
@@ -245,14 +246,16 @@ cd(@__DIR__) do
                         test = popfirst!(tests)
                         running_tests[test] = now()
                         wrkr = p
-                        resp = try
-                                remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                        before = time()
+                        resp, duration = try
+                                r = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                                r, time() - before
                             catch e
                                 isa(e, InterruptException) && return
-                                Any[CapturedException(e, catch_backtrace())]
+                                Any[CapturedException(e, catch_backtrace())], time() - before
                             end
                         delete!(running_tests, test)
-                        push!(results, (test, resp))
+                        push!(results, (test, resp, duration))
                         if length(resp) == 1
                             print_testworker_errored(test, wrkr, exit_on_error ? nothing : resp[1])
                             if exit_on_error
@@ -303,18 +306,20 @@ cd(@__DIR__) do
             # to the overall aggregator
             isolate = true
             t == "SharedArrays" && (isolate = false)
-            resp = try
-                    Base.invokelatest(runtests, t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+            before = time()
+            resp, duration = try
+                    r = Base.invokelatest(runtests, t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                    r, time() - before
                 catch e
                     isa(e, InterruptException) && rethrow()
-                    Any[CapturedException(e, catch_backtrace())]
+                    Any[CapturedException(e, catch_backtrace())], time() - before
                 end
             if length(resp) == 1
                 print_testworker_errored(t, 1, resp[1])
             else
                 print_testworker_stats(t, 1, resp)
             end
-            push!(results, (t, resp))
+            push!(results, (t, resp, duration))
         end
     catch e
         isa(e, InterruptException) || rethrow()
@@ -360,16 +365,19 @@ cd(@__DIR__) do
     =#
     Test.TESTSET_PRINT_ENABLE[] = false
     o_ts = Test.DefaultTestSet("Overall")
+    o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
-    for (testname, (resp,)) in results
+    for (testname, (resp,), duration) in results
         push!(completed_tests, testname)
         if isa(resp, Test.DefaultTestSet)
+            resp.time_end = resp.time_start + duration
             Test.push_testset(resp)
             Test.record(o_ts, resp)
             Test.pop_testset()
         elseif isa(resp, Test.TestSetException)
             fake = Test.DefaultTestSet(testname)
+            fake.time_end = fake.time_start + duration
             for i in 1:resp.pass
                 Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(@__LINE__, @__FILE__)))
             end
@@ -391,6 +399,7 @@ cd(@__DIR__) do
             # the test runner itself had some problem, so we may have hit a segfault,
             # deserialization errors or something similar.  Record this testset as Errored.
             fake = Test.DefaultTestSet(testname)
+            fake.time_end = fake.time_start + duration
             Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
@@ -407,6 +416,7 @@ cd(@__DIR__) do
     end
     Test.TESTSET_PRINT_ENABLE[] = true
     println()
+    # o_ts.verbose = true # set to true to show all timings when successful
     Test.print_test_results(o_ts, 1)
     if !o_ts.anynonpass
         println("    \033[32;1mSUCCESS\033[0m")
