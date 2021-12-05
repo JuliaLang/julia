@@ -2710,7 +2710,7 @@ end
 
 function _vstack_plus(itr)
     z = iterate(itr)
-    isnothing(z) && throw(ArgumentError("cannot stack an empty collection"))
+    z === nothing && throw(ArgumentError("cannot stack an empty collection"))
     val, state = z
     val isa Union{AbstractArray, Tuple} || throw(ArgumentError("cannot stack elements of type $(typeof(val))"))
 
@@ -2718,7 +2718,12 @@ function _vstack_plus(itr)
     len = length(val)
     n = haslength(itr) ? len*length(itr) : nothing
 
-    v = similar(val isa Tuple ? (1:0) : val, eltype(val), something(n, len))
+    v = if val isa Tuple
+        T = mapreduce(typeof, promote_type, val)
+        similar(1:0, T, something(n, len))
+    else
+        similar(val, something(n, len))
+    end
     copyto!(v, 1, val, firstindex(val), len)
 
     w = _stack_rest!(v, 0, n, axe, itr, state)
@@ -2729,12 +2734,16 @@ function _stack_rest!(v::AbstractVector, i, n, axe, itr, state)
     len = prod(length, axe; init=1)
     while true
         z = iterate(itr, state)
-        isnothing(z) && return v
+        z === nothing && return v
         val, state = z
         axes(val) == axe || throw(DimensionMismatch(
             "expected a consistent size, got axes $(UnitRange.(axes(val))) compared to $(UnitRange.(axe)) for the first"))
         i += 1
-        T′ = promote_type(eltype(v), eltype(val))
+        T′ = if val isa Tuple
+            promote_type(eltype(v), mapreduce(typeof, promote_type, val))
+        else
+            promote_type(eltype(v), eltype(val))
+        end
         if T′ <: eltype(v)
             if n isa Integer
                 copyto!(v, i*len+1, val, firstindex(val), len)

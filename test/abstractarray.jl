@@ -1569,6 +1569,11 @@ end
         X3 = stack(x for x in args if true)
         @test X3 == Y
         @test typeof(X3) === typeof(Y)
+
+        if isconcretetype(eltype(args))
+            @inferred stack(args)
+            @inferred stack(x for x in args)
+        end
     end
     # Higher dims
     @test size(stack([rand(2,3) for _ in 1:4, _ in 1:5])) == (2,3,4,5)
@@ -1578,12 +1583,13 @@ end
     # Tuples
     @test stack([(1,2), (3,4)]) == [1 3; 2 4]
     @test stack(((1,2), (3,4))) == [1 3; 2 4]
-    @test size(stack(Iterators.product(1:3, 1:4))) == (2,3,4)
-    @test stack([('a', 'b'), ('c', 'd')]) == ['a' 'c'; 'b' 'd']
+    @test size(@inferred stack(Iterators.product(1:3, 1:4))) == (2,3,4)
+    @test @inferred(stack([('a', 'b'), ('c', 'd')])) == ['a' 'c'; 'b' 'd']
+    @test @inferred(stack([(1,2+3im), (4, 5+6im)])) isa Matrix{Complex{Int}}
 
     # stack(f, iter)
-    @test stack(x -> [x, 2x], 3:5) == [3 4 5; 6 8 10]
-    @test stack(x -> x*x'/2, [1:2, 3:4]) == [0.5 1.0; 1.0 2.0;;; 4.5 6.0; 6.0 8.0]
+    @test @inferred(stack(x -> [x, 2x], 3:5)) == [3 4 5; 6 8 10]
+    @test @inferred(stack(x -> x*x'/2, [1:2, 3:4])) == [0.5 1.0; 1.0 2.0;;; 4.5 6.0; 6.0 8.0]
 
     # Mismatched sizes
     @test_throws DimensionMismatch stack([1:2, 1:3])
