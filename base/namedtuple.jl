@@ -384,7 +384,7 @@ julia> Base.setindex(nt, "a", 1)
 ```
 """
 function setindex(nt::NamedTuple{names, T}, val, idx::Int) where {names, T}
-    NamedTuple(zip(names, setindex(Tuple(nt), val, idx)))
+    NamedTuple{names}(Base.setindex(Tuple(nt), val, idx))
 end
 """
     @NamedTuple{key1::Type1, key2::Type2, ...}
