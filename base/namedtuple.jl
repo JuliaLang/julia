@@ -368,7 +368,24 @@ julia> Base.setindex(nt, "a", :a)
 function setindex(nt::NamedTuple, v, idx::Symbol)
     merge(nt, (; idx => v))
 end
+"""
+    setindex(nt::NamedTuple, val, idx::Int)
 
+Constructs a new `NamedTuple` with the value at position `idx` set to `val`.
+```jldoctest
+julia> nt = (a = 3, b = 4)
+(a = 3, b = 4)
+
+julia> Base.setindex(nt, 5, 1)
+(a = 5, b = 4)
+
+julia> Base.setindex(nt, "a", 1)
+(a = "a", b = 4)
+```
+"""
+function setindex(nt::NamedTuple{names, T}, val, idx::Int) where {names, T}
+    NamedTuple(zip(names, setindex(Tuple(nt), val, idx)))
+end
 """
     @NamedTuple{key1::Type1, key2::Type2, ...}
     @NamedTuple begin key1::Type1; key2::Type2; ...; end
