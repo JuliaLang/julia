@@ -19,11 +19,11 @@
 #    undef USE_DYN_GETAUXVAL
 #    include <sys/auxv.h>
 #  endif
-#endif
-#if defined _CPU_AARCH64_ && defined _OS_DARWIN_
+#elif defined _CPU_AARCH64_ && defined _OS_DARWIN_
 #include <sys/sysctl.h>
 #include <string.h>
 #endif
+
 namespace ARM {
 enum class CPU : uint32_t {
     generic = 0,
@@ -696,24 +696,19 @@ static inline const char *find_cpu_name(uint32_t cpu)
 }
 
 #if defined _CPU_AARCH64_ && defined _OS_DARWIN_
-static CPU get_cpu_name()
+
+static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 {
     char buffer[128];
     size_t bufferlen = 128;
     sysctlbyname("machdep.cpu.brand_string",&buffer,&bufferlen,NULL,0);
-    if(strcmp(buffer,"Apple M1") == 0)
-        return CPU::apple_m1;
-    else
-        return CPU::generic;// Firestorm core data based on https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
-}
-static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
-{
-    FeatureList<feature_sz> features = {};
 
-    auto name = (uint32_t)get_cpu_name();
-    features = find_cpu(name)->features;
-    return std::make_pair(name, features);
+    if(strcmp(buffer,"Apple M1") == 0)// Firestorm core data based on https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
+        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
+    else
+        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
 }
+
 #else
 
 // auxval reader
