@@ -702,8 +702,8 @@ static CPU get_cpu_name()
     size_t bufferlen = 128;
     sysctlbyname("machdep.cpu.brand_string",&buffer,&bufferlen,NULL,0);
     if(strcmp(buffer,"Apple M1") == 0)
-        return CPU::apple_m1; 
-    else 
+        return CPU::apple_m1;
+    else
         return CPU::generic;// Firestorm core data based on https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
 }
 static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
