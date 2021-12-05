@@ -1037,7 +1037,7 @@ function require(into::Module, mod::Symbol)
     finally
         LOADING_CACHE[] = nothing
     end
-    end
+    end #= @lock unlock_expr =# yield()
 end
 
 mutable struct PkgOrigin
@@ -1067,7 +1067,7 @@ function require(uuidkey::PkgId)
               module `$(uuidkey.name)`, check for typos in package module name")
     end
     return root_module(uuidkey)
-    end
+    end #= @lock unlock_expr =# yield()
 end
 
 const loaded_modules = Dict{PkgId,Module}()

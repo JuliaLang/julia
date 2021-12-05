@@ -198,7 +198,7 @@ function trylock(f, l::AbstractLock)
 end
 
 """
-    @lock l expr
+    @lock l expr [unlock_expr=nothing]
 
 Macro version of `lock(f, l::AbstractLock)` but with `expr` instead of `f` function.
 Expands to:
@@ -208,12 +208,16 @@ try
     expr
 finally
     unlock(l)
+    unlock_expr
 end
 ```
 This is similar to using [`lock`](@ref) with a `do` block, but avoids creating a closure
 and thus can improve the performance.
+
+!!! compat "Julia 1.8"
+    `unlock_expr` requires at least Julia 1.8
 """
-macro lock(l, expr)
+macro lock(l, expr, unlock_expr=nothing)
     quote
         temp = $(esc(l))
         lock(temp)
@@ -221,6 +225,7 @@ macro lock(l, expr)
             $(esc(expr))
         finally
             unlock(temp)
+            $(esc(unlock_expr))
         end
     end
 end

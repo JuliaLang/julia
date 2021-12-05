@@ -766,3 +766,40 @@ end
         end
     end
 end
+
+@testset "package callbacks that acquire `require_lock` under `@async`" begin
+    # https://github.com/JuliaLang/julia/pull/41602#issuecomment-986115131
+    mktempdir() do tmp
+        push!(LOAD_PATH, tmp)
+        write(joinpath(tmp, "Outer41602.jl"), """
+            module Outer41602
+            using Inner41602
+
+            const callback_timing = []
+            function __init__()
+                push!(Base.package_callbacks, id -> @async push!(callback_timing, (Base.root_module(id), time()-Inner41602.callback_timing[1])))
+            end
+
+            end
+        """)
+        write(joinpath(tmp, "Inner41602.jl"), """
+            module Inner41602
+
+            const callback_timing = []
+            function __init__()
+                push!(callback_timing, time())
+                push!(Base.package_callbacks, id -> @async push!(callback_timing, (Base.root_module(id), time()-callback_timing[1])))
+            end
+
+            end
+        """)
+        @eval using Outer41602
+        cti, cto = copy(Outer41602.Inner41602.callback_timing), copy(Outer41602.callback_timing)
+        @test length(cti) == 3
+        @test length(cto) == 1
+        @test cti[2][1] == Outer41602.Inner41602
+        @test cti[3][1] == Outer41602
+        @test cti[end][end] < cto[end][end]
+        pop!(LOAD_PATH)
+    end
+end
