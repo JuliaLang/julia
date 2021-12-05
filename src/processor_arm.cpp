@@ -20,7 +20,10 @@
 #    include <sys/auxv.h>
 #  endif
 #endif
-
+#if defined _CPU_AARCH64_ && defined _OS_DARWIN_
+#include <sys/sysctl.h>
+#include <string.h>
+#endif
 namespace ARM {
 enum class CPU : uint32_t {
     generic = 0,
@@ -671,8 +674,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"exynos-m2", CPU::samsung_exynos_m2, CPU::generic, UINT32_MAX, Feature::samsung_exynos_m2},
     {"exynos-m3", CPU::samsung_exynos_m3, CPU::generic, 0, Feature::samsung_exynos_m3},
     {"exynos-m4", CPU::samsung_exynos_m4, CPU::generic, 0, Feature::samsung_exynos_m4},
-    {"exynos-m5", CPU::samsung_exynos_m5, CPU::samsung_exynos_m4, 110000,
-     Feature::samsung_exynos_m5},
+    {"exynos-m5", CPU::samsung_exynos_m5, CPU::samsung_exynos_m4, 110000, Feature::samsung_exynos_m5},
     {"apple-a7", CPU::apple_a7, CPU::generic, 0, Feature::apple_a7},
 };
 #endif
@@ -1033,6 +1035,43 @@ static CPU get_cpu_name(CPUID cpuid)
         return CPU::generic;
     }
 }
+static inline const CPUSpec<CPU,feature_sz> *find_cpu(uint32_t cpu)
+{
+    return ::find_cpu(cpu, cpus, ncpu_names);
+}
+
+static inline const CPUSpec<CPU,feature_sz> *find_cpu(llvm::StringRef name)
+{
+    return ::find_cpu(name, cpus, ncpu_names);
+}
+
+static inline const char *find_cpu_name(uint32_t cpu)
+{
+    return ::find_cpu_name(cpu, cpus, ncpu_names);
+}
+
+#if defined _CPU_AARCH64_ && defined _OS_DARWIN_
+static CPUID get_apple_cpu()
+{
+    char buffer[128];
+    size_t bufferlen = 128;
+    sysctlbyname("machdep.cpu.brand_string",&buffer,&bufferlen,NULL,0);
+    if(strcmp(buffer,"Apple M1") == 0)
+        return CPUID{0x61, 0,0x23};
+    else 
+        return CPUID{0, 0, 0}; // Firestorm core data based on https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
+}
+
+static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
+{
+    FeatureList<feature_sz> features = {};
+    CPUID info = get_apple_cpu();
+    auto name = (uint32_t)get_cpu_name(info);
+    features = find_cpu(name)->features;
+    return std::make_pair(name, features);
+}
+#else
+
 
 namespace {
 
@@ -1075,21 +1114,6 @@ static arm_arch get_elf_arch(void)
 #  endif
     return {ver, profile};
 #endif
-}
-
-static inline const CPUSpec<CPU,feature_sz> *find_cpu(uint32_t cpu)
-{
-    return ::find_cpu(cpu, cpus, ncpu_names);
-}
-
-static inline const CPUSpec<CPU,feature_sz> *find_cpu(llvm::StringRef name)
-{
-    return ::find_cpu(name, cpus, ncpu_names);
-}
-
-static inline const char *find_cpu_name(uint32_t cpu)
-{
-    return ::find_cpu_name(cpu, cpus, ncpu_names);
 }
 
 static arm_arch feature_arch_version(const FeatureList<feature_sz> &feature)
@@ -1196,35 +1220,6 @@ static void shrink_big_little(std::vector<std::pair<uint32_t,CPUID>> &list,
     }
 }
 
-#if defined _CPU_AARCH64_ && defined _OS_DARWIN_
-static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
-{
-    FeatureList<feature_sz> features = {};
-    CPUID info = {
-            uint8_t(0x61),
-            uint8_t(0),
-            uint16_t(0x23)
-        }; // Hardcoded Firestorm core data based on https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
-    std::vector<std::pair<uint32_t,CPUID>> list;
-    auto name = (uint32_t)get_cpu_name(info);
-    auto arch = get_elf_arch();
-    features = find_cpu(name)->features;
-    list.emplace_back(name, info);
-    uint32_t cpu = 0;
-    if (list.empty()) {
-        cpu = (uint32_t)generic_for_arch(arch);
-    }
-    else {
-        // This also covers `list.size() > 1` case which means there's a unknown combination
-        // consists of CPU's we know. Unclear what else we could try so just randomly return
-        // one...
-        cpu = list[0].first;
-    }
-    // Ignore feature bits that we are not interested in.
-    mask_features(feature_masks, &features[0]);
-    return std::make_pair(cpu, features);
-}
-#else
 static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 {
     FeatureList<feature_sz> features = {};
