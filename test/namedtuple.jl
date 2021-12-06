@@ -302,6 +302,13 @@ let nt0 = NamedTuple(), nt1 = (a=33,), nt2 = (a=0, b=:v)
     @test Base.setindex(Base.setindex(nt1, 0, :a), :v, :b) == nt2
     @test Base.setindex(nt1, "value", :a) == (a="value",)
     @test Base.setindex(nt1, "value", :a) isa NamedTuple{(:a,),<:Tuple{AbstractString}}
+
+    @test Base.setindex(nt1, 42, 1) == (a=42,)
+    @test Base.setindex(nt1, "value", 1) isa NamedTuple{(:a,),<:Tuple{AbstractString}}
+    @test Base.setindex(nt2, "v", 2) == (a=0, b="v")
+    @test_throws BoundsError Base.setindex(nt1, 42, 0)
+    @test_throws BoundsError Base.setindex(nt1, 42, 2)
+    @test_throws BoundsError Base.setindex(nt0, 45, 1)
 end
 
 # @NamedTuple
