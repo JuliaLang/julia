@@ -497,6 +497,12 @@ uint32_t CloneCtx::collect_func_info(Function &F)
                     flag |= JL_TARGET_CLONE_MATH;
                 }
             }
+            for (size_t i = 0; i < I.getNumOperands(); i++) {
+                if(I.getOperand(i)->getType()->isHalfTy()){
+                    flag |= JL_TARGET_CLONE_FLOAT16;
+                }
+                // Check for BFloat16 when they are added to julia can be done here
+            }
             if (has_veccall && (flag & JL_TARGET_CLONE_SIMD) && (flag & JL_TARGET_CLONE_MATH)) {
                 return flag;
             }

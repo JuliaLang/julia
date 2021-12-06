@@ -109,6 +109,8 @@ enum {
     JL_TARGET_MINSIZE = 1 << 7,
     // Clone when the function queries CPU features
     JL_TARGET_CLONE_CPU = 1 << 8,
+    // Clone when the function uses fp16
+    JL_TARGET_CLONE_FLOAT16 = 1 << 9,
 };
 
 #define JL_FEATURE_DEF_NAME(name, bit, llvmver, str) JL_FEATURE_DEF(name, bit, llvmver)
