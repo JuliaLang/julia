@@ -879,8 +879,6 @@ static void ensure_jit_target(bool imaging)
             continue;
         // Always clone when code checks CPU features
         t.en.flags |= JL_TARGET_CLONE_CPU;
-        // Clone cause x86 doesn't have float_16 support
-        t.en.flags |= JL_TARGET_CLONE_FLOAT16;
         // The most useful one in general...
         t.en.flags |= JL_TARGET_CLONE_LOOP;
         auto &features0 = jit_targets[t.base].en.features;

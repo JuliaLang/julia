@@ -45,6 +45,16 @@ extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *pare
 
 extern Optional<bool> always_have_fma(Function&);
 
+
+Optional<bool> always_have_fp16() {
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+    // x86 doesn't support fp16
+    return false;
+#else
+    return {};
+#endif
+}
+
 namespace {
 
 // These are valid detail cloning conditions in the target flags.
@@ -497,11 +507,13 @@ uint32_t CloneCtx::collect_func_info(Function &F)
                     flag |= JL_TARGET_CLONE_MATH;
                 }
             }
-            for (size_t i = 0; i < I.getNumOperands(); i++) {
-                if(I.getOperand(i)->getType()->isHalfTy()){
-                    flag |= JL_TARGET_CLONE_FLOAT16;
+            if(!always_have_fp16().hasValue()){
+                for (size_t i = 0; i < I.getNumOperands(); i++) {
+                    if(I.getOperand(i)->getType()->isHalfTy()){
+                        flag |= JL_TARGET_CLONE_FLOAT16;
+                    }
+                    // Check for BFloat16 when they are added to julia can be done here
                 }
-                // Check for BFloat16 when they are added to julia can be done here
             }
             if (has_veccall && (flag & JL_TARGET_CLONE_SIMD) && (flag & JL_TARGET_CLONE_MATH)) {
                 return flag;
