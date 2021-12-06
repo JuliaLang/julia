@@ -24,6 +24,28 @@ struct StackFrame {
 struct RawBacktrace {
     jl_bt_element_t *data;
     size_t size;
+
+    RawBacktrace(
+        jl_bt_element_t *_data,
+        size_t _size
+    ) : data(_data), size(_size) {}
+
+    ~RawBacktrace() {
+        if (data != nullptr) {
+            free(data);
+        }
+    }
+    // Move constructor (X a = X{...})
+    RawBacktrace(RawBacktrace&& rhs) :
+        data(rhs.data), size(rhs.size)
+    {
+        rhs.data = nullptr;
+        rhs.size = 0;
+    }
+    private:
+    // Disallow copy and copy-assignment
+    RawBacktrace(const RawBacktrace&) = delete; // X b(a);
+    RawBacktrace& operator=(const RawBacktrace& other) = delete; // b = a;
 };
 
 struct Alloc {
@@ -33,6 +55,10 @@ struct Alloc {
 };
 
 struct AllocProfile {
+    AllocProfile(int _skip_every) {
+        reset(_skip_every);
+    }
+
     int skip_every;
 
     vector<Alloc> allocs;
@@ -42,14 +68,23 @@ struct AllocProfile {
 
     size_t alloc_counter;
     size_t last_recorded_alloc;
+
+    void reset(int _skip_every) {
+        skip_every = _skip_every;
+        alloc_counter = 0;
+        last_recorded_alloc = 0;
+    }
+
+    private:
+    AllocProfile(const AllocProfile&) = delete; // X b(a);
+    AllocProfile& operator=(const AllocProfile& other) = delete; // b = a;
 };
 
-struct Serializer {
-    AllocProfile *profile;
-    unordered_map<string, vector<StackFrame>> frames_cache;
-    size_t cache_hits;
-    size_t cache_misses;
-};
+// == global variables manipulated by callbacks ==
+
+AllocProfile g_alloc_profile(0);
+int g_alloc_profile_enabled = false;
+
 
 // == utility functions ==
 
@@ -206,7 +241,7 @@ vector<StackFrame> get_julia_frames(jl_bt_element_t *bt_entry) {
                 jl_symbol_name(locinfo->file),
                 locinfo->line,
             });
-            
+
             debuginfoloc = locinfo->inlined_at;
         }
     }
@@ -218,63 +253,8 @@ vector<StackFrame> get_julia_frames(jl_bt_element_t *bt_entry) {
     return ret;
 }
 
-vector<StackFrame> get_native_frames(uintptr_t ip) JL_NOTSAFEPOINT {
-    vector<StackFrame> out_frames;
-
-    // This function is not allowed to reference any TLS variables since
-    // it can be called from an unmanaged thread on OSX.
-    // it means calling getFunctionInfo with noInline = 1
-    jl_frame_t *frames = NULL;
-    int n = jl_getFunctionInfo(&frames, ip, 0, 0);
-    int i;
-
-    for (i = 0; i < n; i++) {
-        jl_frame_t frame = frames[i];
-        if (!frame.func_name) {
-            // TODO: record these somewhere
-            // jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
-        }
-        else {
-            out_frames.push_back(StackFrame{
-                frame.func_name,
-                frame.file_name,
-                frame.line,
-            });
-
-            free(frame.func_name);
-            free(frame.file_name);
-        }
-    }
-    free(frames);
-
-    return out_frames;
-}
-
-vector<StackFrame> get_frames(
-    Serializer *serializer,
-    jl_bt_element_t *entry,
-    size_t entry_size,
-    bool is_native
-) {
-    string entry_str = frame_as_string(entry, entry_size);
-
-    auto maybe_frames = serializer->frames_cache.find(entry_str);
-    if (maybe_frames == serializer->frames_cache.end()) {
-        serializer->cache_misses++;
-        auto frames = is_native
-            ? get_native_frames(entry[0].uintptr)
-            : get_julia_frames(entry);
-        serializer->frames_cache[entry_str] = frames;
-        return frames;
-    } else {
-        serializer->cache_hits++;
-        return maybe_frames->second;
-    }
-}
-
 RawBacktrace get_raw_backtrace() {
-    // TODO: don't allocate this every time
-    jl_bt_element_t *bt_data = (jl_bt_element_t*) malloc(JL_MAX_BT_SIZE);
+    static jl_bt_element_t bt_data[JL_MAX_BT_SIZE];
 
     // TODO: tune the number of frames that are skipped
     size_t bt_size = rec_backtrace(bt_data, JL_MAX_BT_SIZE, 1);
@@ -285,220 +265,73 @@ RawBacktrace get_raw_backtrace() {
     };
 }
 
-vector<StackFrame> expand_stack(Serializer *serializer, RawBacktrace backtrace) {
-    vector<StackFrame> out;
-
-    int i = 0;
-    while (i < backtrace.size) {
-        jl_bt_element_t *entry = backtrace.data + i;
-        auto entry_size = jl_bt_entry_size(entry);
-        i += entry_size;
-        auto is_native = jl_bt_is_native(entry);;
-
-        // TODO: cache frames by bt_element as string?
-        auto frames = get_frames(serializer, entry, entry_size, is_native);
-        
-        for (auto frame : frames) {
-            auto frame_label = frame.func_name;
-            auto is_julia = ends_with(frame.file_name, ".jl") || frame.file_name == "top-level scope";
-            auto actual_is_native = !is_julia;
-
-            if (actual_is_native) {
-                continue;
-            }
-
-            out.push_back(frame);
-        }
-    }
-
-    return out;
-}
-
-string stack_frame_to_string(StackFrame frame) {
-    if (frame.total != "") {
-        return frame.total;
-    }
-
-    ios_t str;
-    ios_mem(&str, 1024);
-
-    ios_printf(
-        &str, "%s at %s:%d",
-        frame.func_name.c_str(), frame.file_name.c_str(), frame.line_no
-    );
-
-    string type_str = string((const char*)str.buf, str.size);
-    frame.total = type_str;
-    ios_close(&str);
-
-    return frame.total;
-}
-
-void profile_serialize(ios_t *out, Serializer *serializer) {
-    StringTable locations;
-
-    ios_printf(out, "{\n");
-    ios_printf(out, "  \"allocs\":[\n");
-    bool first_alloc = true;
-    for (auto alloc : serializer->profile->allocs) {
-        if (first_alloc) {
-            first_alloc = false;
-        } else {
-            ios_printf(out, ",\n");
-        }
-
-        auto frames = expand_stack(serializer, alloc.backtrace);
-        // print out stack and type
-
-        ios_printf(out, "    {\"stack\":[");
-        bool first_frame = true;
-        for (auto frame : frames) {
-            if (first_frame) {
-                first_frame = false;
-            } else {
-                ios_printf(out, ",");
-            }
-
-            size_t frame_id = locations.find_or_create_string_id(stack_frame_to_string(frame));
-            ios_printf(out, "%zu", frame_id);
-        }        
-        ios_printf(out, "]"); // end stack
-
-        ios_printf(out, ",\"type\":\"%zu\"", alloc.type_address);
-        ios_printf(out, ",\"size\":%zu", alloc.size);
-        ios_printf(out, "}"); // end alloc
-    }
-    ios_printf(out, "\n  ],\n"); // end allocs
-
-    // print locations
-    ios_printf(out, "  \"locations\":");
-    locations.print_json_array(out, "loc", true);
-    ios_printf(out, ",\n"); // end locations
-
-    // print types
-    ios_printf(out, "  \"types\":[\n");
-    auto first_type = true;
-    for (auto type : serializer->profile->type_name_by_address) {
-        if (first_type) {
-            first_type = false;
-        } else {
-            ios_printf(out, ",\n");
-        }
-        
-        ios_printf(out, "    {");
-        ios_printf(out, "\"id\":\"%zu\",", type.first);
-        ios_printf(out, "\"name\":");
-        print_str_escape_json(out, type.second);
-        ios_printf(out, "}");
-    }
-    ios_printf(out, "\n  ],\n");
-
-    // print frees
-    ios_printf(out, "  \"frees_by_type\":[\n");
-    auto first_free = true;
-    for (auto free : serializer->profile->frees_by_type_address) {
-        if (first_free) {
-            first_free = false;
-        } else {
-            ios_printf(out, ",\n");
-        }
-        
-        ios_printf(out, "    {");
-        ios_printf(out, "\"type_id\":\"%zu\",", free.first);
-        ios_printf(out, "\"count\":%zu", free.second);
-        ios_printf(out, "}");
-    }
-    ios_printf(out, "\n  ]\n"); // end frees by type
-
-    ios_printf(out, "}\n");
-}
-
-void alloc_profile_serialize(ios_t *out, AllocProfile *profile) {
-    jl_printf(JL_STDERR, "serializing trie from %d allocs\n", profile->allocs.size());
-
-    auto serializer = Serializer{profile};
-    profile_serialize(out, &serializer);
-
-    jl_printf(JL_STDERR, "  frame cache hits: %d\n", serializer.cache_hits);
-    jl_printf(JL_STDERR, "  frame cache misses: %d\n", serializer.cache_misses);
-}
-
-// == global variables manipulated by callbacks ==
-
-AllocProfile *g_alloc_profile = nullptr;
-int g_alloc_profile_enabled = false;
-
 // == exported interface ==
 
 JL_DLLEXPORT void jl_start_alloc_profile(int skip_every) {
+    jl_printf(JL_STDERR, "g_alloc_profile se:%d allocs:%d \n", g_alloc_profile.skip_every, g_alloc_profile.allocs.size());
     g_alloc_profile_enabled = true;
-    g_alloc_profile = new AllocProfile{skip_every};
+    g_alloc_profile.reset(skip_every);
 }
 
-JL_DLLEXPORT void jl_stop_and_write_alloc_profile(ios_t *stream) {
-    alloc_profile_serialize(stream, g_alloc_profile);
-    ios_flush(stream);
+extern "C" {  // Needed since the function doesn't take any arguments.
 
-    // TODO: free everything in the profile
-    // especially all those malloc'd backtraces
-    
+JL_DLLEXPORT struct AllocResults jl_stop_and_write_alloc_profile() {
     g_alloc_profile_enabled = false;
-    
-    // TODO: something to free the alloc profile?
-    // I don't know how to C++
-    g_alloc_profile = nullptr;
+
+    return AllocResults{g_alloc_profile.allocs.size(),
+                    g_alloc_profile.allocs.data()};
+}
+
 }
 
 // == callbacks called into by the outside ==
 
 void register_type_string(jl_datatype_t *type) {
-    auto id = g_alloc_profile->type_name_by_address.find((size_t)type);
-    if (id != g_alloc_profile->type_name_by_address.end()) {
+    auto id = g_alloc_profile.type_name_by_address.find((size_t)type);
+    if (id != g_alloc_profile.type_name_by_address.end()) {
         return;
     }
 
     string type_str = _type_as_string(type);
-    g_alloc_profile->type_name_by_address[(size_t)type] = type_str;
+    g_alloc_profile.type_name_by_address[(size_t)type] = type_str;
 }
 
 void _record_allocated_value(jl_value_t *val, size_t size) {
-    auto profile = g_alloc_profile;
-    profile->alloc_counter++;
-    auto diff = profile->alloc_counter - profile->last_recorded_alloc;
-    if (diff < profile->skip_every) {
+    auto& profile = g_alloc_profile;
+    profile.alloc_counter++;
+    auto diff = profile.alloc_counter - profile.last_recorded_alloc;
+    if (diff < profile.skip_every) {
         return;
     }
-    profile->last_recorded_alloc = profile->alloc_counter;
+    profile.last_recorded_alloc = profile.alloc_counter;
 
     auto type = (jl_datatype_t*)jl_typeof(val);
     register_type_string(type);
 
-    profile->type_address_by_value_address[(size_t)val] = (size_t)type;
+    profile.type_address_by_value_address[(size_t)val] = (size_t)type;
 
     // TODO: get stack, push into vector
-    auto backtrace = get_raw_backtrace();
-
-    profile->allocs.push_back(Alloc{
+    profile.allocs.emplace_back(Alloc{
         (size_t) type,
-        backtrace,
+        get_raw_backtrace(),
         size
     });
 }
 
 void _record_freed_value(jl_taggedvalue_t *tagged_val) {
     jl_value_t *val = jl_valueof(tagged_val);
-    
+
     auto value_address = (size_t)val;
-    auto type_address = g_alloc_profile->type_address_by_value_address.find(value_address);
-    if (type_address == g_alloc_profile->type_address_by_value_address.end()) {
+    auto type_address = g_alloc_profile.type_address_by_value_address.find(value_address);
+    if (type_address == g_alloc_profile.type_address_by_value_address.end()) {
         return; // TODO: warn
     }
-    auto frees = g_alloc_profile->frees_by_type_address.find(type_address->second);
+    auto frees = g_alloc_profile.frees_by_type_address.find(type_address->second);
 
-    if (frees == g_alloc_profile->frees_by_type_address.end()) {
-        g_alloc_profile->frees_by_type_address[type_address->second] = 1;
+    if (frees == g_alloc_profile.frees_by_type_address.end()) {
+        g_alloc_profile.frees_by_type_address[type_address->second] = 1;
     } else {
-        g_alloc_profile->frees_by_type_address[type_address->second] = frees->second + 1;
+        g_alloc_profile.frees_by_type_address[type_address->second] = frees->second + 1;
     }
 }
 
