@@ -603,6 +603,15 @@ get_llvm(g41438, ()); # cause allocation of layout
 @test S41438{Int}.layout != C_NULL
 @test !Base.datatype_pointerfree(S41438{Int})
 
+
+# issue #43303
+struct A43303{T}
+    x::Pair{Ptr{T},Ptr{T}}
+end
+@test A43303.body.layout != C_NULL
+@test isbitstype(A43303{Int})
+@test A43303.body.types[1].layout != C_NULL
+
 # issue #41157
 f41157(a, b) = a[1] = b[1]
 @test_throws BoundsError f41157(Tuple{Int}[], Tuple{Union{}}[])
