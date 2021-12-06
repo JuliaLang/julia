@@ -160,6 +160,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     # by constant analysis, but let's create `ConstCallInfo` if there has been any successful
     # constant propagation happened since other consumers may be interested in this
     if any_const_result && seen == napplicable
+        @assert napplicable == nmatches(info) == length(const_results)
         info = ConstCallInfo(info, const_results)
     end
 
