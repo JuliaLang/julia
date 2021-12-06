@@ -703,7 +703,7 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
     size_t bufferlen = 128;
     sysctlbyname("machdep.cpu.brand_string",&buffer,&bufferlen,NULL,0);
 
-    if(strcmp(buffer,"Apple M1") == 0)// Firestorm core data based on https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
+    if(strcmp(buffer,"Apple M1") == 0)
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
     else
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
@@ -1016,7 +1016,7 @@ static CPU get_cpu_name(CPUID cpuid)
         default: return CPU::generic;
         }
     case 0x61: // 'a': Apple
-        // https://opensource.apple.com/source/xnu/xnu-6153.81.5/osfmk/arm/cpuid.h.auto.html
+        // https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
         switch (cpuid.part) {
         case 0x0: // Swift
             return CPU::apple_swift;
