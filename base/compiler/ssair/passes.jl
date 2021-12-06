@@ -323,50 +323,25 @@ function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
     return oc ⊑ Core.OpaqueClosure
 end
 
+struct LiftedValue
+    x
+    LiftedValue(@nospecialize x) = new(x)
+end
+const LiftedLeaves = IdDict{Any, Union{Nothing,LiftedValue}}
+
 # try to compute lifted values that can replace `getfield(x, field)` call
 # where `x` is an immutable struct that are defined at any of `leaves`
 function lift_leaves(compact::IncrementalCompact,
                      @nospecialize(result_t), field::Int, leaves::Vector{Any})
     # For every leaf, the lifted value
-    lifted_leaves = IdDict{Any, Union{Nothing,LiftedValue}}()
+    lifted_leaves = LiftedLeaves()
     maybe_undef = false
     for leaf in leaves
-        leaf_key = leaf
+        cache_key = leaf
         if isa(leaf, AnySSAValue)
-            function lift_arg(ref::Core.Compiler.UseRef)
-                lifted = ref[]
-                if is_old(compact, leaf) && isa(lifted, SSAValue)
-                    lifted = OldSSAValue(lifted.id)
-                end
-                if isa(lifted, GlobalRef) || isa(lifted, Expr)
-                    lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted))))
-                    ref[] = lifted
-                    (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
-                end
-                lifted_leaves[leaf_key] = LiftedValue(lifted)
-                nothing
-            end
-            function walk_leaf(@nospecialize(leaf))
-                if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
-                    leaf = compact.ssa_rename[leaf.id]
-                    if isa(leaf, AnySSAValue)
-                        leaf = simple_walk(compact, leaf)
-                    end
-                    if isa(leaf, AnySSAValue)
-                        def = compact[leaf]
-                    else
-                        def = leaf
-                    end
-                elseif isa(leaf, AnySSAValue)
-                    def = compact[leaf]
-                else
-                    def = leaf
-                end
-                return Pair{Any, Any}(def, leaf)
-            end
-            (def, leaf) = walk_leaf(leaf)
-            if is_tuple_call(compact, def) && 1 <= field < length(def.args)
-                lift_arg(UseRef(def, 1 + field))
+            (def, leaf) = walk_to_def(compact, leaf)
+            if is_tuple_call(compact, def) && 1 ≤ field < length(def.args)
+                lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             elseif isexpr(def, :new)
                 typ = widenconst(types(compact)[leaf])
@@ -375,7 +350,7 @@ function lift_leaves(compact::IncrementalCompact,
                 end
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
                 @assert !ismutabletype(typ)
-                if length(def.args) < 1 + field
+                if length(def.args) < 1+field
                     if field > fieldcount(typ)
                         return nothing
                     end
@@ -384,7 +359,7 @@ function lift_leaves(compact::IncrementalCompact,
                         # On this branch, this will be a guaranteed UndefRefError.
                         # We use the regular undef mechanic to lift this to a boolean slot
                         maybe_undef = true
-                        lifted_leaves[leaf_key] = nothing
+                        lifted_leaves[cache_key] = nothing
                         continue
                     end
                     return nothing
@@ -398,16 +373,7 @@ function lift_leaves(compact::IncrementalCompact,
                     end
                     compact[leaf] = def
                 end
-                lifted = def.args[1+field]
-                if is_old(compact, leaf) && isa(lifted, SSAValue)
-                    lifted = OldSSAValue(lifted.id)
-                end
-                if isa(lifted, GlobalRef) || isa(lifted, Expr)
-                    lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted))))
-                    def.args[1+field] = lifted
-                    (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
-                end
-                lifted_leaves[leaf_key] = LiftedValue(lifted)
+                lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             elseif is_getfield_captures(def, compact)
                 # Walk to new_opaque_closure
@@ -415,9 +381,9 @@ function lift_leaves(compact::IncrementalCompact,
                 if isa(ocleaf, AnySSAValue)
                     ocleaf = simple_walk(compact, ocleaf)
                 end
-                ocdef, _ = walk_leaf(ocleaf)
-                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 <= field <= length(ocdef.args)-5
-                    lift_arg(UseRef(ocdef, 5 + field))
+                ocdef, _ = walk_to_def(compact, ocleaf)
+                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-5
+                    lift_arg!(compact, leaf, cache_key, ocdef, 5+field, lifted_leaves)
                     continue
                 end
                 return nothing
@@ -445,16 +411,53 @@ function lift_leaves(compact::IncrementalCompact,
             else
                 return nothing
             end
-        elseif isa(leaf, Union{Argument, Expr})
+        elseif isa(leaf, Argument) || isa(leaf, Expr)
             return nothing
         end
         ismutable(leaf) && return nothing
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
         is_inlineable_constant(val) || return nothing
-        lifted_leaves[leaf_key] = LiftedValue(quoted(val))
+        lifted_leaves[cache_key] = LiftedValue(quoted(val))
     end
     return lifted_leaves, maybe_undef
+end
+
+function lift_arg!(
+    compact::IncrementalCompact, @nospecialize(leaf), @nospecialize(cache_key),
+    stmt::Expr, argidx::Int, lifted_leaves::LiftedLeaves)
+    lifted = stmt.args[argidx]
+    if is_old(compact, leaf) && isa(lifted, SSAValue)
+        lifted = OldSSAValue(lifted.id)
+    end
+    if isa(lifted, GlobalRef) || isa(lifted, Expr)
+        lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted))))
+        stmt.args[argidx] = lifted
+        if isa(leaf, SSAValue) && leaf.id < compact.result_idx
+            push!(compact.late_fixup, leaf.id)
+        end
+    end
+    lifted_leaves[cache_key] = LiftedValue(lifted)
+    nothing
+end
+
+function walk_to_def(compact::IncrementalCompact, @nospecialize(leaf))
+    if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
+        leaf = compact.ssa_rename[leaf.id]
+        if isa(leaf, AnySSAValue)
+            leaf = simple_walk(compact, leaf)
+        end
+        if isa(leaf, AnySSAValue)
+            def = compact[leaf]
+        else
+            def = leaf
+        end
+    elseif isa(leaf, AnySSAValue)
+        def = compact[leaf]
+    else
+        def = leaf
+    end
+    return Pair{Any, Any}(def, leaf)
 end
 
 make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
@@ -505,7 +508,7 @@ function lift_comparison!(compact::IncrementalCompact,
         r = egal_tfunc(compact_exprtype(compact, leaf), cmp)
         if isa(r, Const)
             if lifted_leaves === nothing
-                lifted_leaves = IdDict{Any, Union{Nothing,LiftedValue}}()
+                lifted_leaves = LiftedLeaves()
             end
             lifted_leaves[leaf] = LiftedValue(r.val)
         else
@@ -515,7 +518,7 @@ function lift_comparison!(compact::IncrementalCompact,
 
     lifted_val = perform_lifting!(compact,
         visited_phinodes, cmp, lifting_cache, Bool,
-        lifted_leaves::IdDict{Any, Union{Nothing,LiftedValue}}, val)::LiftedValue
+        lifted_leaves::LiftedLeaves, val)::LiftedValue
 
     compact[idx] = lifted_val.x
 end
@@ -532,15 +535,10 @@ function is_old(compact, @nospecialize(old_node_ssa))
         !already_inserted(compact, old_node_ssa)
 end
 
-struct LiftedValue
-    x
-    LiftedValue(@nospecialize x) = new(x)
-end
-
 function perform_lifting!(compact::IncrementalCompact,
     visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    @nospecialize(result_t), lifted_leaves::IdDict{Any, Union{Nothing,LiftedValue}}, @nospecialize(stmt_val))
+    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val))
     reverse_mapping = IdDict{AnySSAValue, Int}(ssa => id for (id, ssa) in enumerate(visited_phinodes))
 
     # Insert PhiNodes

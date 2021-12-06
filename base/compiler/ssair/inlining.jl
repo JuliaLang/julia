@@ -370,9 +370,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 isa(val, SSAValue) && (compact.used_ssas[val.id] += 1)
                 return_value = SSAValue(idx′)
                 inline_compact[idx′] = val
-                inline_compact.result[idx′][:type] = (isa(val, Argument) || isa(val, Expr)) ?
-                    compact_exprtype(compact, val) :
-                    compact_exprtype(inline_compact, val)
+                inline_compact.result[idx′][:type] =
+                    compact_exprtype(isa(val, Argument) || isa(val, Expr) ? compact : inline_compact, val)
                 break
             end
             inline_compact[idx′] = stmt′
@@ -400,9 +399,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                     push!(pn.edges, inline_compact.active_result_bb-1)
                     if isa(val, GlobalRef) || isa(val, Expr)
                         stmt′ = val
-                        inline_compact.result[idx′][:type] = (isa(val, Argument) || isa(val, Expr)) ?
-                            compact_exprtype(compact, val) :
-                            compact_exprtype(inline_compact, val)
+                        inline_compact.result[idx′][:type] =
+                            compact_exprtype(isa(val, Expr) ? compact : inline_compact, val)
                         insert_node_here!(inline_compact, NewInstruction(GotoNode(post_bb_id),
                                           Any, compact.result[idx′][:line]),
                                           true)
@@ -411,7 +409,6 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                         push!(pn.values, val)
                         stmt′ = GotoNode(post_bb_id)
                     end
-
                 end
             elseif isa(stmt′, GotoNode)
                 stmt′ = GotoNode(stmt′.label + bb_offset)
