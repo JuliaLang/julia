@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-e5e5febd-cf98-4ce6-9927-6659141e126b",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-58fd2211-1a18-454c-ad92-e373304a94c7",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-11-28T19:31:24Z"
+        "created": "2021-12-06T07:52:05Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -572,7 +572,7 @@
         },
         {
             "spdxElementId": "SPDXRef-zlib",
-            "relationshipType": "RUNTIME_DEPENDENCY_OF",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
