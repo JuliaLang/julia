@@ -178,6 +178,42 @@ end
     end
 end
 
+# extras
+@testset "extras" begin
+    mktempdir() do dir
+        project_file = joinpath(dir, "Project.toml")
+        touch(project_file) # dummy_uuid calls realpath
+        # various UUIDs to work with
+        proj_uuid = dummy_uuid(project_file)
+        root_uuid = uuid4()
+        this_uuid = uuid4()
+
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [project_file])
+            write(project_file, """
+            name = "Root"
+            uuid = "$root_uuid"
+            [extras]
+            This = "$this_uuid"
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == root_uuid
+            @test this == nothing
+            @test that == nothing
+
+            @test Base.get_uuid_name(project_file, this_uuid) == "This"
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
+    end
+end
+
+
 ## functional testing of package identification, location & loading ##
 
 saved_load_path = copy(LOAD_PATH)

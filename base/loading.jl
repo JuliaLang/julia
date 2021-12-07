@@ -1707,7 +1707,8 @@ function srctext_files(f::IO, srctextpos::Int64)
 end
 
 # Test to see if this UUID is mentioned in this `Project.toml`; either as
-# the top-level UUID (e.g. that of the project itself) or as a dependency.
+# the top-level UUID (e.g. that of the project itself), as a dependency,
+# or as a extra for Preferences.
 function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
     uuid_p = get(project, "uuid", nothing)::Union{Nothing, String}
     name = get(project, "name", nothing)::Union{Nothing, String}
@@ -1717,6 +1718,14 @@ function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
     deps = get(project, "deps", nothing)::Union{Nothing, Dict{String, Any}}
     if deps !== nothing
         for (k, v) in deps
+            if uuid == UUID(v::String)
+                return k
+            end
+        end
+    end
+    extras = get(project, "extras", nothing)::Union{Nothing, Dict{String, Any}}
+    if extras !== nothing
+        for (k, v) in extras
             if uuid == UUID(v::String)
                 return k
             end
