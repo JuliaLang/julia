@@ -12,10 +12,9 @@
 using std::unordered_map;
 using std::string;
 using std::vector;
-using std::unique_ptr;
 
 struct RawBacktrace {
-    unique_ptr<jl_bt_element_t *> data;
+    jl_bt_element_t *data;
     size_t size;
 };
 
@@ -74,13 +73,13 @@ string _type_as_string(jl_datatype_t *type) {
 // === stack stuff ===
 
 RawBacktrace get_raw_backtrace() {
-    static jl_bt_element_t bt_data[JL_MAX_BT_SIZE];
+    jl_bt_element_t *bt_data = (jl_bt_element_t*) malloc(JL_MAX_BT_SIZE);
 
     // TODO: tune the number of frames that are skipped
     size_t bt_size = rec_backtrace(bt_data, JL_MAX_BT_SIZE, 1);
 
     return RawBacktrace{
-        std::make_unique<jl_bt_element_t*>(bt_data),
+        bt_data,
         bt_size
     };
 }
@@ -94,13 +93,24 @@ JL_DLLEXPORT void jl_start_alloc_profile(int skip_every) {
 
 extern "C" {  // Needed since the function doesn't take any arguments.
 
-JL_DLLEXPORT struct AllocResults jl_stop_alloc_profile() {
+JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
     g_alloc_profile_enabled = false;
 
-    return AllocResults{
+    return RawAllocResults{
         g_alloc_profile.allocs.size(),
         g_alloc_profile.allocs.data()
     };
+}
+
+JL_DLLEXPORT void jl_free_alloc_profile() {
+    g_alloc_profile.frees_by_type_address.clear();
+    g_alloc_profile.type_address_by_value_address.clear();
+    g_alloc_profile.type_name_by_address.clear();
+    g_alloc_profile.alloc_counter = 0;
+    for (auto alloc : g_alloc_profile.allocs) {
+        free(alloc.backtrace.data);
+    }
+    g_alloc_profile.allocs.clear();
 }
 
 }
