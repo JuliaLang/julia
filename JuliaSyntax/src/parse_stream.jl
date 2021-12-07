@@ -21,23 +21,40 @@ struct SyntaxToken
 end
 
 function Base.show(io::IO, tok::SyntaxToken)
-    range = string(lpad(start_byte(tok), 3), ":", rpad(end_byte(tok), 3))
+    range = string(lpad(first_byte(tok), 3), ":", rpad(last_byte(tok), 3))
     print(io, rpad(range, 17, " "), rpad(kind(tok), 15, " "))
 end
 
 kind(tok::SyntaxToken) = tok.raw.kind
-start_byte(tok::SyntaxToken) = tok.raw.startbyte + 1
-end_byte(tok::SyntaxToken) = tok.raw.endbyte + 1
-span(tok::SyntaxToken) = end_byte(tok) - start_byte(tok) + 1
+first_byte(tok::SyntaxToken) = tok.raw.startbyte + 1
+last_byte(tok::SyntaxToken) = tok.raw.endbyte + 1
+span(tok::SyntaxToken) = last_byte(tok) - first_byte(tok) + 1
 
+Base.:(~)(tok::SyntaxToken, k::Kind) = kind(tok) == k
+Base.:(~)(k::Kind, tok::SyntaxToken) = kind(tok) == k
 
 #-------------------------------------------------------------------------------
+
+struct TextSpan
+    kind::Kind
+    flags::_RawFlags
+    first_byte::Int
+    last_byte::Int
+end
+
+function TextSpan(raw::RawToken, flags::_RawFlags)
+    TextSpan(raw.kind, flags, raw.startbyte + 1, raw.endbyte + 1)
+end
+
+kind(span::TextSpan) = span.kind
+first_byte(span::TextSpan) = span.first_byte
+last_byte(span::TextSpan)  = span.last_byte
+span(span::TextSpan)  = last_byte(span) - first_byte(span) + 1
 
 """
 ParseStream provides an IO interface for the parser. It
 - Wraps the lexer from Tokenize.jl with a short lookahead buffer
 - Removes whitespace and comment tokens, shifting them into the output implicitly
-- Provides a begin_node/end_node interface to emit the parsed tree structure
 
 This is simililar to rust-analyzer's
 [TextTreeSink](https://github.com/rust-analyzer/rust-analyzer/blob/4691a0647b2c96cc475d8bbe7c31fe194d1443e7/crates/syntax/src/parsing/text_tree_sink.rs)
@@ -45,36 +62,25 @@ This is simililar to rust-analyzer's
 mutable struct ParseStream
     lexer::Tokenize.Lexers.Lexer{IOBuffer,RawToken}
     lookahead::Vector{SyntaxToken}
-    trivia_buf::Vector{SyntaxToken}
-    current_end_byte::Int  # Byte index of the last *consumed* token
-    pending_node_stack::Vector{Tuple{Vector{RawSyntaxNode},Int}}
+    lookahead_trivia::Vector{TextSpan}
+    spans::Vector{TextSpan}
+    # First byte of next token
+    next_byte::Int
 end
 
 function ParseStream(code)
     lexer = Tokenize.tokenize(code, RawToken)
-    ParseStream(lexer, SyntaxToken[], SyntaxToken[], 0, Vector{RawSyntaxNode}[])
+    ParseStream(lexer,
+                Vector{SyntaxToken}(),
+                Vector{TextSpan}(),
+                Vector{TextSpan}(),
+                1)
 end
 
 function Base.show(io::IO, mime::MIME"text/plain", stream::ParseStream)
-    print(io, ParseStream, ":\n  lexer = ")
-    show(io, mime, stream.lexer)
+    println(io, "ParseStream at position $(stream.next_byte)")
 end
 
-# Iterator interface
-#=
-Base.IteratorSize(::Type{ParseStream}) = Base.SizeUnknown()
-Base.IteratorEltype(::Type{ParseStream}) = Base.HasEltype()
-Base.eltype(::Type{ParseStream}) = SyntaxToken
-
-function Base.iterate(stream::ParseStream, end_state=false)
-    end_state && return nothing
-    t = peek(stream)
-    bump!()
-    return t, kind(t) == K"EndMarker"
-end
-=#
-
-# Read one nontrivia token; shift trivia into stream.trivia_buf
 function _read_token(stream::ParseStream)
     had_whitespace = false
     had_newline = false
@@ -84,7 +90,7 @@ function _read_token(stream::ParseStream)
         if k in (K"Whitespace", K"Comment", K"NewlineWs")
             had_whitespace = true
             had_newline = k == K"NewlineWs"
-            push!(stream.trivia_buf, SyntaxToken(raw, false, false))
+            push!(stream.lookahead_trivia, TextSpan(raw, TRIVIA_FLAG))
             continue
         end
         return SyntaxToken(raw, had_whitespace, had_newline)
@@ -94,7 +100,7 @@ end
 """
     peek(stream [, n=1])
 
-Look ahead in the stream `n` tokens.
+Look ahead in the stream `n` tokens, returning a SyntaxToken
 """
 function peek(stream::ParseStream, n::Integer=1)
     if length(stream.lookahead) < n
@@ -105,61 +111,88 @@ function peek(stream::ParseStream, n::Integer=1)
     return stream.lookahead[n]
 end
 
-function _current_node_children(stream::ParseStream)
-    last(stream.pending_node_stack)[1]
-end
-
 """
-    bump!(stream)
+    bump(stream [, flags=EMPTY_FLAGS])
 
-Remove next token from the stream and add it as a syntax leaf to the current
-output node.
-
-`bump!` returns `nothing` to make synchronization with the output stream
-clearer. To see token values use `peek()`.
+Shift the current token into the output as a new text span with the given
+`flags`.
 """
-function bump!(stream::ParseStream, flags::_RawFlags=EMPTY_FLAGS)
-    if isempty(stream.pending_node_stack)
-        error("Cannot bump! stream outside begin_node-end_node pair because this would loose input tokens")
-    end
+function bump(stream::ParseStream, flags=EMPTY_FLAGS)
     tok = isempty(stream.lookahead) ?
           _read_token(stream) :
           popfirst!(stream.lookahead)  # TODO: use a circular buffer?
-    while true
-        if #==# isempty(stream.trivia_buf) ||
-                start_byte(first(stream.trivia_buf)) > start_byte(tok)
-            break
-        end
-        t = popfirst!(stream.trivia_buf)
-        trivia_node = RawSyntaxNode(kind(t), span(t), TRIVIA_FLAG)
-        push!(_current_node_children(stream), trivia_node)
+    # Bump trivia tokens into output
+    while !isempty(stream.lookahead_trivia) &&
+            first_byte(first(stream.lookahead_trivia)) <= first_byte(tok)
+        trivia_span = popfirst!(stream.lookahead_trivia)
+        push!(stream.spans, trivia_span)
     end
-    node = RawSyntaxNode(kind(tok), span(tok), flags)
-    push!(_current_node_children(stream), node)
-    stream.current_end_byte = end_byte(tok)
+    span = TextSpan(kind(tok), flags, first_byte(tok), last_byte(tok))
+    push!(stream.spans, span)
+    stream.next_byte = last_byte(tok) + 1
     nothing
+end
+
+function Base.position(stream::ParseStream)
+    return stream.next_byte
+end
+
+"""
+    emit(stream, start_position, kind [, flags = EMPTY_FLAGS])
+
+Emit a new text span into the output which covers source bytes from
+`start_position` to the end of the most recent token which was `bump()`'ed.
+The `start_position` of the span should be a previous return value of
+`position()`.
+"""
+function emit(stream::ParseStream, start_position::Integer, kind::Kind,
+              flags = EMPTY_FLAGS)
+    push!(stream.spans, TextSpan(kind, flags, start_position, stream.next_byte-1))
+    return nothing
 end
 
 
 #-------------------------------------------------------------------------------
-# ParseStream tree output interface
+# Tree construction
+#
+# Note that this is largely independent of RawSyntaxNode, and could easily be
+# made completely independent with a tree builder interface.
 
-function begin_node(stream::ParseStream)
-    # TODO: Add a trivia heuristic here and in end_node so that whitespace and
-    # comments attach to nodes more usefully. May need some hint from the
-    # parser (eg, designating nodes which tend to be "block" vs "inline"?) for
-    # this to work well.
-    node_begin_byte = stream.current_end_byte + 1
-    push!(stream.pending_node_stack, (RawSyntaxNode[], node_begin_byte))
-    nothing
-end
-
-function end_node(stream::ParseStream, k::Kind, flags::_RawFlags=EMPTY_FLAGS)
-    children, node_begin_byte = pop!(stream.pending_node_stack)
-    span = stream.current_end_byte - node_begin_byte + 1
-    node = RawSyntaxNode(k, span, flags, children)
-    if !isempty(stream.pending_node_stack)
-        push!(last(stream.pending_node_stack)[1], node)
+function _push_node!(stack, text_span::TextSpan, children=nothing)
+    if isnothing(children)
+        node = RawSyntaxNode(kind(text_span), span(text_span), text_span.flags)
+        push!(stack, (text_span=text_span, node=node))
+    else
+        node = RawSyntaxNode(kind(text_span), span(text_span), text_span.flags, children)
+        push!(stack, (text_span=text_span, node=node))
     end
-    return node
 end
+
+function to_tree(st)
+    stack = Vector{@NamedTuple{text_span::TextSpan,node::RawSyntaxNode}}()
+    _push_node!(stack, st.spans[1])
+    for i = 2:length(st.spans)
+        text_span = st.spans[i]
+
+        if first_byte(text_span) > last_byte(stack[end].text_span)
+            # A leaf node (span covering a single token):
+            # [a][b][stack[end]]
+            #                   [text_span]
+            _push_node!(stack, text_span)
+            continue
+        end
+        # An interior node, span covering multiple tokens:
+        #
+        # [a][b][stack[end]]
+        #    [    text_span]
+        j = length(stack)
+        while j > 1 && first_byte(text_span) < first_byte(stack[j].text_span)
+            j -= 1
+        end
+        children = [stack[k].node for k = j:length(stack)]
+        resize!(stack, j-1)
+        _push_node!(stack, text_span, children)
+    end
+    return only(stack).node
+end
+

@@ -5,7 +5,7 @@ using JuliaSyntax: SourceFile
 using JuliaSyntax: RawSyntaxNode, SyntaxNode, raw_flags, TRIVIA_FLAG, INFIX_FLAG
 using JuliaSyntax: Kind, @K_str, children, child, setchild!
 using JuliaSyntax: highlight
-using JuliaSyntax: ParseStream, bump!, peek, begin_node, end_node
+using JuliaSyntax: ParseStream, bump, peek, emit
 
 # Shortcuts for defining raw syntax nodes
 
@@ -18,7 +18,7 @@ N(k, args::RawSyntaxNode...) = RawSyntaxNode(k, args...)
 NI(k, args::RawSyntaxNode...) = RawSyntaxNode(k, raw_flags(infix=true), args...)
 
 
-include("syntax_trees.jl")
-include("syntax_interpolation.jl")
+#include("syntax_trees.jl")
+#include("syntax_interpolation.jl")
 include("parse_stream.jl")
 
