@@ -198,7 +198,9 @@ Highlights:
 * [Modern parser generator](https://matklad.github.io/2018/06/06/modern-parser-generator.html)
   has a lot of practical notes on writing parsers. Highlights:
   - Encourages writing tests for handwritten parsers as inline comments
-  - Mentions [Pratt parsers](http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/) for operator precedence.
+  - Mentions Pratt parsers for simple operator precedence parsing. Good articles:
+    - [From Aleksey Kladov (matklad - the main rust-analyzer author, etc)](https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html)
+    - [From Bob Nystrom (munificent - one of the Dart devs, etc](http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/)
   - Some discussion of error recovery
 
 ## `rust-analyzer`
