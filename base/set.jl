@@ -427,6 +427,34 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
+"""
+    allequal(itr) -> Bool
+
+Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
+
+See also: [`unique`](@ref), [`allunique`](@ref), [`issorted`](@ref).
+
+# Examples
+```jldoctest
+julia> allequal([])
+true
+
+julia> allequal([1])
+true
+
+julia> allequal([1, 1])
+true
+
+julia> allequal([1, 2])
+false
+```
+"""
+allequal(itr) = isempty(itr) ? true : all(isequal(first(itr)), itr)
+
+allequal(c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
+
+allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
+
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
 const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
