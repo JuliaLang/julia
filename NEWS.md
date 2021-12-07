@@ -47,7 +47,7 @@ Compiler/Runtime improvements
 * Julia-level SROA (Scalar Replacement of Aggregates) has been improved, i.e. allowing elimination of
   `getfield` call with constant global field ([#42355]), enabling elimination of mutable struct with
   uninitialized fields ([#43208]), improving performance ([#43232]), handling more nested `getfield`
-  calls ([#43239]).
+  calls ([#43239], [#43267]).
 * Abstract callsite can now be inlined or statically resolved as far as the callsite has a single
   matching method ([#43113]).
 
