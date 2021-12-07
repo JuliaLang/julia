@@ -161,3 +161,10 @@ Base.SimdLoop.simd_index(v::iter31113, j, i) = j
 Base.SimdLoop.simd_inner_length(v::iter31113, j) = 1
 Base.SimdLoop.simd_outer_range(v::iter31113) = v
 @test 2001000 == simd_sum_over_array(iter31113(Vector(1:2000)))
+
+#@ivdep thrown
+ivdep_out_simd(x) = @inbounds for i in eachindex(x)
+    Base.@ivdep x[i] += 1
+end
+@test_throws "Found ivdepscope outside @simd." ivdep_out_simd([1,2,3,4])
+@test_throws MethodError ivdep_out_simd((1,2,3,4))
