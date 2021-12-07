@@ -19,7 +19,7 @@ struct RawBacktrace {
 };
 
 struct RawAlloc {
-    size_t type_address;
+    jl_datatype_t *type_address;
     RawBacktrace backtrace;
     size_t size;
 };
@@ -142,7 +142,7 @@ void _record_allocated_value(jl_value_t *val, size_t size) {
     profile.type_address_by_value_address[(size_t)val] = (size_t)type;
 
     profile.allocs.emplace_back(RawAlloc{
-        (size_t) type,
+        type,
         get_raw_backtrace(),
         size
     });
