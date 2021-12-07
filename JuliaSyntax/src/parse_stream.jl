@@ -51,6 +51,11 @@ first_byte(span::TextSpan) = span.first_byte
 last_byte(span::TextSpan)  = span.last_byte
 span(span::TextSpan)  = last_byte(span) - first_byte(span) + 1
 
+struct Diagnostic
+    text_span::TextSpan
+    message::String
+end
+
 """
 ParseStream provides an IO interface for the parser. It
 - Wraps the lexer from Tokenize.jl with a short lookahead buffer
@@ -64,6 +69,7 @@ mutable struct ParseStream
     lookahead::Vector{SyntaxToken}
     lookahead_trivia::Vector{TextSpan}
     spans::Vector{TextSpan}
+    diagnostics::Vector{Diagnostic}
     # First byte of next token
     next_byte::Int
 end
@@ -74,6 +80,7 @@ function ParseStream(code)
                 Vector{SyntaxToken}(),
                 Vector{TextSpan}(),
                 Vector{TextSpan}(),
+                Vector{Diagnostic}(),
                 1)
 end
 
@@ -98,17 +105,26 @@ function _read_token(stream::ParseStream)
 end
 
 """
-    peek(stream [, n=1])
+    peek_token(stream [, n=1])
 
 Look ahead in the stream `n` tokens, returning a SyntaxToken
 """
-function peek(stream::ParseStream, n::Integer=1)
+function peek_token(stream::ParseStream, n::Integer=1)
     if length(stream.lookahead) < n
         for i=1:(n-length(stream.lookahead))
             push!(stream.lookahead, _read_token(stream))
         end
     end
     return stream.lookahead[n]
+end
+
+"""
+    peek_token(stream [, n=1])
+
+Look ahead in the stream `n` tokens, returning a Kind
+"""
+function peek(stream::ParseStream, n::Integer=1)
+    kind(peek_token(stream, n))
 end
 
 """
@@ -146,8 +162,15 @@ The `start_position` of the span should be a previous return value of
 `position()`.
 """
 function emit(stream::ParseStream, start_position::Integer, kind::Kind,
-              flags = EMPTY_FLAGS)
-    push!(stream.spans, TextSpan(kind, flags, start_position, stream.next_byte-1))
+              flags::_RawFlags = EMPTY_FLAGS; error=nothing)
+    if !isnothing(error)
+        flags |= ERROR_FLAG
+    end
+    text_span = TextSpan(kind, flags, start_position, stream.next_byte-1)
+    if !isnothing(error)
+        push!(stream.diagnostics, Diagnostic(text_span, error))
+    end
+    push!(stream.spans, text_span)
     return nothing
 end
 
@@ -168,7 +191,7 @@ function _push_node!(stack, text_span::TextSpan, children=nothing)
     end
 end
 
-function to_tree(st)
+function to_raw_tree(st)
     stack = Vector{@NamedTuple{text_span::TextSpan,node::RawSyntaxNode}}()
     _push_node!(stack, st.spans[1])
     for i = 2:length(st.spans)
@@ -196,3 +219,12 @@ function to_tree(st)
     return only(stack).node
 end
 
+function show_diagnostic(io::IO, diagnostic, code)
+    printstyled(io, "Error: ", color=:light_red)
+    print(io, diagnostic.message, ":\n")
+    p = first_byte(diagnostic.text_span)
+    q = last_byte(diagnostic.text_span)
+    print(io, code[1:p-1])
+    _printstyled(io, code[p:q]; color=(100,40,40))
+    print(io, code[q+1:end], '\n')
+end

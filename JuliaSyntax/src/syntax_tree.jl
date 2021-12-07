@@ -40,7 +40,7 @@ const _RawFlags = UInt32
 EMPTY_FLAGS = 0x00000000
 TRIVIA_FLAG = 0x00000001
 INFIX_FLAG = 0x00000002
-# DIAGNOSTICS_FLAG
+ERROR_FLAG = 0x80000000
 
 function raw_flags(; trivia::Bool=false, infix::Bool=false)
     flags = _RawFlags(0)
@@ -73,6 +73,7 @@ children(node::RawSyntaxNode) = node.args
 
 istrivia(node::RawSyntaxNode) = node.flags & TRIVIA_FLAG != 0
 isinfix(node::RawSyntaxNode)  = node.flags & INFIX_FLAG != 0
+iserror(node::RawSyntaxNode)  = node.flags & ERROR_FLAG != 0
 
 kind(node::RawSyntaxNode) = node.kind
 
@@ -82,18 +83,28 @@ function _show_raw_node(io, node, indent, pos, str, show_trivia)
         return
     end
     posstr = "$(lpad(pos, 6)):$(rpad(pos+node.span-1, 6)) │"
-    if !haschildren(node)
+    is_leaf = !haschildren(node)
+    if is_leaf
         line = string(posstr, indent, _kind_str(node.kind))
-        if !istrivia(node)
-            line = rpad(line, 40) * "✔"
-        end
-        if isnothing(str)
-            println(io, line)
-        else
-            println(io, rpad(line, 42), ' ', repr(str[pos:pos + node.span - 1]))
-        end
     else
-        println(io, posstr, indent, '[', _kind_str(node.kind), "]")
+        line = string(posstr, indent, '[', _kind_str(node.kind), "]")
+    end
+    if !istrivia(node) && is_leaf
+        line = rpad(line, 40) * "✔"
+    end
+    if iserror(node)
+        line = rpad(line, 41) * "✘"
+    end
+    if is_leaf && !isnothing(str)
+        line = string(rpad(line, 43), ' ', repr(str[pos:pos + node.span - 1]))
+    end
+    line = line*"\n"
+    if iserror(node)
+        printstyled(io, line, color=:light_red)
+    else
+        print(io, line)
+    end
+    if !is_leaf
         new_indent = indent*"  "
         p = pos
         for a in node.args
