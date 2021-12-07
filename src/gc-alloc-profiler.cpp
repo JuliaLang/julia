@@ -13,39 +13,9 @@ using std::unordered_map;
 using std::string;
 using std::vector;
 
-struct StackFrame {
-    string func_name;
-    string file_name;
-    intptr_t line_no;
-
-    string total; // cache of the above fields concatenated
-};
-
 struct RawBacktrace {
     jl_bt_element_t *data;
     size_t size;
-
-    RawBacktrace(
-        jl_bt_element_t *_data,
-        size_t _size
-    ) : data(_data), size(_size) {}
-
-    ~RawBacktrace() {
-        if (data != nullptr) {
-            free(data);
-        }
-    }
-    // Move constructor (X a = X{...})
-    RawBacktrace(RawBacktrace&& rhs) :
-        data(rhs.data), size(rhs.size)
-    {
-        rhs.data = nullptr;
-        rhs.size = 0;
-    }
-    private:
-    // Disallow copy and copy-assignment
-    RawBacktrace(const RawBacktrace&) = delete; // X b(a);
-    RawBacktrace& operator=(const RawBacktrace& other) = delete; // b = a;
 };
 
 struct Alloc {
@@ -55,10 +25,6 @@ struct Alloc {
 };
 
 struct AllocProfile {
-    AllocProfile(int _skip_every) {
-        reset(_skip_every);
-    }
-
     int skip_every;
 
     vector<Alloc> allocs;
@@ -68,23 +34,12 @@ struct AllocProfile {
 
     size_t alloc_counter;
     size_t last_recorded_alloc;
-
-    void reset(int _skip_every) {
-        skip_every = _skip_every;
-        alloc_counter = 0;
-        last_recorded_alloc = 0;
-    }
-
-    private:
-    AllocProfile(const AllocProfile&) = delete; // X b(a);
-    AllocProfile& operator=(const AllocProfile& other) = delete; // b = a;
 };
 
 // == global variables manipulated by callbacks ==
 
-AllocProfile g_alloc_profile(0);
+AllocProfile g_alloc_profile;
 int g_alloc_profile_enabled = false;
-
 
 // == utility functions ==
 
@@ -132,9 +87,8 @@ RawBacktrace get_raw_backtrace() {
 // == exported interface ==
 
 JL_DLLEXPORT void jl_start_alloc_profile(int skip_every) {
-    jl_printf(JL_STDERR, "g_alloc_profile se:%d allocs:%d \n", g_alloc_profile.skip_every, g_alloc_profile.allocs.size());
     g_alloc_profile_enabled = true;
-    g_alloc_profile.reset(skip_every);
+    g_alloc_profile = AllocProfile{skip_every};
 }
 
 extern "C" {  // Needed since the function doesn't take any arguments.
@@ -142,8 +96,10 @@ extern "C" {  // Needed since the function doesn't take any arguments.
 JL_DLLEXPORT struct AllocResults jl_stop_alloc_profile() {
     g_alloc_profile_enabled = false;
 
-    return AllocResults{g_alloc_profile.allocs.size(),
-                    g_alloc_profile.allocs.data()};
+    return AllocResults{
+        g_alloc_profile.allocs.size(),
+        g_alloc_profile.allocs.data()
+    };
 }
 
 }
