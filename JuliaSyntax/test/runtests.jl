@@ -2,8 +2,11 @@ using JuliaSyntax
 using Test
 
 using JuliaSyntax: SourceFile
-using JuliaSyntax: RawSyntaxNode, SyntaxNode, raw_flags, TRIVIA_FLAG, INFIX_FLAG
-using JuliaSyntax: Kind, @K_str, children, child, setchild!
+
+using JuliaSyntax: RawSyntaxNode, SyntaxNode, raw_flags, TRIVIA_FLAG, INFIX_FLAG,
+    children, child, setchild!
+
+using JuliaSyntax: Kind, @K_str, isliteral, iskeyword, isoperator
 using JuliaSyntax: highlight
 using JuliaSyntax: ParseStream, bump, peek, emit
 
@@ -18,7 +21,7 @@ N(k, args::RawSyntaxNode...) = RawSyntaxNode(k, args...)
 NI(k, args::RawSyntaxNode...) = RawSyntaxNode(k, raw_flags(infix=true), args...)
 
 
-#include("syntax_trees.jl")
-#include("syntax_interpolation.jl")
+include("syntax_trees.jl")
+include("syntax_interpolation.jl")
 include("parse_stream.jl")
-
+include("simple_parser.jl")

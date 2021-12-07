@@ -1,10 +1,10 @@
 """
 ParseState carries parser context as we recursively descend into the parse
 tree. For example, normally `x -y` means `(x) - (y)`, but when parsing matrix
-literals we're in "whitespace sensitive" mode, and `[x -y]` means [(x) (-y)].
+literals we're in `space_sensitive` mode, and `[x -y]` means [(x) (-y)].
 """
 struct ParseState
-    tokens::ParseStream
+    stream::ParseStream
     # Vesion of Julia we're parsing this code for. May be different from VERSION!
     julia_version::VersionNumber
 
@@ -23,15 +23,15 @@ struct ParseState
 end
 
 # Normal context
-function ParseState(tokens::ParseStream; julia_version=VERSION)
-    ParseState(tokens, julia_version, true, false, true, false, false, false)
+function ParseState(stream::ParseStream; julia_version=VERSION)
+    ParseState(stream, julia_version, true, false, true, false, false, false)
 end
 
 function ParseState(ps::ParseState; range_colon_enabled=nothing,
                     space_sensitive=nothing, for_generator=nothing,
                     end_symbol=nothing, whitespace_newline=nothing,
                     where_enabled=nothing)
-    ParseState(ps.tokens, ps.julia_version,
+    ParseState(ps.stream, ps.julia_version,
         range_colon_enabled === nothing ? ps.range_colon_enabled : range_colon_enabled,
         space_sensitive === nothing ? ps.space_sensitive : space_sensitive,
         for_generator === nothing ? ps.for_generator : for_generator,
@@ -40,10 +40,9 @@ function ParseState(ps::ParseState; range_colon_enabled=nothing,
         where_enabled === nothing ? ps.where_enabled : where_enabled)
 end
 
-take_token!(ps::ParseState) = take_token!(ps.tokens)
-require_token(ps::ParseState) = require_token(ps.tokens)
-peek_token(ps::ParseState) = peek_token(ps.tokens)
-put_back!(ps::ParseState, tok::RawToken) = put_back!(ps.tokens, tok)
+peek(ps::ParseState, args...) = peek(ps.stream, args...)
+bump(ps::ParseState, args...) = bump(ps.stream, args...)
+emit(ps::ParseState, args...) = emit(ps.stream, args...)
 
 #-------------------------------------------------------------------------------
 # Parser
@@ -56,12 +55,15 @@ function is_closing_token(ps::ParseState, tok)
 end
 
 function has_whitespace_prefix(tok::SyntaxToken)
-    tok.leading_trivia.kind == K" "
+    tok.had_whitespace
 end
 
 function TODO(str)
     error("TODO: $str")
 end
+
+
+#=
 
 # Parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 function parse_atom(ps::ParseState; checked::Bool=true)::RawSyntaxNode
@@ -148,6 +150,8 @@ function parse_cat(ps0::ParseState, opening_tok, closer, last_end_symbol::Bool)
     end
 end
 
+=#
+
 #-------------------------------------------------------------------------------
 
 # the principal non-terminals follow, in increasing precedence order
@@ -188,7 +192,7 @@ end
 #-------------------------------------------------------------------------------
 
 function parse(code)
-    tokens = JuliaSyntax.ParseStream(code)
-    parse_statements(tokens)
+    stream = ParseStream(code)
+    parse_statements(stream)
 end
 
