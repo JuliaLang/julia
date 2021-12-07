@@ -105,20 +105,23 @@ Control whether garbage collection is enabled using a boolean argument (`true` f
 """
 enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
 
+# raw results
+
 struct RawBacktrace
     data::Ptr{Nothing} # jl_bt_element_t
     size::Csize_t
 end
 
-struct Alloc
+struct RawAlloc
     type_address::Csize_t
     backtrace::RawBacktrace
     size::Csize_t
 end
 
-struct AllocResults
+# matches RawAllocResults on the C side
+struct RawAllocResults
     num_allocs::Csize_t
-    allocs::Ptr{Alloc}
+    allocs::Ptr{RawAlloc}
 end
 
 function start_alloc_profile(skip_every::Int=0)
@@ -129,9 +132,12 @@ end
     GC.stop_alloc_profile()
 """
 function stop_alloc_profile()
-    raw_results = ccall(:jl_stop_alloc_profile, Ptr{Nothing}, ())
-    # TODO: reinterpret as AllocResults, decode stack traces
+    raw_results = ccall(:jl_stop_alloc_profile, RawAllocResults, ())
     return raw_results
+end
+
+function free_alloc_profile()
+    ccall(:jl_free_alloc_profile, Cvoid, ())
 end
 
 """

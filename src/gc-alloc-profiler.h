@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-struct AllocResults {
+struct RawAllocResults {
     size_t num_allocs;
     void* allocs; // Alloc* (see gc-alloc-profiler.cpp)
 };
@@ -18,7 +18,8 @@ struct AllocResults {
 void _report_gc_started(void);
 void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd);
 JL_DLLEXPORT void jl_start_alloc_profile(int skip_every);
-JL_DLLEXPORT struct AllocResults jl_stop_alloc_profile(void);
+JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile(void);
+JL_DLLEXPORT void jl_free_alloc_profile();
 
 void _record_allocated_value(jl_value_t *val, size_t size);
 void _record_freed_value(jl_taggedvalue_t *tagged_val);
