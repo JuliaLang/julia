@@ -447,6 +447,9 @@ true
 
 julia> allequal([1, 2])
 false
+
+julia> allequal(Dict(:a => 1, :b => 1))
+false
 ```
 """
 allequal(itr) = isempty(itr) ? true : all(isequal(first(itr)), itr)
