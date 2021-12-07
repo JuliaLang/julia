@@ -18,7 +18,7 @@ end
 
 # matches RawAlloc on the C side
 struct RawAlloc
-    type::Ptr{Cvoid}
+    type::Ptr{Type}
     backtrace::RawBacktrace
     size::Csize_t
 end
@@ -44,7 +44,7 @@ end
 
 struct Alloc
     # type::Type
-    type_addr::UInt
+    type_addr::Ptr{Type} # TODO: fix segfault when loading this
     stacktrace::Vector{StackTraces.StackFrame}
     size::Int
 end
@@ -54,8 +54,8 @@ function decode(raw_results::RawAllocResults)::Vector{Alloc}
     for i in 1:raw_results.num_allocs
         raw_alloc = unsafe_load(raw_results.allocs, i)
         push!(out, Alloc(
-            # unsafe_pointer_to_objref(raw_alloc.type),
-            convert(UInt, raw_alloc.type),
+            # unsafe_pointer_to_objref(convert(Ptr{Any}, raw_alloc.type)),
+            raw_alloc.type,
             stacktrace(_reformat_bt(raw_alloc.backtrace)),
             UInt(raw_alloc.size)
         ))
