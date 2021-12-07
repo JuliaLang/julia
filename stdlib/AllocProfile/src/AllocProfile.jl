@@ -35,6 +35,7 @@ end
 
 function stop()
     raw_results = ccall(:jl_stop_alloc_profile, RawAllocResults, ())
+    println("allocs: $(raw_results.num_allocs)")
     decoded_results = decode(raw_results)
     ccall(:jl_free_alloc_profile, Cvoid, ())
     return decoded_results
@@ -81,16 +82,16 @@ function _reformat_bt(bt::RawBacktrace)::Vector{Union{Ptr{Cvoid}, InterpreterIP}
         end
 
         # Extended backtrace entry
-        entry_metadata = reinterpret(UInt, unsafe_load(bt, i+1))
+        entry_metadata = reinterpret(UInt, unsafe_load(bt.data, i+1).content)
         njlvalues =  entry_metadata & 0x7
         nuintvals = (entry_metadata >> 3) & 0x7
         tag       = (entry_metadata >> 6) & 0xf
         header    =  entry_metadata >> 10
 
         if tag == 1 # JL_BT_INTERP_FRAME_TAG
-            code = unsafe_pointer_to_objref(convert(Ptr{Any}, unsafe_load(bt, i+2)))
+            code = unsafe_pointer_to_objref(convert(Ptr{Any}, unsafe_load(bt.data, i+2).content))
             mod = if njlvalues == 2
-                unsafe_pointer_to_objref(convert(Ptr{Any}, unsafe_load(bt, i+3)))
+                unsafe_pointer_to_objref(convert(Ptr{Any}, unsafe_load(bt.data, i+3).content))
             else
                 nothing
             end
