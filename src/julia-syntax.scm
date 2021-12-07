@@ -3516,7 +3516,7 @@ f(x) = yt(x)
 
 (define lambda-opt-ignored-exprs
   (Set '(quote top core line inert local-def unnecessary copyast
-         meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
+         meta inbounds boundscheck loopinfo ivdepscope decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
@@ -4625,7 +4625,7 @@ f(x) = yt(x)
                (cons (car e) args)))
 
             ;; metadata expressions
-            ((line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope inline noinline)
+            ((line meta inbounds loopinfo ivdepscope gc_preserve_end aliasscope popaliasscope inline noinline)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)

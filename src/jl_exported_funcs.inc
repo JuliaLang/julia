@@ -472,6 +472,7 @@
     XX(jl_tty_set_mode) \
     XX(jl_tupletype_fill) \
     XX(jl_typeassert) \
+    XX(jl_ivdepscope_error) \
     XX(jl_type_equality_is_identity) \
     XX(jl_type_error) \
     XX(jl_type_error_rt) \

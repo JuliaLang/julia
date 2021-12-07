@@ -534,6 +534,7 @@ JL_DLLEXPORT jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type, const 
 
 JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f);
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
+JL_DLLEXPORT void jl_ivdepscope_error(void);
 
 #define JL_CALLABLE(name)                                               \
     JL_DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
@@ -1408,6 +1409,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_copyast_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_cfunction_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_pure_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_loopinfo_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_ivdepscope_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_meta_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_inert_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_polly_sym;

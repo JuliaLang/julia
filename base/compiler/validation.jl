@@ -28,6 +28,7 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :isdefined => 1:1,
     :code_coverage_effect => 0:0,
     :loopinfo => 0:typemax(Int),
+    :ivdepscope => 1:1,
     :gc_preserve_begin => 0:typemax(Int),
     :gc_preserve_end => 0:typemax(Int),
     :thunk => 1:1,
@@ -145,7 +146,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                 head === :inbounds || head === :foreigncall || head === :cfunction ||
                 head === :const || head === :enter || head === :leave || head === :pop_exception ||
                 head === :method || head === :global || head === :static_parameter ||
-                head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
+                head === :new || head === :splatnew || head === :thunk || head === :loopinfo || head === :ivdepscope ||
                 head === :throw_undef_if_not || head === :code_coverage_effect || head === :inline || head === :noinline
                 validate_val!(x)
             else

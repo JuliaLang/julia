@@ -214,6 +214,11 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
         jl_type_error("typeassert", t, x);
 }
 
+JL_DLLEXPORT void jl_ivdepscope_error(void)
+{
+    jl_errorf("Found ivdepscope outside @simd.");
+}
+
 #ifndef HAVE_SSP
 JL_DLLEXPORT uintptr_t __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
 
