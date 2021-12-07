@@ -18,7 +18,7 @@ end
 
 # matches RawAlloc on the C side
 struct RawAlloc
-    type_address::Csize_t
+    type::Ptr{Cvoid}
     backtrace::RawBacktrace
     size::Csize_t
 end
@@ -35,7 +35,6 @@ end
 
 function stop()
     raw_results = ccall(:jl_stop_alloc_profile, RawAllocResults, ())
-    println("allocs: $(raw_results.num_allocs)")
     decoded_results = decode(raw_results)
     ccall(:jl_free_alloc_profile, Cvoid, ())
     return decoded_results
@@ -44,7 +43,8 @@ end
 # decoded results
 
 struct Alloc
-    type::Type
+    # type::Type
+    type_addr::UInt
     stacktrace::Vector{StackTraces.StackFrame}
     size::Int
 end
@@ -54,9 +54,10 @@ function decode(raw_results::RawAllocResults)::Vector{Alloc}
     for i in 1:raw_results.num_allocs
         raw_alloc = unsafe_load(raw_results.allocs, i)
         push!(out, Alloc(
-            Int,
+            # unsafe_pointer_to_objref(raw_alloc.type),
+            convert(UInt, raw_alloc.type),
             stacktrace(_reformat_bt(raw_alloc.backtrace)),
-            5
+            UInt(raw_alloc.size)
         ))
     end
     return out
