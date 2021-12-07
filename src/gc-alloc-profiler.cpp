@@ -12,9 +12,10 @@
 using std::unordered_map;
 using std::string;
 using std::vector;
+using std::unique_ptr;
 
 struct RawBacktrace {
-    jl_bt_element_t *data;
+    unique_ptr<jl_bt_element_t *> data;
     size_t size;
 };
 
@@ -79,7 +80,7 @@ RawBacktrace get_raw_backtrace() {
     size_t bt_size = rec_backtrace(bt_data, JL_MAX_BT_SIZE, 1);
 
     return RawBacktrace{
-        bt_data,
+        std::make_unique<jl_bt_element_t*>(bt_data),
         bt_size
     };
 }
