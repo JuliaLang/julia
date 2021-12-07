@@ -822,7 +822,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
     @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
 
     # Returns false iff promoting the fields to
-    is_parallel_promotable = parallel_getfield_elim_checker(ir)
+    is_parallel_promotable = parallel_sroa_checker(ir)
 
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
