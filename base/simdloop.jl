@@ -4,7 +4,7 @@
 
 module SimdLoop
 
-export @simd, simd_outer_range, simd_inner_length, simd_index
+export @simd, @ivdep, simd_outer_range, simd_inner_length, simd_index
 
 # Error thrown from ill-formed uses of @simd
 struct SimdError <: Exception
@@ -58,7 +58,7 @@ function compile(x, ivdep)
     (isa(x, Expr) && x.head === :for) || throw(SimdError("for loop expected"))
     length(x.args) == 2 || throw(SimdError("1D for loop expected"))
     check_body!(x)
-
+    ivdepend = ivdep === nothing ? nothing : Expr(:ivdepscope, :end)
     var,range = parse_iteration_space(x.args[1])
     r = gensym("r") # Range value
     j = gensym("i") # Iteration variable for outer loop
@@ -73,10 +73,12 @@ function compile(x, ivdep)
                         # Lower loop in way that seems to work best for LLVM 3.3 vectorizer.
                         let $i = zero($n)
                             while $i < $n
+                                $ivdep
                                 local $var = Base.simd_index($r,$j,$i)
                                 $(x.args[2])        # Body of loop
                                 $i += 1
-                                $(Expr(:loopinfo, Symbol("julia.simdloop"), ivdep))  # Mark loop as SIMD loop
+                                $ivdepend
+                                $(Expr(:loopinfo, Symbol("julia.simdloop")))  # Mark loop as SIMD loop
                             end
                         end
                     end
@@ -130,10 +132,27 @@ end
 
 macro simd(ivdep, forloop)
     if ivdep === :ivdep
-        esc(compile(forloop, Symbol("julia.ivdep")))
+        esc(compile(forloop, Expr(:ivdepscope, :begin)))
     else
         throw(SimdError("Only ivdep is valid as the first argument to @simd"))
     end
+end
+
+"""
+    @ivdep
+
+Annotate the following scope is free of loop-carried memory dependencies.
+
+!!! note
+    @ivdep is valid only within a @simd loop
+"""
+macro ivdep(ex)
+    esc(quote
+        $(Expr(:ivdepscope, :begin))
+        temp = $ex
+        $(Expr(:ivdepscope, :end))
+        temp
+    end)
 end
 
 end # module SimdLoop
