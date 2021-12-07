@@ -115,13 +115,11 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
 
         LoopInfo &LI = GetLI(*I->getParent()->getParent());
         Loop *L = LI.getLoopFor(I->getParent());
-        I->removeFromParent();
         if (!L)
             continue;
 
         LLVM_DEBUG(dbgs() << "LSL: loopinfo marker found\n");
         bool simd = false;
-        bool ivdep = false;
         SmallVector<Metadata *, 8> MDs;
 
         BasicBlock *Lh = L->getHeader();
@@ -144,8 +142,6 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
                         if (S->getString().startswith("julia")) {
                             if (S->getString().equals("julia.simdloop"))
                                 simd = true;
-                            if (S->getString().equals("julia.ivdep"))
-                                ivdep = true;
                             continue;
                         }
                     }
@@ -154,7 +150,9 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
             }
         }
 
-        LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
+        LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << "\n");
+        if (!simd)
+            continue;
 
         MDNode *n = L->getLoopID();
         if (n) {
@@ -173,38 +171,60 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
 
         MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Metadata *>(LoopID));
 
-        // If ivdep is true we assume that there is no memory dependency between loop iterations
+        // mark the inner-most loop is free of memory dependency within julia ivdep scope.
         // This is a fairly strong assumption and does often not hold true for generic code.
-        if (ivdep) {
-            // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
-            for (BasicBlock *BB : L->blocks()) {
-               for (Instruction &I : *BB) {
-                   if (I.mayReadOrWriteMemory()) {
-                       I.setMetadata(LLVMContext::MD_mem_parallel_loop_access, m);
-                   }
-               }
+        int ivdep = 0;
+        for (BasicBlock *BB : L->blocks()) {
+            for (Instruction &I : *BB) {
+                if (I.hasMetadataOtherThanDebugLoc()) {
+                    if (MDNode *JLMD= I.getMetadata("julia.ivdepscope")) {
+                        ToDelete.push_back(&I);
+                        LLVM_DEBUG(dbgs() << "LSL: found julia.ivdepscope ");
+                        if (JLMD->getNumOperands() < 1)
+                            continue;
+                        if (MDString *S = dyn_cast<MDString>(JLMD->getOperand(0))) {
+                            LLVM_DEBUG(dbgs() << S->getString() << "\n");
+                            if (S->getString().equals("begin"))
+                                ivdep += 1;
+                            else
+                                ivdep -= 1;
+                        }
+                    }
+                }
+                if (ivdep > 0 &&I.mayReadOrWriteMemory()) {
+                    I.setMetadata(LLVMContext::MD_mem_parallel_loop_access, m);
+                }
             }
-            assert(L->isAnnotatedParallel());
         }
+        // if ivdep != 0
+            // thrown() ??
 
-        if (simd) {
-            // Mark floating-point reductions as okay to reassociate/commute.
-            for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I != E; ++I) {
-                if (PHINode *Phi = dyn_cast<PHINode>(I))
-                    enableUnsafeAlgebraIfReduction(Phi, L);
-                else
-                    break;
-            }
+        // Mark floating-point reductions as okay to reassociate/commute.
+        for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I != E; ++I) {
+            if (PHINode *Phi = dyn_cast<PHINode>(I))
+                enableUnsafeAlgebraIfReduction(Phi, L);
+            else
+                break;
         }
 
         Changed = true;
     }
 
     for (Instruction *I : ToDelete)
-        I->deleteValue();
+        I->eraseFromParent();
     marker->eraseFromParent();
 
     return Changed;
+}
+
+static void eraseIvdepScope(Module &M, Function *marker)
+{
+    for (User *U : marker->users()) {
+        Instruction *I = cast<Instruction>(U);
+        // remove "ivdepscope" from unreachable branch to make error message clearer.
+        if (isa<UnreachableInst>(I -> getParent() -> back()))
+            I -> eraseFromParent();
+    }
 }
 
 } // end anonymous namespace
@@ -223,7 +243,12 @@ PreservedAnalyses LowerSIMDLoop::run(Module &M, ModuleAnalysisManager &AM)
     Function *loopinfo_marker = M.getFunction("julia.loopinfo_marker");
 
     if (!loopinfo_marker)
+    {
+        Function *ivdepscope = M.getFunction("julia.ivdepscope");
+        if (ivdepscope)
+            eraseIvdepScope(M, ivdepscope);
         return PreservedAnalyses::all();
+    }
 
     FunctionAnalysisManager &FAM =
       AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
@@ -258,6 +283,11 @@ public:
 
     if (loopinfo_marker)
         Changed |= markLoopInfo(M, loopinfo_marker, GetLI);
+    else {
+        Function *ivdepscope = M.getFunction("julia.ivdepscope");
+        if (ivdepscope)
+            eraseIvdepScope(M, ivdepscope);
+    }
 
     return Changed;
   }
