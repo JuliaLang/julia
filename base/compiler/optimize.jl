@@ -310,7 +310,7 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     tapir = has_tapir(ir)
     if tapir
         tapir_remark_begin(sv)
-        # This must be run just after `slot2ref`:
+        # This must be run just after `slot2reg`:
         @timeit "Early tapir pass" ir, racy = early_tapir_pass!(ir)
         if racy
             # type_lift_pass! is required as a fixup of slot2reg
