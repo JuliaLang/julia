@@ -275,7 +275,7 @@ JL_DLLEXPORT void jl_start_alloc_profile(int skip_every) {
 
 extern "C" {  // Needed since the function doesn't take any arguments.
 
-JL_DLLEXPORT struct AllocResults jl_stop_and_write_alloc_profile() {
+JL_DLLEXPORT struct AllocResults jl_stop_alloc_profile() {
     g_alloc_profile_enabled = false;
 
     return AllocResults{g_alloc_profile.allocs.size(),
