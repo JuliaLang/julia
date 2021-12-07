@@ -43,3 +43,12 @@ end
     err_str = String(take!(errio))
     @test occursin(nested_error_pattern, err_str)
 end
+
+@testset "display_error(io, er, bt) works" begin
+    errio = IOBuffer()
+    Base.display_error(errio, ErrorException, [])
+    err_str = String(take!(errio))
+    @test occursin(r"""
+        ERROR: ErrorException
+        """s, err_str)
+end

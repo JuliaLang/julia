@@ -450,7 +450,8 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         # bail if everything isn't a well-formed DataType
         ti = types[i]
         uw = unwrap_unionall(ti)
-        (uw isa DataType && ti <: uw.name.wrapper) || return Any
+        uw isa DataType || return Any
+        ti <: uw.name.wrapper || return Any
         typenames[i] = uw.name
     end
     u = Union{types...}

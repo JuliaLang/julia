@@ -38,3 +38,5 @@ struct SomeOtherOrder <: Base.Order.Ordering end
 
 @test_throws ErrorException sort([1, 2, 3], lt=(a, b) -> a - b < 0, order=SomeOtherOrder())
 
+@test reverse(Forward) === Reverse
+@test reverse(Reverse) === Forward

@@ -517,15 +517,6 @@ if cfunction_closure
     test_thread_cfunction()
 end
 
-# Compare the two ways of checking if threading is enabled.
-# `jl_tls_states` should only be defined on non-threading build.
-if ccall(:jl_threading_enabled, Cint, ()) == 0
-    @test nthreads() == 1
-    cglobal(:jl_tls_states) != C_NULL
-else
-    @test_throws ErrorException cglobal(:jl_tls_states)
-end
-
 function test_thread_range()
     a = zeros(Int, nthreads())
     @threads for i in 1:threadid()

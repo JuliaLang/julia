@@ -46,12 +46,10 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
                layout_uses_free_typevars(((jl_uniontype_t*)v)->b, env);
     if (jl_is_vararg(v)) {
         jl_vararg_t *vm = (jl_vararg_t*)v;
-        if (vm->T) {
-            if (layout_uses_free_typevars(vm->T, env))
-                return 1;
-            if (vm->N && layout_uses_free_typevars(vm->N, env))
-                return 1;
-        }
+        if (vm->T && layout_uses_free_typevars(vm->T, env))
+            return 1;
+        if (vm->N && layout_uses_free_typevars(vm->N, env))
+            return 1;
         return 0;
     }
     if (jl_is_unionall(v)) {
