@@ -669,6 +669,14 @@ static const auto jl_loopinfo_marker_func = new JuliaFunction{
             AttributeSet(),
             None); },
 };
+static const auto jl_ivdepscope_func = new JuliaFunction{
+    "julia.ivdepscope",
+    [](LLVMContext &C) { return FunctionType::get(T_void, false); },
+    [](LLVMContext &C) { return AttributeList::get(C,
+            Attributes(C, {Attribute::ReadOnly, Attribute::NoRecurse, Attribute::InaccessibleMemOnly}),
+            AttributeSet(),
+            None); },
+};
 static const auto jl_write_barrier_func = new JuliaFunction{
     "julia.write_barrier",
     [](LLVMContext &C) { return FunctionType::get(T_void,
@@ -4694,6 +4702,20 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         I->setMetadata("julia.loopinfo", MD);
         return jl_cgval_t();
     }
+    else if (head == jl_ivdepscope_sym) {
+        // parse Expr(:ivdepscope, :begin/end)
+        SmallVector<Metadata *, 8> MDs;
+        for (int i = 0, ie = nargs; i < ie; ++i) {
+            Metadata *MD = to_md_tree(args[i]);
+            if (MD)
+                MDs.push_back(MD);
+        }
+
+        MDNode* MD = MDNode::get(jl_LLVMContext, MDs);
+        CallInst *I = ctx.builder.CreateCall(prepare_call(jl_ivdepscope_func));
+        I->setMetadata("julia.ivdepscope", MD);
+        return jl_cgval_t();
+    }
     else if (head == jl_leave_sym || head == jl_coverageeffect_sym
             || head == jl_pop_exception_sym || head == jl_enter_sym || head == jl_inbounds_sym
             || head == jl_aliasscope_sym || head == jl_popaliasscope_sym || head == jl_inline_sym || head == jl_noinline_sym) {
@@ -7897,6 +7919,7 @@ static void init_jit_functions(void)
     add_named_global(jl_alloc_obj_func, (void*)NULL);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
     add_named_global(jl_loopinfo_marker_func, (void*)NULL);
+    add_named_global(jl_ivdepscope_func, &jl_ivdepscope_error);
     add_named_global(jl_typeof_func, (void*)NULL);
     add_named_global(jl_write_barrier_func, (void*)NULL);
     add_named_global(jldlsym_func, &jl_load_and_lookup);
