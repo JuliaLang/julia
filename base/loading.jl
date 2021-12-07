@@ -1723,11 +1723,13 @@ function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
             end
         end
     end
-    extras = get(project, "extras", nothing)::Union{Nothing, Dict{String, Any}}
-    if extras !== nothing
-        for (k, v) in extras
-            if uuid == UUID(v::String)
-                return k
+    for subkey in ("deps", "extras")
+        subsection = get(project, subkey, nothing)::Union{Nothing, Dict{String, Any}}
+        if subsection !== nothing
+            for (k, v) in subsection
+                if uuid == UUID(v::String)
+                    return k
+                end
             end
         end
     end
