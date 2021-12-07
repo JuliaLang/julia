@@ -18,7 +18,7 @@ struct RawBacktrace {
     size_t size;
 };
 
-struct Alloc {
+struct RawAlloc {
     size_t type_address;
     RawBacktrace backtrace;
     size_t size;
@@ -27,7 +27,7 @@ struct Alloc {
 struct AllocProfile {
     int skip_every;
 
-    vector<Alloc> allocs;
+    vector<RawAlloc> allocs;
     unordered_map<size_t, string> type_name_by_address;
     unordered_map<size_t, size_t> type_address_by_value_address;
     unordered_map<size_t, size_t> frees_by_type_address;
@@ -141,8 +141,7 @@ void _record_allocated_value(jl_value_t *val, size_t size) {
 
     profile.type_address_by_value_address[(size_t)val] = (size_t)type;
 
-    // TODO: get stack, push into vector
-    profile.allocs.emplace_back(Alloc{
+    profile.allocs.emplace_back(RawAlloc{
         (size_t) type,
         get_raw_backtrace(),
         size
