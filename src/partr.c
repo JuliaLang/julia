@@ -14,7 +14,6 @@
 extern "C" {
 #endif
 
-
 // thread sleep state
 
 // default to DEFAULT_THREAD_SLEEP_THRESHOLD; set via $JULIA_THREAD_SLEEP_THRESHOLD
@@ -250,10 +249,14 @@ static inline void multiq_init(void)
 //
 // TODO: Dynamic buffer resizing.
 typedef struct _wsdeque_t {
-    jl_task_t **tasks;
-    _Atomic(int64_t) top;
-    _Atomic(int64_t) bottom;
-    // TODO: pad
+    union {
+        struct {
+            jl_task_t **tasks;
+            _Atomic(int64_t) top;
+            _Atomic(int64_t) bottom;
+        };
+        uint8_t padding[JL_CACHE_BYTE_ALIGNMENT];
+    };
 } wsdeque_t;
 
 static wsdeque_t *wsdeques;
@@ -413,7 +416,11 @@ static int wsdeque_check_empty(void)
 
 static void wsdeque_init(void)
 {
-    wsdeques = (wsdeque_t *)calloc(jl_n_threads, sizeof(wsdeque_t));
+    // Manually align the pointer since `jl_malloc_aligned` is not available here.
+    wsdeques = (wsdeque_t *)(((uintptr_t)calloc(1, sizeof(wsdeque_t) * jl_n_threads +
+                                                       JL_CACHE_BYTE_ALIGNMENT - 1) +
+                              JL_CACHE_BYTE_ALIGNMENT - 1) &
+                             (-JL_CACHE_BYTE_ALIGNMENT));
     for (int32_t i = 0; i < jl_n_threads; ++i) {
         wsdeques[i].tasks = (jl_task_t **)calloc(tasks_per_heap, sizeof(jl_task_t *));
     }
