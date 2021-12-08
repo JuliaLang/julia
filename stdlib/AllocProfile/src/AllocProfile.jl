@@ -24,8 +24,8 @@ struct RawAlloc
 end
 
 struct TypeNamePair
-    addr::UInt
-    name::String
+    addr::Csize_t
+    name::Ptr{UInt8}
 end
 
 struct FreeInfo
@@ -82,25 +82,25 @@ function decode_alloc(raw_alloc::RawAlloc)::Alloc
 end
 
 function decode(raw_results::RawAllocResults)::AllocResults
+    type_names = Dict{UInt,String}()
+    for i in 1:raw_results.num_type_names
+        pair = unsafe_load(raw_results.type_names, i)
+        type_addr = convert(UInt, pair.addr)
+        type_names[type_addr] = unsafe_string(pair.name)
+    end
+
     allocs = [
         decode_alloc(unsafe_load(raw_results.allocs, i))
         for i in 1:raw_results.num_allocs
     ]
-    type_names = Dict{UInt,String}
-    for i in 1:raw_results.num_type_names
-        pair = unsafe_load(raw_results.type_names, i)
-        # println("pair=$pair")
-        # type_names[convert(UInt, pair.addr)] = pair.name
-        type_addr = convert(UInt, pair.addr)
-        println("type_addr=$type_addr")
-        type_names[type_addr] = "MyType"
-    end
+
     frees = Dict{String,UInt}()
     for i in 1:raw_results.num_frees
         free = unsafe_load(raw_results.frees, i)
         type_name = type_names[free.type_addr]
         frees[type_name] = free.count
     end
+    
     return AllocResults(
         allocs,
         frees,
