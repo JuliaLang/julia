@@ -96,10 +96,23 @@ extern "C" {  // Needed since the function doesn't take any arguments.
 JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
     g_alloc_profile_enabled = false;
 
-    return RawAllocResults{
-        g_alloc_profile.allocs.size(),
-        g_alloc_profile.allocs.data()
+    auto results = RawAllocResults{
+        g_alloc_profile.allocs.data(),
+        g_alloc_profile.allocs.size()
     };
+    results.num_type_names = g_alloc_profile.type_name_by_address.size();
+    results.type_names = (TypeNamePair*) malloc(sizeof(TypeNamePair) * results.num_type_names);
+    int i = 0;
+    for (auto type_addr_name : g_alloc_profile.type_name_by_address) {
+        auto str = jl_cstr_to_string(type_addr_name.second.c_str());
+        results.type_names[i++] = TypeNamePair{
+            type_addr_name.first,
+            str,
+        };
+    }
+
+    // TODO: package up the frees as well
+    return results;
 }
 
 JL_DLLEXPORT void jl_free_alloc_profile() {
