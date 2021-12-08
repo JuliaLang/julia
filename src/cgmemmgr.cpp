@@ -173,7 +173,7 @@ static intptr_t get_anon_hdl(void)
     if (check_fd_or_close(fd))
         return fd;
 #  endif
-    char shm_name[] = "julia-codegen-0123456789-0123456789/tmp///";
+    char shm_name[PATH_MAX] = "julia-codegen-0123456789-0123456789/tmp///";
     pid_t pid = getpid();
     // `shm_open` can't be mapped exec on mac
 #  ifndef _OS_DARWIN_
@@ -195,8 +195,14 @@ static intptr_t get_anon_hdl(void)
             return fd;
         }
     }
-    snprintf(shm_name, sizeof(shm_name),
-             "/tmp/julia-codegen-%d-XXXXXX", (int)pid);
+    size_t len = sizeof(shm_name);
+    if (uv_os_tmpdir(shm_name, &len) != 0) {
+        // Unknown error; default to `/tmp`
+        snprintf(shm_name, sizeof(shm_name), "/tmp");
+        len = 4;
+    }
+    snprintf(shm_name + len, sizeof(shm_name) - len,
+             "/julia-codegen-%d-XXXXXX", (int)pid);
     fd = mkstemp(shm_name);
     if (check_fd_or_close(fd)) {
         unlink(shm_name);
