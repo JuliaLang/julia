@@ -100,7 +100,10 @@ JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
         g_alloc_profile.allocs.data(),
         g_alloc_profile.allocs.size()
     };
+    
+    // package up type names
     results.num_type_names = g_alloc_profile.type_name_by_address.size();
+    // TODO: free this malloc
     results.type_names = (TypeNamePair*) malloc(sizeof(TypeNamePair) * results.num_type_names);
     int i = 0;
     for (auto type_addr_name : g_alloc_profile.type_name_by_address) {
@@ -111,7 +114,17 @@ JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
         };
     }
 
-    // TODO: package up the frees as well
+    // package up frees
+    results.num_frees = g_alloc_profile.frees_by_type_address.size();
+    results.frees = (FreeInfo*) malloc(sizeof(FreeInfo) * results.num_frees);
+    int j = 0;
+    for (auto type_addr_free_count : g_alloc_profile.frees_by_type_address) {
+        results.frees[j++] = FreeInfo{
+            type_addr_free_count.first,
+            type_addr_free_count.second
+        };
+    }
+
     return results;
 }
 

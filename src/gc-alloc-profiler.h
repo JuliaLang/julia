@@ -15,12 +15,20 @@ struct TypeNamePair {
     jl_value_t *name;
 };
 
+struct FreeInfo {
+    size_t type_addr;
+    size_t count;
+};
+
 struct RawAllocResults {
     void *allocs; // Alloc* (see gc-alloc-profiler.cpp)
     size_t num_allocs;
 
     struct TypeNamePair *type_names; // an array
     size_t num_type_names;
+
+    struct FreeInfo *frees;
+    size_t num_frees;
 };
 
 void _report_gc_started(void);
