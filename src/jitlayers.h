@@ -143,10 +143,6 @@ typedef JITSymbol JL_JITSymbol;
 // is expected.
 typedef JITSymbol JL_SymbolInfo;
 
-#if JL_LLVM_VERSION < 120000
-using RTDyldObjHandleT = orc::VModuleKey;
-#endif
-
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 
 class JuliaOJIT {
@@ -158,38 +154,21 @@ class JuliaOJIT {
     private:
         JuliaOJIT &jit;
     };
-#if JL_LLVM_VERSION >= 120000
     // Custom object emission notification handler for the JuliaOJIT
     template <typename ObjT, typename LoadResult>
     void registerObject(const ObjT &Obj, const LoadResult &LO);
-#else
-    // Custom object emission notification handler for the JuliaOJIT
-    template <typename ObjT, typename LoadResult>
-    void registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO);
-#endif
 
 public:
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
     typedef orc::IRCompileLayer CompileLayerT;
-#if JL_LLVM_VERSION < 120000
-    typedef RTDyldObjHandleT ModuleHandleT;
-#endif
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
     JuliaOJIT(TargetMachine &TM, LLVMContext *Ctx);
 
     void RegisterJITEventListener(JITEventListener *L);
-#if JL_LLVM_VERSION < 120000
-    std::vector<JITEventListener *> EventListeners;
-    void NotifyFinalizer(RTDyldObjHandleT Key,
-                         const object::ObjectFile &Obj,
-                         const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
-#endif
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addModule(std::unique_ptr<Module> M);
-#if JL_LLVM_VERSION < 120000
-    void removeModule(ModuleHandleT H);
-#endif
+
     JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly);
     JL_JITSymbol findUnmangledSymbol(StringRef Name);
     uint64_t getGlobalValueAddress(StringRef Name);
