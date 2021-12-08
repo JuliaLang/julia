@@ -178,21 +178,21 @@ end
 #-------------------------------------------------------------------------------
 # Tree construction
 #
-# Note that this is largely independent of RawSyntaxNode, and could easily be
+# Note that this is largely independent of GreenNode, and could easily be
 # made completely independent with a tree builder interface.
 
 function _push_node!(stack, text_span::TextSpan, children=nothing)
     if isnothing(children)
-        node = RawSyntaxNode(kind(text_span), span(text_span), text_span.flags)
+        node = GreenNode(kind(text_span), span(text_span), text_span.flags)
         push!(stack, (text_span=text_span, node=node))
     else
-        node = RawSyntaxNode(kind(text_span), span(text_span), text_span.flags, children)
+        node = GreenNode(kind(text_span), span(text_span), text_span.flags, children)
         push!(stack, (text_span=text_span, node=node))
     end
 end
 
 function to_raw_tree(st)
-    stack = Vector{@NamedTuple{text_span::TextSpan,node::RawSyntaxNode}}()
+    stack = Vector{@NamedTuple{text_span::TextSpan,node::GreenNode}}()
     _push_node!(stack, st.spans[1])
     for i = 2:length(st.spans)
         text_span = st.spans[i]

@@ -3,7 +3,7 @@ using Test
 
 using JuliaSyntax: SourceFile
 
-using JuliaSyntax: RawSyntaxNode, SyntaxNode, raw_flags, TRIVIA_FLAG, INFIX_FLAG,
+using JuliaSyntax: GreenNode, SyntaxNode, raw_flags, TRIVIA_FLAG, INFIX_FLAG,
     children, child, setchild!
 
 using JuliaSyntax: Kind, @K_str, isliteral, iskeyword, isoperator
@@ -13,12 +13,12 @@ using JuliaSyntax: ParseStream, bump, peek, emit
 # Shortcuts for defining raw syntax nodes
 
 # Trivia nodes
-T(k, s) = RawSyntaxNode(k, s, raw_flags(trivia=true))
+T(k, s) = GreenNode(k, s, raw_flags(trivia=true))
 # Non-trivia nodes
-N(k, s) = RawSyntaxNode(k, s)
-N(k, args::RawSyntaxNode...) = RawSyntaxNode(k, args...)
+N(k, s) = GreenNode(k, s)
+N(k, args::GreenNode...) = GreenNode(k, args...)
 # Non-trivia, infix form
-NI(k, args::RawSyntaxNode...) = RawSyntaxNode(k, raw_flags(infix=true), args...)
+NI(k, args::GreenNode...) = GreenNode(k, raw_flags(infix=true), args...)
 
 
 include("syntax_trees.jl")

@@ -44,7 +44,7 @@ N(K"for",
 # And the following AST
 s = SyntaxNode(source, t)
 
-println("\nRawSyntaxNode")
+println("\nGreenNode")
 show(stdout, MIME"text/plain"(), t, code, show_trivia=true)
 
 println("\nSyntaxNode")
