@@ -434,7 +434,7 @@ void jl_init_threadinginfra(void)
 {
     /* choose and initialize the scheduler */
     char *sch = getenv("JULIA_THREAD_SCHEDULER");
-    if (sch && !strncasecmp(sch, "workstealing", 12))
+    if (!sch || !strncasecmp(sch, "workstealing", 12))
         wsdeque_init();
     else
         multiq_init();
