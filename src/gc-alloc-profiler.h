@@ -12,7 +12,7 @@ extern "C" {
 
 struct TypeNamePair {
     size_t addr;
-    jl_value_t *name;
+    const char *name;
 };
 
 struct FreeInfo {
