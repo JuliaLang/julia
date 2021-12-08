@@ -5,15 +5,15 @@
 Yet another Julia frontend, written in Julia.
 
 Goals:
-* Parse Julia code with precise source mapping (concrete syntax trees)
+* Parse Julia code with precise source mapping
 * Avoid worrying about how much work this will be 😅
 
 Nice to have:
 * Speedy enough for interactive editing
 * Production quality error recovery and reporting
 * "Compilation as an API" to support all sorts of tooling
+* Make the code easy to maintain in parallel with Julia's flisp frontend
 * Go further than parsing - macro expansion, syntax desugaring and scope analysis
-* Code which is correct, fast and understandable
 
 ## Design
 
@@ -225,10 +225,17 @@ Highlights:
   another flat stream of events."  This seems great, let's adopt it!
 * TODO
 
-## Oil shell
-* Andy Chu (the author of the OIL shell) has written some things about this
-  - Collected links about lossless syntax in [a wiki page](https://github.com/oilshell/oil/wiki/Lossless-Syntax-Tree-Pattern)
-  - A blog post [From AST to Lossless Syntax Tree](https://www.oilshell.org/blog/2017/02/11.html)
+## Diagnostics
+
+Rust is renowned for having great compiler diagnostics, so it's probably a good
+place to get inspiration from.
+
+Some resources:
+* [rustc_errors::Diagnostic](https://doc.rust-lang.org/stable/nightly-rustc/rustc_errors/struct.Diagnostic.html)
+* The source of the Rust compiler's diagnostics system:
+  - The [`println!` macro](https://github.com/rust-lang/rust/blob/0b6f079e4987ded15c13a15b734e7cfb8176839f/compiler/rustc_builtin_macros/src/format.rs)
+    shows how these can be emitted from macros
+  - The parser's [diagnostics.rs](https://github.com/rust-lang/rust/blob/0b6f079e4987ded15c13a15b734e7cfb8176839f/compiler/rustc_parse/src/parser/diagnostics.rs)
 
 ## General resources about parsing
 
