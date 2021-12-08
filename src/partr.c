@@ -294,7 +294,7 @@ static jl_task_t *wsdeque_pop(void)
         (_Atomic(jl_task_t **))&wsdeques[tid].tasks[b % tasks_per_heap]);
     if (size > 0)
         return task;
-    if (!atomic_compare_exchange_strong_explicit(&wsdeques[tid].top, &t, t + 1, memory_order_seq_cst, memory_order_relaxed))
+    if (!jl_atomic_cmpswap(&wsdeques[tid].top, &t, t + 1))
         task = NULL;
     jl_atomic_store_relaxed(&wsdeques[tid].bottom, b + 1);
     return task;
@@ -311,8 +311,7 @@ static jl_task_t *wsdeque_steal(int16_t tid)
         return NULL;
     jl_task_t *task = jl_atomic_load_relaxed(
         (_Atomic(jl_task_t **))&wsdeques[tid].tasks[t % tasks_per_heap]);
-    if (!atomic_compare_exchange_strong_explicit(
-            &wsdeques[tid].top, &t, t + 1, memory_order_seq_cst, memory_order_relaxed))
+    if (!jl_atomic_cmpswap(&wsdeques[tid].top, &t, t + 1))
         return NULL;
     return task;
 }
