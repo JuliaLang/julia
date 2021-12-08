@@ -57,6 +57,12 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
 extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
                                          jl_gc_mark_sp_t *sp, jl_value_t *obj) JL_NOTSAFEPOINT;
 
+// partr dynamic dispatch
+void (*jl_gc_mark_enqueued_tasks)(jl_gc_mark_cache_t *, jl_gc_mark_sp_t *);
+static int (*partr_enqueue_task)(jl_task_t *, int16_t);
+static jl_task_t *(*partr_dequeue_task)(void);
+static int (*partr_check_empty)(void);
+
 // multiq
 // ---
 
@@ -81,20 +87,6 @@ static int32_t heap_p;
 
 /* unbias state for the RNG */
 static uint64_t cong_unbias;
-
-
-static inline void multiq_init(void)
-{
-    heap_p = heap_c * jl_n_threads;
-    heaps = (taskheap_t *)calloc(heap_p, sizeof(taskheap_t));
-    for (int32_t i = 0; i < heap_p; ++i) {
-        uv_mutex_init(&heaps[i].lock);
-        heaps[i].tasks = (jl_task_t **)calloc(tasks_per_heap, sizeof(jl_task_t*));
-        jl_atomic_store_relaxed(&heaps[i].ntasks, 0);
-        jl_atomic_store_relaxed(&heaps[i].prio, INT16_MAX);
-    }
-    unbias_cong(heap_p, &cong_unbias);
-}
 
 
 static inline void sift_up(taskheap_t *heap, int32_t idx)
@@ -208,7 +200,7 @@ static inline jl_task_t *multiq_deletemin(void)
 }
 
 
-void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
+void multiq_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
     int32_t i, j;
     for (i = 0; i < heap_p; ++i)
@@ -228,6 +220,210 @@ static int multiq_check_empty(void)
 }
 
 
+static inline void multiq_init(void)
+{
+    heap_p = heap_c * jl_n_threads;
+    heaps = (taskheap_t *)calloc(heap_p, sizeof(taskheap_t));
+    for (int32_t i = 0; i < heap_p; ++i) {
+        uv_mutex_init(&heaps[i].lock);
+        heaps[i].tasks = (jl_task_t **)calloc(tasks_per_heap, sizeof(jl_task_t*));
+        jl_atomic_store_relaxed(&heaps[i].ntasks, 0);
+        jl_atomic_store_relaxed(&heaps[i].prio, INT16_MAX);
+    }
+    unbias_cong(heap_p, &cong_unbias);
+    jl_gc_mark_enqueued_tasks = &multiq_gc_mark_enqueued_tasks;
+    partr_enqueue_task = &multiq_insert;
+    partr_dequeue_task = &multiq_deletemin;
+    partr_check_empty = &multiq_check_empty;
+}
+
+
+
+// work-stealing deque
+
+// The work-stealing deque by Chase and Lev (2005).  Le et al. (2013) provides
+// C11-complienet memory ordering.
+//
+// Ref:
+// * Chase and Lev (2005) https://doi.org/10.1145/1073970.1073974
+// * Le et al. (2013) https://doi.org/10.1145/2442516.2442524
+//
+// TODO: Dynamic buffer resizing.
+typedef struct _wsdeque_t {
+    jl_task_t **tasks;
+    _Atomic(int64_t) top;
+    _Atomic(int64_t) bottom;
+    // TODO: pad
+} wsdeque_t;
+
+static wsdeque_t *wsdeques;
+
+
+static int wsdeque_push(jl_task_t *task, int16_t priority_ignord)
+{
+    int16_t tid = jl_threadid();
+    int64_t b = jl_atomic_load_relaxed(&wsdeques[tid].bottom);
+    int64_t t = jl_atomic_load_acquire(&wsdeques[tid].top);
+    int64_t size = b - t;
+    if (size >= tasks_per_heap - 1) // full
+        return -1;
+    jl_atomic_store_relaxed((_Atomic(jl_task_t **))&wsdeques[tid].tasks[b % tasks_per_heap],
+                            task);
+    jl_fence_release();
+    jl_atomic_store_relaxed(&wsdeques[tid].bottom, b + 1);
+    return 0;
+}
+
+
+static jl_task_t *wsdeque_pop(void)
+{
+    int16_t tid = jl_threadid();
+    int64_t b = jl_atomic_load_relaxed(&wsdeques[tid].bottom) - 1;
+    jl_atomic_store_relaxed(&wsdeques[tid].bottom, b);
+    jl_fence();
+    int64_t t = jl_atomic_load_relaxed(&wsdeques[tid].top);
+    int64_t size = b - t;
+    if (size < 0) {
+        jl_atomic_store_relaxed(&wsdeques[tid].bottom, t);
+        return NULL;
+    }
+    jl_task_t *task = jl_atomic_load_relaxed(
+        (_Atomic(jl_task_t **))&wsdeques[tid].tasks[b % tasks_per_heap]);
+    if (size > 0)
+        return task;
+    if (!atomic_compare_exchange_strong_explicit(&wsdeques[tid].top, &t, t + 1, memory_order_seq_cst, memory_order_relaxed))
+        task = NULL;
+    jl_atomic_store_relaxed(&wsdeques[tid].bottom, b + 1);
+    return task;
+}
+
+
+static jl_task_t *wsdeque_steal(int16_t tid)
+{
+    int64_t t = jl_atomic_load_acquire(&wsdeques[tid].top);
+    jl_fence();
+    int64_t b = jl_atomic_load_acquire(&wsdeques[tid].bottom);
+    int64_t size = b - t;
+    if (size <= 0)
+        return NULL;
+    jl_task_t *task = jl_atomic_load_relaxed(
+        (_Atomic(jl_task_t **))&wsdeques[tid].tasks[t % tasks_per_heap]);
+    if (!atomic_compare_exchange_strong_explicit(
+            &wsdeques[tid].top, &t, t + 1, memory_order_seq_cst, memory_order_relaxed))
+        return NULL;
+    return task;
+}
+
+
+static const int wsdeque_pop_stash = 16;
+
+
+static jl_task_t *wsdeque_pop_or_steal(void)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    jl_task_t *task = NULL;
+
+    // Try pop and lock the top `wsdeque_pop_stash` tasks in the local deque.
+    jl_task_t *stash[wsdeque_pop_stash];
+    int n_stashed = 0;
+    for (; n_stashed < wsdeque_pop_stash; n_stashed++) {
+        task = wsdeque_pop();
+        if (task != NULL)
+            if (!jl_set_task_tid(task, ptls->tid)) {
+                stash[n_stashed] = task;
+                task = NULL;
+                continue;
+            }
+        break;
+    }
+    // Put back stashed tasks in the original order; TODO: batch insert?
+    for (int i = n_stashed - 1; i >= 0; i--) {
+        int err = wsdeque_push(stash[i], 0);
+        (void)err;
+        assert(!err);
+    }
+    int pushed = n_stashed;
+    if (task)
+        goto done;
+    if (jl_n_threads < 2)
+        goto done;
+
+    // Compute the lower bound of the number of empty slots.  It's OK to be
+    // smaller than the actual number (which can happen when other threads steal
+    // some tasks). Note that `- 1` here is required since Chase-Lev deque needs
+    // one empty slot.
+    int64_t empty_slots = tasks_per_heap - 1;
+    if (n_stashed > 0) {
+        int64_t b = jl_atomic_load_relaxed(&wsdeques[ptls->tid].bottom);
+        int64_t t = jl_atomic_load_relaxed(&wsdeques[ptls->tid].top);
+        empty_slots -= b - t;
+    }
+
+    int ntries = jl_n_threads;
+    if (ntries > empty_slots)
+        ntries = empty_slots; // because `wsdeque_push` below can't fail
+    for (int i = 0; i < ntries; ++i) {
+        uint64_t tid = cong(jl_n_threads - 1, cong_unbias, &ptls->rngseed);
+        if (tid >= ptls->tid)
+            tid++;
+        task = wsdeque_steal(tid);
+        if (task != NULL) {
+            if (!jl_set_task_tid(task, ptls->tid)) {
+                int err = wsdeque_push(task, 0);
+                (void)err;
+                assert(!err);
+                pushed = 1;
+                task = NULL;
+                continue;
+            }
+            break;
+        }
+    }
+
+done:
+    if (pushed)
+        jl_wakeup_thread(-1);
+    return task;
+}
+
+
+void wsdeque_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
+{
+    for (int i = 0; i < jl_n_threads; ++i) {
+        int64_t t = jl_atomic_load_relaxed(&wsdeques[i].top);
+        int64_t b = jl_atomic_load_relaxed(&wsdeques[i].bottom);
+        for (int j = t; j < b; ++j)
+            jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)wsdeques[i].tasks[j]);
+    }
+}
+
+
+static int wsdeque_check_empty(void)
+{
+    for (int32_t i = 0; i < jl_n_threads; ++i) {
+        int64_t t = jl_atomic_load_relaxed(&wsdeques[i].top);
+        int64_t b = jl_atomic_load_relaxed(&wsdeques[i].bottom);
+        int64_t size = b - t;
+        if (size > 0)
+            return 0;
+    }
+    return 1;
+}
+
+
+static void wsdeque_init(void)
+{
+    wsdeques = (wsdeque_t *)calloc(jl_n_threads, sizeof(wsdeque_t));
+    for (int32_t i = 0; i < jl_n_threads; ++i) {
+        wsdeques[i].tasks = (jl_task_t **)calloc(tasks_per_heap, sizeof(jl_task_t *));
+    }
+    unbias_cong(jl_n_threads, &cong_unbias);
+    jl_gc_mark_enqueued_tasks = &wsdeque_gc_mark_enqueued_tasks;
+    partr_enqueue_task = &wsdeque_push;
+    partr_dequeue_task = &wsdeque_pop_or_steal;
+    partr_check_empty = &wsdeque_check_empty;
+}
+
 
 // parallel task runtime
 // ---
@@ -236,8 +432,12 @@ static int multiq_check_empty(void)
 // (used only by the main thread)
 void jl_init_threadinginfra(void)
 {
-    /* initialize the synchronization trees pool and the multiqueue */
-    multiq_init();
+    /* choose and initialize the scheduler */
+    char *sch = getenv("JULIA_THREAD_SCHEDULER");
+    if (sch && !strncasecmp(sch, "workstealing", 12))
+        wsdeque_init();
+    else
+        multiq_init();
 
     sleep_threshold = DEFAULT_THREAD_SLEEP_THRESHOLD;
     char *cp = getenv(THREAD_SLEEP_THRESHOLD_NAME);
@@ -292,7 +492,7 @@ void jl_threadfun(void *arg)
 // enqueue the specified task for execution
 JL_DLLEXPORT int jl_enqueue_task(jl_task_t *task)
 {
-    if (multiq_insert(task, task->prio) == -1)
+    if (partr_enqueue_task(task, task->prio) == -1)
         return 1;
     return 0;
 }
@@ -419,7 +619,7 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
         jl_set_task_tid(task, self);
         return task;
     }
-    return multiq_deletemin();
+    return partr_dequeue_task();
 }
 
 static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
@@ -444,7 +644,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
 
         // quick, race-y check to see if there seems to be any stuff in there
         jl_cpu_pause();
-        if (!multiq_check_empty()) {
+        if (!partr_check_empty()) {
             start_cycles = 0;
             continue;
         }
@@ -453,7 +653,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
         jl_ptls_t ptls = ct->ptls;
         if (sleep_check_after_threshold(&start_cycles) || (!jl_atomic_load_relaxed(&_threadedregion) && ptls->tid == 0)) {
             jl_atomic_store(&ptls->sleep_check_state, sleeping); // acquire sleep-check lock
-            if (!multiq_check_empty()) {
+            if (!partr_check_empty()) {
                 if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)
                     jl_atomic_store(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
                 continue;

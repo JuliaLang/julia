@@ -24,9 +24,12 @@ let lk = ReentrantLock()
 end
 
 let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`
-    for test_nthreads in (1, 2, 4, 4) # run once to try single-threaded mode, then try a couple times to trigger bad races
+    for test_nthreads in (1, 2, 4, 4), # run once to try single-threaded mode, then try a couple times to trigger bad races
+        sch in ("depthfirst", "workstealing")
+
         new_env = copy(ENV)
         new_env["JULIA_NUM_THREADS"] = string(test_nthreads)
+        new_env["JULIA_THREAD_SCHEDULER"] = sch
         run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
     end
 end
