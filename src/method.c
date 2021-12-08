@@ -19,7 +19,7 @@ extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
 
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 {
@@ -91,17 +91,19 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         else {
             size_t i = 0, nargs = jl_array_len(e->args);
             if (e->head == jl_opaque_closure_method_sym) {
-                if (nargs != 4) {
+                if (nargs != 5) {
                     jl_error("opaque_closure_method: invalid syntax");
                 }
                 jl_value_t *name = jl_exprarg(e, 0);
                 jl_value_t *nargs = jl_exprarg(e, 1);
-                jl_value_t *functionloc = jl_exprarg(e, 2);
-                jl_value_t *ci = jl_exprarg(e, 3);
+                int isva = jl_exprarg(e, 2) == jl_true;
+                jl_value_t *functionloc = jl_exprarg(e, 3);
+                jl_value_t *ci = jl_exprarg(e, 4);
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
                 }
-                return (jl_value_t*)jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci, isva);
+                return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
                 JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
@@ -758,14 +760,13 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 // method definition ----------------------------------------------------------
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci)
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva)
 {
     jl_method_t *m = jl_new_method_uninit(module);
     JL_GC_PUSH1(&m);
     // TODO: Maybe have a signature of (parent method, stmt#)?
     m->sig = (jl_value_t*)jl_anytuple_type;
-    // Unused for opaque closures. va-ness is determined on construction
-    m->isva = 0;
+    m->isva = isva;
     m->is_for_opaque_closure = 1;
     if (name == jl_nothing) {
         m->name = jl_symbol("opaque closure");

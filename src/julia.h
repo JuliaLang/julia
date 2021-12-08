@@ -351,7 +351,6 @@ struct _jl_method_instance_t {
 typedef struct jl_opaque_closure_t {
     JL_DATA_TYPE
     jl_value_t *captures;
-    uint8_t isva;
     size_t world;
     jl_method_t *source;
     jl_fptr_args_t invoke;

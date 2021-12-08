@@ -402,7 +402,7 @@ function lift_leaves(compact::IncrementalCompact,
                     ocleaf = simple_walk(compact, ocleaf)
                 end
                 ocdef, _ = walk_leaf(ocleaf)
-                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 <= field <= length(ocdef.args)-5
+                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 <= field <= length(ocdef.args)-4
                     lift_arg(UseRef(ocdef, 5 + field))
                     continue
                 end

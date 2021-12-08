@@ -2606,17 +2606,16 @@ void jl_init_types(void) JL_GC_DISABLED
 
     tv = jl_svec2(tvar("A"), tvar("R"));
     jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,
-        jl_perm_symsvec(6, "captures", "isva", "world", "source", "invoke", "specptr"),
-        jl_svec(6, jl_any_type, jl_bool_type, jl_long_type, jl_any_type, pointer_void, pointer_void),
-        jl_emptysvec, 0, 0, 6)->name->wrapper;
+        jl_perm_symsvec(5, "captures", "world", "source", "invoke", "specptr"),
+        jl_svec(5, jl_any_type, jl_long_type, jl_any_type, pointer_void, pointer_void),
+        jl_emptysvec, 0, 0, 5)->name->wrapper;
     jl_opaque_closure_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type))->name;
     jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type));
 
-
     jl_partial_opaque_type = jl_new_datatype(jl_symbol("PartialOpaque"), core, jl_any_type, jl_emptysvec,
-        jl_perm_symsvec(5, "typ", "env", "isva", "parent", "source"),
-        jl_svec(5, jl_type_type, jl_any_type, jl_bool_type, jl_method_instance_type, jl_method_type),
-        jl_emptysvec, 0, 0, 5);
+        jl_perm_symsvec(4, "typ", "env", "parent", "source"),
+        jl_svec(4, jl_type_type, jl_any_type, jl_method_instance_type, jl_method_type),
+        jl_emptysvec, 0, 0, 4);
 
     // complete builtin type metadata
     jl_voidpointer_type = (jl_datatype_t*)pointer_void;

@@ -21,11 +21,11 @@ end
 # to return a valid value for `cache_lookup(linfo, argtypes, cache).argtypes`,
 # so that we can construct cache-correct `InferenceResult`s in the first place.
 function matching_cache_argtypes(
-    linfo::MethodInstance, (arginfo, sv)#=::Tuple{ArgInfo,InferenceState}=#, va_override::Bool)
+    linfo::MethodInstance, (arginfo, sv)#=::Tuple{ArgInfo,InferenceState}=#)
     (; fargs, argtypes) = arginfo
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing, va_override)
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing)
     given_argtypes = Vector{Any}(undef, length(argtypes))
     local condargs = nothing
     for i in 1:length(argtypes)
@@ -55,7 +55,7 @@ function matching_cache_argtypes(
         end
         given_argtypes[i] = widenconditional(argtype)
     end
-    isva = va_override || linfo.def.isva
+    isva = linfo.def.isva
     if isva || isvarargtype(given_argtypes[end])
         isva_given_argtypes = Vector{Any}(undef, nargs)
         for i = 1:(nargs - isva)
@@ -93,8 +93,9 @@ function matching_cache_argtypes(
 end
 
 function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(specTypes),
-    isva::Bool, withfirst::Bool = true)
+    withfirst::Bool = true)
     toplevel = method === nothing
+    isva = !toplevel && method.isva
     linfo_argtypes = Any[(unwrap_unionall(specTypes)::DataType).parameters...]
     nargs::Int = toplevel ? 0 : method.nargs
     if !withfirst
@@ -192,10 +193,9 @@ function elim_free_typevars(@nospecialize t)
     end
 end
 
-function matching_cache_argtypes(linfo::MethodInstance, ::Nothing, va_override::Bool)
+function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
     mthd = isa(linfo.def, Method) ? linfo.def::Method : nothing
-    cache_argtypes = most_general_argtypes(mthd, linfo.specTypes,
-        va_override || (isa(mthd, Method) ? mthd.isva : false))
+    cache_argtypes = most_general_argtypes(mthd, linfo.specTypes)
     return cache_argtypes, falses(length(cache_argtypes))
 end
 

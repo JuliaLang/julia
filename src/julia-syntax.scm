@@ -1071,16 +1071,16 @@
                   (loop (if isseq F (cdr F)) (cdr A) stmts
                         (list* ty T) (list* ca C) (list* g GC)))))))))
 
+(define (just-arglist? ex)
+  (and (pair? ex)
+       (or (memq (car ex) '(tuple block ...))
+           (and (eq? (car ex) 'where)
+                (just-arglist? (cadr ex))))))
+
 (define (expand-function-def e)   ;; handle function definitions
-  (define (just-arglist? ex)
-    (and (pair? ex)
-         (or (memq (car ex) '(tuple block ...))
-             (and (eq? (car ex) 'where)
-                  (just-arglist? (cadr ex))))))
-  (let ((name (cadr e)))
-    (if (just-arglist? name)
-        (expand-forms (cons '-> (cdr e)))
-        (expand-function-def- e))))
+  (if (just-arglist? (cadr e))
+      (expand-forms (cons '-> (cdr e)))
+      (expand-function-def- e)))
 
 ;; convert (where (where x S) T) to (where x T S)
 (define (flatten-where-expr e)
@@ -1196,6 +1196,21 @@
                    `(where (call ,name ,@argl) ,@where)
                    `(call ,name ,@argl))
               ,body)))))
+
+(define (function-arglist e)
+  (cond ((eq? (car e) 'function)
+         (if (just-arglist? (cadr e))
+             (function-arglist (cons '-> (cdr e)))
+             (let* ((name  (cadr e))
+                    (dcl   (and (pair? name) (eq? (car name) '|::|)))
+                    (name  (if dcl (cadr name) name)))
+               (cddr name))))
+        ((eq? (car e) '->)
+         (let* ((a (cadr e)))
+           (if (pair? a)
+               (tuple-to-arglist (filter (lambda (x) (not (linenum? x))) a))
+               (list a))))
+        (else '())))
 
 (define (let-binds e)
   (if (and (pair? (cadr e))
@@ -2250,7 +2265,11 @@
 
    'opaque_closure
    (lambda (e)
-     (let* ((meth (caddr (caddr (expand-forms (cadr e))))) ;; `method` expr
+     (let* ((isva (let* ((arglist (function-arglist (cadr e)))
+                         (lastarg (and (pair? arglist) (last arglist))))
+                    (if (or (varargexpr? lastarg) (vararg? lastarg))
+                        '(true) '(false))))
+            (meth (caddr (caddr (expand-forms (cadr e))))) ;; `method` expr
             (lam       (cadddr meth))
             (sig-block (caddr meth))
             (sig-block (if (and (pair? sig-block) (eq? (car sig-block) 'block))
@@ -2263,14 +2282,11 @@
             (argtypes  (cdddr typ-svec))
             (functionloc (cadr (caddddr sig-svec))))
        (if (length= argtypes 0)
-        `(_opaque_closure ,(expand-forms `(curly (core Tuple))) (false) 0 ,functionloc ,lam)
-         (let* ((vssa (make-ssavalue))
-                (vval (expand-forms (last argtypes)))
-                (argtypes (append (butlast argtypes) (list `(block (= ,vssa ,vval)))))
-                (argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
-                                  (expand-forms `(curly (core Tuple) ,@argtypes))
-                                  (reverse tvars))))
-              `(_opaque_closure ,argtype (call (core isa) ,vssa (core TypeofVararg)) ,(length argtypes) ,functionloc ,lam)))))
+           `(_opaque_closure ,(expand-forms `(curly (core Tuple))) (false) 0 ,functionloc ,lam)
+           (let* ((argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
+                                    (expand-forms `(curly (core Tuple) ,@argtypes))
+                                    (reverse tvars))))
+             `(_opaque_closure ,argtype ,isva ,(length argtypes) ,functionloc ,lam)))))
    'block
    (lambda (e)
      (cond ((null? (cdr e)) '(null))
@@ -3800,9 +3816,10 @@ f(x) = yt(x)
                                            (capt-var-access v fname opaq)
                                            v)))
                                    cvs)))
-               `(new_opaque_closure ,(cadr e) ,isva (call (core apply_type) Union) (core Any)
-                      (opaque_closure_method (null) ,nargs ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs)))
-                      ,@var-exprs))))
+               `(new_opaque_closure
+                 ,(cadr e) (call (core apply_type) Union) (core Any)
+                 (opaque_closure_method (null) ,nargs ,isva ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs)))
+                 ,@var-exprs))))
           ((method)
            (let* ((name  (method-expr-name e))
                   (short (length= e 2))  ;; function f end
@@ -4300,13 +4317,13 @@ f(x) = yt(x)
                               (cons (cadr e) (cons fptr (cdddr e)))))
                            ;; Leave a literal lambda in place for later global expansion
                            ((eq? (car e) 'new_opaque_closure)
-                             (let* ((oc_method (car (list-tail (cdr e) 4))) ;; opaque_closure_method
-                                    (lambda (caddddr oc_method))
-                                    (lambda (linearize lambda)))
-                                (append
-                                  (compile-args (list-head (cdr e) 4) break-labels)
-                                  (list (append (butlast oc_method) (list lambda)))
-                                  (compile-args (list-tail (cdr e) 5) break-labels))))
+                            (let* ((oc_method (car (list-tail (cdr e) 3))) ;; opaque_closure_method
+                                   (lambda (list-ref oc_method 5))
+                                   (lambda (linearize lambda)))
+                              (append
+                               (compile-args (list-head (cdr e) 3) break-labels)
+                               (list (append (butlast oc_method) (list lambda)))
+                               (compile-args (list-tail (cdr e) 4) break-labels))))
                            ;; NOTE: 1st argument to cglobal treated same as for ccall
                            ((and (length> e 2)
                                  (or (eq? (cadr e) 'cglobal)

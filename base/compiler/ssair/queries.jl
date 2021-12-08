@@ -50,17 +50,16 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::
             end
             return true
         elseif head === :new_opaque_closure
-            length(ea) < 5 && return false
+            length(ea) < 4 && return false
             a = ea[1]
             typ = argextype(a, src, sptypes)
             typ, isexact = instanceof_tfunc(typ)
             isexact || return false
             typ ⊑ Tuple || return false
-            isva = argextype(ea[2], src, sptypes)
-            rt_lb = argextype(ea[3], src, sptypes)
-            rt_ub = argextype(ea[4], src, sptypes)
-            src = argextype(ea[5], src, sptypes)
-            if !(isva ⊑ Bool && rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
+            rt_lb = argextype(ea[2], src, sptypes)
+            rt_ub = argextype(ea[3], src, sptypes)
+            src = argextype(ea[4], src, sptypes)
+            if !(rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
                 return false
             end
             return true

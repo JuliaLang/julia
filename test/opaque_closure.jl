@@ -7,8 +7,8 @@ const lno = LineNumberNode(1, :none)
 
 let ci = @code_lowered const_int()
     @eval function oc_trivial()
-        $(Expr(:new_opaque_closure, Tuple{}, false, Any, Any,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci)))
+        $(Expr(:new_opaque_closure, Tuple{}, Any, Any,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci)))
     end
 end
 @test isa(oc_trivial(), Core.OpaqueClosure{Tuple{}, Any})
@@ -16,8 +16,8 @@ end
 
 let ci = @code_lowered const_int()
     @eval function oc_simple_inf()
-        $(Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci)))
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci)))
     end
 end
 @test isa(oc_simple_inf(), Core.OpaqueClosure{Tuple{}, Int})
@@ -30,8 +30,8 @@ end
 (a::OcClos2Int)() = getfield(a, 1) + getfield(a, 2)
 let ci = @code_lowered OcClos2Int(1, 2)();
     @eval function oc_trivial_clos()
-        $(Expr(:new_opaque_closure, Tuple{}, false, Int, Int,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci),
+        $(Expr(:new_opaque_closure, Tuple{}, Int, Int,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             1, 2))
     end
 end
@@ -39,8 +39,8 @@ end
 
 let ci = @code_lowered OcClos2Int(1, 2)();
     @eval function oc_self_call_clos()
-        $(Expr(:new_opaque_closure, Tuple{}, false, Int, Int,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci),
+        $(Expr(:new_opaque_closure, Tuple{}, Int, Int,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             1, 2))()
     end
 end
@@ -56,8 +56,8 @@ end
 (a::OcClos1Any)() = getfield(a, 1)
 let ci = @code_lowered OcClos1Any(1)()
     @eval function oc_pass_clos(x)
-        $(Expr(:new_opaque_closure, Tuple{}, false, Any, Any,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci),
+        $(Expr(:new_opaque_closure, Tuple{}, Any, Any,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             :x))
     end
 end
@@ -66,8 +66,8 @@ end
 
 let ci = @code_lowered OcClos1Any(1)()
     @eval function oc_infer_pass_clos(x)
-        $(Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci),
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             :x))
     end
 end
@@ -78,8 +78,8 @@ end
 
 let ci = @code_lowered identity(1)
     @eval function oc_infer_pass_id()
-        $(Expr(:new_opaque_closure, Tuple{Any}, false, Any, Any,
-            Expr(:opaque_closure_method, nothing, 1, lno, ci)))
+        $(Expr(:new_opaque_closure, Tuple{Any}, Any, Any,
+            Expr(:opaque_closure_method, nothing, 1, false, lno, ci)))
     end
 end
 function complicated_identity(x)
@@ -100,8 +100,8 @@ end
 
 let ci = @code_lowered OcOpt([1 2])()
     @eval function oc_opt_ndims(A)
-        $(Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci),
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             :A))
     end
 end
@@ -142,7 +142,7 @@ g_world_age = @opaque ()->test_oc_world_age()
 
 # Evil, dynamic Vararg stuff (don't do this - made to work for consistency)
 function maybe_opaque(isva::Bool)
-    T = isva ? Vararg{Int, 1} : Int
+    T = isva ? Vararg{Int} : Int
     @opaque (x::T)->x
 end
 @test maybe_opaque(false)(1) == 1
@@ -159,8 +159,8 @@ mk_va_opaque() = @opaque (x...)->x
 # Opaque closure in CodeInfo returned from generated functions
 function mk_ocg(args...)
     ci = @code_lowered const_int()
-    cig = Meta.lower(@__MODULE__, Expr(:new_opaque_closure, Tuple{}, false, Any, Any,
-        Expr(:opaque_closure_method, nothing, 0, lno, ci))).args[1]
+    cig = Meta.lower(@__MODULE__, Expr(:new_opaque_closure, Tuple{}, Any, Any,
+        Expr(:opaque_closure_method, nothing, 0, false, lno, ci))).args[1]
     cig.slotnames = Symbol[Symbol("#self#")]
     cig.slottypes = Any[Any]
     cig.slotflags = UInt8[0x00]
