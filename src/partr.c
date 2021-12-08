@@ -270,8 +270,8 @@ static int wsdeque_push(jl_task_t *task, int16_t priority_ignord)
     int64_t size = b - t;
     if (size >= tasks_per_heap - 1) // full
         return -1;
-    jl_atomic_store_relaxed((_Atomic(jl_task_t **))&wsdeques[tid].tasks[b % tasks_per_heap],
-                            task);
+    jl_atomic_store_relaxed(
+        (_Atomic(jl_task_t *) *)&wsdeques[tid].tasks[b % tasks_per_heap], task);
     jl_fence_release();
     jl_atomic_store_relaxed(&wsdeques[tid].bottom, b + 1);
     return 0;
