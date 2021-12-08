@@ -28,6 +28,11 @@ struct TypeNamePair
     name::String
 end
 
+struct FreeInfo
+    type_addr::UInt
+    count::UInt
+end
+
 # matches RawAllocResults on the C side
 struct RawAllocResults
     allocs::Ptr{RawAlloc}
@@ -35,6 +40,9 @@ struct RawAllocResults
 
     type_names::Ptr{TypeNamePair}
     num_type_names::Csize_t
+
+    frees::Ptr{FreeInfo}
+    num_frees::Csize_t
 end
 
 function start(skip_every::Int=0)
@@ -59,8 +67,8 @@ end
 
 struct AllocResults
     allocs::Vector{Alloc}
-    frees::Dict{UInt,UInt} # type name => string
-    type_names::Dict{UInt,String}
+    frees::Dict{String,UInt} # type name => string
+    type_names::Dict{UInt,String} # type addr => type name
 end
 
 function decode_alloc(raw_alloc::RawAlloc)::Alloc
@@ -79,8 +87,13 @@ function decode(raw_results::RawAllocResults)::AllocResults
     ]
     type_names = Dict{UInt,String}
     for i in 1:raw_results.num_type_names
-        pair = reinterpret(TypeNamePair, unsafe_load(raw_results.type_names, i))
-        type_names[XXXX]
+        pair = unsafe_load(raw_results.type_names, i)
+        type_names[convert(UInt, pair.addr)] = pair.name
+    end
+    frees = Dict{String,UInt}()
+    for i in 1:raw_results.num_frees
+        free = unsafe_load(raw_results.frees, i)
+        frees[type_names[free.type_addr]] = free.count
     end
     return AllocResults(
         allocs,
