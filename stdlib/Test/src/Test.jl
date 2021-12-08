@@ -978,8 +978,11 @@ mutable struct DefaultTestSet <: AbstractTestSet
     n_passed::Int
     anynonpass::Bool
     verbose::Bool
+    showtiming::Bool
+    time_start::Float64
+    time_end::Union{Float64,Nothing}
 end
-DefaultTestSet(desc::AbstractString; verbose::Bool = false) = DefaultTestSet(String(desc)::String, [], 0, false, verbose)
+DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true) = DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing)
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
@@ -1026,7 +1029,7 @@ end
 function print_test_results(ts::DefaultTestSet, depth_pad=0)
     # Calculate the overall number for each type so each of
     # the test result types are aligned
-    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
+    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration = get_test_counts(ts)
     total_pass   = passes + c_passes
     total_fail   = fails  + c_fails
     total_error  = errors + c_errors
@@ -1044,6 +1047,7 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     error_width  = dig_error  > 0 ? max(length("Error"),  dig_error)  : 0
     broken_width = dig_broken > 0 ? max(length("Broken"), dig_broken) : 0
     total_width  = dig_total  > 0 ? max(length("Total"),  dig_total)  : 0
+    duration_width = max(length("Time"), length(duration))
     # Calculate the alignment of the test result counts by
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, 0), length("Test Summary:"))
@@ -1063,11 +1067,14 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
         printstyled(lpad("Broken", broken_width, " "), "  "; bold=true, color=Base.warn_color())
     end
     if total_width > 0
-        printstyled(lpad("Total", total_width, " "); bold=true, color=Base.info_color())
+        printstyled(lpad("Total", total_width, " "), "  "; bold=true, color=Base.info_color())
+    end
+    if ts.showtiming
+        printstyled(lpad("Time", duration_width, " "); bold=true)
     end
     println()
     # Recursively print a summary at every level
-    print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width)
+    print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width, duration_width, ts.showtiming)
 end
 
 
@@ -1076,6 +1083,7 @@ const TESTSET_PRINT_ENABLE = Ref(true)
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset
 function finish(ts::DefaultTestSet)
+    ts.time_end = time()
     # If we are a nested test set, do not print a full summary
     # now - let the parent test set do the printing
     if get_testset_depth() != 0
@@ -1084,7 +1092,7 @@ function finish(ts::DefaultTestSet)
         record(parent_ts, ts)
         return ts
     end
-    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
+    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration = get_test_counts(ts)
     total_pass   = passes + c_passes
     total_fail   = fails  + c_fails
     total_error  = errors + c_errors
@@ -1148,7 +1156,7 @@ function get_test_counts(ts::DefaultTestSet)
         isa(t, Error)  && (errors += 1)
         isa(t, Broken) && (broken += 1)
         if isa(t, DefaultTestSet)
-            np, nf, ne, nb, ncp, ncf, nce , ncb = get_test_counts(t)
+            np, nf, ne, nb, ncp, ncf, nce , ncb, duration = get_test_counts(t)
             c_passes += np + ncp
             c_fails  += nf + ncf
             c_errors += ne + nce
@@ -1156,16 +1164,28 @@ function get_test_counts(ts::DefaultTestSet)
         end
     end
     ts.anynonpass = (fails + errors + c_fails + c_errors > 0)
-    return passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken
+    duration = if isnothing(ts.time_end)
+        ""
+    else
+        dur_s = ts.time_end - ts.time_start
+        if dur_s < 60
+            string(round(dur_s, digits = 1), "s")
+        else
+            m, s = divrem(dur_s, 60)
+            s = lpad(string(round(s, digits = 1)), 4, "0")
+            string(round(Int, m), "m", s, "s")
+        end
+    end
+    return passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration
 end
 
 # Recursive function that prints out the results at each level of
 # the tree of test sets
 function print_counts(ts::DefaultTestSet, depth, align,
-                      pass_width, fail_width, error_width, broken_width, total_width)
+                      pass_width, fail_width, error_width, broken_width, total_width, duration_width, showtiming)
     # Count results by each type at this level, and recursively
     # through any child test sets
-    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
+    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration = get_test_counts(ts)
     subtotal = passes + fails + errors + broken + c_passes + c_fails + c_errors + c_broken
     # Print test set header, with an alignment that ensures all
     # the test results appear above each other
@@ -1204,9 +1224,13 @@ function print_counts(ts::DefaultTestSet, depth, align,
     end
 
     if np == 0 && nf == 0 && ne == 0 && nb == 0
-        printstyled("No tests", color=Base.info_color())
+        printstyled(lpad("None", total_width, " "), "  ", color=Base.info_color())
     else
-        printstyled(lpad(string(subtotal), total_width, " "), color=Base.info_color())
+        printstyled(lpad(string(subtotal), total_width, " "), "  ", color=Base.info_color())
+    end
+
+    if showtiming
+        printstyled(lpad(string(duration), duration_width, " "))
     end
     println()
 
@@ -1216,7 +1240,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
         for t in ts.results
             if isa(t, DefaultTestSet)
                 print_counts(t, depth + 1, align,
-                    pass_width, fail_width, error_width, broken_width, total_width)
+                    pass_width, fail_width, error_width, broken_width, total_width, duration_width, ts.showtiming)
             end
         end
     end
@@ -1256,8 +1280,11 @@ along with a summary of the test results.
 Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
 also be used for any nested `@testset` invocations. The given options are only
 applied to the test set where they are given. The default test set type
-accepts the `verbose` boolean option: if `true`, the result summary of the
-nested testsets is shown even when they all pass (the default is `false`).
+accepts two boolean options:
+- `verbose`: if `true`, the result summary of the nested testsets is shown even
+when they all pass (the default is `false`).
+- `showtiming`: if `true`, the duration of each displayed testset is shown
+(the default is `true`).
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
@@ -1278,7 +1305,7 @@ re-arrangements of `@testset`s regardless of their side-effect on the
 global RNG state.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"trigonometric identities |    4      4  [0-9\\.]+s"
 julia> @testset "trigonometric identities" begin
            θ = 2/3*π
            @test sin(-θ) ≈ -sin(θ)
@@ -1286,8 +1313,8 @@ julia> @testset "trigonometric identities" begin
            @test sin(2θ) ≈ 2*sin(θ)*cos(θ)
            @test cos(2θ) ≈ cos(θ)^2 - sin(θ)^2
        end;
-Test Summary:            | Pass  Total
-trigonometric identities |    4      4
+Test Summary:            | Pass  Total  Time
+trigonometric identities |    4      4  0.2s
 ```
 """
 macro testset(args...)

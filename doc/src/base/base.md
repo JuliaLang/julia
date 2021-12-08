@@ -39,6 +39,7 @@ Base.methods
 Base.@show
 ans
 Base.active_project
+Base.set_active_project
 ```
 
 ## [Keywords](@id Keywords)

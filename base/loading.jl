@@ -1345,7 +1345,7 @@ function load_path_setup_code(load_path::Bool=true)
         code *= """
         append!(empty!(Base.LOAD_PATH), $(repr(load_path)))
         ENV["JULIA_LOAD_PATH"] = $(repr(join(load_path, Sys.iswindows() ? ';' : ':')))
-        Base.ACTIVE_PROJECT[] = nothing
+        Base.set_active_project(nothing)
         """
     end
     return code
@@ -1358,7 +1358,7 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
     append!(empty!(Base.LOAD_PATH), load_path)
     ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
-    Base.ACTIVE_PROJECT[] = nothing
+    set_active_project(nothing)
     Base._track_dependencies[] = true
     get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
     append!(empty!(Base._concrete_dependencies), concrete_deps)
@@ -1707,7 +1707,8 @@ function srctext_files(f::IO, srctextpos::Int64)
 end
 
 # Test to see if this UUID is mentioned in this `Project.toml`; either as
-# the top-level UUID (e.g. that of the project itself) or as a dependency.
+# the top-level UUID (e.g. that of the project itself), as a dependency,
+# or as a extra for Preferences.
 function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
     uuid_p = get(project, "uuid", nothing)::Union{Nothing, String}
     name = get(project, "name", nothing)::Union{Nothing, String}
@@ -1719,6 +1720,16 @@ function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
         for (k, v) in deps
             if uuid == UUID(v::String)
                 return k
+            end
+        end
+    end
+    for subkey in ("deps", "extras")
+        subsection = get(project, subkey, nothing)::Union{Nothing, Dict{String, Any}}
+        if subsection !== nothing
+            for (k, v) in subsection
+                if uuid == UUID(v::String)
+                    return k
+                end
             end
         end
     end

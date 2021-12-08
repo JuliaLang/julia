@@ -178,15 +178,56 @@ end
     end
 end
 
+# extras
+@testset "extras" begin
+    mktempdir() do dir
+        project_file = joinpath(dir, "Project.toml")
+        touch(project_file) # dummy_uuid calls realpath
+        # various UUIDs to work with
+        proj_uuid = dummy_uuid(project_file)
+        root_uuid = uuid4()
+        this_uuid = uuid4()
+
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [project_file])
+            write(project_file, """
+            name = "Root"
+            uuid = "$root_uuid"
+            [extras]
+            This = "$this_uuid"
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == root_uuid
+            @test this == nothing
+            @test that == nothing
+
+            @test Base.get_uuid_name(project_file, this_uuid) == "This"
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
+    end
+end
+
+
 ## functional testing of package identification, location & loading ##
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
 saved_active_project = Base.ACTIVE_PROJECT[]
+watcher_counter = Ref(0)
+push!(Base.active_project_callbacks, () -> watcher_counter[] += 1)
+push!(Base.active_project_callbacks, () -> error("broken"))
 
 push!(empty!(LOAD_PATH), joinpath(@__DIR__, "project"))
 append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
-Base.ACTIVE_PROJECT[] = nothing
+@test watcher_counter[] == 0
+@test_logs (:error, r"active project callback .* failed") Base.set_active_project(nothing)
+@test watcher_counter[] == 1
 
 @test load_path() == [joinpath(@__DIR__, "project", "Project.toml")]
 
@@ -598,10 +639,10 @@ end == "opening file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")
 try
-    Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
+    Base.set_active_project(joinpath(@__DIR__, "TestPkg"))
     @eval using TestPkg
 finally
-    Base.ACTIVE_PROJECT[] = old_act_proj
+    Base.set_active_project(old_act_proj)
     popfirst!(LOAD_PATH)
 end
 
@@ -684,7 +725,9 @@ end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-Base.ACTIVE_PROJECT[] = saved_active_project
+for _ = 1:2 pop!(Base.active_project_callbacks) end
+Base.set_active_project(saved_active_project)
+@test watcher_counter[] == 3
 
 # issue #28190
 module Foo; import Libdl; end

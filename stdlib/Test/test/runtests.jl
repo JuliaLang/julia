@@ -760,13 +760,13 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
                 @test foo(fill(1., 4)) == 15
             end
         end'`), stderr=devnull), String)
-    @test occursin("""
-        Test Summary: | Pass  Fail  Total
-        Foo Tests     |    2     2      4
-          Animals     |    1     1      2
-            Felines   |    1            1
-            Canines   |          1      1
-          Arrays      |    1     1      2
+    @test occursin(r"""
+        Test Summary: | Pass  Fail  Total  Time
+        Foo Tests     |    2     2      4  \s*\d*.\ds
+          Animals     |    1     1      2  \s*\d*.\ds
+            Felines   |    1            1  \s*\d*.\ds
+            Canines   |          1      1  \s*\d*.\ds
+          Arrays      |    1     1      2  \s*\d*.\ds
         """, msg)
 end
 
@@ -1078,18 +1078,18 @@ let ex = :(something_complex + [1, 2, 3])
 end
 
 @testset "verbose option" begin
-    expected = """
-    Test Summary:             | Pass  Total
-    Parent                    |    9      9
-      Child 1                 |    3      3
-        Child 1.1 (long name) |    1      1
-        Child 1.2             |    1      1
-        Child 1.3             |    1      1
-      Child 2                 |    3      3
-      Child 3                 |    3      3
-        Child 3.1             |    1      1
-        Child 3.2             |    1      1
-        Child 3.3             |    1      1
+    expected = r"""
+    Test Summary:             | Pass  Total  Time
+    Parent                    |    9      9  \s*\d*.\ds
+      Child 1                 |    3      3  \s*\d*.\ds
+        Child 1.1 (long name) |    1      1  \s*\d*.\ds
+        Child 1.2             |    1      1  \s*\d*.\ds
+        Child 1.3             |    1      1  \s*\d*.\ds
+      Child 2                 |    3      3  \s*\d*.\ds
+      Child 3                 |    3      3  \s*\d*.\ds
+        Child 3.1             |    1      1  \s*\d*.\ds
+        Child 3.2             |    1      1  \s*\d*.\ds
+        Child 3.3             |    1      1  \s*\d*.\ds
     """
 
     mktemp() do f, _

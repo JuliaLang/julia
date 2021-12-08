@@ -358,7 +358,7 @@ end
     return hi, x-hi
 end
 
-@inline function twomul(a::Float64, b::Float64)
+function twomul(a::Float64, b::Float64)
     ahi, alo = splitbits(a)
     bhi, blo = splitbits(b)
     abhi = a*b
@@ -368,7 +368,7 @@ end
 end
 
 function fma_emulated(a::Float64, b::Float64,c::Float64)
-    abhi, ablo = twomul(a,b)
+    abhi, ablo = @inline twomul(a,b)
     if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || issubnormal(a) || issubnormal(b)
         aandbfinite = isfinite(a) && isfinite(b)
         if !(isfinite(c) && aandbfinite)
