@@ -23,10 +23,18 @@ struct RawAlloc
     size::Csize_t
 end
 
+struct TypeNamePair
+    addr::UInt
+    name::String
+end
+
 # matches RawAllocResults on the C side
 struct RawAllocResults
-    num_allocs::Csize_t
     allocs::Ptr{RawAlloc}
+    num_allocs::Csize_t
+
+    type_names::Ptr{TypeNamePair}
+    num_type_names::Csize_t
 end
 
 function start(skip_every::Int=0)
@@ -49,18 +57,36 @@ struct Alloc
     size::Int
 end
 
-function decode(raw_results::RawAllocResults)::Vector{Alloc}
-    out = Vector{Alloc}()
-    for i in 1:raw_results.num_allocs
-        raw_alloc = unsafe_load(raw_results.allocs, i)
-        push!(out, Alloc(
-            # unsafe_pointer_to_objref(convert(Ptr{Any}, raw_alloc.type)),
-            raw_alloc.type,
-            stacktrace(_reformat_bt(raw_alloc.backtrace)),
-            UInt(raw_alloc.size)
-        ))
+struct AllocResults
+    allocs::Vector{Alloc}
+    frees::Dict{UInt,UInt} # type name => string
+    type_names::Dict{UInt,String}
+end
+
+function decode_alloc(raw_alloc::RawAlloc)::Alloc
+    Alloc(
+        # unsafe_pointer_to_objref(convert(Ptr{Any}, raw_alloc.type)),
+        raw_alloc.type,
+        stacktrace(_reformat_bt(raw_alloc.backtrace)),
+        UInt(raw_alloc.size)
+    )
+end
+
+function decode(raw_results::RawAllocResults)::AllocResults
+    allocs = [
+        decode_alloc(unsafe_load(raw_results.allocs, i))
+        for i in 1:raw_results.num_allocs
+    ]
+    type_names = Dict{UInt,String}
+    for i in 1:raw_results.num_type_names
+        pair = reinterpret(TypeNamePair, unsafe_load(raw_results.type_names, i))
+        type_names[XXXX]
     end
-    return out
+    return AllocResults(
+        allocs,
+        frees,
+        type_names
+    )
 end
 
 # convert an array of raw backtrace entries to array of usable objects
