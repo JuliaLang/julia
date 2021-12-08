@@ -218,6 +218,7 @@ rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} 
 rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
 rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re, kvs...)::Rational{T}, rationalize(T, x.im, kvs...)::Rational{T})
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re, kvs...), rationalize(Int, x.im, kvs...))
+rationalize(x::Rational) = x
 
 """
     numerator(x)
