@@ -51,9 +51,10 @@ end
 
 function stop()
     raw_results = ccall(:jl_stop_alloc_profile, RawAllocResults, ())
-    decoded_results = decode(raw_results)
-    ccall(:jl_free_alloc_profile, Cvoid, ())
-    return decoded_results
+    # decoded_results = decode(raw_results)
+    # ccall(:jl_free_alloc_profile, Cvoid, ())
+    # return decoded_results
+    return raw_results
 end
 
 # decoded results
@@ -88,12 +89,17 @@ function decode(raw_results::RawAllocResults)::AllocResults
     type_names = Dict{UInt,String}
     for i in 1:raw_results.num_type_names
         pair = unsafe_load(raw_results.type_names, i)
-        type_names[convert(UInt, pair.addr)] = pair.name
+        # println("pair=$pair")
+        # type_names[convert(UInt, pair.addr)] = pair.name
+        type_addr = convert(UInt, pair.addr)
+        println("type_addr=$type_addr")
+        type_names[type_addr] = "MyType"
     end
     frees = Dict{String,UInt}()
     for i in 1:raw_results.num_frees
         free = unsafe_load(raw_results.frees, i)
-        frees[type_names[free.type_addr]] = free.count
+        type_name = type_names[free.type_addr]
+        frees[type_name] = free.count
     end
     return AllocResults(
         allocs,
