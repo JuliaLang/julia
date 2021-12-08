@@ -395,7 +395,8 @@ void wsdeque_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_
         int64_t t = jl_atomic_load_relaxed(&wsdeques[i].top);
         int64_t b = jl_atomic_load_relaxed(&wsdeques[i].bottom);
         for (int j = t; j < b; ++j)
-            jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)wsdeques[i].tasks[j]);
+            jl_gc_mark_queue_obj_explicit(
+                gc_cache, sp, (jl_value_t *)wsdeques[i].tasks[j % tasks_per_heap]);
     }
 }
 
