@@ -1274,55 +1274,28 @@ answer_color(r::StreamREPL) = r.answer_color
 input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
 
+function _without_strings_and_comments(s::AbstractString)
+    # """hello"""
+    s = replace(s, r"\"\"\".*\"\"\"" => "")
+    # "hello"
+    s = replace(s, r"\"[^\"]*\"" => "")
+    # `hello`
+    s = replace(s, r"\`[^(\`)]*\`" => "")
+
+    # multi-line #= comments =#
+    s = replace(s, r"\#=(?:([^\#\=]|\=(?!\#)|\#(?!\=))+|(?R))*+=\#" => "")
+    # single-line # comments
+    s = replace(s, r"#.*" => "")
+    return s
+end
+
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
 function ends_with_semicolon(line::AbstractString)
-    match = findlast(isequal(';'), line)::Union{Nothing,Int}
-    if match !== nothing
-        # state for comment parser, assuming that the `;` isn't in a string or comment
-        # so input like ";#" will still thwart this to give the wrong (anti-conservative) answer
-        comment = false
-        comment_start = false
-        comment_close = false
-        comment_multi = 0
-        for c in line[(match + 1):end]
-            if comment_multi > 0
-                # handle nested multi-line comments
-                if comment_close && c == '#'
-                    comment_close = false
-                    comment_multi -= 1
-                elseif comment_start && c == '='
-                    comment_start = false
-                    comment_multi += 1
-                else
-                    comment_start = (c == '#')
-                    comment_close = (c == '=')
-                end
-            elseif comment
-                # handle line comments
-                if c == '\r' || c == '\n'
-                    comment = false
-                end
-            elseif comment_start
-                # see what kind of comment this is
-                comment_start = false
-                if c == '='
-                    comment_multi = 1
-                else
-                    comment = true
-                end
-            elseif c == '#'
-                # start handling for a comment
-                comment_start = true
-            else
-                # outside of a comment, encountering anything but whitespace
-                # means the semi-colon was internal to the expression
-                isspace(c) || return false
-            end
-        end
-        return true
-    end
-    return false
+    stripped_line = _without_strings_and_comments(line)
+    match = findlast(isequal(';'), stripped_line)::Union{Nothing,Int}
+
+    return match !== nothing && all(isspace, stripped_line[(match + 1):end])
 end
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
