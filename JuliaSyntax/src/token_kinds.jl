@@ -56,6 +56,30 @@ kind(raw::TzTokens.RawToken) = TzTokens.exactkind(raw)
 
 is_prec_assignment(tok) = K"BEGIN_ASSIGNMENTS" < kind(tok) < K"END_ASSIGNMENTS"
 
+"""
+Get the "binding power" (precedence level) of an operator kind
+"""
+function binding_power(k::Kind)
+    return k < K"END_ASSIGNMENTS" ? 1  :
+           k < K"END_CONDITIONAL" ? 2  :
+           k < K"END_ARROW"       ? 3  :
+           k < K"END_LAZYOR"      ? 4  :
+           k < K"END_LAZYAND"     ? 5  :
+           k < K"END_COMPARISON"  ? 6  :
+           k < K"END_PIPE"        ? 7  :
+           k < K"END_COLON"       ? 8  :
+           k < K"END_PLUS"        ? 9  :
+           k < K"END_BITSHIFTS"   ? 10 :
+           k < K"END_TIMES"       ? 11 :
+           k < K"END_RATIONAL"    ? 12 :
+           k < K"END_POWER"       ? 13 :
+           k < K"END_DECL"        ? 14 :
+           k < K"END_WHERE"       ? 15 :
+           k < K"END_DOT"         ? 16 :
+           k < K"END_OPS"         ? 17 : # ?? unary ops
+           error("Not an operator")
+end
+
 function _kind_str(k::Kind)
     if k in (K"Identifier", K"VarIdentifier")
         "Identifier"
