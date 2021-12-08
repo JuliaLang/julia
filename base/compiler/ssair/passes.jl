@@ -286,7 +286,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
     return leaves, visited_phinodes
 end
 
-function process_immutable_preserve!(new_preserves::Vector{Any}, compact::IncrementalCompact, def::Expr)
+function record_immutable_preserve!(new_preserves::Vector{Any}, compact::IncrementalCompact, def::Expr)
     for arg in (isexpr(def, :new) ? def.args : def.args[2:end])
         if !isbitstype(widenconst(compact_exprtype(compact, arg)))
             push!(new_preserves, arg)
@@ -658,9 +658,10 @@ function sroa_pass!(ir::IRCode)
             end
         elseif isexpr(stmt, :foreigncall)
             nccallargs = length(stmt.args[3]::SimpleVector)
+            preserved = Int[]
             new_preserves = Any[]
-            old_preserves = stmt.args[(6+nccallargs):end]
-            for (pidx, preserved_arg) in enumerate(old_preserves)
+            for pidx in (6+nccallargs):length(stmt.args)
+                preserved_arg = stmt.args[pidx]
                 isa(preserved_arg, SSAValue) || continue
                 let intermediaries = SPCSet()
                     callback = function (@nospecialize(pi), @nospecialize(ssa))
@@ -672,8 +673,8 @@ function sroa_pass!(ir::IRCode)
                     defidx = def.id
                     def = compact[defidx]
                     if is_tuple_call(compact, def)
-                        process_immutable_preserve!(new_preserves, compact, def)
-                        old_preserves[pidx] = nothing
+                        record_immutable_preserve!(new_preserves, compact, def)
+                        push!(preserved, preserved_arg.id)
                         continue
                     elseif isexpr(def, :new)
                         typ = widenconst(compact_exprtype(compact, SSAValue(defidx)))
@@ -681,8 +682,8 @@ function sroa_pass!(ir::IRCode)
                             typ = unwrap_unionall(typ)
                         end
                         if typ isa DataType && !ismutabletype(typ)
-                            process_immutable_preserve!(new_preserves, compact, def)
-                            old_preserves[pidx] = nothing
+                            record_immutable_preserve!(new_preserves, compact, def)
+                            push!(preserved, preserved_arg.id)
                             continue
                         end
                     else
@@ -698,10 +699,7 @@ function sroa_pass!(ir::IRCode)
                 continue
             end
             if !isempty(new_preserves)
-                old_preserves = filter(ssa->ssa !== nothing, old_preserves)
-                new_expr = Expr(:foreigncall, stmt.args[1:(6+nccallargs-1)]...,
-                    old_preserves..., new_preserves...)
-                compact[idx] = new_expr
+                compact[idx] = form_new_preserves(stmt, preserved, new_preserves)
             end
             continue
         # TODO: This isn't the best place to put these
@@ -849,7 +847,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         # Partition defuses by field
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
         for use in defuse.uses
-            stmt = ir[SSAValue(use)]
+            stmt = ir[SSAValue(use)] # == `getfield` call
             # We may have discovered above that this use is dead
             # after the getfield elim of immutables. In that case,
             # it would have been deleted. That's fine, just ignore
@@ -859,10 +857,11 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             field === nothing && @goto skip
             push!(fielddefuse[field].uses, use)
         end
-        for use in defuse.defs
-            field = try_compute_fieldidx_stmt(ir, ir[SSAValue(use)]::Expr, typ)
+        for def in defuse.defs
+            stmt = ir[SSAValue(def)]::Expr # == `setfield!` call
+            field = try_compute_fieldidx_stmt(ir, stmt, typ)
             field === nothing && @goto skip
-            push!(fielddefuse[field].defs, use)
+            push!(fielddefuse[field].defs, def)
         end
         # Check that the defexpr has defined values for all the fields
         # we're accessing. In the future, we may want to relax this,
@@ -926,18 +925,30 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         push!(intermediaries, newidx)
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
-            useexpr = ir[SSAValue(use)]::Expr
-            nccallargs = length(useexpr.args[3]::SimpleVector)
-            old_preserves = let intermediaries = intermediaries
-                filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
-            end
-            new_expr = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
-                old_preserves..., new_preserves...)
-            ir[SSAValue(use)] = new_expr
+            ir[SSAValue(use)] = form_new_preserves(ir[SSAValue(use)]::Expr, intermediaries, new_preserves)
         end
 
         @label skip
     end
+end
+
+function form_new_preserves(origex::Expr, preserved::Vector{Int}, new_preserves::Vector{Any})
+    newex = Expr(:foreigncall)
+    nccallargs = length(origex.args[3]::SimpleVector)
+    for i in 1:(6+nccallargs-1)
+        push!(newex.args, origex.args[i])
+    end
+    for i in (6+nccallargs):length(origex.args)
+        x = origex.args[i]
+        if isa(x, SSAValue) && x.id in preserved
+            continue
+        end
+        push!(newex.args, x)
+    end
+    for i in 1:length(new_preserves)
+        push!(newex.args, new_preserves[i])
+    end
+    return newex
 end
 
 """
