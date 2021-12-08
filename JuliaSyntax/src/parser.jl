@@ -66,7 +66,7 @@ end
 #=
 
 # Parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
-function parse_atom(ps::ParseState; checked::Bool=true)::RawSyntaxNode
+function parse_atom(ps::ParseState; checked::Bool=true)::GreenNode
     tok = require_token(ps)
     tok_kind = kind(tok)
     # TODO: Reorder these to put most likely tokens first
@@ -75,7 +75,7 @@ function parse_atom(ps::ParseState; checked::Bool=true)::RawSyntaxNode
         next = peek_token(ps)
         if is_closing_token(ps, next) && (kind(next) != K"Keyword" ||
                                           has_whitespace_prefix(next))
-            return RawSyntaxNode(tok)
+            return GreenNode(tok)
         elseif has_whitespace_prefix(next)
             error("whitespace not allowed after \":\" used for quoting")
         elseif kind(next) == K"NewlineWs"
@@ -83,7 +83,7 @@ function parse_atom(ps::ParseState; checked::Bool=true)::RawSyntaxNode
         else
             # Being inside quote makes `end` non-special again. issue #27690
             ps1 = ParseState(ps, end_symbol=false)
-            return RawSyntaxNode(K"quote", parse_atom(ps1, checked=false))
+            return GreenNode(K"quote", parse_atom(ps1, checked=false))
         end
     elseif tok_kind == K"=" # misplaced =
         error("unexpected `=`")
@@ -92,10 +92,10 @@ function parse_atom(ps::ParseState; checked::Bool=true)::RawSyntaxNode
             TODO("Checked identifier names")
         end
         take_token!(ps)
-        return RawSyntaxNode(tok)
+        return GreenNode(tok)
     elseif tok_kind == K"VarIdentifier"
         take_token!(ps)
-        return RawSyntaxNode(tok)
+        return GreenNode(tok)
     elseif tok_kind == K"(" # parens or tuple
         take_token!(ps)
         return parse_paren(ps, checked)
@@ -111,7 +111,7 @@ function parse_atom(ps::ParseState; checked::Bool=true)::RawSyntaxNode
         # return Expr(:macrocall, Expr(:core, Symbol("@cmd")),
     elseif isliteral(tok_kind)
         take_token!(ps)
-        return RawSyntaxNode(tok)
+        return GreenNode(tok)
     elseif is_closing_token(tok)
         error("unexpected: $tok")
     else
@@ -185,7 +185,7 @@ function parse_assignment(ps::ParseState, down)
         # ~ is the only non-syntactic assignment-precedence operator
         TODO("Turn ~ into a call node")
     else
-        RawSyntaxNode
+        GreenNode
     end
 end
 

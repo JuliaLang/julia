@@ -29,11 +29,11 @@ Design alternatives to explore:
   in the serialization and discard the source text. (Caveat - unclear that this
   could deal with incremental parsing...)
 """
-struct RawSyntaxNode
+struct GreenNode
     kind::Kind
     span::UInt32
     flags::UInt32
-    args::Union{Tuple{},Vector{RawSyntaxNode}}
+    args::Union{Tuple{},Vector{GreenNode}}
 end
 
 const _RawFlags = UInt32
@@ -49,33 +49,33 @@ function raw_flags(; trivia::Bool=false, infix::Bool=false)
     return flags::_RawFlags
 end
 
-function RawSyntaxNode(kind::Kind, span::Int, flags::_RawFlags=EMPTY_FLAGS)
-    RawSyntaxNode(kind, span, flags, ())
+function GreenNode(kind::Kind, span::Int, flags::_RawFlags=EMPTY_FLAGS)
+    GreenNode(kind, span, flags, ())
 end
 
-function RawSyntaxNode(raw::TzTokens.RawToken)
+function GreenNode(raw::TzTokens.RawToken)
     span = 1 + raw.endbyte - raw.startbyte
-    RawSyntaxNode(kind(raw), span, 0, FIXME)
+    GreenNode(kind(raw), span, 0, FIXME)
 end
 
-function RawSyntaxNode(kind::Kind, flags::_RawFlags, args::RawSyntaxNode...)
+function GreenNode(kind::Kind, flags::_RawFlags, args::GreenNode...)
     span = sum(x.span for x in args)
-    RawSyntaxNode(kind, span, flags, RawSyntaxNode[args...])
+    GreenNode(kind, span, flags, GreenNode[args...])
 end
 
-function RawSyntaxNode(kind::Kind, args::RawSyntaxNode...)
-    RawSyntaxNode(kind, _RawFlags(0), args...)
+function GreenNode(kind::Kind, args::GreenNode...)
+    GreenNode(kind, _RawFlags(0), args...)
 end
 
 # Acessors / predicates
-haschildren(node::RawSyntaxNode) = !(node.args isa Tuple{})
-children(node::RawSyntaxNode) = node.args
+haschildren(node::GreenNode) = !(node.args isa Tuple{})
+children(node::GreenNode) = node.args
 
-istrivia(node::RawSyntaxNode) = node.flags & TRIVIA_FLAG != 0
-isinfix(node::RawSyntaxNode)  = node.flags & INFIX_FLAG != 0
-iserror(node::RawSyntaxNode)  = node.flags & ERROR_FLAG != 0
+istrivia(node::GreenNode) = node.flags & TRIVIA_FLAG != 0
+isinfix(node::GreenNode)  = node.flags & INFIX_FLAG != 0
+iserror(node::GreenNode)  = node.flags & ERROR_FLAG != 0
 
-kind(node::RawSyntaxNode) = node.kind
+kind(node::GreenNode) = node.kind
 
 # Pretty printing
 function _show_raw_node(io, node, indent, pos, str, show_trivia)
@@ -114,11 +114,11 @@ function _show_raw_node(io, node, indent, pos, str, show_trivia)
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", node::RawSyntaxNode)
+function Base.show(io::IO, ::MIME"text/plain", node::GreenNode)
     _show_raw_node(io, node, "", 1, nothing, true)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", node::RawSyntaxNode, str::String; show_trivia=true)
+function Base.show(io::IO, ::MIME"text/plain", node::GreenNode, str::String; show_trivia=true)
     _show_raw_node(io, node, "", 1, str, show_trivia)
 end
 
@@ -132,14 +132,14 @@ Design options:
 """
 mutable struct SyntaxNode
     source::SourceFile
-    raw::RawSyntaxNode
+    raw::GreenNode
     position::Int
     parent::Union{Nothing,SyntaxNode}
     head::Symbol
     val::Any
 end
 
-function SyntaxNode(source::SourceFile, raw::RawSyntaxNode, position::Integer=1)
+function SyntaxNode(source::SourceFile, raw::GreenNode, position::Integer=1)
     if !haschildren(raw)
         # Leaf node
         k = raw.kind
@@ -286,7 +286,7 @@ end
 #
 # However... this analogy is only good for complete trees at a given depth (=
 # dimension). But the syntax is oh-so-handy!
-function Base.getindex(node::Union{SyntaxNode,RawSyntaxNode}, path::Int...)
+function Base.getindex(node::Union{SyntaxNode,GreenNode}, path::Int...)
     child(node, path...)
 end
 function Base.setindex!(node::SyntaxNode, x::SyntaxNode, path::Int...)
@@ -296,7 +296,7 @@ end
 """
 Get absolute position and span of the child of `node` at the given tree `path`.
 """
-function child_position_span(node::RawSyntaxNode, path::Int...)
+function child_position_span(node::GreenNode, path::Int...)
     n = node
     p = 1
     for index in path
