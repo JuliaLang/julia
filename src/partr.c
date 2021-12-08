@@ -291,7 +291,7 @@ static jl_task_t *wsdeque_pop(void)
         return NULL;
     }
     jl_task_t *task = jl_atomic_load_relaxed(
-        (_Atomic(jl_task_t **))&wsdeques[tid].tasks[b % tasks_per_heap]);
+        (_Atomic(jl_task_t *) *)&wsdeques[tid].tasks[b % tasks_per_heap]);
     if (size > 0)
         return task;
     if (!jl_atomic_cmpswap(&wsdeques[tid].top, &t, t + 1))
@@ -310,7 +310,7 @@ static jl_task_t *wsdeque_steal(int16_t tid)
     if (size <= 0)
         return NULL;
     jl_task_t *task = jl_atomic_load_relaxed(
-        (_Atomic(jl_task_t **))&wsdeques[tid].tasks[t % tasks_per_heap]);
+        (_Atomic(jl_task_t *) *)&wsdeques[tid].tasks[t % tasks_per_heap]);
     if (!jl_atomic_cmpswap(&wsdeques[tid].top, &t, t + 1))
         return NULL;
     return task;
