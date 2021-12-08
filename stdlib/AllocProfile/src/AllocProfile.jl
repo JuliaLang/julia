@@ -1,6 +1,6 @@
 module AllocProfile
 
-using Base.StackTraces
+using Base.StackTraces: StackTrace, StackFrame, lookup
 using Base: InterpreterIP
 
 # raw results
@@ -62,7 +62,7 @@ end
 struct Alloc
     # type::Type
     type_addr::Ptr{Type} # TODO: fix segfault when loading this
-    stacktrace::Vector{StackTraces.StackFrame}
+    stacktrace::StackTrace
     size::Int
 end
 
@@ -72,11 +72,15 @@ struct AllocResults
     type_names::Dict{UInt,String} # type addr => type name
 end
 
-function decode_alloc(raw_alloc::RawAlloc)::Alloc
+const BacktraceEntry = Union{Ptr{Cvoid}, InterpreterIP}
+const BacktraceCache = Dict{BacktraceEntry,Vector{StackFrame}}
+
+function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
     Alloc(
         # unsafe_pointer_to_objref(convert(Ptr{Any}, raw_alloc.type)),
         raw_alloc.type,
-        stacktrace(_reformat_bt(raw_alloc.backtrace)),
+        # TODO: add caching to stacktrace
+        stacktrace_memoized(cache, _reformat_bt(raw_alloc.backtrace)),
         UInt(raw_alloc.size)
     )
 end
@@ -89,8 +93,9 @@ function decode(raw_results::RawAllocResults)::AllocResults
         type_names[type_addr] = unsafe_string(pair.name)
     end
 
+    cache = BacktraceCache()
     allocs = [
-        decode_alloc(unsafe_load(raw_results.allocs, i))
+        decode_alloc(cache, unsafe_load(raw_results.allocs, i))
         for i in 1:raw_results.num_allocs
     ]
 
@@ -108,13 +113,35 @@ function decode(raw_results::RawAllocResults)::AllocResults
     )
 end
 
+function stacktrace_memoized(
+    cache::BacktraceCache,
+    trace::Vector{BacktraceEntry},
+    c_funcs=true
+)::StackTrace
+    stack = StackTrace()
+    for ip in trace
+        frames = get(cache, ip) do
+            res = lookup(ip)
+            cache[ip] = res
+            return res
+        end
+        for frame in frames
+            # Skip frames that come from C calls.
+            if c_funcs || !frame.from_c
+                push!(stack, frame)
+            end
+        end
+    end
+    return stack
+end
+
 # convert an array of raw backtrace entries to array of usable objects
 # (either native pointers, InterpreterIP objects, or AllocationInfo objects)
-function _reformat_bt(bt::RawBacktrace)::Vector{Union{Ptr{Cvoid}, InterpreterIP}}
+function _reformat_bt(bt::RawBacktrace)::Vector{BacktraceEntry}
     # NOTE: Ptr{Cvoid} is always part of the output container type,
     #       as end-of-block markers are encoded as a NULL pointer
     # TODO: use Nothing/nothing for that?
-    ret = Vector{Union{Ptr{Cvoid}, InterpreterIP}}()
+    ret = Vector{BacktraceEntry}()
     i = 1
     while i <= bt.size
         ip = unsafe_load(bt.data, i).content
