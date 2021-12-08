@@ -1580,9 +1580,8 @@ function array_elmtype(@nospecialize ary)
     return Any
 end
 
-function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
-        @nospecialize(lb), @nospecialize(ub), @nospecialize(source), env::Vector{Any},
-        linfo::MethodInstance)
+function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(lb), @nospecialize(ub),
+        @nospecialize(source), env::Vector{Any}, linfo::MethodInstance)
 
     argt, argt_exact = instanceof_tfunc(arg)
     lbt, lb_exact = instanceof_tfunc(lb)
@@ -1596,9 +1595,8 @@ function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
     t = lbt == ubt ? t{ubt} : (t{T} where lbt <: T <: ubt)
 
     (isa(source, Const) && isa(source.val, Method)) || return t
-    (isa(isva, Const) && isa(isva.val, Bool)) || return t
 
-    return PartialOpaque(t, tuple_tfunc(env), isva.val, linfo, source.val)
+    return PartialOpaque(t, tuple_tfunc(env), linfo, source.val)
 end
 
 # whether getindex for the elements can potentially throw UndefRef

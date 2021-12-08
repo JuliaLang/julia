@@ -126,9 +126,8 @@ mutable struct InferenceResult
     ipo_effects::Effects # if inference is finished
     effects::Effects # if optimization is finished
     function InferenceResult(linfo::MethodInstance,
-                             arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing,
-                             va_override::Bool = false)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo, va_override)
+                             arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing)
+        argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
         return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange(), Effects(), Effects())
     end
 end

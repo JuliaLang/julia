@@ -1056,10 +1056,10 @@ end
 
 function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), state::InliningState)
     if isa(info, OpaqueClosureCreateInfo)
-        lbt = argextype(stmt.args[3], ir)
+        lbt = argextype(stmt.args[2], ir)
         lb, exact = instanceof_tfunc(lbt)
         exact || return
-        ubt = argextype(stmt.args[4], ir)
+        ubt = argextype(stmt.args[3], ir)
         ub, exact = instanceof_tfunc(ubt)
         exact || return
         # Narrow opaque closure type
@@ -1068,7 +1068,7 @@ function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), sta
             # N.B.: Narrowing the ub requires a backdge on the mi whose type
             # information we're using, since a change in that function may
             # invalidate ub result.
-            stmt.args[4] = newT
+            stmt.args[3] = newT
         end
     end
 end
