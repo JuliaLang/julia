@@ -57,12 +57,15 @@ Let's tackle it by prototyping several important work flows:
 
 ## Tree design
 
-Raw syntax tree (RST / "Green tree")
+### Raw syntax tree / Green tree
 
-We want RawSyntaxNode to be
+Raw syntax tree (RST, or "Green tree" in the terminology from Roslyn)
+
+We want GreenNode to be
 * *structurally minimal* — For efficiency and generality
 * *immutable*            — For efficiency (& thread safety?)
 * *complete*             — To preserve parser knowledge
+* *token agnostic*       — To allow use with any source language
 
 ```
 for i = 1:10
@@ -116,13 +119,49 @@ Call represents a challange for the AST vs RST in terms of node placement /
 iteration for infix operators vs normal prefix function calls.
 
 - The normal problem of `a + 1` vs `+(a, 1)`
-- Or even worse, `a + 1 + 2` vs `+(a, 1, 2)`
+- Or worse, `a + 1 + 2` vs `+(a, 1, 2)`
 
 Clearly in the AST's *interface* we need to abstract over this placement. For
-example with something like the normal Julia AST. But in the RST we only need
-to distinguish between infix and prefix.
+example with something like the normal Julia AST's iteration order.
 
+### Abstract syntax tree
 
+By pointing to green tree nodes, AST nodes become tracable back to the original
+source.
+
+Unlike other languages, designing a new AST is tricky because the existing
+`Expr` is a very public API used in every macro expansion. User-defined
+macro expansions interpose between the source text and lowering, and using
+`Expr` looses source information in many ways.
+
+There seems to be a few ways forward:
+* Maybe we can give `Expr` some new semi-hidden fields to point back to the
+  green tree nodes that the `Expr` or its `args` list came from?
+* We can use the existing `Expr` during macro expansion and try to recover
+  source information after macro expansion using heuristics. Likely the
+  presence of correct hygiene can help with this.
+* Introducing a new AST would be possible if it were opt-in for new-style
+  macros only. Fixing hygiene should go along with this. Design challenge: How
+  do we make manipulating expressions reasonable when literals need to carry
+  source location?
+
+One option which may help bridge between locationless ASTs and something new
+may be to have wrappers for the small number of literal types we need to cover.
+For example:
+
+```julia
+SourceSymbol <: AbstractSymbol
+SourceInt    <: Integer
+SourceString <: AbstractString
+```
+
+Having source location attached to symbols would potentially solve most of the
+hygine problem. There's still the problem of macro helper functions which use
+symbol literals; we can't very well be changing the meaning of `:x`! Perhaps
+the trick there is to try capturing the current module at the location of the
+interpolation syntax. Eg, if you do `:(y + $x)`, lowering expands this to
+`Core._expr(:call, :+, :y, x)`, but it could expand it to something like
+`Core._expr(:call, :+, :y, _add_source_symbol(_module_we_are_lowering_into, x))`?
 
 ## Fun research questions
 
@@ -138,12 +177,6 @@ to distinguish between infix and prefix.
 * [Roslyn optimization overview](https://github.com/KirillOsenkov/Bliki/wiki/Roslyn-Immutable-Trees)
 * [Literate C# Usage Example](https://johtela.github.io/LiterateCS/LiterateCS/BlockBuilder.html)
 
-## 
-
-## Oil shell
-* Andy Chu (the author of the OIL shell) has written some things about this
-  - Collected links about lossless syntax in [a wiki page](https://github.com/oilshell/oil/wiki/Lossless-Syntax-Tree-Pattern)
-  - A blog post [From AST to Lossless Syntax Tree](https://www.oilshell.org/blog/2017/02/11.html)
 
 ## Rust-analyzer
 
@@ -192,6 +225,10 @@ Highlights:
   another flat stream of events."  This seems great, let's adopt it!
 * TODO
 
+## Oil shell
+* Andy Chu (the author of the OIL shell) has written some things about this
+  - Collected links about lossless syntax in [a wiki page](https://github.com/oilshell/oil/wiki/Lossless-Syntax-Tree-Pattern)
+  - A blog post [From AST to Lossless Syntax Tree](https://www.oilshell.org/blog/2017/02/11.html)
 
 ## General resources about parsing
 
@@ -202,6 +239,4 @@ Highlights:
     - [From Aleksey Kladov (matklad - the main rust-analyzer author, etc)](https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html)
     - [From Bob Nystrom (munificent - one of the Dart devs, etc](http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/)
   - Some discussion of error recovery
-
-## `rust-analyzer`
 
