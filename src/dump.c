@@ -371,6 +371,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_uint8(s->s, m->optlevel);
     write_uint8(s->s, m->compile);
     write_uint8(s->s, m->infer);
+    write_uint8(s->s, m->max_methods);
 }
 
 static int jl_serialize_generic(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED
@@ -1678,6 +1679,7 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
     m->optlevel = read_int8(s->s);
     m->compile = read_int8(s->s);
     m->infer = read_int8(s->s);
+    m->max_methods = read_int8(s->s);
     m->primary_world = jl_atomic_load_acquire(&jl_world_counter);
     return (jl_value_t*)m;
 }

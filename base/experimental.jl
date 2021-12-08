@@ -123,7 +123,19 @@ macro optlevel(n::Int)
 end
 
 """
-    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no}
+    Experimental.@max_methods n::Int
+
+Set the maximum number of methods considered when running inference for the
+current module.
+
+Supported values are 1, 2, 3, and 4.
+"""
+macro max_methods(n::Int)
+    return Expr(:meta, :max_methods, n)
+end
+
+"""
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,...}
 
 Set compiler options for code in the enclosing module. Options correspond directly to
 command-line options with the same name, where applicable. The following options
@@ -133,6 +145,7 @@ are currently supported:
   * `compile`: Toggle native code compilation. Currently only `min` is supported, which
     requests the minimum possible amount of compilation.
   * `infer`: Enable or disable type inference. If disabled, implies [`@nospecialize`](@ref).
+  * `max_methods`: Maximum number of matching methods considered when running type inference.
 """
 macro compiler_options(args...)
     opts = Expr(:block)
@@ -152,6 +165,12 @@ macro compiler_options(args...)
                 a = a === false || a === :no  ? 0 :
                     a === true  || a === :yes ? 1 : error("invalid argument to \"infer\" option")
                 push!(opts.args, Expr(:meta, :infer, a))
+            elseif ex.args[1] === :max_methods
+                a = ex.args[2]
+                a = a === :default ? 3 :
+                  a isa Int ? (a > 0 ? a : error("\"max_methods\" must be positive.")) :
+                  error("invalid argument to \"max_methods\" option")
+                push!(opts.args, Expr(:meta, :max_methods, a))
             else
                 error("unknown option \"$(ex.args[1])\"")
             end
