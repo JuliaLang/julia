@@ -107,7 +107,6 @@ JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
     results.type_names = (TypeNamePair*) malloc(sizeof(TypeNamePair) * results.num_type_names);
     int i = 0;
     for (auto type_addr_name : g_alloc_profile.type_name_by_address) {
-        jl_printf(JL_STDERR, "type name: %s\n", type_addr_name.second.c_str());
         // TODO: free this malloc
         char *name = (char *) malloc(type_addr_name.second.length() + 1);
         memcpy(name, type_addr_name.second.c_str(), type_addr_name.second.length() + 1);
