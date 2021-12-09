@@ -709,7 +709,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAllocOptPass());
     PM->add(createLoopRotatePass());
     // moving IndVarSimplify here prevented removing the loop in perf_sumcartesian(10:-1:1)
-    PM->add(createLoopIdiomPass());
 #ifdef USE_POLLY
     // LCSSA (which has already run at this point due to the dependencies of the
     // above passes) introduces redundant phis that hinder Polly. Therefore we
@@ -729,6 +728,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createInductiveRangeCheckEliminationPass());
     // Subsequent passes not stripping metadata from terminator
     PM->add(createInstSimplifyLegacyPass());
+    PM->add(createLoopIdiomPass());
     PM->add(createIndVarSimplifyPass());
     PM->add(createLoopDeletionPass());
     PM->add(createSimpleLoopUnrollPass());
