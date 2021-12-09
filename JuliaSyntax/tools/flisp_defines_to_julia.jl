@@ -38,7 +38,7 @@ function juliafy_flisp(fl_input, jl_output)
                 ";"                     => "; ",
             )
             if startswith(funcname, "parse_")
-                funcargs = "ps::ParseState, "*funcargs
+                funcargs = replace(funcargs, r"^ *s\b"=>"ps::ParseState")
             end
             text = """
             function $funcname($funcargs)
@@ -52,8 +52,8 @@ function juliafy_flisp(fl_input, jl_output)
             print(jl_output, text)
             prev_newline = false
             had_comment = false
-        elseif occursin(r"^;;", line)
-            println(jl_output, replace(line, r"^;;" => "#"))
+        elseif occursin(r"^;", line)
+            println(jl_output, replace(line, r"^;+" => "#"))
             prev_newline = false
             had_comment = true
         elseif line == ""
