@@ -36,6 +36,8 @@ Compiler/Runtime improvements
   `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
   In deployments that do not need the compiler (e.g. system images where all needed code
   is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
+* The environment variable `JULIA_THREAD_SCHEDULER` can be set to `workstealing` to use the
+  alternative work-stealing scheduler or threaded tasks ([#43366]).
 
 Command-line option changes
 ---------------------------
