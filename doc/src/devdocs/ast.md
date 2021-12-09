@@ -700,9 +700,11 @@ A (usually temporary) container for holding lowered source code.
     Statement-level flags for each expression in the function. Many of these are reserved, but not yet implemented:
 
     * 0 = inbounds
-    * 1,2 = <reserved> inlinehint,always-inline,noinline
+    * 1 = inline
+    * 2 = noinline
     * 3 = <reserved> strict-ieee (strictfp)
-    * 4-6 = <unused>
+    * 4 = effect-free (may be deleted if unused)
+    * 5-6 = <unused>
     * 7 = <reserved> has out-of-band info
 
   * `linetable`
@@ -733,6 +735,10 @@ Optional Fields:
 
     The `MethodInstance` that "owns" this object (if applicable).
 
+  * `edges`
+
+    Forward edges to method instances that must be invalidated.
+
   * `min_world`/`max_world`
 
     The range of world ages for which this code was valid at the time when it had been inferred.
@@ -757,3 +763,12 @@ Boolean properties:
 
     Whether this is known to be a pure function of its arguments, without respect to the
     state of the method caches or other mutable global state.
+
+
+UInt8 settings:
+
+  * `constprop`
+
+    * 0 = use heuristic
+    * 1 = aggressive
+    * 2 = none
