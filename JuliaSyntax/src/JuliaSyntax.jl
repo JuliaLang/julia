@@ -8,6 +8,8 @@ include("utils.jl")
 
 include("source_files.jl")
 
+include("green_tree.jl")
+
 include("token_kinds.jl")
 
 include("syntax_tree.jl")

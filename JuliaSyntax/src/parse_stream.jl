@@ -36,20 +36,21 @@ Base.:(~)(k::Kind, tok::SyntaxToken) = kind(tok) == k
 #-------------------------------------------------------------------------------
 
 struct TextSpan
-    kind::Kind
-    flags::_RawFlags
+    head::SyntaxHead
     first_byte::Int
     last_byte::Int
 end
 
-function TextSpan(raw::RawToken, flags::_RawFlags)
-    TextSpan(raw.kind, flags, raw.startbyte + 1, raw.endbyte + 1)
+function TextSpan(raw::RawToken, flags::RawFlags)
+    TextSpan(SyntaxHead(raw.kind, flags), raw.startbyte + 1, raw.endbyte + 1)
 end
 
-kind(span::TextSpan) = span.kind
-first_byte(span::TextSpan) = span.first_byte
-last_byte(span::TextSpan)  = span.last_byte
-span(span::TextSpan)  = last_byte(span) - first_byte(span) + 1
+head(text_span::TextSpan)       = text_span.head
+kind(text_span::TextSpan)       = kind(text_span.head)
+flags(text_span::TextSpan)      = flags(text_span.head)
+first_byte(text_span::TextSpan) = text_span.first_byte
+last_byte(text_span::TextSpan)  = text_span.last_byte
+span(text_span::TextSpan)       = last_byte(text_span) - first_byte(text_span) + 1
 
 struct Diagnostic
     text_span::TextSpan
@@ -143,7 +144,7 @@ function bump(stream::ParseStream, flags=EMPTY_FLAGS)
         trivia_span = popfirst!(stream.lookahead_trivia)
         push!(stream.spans, trivia_span)
     end
-    span = TextSpan(kind(tok), flags, first_byte(tok), last_byte(tok))
+    span = TextSpan(SyntaxHead(kind(tok), flags), first_byte(tok), last_byte(tok))
     push!(stream.spans, span)
     stream.next_byte = last_byte(tok) + 1
     nothing
@@ -162,11 +163,11 @@ The `start_position` of the span should be a previous return value of
 `position()`.
 """
 function emit(stream::ParseStream, start_position::Integer, kind::Kind,
-              flags::_RawFlags = EMPTY_FLAGS; error=nothing)
+              flags::RawFlags = EMPTY_FLAGS; error=nothing)
     if !isnothing(error)
         flags |= ERROR_FLAG
     end
-    text_span = TextSpan(kind, flags, start_position, stream.next_byte-1)
+    text_span = TextSpan(SyntaxHead(kind, flags), start_position, stream.next_byte-1)
     if !isnothing(error)
         push!(stream.diagnostics, Diagnostic(text_span, error))
     end
@@ -183,10 +184,10 @@ end
 
 function _push_node!(stack, text_span::TextSpan, children=nothing)
     if isnothing(children)
-        node = GreenNode(kind(text_span), span(text_span), text_span.flags)
+        node = GreenNode(head(text_span), span(text_span))
         push!(stack, (text_span=text_span, node=node))
     else
-        node = GreenNode(kind(text_span), span(text_span), text_span.flags, children)
+        node = GreenNode(head(text_span), span(text_span), children)
         push!(stack, (text_span=text_span, node=node))
     end
 end
