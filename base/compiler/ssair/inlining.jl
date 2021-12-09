@@ -371,7 +371,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 return_value = SSAValue(idx′)
                 inline_compact[idx′] = val
                 inline_compact.result[idx′][:type] =
-                    compact_exprtype(isa(val, Argument) || isa(val, Expr) ? compact : inline_compact, val)
+                    argextype(val, isa(val, Argument) || isa(val, Expr) ? compact : inline_compact)
                 break
             end
             inline_compact[idx′] = stmt′
@@ -400,7 +400,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                     if isa(val, GlobalRef) || isa(val, Expr)
                         stmt′ = val
                         inline_compact.result[idx′][:type] =
-                            compact_exprtype(isa(val, Expr) ? compact : inline_compact, val)
+                            argextype(val, isa(val, Expr) ? compact : inline_compact)
                         insert_node_here!(inline_compact, NewInstruction(GotoNode(post_bb_id),
                                           Any, compact.result[idx′][:line]),
                                           true)
@@ -435,7 +435,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             return_value = pn.values[1]
         else
             return_value = insert_node_here!(compact,
-                NewInstruction(pn, compact_exprtype(compact, SSAValue(idx)), compact.result[idx][:line]))
+                NewInstruction(pn, argextype(SSAValue(idx), compact), compact.result[idx][:line]))
         end
     end
     return_value
@@ -580,7 +580,7 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
                 for aidx in 1:length(argexprs)
                     aexpr = argexprs[aidx]
                     if isa(aexpr, Expr) || isa(aexpr, GlobalRef)
-                        ninst = effect_free(NewInstruction(aexpr, compact_exprtype(compact, aexpr), compact.result[idx][:line]))
+                        ninst = effect_free(NewInstruction(aexpr, argextype(aexpr, compact), compact.result[idx][:line]))
                         argexprs[aidx] = insert_node_here!(compact, ninst)
                     end
                 end
@@ -886,7 +886,7 @@ function inline_splatnew!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(rt))
     if nf isa Const
         eargs = stmt.args
         tup = eargs[2]
-        tt = argextype(tup, ir, ir.sptypes)
+        tt = argextype(tup, ir)
         tnf = nfields_tfunc(tt)
         # TODO: hoisting this tnf.val === nf.val check into codegen
         # would enable us to almost always do this transform
@@ -908,7 +908,7 @@ end
 
 function call_sig(ir::IRCode, stmt::Expr)
     isempty(stmt.args) && return nothing
-    ft = argextype(stmt.args[1], ir, ir.sptypes)
+    ft = argextype(stmt.args[1], ir)
     has_free_typevars(ft) && return nothing
     f = singleton_type(ft)
     f === Core.Intrinsics.llvmcall && return nothing
@@ -916,7 +916,7 @@ function call_sig(ir::IRCode, stmt::Expr)
     argtypes = Vector{Any}(undef, length(stmt.args))
     argtypes[1] = ft
     for i = 2:length(stmt.args)
-        a = argextype(stmt.args[i], ir, ir.sptypes)
+        a = argextype(stmt.args[i], ir)
         (a === Bottom || isvarargtype(a)) && return nothing
         argtypes[i] = a
     end
@@ -1025,10 +1025,10 @@ end
 
 function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), state::InliningState)
     if isa(info, OpaqueClosureCreateInfo)
-        lbt = argextype(stmt.args[3], ir, ir.sptypes)
+        lbt = argextype(stmt.args[3], ir)
         lb, exact = instanceof_tfunc(lbt)
         exact || return
-        ubt = argextype(stmt.args[4], ir, ir.sptypes)
+        ubt = argextype(stmt.args[4], ir)
         ub, exact = instanceof_tfunc(ubt)
         exact || return
         # Narrow opaque closure type
@@ -1046,7 +1046,7 @@ end
 # For primitives, we do that right here. For proper calls, we will
 # discover this when we consult the caches.
 function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecialize(rt))
-    if stmt_effect_free(stmt, rt, ir, ir.sptypes)
+    if stmt_effect_free(stmt, rt, ir)
         ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
     end
 end
@@ -1346,7 +1346,7 @@ end
 
 function mk_tuplecall!(compact::IncrementalCompact, args::Vector{Any}, line_idx::Int32)
     e = Expr(:call, TOP_TUPLE, args...)
-    etyp = tuple_tfunc(Any[compact_exprtype(compact, args[i]) for i in 1:length(args)])
+    etyp = tuple_tfunc(Any[argextype(args[i], compact) for i in 1:length(args)])
     return insert_node_here!(compact, NewInstruction(e, etyp, line_idx))
 end
 
