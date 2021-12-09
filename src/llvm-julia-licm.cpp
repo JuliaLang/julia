@@ -117,14 +117,24 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                     }
                 }
                 else if (callee == write_barrier_func) {
-                    L->makeLoopInvariant(call, changed);
+                    bool valid = true;
+                    for (std::size_t i = 0; i < call->getNumArgOperands(); i++) {
+                        if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                    if (valid) {
+                        call->moveBefore(preheader->getTerminator());
+                        changed = true;
+                    }
                 }
                 else if (callee == alloc_obj_func) {
                     jl_alloc::AllocUseInfo use_info;
                     jl_alloc::CheckInst::Stack check_stack;
                     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
-                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()).with_ignore_return(true));
-                    if (use_info.escaped || use_info.addrescaped || use_info.hasunknownmem) {
+                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()));
+                    if (use_info.escaped || use_info.addrescaped) {
                         continue;
                     }
                     bool valid = true;

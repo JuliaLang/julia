@@ -220,6 +220,11 @@ void Optimizer::optimizeAll()
                 optimizeTag(orig);
             continue;
         }
+        if (use_info.haserror || use_info.returned) {
+            if (use_info.hastypeof)
+                optimizeTag(orig);
+            continue;
+        }
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
             // No one took the address, no one reads anything and there's no meaningful

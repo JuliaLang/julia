@@ -80,6 +80,11 @@ namespace jl_alloc {
         // This is a weaker form of `addrescaped` since `hasload` can still be used
         // to see if the memory is actually being used
         bool hasunknownmem:1;
+        // The object is returned
+        bool returned:1;
+        // The object is used in an error function
+        bool haserror:1;
+
         void reset()
         {
             escaped = false;
@@ -90,6 +95,8 @@ namespace jl_alloc {
             refstore = false;
             hastypeof = false;
             hasunknownmem = false;
+            returned = false;
+            haserror = false;
             uses.clear();
             preserves.clear();
             memops.clear();
@@ -120,19 +127,11 @@ namespace jl_alloc {
         //will not be considered. Defaults to nullptr, which means all uses of the allocation
         //are considered
         const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set;
-        //Whether or not to consider returns to escape the function. Defaults to false,
-        //which means a return of an allocation does cause an escape.
-        bool ignore_return;
 
         EscapeAnalysisOptionalArgs() = default;
 
         EscapeAnalysisOptionalArgs &with_valid_set(decltype(valid_set) valid_set) {
             this->valid_set = valid_set;
-            return *this;
-        }
-
-        EscapeAnalysisOptionalArgs &with_ignore_return(decltype(ignore_return) ignore_return) {
-            this->ignore_return = ignore_return;
             return *this;
         }
     };

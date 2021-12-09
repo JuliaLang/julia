@@ -208,6 +208,10 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
             if (!call->isBundleOperand(opno) ||
                 call->getOperandBundleForOperand(opno).getTagName() != "jl_roots") {
+                if (isa<UnreachableInst>(call->getParent()->getTerminator())) {
+                    required.use_info.haserror = true;
+                    return true;
+                }
                 required.use_info.escaped = true;
                 return false;
             }
@@ -264,9 +268,9 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
             cur.offset = (uint32_t)next_offset;
             return true;
         }
-        if (options.ignore_return && isa<ReturnInst>(inst)) {
-            return true; // Sometimes a returned object can still be optimized
-            //(e.g. loop allocation hoisting)
+        if (isa<ReturnInst>(inst)) {
+            required.use_info.returned = true;
+            return true;
         }
         required.use_info.escaped = true;
         return false;
