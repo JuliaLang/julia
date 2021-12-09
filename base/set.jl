@@ -432,6 +432,7 @@ function allunique(A::AbstractArray)
             end
             a || return false
         end
+        return true
     else
         invoke(allunique, Tuple{Any}, A)
     end
