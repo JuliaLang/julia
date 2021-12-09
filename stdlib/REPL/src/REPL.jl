@@ -1278,7 +1278,7 @@ function _without_strings_and_comments(s::AbstractString)
     # """hello"""
     s = replace(s, r"\"\"\".*\"\"\"" => "")
     # "hello"
-    s = replace(s, r"\"[^\"]*\"" => "")
+    s = replace(s, r"\"([^\"]|\\\")*\"" => "")
     # `hello`
     s = replace(s, r"\`[^(\`)]*\`" => "")
 
