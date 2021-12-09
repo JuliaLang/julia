@@ -54,7 +54,35 @@ end
 kind(k::Kind) = k
 kind(raw::TzTokens.RawToken) = TzTokens.exactkind(raw)
 
-is_prec_assignment(tok) = K"BEGIN_ASSIGNMENTS" < kind(tok) < K"END_ASSIGNMENTS"
+# Predicates for operator precedence
+is_prec_assignment(t)  = K"BEGIN_ASSIGNMENTS" < kind(t) < K"END_ASSIGNMENTS"
+is_prec_pair(t)        = K"BEGIN_PAIRARROW"   < kind(t) < K"END_PAIRARROW"
+is_prec_conditional(t) = K"BEGIN_CONDITIONAL" < kind(t) < K"END_CONDITIONAL"
+is_prec_arrow(t)       = K"BEGIN_ARROW"       < kind(t) < K"END_ARROW"
+is_prec_lazy_or(t)     = K"BEGIN_LAZYOR"      < kind(t) < K"END_LAZYOR"
+is_prec_lazy_and(t)    = K"BEGIN_LAZYAND"     < kind(t) < K"END_LAZYAND"
+is_prec_comparison(t)  = K"BEGIN_COMPARISON"  < kind(t) < K"END_COMPARISON"
+is_prec_pipe(t)        = K"BEGIN_PIPE"        < kind(t) < K"END_PIPE"
+is_prec_colon(t)       = K"BEGIN_COLON"       < kind(t) < K"END_COLON"
+is_prec_plus(t)        = K"BEGIN_PLUS"        < kind(t) < K"END_PLUS"
+is_prec_bitshift(t)    = K"BEGIN_BITSHIFTS"   < kind(t) < K"END_BITSHIFTS"
+is_prec_times(t)       = K"BEGIN_TIMES"       < kind(t) < K"END_TIMES"
+is_prec_rational(t)    = K"BEGIN_RATIONAL"    < kind(t) < K"END_RATIONAL"
+is_prec_power(t)       = K"BEGIN_POWER"       < kind(t) < K"END_POWER"
+is_prec_decl(t)        = K"BEGIN_DECL"        < kind(t) < K"END_DECL"
+is_prec_where(t)       = K"BEGIN_WHERE"       < kind(t) < K"END_WHERE"
+is_prec_dot(t)         = K"BEGIN_DOT"         < kind(t) < K"END_DOT"
+is_prec_unicode_ops(t) = K"BEGIN_UNICODE_OPS" < kind(t) < K"END_UNICODE_OPS"
+
+is_prec_pipe_lt(t)     = kind(t) == K"<|"
+is_prec_pipe_gt(t)     = kind(t) == K"|>"
+
+# Operators which are boty unary and binary
+function is_both_unary_and_binary(t)
+    # TODO: Do we need to check dotop as well here?
+    kind(t) in (K"$", K"&", K"~",             # <- dotop disallowed?
+                K"+", K"-", K"⋆", K"±", K"∓") # dotop allowed
+end
 
 """
 Get the "binding power" (precedence level) of an operator kind
@@ -81,41 +109,22 @@ function binding_power(k::Kind)
 end
 
 function _kind_str(k::Kind)
-    if k in (K"Identifier", K"VarIdentifier")
-        "Identifier"
-    elseif isliteral(k)
-        "Literal"
-    elseif k == K"Comment"
-        "Comment"
-    elseif k == K"Whitespace"
-        "Whitespace"
-    elseif k == K"NewlineWs"
-        "NewlineWs"
-    elseif iskeyword(k)
-        lowercase(string(k))
-    elseif isoperator(k)
-        string(TzTokens.UNICODE_OPS_REVERSE[k]) 
-    elseif k == K"("
-        "("
-    elseif k == K"["
-        "["
-    elseif k == K"{"
-        "{"
-    elseif k == K")"
-        ")"
-    elseif k == K"]"
-        "]"
-    elseif k == K"}"
-        "}"
-    elseif k == K"@"
-        "@"
-    elseif k == K","
-        ","
-    elseif k == K";"
-        ";"
-    else
-        lowercase(string(k))
-    end
+    u = untokenize(k)
+    return !isnothing(u)                           ? u            :
+           k in (K"Identifier", K"VarIdentifier")  ? "Identifier" :
+           isliteral(k)                            ? "Literal"    :
+           k == K"Comment"                         ? "Comment"    :
+           k == K"Whitespace"                      ? "Whitespace" :
+           k == K"NewlineWs"                       ? "NewlineWs"  :
+           lowercase(string(k))
+end
+
+"""
+Return the string representation of a token kind, or `nothing` if the kind
+represents a class of tokens like K"Identifier".
+"""
+function untokenize(k::Kind)
+    get(_kind_to_str, k, nothing)
 end
 
 """
@@ -168,7 +177,6 @@ const var"function"    =  @_K FUNCTION
 const var"global"      =  @_K GLOBAL
 const var"if"          =  @_K IF
 const var"import"      =  @_K IMPORT
-const var"importall"   =  @_K IMPORTALL
 const var"let"         =  @_K LET
 const var"local"       =  @_K LOCAL
 const var"macro"       =  @_K MACRO
@@ -713,8 +721,8 @@ const END_COMPARISON = @_K end_comparison
 
 # Level 7
 const BEGIN_PIPE  =  @_K begin_pipe
-const var"|>"     =  @_K LPIPE
-const var"<|"     =  @_K RPIPE
+const var"<|"     =  @_K LPIPE
+const var"|>"     =  @_K RPIPE
 const END_PIPE    =  @_K end_pipe
 
 # Level 8
@@ -949,18 +957,47 @@ const END_UNICODE_OPS    =  @_K end_unicode_ops
 
 const END_OPS = @_K end_ops
 
-# Cute synonyms
+# (Too?) cute synonyms
 const var" "      =  @_K WHITESPACE
 const var"\n"      =  @_K NEWLINE_WS
 
 # Our custom syntax tokens
-
 const BEGIN_SYNTAX_KINDS = @_K begin_syntax_kinds
-const toplevel = @_K TOPLEVEL
-const call     = @_K CALL
-const ref      = @_K REF
-const block    = @_K BLOCK
+const block               = @_K BLOCK
+const call                = @_K CALL
+const comparison          = @_K COMPARISON
+const curly               = @_K CURLY
+const string              = @_K STRING_INTERP
+const toplevel            = @_K TOPLEVEL
+const tuple               = @_K TUPLE
+const ref                 = @_K REF
+const vect                = @_K VECT
+const braces              = @_K BRACES
+const bracescat           = @_K BRACESCAT
+const hcat                = @_K HCAT
+const vcat                = @_K VCAT
+const ncat                = @_K NCAT
+const typed_hcat          = @_K TYPED_HCAT
+const typed_vcat          = @_K TYPED_VCAT
+const typed_ncat          = @_K TYPED_NCAT
+const generator           = @_K GENERATOR
+const flatten             = @_K FLATTEN
+const comprehension       = @_K COMPREHENSION
+const typed_comprehension = @_K TYPED_COMPREHENSION
 const END_SYNTAX_KINDS = @_K end_syntax_kinds
 
-end
+end # module Kinds
 
+# Mapping from kinds to their unique string representation, if it exists
+const _kind_to_str =
+    Dict{Kind,String}(k=>string(s) for (k,s) in TzTokens.UNICODE_OPS_REVERSE)
+for c in "([{}])@,;"
+    _kind_to_str[getfield(Kinds, Symbol(c))] = string(c)
+end
+for kw in split("""abstract baremodule begin break catch const
+                   continue do else elseif end export finally for
+                   function global if import let local
+                   macro module mutable new outer primitive quote
+                   return struct try type using while""")
+    _kind_to_str[getfield(Kinds, Symbol(kw))] = kw
+end
