@@ -425,13 +425,24 @@ function allunique(A::AbstractArray)
         return true
     elseif length(A) < 25 && IndexStyle(A) isa IndexLinear
         # then linear search is faster, even in worst case
-        return all(!any(isequal(A[i]), @view A[i+1:end]) for i in LinearIndices(A))
+        for i in LinearIndices(A)
+            y = A[i]
+            a = foldl(@view A[begin:i-1]; init=true) do b, x
+                b & !isequal(y, x)
+            end
+            a || return false
+        end
     else
         invoke(allunique, Tuple{Any}, A)
     end
 end
 
-allunique(t::Tuple) = !any(isequal(first(t)), tail(t)) && allunique(tail(t))
+function allunique(t::Tuple)
+    a = afoldl(true, tail(t)...) do b, x
+        b & !isequal(first(t), x)
+    end
+    a && allunique(tail(t))
+end
 allunique(t::Tuple{}) = true
 allunique(t::Any32) = invoke(allunique, Tuple{Any}, t)
 
