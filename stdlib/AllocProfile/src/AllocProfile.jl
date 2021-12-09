@@ -24,7 +24,7 @@ struct TypeNamePair
 end
 
 struct FreeInfo
-    type_addr::UInt
+    type::Ptr{Type}
     count::UInt
 end
 
@@ -32,9 +32,6 @@ end
 struct RawAllocResults
     allocs::Ptr{RawAlloc}
     num_allocs::Csize_t
-
-    type_names::Ptr{TypeNamePair}
-    num_type_names::Csize_t
 
     frees::Ptr{FreeInfo}
     num_frees::Csize_t
@@ -54,55 +51,55 @@ end
 # decoded results
 
 struct Alloc
-    # type::Type
-    type_addr::Ptr{Type} # TODO: fix segfault when loading this
+    type::Type
     stacktrace::StackTrace
     size::Int
 end
 
 struct AllocResults
     allocs::Vector{Alloc}
-    frees::Dict{String,UInt} # type name => string
-    type_names::Dict{UInt,String} # type addr => type name
+    frees::Dict{Type,UInt}
 end
 
 const BacktraceEntry = Union{Ptr{Cvoid}, InterpreterIP}
 const BacktraceCache = Dict{BacktraceEntry,Vector{StackFrame}}
 
+# loading anything below this seems to segfault
+# TODO: find out what's going on
+TYPE_PTR_THRESHOLD = 0x0000000100000000
+
+function load_type(ptr::Ptr{Type})::Type
+    if UInt(ptr) < TYPE_PTR_THRESHOLD
+        return Missing
+    end
+    return unsafe_pointer_to_objref(ptr)
+end
+
 function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
     Alloc(
-        # unsafe_pointer_to_objref(convert(Ptr{Any}, raw_alloc.type)),
-        raw_alloc.type,
+        load_type(raw_alloc.type),
         stacktrace_memoized(cache, _reformat_bt(raw_alloc.backtrace)),
         UInt(raw_alloc.size)
     )
 end
 
 function decode(raw_results::RawAllocResults)::AllocResults
-    type_names = Dict{UInt,String}()
-    for i in 1:raw_results.num_type_names
-        pair = unsafe_load(raw_results.type_names, i)
-        type_addr = convert(UInt, pair.addr)
-        type_names[type_addr] = unsafe_string(pair.name)
-    end
-
     cache = BacktraceCache()
     allocs = [
         decode_alloc(cache, unsafe_load(raw_results.allocs, i))
         for i in 1:raw_results.num_allocs
     ]
 
-    frees = Dict{String,UInt}()
+    frees = Dict{Type,UInt}()
     for i in 1:raw_results.num_frees
         free = unsafe_load(raw_results.frees, i)
-        type_name = type_names[free.type_addr]
-        frees[type_name] = free.count
+        type = load_type(free.type)
+        frees[type] = free.count
     end
     
     return AllocResults(
         allocs,
-        frees,
-        type_names
+        frees
     )
 end
 
