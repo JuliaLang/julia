@@ -420,23 +420,21 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
-function allunique(x::AbstractArray)
-    if length(x) < 2
+function allunique(A::AbstractArray)
+    if length(A) < 2
         return true
-    elseif length(x) < 32 && IndexStyle(x) isa IndexLinear
+    elseif length(A) < 25 && IndexStyle(A) isa IndexLinear
         # then linear search is faster, even in worst case
-        return all(!(x[i] in @view x[i+1:end]) for i in LinearIndices(x))
-    elseif length(x) > 31 && !allunique(NTuple{3}(x))
-        # catches e.g. fill(pi, 365), worst case costs <5%
-        return false
+        return all(!any(isequal(A[i]), @view A[i+1:end]) for i in LinearIndices(A))
     else
-        invoke(allunique, Tuple{Any}, x)
+        invoke(allunique, Tuple{Any}, A)
     end
 end
 
-allunique(x::Tuple) = first(x) ∉ tail(x) && allunique(tail(x))
-allunique(x::Tuple{}) = true
-allunique(x::Any32) = invoke(allunique, Tuple{Any})
+allunique(t::Tuple) = !any(isequal(first(t)), tail(t)) && allunique(tail(t))
+allunique(t::Tuple{}) = true
+allunique(t::Any32) = invoke(allunique, Tuple{Any}, t)
+
 
 """
     allequal(itr) -> Bool

@@ -506,6 +506,10 @@ end
     @test allunique(eachrow(hcat(1:10, 1:10)))
     @test allunique(x for x in 'A':'Z' if randn()>0)
     @test !allunique(x for x in repeat(1:2000, 3) if true)
+    @test allunique([0.0, -0.0])
+    @test allunique(x for x in [0.0, -0.0] if true)
+    @test !allunique([NaN, NaN])
+    @test !allunique(x for x in [NaN, NaN] if true)
     # ranges
     @test allunique(4:7)
     @test allunique(1:1)
@@ -527,6 +531,8 @@ end
     @test allunique((1,2,3))
     @test allunique(ntuple(identity, 40))
     @test !allunique((1,2,3,4,3))
+    @test allunique((0.0, -0.0))
+    @test !allunique((NaN, NaN))
 end
 
 @testset "allequal" begin
