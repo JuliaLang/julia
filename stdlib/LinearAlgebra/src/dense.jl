@@ -1658,12 +1658,14 @@ julia> A*X + X*A' + B
  6.66134e-16  8.88178e-16
 ```
 """
-function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
+function lyap(A::AbstractMatrix, C::AbstractMatrix)
+    T = promote_type(float(eltype(A)), float(eltype(C)))
+    return lyap(copy_similar(A, T), copy_similar(C, T))
+end
+function lyap(A::AbstractMatrix{T}, C::AbstractMatrix{T}) where {T<:BlasFloat}
     R, Q = schur(A)
-
     D = -(adjoint(Q) * (C*Q))
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
     rmul!(Q*(Y * adjoint(Q)), inv(scale))
 end
-lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
 lyap(a::Union{Real,Complex}, c::Union{Real,Complex}) = -c/(2real(a))
