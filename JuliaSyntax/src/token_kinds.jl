@@ -29,7 +29,6 @@
         GLOBAL,
         IF,
         IMPORT,
-        IMPORTALL,
         LET,
         LOCAL,
         MACRO,
