@@ -573,8 +573,8 @@
 
         # Level 7
         begin_pipe,
-            LPIPE, # |>
-            RPIPE, # <|
+            LPIPE, # <|
+            RPIPE, # |>
         end_pipe,
 
         # Level 8
