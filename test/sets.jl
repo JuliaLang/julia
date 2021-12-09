@@ -513,6 +513,11 @@ end
              LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
         @test allunique(r) == invoke(allunique, Tuple{Any}, r)
     end
+    # tuples
+    @test allunique(())
+    @test allunique((1,2,3))
+    @test allunique(ntuple(identity, 40))
+    @test !allunique((1,2,3,4,3))
 end
 
 @testset "allequal" begin

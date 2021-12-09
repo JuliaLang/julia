@@ -420,6 +420,10 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
+allunique(x::Tuple) = first(x) ∉ tail(x) && allunique(tail(x))
+allunique(x::Tuple{}) = true
+allunique(x::Any32) = invoke(allunique, Tuple{Any})
+
 """
     allequal(itr) -> Bool
 
