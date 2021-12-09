@@ -156,7 +156,6 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream) {
     while (gc_num.pause < 2) {
         jl_gc_collect(JL_GC_AUTO);
     }
-    jl_printf(JL_STDERR, "pause: %d\n", gc_num.pause);
 
     // Do a full GC mark (and incremental sweep), which will invoke our callbacks on `g_snapshot`
     jl_gc_collect(JL_GC_FULL);
