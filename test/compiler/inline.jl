@@ -381,7 +381,7 @@ f_oc_getfield(x) = (@opaque ()->x)()
 @test fully_eliminated(f_oc_getfield, Tuple{Int})
 
 import Core.Compiler: argextype, singleton_type
-const EMPTY_SPTYPES = Core.Compiler.EMPTY_SLOTTYPES
+const EMPTY_SPTYPES = Any[]
 
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
