@@ -427,7 +427,7 @@ function allunique(A::AbstractArray)
         # then linear search is faster, even in worst case
         for i in LinearIndices(A)
             y = A[i]
-            a = foldl(@view A[begin:i-1]; init=true) do b, x
+            a = foldl(view(A, firstindex(A):(i-1)); init=true) do b, x
                 b & !isequal(y, x)
             end
             a || return false
