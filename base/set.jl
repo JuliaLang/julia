@@ -420,6 +420,14 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
+function allunique(x::AbstractArray)
+    if length(x) < 32  # then linear search is faster, even in worst case
+        return @inbounds all(!(x[i] in @view x[i+1:end]) for i in LinearIndices(x))
+    else
+        invoke(allunique, Tuple{Any})
+    end
+end
+
 allunique(x::Tuple) = first(x) ∉ tail(x) && allunique(tail(x))
 allunique(x::Tuple{}) = true
 allunique(x::Any32) = invoke(allunique, Tuple{Any})
