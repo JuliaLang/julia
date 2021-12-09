@@ -384,16 +384,16 @@ See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
-julia> a = [1; 2; 3]
-3-element Vector{Int64}:
- 1
- 2
- 3
-
-julia> allunique(a)
+julia> allunique([1, 2, 3])
 true
 
-julia> allunique([a, a])
+julia> allunique([1, 2, 1, 2])
+false
+
+julia> allunique(Real[1, 1.0, 2])
+false
+
+julia> allunique([NaN, 2.0, NaN, 4.0])
 false
 ```
 """
