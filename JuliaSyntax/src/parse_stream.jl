@@ -157,8 +157,36 @@ function bump(stream::ParseStream, flags=EMPTY_FLAGS)
     end
     span = TextSpan(SyntaxHead(kind(tok), flags), first_byte(tok), last_byte(tok))
     push!(stream.spans, span)
+    mark = lastindex(stream.spans)
     stream.next_byte = last_byte(tok) + 1
-    nothing
+    mark
+end
+
+"""
+Hack: Reset flags of an existing token in the output stream
+
+This is necessary on some occasions when we don't know whether a token will
+have TRIVIA_FLAG set until.
+"""
+function set_flags!(stream::ParseStream, mark, flags)
+    text_span = stream.spans[mark]
+    stream.spans[mark] = TextSpan(SyntaxHead(kind(text_span), flags),
+                                  first_byte(text_span), last_byte(text_span))
+end
+
+#=
+function accept(stream::ParseStream, k::Kind)
+    if peek(stream) != k
+        return false
+    else
+        bump(stream, TRIVIA_FLAG)
+    end
+end
+=#
+
+function bump(stream::ParseStream, k::Kind, flags=EMPTY_FLAGS)
+    @assert peek(stream) == k
+    bump(stream, flags)
 end
 
 function Base.position(stream::ParseStream)
@@ -166,24 +194,34 @@ function Base.position(stream::ParseStream)
 end
 
 """
-    emit(stream, start_position, kind [, flags = EMPTY_FLAGS])
+    emit(stream, start_mark, kind, flags = EMPTY_FLAGS; error=nothing)
 
 Emit a new text span into the output which covers source bytes from
-`start_position` to the end of the most recent token which was `bump()`'ed.
-The `start_position` of the span should be a previous return value of
+`start_mark` to the end of the most recent token which was `bump()`'ed.
+The `start_mark` of the span should be a previous return value of
 `position()`.
 """
-function emit(stream::ParseStream, start_position::Integer, kind::Kind,
+function emit(stream::ParseStream, start_mark::Integer, kind::Kind,
               flags::RawFlags = EMPTY_FLAGS; error=nothing)
     if !isnothing(error)
         flags |= ERROR_FLAG
     end
-    text_span = TextSpan(SyntaxHead(kind, flags), start_position, stream.next_byte-1)
+    text_span = TextSpan(SyntaxHead(kind, flags), start_mark, stream.next_byte-1)
     if !isnothing(error)
         push!(stream.diagnostics, Diagnostic(text_span, error))
     end
     push!(stream.spans, text_span)
     return nothing
+end
+
+"""
+Emit a diagnostic at the position of the next token
+"""
+function emit_diagnostic(stream::ParseStream; error)
+    byte = first_byte(peek_token(stream))
+    # It's a bit weird to require supplying a SyntaxHead here...
+    text_span = TextSpan(SyntaxHead(K"Error", EMPTY_FLAGS), byte, byte)
+    push!(stream.diagnostics, Diagnostic(text_span, error))
 end
 
 
@@ -230,6 +268,11 @@ function to_raw_tree(st)
     return only(stack).node
 end
 
+function show_diagnostics(io::IO, stream::ParseStream, code)
+    for d in stream.diagnostics
+        show_diagnostic(io, d, code)
+    end
+end
 
 #-------------------------------------------------------------------------------
 """
@@ -274,6 +317,10 @@ function ParseState(ps::ParseState; range_colon_enabled=nothing,
         where_enabled === nothing ? ps.where_enabled : where_enabled)
 end
 
-peek(ps::ParseState, args...) = peek(ps.stream, args...)
-bump(ps::ParseState, args...) = bump(ps.stream, args...)
-emit(ps::ParseState, args...) = emit(ps.stream, args...)
+peek(ps::ParseState, args...)          = peek(ps.stream, args...)
+peek_token(ps::ParseState, args...)    = peek_token(ps.stream, args...)
+bump(ps::ParseState, args...)          = bump(ps.stream, args...)
+set_flags!(ps::ParseState, args...)    = set_flags!(ps.stream, args...)
+Base.position(ps::ParseState, args...) = position(ps.stream, args...)
+emit(ps::ParseState, args...; kws...)  = emit(ps.stream, args...; kws...)
+emit_diagnostic(ps::ParseState, args...; kws...)  = emit_diagnostic(ps.stream, args...; kws...)

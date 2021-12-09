@@ -87,7 +87,7 @@ function _show_green_node(io, node, indent, pos, str, show_trivia)
         line = rpad(line, 41) * "✘"
     end
     if is_leaf && !isnothing(str)
-        line = string(rpad(line, 43), ' ', repr(str[pos:pos + span(node) - 1]))
+        line = string(rpad(line, 43), ' ', repr(str[pos:prevind(str, pos + span(node))]))
     end
     line = line*"\n"
     if iserror(node)
