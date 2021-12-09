@@ -28,7 +28,6 @@ struct AllocProfile {
     int skip_every;
 
     vector<RawAlloc> allocs;
-    unordered_map<size_t, string> type_name_by_address;
     unordered_map<size_t, size_t> type_address_by_value_address;
     unordered_map<size_t, size_t> frees_by_type_address;
 
@@ -40,35 +39,6 @@ struct AllocProfile {
 
 AllocProfile g_alloc_profile;
 int g_alloc_profile_enabled = false;
-
-// == utility functions ==
-
-string _type_as_string(jl_datatype_t *type) {
-    if ((uintptr_t)type < 4096U) {
-        return "<corrupt>";
-    } else if (type == (jl_datatype_t*)jl_buff_tag) {
-        return "<buffer>";
-    } else if (type == (jl_datatype_t*)jl_malloc_tag) {
-        return "<malloc>";
-    } else if (type == jl_string_type) {
-        return "<string>";
-    } else if (type == jl_symbol_type) {
-        return "<symbol>";
-    } else if (jl_is_datatype(type)) {
-        ios_t str_;
-        ios_mem(&str_, 10024);
-        JL_STREAM* str = (JL_STREAM*)&str_;
-
-        jl_static_show(str, (jl_value_t*)type);
-
-        string type_str = string((const char*)str_.buf, str_.size);
-        ios_close(&str_);
-
-        return type_str;
-    } else {
-        return "<missing>";
-    }
-}
 
 // === stack stuff ===
 
@@ -101,21 +71,6 @@ JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
         g_alloc_profile.allocs.size()
     };
     
-    // package up type names
-    results.num_type_names = g_alloc_profile.type_name_by_address.size();
-    // TODO: free this malloc
-    results.type_names = (TypeNamePair*) malloc(sizeof(TypeNamePair) * results.num_type_names);
-    int i = 0;
-    for (auto type_addr_name : g_alloc_profile.type_name_by_address) {
-        // TODO: free this malloc
-        char *name = (char *) malloc(type_addr_name.second.length() + 1);
-        memcpy(name, type_addr_name.second.c_str(), type_addr_name.second.length() + 1);
-        results.type_names[i++] = TypeNamePair{
-            type_addr_name.first,
-            name,
-        };
-    }
-
     // package up frees
     results.num_frees = g_alloc_profile.frees_by_type_address.size();
     results.frees = (FreeInfo*) malloc(sizeof(FreeInfo) * results.num_frees);
@@ -133,7 +88,6 @@ JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
 JL_DLLEXPORT void jl_free_alloc_profile() {
     g_alloc_profile.frees_by_type_address.clear();
     g_alloc_profile.type_address_by_value_address.clear();
-    g_alloc_profile.type_name_by_address.clear();
     g_alloc_profile.alloc_counter = 0;
     for (auto alloc : g_alloc_profile.allocs) {
         free(alloc.backtrace.data);
@@ -145,16 +99,6 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
 
 // == callbacks called into by the outside ==
 
-void register_type_string(jl_datatype_t *type) {
-    auto id = g_alloc_profile.type_name_by_address.find((size_t)type);
-    if (id != g_alloc_profile.type_name_by_address.end()) {
-        return;
-    }
-
-    string type_str = _type_as_string(type);
-    g_alloc_profile.type_name_by_address[(size_t)type] = type_str;
-}
-
 void _record_allocated_value(jl_value_t *val, size_t size) {
     auto& profile = g_alloc_profile;
     profile.alloc_counter++;
@@ -165,7 +109,6 @@ void _record_allocated_value(jl_value_t *val, size_t size) {
     profile.last_recorded_alloc = profile.alloc_counter;
 
     auto type = (jl_datatype_t*)jl_typeof(val);
-    register_type_string(type);
 
     profile.type_address_by_value_address[(size_t)val] = (size_t)type;
 
@@ -192,6 +135,8 @@ void _record_freed_value(jl_taggedvalue_t *tagged_val) {
         g_alloc_profile.frees_by_type_address[type_address->second] = frees->second + 1;
     }
 }
+
+// TODO: remove these or make them toggle-able.
 
 void _report_gc_started() {
     // ...

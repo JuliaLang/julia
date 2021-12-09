@@ -24,9 +24,6 @@ struct RawAllocResults {
     void *allocs; // Alloc* (see gc-alloc-profiler.cpp)
     size_t num_allocs;
 
-    struct TypeNamePair *type_names; // an array
-    size_t num_type_names;
-
     struct FreeInfo *frees;
     size_t num_frees;
 };
