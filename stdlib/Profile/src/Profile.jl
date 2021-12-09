@@ -122,6 +122,12 @@ struct ProfileFormat
     end
 end
 
+# offsets of the metadata in the data stream
+const META_OFFSET_SLEEPSTATE = 2
+const META_OFFSET_CPUCYCLECLOCK = 3
+const META_OFFSET_TASKID = 4
+const META_OFFSET_THREADID = 5
+
 """
     print([io::IO = stdout,] [data::Vector]; kwargs...)
 
@@ -267,8 +273,8 @@ function get_task_ids(data::Vector{<:Unsigned}, threadid = nothing)
     taskids = UInt[]
     for i in length(data):-1:1
         if is_block_end(data, i)
-            if isnothing(threadid) || data[i - 5] == threadid
-                taskid = data[i - 4]
+            if isnothing(threadid) || data[i - META_OFFSET_THREADID] == threadid
+                taskid = data[i - META_OFFSET_TASKID]
                 !in(taskid, taskids) && push!(taskids, taskid)
             end
         end
@@ -280,8 +286,8 @@ function get_thread_ids(data::Vector{<:Unsigned}, taskid = nothing)
     threadids = Int[]
     for i in length(data):-1:1
         if is_block_end(data, i)
-            if isnothing(taskid) || data[i - 4] == taskid
-                threadid = data[i - 5]
+            if isnothing(taskid) || data[i - META_OFFSET_TASKID] == taskid
+                threadid = data[i - META_OFFSET_THREADID]
                 !in(threadid, threadids) && push!(threadids, threadid)
             end
         end
@@ -296,13 +302,20 @@ function is_block_end(data, i)
     # and we could have (though very unlikely):
     # 1:<stack><metadata><null><null><NULL><metadata><null><null>:end
     # and we want to ignore the triple NULL (which is an ip).
-    data[i] == 0 || return false        # first block end null
-    data[i - 1] == 0 || return false    # second block end null
-    data[i - 2] in 1:2 || return false  # sleep state
-    data[i - 3] != 0 || return false    # cpu_cycle_clock
-    data[i - 4] != 0 || return false    # taskid
-    data[i - 5] != 0 || return false    # threadid
-    return true
+    return data[i] == 0 && data[i - 1] == 0 && data[i - META_OFFSET_SLEEPSTATE] != 0
+end
+
+function has_meta(data)
+    for i in 6:length(data)
+        data[i] == 0 || continue            # first block end null
+        data[i - 1] == 0 || continue        # second block end null
+        data[i - META_OFFSET_SLEEPSTATE] in 1:2 || continue
+        data[i - META_OFFSET_CPUCYCLECLOCK] != 0 || continue
+        data[i - META_OFFSET_TASKID] != 0 || continue
+        data[i - META_OFFSET_THREADID] != 0 || continue
+        return true
+    end
+    return false
 end
 
 """
@@ -505,15 +518,15 @@ error_codes = Dict(
 
 
 """
-    fetch(;include_meta = false) -> data
+    fetch(;include_meta = true) -> data
 
 Returns a copy of the buffer of profile backtraces. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
-By default metadata such as threadid and taskid will be stripped. Set `include_meta` to `true` to include metadata.
+By default metadata such as threadid and taskid is included. Set `include_meta` to `false` to strip metadata.
 """
-function fetch(;include_meta = false)
+function fetch(;include_meta = true)
     maxlen = maxlen_data()
     len = len_data()
     if is_buffer_full()
@@ -542,7 +555,7 @@ function strip_meta(data)
         i -= 1
         j -= 1
     end
-    @assert i == j == 0 "metadata stripping failed i=$i j=$j data[1:i]=$(data[1:i])"
+    @assert i == j == 0 "metadata stripping failed"
     return data_stripped
 end
 
@@ -556,7 +569,7 @@ details of the metadata format.
 function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
     threadid == 0 && error("Fake threadid cannot be 0")
     taskid == 0 && error("Fake taskid cannot be 0")
-    any(Base.Fix1(is_block_end, data), eachindex(data)) && error("input already has metadata")
+    !isempty(data) && has_meta(data) && error("input already has metadata")
     cpu_clock_cycle = UInt64(99)
     data_with_meta = similar(data, 0)
     for i = 1:length(data)
@@ -576,6 +589,7 @@ end
 # Merging multiple equivalent entries and recursive calls
 function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool,
                     threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}) where {T}
+    !isempty(data) && !has_meta(data) && error("Profile data is missing required metadata")
     lilist = StackFrame[]
     n = Int[]
     m = Int[]
@@ -591,10 +605,10 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
         ip = data[i]
         if is_block_end(data, i)
             # read metadata
-            thread_sleeping = data[i - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
-            # cpu_cycle_clock = data[i - 3]
-            taskid = data[i - 4]
-            threadid = data[i - 5]
+            thread_sleeping = data[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = data[i - META_OFFSET_CPUCYCLECLOCK]
+            taskid = data[i - META_OFFSET_TASKID]
+            threadid = data[i - META_OFFSET_THREADID]
             if !in(threadid, threads) || !in(taskid, tasks)
                 skip = true
                 continue
@@ -828,6 +842,7 @@ end
 # turn a list of backtraces into a tree (implicitly separated by NULL markers)
 function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool, recur::Symbol,
                 threads::Union{Int,AbstractVector{Int},Nothing}=nothing, tasks::Union{UInt,AbstractVector{UInt},Nothing}=nothing) where {T}
+    !isempty(all) && !has_meta(all) && error("Profile data is missing required metadata")
     parent = root
     tops = Vector{StackFrameTree{T}}()
     build = Vector{StackFrameTree{T}}()
@@ -839,10 +854,10 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         ip = all[i]
         if is_block_end(all, i)
             # read metadata
-            thread_sleeping = all[i - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
-            # cpu_cycle_clock = all[i - 3]
-            taskid = all[i - 4]
-            threadid = all[i - 5]
+            thread_sleeping = all[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = all[i - META_OFFSET_CPUCYCLECLOCK]
+            taskid = all[i - META_OFFSET_TASKID]
+            threadid = all[i - META_OFFSET_THREADID]
             if (threads !== nothing && !in(threadid, threads)) ||
                (tasks !== nothing && !in(taskid, tasks))
                 skip = true

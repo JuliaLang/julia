@@ -656,8 +656,33 @@ end
 SparseMatrixCSC(D::Diagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(D)
 function SparseMatrixCSC{Tv,Ti}(D::Diagonal) where {Tv,Ti}
     m = length(D.diag)
-    return SparseMatrixCSC(m, m, Vector(Ti(1):Ti(m+1)), Vector(Ti(1):Ti(m)), Vector{Tv}(D.diag))
+    m == 0 && return SparseMatrixCSC{Tv,Ti}(zeros(Tv, 0, 0))
+
+    nz = count(!iszero, D.diag)
+    nz_counter = 1
+
+    rowval = Vector{Ti}(undef, nz)
+    nzval =  Vector{Tv}(undef, nz)
+
+    nz == 0 && return SparseMatrixCSC{Tv,Ti}(m, m, ones(Ti, m+1), rowval, nzval)
+
+    colptr = Vector{Ti}(undef, m+1)
+
+    @inbounds for i=1:m
+        if !iszero(D.diag[i])
+            colptr[i] = nz_counter
+            rowval[nz_counter] = i
+            nzval[nz_counter]  = D.diag[i]
+            nz_counter += 1
+        else
+            colptr[i] = nz_counter
+        end
+    end
+    colptr[end] = nz_counter
+
+    return SparseMatrixCSC{Tv,Ti}(m, m, colptr, rowval, nzval)
 end
+
 SparseMatrixCSC(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
@@ -2172,8 +2197,10 @@ end
 _isless_fm(a, b)    =  b == b && ( a != a || isless(a, b) )
 _isgreater_fm(a, b) =  b == b && ( a != a || isless(b, a) )
 
-findmin(A::AbstractSparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = _findr(_isless_fm, A, region, Tv)
-findmax(A::AbstractSparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = _findr(_isgreater_fm, A, region, Tv)
+findmin(A::AbstractSparseMatrixCSC{Tv}, region::Union{Integer,Tuple{Integer},NTuple{2,Integer}}) where {Tv} =
+    _findr(_isless_fm, A, region, Tv)
+findmax(A::AbstractSparseMatrixCSC{Tv}, region::Union{Integer,Tuple{Integer},NTuple{2,Integer}}) where {Tv} =
+    _findr(_isgreater_fm, A, region, Tv)
 findmin(A::AbstractSparseMatrixCSC) = (r=findmin(A,(1,2)); (r[1][1], r[2][1]))
 findmax(A::AbstractSparseMatrixCSC) = (r=findmax(A,(1,2)); (r[1][1], r[2][1]))
 

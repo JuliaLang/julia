@@ -10,8 +10,16 @@ struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         new{T,V}(diag)
     end
 end
+Diagonal{T,V}(d::Diagonal) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(d.diag)
 Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
+
+function Base.promote_rule(A::Type{<:Diagonal{<:Any,V}}, B::Type{<:Diagonal{<:Any,W}}) where {V,W}
+    X = promote_type(V, W)
+    T = eltype(X)
+    isconcretetype(T) && return Diagonal{T,X}
+    return typejoin(A, B)
+end
 
 """
     Diagonal(V::AbstractVector)
@@ -88,7 +96,7 @@ similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
 
 copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
-size(D::Diagonal) = (length(D.diag),length(D.diag))
+size(D::Diagonal) = (n = length(D.diag); (n,n))
 
 function size(D::Diagonal,d::Integer)
     if d<1
@@ -349,13 +357,13 @@ end
 
 /(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D)), size(A)), A, D)
 
-rdiv!(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(A, A, D)
+rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
 function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     require_one_based_indexing(A)
     dd = D.diag
     m, n = size(A, 1), size(A, 2)
-    if (k = length(dd)) ≠ n
+    if (k = length(dd)) != n
         throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
     end
     @inbounds for j in 1:n
@@ -370,24 +378,28 @@ end
 
 \(D::Diagonal, B::AbstractVecOrMat) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B)), size(B)), D, B)
 
-ldiv!(D::Diagonal, B::AbstractVecOrMat) = ldiv!(B, D, B)
+ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
     require_one_based_indexing(A, B)
-    d = length(D.diag)
+    dd = D.diag
+    d = length(dd)
     m, n = size(A, 1), size(A, 2)
     m′, n′ = size(B, 1), size(B, 2)
     m == d || throw(DimensionMismatch("right hand side has $m rows but D is $d by $d"))
     (m, n) == (m′, n′) || throw(DimensionMismatch("expect output to be $m by $n, but got $m′ by $n′"))
     j = findfirst(iszero, D.diag)
     isnothing(j) || throw(SingularException(j))
-    B .= D.diag .\ A
+    @inbounds for j = 1:n, i = 1:m
+        B[i, j] = dd[i] \ A[i, j]
+    end
+    B
 end
 
 # Optimizations for \, / between Diagonals
 \(D::Diagonal, B::Diagonal) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B))), D, B)
 /(A::Diagonal, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D))), A, D)
 function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
-    n, k = length(Db.diag), length(Db.diag)
+    n, k = length(Db.diag), length(Da.diag)
     n == k || throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
     j = findfirst(iszero, Da.diag)
     isnothing(j) || throw(SingularException(j))
@@ -395,6 +407,88 @@ function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
     Dc
 end
 ldiv!(Dc::Diagonal, Da::Diagonal, Db::Diagonal) = Diagonal(ldiv!(Dc.diag, Da, Db.diag))
+
+# optimizations for (Sym)Tridiagonal and Diagonal
+@propagate_inbounds _getudiag(T::Tridiagonal, i) = T.du[i]
+@propagate_inbounds _getudiag(S::SymTridiagonal, i) = S.ev[i]
+@propagate_inbounds _getdiag(T::Tridiagonal, i) = T.d[i]
+@propagate_inbounds _getdiag(S::SymTridiagonal, i) = symmetric(S.dv[i], :U)::symmetric_type(eltype(S.dv))
+@propagate_inbounds _getldiag(T::Tridiagonal, i) = T.dl[i]
+@propagate_inbounds _getldiag(S::SymTridiagonal, i) = transpose(S.ev[i])
+
+function (\)(D::Diagonal, S::SymTridiagonal)
+    T = promote_op(\, eltype(D), eltype(S))
+    du = similar(S.ev, T, max(length(S.dv)-1, 0))
+    d  = similar(S.dv, T, length(S.dv))
+    dl = similar(S.ev, T, max(length(S.dv)-1, 0))
+    ldiv!(Tridiagonal(dl, d, du), D, S)
+end
+(\)(D::Diagonal, T::Tridiagonal) = ldiv!(similar(T, promote_op(\, eltype(D), eltype(T))), D, T)
+function ldiv!(T::Tridiagonal, D::Diagonal, S::Union{SymTridiagonal,Tridiagonal})
+    m = size(S, 1)
+    dd = D.diag
+    if (k = length(dd)) != m
+        throw(DimensionMismatch("diagonal matrix is $k by $k but right hand side has $m rows"))
+    end
+    if length(T.d) != m
+        throw(DimensionMismatch("target matrix size $(size(T)) does not match input matrix size $(size(S))"))
+    end
+    m == 0 && return T
+    j = findfirst(iszero, dd)
+    isnothing(j) || throw(SingularException(j))
+    ddj = dd[1]
+    T.d[1] = ddj \ _getdiag(S, 1)
+    @inbounds if m > 1
+        T.du[1] = ddj \ _getudiag(S, 1)
+        for j in 2:m-1
+            ddj = dd[j]
+            T.dl[j-1] = ddj \ _getldiag(S, j-1)
+            T.d[j]  = ddj \ _getdiag(S, j)
+            T.du[j] = ddj \ _getudiag(S, j)
+        end
+        ddj = dd[m]
+        T.dl[m-1] = ddj \ _getldiag(S, m-1)
+        T.d[m] = ddj \ _getdiag(S, m)
+    end
+    return T
+end
+
+function (/)(S::SymTridiagonal, D::Diagonal)
+    T = promote_op(\, eltype(D), eltype(S))
+    du = similar(S.ev, T, max(length(S.dv)-1, 0))
+    d  = similar(S.dv, T, length(S.dv))
+    dl = similar(S.ev, T, max(length(S.dv)-1, 0))
+    _rdiv!(Tridiagonal(dl, d, du), S, D)
+end
+(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(similar(T, promote_op(/, eltype(T), eltype(D))), T, D)
+function _rdiv!(T::Tridiagonal, S::Union{SymTridiagonal,Tridiagonal}, D::Diagonal)
+    n = size(S, 2)
+    dd = D.diag
+    if (k = length(dd)) != n
+        throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
+    end
+    if length(T.d) != n
+        throw(DimensionMismatch("target matrix size $(size(T)) does not match input matrix size $(size(S))"))
+    end
+    n == 0 && return T
+    j = findfirst(iszero, dd)
+    isnothing(j) || throw(SingularException(j))
+    ddj = dd[1]
+    T.d[1] = _getdiag(S, 1) / ddj
+    @inbounds if n > 1
+        T.dl[1] = _getldiag(S, 1) / ddj
+        for j in 2:n-1
+            ddj = dd[j]
+            T.dl[j] = _getldiag(S, j) / ddj
+            T.d[j] = _getdiag(S, j) / ddj
+            T.du[j-1] = _getudiag(S, j-1) / ddj
+        end
+        ddj = dd[n]
+        T.d[n] = _getdiag(S, n) / ddj
+        T.du[n-1] = _getudiag(S, n-1) / ddj
+    end
+    return T
+end
 
 # Optimizations for [l/r]mul!, l/rdiv!, *, / and \ between Triangular and Diagonal.
 # These functions are generally more efficient if we calculate the whole data field.
@@ -615,7 +709,7 @@ dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
 
 function _mapreduce_prod(f, x, D::Diagonal, y)
     if isempty(x) && isempty(D) && isempty(y)
-        return zero(Base.promote_op(f, eltype(x), eltype(D), eltype(y)))
+        return zero(promote_op(f, eltype(x), eltype(D), eltype(y)))
     else
         return mapreduce(t -> f(t[1], t[2], t[3]), +, zip(x, D.diag, y))
     end

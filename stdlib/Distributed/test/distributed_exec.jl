@@ -293,7 +293,9 @@ let wid1 = workers()[1],
     end
     finalize(rr) # finalize locally
     yield() # flush gc msgs
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    if include_thread_unsafe()
+        @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    end
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
     sleep(0.5) # to ensure that wid2 messages have been executed on wid1
     @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == false
@@ -348,6 +350,9 @@ function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
         v = getfield(ref2, fld)
         if isa(v, Number)
             @test v === zero(typeof(v))
+        elseif fld == :lock
+            @test v isa ReentrantLock
+            @test !islocked(v)
         elseif v !== nothing
             error(string("Add test for field ", fld))
         end

@@ -3,7 +3,7 @@ include $(SRCDIR)/llvm-ver.make
 include $(SRCDIR)/llvm-options.mk
 
 ifneq ($(USE_BINARYBUILDER_LLVM), 1)
-LLVM_GIT_URL:=git://github.com/JuliaLang/llvm-project.git
+LLVM_GIT_URL:=https://github.com/JuliaLang/llvm-project.git
 LLVM_TAR_URL=https://api.github.com/repos/JuliaLang/llvm-project/tarball/$1
 $(eval $(call git-external,llvm,LLVM,CMakeLists.txt,,$(SRCCACHE)))
 
@@ -174,10 +174,6 @@ endif
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
 endif
-
-# disable ABI breaking checks: by default only enabled for asserts build, in which case
-# it is then impossible to call non-asserts LLVM libraries (like out-of-tree backends)
-LLVM_CMAKE += -DLLVM_ABI_BREAKING_CHECKS=FORCE_OFF
 
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
 	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)"

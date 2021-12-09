@@ -23,7 +23,7 @@ extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM);
+void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
 Module *jl_create_llvm_module(StringRef name);
@@ -52,7 +52,7 @@ struct jl_returninfo_t {
 typedef std::vector<std::tuple<jl_code_instance_t*, jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool>> jl_codegen_call_targets_t;
 typedef std::tuple<std::unique_ptr<Module>, jl_llvm_functions_t> jl_compile_result_t;
 
-typedef struct {
+typedef struct _jl_codegen_params_t {
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     jl_codegen_call_targets_t workqueue;
@@ -243,6 +243,7 @@ Pass *createJuliaLICMPass();
 Pass *createMultiVersioningPass();
 Pass *createAllocOptPass();
 Pass *createDemoteFloat16Pass();
+Pass *createCPUFeaturesPass();
 // Whether the Function is an llvm or julia intrinsic.
 static inline bool isIntrinsicFunction(Function *F)
 {

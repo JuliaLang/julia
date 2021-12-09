@@ -1049,13 +1049,19 @@ end
     @test length(map(identity, UInt64(1):UInt64(5))) == 5
     @test length(map(identity, UInt128(1):UInt128(5))) == 5
 end
-@testset "issue #8531" begin
+@testset "issue #8531, issue #29801" begin
     smallint = (Int === Int64 ?
-                (Int8,UInt8,Int16,UInt16,Int32,UInt32) :
-                (Int8,UInt8,Int16,UInt16))
+                (Int8, UInt8, Int16, UInt16, Int32, UInt32) :
+                (Int8, UInt8, Int16, UInt16))
     for T in smallint
         s = typemin(T):typemax(T)
-        @test length(s) == checked_length(s) == 2^(8*sizeof(T))
+        @test length(s) === checked_length(s) === 2^(8*sizeof(T))
+        s = T(10):typemax(T):T(10)
+        @test length(s) === checked_length(s) === 1
+        s = T(10):typemax(T):T(0)
+        @test length(s) === checked_length(s) === 0
+        s = T(10):typemax(T):typemin(T)
+        @test length(s) === checked_length(s) === 0
     end
 end
 
@@ -2209,4 +2215,14 @@ end
     @test Fix42528(0x0):Fix42528(0x1) == [Fix42528(0x0), Fix42528(0x01)]
     @test iszero(length(Fix42528(0x1):Fix42528(0x0)))
     @test_throws DomainError Fix42528(0x0) - Fix42528(0x1)
+end
+
+let r = Ptr{Cvoid}(20):-UInt(2):Ptr{Cvoid}(10)
+    @test isempty(r)
+    @test length(r) == 0
+    @test count(i -> true, r) == 0
+    @test isempty(collect(r))
+    @test first(r) === Ptr{Cvoid}(20)
+    @test step(r) === -UInt(2)
+    @test last(r) === Ptr{Cvoid}(10)
 end
