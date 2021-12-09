@@ -1,49 +1,3 @@
-"""
-ParseState carries parser context as we recursively descend into the parse
-tree. For example, normally `x -y` means `(x) - (y)`, but when parsing matrix
-literals we're in `space_sensitive` mode, and `[x -y]` means [(x) (-y)].
-"""
-struct ParseState
-    stream::ParseStream
-    # Vesion of Julia we're parsing this code for. May be different from VERSION!
-    julia_version::VersionNumber
-
-    # Disable range colon for parsing ternary conditional operator
-    range_colon_enabled::Bool
-    # In space-sensitive mode "x -y" is 2 expressions, not a subtraction
-    space_sensitive::Bool
-    # Seeing `for` stops parsing macro arguments and makes a generator
-    for_generator::Bool
-    # Treat 'end' like a normal symbol instead of a reserved word
-    end_symbol::Bool
-    # Treat newline like ordinary whitespace instead of as a potential separator
-    whitespace_newline::Bool
-    # Enable parsing `where` with high precedence
-    where_enabled::Bool
-end
-
-# Normal context
-function ParseState(stream::ParseStream; julia_version=VERSION)
-    ParseState(stream, julia_version, true, false, true, false, false, false)
-end
-
-function ParseState(ps::ParseState; range_colon_enabled=nothing,
-                    space_sensitive=nothing, for_generator=nothing,
-                    end_symbol=nothing, whitespace_newline=nothing,
-                    where_enabled=nothing)
-    ParseState(ps.stream, ps.julia_version,
-        range_colon_enabled === nothing ? ps.range_colon_enabled : range_colon_enabled,
-        space_sensitive === nothing ? ps.space_sensitive : space_sensitive,
-        for_generator === nothing ? ps.for_generator : for_generator,
-        end_symbol === nothing ? ps.end_symbol : end_symbol,
-        whitespace_newline === nothing ? ps.whitespace_newline : whitespace_newline,
-        where_enabled === nothing ? ps.where_enabled : where_enabled)
-end
-
-peek(ps::ParseState, args...) = peek(ps.stream, args...)
-bump(ps::ParseState, args...) = bump(ps.stream, args...)
-emit(ps::ParseState, args...) = emit(ps.stream, args...)
-
 #-------------------------------------------------------------------------------
 # Parser
 
@@ -195,4 +149,3 @@ function parse(code)
     stream = ParseStream(code)
     parse_statements(stream)
 end
-
