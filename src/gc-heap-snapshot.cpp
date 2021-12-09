@@ -420,7 +420,7 @@ void _gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, cha
                     g_snapshot->names.find_or_create_string_id(name));
 }
 
-void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) JL_NOTSAFEPOINT {
+void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void* slot) JL_NOTSAFEPOINT {
     jl_datatype_t *type = (jl_datatype_t*)jl_typeof(from);
 
     auto field_paths = _fieldpath_for_slot(from, slot);
