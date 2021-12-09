@@ -5,14 +5,9 @@ using Base: InterpreterIP
 
 # raw results
 
-# modeled on jl_bt_element_t
-struct RawBacktraceElement
-    content::Csize_t
-end
-
 # matches RawBacktrace on the C side
 struct RawBacktrace
-    data::Ptr{RawBacktraceElement}
+    data::Ptr{Csize_t} # in C: *jl_bt_element_t
     size::Csize_t
 end
 
@@ -51,10 +46,9 @@ end
 
 function stop()
     raw_results = ccall(:jl_stop_alloc_profile, RawAllocResults, ())
-    # decoded_results = decode(raw_results)
-    # ccall(:jl_free_alloc_profile, Cvoid, ())
-    # return decoded_results
-    return raw_results
+    decoded_results = GC.@preserve raw_results decode(raw_results)
+    ccall(:jl_free_alloc_profile, Cvoid, ())
+    return decoded_results
 end
 
 # decoded results
@@ -79,7 +73,6 @@ function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
     Alloc(
         # unsafe_pointer_to_objref(convert(Ptr{Any}, raw_alloc.type)),
         raw_alloc.type,
-        # TODO: add caching to stacktrace
         stacktrace_memoized(cache, _reformat_bt(raw_alloc.backtrace)),
         UInt(raw_alloc.size)
     )
@@ -116,7 +109,7 @@ end
 function stacktrace_memoized(
     cache::BacktraceCache,
     trace::Vector{BacktraceEntry},
-    c_funcs=true
+    c_funcs::Bool=true
 )::StackTrace
     stack = StackTrace()
     for ip in trace
@@ -144,7 +137,7 @@ function _reformat_bt(bt::RawBacktrace)::Vector{BacktraceEntry}
     ret = Vector{BacktraceEntry}()
     i = 1
     while i <= bt.size
-        ip = unsafe_load(bt.data, i).content
+        ip = unsafe_load(bt.data, i)
 
         # native frame
         if UInt(ip) != (-1 % UInt)
@@ -155,16 +148,16 @@ function _reformat_bt(bt::RawBacktrace)::Vector{BacktraceEntry}
         end
 
         # Extended backtrace entry
-        entry_metadata = reinterpret(UInt, unsafe_load(bt.data, i+1).content)
+        entry_metadata = reinterpret(UInt, unsafe_load(bt.data, i+1))
         njlvalues =  entry_metadata & 0x7
         nuintvals = (entry_metadata >> 3) & 0x7
         tag       = (entry_metadata >> 6) & 0xf
         header    =  entry_metadata >> 10
 
         if tag == 1 # JL_BT_INTERP_FRAME_TAG
-            code = unsafe_pointer_to_objref(convert(Ptr{Any}, unsafe_load(bt.data, i+2).content))
+            code = unsafe_pointer_to_objref(convert(Ptr{Any}, unsafe_load(bt.data, i+2)))
             mod = if njlvalues == 2
-                unsafe_pointer_to_objref(convert(Ptr{Any}, unsafe_load(bt.data, i+3).content))
+                unsafe_pointer_to_objref(convert(Ptr{Any}, unsafe_load(bt.data, i+3)))
             else
                 nothing
             end
