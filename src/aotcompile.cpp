@@ -750,7 +750,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // loops over Union-typed arrays to vectorize.
     PM->add(createInstructionCombiningPass());
     PM->add(createJumpThreadingPass());
-    PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
+    if (opt_level >= 3) {
+        PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
+    }
     PM->add(createCorrelatedValuePropagationPass());
     PM->add(createDeadStoreEliminationPass());
 
