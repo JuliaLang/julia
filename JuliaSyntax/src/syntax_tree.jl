@@ -1,126 +1,39 @@
 #-------------------------------------------------------------------------------
 # Syntax tree types
 
-# Desired rules of lossless syntax trees:
-#
-# * Every source byte is covered by the tree
-# * The children (including trivia) cover the full span of the parent
-# * Children occur in source order
-#
-# Additionally
-# * Nodes should be position-independent so that reparsing doesn't disturb them,
-#   and so that it's possible to pool and reuse them (especially leaf nodes!)
+#-------------------------------------------------------------------------------
 
-"""
-The rawest version of a lossless syntax tree.
-
-Design principles:
-* Tree should remember what the lexer and parser knew about the source code
-* Be position-independent so nodes can be interned and reused
-
-Design alternatives to explore:
-* Maybe allow some loss of local parser state if it can be derived again
-  quickly? Particularly in the ordering of children.
-* Store strings for tokens? (Surprisingly, rust-analyzer does this. It could be
-  efficient if the strings or nodes are interned for the parsing session?)
-* Never construct this tree? Instead serialize it to Vector{UInt8} in an
-  efficient but compact format? Could this be more flexible with storing parser
-  state and beat the interning approach? We could also store the source tokens
-  in the serialization and discard the source text. (Caveat - unclear that this
-  could deal with incremental parsing...)
-"""
-struct GreenNode
-    kind::Kind
-    span::UInt32
-    flags::UInt32
-    args::Union{Tuple{},Vector{GreenNode}}
-end
-
-const _RawFlags = UInt32
+const RawFlags = UInt32
 EMPTY_FLAGS = 0x00000000
 TRIVIA_FLAG = 0x00000001
 INFIX_FLAG = 0x00000002
 ERROR_FLAG = 0x80000000
 
+struct SyntaxHead
+    kind::Kind
+    flags::RawFlags
+end
+
+kind(head::SyntaxHead) = head.kind
+flags(head::SyntaxHead) = head.flags
+
+function Base.summary(head::SyntaxHead)
+    _kind_str(kind(head))
+end
+
 function raw_flags(; trivia::Bool=false, infix::Bool=false)
-    flags = _RawFlags(0)
+    flags = RawFlags(0)
     trivia && (flags |= TRIVIA_FLAG)
     infix  && (flags |= INFIX_FLAG)
-    return flags::_RawFlags
+    return flags::RawFlags
 end
 
-function GreenNode(kind::Kind, span::Int, flags::_RawFlags=EMPTY_FLAGS)
-    GreenNode(kind, span, flags, ())
-end
+kind(node::GreenNode{SyntaxHead})  = head(node).kind
+flags(node::GreenNode{SyntaxHead}) = head(node).flags
 
-function GreenNode(raw::TzTokens.RawToken)
-    span = 1 + raw.endbyte - raw.startbyte
-    GreenNode(kind(raw), span, 0, FIXME)
-end
-
-function GreenNode(kind::Kind, flags::_RawFlags, args::GreenNode...)
-    span = sum(x.span for x in args)
-    GreenNode(kind, span, flags, GreenNode[args...])
-end
-
-function GreenNode(kind::Kind, args::GreenNode...)
-    GreenNode(kind, _RawFlags(0), args...)
-end
-
-# Acessors / predicates
-haschildren(node::GreenNode) = !(node.args isa Tuple{})
-children(node::GreenNode) = node.args
-
-istrivia(node::GreenNode) = node.flags & TRIVIA_FLAG != 0
-isinfix(node::GreenNode)  = node.flags & INFIX_FLAG != 0
-iserror(node::GreenNode)  = node.flags & ERROR_FLAG != 0
-
-kind(node::GreenNode) = node.kind
-
-# Pretty printing
-function _show_raw_node(io, node, indent, pos, str, show_trivia)
-    if !show_trivia && istrivia(node)
-        return
-    end
-    posstr = "$(lpad(pos, 6)):$(rpad(pos+node.span-1, 6)) │"
-    is_leaf = !haschildren(node)
-    if is_leaf
-        line = string(posstr, indent, _kind_str(node.kind))
-    else
-        line = string(posstr, indent, '[', _kind_str(node.kind), "]")
-    end
-    if !istrivia(node) && is_leaf
-        line = rpad(line, 40) * "✔"
-    end
-    if iserror(node)
-        line = rpad(line, 41) * "✘"
-    end
-    if is_leaf && !isnothing(str)
-        line = string(rpad(line, 43), ' ', repr(str[pos:pos + node.span - 1]))
-    end
-    line = line*"\n"
-    if iserror(node)
-        printstyled(io, line, color=:light_red)
-    else
-        print(io, line)
-    end
-    if !is_leaf
-        new_indent = indent*"  "
-        p = pos
-        for a in node.args
-            _show_raw_node(io, a, new_indent, p, str, show_trivia)
-            p += a.span
-        end
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/plain", node::GreenNode)
-    _show_raw_node(io, node, "", 1, nothing, true)
-end
-
-function Base.show(io::IO, ::MIME"text/plain", node::GreenNode, str::String; show_trivia=true)
-    _show_raw_node(io, node, "", 1, str, show_trivia)
-end
+istrivia(node::GreenNode{SyntaxHead}) = flags(node) & TRIVIA_FLAG != 0
+isinfix(node::GreenNode{SyntaxHead})  = flags(node) & INFIX_FLAG != 0
+iserror(node::GreenNode{SyntaxHead})  = flags(node) & ERROR_FLAG != 0
 
 #-------------------------------------------------------------------------------
 # AST interface, built on top of raw tree
@@ -132,18 +45,18 @@ Design options:
 """
 mutable struct SyntaxNode
     source::SourceFile
-    raw::GreenNode
+    raw::GreenNode{SyntaxHead}
     position::Int
     parent::Union{Nothing,SyntaxNode}
     head::Symbol
     val::Any
 end
 
-function SyntaxNode(source::SourceFile, raw::GreenNode, position::Integer=1)
+function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::Integer=1)
     if !haschildren(raw)
         # Leaf node
-        k = raw.kind
-        val_range = position:position + raw.span - 1
+        k = kind(raw)
+        val_range = position:position + span(raw) - 1
         val_str = source[val_range]
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
@@ -152,7 +65,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode, position::Integer=1)
         elseif k == K"Identifier"
             val = Symbol(val_str)
         elseif k == K"String"
-            val = unescape_string(source[position+1:position+raw.span-2])
+            val = unescape_string(source[position+1:position+span(raw)-2])
         elseif isoperator(k)
             val = Symbol(val_str)
         else
@@ -160,7 +73,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode, position::Integer=1)
         end
         return SyntaxNode(source, raw, position, nothing, :leaf, val)
     else
-        k = raw.kind
+        k = kind(raw)
         head = k == K"call"     ? :call     :
                k == K"toplevel" ? :toplevel :
                k == K"block"    ? :block    :
@@ -200,11 +113,13 @@ end
 haschildren(node::SyntaxNode) = node.head !== :leaf
 children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : ()
 
+span(node::SyntaxNode) = span(node.raw)
+
 function _show_syntax_node(io, current_filename, node, indent)
     fname = node.source.filename
     #@info "" fname print_fname current_filename[] 
     line, col = source_location(node.source, node.position)
-    posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(node.position,6)):$(rpad(node.position+node.raw.span,6))│"
+    posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(node.position,6)):$(rpad(node.position+span(node),6))│"
     nodestr = !haschildren(node) ?
               repr(node.val) :
               "[$(_kind_str(kind(node.raw)))]"
@@ -302,7 +217,7 @@ function child_position_span(node::GreenNode, path::Int...)
     for index in path
         cs = children(n)
         for i = 1:index-1
-            p += cs[i].span
+            p += span(cs[i])
         end
         n = cs[index]
     end
@@ -311,7 +226,7 @@ end
 
 function child_position_span(node::SyntaxNode, path::Int...)
     n = child(node, path...)
-    n, n.position, n.raw.span
+    n, n.position, span(n)
 end
 
 """
