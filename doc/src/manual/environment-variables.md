@@ -235,6 +235,16 @@ If set to anything besides `0`, then Julia's thread policy is consistent with
 running on a dedicated machine: the master thread is on proc 0, and threads are
 affinitized. Otherwise, Julia lets the operating system handle thread policy.
 
+### `JULIA_THREAD_SCHEDULER`
+
+If set to `workstealing` (case insensitive), Julia uses the work-stealing
+scheduler for scheduling thread-enabled tasks (e.g., tasks created by
+`Threads.@spawn`).  This is only an advisory mechanism and the interface may be
+changed or removed in the future.
+
+!!! compat "Julia 1.8"
+    `JULIA_THREAD_SCHEDULER` requires at least Julia 1.8.
+
 ## REPL formatting
 
 Environment variables that determine how REPL output should be formatted at the
