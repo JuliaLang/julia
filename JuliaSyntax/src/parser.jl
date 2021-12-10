@@ -162,10 +162,10 @@ function parse_eq(ps::ParseState)
     parse_assignment(ps, parse_comma)
 end
 
-# parse_eq_ is used where commas are special, for example in an argument list
+# parse_eq_star is used where commas are special, for example in an argument list
 #
 # flisp: (define (parse-eq* s)
-function parse_eq_(ps::ParseState)
+function parse_eq_star(ps::ParseState)
     k = peek(ps)
     k2 = peek(ps,2)
     if (isliteral(k) || k == K"Identifier") && k2 in (K",", K")", K"}", K"]")
@@ -256,13 +256,41 @@ function parse_cond(ps::ParseState)
     if kind(t) != K"?"
         return
     end
-    flags = EMPTY_FLAGS
+    cond_flags = EMPTY_FLAGS
     if !t.had_whitespace
+        # a? b : c
         emit_diagnostic(ps, error="space required before `?` operator")
-        flags |= ERROR_FLAG
+        cond_flags |= ERROR_FLAG
     end
-    bump(ps, TRIVIA_FLAG)
-    f
+    bump(ps, TRIVIA_FLAG) # ?
+    t = peek_token(ps, skip_newlines=true)
+    if !t.had_whitespace
+        # a ?b : c
+        emit_diagnostic(ps, error="space required after `?` operator")
+        cond_flags |= ERROR_FLAG
+    end
+    parse_eq_star(ParseState(ps, range_colon_enabled=false))
+    t = peek_token(ps)
+    if kind(t) != K":"
+        # a ? b:   ==>   (if-e a b)
+        emit(ps, mark, K"if", cond_flags,
+             error="colon expected in `?` expression")
+        return
+    end
+    if !t.had_whitespace
+        # a ? b: c
+        emit_diagnostic(ps, error="space required before `:` in `?` expression")
+        cond_flags |= ERROR_FLAG
+    end
+    bump(ps, TRIVIA_FLAG) # :
+    t = peek_token(ps, skip_newlines=true)
+    if !t.had_whitespace
+        # a ? b :c
+        emit_diagnostic(ps, error="space required after `:` in `?` expression")
+        cond_flags |= ERROR_FLAG
+    end
+    parse_eq_star(ps)
+    emit(ps, mark, K"if", cond_flags)
 end
 
 # Parse arrows

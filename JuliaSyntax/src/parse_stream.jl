@@ -371,7 +371,10 @@ function peek(ps::ParseState, n=1; skip_newlines=nothing)
     peek(ps.stream, n, skip_nl)
 end
 
-peek_token(ps::ParseState, n=1)         = peek_token(ps.stream, n, ps.whitespace_newline)
+function peek_token(ps::ParseState, n=1; skip_newlines=nothing)
+    skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
+    peek_token(ps.stream, n, skip_nl)
+end
 
 function bump(ps::ParseState, flags=EMPTY_FLAGS; skip_newlines=nothing)
     skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
