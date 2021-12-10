@@ -84,6 +84,10 @@ function is_both_unary_and_binary(t)
                 K"+", K"-", K"⋆", K"±", K"∓") # dotop allowed
 end
 
+function is_number(t)
+    kind(t) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float")
+end
+
 """
 Get the "binding power" (precedence level) of an operator kind
 """
