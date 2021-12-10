@@ -30,6 +30,10 @@ first_byte(tok::SyntaxToken) = tok.raw.startbyte + 1
 last_byte(tok::SyntaxToken) = tok.raw.endbyte + 1
 span(tok::SyntaxToken) = last_byte(tok) - first_byte(tok) + 1
 
+is_dotted(tok::SyntaxToken)    = tok.raw.dotop
+is_suffixed(tok::SyntaxToken)  = tok.raw.suffix
+is_decorated(tok::SyntaxToken) = is_dotted(tok) || is_suffixed(tok)
+
 Base.:(~)(tok::SyntaxToken, k::Kind) = kind(tok) == k
 Base.:(~)(k::Kind, tok::SyntaxToken) = kind(tok) == k
 
@@ -79,11 +83,12 @@ This is simililar to rust-analyzer's
 mutable struct ParseStream
     lexer::Tokenize.Lexers.Lexer{IOBuffer,RawToken}
     lookahead::Vector{SyntaxToken}
-    lookahead_trivia::Vector{TextSpan}
     spans::Vector{TextSpan}
     diagnostics::Vector{Diagnostic}
     # First byte of next token
     next_byte::Int
+    # Counter for number of peek()s we've done without making progress via a bump()
+    peek_count::Int
 end
 
 function ParseStream(code)
@@ -91,28 +96,52 @@ function ParseStream(code)
     ParseStream(lexer,
                 Vector{SyntaxToken}(),
                 Vector{TextSpan}(),
-                Vector{TextSpan}(),
                 Vector{Diagnostic}(),
-                1)
+                1,
+                0)
 end
 
 function Base.show(io::IO, mime::MIME"text/plain", stream::ParseStream)
     println(io, "ParseStream at position $(stream.next_byte)")
 end
 
-function _read_token(stream::ParseStream)
+# Buffer up until the next non-whitespace token.
+# This can buffer more than strictly necessary when newlines are significant,
+# but this is not a big problem.
+function _buffer_lookahead_tokens(stream::ParseStream)
     had_whitespace = false
-    had_newline = false
+    had_newline    = false
     while true
         raw = Tokenize.Lexers.next_token(stream.lexer)
         k = TzTokens.exactkind(raw)
-        if k in (K"Whitespace", K"Comment", K"NewlineWs")
-            had_whitespace = true
-            had_newline = k == K"NewlineWs"
-            push!(stream.lookahead_trivia, TextSpan(raw, TRIVIA_FLAG))
-            continue
+
+        was_whitespace = k in (K"Whitespace", K"Comment", K"NewlineWs")
+        was_newline    = k == K"NewlineWs"
+        had_whitespace |= was_whitespace
+        had_newline    |= was_newline
+        push!(stream.lookahead, SyntaxToken(raw, had_whitespace, had_newline))
+        if !was_whitespace
+            break
         end
-        return SyntaxToken(raw, had_whitespace, had_newline)
+    end
+end
+
+function _lookahead_index(stream::ParseStream, n::Integer, skip_newlines::Bool)
+    i = 1
+    while true
+        if i > length(stream.lookahead)
+            _buffer_lookahead_tokens(stream)
+        end
+        k = kind(stream.lookahead[i])
+        is_skipped =  k ∈ (K"Whitespace", K"Comment") ||
+                     (k == K"NewlineWs" && skip_newlines)
+        if !is_skipped
+            if n == 1
+                return i
+            end
+            n -= 1
+        end
+        i += 1
     end
 end
 
@@ -121,13 +150,12 @@ end
 
 Look ahead in the stream `n` tokens, returning a SyntaxToken
 """
-function peek_token(stream::ParseStream, n::Integer=1)
-    if length(stream.lookahead) < n
-        for i=1:(n-length(stream.lookahead))
-            push!(stream.lookahead, _read_token(stream))
-        end
+function peek_token(stream::ParseStream, n::Integer=1, skip_newlines=false)
+    stream.peek_count += 1
+    if stream.peek_count > 100_000
+        error("The parser seems stuck at byte $(position(stream))")
     end
-    return stream.lookahead[n]
+    stream.lookahead[_lookahead_index(stream, n, skip_newlines)]
 end
 
 """
@@ -135,8 +163,8 @@ end
 
 Look ahead in the stream `n` tokens, returning a Kind
 """
-function peek(stream::ParseStream, n::Integer=1)
-    kind(peek_token(stream, n))
+function peek(stream::ParseStream, n::Integer=1, skip_newlines=false)
+    kind(peek_token(stream, n, skip_newlines))
 end
 
 """
@@ -145,32 +173,47 @@ end
 Shift the current token into the output as a new text span with the given
 `flags`.
 """
-function bump(stream::ParseStream, flags=EMPTY_FLAGS)
-    tok = isempty(stream.lookahead) ?
-          _read_token(stream) :
-          popfirst!(stream.lookahead)  # TODO: use a circular buffer?
-    # Bump trivia tokens into output
-    while !isempty(stream.lookahead_trivia) &&
-            first_byte(first(stream.lookahead_trivia)) <= first_byte(tok)
-        trivia_span = popfirst!(stream.lookahead_trivia)
-        push!(stream.spans, trivia_span)
+function bump(stream::ParseStream, flags=EMPTY_FLAGS, skip_newlines=false)
+    n = _lookahead_index(stream, 1, skip_newlines)
+    for i=1:n
+        tok = stream.lookahead[i]
+        k = kind(tok)
+        if k == K"EndMarker"
+            break
+        end
+        is_skipped_ws = k ∈ (K"Whitespace", K"Comment") ||
+                        (k == K"NewlineWs" && skip_newlines)
+        f = is_skipped_ws ? TRIVIA_FLAG : flags
+        span = TextSpan(SyntaxHead(kind(tok), f), first_byte(tok), last_byte(tok))
+        push!(stream.spans, span)
     end
-    span = TextSpan(SyntaxHead(kind(tok), flags), first_byte(tok), last_byte(tok))
-    push!(stream.spans, span)
-    mark = lastindex(stream.spans)
-    stream.next_byte = last_byte(tok) + 1
-    mark
+    Base._deletebeg!(stream.lookahead, n)
+    stream.next_byte = last_byte(last(stream.spans)) + 1
+    # Defuse the time bomb
+    stream.peek_count = 0
+    # Return last token location in output if needed for set_flags!
+    return lastindex(stream.spans)
+end
+
+function bump_invisible(stream::ParseStream, kind)
+    emit(stream, position(stream), kind)
+    return lastindex(stream.spans)
 end
 
 """
-Hack: Reset flags of an existing token in the output stream
+Hack: Reset kind or flags of an existing token in the output stream
 
 This is necessary on some occasions when we don't know whether a token will
-have TRIVIA_FLAG set until.
+have TRIVIA_FLAG set until after consuming more input, or when we need to
+insert a invisible token like core_@doc but aren't yet sure it'll be needed -
+see bump_invisible()
 """
-function set_flags!(stream::ParseStream, mark, flags)
+function reset_token!(stream::ParseStream, mark;
+                      kind=nothing, flags=nothing)
     text_span = stream.spans[mark]
-    stream.spans[mark] = TextSpan(SyntaxHead(kind(text_span), flags),
+    k = isnothing(kind) ? (@__MODULE__).kind(text_span) : kind
+    f = isnothing(flags) ? (@__MODULE__).flags(text_span) : flags
+    stream.spans[mark] = TextSpan(SyntaxHead(k, f),
                                   first_byte(text_span), last_byte(text_span))
 end
 
@@ -184,10 +227,12 @@ function accept(stream::ParseStream, k::Kind)
 end
 =#
 
+#=
 function bump(stream::ParseStream, k::Kind, flags=EMPTY_FLAGS)
     @assert peek(stream) == k
     bump(stream, flags)
 end
+=#
 
 function Base.position(stream::ParseStream)
     return stream.next_byte
@@ -242,11 +287,14 @@ end
 
 function to_raw_tree(st)
     stack = Vector{@NamedTuple{text_span::TextSpan,node::GreenNode}}()
-    _push_node!(stack, st.spans[1])
-    for i = 2:length(st.spans)
-        text_span = st.spans[i]
+    for text_span in st.spans
+        if kind(text_span) == K"TOMBSTONE"
+            # Ignore invisible tokens which were created but never finalized.
+            # See bump_invisible()
+            continue
+        end
 
-        if first_byte(text_span) > last_byte(stack[end].text_span)
+        if isempty(stack) || first_byte(text_span) > last_byte(stack[end].text_span)
             # A leaf node (span covering a single token):
             # [a][b][stack[end]]
             #                   [text_span]
@@ -258,13 +306,14 @@ function to_raw_tree(st)
         # [a][b][stack[end]]
         #    [    text_span]
         j = length(stack)
-        while j > 1 && first_byte(text_span) < first_byte(stack[j].text_span)
+        while j > 1 && first_byte(text_span) <= first_byte(stack[j-1].text_span)
             j -= 1
         end
         children = [stack[k].node for k = j:length(stack)]
         resize!(stack, j-1)
         _push_node!(stack, text_span, children)
     end
+    # show(stdout, MIME"text/plain"(), stack[1].node)
     return only(stack).node
 end
 
@@ -317,10 +366,55 @@ function ParseState(ps::ParseState; range_colon_enabled=nothing,
         where_enabled === nothing ? ps.where_enabled : where_enabled)
 end
 
-peek(ps::ParseState, args...)          = peek(ps.stream, args...)
-peek_token(ps::ParseState, args...)    = peek_token(ps.stream, args...)
-bump(ps::ParseState, args...)          = bump(ps.stream, args...)
-set_flags!(ps::ParseState, args...)    = set_flags!(ps.stream, args...)
-Base.position(ps::ParseState, args...) = position(ps.stream, args...)
-emit(ps::ParseState, args...; kws...)  = emit(ps.stream, args...; kws...)
-emit_diagnostic(ps::ParseState, args...; kws...)  = emit_diagnostic(ps.stream, args...; kws...)
+function peek(ps::ParseState, n=1; skip_newlines=nothing)
+    skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
+    peek(ps.stream, n, skip_nl)
+end
+
+peek_token(ps::ParseState, n=1)         = peek_token(ps.stream, n, ps.whitespace_newline)
+
+function bump(ps::ParseState, flags=EMPTY_FLAGS; skip_newlines=nothing)
+    skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
+    bump(ps.stream, flags, skip_nl)
+end
+
+function bump_newlines(ps::ParseState)
+    while peek(ps) == K"NewlineWs"
+        bump(ps, TRIVIA_FLAG)
+    end
+end
+
+"""
+Bump a new zero-width "invisible" token at the current stream position. These
+can be useful in several situations, for example,
+
+* Implicit multiplication - the * is invisible
+  `2x  ==>  (call 2 * x)`
+* Docstrings - the macro name is invisible
+  `"doc" foo() = 1   ==>  (macrocall (core @doc) . (= (call foo) 1))`
+* Big integer literals - again, an invisible macro name
+  `11111111111111111111  ==>  (macrocall (core @int128_str) . 11111111111111111111)`
+
+By default if no `kind` is provided then the invisible token stays invisible
+and will be discarded unless `reset_token!(kind=...)` is used.
+"""
+function bump_invisible(ps::ParseState, kind=K"TOMBSTONE")
+    bump_invisible(ps.stream, kind)
+end
+
+function reset_token!(ps::ParseState, args...; kws...)
+    reset_token!(ps.stream, args...; kws...)
+end
+
+function Base.position(ps::ParseState, args...)
+    position(ps.stream, args...)
+end
+
+function emit(ps::ParseState, args...; kws...)
+    emit(ps.stream, args...; kws...)
+end
+
+function emit_diagnostic(ps::ParseState, args...; kws...)
+    emit_diagnostic(ps.stream, args...; kws...)
+end
+

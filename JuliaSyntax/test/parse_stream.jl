@@ -33,6 +33,8 @@ st = ParseStream(code)
                 bump(st) # 10
             emit(st, p3, K"call", INFIX_FLAG)
         emit(st, p2, K"=")
+        @test peek(st) == K"NewlineWs"
+        bump(st, TRIVIA_FLAG)
         p4 = position(st)
             p5 = position(st) # [call]
                 p6 = position(st) # [ref]
@@ -50,12 +52,19 @@ st = ParseStream(code)
                 @test peek(st) == K"Integer"        # 2
                 bump(st)
             emit(st, p5, K"call", INFIX_FLAG)
+            @test peek(st) == K"NewlineWs"
+            bump(st, TRIVIA_FLAG)
+            @test peek(st) == K"NewlineWs"
+            bump(st, TRIVIA_FLAG)
             @test peek(st) == K"Identifier" # 'yy'
             bump(st)
         emit(st, p4, K"block")
+        @test peek(st) == K"NewlineWs"
+        bump(st, TRIVIA_FLAG)
         bump(st, TRIVIA_FLAG) # end
     emit(st, p1, K"for")
-    bump(st, TRIVIA_FLAG) # \n
+    @test peek(st) == K"NewlineWs"
+    bump(st, TRIVIA_FLAG)
     emit(st, p1, K"toplevel")
 end
 
