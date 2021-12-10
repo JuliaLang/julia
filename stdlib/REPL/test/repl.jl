@@ -929,7 +929,7 @@ let ends_with_semicolon = REPL.ends_with_semicolon
     @test ends_with_semicolon("\na; #=#=#\n=#b=#\n# test\n#=\nfoobar\n=##bazbax\n")
     @test ends_with_semicolon("f()= 1; # a ; 2")
     @test ends_with_semicolon("f()= 1; # a")
-    @test ends_with_semicolon("f()= 1; \"a\"")
+    @test !ends_with_semicolon("f()= 1; \"a\"")
     @test !ends_with_semicolon("""("f()= 1; # a")""")
     @test !ends_with_semicolon(""" "f()= 1; # a" """)
     @test ends_with_semicolon("f()= 1;")
