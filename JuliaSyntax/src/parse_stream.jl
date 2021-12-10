@@ -262,10 +262,11 @@ end
 """
 Emit a diagnostic at the position of the next token
 """
-function emit_diagnostic(stream::ParseStream; error)
+function emit_diagnostic(stream::ParseStream, mark=nothing; error)
     byte = first_byte(peek_token(stream))
+    mark = isnothing(mark) ? byte : mark
     # It's a bit weird to require supplying a SyntaxHead here...
-    text_span = TextSpan(SyntaxHead(K"Error", EMPTY_FLAGS), byte, byte)
+    text_span = TextSpan(SyntaxHead(K"Error", EMPTY_FLAGS), mark, byte)
     push!(stream.diagnostics, Diagnostic(text_span, error))
 end
 

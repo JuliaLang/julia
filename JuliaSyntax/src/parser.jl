@@ -16,11 +16,26 @@ function bumpTODO(ps::ParseState)
     end
 end
 
-function is_closing_token(ps::ParseState, tok)
-    k = kind(tok)
+function is_closing_token(ps::ParseState, t)
+    k = kind(t)
     return k in (K"else", K"elseif", K"catch", K"finally",
                  K",", K")", K"]", K"}", K";",
                  K"EndMarker") || (k == K"end" && !ps.end_symbol)
+end
+
+function is_initial_reserved_word(ps::ParseState, t)
+    k = kind(t)
+    is_iresword = k in (
+        K"begin", K"while", K"if", K"for", K"try", K"return", K"break",
+        K"continue", K"function", K"macro", K"quote", K"let", K"local",
+        K"global", K"const", K"do", K"struct", K"module", K"baremodule",
+        K"using", K"import", K"export")
+    # `begin` means firstindex(a) inside a[...]
+    return is_iresword && !(k == K"begin" && ps.end_symbol)
+end
+
+function is_syntactic_unary_op(t)
+    kind(t) in (K"$", K"&", K"::")
 end
 
 function has_whitespace_prefix(tok::SyntaxToken)
@@ -60,7 +75,7 @@ function parse_RtoL(ps::ParseState, down, is_op, syntactic, self)
     down(ps)
     k = peek(ps)
     if is_op(k)
-        if (syntactic isa Bool && syntactic) || syntactic(k)
+        if syntactic isa Bool ? syntactic : syntactic(k)
             bump(ps, TRIVIA_FLAG)
             self(ps)
             emit(ps, mark, k)
@@ -182,11 +197,6 @@ function is_eventually_call(ex)
     TODO("is_eventually_call unimplemented")
 end
 
-# flisp: (define (short-form-function-loc ex lno)
-function short_form_function_loc(ex, lno)
-    TODO("short_form_function_loc unimplemented")
-end
-
 # flisp: (define (parse-assignment s down)
 function parse_assignment(ps::ParseState, down)
     mark = position(ps)
@@ -298,19 +308,19 @@ end
 # x <--> y  ==>  (call-i x <--> y)
 # x --> y   ==>  (x --> y)           # The only syntactic arrow
 #
-# flisp: (define (parse-arrow s) (parse-RtoL s parse-or         is-prec-arrow? (eq? t '-->) parse-arrow))
+# flisp: parse-arrow
 function parse_arrow(ps::ParseState)
     parse_RtoL(ps, parse_or, is_prec_arrow, ==(K"-->"), parse_arrow)
 end
 
 # x || y || z   ==>   (call-i x || (call-i y || z))
 #
-# flisp: (define (parse-or s)    (parse-RtoL s parse-and        is-prec-lazy-or? #t parse-or))
+# flisp: parse-or
 function parse_or(ps::ParseState)
     parse_RtoL(ps, parse_and, is_prec_lazy_or, true, parse_or)
 end
 
-# flisp: (define (parse-and s)   (parse-RtoL s parse-comparison is-prec-lazy-and? #t parse-and))
+# flisp: parse-and
 function parse_and(ps::ParseState)
     parse_RtoL(ps, parse_comparison, is_prec_lazy_and, true, parse_and)
 end
@@ -320,7 +330,7 @@ end
 # x < y < z    ==> (comparison x < y < z)
 # x == y < z   ==> (comparison x == y < z)
 #
-# flisp: (define (parse-comparison s)
+# flisp: parse-comparison
 function parse_comparison(ps::ParseState)
     mark = position(ps)
     parse_pipe_lt(ps)
@@ -348,13 +358,13 @@ function parse_comparison(ps::ParseState)
 end
 
 # x |> y |> z  ==>  ((x |> y) |> z)
-# flisp: (define (parse-pipe< s) (parse-RtoL s parse-pipe> is-prec-pipe<? #f parse-pipe<))
+# flisp: parse-pipe<
 function parse_pipe_lt(ps::ParseState)
     parse_RtoL(ps, parse_pipe_gt, is_prec_pipe_lt, false, parse_pipe_lt)
 end
 
 # x <| y <| z  ==>  (x <| (y <| z))
-# flisp: (define (parse-pipe> s) (parse-LtoR s parse-range is-prec-pipe>?))
+# flisp: parse-pipe>
 function parse_pipe_gt(ps::ParseState)
     parse_LtoR(ps, parse_range, is_prec_pipe_gt)
 end
@@ -366,7 +376,7 @@ end
 # Chaining gives
 # a:b:c:d:e ==> (call-i (call-i a : b c) : d e)
 #
-# flisp: (define (parse-range s)
+# flisp: parse-range
 function parse_range(ps::ParseState)
     mark = position(ps)
     parse_expr(ps)
@@ -505,18 +515,37 @@ end
 #
 # flisp: parse-unary-subtype
 function parse_unary_subtype(ps::ParseState)
-    bumpTODO(ps)
+    parse_where(ps, parse_juxtapose)
     #TODO("parse_unary_subtype unimplemented")
 end
 
-# flisp: (define (parse-where-chain s first)
-function parse_where_chain(ps::ParseState, first)
-    TODO("parse_where_chain unimplemented")
+# flisp: parse-where-chain
+function parse_where_chain(ps0::ParseState, mark)
+    ps = ParseState(ps0, where_enabled=false)
+    while peek(ps) == K"where"
+        bump(ps, TRIVIA_FLAG) # where
+        k = peek(ps)
+        if k == K"{"
+            # x where {T,S}  ==>  (where x T S)
+            TODO("bracescat, braces etc allowed here??")
+            parse_cat(ps, K"}", ps.end_symbol)
+            emit(ps, mark, K"where")
+        else
+            parse_comparison(ps)
+            emit(ps, mark, K"where")
+        end
+    end
 end
 
 # flisp: (define (parse-where s down)
 function parse_where(ps::ParseState, down)
-    TODO("parse_where unimplemented")
+    # `where` needs to be below unary for the following to work
+    # +(x::T,y::T) where {T} = x
+    mark = position(ps)
+    down(ps)
+    if ps.where_enabled && peek(ps) == K"where"
+        parse_where_chain(ps, mark)
+    end
 end
 
 # given an expression and the next token, is there a juxtaposition
@@ -529,7 +558,8 @@ end
 
 # flisp: (define (parse-juxtapose s)
 function parse_juxtapose(ps::ParseState)
-    TODO("parse_juxtapose unimplemented")
+    parse_unary(ps)
+    #TODO("parse_juxtapose unimplemented")
 end
 
 # flisp: (define (maybe-negate op num)
@@ -558,52 +588,138 @@ end
 # -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 # and parse-unary from then on (to handle 2^-3)
 #
-# flisp: (define (parse-factor s)
+# flisp: parse-factor
 function parse_factor(ps::ParseState)
     TODO("parse_factor unimplemented")
+    mark = position(ps)
+    parse_unary_prefix(ps)
+    parse_factor_with_initial_ex(ps, mark)
 end
 
-# flisp: (define (parse-factor-with-initial-ex s ex0 (tok #f))
-function parse_factor_with_initial_ex(ps::ParseState, ex0; tok=false)
+# flisp: parse-factor-with-initial-ex
+function parse_factor_with_initial_ex(ps::ParseState, mark)
     TODO("parse_factor_with_initial_ex unimplemented")
+    parse_call_with_initial_ex(ps, mark)
+    parse_decl_with_initial_ex(ps, mark)
+    if is_prec_power(peek(ps))
+        bump(ps)
+        parse_factor_after(ps)
+        emit(ps, mark, K"call", INFIX_FLAG)
+    end
 end
 
-# flisp: (define (parse-factor-after s) (parse-RtoL s parse-juxtapose is-prec-power? #f parse-factor-after))
+# flisp: parse-factor-after
 function parse_factor_after(ps::ParseState)
     parse_RtoL(ps, parse_juxtapose, is_prec_power, false, parse_factor_after)
 end
 
-# flisp: (define (parse-decl s)
+# Parse type declarations and lambda syntax
+# a->b      ==>   (-> a b)
+# a::b      ==>   (:: a b)
+#
+# flisp: parse-decl
 function parse_decl(ps::ParseState)
-    TODO("parse_decl unimplemented")
+    mark = position(ps)
+    parse_call(ps)
+    parse_decl_with_initial_ex(ps, mark)
 end
 
-# flisp: (define (parse-decl-with-initial-ex s ex)
-function parse_decl_with_initial_ex(ps::ParseState, ex)
-    TODO("parse_decl_with_initial_ex unimplemented")
+# flisp: parse-decl-with-initial-ex
+function parse_decl_with_initial_ex(ps::ParseState, mark)
+    while peek(ps) == K"::"
+        # a::b::c   ==>   (:: (:: a b) c)
+        bump(ps, TRIVIA_FLAG)
+        parse_where(ps, parse_call)
+        emit(ps, mark, K"::")
+    end
+    if peek(ps) == K"->"
+        # a::b->c   ==>   (-> (:: a b) c)
+        bump(ps, TRIVIA_FLAG)
+        # -> is unusual: it binds tightly on the left and
+        # loosely on the right.
+        parse_eq_star(ps)
+        emit(ps, mark, K"->")
+    end
 end
 
 # parse function call, indexing, dot, and transpose expressions
 # also handles looking for syntactic reserved words
 #
-# flisp: (define (parse-call s)
+# flisp: parse-call
 function parse_call(ps::ParseState)
-    TODO("parse_call unimplemented")
+    mark = position(ps)
+    parse_unary_prefix(ps)
+    parse_call_with_initial_ex(ps, mark)
 end
 
 # flisp: (define (parse-call-with-initial-ex s ex tok)
 function parse_call_with_initial_ex(ps::ParseState, ex, tok)
-    TODO("parse_call_with_initial_ex unimplemented")
+    k = peek(ps)
+    if is_initial_reserved_word(ps, k) || k in (K"mutable", K"primitive", K"abstract")
+        parse_resword(ps, mark)
+    else
+        parse_call_chain(ps, mark, false)
+    end
 end
 
-# flisp: (define (parse-unary-prefix s)
+# parse syntactic unary operators
+#
+# &a   ==>  (& a)
+# ::a  ==>  (:: a)
+# $a   ==>  ($ a)
+#
+# flisp: parse-unary-prefix
 function parse_unary_prefix(ps::ParseState)
-    TODO("parse_unary_prefix unimplemented")
+    mark = position(ps)
+    k = peek(ps)
+    if is_syntactic_unary_op(k)
+        k2 = peek(ps, 2)
+        if k in (K"&", K"$") && (is_closing_token(ps, k2) || k2 == K"NewlineWs")
+            # (&)     ==>  (&)
+            # ===
+            # x = $
+            # ==> (= x &)
+            bump(ps)
+        else
+            bump(ps, TRIVIA_FLAG)
+            if k in (K"&", K"::")
+                parse_where(ps, parse_call)
+            else
+                # $$$a   ==>   ($ ($ ($ a)))
+                parse_unary_prefix(ps)
+            end
+            emit(ps, mark, k)
+        end
+    else
+        parse_atom(ps)
+    end
 end
 
-# flisp: (define (parse-def s is-func anon)
+# Parse function and macro signatures
+#
+# flisp: parse-def
 function parse_def(ps::ParseState, is_func, anon)
-    TODO("parse_def unimplemented")
+    mark = position(ps)
+    flags = EMPTY_FLAGS
+    k = peek(ps)
+    parse_unary_prefix(ps)
+    if (is_func && iskeyword(k)) || is_initial_reserved_word(ps, k)
+        # Forbid things like
+        # function begin() end  ==>  (function-e begin (call))
+        emit_diagnostic(ps, mark,
+                        error="invalid $(is_func ? "function" : "macro") name")
+        # FIXME: Which node does this error go with?
+        flags |= ERROR_FLAGS
+    end
+    parse_call_chain(ps, mark, false)
+    if is_func && peek(ps) == K"::"
+        bump(ps, TRIVIA_FLAG)
+        parse_call(ps)
+        emit(ps, mark, K"::")
+    end
+    if peek(ps) == K"where"
+        parse_where_chain(ps, mark)
+    end
 end
 
 # flisp: (define (disallowed-space-error lno ex t)
@@ -611,9 +727,11 @@ function disallowed_space_error(lno, ex, t)
     TODO("disallowed_space_error unimplemented")
 end
 
-# flisp: (define (disallow-space s ex t)
-function disallow_space(s, ex, t)
-    TODO("disallow_space unimplemented")
+# flisp: disallow-space
+function disallow_space(ps, t)
+    if t.had_whitespace
+        emit_diagnostic(ps, mark, "space disallowed before $t")
+    end
 end
 
 # string macro suffix for given delimiter t
@@ -624,8 +742,31 @@ function macsuffix(t)
 end
 
 # flisp: (define (parse-call-chain s ex macrocall?)
-function parse_call_chain(ps::ParseState, ex, is_macrocall)
-    TODO("parse_call_chain unimplemented")
+function parse_call_chain(ps::ParseState, mark, is_macrocall)
+    TODO("parse_call_chain")
+    while true
+        t = peek_token(ps)
+        k = kind(t)
+        if (ps.space_sensitive && t.had_whitespace &&
+            k in (K"(", K"[", K"{", K"'", K"\"", K"\\"))  ||
+            (is_number(k) && k == K"(")
+            # 2(...) is multiply, not call
+            # FIXME: Is this `break` correct ?
+            break
+        end
+        if k == K"("
+            disallow_space(ps, t)
+            bump(ps, TRIVIA_FLAG)
+            parse_call_arglist(ps, K")")
+        elseif k == K"["
+        elseif k == K"."
+        elseif k == K"'"
+        elseif k == K"{"
+        elseif k in (K"\"", K"`")
+        else
+            break
+        end
+    end
 end
 
 # flisp: (define (expect-end s word)
@@ -1009,7 +1150,8 @@ end
 #
 # flisp: (define (parse-atom s (checked #t))
 function parse_atom(ps::ParseState; checked=true)
-    TODO("parse_atom unimplemented")
+    bumpTODO(ps)
+    #TODO("parse_atom unimplemented")
 end
 
 # flisp: (define (valid-modref? e)
