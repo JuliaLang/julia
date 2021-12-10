@@ -99,7 +99,7 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
 
 // == callbacks called into by the outside ==
 
-void _record_allocated_value(jl_value_t *val, size_t size) {
+void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
     auto& profile = g_alloc_profile;
     profile.alloc_counter++;
     auto diff = profile.alloc_counter - profile.last_recorded_alloc;
@@ -119,7 +119,7 @@ void _record_allocated_value(jl_value_t *val, size_t size) {
     });
 }
 
-void _record_freed_value(jl_taggedvalue_t *tagged_val) {
+void _record_freed_value(jl_taggedvalue_t *tagged_val) JL_NOTSAFEPOINT {
     jl_value_t *val = jl_valueof(tagged_val);
 
     auto value_address = (size_t)val;
@@ -138,12 +138,12 @@ void _record_freed_value(jl_taggedvalue_t *tagged_val) {
 
 // TODO: remove these or make them toggle-able.
 
-void _report_gc_started() {
+void _report_gc_started() JL_NOTSAFEPOINT {
     // ...
 }
 
 // TODO: figure out how to pass all of these in as a struct
-void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd) {
+void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd) JL_NOTSAFEPOINT {
     // TODO: figure out how to put in commas
     jl_safe_printf("GC: pause %fms. collected %fMB. %lld allocs total\n",
         pause/1e6, freed/1e6, allocd
