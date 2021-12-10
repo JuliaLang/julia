@@ -70,7 +70,7 @@ JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
         g_alloc_profile.allocs.data(),
         g_alloc_profile.allocs.size()
     };
-    
+
     // package up frees
     results.num_frees = g_alloc_profile.frees_by_type_address.size();
     results.frees = (FreeInfo*) malloc(sizeof(FreeInfo) * results.num_frees);
@@ -145,9 +145,7 @@ void _report_gc_started() {
 // TODO: figure out how to pass all of these in as a struct
 void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd) {
     // TODO: figure out how to put in commas
-    jl_printf(
-        JL_STDERR,
-        "GC: pause %fms. collected %fMB. %lld allocs total\n",
+    jl_safe_printf("GC: pause %fms. collected %fMB. %lld allocs total\n",
         pause/1e6, freed/1e6, allocd
     );
 }
