@@ -132,3 +132,5 @@ JL_DLLEXPORT void LLVMExtraAddRemoveNIPass_fallback(void *PM) UNAVAILABLE
 JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_fallback(void *PM, bool_t Strong) UNAVAILABLE
 
 JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddCPUFeaturesPass_impl(void *PM) UNAVAILABLE
