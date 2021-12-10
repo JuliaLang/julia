@@ -6,13 +6,14 @@ function TODO(str)
     error("TODO: $str")
 end
 
-# Placeholder - bump an identifier in place of a production we haven't
-# implemented yet.
+# Placeholder - bump an identifier or literal in place of a production we
+# haven't implemented yet.
 function bumpTODO(ps::ParseState)
-    if peek(ps) != K"Identifier"
-        error("bump ident - TODO")
+    if peek(ps) == K"Identifier" || isliteral(peek(ps))
+        bump(ps)
+    else
+        error("bumpTODO - got unexpected $(peek(ps))")
     end
-    bump(ps)
 end
 
 function is_closing_token(ps::ParseState, tok)
@@ -71,60 +72,114 @@ function parse_RtoL(ps::ParseState, down, is_op, syntactic, self)
     end
 end
 
-# flisp: (define (line-number-node s)
-function line_number_node(s)
-    TODO("line_number_node unimplemented")
-end
-
-# parse a@b@c@... as (@ a b c ...) for some operator @
-# ops: operators to look for
-# head: the expression head to yield in the result, e.g. "a;b" => (block a b)
-# closer?: predicate to identify tokens that stop parsing
-#          however, this doesn't consume the closing token, just looks at it
-# ow, my eyes!!
+# parse block-like structures
+#
+# `delimiters` are a set of token kinds acting as delimiters; `closing_tokens`
+# stop the parsing.
+#
+# Returns true if the block was nontrivial and a node needs to be emitted by
+# the caller.
 #
 # flisp: (define (parse-Nary s down ops head closer? add-linenums)
-function parse_Nary(ps::ParseState, down, ops, head, is_closer, add_linenums)
-    TODO("parse_Nary unimplemented")
+function parse_Nary(ps::ParseState, down, delimiters, closing_tokens)
+    bump_newlines(ps)
+    k = peek(ps)
+    if k in closing_tokens
+        return true
+    end
+    # Skip leading operator
+    n_delims = 0
+    if k in delimiters
+        bump(ps, TRIVIA_FLAG)
+        n_delims += 1
+    else
+        down(ps)
+    end
+    while peek(ps) in delimiters
+        bump(ps, TRIVIA_FLAG)
+        n_delims += 1
+        k = peek(ps)
+        if k == K"EndMarker" || k in closing_tokens
+            break
+        elseif k in delimiters
+            # ignore empty delimited sections
+            # a;;;b  ==>  (block a b) 
+            continue
+        end
+        down(ps)
+    end
+    return n_delims != 0
 end
 
 # the principal non-terminals follow, in increasing precedence order
 
+# Parse a newline or semicolon-delimited list of expressions. 
+# Repeated delimiters are allowed but ignored
+# (a;b;c)     ==>  (block a b c)
+# (a;;;b;;)   ==>  (block a b)
+# ===
+# begin
+#   a
+#   b
+# end
+# ==> (block a b)
+#
 # flisp: (define (parse-block s (down parse-eq))
-function parse_block(ps::ParseState; down, parse_eq)
-    TODO("parse_block unimplemented")
+function parse_block(ps::ParseState, down=parse_eq)
+    mark = position(ps)
+    if parse_Nary(ps, down, (K"NewlineWs", K";"),
+                  (K"end", K"else", K"elseif", K"catch", K"finally"))
+        emit(ps, mark, K"block")
+    end
 end
 
 # ";" at the top level produces a sequence of top level expressions
 #
+# a;b;c   ==>  (toplevel a b c)
+# a;;;b;; ==>  (toplevel a b)
+#
 # flisp: (define (parse-stmts s)
 function parse_stmts(ps::ParseState)
-    TODO("parse_stmts unimplemented")
+    mark = position(ps)
+    do_emit = parse_Nary(ps, parse_docstring, (K";",), (K"NewlineWs",))
+    # check for unparsed junk after an expression
+    junk_mark = position(ps)
+    while peek(ps) ∉ (K"EndMarker", K"NewlineWs")
+        # Error recovery
+        bump(ps)
+    end
+    if junk_mark != position(ps)
+        emit(ps, junk_mark, K"Error",
+             error="Extra tokens after end of expression")
+    end
+    if do_emit
+        emit(ps, mark, K"toplevel")
+    end
 end
 
 # flisp: (define (parse-eq s) (parse-assignment s parse-comma))
 function parse_eq(ps::ParseState)
-    TODO("parse_eq unimplemented")
+    parse_assignment(ps, parse_comma)
 end
 
-# symbol tokens that do not simply parse to themselves when appearing alone as
-# an element of an argument list
-
-# parse-eq* is used where commas are special, for example in an argument list
+# parse_eq_ is used where commas are special, for example in an argument list
 #
 # flisp: (define (parse-eq* s)
-function parse_eq_star(ps::ParseState)
-    TODO("parse_eq_star unimplemented")
+function parse_eq_(ps::ParseState)
+    k = peek(ps)
+    k2 = peek(ps,2)
+    if (isliteral(k) || k == K"Identifier") && k2 in (K",", K")", K"}", K"]")
+        # optimization: skip checking the whole precedence stack if we have a
+        # simple token followed by a common closing token
+        bump(ps)
+    else
+        parse_assignment(ps, parse_pair)
+    end
 end
 
 # flisp: (define (eventually-call? ex)
 function is_eventually_call(ex)
     TODO("is_eventually_call unimplemented")
-end
-
-# flisp: (define (add-line-number blk linenode)
-function add_line_number(blk, linenode)
-    TODO("add_line_number unimplemented")
 end
 
 # flisp: (define (short-form-function-loc ex lno)
@@ -177,7 +232,7 @@ function parse_comma(ps::ParseState)
             return
         end
         first = false
-        bump(ps, K",", TRIVIA_FLAG)
+        bump(ps, TRIVIA_FLAG)
         n_commas += 1
         if peek(ps) == K"="
             # Test:
@@ -195,8 +250,6 @@ end
 
 # flisp: (define (parse-cond s)
 function parse_cond(ps::ParseState)
-    bumpTODO(ps)
-    #=
     mark = position(ps)
     parse_arrow(ps)
     t = peek_token(ps)
@@ -210,9 +263,6 @@ function parse_cond(ps::ParseState)
     end
     bump(ps, TRIVIA_FLAG)
     f
-
-    Tricky whitespace-newline!
-    =#
 end
 
 # Parse arrows
@@ -259,7 +309,7 @@ function parse_comparison(ps::ParseState)
             # Type comparisons are syntactic and have their kind encoded in the head
             # x <: y  ==>  (<: x y)
             # x >: y  ==>  (>: x y)
-            set_flags!(ps, op_pos, TRIVIA_FLAG)
+            reset_token!(ps, op_pos, flags=TRIVIA_FLAG)
             emit(ps, mark, initial_kind)
         else
             emit(ps, mark, K"call", INFIX_FLAG)
@@ -328,9 +378,7 @@ function parse_range(ps::ParseState)
                 # ===
                 # 1:
                 # 2
-                # ==>
-                # (call-i-e 1 :)
-                # ===
+                # ==> (call-i-e 1 :)
                 emit(ps, mark, K"call", INFIX_FLAG|ERROR_FLAG)
                 emit_diagnostic(ps, error="line break after `:` in range expression")
                 return
@@ -359,13 +407,10 @@ function parse_range(ps::ParseState)
     end
 end
 
-# parse left to right chains of a certain binary operator
+# parse left to right chains of a given binary operator
 #
 # flisp: (define (parse-chain s down op)
 function parse_chain(ps::ParseState, down, op_kind)
-    mark = position(ps)
-    down(ps)
-    first = true
     while (t = peek_token(ps); kind(t) == op_kind)
         if ps.space_sensitive && t.had_whitespace &&
             is_both_unary_and_binary(kind(t)) &&
@@ -373,75 +418,67 @@ function parse_chain(ps::ParseState, down, op_kind)
             # [x +y]  ==>  (hcat x (call + y))
             break
         end
-        bump(ps, first ? EMPTY_FLAGS : TRIVIA_FLAG)
-        first = false
+        bump(ps, TRIVIA_FLAG)
         down(ps)
     end
-    emit(ps, mark, K"call", INFIX_FLAG)
 end
 
-# parse left to right, combining chains of a certain operator into 1 call
-# a + b + c ==> (call-i a + b c)
+# Parse left to right, combining any of `chain_ops` into one call
+# a - b - c  ==>  (call-i (call-i a - b) - c)
 #
-# flisp: (define (parse-with-chains s down ops chain-ops)
+# flisp: parse-with-chains
 function parse_with_chains(ps::ParseState, down, is_op, chain_ops)
-    TODO("parse_with_chains")
-    #=
     mark = position(ps)
     down(ps)
-    chain_op = K"Nothing"
     while (t = peek_token(ps); is_op(kind(t)))
         if ps.space_sensitive && t.had_whitespace &&
             is_both_unary_and_binary(kind(t)) &&
             !peek_token(ps, 2).had_whitespace
-            # [x+y +z]  ==>  (hcat (call-i x y) (call + z))
+            # The following is two elements of a hcat
+            # [x+y +z]   ==>  (hcat (call-i x + y) (call + z))
+            # Conversely
+            # [x+y+z]    ==>  (hcat (call-i x + y z))
+            # [x+y + z]  ==>  (hcat (call-i x + y z))
             break
         end
-        op_is_trivia = false
-        if chain_op != K"Nothing"
-            if kind(t) != chain_op
-                # Finish the chain
-                emit(ps, mark, K"call", INFIX_FLAG)
-                chain_op = K"Nothing"
-            else
-                op_is_trivia = true
-            end
-        end
-        if chain_op == K"Nothing" && kind(t) in chain_ops
-            chain_op = kind(t)
-        bump(ps, op_is_trivia ? TRIVIA_FLAG : EMPTY_FLAGS)
+        bump(ps)
         down(ps)
-        if !(kind(t) in chain_ops)
+        if kind(t) in chain_ops && !is_decorated(t)
+            # a + b + c    ==>  (call-i a + b c)
+            # a +₁ b +₁ c  ==>  (call-i (call-i a +₁ b) +₁ c)
+            # a .+ b .+ c  ==>  (call-i (call-i a .+ b) .+ c)
+            parse_chain(ps, down, kind(t))
         end
+        emit(ps, mark, K"call", INFIX_FLAG)
     end
-    =#
 end
 
-# flisp: (define (parse-expr s)     (parse-with-chains s parse-term          is-prec-plus?  '(+ ++)))
+# flisp: parse-expr
 function parse_expr(ps::ParseState)
-    bumpTODO(ps)
+    parse_with_chains(ps, parse_term, is_prec_plus, (K"+", K"++"))
 end
 
-# flisp: (define (parse-term s)     (parse-with-chains s parse-rational      is-prec-times? '(*)))
+# flisp: parse-term
 function parse_term(ps::ParseState)
-    TODO("parse_term unimplemented")
+    parse_with_chains(ps, parse_rational, is_prec_times, (K"*",))
 end
 
-# flisp: (define (parse-rational s) (parse-LtoR        s parse-shift         is-prec-rational?))
+# flisp: parse-rational
 function parse_rational(ps::ParseState)
     parse_LtoR(ps, parse_shift, is_prec_rational)
 end
 
-# flisp: (define (parse-shift s)    (parse-LtoR        s parse-unary-subtype is-prec-bitshift?))
+# flisp: parse-shift
 function parse_shift(ps::ParseState)
     parse_LtoR(ps, parse_unary_subtype, is_prec_bitshift)
 end
 
 # parse `<: A where B` as `<: (A where B)` (issue #21545)
 #
-# flisp: (define (parse-unary-subtype s)
+# flisp: parse-unary-subtype
 function parse_unary_subtype(ps::ParseState)
-    TODO("parse_unary_subtype unimplemented")
+    bumpTODO(ps)
+    #TODO("parse_unary_subtype unimplemented")
 end
 
 # flisp: (define (parse-where-chain s first)
@@ -738,9 +775,20 @@ function expect_space_before(s, t)
     TODO("expect_space_before unimplemented")
 end
 
+# Parse syntax inside of `[]` or `{}`
+#
 # flisp: (define (parse-cat s closer last-end-symbol)
 function parse_cat(ps::ParseState, closer, last_end_symbol)
     TODO("parse_cat unimplemented")
+    ps = ParseState(ps0, range_colon_enabled=true,
+                    space_sensitive=true,
+                    where_enabled=true,
+                    whitespace_newline=false,
+                    for_generator=true)
+    if require_token(ps) == closer
+        take_token!(ps)
+        return 
+    end
 end
 
 # flisp: (define (kw-to-= e) (if (kwarg? e) (cons '= (cdr e)) e))
@@ -971,19 +1019,78 @@ function is_doc_string_literal(s, e)
     TODO("is_doc_string_literal unimplemented")
 end
 
+# Parse docstrings attached by a space or single newline
 # flisp: (define (parse-docstring s production)
-function parse_docstring(ps::ParseState, production)
-    TODO("parse_docstring unimplemented")
+function parse_docstring(ps::ParseState, down=parse_eq)
+    mark = position(ps)
+    # TODO? This is not quite equivalent to the flisp parser which accepts
+    # more than just a string. For example:
+    #! ("doc") foo  ==>  (macrocall core_@doc "doc" foo)
+    maybe_doc = peek(ps) in (K"String", K"TripleString")
+    atdoc_mark = bump_invisible(ps)
+    down(ps)
+    if maybe_doc
+        is_doc = true
+        k = peek(ps)
+        if is_closing_token(ps, k)
+            is_doc = false
+        elseif k == K"NewlineWs"
+            k2 = peek(ps, 2)
+            if is_closing_token(ps, k2) || k2 == K"NewlineWs"
+                is_doc = false
+            else
+                # Allow a single newline
+                # ===
+                # "doc"
+                # foo
+                # ===> (macrocall core_@doc "doc" foo)
+                bump(ps, TRIVIA_FLAG) # NewlineWs
+            end
+        end
+        if is_doc
+            reset_token!(ps, atdoc_mark, kind=K"core_@doc")
+            down(ps)
+            emit(ps, mark, K"macrocall")
+        end
+    end
 end
 
-# --- main entry point ---
 
-# can optionally specify which grammar production to parse.
-# default is parse-stmts.
-#
-# flisp: (define (julia-parse s . production)
-function julia_parse(s, _, production)
-    TODO("julia_parse unimplemented")
+"""
+    parse_all(input)
+
+Parse a sequence of top level statements.
+
+`input` may be a `ParseStream` or other input source which will be passed to
+the `ParseStream` constructor. The `ParseStream` is returned.
+
+flisp: parse-all
+"""
+function parse_all(stream::ParseStream)
+    ps = ParseState(stream)
+    mark = position(ps)
+    while true
+        if peek(ps, skip_newlines=true) == K"EndMarker"
+            # As a special case, allow early end of input if there is
+            # nothing left but whitespace
+            # ===
+            # # a
+            #
+            # #= b =#  # c
+            # ==> (toplevel)
+            bump(ps, skip_newlines=true)
+            break
+        else
+            parse_stmts(ps)
+        end
+    end
+    emit(ps, mark, K"toplevel")
+    return ps.stream
+end
+
+function parse_all(code, args...)
+    stream = ParseStream(code)
+    return parse_all(ParseState(stream), args...)
 end
 
 #-------------------------------------------------------------------------------
@@ -1046,59 +1153,7 @@ function parse_atom(ps::ParseState; checked::Bool=true)::GreenNode
     end
 end
 
-# parse `a@b@c@...` for some @
-#
-# `is_separator` - predicate
-# `head` the expression head to yield in the result, e.g. "a;b" => (block a b)
-# `is_closer` - predicate to identify tokens that stop parsing
-#               however, this doesn't consume the closing token, just looks at it
-function parse_Nary(ps::ParseState, down::Function, is_separator::Function,
-                    result_kind, is_closer::Function)
-end
-
-# flisp: parse-docstring
-# Parse statement with possible docstring
-function parse_statement_with_doc(ps::ParseState)
-    parse_eq(ps)
-    # TODO: Detect docstrings
-end
-
-# flisp: parse-cat
-# Parse syntax inside of `[]` or `{}`
-function parse_cat(ps0::ParseState, opening_tok, closer, last_end_symbol::Bool)
-    ps = ParseState(ps0, range_colon_enabled=true,
-                    space_sensitive=true,
-                    where_enabled=true,
-                    whitespace_newline=false,
-                    for_generator=true)
-    if require_token(ps) == closer
-        take_token!(ps)
-        return 
-    end
-end
-
-
-# flisp: parse-stmts
-# `;` at the top level produces a sequence of top level expressions
-function parse_statements(ps::ParseState)
-    parse_Nary(ps, parse_statement)
-end
-
-# flisp: parse-eq
-function parse_eq(ps::ParseState)
-    parse_assignment(ps, parse_comma)
-end
-
-# flisp: parse-eq*
-# parse_eq_2 is used where commas are special, for example in an argument list
-# function parse_eq_2
-
 #-------------------------------------------------------------------------------
-
-function parse(code)
-    stream = ParseStream(code)
-    parse_statements(stream)
-end
 
 =#
 

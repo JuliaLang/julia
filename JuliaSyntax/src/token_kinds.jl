@@ -961,6 +961,15 @@ const END_OPS = @_K end_ops
 const var" "      =  @_K WHITESPACE
 const var"\n"      =  @_K NEWLINE_WS
 
+const BEGIN_INVISIBLE_TOKENS = @_K begin_invisible_tokens
+const TOMBSTONE              = @_K TOMBSTONE
+const var"core_@doc"         = @_K CORE_AT_DOC
+const var"core_@cmd"         = @_K CORE_AT_CMD
+const var"core_@int128_str"  = @_K CORE_AT_INT128_STR
+const var"core_@uint128_str" = @_K CORE_AT_UINT128_STR
+const var"core_@big_str"     = @_K CORE_AT_BIG_STR
+const END_INVISIBLE_TOKENS   = @_K end_invisible_tokens
+
 # Our custom syntax tokens
 const BEGIN_SYNTAX_KINDS = @_K begin_syntax_kinds
 const block               = @_K BLOCK
@@ -968,6 +977,7 @@ const call                = @_K CALL
 const comparison          = @_K COMPARISON
 const curly               = @_K CURLY
 const string              = @_K STRING_INTERP
+const macrocall           = @_K MACROCALL
 const toplevel            = @_K TOPLEVEL
 const tuple               = @_K TUPLE
 const ref                 = @_K REF
