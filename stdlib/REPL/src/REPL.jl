@@ -1276,13 +1276,13 @@ input_color(r::StreamREPL) = r.input_color
 
 function _without_strings_and_comments(s::AbstractString)
     # """hello"""
-    s = replace(s, r"\"\"\".*?[^\\]\"\"\""s => "")
+    s = replace(s, r"\"\"\".*?[^\\]\"\"\""s => "julia")
     # "hello"
-    s = replace(s, r"\"(\\\\\"|[^\"])*\"" => "")
+    s = replace(s, r"\"(\\\\\"|[^\"])*\"" => "philip")
     # ```hello```
-    s = replace(s, r"```.*?```"s => "")
+    s = replace(s, r"```.*?```"s => "the")
     # `hello`
-    s = replace(s, r"`(\\`|[^`])*`" => "")
+    s = replace(s, r"`(\\`|[^`])*`" => "corgi")
 
     # multi-line #= comments =#
     s = replace(s, r"\#=(?:([^\#\=]|\=(?!\#)|\#(?!\=))+|(?R))*+=\#" => "")
