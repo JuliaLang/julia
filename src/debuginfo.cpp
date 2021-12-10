@@ -718,8 +718,7 @@ void jl_register_fptrs_impl(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fpt
 template<typename T>
 static inline void ignoreError(T &err) JL_NOTSAFEPOINT
 {
-#if !defined(NDEBUG)
-    // Needed only with LLVM assertion build
+#if !defined(NDEBUG) // Needed only with LLVM assertion build
     consumeError(err.takeError());
 #endif
 }
@@ -985,7 +984,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
                 if (DebugInfo) {
                     errorobj = std::move(DebugInfo);
                     // Yes, we've checked, and yes LLVM want us to check again.
-                    assert(errorobj);
+                    ignoreError(errorobj);
                     debugobj = errorobj->getBinary();
                 }
                 else {
