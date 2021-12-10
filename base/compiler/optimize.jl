@@ -34,8 +34,6 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
         src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
         src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
         return src_inferred && src_inlineable ? src : nothing
-    elseif isa(src, OptimizationState) && isdefined(src, :ir)
-        return (is_stmt_inline(stmt_flag) || src.src.inlineable) ? src.ir : nothing
     elseif src === nothing && is_stmt_inline(stmt_flag)
         # if this statement is forced to be inlined, make an additional effort to find the
         # inferred source in the local cache
@@ -47,8 +45,6 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
         if isa(src, CodeInfo)
             src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
             return src_inferred ? src : nothing
-        elseif isa(src, OptimizationState)
-            return isdefined(src, :ir) ? src.ir : nothing
         else
             return nothing
         end
