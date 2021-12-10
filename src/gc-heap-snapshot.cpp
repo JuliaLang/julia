@@ -263,6 +263,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
 
 typedef pair<jl_datatype_t*, string> inlineallocd_field_type_t;
 
+// TODO: remove this
 static bool debug_log = false;
 
 bool _fieldpath_for_slot_helper(
@@ -337,7 +338,7 @@ vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, void *slo
 }
 
 
-void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) {
+void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) JL_NOTSAFEPOINT {
     record_node_to_gc_snapshot(root);
 
     auto &internal_root = g_snapshot->nodes.front();
