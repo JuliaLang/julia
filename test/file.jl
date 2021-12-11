@@ -106,13 +106,15 @@ using Random
 end
 
 @testset "tempname with parent" begin
-    t = tempname()
-    @test dirname(t) == tempdir()
-    mktempdir() do d
-        t = tempname(d)
-        @test dirname(t) == d
+    withenv("TMPDIR" => nothing) do
+        t = tempname()
+        @test dirname(t) == tempdir()
+        mktempdir() do d
+            t = tempname(d)
+            @test dirname(t) == d
+        end
+        @test_throws ArgumentError tempname(randstring())
     end
-    @test_throws ArgumentError tempname(randstring())
 end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
@@ -1694,4 +1696,18 @@ end
         @test !isnothing(Base.Filesystem.getusername(s.uid))
         @test !isnothing(Base.Filesystem.getgroupname(s.gid))
     end
+end
+
+@testset "diskstat() works" begin
+    # Sanity check assuming disk is smaller than 32PB
+    PB = Int64(2)^44
+
+    dstat = diskstat()
+    @test dstat.total < 32PB
+    @test dstat.used + dstat.available == dstat.total
+    @test occursin(r"^DiskStat\(total=\d+, used=\d+, available=\d+\)$", sprint(show, dstat))
+    # Test diskstat(::AbstractString)
+    dstat = diskstat(pwd())
+    @test dstat.total < 32PB
+    @test dstat.used + dstat.available == dstat.total
 end

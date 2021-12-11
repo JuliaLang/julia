@@ -335,6 +335,20 @@ function endswith(s::SubString, r::Regex)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
 
+function chopprefix(s::AbstractString, prefix::Regex)
+    m = match(prefix, s, firstindex(s), PCRE.ANCHORED)
+    m === nothing && return SubString(s)
+    return SubString(s, ncodeunits(m.match) + 1)
+end
+
+function chopsuffix(s::AbstractString, suffix::Regex)
+    m = match(suffix, s, firstindex(s), PCRE.ENDANCHORED)
+    m === nothing && return SubString(s)
+    isempty(m.match) && return SubString(s)
+    return SubString(s, firstindex(s), prevind(s, m.offset))
+end
+
+
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 

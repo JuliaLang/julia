@@ -175,6 +175,8 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
     return a # TODO: improve this bound?
 end
 
+hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
+
 function tvar_extent(@nospecialize t)
     while t isa TypeVar
         t = t.ub
@@ -210,10 +212,10 @@ end
 # or outside of the Tuple/Union nesting, though somewhat more expensive to be
 # outside than inside because the representation is larger (because and it
 # informs the callee whether any splitting is possible).
-function unionsplitcost(atypes::Union{SimpleVector,Vector{Any}})
+function unionsplitcost(argtypes::Union{SimpleVector,Vector{Any}})
     nu = 1
     max = 2
-    for ti in atypes
+    for ti in argtypes
         if isa(ti, Union)
             nti = unionlen(ti)
             if nti > max

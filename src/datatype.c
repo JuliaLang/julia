@@ -248,9 +248,9 @@ int jl_struct_try_layout(jl_datatype_t *dt)
     return 1;
 }
 
-int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree) JL_NOTSAFEPOINT
+int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree)
 {
-    if (ty->name->mayinlinealloc && (ty->isconcretetype || ((jl_datatype_t*)jl_unwrap_unionall(ty->name->wrapper))->layout)) { // TODO: use jl_struct_try_layout(dt) (but it is a safepoint)
+    if (ty->name->mayinlinealloc && jl_struct_try_layout(ty)) {
         if (ty->layout->npointers > 0) {
             if (pointerfree)
                 return 0;
@@ -264,7 +264,7 @@ int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree) JL_NOTSAFEPOIN
     return 0;
 }
 
-static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align, int asfield) JL_NOTSAFEPOINT
+static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align, int asfield)
 {
     if (jl_is_uniontype(ty)) {
         unsigned na = union_isinlinable(((jl_uniontype_t*)ty)->a, 1, nbytes, align, asfield);
@@ -290,19 +290,19 @@ static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbyte
     return 0;
 }
 
-int jl_uniontype_size(jl_value_t *ty, size_t *sz) JL_NOTSAFEPOINT
+int jl_uniontype_size(jl_value_t *ty, size_t *sz)
 {
     size_t al = 0;
     return union_isinlinable(ty, 0, sz, &al, 0) != 0;
 }
 
-JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al)
 {
     unsigned countbits = union_isinlinable(eltype, 0, fsz, al, 1);
     return (countbits > 0 && countbits < 127) ? countbits : 0;
 }
 
-JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype)
 {
     size_t fsz = 0, al = 0;
     return jl_islayout_inline(eltype, &fsz, &al);
@@ -317,7 +317,7 @@ int jl_pointer_egal(jl_value_t *t)
         return 1;
     if (t == (jl_value_t*)jl_bool_type)
         return 1;
-    if (jl_is_mutable_datatype(t) && // excludes abstract types
+    if (jl_is_mutable_datatype(jl_unwrap_unionall(t)) && // excludes abstract types
         t != (jl_value_t*)jl_string_type && // technically mutable, but compared by contents
         t != (jl_value_t*)jl_simplevector_type &&
         !jl_is_kind(t))
@@ -339,6 +339,10 @@ int jl_pointer_egal(jl_value_t *t)
             // pointer value.
             return 1;
         }
+    }
+    if (jl_is_uniontype(t)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)t;
+        return jl_pointer_egal(u->a) && jl_pointer_egal(u->b);
     }
     return 0;
 }

@@ -32,6 +32,7 @@
     XX(jl_array_grow_end) \
     XX(jl_array_isassigned) \
     XX(jl_arraylen) \
+    XX(jl_have_fma) \
     XX(jl_array_ptr) \
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
@@ -460,7 +461,6 @@
     XX(jl_task_stack_buffer) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
-    XX(jl_threading_enabled) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
     XX(jl_too_few_args) \
@@ -519,7 +519,6 @@
 
 // use YY instead of XX to avoid jl -> ijl renaming in libjulia-codegen
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
-    YY(jl_clear_malloc_data) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
     YY(jl_extern_c) \
@@ -530,8 +529,6 @@
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
     YY(jl_get_llvm_gv) \
-    YY(jl_write_malloc_log) \
-    YY(jl_write_coverage_data) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \
@@ -542,6 +539,7 @@
     YY(jl_generate_fptr_for_unspecialized) \
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
+    YY(jl_jit_total_bytes) \
     YY(jl_lock_profile) \
     YY(jl_unlock_profile) \
     YY(jl_create_native) \
@@ -565,4 +563,5 @@
     YY(LLVMExtraAddRemoveNIPass) \
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
+    YY(LLVMExtraAddCPUFeaturesPass) \
 

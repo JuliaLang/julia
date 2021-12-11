@@ -1726,6 +1726,14 @@ end
     @test sparse(s) == s
 end
 
+@testset "avoid allocation for zeros in diagonal" begin
+    x = [1, 0, 0, 5, 0]
+    d = Diagonal(x)
+    s = sparse(d)
+    @test s == d
+    @test nnz(s) == 2
+end
+
 @testset "error conditions for reshape, and dropdims" begin
     local A = sprand(Bool, 5, 5, 0.2)
     @test_throws DimensionMismatch reshape(A,(20, 2))

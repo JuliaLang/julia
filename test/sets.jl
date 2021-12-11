@@ -242,6 +242,9 @@ end
         s = S([1,2]) ∩ S([3,4])
         @test s == S()
         s = intersect(S([5,6,7,8]), S([7,8,9]))
+        slong = S(collect(3:63))
+        # test #36339 length/order short-cut
+        @test intersect(S([5,6,7,8]), slong) == intersect(slong, S([5,6,7,8]))
         @test s == S([7,8])
         @test intersect(S([2,3,1]), S([4,2,3]), S([5,4,3,2])) == S([2,3])
         let s1 = S([1,2,3])

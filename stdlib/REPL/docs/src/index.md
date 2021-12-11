@@ -669,7 +669,7 @@ v  [ ] blueberry
 
 can instead be rendered with Unicode selection and navigation characters with
 
-```julia
+```julia-repl
 julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode);
 
 julia> request(menu)
@@ -683,7 +683,7 @@ julia> request(menu)
 
 More fine-grained configuration is also possible:
 
-```julia
+```julia-repl
 julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode, checked="YEP!", unchecked="NOPE", cursor='⧐');
 
 julia> request(menu)

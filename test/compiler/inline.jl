@@ -380,23 +380,25 @@ using Base.Experimental: @opaque
 f_oc_getfield(x) = (@opaque ()->x)()
 @test fully_eliminated(f_oc_getfield, Tuple{Int})
 
-import Core.Compiler: argextype
-const EMPTY_SPTYPES = Core.Compiler.EMPTY_SLOTTYPES
+import Core.Compiler: argextype, singleton_type
+const EMPTY_SPTYPES = Any[]
 
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 
 # check if `x` is a dynamic call of a given function
+iscall(y) = @nospecialize(x) -> iscall(y, x)
 function iscall((src, f)::Tuple{Core.CodeInfo,Function}, @nospecialize(x))
     return iscall(x) do @nospecialize x
-        argextype(x, src, EMPTY_SPTYPES) === typeof(f)
+        singleton_type(argextype(x, src, EMPTY_SPTYPES)) === f
     end
 end
-iscall(pred, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
+iscall(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
 
 # check if `x` is a statically-resolved call of a function whose name is `sym`
+isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
 isinvoke(sym::Symbol, @nospecialize(x)) = isinvoke(mi->mi.def.name===sym, x)
-isinvoke(pred, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.args[1]::Core.MethodInstance)
+isinvoke(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.args[1]::Core.MethodInstance)
 
 @testset "@inline/@noinline annotation before definition" begin
     M = Module()
@@ -422,25 +424,17 @@ isinvoke(pred, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.args[1]::Co
     end
 
     let code = get_code(M.def_inline, (Int,))
-        @test all(code) do @nospecialize x
-            !isinvoke(:_def_inline, x)
-        end
+        @test all(!isinvoke(:_def_inline), code)
     end
     let code = get_code(M.def_noinline, (Int,))
-        @test any(code) do @nospecialize x
-            isinvoke(:_def_noinline, x)
-        end
+        @test any(isinvoke(:_def_noinline), code)
     end
     # test that they don't conflict with other "before-definition" macros
     let code = get_code(M.def_inline_noconflict, (Int,))
-        @test all(code) do @nospecialize x
-            !isinvoke(:_def_inline_noconflict, x)
-        end
+        @test all(!isinvoke(:_def_inline_noconflict), code)
     end
     let code = get_code(M.def_noinline_noconflict, (Int,))
-        @test any(code) do @nospecialize x
-            isinvoke(:_def_noinline_noconflict, x)
-        end
+        @test any(isinvoke(:_def_noinline_noconflict), code)
     end
 end
 
@@ -479,14 +473,10 @@ end
     end
 
     let code = get_code(M.body_inline, (Int,))
-        @test all(code) do @nospecialize x
-            !isinvoke(:_body_inline, x)
-        end
+        @test all(!isinvoke(:_body_inline), code)
     end
     let code = get_code(M.body_noinline, (Int,))
-        @test any(code) do @nospecialize x
-            isinvoke(:_body_noinline, x)
-        end
+        @test any(isinvoke(:_body_noinline), code)
     end
     # test annotations for `do` blocks
     let code = get_code(M.do_inline, (Int,))
@@ -552,9 +542,7 @@ end
     end
 
     let code = get_code(M.force_inline_explicit, (Int,))
-        @test all(code) do @nospecialize x
-            !isinvoke(:noinlined_explicit, x)
-        end
+        @test all(!isinvoke(:noinlined_explicit), code)
     end
     let code = get_code(M.force_inline_block_explicit, (Int,))
         @test all(code) do @nospecialize x
@@ -563,63 +551,41 @@ end
         end
     end
     let code = get_code(M.force_inline_implicit, (Int,))
-        @test all(code) do @nospecialize x
-            !isinvoke(:noinlined_implicit, x)
-        end
+        @test all(!isinvoke(:noinlined_implicit), code)
     end
     let code = get_code(M.force_inline_block_implicit, (Int,))
-        @test all(code) do @nospecialize x
-            !isinvoke(:noinlined_explicit, x)
-        end
+        @test all(!isinvoke(:noinlined_explicit), code)
     end
 
     let code = get_code(M.force_noinline_explicit, (Int,))
-        @test any(code) do @nospecialize x
-            isinvoke(:inlined_explicit, x)
-        end
+        @test any(isinvoke(:inlined_explicit), code)
     end
     let code = get_code(M.force_noinline_block_explicit, (Int,))
-        @test count(code) do @nospecialize x
-            isinvoke(:inlined_explicit, x)
-        end == 2
+        @test count(isinvoke(:inlined_explicit), code) == 2
     end
     let code = get_code(M.force_noinline_implicit, (Int,))
-        @test any(code) do @nospecialize x
-            isinvoke(:inlined_implicit, x)
-        end
+        @test any(isinvoke(:inlined_implicit), code)
     end
     let code = get_code(M.force_noinline_block_implicit, (Int,))
-        @test count(code) do @nospecialize x
-            isinvoke(:inlined_implicit, x)
-        end == 2
+        @test count(isinvoke(:inlined_implicit), code) == 2
     end
 
     let code = get_code(M.force_inline_constprop_explicit)
-        @test all(code) do @nospecialize x
-            !isinvoke(:noinlined_constprop_explicit, x)
-        end
+        @test all(!isinvoke(:noinlined_constprop_explicit), code)
     end
     let code = get_code(M.force_inline_constprop_implicit)
-        @test all(code) do @nospecialize x
-            !isinvoke(:noinlined_constprop_implicit, x)
-        end
+        @test all(!isinvoke(:noinlined_constprop_implicit), code)
     end
 
     let code = get_code(M.force_noinline_constprop_explicit)
-        @test any(code) do @nospecialize x
-            isinvoke(:inlined_constprop_explicit, x)
-        end
+        @test any(isinvoke(:inlined_constprop_explicit), code)
     end
     let code = get_code(M.force_noinline_constprop_implicit)
-        @test any(code) do @nospecialize x
-            isinvoke(:inlined_constprop_implicit, x)
-        end
+        @test any(isinvoke(:inlined_constprop_implicit), code)
     end
 
     let code = get_code(M.nested, (Int,Int))
-        @test count(code) do @nospecialize x
-            isinvoke(:notinlined, x)
-        end == 1
+        @test count(isinvoke(:notinlined), code) == 1
     end
 end
 
@@ -643,9 +609,7 @@ let code = @eval Module() begin
         $get_code(setter, (Vector{Foo},))
     end
 
-    @test !any(code) do @nospecialize x
-        isinvoke(:setproperty!, x)
-    end
+    @test !any(isinvoke(:setproperty!), code)
 end
 
 # Issue #41299 - inlining deletes error check in :>
@@ -665,9 +629,7 @@ let
         code = get_code((Int,)) do a
             @inline f42078(a)
         end
-        @test all(code) do @nospecialize x
-            !isinvoke(:f42078, x)
-        end
+        @test all(!isinvoke(:f42078), code)
         length(code)
     end
 
@@ -686,10 +648,60 @@ let
         code = get_code((Int,)) do a
             @inline f42078(a)
         end
-        @test all(code) do @nospecialize x
-            !isinvoke(:f42078, x)
-        end
+        @test all(!isinvoke(:f42078), code)
         @test ninlined == length(code)
+    end
+end
+
+begin
+    # more idempotency of callsite inling
+    # -----------------------------------
+    # this test case requires forced constant propagation for callsite inlined function call,
+    # particularly, in the following example, the inlinear will look up `+ₚ(::Point, ::Const(Point(2.25, 4.75)))`
+    # and the callsite inlining needs the corresponding constant result to exist in the local cache
+
+    struct Point
+        x::Float64
+        y::Float64
+    end
+    @noinline a::Point +ₚ b::Point = Point(a.x + b.x, a.y + b.y)
+
+    function compute(n)
+        a = Point(1.5, 2.5)
+        b = Point(2.25, 4.75)
+        for i in 0:(n-1)
+            a = @inline (a +ₚ b) +ₚ b
+        end
+        return a.x, a.y
+    end
+    let src = code_typed1(compute, (Int,))
+        @test count(isinvoke(:+ₚ), src.code) == 0 # successful inlining
+    end
+
+    function compute(n)
+        a = Point(1.5, 2.5)
+        b = Point(2.25, 4.75)
+        for i in 0:(n-1)
+            a = (a +ₚ b) +ₚ b
+        end
+        return a.x, a.y
+    end
+    let src = code_typed1(compute, (Int,))
+        @test count(isinvoke(:+ₚ), src.code) == 2 # no inlining
+    end
+
+    compute(42) # this execution should discard the cache of `+ₚ` since it's declared as `@noinline`
+
+    function compute(n)
+        a = Point(1.5, 2.5)
+        b = Point(2.25, 4.75)
+        for i in 0:(n-1)
+            @inline a = (a +ₚ b) +ₚ b
+        end
+        return a.x, a.y
+    end
+    let src = code_typed1(compute, (Int,))
+        @test count(isinvoke(:+ₚ), src.code) == 0 # no inlining !?
     end
 end
 
@@ -724,7 +736,7 @@ let f(x) = (x...,)
 end
 
 # https://github.com/JuliaLang/julia/issues/42754
-# inline union-split constant-prop'ed sources
+# inline union-split constant-prop'ed results
 mutable struct X42754
     # NOTE in order to confuse `fieldtype_tfunc`, we need to have at least two fields with different types
     a::Union{Nothing, Int}
@@ -744,6 +756,27 @@ let src = code_typed1((X42754, Union{Nothing,Int})) do x, a
 end
 
 import Base: @constprop
+
+# test union-split callsite with successful and unsuccessful constant-prop' results
+@constprop :aggressive @inline f42840(xs, a::Int) = xs[a]             # should be successful, and inlined
+@constprop :none @noinline f42840(xs::AbstractVector, a::Int) = xs[a] # should be unsuccessful, but still statically resolved
+let src = code_typed((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
+             f42840(xs, 2)
+         end |> only |> first
+    # `(xs::Tuple{Int,Int,Int})[a::Const(2)]` => `getfield(xs, 2)`
+    @test count(iscall((src, getfield)), src.code) == 1
+    @test count(isinvoke(:f42840), src.code) == 1
+end
+# a bit weird, but should handle this kind of case as well
+@constprop :aggressive @noinline g42840(xs, a::Int) = xs[a]         # should be successful, but only statically resolved
+@constprop :none @inline g42840(xs::AbstractVector, a::Int) = xs[a] # should be unsuccessful, still inlined
+let src = code_typed((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
+        g42840(xs, 2)
+    end |> only |> first
+    # `(xs::Vector{Int})[a::Const(2)]` => `Base.arrayref(true, xs, 2)`
+    @test count(iscall((src, Base.arrayref)), src.code) == 1
+    @test count(isinvoke(:g42840), src.code) == 1
+end
 
 # test single, non-dispatchtuple callsite inlining
 
@@ -783,4 +816,47 @@ end
 let
     invoke(xs) = validate_unionsplit_inlining(true, xs[1])
     @test invoke(Any[10]) === false
+end
+
+# issue 43104
+
+@inline isGoodType(@nospecialize x::Type) =
+    x !== Any && !(@noinline Base.has_free_typevars(x))
+let # aggressive inlining of single, abstract method match
+    src = code_typed((Type, Any,)) do x, y
+        isGoodType(x), isGoodType(y)
+    end |> only |> first
+    # both callsites should be inlined
+    @test count(isinvoke(:has_free_typevars), src.code) == 2
+    # `isGoodType(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
+    @test count(iscall((src,isGoodType)), src.code) == 1
+end
+
+@inline isGoodType2(cnd, @nospecialize x::Type) =
+    x !== Any && !(@noinline (cnd ? Core.Compiler.isType : Base.has_free_typevars)(x))
+let # aggressive inlining of single, abstract method match (with constant-prop'ed)
+    src = code_typed((Type, Any,)) do x, y
+        isGoodType2(true, x), isGoodType2(true, y)
+    end |> only |> first
+    # both callsite should be inlined with constant-prop'ed result
+    @test count(isinvoke(:isType), src.code) == 2
+    @test count(isinvoke(:has_free_typevars), src.code) == 0
+    # `isGoodType(y::Any)` isn't fully convered, thus a runtime type check and fallback dynamic dispatch should be inserted
+    @test count(iscall((src,isGoodType2)), src.code) == 1
+end
+
+@noinline function checkBadType!(@nospecialize x::Type)
+    if x === Any || Base.has_free_typevars(x)
+        println(x)
+    end
+    return nothing
+end
+let # aggressive static dispatch of single, abstract method match
+    src = code_typed((Type, Any,)) do x, y
+        checkBadType!(x), checkBadType!(y)
+    end |> only |> first
+    # both callsites should be resolved statically
+    @test count(isinvoke(:checkBadType!), src.code) == 2
+    # `checkBadType!(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
+    @test count(iscall((src,checkBadType!)), src.code) == 1
 end

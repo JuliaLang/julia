@@ -526,11 +526,20 @@ file, if it behaves differently than it did in the REPL, then you will get a war
 ### Let Blocks
 
 `let` statements create a new *hard scope* block (see above) and introduce new variable
-bindings each time they run. Whereas assignments might reassign a new value to an existing value location,
-`let` always creates a new location.
-This difference is usually not important, and is only detectable in the case of variables that
-outlive their scope via closures. The `let` syntax accepts a comma-separated series of assignments
-and variable names:
+bindings each time they run. The variable need not be immediately assigned:
+```jldoctest
+julia> var1 = let x
+           for i in 1:5
+               (i == 4) && (x = i; break)
+           end
+           x
+       end
+4
+```
+Whereas assignments might reassign a new value to an existing value location, `let` always creates a
+new location. This difference is usually not important, and is only detectable in the case of
+variables that outlive their scope via closures. The `let` syntax accepts a comma-separated series of
+assignments and variable names:
 
 ```jldoctest
 julia> x, y, z = -1, -1, -1;

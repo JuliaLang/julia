@@ -35,7 +35,7 @@ look like this, plus one or more of the `SANITIZE_*` flags listed below:
 
 ## Address Sanitizer (ASAN)
 
-For detecting or debugging memory bugs, you can use Clang's [address sanitizer (ASAN)](http://clang.llvm.org/docs/AddressSanitizer.html).
+For detecting or debugging memory bugs, you can use Clang's [address sanitizer (ASAN)](https://clang.llvm.org/docs/AddressSanitizer.html).
 By compiling with `SANITIZE_ADDRESS=1` you enable ASAN for the Julia compiler and its generated code.
 In addition, you can specify `LLVM_SANITIZE=1` to sanitize the LLVM library as well. Note that
 these options incur a high performance and memory cost. For example, using ASAN for Julia and
@@ -116,7 +116,7 @@ to build `julia-debug` with ASAN.
 
 ## Memory Sanitizer (MSAN)
 
-For detecting use of uninitialized memory, you can use Clang's [memory sanitizer (MSAN)](http://clang.llvm.org/docs/MemorySanitizer.html)
+For detecting use of uninitialized memory, you can use Clang's [memory sanitizer (MSAN)](https://clang.llvm.org/docs/MemorySanitizer.html)
 by compiling with `SANITIZE_MEMORY=1`.
 
 ## Thread Sanitizer (TSAN)
