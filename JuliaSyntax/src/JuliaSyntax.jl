@@ -10,7 +10,7 @@ include("source_files.jl")
 
 include("green_tree.jl")
 
-include("token_kinds.jl")
+include("tokens.jl")
 
 include("syntax_tree.jl")
 include("parse_stream.jl")

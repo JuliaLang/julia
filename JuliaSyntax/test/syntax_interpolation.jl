@@ -32,16 +32,16 @@ function at_show2(ex::SyntaxNode)
     end
     raw = N(K"block",
             T(K"quote", 5),
-            T(K"\n", 9),
+            T(K"NewlineWs", 9),
             N(K"=",
               N(K"Identifier", 5),
-              T(K" ", 1),
+              T(K"Whitespace", 1),
               T(K"=", 1),
-              T(K" ", 1),
+              T(K"Whitespace", 1),
               N(K"$",
                 T(K"$", 1),
                 N(K"Identifier", 2)),
-              T(K"\n", 9)),
+              T(K"NewlineWs", 9)),
             N(K"call",
               N(K"Identifier", 7),
               T(K"(", 1),
@@ -49,15 +49,15 @@ function at_show2(ex::SyntaxNode)
                 T(K"$", 1),
                 N(K"Identifier", 4)),
               T(K",", 1),
-              T(K" ", 1),
+              T(K"Whitespace", 1),
               N(K"String", 5),
               T(K",", 1),
-              T(K" ", 1),
+              T(K"Whitespace", 1),
               N(K"Identifier", 5),
               T(K")", 1)),
-            T(K"\n", 9),
+            T(K"NewlineWs", 9),
             N(K"Identifier", 5),
-            T(K"\n", 5),
+            T(K"NewlineWs", 5),
             T(K"end", 3))
     source = SourceFile(code, filename=@__FILE__)
     block = SyntaxNode(source, raw, source.line_starts[quote_begin]+4)
@@ -81,9 +81,9 @@ code2 = "foo + 42"
 source2 = SourceFile(code2, filename="foo.jl")
 s2 = SyntaxNode(source2, NI(K"call",
                             N(K"Identifier", 3),
-                            T(K" ", 1),
+                            T(K"Whitespace", 1),
                             N(K"+", 1),
-                            T(K" ", 1),
+                            T(K"Whitespace", 1),
                             N(K"Integer", 2)))
 
 # Calling at_show2, we see that the precise source information is preserved for
