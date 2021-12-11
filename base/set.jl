@@ -423,14 +423,16 @@ allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 function allunique(A::AbstractArray)
     if length(A) < 2
         return true
-    elseif length(A) < 25 && IndexStyle(A) isa IndexLinear
-        # then linear search is faster, even in worst case
-        for i in LinearIndices(A)
-            y = A[i]
-            a = foldl(view(A, firstindex(A):(i-1)); init=true) do b, x
-                b & !isequal(y, x)
+    elseif length(A) < 32 && A isa StridedArray  # then linear search is certainly faster
+        iter = eachindex(A)
+        I = iterate(iter)
+        while I !== nothing
+            i, s = I
+            a = A[i]
+            for j in Iterators.rest(iter, s)
+                isequal(a, @inbounds A[j]) && return false
             end
-            a || return false
+            I = iterate(iter, s)
         end
         return true
     else
