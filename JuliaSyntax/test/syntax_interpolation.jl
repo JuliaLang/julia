@@ -21,7 +21,7 @@ end
 # so we need to hand construct all our trees.
 function at_show2(ex::SyntaxNode)
     code = String(read(@__FILE__))
-    name = sprint(JuliaSyntax._show_syntax_node_compact, ex)
+    name = sprint(show, MIME"text/x.sexpression"(), ex)
     # The following quote block is not used directly, but the text for it is
     # re-read from `code`.
     quote_begin = (@__LINE__) + 1

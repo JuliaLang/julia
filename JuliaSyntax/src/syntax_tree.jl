@@ -68,20 +68,17 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             val = unescape_string(source[position+1:position+span(raw)-2])
         elseif isoperator(k)
             val = Symbol(val_str)
+        elseif k == K"core_@doc"
+            val = GlobalRef(Core, :var"@doc")
         else
             error("Can't parse literal of kind $k")
         end
         return SyntaxNode(source, raw, position, nothing, :leaf, val)
     else
         k = kind(raw)
-        head = k == K"call"     ? :call     :
-               k == K"toplevel" ? :toplevel :
-               k == K"block"    ? :block    :
-               k == K"for"      ? :for      :
-               k == K"="        ? :(=)      :
-               k == K"$"        ? :$        :
-               k == K"quote"    ? :quote    :
-               error("Unknown head of kind $k")
+        str = untokenize(k)
+        head = !isnothing(str) ? Symbol(str) :
+               error("Can't untokenize head of kind $k")
         cs = SyntaxNode[]
         pos = position
         for (i,rawchild) in enumerate(children(raw))
@@ -119,7 +116,7 @@ function _show_syntax_node(io, current_filename, node, indent)
     fname = node.source.filename
     #@info "" fname print_fname current_filename[] 
     line, col = source_location(node.source, node.position)
-    posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(node.position,6)):$(rpad(node.position+span(node),6))│"
+    posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(node.position,6)):$(rpad(node.position+span(node)-1,6))│"
     nodestr = !haschildren(node) ?
               repr(node.val) :
               "[$(_kind_str(kind(node.raw)))]"
@@ -139,7 +136,7 @@ function _show_syntax_node(io, current_filename, node, indent)
     end
 end
 
-function _show_syntax_node_compact(io, node)
+function _show_syntax_node_sexpr(io, node)
     if !haschildren(node)
         print(io, repr(node.val))
     else
@@ -147,7 +144,7 @@ function _show_syntax_node_compact(io, node)
         first = true
         for n in children(node)
             first || print(io, ' ')
-            _show_syntax_node_compact(io, n)
+            _show_syntax_node_sexpr(io, n)
             first = false
         end
         print(io, ')')
@@ -159,8 +156,12 @@ function Base.show(io::IO, ::MIME"text/plain", node::SyntaxNode)
     _show_syntax_node(io, Ref{Union{Nothing,String}}(nothing), node, "")
 end
 
+function Base.show(io::IO, ::MIME"text/x.sexpression", node::SyntaxNode)
+    _show_syntax_node_sexpr(io, node)
+end
+
 function Base.show(io::IO, node::SyntaxNode)
-    _show_syntax_node_compact(io, node)
+    _show_syntax_node_sexpr(io, node)
 end
 
 function Base.push!(node::SyntaxNode, child::SyntaxNode)
