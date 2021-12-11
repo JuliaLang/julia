@@ -489,8 +489,10 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     # isassigned(a::AbstractArray, i::Int...)
     j = rand(1:length(B))
     @test isassigned(B, j) == true
+    @test isassigned(B, CartesianIndex(1, j))
     if T == T24Linear
-        @test isassigned(B, length(B) + 1) == false
+        @test !isassigned(B, length(B) + 1)
+        @test !isassigned(B, CartesianIndex(1, length(B) + 1))
     end
 
     # reshape(a::AbstractArray, dims::Dims)
