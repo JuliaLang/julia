@@ -10,6 +10,7 @@ using JuliaSyntax: GreenNode, SyntaxNode,
 using JuliaSyntax: Kind, @K_str, isliteral, iskeyword, isoperator
 using JuliaSyntax: highlight
 using JuliaSyntax: ParseStream, bump, peek, emit
+using JuliaSyntax: ParseState
 
 # Shortcuts for defining raw syntax nodes
 
@@ -26,3 +27,4 @@ include("syntax_trees.jl")
 include("syntax_interpolation.jl")
 include("parse_stream.jl")
 include("simple_parser.jl")
+include("parser.jl")

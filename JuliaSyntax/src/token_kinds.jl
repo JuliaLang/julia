@@ -1012,6 +1012,12 @@ for kw in split("""abstract baremodule begin break catch const
                    continue do else elseif end export finally for
                    function global if import let local
                    macro module mutable new outer primitive quote
-                   return struct try type using while""")
+                   return struct try type using while
+
+                   block call comparison curly string macrocall
+                   toplevel tuple ref vect braces bracescat hcat
+                   vcat ncat typed_hcat typed_vcat typed_ncat generator
+                   flatten comprehension typed_comprehension
+                   """)
     _kind_to_str[getfield(Kinds, Symbol(kw))] = kw
 end

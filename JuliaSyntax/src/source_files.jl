@@ -52,7 +52,13 @@ function Base.show(io::IO, ::MIME"text/plain", source::SourceFile)
 end
 
 function Base.getindex(source::SourceFile, rng::AbstractRange)
-    @view source.code[rng]
+    i = first(rng)
+    # Convert byte range into unicode String character range.
+    # Assumes valid unicode! (SubString doesn't give us a reliable way to opt
+    # out of the valid unicode check. The SubString{String} inner constructor
+    # has some @boundscheck, but using @inbounds depends on inlining choices.)
+    j = prevind(source.code, last(rng)+1)
+    @view source.code[i:j]
 end
 
 function Base.getindex(source::SourceFile, i::Int)
