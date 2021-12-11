@@ -225,6 +225,24 @@ Highlights:
   another flat stream of events."  This seems great, let's adopt it!
 * TODO
 
+## RSLint
+
+[RSLint](https://rslint.org/dev) is a linter for javascript, built in Rust. It
+uses the same parsing infrastructure and green tree libraries `rust-analyzer`.
+There's an excellent and friendly high level overview of how all this works in
+the rslint [parsing devdocs](https://rslint.org/dev/parsing.html).
+
+Points of note:
+
+* Backtracking and restarting the parser on error is actually quite simple in
+  the architecture we (mostly) share with `rust-analyzer`:
+  > ... events allow us to cheaply backtrack the parser by simply draining
+  > the events and resetting the token source cursor back to some place.
+
+* The section on [error
+  recovery](https://rslint.org/dev/parsing.html#error-recovery) is interesting;
+  they talk about various error recovery strategies.
+
 ## Diagnostics
 
 Rust is renowned for having great compiler diagnostics, so it's probably a good
