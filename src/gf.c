@@ -1931,6 +1931,36 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
     return NULL;
 }
 
+static void record_precompile_statement(jl_method_instance_t *mi)
+{
+    static ios_t f_precompile;
+    static JL_STREAM* s_precompile = NULL;
+    jl_method_t *def = mi->def.method;
+    if (jl_options.trace_compile == NULL)
+        return;
+    if (!jl_is_method(def))
+        return;
+
+    if (s_precompile == NULL) {
+        const char *t = jl_options.trace_compile;
+        if (!strncmp(t, "stderr", 6)) {
+            s_precompile = JL_STDERR;
+        }
+        else {
+            if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
+                jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
+            s_precompile = (JL_STREAM*) &f_precompile;
+        }
+    }
+    if (!jl_has_free_typevars(mi->specTypes)) {
+        jl_printf(s_precompile, "precompile(");
+        jl_static_show(s_precompile, mi->specTypes);
+        jl_printf(s_precompile, ")\n");
+        if (s_precompile != JL_STDERR)
+            ios_flush(&f_precompile);
+    }
+}
+
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
 {
     jl_code_instance_t *codeinst = jl_method_compiled(mi, world);
@@ -1962,6 +1992,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 codeinst->rettype_const = unspec->rettype_const;
                 codeinst->invoke = unspec->invoke;
                 jl_mi_cache_insert(mi, codeinst);
+                record_precompile_statement(mi);
                 return codeinst;
             }
         }
@@ -1976,6 +2007,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 0, 1, ~(size_t)0);
             codeinst->invoke = jl_fptr_interpret_call;
             jl_mi_cache_insert(mi, codeinst);
+            record_precompile_statement(mi);
             return codeinst;
         }
         if (compile_option == JL_OPTIONS_COMPILE_OFF) {
@@ -2013,6 +2045,9 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         codeinst->rettype_const = ucache->rettype_const;
         codeinst->invoke = ucache->invoke;
         jl_mi_cache_insert(mi, codeinst);
+    }
+    else {
+        record_precompile_statement(mi);
     }
     jl_atomic_store_relaxed(&codeinst->precompile, 1);
     return codeinst;
