@@ -39,25 +39,28 @@ Base.:(~)(k::Kind, tok::SyntaxToken) = kind(tok) == k
 
 #-------------------------------------------------------------------------------
 
-struct TextSpan
+# Range in the source text which will become a node in the tree. Can be either
+# a token (leaf node of the tree) or an interior node, depending on how nodes
+# overlap.
+struct TaggedRange
     head::SyntaxHead
     first_byte::Int
     last_byte::Int
 end
 
-function TextSpan(raw::RawToken, flags::RawFlags)
-    TextSpan(SyntaxHead(raw.kind, flags), raw.startbyte + 1, raw.endbyte + 1)
+function TaggedRange(raw::RawToken, flags::RawFlags)
+    TaggedRange(SyntaxHead(raw.kind, flags), raw.startbyte + 1, raw.endbyte + 1)
 end
 
-head(text_span::TextSpan)       = text_span.head
-kind(text_span::TextSpan)       = kind(text_span.head)
-flags(text_span::TextSpan)      = flags(text_span.head)
-first_byte(text_span::TextSpan) = text_span.first_byte
-last_byte(text_span::TextSpan)  = text_span.last_byte
-span(text_span::TextSpan)       = last_byte(text_span) - first_byte(text_span) + 1
+head(text_span::TaggedRange)       = text_span.head
+kind(text_span::TaggedRange)       = kind(text_span.head)
+flags(text_span::TaggedRange)      = flags(text_span.head)
+first_byte(text_span::TaggedRange) = text_span.first_byte
+last_byte(text_span::TaggedRange)  = text_span.last_byte
+span(text_span::TaggedRange)       = last_byte(text_span) - first_byte(text_span) + 1
 
 struct Diagnostic
-    text_span::TextSpan
+    text_span::TaggedRange
     message::String
 end
 
@@ -83,7 +86,7 @@ This is simililar to rust-analyzer's
 mutable struct ParseStream
     lexer::Tokenize.Lexers.Lexer{IOBuffer,RawToken}
     lookahead::Vector{SyntaxToken}
-    spans::Vector{TextSpan}
+    spans::Vector{TaggedRange}
     diagnostics::Vector{Diagnostic}
     # First byte of next token
     next_byte::Int
@@ -95,7 +98,7 @@ function ParseStream(code)
     lexer = Tokenize.tokenize(code, RawToken)
     ParseStream(lexer,
                 Vector{SyntaxToken}(),
-                Vector{TextSpan}(),
+                Vector{TaggedRange}(),
                 Vector{Diagnostic}(),
                 1,
                 0)
@@ -184,7 +187,7 @@ function bump(stream::ParseStream, flags=EMPTY_FLAGS, skip_newlines=false)
         is_skipped_ws = k ∈ (K"Whitespace", K"Comment") ||
                         (k == K"NewlineWs" && skip_newlines)
         f = is_skipped_ws ? TRIVIA_FLAG : flags
-        span = TextSpan(SyntaxHead(kind(tok), f), first_byte(tok), last_byte(tok))
+        span = TaggedRange(SyntaxHead(kind(tok), f), first_byte(tok), last_byte(tok))
         push!(stream.spans, span)
     end
     Base._deletebeg!(stream.lookahead, n)
@@ -213,7 +216,7 @@ function reset_token!(stream::ParseStream, mark;
     text_span = stream.spans[mark]
     k = isnothing(kind) ? (@__MODULE__).kind(text_span) : kind
     f = isnothing(flags) ? (@__MODULE__).flags(text_span) : flags
-    stream.spans[mark] = TextSpan(SyntaxHead(k, f),
+    stream.spans[mark] = TaggedRange(SyntaxHead(k, f),
                                   first_byte(text_span), last_byte(text_span))
 end
 
@@ -251,7 +254,7 @@ function emit(stream::ParseStream, start_mark::Integer, kind::Kind,
     if !isnothing(error)
         flags |= ERROR_FLAG
     end
-    text_span = TextSpan(SyntaxHead(kind, flags), start_mark, stream.next_byte-1)
+    text_span = TaggedRange(SyntaxHead(kind, flags), start_mark, stream.next_byte-1)
     if !isnothing(error)
         push!(stream.diagnostics, Diagnostic(text_span, error))
     end
@@ -266,7 +269,7 @@ function emit_diagnostic(stream::ParseStream, mark=nothing; error)
     byte = first_byte(peek_token(stream))
     mark = isnothing(mark) ? byte : mark
     # It's a bit weird to require supplying a SyntaxHead here...
-    text_span = TextSpan(SyntaxHead(K"Error", EMPTY_FLAGS), mark, byte)
+    text_span = TaggedRange(SyntaxHead(K"Error", EMPTY_FLAGS), mark, byte)
     push!(stream.diagnostics, Diagnostic(text_span, error))
 end
 
@@ -276,7 +279,7 @@ end
 # Note that this is largely independent of GreenNode, and could easily be
 # made completely independent with a tree builder interface.
 
-function _push_node!(stack, text_span::TextSpan, children=nothing)
+function _push_node!(stack, text_span::TaggedRange, children=nothing)
     if isnothing(children)
         node = GreenNode(head(text_span), span(text_span))
         push!(stack, (text_span=text_span, node=node))
@@ -287,7 +290,7 @@ function _push_node!(stack, text_span::TextSpan, children=nothing)
 end
 
 function to_raw_tree(st)
-    stack = Vector{@NamedTuple{text_span::TextSpan,node::GreenNode}}()
+    stack = Vector{@NamedTuple{text_span::TaggedRange,node::GreenNode}}()
     for text_span in st.spans
         if kind(text_span) == K"TOMBSTONE"
             # Ignore invisible tokens which were created but never finalized.
