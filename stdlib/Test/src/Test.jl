@@ -925,8 +925,8 @@ end
 function get_alignment(ts::DefaultTestSet, depth::Int)
     # The minimum width at this depth is
     ts_width = 2*depth + length(ts.description)
-    # If all passing, no need to look at children
-    !ts.anynonpass && return ts_width
+    # If not verbose and all passing, no need to look at children
+    !ts.verbose && !ts.anynonpass && return ts_width
     # Return the maximum of this width and the minimum width
     # for all children (if they exist)
     isempty(ts.results) && return ts_width

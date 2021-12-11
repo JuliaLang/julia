@@ -1785,8 +1785,9 @@ function stale_cachefile(modpath::String, cachefile::String; ignore_loaded = fal
                 f, ftime_req = chi.filename, chi.mtime
                 # Issue #13606: compensate for Docker images rounding mtimes
                 # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
+                # The `ftime != 1.0` condition below provides compatibility with Nix mtime.
                 ftime = mtime(f)
-                if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, digits=6)
+                if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, digits=6) && ftime != 1.0
                     @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
                     return true
                 end

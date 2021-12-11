@@ -456,8 +456,6 @@ endif
 	-ls stdlib/srccache/*.tar.gz >> light-source-dist.tmp
 	-ls stdlib/*/StdlibArtifacts.toml >> light-source-dist.tmp
 
-	# Exclude git, github and CI config files
-	git ls-files | sed -E -e '/^\..+/d' -e '/\/\..+/d' -e '/appveyor.yml/d' >> light-source-dist.tmp
 	find doc/_build/html >> light-source-dist.tmp
 
 # Make tarball with only Julia code + stdlib tarballs
