@@ -163,6 +163,103 @@ interpolation syntax. Eg, if you do `:(y + $x)`, lowering expands this to
 `Core._expr(:call, :+, :y, x)`, but it could expand it to something like
 `Core._expr(:call, :+, :y, _add_source_symbol(_module_we_are_lowering_into, x))`?
 
+## Error recovery
+
+Some disorganized musings about error recovery
+
+Different types of errors seem to occur...
+
+* Disallowed syntax (such as lack of spaces in conditional expressions)
+  where we can reasonably just continue parsing the production and emit the
+  node with an error flag which is otherwise fully formed. In some cases like
+  parsing infix expressions with a missing tail, emitting a zero width error
+  token can lead to a fully formed parse tree without the productions up the
+  stack needing to participate in recovery.
+* A token which is disallowed in current context. Eg, `=` in parse_atom, or a
+  closing token inside an infix expression. Here we can emit a `K"Error"`, but
+  we can't descend further into the parse tree; we must pop several recursive
+  frames off. Seems tricky!
+
+A typical structure is as follows:
+
+```julia
+function parse_foo(ps)
+    mark = position(ps)
+    parse_bar(ps)  # What if this fails?
+    if peek(ps) == K"some-token"
+        bump(ps)
+        parse_baz(ps)  # What if this fails?
+        emit(ps, mark, K"foo")
+    end
+end
+```
+
+Emitting plain error tokens are good in unfinished infix expressions:
+
+```julia
+begin
+    a = x +
+end
+```
+
+The "missing end" problem is tricky, as the intermediate syntax is valid; the
+problem is often only obvious until we get to EOF.
+
+Missing end
+```julia
+function f()
+    begin
+        a = 10
+end
+
+# <-- Indentation would be wrong if g() was an inner function of f.
+function g()
+end
+```
+
+It seems like ideal error recorvery would need to backtrack in this case. For
+example:
+
+- Pop back to the frame which was parsing `f()`
+- Backtrack through the parse events until we find a function with indentation
+  mismatched to the nesting of the parent.
+- Reset ParseStream to a parsing checkpoint before `g()` was called
+- Emit error and exit the function parsing `f()`
+- Restart parsing
+- Somehow make sure all of this can't result in infinite recursion 😅
+
+For this kind of recovery it sure would be good if we could reify the program
+stack into a parser state object...
+
+Missing commas or closing brackets in nested structures also present the
+existing parser with a problem.
+
+```julia
+f(a,
+  g(b,
+    c    # -- missing comma?
+    d),
+  e)
+```
+
+Again the local indentation might tell a story
+
+```julia
+f(a,
+  g(b,
+    c    # -- missing closing `)` ?
+  d)
+```
+
+But not always!
+
+```julia
+f(a,
+  g(b,
+    c    # -- missing closing `)` ?
+  d)
+```
+
 ## Fun research questions
 
 * Given the raw tree (the green tree, in Roslyn terminology) can we regress a
