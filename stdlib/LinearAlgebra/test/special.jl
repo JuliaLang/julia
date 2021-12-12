@@ -453,4 +453,22 @@ end
     @test Bl + S ≈ Mbl + Ms
 end
 
+@testset "Ensure Matrix * (Sym)Tridiagonal is Dense" begin
+    x = rand(3)
+    y = rand(3)
+    z = rand(2)
+    m = rand(3, 3)
+
+    S = SymTridiagonal(x, y)
+    T = Tridiagonal(z, x, z)
+    M_S = Matrix(S)
+    M_T = Matrix(T)
+
+    @test m * T ≈ m * M_T
+    @test m * S ≈ m * M_S
+
+    @test m * T isa Matrix
+    @test m * S isa Matrix
+end
+
 end # module TestSpecial
