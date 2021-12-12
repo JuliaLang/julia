@@ -928,14 +928,13 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             end
         end
         preserve_uses === nothing && continue
-        preserve_newidx = false
-        for use in defuse.ccall_preserve_uses
-            if isempty(preserve_uses[use])
-                preserve_newidx = true
-                break
-            end
+        any_field_ccall_preserve = _any(use->!isempty(preserve_uses[use]), defuse.ccall_preserve_uses)
+        if any_field_ccall_preserve
+            # this means the ccall preserve is for a field and not the whole struct
+            # so we can potentially eliminate the allocation, otherwise we must preserve
+            # the whole allocation.
+            push!(intermediaries, newidx)
         end
-        preserve_newidx || push!(intermediaries, newidx)
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
             ir[SSAValue(use)] = form_new_preserves(ir[SSAValue(use)]::Expr, intermediaries, new_preserves)
@@ -945,7 +944,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
     end
 end
 
-function form_new_preserves(origex::Expr, preserved::Vector{Int}, new_preserves::Vector{Any})
+function form_new_preserves(origex::Expr, intermediates::Vector{Int}, new_preserves::Vector{Any})
     newex = Expr(:foreigncall)
     nccallargs = length(origex.args[3]::SimpleVector)
     for i in 1:(6+nccallargs-1)
@@ -953,7 +952,8 @@ function form_new_preserves(origex::Expr, preserved::Vector{Int}, new_preserves:
     end
     for i in (6+nccallargs):length(origex.args)
         x = origex.args[i]
-        if isa(x, SSAValue) && x.id in preserved
+        # don't need to preserve intermediaries
+        if isa(x, SSAValue) && x.id in intermediates
             continue
         end
         push!(newex.args, x)
