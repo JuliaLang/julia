@@ -4,12 +4,15 @@ using Test
 using JuliaSyntax: SourceFile
 
 using JuliaSyntax: GreenNode, SyntaxNode,
-    raw_flags, TRIVIA_FLAG, INFIX_FLAG,
+    raw_flags, EMPTY_FLAGS, TRIVIA_FLAG, INFIX_FLAG, ERROR_FLAG,
     children, child, setchild!, SyntaxHead
 
 using JuliaSyntax: Kind, @K_str, isliteral, iskeyword, isoperator
 using JuliaSyntax: highlight
-using JuliaSyntax: ParseStream, bump, peek, emit
+using JuliaSyntax: ParseStream,
+    peek, peek_token,
+    bump, bump_trivia,
+    emit, emit_diagnostic
 using JuliaSyntax: ParseState
 
 # Shortcuts for defining raw syntax nodes

@@ -47,12 +47,20 @@ function is_initial_reserved_word(ps::ParseState, t)
     return is_iresword && !(k == K"begin" && ps.end_symbol)
 end
 
+function is_syntactic_operator(t)
+    k = kind(t)
+    return k in (K"&&", K"||", K".", K"...", K"->") ||
+           (is_prec_assignment(k) && k != K"~")
+end
+
 function is_syntactic_unary_op(t)
     kind(t) in (K"$", K"&", K"::")
 end
 
-function has_whitespace_prefix(tok::SyntaxToken)
-    tok.had_whitespace
+# flisp: invalid-identifier?
+function is_valid_identifier(k)
+    # FIXME? flisp also had K"...." disallowed, whatever that's for!
+    !(is_syntactic_operator(k) || k in (K"?", K".'"))
 end
 
 #-------------------------------------------------------------------------------
@@ -110,7 +118,7 @@ end
 #
 # flisp: (define (parse-Nary s down ops head closer? add-linenums)
 function parse_Nary(ps::ParseState, down, delimiters, closing_tokens)
-    bump_newlines(ps)
+    bump_trivia(ps, skip_newlines=true)
     k = peek(ps)
     if k in closing_tokens
         return true
@@ -755,7 +763,7 @@ end
 # flisp: disallow-space
 function disallow_space(ps, t)
     if t.had_whitespace
-        emit_diagnostic(ps, mark, "space disallowed before $t")
+        emit_diagnostic(ps, mark, error="space disallowed before $t", whitespace=true)
     end
 end
 
@@ -770,6 +778,7 @@ end
 function parse_call_chain(ps::ParseState, mark, is_macrocall)
     bumpTODO(ps); return
     TODO("parse_call_chain")
+    #=
     while true
         t = peek_token(ps)
         k = kind(t)
@@ -793,6 +802,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall)
             break
         end
     end
+    =#
 end
 
 # flisp: (define (expect-end s word)
@@ -1022,15 +1032,17 @@ function tuple_to_arglist(e)
     TODO("tuple_to_arglist unimplemented")
 end
 
+# The initial ( has been bumped
+#
 # flisp: (define (parse-paren s (checked #t)) (car (parse-paren- s checked)))
-function parse_paren(ps::ParseState; checked=true)
+function parse_paren(ps::ParseState, check_identifiers=true)
     TODO("parse_paren unimplemented")
 end
 
 # return (expr . arglist) where arglist is #t iff this isn't just a parenthesized expr
 #
 # flisp: (define (parse-paren- s checked)
-function parse_paren_(ps::ParseState, checked)
+function parse_paren_(ps::ParseState, check_identifiers)
     TODO("parse_paren_ unimplemented")
 end
 
@@ -1174,62 +1186,83 @@ end
 
 # parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 #
-# flisp: (define (parse-atom s (checked #t))
-function parse_atom(ps::ParseState; checked=true)
-    bumpTODO(ps)
-    #TODO("parse_atom unimplemented")
-    #=
-    tok = require_token(ps)
-    tok_kind = kind(tok)
-    # TODO: Reorder these to put most likely tokens first
-    if tok_kind == K":" # symbol/expression quote
-        take_token!(ps)
-        next = peek_token(ps)
-        if is_closing_token(ps, next) && (kind(next) != K"Keyword" ||
-                                          has_whitespace_prefix(next))
-            return GreenNode(tok)
-        elseif has_whitespace_prefix(next)
-            error("whitespace not allowed after \":\" used for quoting")
-        elseif kind(next) == K"NewlineWs"
-            error("newline not allowed after \":\" used for quoting")
+# If `check_identifiers` is true, identifiers are disallowed from being one of
+# the syntactic operators or closing tokens.
+#
+# flisp: parse-atom
+function parse_atom(ps::ParseState, check_identifiers=true)
+    atom_mark = position(ps)
+    bump_trivia(ps, skip_newlines=true)
+    leading_kind = peek(ps)
+    # TODO: Reorder to put most likely tokens first
+    if leading_kind == K":"
+        # symbol/expression quote
+        t = peek_token(ps, 2)
+        k = kind(t)
+        if is_closing_token(ps, k) && (!iskeyword(k) || t.had_whitespace)
+            # : is a literal colon in some circumstances
+            # (:)          ==>  :
+            # begin : end  ==>  (block :)
+            bump(ps) # K":"
+            return
+        end
+        bump(ps, TRIVIA_FLAG) # K":"
+        # TODO: It's clunky to have to track flags here when we'll emit an
+        # error diagnostic.
+        flags = EMPTY_FLAGS
+        if t.had_whitespace
+            emit_diagnostic(ps, error="whitespace not allowed after `:` used for quoting",
+                            whitespace=true)
+            flags = ERROR_FLAG
+        elseif k == K"NewlineWs"
+            emit_diagnostic(ps, error="newline not allowed after `:` used for quoting")
+            flags = ERROR_FLAG
         else
             # Being inside quote makes `end` non-special again. issue #27690
             ps1 = ParseState(ps, end_symbol=false)
-            return GreenNode(K"quote", parse_atom(ps1, checked=false))
+            parse_atom(ps1, false)
+            emit(ps1, atom_mark, K"quote", flags)
         end
-    elseif tok_kind == K"=" # misplaced =
-        error("unexpected `=`")
-    elseif tok_kind == K"Identifier"
-        if checked
-            TODO("Checked identifier names")
+    elseif leading_kind == K"="
+        emit_diagnostic(ps, error="unexpected `=`")
+        bump(ps, ERROR_FLAG)
+    elseif leading_kind in (K"Identifier", K"VarIdentifier")
+        bump(ps)
+    elseif isoperator(leading_kind) || iskeyword(leading_kind)
+        # Operators and keywords are generally turned into identifiers if used
+        # as atoms.
+        if check_identifiers && (is_syntactic_operator(ps) ||
+                                 is_closing_token(ps, leading_kind))
+            bump(ps, error="Invalid identifier")
         end
-        take_token!(ps)
-        return GreenNode(tok)
-    elseif tok_kind == K"VarIdentifier"
-        take_token!(ps)
-        return GreenNode(tok)
-    elseif tok_kind == K"(" # parens or tuple
-        take_token!(ps)
-        return parse_paren(ps, checked)
-    elseif tok_kind == K"[" # cat expression
-        # NB: Avoid take_token! here? It's better to not consume tokens early
-        # take_token!(ps)
-        vex = parse_cat(ps, tok, K"]", ps.end_symbol)
-    elseif tok_kind == K"{" # cat expression
+        bump(ps, new_kind=K"Identifier")
+    elseif leading_kind == K"(" # parens or tuple
+        bump(ps, TRIVIA_FLAG)
+        parse_paren(ps, check_identifiers)
+    elseif leading_kind == K"[" # cat expression
+        TODO("parse_cat unimplemented")
+        parse_cat(ps, tok, K"]", ps.end_symbol)
+    elseif leading_kind == K"{" # cat expression
         take_token!(ps)
         TODO("""parse_cat(ps, K"}", )""")
-    elseif tok_kind == K"`"
-        TODO("(macrocall (core @cmd) ...)")
-        # return Expr(:macrocall, Expr(:core, Symbol("@cmd")),
-    elseif isliteral(tok_kind)
-        take_token!(ps)
-        return GreenNode(tok)
-    elseif is_closing_token(tok)
-        error("unexpected: $tok")
+    elseif leading_kind ∈ (K"String", K"TripleString")
+        parse_string_literal(ps)
+    elseif leading_kind == K"@"
+        bump(ps, TRIVIA_FLAG)
+        ps1 = ParseState(ps, space_sensitive=true)
+        parse_macro_name(ps)
+        TODO("parse macrocall")
+    elseif leading_kind in (K"Cmd", K"TripleCmd")
+        bump_invisible(ps, K"core_@cmd")
+        emit(ps, mark, K"macrocall")
+    elseif isliteral(leading_kind)
+        bump(ps)
+    elseif is_closing_token(ps, leading_kind)
+        # Leave closing token in place for other productions to 
+        emit_diagnostic("Unexpected closing token")
     else
-        error("invalid syntax: `$tok`")
+        bump(ps, error="Invalid syntax")
     end
-    =#
 end
 
 # flisp: (define (valid-modref? e)

@@ -170,31 +170,52 @@ function peek(stream::ParseStream, n::Integer=1, skip_newlines=false)
     kind(peek_token(stream, n, skip_newlines))
 end
 
-"""
-    bump(stream [, flags=EMPTY_FLAGS])
-
-Shift the current token into the output as a new text span with the given
-`flags`.
-"""
-function bump(stream::ParseStream, flags=EMPTY_FLAGS, skip_newlines=false)
-    n = _lookahead_index(stream, 1, skip_newlines)
+# Bump the next `n` tokens
+# flags and new_kind are applied to any non-trivia tokens
+function _bump_n(stream::ParseStream, n::Integer, flags, new_kind=K"Nothing")
+    if n <= 0
+        return
+    end
     for i=1:n
         tok = stream.lookahead[i]
         k = kind(tok)
         if k == K"EndMarker"
             break
         end
-        is_skipped_ws = k ∈ (K"Whitespace", K"Comment") ||
-                        (k == K"NewlineWs" && skip_newlines)
-        f = is_skipped_ws ? TRIVIA_FLAG : flags
-        span = TaggedRange(SyntaxHead(kind(tok), f), first_byte(tok), last_byte(tok))
+        is_trivia = k ∈ (K"Whitespace", K"Comment", K"NewlineWs")
+        f = is_trivia ? TRIVIA_FLAG : flags
+        k = (is_trivia || new_kind == K"Nothing") ? k : new_kind
+        span = TaggedRange(SyntaxHead(k, f), first_byte(tok), last_byte(tok))
         push!(stream.spans, span)
     end
     Base._deletebeg!(stream.lookahead, n)
     stream.next_byte = last_byte(last(stream.spans)) + 1
     # Defuse the time bomb
     stream.peek_count = 0
+end
+
+"""
+    bump(stream [, flags=EMPTY_FLAGS])
+
+Shift the current token into the output as a new text span with the given
+`flags`.
+"""
+function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
+              error=nothing, new_kind=K"Nothing")
+    if !isnothing(error)
+        flags |= ERROR_FLAG
+        emit_diagnostic(stream, error=error)
+    end
+    _bump_n(stream, _lookahead_index(stream, 1, skip_newlines), flags, new_kind)
     # Return last token location in output if needed for set_flags!
+    return lastindex(stream.spans)
+end
+
+"""
+Bump comments and whitespace tokens preceding the next token
+"""
+function bump_trivia(stream::ParseStream; skip_newlines=false)
+    _bump_n(stream, _lookahead_index(stream, 1, skip_newlines) - 1, EMPTY_FLAGS)
     return lastindex(stream.spans)
 end
 
@@ -264,12 +285,24 @@ end
 
 """
 Emit a diagnostic at the position of the next token
+
+If `whitespace` is true, the diagnostic is positioned on the whitespace before
+the next token. Otherwise it's positioned at the next token as returned by `peek()`.
 """
-function emit_diagnostic(stream::ParseStream, mark=nothing; error)
-    byte = first_byte(peek_token(stream))
-    mark = isnothing(mark) ? byte : mark
+function emit_diagnostic(stream::ParseStream, mark=nothing; error, whitespace=false)
+    i = _lookahead_index(stream, 1, true)
+    begin_tok_i = i
+    end_tok_i = i
+    if whitespace
+        # It's the whitespace which is the error. Find the range of the current
+        # whitespace.
+        begin_tok_i = 1
+        end_tok_i = is_whitespace(stream.lookahead[i]) ? i : max(1, i-1)
+    end
+    mark = isnothing(mark) ? first_byte(stream.lookahead[begin_tok_i]) : mark
+    err_end = last_byte(stream.lookahead[end_tok_i])
     # It's a bit weird to require supplying a SyntaxHead here...
-    text_span = TaggedRange(SyntaxHead(K"Error", EMPTY_FLAGS), mark, byte)
+    text_span = TaggedRange(SyntaxHead(K"Error", EMPTY_FLAGS), mark, err_end)
     push!(stream.diagnostics, Diagnostic(text_span, error))
 end
 
@@ -289,7 +322,7 @@ function _push_node!(stack, text_span::TaggedRange, children=nothing)
     end
 end
 
-function to_raw_tree(st)
+function to_raw_tree(st; wrap_toplevel_as_kind=nothing)
     stack = Vector{@NamedTuple{text_span::TaggedRange,node::GreenNode}}()
     for text_span in st.spans
         if kind(text_span) == K"TOMBSTONE"
@@ -318,7 +351,15 @@ function to_raw_tree(st)
         _push_node!(stack, text_span, children)
     end
     # show(stdout, MIME"text/plain"(), stack[1].node)
-    return only(stack).node
+    if length(stack) == 1
+        return only(stack).node
+    elseif !isnothing(wrap_toplevel_as_kind)
+        # Mostly for debugging
+        children = [x.node for x in stack]
+        return GreenNode(SyntaxHead(wrap_toplevel_as_kind, ERROR_FLAG), children...)
+    else
+        error("Found multiple nodes at top level")
+    end
 end
 
 function show_diagnostics(io::IO, stream::ParseStream, code)
@@ -380,15 +421,13 @@ function peek_token(ps::ParseState, n=1; skip_newlines=nothing)
     peek_token(ps.stream, n, skip_nl)
 end
 
-function bump(ps::ParseState, flags=EMPTY_FLAGS; skip_newlines=nothing)
+function bump(ps::ParseState, flags=EMPTY_FLAGS; skip_newlines=nothing, kws...)
     skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
-    bump(ps.stream, flags, skip_nl)
+    bump(ps.stream, flags; skip_newlines=skip_nl, kws...)
 end
 
-function bump_newlines(ps::ParseState)
-    while peek(ps) == K"NewlineWs"
-        bump(ps, TRIVIA_FLAG)
-    end
+function bump_trivia(ps::ParseState; kws...)
+    bump_trivia(ps.stream; kws...)
 end
 
 """
