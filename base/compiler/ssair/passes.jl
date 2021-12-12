@@ -928,7 +928,14 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             end
         end
         preserve_uses === nothing && continue
-        push!(intermediaries, newidx)
+        preserve_newidx = false
+        for use in defuse.ccall_preserve_uses
+            if isempty(preserve_uses[use])
+                preserve_newidx = true
+                break
+            end
+        end
+        preserve_newidx || push!(intermediaries, newidx)
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
             ir[SSAValue(use)] = form_new_preserves(ir[SSAValue(use)]::Expr, intermediaries, new_preserves)
