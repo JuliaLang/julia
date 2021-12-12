@@ -490,14 +490,15 @@ julia> prevpow(4, 16)
 16
 ```
 """
-function prevpow(a::Real, x::Real)
+function prevpow(a::Real, x::T) where T <: Real
     x < 1 && throw(DomainError(x, "`x` must be ≥ 1."))
     # See comment in nextpos() for a == special case.
     a == 2 && isa(x, Integer) && return _prevpow2(x)
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     n = floor(Integer,log(a, x))
-    p = a^(n+1)
-    p <= x ? p : a^n
+    p = a^n
+    wp = widemul(p,a)
+    wp <= x ? T(wp) : p
 end
 
 ## ndigits (number of digits) in base 10 ##
