@@ -185,7 +185,7 @@ function parse_stmts(ps::ParseState)
         bump(ps)
     end
     if junk_mark != position(ps)
-        emit(ps, junk_mark, K"Error",
+        emit(ps, junk_mark, K"error",
              error="Extra tokens after end of expression")
     end
     if do_emit
@@ -279,52 +279,50 @@ function parse_pair(ps::ParseState)
     parse_RtoL(ps, parse_cond, is_prec_pair, false, parse_pair)
 end
 
+# Parse short form conditional expression
+# a ? b : c ==> (if a b c)
+#
 # flisp: (define (parse-cond s)
 function parse_cond(ps::ParseState)
-    cond_kind = K"if"
     mark = position(ps)
     parse_arrow(ps)
     t = peek_token(ps)
     if kind(t) != K"?"
         return
     end
-    cond_flags = EMPTY_FLAGS
     if !t.had_whitespace
-        # a? b : c
-        emit_diagnostic(ps, error="space required before `?` operator")
-        cond_flags |= ERROR_FLAG
+        # a? b : c  => (if a (error-t) b c)
+        bump_invisible(ps, K"error", TRIVIA_FLAG,
+                       error="space required before `?` operator")
     end
     bump(ps, TRIVIA_FLAG) # ?
-    t = peek_token_or_emit_incomplete(ps, cond_kind, cond_flags, mark)
-    kind(t) == K"EndMarker" && return
+    t = peek_token(ps)
     if !t.had_whitespace
         # a ?b : c
-        emit_diagnostic(ps, error="space required after `?` operator")
-        cond_flags |= ERROR_FLAG
+        bump_invisible(ps, K"error", TRIVIA_FLAG,
+                       error="space required after `?` operator")
     end
     parse_eq_star(ParseState(ps, range_colon_enabled=false))
     t = peek_token(ps)
-    if kind(t) != K":"
-        # a ? b:   ==>   (if-e a b)
-        emit(ps, mark, K"if", cond_flags,
-             error="colon expected in `?` expression")
-        return
-    end
     if !t.had_whitespace
-        # a ? b: c
-        emit_diagnostic(ps, error="space required before `:` in `?` expression")
-        cond_flags |= ERROR_FLAG
+        # a ? b: c  ==>  (if a [ ] [?] [ ] b (error-t) [:] [ ] c)
+        bump_invisible(ps, K"error", TRIVIA_FLAG,
+                       error="space required before `:` in `?` expression")
     end
-    bump(ps, TRIVIA_FLAG) # :
-    t = peek_token_or_emit_incomplete(ps, cond_kind, cond_flags, mark)
-    kind(t) == K"EndMarker" && return
+    if kind(t) == K":"
+        bump(ps, TRIVIA_FLAG)
+    else
+        # a ? b c  ==>  (if a b (error) c)
+        bump_invisible(ps, K"error", TRIVIA_FLAG, error="`:` expected in `?` expression")
+    end
+    t = peek_token(ps)
     if !t.had_whitespace
-        # a ? b :c
-        emit_diagnostic(ps, error="space required after `:` in `?` expression")
-        cond_flags |= ERROR_FLAG
+        # a ? b :c  ==>  (if a [ ] [?] [ ] b [ ] [:] (error-t) c)
+        bump_invisible(ps, K"error", TRIVIA_FLAG,
+                       error="space required after `:` in `?` expression")
     end
     parse_eq_star(ps)
-    emit(ps, mark, K"if", cond_flags)
+    emit(ps, mark, K"if")
 end
 
 # Parse arrows
@@ -425,30 +423,46 @@ function parse_range(ps::ParseState)
                 # [1 2:3 :a]  ==>  (vcat 1 (call-i 2 : 3) (quote a))
                 break
             end
+            t2 = peek_token(ps,2)
+            if kind(t2) in (K"<", K">") && !t2.had_whitespace
+                # Error heuristic: we found `:>` or `:<` which are invalid lookalikes
+                # for `<:` and `>:`. Attempt to recover by treating them as a
+                # comparison operator.
+                # a :> b   ==>  (call-i a (error : >) b)
+                bump_trivia(ps)
+                emark = position(ps)
+                bump(ps) # K":"
+                ks = untokenize(peek(ps))
+                bump(ps) # K"<" or K">"
+                emit(ps, emark, K"error",
+                     error="Invalid `:$ks` found, maybe replace with `$ks:`")
+                parse_expr(ps)
+                emit(ps, mark, K"call", INFIX_FLAG)
+                break
+            end
             n_colons += 1
             bump(ps, n_colons == 1 ? EMPTY_FLAGS : TRIVIA_FLAG)
-            t2 = peek_token(ps)
-            if is_closing_token(ps, kind(t2))
-                # 1: }    ==>  (call-i-e 1 :)
-                # 1:2: }  ==>  (call-i-e 1 : 2)
-                emit(ps, mark, K"call", INFIX_FLAG,
-                     error="missing last argument in range expression")
+            t = peek_token(ps)
+            if is_closing_token(ps, kind(t))
+                # 1: }    ==>  (call-i 1 : (error))
+                # 1:2: }  ==>  (call-i 1 : 2 (error))
+                bump_invisible(ps, K"error",
+                               error="missing last argument in range expression")
+                emit(ps, mark, K"call", INFIX_FLAG)
                 emit_diagnostic(ps, error="found unexpected closing token")
                 return
             end
-            if t2.had_newline
+            if t.had_newline
                 # Error message for people coming from python
                 # ===
                 # 1:
                 # 2
-                # ==> (call-i-e 1 :)
-                emit(ps, mark, K"call", INFIX_FLAG|ERROR_FLAG)
-                emit_diagnostic(ps, error="line break after `:` in range expression")
+                # ==> (call-i 1 : (error))
+                emit_diagnostic(ps, whitespace=true,
+                                error="line break after `:` in range expression")
+                bump_invisible(ps, K"error")
+                emit(ps, mark, K"call", INFIX_FLAG)
                 return
-            elseif kind(t2) in (K"<", K">") && !t2.had_whitespace
-                # :> and :< are not operators
-                ks = untokenize(kind(t2))
-                emit_diagnostic(ps, error="Invalid `:$ks` found - did you mean `$ks:`?")
             end
             parse_expr(ps)
             if n_colons == 2
@@ -546,6 +560,9 @@ end
 function parse_unary_subtype(ps::ParseState)
     k = peek(ps, skip_newlines=true)
     if k == K"EndMarker"
+        # FIXME - should be in parse_atom!!
+        bump_invisible(ps, K"error", error="expected identifier")
+        return 
     end
     parse_where(ps, parse_juxtapose)
     #TODO("parse_unary_subtype unimplemented")
@@ -733,16 +750,16 @@ end
 # flisp: parse-def
 function parse_def(ps::ParseState, is_func, anon)
     mark = position(ps)
-    flags = EMPTY_FLAGS
     k = peek(ps)
-    parse_unary_prefix(ps)
     if (is_func && iskeyword(k)) || is_initial_reserved_word(ps, k)
         # Forbid things like
-        # function begin() end  ==>  (function-e begin (call))
-        emit_diagnostic(ps, mark,
-                        error="invalid $(is_func ? "function" : "macro") name")
-        # FIXME: Which node does this error go with?
-        flags |= ERROR_FLAGS
+        # function begin() end  ==>  (function (call (error begin)))
+        emark = position(ps)
+        bump(ps)
+        emit(ps, emark, K"error",
+             error="invalid $(is_func ? "function" : "macro") name")
+    else
+        parse_unary_prefix(ps)
     end
     parse_call_chain(ps, mark, false)
     if is_func && peek(ps) == K"::"
@@ -1191,47 +1208,55 @@ end
 #
 # flisp: parse-atom
 function parse_atom(ps::ParseState, check_identifiers=true)
-    atom_mark = position(ps)
     bump_trivia(ps, skip_newlines=true)
+    atom_mark = position(ps)
     leading_kind = peek(ps)
-    # TODO: Reorder to put most likely tokens first
+    # TODO: Reorder to put most likely tokens first. This can be done because
+    # our tokens are richer in information than the flisp parser.
     if leading_kind == K":"
         # symbol/expression quote
+        # :foo  =>  (quote foo)
         t = peek_token(ps, 2)
         k = kind(t)
         if is_closing_token(ps, k) && (!iskeyword(k) || t.had_whitespace)
             # : is a literal colon in some circumstances
-            # (:)          ==>  :
-            # begin : end  ==>  (block :)
+            # :)     ==>  :
+            # : end  ==>  :
             bump(ps) # K":"
             return
         end
         bump(ps, TRIVIA_FLAG) # K":"
-        # TODO: It's clunky to have to track flags here when we'll emit an
-        # error diagnostic.
-        flags = EMPTY_FLAGS
         if t.had_whitespace
-            emit_diagnostic(ps, error="whitespace not allowed after `:` used for quoting",
-                            whitespace=true)
-            flags = ERROR_FLAG
-        elseif k == K"NewlineWs"
-            emit_diagnostic(ps, error="newline not allowed after `:` used for quoting")
-            flags = ERROR_FLAG
+            # : a  ==> (quote (error-t) a))
+            # ===
+            # :
+            # a
+            # ==> (quote (error))
+            bump_trivia(ps, skip_newlines=true,
+                        error="whitespace not allowed after `:` used for quoting")
+            # Heuristic recovery
+            if kind(t) == K"NewlineWs"
+                bump_invisible(ps, K"error")
+            else
+                bump(ps)
+            end
         else
             # Being inside quote makes `end` non-special again. issue #27690
+            # a[:(end)]  ==>  (ref a (quote (error-t end)))
             ps1 = ParseState(ps, end_symbol=false)
             parse_atom(ps1, false)
-            emit(ps1, atom_mark, K"quote", flags)
         end
+        emit(ps, atom_mark, K"quote")
     elseif leading_kind == K"="
-        emit_diagnostic(ps, error="unexpected `=`")
-        bump(ps, ERROR_FLAG)
+        emark = position(ps)
+        bump(ps)
+        emit(ps, emark, K"error", TRIVIA_FLAG)
     elseif leading_kind in (K"Identifier", K"VarIdentifier")
         bump(ps)
     elseif isoperator(leading_kind) || iskeyword(leading_kind)
         # Operators and keywords are generally turned into identifiers if used
         # as atoms.
-        if check_identifiers && (is_syntactic_operator(ps) ||
+        if check_identifiers && (is_syntactic_operator(leading_kind) ||
                                  is_closing_token(ps, leading_kind))
             bump(ps, error="Invalid identifier")
         end
@@ -1243,7 +1268,6 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         TODO("parse_cat unimplemented")
         parse_cat(ps, tok, K"]", ps.end_symbol)
     elseif leading_kind == K"{" # cat expression
-        take_token!(ps)
         TODO("""parse_cat(ps, K"}", )""")
     elseif leading_kind ∈ (K"String", K"TripleString")
         parse_string_literal(ps)
@@ -1259,7 +1283,8 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         bump(ps)
     elseif is_closing_token(ps, leading_kind)
         # Leave closing token in place for other productions to 
-        emit_diagnostic("Unexpected closing token")
+        # recover with
+        emit_diagnostic(ps, error="Unexpected closing token")
     else
         bump(ps, error="Invalid syntax")
     end
@@ -1307,10 +1332,10 @@ function parse_docstring(ps::ParseState, down=parse_eq)
     # TODO? This is not quite equivalent to the flisp parser which accepts
     # more than just a string. For example:
     #! ("doc") foo  ==>  (macrocall core_@doc "doc" foo)
-    # TODO: Also, all these TOMBSTONEs are inefficient. Perhaps we can improve
-    # things?
+    # TODO: Also, all these TOMBSTONEs seem kind of inefficient. Perhaps we can
+    # improve things?
     maybe_doc = peek(ps) in (K"String", K"TripleString")
-    atdoc_mark = bump_invisible(ps)
+    atdoc_mark = bump_invisible(ps, K"TOMBSTONE")
     down(ps)
     if maybe_doc
         is_doc = true

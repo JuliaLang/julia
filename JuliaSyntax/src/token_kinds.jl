@@ -3,7 +3,7 @@
 const _str_to_kind = let Ts = TzTokens
 Dict([
 "EndMarker"      =>  Ts.ENDMARKER
-"Error"          =>  Ts.ERROR
+"error"          =>  Ts.ERROR
 "Comment"        =>  Ts.COMMENT
 "Whitespace"     =>  Ts.WHITESPACE
 "Identifier"     =>  Ts.IDENTIFIER
@@ -850,6 +850,7 @@ Dict([
 "comprehension"        =>  Ts.COMPREHENSION
 "typed_comprehension"  =>  Ts.TYPED_COMPREHENSION
 "END_SYNTAX_KINDS" => Ts.end_syntax_kinds
+
 ])
 end
 
@@ -869,6 +870,8 @@ for kw in split("""abstract baremodule begin break catch const
                    toplevel tuple ref vect braces bracescat hcat
                    vcat ncat typed_hcat typed_vcat typed_ncat generator
                    flatten comprehension typed_comprehension
+
+                   error
                    """)
     _kind_to_str_unique[_str_to_kind[kw]] = kw
 end

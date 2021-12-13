@@ -4,14 +4,14 @@ using Test
 using JuliaSyntax: SourceFile
 
 using JuliaSyntax: GreenNode, SyntaxNode,
-    raw_flags, EMPTY_FLAGS, TRIVIA_FLAG, INFIX_FLAG, ERROR_FLAG,
+    raw_flags, EMPTY_FLAGS, TRIVIA_FLAG, INFIX_FLAG,
     children, child, setchild!, SyntaxHead
 
 using JuliaSyntax: Kind, @K_str, isliteral, iskeyword, isoperator
 using JuliaSyntax: highlight
 using JuliaSyntax: ParseStream,
     peek, peek_token,
-    bump, bump_trivia,
+    bump, bump_trivia, bump_invisible,
     emit, emit_diagnostic
 using JuliaSyntax: ParseState
 

@@ -28,19 +28,17 @@ function parse_function_def(st)
     bump(st, TRIVIA_FLAG)
     parse_call(st)
     parse_block(st, K"end")
-    @assert peek(st) == K"end"
-    bump(st, TRIVIA_FLAG)
     emit(st, mark, K"function")
 end
 
-function parse_block(st, closing_kind)
-    mark = position(st)
+function parse_block(st, closing_kind, mark=position(st))
     while true
         bump_trivia(st, skip_newlines=true)
         if peek(st) == closing_kind
+            bump(st, TRIVIA_FLAG)
             break
         elseif peek(st) == K"EndMarker"
-            emit_diagnostic(st, error="Unexpecte end of input")
+            emit_diagnostic(st, error="Unexpected end of input")
             break
         end
         parse_assignment(st)
@@ -81,7 +79,6 @@ end
 function parse_call(st)
     mark = position(st)
     parse_atom(st)
-    flags = EMPTY_FLAGS
     if peek(st) == K"("
         bump(st, TRIVIA_FLAG)
         need_comma = false
@@ -97,16 +94,14 @@ function parse_call(st)
                 break
             elseif k == K"EndMarker"
                 emit_diagnostic(st, error="Unexpected end of input")
-                flags = ERROR_FLAG
                 break
             elseif need_comma
-                emit_diagnostic(st, error="Expected a `,`")
-                flags = ERROR_FLAG
+                bump_invisible(st, K"error", TRIVIA_TOKEN, error="Expected a `,`")
             end
             parse_expression(st)
             need_comma = true
         end
-        emit(st, mark, K"call", flags)
+        emit(st, mark, K"call")
     end
 end
 
@@ -127,12 +122,15 @@ function parse_atom(st)
             bump(st, TRIVIA_FLAG)
             # emit(st, mark, K"(")
         else
-            emit(st, mark, K"(",
-                 error="Expected `)` following expression")
+            bump_invisible(st, K"error", TRIVIA_FLAG,
+                           error="Expected `)` following expression")
         end
+    elseif k == K"begin"
+        bump(st, TRIVIA_FLAG)
+        parse_block(st, K"end", mark)
     else
         bump(st)
-        emit(st, mark, K"Error",
+        emit(st, mark, K"error",
              error="Expected literal, identifier or opening parenthesis")
     end
 end
@@ -140,7 +138,7 @@ end
 function parse_and_show(production::Function, code)
     st = ParseStream(code)
     production(st)
-    t = JuliaSyntax.to_raw_tree(st, wrap_toplevel_as_kind=K"Error")
+    t = JuliaSyntax.to_raw_tree(st, wrap_toplevel_as_kind=K"error")
     show(stdout, MIME"text/plain"(), t, code, show_trivia=true)
     if !isempty(st.diagnostics)
         println()
@@ -152,19 +150,23 @@ function parse_and_show(production::Function, code)
 end
 
 println()
-println("Example diagnostics:")
-parse_and_show(parse_expression, "(x + a*y) * (b")
-
-println()
 println("Example good parse:")
 parse_and_show(parse_toplevel,
                """
                function f(x, y)
-                   z = (x + y) * 2
+                   z = x - y
+                   begin
+                       a
+                       b
+                   end
                    z * z
                end
 
                f(1,2)
                """)
+
+println()
+println("Example diagnostics:")
+parse_and_show(parse_expression, "(x + a*y) * (b")
 
 nothing

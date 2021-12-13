@@ -129,7 +129,7 @@ example with something like the normal Julia AST's iteration order.
 By pointing to green tree nodes, AST nodes become tracable back to the original
 source.
 
-Unlike other languages, designing a new AST is tricky because the existing
+Unlike most languages, designing a new AST is tricky because the existing
 `Expr` is a very public API used in every macro expansion. User-defined
 macro expansions interpose between the source text and lowering, and using
 `Expr` looses source information in many ways.
@@ -163,7 +163,35 @@ interpolation syntax. Eg, if you do `:(y + $x)`, lowering expands this to
 `Core._expr(:call, :+, :y, x)`, but it could expand it to something like
 `Core._expr(:call, :+, :y, _add_source_symbol(_module_we_are_lowering_into, x))`?
 
-## Error recovery
+## Parsing
+
+The goal of the parser is to produce well-formed heirarchical structure from
+the source text. For interactive tools we need this to work even when the
+source text contains errors, so it's the job of the parser to include the
+recovery heuristics necessary to make this work.
+
+Concretely, the parser in `JuliaSyntax` should always produce a green tree
+which is *well formed* in the sense that `GreenNode`s of a given `Kind` have
+well-defined layout of children. This means the `GreenNode` to `SyntaxNode`
+transformation is deterministic and tools can assume they're working with a
+"mostly valid" AST.
+
+What does "mostly valid" mean? We allow the tree to contain the following types
+of error nodes:
+
+* Missing tokens or nodes may be **added** as placeholders when they're needed
+  to complete a piece of syntax. For example, we could parse `a + (b *` as
+  `(call-i a + (call-i * b XXX))` where `XXX` is a placeholder.
+* A sequence of unexpected tokens may be **removed** by collecting
+  them as children of an error node and treating them as syntax trivia during
+  AST construction. For example, `a + b end * c` could be parsed as the green
+  tree `(call-i a + b (error end * c))`, and turned into the AST `(call + a b)`.
+
+We want to encode both these cases in a way which is simplest for downstream
+tools to use. This is an open question, but for now we use `K"error"` as the
+token head, with the `TRIVIA_FLAG` set for unexpected syntax.
+
+### Error recovery
 
 Some disorganized musings about error recovery
 
@@ -176,7 +204,7 @@ Different types of errors seem to occur...
   token can lead to a fully formed parse tree without the productions up the
   stack needing to participate in recovery.
 * A token which is disallowed in current context. Eg, `=` in parse_atom, or a
-  closing token inside an infix expression. Here we can emit a `K"Error"`, but
+  closing token inside an infix expression. Here we can emit a `K"error"`, but
   we can't descend further into the parse tree; we must pop several recursive
   frames off. Seems tricky!
 
