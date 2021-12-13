@@ -497,8 +497,12 @@ function prevpow(a::Real, x::T) where T <: Real
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     n = floor(Integer,log(a, x))
     p = T(a)^n
-    wp = widemul(p,a)
-    wp <= x ? T(wp) : p
+    if a isa Integer && x isa Integer
+        wp, overflow = mul_with_overflow(T(a), x)
+        return overflow ? T(wp) : p
+    end
+    wp = p*a
+    return wp <= x ? T(wp) : p
 end
 
 ## ndigits (number of digits) in base 10 ##
