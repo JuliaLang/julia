@@ -264,7 +264,7 @@ end
     @test prevpow(2, 3) == 2
     @test prevpow(2, 4) == 4
     @test prevpow(2, 5) == 4
-    @test prevpow(10, 1234567890123456789)) == 1000000000000000000
+    @test prevpow(10, 1234567890123456789) == 1000000000000000000
     @test_throws DomainError prevpow(0, 3)
     @test_throws DomainError prevpow(0, 3)
 end
