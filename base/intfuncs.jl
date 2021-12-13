@@ -499,7 +499,7 @@ function prevpow(a::Real, x::T) where T <: Real
     p = T(a)^n
     if a isa Integer && x isa Integer
         wp, overflow = mul_with_overflow(T(a), x)
-        return overflow ? T(wp) : p
+        return overflow ? p : T(wp)
     end
     wp = p*a
     return wp <= x ? T(wp) : p
