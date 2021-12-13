@@ -852,13 +852,17 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         typ = typ::DataType
         # Partition defuses by field
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
+        all_forwarded = true
         for use in defuse.uses
             stmt = ir[SSAValue(use)] # == `getfield` call
             # We may have discovered above that this use is dead
             # after the getfield elim of immutables. In that case,
             # it would have been deleted. That's fine, just ignore
             # the use in that case.
-            stmt === nothing && continue
+            if stmt === nothing
+                all_forwarded = false
+                continue
+            end
             field = try_compute_fieldidx_stmt(ir, stmt::Expr, typ)
             field === nothing && @goto skip
             push!(fielddefuse[field].uses, use)
@@ -928,9 +932,8 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             end
         end
         preserve_uses === nothing && continue
-        any_field_ccall_preserve = _any(use->!isempty(preserve_uses[use]), defuse.ccall_preserve_uses)
-        if any_field_ccall_preserve
-            # this means the ccall preserve is for a field and not the whole struct
+        if all_forwarded
+            # this means all ccall preserves have been replaced with forwarded loads
             # so we can potentially eliminate the allocation, otherwise we must preserve
             # the whole allocation.
             push!(intermediaries, newidx)
