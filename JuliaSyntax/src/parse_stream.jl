@@ -69,9 +69,19 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, code)
     print(io, diagnostic.message, ":\n")
     p = first_byte(diagnostic.text_span)
     q = last_byte(diagnostic.text_span)
-    print(io, code[1:p-1])
+    if !isvalid(code, q)
+        # Transform byte range into valid text range
+        q = prevind(code, q)
+    end
+    if q < p || (p == q && code[p] == '\n')
+        # An empty or invisible range!  We expand it symmetrically to make it
+        # visible.
+        p = max(firstindex(code), prevind(code, p))
+        q = min(lastindex(code), nextind(code, q))
+    end
+    print(io, code[1:prevind(code, p)])
     _printstyled(io, code[p:q]; color=(100,40,40))
-    print(io, code[q+1:end], '\n')
+    print(io, code[nextind(code, q):end], '\n')
 end
 
 #-------------------------------------------------------------------------------
@@ -202,11 +212,11 @@ Shift the current token into the output as a new text span with the given
 """
 function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
               error=nothing, new_kind=K"Nothing")
-    if !isnothing(error)
-        flags |= ERROR_FLAG
-        emit_diagnostic(stream, error=error)
-    end
+    emark = position(stream)
     _bump_n(stream, _lookahead_index(stream, 1, skip_newlines), flags, new_kind)
+    if !isnothing(error)
+        emit(stream, emark, K"error", TRIVIA_FLAG, error=error)
+    end
     # Return last token location in output if needed for set_flags!
     return lastindex(stream.spans)
 end
@@ -214,13 +224,18 @@ end
 """
 Bump comments and whitespace tokens preceding the next token
 """
-function bump_trivia(stream::ParseStream; skip_newlines=false)
+function bump_trivia(stream::ParseStream; skip_newlines=false, error=nothing)
+    emark = position(stream)
     _bump_n(stream, _lookahead_index(stream, 1, skip_newlines) - 1, EMPTY_FLAGS)
+    if !isnothing(error)
+        emit(stream, emark, K"error", TRIVIA_FLAG, error=error)
+    end
     return lastindex(stream.spans)
 end
 
-function bump_invisible(stream::ParseStream, kind)
-    emit(stream, position(stream), kind)
+function bump_invisible(stream::ParseStream, kind, flags=EMPTY_FLAGS;
+                        error=nothing)
+    emit(stream, position(stream), kind, flags, error=error)
     return lastindex(stream.spans)
 end
 
@@ -272,9 +287,6 @@ The `start_mark` of the span should be a previous return value of
 """
 function emit(stream::ParseStream, start_mark::Integer, kind::Kind,
               flags::RawFlags = EMPTY_FLAGS; error=nothing)
-    if !isnothing(error)
-        flags |= ERROR_FLAG
-    end
     text_span = TaggedRange(SyntaxHead(kind, flags), start_mark, stream.next_byte-1)
     if !isnothing(error)
         push!(stream.diagnostics, Diagnostic(text_span, error))
@@ -302,10 +314,9 @@ function emit_diagnostic(stream::ParseStream, mark=nothing; error, whitespace=fa
     mark = isnothing(mark) ? first_byte(stream.lookahead[begin_tok_i]) : mark
     err_end = last_byte(stream.lookahead[end_tok_i])
     # It's a bit weird to require supplying a SyntaxHead here...
-    text_span = TaggedRange(SyntaxHead(K"Error", EMPTY_FLAGS), mark, err_end)
+    text_span = TaggedRange(SyntaxHead(K"error", EMPTY_FLAGS), mark, err_end)
     push!(stream.diagnostics, Diagnostic(text_span, error))
 end
-
 
 # Tree construction from the list of text spans held by ParseStream
 #
@@ -356,7 +367,7 @@ function to_raw_tree(st; wrap_toplevel_as_kind=nothing)
     elseif !isnothing(wrap_toplevel_as_kind)
         # Mostly for debugging
         children = [x.node for x in stack]
-        return GreenNode(SyntaxHead(wrap_toplevel_as_kind, ERROR_FLAG), children...)
+        return GreenNode(SyntaxHead(wrap_toplevel_as_kind), children...)
     else
         error("Found multiple nodes at top level")
     end
@@ -426,26 +437,24 @@ function bump(ps::ParseState, flags=EMPTY_FLAGS; skip_newlines=nothing, kws...)
     bump(ps.stream, flags; skip_newlines=skip_nl, kws...)
 end
 
-function bump_trivia(ps::ParseState; kws...)
-    bump_trivia(ps.stream; kws...)
+function bump_trivia(ps::ParseState, args...; kws...)
+    bump_trivia(ps.stream, args...; kws...)
 end
 
 """
 Bump a new zero-width "invisible" token at the current stream position. These
-can be useful in several situations, for example,
+can be useful in several situations.
 
+When a token is implied but not present in the source text:
 * Implicit multiplication - the * is invisible
   `2x  ==>  (call 2 * x)`
 * Docstrings - the macro name is invisible
   `"doc" foo() = 1   ==>  (macrocall (core @doc) . (= (call foo) 1))`
 * Big integer literals - again, an invisible macro name
   `11111111111111111111  ==>  (macrocall (core @int128_str) . 11111111111111111111)`
-
-By default if no `kind` is provided then the invisible token stays invisible
-and will be discarded unless `reset_token!(kind=...)` is used.
 """
-function bump_invisible(ps::ParseState, kind=K"TOMBSTONE")
-    bump_invisible(ps.stream, kind)
+function bump_invisible(ps::ParseState, args...; kws...)
+    bump_invisible(ps.stream, args...; kws...)
 end
 
 function reset_token!(ps::ParseState, args...; kws...)

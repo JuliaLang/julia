@@ -7,7 +7,7 @@ const RawFlags = UInt32
 EMPTY_FLAGS = 0x00000000
 TRIVIA_FLAG = 0x00000001
 INFIX_FLAG = 0x00000002
-ERROR_FLAG = 0x80000000
+# ERROR_FLAG = 0x80000000
 
 struct SyntaxHead
     kind::Kind
@@ -33,7 +33,7 @@ flags(node::GreenNode{SyntaxHead}) = head(node).flags
 
 istrivia(node::GreenNode{SyntaxHead}) = flags(node) & TRIVIA_FLAG != 0
 isinfix(node::GreenNode{SyntaxHead})  = flags(node) & INFIX_FLAG != 0
-iserror(node::GreenNode{SyntaxHead})  = flags(node) & ERROR_FLAG != 0
+iserror(node::GreenNode{SyntaxHead})  = kind(node) == K"error"
 
 #-------------------------------------------------------------------------------
 # AST interface, built on top of raw tree
@@ -70,8 +70,13 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             val = Symbol(val_str)
         elseif k == K"core_@doc"
             val = GlobalRef(Core, :var"@doc")
+        elseif k == K"core_@cmd"
+            val = GlobalRef(Core, :var"@cmd")
+        elseif k in (K"error", K"Nothing")
+            val = nothing
         else
-            error("Can't parse literal of kind $k")
+            @error "Leaf node of kind $k unparsed"
+            val = nothing
         end
         return SyntaxNode(source, raw, position, nothing, :leaf, val)
     else

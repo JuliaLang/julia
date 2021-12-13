@@ -1,8 +1,8 @@
 function test_parse(production, code)
     stream = ParseStream(code)
     production(JuliaSyntax.ParseState(stream))
-    t = JuliaSyntax.to_raw_tree(stream)
-    @test Text(sprint(JuliaSyntax.show_diagnostics, stream, code)) == Text("")
+    t = JuliaSyntax.to_raw_tree(stream, wrap_toplevel_as_kind=K"error")
+    # @test Text(sprint(JuliaSyntax.show_diagnostics, stream, code)) == Text("")
     s = SyntaxNode(SourceFile(code), t)
     sprint(show, MIME("text/x.sexpression"), s)
 end
@@ -23,6 +23,12 @@ tests = [
     ],
     JuliaSyntax.parse_cond => [
         "a ? b : c"    => "(if :a :b :c)"
+        # Following are errors but should recover
+        "a? b : c"    => "(if :a :b :c)"
+        "a ?b : c"    => "(if :a :b :c)"
+        "a ? b: c"    => "(if :a :b :c)"
+        "a ? b :c"    => "(if :a :b :c)"
+        "a ? b c"    => "(if :a :b :c)"
         #"a ?\nb : c"   => "(if :a :b :c)"
         #"a ? b :\nc"   => "(if :a :b :c)"
     ],
@@ -54,6 +60,7 @@ tests = [
         "1:2"       => "(call :(:) 1 2)"
         "1:2:3"     => "(call :(:) 1 2 3)"
         "a:b:c:d:e" => "(call :(:) (call :(:) :a :b :c) :d :e)"
+        "a :< b"    => "(call (error :(:) :<) :a :b)"
     ],
     JuliaSyntax.parse_range => [
         "a..b"      => "(call :.. :a :b)"
@@ -87,10 +94,19 @@ tests = [
         #"&a"   => "(& :a)"
         #"::a"  => "(:: :a)"
         #"\$a"  => "(\$ :a)"
+        #"\$\$a"  => "(\$ (\$ :a))"
     ],
     JuliaSyntax.parse_docstring => [
         "\"doc\" foo" => "(macrocall :(Core.var\"@doc\") \"doc\" :foo)"
     ],
+    JuliaSyntax.parse_atom => [
+        ":foo" => "(quote :foo)"
+        # Literal colons
+        ":)"   => ":(:)"
+        ": end"   => ":(:)"
+        # Errors
+        ": foo" => "(quote :foo)"
+    ]
 ]
 
 @testset "$production" for (production, test_specs) in tests
