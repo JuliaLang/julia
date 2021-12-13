@@ -496,7 +496,7 @@ function prevpow(a::Real, x::T) where T <: Real
     a == 2 && isa(x, Integer) && return _prevpow2(x)
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     n = floor(Integer,log(a, x))
-    p = a^n
+    p = T(a)^n
     wp = widemul(p,a)
     wp <= x ? T(wp) : p
 end
