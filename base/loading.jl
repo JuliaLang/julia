@@ -11,7 +11,7 @@ if Sys.isunix() && !Sys.isapple()
 elseif Sys.iswindows()
     # GetLongPathName Win32 function returns the case-preserved filename on NTFS.
     function isfile_casesensitive(path)
-        isaccessiblefile(path) || return false  # Fail fast
+        isfile(path) || return false  # Fail fast
         basename(Filesystem.longpath(path)) == basename(path)
     end
 elseif Sys.isapple()
