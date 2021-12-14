@@ -64,6 +64,10 @@ struct AllocResults
     frees::Dict{Type,UInt}
 end
 
+function Base.show(io::IO, ::AllocResults)
+    print(io, "AllocResults")
+end
+
 const BacktraceEntry = Union{Ptr{Cvoid}, InterpreterIP}
 const BacktraceCache = Dict{BacktraceEntry,Vector{StackFrame}}
 
