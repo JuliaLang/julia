@@ -2401,6 +2401,8 @@ static intptr_t arraytype_maxsize(jl_value_t *ty)
     return INTPTR_MAX / elsz;
 }
 
+static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo);
+
 static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *dim)
 {
     size_t ndim;
@@ -2408,6 +2410,13 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *
     if (arraytype_constdim(tinfo.typ, &ndim)) {
         if (ndim == 0)
             return ConstantInt::get(T_size, 1);
+        if (ndim == 1) {
+            if (auto d = dyn_cast<ConstantInt>(dim)) {
+                if (d->getZExtValue() == 1) {
+                    return emit_arraylen(ctx, tinfo);
+                }
+            }
+        }
         if (ndim > 1) {
             if (tinfo.constant && isa<ConstantInt>(dim)) {
                 auto n = cast<ConstantInt>(dim)->getZExtValue() - 1;
