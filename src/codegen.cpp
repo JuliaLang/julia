@@ -144,7 +144,7 @@ extern JITEventListener *CreateJuliaJITEventListener();
 bool imaging_mode = false;
 
 // shared llvm state
-JL_DLLEXPORT LLVMContext &jl_LLVMContext = *(new LLVMContext());
+static LLVMContext &jl_LLVMContext = *(new LLVMContext());
 TargetMachine *jl_TargetMachine;
 static DataLayout &jl_data_layout = *(new DataLayout(""));
 #define jl_Module ctx.f->getParent()
@@ -1707,6 +1707,16 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
             llvm::DEBUG_METADATA_VERSION);
     m->setDataLayout(jl_data_layout);
     m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
+
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION >= 130000
+    // tell Win32 to assume the stack is always 16-byte aligned,
+    // and to ensure that it is 16-byte aligned for out-going calls,
+    // to ensure compatibility with GCC codes
+    m->setOverrideStackAlignment(16);
+#endif
+#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION >= 130000
+    m->setStackProtectorGuard("global");
+#endif
 }
 
 Module *jl_create_llvm_module(StringRef name)
@@ -4780,7 +4790,7 @@ static Value *get_current_task(jl_codectx_t &ctx)
 // Get PTLS through current task.
 static Value *get_current_ptls(jl_codectx_t &ctx)
 {
-    return get_current_ptls_from_task(ctx.builder, get_current_task(ctx));
+    return get_current_ptls_from_task(ctx.builder, get_current_task(ctx), tbaa_gcframe);
 }
 
 // Store world age at the entry block of the function. This function should be
@@ -7679,7 +7689,7 @@ void jl_compile_workqueue(
 
 // --- initialization ---
 
-std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false)
+static std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false)
 {
     MDBuilder mbuilder(jl_LLVMContext);
     if (tbaa_root == nullptr) {
@@ -8033,13 +8043,14 @@ extern "C" void jl_init_llvm(void)
 
     TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION < 130000
     // tell Win32 to assume the stack is always 16-byte aligned,
     // and to ensure that it is 16-byte aligned for out-going calls,
     // to ensure compatibility with GCC codes
+    // In LLVM 13 and onwards this has turned into a module option
     options.StackAlignmentOverride = 16;
 #endif
-#ifdef JL_DEBUG_BUILD
+#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION < 130000
     // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
     options.StackProtectorGuard = StackProtectorGuards::Global;
 #endif

@@ -177,13 +177,6 @@ struct revcomp {
     { return lhs>rhs; }
 };
 
-struct strrefcomp {
-    bool operator() (const StringRef& lhs, const StringRef& rhs) const
-    {
-        return lhs.compare(rhs) > 0;
-    }
-};
-
 class JuliaJITEventListener: public JITEventListener
 {
     std::map<size_t, ObjectInfo, revcomp> objectmap;
@@ -234,11 +227,13 @@ public:
         SavedObject.second.release();
 
         object::section_iterator EndSection = debugObj.section_end();
-        std::map<StringRef, object::SectionRef, strrefcomp> loadedSections;
+        StringMap<object::SectionRef> loadedSections;
         for (const object::SectionRef &lSection: Object.sections()) {
             auto sName = lSection.getName();
-            if (sName)
-                loadedSections[*sName] = lSection;
+            if (sName) {
+                bool inserted = loadedSections.insert(std::make_pair(*sName, lSection)).second;
+                assert(inserted); (void)inserted;
+            }
         }
         auto getLoadAddress = [&] (const StringRef &sName) -> uint64_t {
             auto search = loadedSections.find(sName);

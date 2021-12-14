@@ -1045,7 +1045,7 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
             ConstantAggregateZero::get(atype), "__catchjmp") };
     gvs[0]->setSection(".text");
     gvs[1]->setSection(".text");
-    appendToUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
+    appendToCompilerUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
 #endif
     jl_jit_share_data(*m);
     assert(jl_ExecutionEngine);

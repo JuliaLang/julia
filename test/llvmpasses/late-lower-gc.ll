@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia-internal%shlibext -LateLowerGCFrame -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LateLowerGCFrame -S %s | FileCheck %s
 
 @tag = external addrspace(10) global {}, align 16
 
@@ -77,11 +77,11 @@ top:
     %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 8, {} addrspace(10)* @tag)
 ; CHECK-NEXT: %v64 = bitcast {} addrspace(10)* %v to i64 addrspace(10)*
     %v64 = bitcast {} addrspace(10)* %v to i64 addrspace(10)*
-; CHECK-NEXT: %loadedval = load i64, i64 addrspace(10)* %v64, align 8, !range !9
+; CHECK-NEXT: %loadedval = load i64, i64 addrspace(10)* %v64, align 8, !range !7
     %loadedval = load i64, i64 addrspace(10)* %v64, align 8, !range !0, !invariant.load !1
-; CHECK-NEXT: store i64 %loadedval, i64 addrspace(10)* %v64, align 8, !noalias !10
+; CHECK-NEXT: store i64 %loadedval, i64 addrspace(10)* %v64, align 8, !noalias !8
     store i64 %loadedval, i64 addrspace(10)* %v64, align 8, !noalias !2
-; CHECK-NEXT: %lv2 = load i64, i64 addrspace(10)* %v64, align 8, !tbaa !11, !range !9
+; CHECK-NEXT: %lv2 = load i64, i64 addrspace(10)* %v64, align 8, !tbaa !9, !range !7
     %lv2 = load i64, i64 addrspace(10)* %v64, align 8, !range !0, !tbaa !4
 ; CHECK-NEXT: ret void
     ret void
@@ -118,8 +118,6 @@ top:
 ; CHECK-NEXT: !3 = !{!"jtbaa"}
 ; CHECK-NEXT: !4 = !{!5, !5, i64 0}
 ; CHECK-NEXT: !5 = !{!"jtbaa_tag", !6, i64 0}
-; CHECK-NEXT: !6 = !{!"jtbaa_data", !7, i64 0}
-; CHECK-NEXT: !7 = !{!"jtbaa", !8, i64 0}
-; CHECK-NEXT: !8 = !{!"jtbaa"}
-; CHECK-NEXT: !9 = !{i64 0, i64 23}
-; CHECK-NEXT: !10 = distinct !{!10}
+; CHECK-NEXT: !6 = !{!"jtbaa_data", !2, i64 0}
+; CHECK-NEXT: !7 = !{i64 0, i64 23}
+; CHECK-NEXT: !8 = distinct !{!8}
