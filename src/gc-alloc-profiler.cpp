@@ -143,9 +143,12 @@ void _report_gc_started() JL_NOTSAFEPOINT {
 }
 
 // TODO: figure out how to pass all of these in as a struct
-void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd) JL_NOTSAFEPOINT {
+void _report_gc_finished(
+    uint64_t pause, uint64_t freed, uint64_t allocd, int full, int recollect
+) JL_NOTSAFEPOINT {
     // TODO: figure out how to put in commas
-    jl_safe_printf("GC: pause %fms. collected %fMB. %lld allocs total\n",
-        pause/1e6, freed/1e6, allocd
+    jl_safe_printf("GC: pause %fms. collected %fMB. %lld allocs total. %s %s\n",
+        pause/1e6, freed/1e6, allocd,
+        full ? "full" : "incr", recollect ? "recollect" : ""
     );
 }
