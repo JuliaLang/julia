@@ -30,7 +30,9 @@ struct RawAllocResults {
 
 // TODO(PR): Is this correct? Are these JL_NOTSAFEPOINT?
 void _report_gc_started(void) JL_NOTSAFEPOINT;
-void _report_gc_finished(uint64_t pause, uint64_t freed, uint64_t allocd) JL_NOTSAFEPOINT;
+void _report_gc_finished(
+    uint64_t pause, uint64_t freed, uint64_t allocd, int full, int recollect
+) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_start_alloc_profile(int skip_every);
 JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile(void);
 JL_DLLEXPORT void jl_free_alloc_profile(void);
