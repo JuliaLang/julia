@@ -22,8 +22,22 @@ See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
-function threading_run(func)
+function prefer_threaded_region(f)
+    if Threads.threadid() != 1
+        return f()
+    end
+    old = current_task().sticky
+    current_task().sticky = true  # so that exit is called in the primary thread
     ccall(:jl_enter_threaded_region, Cvoid, ())
+    try
+        f()
+    finally
+        ccall(:jl_exit_threaded_region, Cvoid, ())
+        current_task().sticky = old
+    end
+end
+
+function threading_run(func)
     n = nthreads()
     tasks = Vector{Task}(undef, n)
     for i = 1:n
@@ -33,12 +47,10 @@ function threading_run(func)
         tasks[i] = t
         schedule(t)
     end
-    try
+    prefer_threaded_region() do
         for i = 1:n
             wait(tasks[i])
         end
-    finally
-        ccall(:jl_exit_threaded_region, Cvoid, ())
     end
 end
 
