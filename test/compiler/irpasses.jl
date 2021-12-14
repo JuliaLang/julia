@@ -69,6 +69,233 @@ end
 
 # Tests for SROA
 
+import Core.Compiler: argextype, singleton_type
+const EMPTY_SPTYPES = Any[]
+
+code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
+get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
+
+# check if `x` is a statement with a given `head`
+isnew(@nospecialize x) = Meta.isexpr(x, :new)
+
+# check if `x` is a dynamic call of a given function
+iscall(y) = @nospecialize(x) -> iscall(y, x)
+function iscall((src, f)::Tuple{Core.CodeInfo,Function}, @nospecialize(x))
+    return iscall(x) do @nospecialize x
+        singleton_type(argextype(x, src, EMPTY_SPTYPES)) === f
+    end
+end
+iscall(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
+
+struct ImmutableXYZ; x; y; z; end
+mutable struct MutableXYZ; x; y; z; end
+
+# should optimize away very basic cases
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = ImmutableXYZ(x, y, z)
+        xyz.x, xyz.y, xyz.z
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        xyz.x, xyz.y, xyz.z
+    end
+    @test !any(isnew, src.code)
+end
+
+# should handle simple mutabilities
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        xyz.y = 42
+        xyz.x, xyz.y, xyz.z
+    end
+    @test !any(isnew, src.code)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), 42, #=x=# Core.Argument(4)]
+    end
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        xyz.x, xyz.z = xyz.z, xyz.x
+        xyz.x, xyz.y, xyz.z
+    end
+    @test !any(isnew, src.code)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=z=# Core.Argument(4), #=y=# Core.Argument(3), #=x=# Core.Argument(2)]
+    end
+end
+# circumvent uninitialized fields as far as there is a solid `setfield!` definition
+let src = code_typed1() do
+        r = Ref{Any}()
+        r[] = 42
+        return r[]
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Bool,)) do cond
+        r = Ref{Any}()
+        if cond
+            r[] = 42
+            return r[]
+        else
+            r[] = 32
+            return r[]
+        end
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Bool,)) do cond
+        r = Ref{Any}()
+        if cond
+            r[] = 42
+        else
+            r[] = 32
+        end
+        return r[]
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Bool,Bool,Any,Any,Any)) do c1, c2, x, y, z
+        r = Ref{Any}()
+        if c1
+            if c2
+                r[] = x
+            else
+                r[] = y
+            end
+        else
+            r[] = z
+        end
+        return r[]
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Bool,)) do cond
+        r = Ref{Any}()
+        if cond
+            r[] = 42
+        end
+        return r[]
+    end
+    # N.B. `r` should be allocated since `cond` might be `false` and then it will be thrown
+    @test any(isnew, src.code)
+end
+let src = code_typed1((Bool,Bool,Any,Any)) do c1, c2, x, y
+        r = Ref{Any}()
+        if c1
+            if c2
+                r[] = x
+            end
+        else
+            r[] = y
+        end
+        return r[]
+    end
+    # N.B. `r` should be allocated since `c2` might be `false` and then it will be thrown
+    @test any(isnew, src.code)
+end
+
+# should include a simple alias analysis
+struct ImmutableOuter{T}; x::T; y::T; z::T; end
+mutable struct MutableOuter{T}; x::T; y::T; z::T; end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = ImmutableXYZ(x, y, z)
+        outer = ImmutableOuter(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test !any(src.code) do @nospecialize x
+        Meta.isexpr(x, :new)
+    end
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=y=# Core.Argument(4)]
+    end
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = ImmutableXYZ(x, y, z)
+        # #42831 forms ::PartialStruct(ImmutableOuter{Any}, Any[ImmutableXYZ, ImmutableXYZ, ImmutableXYZ])
+        # so the succeeding `getproperty`s are type stable and inlined
+        outer = ImmutableOuter{Any}(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test !any(isnew, src.code)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=y=# Core.Argument(4)]
+    end
+end
+
+# FIXME our analysis isn't yet so powerful at this moment: may be unable to handle nested objects well
+# OK: mutable(immutable(...)) case
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        t   = (xyz,)
+        v = t[1].x
+        v, v, v
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        outer = ImmutableOuter(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test !any(isnew, src.code)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=y=# Core.Argument(4)]
+    end
+end
+let # this is a simple end to end test case, which demonstrates allocation elimination
+    # by handling `mutable[RefValue{String}](immutable[Tuple](...))` case correctly
+    # NOTE this test case isn't so robust and might be subject to future changes of the broadcasting implementation,
+    # in that case you don't really need to stick to keeping this test case around
+    simple_sroa(s) = broadcast(identity, Ref(s))
+    s = Base.inferencebarrier("julia")::String
+    simple_sroa(s)
+    # NOTE don't hard-code `"julia"` in `@allocated` clause and make sure to execute the
+    # compiled code for `simple_sroa`, otherwise everything can be folded even without SROA
+    @test @allocated(simple_sroa(s)) == 0
+end
+# FIXME: immutable(mutable(...)) case
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = ImmutableXYZ(x, y, z)
+        outer = MutableOuter(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test_broken !any(isnew, src.code)
+end
+# FIXME: mutable(mutable(...)) case
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        outer = MutableOuter(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test_broken !any(isnew, src.code)
+end
+
+# should work nicely with inlining to optimize away a complicated case
+# adapted from http://wiki.luajit.org/Allocation-Sinking-Optimization#implementation%5B
+struct Point
+    x::Float64
+    y::Float64
+end
+#=@inline=# add(a::Point, b::Point) = Point(a.x + b.x, a.y + b.y)
+function compute()
+    a = Point(1.5, 2.5)
+    b = Point(2.25, 4.75)
+    for i in 0:(100000000-1)
+        a = add(add(a, b), b)
+    end
+    a.x, a.y
+end
+let src = code_typed1(compute)
+    @test !any(isnew, src.code)
+end
+
 mutable struct Foo30594; x::Float64; end
 Base.copy(x::Foo30594) = Foo30594(x.x)
 function add!(p::Foo30594, off::Foo30594)
@@ -180,7 +407,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
     @test Core.Compiler.verify_ir(ir) === nothing
-    ir = @test_nowarn Core.Compiler.getfield_elim_pass!(ir)
+    ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
@@ -384,7 +611,7 @@ exc39508 = ErrorException("expected")
 end
 @test test39508() === exc39508
 
-let # `getfield_elim_pass!` should work with constant globals
+let # `sroa_pass!` should work with constant globals
     # immutable pass
     src = @eval Module() begin
         const REF_FLD = :x
@@ -400,7 +627,7 @@ let # `getfield_elim_pass!` should work with constant globals
     end
     @test !any(src.code) do @nospecialize(stmt)
         Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) == typeof(getfield)
     end
     @test !any(src.code) do @nospecialize(stmt)
@@ -418,7 +645,7 @@ let # `getfield_elim_pass!` should work with constant globals
     end
     @test !any(src.code) do @nospecialize(stmt)
         Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) == typeof(getfield)
     end
     @test !any(src.code) do @nospecialize(stmt)
@@ -441,7 +668,39 @@ let
     # eliminate `typeassert(x2.x, Foo)`
     @test all(src.code) do @nospecialize stmt
         Meta.isexpr(stmt, :call) || return true
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) !== typeof(typeassert)
     end
+end
+
+let
+    # Test for https://github.com/JuliaLang/julia/issues/43402
+    # Ensure that structs required not used outside of the ccall,
+    # still get listed in the ccall_preserves
+
+    src = @eval Module() begin
+        @inline function effectful()
+            s1 = Ref{Csize_t}()
+            s2 = Ref{Csize_t}()
+            ccall(:some_ccall, Cvoid,
+                  (Ref{Csize_t},Ref{Csize_t}),
+                  s1, s2)
+            return s1[], s2[]
+        end
+
+        code_typed() do
+            s1, s2 = effectful()
+            return s1
+        end |> only |> first
+    end
+
+    refs = map(Core.SSAValue, findall(x->x isa Expr && x.head == :new, src.code))
+    some_ccall = findfirst(x -> x isa Expr && x.head == :foreigncall && x.args[1] == :(:some_ccall), src.code)
+    @assert some_ccall !== nothing
+    stmt = src.code[some_ccall]
+    nccallargs = length(stmt.args[3]::Core.SimpleVector)
+    preserves = stmt.args[6+nccallargs:end]
+    @test length(refs) == 2
+    @test length(preserves) == 2
+    @test all(alloc -> alloc in preserves, refs)
 end

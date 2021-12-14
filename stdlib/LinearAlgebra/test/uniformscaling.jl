@@ -57,6 +57,9 @@ end
         ([8,3,5,3], 2:9),
     ]
         @test I[a,b] == J[a,b]
+        ndims(a) == 1 && @test I[OffsetArray(a,-10),b] == J[OffsetArray(a,-10),b]
+        ndims(b) == 1 && @test I[a,OffsetArray(b,-9)] == J[a,OffsetArray(b,-9)]
+        ndims(a) == ndims(b) == 1 && @test I[OffsetArray(a,-7),OffsetArray(b,-8)] == J[OffsetArray(a,-7),OffsetArray(b,-8)]
     end
 end
 

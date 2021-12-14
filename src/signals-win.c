@@ -2,6 +2,7 @@
 
 // Windows
 // Note that this file is `#include`d by "signal-handling.c"
+#include <mmsystem.h> // hidden by LEAN_AND_MEAN
 
 #define sig_stack_size 131072 // 128k reserved for SEGV handling
 

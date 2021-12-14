@@ -544,7 +544,7 @@ most books on scientific computation, and also in the following references:
     abstraction of real numbers.
   * Also recommended is Bruce Dawson's [series of blog posts on floating-point numbers](https://randomascii.wordpress.com/2012/05/20/thats-not-normalthe-performance-of-odd-floats/).
   * For an excellent, in-depth discussion of floating-point numbers and issues of numerical accuracy
-    encountered when computing with them, see David Goldberg's paper [What Every Computer Scientist Should Know About Floating-Point Arithmetic](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.22.6768&rep=rep1&type=pdf).
+    encountered when computing with them, see David Goldberg's paper [What Every Computer Scientist Should Know About Floating-Point Arithmetic](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.22.6768&rep=rep1&type=pdf).
   * For even more extensive documentation of the history of, rationale for, and issues with floating-point
     numbers, as well as discussion of many other topics in numerical computing, see the [collected writings](https://people.eecs.berkeley.edu/~wkahan/)
     of [William Kahan](https://en.wikipedia.org/wiki/William_Kahan), commonly known as the "Father

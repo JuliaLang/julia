@@ -656,8 +656,33 @@ end
 SparseMatrixCSC(D::Diagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(D)
 function SparseMatrixCSC{Tv,Ti}(D::Diagonal) where {Tv,Ti}
     m = length(D.diag)
-    return SparseMatrixCSC(m, m, Vector(Ti(1):Ti(m+1)), Vector(Ti(1):Ti(m)), Vector{Tv}(D.diag))
+    m == 0 && return SparseMatrixCSC{Tv,Ti}(zeros(Tv, 0, 0))
+
+    nz = count(!iszero, D.diag)
+    nz_counter = 1
+
+    rowval = Vector{Ti}(undef, nz)
+    nzval =  Vector{Tv}(undef, nz)
+
+    nz == 0 && return SparseMatrixCSC{Tv,Ti}(m, m, ones(Ti, m+1), rowval, nzval)
+
+    colptr = Vector{Ti}(undef, m+1)
+
+    @inbounds for i=1:m
+        if !iszero(D.diag[i])
+            colptr[i] = nz_counter
+            rowval[nz_counter] = i
+            nzval[nz_counter]  = D.diag[i]
+            nz_counter += 1
+        else
+            colptr[i] = nz_counter
+        end
+    end
+    colptr[end] = nz_counter
+
+    return SparseMatrixCSC{Tv,Ti}(m, m, colptr, rowval, nzval)
 end
+
 SparseMatrixCSC(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}

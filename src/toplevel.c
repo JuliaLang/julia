@@ -17,7 +17,6 @@
 #endif
 #include "julia.h"
 #include "julia_internal.h"
-#include "uv.h"
 #include "julia_assert.h"
 #include "intrinsics.h"
 #include "builtin_proto.h"

@@ -3,7 +3,7 @@
 module TestDiagonal
 
 using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: mul!, mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
+using LinearAlgebra: BlasFloat, BlasComplex
 
 n=12 #Size of matrix problem to test
 Random.seed!(1)
@@ -776,6 +776,59 @@ end
     end
 end
 
+@testset "(Sym)Tridiagonal division by Diagonal" begin
+    for K in (5, 1), elty in (Float64, ComplexF32), overlength in (1, 0)
+        S = SymTridiagonal(randn(elty, K), randn(elty, K-overlength))
+        T = Tridiagonal(randn(elty, K-1), randn(elty, K), randn(elty, K-1))
+        D = Diagonal(randn(elty, K))
+        D0 = Diagonal(zeros(elty, K))
+        @test (D \ S)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(S))
+        @test (D \ T)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(T))
+        @test (S / D)::Tridiagonal{elty} == Tridiagonal(Matrix(S) / Matrix(D))
+        @test (T / D)::Tridiagonal{elty} == Tridiagonal(Matrix(T) / Matrix(D))
+        @test_throws SingularException D0 \ S
+        @test_throws SingularException D0 \ T
+        @test_throws SingularException S / D0
+        @test_throws SingularException T / D0
+    end
+    # 0-length case
+    S = SymTridiagonal(Float64[], Float64[])
+    T = Tridiagonal(Float64[], Float64[], Float64[])
+    D = Diagonal(Float64[])
+    @test (D \ S)::Tridiagonal{Float64} == T
+    @test (D \ T)::Tridiagonal{Float64} == T
+    @test (S / D)::Tridiagonal{Float64} == T
+    @test (T / D)::Tridiagonal{Float64} == T
+    # matrix eltype case
+    K = 5
+    for elty in (Float64, ComplexF32), overlength in (1, 0)
+        S = SymTridiagonal([rand(elty, 2, 2) for _ in 1:K], [rand(elty, 2, 2) for _ in 1:K-overlength])
+        T = Tridiagonal([rand(elty, 2, 2) for _ in 1:K-1], [rand(elty, 2, 2) for _ in 1:K], [rand(elty, 2, 2) for _ in 1:K-1])
+        D = Diagonal(randn(elty, K))
+        SM = fill(zeros(elty, 2, 2), K, K)
+        TM = copy(SM)
+        SM[1,1] = S[1,1]; TM[1,1] = T[1,1]
+        for j in 2:K
+            SM[j,j-1] = S[j,j-1]; SM[j,j] = S[j,j]; SM[j-1,j] = S[j-1,j]
+            TM[j,j-1] = T[j,j-1]; TM[j,j] = T[j,j]; TM[j-1,j] = T[j-1,j]
+        end
+        for (M, Mm) in ((S, SM), (T, TM))
+            DS = D \ M
+            @test DS isa Tridiagonal
+            DM = D \ Mm
+            for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
+        end
+    end
+    # eltype promotion case
+    S = SymTridiagonal(rand(-20:20, K), rand(-20:20, K-1))
+    T = Tridiagonal(rand(-20:20, K-1), rand(-20:20, K), rand(-20:20, K-1))
+    D = Diagonal(rand(1:20, K))
+    @test (D \ S)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(S))
+    @test (D \ T)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(T))
+    @test (S / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(S) / Matrix(D))
+    @test (T / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(T) / Matrix(D))
+end
+
 @testset "eigenvalue sorting" begin
     D = Diagonal([0.4, 0.2, -1.3])
     @test eigvals(D) == eigen(D).values == [0.4, 0.2, -1.3] # not sorted by default
@@ -882,6 +935,31 @@ end
     B = Diagonal(rand(elty,5,5))
     x = rand(elty)
     @test \(x, B) == /(B, x)
+end
+
+@testset "promotion" begin
+    for (v1, v2) in (([true], [1]), ([zeros(2,2)], [zeros(Int, 2,2)]))
+        T = promote_type(eltype(v1), eltype(v2))
+        V = promote_type(typeof(v1), typeof(v2))
+        d1 = Diagonal(v1)
+        d2 = Diagonal(v2)
+        v = [d1, d2]
+        @test (@inferred eltype(v)) == Diagonal{T, V}
+    end
+    # test for a type for which promote_type doesn't lead to a concrete eltype
+    struct MyArrayWrapper{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+       a :: A
+    end
+    Base.size(M::MyArrayWrapper) = size(M.a)
+    Base.axes(M::MyArrayWrapper) = axes(M.a)
+    Base.length(M::MyArrayWrapper) = length(M.a)
+    Base.getindex(M::MyArrayWrapper, i::Int...) = M.a[i...]
+    Base.setindex!(M::MyArrayWrapper, v, i::Int...) = M.a[i...] = v
+    d1 = Diagonal(MyArrayWrapper(1:3))
+    d2 = Diagonal(MyArrayWrapper(1.0:3.0))
+    c = [d1, d2]
+    @test c[1] == d1
+    @test c[2] == d2
 end
 
 @testset "zero and one" begin

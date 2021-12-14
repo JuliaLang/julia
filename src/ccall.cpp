@@ -288,7 +288,7 @@ class AbiLayout {
 public:
     virtual ~AbiLayout() {}
     virtual bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) = 0;
-    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx) = 0;
+    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx, Type* llvm_t) = 0;
     virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret, LLVMContext &ctx) const = 0;
 };
 
@@ -891,6 +891,10 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // copy module properties that should always match
     Mod->setTargetTriple(jl_Module->getTargetTriple());
     Mod->setDataLayout(jl_Module->getDataLayout());
+#if JL_LLVM_VERSION >= 130000
+    Mod->setStackProtectorGuard(jl_Module->getStackProtectorGuard());
+    Mod->setOverrideStackAlignment(jl_Module->getOverrideStackAlignment());
+#endif
 
     // verify the definition
     Function *def = Mod->getFunction(ir_name);
@@ -1086,7 +1090,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         // Whether or not LLVM wants us to emit a pointer to the data
-        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, jl_LLVMContext);
+        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, jl_LLVMContext, t);
 
         if (jl_is_cpointer_type(tti)) {
             pat = t;

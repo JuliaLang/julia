@@ -35,6 +35,8 @@ end
     @test sort([2,3,1], rev=true) == [3,2,1] == sort([2,3,1], order=Reverse)
     @test sort(['z':-1:'a';]) == ['a':'z';]
     @test sort(['a':'z';], rev=true) == ['z':-1:'a';]
+    @test sort(OffsetVector([3,1,2], -2)) == OffsetVector([1,2,3], -2)
+    @test sort(OffsetVector([3.0,1.0,2.0], 2), rev=true) == OffsetVector([3.0,2.0,1.0], 2)
 end
 
 @testset "sortperm" begin
@@ -46,6 +48,7 @@ end
         @test r === s
     end
     @test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
+    @test sortperm(OffsetVector([8.0,-2.0,0.5], -4)) == OffsetVector([-2, -1, -3], -4)
 end
 
 @testset "misc sorting" begin
@@ -670,6 +673,14 @@ end
     for i in axes(x, 2)
         @test issorted(x[:,i])
     end
+end
+
+@testset "searchsortedfirst/last with generalized indexing" begin
+    o = OffsetVector(1:3, -2)
+    @test searchsortedfirst(o, 4) == lastindex(o) + 1
+    @test searchsortedfirst(o, 1.5) == 0
+    @test searchsortedlast(o, 0) == firstindex(o) - 1
+    @test searchsortedlast(o, 1.5) == -1
 end
 
 end

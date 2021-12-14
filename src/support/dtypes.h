@@ -10,7 +10,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <math.h>
+#include <math.h> // NAN and INF constants
 
 #include "platform.h"
 #include "analyzer_annotations.h"
@@ -24,6 +24,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 
 #if !defined(_COMPILER_GCC_)
 
@@ -312,10 +314,6 @@ STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOI
 {
     memcpy(ptr, &val, 2);
 }
-
-#ifdef _OS_WINDOWS_
-#include <errhandlingapi.h>
-#endif
 
 STATIC_INLINE void *malloc_s(size_t sz) JL_NOTSAFEPOINT {
     int last_errno = errno;

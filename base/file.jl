@@ -321,7 +321,7 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
             if Base.samefile(src, dst)
                 abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
                 abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
-                throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir.",
+                throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir. ",
                                            "This is not supported.\n  ",
                                            "`src` refers to: $(abs_src)\n  ",
                                            "`dst` refers to: $(abs_dst)\n")))
@@ -1190,23 +1190,19 @@ struct DiskStat
 end
 
 function Base.getproperty(stats::DiskStat, field::Symbol)
-    total = getfield(stats, :bsize) * getfield(stats, :blocks)
-    available = getfield(stats, :bsize) * getfield(stats, :bavail)
-    field === :available && return available
+    total = Int64(getfield(stats, :bsize) * getfield(stats, :blocks))
+    available = Int64(getfield(stats, :bsize) * getfield(stats, :bavail))
     field === :total && return total
+    field === :available && return available
     field === :used && return total - available
     return getfield(stats, field)
 end
 
-@eval Base.propertynames(stats::DiskStat) = $((fieldnames(DiskStat)[1:end-1]..., :available, :total, :used))
+@eval Base.propertynames(stats::DiskStat) =
+    $((fieldnames(DiskStat)[1:end-1]..., :available, :total, :used))
 
-function Base.show(io::IO, x::DiskStat)
-    print(io, "DiskStat(")
-    for field in 1:(nfields(x) - 1)
-        print(io, "$(getfield(x, field)), ")
-    end
-    print(io, "available: $(x.available), total: $(x.total), used: $(x.used))")
-end
+Base.show(io::IO, x::DiskStat) =
+    print(io, "DiskStat(total=$(x.total), used=$(x.used), available=$(x.available))")
 
 """
     diskstat(path=pwd())

@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <pthread.h>
+#include <time.h>
 #include <errno.h>
 #if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
 #define MAP_ANONYMOUS MAP_ANON
@@ -368,11 +369,25 @@ static pthread_cond_t signal_caught_cond;
 
 static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_sec += 1;
     pthread_mutex_lock(&in_signal_lock);
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
     jl_atomic_store_release(&ptls2->signal_request, 1);
     pthread_kill(ptls2->system_id, SIGUSR2);
-    pthread_cond_wait(&signal_caught_cond, &in_signal_lock);  // wait for thread to acknowledge
+    // wait for thread to acknowledge
+    int err = pthread_cond_timedwait(&signal_caught_cond, &in_signal_lock, &ts);
+    if (err == ETIMEDOUT) {
+        sig_atomic_t request = 1;
+        if (jl_atomic_cmpswap(&ptls2->signal_request, &request, 0)) {
+            *ctx = NULL;
+            pthread_mutex_unlock(&in_signal_lock);
+            return;
+        }
+        err = pthread_cond_wait(&signal_caught_cond, &in_signal_lock);
+    }
+    assert(!err);
     assert(jl_atomic_load_acquire(&ptls2->signal_request) == 0);
     *ctx = signal_context;
 }
@@ -452,6 +467,8 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     if (ct == NULL)
         return;
     jl_ptls_t ptls = ct->ptls;
+    if (ptls == NULL)
+        return;
     int errno_save = errno;
     sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
 #if !defined(JL_DISABLE_LIBUNWIND)
@@ -756,6 +773,8 @@ static void *signal_listener(void *arg)
                 int i = critical ? idx : profile_round_robin_thread_order[idx];
                 // notify thread to stop
                 jl_thread_suspend_and_get_state(i, &signal_context);
+                if (signal_context == NULL)
+                    continue;
 
                 // do backtrace on thread contexts for critical signals
                 // this part must be signal-handler safe
@@ -788,19 +807,19 @@ static void *signal_listener(void *arg)
                         }
                         jl_set_safe_restore(old_buf);
 
-                        jl_ptls_t ptls = jl_all_tls_states[i];
+                        jl_ptls_t ptls2 = jl_all_tls_states[i];
 
                         // store threadid but add 1 as 0 is preserved to indicate end of block
-                        bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+                        bt_data_prof[bt_size_cur++].uintptr = ptls2->tid + 1;
 
                         // store task id
-                        bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
+                        bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls2->current_task);
 
                         // store cpu cycle clock
                         bt_data_prof[bt_size_cur++].uintptr = cycleclock();
 
                         // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                        bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
+                        bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls2->sleep_check_state) + 1;
 
                         // Mark the end of this block with two 0's
                         bt_data_prof[bt_size_cur++].uintptr = 0;
@@ -832,6 +851,15 @@ static void *signal_listener(void *arg)
                 jl_exit_thread0(128 + sig, bt_data, bt_size);
             }
             else {
+#ifndef SIGINFO // SIGINFO already prints this automatically
+                int nrunning = 0;
+                for (int idx = jl_n_threads; idx-- > 0; ) {
+                    jl_ptls_t ptls2 = jl_all_tls_states[idx];
+                    nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
+                }
+                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", jl_getpid(), nrunning, jl_n_threads);
+#endif
+
                 jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
                 size_t i;
                 for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {

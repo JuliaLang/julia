@@ -16,18 +16,6 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[frame.currpc])
 
-# check if this return type is improvable (i.e. whether it's possible that with
-# more information, we might get a more precise type)
-function is_improvable(@nospecialize(rtype))
-    if isa(rtype, Type)
-        # Could always be improved to Const or PartialStruct, unless we're
-        # already at Bottom
-        return rtype !== Union{}
-    end
-    # Could be improved to `Const` or a more precise wrapper
-    return isa(rtype, PartialStruct) || isa(rtype, InterConditional)
-end
-
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, @nospecialize(atype),
                                   sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
@@ -292,7 +280,7 @@ function from_interprocedural!(@nospecialize(rt), sv::InferenceState, arginfo::A
         if maybecondinfo === nothing
             rt = widenconditional(rt)
         else
-            rt = from_interconditional(rt, arginfo, maybecondinfo)
+            rt = from_interconditional(rt, sv, arginfo, maybecondinfo)
         end
     end
     @assert !(rt isa InterConditional) "invalid lattice element returned from inter-procedural context"
@@ -307,7 +295,7 @@ function collect_limitations!(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
-function from_interconditional(@nospecialize(typ), (; fargs, argtypes)::ArgInfo, @nospecialize(maybecondinfo))
+function from_interconditional(@nospecialize(typ), sv::InferenceState, (; fargs, argtypes)::ArgInfo, @nospecialize(maybecondinfo))
     fargs === nothing && return widenconditional(typ)
     slot = 0
     vtype = elsetype = Any
@@ -315,7 +303,7 @@ function from_interconditional(@nospecialize(typ), (; fargs, argtypes)::ArgInfo,
     for i in 1:length(fargs)
         # find the first argument which supports refinement,
         # and intersect all equivalent arguments with it
-        arg = fargs[i]
+        arg = ssa_def_slot(fargs[i], sv)
         arg isa SlotNumber || continue # can't refine
         old = argtypes[i]
         old isa Type || continue # unlikely to refine
@@ -602,7 +590,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
                 return nothing
             end
         end
-        inf_result = InferenceResult(mi, arginfo, va_override)
+        inf_result = InferenceResult(mi, (arginfo, sv), va_override)
         if !any(inf_result.overridden_by_const)
             add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
             return nothing
@@ -642,7 +630,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         add_remark!(interp, sv, "[constprop] Disabled by argument and rettype heuristics")
         return nothing
     end
-    all_overridden = is_all_overridden(arginfo)
+    all_overridden = is_all_overridden(arginfo, sv)
     if !force && !const_prop_function_heuristic(interp, f, arginfo, nargs, all_overridden, sv)
         add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
         return nothing
@@ -666,18 +654,39 @@ function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodC
         add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (edgecycle with unused result)")
         return false
     end
-    is_improvable(result.rt) && return true
-    add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable return type)")
-    return false
+    # check if this return type is improvable (i.e. whether it's possible that with more
+    # information, we might get a more precise type)
+    rt = result.rt
+    if isa(rt, Type)
+        # could always be improved to `Const`, `PartialStruct` or just a more precise type,
+        # unless we're already at `Bottom`
+        if rt === Bottom
+            add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (erroneous result)")
+            return false
+        else
+            return true
+        end
+    elseif isa(rt, PartialStruct) || isa(rt, InterConditional)
+        # could be improved to `Const` or a more precise wrapper
+        return true
+    elseif isa(rt, LimitedAccuracy)
+        # optimizations like inlining are disabled for limited frames,
+        # thus there won't be much benefit in constant-prop' here
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
+        return false
+    else
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable return type)")
+        return false
+    end
 end
 
 # determines heuristically whether if constant propagation can be worthwhile
 # by checking if any of given `argtypes` is "interesting" enough to be propagated
-function const_prop_argument_heuristic(_::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, _::InferenceState)
+function const_prop_argument_heuristic(_::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState)
     for i in 1:length(argtypes)
         a = argtypes[i]
         if isa(a, Conditional) && fargs !== nothing
-            is_const_prop_profitable_conditional(a, fargs) && return true
+            is_const_prop_profitable_conditional(a, fargs, sv) && return true
         else
             a = widenconditional(a)
             has_nontrivial_const_info(a) && is_const_prop_profitable_arg(a) && return true
@@ -701,8 +710,8 @@ function is_const_prop_profitable_arg(@nospecialize(arg))
     return isa(val, Symbol) || isa(val, Type) || (!isa(val, String) && !ismutable(val))
 end
 
-function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{Any})
-    slotid = find_constrained_arg(cnd, fargs)
+function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{Any}, sv::InferenceState)
+    slotid = find_constrained_arg(cnd, fargs, sv)
     if slotid !== nothing
         return true
     end
@@ -712,18 +721,22 @@ function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{An
     return isa(widenconditional(cnd), Const)
 end
 
-function find_constrained_arg(cnd::Conditional, fargs::Vector{Any})
-    slot = cnd.var
-    return findfirst(fargs) do @nospecialize(x)
-        x === slot
+function find_constrained_arg(cnd::Conditional, fargs::Vector{Any}, sv::InferenceState)
+    slot = slot_id(cnd.var)
+    for i in 1:length(fargs)
+        arg = ssa_def_slot(fargs[i], sv)
+        if isa(arg, SlotNumber) && slot_id(arg) == slot
+            return i
+        end
     end
+    return nothing
 end
 
 # checks if all argtypes has additional information other than what `Type` can provide
-function is_all_overridden((; fargs, argtypes)::ArgInfo)
+function is_all_overridden((; fargs, argtypes)::ArgInfo, sv::InferenceState)
     for a in argtypes
         if isa(a, Conditional) && fargs !== nothing
-            is_const_prop_profitable_conditional(a, fargs) || return false
+            is_const_prop_profitable_conditional(a, fargs, sv) || return false
         else
             a = widenconditional(a)
             is_forwardable_argtype(a) || return false
@@ -766,14 +779,14 @@ function const_prop_function_heuristic(
         # but highly worthwhile to inline promote of a constant
         length(argtypes) > 2 || return false
         t1 = widenconst(argtypes[2])
-        all_same = true
         for i in 3:length(argtypes)
-            if widenconst(argtypes[i]) !== t1
-                all_same = false
-                break
+            at = argtypes[i]
+            ty = isvarargtype(at) ? unwraptv(at) : widenconst(at)
+            if ty !== t1
+                return true
             end
         end
-        return !all_same
+        return false
     end
     return true
 end
@@ -796,20 +809,27 @@ function const_prop_methodinstance_heuristic(
     # was able to cut it down to something simple (inlineable in particular).
     # If so, there's a good chance we might be able to const prop all the way
     # through and learn something new.
-    code = get(code_cache(interp), mi, nothing)
-    declared_inline = isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
-    cache_inlineable = declared_inline
-    if isdefined(code, :inferred) && !cache_inlineable
-        cache_inf = code.inferred
-        if !(cache_inf === nothing)
-            src = inlining_policy(interp, cache_inf, get_curr_ssaflag(sv), mi, argtypes)
-            cache_inlineable = src !== nothing
+    if isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
+        return true
+    else
+        flag = get_curr_ssaflag(sv)
+        if is_stmt_inline(flag)
+            # force constant propagation for a call that is going to be inlined
+            # since the inliner will try to find this constant result
+            # if these constant arguments arrive there
+            return true
+        elseif is_stmt_noinline(flag)
+            # this call won't be inlined, thus this constant-prop' will most likely be unfruitful
+            return false
+        else
+            code = get(code_cache(interp), mi, nothing)
+            if isdefined(code, :inferred) && inlining_policy(
+                    interp, code.inferred, IR_FLAG_NULL, mi, argtypes) !== nothing
+                return true
+            end
         end
     end
-    if !cache_inlineable
-        return false
-    end
-    return true
+    return false # the cache isn't inlineable, so this constant-prop' will most likely be unfruitful
 end
 
 # This is only for use with `Conditional`.
@@ -966,7 +986,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         end
         if nounion === Union{} || (nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype)
             # reached a fixpoint or iterator failed/gave invalid answer
-            if typeintersect(stateordonet_widened, Nothing) === Union{}
+            if !hasintersect(stateordonet_widened, Nothing)
                 # ... but cannot terminate
                 if !may_have_terminated
                     #  ... and cannot have terminated prior to this loop
@@ -1228,6 +1248,28 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 end
                 return Conditional(aty.var, ifty, elty)
             end
+        elseif f === isdefined
+            uty = argtypes[2]
+            a = ssa_def_slot(fargs[2], sv)
+            if isa(uty, Union) && isa(a, SlotNumber)
+                fld = argtypes[3]
+                vtype = Union{}
+                elsetype = Union{}
+                for ty in uniontypes(uty)
+                    cnd = isdefined_tfunc(ty, fld)
+                    if isa(cnd, Const)
+                        if cnd.val::Bool
+                            vtype = tmerge(vtype, ty)
+                        else
+                            elsetype = tmerge(elsetype, ty)
+                        end
+                    else
+                        vtype = tmerge(vtype, ty)
+                        elsetype = tmerge(elsetype, ty)
+                    end
+                end
+                return Conditional(a, vtype, elsetype)
+            end
         end
     end
     @assert !isa(rt, TypeVar) "unhandled TypeVar"
@@ -1340,9 +1382,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(Any, false)
     elseif f === Core.kwfunc
         if la == 2
-            ft = widenconst(argtypes[2])
-            if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
-                return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
+            aty = argtypes[2]
+            if !isvarargtype(aty)
+                ft = widenconst(aty)
+                if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
+                    return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
+                end
             end
         end
         return CallMeta(Any, false)
@@ -1362,8 +1407,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(typevar_tfunc(n, lb_var, ub_var), false)
     elseif f === UnionAll
         return CallMeta(abstract_call_unionall(argtypes), false)
-    elseif f === Tuple && la == 2 && !isconcretetype(widenconst(argtypes[2]))
-        return CallMeta(Tuple, false)
+    elseif f === Tuple && la == 2
+        aty = argtypes[2]
+        ty = isvarargtype(aty) ? unwrapva(aty) : widenconst(aty)
+        if !isconcretetype(ty)
+            return CallMeta(Tuple, false)
+        end
     elseif is_return_type(f)
         return return_type_tfunc(interp, argtypes, sv)
     elseif la == 2 && istopfunction(f, :!)
@@ -1464,7 +1513,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
     elseif f === nothing
         # non-constant function, but the number of arguments is known
         # and the ft is not a Builtin or IntrinsicFunction
-        if typeintersect(widenconst(ft), Union{Builtin, Core.OpaqueClosure}) != Union{}
+        if hasintersect(widenconst(ft), Union{Builtin, Core.OpaqueClosure})
             add_remark!(interp, sv, "Could not identify method table for call")
             return CallMeta(Any, false)
         end

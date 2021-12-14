@@ -107,6 +107,8 @@ enum {
     JL_TARGET_OPTSIZE = 1 << 6,
     // Only optimize for size for this target
     JL_TARGET_MINSIZE = 1 << 7,
+    // Clone when the function queries CPU features
+    JL_TARGET_CLONE_CPU = 1 << 8,
 };
 
 #define JL_FEATURE_DEF_NAME(name, bit, llvmver, str) JL_FEATURE_DEF(name, bit, llvmver)

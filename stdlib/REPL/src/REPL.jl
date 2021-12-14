@@ -284,6 +284,8 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
         try
             Base.sigatomic_end()
             if iserr
+                val = Base.scrub_repl_backtrace(val)
+                Base.istrivialerror(val) || ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, val)
                 Base.invokelatest(Base.display_error, errio, val)
             else
                 if val !== nothing && show_value
@@ -305,7 +307,9 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
-                    Base.invokelatest(Base.display_error, errio, current_exceptions())
+                    excs = Base.scrub_repl_backtrace(current_exceptions())
+                    ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, excs)
+                    Base.invokelatest(Base.display_error, errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.

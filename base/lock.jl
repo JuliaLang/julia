@@ -26,11 +26,22 @@ end
 ```
 """
 mutable struct ReentrantLock <: AbstractLock
-    locked_by::Union{Task, Nothing}
-    cond_wait::ThreadSynchronizer
-    reentrancy_cnt::Int
+    # offset = 16
+    @atomic locked_by::Union{Task, Nothing}
+    # offset32 = 20, offset64 = 24
+    reentrancy_cnt::UInt32
+    # offset32 = 24, offset64 = 28
+    @atomic havelock::UInt8 # 0x0 = none, 0x1 = lock, 0x2 = conflict
+    # offset32 = 28, offset64 = 32
+    cond_wait::ThreadSynchronizer # 2 words
+    # offset32 = 36, offset64 = 48
+    # sizeof32 = 20, sizeof64 = 32
+    # now add padding to make this a full cache line to minimize false sharing between objects
+    _::NTuple{Int === Int32 ? 2 : 3, Int}
+    # offset32 = 44, offset64 = 72 == sizeof+offset
+    # sizeof32 = 28, sizeof64 = 56
 
-    ReentrantLock() = new(nothing, ThreadSynchronizer(), 0)
+    ReentrantLock() = new(nothing, 0x0000_0000, 0x00, ThreadSynchronizer())
 end
 
 assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
@@ -42,7 +53,7 @@ Check whether the `lock` is held by any task/thread.
 This should not be used for synchronization (see instead [`trylock`](@ref)).
 """
 function islocked(rl::ReentrantLock)
-    return rl.reentrancy_cnt != 0
+    return rl.havelock != 0
 end
 
 """
@@ -55,23 +66,26 @@ return `false`.
 
 Each successful `trylock` must be matched by an [`unlock`](@ref).
 """
-function trylock(rl::ReentrantLock)
-    t = current_task()
-    if t === rl.locked_by
-        rl.reentrancy_cnt += 1
+@inline function trylock(rl::ReentrantLock)
+    ct = current_task()
+    if rl.locked_by === ct
+        #@assert rl.havelock !== 0x00
+        rl.reentrancy_cnt += 0x0000_0001
         return true
     end
-    lock(rl.cond_wait)
-    if rl.reentrancy_cnt == 0
-        rl.locked_by = t
-        rl.reentrancy_cnt = 1
-        GC.disable_finalizers()
-        got = true
-    else
-        got = false
+    return _trylock(rl, ct)
+end
+@noinline function _trylock(rl::ReentrantLock, ct::Task)
+    GC.disable_finalizers()
+    if (@atomicreplace :acquire rl.havelock 0x00 => 0x01).success
+        #@assert rl.locked_by === nothing
+        #@assert rl.reentrancy_cnt === 0
+        rl.reentrancy_cnt = 0x0000_0001
+        @atomic :release rl.locked_by = ct
+        return true
     end
-    unlock(rl.cond_wait)
-    return got
+    GC.enable_finalizers()
+    return false
 end
 
 """
@@ -83,28 +97,23 @@ wait for it to become available.
 
 Each `lock` must be matched by an [`unlock`](@ref).
 """
-function lock(rl::ReentrantLock)
-    t = current_task()
-    if t === rl.locked_by
-        rl.reentrancy_cnt += 1
-    else
-        lock(rl.cond_wait)
-        while true
-            if rl.reentrancy_cnt == 0
-                rl.locked_by = t
-                rl.reentrancy_cnt = 1
-                GC.disable_finalizers()
-                break
+@inline function lock(rl::ReentrantLock)
+    trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
+        c = rl.cond_wait
+        lock(c.lock)
+        try
+            while true
+                if (@atomicreplace rl.havelock 0x01 => 0x02).old == 0x00 # :sequentially_consistent ? # now either 0x00 or 0x02
+                    # it was unlocked, so try to lock it ourself
+                    _trylock(rl, current_task()) && break
+                else # it was locked, so now wait for the release to notify us
+                    wait(c)
+                end
             end
-            try
-                wait(rl.cond_wait)
-            catch
-                unlock(rl.cond_wait)
-                rethrow()
-            end
+        finally
+            unlock(c.lock)
         end
-        unlock(rl.cond_wait)
-    end
+    end)(rl)
     return
 end
 
@@ -116,58 +125,42 @@ Releases ownership of the `lock`.
 If this is a recursive lock which has been acquired before, decrement an
 internal counter and return immediately.
 """
-function unlock(rl::ReentrantLock)
-    t = current_task()
-    n = rl.reentrancy_cnt
-    n == 0 && error("unlock count must match lock count")
-    rl.locked_by === t || error("unlock from wrong thread")
-    if n > 1
-        rl.reentrancy_cnt = n - 1
-    else
-        lock(rl.cond_wait)
-        rl.reentrancy_cnt = 0
-        rl.locked_by = nothing
-        if !isempty(rl.cond_wait.waitq)
-            try
-                notify(rl.cond_wait)
-            catch
-                unlock(rl.cond_wait)
-                rethrow()
+@inline function unlock(rl::ReentrantLock)
+    rl.locked_by === current_task() ||
+        error(rl.reentrancy_cnt == 0x0000_0000 ? "unlock count must match lock count" : "unlock from wrong thread")
+    (@noinline function _unlock(rl::ReentrantLock)
+        n = rl.reentrancy_cnt - 0x0000_0001
+        rl.reentrancy_cnt = n
+        if n == 0x0000_00000
+            @atomic :monotonic rl.locked_by = nothing
+            if (@atomicswap :release rl.havelock = 0x00) == 0x02
+                (@noinline function notifywaiters(rl)
+                    cond_wait = rl.cond_wait
+                    lock(cond_wait)
+                    try
+                        notify(cond_wait)
+                    finally
+                        unlock(cond_wait)
+                    end
+                end)(rl)
             end
+            return true
         end
-        GC.enable_finalizers()
-        unlock(rl.cond_wait)
-    end
-    return
+        return false
+    end)(rl) && GC.enable_finalizers()
+    nothing
 end
 
 function unlockall(rl::ReentrantLock)
-    t = current_task()
-    n = rl.reentrancy_cnt
-    rl.locked_by === t || error("unlock from wrong thread")
-    n == 0 && error("unlock count must match lock count")
-    lock(rl.cond_wait)
-    rl.reentrancy_cnt = 0
-    rl.locked_by = nothing
-    if !isempty(rl.cond_wait.waitq)
-        try
-            notify(rl.cond_wait)
-        catch
-            unlock(rl.cond_wait)
-            rethrow()
-        end
-    end
-    GC.enable_finalizers()
-    unlock(rl.cond_wait)
+    n = @atomicswap :not_atomic rl.reentrancy_cnt = 0x0000_0001
+    unlock(rl)
     return n
 end
 
-function relockall(rl::ReentrantLock, n::Int)
-    t = current_task()
+function relockall(rl::ReentrantLock, n::UInt32)
     lock(rl)
-    n1 = rl.reentrancy_cnt
-    rl.reentrancy_cnt = n
-    n1 == 1 || concurrency_violation()
+    old = @atomicswap :not_atomic rl.reentrancy_cnt = n
+    old == 0x0000_0001 || concurrency_violation()
     return
 end
 

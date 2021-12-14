@@ -106,13 +106,15 @@ using Random
 end
 
 @testset "tempname with parent" begin
-    t = tempname()
-    @test dirname(t) == tempdir()
-    mktempdir() do d
-        t = tempname(d)
-        @test dirname(t) == d
+    withenv("TMPDIR" => nothing) do
+        t = tempname()
+        @test dirname(t) == tempdir()
+        mktempdir() do d
+            t = tempname(d)
+            @test dirname(t) == d
+        end
+        @test_throws ArgumentError tempname(randstring())
     end
-    @test_throws ArgumentError tempname(randstring())
 end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
@@ -1703,7 +1705,7 @@ end
     dstat = diskstat()
     @test dstat.total < 32PB
     @test dstat.used + dstat.available == dstat.total
-    @test occursin(r"^DiskStat\(.*, available: \d+, total: \d+, used: \d+\)$", sprint(show, dstat))
+    @test occursin(r"^DiskStat\(total=\d+, used=\d+, available=\d+\)$", sprint(show, dstat))
     # Test diskstat(::AbstractString)
     dstat = diskstat(pwd())
     @test dstat.total < 32PB

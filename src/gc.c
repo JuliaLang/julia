@@ -1664,20 +1664,18 @@ JL_NORETURN NOINLINE void gc_assert_datatype_fail(jl_ptls_t ptls, jl_datatype_t 
 // See the call to `gc_mark_loop` in init with a `NULL` `ptls`.
 void *gc_mark_label_addrs[_GC_MARK_L_MAX];
 
-// Double the mark stack (both pc and data) with the lock held.
+// Double the local mark stack (both pc and data)
 static void NOINLINE gc_mark_stack_resize(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp) JL_NOTSAFEPOINT
 {
     jl_gc_mark_data_t *old_data = gc_cache->data_stack;
     void **pc_stack = sp->pc_start;
     size_t stack_size = (char*)sp->pc_end - (char*)pc_stack;
-    uv_mutex_lock(&gc_cache->stack_lock);
     gc_cache->data_stack = (jl_gc_mark_data_t *)realloc_s(old_data, stack_size * 2 * sizeof(jl_gc_mark_data_t));
     sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + (((char*)gc_cache->data_stack) - ((char*)old_data)));
 
     sp->pc_start = gc_cache->pc_stack = (void**)realloc_s(pc_stack, stack_size * 2 * sizeof(void*));
     gc_cache->pc_stack_end = sp->pc_end = sp->pc_start + stack_size * 2;
     sp->pc = sp->pc_start + (sp->pc - pc_stack);
-    uv_mutex_unlock(&gc_cache->stack_lock);
 }
 
 // Push a work item to the stack. The type of the work item is marked with `pc`.
@@ -3104,13 +3102,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (!prev_sweep_full)
         promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
     // 5. next collection decision
-    int not_freed_enough = estimate_freed < (7*(actual_allocd/10));
+    int not_freed_enough = (collection == JL_GC_AUTO) && estimate_freed < (7*(actual_allocd/10));
     int nptr = 0;
     for (int i = 0;i < jl_n_threads;i++)
         nptr += jl_all_tls_states[i]->heap.remset_nptr;
     int large_frontier = nptr*sizeof(void*) >= default_collect_interval; // many pointers in the intergen frontier => "quick" mark is not quick
-    int sweep_full;
-    int recollect = 0;
     // trigger a full collection if the number of live bytes doubles since the last full
     // collection and then remains at least that high for a while.
     if (grown_heap_age == 0) {
@@ -3120,36 +3116,48 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     else if (live_bytes >= last_live_bytes) {
         grown_heap_age++;
     }
-    if (collection == JL_GC_INCREMENTAL) {
-        sweep_full = 0;
-    } else if ((collection == JL_GC_FULL || large_frontier ||
+    int sweep_full = 0;
+    int recollect = 0;
+    if ((large_frontier ||
          ((not_freed_enough || promoted_bytes >= gc_num.interval) &&
           (promoted_bytes >= default_collect_interval || prev_sweep_full)) ||
-         grown_heap_age > 1) &&
-        gc_num.pause > 1) {
-        recollect = (collection == JL_GC_FULL);
-        if (large_frontier)
-            gc_num.interval = last_long_collect_interval;
-        if (not_freed_enough || large_frontier) {
-            if (gc_num.interval <= 2*(max_collect_interval/5)) {
-                gc_num.interval = 5 * (gc_num.interval / 2);
-            }
-        }
-        last_long_collect_interval = gc_num.interval;
+         grown_heap_age > 1) && gc_num.pause > 1) {
         sweep_full = 1;
+    }
+    // update heuristics only if this GC was automatically triggered
+    if (collection == JL_GC_AUTO) {
+        if (sweep_full) {
+            if (large_frontier)
+                gc_num.interval = last_long_collect_interval;
+            if (not_freed_enough || large_frontier) {
+                if (gc_num.interval <= 2*(max_collect_interval/5)) {
+                    gc_num.interval = 5 * (gc_num.interval / 2);
+                }
+            }
+            last_long_collect_interval = gc_num.interval;
+        }
+        else {
+            // reset interval to default, or at least half of live_bytes
+            int64_t half = live_bytes/2;
+            if (default_collect_interval < half && half <= max_collect_interval)
+                gc_num.interval = half;
+            else
+                gc_num.interval = default_collect_interval;
+        }
+    }
+    if (gc_sweep_always_full) {
+        sweep_full = 1;
+    }
+    if (collection == JL_GC_FULL) {
+        sweep_full = 1;
+        recollect = 1;
+    }
+    if (sweep_full) {
+        // these are the difference between the number of gc-perm bytes scanned
+        // on the first collection after sweep_full, and the current scan
+        perm_scanned_bytes = 0;
         promoted_bytes = 0;
     }
-    else {
-        // reset interval to default, or at least half of live_bytes
-        int64_t half = live_bytes/2;
-        if (default_collect_interval < half && half <= max_collect_interval)
-            gc_num.interval = half;
-        else
-            gc_num.interval = default_collect_interval;
-        sweep_full = gc_sweep_always_full;
-    }
-    if (sweep_full)
-        perm_scanned_bytes = 0;
     scanned_bytes = 0;
     // 5. start sweeping
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
@@ -3336,7 +3344,6 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     gc_cache->perm_scanned_bytes = 0;
     gc_cache->scanned_bytes = 0;
     gc_cache->nbig_obj = 0;
-    uv_mutex_init(&gc_cache->stack_lock);
     size_t init_size = 1024;
     gc_cache->pc_stack = (void**)malloc_s(init_size * sizeof(void*));
     gc_cache->pc_stack_end = gc_cache->pc_stack + init_size;
