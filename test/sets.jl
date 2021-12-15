@@ -242,6 +242,9 @@ end
         s = S([1,2]) ∩ S([3,4])
         @test s == S()
         s = intersect(S([5,6,7,8]), S([7,8,9]))
+        slong = S(collect(3:63))
+        # test #36339 length/order short-cut
+        @test intersect(S([5,6,7,8]), slong) == intersect(slong, S([5,6,7,8]))
         @test s == S([7,8])
         @test intersect(S([2,3,1]), S([4,2,3]), S([5,4,3,2])) == S([2,3])
         let s1 = S([1,2,3])
@@ -254,6 +257,8 @@ end
     end
     @test intersect(Set([1]), BitSet()) isa Set{Int}
     @test intersect(BitSet([1]), Set()) isa Set{Any}
+    @test intersect(BitSet([1]), Set([1])) isa BitSet
+    @test intersect(BitSet([1]), Set([1]), Set([1])) isa BitSet
     @test intersect([1], BitSet()) isa Vector{Int}
     # intersect must uniquify
     @test intersect([1, 2, 1]) == intersect!([1, 2, 1]) == [1, 2]
@@ -276,6 +281,10 @@ end
             @test eltype(intersect(a, a, b)) == Float64
         end
     end
+
+    # 3-argument version is correctly covered
+    @test intersect(Set([1,2]), Set([2]), Set([1,2,3])) == Set([2])
+    @test intersect(Set([1,2]), Set([2]), Set([1.,2,3])) == Set([2.])
 end
 
 @testset "setdiff" begin

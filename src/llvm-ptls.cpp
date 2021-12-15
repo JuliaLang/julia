@@ -32,9 +32,6 @@ using namespace llvm;
 
 typedef Instruction TerminatorInst;
 
-std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr,
-                                           bool isConstant=false);
-
 namespace {
 
 struct LowerPTLS: public ModulePass {
@@ -160,15 +157,6 @@ template<typename T>
 inline T *LowerPTLS::add_comdat(T *G) const
 {
 #if defined(_OS_WINDOWS_)
-    // Add comdat information to make MSVC link.exe happy
-    // it's valid to emit this for ld.exe too,
-    // but makes it very slow to link for no benefit
-#if defined(_COMPILER_MICROSOFT_)
-    Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
-    // ELF only supports Comdat::Any
-    jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
-    G->setComdat(jl_Comdat);
-#endif
     // add __declspec(dllexport) to everything marked for export
     if (G->getLinkage() == GlobalValue::ExternalLinkage)
         G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
@@ -273,7 +261,7 @@ bool LowerPTLS::runOnModule(Module &_M)
         return false;
 
     ctx = &M->getContext();
-    tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
+    tbaa_const = tbaa_make_child_with_context(*ctx, "jtbaa_const", nullptr, true).first;
 
     T_int8 = Type::getInt8Ty(*ctx);
     T_size = sizeof(size_t) == 8 ? Type::getInt64Ty(*ctx) : Type::getInt32Ty(*ctx);
@@ -316,7 +304,7 @@ Pass *createLowerPTLSPass(bool imaging_mode)
     return new LowerPTLS(imaging_mode);
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLowerPTLSPass(LLVMPassManagerRef PM, LLVMBool imaging_mode)
+extern "C" JL_DLLEXPORT void LLVMExtraAddLowerPTLSPass_impl(LLVMPassManagerRef PM, LLVMBool imaging_mode)
 {
     unwrap(PM)->add(createLowerPTLSPass(imaging_mode));
 }

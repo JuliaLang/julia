@@ -162,7 +162,7 @@ Pass *createDemoteFloat16Pass()
     return new DemoteFloat16Legacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createDemoteFloat16Pass());
 }

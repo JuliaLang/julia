@@ -42,11 +42,9 @@ uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
 // Additionally accessing `jl_gc_running` should use acquire/release
 // load/store so that threads waiting for the GC doesn't have to also
 // fight on the safepoint lock...
-//
-// Acquiring and releasing this lock should use the `jl_mutex_*_nogc` functions
-jl_mutex_t safepoint_lock;
+uv_mutex_t safepoint_lock;
 
-static void jl_safepoint_enable(int idx)
+static void jl_safepoint_enable(int idx) JL_NOTSAFEPOINT
 {
     // safepoint_lock should be held
     assert(0 <= idx && idx < 3);
@@ -67,7 +65,7 @@ static void jl_safepoint_enable(int idx)
 #endif
 }
 
-static void jl_safepoint_disable(int idx)
+static void jl_safepoint_disable(int idx) JL_NOTSAFEPOINT
 {
     // safepoint_lock should be held
     assert(0 <= idx && idx < 3);
@@ -88,6 +86,7 @@ static void jl_safepoint_disable(int idx)
 
 void jl_safepoint_init(void)
 {
+    uv_mutex_init(&safepoint_lock);
     // jl_page_size isn't available yet.
     size_t pgsz = jl_getpagesize();
 #ifdef _OS_WINDOWS_
@@ -100,7 +99,7 @@ void jl_safepoint_init(void)
 #endif
     if (addr == NULL) {
         jl_printf(JL_STDERR, "could not allocate GC synchronization page\n");
-        gc_debug_critical_error();
+        jl_gc_debug_critical_error();
         abort();
     }
     // The signal page is for the gc safepoint.
@@ -111,36 +110,36 @@ void jl_safepoint_init(void)
 int jl_safepoint_start_gc(void)
 {
     if (jl_n_threads == 1) {
-        jl_gc_running = 1;
+        jl_atomic_store_relaxed(&jl_gc_running, 1);
         return 1;
     }
     // The thread should have set this already
     assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) == JL_GC_STATE_WAITING);
-    jl_mutex_lock_nogc(&safepoint_lock);
+    uv_mutex_lock(&safepoint_lock);
     // In case multiple threads enter the GC at the same time, only allow
     // one of them to actually run the collection. We can't just let the
     // master thread do the GC since it might be running unmanaged code
     // and can take arbitrarily long time before hitting a safe point.
     uint32_t running = 0;
     if (!jl_atomic_cmpswap(&jl_gc_running, &running, 1)) {
-        jl_mutex_unlock_nogc(&safepoint_lock);
+        uv_mutex_unlock(&safepoint_lock);
         jl_safepoint_wait_gc();
         return 0;
     }
     jl_safepoint_enable(1);
     jl_safepoint_enable(2);
-    jl_mutex_unlock_nogc(&safepoint_lock);
+    uv_mutex_unlock(&safepoint_lock);
     return 1;
 }
 
 void jl_safepoint_end_gc(void)
 {
-    assert(jl_gc_running);
+    assert(jl_atomic_load_relaxed(&jl_gc_running));
     if (jl_n_threads == 1) {
-        jl_gc_running = 0;
+        jl_atomic_store_relaxed(&jl_gc_running, 0);
         return;
     }
-    jl_mutex_lock_nogc(&safepoint_lock);
+    uv_mutex_lock(&safepoint_lock);
     // Need to reset the page protection before resetting the flag since
     // the thread will trigger a segfault immediately after returning from
     // the signal handler.
@@ -151,7 +150,7 @@ void jl_safepoint_end_gc(void)
     // This wakes up other threads on mac.
     jl_mach_gc_end();
 #  endif
-    jl_mutex_unlock_nogc(&safepoint_lock);
+    uv_mutex_unlock(&safepoint_lock);
 }
 
 void jl_safepoint_wait_gc(void)
@@ -167,7 +166,7 @@ void jl_safepoint_wait_gc(void)
 
 void jl_safepoint_enable_sigint(void)
 {
-    jl_mutex_lock_nogc(&safepoint_lock);
+    uv_mutex_lock(&safepoint_lock);
     // Make sure both safepoints are enabled exactly once for SIGINT.
     switch (jl_signal_pending) {
     default:
@@ -183,24 +182,24 @@ void jl_safepoint_enable_sigint(void)
     case 2:
         jl_signal_pending = 2;
     }
-    jl_mutex_unlock_nogc(&safepoint_lock);
+    uv_mutex_unlock(&safepoint_lock);
 }
 
 void jl_safepoint_defer_sigint(void)
 {
-    jl_mutex_lock_nogc(&safepoint_lock);
+    uv_mutex_lock(&safepoint_lock);
     // Make sure the GC safepoint is disabled for SIGINT.
     if (jl_signal_pending == 2) {
         jl_safepoint_disable(1);
         jl_signal_pending = 1;
     }
-    jl_mutex_unlock_nogc(&safepoint_lock);
+    uv_mutex_unlock(&safepoint_lock);
 }
 
 int jl_safepoint_consume_sigint(void)
 {
     int has_signal = 0;
-    jl_mutex_lock_nogc(&safepoint_lock);
+    uv_mutex_lock(&safepoint_lock);
     // Make sure both safepoints are disabled for SIGINT.
     switch (jl_signal_pending) {
     default:
@@ -217,7 +216,7 @@ int jl_safepoint_consume_sigint(void)
     case 0:
         jl_signal_pending = 0;
     }
-    jl_mutex_unlock_nogc(&safepoint_lock);
+    uv_mutex_unlock(&safepoint_lock);
     return has_signal;
 }
 

@@ -19,8 +19,13 @@ true
 ```
 """
 function startswith(a::AbstractString, b::AbstractString)
-    a, b = Iterators.Stateful(a), Iterators.Stateful(b)
-    all(splat(==), zip(a, b)) && isempty(b)
+    i, j = iterate(a), iterate(b)
+    while true
+        j === nothing && return true # ran out of prefix: success!
+        i === nothing && return false # ran out of source: failure
+        i[1] == j[1] || return false # mismatch: failure
+        i, j = iterate(a, i[2]), iterate(b, j[2])
+    end
 end
 startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str)::AbstractChar in chars
 
@@ -39,9 +44,14 @@ true
 ```
 """
 function endswith(a::AbstractString, b::AbstractString)
-    a = Iterators.Stateful(Iterators.reverse(a))
-    b = Iterators.Stateful(Iterators.reverse(b))
-    all(splat(==), zip(a, b)) && isempty(b)
+    a, b = Iterators.Reverse(a), Iterators.Reverse(b)
+    i, j = iterate(a), iterate(b)
+    while true
+        j === nothing && return true # ran out of suffix: success!
+        i === nothing && return false # ran out of source: failure
+        i[1] == j[1] || return false # mismatch: failure
+        i, j = iterate(a, i[2]), iterate(b, j[2])
+    end
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
@@ -51,7 +61,7 @@ function startswith(a::Union{String, SubString{String}},
     if ncodeunits(a) < cub
         false
     elseif _memcmp(a, b, sizeof(b)) == 0
-        nextind(a, cub) == cub + 1
+        nextind(a, cub) == cub + 1 # check that end of `b` doesn't match a partial character in `a`
     else
         false
     end
@@ -64,7 +74,7 @@ function endswith(a::Union{String, SubString{String}},
     if astart < 1
         false
     elseif GC.@preserve(a, _memcmp(pointer(a, astart), b, sizeof(b))) == 0
-        thisind(a, astart) == astart
+        thisind(a, astart) == astart # check that end of `b` doesn't match a partial character in `a`
     else
         false
     end
@@ -194,6 +204,91 @@ end
 
 # TODO: optimization for the default case based on
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
+
+"""
+    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex}) -> SubString
+
+Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
+
+See also [`chopsuffix`](@ref).
+
+!!! compat "Julia 1.8"
+    This function is available as of Julia 1.8.
+
+# Examples
+```jldoctest
+julia> chopprefix("Hamburger", "Ham")
+"burger"
+
+julia> chopprefix("Hamburger", "hotdog")
+"Hamburger"
+```
+"""
+function chopprefix(s::AbstractString, prefix::AbstractString)
+    k = firstindex(s)
+    i, j = iterate(s), iterate(prefix)
+    while true
+        j === nothing && i === nothing && return SubString(s, 1, 0) # s == prefix: empty result
+        j === nothing && return @inbounds SubString(s, k) # ran out of prefix: success!
+        i === nothing && return SubString(s) # ran out of source: failure
+        i[1] == j[1] || return SubString(s) # mismatch: failure
+        k = i[2]
+        i, j = iterate(s, k), iterate(prefix, j[2])
+    end
+end
+
+function chopprefix(s::Union{String, SubString{String}},
+                    prefix::Union{String, SubString{String}})
+    if startswith(s, prefix)
+        SubString(s, 1 + ncodeunits(prefix))
+    else
+        SubString(s)
+    end
+end
+
+"""
+    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex}) -> SubString
+
+Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
+
+See also [`chopprefix`](@ref).
+
+!!! compat "Julia 1.8"
+    This function is available as of Julia 1.8.
+
+# Examples
+```jldoctest
+julia> chopsuffix("Hamburger", "er")
+"Hamburg"
+
+julia> chopsuffix("Hamburger", "hotdog")
+"Hamburger"
+```
+"""
+function chopsuffix(s::AbstractString, suffix::AbstractString)
+    a, b = Iterators.Reverse(s), Iterators.Reverse(suffix)
+    k = lastindex(s)
+    i, j = iterate(a), iterate(b)
+    while true
+        j === nothing && i === nothing && return SubString(s, 1, 0) # s == suffix: empty result
+        j === nothing && return @inbounds SubString(s, firstindex(s), k) # ran out of suffix: success!
+        i === nothing && return SubString(s) # ran out of source: failure
+        i[1] == j[1] || return SubString(s) # mismatch: failure
+        k = i[2]
+        i, j = iterate(a, k), iterate(b, j[2])
+    end
+end
+
+function chopsuffix(s::Union{String, SubString{String}},
+                    suffix::Union{String, SubString{String}})
+    if !isempty(suffix) && endswith(s, suffix)
+        astart = ncodeunits(s) - ncodeunits(suffix) + 1
+        @inbounds SubString(s, firstindex(s), prevind(s, astart))
+    else
+        SubString(s)
+    end
+end
+
 
 """
     chomp(s::AbstractString) -> SubString
@@ -398,6 +493,9 @@ The iterator will return a maximum of `limit` results if the keyword argument is
 The default of `limit=0` implies no maximum.
 
 See also [`split`](@ref).
+
+!!! compat "Julia 1.8"
+    The `eachsplit` function requires at least Julia 1.8.
 
 # Examples
 ```jldoctest

@@ -13,25 +13,25 @@ The arguments may be integer and rational numbers.
 
 # Examples
 ```jldoctest
-julia> gcd(6,9)
+julia> gcd(6, 9)
 3
 
-julia> gcd(6,-9)
+julia> gcd(6, -9)
 3
 
-julia> gcd(6,0)
+julia> gcd(6, 0)
 6
 
-julia> gcd(0,0)
+julia> gcd(0, 0)
 0
 
-julia> gcd(1//3,2//3)
+julia> gcd(1//3, 2//3)
 1//3
 
-julia> gcd(1//3,-2//3)
+julia> gcd(1//3, -2//3)
 1//3
 
-julia> gcd(1//3,2)
+julia> gcd(1//3, 2)
 1//3
 
 julia> gcd(0, 0, 10, 15)
@@ -90,33 +90,33 @@ The arguments may be integer and rational numbers.
 
 # Examples
 ```jldoctest
-julia> lcm(2,3)
+julia> lcm(2, 3)
 6
 
-julia> lcm(-2,3)
+julia> lcm(-2, 3)
 6
 
-julia> lcm(0,3)
+julia> lcm(0, 3)
 0
 
-julia> lcm(0,0)
+julia> lcm(0, 0)
 0
 
-julia> lcm(1//3,2//3)
+julia> lcm(1//3, 2//3)
 2//3
 
-julia> lcm(1//3,-2//3)
+julia> lcm(1//3, -2//3)
 2//3
 
-julia> lcm(1//3,2)
+julia> lcm(1//3, 2)
 2//1
 
-julia> lcm(1,3,5,7)
+julia> lcm(1, 3, 5, 7)
 105
 ```
 """
 function lcm(a::T, b::T) where T<:Integer
-    # explicit a==0 test is to handle case of lcm(0,0) correctly
+    # explicit a==0 test is to handle case of lcm(0, 0) correctly
     # explicit b==0 test is to handle case of lcm(typemin(T),0) correctly
     if a == 0 || b == 0
         return zero(a)
@@ -214,13 +214,13 @@ and ``div(y,m) = 0``. This will throw an error if ``m = 0``, or if
 
 # Examples
 ```jldoctest
-julia> invmod(2,5)
+julia> invmod(2, 5)
 3
 
-julia> invmod(2,3)
+julia> invmod(2, 3)
 2
 
-julia> invmod(5,6)
+julia> invmod(5, 6)
 5
 ```
 """
@@ -319,6 +319,9 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{1}) = x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-1}) = inv(x)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-2}) = (i=inv(x); i*i)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-3}) = (i=inv(x); i*i*i)
 
 # don't use the inv(x) transformation here since float^p is slightly more accurate
 @inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p
@@ -328,7 +331,11 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 # be computed in a type-stable way even for e.g. integers.
 @inline function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
-        literal_pow(^, inv(x), Val(-p))
+        if x isa BitInteger64
+            f(Float64(x), p) # inv would cause rounding, while Float64^Integer is able to compensate the inverse
+        else
+            f(inv(x), -p)
+        end
     else
         f(x, p)
     end
@@ -894,14 +901,14 @@ the array length. If the array length is excessive, the excess portion is filled
 
 # Examples
 ```jldoctest
-julia> digits!([2,2,2,2], 10, base = 2)
+julia> digits!([2, 2, 2, 2], 10, base = 2)
 4-element Vector{Int64}:
  0
  1
  0
  1
 
-julia> digits!([2,2,2,2,2,2], 10, base = 2)
+julia> digits!([2, 2, 2, 2, 2, 2], 10, base = 2)
 6-element Vector{Int64}:
  0
  1
@@ -1040,7 +1047,7 @@ function binomial(n::T, k::T) where T<:Integer
     k < 0 && return zero(T)
     sgn = one(T)
     if n < 0
-        n = -n + k -1
+        n = -n + k - one(T)
         if isodd(k)
             sgn = -sgn
         end
@@ -1051,15 +1058,15 @@ function binomial(n::T, k::T) where T<:Integer
     if k > (n>>1)
         k = (n - k)
     end
-    x::T = nn = n - k + 1
-    nn += 1
-    rr = 2
+    x = nn = n - k + one(T)
+    nn += one(T)
+    rr = T(2)
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt % T
         x == xt || throw(OverflowError("binomial($n0, $k0) overflows"))
-        rr += 1
-        nn += 1
+        rr += one(T)
+        nn += one(T)
     end
-    convert(T, copysign(x, sgn))
+    copysign(x, sgn)
 end

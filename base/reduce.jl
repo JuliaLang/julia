@@ -168,6 +168,8 @@ Like [`reduce`](@ref), but with guaranteed left associativity. If provided, the 
 argument `init` will be used exactly once. In general, it will be necessary to provide
 `init` to work with empty collections.
 
+See also [`mapfoldl`](@ref), [`foldr`](@ref), [`accumulate`](@ref).
+
 # Examples
 ```jldoctest
 julia> foldl(=>, 1:4)
@@ -175,6 +177,9 @@ julia> foldl(=>, 1:4)
 
 julia> foldl(=>, 1:4; init=0)
 (((0 => 1) => 2) => 3) => 4
+
+julia> accumulate(=>, (1,2,3,4))
+(1, 1 => 2, (1 => 2) => 3, ((1 => 2) => 3) => 4)
 ```
 """
 foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
@@ -1216,10 +1221,12 @@ count(itr; init=0) = count(identity, itr; init)
 
 count(f, itr; init=0) = _simple_count(f, itr, init)
 
-function _simple_count(pred, itr, init::T) where {T}
+_simple_count(pred, itr, init) = _simple_count_helper(Generator(pred, itr), init)
+
+function _simple_count_helper(g, init::T) where {T}
     n::T = init
-    for x in itr
-        n += pred(x)::Bool
+    for x in g
+        n += x::Bool
     end
     return n
 end

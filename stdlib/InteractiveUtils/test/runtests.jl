@@ -568,6 +568,31 @@ file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(pathof(InteractiveUtils))
 @test isdir(pkgdir(InteractiveUtils))
 
+@testset "buildbot path updating" begin
+    file, ln = functionloc(versioninfo, Tuple{})
+    @test isfile(file)
+
+    e = try versioninfo("wat")
+    catch e
+        e
+    end
+    @test e isa MethodError
+    m = @which versioninfo()
+    s = sprint(showerror, e)
+    m = match(Regex("at (.*?):$(m.line)"), s)
+    @test isfile(expanduser(m.captures[1]))
+
+    g() = x
+    e, bt = try code_llvm(g, Tuple{Int})
+    catch e
+        e, catch_backtrace()
+    end
+    @test e isa Exception
+    s = sprint(showerror, e, bt)
+    m = match(r"(\S*InteractiveUtils[\/\\]src\S*):", s)
+    @test isfile(expanduser(m.captures[1]))
+end
+
 @testset "Issue #34434" begin
     io = IOBuffer()
     code_native(io, eltype, Tuple{Int})
@@ -623,4 +648,25 @@ end
             end
         end
     end
+end
+
+let # `default_tt` should work with any function with one method
+    @test (code_warntype(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_warntype(devnull, function (a::Int)
+        sin(a)
+    end); true)
+    @test (code_llvm(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_llvm(devnull, function (a::Int)
+        sin(a)
+    end); true)
+    @test (code_native(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_native(devnull, function (a::Int)
+        sin(a)
+    end); true)
 end

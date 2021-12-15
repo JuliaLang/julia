@@ -209,6 +209,13 @@
                                 "\n"
                                 (indented-block (cdr (cadddr e)) ilvl))
                         "")
+                    (if (length> e 5)
+                        (let ((els (cadddddr e)))
+                          (if (and (pair? els) (eq? (car els) 'block))
+                              (string (string.rep "    " ilvl) "else\n"
+                                      (indented-block (cdr els) ilvl))
+                              ""))
+                        "")
                     (if (length> e 4)
                         (let ((fin (caddddr e)))
                           (if (and (pair? fin) (eq? (car fin) 'block))

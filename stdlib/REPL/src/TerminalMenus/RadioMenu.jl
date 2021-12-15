@@ -8,7 +8,7 @@ A menu that allows a user to select a single option from a list.
 
 # Sample Output
 
-```julia
+```julia-repl
 julia> request(RadioMenu(options, pagesize=4))
 Choose your favorite fruit:
 ^  grape
@@ -31,7 +31,9 @@ end
 
 """
 
-    RadioMenu(options::Array{String,1}; pagesize::Int=10, kwargs...)
+    RadioMenu(options::Array{String,1}; pagesize::Int=10,
+                                        keybindings::Vector{Char}=Char[],
+                                        kwargs...)
 
 Create a RadioMenu object. Use `request(menu::RadioMenu)` to get user input.
 `request()` returns an `Int` which is the index of the option selected by the
@@ -41,8 +43,12 @@ user.
 
   - `options::Array{String, 1}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
+  - `keybindings::Vector{Char}=Char[]`: Shortcuts to pick corresponding entry from `options`
 
 Any additional keyword arguments will be passed to [`TerminalMenus.Config`](@ref).
+
+!!! compat "Julia 1.8"
+    The `keybindings` argument requires Julia 1.8 or later.
 """
 function RadioMenu(options::Array{String,1}; pagesize::Int=10, warn::Bool=true, keybindings::Vector{Char}=Char[], kwargs...)
     length(options) < 1 && error("RadioMenu must have at least one option")

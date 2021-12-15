@@ -239,6 +239,15 @@ end
 @test repr(:(-(;x))) == ":(-(; x))"
 @test repr(:(+(1, 2;x))) == ":(+(1, 2; x))"
 @test repr(:(1:2...)) == ":(1:2...)"
+
+@test repr(:(1 := 2)) == ":(1 := 2)"
+@test repr(:(1 ≔ 2)) == ":(1 ≔ 2)"
+@test repr(:(1 ⩴ 2)) == ":(1 ⩴ 2)"
+@test repr(:(1 ≕ 2)) == ":(1 ≕ 2)"
+
+@test repr(:(∓ 1)) == ":(∓1)"
+@test repr(:(± 1)) == ":(±1)"
+
 for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:ref, :f, Expr(:(=), :x, 1)),
            Expr(:vect, 1, 2, Expr(:kw, :x, 1)),
@@ -258,6 +267,7 @@ end
 @test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
 @test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
 @test repr(Expr(:import, Expr(:(.), ))) == ":(\$(Expr(:import, :(\$(Expr(:.))))))"
+
 
 @test repr(Expr(:using, Expr(:(.), :A))) == ":(using A)"
 @test repr(Expr(:using, Expr(:(.), :A),
@@ -1347,6 +1357,20 @@ test_repr("(:).a")
 @test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4, Float64}"
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32, Float32, Float32}"
 
+@testset "issue #42931" begin
+    @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
+    @test repr(NTuple{3, :A}) == "Tuple{:A, :A, :A}"
+    @test repr(NTuple{2, :A}) == "Tuple{:A, :A}"
+    @test repr(NTuple{1, :A}) == "Tuple{:A}"
+    @test repr(NTuple{0, :A}) == "Tuple{}"
+
+    @test repr(Tuple{:A, :A, :A, :B}) == "Tuple{:A, :A, :A, :B}"
+    @test repr(Tuple{:A, :A, :A, :A}) == "NTuple{4, :A}"
+    @test repr(Tuple{:A, :A, :A}) == "Tuple{:A, :A, :A}"
+    @test repr(Tuple{:A}) == "Tuple{:A}"
+    @test repr(Tuple{}) == "Tuple{}"
+end
+
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
 @test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
@@ -1843,6 +1867,12 @@ end
     # issue #34343
     @test showstr([[1], Int[]]) == "[[1], $Int[]]"
     @test showstr([Dict(1=>1), Dict{Int,Int}()]) == "[Dict(1 => 1), Dict{$Int, $Int}()]"
+
+    # issue #42719, NamedTuple with @var_str
+    @test replstr((; var"a b"=1)) == """(var"a b" = 1,)"""
+    @test replstr((; var"#var#"=1)) == """(var"#var#" = 1,)"""
+    @test replstr((; var"a"=1, b=2)) == "(a = 1, b = 2)"
+    @test replstr((; a=1, b=2)) == "(a = 1, b = 2)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin

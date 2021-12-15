@@ -53,8 +53,6 @@ call. Finally, chains of comparisons have their own special expression structure
 | `a&&b`      | `(&& a b)`                |
 | `x += 1`    | `(+= x 1)`                |
 | `a ? 1 : 2` | `(if a 1 2)`              |
-| `a:b`       | `(: a b)`                 |
-| `a:b:c`     | `(: a b c)`               |
 | `a,b`       | `(tuple a b)`             |
 | `a==b`      | `(call == a b)`           |
 | `1<i<=n`    | `(comparison 1 < i <= n)` |
@@ -78,10 +76,10 @@ call. Finally, chains of comparisons have their own special expression structure
 | `[x y]`                  | `(hcat x y)`                                      |
 | `[x y; z t]`             | `(vcat (row x y) (row z t))`                      |
 | `[x;y;; z;t;;;]`         | `(ncat 3 (nrow 2 (nrow 1 x y) (nrow 1 z t)))`     |
-| `[x for y in z, a in b]` | `(comprehension x (= y z) (= a b))`               |
-| `T[x for y in z]`        | `(typed_comprehension T x (= y z))`               |
+| `[x for y in z, a in b]` | `(comprehension (generator x (= y z) (= a b)))`   |
+| `T[x for y in z]`        | `(typed_comprehension T (generator x (= y z)))`   |
 | `(a, b, c)`              | `(tuple a b c)`                                   |
-| `(a; b; c)`              | `(block a (block b c))`                           |
+| `(a; b; c)`              | `(block a b c)`                                   |
 
 ### Macros
 
@@ -130,11 +128,11 @@ instead of `:import`.
 Julia supports more number types than many scheme implementations, so not all numbers are represented
 directly as scheme numbers in the AST.
 
-| Input                   | AST                                                     |
-|:----------------------- |:------------------------------------------------------- |
-| `11111111111111111111`  | `(macrocall @int128_str (null) "11111111111111111111")` |
-| `0xfffffffffffffffff`   | `(macrocall @uint128_str (null) "0xfffffffffffffffff")` |
-| `1111...many digits...` | `(macrocall @big_str (null) "1111....")`                |
+| Input                   | AST                                                      |
+|:----------------------- |:-------------------------------------------------------- |
+| `11111111111111111111`  | `(macrocall @int128_str nothing "11111111111111111111")` |
+| `0xfffffffffffffffff`   | `(macrocall @uint128_str nothing "0xfffffffffffffffff")` |
+| `1111...many digits...` | `(macrocall @big_str nothing "1111....")`                |
 
 ### Block forms
 
@@ -157,7 +155,7 @@ parses as:
 ```
 (if a (block (line 2) b)
     (elseif (block (line 3) c) (block (line 4) d)
-            (block (line 5 e))))
+            (block (line 6 e))))
 ```
 
 A `while` loop parses as `(while condition body)`.
@@ -520,6 +518,37 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
         The additional objects that may need to be gc-rooted for the duration of the call.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
 
+  * `new_opaque_closure`
+
+    Constructs a new opaque closure. The fields are:
+
+      * `args[1]` : signature
+
+        The function signature of the opaque closure. Opaque closures don't participate in dispatch, but the input types can be restricted.
+
+      * `args[2]` : isva
+
+        Indicates whether the closure accepts varargs.
+
+      * `args[3]` : lb
+
+        Lower bound on the output type. (Defaults to `Union{}`)
+
+      * `args[4]` : ub
+
+        Upper bound on the output type. (Defaults to `Any`)
+
+      * `args[5]` : method
+
+        The actual method as an `opaque_closure_method` expression.
+
+      * `args[6:end]` : captures
+
+        The values captured by the opaque closure.
+
+    !!! compat "Julia 1.7"
+        Opaque closures were added in Julia 1.7
+
 
 ### [Method](@id ast-lowered-method)
 
@@ -563,7 +592,8 @@ A unique'd container describing the shared metadata for a single method.
 
 ### MethodInstance
 
-A unique'd container describing a single callable signature for a Method. See especially [Proper maintenance and care of multi-threading locks](@ref)
+A unique'd container describing a single callable signature for a Method.
+See especially [Proper maintenance and care of multi-threading locks](@ref Proper-maintenance-and-care-of-multi-threading-locks)
 for important details on how to modify these fields safely.
 
   * `specTypes`

@@ -47,7 +47,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         # XXX: this is wrong if `sig` is not a concretetype method
         # more correct would be to use `fieldtype(sig, i)`, but that would obscure / discard Varargs information in show
         sig = linfo.specTypes == Tuple ? Core.svec() : Base.unwrap_unionall(linfo.specTypes).parameters::Core.SimpleVector
-        print_arg(i) = sprint() do io
+        print_arg(i) = sprint(; context=io) do io
             show_unquoted(io, stmt.args[i], indent)
             if (i - 1) <= length(sig)
                 print(io, "::", sig[i - 1])
@@ -82,7 +82,7 @@ function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::Strin
     args = String[let
         e = stmt.edges[i]
         v = !isassigned(stmt.values, i) ? "#undef" :
-            sprint() do io′
+            sprint(; context=io) do io′
                 show_unquoted(io′, stmt.values[i], indent)
             end
         "$prefix$e => $v"
@@ -382,7 +382,7 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                     # if so, drop all existing calls to it from the top of the context
                     # AND check if instead the context was previously printed that way
                     # but now has removed the recursive frames
-                    let method = method_name(context[nctx])
+                    let method = method_name(context[nctx]) # last matching frame
                         if (nctx < nframes && method_name(DI[nframes - nctx]) === method) ||
                            (nctx < length(context) && method_name(context[nctx + 1]) === method)
                             update_line_only = true
@@ -391,8 +391,15 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                             end
                         end
                     end
-                elseif length(context) > 0
-                    update_line_only = true
+                end
+                # look at the first non-matching element to see if we are only changing the line number
+                if !update_line_only && nctx < length(context) && nctx < nframes
+                    let CtxLine = context[nctx + 1],
+                        FrameLine = DI[nframes - nctx]
+                        if method_name(CtxLine) === method_name(FrameLine)
+                            update_line_only = true
+                        end
+                    end
                 end
             elseif nctx < length(context) && nctx < nframes
                 # look at the first non-matching element to see if we are only changing the line number

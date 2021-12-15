@@ -404,13 +404,15 @@ end
 if ENDIAN_BOM == 0x04030201
 function read(s::IOStream, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64}})
     n = sizeof(T)
-    lock(s.lock)
+    l = s._dolock
+    _lock = s.lock
+    l && lock(_lock)
     if ccall(:jl_ios_buffer_n, Cint, (Ptr{Cvoid}, Csize_t), s.ios, n) != 0
-        unlock(s.lock)
+        l && unlock(_lock)
         throw(EOFError())
     end
     x = ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Cvoid}, Csize_t), s.ios, n) % T
-    unlock(s.lock)
+    l && unlock(_lock)
     return x
 end
 

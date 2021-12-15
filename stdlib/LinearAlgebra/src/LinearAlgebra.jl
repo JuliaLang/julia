@@ -12,9 +12,9 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!, cos,
     cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
     getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!, length, log, map, ndims,
-    oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
+    one, oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, sqrt,
-    strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
+    strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec, zero
 using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
@@ -262,9 +262,7 @@ function sym_uplo(uplo::Char)
     end
 end
 
-
 @noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
-
 
 """
     ldiv!(Y, A, B) -> Y
@@ -398,7 +396,7 @@ The resulting array is mutable. It can be used, for example, to pass the data of
 `A` to an efficient in-place method for a matrix factorization such as `lu!`, in
 cases where a more specific implementation of `lu!` (or `lu`) is not available.
 
-See also: `copy_oftype`, `copy_similar`
+See also: `copy_oftype`, `copy_similar`.
 """
 copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)...), A)
 
@@ -453,6 +451,12 @@ export ⋅, ×
 ## vectors to matrices.
 _cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
 _cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+
+# SymTridiagonal ev can be the same length as dv, but the last element is
+# ignored. However, some methods can fail if they read the entired ev
+# rather than just the meaningful elements. This is a helper function
+# for getting only the meaningful elements of ev. See #41089
+_evview(S::SymTridiagonal) = @view S.ev[begin:length(S.dv) - 1]
 
 ## append right hand side with zeros if necessary
 _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))

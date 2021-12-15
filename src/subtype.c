@@ -639,6 +639,8 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     return 1;
 }
 
+static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT;
+
 // check that type var `b` is >: `a`, and update b's lower bound.
 static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
@@ -656,7 +658,10 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     }
     if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(a, bb->ub, e)))
         return 0;
-    bb->lb = simple_join(bb->lb, a);
+    jl_value_t *lb = simple_join(bb->lb, a);
+    if (!e->intersection || !subtype_by_bounds(lb, (jl_value_t*)b, e))
+        bb->lb = lb;
+    // this bound should not be directly circular
     assert(bb->lb != (jl_value_t*)b);
     if (jl_is_typevar(a)) {
         jl_varbinding_t *aa = lookup(e, (jl_tvar_t*)a);
@@ -2918,7 +2923,7 @@ static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 
 // cmp <= 0: is x already <= y in this environment
 // cmp >= 0: is x already >= y in this environment
-static int compareto_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, int cmp)
+static int compareto_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, int cmp) JL_NOTSAFEPOINT
 {
     if (x == (jl_value_t*)y)
         return 1;
@@ -2938,7 +2943,7 @@ static int compareto_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, int cmp)
 // Check whether the environment already asserts x <: y via recorded bounds.
 // This is used to avoid adding redundant constraints that lead to cycles.
 // Note this is a semi-predicate: 1 => is a subtype, 0 => unknown
-static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
     if (!jl_is_typevar(x) || !jl_is_typevar(y))
         return 0;

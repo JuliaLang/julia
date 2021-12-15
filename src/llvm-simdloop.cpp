@@ -239,7 +239,7 @@ PreservedAnalyses LowerSIMDLoop::run(Module &M, ModuleAnalysisManager &AM)
 
 namespace {
 class LowerSIMDLoopLegacy : public ModulePass {
-    LowerSIMDLoop Impl;
+    //LowerSIMDLoop Impl;
 
 public:
   static char ID;
@@ -284,7 +284,7 @@ JL_DLLEXPORT Pass *createLowerSimdLoopPass()
     return new LowerSIMDLoopLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createLowerSimdLoopPass());
 }

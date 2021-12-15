@@ -88,10 +88,10 @@ end
 function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecialize(stmt::Union{SlotNumber, TypedSlot}), @nospecialize(ssa))
     # We don't really have the information here to get rid of these.
     # We'll do so later
-    if ssa === undef_token
+    if ssa === UNDEF_TOKEN
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], false), Any))
-        return undef_token
+        return UNDEF_TOKEN
     end
     if !isa(ssa, Argument) && !(ssa === nothing) && ((ci.slotflags[slot] & SLOT_USEDUNDEF) != 0)
         # insert a temporary node. type_lift_pass! will remove it
@@ -134,7 +134,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
                 return true
             else
                 ssa = rename(val)
-                if ssa === undef_token
+                if ssa === UNDEF_TOKEN
                     return false
                 elseif !isa(ssa, SSAValue) && !isa(ssa, NewSSAValue)
                     return true
@@ -152,7 +152,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
             x = fixup_slot!(ir, ci, idx, slot_id(val), val, rename(val))
             # We inserted an undef error node. Delete subsequent statement
             # to avoid confusing the optimizer
-            if x === undef_token
+            if x === UNDEF_TOKEN
                 return nothing
             end
             op[] = x
@@ -177,13 +177,14 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    (; codelocs, ssaflags) = ci
     for i = length(code):-1:1
         if code[i] !== nothing
             resize!(code, i)
             resize!(ssavaluetypes, i)
-            resize!(ci.codelocs, i)
+            resize!(codelocs, i)
             resize!(info, i)
-            resize!(ci.ssaflags, i)
+            resize!(ssaflags, i)
             break
         end
     end
@@ -193,9 +194,9 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
     if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
         push!(code, ReturnNode())
         push!(ssavaluetypes, Union{})
-        push!(ci.codelocs, 0)
+        push!(codelocs, 0)
         push!(info, nothing)
-        push!(ci.ssaflags, IR_FLAG_NULL)
+        push!(ssaflags, IR_FLAG_NULL)
     end
     nothing
 end
@@ -230,41 +231,49 @@ struct BlockLiveness
     live_in_bbs::Vector{Int}
 end
 
-# Run iterated dominance frontier
-#
-# The algorithm we have here essentially follows LLVM, which itself is a
-# a cleaned up version of the linear-time algorithm described in
-#
-#  A Linear Time Algorithm for Placing phi-Nodes (by Sreedhar and Gao)
-#
-# The algorithm here, is quite straightforward. Suppose we have a CFG:
-#
-# A -> B -> D -> F
-#  \-> C -------/
-#
-# and a corresponding dominator tree:
-#
-# A
-# |- B - D
-# |- C
-# |- F
-#
-# Now, for every definition of our slot, we simply walk down the dominator
-# tree and look for any edges that leave the sub-domtree rooted by our definition.
-#
-# E.g. in our example above, if we have a definition in `B`, we look at its successors,
-#      which is only `D`, which is dominated by `B` and hence doesn't need a phi node.
-#      Then we descend down the subtree rooted at `B` and end up in `D`. `D` has a successor
-#      `F`, which is not part of the current subtree, (i.e. not dominated by `B`), so it
-#      needs a phi node.
-#
-# Now, the key insight of that algorithm is that we have two defs, in blocks `A` and `B`,
-# and `A` dominates `B`, then we do not need to recurse into `B`, because the set of
-# potential backedges from a subtree rooted at `B` (to outside the subtree) is a strict
-# subset of those backedges from a subtree rooted at `A` (out outside the subtree rooted
-# at `A`). Note however that this does not work the other way. Thus, the algorithm
-# needs to make sure that we always visit `B` before `A`.
-function idf(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
+"""
+    iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
+        -> phinodes::Vector{Int}
+
+Run iterated dominance frontier.
+The algorithm we have here essentially follows LLVM, which itself is a
+a cleaned up version of the linear-time algorithm described in [^SG95].
+
+The algorithm here, is quite straightforward. Suppose we have a CFG:
+
+    A -> B -> D -> F
+     \\-> C ------>/
+
+and a corresponding dominator tree:
+
+    A
+    |- B - D
+    |- C
+    |- F
+
+Now, for every definition of our slot, we simply walk down the dominator
+tree and look for any edges that leave the sub-domtree rooted by our definition.
+
+In our example above, if we have a definition in `B`, we look at its successors,
+which is only `D`, which is dominated by `B` and hence doesn't need a ϕ-node.
+Then we descend down the subtree rooted at `B` and end up in `D`. `D` has a successor
+`F`, which is not part of the current subtree, (i.e. not dominated by `B`),
+so it needs a ϕ-node.
+
+Now, the key insight of that algorithm is that we have two defs, in blocks `A` and `B`,
+and `A` dominates `B`, then we do not need to recurse into `B`, because the set of
+potential backedges from a subtree rooted at `B` (to outside the subtree) is a strict
+subset of those backedges from a subtree rooted at `A` (out outside the subtree rooted
+at `A`). Note however that this does not work the other way. Thus, the algorithm
+needs to make sure that we always visit `B` before `A`.
+
+[^SG95]: Vugranam C. Sreedhar and Guang R. Gao. 1995.
+         A linear time algorithm for placing φ-nodes.
+         In Proceedings of the 22nd ACM SIGPLAN-SIGACT symposium on Principles of programming languages (POPL '95).
+         Association for Computing Machinery, New York, NY, USA, 62–73.
+         DOI: <https://doi.org/10.1145/199448.199464>.
+"""
+function iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
     # This should be a priority queue, but TODO - sorted array for now
     defs = liveness.def_bbs
     pq = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
@@ -362,11 +371,11 @@ function rename_phinode_edges(node, bb, result_order, bb_rename)
 end
 
 """
-    Sort the basic blocks in `ir` into domtree order (i.e. if bb`` is higher in
-    the domtree than bb2, it will come first in the linear order). The resulting
-    ir has the property that a linear traversal of basic blocks will also be a
-    RPO traversal and in particular, any use of an SSA value must come after (by linear
-    order) its definition.
+Sort the basic blocks in `ir` into domtree order (i.e. if `bb1` is higher in
+the domtree than `bb2`, it will come first in the linear order). The resulting
+`ir` has the property that a linear traversal of basic blocks will also be a
+RPO traversal and in particular, any use of an SSA value must come after
+(by linear order) its definition.
 """
 function domsort_ssa!(ir::IRCode, domtree::DomTree)
     # First compute the new order of basic blocks
@@ -514,12 +523,14 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     return new_ir
 end
 
-function compute_live_ins(cfg::CFG, defuse #=::Union{SlotInfo,SSADefUse}=#)
+compute_live_ins(cfg::CFG, slot::SlotInfo) = compute_live_ins(cfg, slot.defs, slot.uses)
+
+function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
     # We remove from `uses` any block where all uses are dominated
     # by a def. This prevents insertion of dead phi nodes at the top
     # of such a block if that block happens to be in a loop
-    ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in defuse.uses]
-    for x in defuse.defs
+    ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in uses]
+    for x in defs
         push!(ordered, (x, block_for_inst(cfg, x), false))
     end
     ordered = sort(ordered, by=x->x[1])
@@ -580,7 +591,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                         defuses::Vector{SlotInfo}, slottypes::Vector{Any})
     code = ir.stmts.inst
     cfg = ir.cfg
-    left = Int[]
     catch_entry_blocks = Tuple{Int, Int}[]
     for idx in 1:length(code)
         stmt = code[idx]
@@ -649,7 +659,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 end
             end
         end
-        phiblocks = idf(cfg, live, domtree)
+        phiblocks = iterated_dominance_frontier(cfg, live, domtree)
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
@@ -657,14 +667,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 first_insert_for_bb(code, cfg, block), NewInstruction(node, Union{})).id - length(ir.stmts))
             push!(phi_nodes[block], ssa=>node)
         end
-        push!(left, idx)
     end
     # Perform SSA renaming
     initial_incoming_vals = Any[
         if 0 in defuses[x].defs
             Argument(x)
         elseif !defuses[x].any_newvar
-            undef_token
+            UNDEF_TOKEN
         else
             SSAValue(-2)
         end for x in 1:length(ci.slotflags)
@@ -701,7 +710,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 continue
             end
             push!(node.edges, pred)
-            if incoming_val === undef_token
+            if incoming_val === UNDEF_TOKEN
                 resize!(node.values, length(node.values)+1)
             else
                 push!(node.values, incoming_val)
@@ -711,7 +720,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             if isa(incoming_val, NewSSAValue)
                 push!(type_refine_phi, ssaval.id)
             end
-            typ = incoming_val === undef_token ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci, ir.sptypes, -1, slottypes)
+            typ = incoming_val === UNDEF_TOKEN ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci, ir.sptypes, -1, slottypes)
             old_entry = new_nodes.stmts[ssaval.id]
             if isa(typ, DelayedTyp)
                 push!(type_refine_phi, ssaval.id)
@@ -733,7 +742,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         if eidx !== nothing
             for (slot, _, node) in phicnodes[catch_entry_blocks[eidx][2]]
                 ival = incoming_vals[slot_id(slot)]
-                ivalundef = ival === undef_token
+                ivalundef = ival === UNDEF_TOKEN
                 unode = ivalundef ? UpsilonNode() : UpsilonNode(ival)
                 typ = ivalundef ? MaybeUndef(Union{}) : typ_for_val(ival, ci, ir.sptypes, -1, slottypes)
                 push!(node.values,
@@ -746,7 +755,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             stmt = code[idx]
             (isa(stmt, PhiNode) || (isexpr(stmt, :(=)) && isa(stmt.args[2], PhiNode))) && continue
             if isa(stmt, NewvarNode)
-                incoming_vals[slot_id(stmt.slot)] = undef_token
+                incoming_vals[slot_id(stmt.slot)] = UNDEF_TOKEN
                 code[idx] = nothing
             else
                 stmt = rename_uses!(ir, ci, idx, stmt, incoming_vals)
@@ -760,13 +769,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                     id = slot_id(stmt.args[1])
                     val = stmt.args[2]
                     typ = typ_for_val(val, ci, ir.sptypes, idx, slottypes)
-                    # Having undef_token appear on the RHS is possible if we're on a dead branch.
+                    # Having UNDEF_TOKEN appear on the RHS is possible if we're on a dead branch.
                     # Do something reasonable here, by marking the LHS as undef as well.
-                    if val !== undef_token
+                    if val !== UNDEF_TOKEN
                         incoming_vals[id] = SSAValue(make_ssa!(ci, code, idx, id, typ)::Int)
                     else
                         code[idx] = nothing
-                        incoming_vals[id] = undef_token
+                        incoming_vals[id] = UNDEF_TOKEN
                     end
                     eidx = item
                     while haskey(exc_handlers, eidx)
@@ -774,7 +783,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                         cidx = findfirst(x->slot_id(x[1]) == id, phicnodes[exc])
                         if cidx !== nothing
                             node = UpsilonNode(incoming_vals[id])
-                            if incoming_vals[id] === undef_token
+                            if incoming_vals[id] === UNDEF_TOKEN
                                 node = UpsilonNode()
                                 typ = MaybeUndef(Union{})
                             end

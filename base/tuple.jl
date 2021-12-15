@@ -133,6 +133,7 @@ function rest end
 rest(t::Tuple) = t
 rest(t::Tuple, i::Int) = ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
 rest(a::Array, i::Int=1) = a[i:end]
+rest(a::Core.SimpleVector, i::Int=1) = a[i:end]
 rest(itr, state...) = Iterators.rest(itr, state...)
 
 # Use dispatch to avoid a branch in first
@@ -354,6 +355,23 @@ _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
 
 end
 
+## find ##
+
+_findfirst_rec(f, i::Int, ::Tuple{}) = nothing
+_findfirst_rec(f, i::Int, t::Tuple) = (@inline; f(first(t)) ? i : _findfirst_rec(f, i+1, tail(t)))
+function _findfirst_loop(f::Function, t)
+    for i in 1:length(t)
+        f(t[i]) && return i
+    end
+    return nothing
+end
+findfirst(f::Function, t::Tuple) = length(t) < 32 ? _findfirst_rec(f, 1, t) : _findfirst_loop(f, t)
+
+function findlast(f::Function, x::Tuple)
+    r = findfirst(f, reverse(x))
+    return isnothing(r) ? r : length(x) - r + 1
+end
+
 ## filter ##
 
 filter_rec(f, xs::Tuple) = afoldl((ys, x) -> f(x) ? (ys..., x) : ys, (), xs...)
@@ -365,11 +383,8 @@ filter(f, t::Tuple) = length(t) < 32 ? filter_rec(f, t) : Tuple(filter(f, collec
 
 isequal(t1::Tuple, t2::Tuple) = length(t1) == length(t2) && _isequal(t1, t2)
 _isequal(::Tuple{}, ::Tuple{}) = true
-function _isequal(t1::Tuple{Any,Vararg{Any,N}}, t2::Tuple{Any,Vararg{Any,N}}) where {N}
-    isequal(t1[1], t2[1]) || return false
-    t1, t2 = tail(t1), tail(t2)
-    # avoid dynamic dispatch by telling the compiler relational invariants
-    return isa(t1, Tuple{}) ? true : _isequal(t1, t2::Tuple{Any,Vararg{Any}})
+function _isequal(t1::Tuple{Any,Vararg{Any}}, t2::Tuple{Any,Vararg{Any}})
+    return isequal(t1[1], t2[1]) && _isequal(tail(t1), tail(t2))
 end
 function _isequal(t1::Any32, t2::Any32)
     for i = 1:length(t1)

@@ -8,7 +8,8 @@
 # inside this function.
 function *ₛ end
 Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
-    iszero(beta::Number) ? false : broadcasted(*, out, beta)
+    iszero(beta::Number) ? false :
+    isone(beta::Number) ? broadcasted(identity, out) : broadcasted(*, out, beta)
 
 """
     MulAddMul(alpha, beta)
@@ -448,45 +449,11 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 # Dot products and norms
 
 # special cases of norm; note that they don't need to handle isempty(x)
-function generic_normMinusInf(x)
-    (v, s) = iterate(x)::Tuple
-    minabs = norm(v)
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        vnorm = norm(v)
-        minabs = ifelse(isnan(minabs) | (minabs < vnorm), minabs, vnorm)
-    end
-    return float(minabs)
-end
+generic_normMinusInf(x) = float(mapreduce(norm, min, x))
 
-function generic_normInf(x)
-    (v, s) = iterate(x)::Tuple
-    maxabs = norm(v)
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        vnorm = norm(v)
-        maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
-    end
-    return float(maxabs)
-end
+generic_normInf(x) = float(mapreduce(norm, max, x))
 
-function generic_norm1(x)
-    (v, s) = iterate(x)::Tuple
-    av = float(norm(v))
-    T = typeof(av)
-    sum::promote_type(Float64, T) = av
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        sum += norm(v)
-    end
-    return convert(T, sum)
-end
+generic_norm1(x) = mapreduce(float ∘ norm, +, x)
 
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
@@ -1515,9 +1482,9 @@ end
 end
 
 # apply reflector from left
-@inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractMatrix)
+@inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
     require_one_based_indexing(x)
-    m, n = size(A)
+    m, n = size(A, 1), size(A, 2)
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
@@ -1593,6 +1560,8 @@ julia> logabsdet(B)
 ```
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
+
+logabsdet(a::Number) = log(abs(a)), sign(a)
 
 """
     logdet(M)

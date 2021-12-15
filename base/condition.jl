@@ -34,7 +34,7 @@ assert_havelock(l::AbstractLock, tid::Nothing) = concurrency_violation()
 This struct does not implement a real lock, but instead
 pretends to be always locked on the original thread it was allocated on,
 and simply ignores all other interactions.
-It also does not synchronize tasks; for that use a real lock such as [`RecursiveLock`](@ref).
+It also does not synchronize tasks; for that use a real lock such as [`ReentrantLock`](@ref).
 This can be used in the place of a real lock to, instead, simply and cheaply assert
 that the operation is only occurring on a single cooperatively-scheduled thread.
 It is thus functionally equivalent to allocating a real, recursive, task-unaware lock
@@ -82,6 +82,17 @@ function _wait2(c::GenericCondition, waiter::Task)
     ct = current_task()
     assert_havelock(c)
     push!(c.waitq, waiter)
+    # since _wait2 is similar to schedule, we should observe the sticky bit now
+    if waiter.sticky && Threads.threadid(waiter) == 0
+        # Issue #41324
+        # t.sticky && tid == 0 is a task that needs to be co-scheduled with
+        # the parent task. If the parent (current_task) is not sticky we must
+        # set it to be sticky.
+        # XXX: Ideally we would be able to unset this
+        ct.sticky = true
+        tid = Threads.threadid()
+        ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
+    end
     return
 end
 

@@ -139,10 +139,6 @@ const t_log_Float32 = (0.0,0.007782140442054949,0.015504186535965254,0.023167059
     0.6773988235918061,0.6813592248079031,0.6853040030989194,0.689233281238809,
     0.6931471805599453)
 
-# determine if hardware FMA is available
-# should probably check with LLVM, see #9855.
-const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) != 0
-
 # truncate lower order bits (up to 26)
 # ideally, this should be able to use ANDPD instructions, see #9868.
 @inline function truncbits(x::Float64)
@@ -209,18 +205,10 @@ end
     #   2(f-u1-u2) - f*(u1+u2) = 0
     #   2(f-u1) - f*u1 = (2+f)u2
     #   u2 = (2(f-u1) - f*u1)/(2+f)
-    if FMA_NATIVE
-        return u + fma(fma(-u,f,2(f-u)), g, q)
-    else
-        u1 = truncbits(u) # round to 24 bits
-        f1 = truncbits(f)
-        f2 = f-f1
-        u2 = ((2.0*(f-u1)-u1*f1)-u1*f2)*g
-        ## Step 4
-        m_hi = logbU(Float64, base)
-        m_lo = logbL(Float64, base)
-        return fma(m_hi, u1, fma(m_hi, (u2 + q), m_lo*u1))
-    end
+
+    m_hi = logbU(Float64, base)
+    m_lo = logbL(Float64, base)
+    return fma(m_hi, u, fma(m_lo, u, m_hi*fma(fma(-u,f,2(f-u)), g, q)))
 end
 
 
@@ -409,3 +397,51 @@ function log1p(x::Float32)
     end
 end
 
+
+@inline function log_ext_kernel(x_hi::Float64, x_lo::Float64)
+    c1hi = 0.666666666666666629659233
+    hi_order =  evalpoly(x_hi, (0.400000000000000077715612, 0.285714285714249172087875,
+                                0.222222222230083560345903, 0.181818180850050775676507,
+                                0.153846227114512262845736, 0.13332981086846273921509,
+                                0.117754809412463995466069, 0.103239680901072952701192,
+                                0.116255524079935043668677))
+    res_hi, res_lo = two_mul(hi_order, x_hi)
+    res_lo = fma(x_lo, hi_order, res_lo)
+    ans_hi = c1hi + res_hi
+    ans_lo = ((c1hi - ans_hi) + res_hi) + (res_lo + 3.80554962542412056336616e-17)
+    return ans_hi, ans_lo
+end
+
+# Log implementation that returns 2 numbers which sum to give true value with about 68 bits of precision
+# Implimentation adapted from SLEEFPirates.jl
+# Does not normalize results.
+# Must be caused with positive finite arguments
+function _log_ext(d::Float64)
+    m, e = significand(d), exponent(d)
+    if m > 1.5
+        m *= 0.5
+        e += 1.0
+    end
+    # x = (m-1)/(m+1)
+    mp1hi = m + 1.0
+    mp1lo = m + (1.0 - mp1hi)
+    invy = inv(mp1hi)
+    xhi = (m - 1.0) * invy
+    xlo = fma(-xhi, mp1lo, fma(-xhi, mp1hi, m - 1.0)) * invy
+    x2hi, x2lo = two_mul(xhi, xhi)
+    x2lo = muladd(xhi, xlo * 2.0, x2lo)
+    thi, tlo  = log_ext_kernel(x2hi, x2lo)
+
+    shi = 0.6931471805582987 * e
+    xhi2 = xhi * 2.0
+    shinew = muladd(xhi, 2.0, shi)
+    slo = muladd(1.6465949582897082e-12, e, muladd(xlo, 2.0, (((shi - shinew) + xhi2))))
+    shi = shinew
+    x3hi, x3lo = two_mul(x2hi, xhi)
+    x3lo = muladd(x2hi, xlo, muladd(xhi, x2lo,x3lo))
+    x3thi, x3tlo = two_mul(x3hi, thi)
+    x3tlo = muladd(x3hi, tlo, muladd(x3lo, thi, x3tlo))
+    anshi = x3thi + shi
+    anslo = slo + x3tlo - ((anshi - shi) - x3thi)
+    return anshi, anslo
+end
