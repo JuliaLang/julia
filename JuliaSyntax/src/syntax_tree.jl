@@ -17,6 +17,10 @@ end
 kind(head::SyntaxHead) = head.kind
 flags(head::SyntaxHead) = head.flags
 
+istrivia(head::SyntaxHead) = flags(head) & TRIVIA_FLAG != 0
+isinfix(head::SyntaxHead)  = flags(head) & INFIX_FLAG != 0
+iserror(head::SyntaxHead)  = kind(head) == K"error"
+
 function Base.summary(head::SyntaxHead)
     _kind_str(kind(head))
 end
@@ -31,9 +35,7 @@ end
 kind(node::GreenNode{SyntaxHead})  = head(node).kind
 flags(node::GreenNode{SyntaxHead}) = head(node).flags
 
-istrivia(node::GreenNode{SyntaxHead}) = flags(node) & TRIVIA_FLAG != 0
-isinfix(node::GreenNode{SyntaxHead})  = flags(node) & INFIX_FLAG != 0
-iserror(node::GreenNode{SyntaxHead})  = kind(node) == K"error"
+isinfix(node) = isinfix(head(node))
 
 #-------------------------------------------------------------------------------
 # AST interface, built on top of raw tree
@@ -52,6 +54,11 @@ mutable struct SyntaxNode
     val::Any
 end
 
+struct ErrorVal
+end
+
+Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
+
 function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::Integer=1)
     if !haschildren(raw)
         # Leaf node
@@ -64,18 +71,25 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             val = Base.parse(Int, val_str)
         elseif k == K"Identifier"
             val = Symbol(val_str)
+        elseif k == K"VarIdentifier"
+            val = Symbol(val_str[5:end-1])
         elseif k == K"String"
             val = unescape_string(source[position+1:position+span(raw)-2])
         elseif isoperator(k)
-            val = Symbol(val_str)
+            val = isempty(val_range)  ?
+                Symbol(untokenize(k)) : # synthetic invisible tokens
+                Symbol(val_str)
+            @assert !isnothing(val)
         elseif k == K"core_@doc"
             val = GlobalRef(Core, :var"@doc")
         elseif k == K"core_@cmd"
             val = GlobalRef(Core, :var"@cmd")
-        elseif k in (K"error", K"Nothing")
-            val = nothing
+        elseif k == K"error"
+            val = ErrorVal()
+        elseif k == K"__dot__"
+            val = :__dot__
         else
-            @error "Leaf node of kind $k unparsed"
+            @error "Leaf node of kind $k unknown to SyntaxNode"
             val = nothing
         end
         return SyntaxNode(source, raw, position, nothing, :leaf, val)
@@ -107,15 +121,17 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
     end
 end
 
-function interpolate_literal(node::SyntaxNode, val)
-    @assert node.head == :$
-    SyntaxNode(node.source, node.raw, node.position, node.parent, :leaf, val)
-end
+head(node::SyntaxNode) = node.head
 
 haschildren(node::SyntaxNode) = node.head !== :leaf
 children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : ()
 
 span(node::SyntaxNode) = span(node.raw)
+
+function interpolate_literal(node::SyntaxNode, val)
+    @assert node.head == :$
+    SyntaxNode(node.source, node.raw, node.position, node.parent, :leaf, val)
+end
 
 function _show_syntax_node(io, current_filename, node, indent)
     fname = node.source.filename
@@ -245,3 +261,35 @@ function highlight(code::String, node, path::Int...; color=(40,40,70))
     _printstyled(stdout, code[p:q-1]; color)
     print(stdout, code[q:end])
 end
+
+
+#-------------------------------------------------------------------------------
+# Conversion to Base.Expr
+
+function _macroify_name(name)
+    @assert name isa Symbol # fixme
+    Symbol('@', name)
+end
+
+function _to_expr(node::SyntaxNode)
+    if haschildren(node)
+        args = Vector{Any}(undef, length(children(node)))
+        args = map!(_to_expr, args, children(node))
+        # Convert elements
+        if head(node) == :macrocall
+            line_node = source_location(LineNumberNode, node.source, node.position)
+            args[1] = _macroify_name(args[1])
+            insert!(args, 2, line_node)
+        elseif head(node) == :call || head(node) == :tuple
+            if length(args) > 1 && Meta.isexpr(args[end], :parameters)
+                pushfirst!(args, args[end])
+                pop!(args)
+            end
+        end
+        Expr(head(node), args...)
+    else
+        node.val
+    end
+end
+
+Base.Expr(node::SyntaxNode) = _to_expr(node)

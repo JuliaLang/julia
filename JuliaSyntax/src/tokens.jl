@@ -47,6 +47,19 @@ is_prec_unicode_ops(t) = K"BEGIN_UNICODE_OPS" < kind(t) < K"END_UNICODE_OPS"
 is_prec_pipe_lt(t)     = kind(t) == K"<|"
 is_prec_pipe_gt(t)     = kind(t) == K"|>"
 
+#=
+# Sholuld we optimize membership a bit by unrolling?
+@generated function in(k::Kind, t::NTuple{N,Kind}) where {N}
+    ex = :(k === t[1])
+    for i = 2:N
+        ex = :($ex || k === t[$i])
+    end
+    quote
+        $ex
+    end
+end
+=#
+
 # Operators which are boty unary and binary
 function is_both_unary_and_binary(t)
     # TODO: Do we need to check dotop as well here?
@@ -58,32 +71,16 @@ function is_number(t)
     kind(t) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float")
 end
 
-function is_whitespace(t)
-    kind(t) in (K"Whitespace", K"NewlineWs")
+function is_string(t)
+    kind(t) in (K"String", K"TripleString")
 end
 
-"""
-Get the "binding power" (precedence level) of an operator kind
-"""
-function binding_power(k::Kind)
-    return k < K"END_ASSIGNMENTS" ? 1  :
-           k < K"END_CONDITIONAL" ? 2  :
-           k < K"END_ARROW"       ? 3  :
-           k < K"END_LAZYOR"      ? 4  :
-           k < K"END_LAZYAND"     ? 5  :
-           k < K"END_COMPARISON"  ? 6  :
-           k < K"END_PIPE"        ? 7  :
-           k < K"END_COLON"       ? 8  :
-           k < K"END_PLUS"        ? 9  :
-           k < K"END_BITSHIFTS"   ? 10 :
-           k < K"END_TIMES"       ? 11 :
-           k < K"END_RATIONAL"    ? 12 :
-           k < K"END_POWER"       ? 13 :
-           k < K"END_DECL"        ? 14 :
-           k < K"END_WHERE"       ? 15 :
-           k < K"END_DOT"         ? 16 :
-           k < K"END_OPS"         ? 17 : # ?? unary ops
-           error("Not an operator")
+function is_radical_op(t)
+    kind(t) in (K"√", K"∛", K"∜")
+end
+
+function is_whitespace(t)
+    kind(t) in (K"Whitespace", K"NewlineWs")
 end
 
 function _kind_str(k::Kind)

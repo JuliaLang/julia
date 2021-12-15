@@ -87,10 +87,10 @@ end
 #-------------------------------------------------------------------------------
 """
 ParseStream provides an IO interface for the parser. It
-- Wraps the lexer from Tokenize.jl with a short lookahead buffer
+- Wraps the lexer with a lookahead buffer
 - Removes whitespace and comment tokens, shifting them into the output implicitly
 
-This is simililar to rust-analyzer's
+This is simililar in spirit to rust-analyzer's
 [TextTreeSink](https://github.com/rust-analyzer/rust-analyzer/blob/4691a0647b2c96cc475d8bbe7c31fe194d1443e7/crates/syntax/src/parsing/text_tree_sink.rs)
 """
 mutable struct ParseStream
@@ -118,6 +118,15 @@ function Base.show(io::IO, mime::MIME"text/plain", stream::ParseStream)
     println(io, "ParseStream at position $(stream.next_byte)")
 end
 
+function show_diagnostics(io::IO, stream::ParseStream, code)
+    for d in stream.diagnostics
+        show_diagnostic(io, d, code)
+    end
+end
+
+#-------------------------------------------------------------------------------
+# Stream input interface - the peek_* family of functions
+
 # Buffer up until the next non-whitespace token.
 # This can buffer more than strictly necessary when newlines are significant,
 # but this is not a big problem.
@@ -127,7 +136,6 @@ function _buffer_lookahead_tokens(stream::ParseStream)
     while true
         raw = Tokenize.Lexers.next_token(stream.lexer)
         k = TzTokens.exactkind(raw)
-
         was_whitespace = k in (K"Whitespace", K"Comment", K"NewlineWs")
         was_newline    = k == K"NewlineWs"
         had_whitespace |= was_whitespace
@@ -180,6 +188,52 @@ function peek(stream::ParseStream, n::Integer=1, skip_newlines=false)
     kind(peek_token(stream, n, skip_newlines))
 end
 
+"""
+Return true if the next token equals the string `str`
+
+This is a hack (ideally the tokenizer would provide tokens for any
+identifiers which need special treatment) But occasionally the parser needs
+access to interpret normal identifiers as contextural keywords or other special
+syntactic constructs.
+
+For example, the special parsing rules for `@doc` line contination :-/
+"""
+function peek_equal_to(stream::ParseStream, str::String)
+    t = peek_token(stream)
+    if span(t) != ncodeunits(str)
+        return false
+    end
+    # Humongous but should-be-allocation-free hack: peek at the underlying data
+    # buffer. TODO: Attach the code string to the stream so we don't have to
+    # dig into the lexer?
+    buf = stream.lexer.io.data
+    cbuf = codeunits(str)
+    for i = 1:span(t)
+        if buf[first_byte(t) + i - 1] != cbuf[i]
+            return false
+        end
+    end
+    return true
+end
+
+"""
+Return the kind of the previous non-trivia span which was inserted.
+
+This is a bit hacky but can be handy on occasion.
+"""
+function peek_behind(stream::ParseStream)
+    for i = length(stream.spans):-1:1
+        s = stream.spans[i]
+        if !istrivia(head(s))
+            return kind(s)
+        end
+    end
+    return K"Nothing"
+end
+
+#-------------------------------------------------------------------------------
+# Stream output interface - the `bump_*` and `emit_*` family of functions
+
 # Bump the next `n` tokens
 # flags and new_kind are applied to any non-trivia tokens
 function _bump_n(stream::ParseStream, n::Integer, flags, new_kind=K"Nothing")
@@ -217,14 +271,16 @@ function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
     if !isnothing(error)
         emit(stream, emark, K"error", TRIVIA_FLAG, error=error)
     end
-    # Return last token location in output if needed for set_flags!
+    # Return last token location in output if needed for reset_token!
     return lastindex(stream.spans)
 end
 
 """
 Bump comments and whitespace tokens preceding the next token
+
+**Skips newlines** by default.  Set skip_newlines=false to avoid that.
 """
-function bump_trivia(stream::ParseStream; skip_newlines=false, error=nothing)
+function bump_trivia(stream::ParseStream; skip_newlines=true, error=nothing)
     emark = position(stream)
     _bump_n(stream, _lookahead_index(stream, 1, skip_newlines) - 1, EMPTY_FLAGS)
     if !isnothing(error)
@@ -233,6 +289,12 @@ function bump_trivia(stream::ParseStream; skip_newlines=false, error=nothing)
     return lastindex(stream.spans)
 end
 
+"""
+Bump an invisible zero-width token into the output
+
+This is useful when surrounding syntax implies the presence of a token.  For
+example, `2x` means `2*x` via the juxtoposition rules.
+"""
 function bump_invisible(stream::ParseStream, kind, flags=EMPTY_FLAGS;
                         error=nothing)
     emit(stream, position(stream), kind, flags, error=error)
@@ -240,12 +302,11 @@ function bump_invisible(stream::ParseStream, kind, flags=EMPTY_FLAGS;
 end
 
 """
-Hack: Reset kind or flags of an existing token in the output stream
+Reset kind or flags of an existing token in the output stream
 
-This is necessary on some occasions when we don't know whether a token will
-have TRIVIA_FLAG set until after consuming more input, or when we need to
-insert a invisible token like core_@doc but aren't yet sure it'll be needed -
-see bump_invisible()
+This is a hack, but necessary on some occasions
+* When some trailing syntax may change the kind or flags of the token
+* When an invisible token might be required - see bump_invisible with K"TOMBSTONE"
 """
 function reset_token!(stream::ParseStream, mark;
                       kind=nothing, flags=nothing)
@@ -256,34 +317,16 @@ function reset_token!(stream::ParseStream, mark;
                                   first_byte(text_span), last_byte(text_span))
 end
 
-#=
-function accept(stream::ParseStream, k::Kind)
-    if peek(stream) != k
-        return false
-    else
-        bump(stream, TRIVIA_FLAG)
-    end
-end
-=#
-
-#=
-function bump(stream::ParseStream, k::Kind, flags=EMPTY_FLAGS)
-    @assert peek(stream) == k
-    bump(stream, flags)
-end
-=#
-
 function Base.position(stream::ParseStream)
     return stream.next_byte
 end
 
 """
-    emit(stream, start_mark, kind, flags = EMPTY_FLAGS; error=nothing)
+    emit(stream, mark, kind, flags = EMPTY_FLAGS; error=nothing)
 
-Emit a new text span into the output which covers source bytes from
-`start_mark` to the end of the most recent token which was `bump()`'ed.
-The `start_mark` of the span should be a previous return value of
-`position()`.
+Emit a new text span into the output which covers source bytes from `mark` to
+the end of the most recent token which was `bump()`'ed. The starting `mark`
+should be a previous return value of `position()`.
 """
 function emit(stream::ParseStream, start_mark::Integer, kind::Kind,
               flags::RawFlags = EMPTY_FLAGS; error=nothing)
@@ -318,6 +361,8 @@ function emit_diagnostic(stream::ParseStream, mark=nothing; error, whitespace=fa
     push!(stream.diagnostics, Diagnostic(text_span, error))
 end
 
+
+#-------------------------------------------------------------------------------
 # Tree construction from the list of text spans held by ParseStream
 #
 # Note that this is largely independent of GreenNode, and could easily be
@@ -367,15 +412,9 @@ function to_raw_tree(st; wrap_toplevel_as_kind=nothing)
     elseif !isnothing(wrap_toplevel_as_kind)
         # Mostly for debugging
         children = [x.node for x in stack]
-        return GreenNode(SyntaxHead(wrap_toplevel_as_kind), children...)
+        return GreenNode(SyntaxHead(wrap_toplevel_as_kind, EMPTY_FLAGS), children...)
     else
         error("Found multiple nodes at top level")
-    end
-end
-
-function show_diagnostics(io::IO, stream::ParseStream, code)
-    for d in stream.diagnostics
-        show_diagnostic(io, d, code)
     end
 end
 
@@ -422,6 +461,26 @@ function ParseState(ps::ParseState; range_colon_enabled=nothing,
         where_enabled === nothing ? ps.where_enabled : where_enabled)
 end
 
+# Functions to change parse state
+
+function with_normal_context(ps::ParseState)
+    f(ParseState(ps,
+                 range_colon_enabled=true,
+                 space_sensitive=false,
+                 where_enabled=false,
+                 for_generator=false,
+                 end_symbol=false,
+                 whitespace_newline=false))
+end
+
+function with_space_sensitive(f::Function, ps::ParseState)
+    f(ParseState(ps,
+                 space_sensitive=true,
+                 whitespace_newline=false))
+end
+
+# Convenient wrappers for ParseStream
+
 function peek(ps::ParseState, n=1; skip_newlines=nothing)
     skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
     peek(ps.stream, n, skip_nl)
@@ -430,6 +489,14 @@ end
 function peek_token(ps::ParseState, n=1; skip_newlines=nothing)
     skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
     peek_token(ps.stream, n, skip_nl)
+end
+
+function peek_equal_to(ps::ParseState, args...)
+    peek_equal_to(ps.stream, args...)
+end
+
+function peek_behind(ps::ParseState)
+    peek_behind(ps.stream)
 end
 
 function bump(ps::ParseState, flags=EMPTY_FLAGS; skip_newlines=nothing, kws...)
