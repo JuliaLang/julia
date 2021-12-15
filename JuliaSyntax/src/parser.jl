@@ -43,6 +43,11 @@ function bumpTODO(ps::ParseState)
     end
 end
 
+#-------------------------------------------------------------------------------
+# Parsing-specific predicates on tokens/kinds
+#
+# All these take either a raw kind or a token.
+
 function is_closing_token(ps::ParseState, k)
     k = kind(k)
     return k in (K"else", K"elseif", K"catch", K"finally",
@@ -55,8 +60,8 @@ function is_non_keyword_closer(k)
     kind(k) in (K",", K")", K"]", K"}", K";", K"EndMarker")
 end
 
-function is_initial_reserved_word(ps::ParseState, t)
-    k = kind(t)
+function is_initial_reserved_word(ps::ParseState, k)
+    k = kind(k)
     is_iresword = k in (
         K"begin", K"while", K"if", K"for", K"try", K"return", K"break",
         K"continue", K"function", K"macro", K"quote", K"let", K"local",
@@ -66,25 +71,55 @@ function is_initial_reserved_word(ps::ParseState, t)
     return is_iresword && !(k == K"begin" && ps.end_symbol)
 end
 
-function is_block_form(t)
-    kind(t) in (K"block", K"quote", K"if", K"for", K"while",
+function is_block_form(k)
+    kind(k) in (K"block", K"quote", K"if", K"for", K"while",
                 K"let", K"function", K"macro", K"abstract",
                 K"primitive", K"struct", K"try", K"module")
 end
 
-function is_syntactic_operator(t)
-    k = kind(t)
+function is_syntactic_operator(k)
+    k = kind(k)
     return k in (K"&&", K"||", K".", K"...", K"->") ||
            (is_prec_assignment(k) && k != K"~")
 end
 
-function is_syntactic_unary_op(t)
-    kind(t) in (K"$", K"&", K"::")
+function is_syntactic_unary_op(k)
+    kind(k) in (K"$", K"&", K"::")
+end
+
+function is_type_operator(k)
+    kind(k) in (K"<:", K">:")
+end
+
+function is_unary_op(k)
+    kind(k) in (
+        K"<:", K">:",  # TODO: dotop disallowed ?
+        K"+", K"-", K"!", K"~", K"¬", K"√", K"∛", K"∜", K"⋆", K"±", K"∓" # dotop allowed
+    )
+end
+
+# Operators which are both unary and binary
+function is_both_unary_and_binary(k)
+    # TODO: Do we need to check dotop as well here?
+    kind(k) in (K"$", K"&", K"~",             # <- dotop disallowed?
+                K"+", K"-", K"⋆", K"±", K"∓") # dotop allowed
+end
+
+# operators handled by parse_unary at the start of an expression
+function is_initial_operator(k)
+    k = kind(k)
+    # TODO(jb): ? should probably not be listed here except for the syntax hack in osutils.jl
+    isoperator(k)                      &&
+    !(k in (K":", K"'", K".'", K"?"))  &&
+    !is_syntactic_unary_op(k)    &&
+    !is_syntactic_operator(k)
 end
 
 # flisp: invalid-identifier?
 function is_valid_identifier(k)
-    # FIXME? flisp also had K"...." disallowed, whatever that's for!
+    k = kind(k)
+    # TODO: flisp also had K"...." disallowed. But I don't know what that's
+    # for! Tokenize doesn't have an equivalent here.
     !(is_syntactic_operator(k) || k in (K"?", K".'"))
 end
 
@@ -226,6 +261,9 @@ end
 
 # parse_eq_star is used where commas are special, for example in an argument list
 #
+# If an `(= x y)` node was emitted, returns the position of that node in the
+# output list so that it can be changed to `(kw x y)` later if necessary.
+#
 # flisp: (define (parse-eq* s)
 function parse_eq_star(ps::ParseState, equals_is_kw=false)
     k = peek(ps)
@@ -234,8 +272,9 @@ function parse_eq_star(ps::ParseState, equals_is_kw=false)
         # optimization: skip checking the whole precedence stack if we have a
         # simple token followed by a common closing token
         bump(ps)
+        return NO_POSITION
     else
-        parse_assignment(ps, parse_pair, equals_is_kw)
+        return parse_assignment(ps, parse_pair, equals_is_kw)
     end
 end
 
@@ -252,7 +291,7 @@ function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
     down(ps)
     k = peek(ps)
     if !is_prec_assignment(k)
-        return
+        return NO_POSITION
     end
     if k == K"~"
         bump(ps)
@@ -265,11 +304,13 @@ function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
             parse_assignment(ps, down, equals_is_kw)
             emit(ps, mark, K"call", INFIX_FLAG)
         end
+        return NO_POSITION
     else
         bump(ps, TRIVIA_FLAG)
         parse_assignment(ps, down, equals_is_kw)
         result_k = (k == K"=" && equals_is_kw) ? K"kw" : k
-        emit(ps, mark, result_k)
+        equals_pos = emit(ps, mark, result_k)
+        return k == K"=" ? equals_pos : NO_POSITION
     end
 end
 
@@ -397,11 +438,11 @@ function parse_comparison(ps::ParseState)
         parse_pipe_lt(ps)
     end
     if n_comparisons == 1
-        if initial_kind in (K"<:", K">:")
+        if is_type_operator(initial_kind)
             # Type comparisons are syntactic
             # x <: y  ==>  (<: x y)
             # x >: y  ==>  (>: x y)
-            reset_token!(ps, op_pos, flags=TRIVIA_FLAG)
+            reset_node!(ps, op_pos, flags=TRIVIA_FLAG)
             emit(ps, mark, initial_kind)
         else
             emit(ps, mark, K"call", INFIX_FLAG)
@@ -651,7 +692,7 @@ end
 # 2x       ==>  (call-i 2 * x)
 # 2(x)     ==>  (call-i 2 * x)
 # (2)(3)x  ==>  (call-i 2 * 3 x)
-# (x-1)y   ==>  (call-i (- x 1) * y)
+# (x-1)y   ==>  (call-i (call-i x - 1) * y)
 #
 # flisp: parse-juxtapose
 function parse_juxtapose(ps::ParseState)
@@ -664,12 +705,14 @@ function parse_juxtapose(ps::ParseState)
         if !is_juxtapose(ps, prev_kind, t)
             break
         end
-        bump_invisible(ps, K"*")
+        if n_terms == 1
+            bump_invisible(ps, K"*")
+        end
         if is_string(prev_kind) || is_string(t)
             # issue #20575
             #
             # "a""b"  ==>  (call-i "a" * (error) "b")
-            # "a"x  ==>  (call-i "a" * (error) x)
+            # "a"x    ==>  (call-i "a" * (error) x)
             bump_invisible(ps, K"error", TRIVIA_FLAG,
                            error="cannot juxtapose string literal")
         end
@@ -685,27 +728,149 @@ function parse_juxtapose(ps::ParseState)
     end
 end
 
-# flisp: (define (maybe-negate op num)
-function maybe_negate(op, num)
-    TODO("maybe_negate unimplemented")
-end
-
-# operators handled by parse-unary at the start of an expression
-
+# Deal with numeric literal prefixes and unary calls
+#
 # flisp: (define (parse-unary s)
 function parse_unary(ps::ParseState)
-    bumpTODO(ps)
-    #TODO("parse_unary unimplemented")
+    mark = position(ps)
+    bump_trivia(ps)
+    k = peek(ps)
+    if !is_initial_operator(k)
+        parse_factor(ps)
+        return
+    end
+    if k in (K"-", K"+")
+        t2 = peek_token(ps, 2)
+        if !t2.had_whitespace && kind(t2) in (K"Integer", K"Float")
+            k3 = peek(ps, 3)
+            if is_prec_power(k3) || k3 in (K"[", K"{")
+                # `[`, `{` (issue #18851) and `^` have higher precedence than
+                # unary negation
+                # -2^x      ==>  (call - (call-i 2 ^ x))
+                # -2[1, 3]  ==>  (call - (ref 2 1 3))
+                bump(ps)
+                parse_factor(ps)
+                emit(ps, mark, K"call")
+            else
+                # We have a signed numeric literal. Glue the operator to the
+                # next token to create a signed literal:
+                # +2    ==>  +2
+                # -2*x  ==>  (call-i -2 * x)
+                bump_glue(ps, kind(t2), EMPTY_FLAGS, 2)
+            end
+            return
+        end
+    end
+    parse_unary_call(ps)
 end
 
-# flisp: (define (fix-syntactic-unary e)
-function fix_syntactic_unary(e)
-    TODO("fix_syntactic_unary unimplemented")
-end
+# Parse calls to unary operators and prefix calls involving arbitrary operators
+# with bracketed arglists (as opposed to infix notation)
+#
+# +a      ==>  (call + a)
+# +(a,b)  ==>  (call + a b)
+#
+# flisp: parse-unary-call
+function parse_unary_call(ps::ParseState)
+    mark = position(ps)
+    op_t = peek_token(ps)
+    op_k = kind(op_t)
+    op_node_kind = is_type_operator(op_k) ? op_k : K"call"
+    op_tok_flags = is_type_operator(op_t) ? TRIVIA_FLAG : EMPTY_FLAGS
+    t2 = peek_token(ps, 2)
+    k2 = kind(t2)
+    if is_closing_token(ps, k2) || k2 in (K"NewlineWs", K"=")
+        if is_dotted(op_t)
+            # standalone dotted operators are parsed as (|.| op)
+            # .+  ==>  (. +)
+            bump_trivia(ps)
+            bump_split(ps, 1,
+                       K".", TRIVIA_FLAG,
+                       op_k, EMPTY_FLAGS)
+            emit(ps, mark, K".")
+        else
+            # return operator by itself, as in
+            # (+)  ==>  +
+            bump(ps)
+        end
+    elseif k2 == K"{" || (!is_unary_op(op_k) && k2 == K"(")
+        # this case is +{T}(x::T) = ...
+        parse_factor(ps)
+    elseif k2 == K"("
+        # Cases like +(a,b) and +(a)
+        #
+        # Bump the operator
+        bump(ps, op_tok_flags)
 
-# flisp: (define (parse-unary-call s op un spc)
-function parse_unary_call(ps::ParseState, op, un, spc)
-    TODO("parse_unary_call unimplemented")
+        # Setup possible whitespace error between operator and (
+        ws_mark = position(ps)
+        bump_trivia(ps)
+        ws_mark_end = position(ps) - 1
+        ws_error_pos = emit(ps, ws_mark, K"TOMBSTONE")
+
+        mark_before_paren = position(ps)
+        bump(ps, TRIVIA_FLAG) # (
+        # There's two tricky parts for unary-prefixed parenthesized expressions
+        # like `+(a,b)`
+        #
+        # 1. The ambiguity between a function call arglist or a block. The
+        #    flisp parser resolves in favor of a block if there's no initial
+        #    commas before semicolons:
+        #
+        #    Function calls:
+        #    +(a,b)   ==>  (call + a b)
+        #    +(a=1,)  ==>  (call + (kw a 1))
+        #
+        #    Not function calls:
+        #    +(a;b)   ==>  (call + (block a b))
+        #    +(a=1)   ==>  (call + (= a 1))
+        #
+        #    However this heuristic fails in some cases:
+        #    +(a;b,c)  ??>  (call + (tuple a (parameters b c)))
+        #
+        # Here we use a simpler rule: if there were any commas, it was a
+        # function call.
+        is_call = false
+        is_block = false
+        parse_brackets(ps, K")") do had_commas,  num_semis, num_subexprs
+            is_call = had_commas
+            is_block = !is_call && num_semis > 0
+            bump_closing_token(ps, K")")
+            return (needs_parameters=is_call,
+                    eq_is_kw_before_semi=is_call,
+                    eq_is_kw_after_semi=is_call)
+        end
+
+        if is_call && t2.had_whitespace
+            reset_node!(ps, ws_error_pos, kind=K"error")
+            emit_diagnostic(ps, ws_mark, ws_mark_end,
+                error="whitespace not allowed between prefix function call and argument list")
+        end
+
+        # 2. The precedence between unary + and any following infix ^ depends
+        #    on whether the parens are a function call or not:
+        #
+        if is_call
+            # Prefix operator call
+            # +(a,b)^2  ==>  (call-i (call + a b) ^ 2)
+            emit(ps, mark, op_node_kind)
+            parse_factor_with_initial_ex(ps, mark)
+        else
+            if is_block
+                emit(ps, mark_before_paren, K"block")
+            end
+            # Not a prefix operator call
+            # +(a)^2    ==>  (call + (call-i ^ a 2))
+            parse_factor_with_initial_ex(ps, mark_before_paren)
+            emit(ps, mark, op_node_kind)
+        end
+    elseif !is_unary_op(op_k)
+        emit_diagnostic(error="expected a unary operator")
+    else
+        bump(ps, op_tok_flags)
+        parse_unary(ps)
+        emit(ps, mark, op_node_kind)
+    end
 end
 
 # handle ^ and .^
@@ -714,8 +879,6 @@ end
 #
 # flisp: parse-factor
 function parse_factor(ps::ParseState)
-    # FIXME!!
-    bumpTODO(ps) ; return
     mark = position(ps)
     parse_unary_prefix(ps)
     parse_factor_with_initial_ex(ps, mark)
@@ -723,9 +886,9 @@ end
 
 # flisp: parse-factor-with-initial-ex
 function parse_factor_with_initial_ex(ps::ParseState, mark)
-    TODO("parse_factor_with_initial_ex unimplemented")
-    parse_call_with_initial_ex(ps, mark)
-    parse_decl_with_initial_ex(ps, mark)
+    # FIXME
+    #parse_call_with_initial_ex(ps, mark)
+    #parse_decl_with_initial_ex(ps, mark)
     if is_prec_power(peek(ps))
         bump(ps)
         parse_factor_after(ps)
@@ -850,7 +1013,7 @@ end
 # flisp: disallow-space
 function bump_disallowed_space(ps)
     if peek_token(ps).had_whitespace
-        bump_trivia(ps, skip_newlines=false, error="whitespace is disallowed here")
+        bump_trivia(ps, skip_newlines=false, error="whitespace is not allowed here")
     end
 end
 
@@ -1046,77 +1209,19 @@ end
 
 # like parse-arglist, but with `for` parsed as a generator
 #
-# flisp: (define (parse-call-arglist s closer)
+# flisp: parse-call-arglist
 function parse_call_arglist(ps::ParseState, closer)
-    parse_arglist(ParseState(ps, for_generator=true), closer)
+    ps = ParseState(ps, for_generator=true)
+
+    parse_brackets(ps, closer) do _, _, _
+        bump_closing_token(ps, closer)
+        return (needs_parameters=true,
+                eq_is_kw_before_semi=true,
+                eq_is_kw_after_semi=true)
+    end
 end
 
-# Handle function call argument list, or any comma-delimited list.
-# * an extra comma at the end is allowed
-# * expressions after a ; are enclosed in (parameters ...)
-# * an expression followed by ... becomes (... x)
-#
-# flisp: parse-arglist
-function parse_arglist(ps0::ParseState, closing_kind, equals_is_kw=true)
-    ps = ParseState(ps0, range_colon_enabled=true,
-                    space_sensitive=false,
-                    where_enabled=true,
-                    whitespace_newline=true)
-    params_mark = 0
-    while true
-        bump_trivia(ps)
-        k = peek(ps)
-        if k == closing_kind
-            break
-        elseif k == K";"
-            # Start of "parameters" list
-            # a, b; c d)       ==>  a b (parameters c d)
-            if params_mark != 0
-                # a, b; c d; e f)  ==>  a b (parameters c d (parameters e f))
-                TODO("nested parameters")
-            end
-            params_mark = position(ps)
-            equals_is_kw = true
-            bump(ps, TRIVIA_FLAG)
-            bump_trivia(ps)
-        else
-            prefix_mark = position(ps)
-            parse_eq_star(ps, equals_is_kw)
-            t = peek_token(ps, skip_newlines=true)
-            k = kind(t)
-            bump_trivia(ps)  # FIXME! Handle EndMarker in all such bump_trivia()'s
-            if k == K","
-                bump(ps, TRIVIA_FLAG)
-            elseif k == K";" || k == closing_kind
-                # Handled above
-                continue
-            elseif k == K"for"
-                if !t.had_whitespace
-                    bump_invisible(ps, K"error",
-                                   error="expected whitespace before for")
-                end
-                bump(ps, TRIVIA_FLAG)
-                parse_generator(ps, prefix_mark)
-            else
-                k_str = untokenize(k)
-                ck_str = untokenize(closing_kind)
-                if k in (K"]", K"}")
-                    emit_diagnostic(ps, error="unexpected `$k_str` in argument list")
-                else
-                    emit_diagnostic(ps, error="missing comma or $ck_str in argument list")
-                end
-                # Recovery done after loop
-                break
-            end
-        end
-    end
-    if params_mark != 0
-        emit(ps, params_mark, K"parameters")
-    end
-    bump_closing_token(ps, closing_kind)
-end
-
-# flisp: (define (parse-vect s first closer)
+# flisp: parse-vect
 function parse_vect(ps::ParseState, first, closer)
     TODO("parse_vect unimplemented")
 end
@@ -1163,45 +1268,7 @@ function parse_paren(ps::ParseState, check_identifiers=true)
 end
 
 # Parse un-prefixed parenthesized syntax. This is hard because parentheses are
-# *very* overloaded!  Possible forms:
-#
-# Parentheses used for grouping
-# (a * b)  ==>  (call * a b)
-# (a=1)    ==>  (= a 1)
-# (x)      ==>  (x)
-#
-# Block syntax
-# (a=1; b=2)  ==>  (block (= a 1) (= b 2))
-# (a=1;)      ==>  (block (= a 1))
-# (;;)        ==>  (block)
-#
-# Tuple syntax
-# (a,)     ==>  (tuple a)
-# (a,b)    ==>  (tuple a b)
-#
-# Named tuple syntax
-# (a=1, b=2)  ==>  (tuple (= a 1) (= b 2))
-# (; a=1)     ==>  (tuple (parameters (kw a 1)))
-# (;)         ==>  (tuple (parameters))
-#
-# Generators
-# (i for i in 1:10)
-#
-# Frankentuples and nested parameters
-# (; a=1; b=2)  ==> (tuple (parameters (kw a 1) (parameters (kw b 2))))
-# (a=1, b=2; c=3, d=4) ==> (tuple (= a 1) (= b 2) (parameters (kw c 3) (parameters (kw d 4))))
-#
-# The worst ambiguity is with messes like the following:
-# (a;b=1;c;d)     => a block with (= b 1) vs
-# (a;b=1;c;d, e)  => nested parameters with (kw b 1)
-#
-# This is such a mess (and furthermore, a largely invalid syntactic
-# edgecase)... maybe we should just assume it's a block and deal with it via
-# backtracking?
-#
-# To add to this, we've got to deal with prefixed parenthesized syntax...
-#
-# Return true iff this isn't just a parenthesized expr.
+# *very* overloaded!
 #
 # flisp: parse-paren-
 function parse_paren_(ps0::ParseState, check_identifiers)
@@ -1218,7 +1285,6 @@ function parse_paren_(ps0::ParseState, check_identifiers)
         # ()  ==>  (tuple)
         bump(ps, TRIVIA_FLAG)
         emit(ps, mark, K"tuple")
-        return true
     elseif is_syntactic_operator(k)
         # allow :(=) etc in unchecked contexts, eg quotes
         # :(=)  ==>  (quote =)
@@ -1228,108 +1294,163 @@ function parse_paren_(ps0::ParseState, check_identifiers)
             bump(ps)
         end
         bump_closing_token(ps, K")")
-        return false
     elseif !check_identifiers && k == K"::" && peek(ps, 2, skip_newlines=true) == K")"
         # allow :(::) as a special case
         # :(::)   ==>  (quote ::)
         bump(ps)
         bump(ps, TRIVIA_FLAG, skip_newlines=true)
-        return false
-    elseif k == K";"
-        # Tuples and empty blocks
-        if peek(ps, 2) == K";"
-            # (;;)  ==>  (block)
-            parse_paren_block(ps)
-            bump_closing_token(ps, K")")
-            emit(ps, mark, K"block")
-            return false
-        end
-        # Named tuple
-        # (;)       ==>  (tuple (parameters))
-        # (; a=1)   ==>  (tuple (parameters (kw a 1)))
-        parse_arglist(ps, K")")
-        # FIXME Nested parameters
-        # (; a=1; b=2)
-        emit(ps, mark, K"tuple")
-        return true
     else
-        # Here we parse the first subexpression separately, so
-        # we can look for a comma to see if it's a tuple.
-        # This lets us distinguish (x) from (x,)
-        parse_eq_star(ps)
-        k = peek(ps)
-        if k == K")"
-            # value in parentheses
-            # (x)  ==>  x
-            bump(ps, TRIVIA_FLAG)
-            # FIXME: return true if it has the ... suffix :-/
-            return false
-        elseif k == K","
-            # Tuple syntax
-            # (x,)       ==>  (tuple x)
-            # (x,y)      ==>  (tuple x y)
-            # (x=1,y=2)  ==>  (tuple (= x 1) (y 2))
-            # Frankentuple syntax
+        # Deal with all other cases of tuple or block syntax via the generic
+        # parse_brackets
+        initial_semi = peek(ps) == K";"
+        is_tuple = false
+        is_block = false
+        parse_brackets(ps, K")") do had_commas, num_semis, num_subexprs
+            is_tuple = had_commas ||
+                       (initial_semi && (num_semis == 1 || num_subexprs > 0))
+            is_block = num_semis > 0
+            bump_closing_token(ps, K")")
+            return (needs_parameters=is_tuple,
+                    eq_is_kw_before_semi=false,
+                    eq_is_kw_after_semi=is_tuple)
+        end
+        if is_tuple
+            # Tuple syntax with commas
+            # (x,)        ==>  (tuple x)
+            # (x,y)       ==>  (tuple x y)
+            # (x=1, y=2)  ==>  (tuple (= x 1) (= y 2))
+            #
+            # Named tuple with initial semicolon
+            # (;)         ==>  (tuple (parameters))
+            # (; a=1)     ==>  (tuple (parameters (kw a 1)))
+            #
+            # Extra credit: nested parameters and frankentuples
+            # (; a=1; b=2)    ==> (tuple (parameters (kw a 1) (parameters (kw b 2))))
+            # (a; b; c,d)     ==> (tuple a (parameters b (parameters c d)))
             # (a=1, b=2; c=3) ==> (tuple (= a 1) (= b 2) (parameters (kw c 3)))
-            bump(ps, TRIVIA_FLAG)
-            parse_arglist(ps, K")", false)
             emit(ps, mark, K"tuple")
-            return false
-        elseif k == K";"
-            # In normal valid Julia code this is block syntax
-            # (a;b;;c) ==> (block a b c)
-            parse_paren_block(ps)
-            bump_closing_token(ps, K")")
-            # TODO: 
-            # consider `(x...; ` the start of an arglist, since it's not useful as a block
+        elseif is_block
+            # Blocks
+            # (;;)        ==>  (block)
+            # (a=1;)      ==>  (block (= a 1))
+            # (a;b;;c)    ==>  (block a b c)
+            # (a=1; b=2)  ==>  (block (= a 1) (= b 2))
             emit(ps, mark, K"block")
-        elseif k == K"for"
-            if !peek_token(ps).had_whitespace
-                bump_invisible(ps, K"error",
-                               error="expected whitespace before for")
-            end
-            bump(ps, TRIVIA_FLAG)
-            parse_generator(ps, after_paren_mark)
-            bump_closing_token(ps, K")")
-            return false
-        else
-            bump_closing_token(ps, K")")
-            return true
         end
     end
 end
 
-# Parse (the remainder of) a parenthesized block
-# (a;b;c) ==> (block a b c)
-# (;;) ==> (block)
+# Handle bracketed syntax inside any of () [] or {} where there's a mixture
+# of commas and semicolon delimiters.
 #
-# Also parse nested parameters lists in the same way that the flisp parser
-# does (TODO)
-# (a=1; b=2; c=3,d=4) ==> (tuple (= a 1) (parameters (kw b 2) (parameters (kw c 3) (kw d 4))))
-function parse_paren_block(ps)
-    need_delim = true
+# This is hard because there's various ambiguities depending on context.
+# In general (X; Y) is difficult when X and Y are subexpressions possibly
+# containing `,` and `=`.
+#
+# For example, (a=1; b=2) could be seen to parse four different ways!
+#
+# Function args:   (kw a 1) (parameters (kw b 2))
+# Tuple-like:      (=  a 1) (parameters (kw b 2)) 
+# Block:           (=  a 1)             (=  b 2)  
+# [] vect-like:    (=  a 1) (parameters (=  b 2)) 
+#
+# Expressions (X; Y; Z) with more semicolons are also allowed by the flisp
+# parser and generally parse as nested parameters blocks. This is invalid Julia
+# syntax so the parse tree is pretty strange in these cases!  Some macros
+# probably use it though.  Example:
+#
+# (a,b=1; c,d=2; e,f=3)  ==>  (tuple a (= b 1) (parameters c (kw d 2) (parameters e (kw f 3))
+#
+# Deciding which of these representations to use depends on both the prefix
+# context and the contained expressions. To distinguish between blocks vs
+# tuples we use the presence of `,` within the `;`-delimited sections: If
+# there's commas, it's a tuple, otherwise a block.
+#
+function parse_brackets(after_parse::Function,
+                        ps::ParseState, closing_kind)
+    ps = ParseState(ps, range_colon_enabled=true,
+                    space_sensitive=false,
+                    where_enabled=true,
+                    whitespace_newline=true)
+    params_marks = Int[]
+    eq_positions = Int[]
+    last_eq_before_semi = 0
+    num_subexprs = 0
+    num_semis = 0
+    had_commas = false
     while true
+        bump_trivia(ps)
         k = peek(ps)
-        if k == K";"
-            bump(ps, TRIVIA_FLAG)
-            need_delim = false
-            continue
-        elseif is_closing_token(ps, k)
+        if k == closing_kind
             break
-        elseif k == K","
-            # (a;b;c,d) ==> (tuple a (parameters b (parameters c d)))
-            #
-            # It's not clear this nested representation was an
-            # intentional choice in the flisp parser. It seems kind of
-            # awful!
-            TODO("Backtrack and parse as a nested parameters block")
-            break
-        else
-            if need_delim
-                break # ) or error; we'll deal with it in the caller.
+        elseif k == K";"
+            # Start of "parameters" list
+            # a, b; c d  ==>  a b (parameters c d)
+            push!(params_marks, position(ps))
+            if num_semis == 0
+                last_eq_before_semi = length(eq_positions)
             end
-            parse_eq_star(ps)
-            need_delim = true
+            num_semis += 1
+            bump(ps, TRIVIA_FLAG)
+            bump_trivia(ps)
+        else
+            num_subexprs += 1
+            mark = position(ps)
+            eq_pos = parse_eq_star(ps)
+            if eq_pos != NO_POSITION
+                push!(eq_positions, eq_pos)
+            end
+            t = peek_token(ps, skip_newlines=true)
+            k = kind(t)
+            bump_trivia(ps)
+            if k == K","
+                had_commas = true
+                bump(ps, TRIVIA_FLAG)
+            elseif k == K";" || k == closing_kind
+                # Handled above
+                continue
+            elseif k == K"for"
+                # Generator syntax
+                # (i for i in 1:10)
+                if !t.had_whitespace
+                    bump_invisible(ps, K"error",
+                                   error="expected whitespace before for")
+                end
+                bump(ps, TRIVIA_FLAG)
+                parse_generator(ps, mark)
+            else
+                k_str = untokenize(k)
+                ck_str = untokenize(closing_kind)
+                if is_closing_token(ps, k)
+                    emit_diagnostic(ps, error="unexpected `$k_str` in bracketed list")
+                else
+                    emit_diagnostic(ps, error="missing comma or $ck_str in bracketed list")
+                end
+                # Recovery done after loop
+                break
+            end
+        end
+    end
+    actions = after_parse(had_commas, num_semis, num_subexprs)
+    if num_semis == 0
+        last_eq_before_semi = length(eq_positions)
+    end
+    # Turn any K"=" into K"kw" as necessary
+    if actions.eq_is_kw_before_semi
+        # f(a=1)   ==>   (call f (kw a 1))
+        for i=1:last_eq_before_semi
+            reset_node!(ps, eq_positions[i], kind=K"kw")
+        end
+    end
+    if actions.eq_is_kw_after_semi
+        for i = last_eq_before_semi+1:length(eq_positions)
+            reset_node!(ps, eq_positions[i], kind=K"kw")
+        end
+    end
+    # Emit nested parameter nodes if necessary
+    if actions.needs_parameters
+        for mark in Iterators.reverse(params_marks)
+            emit(ps, mark, K"parameters")
         end
     end
 end
@@ -1658,7 +1779,7 @@ function parse_docstring(ps::ParseState, down=parse_eq)
             end
         end
         if is_doc
-            reset_token!(ps, atdoc_mark, kind=K"core_@doc")
+            reset_node!(ps, atdoc_mark, kind=K"core_@doc")
             down(ps)
             emit(ps, mark, K"macrocall")
         end

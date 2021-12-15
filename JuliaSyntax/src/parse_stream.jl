@@ -147,6 +147,10 @@ function _buffer_lookahead_tokens(stream::ParseStream)
     end
 end
 
+# Find the index of the first nontrivia token in the lookahead buffer.
+#
+# TODO: Store this as part of _buffer_lookahead_tokens to avoid redoing this
+# work all the time!
 function _lookahead_index(stream::ParseStream, n::Integer, skip_newlines::Bool)
     i = 1
     while true
@@ -302,20 +306,53 @@ function bump_invisible(stream::ParseStream, kind, flags=EMPTY_FLAGS;
 end
 
 """
-Reset kind or flags of an existing token in the output stream
+Bump several tokens, gluing them together into a single token
+
+This is for use in special circumstances where the parser needs to resolve
+lexing ambiguities. There's no special whitespace handling — bump any
+whitespace if necessary with bump_trivia.
+"""
+function bump_glue(stream::ParseStream, kind, flags, num_tokens)
+    span = TaggedRange(SyntaxHead(kind, flags),
+                       first_byte(stream.lookahead[1]),
+                       last_byte(stream.lookahead[num_tokens]))
+    Base._deletebeg!(stream.lookahead, num_tokens)
+    push!(stream.spans, span)
+    return lastindex(stream.spans)
+end
+
+"""
+Bump a token, splitting it into two pieces.
+
+Wow, this is a hack! It helps resolves the occasional lexing ambiguities. For
+example whether .+ should be a single token or a composite (. +)
+"""
+function bump_split(stream::ParseStream, num_bytes, kind1, flags1, kind2, flags2)
+    tok = popfirst!(stream.lookahead)
+    push!(stream.spans, TaggedRange(SyntaxHead(kind1, flags1),
+                                    first_byte(tok), first_byte(tok)+num_bytes-1))
+    push!(stream.spans, TaggedRange(SyntaxHead(kind2, flags2),
+                                    first_byte(tok)+num_bytes, last_byte(tok)))
+    nothing
+end
+
+"""
+Reset kind or flags of an existing node in the output stream
 
 This is a hack, but necessary on some occasions
 * When some trailing syntax may change the kind or flags of the token
 * When an invisible token might be required - see bump_invisible with K"TOMBSTONE"
 """
-function reset_token!(stream::ParseStream, mark;
-                      kind=nothing, flags=nothing)
-    text_span = stream.spans[mark]
-    k = isnothing(kind) ? (@__MODULE__).kind(text_span) : kind
+function reset_node!(stream::ParseStream, omark;
+                     kind=nothing, flags=nothing)
+    text_span = stream.spans[omark]
+    k = isnothing(kind)  ? (@__MODULE__).kind(text_span)  : kind
     f = isnothing(flags) ? (@__MODULE__).flags(text_span) : flags
-    stream.spans[mark] = TaggedRange(SyntaxHead(k, f),
-                                  first_byte(text_span), last_byte(text_span))
+    stream.spans[omark] = TaggedRange(SyntaxHead(k, f),
+                                      first_byte(text_span), last_byte(text_span))
 end
+
+const NO_POSITION = 0
 
 function Base.position(stream::ParseStream)
     return stream.next_byte
@@ -335,7 +372,7 @@ function emit(stream::ParseStream, start_mark::Integer, kind::Kind,
         push!(stream.diagnostics, Diagnostic(text_span, error))
     end
     push!(stream.spans, text_span)
-    return nothing
+    return lastindex(stream.spans)
 end
 
 """
@@ -344,7 +381,8 @@ Emit a diagnostic at the position of the next token
 If `whitespace` is true, the diagnostic is positioned on the whitespace before
 the next token. Otherwise it's positioned at the next token as returned by `peek()`.
 """
-function emit_diagnostic(stream::ParseStream, mark=nothing; error, whitespace=false)
+function emit_diagnostic(stream::ParseStream, mark=nothing, end_mark=nothing;
+                         error, whitespace=false)
     i = _lookahead_index(stream, 1, true)
     begin_tok_i = i
     end_tok_i = i
@@ -355,10 +393,11 @@ function emit_diagnostic(stream::ParseStream, mark=nothing; error, whitespace=fa
         end_tok_i = is_whitespace(stream.lookahead[i]) ? i : max(1, i-1)
     end
     mark = isnothing(mark) ? first_byte(stream.lookahead[begin_tok_i]) : mark
-    err_end = last_byte(stream.lookahead[end_tok_i])
+    end_mark = isnothing(end_mark) ? last_byte(stream.lookahead[end_tok_i]) : end_mark
     # It's a bit weird to require supplying a SyntaxHead here...
-    text_span = TaggedRange(SyntaxHead(K"error", EMPTY_FLAGS), mark, err_end)
+    text_span = TaggedRange(SyntaxHead(K"error", EMPTY_FLAGS), mark, end_mark)
     push!(stream.diagnostics, Diagnostic(text_span, error))
+    return nothing
 end
 
 
@@ -508,24 +547,20 @@ function bump_trivia(ps::ParseState, args...; kws...)
     bump_trivia(ps.stream, args...; kws...)
 end
 
-"""
-Bump a new zero-width "invisible" token at the current stream position. These
-can be useful in several situations.
-
-When a token is implied but not present in the source text:
-* Implicit multiplication - the * is invisible
-  `2x  ==>  (call 2 * x)`
-* Docstrings - the macro name is invisible
-  `"doc" foo() = 1   ==>  (macrocall (core @doc) . (= (call foo) 1))`
-* Big integer literals - again, an invisible macro name
-  `11111111111111111111  ==>  (macrocall (core @int128_str) . 11111111111111111111)`
-"""
 function bump_invisible(ps::ParseState, args...; kws...)
     bump_invisible(ps.stream, args...; kws...)
 end
 
-function reset_token!(ps::ParseState, args...; kws...)
-    reset_token!(ps.stream, args...; kws...)
+function bump_glue(ps::ParseState, args...; kws...)
+    bump_glue(ps.stream, args...; kws...)
+end
+
+function bump_split(ps::ParseState, args...; kws...)
+    bump_split(ps.stream, args...; kws...)
+end
+
+function reset_node!(ps::ParseState, args...; kws...)
+    reset_node!(ps.stream, args...; kws...)
 end
 
 function Base.position(ps::ParseState, args...)

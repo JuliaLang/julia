@@ -60,13 +60,6 @@ is_prec_pipe_gt(t)     = kind(t) == K"|>"
 end
 =#
 
-# Operators which are boty unary and binary
-function is_both_unary_and_binary(t)
-    # TODO: Do we need to check dotop as well here?
-    kind(t) in (K"$", K"&", K"~",             # <- dotop disallowed?
-                K"+", K"-", K"⋆", K"±", K"∓") # dotop allowed
-end
-
 function is_number(t)
     kind(t) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float")
 end
