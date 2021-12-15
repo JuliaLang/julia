@@ -608,14 +608,6 @@ static int num_threads_bound(void) JL_NOTSAFEPOINT
     int err = uv_thread_getaffinity(&tid, cpumask, masksize);
     if (err) {
         free(cpumask);
-#ifdef _OS_WINDOWS_
-// On windows, it seems like this can fail due to access right, presumably
-// because `uv_thread_getaffinity` calls `SetThreadAffinityMask`.
-// TODO: Use `GetProcessAffinityMask` directly?
-        if (err == UV_EBADF) {
-            return INT_MAX;
-        }
-#endif
         jl_safe_printf("WARNING: failed to get thread affinity (%s %d)\n", uv_err_name(err),
                        err);
         return INT_MAX;
