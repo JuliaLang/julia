@@ -398,6 +398,14 @@ false
 ```
 """
 function allunique(C)
+    if haslength(C)
+        length(C) < 2 && return true
+        length(C) < 32 && return _indexed_allunique(collect(C))
+    end
+    return _hashed_allunique(C)
+end
+
+function _hashed_allunique(C)
     seen = Set{eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
@@ -420,35 +428,31 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
-function allunique(A::AbstractArray)
-    if length(A) < 2
-        return true
-    elseif length(A) < 32 && A isa StridedArray  # then linear search is certainly faster
-        iter = eachindex(A)
-        I = iterate(iter)
-        while I !== nothing
-            i, s = I
-            a = A[i]
-            for j in Iterators.rest(iter, s)
-                isequal(a, @inbounds A[j]) && return false
-            end
-            I = iterate(iter, s)
+allunique(A::StridedArray) = length(A) < 32 ? _indexed_allunique(A) : _hashed_allunique(A)
+
+function _indexed_allunique(A)
+    length(A) < 2 && return true
+    iter = eachindex(A)
+    I = iterate(iter)
+    while I !== nothing
+        i, s = I
+        a = A[i]
+        for j in Iterators.rest(iter, s)
+            isequal(a, @inbounds A[j]) && return false
         end
-        return true
-    else
-        invoke(allunique, Tuple{Any}, A)
+        I = iterate(iter, s)
     end
+    return true
 end
 
 function allunique(t::Tuple)
+    length(t) < 32 || return _hashed_allunique(t)
     a = afoldl(true, tail(t)...) do b, x
         b & !isequal(first(t), x)
     end
-    a && allunique(tail(t))
+    return a && allunique(tail(t))
 end
 allunique(t::Tuple{}) = true
-allunique(t::Any32) = invoke(allunique, Tuple{Any}, t)
-
 
 """
     allequal(itr) -> Bool
