@@ -812,10 +812,6 @@ Dict([
 
 "END_OPS" => Ts.end_ops
 
-# Cute synonyms (too cute?
-# " "      => Ts.WHITESPACE
-# "\n"     => Ts.NEWLINE_WS
-
 "BEGIN_INVISIBLE_TOKENS" => Ts.begin_invisible_tokens
 "TOMBSTONE"          =>  Ts.TOMBSTONE
 "core_@doc"          =>  Ts.CORE_AT_DOC
@@ -823,6 +819,7 @@ Dict([
 "core_@int128_str"   =>  Ts.CORE_AT_INT128_STR
 "core_@uint128_str"  =>  Ts.CORE_AT_UINT128_STR
 "core_@big_str"      =>  Ts.CORE_AT_BIG_STR
+"__dot__"            =>  Ts.__DOT__
 "END_INVISIBLE_TOKENS"   => Ts.end_invisible_tokens
 
 # Our custom syntax tokens
@@ -833,6 +830,8 @@ Dict([
 "curly"                =>  Ts.CURLY
 "string"               =>  Ts.STRING_INTERP
 "macrocall"            =>  Ts.MACROCALL
+"kw"                   =>  Ts.KW              # the = in f(a=1)
+"parameters"           =>  Ts.PARAMETERS      # the list after ; in f(; a=1)
 "toplevel"             =>  Ts.TOPLEVEL
 "tuple"                =>  Ts.TUPLE
 "ref"                  =>  Ts.REF
@@ -866,7 +865,7 @@ for kw in split("""abstract baremodule begin break catch const
                    macro module mutable new outer primitive quote
                    return struct try type using while
 
-                   block call comparison curly string macrocall
+                   block call comparison curly string macrocall kw parameters
                    toplevel tuple ref vect braces bracescat hcat
                    vcat ncat typed_hcat typed_vcat typed_ncat generator
                    flatten comprehension typed_comprehension

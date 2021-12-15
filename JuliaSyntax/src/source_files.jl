@@ -25,7 +25,7 @@ function SourceFile(code::AbstractString; filename=nothing)
 end
 
 # Get line number of the given byte within the code
-function line_number(source::SourceFile, byte_index)
+function source_line(source::SourceFile, byte_index)
     searchsortedlast(source.line_starts, byte_index)
 end
 
@@ -41,6 +41,10 @@ function source_location(source::SourceFile, byte_index)
         column += 1
     end
     line, column
+end
+
+function source_location(::Type{LineNumberNode}, source::SourceFile, byte_index)
+    LineNumberNode(source_line(source, byte_index), source.filename)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", source::SourceFile)

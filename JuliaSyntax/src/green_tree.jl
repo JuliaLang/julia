@@ -63,6 +63,8 @@ span(node::GreenNode)        = node.span
 head(node::GreenNode)        = node.head
 
 # Predicates
+#
+# FIXME: All predicates should be consistently named, either with istrivia or is_trivia.
 istrivia(node::GreenNode) = istrivia(node.head)
 iserror(node::GreenNode)  = iserror(node.head)
 
