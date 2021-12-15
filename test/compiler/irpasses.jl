@@ -70,7 +70,7 @@ end
 # Tests for SROA
 
 import Core.Compiler: argextype, singleton_type
-const EMPTY_SPTYPES = Core.Compiler.EMPTY_SLOTTYPES
+const EMPTY_SPTYPES = Any[]
 
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
@@ -147,7 +147,6 @@ let src = code_typed1((Bool,)) do cond
     end
     @test !any(isnew, src.code)
 end
-# FIXME to handle this case, we need a more strong alias analysis
 let src = code_typed1((Bool,)) do cond
         r = Ref{Any}()
         if cond
@@ -157,7 +156,22 @@ let src = code_typed1((Bool,)) do cond
         end
         return r[]
     end
-    @test_broken !any(isnew, src.code)
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Bool,Bool,Any,Any,Any)) do c1, c2, x, y, z
+        r = Ref{Any}()
+        if c1
+            if c2
+                r[] = x
+            else
+                r[] = y
+            end
+        else
+            r[] = z
+        end
+        return r[]
+    end
+    @test !any(isnew, src.code)
 end
 let src = code_typed1((Bool,)) do cond
         r = Ref{Any}()
@@ -167,6 +181,20 @@ let src = code_typed1((Bool,)) do cond
         return r[]
     end
     # N.B. `r` should be allocated since `cond` might be `false` and then it will be thrown
+    @test any(isnew, src.code)
+end
+let src = code_typed1((Bool,Bool,Any,Any)) do c1, c2, x, y
+        r = Ref{Any}()
+        if c1
+            if c2
+                r[] = x
+            end
+        else
+            r[] = y
+        end
+        return r[]
+    end
+    # N.B. `r` should be allocated since `c2` might be `false` and then it will be thrown
     @test any(isnew, src.code)
 end
 
@@ -199,16 +227,50 @@ let src = code_typed1((Any,Any,Any)) do x, y, z
         x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=y=# Core.Argument(4)]
     end
 end
-# FIXME our analysis isn't yet so powerful at this moment, e.g. it can't handle nested mutable objects
+
+# FIXME our analysis isn't yet so powerful at this moment: may be unable to handle nested objects well
+# OK: mutable(immutable(...)) case
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        t   = (xyz,)
+        v = t[1].x
+        v, v, v
+    end
+    @test !any(isnew, src.code)
+end
 let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz = MutableXYZ(x, y, z)
         outer = ImmutableOuter(xyz, xyz, xyz)
         outer.x.x, outer.y.y, outer.z.z
     end
-    @test_broken !any(isnew, src.code)
+    @test !any(isnew, src.code)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=y=# Core.Argument(4)]
+    end
 end
+let # this is a simple end to end test case, which demonstrates allocation elimination
+    # by handling `mutable[RefValue{String}](immutable[Tuple](...))` case correctly
+    # NOTE this test case isn't so robust and might be subject to future changes of the broadcasting implementation,
+    # in that case you don't really need to stick to keeping this test case around
+    simple_sroa(s) = broadcast(identity, Ref(s))
+    s = Base.inferencebarrier("julia")::String
+    simple_sroa(s)
+    # NOTE don't hard-code `"julia"` in `@allocated` clause and make sure to execute the
+    # compiled code for `simple_sroa`, otherwise everything can be folded even without SROA
+    @test @allocated(simple_sroa(s)) == 0
+end
+# FIXME: immutable(mutable(...)) case
 let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz = ImmutableXYZ(x, y, z)
+        outer = MutableOuter(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test_broken !any(isnew, src.code)
+end
+# FIXME: mutable(mutable(...)) case
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
         outer = MutableOuter(xyz, xyz, xyz)
         outer.x.x, outer.y.y, outer.z.z
     end
@@ -565,7 +627,7 @@ let # `sroa_pass!` should work with constant globals
     end
     @test !any(src.code) do @nospecialize(stmt)
         Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) == typeof(getfield)
     end
     @test !any(src.code) do @nospecialize(stmt)
@@ -583,7 +645,7 @@ let # `sroa_pass!` should work with constant globals
     end
     @test !any(src.code) do @nospecialize(stmt)
         Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) == typeof(getfield)
     end
     @test !any(src.code) do @nospecialize(stmt)
@@ -606,7 +668,39 @@ let
     # eliminate `typeassert(x2.x, Foo)`
     @test all(src.code) do @nospecialize stmt
         Meta.isexpr(stmt, :call) || return true
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) !== typeof(typeassert)
     end
+end
+
+let
+    # Test for https://github.com/JuliaLang/julia/issues/43402
+    # Ensure that structs required not used outside of the ccall,
+    # still get listed in the ccall_preserves
+
+    src = @eval Module() begin
+        @inline function effectful()
+            s1 = Ref{Csize_t}()
+            s2 = Ref{Csize_t}()
+            ccall(:some_ccall, Cvoid,
+                  (Ref{Csize_t},Ref{Csize_t}),
+                  s1, s2)
+            return s1[], s2[]
+        end
+
+        code_typed() do
+            s1, s2 = effectful()
+            return s1
+        end |> only |> first
+    end
+
+    refs = map(Core.SSAValue, findall(x->x isa Expr && x.head == :new, src.code))
+    some_ccall = findfirst(x -> x isa Expr && x.head == :foreigncall && x.args[1] == :(:some_ccall), src.code)
+    @assert some_ccall !== nothing
+    stmt = src.code[some_ccall]
+    nccallargs = length(stmt.args[3]::Core.SimpleVector)
+    preserves = stmt.args[6+nccallargs:end]
+    @test length(refs) == 2
+    @test length(preserves) == 2
+    @test all(alloc -> alloc in preserves, refs)
 end

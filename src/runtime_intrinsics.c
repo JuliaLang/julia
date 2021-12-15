@@ -15,7 +15,9 @@
 const unsigned int host_char_bit = 8;
 
 // float16 intrinsics
-// TODO: use LLVM's compiler-rt
+// TODO: use LLVM's compiler-rt on all platforms (Xcode already links compiler-rt)
+
+#if !defined(_OS_DARWIN_)
 
 static inline float half_to_float(uint16_t ival) JL_NOTSAFEPOINT
 {
@@ -185,8 +187,6 @@ static inline uint16_t float_to_half(float param) JL_NOTSAFEPOINT
     }
     return h;
 }
-
-#if !defined(_OS_DARWIN_)   // xcode already links compiler-rt
 
 JL_DLLEXPORT float __gnu_h2f_ieee(uint16_t param)
 {
@@ -451,7 +451,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
 JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym)
 {
     JL_TYPECHK(fence, symbol, order_sym);
-    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 0, 0);
+    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 1, 1);
     if (order > jl_memory_order_monotonic)
         jl_fence();
     return jl_nothing;
@@ -1348,4 +1348,11 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
 {
     JL_TYPECHK(arraylen, array, a);
     return jl_box_long(jl_array_len((jl_array_t*)a));
+}
+
+JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
+{
+    JL_TYPECHK(have_fma, datatype, typ);
+    // TODO: run-time feature check?
+    return jl_false;
 }

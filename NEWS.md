@@ -25,6 +25,9 @@ Language changes
 * `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
   i.e. `@time "Evaluating foo" foo()` ([#42431])
 * New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
+* Iterating an `Iterators.Reverse` now falls back on reversing the eachindex interator, if possible ([#43110]).
+* Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
+  to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -67,6 +70,7 @@ New library features
 * `@testset foo()` can now be used to create a test set from a given function. The name of the test set
   is the name of the called function. The called function can contain `@test` and other `@testset`
   definitions, including to other function calls, while recording all intermediate test results. ([#42518])
+* Keys with value `nothing` are now removed from the environment in `addenv` ([#43271]).
 
 Standard library changes
 ------------------------
@@ -87,6 +91,11 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
+* The BLAS submodule now supports the level-2 BLAS subroutine `spr!` ([#42830]).
+
+* `cholesky[!]` now supports `LinearAlgebra.PivotingStrategy` (singleton type) values
+  as its optional `pivot` argument: the default is `cholesky(A, NoPivot())` (vs.
+  `cholesky(A, RowMaximum())`); the former `Val{true/false}`-based calls are deprecated. ([#41640])
 
 #### Markdown
 
@@ -109,6 +118,9 @@ Standard library changes
   `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
   argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
   to allow any compatible methods.
+
+* New `err` global variable in `Main` set when an expression throws an exception, akin to `ans`. Typing `err` reprints
+  the exception information.
 
 #### SparseArrays
 
