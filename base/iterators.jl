@@ -12,7 +12,8 @@ using .Base:
     @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, AbstractRange,
-    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, _counttuple
+    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, _counttuple,
+    Checked
 
 import .Base:
     first, last,
@@ -1014,7 +1015,7 @@ _prod_axes1(a, A) =
     throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
 
 ndims(p::ProductIterator) = length(axes(p))
-length(P::ProductIterator) = prod(size(P))
+length(P::ProductIterator) = reduce(Checked.checked_mul, size(P); init=1)
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
