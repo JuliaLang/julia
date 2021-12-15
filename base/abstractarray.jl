@@ -2834,6 +2834,11 @@ julia> map(g, eachslice(A, dims=2))
 julia> mapslices(sum, A; dims=(1,3)) == sum(A; dims=(1,3))
 true
 ```
+
+Notice that in `eachslice(A; dims=2)`, the specified dimension is the
+one *without* a colon in the slice. This is `view(A,:,i,:)`, whereas
+`mapslices(f, A; dims=(1,3))` uses `A[:,i,:]`. The function `f` may mutate
+values in the slice without affecting `A`.
 """
 function mapslices(f, A::AbstractArray; dims)
     isempty(dims) && return map(f, A)
