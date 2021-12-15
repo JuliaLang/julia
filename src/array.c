@@ -219,51 +219,28 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
                                           jl_value_t *_dims)
 {
     jl_task_t *ct = jl_current_task;
-    jl_array_t *a;
+    assert(jl_types_equal(jl_tparam0(jl_typeof(data)), jl_tparam0(atype)));
+
     size_t ndims = jl_nfields(_dims);
     assert(is_ntuple_long(_dims));
     size_t *dims = (size_t*)_dims;
-    assert(jl_types_equal(jl_tparam0(jl_typeof(data)), jl_tparam0(atype)));
-
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = sizeof(jl_array_t) + ndimwords * sizeof(size_t) + sizeof(void*);
-    a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
+    jl_array_t *a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
     // No allocation or safepoint allowed after this
+    // copy data (except dims) from the old object
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
     a->flags.ndims = ndims;
     a->offset = 0;
     a->data = NULL;
     a->flags.isaligned = data->flags.isaligned;
-    jl_array_t *owner = (jl_array_t*)jl_array_owner(data);
-    jl_value_t *eltype = jl_tparam0(atype);
-    size_t elsz = 0, align = 0;
-    int isboxed = !jl_islayout_inline(eltype, &elsz, &align);
-    assert(isboxed == data->flags.ptrarray);
-    if (!isboxed) {
-        a->elsize = LLT_ALIGN(elsz, align);
-        jl_value_t *ownerty = jl_typeof(owner);
-        size_t oldelsz = 0, oldalign = 0;
-        if (ownerty == (jl_value_t*)jl_string_type) {
-            oldalign = 1;
-        }
-        else {
-            jl_islayout_inline(jl_tparam0(ownerty), &oldelsz, &oldalign);
-        }
-        if (oldalign < align)
-            jl_exceptionf(jl_argumenterror_type,
-                          "reinterpret from alignment %d bytes to alignment %d bytes not allowed",
-                          (int) oldalign, (int) align);
-        a->flags.ptrarray = 0;
-        a->flags.hasptr = data->flags.hasptr;
-    }
-    else {
-        a->elsize = sizeof(void*);
-        a->flags.ptrarray = 1;
-        a->flags.hasptr = 0;
-    }
+    a->elsize = data->elsize;
+    a->flags.ptrarray = data->flags.ptrarray;
+    a->flags.hasptr = data->flags.hasptr;
 
     // if data is itself a shared wrapper,
     // owner should point back to the original array
+    jl_array_t *owner = (jl_array_t*)jl_array_owner(data);
     jl_array_data_owner(a) = (jl_value_t*)owner;
 
     a->flags.how = 3;

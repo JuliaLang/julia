@@ -817,10 +817,10 @@ static void *signal_listener(void *arg)
                         bt_data_prof[bt_size_cur++].uintptr = 0;
                         bt_data_prof[bt_size_cur++].uintptr = 0;
                     }
-
-                    // notify thread to resume
-                    jl_thread_resume(i, sig);
                 }
+
+                // notify thread to resume
+                jl_thread_resume(i, sig);
             }
             jl_unlock_profile();
         }
