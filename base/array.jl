@@ -223,8 +223,6 @@ function isassigned(a::Array, i::Int...)
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
-isassigned(a::Array, i::CartesianIndex) = isassigned(a, to_indices(a, (), (i, ))...)
-
 ## copy ##
 
 """
