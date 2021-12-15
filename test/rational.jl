@@ -33,6 +33,8 @@ using Test
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
+    @test @inferred(rationalize(Int, 33//100, 0.1)) === 1//3
+    @test @inferred(rationalize(Int, 3, 0.0)) === 3//1
     @test_throws OverflowError rationalize(UInt, -2.0)
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823

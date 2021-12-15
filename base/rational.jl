@@ -158,6 +158,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     if tol < 0
         throw(ArgumentError("negative tolerance $tol"))
     end
+
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
     isnan(x) && return T(x)//one(T)
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
@@ -169,7 +170,6 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     a = trunc(x)
     r = x-a
     y = one(x)
-
     tolx = oftype(x, tol)
     nt, t, tt = tolx, zero(tolx), tolx
     ia = np = nq = zero(T)
@@ -216,8 +216,16 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)::Rational{T}
 rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
-rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re, kvs...)::Rational{T}, rationalize(T, x.im, kvs...)::Rational{T})
-rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re, kvs...), rationalize(Int, x.im, kvs...))
+rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...)::Rational{T}, rationalize(T, x.im; kvs...)::Rational{T})
+rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
+rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer} = rationalize(T, float(x), tol)::Rational{T}
+rationalize(::Type{T}, x::Rational; tol::Real = zero(x)) where {T<:Integer} = rationalize(T, float(x), tol)::Rational{T}
+rationalize(x::Rational; kvs...) = rationalize(Int, x; kvs...)
+rationalize(::Type{T}, x::Integer, tol::Real) where {T<:Integer} = rationalize(T, Rational(x, 1), tol)
+rationalize(::Type{T}, x::Integer; tol::Real = 0) where {T<:Integer} = Rational(x, 1)
+rationalize(x::Integer; kvs...) = Rational(x, 1)
+
+
 
 """
     numerator(x)
