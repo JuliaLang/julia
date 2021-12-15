@@ -50,15 +50,16 @@ tests = [
         "a;;;b;;" => "(toplevel :a :b)"
     ],
     JuliaSyntax.parse_cond => [
-        "a ? b : c"    => "(if :a :b :c)"
+        "a ? b : c"   => "(if :a :b :c)"
+        "a ?\nb : c"  => "(if :a :b :c)"
+        "a ? b :\nc"  => "(if :a :b :c)"
+        "a ? b : c:d" =>   "(if :a :b (call :(:) :c :d))"
         # Following are errors but should recover
-        "a? b : c"    => "(if :a :b :c)"
-        "a ?b : c"    => "(if :a :b :c)"
-        "a ? b: c"    => "(if :a :b :c)"
-        "a ? b :c"    => "(if :a :b :c)"
-        "a ? b c"    => "(if :a :b :c)"
-        #"a ?\nb : c"   => "(if :a :b :c)"
-        #"a ? b :\nc"   => "(if :a :b :c)"
+        "a? b : c"    => "(if :a (error) :b :c)"
+        "a ?b : c"    => "(if :a (error) :b :c)"
+        "a ? b: c"    => "(if :a :b (error) :c)"
+        "a ? b :c"    => "(if :a :b (error) :c)"
+        "a ? b c"     => "(if :a :b (error) :c)"
     ],
     JuliaSyntax.parse_arrow => [
         "x → y"     =>  "(call :→ :x :y)"
@@ -93,7 +94,6 @@ tests = [
     JuliaSyntax.parse_range => [
         "a..b"      => "(call :.. :a :b)"
         "a … b"     => "(call :… :a :b)"
-        # a ? b : c:d   ==>   (if a b (call-i c : d))
         # [1 :a]      ==>  (vcat 1 (quote a))
         # [1 2:3 :a]  ==>  (vcat 1 (call-i 2 : 3) (quote a))
         "x..."     => "(... :x)"
@@ -113,13 +113,38 @@ tests = [
     ],
     JuliaSyntax.parse_term => [
         "a * b * c"  => "(call :* :a :b :c)"
+        # For parse_unary
+        "-2*x"  =>  "(call :* -2 :x)"
     ],
     JuliaSyntax.parse_juxtapose => [
-        "2x"  => "(call :* 2 :x)"
+        "2x"         => "(call :* 2 :x)"
+        "2x"         => "(call :* 2 :x)"
+        "2(x)"       => "(call :* 2 :x)"
+        "(2)(3)x"    => "(call :* 2 3 :x)"
+        "(x-1)y"     => "(call :* (call :- :x 1) :y)"
+        # errors
+        "\"a\"\"b\"" => "(call :* \"a\" (error) \"b\")"
+        "\"a\"x"     => "(call :* \"a\" (error) :x)"
+    ],
+    JuliaSyntax.parse_unary => [
+        "+2"    =>  "2"
+        "-2^x"  =>  "(call :- (call :^ 2 :x))"
+        # -2[1, 3]  ==>  (call - (ref 2 1 3))
+    ],
+    JuliaSyntax.parse_unary_call => [
+        ".+"  =>  "(. :+)"
+        "+)"   =>  ":+"
+        # Function calls:
+        "+(a,b)"   =>  "(call :+ :a :b)"
+        "+(a=1,)"  =>  "(call :+ (kw :a 1))"
+        # Not function calls:
+        "+(a;b)"   =>  "(call :+ (block :a :b))"
+        "+(a=1)"   =>  "(call :+ (= :a 1))"
+        "+(a;b,c)" =>  "(call :+ :a (parameters :b :c))"
     ],
     JuliaSyntax.parse_decl => [
-        #"a::b"    =>   "(:: a b)"
-        #"a->b"    =>   "(-> a b)"
+        #"a::b"    =>   "(:: :a :b)"
+        #"a->b"    =>   "(-> :a :b)"
     ],
     JuliaSyntax.parse_unary_prefix => [
         #"&a"   => "(& :a)"
@@ -133,20 +158,22 @@ tests = [
         "(a * b)"     =>  "(toplevel (call :* :a :b))"
         "(a=1)"       =>  "(toplevel (= :a 1))"
         "(x)"         =>  "(toplevel :x)"
-        # Block syntax
-        "(a=1; b=2)"  =>  "(block (= :a 1) (= :b 2))"
-        "(a=1;)"      =>  "(block (= :a 1))"
-        "(;;)"        =>  "(block )"
-        # Tuple syntax
-        "(a,)"        =>  "(tuple :a)"
-        "(a,b)"       =>  "(tuple :a :b)"
-        # Named tuple syntax
-        "(a=1, b=2)"  =>  "(tuple (= :a 1) (= :b 2))"
-        "(; a=1)"     =>  "(tuple (parameters (kw :a 1)))"
+        # Tuple syntax with commas
+        "(x,)"        =>  "(tuple :x)"
+        "(x,y)"       =>  "(tuple :x :y)"
+        "(x=1, y=2)"  =>  "(tuple (= :x 1) (= :y 2))"
+        # Named tuples with initial semicolon
         "(;)"         =>  "(tuple (parameters ))"
-        # Franken tuple "syntax"
-        "(a=1, b=2; c=3)" =>  "(tuple (= :a 1) (= :b 2) (parameters (kw :c 3)))"
-        # "(a=1, b=2; c=3; d=4)"  # BROKEN!
+        "(; a=1)"     =>  "(tuple (parameters (kw :a 1)))"
+        # Extra credit: nested parameters and frankentuples
+        "(; a=1; b=2)"    => "(tuple (parameters (kw :a 1) (parameters (kw :b 2))))"
+        "(a; b; c,d)"     => "(tuple :a (parameters :b (parameters :c :d)))"
+        "(a=1, b=2; c=3)" => "(tuple (= :a 1) (= :b 2) (parameters (kw :c 3)))"
+        # Block syntax
+        "(;;)"        =>  "(block )"
+        "(a=1;)"      =>  "(block (= :a 1))"
+        "(a;b;;c)"    =>  "(block :a :b :c)"
+        "(a=1; b=2)"  =>  "(block (= :a 1) (= :b 2))"
     ],
     JuliaSyntax.parse_atom => [
         ":foo" => "(quote :foo)"
@@ -163,7 +190,7 @@ tests = [
         # __dot__ macro
         "@. x y" => "(macrocall :__dot__ :x :y)"
         # Errors
-        ": foo" => "(quote :foo)"
+        ": foo" => "(quote (error ) :foo)"
     ],
     JuliaSyntax.parse_docstring => [
         "\"doc\" foo" => "(macrocall :(Core.var\"@doc\") \"doc\" :foo)"

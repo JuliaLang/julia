@@ -1,6 +1,8 @@
 using JuliaSyntax
 using Test
 
+using Base.Meta: @dump
+
 using JuliaSyntax: SourceFile
 
 using JuliaSyntax: GreenNode, SyntaxNode,

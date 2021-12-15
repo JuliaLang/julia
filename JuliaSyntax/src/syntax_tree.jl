@@ -37,6 +37,10 @@ flags(node::GreenNode{SyntaxHead}) = head(node).flags
 
 isinfix(node) = isinfix(head(node))
 
+# Value of an error node with no children
+struct ErrorVal
+end
+
 #-------------------------------------------------------------------------------
 # AST interface, built on top of raw tree
 
@@ -54,9 +58,6 @@ mutable struct SyntaxNode
     val::Any
 end
 
-struct ErrorVal
-end
-
 Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
 
 function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::Integer=1)
@@ -69,6 +70,9 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         # strings. Maybe this is good. Maybe not.
         if k == K"Integer"
             val = Base.parse(Int, val_str)
+        elseif k == K"Float"
+            # FIXME: Other float types!
+            val = Base.parse(Float64, val_str)
         elseif k == K"Identifier"
             val = Symbol(val_str)
         elseif k == K"VarIdentifier"
@@ -101,7 +105,8 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         cs = SyntaxNode[]
         pos = position
         for (i,rawchild) in enumerate(children(raw))
-            if !istrivia(rawchild)
+            # FIXME: Allowing trivia iserror nodes here corrupts the tree layout.
+            if !istrivia(rawchild) || iserror(rawchild)
                 push!(cs, SyntaxNode(source, rawchild, pos))
             end
             pos += rawchild.span
@@ -120,6 +125,9 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         return node
     end
 end
+
+iserror(node::SyntaxNode) = iserror(node.raw)
+istrivia(node::SyntaxNode) = istrivia(node.raw)
 
 head(node::SyntaxNode) = node.head
 
@@ -159,7 +167,11 @@ end
 
 function _show_syntax_node_sexpr(io, node)
     if !haschildren(node)
-        print(io, repr(node.val))
+        if iserror(node)
+            print(io, "(error)")
+        else
+            print(io, repr(node.val))
+        end
     else
         print(io, "($(_kind_str(kind(node.raw))) ")
         first = true
@@ -280,7 +292,12 @@ function _to_expr(node::SyntaxNode)
             line_node = source_location(LineNumberNode, node.source, node.position)
             args[1] = _macroify_name(args[1])
             insert!(args, 2, line_node)
-        elseif head(node) == :call || head(node) == :tuple
+        elseif head(node) == :call
+            if length(args) > 1 && Meta.isexpr(args[end], :parameters)
+                insert!(args, 2, args[end])
+                pop!(args)
+            end
+        elseif head(node) == :tuple || head(node) == :parameters
             if length(args) > 1 && Meta.isexpr(args[end], :parameters)
                 pushfirst!(args, args[end])
                 pop!(args)
