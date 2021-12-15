@@ -99,9 +99,6 @@ static inline std::pair<llvm::MDNode*,llvm::MDNode*> tbaa_make_child_with_contex
     return std::make_pair(n, scalar);
 }
 
-static inline llvm::MDNode *get_tbaa_gcframe(llvm::LLVMContext &ctxt) {
-    return tbaa_make_child_with_context(ctxt, "jtbaa_gcframe").first;
-}
 static inline llvm::MDNode *get_tbaa_const(llvm::LLVMContext &ctxt) {
     return tbaa_make_child_with_context(ctxt, "jtbaa_const", nullptr, true).first;
 }
@@ -132,7 +129,7 @@ static inline llvm::Value *emit_bitcast_with_builder(llvm::IRBuilder<> &builder,
 }
 
 // Get PTLS through current task.
-static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder, llvm::Value *current_task)
+static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder, llvm::Value *current_task, llvm::MDNode *tbaa)
 {
     using namespace llvm;
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(builder.getContext());
@@ -145,7 +142,7 @@ static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder
     LoadInst *ptls_load = builder.CreateAlignedLoad(
         emit_bitcast_with_builder(builder, pptls, T_ppjlvalue), Align(sizeof(void *)), "ptls_load");
     // Note: Corresponding store (`t->ptls = ptls`) happens in `ctx_switch` of tasks.c.
-    tbaa_decorate(get_tbaa_gcframe(builder.getContext()), ptls_load);
+    tbaa_decorate(tbaa, ptls_load);
     // Using `CastInst::Create` to get an `Instruction*` without explicit cast:
     auto ptls = CastInst::Create(Instruction::BitCast, ptls_load, T_ppjlvalue, "ptls");
     builder.Insert(ptls);

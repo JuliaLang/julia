@@ -550,6 +550,10 @@ void jl_dump_native_impl(void *native_code,
     std::unique_ptr<Module> sysimage(new Module("sysimage", Context));
     sysimage->setTargetTriple(data->M->getTargetTriple());
     sysimage->setDataLayout(data->M->getDataLayout());
+#if JL_LLVM_VERSION >= 130000
+    sysimage->setStackProtectorGuard(data->M->getStackProtectorGuard());
+    sysimage->setOverrideStackAlignment(data->M->getOverrideStackAlignment());
+#endif
     data->M.reset(); // free memory for data->M
 
     if (sysimg_data) {
@@ -709,7 +713,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAllocOptPass());
     PM->add(createLoopRotatePass());
     // moving IndVarSimplify here prevented removing the loop in perf_sumcartesian(10:-1:1)
-    PM->add(createLoopIdiomPass());
 #ifdef USE_POLLY
     // LCSSA (which has already run at this point due to the dependencies of the
     // above passes) introduces redundant phis that hinder Polly. Therefore we
@@ -729,6 +732,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createInductiveRangeCheckEliminationPass());
     // Subsequent passes not stripping metadata from terminator
     PM->add(createInstSimplifyLegacyPass());
+    PM->add(createLoopIdiomPass());
     PM->add(createIndVarSimplifyPass());
     PM->add(createLoopDeletionPass());
     PM->add(createSimpleLoopUnrollPass());

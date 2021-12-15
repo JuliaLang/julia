@@ -631,7 +631,15 @@ function fetch(r::Future)
         # why? local put! performs caching and putting into channel under r.lock
 
         # for local put! use the cached value, for call_on_owner cases just take the v_local as it was just cached in r.v
-        v_cache = status ? v_local : v_old
+
+        # remote calls getting the value from `call_on_owner` used to return the value directly without wrapping it in `Some(x)`
+        # so we're doing the same thing here
+        if status
+            send_del_client(r)
+            return v_local
+        else # this `v_cache` is returned at the end of the function
+            v_cache = v_old
+        end
     end
 
     send_del_client(r)
