@@ -40,14 +40,9 @@
 
 using namespace llvm;
 
-extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr,
-                                                  bool isConstant=false);
-
 extern Optional<bool> always_have_fma(Function&);
 
 namespace {
-
-// These are valid detail cloning conditions in the target flags.
 constexpr uint32_t clone_mask =
     JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU;
 
@@ -346,7 +341,7 @@ CloneCtx::CloneCtx(MultiVersioning *pass, Module &M)
       T_int32(Type::getInt32Ty(ctx)),
       T_void(Type::getVoidTy(ctx)),
       T_psize(PointerType::get(T_size, 0)),
-      tbaa_const(tbaa_make_child("jtbaa_const", nullptr, true).first),
+      tbaa_const(tbaa_make_child_with_context(ctx, "jtbaa_const", nullptr, true).first),
       pass(pass),
       specs(jl_get_llvm_clone_targets()),
       fvars(consume_gv<Function>(M, "jl_sysimg_fvars")),

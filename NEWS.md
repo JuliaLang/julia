@@ -92,6 +92,10 @@ Standard library changes
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `spr!` ([#42830]).
 
+* `cholesky[!]` now supports `LinearAlgebra.PivotingStrategy` (singleton type) values
+  as its optional `pivot` argument: the default is `cholesky(A, NoPivot())` (vs.
+  `cholesky(A, RowMaximum())`); the former `Val{true/false}`-based calls are deprecated. ([#41640])
+
 #### Markdown
 
 #### Printf

@@ -550,6 +550,10 @@ void jl_dump_native_impl(void *native_code,
     std::unique_ptr<Module> sysimage(new Module("sysimage", Context));
     sysimage->setTargetTriple(data->M->getTargetTriple());
     sysimage->setDataLayout(data->M->getDataLayout());
+#if JL_LLVM_VERSION >= 130000
+    sysimage->setStackProtectorGuard(data->M->getStackProtectorGuard());
+    sysimage->setOverrideStackAlignment(data->M->getOverrideStackAlignment());
+#endif
     data->M.reset(); // free memory for data->M
 
     if (sysimg_data) {
