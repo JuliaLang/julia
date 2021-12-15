@@ -656,6 +656,8 @@ end
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
 defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = axes(v,1)
