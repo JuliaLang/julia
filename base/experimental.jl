@@ -129,7 +129,7 @@ Set the maximum number of potentially-matching methods considered when running i
 for methods defined in the current module. This setting affects inference of calls with 
 incomplete knowledge of the argument types. 
 
-Supported values are 1, 2, 3, and 4.
+Supported values are `1`, `2`, `3`, and `4`.
 """
 macro max_methods(n::Int)
     return Expr(:meta, :max_methods, n)
