@@ -722,34 +722,28 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
     et = state.et
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
-    isconst, src = false, nothing
     if isa(match, InferenceResult)
         inferred_src = match.src
-        if isa(inferred_src, Const)
-            if !is_inlineable_constant(inferred_src.val)
-                return compileable_specialization(et, match)
-            end
-            isconst, src = true, quoted(inferred_src.val)
+        if isa(inferred_src, ConstAPI)
+            # use constant calling convention
+            et !== nothing && push!(et, mi)
+            return ConstantCase(quoted(inferred_src.val))
         else
-            isconst, src = false, inferred_src
+            src = inferred_src
         end
     else
-        linfo = get(state.mi_cache, mi, nothing)
-        if linfo isa CodeInstance
-            if invoke_api(linfo) == 2
+        code = get(state.mi_cache, mi, nothing)
+        if code isa CodeInstance
+            if use_const_api(code)
                 # in this case function can be inlined to a constant
-                isconst, src = true, quoted(linfo.rettype_const)
+                et !== nothing && push!(et, mi)
+                return ConstantCase(quoted(code.rettype_const))
             else
-                isconst, src = false, linfo.inferred
+                src = code.inferred
             end
         else
-            isconst, src = false, linfo
+            src = code
         end
-    end
-
-    if isconst && et !== nothing
-        push!(et, mi)
-        return ConstantCase(src)
     end
 
     # the duplicated check might have been done already within `analyze_method!`, but still
@@ -1456,25 +1450,22 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
         e = val::Expr
         head = e.head
         if head === :static_parameter
-            return quoted(spvals[e.args[1]])
+            return quoted(spvals[e.args[1]::Int])
         elseif head === :cfunction
             @assert !isa(spsig, UnionAll) || !isempty(spvals)
             e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
             e.args[4] = svec(Any[
                 ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
-                for argt
-                in e.args[4] ]...)
+                for argt in e.args[4]::SimpleVector ]...)
         elseif head === :foreigncall
             @assert !isa(spsig, UnionAll) || !isempty(spvals)
             for i = 1:length(e.args)
                 if i == 2
                     e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, spvals)
                 elseif i == 3
-                    argtuple = Any[
+                    e.args[3] = svec(Any[
                         ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
-                        for argt
-                        in e.args[3] ]
-                    e.args[3] = svec(argtuple...)
+                        for argt in e.args[3]::SimpleVector ]...)
                 end
             end
         elseif head === :boundscheck

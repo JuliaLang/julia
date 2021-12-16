@@ -62,7 +62,6 @@ mutable struct OptimizationState
     mod::Module
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
-    const_api::Bool
     inlining::InliningState
     function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
         s_edges = frame.stmt_edges[1]::Vector{Any}
@@ -72,8 +71,7 @@ mutable struct OptimizationState
             interp)
         return new(frame.linfo,
                    frame.src, nothing, frame.stmt_info, frame.mod,
-                   frame.sptypes, frame.slottypes, false,
-                   inlining)
+                   frame.sptypes, frame.slottypes, inlining)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
         # prepare src for running optimization passes
@@ -101,8 +99,7 @@ mutable struct OptimizationState
             interp)
         return new(linfo,
                    src, nothing, stmt_info, mod,
-                   sptypes_from_meth_instance(linfo), slottypes, false,
-                   inlining)
+                   sptypes_from_meth_instance(linfo), slottypes, inlining)
     end
 end
 
@@ -312,18 +309,35 @@ function argextype(
 end
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
 
-# compute inlining cost and sideeffects
-function finish(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, ir::IRCode, @nospecialize(result))
+struct ConstAPI
+    val
+    ConstAPI(@nospecialize val) = new(val)
+end
+
+"""
+    finish(interp::AbstractInterpreter, opt::OptimizationState,
+           params::OptimizationParams, ir::IRCode, result) -> analyzed::Union{Nothing,ConstAPI}
+
+Post process information derived by Julia-level optimizations for later uses:
+- computes "purity", i.e. side-effect-freeness
+- computes inlining cost
+
+In a case when the purity is proven, `finish` can return `ConstAPI` object wrapping the constant
+value so that the runtime system will use the constant calling convention for the method calls.
+"""
+function finish(interp::AbstractInterpreter, opt::OptimizationState,
+                params::OptimizationParams, ir::IRCode, @nospecialize(result))
     (; src, linfo) = opt
     (; def, specTypes) = linfo
 
+    analyzed = nothing # `ConstAPI` if this call can use constant calling convention
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
         proven_pure = false
-        # must be proven pure to use const_api; otherwise we might skip throwing errors
-        # (issue #20704)
+        # must be proven pure to use constant calling convention;
+        # otherwise we might skip throwing errors (issue #20704)
         # TODO: Improve this analysis; if a function is marked @pure we should really
         # only care about certain errors (e.g. method errors and type errors).
         if length(ir.stmts) < 10
@@ -345,9 +359,6 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
                 end
             end
         end
-        if proven_pure
-            src.pure = true
-        end
 
         if proven_pure
             # use constant calling convention
@@ -356,8 +367,15 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
             # to the `jl_call_method_internal` fast path
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
-            if !(isa(result, Const) && !is_inlineable_constant(result.val))
-                opt.const_api = true
+            src.pure = true
+            if isa(result, Const)
+                val = result.val
+                if is_inlineable_constant(val)
+                    analyzed = ConstAPI(val)
+                end
+            else
+                @assert isconstType(result)
+                analyzed = ConstAPI(result.parameters[1])
             end
             force_noinline || (src.inlineable = true)
         end
@@ -380,7 +398,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
         else
             force_noinline = true
         end
-        if !src.inlineable && result === Union{}
+        if !src.inlineable && result === Bottom
             force_noinline = true
         end
     end
@@ -410,13 +428,13 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
         end
     end
 
-    return nothing
+    return analyzed
 end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
     @timeit "optimizer" ir = run_passes(opt.src, opt)
-    finish(interp, opt, params, ir, result)
+    return finish(interp, opt, params, ir, result)
 end
 
 function run_passes(ci::CodeInfo, sv::OptimizationState)
