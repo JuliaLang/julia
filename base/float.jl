@@ -390,34 +390,20 @@ widen(::Type{Float16}) = Float32
 widen(::Type{Float32}) = Float64
 
 ## floating point arithmetic ##
--(x::Float64) = neg_float(x)
--(x::Float32) = neg_float(x)
--(x::Float16) = neg_float(x)
+-(x::IEEEFloat) = neg_float(x)
 
-+(x::Float16, y::Float16) = add_float(x, y)
-+(x::Float32, y::Float32) = add_float(x, y)
-+(x::Float64, y::Float64) = add_float(x, y)
--(x::Float16, y::Float16) = sub_float(x, y)
--(x::Float32, y::Float32) = sub_float(x, y)
--(x::Float64, y::Float64) = sub_float(x, y)
-*(x::Float16, y::Float16) = mul_float(x, y)
-*(x::Float32, y::Float32) = mul_float(x, y)
-*(x::Float64, y::Float64) = mul_float(x, y)
-/(x::Float16, y::Float16) = div_float(x, y)
-/(x::Float32, y::Float32) = div_float(x, y)
-/(x::Float64, y::Float64) = div_float(x, y)
++(x::T, y::T) where {T <: IEEEFloat} = add_float(x, y)
+-(x::T, y::T) where {T <: IEEEFloat} = sub_float(x, y)
+*(x::T, y::T) where {T <: IEEEFloat} = mul_float(x, y)
+/(x::T, y::T) where {T <: IEEEFloat} = div_float(x, y)
 
-muladd(x::Float16, y::Float16, z::Float16) = muladd_float(x, y, z)
-muladd(x::Float32, y::Float32, z::Float32) = muladd_float(x, y, z)
-muladd(x::Float64, y::Float64, z::Float64) = muladd_float(x, y, z)
+muladd(x::T, y::T, z::T) where {T <: IEEEFloat} = muladd_float(x, y, z)
 
 # TODO: faster floating point div?
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
 
-rem(x::Float16, y::Float16) = rem_float(x, y)
-rem(x::Float32, y::Float32) = rem_float(x, y)
-rem(x::Float64, y::Float64) = rem_float(x, y)
+rem(x::T, y::T) where {T <: IEEEFloat} = rem_float(x, y)
 
 cld(x::T, y::T) where {T<:AbstractFloat} = -fld(-x,y)
 
@@ -433,22 +419,12 @@ function mod(x::T, y::T) where T<:AbstractFloat
 end
 
 ## floating point comparisons ##
-==(x::Float16, y::Float16) = eq_float(x, y)
-==(x::Float32, y::Float32) = eq_float(x, y)
-==(x::Float64, y::Float64) = eq_float(x, y)
-!=(x::Float16, y::Float16) = ne_float(x, y)
-!=(x::Float32, y::Float32) = ne_float(x, y)
-!=(x::Float64, y::Float64) = ne_float(x, y)
-<( x::Float16, y::Float16) = lt_float(x, y)
-<( x::Float32, y::Float32) = lt_float(x, y)
-<( x::Float64, y::Float64) = lt_float(x, y)
-<=(x::Float16, y::Float16) = le_float(x, y)
-<=(x::Float32, y::Float32) = le_float(x, y)
-<=(x::Float64, y::Float64) = le_float(x, y)
+==(x::T, y::T) where {T <: IEEEFloat} = eq_float(x, y)
+!=(x::T, y::T) where {T <: IEEEFloat} = ne_float(x, y)
+<( x::T, y::T) where {T <: IEEEFloat} = lt_float(x, y)
+<=(x::T, y::T) where {T <: IEEEFloat} = le_float(x, y)
 
-isequal(x::Float16, y::Float16) = fpiseq(x, y)
-isequal(x::Float32, y::Float32) = fpiseq(x, y)
-isequal(x::Float64, y::Float64) = fpiseq(x, y)
+isequal(x::T, y::T) where {T <: IEEEFloat} = fpiseq(x, y)
 
 # interpret as sign-magnitude integer
 @inline function _fpint(x)
@@ -519,9 +495,7 @@ for op in (:(==), :<, :<=)
 end
 
 
-abs(x::Float16) = abs_float(x)
-abs(x::Float32) = abs_float(x)
-abs(x::Float64) = abs_float(x)
+abs(x::IEEEFloat) = abs_float(x)
 
 """
     isnan(f) -> Bool
