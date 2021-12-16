@@ -183,22 +183,22 @@ end
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
 for wrapper in (Adjoint, Transpose)
-    @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedVecOrMat}, B::StridedVecOrMat{<:BlasReal})
+    @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedMatrix}, B::StridedMatrix{<:BlasReal})
         TS = promote_type(eltype(A), eltype(B))
         mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
     end
-    @eval function (*)(A::StridedVecOrMat{<:BlasComplex}, B::$wrapper{<:BlasReal,<:StridedVecOrMat})
+    @eval function (*)(A::StridedMatrix{<:BlasComplex}, B::$wrapper{<:BlasReal,<:StridedMatrix})
         TS = promote_type(eltype(A), eltype(B))
         mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
     end
     # when equal real(eltype), don't convert
     for T in (Float32, Float64)
-        @eval function (*)(A::StridedVecOrMat{Complex{$T}}, B::$wrapper{$T,<:StridedVecOrMat})
+        @eval function (*)(A::StridedMatrix{Complex{$T}}, B::$wrapper{$T,<:StridedMatrix})
             mul!(similar(B, complex($T), (size(A,1), size(B,2))), A, B)
         end
     end
     for wrapperB in (Adjoint, Transpose)
-        @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedVecOrMat}, B::$wrapperB{<:BlasReal,<:StridedVecOrMat})
+        @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedMatrix}, B::$wrapperB{<:BlasReal,<:StridedMatrix})
             TS = promote_type(eltype(A), eltype(B))
             mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
         end
