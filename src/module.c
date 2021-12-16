@@ -137,7 +137,7 @@ JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m)
     int value = m->max_methods;
     while (value == -1 && m->parent != m && m != jl_base_module) {
         m = m->parent;
-        value = m->infer;
+        value = m->max_methods;
     }
     return value;
 }
