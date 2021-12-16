@@ -129,7 +129,7 @@ Set the maximum number of potentially-matching methods considered when running i
 for methods defined in the current module. This setting affects inference of calls with 
 incomplete knowledge of the argument types. 
 
-Supported values are `1`, `2`, `3`, and `4`.
+Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to `3`).
 """
 macro max_methods(n::Int)
     return Expr(:meta, :max_methods, n)
@@ -169,7 +169,7 @@ macro compiler_options(args...)
             elseif ex.args[1] === :max_methods
                 a = ex.args[2]
                 a = a === :default ? 3 :
-                  a isa Int ? (a > 0 ? a : error("\"max_methods\" must be positive.")) :
+                  a isa Int ? ((0 < a < 5) ? a : error("\"max_methods\" must be between 0 and 5.")) :
                   error("invalid argument to \"max_methods\" option")
                 push!(opts.args, Expr(:meta, :max_methods, a))
             else
