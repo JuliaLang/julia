@@ -16,7 +16,7 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[frame.currpc])
 
-function get_max_methods(mod, interp)
+function get_max_methods(mod::Module, interp::AbstractInterpreter)
   max_methods = ccall(:jl_get_module_max_methods, Cint, (Any,), mod) % Int
   max_methods < 0 ? InferenceParams(interp).MAX_METHODS : max_methods
 end
