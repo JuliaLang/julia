@@ -742,6 +742,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createGVNPass());
     PM->add(createMemCpyOptPass());
     PM->add(createSCCPPass());
+
+    //These next two passes must come before IRCE to eliminate the bounds check in #43308
+    PM->add(createCorrelatedValuePropagationPass());
+    PM->add(createDeadCodeEliminationPass());
+
     PM->add(createInductiveRangeCheckEliminationPass()); // Must come between the two GVN passes
 
     // Run instcombine after redundancy elimination to exploit opportunities
@@ -753,7 +758,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     if (opt_level >= 3) {
         PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
     }
-    PM->add(createCorrelatedValuePropagationPass());
     PM->add(createDeadStoreEliminationPass());
 
     // More dead allocation (store) deletion before loop optimization
