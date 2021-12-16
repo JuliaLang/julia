@@ -125,9 +125,9 @@ end
 """
     Experimental.@max_methods n::Int
 
-Set the maximum number of potentially-matching methods considered when running inference 
-for methods defined in the current module. This setting affects inference of calls with 
-incomplete knowledge of the argument types. 
+Set the maximum number of potentially-matching methods considered when running inference
+for methods defined in the current module. This setting affects inference of calls with
+incomplete knowledge of the argument types.
 
 Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to `3`).
 """
