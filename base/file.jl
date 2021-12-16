@@ -554,8 +554,41 @@ end
 
 const temp_prefix = "jl_"
 
-if Sys.iswindows()
+# Use `Libc.rand()` to generate random strings
+function _rand_filename(len = 10)
+    slug = Base.StringVector(len)
+    chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for i = 1:len
+        slug[i] = chars[(Libc.rand() % length(chars)) + 1]
+    end
+    return String(slug)
+end
 
+
+# Obtain a temporary filename.
+function tempname(parent::AbstractString=tempdir(); max_tries::Int = 100, cleanup::Bool=true)
+    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
+
+    prefix = joinpath(parent, temp_prefix)
+    filename = nothing
+    for i in 1:max_tries
+        filename = string(prefix, _rand_filename())
+        if ispath(filename)
+            filename = nothing
+        else
+            break
+        end
+    end
+
+    if filename === nothing
+        error("tempname: max_tries exhausted")
+    end
+
+    cleanup && temp_cleanup_later(filename)
+    return filename
+end
+
+if Sys.iswindows()
 function _win_tempname(temppath::AbstractString, uunique::UInt32)
     tempp = cwstring(temppath)
     temppfx = cwstring(temp_prefix)
@@ -576,68 +609,7 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     return (filename, Base.open(filename, "r+"))
 end
 
-# generate a random string from random bytes
-function _rand_string()
-    nchars = 10
-    A = Vector{UInt8}(undef, nchars)
-    windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
-        (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-            A, sizeof(A)))
-
-    slug = Base.StringVector(10)
-    chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    for i = 1:nchars
-        slug[i] = chars[(A[i] % length(chars)) + 1]
-    end
-    return name = String(slug)
-end
-
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    name = _rand_string()
-    filename = joinpath(parent, temp_prefix * name)
-    @assert !ispath(filename)
-    cleanup && temp_cleanup_later(filename)
-    return filename
-end
-
 else # !windows
-
-# Based of musl __randname
-function _rand_string()
-    r = Base.rand(UInt) # FIXME: https://git.musl-libc.org/cgit/musl/tree/src/temp/__randname.c
-    buf = Vector{Char}(undef, 6)
-    for i in 1:6
-        buf[i] = 'A'+(r&15)+(r&16)*2;
-        r >>= 5
-    end
-    String(buf)
-end
-
-# Obtain a temporary filename.
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-
-    prefix = joinpath(parent, temp_prefix)
-    MAX_TRIES = 100
-
-    filename = nothing
-    for i in 1:MAX_TRIES
-        filename = string(prefix, _rand_string())
-        if ispath(filename)
-            filename = nothing
-        else
-            break
-        end
-    end
-
-    if filename === nothing
-        error("tempname: MAX_TRIES exhausted")
-    end
-
-    cleanup && temp_cleanup_later(filename)
-    return filename
-end
 
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
@@ -647,7 +619,6 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     cleanup && temp_cleanup_later(b)
     return (b, fdio(p, true))
 end
-
 
 end # os-test
 
