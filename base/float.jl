@@ -307,16 +307,12 @@ function unsafe_trunc end
 
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
-        unsafe_trunc(::Type{$Ti}, x::Float16) = fptosi($Ti, x)
-        unsafe_trunc(::Type{$Ti}, x::Float32) = fptosi($Ti, x)
-        unsafe_trunc(::Type{$Ti}, x::Float64) = fptosi($Ti, x)
+        unsafe_trunc(::Type{$Ti}, x::IEEEFloat) = fptosi($Ti, x)
     end
 end
 for Ti in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
-        unsafe_trunc(::Type{$Ti}, x::Float16) = fptoui($Ti, x)
-        unsafe_trunc(::Type{$Ti}, x::Float32) = fptoui($Ti, x)
-        unsafe_trunc(::Type{$Ti}, x::Float64) = fptoui($Ti, x)
+        unsafe_trunc(::Type{$Ti}, x::IEEEFloat) = fptoui($Ti, x)
     end
 end
 
@@ -353,33 +349,19 @@ unsafe_trunc(::Type{Int128}, x::Float16) = unsafe_trunc(Int128, Float32(x))
 
 # matches convert methods
 # also determines floor, ceil, round
-trunc(::Type{Signed}, x::Float16) = trunc(Int,x)
-trunc(::Type{Signed}, x::Float32) = trunc(Int,x)
-trunc(::Type{Signed}, x::Float64) = trunc(Int,x)
-trunc(::Type{Unsigned}, x::Float16) = trunc(UInt,x)
-trunc(::Type{Unsigned}, x::Float32) = trunc(UInt,x)
-trunc(::Type{Unsigned}, x::Float64) = trunc(UInt,x)
-trunc(::Type{Integer}, x::Float16) = trunc(Int,x)
-trunc(::Type{Integer}, x::Float32) = trunc(Int,x)
-trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
+trunc(::Type{Signed}, x::IEEEFloat) = trunc(Int,x)
+trunc(::Type{Unsigned}, x::IEEEFloat) = trunc(UInt,x)
+trunc(::Type{Integer}, x::IEEEFloat) = trunc(Int,x)
 
 # fallbacks
 floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundDown))
 ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundUp))
 round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundNearest))
 
-round(x::Float64, r::RoundingMode{:ToZero})  = trunc_llvm(x)
-round(x::Float32, r::RoundingMode{:ToZero})  = trunc_llvm(x)
-round(x::Float16, r::RoundingMode{:ToZero})  = trunc_llvm(x)
-round(x::Float64, r::RoundingMode{:Down})    = floor_llvm(x)
-round(x::Float32, r::RoundingMode{:Down})    = floor_llvm(x)
-round(x::Float16, r::RoundingMode{:Down})    = floor_llvm(x)
-round(x::Float64, r::RoundingMode{:Up})      = ceil_llvm(x)
-round(x::Float32, r::RoundingMode{:Up})      = ceil_llvm(x)
-round(x::Float16, r::RoundingMode{:Up})      = ceil_llvm(x)
-round(x::Float64, r::RoundingMode{:Nearest}) = rint_llvm(x)
-round(x::Float32, r::RoundingMode{:Nearest}) = rint_llvm(x)
-round(x::Float16, r::RoundingMode{:Nearest}) = rint_llvm(x)
+round(x::IEEEFloat, r::RoundingMode{:ToZero})  = trunc_llvm(x)
+round(x::IEEEFloat, r::RoundingMode{:Down})    = floor_llvm(x)
+round(x::IEEEFloat, r::RoundingMode{:Up})      = ceil_llvm(x)
+round(x::IEEEFloat, r::RoundingMode{:Nearest}) = rint_llvm(x)
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
@@ -392,18 +374,18 @@ widen(::Type{Float32}) = Float64
 ## floating point arithmetic ##
 -(x::IEEEFloat) = neg_float(x)
 
-+(x::T, y::T) where {T <: IEEEFloat} = add_float(x, y)
--(x::T, y::T) where {T <: IEEEFloat} = sub_float(x, y)
-*(x::T, y::T) where {T <: IEEEFloat} = mul_float(x, y)
-/(x::T, y::T) where {T <: IEEEFloat} = div_float(x, y)
++(x::T, y::T) where {T<:IEEEFloat} = add_float(x, y)
+-(x::T, y::T) where {T<:IEEEFloat} = sub_float(x, y)
+*(x::T, y::T) where {T<:IEEEFloat} = mul_float(x, y)
+/(x::T, y::T) where {T<:IEEEFloat} = div_float(x, y)
 
-muladd(x::T, y::T, z::T) where {T <: IEEEFloat} = muladd_float(x, y, z)
+muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 
 # TODO: faster floating point div?
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
 
-rem(x::T, y::T) where {T <: IEEEFloat} = rem_float(x, y)
+rem(x::T, y::T) where {T<:IEEEFloat} = rem_float(x, y)
 
 cld(x::T, y::T) where {T<:AbstractFloat} = -fld(-x,y)
 
@@ -419,12 +401,12 @@ function mod(x::T, y::T) where T<:AbstractFloat
 end
 
 ## floating point comparisons ##
-==(x::T, y::T) where {T <: IEEEFloat} = eq_float(x, y)
-!=(x::T, y::T) where {T <: IEEEFloat} = ne_float(x, y)
-<( x::T, y::T) where {T <: IEEEFloat} = lt_float(x, y)
-<=(x::T, y::T) where {T <: IEEEFloat} = le_float(x, y)
+==(x::T, y::T) where {T<:IEEEFloat} = eq_float(x, y)
+!=(x::T, y::T) where {T<:IEEEFloat} = ne_float(x, y)
+<( x::T, y::T) where {T<:IEEEFloat} = lt_float(x, y)
+<=(x::T, y::T) where {T<:IEEEFloat} = le_float(x, y)
 
-isequal(x::T, y::T) where {T <: IEEEFloat} = fpiseq(x, y)
+isequal(x::T, y::T) where {T<:IEEEFloat} = fpiseq(x, y)
 
 # interpret as sign-magnitude integer
 @inline function _fpint(x)
