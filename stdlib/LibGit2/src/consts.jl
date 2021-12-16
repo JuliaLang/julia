@@ -441,7 +441,6 @@ These are used to select which global option to set or get and are used in `git_
                SET_TEMPLATE_PATH        = 11,
                SET_SSL_CERT_LOCATIONS   = 12)
 
-
 """
 Option flags for `GitProxy`.
 
@@ -452,5 +451,16 @@ Option flags for `GitProxy`.
 @enum(GIT_PROXY, PROXY_NONE,
                  PROXY_AUTO,
                  PROXY_SPECIFIED)
+
+# Available tracing levels.
+@enum GIT_TRACE_LEVEL begin
+    TRACE_NONE
+    TRACE_FATAL
+    TRACE_ERROR
+    TRACE_WARN
+    TRACE_INFO
+    TRACE_DEBUG
+    TRACE_TRACE
+end
 
 end
