@@ -139,9 +139,41 @@ function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasFloat})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
 end
+for wrapper in (Adjoint, Transpose)
+    @eval function (*)(A::$wrapper{<:BlasReal,<:StridedMatrix}, B::StridedMatrix{<:BlasFloat})
+        TS = promote_type(eltype(A), eltype(B))
+        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    end
+    @eval function (*)(A::StridedMatrix{<:BlasReal}, B::$wrapper{<:BlasFloat,<:StridedMatrix})
+        TS = promote_type(eltype(A), eltype(B))
+        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    end
+    for wrapperB in (Adjoint, Transpose)
+        @eval function (*)(A::$wrapper{<:BlasReal,<:StridedMatrix}, B::$wrapperB{<:BlasFloat,<:StridedMatrix})
+            TS = promote_type(eltype(A), eltype(B))
+            mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+        end
+    end
+end
 function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMatrix{<:BlasComplex})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+end
+for wrapper in (Adjoint, Transpose)
+    @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedMatrix}, B::StridedMatrix{<:BlasComplex})
+        TS = promote_type(eltype(A), eltype(B))
+        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    end
+    @eval function (*)(A::StridedMatrix{<:BlasComplex}, B::$wrapper{<:BlasComplex,<:StridedMatrix})
+        TS = promote_type(eltype(A), eltype(B))
+        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    end
+    for wrapperB in (Adjoint, Transpose)
+        @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedMatrix}, B::$wrapperB{<:BlasComplex,<:StridedMatrix})
+            TS = promote_type(eltype(A), eltype(B))
+            mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+        end
+    end
 end
 
 @inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
@@ -150,6 +182,28 @@ end
 end
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
+for wrapper in (Adjoint, Transpose)
+    @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedVecOrMat}, B::StridedVecOrMat{<:BlasReal})
+        TS = promote_type(eltype(A), eltype(B))
+        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    end
+    @eval function (*)(A::StridedVecOrMat{<:BlasComplex}, B::$wrapper{<:BlasReal,<:StridedVecOrMat})
+        TS = promote_type(eltype(A), eltype(B))
+        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    end
+    # when equal real(eltype), don't convert
+    for T in (Float32, Float64)
+        @eval function (*)(A::StridedVecOrMat{Complex{$T}}, B::$wrapper{$T,<:StridedVecOrMat})
+            mul!(similar(B, complex($T), (size(A,1), size(B,2))), A, B)
+        end
+    end
+    for wrapperB in (Adjoint, Transpose)
+        @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedVecOrMat}, B::$wrapperB{<:BlasReal,<:StridedVecOrMat})
+            TS = promote_type(eltype(A), eltype(B))
+            mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+        end
+    end
+end
 for elty in (Float32,Float64)
     @eval begin
         @inline function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty},
