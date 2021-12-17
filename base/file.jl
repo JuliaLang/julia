@@ -589,13 +589,17 @@ function tempname(parent::AbstractString=tempdir(); max_tries::Int = 100, cleanu
 end
 
 if Sys.iswindows()
-function _win_tempname(temppath::AbstractString, uunique::UInt32)
+# While this isn't a true analog of `mkstemp`, it _does_ create an
+# empty file for us, ensuring that other simultaneous calls to
+# `_win_mkstemp()` won't collide, so it's a better name for the
+# function than `tempname()`.
+function _win_mkstemp(temppath::AbstractString)
     tempp = cwstring(temppath)
     temppfx = cwstring(temp_prefix)
     tname = Vector{UInt16}(undef, 32767)
     uunique = ccall(:GetTempFileNameW, stdcall, UInt32,
                     (Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt16}),
-                    tempp, temppfx, uunique, tname)
+                    tempp, temppfx, UInt32(0), tname)
     windowserror("GetTempFileName", uunique == 0)
     lentname = something(findfirst(iszero, tname))
     @assert lentname > 0
@@ -604,7 +608,7 @@ function _win_tempname(temppath::AbstractString, uunique::UInt32)
 end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    filename = _win_tempname(parent, UInt32(0))
+    filename = _win_mkstemp(parent)
     cleanup && temp_cleanup_later(filename)
     return (filename, Base.open(filename, "r+"))
 end
