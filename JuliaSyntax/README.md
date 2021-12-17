@@ -290,9 +290,13 @@ f(a,
 
 ## Fun research questions
 
-* Given the raw tree (the green tree, in Roslyn terminology) can we regress a
-  model of indentiation? Such that formatting rules for new code is defined
-  implicitly by a software project's existing style?
+* Given source and syntax tree, can we regress/learn a generative model of
+  indentiation from the syntax tree?  Source formatting involves a big pile of
+  heuristics to get something which "looks nice"... and ML systems have become
+  very good at heuristics.  Also, we've got huge piles of traininig data — just
+  choose some high quality, tastefully hand-formatted libraries.
+
+* Similarly, can we learn fast and reasonably accurate recovery heuristics?
 
 # Resources
 
@@ -390,3 +394,29 @@ Some resources:
     - [From Bob Nystrom (munificent - one of the Dart devs, etc](http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/)
   - Some discussion of error recovery
 
+## Flisp parser oddities and bugs
+
+```julia
+# Operator prefix call syntax doesn't work in some cases (tuple is produced)
++(a;b,c)
+
+# Inconsistent parsing of tuple keyword args inside vs outside of dot calls
+(a=1,)           # (tuple (= a 1))
+f.(a=1)          # (tuple (kw a 1))
+
+# Mixutres of , and ; in calls give nested parameter AST which parses strangely
+# and is kind-of-horrible to use.
+# (tuple (parameters (parameters e f) c d) a b)
+(a,b; c,d; e,f)
+
+# Misplaced @ in macro module paths is parsed but produces odd AST
+# (macrocall (. A (quote (. B @x))))
+# Should be rejected, or produce (macrocall (. (. A (quote B)) (quote @x)))
+A.@B.x
+
+# Lookup for macro module path allows bizarre syntax and stateful semantics!
+b() = rand() > 0.5 ? Base : Core
+b().@info "hi"
+```
+
+Many inconsistencies between `kw` and `=`
