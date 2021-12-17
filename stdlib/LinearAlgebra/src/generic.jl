@@ -657,6 +657,123 @@ julia> norm(-2, Inf)
 end
 norm(::Missing, p::Real=2) = missing
 
+# With dims keyword
+norm0_dims(B, A, dims) = count!(!iszero, B, A)
+norm1_dims!(B, A, dims) = Base.mapreducedim!(norm, +, B, A)
+normInf_dims!(B, A, dims) = Base.mapreducedim!(norm, max, B, A)
+normMinusInf_dims!(B, A, dims) = Base.mapreducedim!(norm, min, B, A)
+
+function norm2_dims!(B::AbstractArray, A::AbstractArray, dims)
+    sum!(norm_sqr, B, A)
+    map!(sqrt, B, B)
+    # Checking whether `A` is safe for the fast path is slower than taking it, check later:
+    if A isa AbstractVecOrMat && dims == 1
+        for (i,x) in zip(eachindex(B), eachcol(A))
+            !iszero(B[i]) && isfinite(B[i]) && continue
+            B[i] = norm2(x)
+        end
+    elseif A isa AbstractVecOrMat && dims == 2
+        for (i,x) in zip(eachindex(B), eachrow(A))
+            !iszero(B[i]) && isfinite(B[i]) && continue
+            B[i] = norm2(x)
+        end
+    # In general `eachslice(A; dims)` is not what we need here.
+    elseif all(y -> !iszero(y) && isfinite(y), B)
+        for I in CartesianIndices(B)
+            !iszero(B[I]) && isfinite(B[I]) && continue
+            # This path is quite slow, but hopefully rare.
+            J = ntuple(d -> d in dims ? Colon() : I[d], ndims(A))
+            B[I] = norm2(view(A, J...))
+        end
+    end
+    B
+end
+
+function normp_dims!(B::AbstractArray, A::AbstractArray, p::Real, dims)
+    if A isa AbstractVecOrMat && dims == 1
+        for (i,x) in zip(eachindex(B), eachcol(A))
+            B[i] = normp(x, p)
+        end
+    elseif A isa AbstractVecOrMat && dims == 2
+        for (i,x) in zip(eachindex(B), eachrow(A))
+            B[i] = normp(x, p)
+        end
+    else
+        # This is slower, but doesn't affect type-stability of `norm`
+        copyto!(B, Base.mapslices(x -> normp(x,p), A; dims))
+    end
+    B
+end
+
+"""
+    norm(A::AbstractArray, [p]; dims)
+
+Find the vector `norm`s of slices of a given array.
+
+The result has the same size as `sum(A; dims)`, containing `norm(A[i,:,j,...], p)`
+for each possible `i,j,...`, with colons at dimensions `d ∈ dims`.
+
+!!! compat "Julia 1.8"
+    Methods taking keyword `dims` require Julia 1.8.
+
+# Examples
+```jldoctest
+julia> v = [3, -2, 6]; m = hcat(v, -v, [3,0,0], [4,4,4])
+3×4 Matrix{Int64}:
+  3  -3  3  4
+ -2   2  0  4
+  6  -6  0  4
+
+julia> norm(v)
+7.0
+
+julia> norm(m; dims=1)
+1×4 Matrix{Float64}:
+ 7.0  7.0  3.0  6.9282
+
+julia> map(norm, eachcol(m))  # same contents as dims=1
+4-element Vector{Float64}:
+ 7.0
+ 7.0
+ 3.0
+ 6.928203230275509
+
+julia> norm(v, 1), norm(m, 1; dims=1)
+(11.0, [11.0 11.0 3.0 12.0])
+
+julia> norm(m, 1; dims=2)
+3×1 Matrix{Float64}:
+ 13.0
+  8.0
+ 16.0
+
+julia> norm(v, Inf), norm(m, Inf; dims=1)
+(6.0, [6.0 6.0 3.0 4.0])
+
+julia> norm([1e-200, 0, 1e-300]; dims=1)  # avoids underflow & overflow
+1-element Vector{Float64}:
+ 1.0e-200
+```
+"""
+function norm(A::AbstractArray, p::Real=2; dims=:)
+    dims isa Colon && return invoke(norm, Tuple{Any, Real}, A, p)
+    B = Base.reducedim_init(norm, +, A, dims)
+    if p == 2
+        norm2_dims!(B, A, dims)
+    elseif p == 1
+        norm1_dims!(B, A, dims)
+    elseif p == Inf
+        normInf_dims!(B, A, dims)
+    elseif p == 0
+        norm0_dims!(B, A, dims)
+    elseif p == -Inf
+        normMinusInf_dims!(B, A, dims)
+    else
+        normp_dims!(B, A, p, dims)
+    end
+    B
+end
+
 # special cases of opnorm
 function opnorm1(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
