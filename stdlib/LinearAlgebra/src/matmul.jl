@@ -116,7 +116,7 @@ end
 # Matrix-matrix multiplication
 
 AdjOrTransStridedMat{T} = Union{Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
-StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, AdjOrTransStridedMat{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
+StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
 
 """
     *(A::AbstractMatrix, B::AbstractMatrix)
