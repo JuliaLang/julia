@@ -359,7 +359,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         if is_same_conditionals(typea, typeb)
             vtype = tmerge(typea.vtype, typeb.vtype)
             elsetype = tmerge(typea.elsetype, typeb.elsetype)
-            if vtype != elsetype
+            if vtype !== elsetype
                 return Conditional(typea.var, vtype, elsetype)
             end
         end
@@ -388,7 +388,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         if is_same_conditionals(typea, typeb)
             vtype = tmerge(typea.vtype, typeb.vtype)
             elsetype = tmerge(typea.elsetype, typeb.elsetype)
-            if vtype != elsetype
+            if vtype !== elsetype
                 return InterConditional(typea.slot, vtype, elsetype)
             end
         end
