@@ -1,10 +1,14 @@
 function test_parse(production, code)
     stream = ParseStream(code)
     production(JuliaSyntax.ParseState(stream))
-    t = JuliaSyntax.to_raw_tree(stream, wrap_toplevel_as_kind=K"toplevel")
-    # @test Text(sprint(JuliaSyntax.show_diagnostics, stream, code)) == Text("")
-    s = SyntaxNode(SourceFile(code), t)
-    sprint(show, MIME("text/x.sexpression"), s)
+    t = JuliaSyntax.to_raw_tree(stream, wrap_toplevel_as_kind=K"Nothing")
+    source = SourceFile(code)
+    s = SyntaxNode(source, t)
+    if JuliaSyntax.kind(s) == K"Nothing"
+        join([sprint(show, MIME("text/x.sexpression"), c) for c in children(s)], ' ')
+    else
+        sprint(show, MIME("text/x.sexpression"), s)
+    end
 end
 
 # Version of test_parse for interactive exploration
@@ -25,7 +29,8 @@ function itest_parse(production, code)
 
     ex = Expr(s)
     println(stdout, "\n\n# Julia Expr:")
-    show(stdout, MIME"text/plain"(), ex)
+    dump(ex)
+    #show(stdout, MIME"text/plain"(), ex)
 
     f_ex = Base.remove_linenums!(Meta.parse(code, raise=false))
     if ex != f_ex
@@ -143,18 +148,26 @@ tests = [
         "+(a;b,c)" =>  "(call :+ :a (parameters :b :c))"
     ],
     JuliaSyntax.parse_decl => [
-        #"a::b"    =>   "(:: :a :b)"
-        #"a->b"    =>   "(-> :a :b)"
+        "a::b"     =>   "(:: :a :b)"
+        "a->b"     =>   "(-> :a :b)"
+        "a::b->c"  =>  "(-> (:: :a :b) :c)"
     ],
     JuliaSyntax.parse_unary_prefix => [
-        #"&a"   => "(& :a)"
-        #"::a"  => "(:: :a)"
-        #"\$a"  => "(\$ :a)"
-        #"\$\$a"  => "(\$ (\$ :a))"
+        "&)"   => ":&"
+        "\$\n" => ":\$"
+        "&a"   => "(& :a)"
+        "::a"  => "(:: :a)"
+        "\$a"  => "(\$ :a)"
+        "\$\$a"  => "(\$ (\$ :a))"
     ],
     JuliaSyntax.parse_call => [
         "f(a,b)" => "(call :f :a :b)"
         "f(a).g(b)" => "(call (. (call :f :a) (quote :g)) :b)"
+        # do
+        "f() do x, y\n body end"  =>  "(do (call :f) (-> (tuple :x :y) (block :body)))"
+        "f() do\nend"         =>  "(do (call :f) (-> (tuple) (block)))"
+        "f() do ; body end"   =>  "(do (call :f) (-> (tuple) (block :body)))"
+        "f(x) do y,z body end"  =>  "(do (call :f :x) (-> (tuple :y :z) (block :body)))"
         # Keyword arguments depend on call vs macrocall
         "foo(a=1)"  =>  "(call :foo (kw :a 1))"
         "@foo(a=1)" =>  "(macrocall :foo (= :a 1))"
@@ -184,7 +197,7 @@ tests = [
         "f.\$x"     =>  "(. :f (quote (\$ :x)))"
         "f.\$(x+y)" =>  "(. :f (quote (\$ (call :+ :x :y))))"
         # .' discontinued
-        "f.'"    =>  "(toplevel :f (error :. Symbol(\"'\")))"
+        "f.'"    =>  ":f (error :. Symbol(\"'\"))"
         # Field/property syntax
         "f.x.y"  =>  "(. (. :f (quote :x)) (quote :y))"
         # Adjoint
@@ -205,9 +218,9 @@ tests = [
     JuliaSyntax.parse_paren => [
         # Parentheses used for grouping
         # NB: The toplevel below is an artificial part of the test setup
-        "(a * b)"     =>  "(toplevel (call :* :a :b))"
-        "(a=1)"       =>  "(toplevel (= :a 1))"
-        "(x)"         =>  "(toplevel :x)"
+        "(a * b)"     =>  "(call :* :a :b)"
+        "(a=1)"       =>  "(= :a 1)"
+        "(x)"         =>  ":x"
         # Tuple syntax with commas
         "(x,)"        =>  "(tuple :x)"
         "(x,y)"       =>  "(tuple :x :y)"

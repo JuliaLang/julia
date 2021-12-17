@@ -60,6 +60,11 @@ is_prec_pipe_gt(t)     = kind(t) == K"|>"
 end
 =#
 
+function is_syntax_kind(t)
+    k = kind(t) 
+    K"BEGIN_SYNTAX_KINDS" < k < K"END_SYNTAX_KINDS"
+end
+
 function is_number(t)
     kind(t) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float")
 end
