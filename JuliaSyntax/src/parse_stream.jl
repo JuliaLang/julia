@@ -84,6 +84,13 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, code)
     print(io, code[nextind(code, q):end], '\n')
 end
 
+struct ParseStreamPosition
+    input_byte::Int    # Index of next byte in input
+    output_index::Int  # Index of last span in output
+end
+
+const NO_POSITION = ParseStreamPosition(0,0)
+
 #-------------------------------------------------------------------------------
 """
 ParseStream provides an IO interface for the parser. It
@@ -223,7 +230,7 @@ end
 """
 Return the kind of the previous non-trivia span which was inserted.
 
-This is a bit hacky but can be handy on occasion.
+Looking backward is a bit hacky but can be handy on occasion.
 """
 function peek_behind(stream::ParseStream)
     for i = length(stream.spans):-1:1
@@ -237,6 +244,8 @@ end
 
 #-------------------------------------------------------------------------------
 # Stream output interface - the `bump_*` and `emit_*` family of functions
+#
+# Though note bump() really does both input and output
 
 # Bump the next `n` tokens
 # flags and new_kind are applied to any non-trivia tokens
@@ -263,10 +272,10 @@ function _bump_n(stream::ParseStream, n::Integer, flags, new_kind=K"Nothing")
 end
 
 """
-    bump(stream [, flags=EMPTY_FLAGS])
+    bump(stream [, flags=EMPTY_FLAGS];
+         skip_newlines=false, error, new_kind)
 
-Shift the current token into the output as a new text span with the given
-`flags`.
+Shift the current token from the input to the output, adding the given flags.
 """
 function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
               error=nothing, new_kind=K"Nothing")
@@ -275,8 +284,8 @@ function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
     if !isnothing(error)
         emit(stream, emark, K"error", TRIVIA_FLAG, error=error)
     end
-    # Return last token location in output if needed for reset_token!
-    return lastindex(stream.spans)
+    # Return last token location in output if needed for reset_node!
+    return position(stream)
 end
 
 """
@@ -290,7 +299,7 @@ function bump_trivia(stream::ParseStream; skip_newlines=true, error=nothing)
     if !isnothing(error)
         emit(stream, emark, K"error", TRIVIA_FLAG, error=error)
     end
-    return lastindex(stream.spans)
+    return position(stream)
 end
 
 """
@@ -302,7 +311,7 @@ example, `2x` means `2*x` via the juxtoposition rules.
 function bump_invisible(stream::ParseStream, kind, flags=EMPTY_FLAGS;
                         error=nothing)
     emit(stream, position(stream), kind, flags, error=error)
-    return lastindex(stream.spans)
+    return position(stream)
 end
 
 """
@@ -318,7 +327,7 @@ function bump_glue(stream::ParseStream, kind, flags, num_tokens)
                        last_byte(stream.lookahead[num_tokens]))
     Base._deletebeg!(stream.lookahead, num_tokens)
     push!(stream.spans, span)
-    return lastindex(stream.spans)
+    return position(stream)
 end
 
 """
@@ -333,7 +342,7 @@ function bump_split(stream::ParseStream, num_bytes, kind1, flags1, kind2, flags2
                                     first_byte(tok), first_byte(tok)+num_bytes-1))
     push!(stream.spans, TaggedRange(SyntaxHead(kind2, flags2),
                                     first_byte(tok)+num_bytes, last_byte(tok)))
-    nothing
+    nothing # position(stream) is ambiguous here, as it involves two spans
 end
 
 """
@@ -343,19 +352,17 @@ This is a hack, but necessary on some occasions
 * When some trailing syntax may change the kind or flags of the token
 * When an invisible token might be required - see bump_invisible with K"TOMBSTONE"
 """
-function reset_node!(stream::ParseStream, omark;
+function reset_node!(stream::ParseStream, mark::ParseStreamPosition;
                      kind=nothing, flags=nothing)
-    text_span = stream.spans[omark]
+    text_span = stream.spans[mark.output_index]
     k = isnothing(kind)  ? (@__MODULE__).kind(text_span)  : kind
     f = isnothing(flags) ? (@__MODULE__).flags(text_span) : flags
-    stream.spans[omark] = TaggedRange(SyntaxHead(k, f),
-                                      first_byte(text_span), last_byte(text_span))
+    stream.spans[mark.output_index] =
+        TaggedRange(SyntaxHead(k, f), first_byte(text_span), last_byte(text_span))
 end
 
-const NO_POSITION = 0
-
 function Base.position(stream::ParseStream)
-    return stream.next_byte
+    ParseStreamPosition(stream.next_byte, lastindex(stream.spans))
 end
 
 """
@@ -365,14 +372,14 @@ Emit a new text span into the output which covers source bytes from `mark` to
 the end of the most recent token which was `bump()`'ed. The starting `mark`
 should be a previous return value of `position()`.
 """
-function emit(stream::ParseStream, start_mark::Integer, kind::Kind,
+function emit(stream::ParseStream, mark::ParseStreamPosition, kind::Kind,
               flags::RawFlags = EMPTY_FLAGS; error=nothing)
-    text_span = TaggedRange(SyntaxHead(kind, flags), start_mark, stream.next_byte-1)
+    text_span = TaggedRange(SyntaxHead(kind, flags), mark.input_byte, stream.next_byte-1)
     if !isnothing(error)
         push!(stream.diagnostics, Diagnostic(text_span, error))
     end
     push!(stream.spans, text_span)
-    return lastindex(stream.spans)
+    return position(stream)
 end
 
 """
@@ -380,6 +387,8 @@ Emit a diagnostic at the position of the next token
 
 If `whitespace` is true, the diagnostic is positioned on the whitespace before
 the next token. Otherwise it's positioned at the next token as returned by `peek()`.
+
+FIXME: Rename? This doesn't emit normal tokens into the output event list!
 """
 function emit_diagnostic(stream::ParseStream, mark=nothing, end_mark=nothing;
                          error, whitespace=false)
@@ -392,14 +401,19 @@ function emit_diagnostic(stream::ParseStream, mark=nothing, end_mark=nothing;
         begin_tok_i = 1
         end_tok_i = is_whitespace(stream.lookahead[i]) ? i : max(1, i-1)
     end
-    mark = isnothing(mark) ? first_byte(stream.lookahead[begin_tok_i]) : mark
-    end_mark = isnothing(end_mark) ? last_byte(stream.lookahead[end_tok_i]) : end_mark
+    first_byte = isnothing(mark) ?
+        first_byte(stream.lookahead[begin_tok_i]) : mark.input_byte
+    last_byte = isnothing(end_mark) ?
+        last_byte(stream.lookahead[end_tok_i]) : end_mark.input_byte
     # It's a bit weird to require supplying a SyntaxHead here...
-    text_span = TaggedRange(SyntaxHead(K"error", EMPTY_FLAGS), mark, end_mark)
+    text_span = TaggedRange(SyntaxHead(K"error", EMPTY_FLAGS), first_byte, last_byte)
     push!(stream.diagnostics, Diagnostic(text_span, error))
     return nothing
 end
 
+function emit_diagnostic(stream::ParseStream, r::NTuple{2,ParseStreamPosition}; kws...)
+    emit_diagnostic(stream, first(r), last(r); kws...)
+end
 
 #-------------------------------------------------------------------------------
 # Tree construction from the list of text spans held by ParseStream

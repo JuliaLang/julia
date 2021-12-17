@@ -77,8 +77,15 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             val = Symbol(val_str)
         elseif k == K"VarIdentifier"
             val = Symbol(val_str[5:end-1])
-        elseif k == K"String"
+        elseif iskeyword(k)
+            # This only happens nodes nested inside errors
+            val = Symbol(val_str)
+        elseif k in (K"String", K"Cmd")
             val = unescape_string(source[position+1:position+span(raw)-2])
+        elseif k in (K"TripleString", K"TripleCmd")
+            val = unescape_string(source[position+3:position+span(raw)-4])
+        elseif k == K"UnquotedString"
+            val = String(val_str)
         elseif isoperator(k)
             val = isempty(val_range)  ?
                 Symbol(untokenize(k)) : # synthetic invisible tokens
@@ -92,6 +99,11 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             val = ErrorVal()
         elseif k == K"__dot__"
             val = :__dot__
+        elseif k == K"StringMacroName"
+            val = Symbol(val_str*"_str")
+        elseif k == K"CmdMacroName"
+            val = Symbol(val_str*"_cmd")
+            @info "hi" val
         else
             @error "Leaf node of kind $k unknown to SyntaxNode"
             val = nothing
@@ -143,7 +155,6 @@ end
 
 function _show_syntax_node(io, current_filename, node, indent)
     fname = node.source.filename
-    #@info "" fname print_fname current_filename[] 
     line, col = source_location(node.source, node.position)
     posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(node.position,6)):$(rpad(node.position+span(node)-1,6))│"
     nodestr = !haschildren(node) ?
@@ -173,10 +184,10 @@ function _show_syntax_node_sexpr(io, node)
             print(io, repr(node.val))
         end
     else
-        print(io, "($(_kind_str(kind(node.raw))) ")
+        print(io, "(", _kind_str(kind(node.raw)))
         first = true
         for n in children(node)
-            first || print(io, ' ')
+            print(io, ' ')
             _show_syntax_node_sexpr(io, n)
             first = false
         end
@@ -279,8 +290,15 @@ end
 # Conversion to Base.Expr
 
 function _macroify_name(name)
-    @assert name isa Symbol # fixme
-    Symbol('@', name)
+    if name isa Symbol
+        Symbol('@', name)
+    else
+        if Meta.isexpr(name, :.) && name.args[2] isa QuoteNode
+            Expr(:., name.args[1], QuoteNode(_macroify_name(name.args[2].value)))
+        else
+            name
+        end
+    end
 end
 
 function _to_expr(node::SyntaxNode)
@@ -303,7 +321,11 @@ function _to_expr(node::SyntaxNode)
                 pop!(args)
             end
         end
-        Expr(head(node), args...)
+        if head(node) == :quote
+            QuoteNode(only(args))
+        else
+            Expr(head(node), args...)
+        end
     else
         node.val
     end

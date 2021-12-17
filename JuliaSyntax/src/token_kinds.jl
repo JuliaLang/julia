@@ -812,15 +812,18 @@ Dict([
 
 "END_OPS" => Ts.end_ops
 
-"BEGIN_INVISIBLE_TOKENS" => Ts.begin_invisible_tokens
+"BEGIN_PARSER_TOKENS" => Ts.begin_parser_tokens
 "TOMBSTONE"          =>  Ts.TOMBSTONE
 "core_@doc"          =>  Ts.CORE_AT_DOC
 "core_@cmd"          =>  Ts.CORE_AT_CMD
 "core_@int128_str"   =>  Ts.CORE_AT_INT128_STR
 "core_@uint128_str"  =>  Ts.CORE_AT_UINT128_STR
 "core_@big_str"      =>  Ts.CORE_AT_BIG_STR
-"__dot__"            =>  Ts.__DOT__
-"END_INVISIBLE_TOKENS"   => Ts.end_invisible_tokens
+"__dot__"            =>  Ts.DOT_MACRO_NAME
+"StringMacroName"    =>  Ts.STRING_MACRO_NAME
+"CmdMacroName"       =>  Ts.CMD_MACRO_NAME
+"UnquotedString"     =>  Ts.UNQUOTED_STRING
+"END_PARSER_TOKENS"  => Ts.end_parser_tokens
 
 # Our custom syntax tokens
 "BEGIN_SYNTAX_KINDS" => Ts.begin_syntax_kinds

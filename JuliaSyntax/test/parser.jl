@@ -12,8 +12,6 @@ function itest_parse(production, code)
     stream = ParseStream(code)
     production(JuliaSyntax.ParseState(stream))
     t = JuliaSyntax.to_raw_tree(stream, wrap_toplevel_as_kind=K"toplevel")
-    s = SyntaxNode(SourceFile(code, filename="none"), t)
-    ex = Expr(s)
 
     println(stdout, "# Code:\n$code\n")
 
@@ -21,9 +19,11 @@ function itest_parse(production, code)
     show(stdout, MIME"text/plain"(), t, code)
     JuliaSyntax.show_diagnostics(stdout, stream, code)
 
+    s = SyntaxNode(SourceFile(code, filename="none"), t)
     println(stdout, "\n# SyntaxNode:")
     show(stdout, MIME"text/x.sexpression"(), s)
 
+    ex = Expr(s)
     println(stdout, "\n\n# Julia Expr:")
     show(stdout, MIME"text/plain"(), ex)
 
@@ -152,6 +152,56 @@ tests = [
         #"\$a"  => "(\$ :a)"
         #"\$\$a"  => "(\$ (\$ :a))"
     ],
+    JuliaSyntax.parse_call => [
+        "f(a,b)" => "(call :f :a :b)"
+        "f(a).g(b)" => "(call (. (call :f :a) (quote :g)) :b)"
+        # Keyword arguments depend on call vs macrocall
+        "foo(a=1)"  =>  "(call :foo (kw :a 1))"
+        "@foo(a=1)" =>  "(macrocall :foo (= :a 1))"
+        # f(x) do y body end  ==>  (do (call :f :x) (-> (tuple :y) (block :body)))
+        "@foo a b"     =>  "(macrocall :foo :a :b)"
+        "A.@foo a b"   =>  "(macrocall (. :A (quote :foo)) :a :b)"
+        "@A.foo a b"   =>  "(macrocall (. :A (quote :foo)) :a :b)"
+        # Special @doc parsing rules
+        "@doc x\ny"    =>  "(macrocall :doc :x :y)"
+        "A.@doc x\ny"  =>  "(macrocall (. :A (quote :doc)) :x :y)"
+        "@A.doc x\ny"  =>  "(macrocall (. :A (quote :doc)) :x :y)"
+        "@doc x y\nz"  =>  "(macrocall :doc :x :y)"
+        "@doc x\n\ny"  =>  "(macrocall :doc :x)"
+        "@doc x\nend"  =>  "(macrocall :doc :x)"
+        # Allow `@` in macrocall only in first and last position
+        "A.B.@x"    =>  "(macrocall (. (. :A (quote :B)) (quote :x)))"
+        "@A.B.x"    =>  "(macrocall (. (. :A (quote :B)) (quote :x)))"
+        "A.@B.x"    =>  "(macrocall (. (. :A (quote :B)) (error) (quote :x)))"
+        "a().@x(y)" => "(macrocall (error (. (call :a) (quote :x))) :y)"
+        "a().@x y"  => "(macrocall (error (. (call :a) (quote :x))) :y)"
+        "a().@x{y}" => "(macrocall (error (. (call :a) (quote :x))) (braces :y))"
+        # Keyword params always use kw inside tuple in dot calls
+        "f.(a,b)"   =>  "(. :f (tuple :a :b))"
+        "f.(a=1)"   =>  "(. :f (tuple (kw :a 1)))"
+        # Other dotted syntax
+        "A.:+"      =>  "(. :A (quote :+))"
+        "f.\$x"     =>  "(. :f (quote (\$ :x)))"
+        "f.\$(x+y)" =>  "(. :f (quote (\$ (call :+ :x :y))))"
+        # .' discontinued
+        "f.'"    =>  "(toplevel :f (error :. Symbol(\"'\")))"
+        # Field/property syntax
+        "f.x.y"  =>  "(. (. :f (quote :x)) (quote :y))"
+        # Adjoint
+        "f'"  => "(' :f)"
+        "f'ᵀ" => "(call Symbol(\"'ᵀ\") :f)"
+        # Curly calls
+        "@S{a,b}" => "(macrocall :S (braces :a :b))"
+        "S{a,b}"  => "(curly :S :a :b)"
+        # String macros
+        """x"str\"""" => """(macrocall :x_str "str")"""
+        """x`str`"""  => """(macrocall :x_cmd "str")"""
+        # Macro sufficies can include keywords and numbers
+        "x\"s\"y"    => """(macrocall :x_str "s" "y")"""
+        "x\"s\"end"  => """(macrocall :x_str "s" "end")"""
+        "x\"s\"2"    => """(macrocall :x_str "s" 2)"""
+        "x\"s\"10.0" => """(macrocall :x_str "s" 10.0)"""
+    ],
     JuliaSyntax.parse_paren => [
         # Parentheses used for grouping
         # NB: The toplevel below is an artificial part of the test setup
@@ -163,14 +213,14 @@ tests = [
         "(x,y)"       =>  "(tuple :x :y)"
         "(x=1, y=2)"  =>  "(tuple (= :x 1) (= :y 2))"
         # Named tuples with initial semicolon
-        "(;)"         =>  "(tuple (parameters ))"
+        "(;)"         =>  "(tuple (parameters))"
         "(; a=1)"     =>  "(tuple (parameters (kw :a 1)))"
         # Extra credit: nested parameters and frankentuples
         "(; a=1; b=2)"    => "(tuple (parameters (kw :a 1) (parameters (kw :b 2))))"
         "(a; b; c,d)"     => "(tuple :a (parameters :b (parameters :c :d)))"
         "(a=1, b=2; c=3)" => "(tuple (= :a 1) (= :b 2) (parameters (kw :c 3)))"
         # Block syntax
-        "(;;)"        =>  "(block )"
+        "(;;)"        =>  "(block)"
         "(a=1;)"      =>  "(block (= :a 1))"
         "(a;b;;c)"    =>  "(block :a :b :c)"
         "(a=1; b=2)"  =>  "(block (= :a 1) (= :b 2))"
@@ -180,17 +230,16 @@ tests = [
         # Literal colons
         ":)"   => ":(:)"
         ": end"   => ":(:)"
-        # Macros
-        "@foo x y" => "(macrocall :foo :x :y)"
-        "@foo x\ny" => "(macrocall :foo :x)"
-        # Doc macro parsing
-        "@doc x\ny" => "(macrocall :doc :x :y)"
-        "@doc x\nend" => "(macrocall :doc :x)"
-        "@doc x y\nz" => "(macrocall :doc :x :y)"
+        # Special symbols quoted
+        ":end" => "(quote :end)"
+        ":(end)" => "(quote (error :end))"
+        ":<:"  => "(quote :<:)"
+        # Macro names can be keywords
+        "@end x" => "(macrocall :end :x)"
         # __dot__ macro
         "@. x y" => "(macrocall :__dot__ :x :y)"
         # Errors
-        ": foo" => "(quote (error ) :foo)"
+        ": foo" => "(quote (error) :foo)"
     ],
     JuliaSyntax.parse_docstring => [
         "\"doc\" foo" => "(macrocall :(Core.var\"@doc\") \"doc\" :foo)"
@@ -199,7 +248,7 @@ tests = [
 
 @testset "Inline test cases" begin
     @testset "$production" for (production, test_specs) in tests
-        for (input,output) in test_specs
+        @testset "$input" for (input,output) in test_specs
             @test test_parse(production, input) == output
         end
     end
