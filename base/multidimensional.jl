@@ -762,6 +762,8 @@ LogicalIndex{Int}(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
 size(L::LogicalIndex) = (L.sum,)
 length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
+collect(L::LogicalIndex{Int,<:BitArray}) = findall(vec(L.mask))
+collect(L::LogicalIndex{CartesianIndex{N},BitArray{N}}) where {N} = N >= 2 ? findall(L.mask) : [i for i in L]
 show(io::IO, r::LogicalIndex) = print(io,collect(r))
 print_array(io::IO, X::LogicalIndex) = print_array(io, collect(X))
 # Iteration over LogicalIndex is very performance-critical, but it also must
