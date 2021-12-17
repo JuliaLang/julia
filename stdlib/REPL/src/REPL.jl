@@ -171,6 +171,7 @@ function check_for_missing_packages_and_run_hooks(ast)
     isa(ast, Expr) || return
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
+    filter!(!isequal(:julia), mods) # "julia" is in General but not installable
     if !isempty(mods)
         for f in install_packages_hooks
             Base.invokelatest(f, mods) && return
