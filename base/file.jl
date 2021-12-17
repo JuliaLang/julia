@@ -557,7 +557,7 @@ const temp_prefix = "jl_"
 # Use `Libc.rand()` to generate random strings
 function _rand_filename(len = 10)
     slug = Base.StringVector(len)
-    chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    chars = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
     for i = 1:len
         slug[i] = chars[(Libc.rand() % length(chars)) + 1]
     end
