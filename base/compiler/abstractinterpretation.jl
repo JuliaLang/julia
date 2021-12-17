@@ -21,6 +21,8 @@ function get_max_methods(mod::Module, interp::AbstractInterpreter)
     max_methods < 0 ? InferenceParams(interp).MAX_METHODS : max_methods
 end
 
+const empty_bitset = BitSet()
+
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, @nospecialize(atype),
                                   sv::InferenceState, max_methods::Int = get_max_methods(sv.mod, interp))
@@ -98,6 +100,20 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
             end
         else
+            if infer_compilation_signature(interp)
+                # Also infer the compilation signature for this method, so it's available
+                # to the compiler in case it ends up needing it (which is likely).
+                csig = get_compileable_sig(method, sig, match.sparams)
+                if csig !== nothing && csig !== sig
+                    # The result of this inference is not directly used, so temporarily empty
+                    # the use set for the current SSA value.
+                    saved_uses = sv.ssavalue_uses[sv.currpc]
+                    sv.ssavalue_uses[sv.currpc] = empty_bitset
+                    abstract_call_method(interp, method, csig, match.sparams, multiple_matches, sv)
+                    sv.ssavalue_uses[sv.currpc] = saved_uses
+                end
+            end
+
             result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
             this_rt, edge = result.rt, result.edge
             if edge !== nothing

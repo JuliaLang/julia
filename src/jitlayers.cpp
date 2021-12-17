@@ -85,10 +85,6 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_code_info_t *src,
         size_t world)
 {
-    // TODO: Merge with jl_dump_compiles?
-    static ios_t f_precompile;
-    static JL_STREAM* s_precompile = NULL;
-
     // caller must hold codegen_lock
     // and have disabled finalizers
     uint64_t start_time = 0;
@@ -182,26 +178,6 @@ static jl_callptr_t _jl_compile_codeinst(
     // then dump the method-instance specialization type to the stream
     jl_method_instance_t *mi = codeinst->def;
     if (jl_is_method(mi->def.method)) {
-        if (jl_options.trace_compile != NULL) {
-            if (s_precompile == NULL) {
-                const char* t = jl_options.trace_compile;
-                if (!strncmp(t, "stderr", 6))
-                    s_precompile = JL_STDERR;
-                else {
-                    if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
-                        jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
-                    s_precompile = (JL_STREAM*) &f_precompile;
-                }
-            }
-            if (!jl_has_free_typevars(mi->specTypes)) {
-                jl_printf(s_precompile, "precompile(");
-                jl_static_show(s_precompile, mi->specTypes);
-                jl_printf(s_precompile, ")\n");
-
-                if (s_precompile != JL_STDERR)
-                    ios_flush(&f_precompile);
-            }
-        }
         if (dump_compiles_stream != NULL) {
             jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", end_time - start_time);
             jl_static_show(dump_compiles_stream, mi->specTypes);
