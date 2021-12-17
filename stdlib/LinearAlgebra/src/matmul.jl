@@ -140,11 +140,15 @@ end
 # which is better handled by reinterpreting rather than promotion
 function (*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::StridedMaybeAdjOrTransMat{<:BlasFloat})
     TS = promote_type(eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         wrapperop(A)(convert(AbstractArray{TS}, parent(A))),
+         wrapperop(B)(convert(AbstractArray{TS}, parent(B))))
 end
 function (*)(A::StridedMaybeAdjOrTransMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasComplex})
     TS = promote_type(eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         wrapperop(A)(convert(AbstractArray{TS}, parent(A))),
+         wrapperop(B)(convert(AbstractArray{TS}, parent(B))))
 end
 
 @inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
@@ -155,11 +159,15 @@ end
 # first matrix as a real matrix and carry out real matrix matrix multiply
 function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
     TS = promote_type(eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{real(TS)}, B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         convert(AbstractArray{TS}, A),
+         wrapperop(B)(convert(AbstractArray{real(TS)}, parent(B))))
 end
 function (*)(A::AdjOrTransStridedMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
     TS = promote_type(eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), copy_oftype(A, TS), convert(AbstractArray{real(TS)}, B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         copy_oftype(A, TS), # remove AdjOrTrans to use reinterpret trick below
+         wrapperop(B)(convert(AbstractArray{real(TS)}, parent(B))))
 end
 for elty in (Float32,Float64)
     @eval begin
