@@ -16,6 +16,9 @@ New language features
 * Support for Unicode 14.0.0 ([#43443]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
   no errors were thrown. ([#42211])
+* Mutable struct fields may now be annotated as `const` to prevent changing
+  them after construction, providing for greater clarity and optimization
+  ability of these objects ([#43305]).
 
 Language changes
 ----------------

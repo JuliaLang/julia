@@ -248,10 +248,33 @@ parentmodule(t::UnionAll) = parentmodule(unwrap_unionall(t))
 """
     isconst(m::Module, s::Symbol) -> Bool
 
-Determine whether a global is declared `const` in a given `Module`.
+Determine whether a global is declared `const` in a given module `m`.
 """
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
+
+"""
+    isconst(t::DataType, s::Union{Int,Symbol}) -> Bool
+
+Determine whether a field `s` is declared `const` in a given type `t`.
+"""
+function isconst(@nospecialize(t::Type), s::Symbol)
+    t = unwrap_unionall(t)
+    isa(t, DataType) || return false
+    return isconst(t, fieldindex(t, s, false))
+end
+function isconst(@nospecialize(t::Type), s::Int)
+    t = unwrap_unionall(t)
+    # TODO: what to do for `Union`?
+    isa(t, DataType) || return false # uncertain
+    ismutabletype(t) || return true # immutable structs are always const
+    1 <= s <= length(t.name.names) || return true # OOB reads are "const" since they always throw
+    constfields = t.name.constfields
+    constfields === C_NULL && return false
+    s -= 1
+    return unsafe_load(Ptr{UInt32}(constfields), 1 + s÷32) & (1 << (s%32)) != 0
+end
+
 
 """
     @locals()
