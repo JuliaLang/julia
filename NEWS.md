@@ -13,6 +13,7 @@ New language features
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
+* Support for Unicode 14.0.0 ([#43443]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
   no errors were thrown. ([#42211])
 
@@ -25,6 +26,9 @@ Language changes
 * `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
   i.e. `@time "Evaluating foo" foo()` ([#42431])
 * New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
+* Iterating an `Iterators.Reverse` now falls back on reversing the eachindex interator, if possible ([#43110]).
+* Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
+  to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -37,6 +41,11 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* New option `--strip-metadata` to remove docstrings, source location information, and local
+  variable names when building a system image ([#42513]).
+* New option `--strip-ir` to remove the compiler's IR (intermediate representation) of source
+  code when building a system image. The resulting image will only work if `--compile=all` is
+  used, or if all needed code is precompiled ([#42925]).
 
 Multi-threading changes
 -----------------------
@@ -50,6 +59,7 @@ New library functions
 ---------------------
 
 * `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 
 New library features
 --------------------
@@ -60,6 +70,7 @@ New library features
 * `@testset foo()` can now be used to create a test set from a given function. The name of the test set
   is the name of the called function. The called function can contain `@test` and other `@testset`
   definitions, including to other function calls, while recording all intermediate test results. ([#42518])
+* Keys with value `nothing` are now removed from the environment in `addenv` ([#43271]).
 
 Standard library changes
 ------------------------
@@ -80,6 +91,11 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
+* The BLAS submodule now supports the level-2 BLAS subroutine `spr!` ([#42830]).
+
+* `cholesky[!]` now supports `LinearAlgebra.PivotingStrategy` (singleton type) values
+  as its optional `pivot` argument: the default is `cholesky(A, NoPivot())` (vs.
+  `cholesky(A, RowMaximum())`); the former `Val{true/false}`-based calls are deprecated. ([#41640])
 
 #### Markdown
 
@@ -102,6 +118,9 @@ Standard library changes
   `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
   argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
   to allow any compatible methods.
+
+* New `err` global variable in `Main` set when an expression throws an exception, akin to `ans`. Typing `err` reprints
+  the exception information.
 
 #### SparseArrays
 

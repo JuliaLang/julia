@@ -318,10 +318,12 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     }
     if (src == NULL && jl_is_method(mi->def.method) &&
              jl_symbol_name(mi->def.method->name)[0] != '@') {
-        // If the caller didn't provide the source,
-        // see if it is inferred, or try to infer it for ourself.
-        // (but don't bother with typeinf on macros or toplevel thunks)
-        src = jl_type_infer(mi, world, 0);
+        if (mi->def.method->source != jl_nothing) {
+            // If the caller didn't provide the source and IR is available,
+            // see if it is inferred, or try to infer it for ourself.
+            // (but don't bother with typeinf on macros or toplevel thunks)
+            src = jl_type_infer(mi, world, 0);
+        }
     }
     jl_code_instance_t *compiled = jl_method_compiled(mi, world);
     if (compiled) {
@@ -535,7 +537,7 @@ static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw
 {
     addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, optlevel);
-    addMachinePasses(&PM, &TM);
+    addMachinePasses(&PM, &TM, optlevel);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
 }
@@ -1043,7 +1045,7 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
             ConstantAggregateZero::get(atype), "__catchjmp") };
     gvs[0]->setSection(".text");
     gvs[1]->setSection(".text");
-    appendToUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
+    appendToCompilerUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
 #endif
     jl_jit_share_data(*m);
     assert(jl_ExecutionEngine);
@@ -1132,7 +1134,7 @@ void add_named_global(StringRef name, void *addr)
 }
 
 extern "C" JL_DLLEXPORT
-size_t jl_jit_total_bytes(void)
+size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
 }

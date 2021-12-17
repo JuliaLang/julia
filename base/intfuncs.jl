@@ -319,6 +319,9 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{1}) = x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-1}) = inv(x)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-2}) = (i=inv(x); i*i)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-3}) = (i=inv(x); i*i*i)
 
 # don't use the inv(x) transformation here since float^p is slightly more accurate
 @inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p
@@ -328,7 +331,11 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 # be computed in a type-stable way even for e.g. integers.
 @inline function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
-        literal_pow(^, inv(x), Val(-p))
+        if x isa BitInteger64
+            f(Float64(x), p) # inv would cause rounding, while Float64^Integer is able to compensate the inverse
+        else
+            f(inv(x), -p)
+        end
     else
         f(x, p)
     end
@@ -1040,7 +1047,7 @@ function binomial(n::T, k::T) where T<:Integer
     k < 0 && return zero(T)
     sgn = one(T)
     if n < 0
-        n = -n + k -1
+        n = -n + k - one(T)
         if isodd(k)
             sgn = -sgn
         end
@@ -1051,15 +1058,15 @@ function binomial(n::T, k::T) where T<:Integer
     if k > (n>>1)
         k = (n - k)
     end
-    x::T = nn = n - k + 1
-    nn += 1
-    rr = 2
+    x = nn = n - k + one(T)
+    nn += one(T)
+    rr = T(2)
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt % T
         x == xt || throw(OverflowError("binomial($n0, $k0) overflows"))
-        rr += 1
-        nn += 1
+        rr += one(T)
+        nn += one(T)
     end
-    convert(T, copysign(x, sgn))
+    copysign(x, sgn)
 end

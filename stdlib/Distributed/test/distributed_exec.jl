@@ -293,7 +293,9 @@ let wid1 = workers()[1],
     end
     finalize(rr) # finalize locally
     yield() # flush gc msgs
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    if include_thread_unsafe()
+        @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    end
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
     sleep(0.5) # to ensure that wid2 messages have been executed on wid1
     @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == false
@@ -348,6 +350,9 @@ function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
         v = getfield(ref2, fld)
         if isa(v, Number)
             @test v === zero(typeof(v))
+        elseif fld == :lock
+            @test v isa ReentrantLock
+            @test !islocked(v)
         elseif v !== nothing
             error(string("Add test for field ", fld))
         end
@@ -835,6 +840,16 @@ end
 v15406 = remotecall_wait(() -> 1, id_other)
 fetch(v15406)
 remotecall_wait(fetch, id_other, v15406)
+
+
+# issue #43396
+# Covers the remote fetch where the value returned is `nothing`
+# May be caused by attempting to unwrap a non-`Some` type with `something`
+# `call_on_owner` ref fetches return values not wrapped in `Some`
+# and have to be returned directly
+@test nothing === fetch(remotecall(() -> nothing, workers()[1]))
+@test 10 === fetch(remotecall(() -> 10, workers()[1]))
+
 
 # Test various forms of remotecall* invocations
 

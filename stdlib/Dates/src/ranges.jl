@@ -24,10 +24,11 @@ end
 Base.length(r::StepRange{<:TimeType}) = isempty(r) ? Int64(0) : len(r.start, r.stop, r.step) + 1
 # Period ranges hook into Int64 overflow detection
 Base.length(r::StepRange{<:Period}) = length(StepRange(value(r.start), value(r.step), value(r.stop)))
+Base.checked_length(r::StepRange{<:Period}) = Base.checked_length(StepRange(value(r.start), value(r.step), value(r.stop)))
 
-# Overload Base.steprange_last because `rem` is not overloaded for `TimeType`s
+# Overload Base.steprange_last because `step::Period` may be a variable amount of time (e.g. for Month and Year)
 function Base.steprange_last(start::T, step, stop) where T<:TimeType
-    if isa(step,AbstractFloat)
+    if isa(step, AbstractFloat)
         throw(ArgumentError("StepRange should not be used with floating point"))
     end
     z = zero(step)
@@ -47,7 +48,7 @@ function Base.steprange_last(start::T, step, stop) where T<:TimeType
             last = stop - remain
         end
     end
-    last
+    return last
 end
 
 import Base.in

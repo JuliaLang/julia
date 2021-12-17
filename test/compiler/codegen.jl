@@ -4,6 +4,7 @@
 
 using Random
 using InteractiveUtils
+using Libdl
 
 const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
@@ -602,6 +603,15 @@ get_llvm(g41438, ()); # cause allocation of layout
 @test S41438{Int}.layout != C_NULL
 @test !Base.datatype_pointerfree(S41438{Int})
 
+
+# issue #43303
+struct A43303{T}
+    x::Pair{Ptr{T},Ptr{T}}
+end
+@test A43303.body.layout != C_NULL
+@test isbitstype(A43303{Int})
+@test A43303.body.types[1].layout != C_NULL
+
 # issue #41157
 f41157(a, b) = a[1] = b[1]
 @test_throws BoundsError f41157(Tuple{Int}[], Tuple{Union{}}[])
@@ -640,8 +650,14 @@ U41096 = Term41096{:U}(Modulate41096(:U, false))
 
 # test that we can start julia with libjulia-codegen removed; PR #41936
 mktempdir() do pfx
-    run(`cp -r $(Sys.BINDIR)/.. $pfx`)
-    run(`rm -rf $pfx/lib/julia/libjulia-codegen\*`)
+    cp(dirname(Sys.BINDIR), pfx; force=true)
+    libpath = relpath(dirname(dlpath("libjulia-codegen")), dirname(Sys.BINDIR))
+    libs_deleted = 0
+    for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+        rm(f; force=true, recursive=true)
+        libs_deleted += 1
+    end
+    @test libs_deleted > 0
     @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'println("no codegen!")'`) == "no codegen!"
 end
 
@@ -665,3 +681,13 @@ function f42645()
   res
 end
 @test ((f42645()::B42645).y::A42645{Int}).x
+
+# issue #43123
+@noinline cmp43123(a::Some, b::Some) = something(a) === something(b)
+@noinline cmp43123(a, b) = a[] === b[]
+@test cmp43123(Some{Function}(+), Some{Union{typeof(+), typeof(-)}}(+))
+@test !cmp43123(Some{Function}(+), Some{Union{typeof(+), typeof(-)}}(-))
+@test cmp43123(Ref{Function}(+), Ref{Union{typeof(+), typeof(-)}}(+))
+@test !cmp43123(Ref{Function}(+), Ref{Union{typeof(+), typeof(-)}}(-))
+@test cmp43123(Function[+], Union{typeof(+), typeof(-)}[+])
+@test !cmp43123(Function[+], Union{typeof(+), typeof(-)}[-])

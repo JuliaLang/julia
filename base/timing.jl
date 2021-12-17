@@ -115,10 +115,10 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false, _lpad=true)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
-        print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        _lpad && print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         print(io, timestr, " seconds")
         parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
         parens && print(io, " (")
@@ -149,9 +149,9 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, ne
     nothing
 end
 
-function timev_print(elapsedtime, diff::GC_Diff, compile_time)
+function timev_print(elapsedtime, diff::GC_Diff, compile_time, _lpad)
     allocs = gc_alloc_count(diff)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, true)
+    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, true, _lpad)
     print("elapsed time (ns): $elapsedtime\n")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -217,14 +217,14 @@ julia> @time begin
 2
 
 julia> @time "A one second sleep" sleep(1)
-A one second sleep ->  1.005750 seconds (5 allocations: 144 bytes)
+A one second sleep: 1.005750 seconds (5 allocations: 144 bytes)
 
 julia> for loop in 1:3
             @time loop sleep(1)
         end
-1 ->  1.006760 seconds (5 allocations: 144 bytes)
-2 ->  1.001263 seconds (5 allocations: 144 bytes)
-3 ->  1.003676 seconds (5 allocations: 144 bytes)
+1: 1.006760 seconds (5 allocations: 144 bytes)
+2: 1.001263 seconds (5 allocations: 144 bytes)
+3: 1.003676 seconds (5 allocations: 144 bytes)
 ```
 """
 macro time(ex)
@@ -243,8 +243,10 @@ macro time(msg, ex)
             compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
         )
         local diff = GC_Diff(gc_num(), stats)
-        isnothing($(esc(msg))) || print($(esc(msg)), " ->")
-        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
+        local _msg = $(esc(msg))
+        local has_msg = !isnothing(_msg)
+        has_msg && print(_msg, ": ")
+        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true, !has_msg)
         val
     end
 end
@@ -261,7 +263,7 @@ See also [`@time`](@ref).
 
 ```julia-repl
 julia> @showtime sleep(1)
-sleep(1) ->  1.002164 seconds (4 allocations: 128 bytes)
+sleep(1): 1.002164 seconds (4 allocations: 128 bytes)
 ```
 """
 macro showtime(ex)
@@ -323,8 +325,10 @@ macro timev(msg, ex)
             compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
         )
         local diff = GC_Diff(gc_num(), stats)
-        isnothing($(esc(msg))) || print($(esc(msg)), " ->")
-        timev_print(elapsedtime, diff, compile_elapsedtime)
+        local _msg = $(esc(msg))
+        local has_msg = !isnothing(_msg)
+        has_msg && print(_msg, ": ")
+        timev_print(elapsedtime, diff, compile_elapsedtime, !has_msg)
         val
     end
 end

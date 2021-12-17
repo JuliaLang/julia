@@ -6,6 +6,14 @@
 
 #include "platform.h"
 #include "libsupport.h"
+#include "utils.h"
+#include "bitvector.h"
+#include "timefuncs.h"
+#include "strtod.h"
+#include "dirpath.h"
+#include "hashing.h"
+#include "ptrhash.h"
+#include "htable.h"
 #include "uv.h"
 
 //#define MEMDEBUG

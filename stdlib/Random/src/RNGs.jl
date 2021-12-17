@@ -13,6 +13,9 @@ if Sys.iswindows()
         rand!(rd, rd.buffer)
         @inbounds return rd.buffer[1] % sp[]
     end
+
+    show(io::IO, ::RandomDevice) = print(io, RandomDevice, "()")
+
 else # !windows
     struct RandomDevice <: AbstractRNG
         unlimited::Bool
@@ -43,6 +46,9 @@ else # !windows
         end
         return fd
     end
+
+    show(io::IO, rd::RandomDevice) =
+        print(io, RandomDevice, rd.unlimited ? "()" : "(unlimited=false)")
 
 end # os-test
 
@@ -386,6 +392,7 @@ copy!(::_GLOBAL_RNG, src::Xoshiro) = copy!(default_rng(), src)
 copy(::_GLOBAL_RNG) = copy(default_rng())
 
 GLOBAL_SEED = 0
+set_global_seed!(seed) = global GLOBAL_SEED = seed
 
 function seed!(::_GLOBAL_RNG, seed=rand(RandomDevice(), UInt64, 4))
     global GLOBAL_SEED = seed

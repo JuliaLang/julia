@@ -1,3 +1,4 @@
+
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
@@ -32,6 +33,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, uint8_t default_names)
     m->optlevel = -1;
     m->compile = -1;
     m->infer = -1;
+    m->max_methods = -1;
     JL_MUTEX_INIT(&m->lock);
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -121,6 +123,21 @@ JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m)
     while (value == -1 && m->parent != m && m != jl_base_module) {
         m = m->parent;
         value = m->infer;
+    }
+    return value;
+}
+
+JL_DLLEXPORT void jl_set_module_max_methods(jl_module_t *self, int value)
+{
+    self->max_methods = value;
+}
+
+JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m)
+{
+    int value = m->max_methods;
+    while (value == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        value = m->max_methods;
     }
     return value;
 }
@@ -839,9 +856,10 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
                  (imported && b->imported) ||
                  (b->owner == m && !b->imported && (all || m == jl_main_module))) &&
                 (all || (!b->deprecated && !hidden))) {
+                jl_sym_t *in_module_name = (jl_sym_t*)table[i-1]; // the name in the module may not be b->name, use the httable key instead
                 jl_array_grow_end(a, 1);
                 //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
-                jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)b->name);
+                jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)in_module_name);
             }
         }
     }
