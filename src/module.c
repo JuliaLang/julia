@@ -145,6 +145,7 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     jl_binding_t *b = (jl_binding_t*)jl_gc_alloc_buf(ct->ptls, sizeof(jl_binding_t));
     b->name = name;
     b->value = NULL;
+    b->ty = NULL;
     b->owner = NULL;
     b->globalref = NULL;
     b->constp = 0;
@@ -789,6 +790,11 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs) JL_NOT
         }
         jl_safe_printf("WARNING: redefinition of constant %s. This may fail, cause incorrect answers, or produce other errors.\n",
                        jl_symbol_name(b->name));
+        // Get and set type of global binding if not already there
+        if (b->ty == NULL) {
+            jl_value_t *type = jl_typeof(b->value);
+            jl_set_typeof(b->value, type);
+        }
     }
     jl_atomic_store_relaxed(&b->value, rhs);
     jl_gc_wb_binding(b, rhs);

@@ -511,6 +511,7 @@ typedef struct {
     jl_sym_t *name;
     _Atomic(jl_value_t*) value;
     _Atomic(jl_value_t*) globalref;  // cached GlobalRef for this binding
+    jl_value_t *ty                   // add type for globals
     struct _jl_module_t* owner;  // for individual imported bindings -- TODO: make _Atomic
     uint8_t constp:1;
     uint8_t exportp:1;
