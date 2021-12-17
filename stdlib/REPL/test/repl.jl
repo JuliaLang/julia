@@ -1364,6 +1364,11 @@ end
 
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
         @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("@eval using Foo"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; @eval using Bar end"))
+        @test mods == [:Foo]
     end
 end
 

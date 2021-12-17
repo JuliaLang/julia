@@ -194,6 +194,7 @@ function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
         end
     end
     for arg in ast.args
+        arg == Symbol("@eval") && break # don't search beyond an `@eval`
         arg isa Expr && modules_to_be_loaded(arg, mods)
     end
     filter!(mod -> !in(String(mod), ["Base", "Main", "Core"]), mods) # Exclude special non-package modules
