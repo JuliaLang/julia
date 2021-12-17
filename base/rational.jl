@@ -220,7 +220,7 @@ rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rational
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
 rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer} = rationalize(T, float(x), tol)::Rational{T}
 rationalize(::Type{T}, x::Rational; tol::Real = zero(x)) where {T<:Integer} = rationalize(T, float(x), tol)::Rational{T}
-rationalize(x::Rational; kvs...) = rationalize(Int, x; kvs...)
+rationalize(x::Rational{T}; kvs...) where{T} = rationalize(T, x; kvs...)
 rationalize(::Type{T}, x::Integer, tol::Real) where {T<:Integer} = rationalize(T, Rational(x, 1), tol)
 rationalize(::Type{T}, x::Integer; tol::Real = 0) where {T<:Integer} = Rational(x, 1)
 rationalize(x::Integer; kvs...) = Rational(x)
