@@ -61,49 +61,49 @@ end
 Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
 
 function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::Integer=1)
-    if !haschildren(raw)
+    if !haschildren(raw) && !is_syntax_kind(raw)
         # Leaf node
         k = kind(raw)
         val_range = position:position + span(raw) - 1
         val_str = source[val_range]
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
-        if k == K"Integer"
-            val = Base.parse(Int, val_str)
+        val = if k == K"Integer"
+            Base.parse(Int, val_str)
         elseif k == K"Float"
             # FIXME: Other float types!
-            val = Base.parse(Float64, val_str)
+            Base.parse(Float64, val_str)
         elseif k == K"Identifier"
-            val = Symbol(val_str)
+            Symbol(val_str)
         elseif k == K"VarIdentifier"
-            val = Symbol(val_str[5:end-1])
+            Symbol(val_str[5:end-1])
         elseif iskeyword(k)
             # This only happens nodes nested inside errors
-            val = Symbol(val_str)
+            Symbol(val_str)
         elseif k in (K"String", K"Cmd")
-            val = unescape_string(source[position+1:position+span(raw)-2])
+            unescape_string(source[position+1:position+span(raw)-2])
         elseif k in (K"TripleString", K"TripleCmd")
-            val = unescape_string(source[position+3:position+span(raw)-4])
+            unescape_string(source[position+3:position+span(raw)-4])
         elseif k == K"UnquotedString"
-            val = String(val_str)
+            String(val_str)
         elseif isoperator(k)
-            val = isempty(val_range)  ?
+            isempty(val_range)  ?
                 Symbol(untokenize(k)) : # synthetic invisible tokens
                 Symbol(val_str)
-            @assert !isnothing(val)
         elseif k == K"core_@doc"
-            val = GlobalRef(Core, :var"@doc")
+            GlobalRef(Core, :var"@doc")
         elseif k == K"core_@cmd"
-            val = GlobalRef(Core, :var"@cmd")
+            GlobalRef(Core, :var"@cmd")
         elseif k == K"error"
-            val = ErrorVal()
+            ErrorVal()
         elseif k == K"__dot__"
-            val = :__dot__
+            :__dot__
         elseif k == K"StringMacroName"
-            val = Symbol(val_str*"_str")
+            Symbol(val_str*"_str")
         elseif k == K"CmdMacroName"
-            val = Symbol(val_str*"_cmd")
-            @info "hi" val
+            Symbol(val_str*"_cmd")
+        elseif is_syntax_kind(raw)
+            nothing
         else
             @error "Leaf node of kind $k unknown to SyntaxNode"
             val = nothing
@@ -111,7 +111,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         return SyntaxNode(source, raw, position, nothing, :leaf, val)
     else
         k = kind(raw)
-        str = untokenize(k)
+        str = k == K"Nothing" ? "Nothing" : untokenize(k)
         head = !isnothing(str) ? Symbol(str) :
                error("Can't untokenize head of kind $k")
         cs = SyntaxNode[]
@@ -142,6 +142,8 @@ iserror(node::SyntaxNode) = iserror(node.raw)
 istrivia(node::SyntaxNode) = istrivia(node.raw)
 
 head(node::SyntaxNode) = node.head
+kind(node::SyntaxNode)  = kind(node.raw)
+flags(node::SyntaxNode) = kind(node.raw)
 
 haschildren(node::SyntaxNode) = node.head !== :leaf
 children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : ()

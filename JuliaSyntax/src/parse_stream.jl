@@ -516,14 +516,14 @@ end
 
 # Functions to change parse state
 
-function with_normal_context(ps::ParseState)
-    f(ParseState(ps,
-                 range_colon_enabled=true,
-                 space_sensitive=false,
-                 where_enabled=false,
-                 for_generator=false,
-                 end_symbol=false,
-                 whitespace_newline=false))
+function normal_context(ps::ParseState)
+    ParseState(ps,
+               range_colon_enabled=true,
+               space_sensitive=false,
+               where_enabled=false,
+               for_generator=false,
+               end_symbol=false,
+               whitespace_newline=false)
 end
 
 function with_space_sensitive(f::Function, ps::ParseState)

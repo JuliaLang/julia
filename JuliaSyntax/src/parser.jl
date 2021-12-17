@@ -235,10 +235,9 @@ end
 #
 # flisp: (define (parse-block s (down parse-eq))
 function parse_block(ps::ParseState, down=parse_eq, mark=position(ps))
-    if parse_Nary(ps, down, (K"NewlineWs", K";"),
+    parse_Nary(ps, down, (K"NewlineWs", K";"),
                   (K"end", K"else", K"elseif", K"catch", K"finally"))
-        emit(ps, mark, K"block")
-    end
+    emit(ps, mark, K"block")
 end
 
 # ";" at the top level produces a sequence of top level expressions
@@ -973,17 +972,16 @@ function parse_unary_prefix(ps::ParseState)
     if is_syntactic_unary_op(k)
         k2 = peek(ps, 2)
         if k in (K"&", K"$") && (is_closing_token(ps, k2) || k2 == K"NewlineWs")
-            # (&)     ==>  (&)
-            # ===
-            # x = $
-            # ==> (= x &)
+            # &)   ==>  &
+            # $\n   ==>  $
             bump(ps)
         else
             bump(ps, TRIVIA_FLAG)
             if k in (K"&", K"::")
                 parse_where(ps, parse_call)
             else
-                # $$$a   ==>   ($ ($ ($ a)))
+                # $a   ==>  ($ a)
+                # $$a  ==>  ($ ($ a))
                 parse_unary_prefix(ps)
             end
             emit(ps, mark, k)
@@ -1320,9 +1318,24 @@ function parse_resword(ps::ParseState, word)
     TODO("parse_resword unimplemented")
 end
 
-# flisp: (define (parse-do s)
+#
+# flisp: parse-do
 function parse_do(ps::ParseState)
-    TODO("parse_do unimplemented")
+    ps = normal_context(ps)
+    mark = position(ps)
+    if peek(ps) in (K"NewlineWs", K";")
+        # f() do\nend        ==>  (do (call f) (-> (tuple) (block)))
+        # f() do ; body end  ==>  (do (call f) (-> (tuple) (block body)))
+        # this trivia needs to go into the tuple due to the way position()
+        # works.
+        bump(ps, TRIVIA_FLAG)
+    else
+        # f() do x, y\n body end  ==>  (do (call f) (-> (tuple x y) (block body)))
+        parse_comma_separated(ps, parse_range)
+    end
+    emit(ps, mark, K"tuple")
+    parse_block(ps)
+    emit(ps, mark, K"->")
 end
 
 # flisp: (define (macrocall-to-atsym e)
@@ -1373,9 +1386,16 @@ end
 
 # parse comma-separated assignments, like "i=1:n,j=1:m,..."
 #
-# flisp: (define (parse-comma-separated s what)
-function parse_comma_separated(ps::ParseState, what)
-    TODO("parse_comma_separated unimplemented")
+# flisp: parse-comma-separated
+function parse_comma_separated(ps::ParseState, down)
+    while true
+        down(ps)
+        if peek(ps) == K","
+            bump(ps, TRIVIA_FLAG)
+        else
+            break
+        end
+    end
 end
 
 # flisp: (define (parse-comma-separated-assignments s)
@@ -1581,6 +1601,7 @@ end
 # tuples we use the presence of `,` within the `;`-delimited sections: If
 # there's commas, it's a tuple, otherwise a block.
 #
+# flisp: parts of parse-paren- and parse-arglist
 function parse_brackets(after_parse::Function,
                         ps::ParseState, closing_kind)
     ps = ParseState(ps, range_colon_enabled=true,
