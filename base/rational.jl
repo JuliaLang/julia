@@ -223,7 +223,7 @@ rationalize(::Type{T}, x::Rational; tol::Real = zero(x)) where {T<:Integer} = ra
 rationalize(x::Rational; kvs...) = rationalize(Int, x; kvs...)
 rationalize(::Type{T}, x::Integer, tol::Real) where {T<:Integer} = rationalize(T, Rational(x, 1), tol)
 rationalize(::Type{T}, x::Integer; tol::Real = 0) where {T<:Integer} = Rational(x, 1)
-rationalize(x::Integer; kvs...) = Rational(x, 1)
+rationalize(x::Integer; kvs...) = Rational(x)
 
 
 
