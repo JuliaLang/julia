@@ -303,7 +303,7 @@ objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
 # concrete datatype predicates
 
-datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Any, (Any,), x)
+datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Core.SimpleVector, (Any,), x)
 
 struct DataTypeLayout
     nfields::UInt32

@@ -23,3 +23,4 @@ Debugging
 | Name                           |  Description                                                |
 | ------------------------------ | ----------------------------------------------------------- |
 |[ debug_bootstrap.gdb ](https://github.com/JuliaLang/julia/blob/master/contrib/debug_bootstrap.gdb) | Bootstrap process using the debug build |
+|[ valgrind-julia.supp ](https://github.com/JuliaLang/julia/blob/master/contrib/valgrind-julia.supp) | Suppressions for Valgrind debugging tool |

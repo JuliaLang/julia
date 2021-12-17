@@ -357,7 +357,7 @@ end
 
 /(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D)), size(A)), A, D)
 
-rdiv!(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(A, A, D)
+rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
 function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     require_one_based_indexing(A)
@@ -378,17 +378,21 @@ end
 
 \(D::Diagonal, B::AbstractVecOrMat) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B)), size(B)), D, B)
 
-ldiv!(D::Diagonal, B::AbstractVecOrMat) = ldiv!(B, D, B)
+ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
     require_one_based_indexing(A, B)
-    d = length(D.diag)
+    dd = D.diag
+    d = length(dd)
     m, n = size(A, 1), size(A, 2)
     m′, n′ = size(B, 1), size(B, 2)
     m == d || throw(DimensionMismatch("right hand side has $m rows but D is $d by $d"))
     (m, n) == (m′, n′) || throw(DimensionMismatch("expect output to be $m by $n, but got $m′ by $n′"))
     j = findfirst(iszero, D.diag)
     isnothing(j) || throw(SingularException(j))
-    B .= D.diag .\ A
+    @inbounds for j = 1:n, i = 1:m
+        B[i, j] = dd[i] \ A[i, j]
+    end
+    B
 end
 
 # Optimizations for \, / between Diagonals
@@ -711,7 +715,7 @@ function _mapreduce_prod(f, x, D::Diagonal, y)
     end
 end
 
-function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
+function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
     info = 0
     for (i, di) in enumerate(A.diag)
         if isreal(di) && real(di) > 0
@@ -725,9 +729,11 @@ function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
     end
     Cholesky(A, 'U', convert(BlasInt, info))
 end
+@deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 
-cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
-    cholesky!(cholcopy(A), Val(false); check = check)
+cholesky(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true) =
+    cholesky!(cholcopy(A), NoPivot(); check = check)
+@deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
 
 function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
     Cfactors = getfield(C, :factors)

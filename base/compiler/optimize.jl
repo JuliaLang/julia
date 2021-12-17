@@ -34,8 +34,6 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
         src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
         src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
         return src_inferred && src_inlineable ? src : nothing
-    elseif isa(src, OptimizationState) && isdefined(src, :ir)
-        return (is_stmt_inline(stmt_flag) || src.src.inlineable) ? src.ir : nothing
     elseif src === nothing && is_stmt_inline(stmt_flag)
         # if this statement is forced to be inlined, make an additional effort to find the
         # inferred source in the local cache
@@ -47,8 +45,6 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
         if isa(src, CodeInfo)
             src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
             return src_inferred ? src : nothing
-        elseif isa(src, OptimizationState)
-            return isdefined(src, :ir) ? src.ir : nothing
         else
             return nothing
         end
@@ -66,7 +62,6 @@ mutable struct OptimizationState
     mod::Module
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
-    const_api::Bool
     inlining::InliningState
     function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
         s_edges = frame.stmt_edges[1]::Vector{Any}
@@ -76,8 +71,7 @@ mutable struct OptimizationState
             interp)
         return new(frame.linfo,
                    frame.src, nothing, frame.stmt_info, frame.mod,
-                   frame.sptypes, frame.slottypes, false,
-                   inlining)
+                   frame.sptypes, frame.slottypes, inlining)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
         # prepare src for running optimization passes
@@ -105,8 +99,7 @@ mutable struct OptimizationState
             interp)
         return new(linfo,
                    src, nothing, stmt_info, mod,
-                   sptypes_from_meth_instance(linfo), slottypes, false,
-                   inlining)
+                   sptypes_from_meth_instance(linfo), slottypes, inlining)
     end
 end
 
@@ -186,7 +179,7 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
         return false
     end
     if isa(stmt, GotoIfNot)
-        t = argextype(stmt.cond, ir, ir.sptypes)
+        t = argextype(stmt.cond, ir)
         return !(t ⊑ Bool)
     end
     if isa(stmt, Expr)
@@ -195,18 +188,156 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
     return true
 end
 
-# compute inlining cost and sideeffects
-function finish(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, ir::IRCode, @nospecialize(result))
+"""
+    stmt_effect_free(stmt, rt, src::Union{IRCode,IncrementalCompact})
+
+Determine whether a `stmt` is "side-effect-free", i.e. may be removed if it has no uses.
+"""
+function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
+    isa(stmt, PiNode) && return true
+    isa(stmt, PhiNode) && return true
+    isa(stmt, ReturnNode) && return false
+    isa(stmt, GotoNode) && return false
+    isa(stmt, GotoIfNot) && return false
+    isa(stmt, Slot) && return false # Slots shouldn't occur in the IR at this point, but let's be defensive here
+    isa(stmt, GlobalRef) && return isdefined(stmt.mod, stmt.name)
+    if isa(stmt, Expr)
+        (; head, args) = stmt
+        if head === :static_parameter
+            etyp = (isa(src, IRCode) ? src.sptypes : src.ir.sptypes)[args[1]::Int]
+            # if we aren't certain enough about the type, it might be an UndefVarError at runtime
+            return isa(etyp, Const)
+        end
+        if head === :call
+            f = argextype(args[1], src)
+            f = singleton_type(f)
+            f === nothing && return false
+            is_return_type(f) && return true
+            if isa(f, IntrinsicFunction)
+                intrinsic_effect_free_if_nothrow(f) || return false
+                return intrinsic_nothrow(f,
+                        Any[argextype(args[i], src) for i = 2:length(args)])
+            end
+            contains_is(_PURE_BUILTINS, f) && return true
+            contains_is(_PURE_OR_ERROR_BUILTINS, f) || return false
+            rt === Bottom && return false
+            return _builtin_nothrow(f, Any[argextype(args[i], src) for i = 2:length(args)], rt)
+        elseif head === :new
+            typ = argextype(args[1], src)
+            # `Expr(:new)` of unknown type could raise arbitrary TypeError.
+            typ, isexact = instanceof_tfunc(typ)
+            isexact || return false
+            isconcretedispatch(typ) || return false
+            typ = typ::DataType
+            fieldcount(typ) >= length(args) - 1 || return false
+            for fld_idx in 1:(length(args) - 1)
+                eT = argextype(args[fld_idx + 1], src)
+                fT = fieldtype(typ, fld_idx)
+                eT ⊑ fT || return false
+            end
+            return true
+        elseif head === :new_opaque_closure
+            length(args) < 5 && return false
+            typ = argextype(args[1], src)
+            typ, isexact = instanceof_tfunc(typ)
+            isexact || return false
+            typ ⊑ Tuple || return false
+            isva = argextype(args[2], src)
+            rt_lb = argextype(args[3], src)
+            rt_ub = argextype(args[4], src)
+            src = argextype(args[5], src)
+            if !(isva ⊑ Bool && rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
+                return false
+            end
+            return true
+        elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds || head === :boundscheck
+            return true
+        else
+            # e.g. :loopinfo
+            return false
+        end
+    end
+    return true
+end
+
+"""
+    argextype(x, src::Union{IRCode,IncrementalCompact}) -> t
+    argextype(x, src::CodeInfo, sptypes::Vector{Any}) -> t
+
+Return the type of value `x` in the context of inferred source `src`.
+Note that `t` might be an extended lattice element.
+Use `widenconst(t)` to get the native Julia type of `x`.
+"""
+argextype(@nospecialize(x), ir::IRCode, sptypes::Vector{Any} = ir.sptypes) =
+    argextype(x, ir, sptypes, ir.argtypes)
+function argextype(@nospecialize(x), compact::IncrementalCompact, sptypes::Vector{Any} = compact.ir.sptypes)
+    isa(x, AnySSAValue) && return types(compact)[x]
+    return argextype(x, compact, sptypes, compact.ir.argtypes)
+end
+argextype(@nospecialize(x), src::CodeInfo, sptypes::Vector{Any}) = argextype(x, src, sptypes, src.slottypes::Vector{Any})
+function argextype(
+    @nospecialize(x), src::Union{IRCode,IncrementalCompact,CodeInfo},
+    sptypes::Vector{Any}, slottypes::Vector{Any})
+    if isa(x, Expr)
+        if x.head === :static_parameter
+            return sptypes[x.args[1]::Int]
+        elseif x.head === :boundscheck
+            return Bool
+        elseif x.head === :copyast
+            return argextype(x.args[1], src, sptypes, slottypes)
+        end
+        @assert false "argextype only works on argument-position values"
+    elseif isa(x, SlotNumber)
+        return slottypes[x.id]
+    elseif isa(x, TypedSlot)
+        return x.typ
+    elseif isa(x, SSAValue)
+        return abstract_eval_ssavalue(x, src)
+    elseif isa(x, Argument)
+        return slottypes[x.n]
+    elseif isa(x, QuoteNode)
+        return Const(x.value)
+    elseif isa(x, GlobalRef)
+        return abstract_eval_global(x.mod, x.name)
+    elseif isa(x, PhiNode)
+        return Any
+    elseif isa(x, PiNode)
+        return x.typ
+    else
+        return Const(x)
+    end
+end
+abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
+
+struct ConstAPI
+    val
+    ConstAPI(@nospecialize val) = new(val)
+end
+
+"""
+    finish(interp::AbstractInterpreter, opt::OptimizationState,
+           params::OptimizationParams, ir::IRCode, result) -> analyzed::Union{Nothing,ConstAPI}
+
+Post process information derived by Julia-level optimizations for later uses:
+- computes "purity", i.e. side-effect-freeness
+- computes inlining cost
+
+In a case when the purity is proven, `finish` can return `ConstAPI` object wrapping the constant
+value so that the runtime system will use the constant calling convention for the method calls.
+"""
+function finish(interp::AbstractInterpreter, opt::OptimizationState,
+                params::OptimizationParams, ir::IRCode, @nospecialize(result))
     (; src, linfo) = opt
     (; def, specTypes) = linfo
 
+    analyzed = nothing # `ConstAPI` if this call can use constant calling convention
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
         proven_pure = false
-        # must be proven pure to use const_api; otherwise we might skip throwing errors
-        # (issue #20704)
+        # must be proven pure to use constant calling convention;
+        # otherwise we might skip throwing errors (issue #20704)
         # TODO: Improve this analysis; if a function is marked @pure we should really
         # only care about certain errors (e.g. method errors and type errors).
         if length(ir.stmts) < 10
@@ -214,7 +345,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
             for i in 1:length(ir.stmts)
                 node = ir.stmts[i]
                 stmt = node[:inst]
-                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, node[:type], ir, ir.sptypes)
+                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, node[:type], ir)
                     proven_pure = false
                     break
                 end
@@ -228,9 +359,6 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
                 end
             end
         end
-        if proven_pure
-            src.pure = true
-        end
 
         if proven_pure
             # use constant calling convention
@@ -239,8 +367,15 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
             # to the `jl_call_method_internal` fast path
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
-            if !(isa(result, Const) && !is_inlineable_constant(result.val))
-                opt.const_api = true
+            src.pure = true
+            if isa(result, Const)
+                val = result.val
+                if is_inlineable_constant(val)
+                    analyzed = ConstAPI(val)
+                end
+            else
+                @assert isconstType(result)
+                analyzed = ConstAPI(result.parameters[1])
             end
             force_noinline || (src.inlineable = true)
         end
@@ -263,7 +398,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
         else
             force_noinline = true
         end
-        if !src.inlineable && result === Union{}
+        if !src.inlineable && result === Bottom
             force_noinline = true
         end
     end
@@ -293,13 +428,13 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
         end
     end
 
-    return nothing
+    return analyzed
 end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
     @timeit "optimizer" ir = run_passes(opt.src, opt)
-    finish(interp, opt, params, ir, result)
+    return finish(interp, opt, params, ir, result)
 end
 
 function run_passes(ci::CodeInfo, sv::OptimizationState)
@@ -416,6 +551,7 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.arraylen ||   # this one is volatile
              f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
+             f === Intrinsics.have_fma ||  # this one depends on the runtime environment
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
 
@@ -431,20 +567,19 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any},
-                        slottypes::Vector{Any}, union_penalties::Bool,
-                        params::OptimizationParams, error_path::Bool = false)
+                        union_penalties::Bool, params::OptimizationParams, error_path::Bool = false)
     head = ex.head
     if is_meta_expr_head(head)
         return 0
     elseif head === :call
         farg = ex.args[1]
-        ftyp = argextype(farg, src, sptypes, slottypes)
+        ftyp = argextype(farg, src, sptypes)
         if ftyp === IntrinsicFunction && farg isa SSAValue
             # if this comes from code that was already inlined into another function,
             # Consts have been widened. try to recover in simple cases.
             farg = isa(src, CodeInfo) ? src.code[farg.id] : src.stmts[farg.id][:inst]
             if isa(farg, GlobalRef) || isa(farg, QuoteNode) || isa(farg, IntrinsicFunction) || isexpr(farg, :static_parameter)
-                ftyp = argextype(farg, src, sptypes, slottypes)
+                ftyp = argextype(farg, src, sptypes)
             end
         end
         f = singleton_type(ftyp)
@@ -466,15 +601,15 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
             elseif (f === Core.arrayref || f === Core.const_arrayref || f === Core.arrayset) && length(ex.args) >= 3
-                atyp = argextype(ex.args[3], src, sptypes, slottypes)
+                atyp = argextype(ex.args[3], src, sptypes)
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
-            elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes, slottypes)))
+            elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
             elseif f === Core.isa
                 # If we're in a union context, we penalize type computations
                 # on union types. In such cases, it is usually better to perform
                 # union splitting on the outside.
-                if union_penalties && isa(argextype(ex.args[2],  src, sptypes, slottypes), Union)
+                if union_penalties && isa(argextype(ex.args[2],  src, sptypes), Union)
                     return params.inline_nonleaf_penalty
                 end
             end
@@ -486,7 +621,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             end
             return T_FFUNC_COST[fidx]
         end
-        extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes, slottypes)
+        extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
         if extyp === Union{}
             return 0
         end
@@ -497,7 +632,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         # run-time of the function, we omit them from
         # consideration. This way, non-inlined error branches do not
         # prevent inlining.
-        extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes, slottypes)
+        extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
         return extyp === Union{} ? 0 : 20
     elseif head === :(=)
         if ex.args[1] isa GlobalRef
@@ -507,7 +642,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         end
         a = ex.args[2]
         if a isa Expr
-            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, slottypes, union_penalties, params, error_path))
+            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, union_penalties, params, error_path))
         end
         return cost
     elseif head === :copyast
@@ -523,11 +658,11 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
 end
 
 function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any},
-                                  slottypes::Vector{Any}, union_penalties::Bool, params::OptimizationParams)
+                                  union_penalties::Bool, params::OptimizationParams)
     thiscost = 0
     dst(tgt) = isa(src, IRCode) ? first(src.cfg.blocks[tgt].stmts) : tgt
     if stmt isa Expr
-        thiscost = statement_cost(stmt, line, src, sptypes, slottypes, union_penalties, params,
+        thiscost = statement_cost(stmt, line, src, sptypes, union_penalties, params,
                                   is_stmt_throw_block(isa(src, IRCode) ? src.stmts.flag[line] : src.ssaflags[line]))::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
@@ -545,7 +680,7 @@ function inline_worthy(ir::IRCode,
     bodycost::Int = 0
     for line = 1:length(ir.stmts)
         stmt = ir.stmts[line][:inst]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, ir.argtypes, union_penalties, params)
+        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, union_penalties, params)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return false
     end
@@ -557,7 +692,6 @@ function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeI
     for line = 1:length(body)
         stmt = body[line]
         thiscost = statement_or_branch_cost(stmt, line, src, sptypes,
-                                            src isa CodeInfo ? src.slottypes : src.argtypes,
                                             unionpenalties, params)
         cost[line] = thiscost
         if thiscost > maxcost
@@ -565,14 +699,6 @@ function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeI
         end
     end
     return maxcost
-end
-
-function is_known_call(e::Expr, @nospecialize(func), src, sptypes::Vector{Any}, slottypes::Vector{Any} = EMPTY_SLOTTYPES)
-    if e.head !== :call
-        return false
-    end
-    f = argextype(e.args[1], src, sptypes, slottypes)
-    return isa(f, Const) && f.val === func
 end
 
 function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int})

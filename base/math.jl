@@ -41,6 +41,24 @@ end
 
 # non-type specific math functions
 
+@inline function two_mul(x::Float64, y::Float64)
+    if Core.Intrinsics.have_fma(Float64)
+        xy = x*y
+        return xy, fma(x, y, -xy)
+    end
+    return Base.twomul(x,y)
+end
+
+@inline function two_mul(x::T, y::T) where T<: Union{Float16, Float32}
+    if Core.Intrinsics.have_fma(T)
+        xy = x*y
+        return xy, fma(x, y, -xy)
+    end
+    xy = widen(x)*y
+    Txy = T(xy)
+    return Txy, T(xy-Txy)
+end
+
 """
     clamp(x, lo, hi)
 
@@ -278,8 +296,7 @@ end
     hi, lo = p[end], zero(x)
     for i in length(p)-1:-1:1
         pi = p[i]
-        prod = hi*x
-        err = fma(hi, x, -prod)
+        prod, err = two_mul(hi,x)
         hi = pi+prod
         lo = fma(lo, x, prod - (hi - pi) + err)
     end
@@ -622,6 +639,8 @@ The article is available online at ArXiv at the link
 
 Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
 
+See also `norm` in the [`LinearAlgebra`](@ref man-linalg) standard library.
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> a = Int64(10)^10;
@@ -643,6 +662,11 @@ julia> hypot(-5.7)
 
 julia> hypot(3, 4im, 12.0)
 13.0
+
+julia> using LinearAlgebra
+
+julia> norm([a, a, a, a]) == hypot(a, a, a, a)
+true
 ```
 """
 hypot(x::Number) = abs(float(x))
@@ -686,7 +710,7 @@ function _hypot(x, y)
     end
     h = sqrt(muladd(ax, ax, ay*ay))
     # This branch is correctly rounded but requires a native hardware fma.
-    if Base.Math.FMA_NATIVE
+    if Core.Intrinsics.have_fma(typeof(h))
         hsquared = h*h
         axsquared = ax*ax
         h -= (fma(-ay, ay, hsquared-axsquared) + fma(h, h,-hsquared) - fma(ax, ax, -axsquared))/(2*h)
@@ -957,7 +981,7 @@ function ^(x::Float64, y::Float64)
     y == yint && return x^yint
     x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     x == 1 && return 1.0
-    !isfinite(x) && return x*(y>0)
+    !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*Inf*(!(y>0))
     logxhi,logxlo = Base.Math._log_ext(x)
     xyhi = logxhi*y
@@ -970,7 +994,7 @@ function ^(x::T, y::T) where T <: Union{Float16, Float32}
     y == yint && return x^yint
     x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     x == 1 && return one(T)
-    !isfinite(x) && return x*(y>0)
+    !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*T(Inf)*(!(y>0))
     return T(exp2(log2(abs(widen(x))) * y))
 end
@@ -990,13 +1014,13 @@ function ^(x::Float64, n::Integer)
     n == 3 && return x*x*x # keep compatibility with literal_pow
     while n > 1
         if n&1 > 0
-            yn = x*y
-            ynlo = fma(x, y , -yn) + muladd(y, xnlo, x*ynlo)
-            y = yn
+            err = muladd(y, xnlo, x*ynlo)
+            y, ynlo = two_mul(x,y)
+            ynlo += err
         end
-        xn = x * x
-        xnlo = muladd(x, 2*xnlo, fma(x, x, -xn))
-        x = xn
+        err = x*2*xnlo
+        x, xnlo = two_mul(x, x)
+        xnlo += err
         n >>>= 1
     end
     !isfinite(x) && return x*y

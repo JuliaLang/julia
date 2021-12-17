@@ -860,21 +860,21 @@ static void jl_dump_asm_internal(
     std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple.str()));
     assert(MRI && "Unable to create target register info!");
 
-    std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
-#if JL_LLVM_VERSION >= 130000
-    MCSubtargetInfo *MSTI = TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features);
-    assert(MSTI && "Unable to create subtarget info!");
+    std::unique_ptr<llvm::MCSubtargetInfo> STI(
+      TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features));
+    assert(STI && "Unable to create subtarget info!");
 
-    MCContext Ctx(TheTriple, MAI.get(), MRI.get(), MSTI, &SrcMgr);
-    MOFI->initMCObjectFileInfo(Ctx, /* PIC */ false, /* LargeCodeModel */ false);
+#if JL_LLVM_VERSION >= 130000
+    MCContext Ctx(TheTriple, MAI.get(), MRI.get(), STI.get(), &SrcMgr);
+    std::unique_ptr<MCObjectFileInfo> MOFI(
+      TheTarget->createMCObjectFileInfo(Ctx, /*PIC=*/false, /*LargeCodeModel=*/ false));
+    Ctx.setObjectFileInfo(MOFI.get());
 #else
+    std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
     MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, Ctx);
 #endif
 
-    // Set up Subtarget and Disassembler
-    std::unique_ptr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features));
     std::unique_ptr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
     if (!DisAsm) {
         rstream << "ERROR: no disassembler for target " << TheTriple.str();

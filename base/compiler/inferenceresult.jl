@@ -21,7 +21,8 @@ end
 # to return a valid value for `cache_lookup(linfo, argtypes, cache).argtypes`,
 # so that we can construct cache-correct `InferenceResult`s in the first place.
 function matching_cache_argtypes(
-    linfo::MethodInstance, (; fargs, argtypes)::ArgInfo, va_override::Bool)
+    linfo::MethodInstance, (arginfo, sv)#=::Tuple{ArgInfo,InferenceState}=#, va_override::Bool)
+    (; fargs, argtypes) = arginfo
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
     cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing, va_override)
@@ -32,7 +33,7 @@ function matching_cache_argtypes(
         # forward `Conditional` if it conveys a constraint on any other argument
         if isa(argtype, Conditional) && fargs !== nothing
             cnd = argtype
-            slotid = find_constrained_arg(cnd, fargs)
+            slotid = find_constrained_arg(cnd, fargs, sv)
             if slotid !== nothing
                 # using union-split signature, we may be able to narrow down `Conditional`
                 sigt = widenconst(slotid > nargs ? argtypes[slotid] : cache_argtypes[slotid])

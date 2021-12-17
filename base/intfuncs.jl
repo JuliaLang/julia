@@ -1047,7 +1047,7 @@ function binomial(n::T, k::T) where T<:Integer
     k < 0 && return zero(T)
     sgn = one(T)
     if n < 0
-        n = -n + k -1
+        n = -n + k - one(T)
         if isodd(k)
             sgn = -sgn
         end
@@ -1058,15 +1058,15 @@ function binomial(n::T, k::T) where T<:Integer
     if k > (n>>1)
         k = (n - k)
     end
-    x::T = nn = n - k + 1
-    nn += 1
-    rr = 2
+    x = nn = n - k + one(T)
+    nn += one(T)
+    rr = T(2)
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt % T
         x == xt || throw(OverflowError("binomial($n0, $k0) overflows"))
-        rr += 1
-        nn += 1
+        rr += one(T)
+        nn += one(T)
     end
-    convert(T, copysign(x, sgn))
+    copysign(x, sgn)
 end

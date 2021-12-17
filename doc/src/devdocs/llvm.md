@@ -45,8 +45,8 @@ a file called `Make.user` in the top-level directory and adding a line to it suc
 LLVM_VER = 12.0.1
 ```
 
-Besides the LLVM release numerals, you can also use `LLVM_VER = svn` to build against the latest
-development version of LLVM.
+Besides the LLVM release numerals, you can also use `DEPS_GIT = llvm` in combination with
+`USE_BINARYBUILDER_LLVM = 0` to build against the latest development version of LLVM.
 
 You can also specify to build a debug version of LLVM, by setting either `LLVM_DEBUG = 1` or
 `LLVM_DEBUG = Release` in your `Make.user` file. The former will be a fully unoptimized build
@@ -79,7 +79,7 @@ environment. In addition, it exposes the `-julia` meta-pass, which runs the
 entire Julia pass-pipeline over the IR. As an example, to generate a system
 image, one could do:
 ```
-opt -load libjulia-internal.so -julia -o opt.bc unopt.bc
+opt -enable-new-pm=0 -load libjulia-internal.so -julia -o opt.bc unopt.bc
 llc -o sys.o opt.bc
 cc -shared -o sys.so sys.o
 ```

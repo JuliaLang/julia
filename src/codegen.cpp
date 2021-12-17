@@ -144,7 +144,7 @@ extern JITEventListener *CreateJuliaJITEventListener();
 bool imaging_mode = false;
 
 // shared llvm state
-JL_DLLEXPORT LLVMContext &jl_LLVMContext = *(new LLVMContext());
+static LLVMContext &jl_LLVMContext = *(new LLVMContext());
 TargetMachine *jl_TargetMachine;
 static DataLayout &jl_data_layout = *(new DataLayout(""));
 #define jl_Module ctx.f->getParent()
@@ -1707,6 +1707,16 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
             llvm::DEBUG_METADATA_VERSION);
     m->setDataLayout(jl_data_layout);
     m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
+
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION >= 130000
+    // tell Win32 to assume the stack is always 16-byte aligned,
+    // and to ensure that it is 16-byte aligned for out-going calls,
+    // to ensure compatibility with GCC codes
+    m->setOverrideStackAlignment(16);
+#endif
+#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION >= 130000
+    m->setStackProtectorGuard("global");
+#endif
 }
 
 Module *jl_create_llvm_module(StringRef name)
@@ -2178,34 +2188,19 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
 static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                                Value *nullcheck1, Value *nullcheck2)
 {
-    // If either sides is boxed or can be trivially boxed,
-    // we'll prefer to do a pointer check.
-    // At this point, we know that at least one of the arguments isn't a constant
-    // so a runtime content check will involve at least one load from the
-    // pointer (and likely a type check)
-    // so a pointer comparison should be no worse than that even in imaging mode
-    // when the constant pointer has to be loaded.
-    // Note that we ignore nullcheck, since in the case where it may be set, we
-    // also knew the types of both fields must be the same so there cannot be
-    // any unboxed values on either side.
-    if ((!arg1.TIndex && jl_pointer_egal(arg1.typ)) || (!arg2.TIndex && jl_pointer_egal(arg2.typ))) {
-        // n.b. Vboxed may be incomplete if Tindex is set (missing singletons)
-        // and Vboxed == isboxed || Tindex
-        if ((arg1.Vboxed || arg1.constant) && (arg2.Vboxed || arg2.constant)) {
-            Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : maybe_bitcast(ctx, arg1.Vboxed, T_pjlvalue);
-            Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : maybe_bitcast(ctx, arg2.Vboxed, T_pjlvalue);
-            return ctx.builder.CreateICmpEQ(decay_derived(ctx, varg1), decay_derived(ctx, varg2));
-        }
-        return ConstantInt::get(T_int1, 0); // seems probably unreachable?
-        // (since intersection of rt1 and rt2 is non-empty here, so we should have
-        // a value in this intersection, but perhaps intersection might have failed)
+    if (jl_pointer_egal(arg1.typ) || jl_pointer_egal(arg2.typ)) {
+        // if we can be certain we won't try to load from the pointer (because
+        // we know boxed is trivial), we can skip the separate null checks
+        // and just do the ICmpEQ test
+        if (!arg1.TIndex && !arg2.TIndex)
+            nullcheck1 = nullcheck2 = nullptr;
     }
-
     return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] {
-        Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : maybe_bitcast(ctx, value_to_pointer(ctx, arg1).V, T_pjlvalue);
-        Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : maybe_bitcast(ctx, value_to_pointer(ctx, arg2).V, T_pjlvalue);
-        varg1 = decay_derived(ctx, varg1);
-        varg2 = decay_derived(ctx, varg2);
+        Value *varg1 = decay_derived(ctx, boxed(ctx, arg1));
+        Value *varg2 = decay_derived(ctx, boxed(ctx, arg2));
+        if (jl_pointer_egal(arg1.typ) || jl_pointer_egal(arg2.typ)) {
+            return ctx.builder.CreateICmpEQ(varg1, varg2);
+        }
         Value *neq = ctx.builder.CreateICmpNE(varg1, varg2);
         return emit_guarded_test(ctx, neq, true, [&] {
             Value *dtarg = emit_typeof_boxed(ctx, arg1);
@@ -2731,28 +2726,28 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     *ret = ghostValue(ety);
                 }
                 else if (!isboxed && jl_is_uniontype(ety)) {
-                    Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
-                    Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), AT->getPointerTo());
-                    // isbits union selector bytes are stored after a->maxsize
-                    Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
-                    Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
+                    Value *data = emit_arrayptr(ctx, ary, ary_ex);
                     Value *offset = emit_arrayoffset(ctx, ary, nd);
-                    Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
-                    Value *selidx_m = emit_arraylen(ctx, ary);
-                    Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
-                    Value *ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                    Value *ptindex;
+                    if (elsz == 0) {
+                        ptindex = data;
+                    }
+                    else {
+                        Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
+                        data = emit_bitcast(ctx, data, AT->getPointerTo());
+                        // isbits union selector bytes are stored after a->maxsize
+                        Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
+                        Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
+                        Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
+                        Value *selidx_m = emit_arraylen(ctx, ary);
+                        Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
+                        ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                        data = ctx.builder.CreateInBoundsGEP(AT, data, idx);
+                    }
                     ptindex = emit_bitcast(ctx, ptindex, T_pint8);
                     ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, offset);
                     ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, idx);
-                    Instruction *tindex = tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateAlignedLoad(T_int8, ptindex, Align(1)));
-                    tindex->setMetadata(LLVMContext::MD_range, MDNode::get(jl_LLVMContext, {
-                        ConstantAsMetadata::get(ConstantInt::get(T_int8, 0)),
-                        ConstantAsMetadata::get(ConstantInt::get(T_int8, union_max)) }));
-                    AllocaInst *lv = emit_static_alloca(ctx, AT);
-                    if (al > 1)
-                        lv->setAlignment(Align(al));
-                    emit_memcpy(ctx, lv, tbaa_arraybuf, ctx.builder.CreateInBoundsGEP(AT, data, idx), tbaa_arraybuf, elsz, al, false);
-                    *ret = mark_julia_slot(lv, ety, ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), tindex), tbaa_arraybuf);
+                    *ret = emit_unionload(ctx, data, ptindex, ety, elsz, al, tbaa_arraybuf, true, union_max, tbaa_arrayselbyte);
                 }
                 else {
                     MDNode *aliasscope = (f == jl_builtin_const_arrayref) ? ctx.aliasscope : nullptr;
@@ -2838,28 +2833,31 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     if (!isboxed && jl_is_uniontype(ety)) {
                         Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
                         Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), AT->getPointerTo());
+                        Value *offset = emit_arrayoffset(ctx, ary, nd);
                         // compute tindex from val
                         jl_cgval_t rhs_union = convert_julia_type(ctx, val, ety);
                         Value *tindex = compute_tindex_unboxed(ctx, rhs_union, ety);
                         tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
-                        Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
-                        Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
-                        Value *offset = emit_arrayoffset(ctx, ary, nd);
-                        Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
-                        Value *selidx_m = emit_arraylen(ctx, ary);
-                        Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
-                        Value *ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                        Value *ptindex;
+                        if (elsz == 0) {
+                            ptindex = data;
+                        }
+                        else {
+                            Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
+                            Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
+                            Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
+                            Value *selidx_m = emit_arraylen(ctx, ary);
+                            Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
+                            ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                            data = ctx.builder.CreateInBoundsGEP(AT, data, idx);
+                        }
                         ptindex = emit_bitcast(ctx, ptindex, T_pint8);
                         ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, offset);
                         ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, idx);
                         tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateStore(tindex, ptindex));
-                        if (jl_is_datatype(val.typ) && jl_datatype_size(val.typ) == 0) {
-                            // no-op
-                        }
-                        else {
-                            // copy data
-                            Value *addr = ctx.builder.CreateInBoundsGEP(AT, data, idx);
-                            emit_unionmove(ctx, addr, tbaa_arraybuf, val, nullptr);
+                        if (elsz > 0 && (!jl_is_datatype(val.typ) || jl_datatype_size(val.typ) > 0)) {
+                            // copy data (if any)
+                            emit_unionmove(ctx, data, tbaa_arraybuf, val, nullptr);
                         }
                     }
                     else {
@@ -4792,7 +4790,7 @@ static Value *get_current_task(jl_codectx_t &ctx)
 // Get PTLS through current task.
 static Value *get_current_ptls(jl_codectx_t &ctx)
 {
-    return get_current_ptls_from_task(ctx.builder, get_current_task(ctx));
+    return get_current_ptls_from_task(ctx.builder, get_current_task(ctx), tbaa_gcframe);
 }
 
 // Store world age at the entry block of the function. This function should be
@@ -7691,7 +7689,7 @@ void jl_compile_workqueue(
 
 // --- initialization ---
 
-std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false)
+static std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false)
 {
     MDBuilder mbuilder(jl_LLVMContext);
     if (tbaa_root == nullptr) {
@@ -8045,13 +8043,14 @@ extern "C" void jl_init_llvm(void)
 
     TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION < 130000
     // tell Win32 to assume the stack is always 16-byte aligned,
     // and to ensure that it is 16-byte aligned for out-going calls,
     // to ensure compatibility with GCC codes
+    // In LLVM 13 and onwards this has turned into a module option
     options.StackAlignmentOverride = 16;
 #endif
-#ifdef JL_DEBUG_BUILD
+#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION < 130000
     // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
     options.StackProtectorGuard = StackProtectorGuards::Global;
 #endif

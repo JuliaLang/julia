@@ -231,41 +231,49 @@ struct BlockLiveness
     live_in_bbs::Vector{Int}
 end
 
-# Run iterated dominance frontier
-#
-# The algorithm we have here essentially follows LLVM, which itself is a
-# a cleaned up version of the linear-time algorithm described in
-#
-#  A Linear Time Algorithm for Placing phi-Nodes (by Sreedhar and Gao)
-#
-# The algorithm here, is quite straightforward. Suppose we have a CFG:
-#
-# A -> B -> D -> F
-#  \-> C -------/
-#
-# and a corresponding dominator tree:
-#
-# A
-# |- B - D
-# |- C
-# |- F
-#
-# Now, for every definition of our slot, we simply walk down the dominator
-# tree and look for any edges that leave the sub-domtree rooted by our definition.
-#
-# E.g. in our example above, if we have a definition in `B`, we look at its successors,
-#      which is only `D`, which is dominated by `B` and hence doesn't need a phi node.
-#      Then we descend down the subtree rooted at `B` and end up in `D`. `D` has a successor
-#      `F`, which is not part of the current subtree, (i.e. not dominated by `B`), so it
-#      needs a phi node.
-#
-# Now, the key insight of that algorithm is that we have two defs, in blocks `A` and `B`,
-# and `A` dominates `B`, then we do not need to recurse into `B`, because the set of
-# potential backedges from a subtree rooted at `B` (to outside the subtree) is a strict
-# subset of those backedges from a subtree rooted at `A` (out outside the subtree rooted
-# at `A`). Note however that this does not work the other way. Thus, the algorithm
-# needs to make sure that we always visit `B` before `A`.
-function idf(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
+"""
+    iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
+        -> phinodes::Vector{Int}
+
+Run iterated dominance frontier.
+The algorithm we have here essentially follows LLVM, which itself is a
+a cleaned up version of the linear-time algorithm described in [^SG95].
+
+The algorithm here, is quite straightforward. Suppose we have a CFG:
+
+    A -> B -> D -> F
+     \\-> C ------>/
+
+and a corresponding dominator tree:
+
+    A
+    |- B - D
+    |- C
+    |- F
+
+Now, for every definition of our slot, we simply walk down the dominator
+tree and look for any edges that leave the sub-domtree rooted by our definition.
+
+In our example above, if we have a definition in `B`, we look at its successors,
+which is only `D`, which is dominated by `B` and hence doesn't need a ϕ-node.
+Then we descend down the subtree rooted at `B` and end up in `D`. `D` has a successor
+`F`, which is not part of the current subtree, (i.e. not dominated by `B`),
+so it needs a ϕ-node.
+
+Now, the key insight of that algorithm is that we have two defs, in blocks `A` and `B`,
+and `A` dominates `B`, then we do not need to recurse into `B`, because the set of
+potential backedges from a subtree rooted at `B` (to outside the subtree) is a strict
+subset of those backedges from a subtree rooted at `A` (out outside the subtree rooted
+at `A`). Note however that this does not work the other way. Thus, the algorithm
+needs to make sure that we always visit `B` before `A`.
+
+[^SG95]: Vugranam C. Sreedhar and Guang R. Gao. 1995.
+         A linear time algorithm for placing φ-nodes.
+         In Proceedings of the 22nd ACM SIGPLAN-SIGACT symposium on Principles of programming languages (POPL '95).
+         Association for Computing Machinery, New York, NY, USA, 62–73.
+         DOI: <https://doi.org/10.1145/199448.199464>.
+"""
+function iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
     # This should be a priority queue, but TODO - sorted array for now
     defs = liveness.def_bbs
     pq = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
@@ -363,11 +371,11 @@ function rename_phinode_edges(node, bb, result_order, bb_rename)
 end
 
 """
-    Sort the basic blocks in `ir` into domtree order (i.e. if bb`` is higher in
-    the domtree than bb2, it will come first in the linear order). The resulting
-    ir has the property that a linear traversal of basic blocks will also be a
-    RPO traversal and in particular, any use of an SSA value must come after (by linear
-    order) its definition.
+Sort the basic blocks in `ir` into domtree order (i.e. if `bb1` is higher in
+the domtree than `bb2`, it will come first in the linear order). The resulting
+`ir` has the property that a linear traversal of basic blocks will also be a
+RPO traversal and in particular, any use of an SSA value must come after
+(by linear order) its definition.
 """
 function domsort_ssa!(ir::IRCode, domtree::DomTree)
     # First compute the new order of basic blocks
@@ -515,12 +523,14 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     return new_ir
 end
 
-function compute_live_ins(cfg::CFG, defuse #=::Union{SlotInfo,SSADefUse}=#)
+compute_live_ins(cfg::CFG, slot::SlotInfo) = compute_live_ins(cfg, slot.defs, slot.uses)
+
+function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
     # We remove from `uses` any block where all uses are dominated
     # by a def. This prevents insertion of dead phi nodes at the top
     # of such a block if that block happens to be in a loop
-    ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in defuse.uses]
-    for x in defuse.defs
+    ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in uses]
+    for x in defs
         push!(ordered, (x, block_for_inst(cfg, x), false))
     end
     ordered = sort(ordered, by=x->x[1])
@@ -649,7 +659,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 end
             end
         end
-        phiblocks = idf(cfg, live, domtree)
+        phiblocks = iterated_dominance_frontier(cfg, live, domtree)
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()

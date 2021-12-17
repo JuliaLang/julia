@@ -616,7 +616,7 @@ std::vector<Value*> LateLowerGCFrame::MaybeExtractVector(State &S, Value *BaseVe
     std::vector<Value*> V{Numbers.size()};
     Value *V_rnull = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
     for (unsigned i = 0; i < V.size(); ++i) {
-        if (Numbers[i] >= 0)
+        if (Numbers[i] >= 0) // ignores undef and poison values
             V[i] = GetPtrForNumber(S, Numbers[i], InsertBefore);
         else
             V[i] = V_rnull;
@@ -860,8 +860,9 @@ std::vector<int> LateLowerGCFrame::NumberAllBase(State &S, Value *CurrentV) {
         std::vector<int> Numbers2 = NumberAll(S, SVI->getOperand(1));
         auto Mask = SVI->getShuffleMask();
         for (auto idx : Mask) {
-            assert(idx != -1 && "Undef tracked value is invalid");
-            if ((unsigned)idx < Numbers1.size()) {
+            if (idx == -1) {
+                Numbers.push_back(-1);
+            } else if ((unsigned)idx < Numbers1.size()) {
                 Numbers.push_back(Numbers1.at(idx));
             } else {
                 Numbers.push_back(Numbers2.at(idx - Numbers1.size()));
@@ -966,8 +967,9 @@ std::vector<int> LateLowerGCFrame::NumberAll(State &S, Value *V) {
             Number = Numbers[CurrentV.second]; // only needed a subset of the values
             Numbers.resize(tracked.count, Number);
         }
-        else
+        else {
             assert(!isa<PointerType>(V->getType()));
+        }
     }
     if (CurrentV.first != V) {
         if (isa<PointerType>(V->getType())) {
@@ -2296,7 +2298,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
                 // `julia.gc_alloc_obj` except it doesn't set the tag.
                 auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
-                auto ptlsLoad = get_current_ptls_from_task(builder, CI->getArgOperand(0));
+                auto ptlsLoad = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
                 auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
                 auto newI = builder.CreateCall(
                     allocBytesIntrinsic,

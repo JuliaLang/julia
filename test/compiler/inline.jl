@@ -381,7 +381,7 @@ f_oc_getfield(x) = (@opaque ()->x)()
 @test fully_eliminated(f_oc_getfield, Tuple{Int})
 
 import Core.Compiler: argextype, singleton_type
-const EMPTY_SPTYPES = Core.Compiler.EMPTY_SLOTTYPES
+const EMPTY_SPTYPES = Any[]
 
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
@@ -816,4 +816,47 @@ end
 let
     invoke(xs) = validate_unionsplit_inlining(true, xs[1])
     @test invoke(Any[10]) === false
+end
+
+# issue 43104
+
+@inline isGoodType(@nospecialize x::Type) =
+    x !== Any && !(@noinline Base.has_free_typevars(x))
+let # aggressive inlining of single, abstract method match
+    src = code_typed((Type, Any,)) do x, y
+        isGoodType(x), isGoodType(y)
+    end |> only |> first
+    # both callsites should be inlined
+    @test count(isinvoke(:has_free_typevars), src.code) == 2
+    # `isGoodType(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
+    @test count(iscall((src,isGoodType)), src.code) == 1
+end
+
+@inline isGoodType2(cnd, @nospecialize x::Type) =
+    x !== Any && !(@noinline (cnd ? Core.Compiler.isType : Base.has_free_typevars)(x))
+let # aggressive inlining of single, abstract method match (with constant-prop'ed)
+    src = code_typed((Type, Any,)) do x, y
+        isGoodType2(true, x), isGoodType2(true, y)
+    end |> only |> first
+    # both callsite should be inlined with constant-prop'ed result
+    @test count(isinvoke(:isType), src.code) == 2
+    @test count(isinvoke(:has_free_typevars), src.code) == 0
+    # `isGoodType(y::Any)` isn't fully convered, thus a runtime type check and fallback dynamic dispatch should be inserted
+    @test count(iscall((src,isGoodType2)), src.code) == 1
+end
+
+@noinline function checkBadType!(@nospecialize x::Type)
+    if x === Any || Base.has_free_typevars(x)
+        println(x)
+    end
+    return nothing
+end
+let # aggressive static dispatch of single, abstract method match
+    src = code_typed((Type, Any,)) do x, y
+        checkBadType!(x), checkBadType!(y)
+    end |> only |> first
+    # both callsites should be resolved statically
+    @test count(isinvoke(:checkBadType!), src.code) == 2
+    # `checkBadType!(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
+    @test count(iscall((src,checkBadType!)), src.code) == 1
 end

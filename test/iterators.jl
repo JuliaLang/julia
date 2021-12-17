@@ -689,11 +689,18 @@ end
                 Iterators.Filter(isodd, 1:10), flatten((1:10, 50:60)), enumerate("foo"),
                 pairs(50:60), zip(1:10,21:30,51:60), product(1:3, 10:12), repeated(3.14159, 5),
                 (a=2, b=3, c=5, d=7, e=11))
-        @test squash(collect(Iterators.reverse(itr))) == reverse(squash(collect(itr)))
+        arr = reverse(squash(collect(itr)))
+        itr = Iterators.reverse(itr)
+        @test squash(collect(itr)) == arr
+        if !isempty(arr)
+            @test first(itr) == first(arr)
+            @test last(itr) == last(arr)
+        end
     end
     @test collect(take(Iterators.reverse(cycle(1:3)), 7)) == collect(take(cycle(3:-1:1), 7))
     let r = repeated(3.14159)
         @test Iterators.reverse(r) === r
+        @test last(r) === 3.14159
     end
     for t in [(1,), (2, 3, 5, 7, 11), (a=1,), (a=2, b=3, c=5, d=7, e=11)]
         @test Iterators.reverse(Iterators.reverse(t)) === t

@@ -263,20 +263,25 @@ end
 
 # unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
 # counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
-function unioncomplexity(u::Union)
-    return unioncomplexity(u.a)::Int + unioncomplexity(u.b)::Int + 1
-end
-function unioncomplexity(t::DataType)
-    t.name === Tuple.name || isvarargtype(t) || return 0
-    c = 0
-    for ti in t.parameters
-        c = max(c, unioncomplexity(ti)::Int)
+unioncomplexity(@nospecialize x) = _unioncomplexity(x)::Int
+function _unioncomplexity(@nospecialize x)
+    if isa(x, DataType)
+        x.name === Tuple.name || isvarargtype(x) || return 0
+        c = 0
+        for ti in x.parameters
+            c = max(c, unioncomplexity(ti))
+        end
+        return c
+    elseif isa(x, Union)
+        return unioncomplexity(x.a) + unioncomplexity(x.b) + 1
+    elseif isa(x, UnionAll)
+        return max(unioncomplexity(x.body), unioncomplexity(x.var.ub))
+    elseif isa(x, TypeofVararg)
+        return isdefined(x, :T) ? unioncomplexity(x.T) : 0
+    else
+        return 0
     end
-    return c
 end
-unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body)::Int, unioncomplexity(u.var.ub)::Int)
-unioncomplexity(t::TypeofVararg) = isdefined(t, :T) ? unioncomplexity(t.T)::Int : 0
-unioncomplexity(@nospecialize(x)) = 0
 
 # convert a Union of Tuple types to a Tuple of Unions
 function unswitchtupleunion(u::Union)

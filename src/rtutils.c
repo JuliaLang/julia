@@ -1014,12 +1014,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, ")}[");
         size_t j, tlen = jl_array_len(v);
         jl_array_t *av = (jl_array_t*)v;
-        jl_datatype_t *el_type = (jl_datatype_t*)jl_tparam0(vt);
+        jl_value_t *el_type = jl_tparam0(vt);
+        char *typetagdata = (!av->flags.ptrarray && jl_is_uniontype(el_type)) ? jl_array_typetagdata(av) : NULL;
         int nlsep = 0;
         if (av->flags.ptrarray) {
             // print arrays with newlines, unless the elements are probably small
             for (j = 0; j < tlen; j++) {
-                jl_value_t *p = jl_array_ptr_ref(av, j);
+                jl_value_t **ptr = ((jl_value_t**)av->data) + j;
+                jl_value_t *p = *ptr;
                 if (p != NULL && (uintptr_t)p >= 4096U) {
                     jl_value_t *p_ty = jl_typeof(p);
                     if ((uintptr_t)p_ty >= 4096U) {
@@ -1035,11 +1037,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_printf(out, "\n  ");
         for (j = 0; j < tlen; j++) {
             if (av->flags.ptrarray) {
-                n += jl_static_show_x(out, jl_array_ptr_ref(v, j), depth);
+                jl_value_t **ptr = ((jl_value_t**)av->data) + j;
+                n += jl_static_show_x(out, *ptr, depth);
             }
             else {
                 char *ptr = ((char*)av->data) + j * av->elsize;
-                n += jl_static_show_x_(out, (jl_value_t*)ptr, el_type, depth);
+                n += jl_static_show_x_(out, (jl_value_t*)ptr,
+                        typetagdata ? (jl_datatype_t*)jl_nth_union_component(el_type, typetagdata[j]) : (jl_datatype_t*)el_type,
+                        depth);
             }
             if (j != tlen - 1)
                 n += jl_printf(out, nlsep ? ",\n  " : ", ");

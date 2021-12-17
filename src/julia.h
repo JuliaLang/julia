@@ -539,6 +539,7 @@ typedef struct _jl_module_t {
     int8_t compile;
     int8_t infer;
     uint8_t istopmod;
+    int8_t max_methods;
     jl_mutex_t lock;
 } jl_module_t;
 
@@ -1480,8 +1481,8 @@ JL_DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *r
 JL_DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
-int jl_uniontype_size(jl_value_t *ty, size_t *sz) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al) JL_NOTSAFEPOINT;
+int jl_uniontype_size(jl_value_t *ty, size_t *sz);
+JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al);
 
 // arrays
 JL_DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims);
@@ -1538,6 +1539,8 @@ JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_compile(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m);
+JL_DLLEXPORT void jl_set_module_max_methods(jl_module_t *self, int value);
+JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);

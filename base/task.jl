@@ -489,13 +489,13 @@ function errormonitor(t::Task)
             try # try to display the failure atomically
                 errio = IOContext(PipeBuffer(), errs::IO)
                 emphasize(errio, "Unhandled Task ")
-                display_error(errio, current_exceptions(t))
+                display_error(errio, scrub_repl_backtrace(current_exceptions(t)))
                 write(errs, errio)
             catch
                 try # try to display the secondary error atomically
                     errio = IOContext(PipeBuffer(), errs::IO)
                     print(errio, "\nSYSTEM: caught exception while trying to print a failed Task notice: ")
-                    display_error(errio, current_exceptions())
+                    display_error(errio, scrub_repl_backtrace(current_exceptions()))
                     write(errs, errio)
                     flush(errs)
                     # and then the actual error, as best we can
