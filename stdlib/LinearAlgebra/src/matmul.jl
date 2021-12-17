@@ -115,6 +115,9 @@ end
 
 # Matrix-matrix multiplication
 
+AdjOrTransStridedMat{T} = Union{Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
+StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, AdjOrTransStridedMat{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
+
 """
     *(A::AbstractMatrix, B::AbstractMatrix)
 
@@ -135,45 +138,13 @@ end
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
 # which is better handled by reinterpreting rather than promotion
-function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasFloat})
+function (*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::StridedMaybeAdjOrTransMat{<:BlasFloat})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
 end
-for wrapper in (Adjoint, Transpose)
-    @eval function (*)(A::$wrapper{<:BlasReal,<:StridedMatrix}, B::StridedMatrix{<:BlasFloat})
-        TS = promote_type(eltype(A), eltype(B))
-        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
-    end
-    @eval function (*)(A::StridedMatrix{<:BlasReal}, B::$wrapper{<:BlasFloat,<:StridedMatrix})
-        TS = promote_type(eltype(A), eltype(B))
-        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
-    end
-    for wrapperB in (Adjoint, Transpose)
-        @eval function (*)(A::$wrapper{<:BlasReal,<:StridedMatrix}, B::$wrapperB{<:BlasFloat,<:StridedMatrix})
-            TS = promote_type(eltype(A), eltype(B))
-            mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
-        end
-    end
-end
-function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMatrix{<:BlasComplex})
+function (*)(A::StridedMaybeAdjOrTransMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasComplex})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
-end
-for wrapper in (Adjoint, Transpose)
-    @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedMatrix}, B::StridedMatrix{<:BlasComplex})
-        TS = promote_type(eltype(A), eltype(B))
-        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
-    end
-    @eval function (*)(A::StridedMatrix{<:BlasComplex}, B::$wrapper{<:BlasComplex,<:StridedMatrix})
-        TS = promote_type(eltype(A), eltype(B))
-        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
-    end
-    for wrapperB in (Adjoint, Transpose)
-        @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedMatrix}, B::$wrapperB{<:BlasComplex,<:StridedMatrix})
-            TS = promote_type(eltype(A), eltype(B))
-            mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
-        end
-    end
 end
 
 @inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
@@ -182,27 +153,13 @@ end
 end
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
-for wrapper in (Adjoint, Transpose)
-    @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedMatrix}, B::StridedMatrix{<:BlasReal})
-        TS = promote_type(eltype(A), eltype(B))
-        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
-    end
-    @eval function (*)(A::StridedMatrix{<:BlasComplex}, B::$wrapper{<:BlasReal,<:StridedMatrix})
-        TS = promote_type(eltype(A), eltype(B))
-        mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
-    end
-    # when equal real(eltype), don't convert
-    for T in (Float32, Float64)
-        @eval function (*)(A::StridedMatrix{Complex{$T}}, B::$wrapper{$T,<:StridedMatrix})
-            mul!(similar(B, complex($T), (size(A,1), size(B,2))), A, B)
-        end
-    end
-    for wrapperB in (Adjoint, Transpose)
-        @eval function (*)(A::$wrapper{<:BlasComplex,<:StridedMatrix}, B::$wrapperB{<:BlasReal,<:StridedMatrix})
-            TS = promote_type(eltype(A), eltype(B))
-            mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
-        end
-    end
+function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
+    TS = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{real(TS)}, B))
+end
+function (*)(A::AdjOrTransStridedMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
+    TS = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, TS, (size(A,1), size(B,2))), copy_oftype(A, TS), convert(AbstractArray{real(TS)}, B))
 end
 for elty in (Float32,Float64)
     @eval begin
@@ -266,8 +223,6 @@ Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrM
     muladd(A', x', z')'
 Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
     transpose(muladd(transpose(A), transpose(x), transpose(z)))
-
-StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
 
 function Base.muladd(A::StridedMaybeAdjOrTransMat{<:Number}, y::AbstractVector{<:Number}, z::Union{Number, AbstractVector})
     T = promote_type(eltype(A), eltype(y), eltype(z))
