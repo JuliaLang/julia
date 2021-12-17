@@ -9,6 +9,10 @@ provider julia {
     probe gc__sweep__end();
     probe gc__end();
     probe gc__finalizer();
+
+    probe rt__run__task(jl_task_t *task);
+    probe rt__pause__task(jl_task_t *task);
+    probe rt__new__task(jl_task_t *parent, jl_task_t *child);
 };
 
 #pragma D attributes Evolving/Evolving/Common provider julia provider

@@ -532,6 +532,8 @@ JL_DLLEXPORT void jl_switch(void)
     if (!jl_set_task_tid(t, jl_atomic_load_relaxed(&ct->tid))) // manually yielding to a task
         jl_error("cannot switch to task running on another thread");
 
+    JL_PROBE_RT_PAUSE_TASK(ct);
+
     // Store old values on the stack and reset
     sig_atomic_t defer_signal = ptls->defer_signal;
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
@@ -579,6 +581,8 @@ JL_DLLEXPORT void jl_switch(void)
     ptls->defer_signal = defer_signal;
     if (other_defer_signal && !defer_signal)
         jl_sigint_safepoint(ptls);
+
+    JL_PROBE_RT_RUN_TASK(ct);
 }
 
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
@@ -813,6 +817,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
 #ifdef _COMPILER_TSAN_ENABLED_
     t->ctx.tsan_state = __tsan_create_fiber(0);
 #endif
+    JL_PROBE_RT_NEW_TASK(ct, t);
     return t;
 }
 
@@ -908,6 +913,7 @@ CFI_NORETURN
 #endif
 
     ct->started = 1;
+    JL_PROBE_RT_RUN_TASK(ct);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
         jl_push_excstack(&ct->excstack, ct->result,

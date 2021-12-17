@@ -1,0 +1,21 @@
+#!/usr/bin/env bpftrace
+
+BEGIN
+{
+    printf("Tracing Julia Task events... Hit Ctrl-C to end.\n");
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__run__task
+{
+    printf("Task running: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__pause__task
+{
+    printf("Task pausing: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__new__task
+{
+    printf("Task created: %x (Parent %x)\n", arg1, arg0);
+}

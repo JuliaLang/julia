@@ -1540,6 +1540,9 @@ uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 #define JL_PROBE_GC_SWEEP_END() do ; while (0)
 #define JL_PROBE_GC_END() do ; while (0)
 #define JL_PROBE_GC_FINALIZER() do ; while (0)
+#define JL_PROBE_RT_RUN_TASK(task) do ; while (0)
+#define JL_PROBE_RT_PAUSE_TASK(task) do ; while (0)
+#define JL_PROBE_RT_NEW_TASK(parent, child) do ; while (0)
 
 #define JL_PROBE_GC_BEGIN_ENABLED() (0)
 #define JL_PROBE_GC_STOP_THE_WORLD_ENABLED() (0)
@@ -1549,6 +1552,9 @@ uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 #define JL_PROBE_GC_SWEEP_END_ENABLED()  (0)
 #define JL_PROBE_GC_END_ENABLED() (0)
 #define JL_PROBE_GC_FINALIZER_ENABLED() (0)
+#define JL_PROBE_RT_RUN_TASK_ENABLED() (0)
+#define JL_PROBE_RT_PAUSE_TASK_ENABLED() (0)
+#define JL_PROBE_RT_NEW_TASK_ENABLED() (0)
 #endif
 
 #endif

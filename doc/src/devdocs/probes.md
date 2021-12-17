@@ -90,9 +90,14 @@ the probe handler.
 3. `julia:gc__mark__begin`: Beginning the mark phase
 4. `julia:gc__mark_end(scanned_bytes, perm_scanned)`: Mark phase ended
 5. `julia:gc__sweep_begin(full)`: Starting sweep
-6. `julia:gc__sweep_end()`: Sweep phase finished
+6. `julia:gc__sweep_end`: Sweep phase finished
 7. `julia:gc__end`: GC is finished, other threads continue work
 8. `julia:gc__finalizer`: Initial GC thread has finished running finalizers
+
+### Task runtime probes
+
+1. `julia:rt__ctx__switch(last, next, ptls)`: Switching from task `last` to task `next` on thread associated with PTLS `ptls`.
+2. `julia:rt__new__task(parent, child, ptls)`: Task `parent` created task `child` on thread associated with PTLS `ptls`.
 
 #### GC stop-the-world latency
 
