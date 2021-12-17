@@ -167,46 +167,38 @@ range_length(len::Integer) = OneTo(len)
 range_stop(stop) = range_start_stop(oftype(stop, 1), stop)
 range_stop(stop::Integer) = range_length(stop)
 
-# Stop and length as the only argument
-range_stop_length(a::Real,          len::Integer) = UnitRange(promote(a - (len - oneunit(len)), a)...)
-range_stop_length(a::AbstractFloat, len::Integer) = range_step_stop_length(oftype(a, 1), a, len)
-range_stop_length(a,                len::Integer) = range_step_stop_length(oftype(a - a, 1), a, len)
-
 range_step_stop_length(step, stop, length) = reverse(range_start_step_length(stop, -step, length))
 
-range_start_length(a::Real,          len::Integer) = UnitRange(promote(a, a + (len - oneunit(len)))...)
-range_start_length(a::AbstractFloat, len::Integer) = range_start_step_length(a, oftype(a, 1), len)
-range_start_length(a,                len::Integer) = range_start_step_length(a, oftype(a - a, 1), len)
+# Stop and length as the only argument
+function range_stop_length(a, len::Integer)
+    step = oftype(a - a, 1) # assert that step is representable
+    start = a - (len - oneunit(len))
+    if start isa Signed
+        # overflow in recomputing length from stop is okay
+        return UnitRange(start, oftype(start, a))
+    end
+    return range_step_stop_length(oftype(a - a, 1), a, len)
+end
+
+# Start and length as the only argument
+function range_start_length(a, len::Integer)
+    step = oftype(a - a, 1) # assert that step is representable
+    stop = a + (len - oneunit(len))
+    if stop isa Signed
+        # overflow in recomputing length from stop is okay
+        return UnitRange(oftype(stop, a), stop)
+    end
+    return range_start_step_length(a, oftype(a - a, 1), len)
+end
 
 range_start_stop(start, stop) = start:stop
 
-function range_start_step_length(a::AbstractFloat, step::AbstractFloat, len::Integer)
-    range_start_step_length(promote(a, step)..., len)
-end
-
-function range_start_step_length(a::Real, step::AbstractFloat, len::Integer)
-    range_start_step_length(float(a), step, len)
-end
-
-function range_start_step_length(a::AbstractFloat, step::Real, len::Integer)
-    range_start_step_length(a, float(step), len)
-end
-
-function range_start_step_length(a::T, step::T, len::Integer) where {T <: AbstractFloat}
-    _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
-end
-
-function range_start_step_length(a::T, step, len::Integer) where {T}
-    _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
-end
-
-function _rangestyle(::Ordered, ::ArithmeticWraps, a, step, len::Integer)
+function range_start_step_length(a, step, len::Integer)
     stop = a + step * (len - oneunit(len))
-    T = typeof(stop)
-    return StepRange{T,typeof(step)}(convert(T, a), step, stop)
-end
-function _rangestyle(::Any, ::Any, a, step, len::Integer)
-    stop = a + step * (len - oneunit(len))
+    if stop isa Signed
+        # overflow in recomputing length from stop is okay
+        return StepRange{typeof(stop),typeof(step)}(convert(typeof(stop), a), step, stop)
+    end
     return StepRangeLen{typeof(stop),typeof(a),typeof(step)}(a, step, len)
 end
 
@@ -952,8 +944,9 @@ end
 
 function lerpi(j::Integer, d::Integer, a::T, b::T) where T
     @inline
-    t = j/d
-    T((1-t)*a + t*b)
+    t = j/d # ∈ [0,1]
+    # compute approximately fma(t, b, -fma(t, a, a))
+    return T((1-t)*a + t*b)
 end
 
 getindex(r::AbstractRange, ::Colon) = copy(r)

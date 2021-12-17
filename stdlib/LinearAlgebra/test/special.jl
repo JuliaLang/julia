@@ -395,12 +395,18 @@ using .Main.Furlongs
     @test one(S) isa SymTridiagonal
 
     # eltype with dimensions
-    D = Diagonal{Furlong{2, Int64}}([1, 2, 3, 4])
-    Bu = Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'U')
-    Bl =  Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'L')
-    T = Tridiagonal{Furlong{2, Int64}}([1, 2, 3], [1, 2, 3, 4], [1, 2, 3])
-    S = SymTridiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3])
-    mats = [D, Bu, Bl, T, S]
+    D0 = Diagonal{Furlong{0, Int64}}([1, 2, 3, 4])
+    Bu0 = Bidiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3], 'U')
+    Bl0 =  Bidiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3], 'L')
+    T0 = Tridiagonal{Furlong{0, Int64}}([1, 2, 3], [1, 2, 3, 4], [1, 2, 3])
+    S0 = SymTridiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3])
+    F2 = Furlongs.Furlong{2}(1)
+    D2 = Diagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2)
+    Bu2 = Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2, 'U')
+    Bl2 =  Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2, 'L')
+    T2 = Tridiagonal{Furlong{2, Int64}}([1, 2, 3].*F2, [1, 2, 3, 4].*F2, [1, 2, 3].*F2)
+    S2 = SymTridiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2)
+    mats = Any[D0, Bu0, Bl0, T0, S0, D2, Bu2, Bl2, T2, S2]
     for A in mats
         @test iszero(zero(A))
         @test isone(one(A))
