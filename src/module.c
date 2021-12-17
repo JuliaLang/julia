@@ -162,13 +162,13 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     jl_binding_t *b = (jl_binding_t*)jl_gc_alloc_buf(ct->ptls, sizeof(jl_binding_t));
     b->name = name;
     b->value = NULL;
-    b->ty = NULL;
     b->owner = NULL;
     b->globalref = NULL;
     b->constp = 0;
     b->exportp = 0;
     b->imported = 0;
     b->deprecated = 0;
+    b->ty = NULL;
     return b;
 }
 
