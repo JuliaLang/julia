@@ -1933,7 +1933,11 @@ end
 
 Normalize the array `a` in-place so that its `p`-norm equals unity,
 i.e. `norm(a, p) == 1`.
+
 See also [`normalize`](@ref) and [`norm`](@ref).
+
+Note that `normalize!(a)` does not take a `dims` keyword. You can write
+`a ./= norm(a, p; dims)`, although this omits some steps for avoiding overflow.
 """
 function normalize!(a::AbstractArray, p::Real=2)
     nrm = norm(a, p)
@@ -1954,16 +1958,40 @@ end
     return a
 end
 
+@inline function __normalize!(a::AbstractArray, nrm::AbstractArray)
+    δ = inv(prevfloat(typemax(eltype(nrm))))
+    if all(≥(δ), nrm)
+        nrm = inv.(nrm)  # know this is mutable as `norm2_dims!` etc wrote into it
+        a .= a .* nrm
+    else
+        εδ = eps(one(nrm))/δ
+        nrm .= inv.(nrm .* εδ)
+        a .= (a .* εδ) .* nrm
+    end
+    a
+end
+
+
 """
-    normalize(a, p::Real=2)
+    normalize(a, p::Real=2; [dims])
 
 Normalize `a` so that its `p`-norm equals unity,
-i.e. `norm(a, p) == 1`. For scalars, this is similar to sign(a),
-except normalize(0) = NaN.
+i.e. `norm(a, p) == 1`. For scalars, this is similar to `sign(a)`,
+except `normalize(0) == NaN`. 
+
 See also [`normalize!`](@ref), [`norm`](@ref), and [`sign`](@ref).
 
 # Examples
 ```jldoctest
+julia> normalize(3, 1)
+1.0
+
+julia> normalize(-8, 1)
+-1.0
+
+julia> normalize(0, 1)
+NaN
+
 julia> a = [1,2,4];
 
 julia> b = normalize(a)
@@ -1983,43 +2011,53 @@ julia> c = normalize(a, 1)
 
 julia> norm(c, 1)
 1.0
-
-julia> a = [1 2 4 ; 1 2 4]
-2×3 Matrix{Int64}:
- 1  2  4
- 1  2  4
-
-julia> norm(a)
-6.48074069840786
-
-julia> normalize(a)
-2×3 Matrix{Float64}:
- 0.154303  0.308607  0.617213
- 0.154303  0.308607  0.617213
-
-julia> normalize(3, 1)
-1.0
-
-julia> normalize(-8, 1)
--1.0
-
-julia> normalize(0, 1)
-NaN
 ```
 """
-function normalize(a::AbstractArray, p::Real = 2)
-    nrm = norm(a, p)
+normalize(x) = x / norm(x)
+normalize(x, p::Real) = x / norm(x, p)
+
+"""
+    normalize(A::AbstractArray, p::Real=2; dims)
+
+Return a similar array for which `norm(result, p; dims)` is everywhere 1.
+
+!!! compat "Julia 1.11"
+    The `dims` keyword requires at least Julia 1.11.
+
+# Examples
+```jldoctest
+julia> d = [1 2 5 ; 1 2 5]
+2×3 Matrix{Int64}:
+ 1  2  5
+ 1  2  5
+
+julia> e = normalize(d; dims=1)
+2×3 Matrix{Float64}:
+ 0.707107  0.707107  0.707107
+ 0.707107  0.707107  0.707107
+
+julia> norm(e; dims=1)
+1×3 Matrix{Float64}:
+ 1.0  1.0  1.0
+
+julia> normalize(d, 1; dims=2)
+2×3 Matrix{Float64}:
+ 0.125  0.25  0.625
+ 0.125  0.25  0.625
+```
+"""
+function normalize(a::AbstractArray, p::Real = 2; dims=:)
+    nrm = norm(a, p; dims)
     if !isempty(a)
-        aa = copymutable_oftype(a, typeof(first(a)/nrm))
+        aa = copymutable_oftype(a, typeof(first(a)/first(nrm)))
         return __normalize!(aa, nrm)
     else
+        @assert dims isa Colon  # else `norm(a; dims)` is already an error
         T = typeof(zero(eltype(a))/nrm)
         return T[]
     end
 end
 
-normalize(x) = x / norm(x)
-normalize(x, p::Real) = x / norm(x, p)
 
 """
     copytrito!(B, A, uplo) -> B
