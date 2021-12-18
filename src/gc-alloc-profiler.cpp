@@ -24,15 +24,19 @@ struct RawAlloc {
     size_t size;
 };
 
-struct AllocProfile {
-    int skip_every;
-
+struct PerThreadAllocProfile {
     vector<RawAlloc> allocs;
     unordered_map<size_t, size_t> type_address_by_value_address;
     unordered_map<size_t, size_t> frees_by_type_address;
 
     size_t alloc_counter;
     size_t last_recorded_alloc;
+};
+
+struct AllocProfile {
+    int skip_every;
+
+    vector<PerThreadAllocProfile> per_thread_profiles;
 };
 
 // == global variables manipulated by callbacks ==
@@ -58,8 +62,13 @@ RawBacktrace get_raw_backtrace() {
 // == exported interface ==
 
 JL_DLLEXPORT void jl_start_alloc_profile(int skip_every) {
-    g_alloc_profile_enabled = true;
     g_alloc_profile = AllocProfile{skip_every};
+
+    for (int i = 0; i < jl_n_threads; i++) {
+        g_alloc_profile.per_thread_profiles.push_back(PerThreadAllocProfile{});
+    }
+
+    g_alloc_profile_enabled = true;
 }
 
 extern "C" {  // Needed since the function doesn't take any arguments.
@@ -67,21 +76,31 @@ extern "C" {  // Needed since the function doesn't take any arguments.
 JL_DLLEXPORT struct RawAllocResults* jl_stop_alloc_profile() {
     g_alloc_profile_enabled = false;
 
-    auto results = new RawAllocResults{
-        g_alloc_profile.allocs.data(),
-        g_alloc_profile.allocs.size()
-    };
+    // combine allocs
+    vector<RawAlloc> combined_allocs;
+    for (auto profile : g_alloc_profile.per_thread_profiles) {
+        for (auto alloc : profile.allocs) {
+            combined_allocs.push_back(alloc);
+        }
+    }
 
     // package up frees
-    results->num_frees = g_alloc_profile.frees_by_type_address.size();
-    results->frees = (FreeInfo*) malloc(sizeof(FreeInfo) * results->num_frees);
-    int j = 0;
-    for (auto type_addr_free_count : g_alloc_profile.frees_by_type_address) {
-        results->frees[j++] = FreeInfo{
-            type_addr_free_count.first,
-            type_addr_free_count.second
-        };
+    vector<FreeInfo> combined_frees;
+    for (auto profile : g_alloc_profile.per_thread_profiles) {
+        for (auto free_info : profile.frees_by_type_address) {
+            combined_frees.push_back(FreeInfo{
+                free_info.first,
+                free_info.second
+            });
+        }
     }
+
+    auto results = new RawAllocResults{
+        combined_allocs.data(),
+        combined_allocs.size(),
+        combined_frees.data(),
+        combined_frees.size()
+    };
 
     g_alloc_profile_results = results;
 
@@ -89,17 +108,18 @@ JL_DLLEXPORT struct RawAllocResults* jl_stop_alloc_profile() {
 }
 
 JL_DLLEXPORT void jl_free_alloc_profile() {
-    g_alloc_profile.frees_by_type_address.clear();
-    g_alloc_profile.type_address_by_value_address.clear();
-    g_alloc_profile.alloc_counter = 0;
-    for (auto alloc : g_alloc_profile.allocs) {
-        free(alloc.backtrace.data);
+    for (auto profile : g_alloc_profile.per_thread_profiles) {
+        profile.frees_by_type_address.clear();
+        profile.type_address_by_value_address.clear();
+        profile.alloc_counter = 0;
+        for (auto alloc : profile.allocs) {
+            free(alloc.backtrace.data);
+        }
+        profile.allocs.clear();
     }
-    g_alloc_profile.allocs.clear();
 
     if (g_alloc_profile_results != nullptr) {
-        free(g_alloc_profile_results->frees);
-        // free the results?
+        // TODO: does this call its destructors?
         g_alloc_profile_results = nullptr;
     }
 }
@@ -109,10 +129,13 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
 // == callbacks called into by the outside ==
 
 void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
-    auto& profile = g_alloc_profile;
+    auto& global_profile = g_alloc_profile;
+
+    auto profile = global_profile.per_thread_profiles[jl_threadid()];
+
     profile.alloc_counter++;
     auto diff = profile.alloc_counter - profile.last_recorded_alloc;
-    if (diff < profile.skip_every) {
+    if (diff < g_alloc_profile.skip_every) {
         return;
     }
     profile.last_recorded_alloc = profile.alloc_counter;
@@ -131,17 +154,19 @@ void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
 void _record_freed_value(jl_taggedvalue_t *tagged_val) JL_NOTSAFEPOINT {
     jl_value_t *val = jl_valueof(tagged_val);
 
+    auto profile = g_alloc_profile.per_thread_profiles[jl_threadid()];
+
     auto value_address = (size_t)val;
-    auto type_address = g_alloc_profile.type_address_by_value_address.find(value_address);
-    if (type_address == g_alloc_profile.type_address_by_value_address.end()) {
+    auto type_address = profile.type_address_by_value_address.find(value_address);
+    if (type_address == profile.type_address_by_value_address.end()) {
         return; // TODO: warn
     }
-    auto frees = g_alloc_profile.frees_by_type_address.find(type_address->second);
+    auto frees = profile.frees_by_type_address.find(type_address->second);
 
-    if (frees == g_alloc_profile.frees_by_type_address.end()) {
-        g_alloc_profile.frees_by_type_address[type_address->second] = 1;
+    if (frees == profile.frees_by_type_address.end()) {
+        profile.frees_by_type_address[type_address->second] = 1;
     } else {
-        g_alloc_profile.frees_by_type_address[type_address->second] = frees->second + 1;
+        profile.frees_by_type_address[type_address->second] = frees->second + 1;
     }
 }
 
