@@ -658,7 +658,7 @@ end
 norm(::Missing, p::Real=2) = missing
 
 # With dims keyword
-norm0_dims(B, A, dims) = count!(!iszero, B, A)
+norm0_dims!(B, A, dims) = count!(!iszero, B, A)
 norm1_dims!(B, A, dims) = Base.mapreducedim!(norm, +, B, A)
 normInf_dims!(B, A, dims) = Base.mapreducedim!(norm, max, B, A)
 normMinusInf_dims!(B, A, dims) = Base.mapreducedim!(norm, min, B, A)
@@ -713,6 +713,10 @@ Find the vector `norm`s of slices of a given array.
 The result has the same size as `sum(A; dims)`, containing `norm(A[i,:,j,...], p)`
 for each possible `i,j,...`, with colons at dimensions `d ∈ dims`.
 
+The result is always a floating point array. To avoid this when `eltype(A) <: Integer`,
+0-norm is `count(!iszero, A; dims)`, 1-norm is `sum(abs, A; dims)`,
+and the `Inf`-norm is `maximum(abs, A; dims)`.
+
 !!! compat "Julia 1.8"
     Methods taking keyword `dims` require Julia 1.8.
 
@@ -738,8 +742,8 @@ julia> map(norm, eachcol(m))  # same contents as dims=1
  3.0
  6.928203230275509
 
-julia> norm(v, 1), norm(m, 1; dims=1)
-(11.0, [11.0 11.0 3.0 12.0])
+julia> norm(v, 1), norm(m, 1; dims=1), sum(abs, m; dims=1)
+(11.0, [11.0 11.0 3.0 12.0], [11 11 3 12])
 
 julia> norm(m, 1; dims=2)
 3×1 Matrix{Float64}:
@@ -747,8 +751,11 @@ julia> norm(m, 1; dims=2)
   8.0
  16.0
 
-julia> norm(v, Inf), norm(m, Inf; dims=1)
-(6.0, [6.0 6.0 3.0 4.0])
+julia> norm(v, Inf), norm(m, Inf; dims=1), maximum(abs, m; dims=1)
+(6.0, [6.0 6.0 3.0 4.0], [6 6 3 4])
+
+julia> norm(m, 0; dims=2), count(!iszero, m; dims=2)
+([4.0; 3.0; 3.0;;], [4; 3; 3;;])
 
 julia> norm([1e-200, 0, 1e-300]; dims=1)  # avoids underflow & overflow
 1-element Vector{Float64}:
