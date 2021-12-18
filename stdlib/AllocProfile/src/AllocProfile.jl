@@ -58,6 +58,7 @@ function profile(f::Function, skip_every::Int=0)
     start(skip_every)
     res = f()
     profile = stop()
+    clear()
     return res, profile
 end
 
