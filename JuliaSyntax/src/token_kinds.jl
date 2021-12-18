@@ -831,6 +831,7 @@ Dict([
 "call"                 =>  Ts.CALL
 "comparison"           =>  Ts.COMPARISON
 "curly"                =>  Ts.CURLY
+"inert"                =>  Ts.INERT
 "string"               =>  Ts.STRING_INTERP
 "macrocall"            =>  Ts.MACROCALL
 "kw"                   =>  Ts.KW              # the = in f(a=1)
@@ -868,7 +869,7 @@ for kw in split("""abstract baremodule begin break catch const
                    macro module mutable new outer primitive quote
                    return struct try type using while
 
-                   block call comparison curly string macrocall kw parameters
+                   block call comparison curly string inert macrocall kw parameters
                    toplevel tuple ref vect braces bracescat hcat
                    vcat ncat typed_hcat typed_vcat typed_ncat generator
                    flatten comprehension typed_comprehension

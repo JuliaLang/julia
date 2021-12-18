@@ -68,12 +68,14 @@ st = ParseStream(code)
     emit(st, p1, K"toplevel")
 end
 
-t = JuliaSyntax.to_raw_tree(st)
+@test JuliaSyntax.to_raw_tree(st) isa JuliaSyntax.GreenNode
 
 # ## Input code
+#=
 println("-----------------------")
 print(code)
 println()
 
 # ## Output tree
 show(stdout, MIME"text/plain"(), t, code, show_trivia=true)
+=#

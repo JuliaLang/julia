@@ -29,11 +29,13 @@ function itest_parse(production, code)
 
     ex = Expr(s)
     println(stdout, "\n\n# Julia Expr:")
-    dump(ex)
-    #show(stdout, MIME"text/plain"(), ex)
+    show(stdout, MIME"text/plain"(), ex)
 
     f_ex = Base.remove_linenums!(Meta.parse(code, raise=false))
     if ex != f_ex
+        println(stdout, "\n\n# AST dump")
+        dump(ex)
+
         printstyled(stdout, "\n\n# flisp Julia Expr:\n", color=:red)
         show(stdout, MIME"text/plain"(), f_ex)
     end
@@ -194,8 +196,8 @@ tests = [
         "f.(a=1)"   =>  "(. :f (tuple (kw :a 1)))"
         # Other dotted syntax
         "A.:+"      =>  "(. :A (quote :+))"
-        "f.\$x"     =>  "(. :f (quote (\$ :x)))"
-        "f.\$(x+y)" =>  "(. :f (quote (\$ (call :+ :x :y))))"
+        "f.\$x"     =>  "(. :f (inert (\$ :x)))"
+        "f.\$(x+y)" =>  "(. :f (inert (\$ (call :+ :x :y))))"
         # .' discontinued
         "f.'"    =>  ":f (error :. Symbol(\"'\"))"
         # Field/property syntax
@@ -214,6 +216,46 @@ tests = [
         "x\"s\"end"  => """(macrocall :x_str "s" "end")"""
         "x\"s\"2"    => """(macrocall :x_str "s" 2)"""
         "x\"s\"10.0" => """(macrocall :x_str "s" 10.0)"""
+    ],
+    JuliaSyntax.parse_resword => [
+        # block
+        "begin end"         =>  "(block)"
+        "begin a ; b end"   =>  "(block :a :b)"
+        "begin\na\nb\nend"  =>  "(block :a :b)"
+        # quote
+        "quote end"         =>  "(quote (block))"
+        "quote body end"    =>  "(quote (block :body))"
+        # while
+        "while cond body end"  =>  "(while :cond (block :body))"
+        """
+        while x < y
+            a
+            b
+        end""" => "(while (call :< :x :y) (block :a :b))"
+        # for
+        "for x in xs end" => "(for (= :x :xs) (block))"
+        """
+        for x in xs, y in ys
+            a
+            b
+        end""" => "(for (block (= :x :xs) (= :y :ys)) (block :a :b))"
+        # let
+        "let x=1\n end"    =>  "(let (= :x 1) (block))"
+        "let x ; end"      =>  "(let :x (block))"
+        "let x=1 ; end"    =>  "(let (= :x 1) (block))"
+        "let x::1 ; end"   =>  "(let (:: :x 1) (block))"
+        "let x=1,y=2 end"  =>  "(let (block (= :x 1) (= :y 2)) (block))"
+        "let x+=1 ; end"   =>  "(let (block (+= :x 1)) (block))"
+        "let ; end"        =>  "(let (block) (block))"
+        "let ; body end"   =>  "(let (block) (block :body))"
+        "let\na\nb\nend"   =>  "(let (block) (block :a :b))"
+    ],
+    JuliaSyntax.parse_iteration_spec => [
+        "i = rhs"        =>  "(= :i :rhs)"
+        "i in rhs"       =>  "(= :i :rhs)"
+        "i ∈ rhs"        =>  "(= :i :rhs)"
+        "i = 1:10"       =>  "(= :i (call :(:) 1 10))"
+        "(i,j) in iter"  =>  "(= (tuple :i :j) :iter)"
     ],
     JuliaSyntax.parse_paren => [
         # Parentheses used for grouping
