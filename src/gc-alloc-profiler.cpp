@@ -109,14 +109,11 @@ JL_DLLEXPORT struct RawAllocResults* jl_stop_alloc_profile() {
 
 JL_DLLEXPORT void jl_free_alloc_profile() {
     for (auto profile : g_alloc_profile.per_thread_profiles) {
-        profile.frees_by_type_address.clear();
-        profile.type_address_by_value_address.clear();
-        profile.alloc_counter = 0;
         for (auto alloc : profile.allocs) {
             free(alloc.backtrace.data);
         }
-        profile.allocs.clear();
     }
+    g_alloc_profile.per_thread_profiles.clear();
 
     if (g_alloc_profile_results != nullptr) {
         // TODO: does this call its destructors?
@@ -131,7 +128,7 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
 void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
     auto& global_profile = g_alloc_profile;
 
-    auto profile = global_profile.per_thread_profiles[jl_threadid()];
+    auto& profile = global_profile.per_thread_profiles[jl_threadid()];
 
     profile.alloc_counter++;
     auto diff = profile.alloc_counter - profile.last_recorded_alloc;
@@ -154,7 +151,7 @@ void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
 void _record_freed_value(jl_taggedvalue_t *tagged_val) JL_NOTSAFEPOINT {
     jl_value_t *val = jl_valueof(tagged_val);
 
-    auto profile = g_alloc_profile.per_thread_profiles[jl_threadid()];
+    auto& profile = g_alloc_profile.per_thread_profiles[jl_threadid()];
 
     auto value_address = (size_t)val;
     auto type_address = profile.type_address_by_value_address.find(value_address);

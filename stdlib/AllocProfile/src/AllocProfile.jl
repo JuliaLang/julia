@@ -66,7 +66,7 @@ end
 # decoded results
 
 struct Alloc
-    type::Type
+    type::Any
     stacktrace::StackTrace
     size::Int
 end
@@ -85,13 +85,15 @@ const BacktraceCache = Dict{BacktraceEntry,Vector{StackFrame}}
 
 # loading anything below this seems to segfault
 # TODO: find out what's going on
-TYPE_PTR_THRESHOLD = 0x0000000100000000
+TYPE_PTR_LOW_THRESHOLD = 0x0000000100000000
+TYPE_PTR_HIGH_THRESHOLD = 100000000000000
 
-function load_type(ptr::Ptr{Type})::Type
-    if UInt(ptr) < TYPE_PTR_THRESHOLD
-        return Missing
+function load_type(ptr::Ptr{Type})
+    # println("type: $(UInt(ptr))")
+    if TYPE_PTR_LOW_THRESHOLD < UInt(ptr) < TYPE_PTR_HIGH_THRESHOLD
+        return unsafe_pointer_to_objref(ptr)
     end
-    return unsafe_pointer_to_objref(ptr)
+    return Missing
 end
 
 function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
