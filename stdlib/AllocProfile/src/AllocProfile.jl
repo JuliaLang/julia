@@ -43,7 +43,7 @@ end
 
 function stop()
     raw_results = ccall(:jl_stop_alloc_profile, RawAllocResults, ())
-    decoded_results = GC.@preserve raw_results decode(raw_results)
+    decoded_results = decode(raw_results)
     return decoded_results
 end
 
