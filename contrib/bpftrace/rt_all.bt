@@ -19,3 +19,13 @@ usdt:usr/lib/libjulia-internal.so:julia:rt__new__task
 {
     printf("Task created: %x (Parent %x)\n", arg1, arg0);
 }
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__start__process__events
+{
+    printf("Task processing libuv events: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__finish__process__events
+{
+    printf("Task processed libuv events: %x\n", arg0);
+}
