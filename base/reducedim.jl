@@ -148,7 +148,7 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
             Tr = v0 isa T ? T : typeof(v0)
 
             # but NaNs and missing need to be avoided as initial values
-            if isnan(v0)
+            if v0 isa Number && isnan(v0)
                 # v0 is NaN
                 v0 = oftype(v0, $initval)
             elseif isunordered(v0)
