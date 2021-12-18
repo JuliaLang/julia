@@ -394,29 +394,86 @@ Some resources:
     - [From Bob Nystrom (munificent - one of the Dart devs, etc](http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/)
   - Some discussion of error recovery
 
-## Flisp parser oddities and bugs
+# Parser devdocs
+
+# Differences from the flisp parser
+
+## Make parsing decisions earlier
+
+The flisp-based parser has many places where it parses an expression and then
+optionally rearranges the resulting AST, modifying heads of expressions etc.
+
+This parser tries hard to avoid that pattern becase
+* It works poorly when the parser is emitting a stream of node spans rather
+  than eagerly creating a tree data structure.
+* It's confusing to re-make parsing decisions
+
+Often the information required to avoid postprocessing the parse tree is
+available early with a bit of restructuring and we make use of this wherever
+possible.
+
+## Function names
+
+Large structural changes were generally avoided while porting. In particular,
+nearly all function names for parsing productions are the same with `-`
+replaced by `_` and predicates prefixed by `is_`.
+
+* `parse-arglist` and a parts of `parse-paren-` have been combined into a
+  general function `parse_brackets`. This function deals with all the odd
+  corner cases of how the AST is emitted when mixing `,` and `;` within
+  parentheses. In particular regard to:
+  - Determining whether `;` are block syntax separators or keyword parameters
+  - Determining whether to emit `parameter` sections based on context
+  - Emitting key-value pairs either as `kw` or `=` depending on context
+
+* The way that `parse-resword` is entered has been rearranged to avoid parsing
+  reserved words with `parse-atom` inside `parse-unary-prefix`. Instead, we
+  detect reserved words and enter `parse_resword` earlier.
+
+## Flisp parser bugs
 
 ```julia
 # Operator prefix call syntax doesn't work in some cases (tuple is produced)
 +(a;b,c)
-
-# Inconsistent parsing of tuple keyword args inside vs outside of dot calls
-(a=1,)           # (tuple (= a 1))
-f.(a=1)          # (tuple (kw a 1))
-
-# Mixutres of , and ; in calls give nested parameter AST which parses strangely
-# and is kind-of-horrible to use.
-# (tuple (parameters (parameters e f) c d) a b)
-(a,b; c,d; e,f)
 
 # Misplaced @ in macro module paths is parsed but produces odd AST
 # (macrocall (. A (quote (. B @x))))
 # Should be rejected, or produce (macrocall (. (. A (quote B)) (quote @x)))
 A.@B.x
 
-# Lookup for macro module path allows bizarre syntax and stateful semantics!
+# Macro module paths allow calls which gives weird stateful semantics!
 b() = rand() > 0.5 ? Base : Core
 b().@info "hi"
 ```
 
-Many inconsistencies between `kw` and `=`
+## Parsing oddities and warts
+
+* There's many inconsistencies between how `kw` and `=` are used when parsing
+  `key=val` pairs inside parentheses.
+
+* Inconsistent parsing of tuple keyword args inside vs outside of dot calls
+  ```julia
+  (a=1,)           # (tuple (= a 1))
+  f.(a=1)          # (tuple (kw a 1))
+  ```
+
+* Mixutres of `,` and `;` in calls give nested parameter AST which parses
+  strangely, and is kind-of-horrible to use.
+  ```julia
+  # (tuple (parameters (parameters e f) c d) a b)
+  (a,b; c,d; e,f)
+  ```
+
+* `let` bindings might be stored in a block, or they might not be, depending on
+  context:
+   ```
+   # Not in a block
+   let x=1 ; end   ==>  (let (= x 1) (block))
+   let x::1 ; end  ==>  (let (:: x 1) (block))
+   let x ; end     ==>  (let x (block))
+
+   # In a block
+   let x=1,y=2 ; end  ==>  (let (block (= x 1) (= y 2) (block)))
+   let x+=1 ; end     ==>  (let (block (+= x 1)) (block))
+   ```
+
