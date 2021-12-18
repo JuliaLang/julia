@@ -167,11 +167,11 @@ invert!(x::BigInt, b::BigInt) = invert!(x, x, b)
 
 fma!(x::BigInt, a::BigInt, b::BigInt) = ccall((:__gmpz_addmul, :libgmp), Cvoid, (mpz_t, mpz_t, mpz_t), x, a, b)
 function Base.fma(a::BigInt, b::BigInt, c::BigInt)
-    res = copy(c)
+    res = set(c)
     fma!(res, a, b)
     res
 end
-Base.muladd(a::BigInt, b::BigInt, c::BigInt) = fma(copy(c), a, b)
+Base.muladd(a::BigInt, b::BigInt, c::BigInt) = fma(a, b, c)
 
 for op in (:add_ui, :sub_ui, :mul_ui, :mul_2exp, :fdiv_q_2exp, :pow_ui, :bin_ui)
     op! = Symbol(op, :!)
