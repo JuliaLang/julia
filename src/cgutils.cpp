@@ -2462,7 +2462,6 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
         }
     }
     Value *t = boxed(ctx, tinfo);
-#ifdef STORE_ARRAY_LEN
     Value *addr = ctx.builder.CreateStructGEP(jl_array_llvmt,
             emit_bitcast(ctx, decay_derived(ctx, t), jl_parray_llvmt),
             1); //index (not offset) of length field in jl_parray_llvmt
@@ -2472,25 +2471,6 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     auto rng = MDB.createRange(V_size0, ConstantInt::get(T_size, arraytype_maxsize(tinfo.typ)));
     len->setMetadata(LLVMContext::MD_range, rng);
     return tbaa_decorate(tbaa, len);
-#else
-    (void)tbaa;
-    jl_value_t *p1 = jl_tparam1(ty); // FIXME: check that ty is an array type
-    if (jl_is_long(p1)) {
-        size_t nd = jl_unbox_long(p1);
-        Value *l = ConstantInt::get(T_size, 1);
-        for(size_t i=0; i < nd; i++) {
-            l = ctx.builder.CreateMul(l, emit_arraysize(ctx, t, (int)(i + 1)));
-        }
-        return l;
-    }
-    else {
-        std::vector<Type *> fargt(0);
-        fargt.push_back(T_pjlvalue);
-        FunctionType *ft = FunctionType::get(T_size, fargt, false);
-        Value *alen = jl_Module->getOrInsertFunction("jl_array_len_", ft); // TODO: move to codegen init block
-        return ctx.builder.CreateCall(prepare_call(alen), t);
-    }
-#endif
 }
 
 static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
@@ -2552,11 +2532,7 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, jl_valu
 static Value *emit_arrayflags(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
     Value *t = boxed(ctx, tinfo);
-#ifdef STORE_ARRAY_LEN
     int arrayflag_field = 2;
-#else
-    int arrayflag_field = 1;
-#endif
     Value *addr = ctx.builder.CreateStructGEP(
             jl_array_llvmt,
             emit_bitcast(ctx, decay_derived(ctx, t), jl_parray_llvmt),
@@ -2576,11 +2552,7 @@ static Value *emit_arrayndims(jl_codectx_t &ctx, const jl_cgval_t &ary)
 static Value *emit_arrayelsize(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
     Value *t = boxed(ctx, tinfo);
-#ifdef STORE_ARRAY_LEN
     int elsize_field = 3;
-#else
-    int elsize_field = 2;
-#endif
     Value *addr = ctx.builder.CreateStructGEP(jl_array_llvmt,
             emit_bitcast(ctx, decay_derived(ctx, t), jl_parray_llvmt),
             elsize_field);
@@ -2592,11 +2564,7 @@ static Value *emit_arrayoffset(jl_codectx_t &ctx, const jl_cgval_t &tinfo, int n
     if (nd != -1 && nd != 1) // only Vector can have an offset
         return ConstantInt::get(T_int32, 0);
     Value *t = boxed(ctx, tinfo);
-#ifdef STORE_ARRAY_LEN
     int offset_field = 4;
-#else
-    int offset_field = 3;
-#endif
 
     Value *addr = ctx.builder.CreateStructGEP(
             jl_array_llvmt,

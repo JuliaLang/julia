@@ -7849,9 +7849,7 @@ static void init_julia_llvm_env(Module *m)
     assert(jl_func_sig_sparams != NULL);
 
     Type *vaelts[] = {PointerType::get(T_int8, AddressSpace::Loaded)
-#ifdef STORE_ARRAY_LEN
                       , T_size
-#endif
                       , T_int16
                       , T_int16
                       , T_int32
