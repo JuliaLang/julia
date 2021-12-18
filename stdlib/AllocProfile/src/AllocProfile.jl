@@ -42,7 +42,8 @@ function start(skip_every::Int=0)
 end
 
 function stop()
-    raw_results = ccall(:jl_stop_alloc_profile, RawAllocResults, ())
+    raw_results_ptr = ccall(:jl_stop_alloc_profile, Ptr{RawAllocResults}, ())
+    raw_results = unsafe_load(raw_results_ptr)
     decoded_results = decode(raw_results)
     return decoded_results
 end
