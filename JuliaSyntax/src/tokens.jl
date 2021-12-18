@@ -61,8 +61,7 @@ end
 =#
 
 function is_syntax_kind(t)
-    k = kind(t) 
-    K"BEGIN_SYNTAX_KINDS" < k < K"END_SYNTAX_KINDS"
+    K"BEGIN_SYNTAX_KINDS" < kind(t) < K"END_SYNTAX_KINDS"
 end
 
 function is_number(t)
@@ -71,6 +70,10 @@ end
 
 function is_string(t)
     kind(t) in (K"String", K"TripleString")
+end
+
+function is_assignment_op(t)
+    K"BEGIN_ASSIGNMENTS" < kind(t) < K"END_ASSIGNMENTS"
 end
 
 function is_radical_op(t)

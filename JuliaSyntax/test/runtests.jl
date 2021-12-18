@@ -27,9 +27,10 @@ N(k, args::GreenNode...) = GreenNode(SyntaxHead(k, raw_flags()), args...)
 # Non-trivia, infix form
 NI(k, args::GreenNode...) = GreenNode(SyntaxHead(k, raw_flags(infix=true)), args...)
 
-
-include("syntax_trees.jl")
-include("syntax_interpolation.jl")
 include("parse_stream.jl")
-include("simple_parser.jl")
 include("parser.jl")
+
+# Prototypes
+#include("syntax_trees.jl")
+#include("syntax_interpolation.jl")
+#include("simple_parser.jl")

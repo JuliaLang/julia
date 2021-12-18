@@ -248,8 +248,8 @@ end
 # Though note bump() really does both input and output
 
 # Bump the next `n` tokens
-# flags and new_kind are applied to any non-trivia tokens
-function _bump_n(stream::ParseStream, n::Integer, flags, new_kind=K"Nothing")
+# flags and remap_kind are applied to any non-trivia tokens
+function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"Nothing")
     if n <= 0
         return
     end
@@ -261,7 +261,7 @@ function _bump_n(stream::ParseStream, n::Integer, flags, new_kind=K"Nothing")
         end
         is_trivia = k ∈ (K"Whitespace", K"Comment", K"NewlineWs")
         f = is_trivia ? TRIVIA_FLAG : flags
-        k = (is_trivia || new_kind == K"Nothing") ? k : new_kind
+        k = (is_trivia || remap_kind == K"Nothing") ? k : remap_kind
         span = TaggedRange(SyntaxHead(k, f), first_byte(tok), last_byte(tok))
         push!(stream.spans, span)
     end
@@ -273,14 +273,14 @@ end
 
 """
     bump(stream [, flags=EMPTY_FLAGS];
-         skip_newlines=false, error, new_kind)
+         skip_newlines=false, error, remap_kind)
 
 Shift the current token from the input to the output, adding the given flags.
 """
 function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
-              error=nothing, new_kind=K"Nothing")
+              error=nothing, remap_kind=K"Nothing")
     emark = position(stream)
-    _bump_n(stream, _lookahead_index(stream, 1, skip_newlines), flags, new_kind)
+    _bump_n(stream, _lookahead_index(stream, 1, skip_newlines), flags, remap_kind)
     if !isnothing(error)
         emit(stream, emark, K"error", TRIVIA_FLAG, error=error)
     end

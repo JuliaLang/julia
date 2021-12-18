@@ -7,6 +7,7 @@
 # Crude recovery heuristic: bump any tokens which aren't block or bracket
 # closing tokens.
 function bump_closing_token(ps, closing_kind)
+    # TODO: Refactor with recover() ?
     bump_trivia(ps)
     if peek(ps) == closing_kind
         bump(ps, TRIVIA_FLAG)
@@ -27,6 +28,24 @@ function bump_closing_token(ps, closing_kind)
     if peek(ps) == closing_kind
         bump(ps, TRIVIA_FLAG)
     end
+end
+
+# Read tokens until we find an expected closing token.
+# Bump the big pile of resulting tokens as a single nontrivia error token
+function recover(is_closer::Function, ps, flags=EMPTY_FLAGS; error="unexpected tokens")
+    mark = position(ps)
+    while true
+        k = peek(ps)
+        if k == K"EndMarker"
+            bump_invisible(ps, K"error", TRIVIA_FLAG,
+                           error="premature end of input")
+            break
+        elseif is_closer(ps, k)
+            break
+        end
+        bump(ps)
+    end
+    emit(ps, mark, K"error", flags, error=error)
 end
 
 # flisp: disallow-space
@@ -234,10 +253,16 @@ end
 # ==> (block a b)
 #
 # flisp: (define (parse-block s (down parse-eq))
-function parse_block(ps::ParseState, down=parse_eq, mark=position(ps))
-    parse_Nary(ps, down, (K"NewlineWs", K";"),
-                  (K"end", K"else", K"elseif", K"catch", K"finally"))
+function parse_block(ps::ParseState, down=parse_eq, mark=position(ps),
+                     consume_end=false)
+    parse_block_inner(ps::ParseState, down)
     emit(ps, mark, K"block")
+end
+
+# Parse a block, but leave emitting the block up to the caller.
+function parse_block_inner(ps::ParseState, down)
+    parse_Nary(ps, down, (K"NewlineWs", K";"),
+               (K"end", K"else", K"elseif", K"catch", K"finally"))
 end
 
 # ";" at the top level produces a sequence of top level expressions
@@ -641,12 +666,29 @@ end
 function parse_unary_subtype(ps::ParseState)
     k = peek(ps, skip_newlines=true)
     if k == K"EndMarker"
-        # FIXME - should be in parse_atom!!
-        bump_invisible(ps, K"error", error="expected identifier")
+        parse_atom(ps)
         return 
+    elseif k in (K"<:", K">:")
+        # FIXME add test cases
+        k2 = peek(ps, 2)
+        if is_closing_token(k2) || k2 in (K"NewlineWs", K"=")
+            # return operator by itself, as in (<:)
+            bump(ps)
+            return
+        end
+        if k2 in (K"{", K"(")
+            # parse <:{T}(x::T) or <:(x::T) like other unary operators
+            parse_where(ps, parse_juxtapose)
+        else
+            TODO("parse_unary_subtype")
+            parse_where(ps, parse_juxtapose)
+            if peek_behind(ps) == K"tuple"
+                # Argh
+            end
+        end
+    else
+        parse_where(ps, parse_juxtapose)
     end
-    parse_where(ps, parse_juxtapose)
-    #TODO("parse_unary_subtype unimplemented")
 end
 
 # flisp: parse-where-chain
@@ -895,9 +937,8 @@ end
 
 # flisp: parse-factor-with-initial-ex
 function parse_factor_with_initial_ex(ps::ParseState, mark)
-    # FIXME
-    #parse_call_with_initial_ex(ps, mark)
-    #parse_decl_with_initial_ex(ps, mark)
+    parse_call_with_initial_ex(ps, mark)
+    parse_decl_with_initial_ex(ps, mark)
     if is_prec_power(peek(ps))
         bump(ps)
         parse_factor_after(ps)
@@ -945,15 +986,20 @@ end
 # flisp: parse-call
 function parse_call(ps::ParseState)
     mark = position(ps)
-    parse_unary_prefix(ps)
-    parse_call_with_initial_ex(ps, mark)
+    k = peek(ps)
+    if is_initial_reserved_word(ps, k) || k in (K"mutable", K"primitive", K"abstract")
+        parse_resword(ps)
+    else
+        parse_unary_prefix(ps)
+        parse_call_with_initial_ex(ps, mark)
+    end
 end
 
 # flisp: parse-call-with-initial-ex
 function parse_call_with_initial_ex(ps::ParseState, mark)
     k = peek(ps)
     if is_initial_reserved_word(ps, k) || k in (K"mutable", K"primitive", K"abstract")
-        parse_resword(ps, mark)
+        parse_resword(ps)
     else
         parse_call_chain(ps, mark)
     end
@@ -987,6 +1033,7 @@ function parse_unary_prefix(ps::ParseState)
             emit(ps, mark, k)
         end
     else
+        # Here's where things go wrong.
         parse_atom(ps)
     end
 end
@@ -1168,13 +1215,13 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false, is_doc_macro
                 emit(ps, m, K"quote")
                 emit(ps, mark, K".")
             elseif k == K"$"
-                # f.$x      ==>  (. f (quote ($ x)))
-                # f.$(x+y)  ==>  (. f (quote ($ (call + x y))))
+                # f.$x      ==>  (. f (inert ($ x)))
+                # f.$(x+y)  ==>  (. f (inert ($ (call + x y))))
                 m = position(ps)
                 bump(ps, TRIVIA_FLAG)
                 parse_atom(ps)
                 emit(ps, m, K"$")
-                emit(ps, m, K"quote")
+                emit(ps, m, K"inert")
                 emit(ps, mark, K".")
                 # Syntax extension: We could allow interpolations like A.$B.@C
                 # to parse in the module reference path. But disallow this for
@@ -1264,7 +1311,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false, is_doc_macro
                 # x"s"10.0 ==> (macrocall x_str "s" 10.0)
                 suffix_kind = (k == K"Identifier" || iskeyword(k)) ?
                               K"UnquotedString" : k
-                bump(ps, new_kind=suffix_kind)
+                bump(ps, remap_kind=suffix_kind)
             end
             emit(ps, mark, K"macrocall")
         else
@@ -1299,8 +1346,8 @@ function rewrap_where(x, w)
     TODO("rewrap_where unimplemented")
 end
 
-# flisp: (define (parse-struct-def s mut? word)
-function parse_struct_def(ps::ParseState, is_mut, word)
+# flisp: parse-struct-def
+function parse_struct_def(ps::ParseState, mark, is_mut)
     TODO("parse_struct_def unimplemented")
 end
 
@@ -1313,9 +1360,127 @@ end
 
 # parse expressions or blocks introduced by syntactic reserved words
 #
-# flisp: (define (parse-resword s word)
-function parse_resword(ps::ParseState, word)
-    TODO("parse_resword unimplemented")
+# flisp: parse-resword
+function parse_resword(ps::ParseState)
+    mark = position(ps)
+    ps = normal_context(ps)
+    word = peek(ps)
+    if word in (K"begin", K"quote")
+        # begin end         ==>  (block)
+        # begin a ; b end   ==>  (block a b)
+        # begin\na\nb\nend  ==>  (block a b)
+        bump(ps, TRIVIA_FLAG)
+        parse_block_inner(ps, parse_docstring)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"block")
+        if word == K"quote"
+            # quote end       ==>  (quote (block))
+            # quote body end  ==>  (quote (block body))
+            emit(ps, mark, K"quote")
+        end
+    elseif word == K"while"
+        # while cond body end  ==>  (while cond (block body))
+        # ===
+        # while x < y
+        #     a
+        #     b
+        # end
+        # ==> (while (call < x y) (block a b))
+        bump(ps, TRIVIA_FLAG)
+        parse_cond(ps)
+        parse_block(ps)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"while")
+    elseif word == K"for"
+        # for x in xs end  ==>  (for (= x xs) (block))
+        # ===
+        # for x in xs, y in ys
+        #     a
+        #     b
+        # end
+        # ==> (for (block (= x xs) (= y ys)) (block a b))
+        bump(ps, TRIVIA_FLAG)
+        m = position(ps)
+        n_subexprs = parse_comma_separated(ps, parse_iteration_spec)
+        if n_subexprs > 1
+            emit(ps, m, K"block")
+        end
+        parse_block(ps)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"for")
+    elseif word == K"let"
+        bump(ps, TRIVIA_FLAG)
+        if peek(ps) ∉ (K"NewlineWs", K";")
+            # let x=1\n end    ==>  (let (= x 1) (block))
+            m = position(ps)
+            n_subexprs = parse_comma_separated(ps, parse_eq_star)
+            kb = peek_behind(ps)
+            # AST wart: This ugly logic seems unfortunate. Why not always emit a block?
+            # let x=1 ; end   ==>  (let (= x 1) (block))
+            # let x::1 ; end  ==>  (let (:: x 1) (block))
+            # let x ; end     ==>  (let x (block))
+            if n_subexprs > 1 || !(kb in (K"Identifier", K"=", K"::"))
+                # let x=1,y=2 ; end  ==>  (let (block (= x 1) (= y 2) (block)))
+                # let x+=1 ; end     ==>  (let (block (+= x 1)) (block))
+                emit(ps, m, K"block")
+            end
+        else
+            # let end           ==>  (let (block) (block))
+            # let ; end         ==>  (let (block) (block))
+            # let ; body end    ==>  (let (block) (block body))
+            bump_invisible(ps, K"block")
+        end
+        k = peek(ps)
+        if k in (K"NewlineWs", K";")
+            bump(ps, TRIVIA_FLAG)
+        elseif k == K"end"
+        else
+            recover((ps,k)->(is_closing_token(ps,k) || k == K"NewlineWs"),
+                    ps, TRIVIA_FLAG,
+                    error="let variables should end in `;` or newline")
+        end
+        # let\na\nb\nend    ==>  (let (block) (block a b))
+        parse_block(ps)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"let")
+    elseif word in (K"if", K"elseif")
+        TODO("parse_resword")
+    elseif word in (K"global", K"local")
+        TODO("parse_resword")
+    elseif word == K"const"
+        TODO("parse_resword")
+    elseif word in (K"function", K"macro")
+        TODO("parse_resword")
+    elseif word == K"abstract"
+        TODO("parse_resword")
+    elseif word == K"struct"
+        parse_struct_def(ps, mark, false)
+    elseif word == K"mutable"
+        if peek(ps) != K"struct"
+            bump(ps, remap_kind=K"Identifier")
+            parse_call_chain(ps, mark)
+        else
+            parse_struct_def(ps, mark, true)
+        end
+    elseif word == K"primitive"
+        TODO("parse_resword")
+    elseif word == K"try"
+        TODO("parse_resword")
+    elseif word == K"return"
+        TODO("parse_resword")
+    elseif word in (K"break", K"continue")
+        TODO("parse_resword")
+    elseif word in (K"module", K"baremodule")
+        TODO("parse_resword")
+    elseif word == K"export"
+        TODO("parse_resword")
+    elseif word in (K"import", K"using")
+        TODO("parse_resword")
+    elseif word == K"do"
+        TODO("parse_resword")
+    else
+        bump(ps, TRIVIA_FLAG, error="unhandled reserved word")
+    end
 end
 
 #
@@ -1338,11 +1503,6 @@ function parse_do(ps::ParseState)
     emit(ps, mark, K"->")
 end
 
-# flisp: (define (macrocall-to-atsym e)
-function macrocall_to_atsym(e)
-    TODO("macrocall_to_atsym unimplemented")
-end
-
 # flisp: (define (parse-imports s word)
 function parse_imports(ps::ParseState, word)
     TODO("parse_imports unimplemented")
@@ -1354,7 +1514,7 @@ function parse_macro_name(ps::ParseState)
     bump_disallowed_space(ps)
     with_space_sensitive(ps) do ps
         if peek(ps) == K"."
-            bump(ps, new_kind=K"__dot__")
+            bump(ps, remap_kind=K"__dot__")
         else
             # The doc in @doc is a contextural keyword
             is_doc_macro = peek_equal_to(ps, "doc")
@@ -1388,14 +1548,17 @@ end
 #
 # flisp: parse-comma-separated
 function parse_comma_separated(ps::ParseState, down)
+    n_subexprs = 0
     while true
         down(ps)
+        n_subexprs += 1
         if peek(ps) == K","
             bump(ps, TRIVIA_FLAG)
         else
             break
         end
     end
+    return n_subexprs
 end
 
 # flisp: (define (parse-comma-separated-assignments s)
@@ -1403,16 +1566,56 @@ function parse_comma_separated_assignments(ps::ParseState)
     TODO("parse_comma_separated_assignments unimplemented")
 end
 
-# as above, but allows both "i=r" and "i in r"
+# FIXME(sschaub): for backwards compatibility, allows newline before =/in/∈
+# in generator expressions. See issue #37393
+function peek_skip_newline_in_gen(ps::ParseState, n=1)
+    k = peek(ps, n)
+    if ps.for_generator && k == K"NewlineWs"
+        k = peek(ps, n+1)
+    end
+    return k
+end
+
+# parse comma-separated "assignment" but allowing `in` and `∈` as assignment operators
+#
+# i = rhs   ==>  (= i rhs)
+# i in rhs  ==>  (= i rhs)
+# i ∈ rhs   ==>  (= i rhs)
+#
+# i = 1:10       ==>  (= i (call : 1 10))
+# (i,j) in iter  ==>  (= (tuple i j) iter)
 #
 # flisp: (define (parse-iteration-spec s)
 function parse_iteration_spec(ps::ParseState)
-    TODO("parse_iteration_spec unimplemented")
+    mark = position(ps)
+    k = peek(ps)
+    # Handle `outer` contextual keyword
+    is_outer_kw = k == K"outer" && !(peek_skip_newline_in_gen(ps, 2) in (K"=", K"in", K"∈"))
+    if is_outer_kw
+        # outer i = rhs  ==>  (= (outer i) rhs)
+        bump(ps, TRIVIA_FLAG)
+    end
+    with_space_sensitive(parse_pipe_lt, ps)
+    if is_outer_kw
+        emit(ps, mark, K"outer")
+    end
+    if peek_skip_newline_in_gen(ps) in (K"=", K"in", K"∈")
+        bump(ps, TRIVIA_FLAG)
+        parse_pipe_lt(ps)
+    else
+        # Recovery heuristic
+        recover(ps, error="invalid iteration spec: expected one of `=` `in` or `∈`") do ps, k
+            k in (K",", K"NewlineWs") || is_closing_token(ps, k)
+        end
+        # TODO: or try parse_pipe_lt ???
+    end
+    emit(ps, mark, K"=")
 end
 
-# flisp: (define (parse-comma-separated-iters s)
+# flisp: parse-comma-separated-iters
 function parse_comma_separated_iters(ps::ParseState)
-    TODO("parse_comma_separated_iters unimplemented")
+    # FIXME REmove?
+    parse_comma_separated(ps, parse_iteration_spec)
 end
 
 # flisp: (define (parse-space-separated-exprs s)
@@ -1901,7 +2104,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             bump(ps, error="invalid identifier")
         else
             # :end  ==>  (quote end)
-            bump(ps, new_kind=K"Identifier")
+            bump(ps, remap_kind=K"Identifier")
         end
     elseif leading_kind == K"(" # parens or tuple
         parse_paren(ps, check_identifiers)
@@ -2038,11 +2241,11 @@ function parse_all(stream::ParseStream)
         end
     end
     emit(ps, mark, K"toplevel")
-    return ps.stream
+    return stream
 end
 
 function parse_all(code, args...)
     stream = ParseStream(code)
-    return parse_all(ParseState(stream), args...)
+    return parse_all(stream, args...)
 end
 

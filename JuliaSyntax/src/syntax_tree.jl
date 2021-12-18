@@ -323,7 +323,8 @@ function _to_expr(node::SyntaxNode)
                 pop!(args)
             end
         end
-        if head(node) == :quote
+        if head(node) == :inert || (head(node) == :quote &&
+                                    length(args) == 1 && !(only(args) isa Expr))
             QuoteNode(only(args))
         else
             Expr(head(node), args...)
