@@ -38,6 +38,7 @@ struct AllocProfile {
 // == global variables manipulated by callbacks ==
 
 AllocProfile g_alloc_profile;
+RawAllocResults *g_alloc_profile_results = nullptr;
 int g_alloc_profile_enabled = false;
 
 // === stack stuff ===
@@ -63,24 +64,26 @@ JL_DLLEXPORT void jl_start_alloc_profile(int skip_every) {
 
 extern "C" {  // Needed since the function doesn't take any arguments.
 
-JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
+JL_DLLEXPORT struct RawAllocResults* jl_stop_alloc_profile() {
     g_alloc_profile_enabled = false;
 
-    auto results = RawAllocResults{
+    auto results = new RawAllocResults{
         g_alloc_profile.allocs.data(),
         g_alloc_profile.allocs.size()
     };
 
     // package up frees
-    results.num_frees = g_alloc_profile.frees_by_type_address.size();
-    results.frees = (FreeInfo*) malloc(sizeof(FreeInfo) * results.num_frees);
+    results->num_frees = g_alloc_profile.frees_by_type_address.size();
+    results->frees = (FreeInfo*) malloc(sizeof(FreeInfo) * results->num_frees);
     int j = 0;
     for (auto type_addr_free_count : g_alloc_profile.frees_by_type_address) {
-        results.frees[j++] = FreeInfo{
+        results->frees[j++] = FreeInfo{
             type_addr_free_count.first,
             type_addr_free_count.second
         };
     }
+
+    g_alloc_profile_results = results;
 
     return results;
 }
@@ -93,6 +96,12 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
         free(alloc.backtrace.data);
     }
     g_alloc_profile.allocs.clear();
+
+    if (g_alloc_profile_results != nullptr) {
+        free(g_alloc_profile_results->frees);
+        // free the results?
+        g_alloc_profile_results = nullptr;
+    }
 }
 
 }

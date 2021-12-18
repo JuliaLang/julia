@@ -12,6 +12,7 @@ using AllocProfile
     using Base64
 
     results = AllocProfile.stop()
+    AllocProfile.clear()
 
     @test length(results.allocs) > 0
     first_alloc = results.allocs[1]
