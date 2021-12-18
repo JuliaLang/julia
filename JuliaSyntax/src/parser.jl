@@ -103,6 +103,22 @@ function is_initial_reserved_word(ps::ParseState, k)
     return is_iresword && !(k == K"begin" && ps.end_symbol)
 end
 
+# Return true if the next word (or word pair) is reserved, introducing a
+# syntactic structure.
+function peek_initial_reserved_words(ps::ParseState)
+    k = peek(ps)
+    if is_initial_reserved_word(ps, k)
+        return true
+    elseif k in (K"mutable", K"primitive", K"abstract")
+        k2 = peek(ps,2)
+        return (k == K"mutable"   && k2 == K"struct") ||
+               (k == K"primitive" && k2 == K"type")   ||
+               (k == K"abstract"  && k2 == K"type")
+    else
+        return false
+    end
+end
+
 function is_block_form(k)
     kind(k) in (K"block", K"quote", K"if", K"for", K"while",
                 K"let", K"function", K"macro", K"abstract",
@@ -930,9 +946,13 @@ end
 #
 # flisp: parse-factor
 function parse_factor(ps::ParseState)
-    mark = position(ps)
-    parse_unary_prefix(ps)
-    parse_factor_with_initial_ex(ps, mark)
+    if peek_initial_reserved_words(ps)
+        parse_resword(ps)
+    else
+        mark = position(ps)
+        parse_unary_prefix(ps)
+        parse_factor_with_initial_ex(ps, mark)
+    end
 end
 
 # flisp: parse-factor-with-initial-ex
@@ -985,11 +1005,10 @@ end
 #
 # flisp: parse-call
 function parse_call(ps::ParseState)
-    mark = position(ps)
-    k = peek(ps)
-    if is_initial_reserved_word(ps, k) || k in (K"mutable", K"primitive", K"abstract")
+    if peek_initial_reserved_words(ps)
         parse_resword(ps)
     else
+        mark = position(ps)
         parse_unary_prefix(ps)
         parse_call_with_initial_ex(ps, mark)
     end
@@ -997,12 +1016,8 @@ end
 
 # flisp: parse-call-with-initial-ex
 function parse_call_with_initial_ex(ps::ParseState, mark)
-    k = peek(ps)
-    if is_initial_reserved_word(ps, k) || k in (K"mutable", K"primitive", K"abstract")
-        parse_resword(ps)
-    else
-        parse_call_chain(ps, mark)
-    end
+    # FIXME: Remove parse_call_with_initial_ex which is redundant now?
+    parse_call_chain(ps, mark)
 end
 
 # parse syntactic unary operators
@@ -1019,21 +1034,22 @@ function parse_unary_prefix(ps::ParseState)
         k2 = peek(ps, 2)
         if k in (K"&", K"$") && (is_closing_token(ps, k2) || k2 == K"NewlineWs")
             # &)   ==>  &
-            # $\n   ==>  $
+            # $\n  ==>  $
             bump(ps)
         else
             bump(ps, TRIVIA_FLAG)
             if k in (K"&", K"::")
+                # &a   ==>  (& a)
                 parse_where(ps, parse_call)
             else
                 # $a   ==>  ($ a)
                 # $$a  ==>  ($ ($ a))
+                # $&a  ==>  ($ (& a))
                 parse_unary_prefix(ps)
             end
             emit(ps, mark, k)
         end
     else
-        # Here's where things go wrong.
         parse_atom(ps)
     end
 end
@@ -1077,6 +1093,11 @@ end
 #
 # flisp: (define (parse-call-chain s ex macrocall?)
 function parse_call_chain(ps::ParseState, mark, is_macrocall=false, is_doc_macro=false)
+    if is_number(peek_behind(ps)) && peek(ps) == K"("
+        # juxtaposition with numbers is multiply, not call
+        # 2(x) ==> (* 2 x)
+        return
+    end
     # source range of the @-prefixed part of a macro
     macro_atname_range = nothing
     is_valid_modref = peek_behind(ps) in (K"__dot__", K"Identifier")
@@ -1087,8 +1108,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false, is_doc_macro
         k = kind(t)
         if (ps.space_sensitive && t.had_whitespace &&
                 # TODO: Is `'` adjoint or Char here?
-                k in (K"(", K"[", K"{", K"\\", K"'", K"Char", K"String", K"TripleString"))  ||
-                (is_number(k) && k == K"(") # 2(...) is multiply, not call
+                k in (K"(", K"[", K"{", K"\\", K"'", K"Char", K"String", K"TripleString"))
             break
         end
         if k == K"("
@@ -1362,8 +1382,8 @@ end
 #
 # flisp: parse-resword
 function parse_resword(ps::ParseState)
-    mark = position(ps)
     ps = normal_context(ps)
+    mark = position(ps)
     word = peek(ps)
     if word in (K"begin", K"quote")
         # begin end         ==>  (block)
