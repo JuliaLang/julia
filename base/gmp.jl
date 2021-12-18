@@ -166,8 +166,12 @@ invert(a::BigInt, b::BigInt) = invert!(BigInt(), a, b)
 invert!(x::BigInt, b::BigInt) = invert!(x, x, b)
 
 fma!(x::BigInt, a::BigInt, b::BigInt) = ccall((:__gmpz_addmul, :libgmp), Cvoid, (mpz_t, mpz_t, mpz_t), x, a, b)
-fma(a::BigInt, b::BigInt, c::BigInt) = fma!(copy(c), a, b)
-muladd(a::BigInt, b::BigInt, c::BigInt) = fma!(copy(c), a, b)
+function Base.fma(a::BigInt, b::BigInt, c::BigInt)
+    res = copy(c)
+    fma!(res, a, b)
+    res
+end
+Base.muladd(a::BigInt, b::BigInt, c::BigInt) = fma(copy(c), a, b)
 
 for op in (:add_ui, :sub_ui, :mul_ui, :mul_2exp, :fdiv_q_2exp, :pow_ui, :bin_ui)
     op! = Symbol(op, :!)
