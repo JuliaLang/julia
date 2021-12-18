@@ -762,8 +762,6 @@ LogicalIndex{Int}(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
 size(L::LogicalIndex) = (L.sum,)
 length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
-collect(L::LogicalIndex{Int,<:BitArray}) = findall(vec(L.mask))
-collect(L::LogicalIndex{CartesianIndex{N},BitArray{N}}) where {N} = N >= 2 ? findall(L.mask) : [i for i in L]
 show(io::IO, r::LogicalIndex) = print(io,collect(r))
 print_array(io::IO, X::LogicalIndex) = print_array(io, collect(X))
 # Iteration over LogicalIndex is very performance-critical, but it also must
@@ -794,22 +792,28 @@ end
     end
 end
 # When wrapping a BitArray, lean heavily upon its internals.
-@inline function iterate(L::Base.LogicalIndex{Int,<:BitArray})
+@inline function iterate(L::LogicalIndex{Int,<:BitArray})
     L.sum == 0 && return nothing
     Bc = L.mask.chunks
-    return iterate(L, (1, @inbounds Bc[1]))
+    iterate(L, (1, 1, (), @inbounds Bc[1]))
 end
-@inline function iterate(L::Base.LogicalIndex{Int,<:BitArray}, s)
+@inline function iterate(L::LogicalIndex{<:CartesianIndex,<:BitArray})
+    L.sum == 0 && return nothing
     Bc = L.mask.chunks
-    i1, c = s
-    while c==0
-        i1 % UInt >= length(Bc) % UInt && return nothing
-        i1 += 1
-        @inbounds c = Bc[i1]
+    irest = ntuple(one, ndims(L.mask)-1)
+    return iterate(L, (1, 1, irest, @inbounds Bc[1]))
+end
+@inline function iterate(L::LogicalIndex{<:Any,<:BitArray}, (i1, Bi, irest, c))
+    Bc = L.mask.chunks
+    while c == 0
+        Bi >= length(Bc) && return nothing
+        i1 += 64
+        @inbounds c = Bc[Bi+=1]
     end
-    tz = trailing_zeros(c) + 1
+    tz = trailing_zeros(c)
     c = _blsr(c)
-    return ((i1-1)<<6 + tz, (i1, c))
+    i1, irest = _overflowind(i1 + tz, irest, size(L.mask))
+    return eltype(L)(i1, irest...), (i1 - tz, Bi, irest, c)
 end
 
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
