@@ -1055,17 +1055,16 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
         check_effect_free!(ir, idx, stmt, rt)
         return nothing
     end
-    if stmt.head !== :call
-        if stmt.head === :splatnew
+    head = stmt.head
+    if head !== :call
+        if head === :splatnew
             inline_splatnew!(ir, idx, stmt, rt)
-        elseif stmt.head === :new_opaque_closure
+        elseif head === :new_opaque_closure
             narrow_opaque_closure!(ir, stmt, ir.stmts[idx][:info], state)
         end
         check_effect_free!(ir, idx, stmt, rt)
         return nothing
     end
-
-    stmt.head === :call || return nothing
 
     sig = call_sig(ir, stmt)
     sig === nothing && return nothing
@@ -1286,8 +1285,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             end
             ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
             info = info.info
-        end
-        if info === false
+        elseif info === false
             # Inference determined this couldn't be analyzed. Don't question it.
             continue
         end
@@ -1330,7 +1328,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         elseif isa(info, UnionSplitInfo)
             infos = info.matches
         else
-            continue
+            continue # isa(info, ReturnTypeCallInfo), etc.
         end
 
         analyze_single_call!(ir, idx, stmt, infos, flag, sig, state, todo)
@@ -1395,6 +1393,9 @@ function early_inline_special_case(
     return nothing
 end
 
+# special-case some regular method calls whose results are not folded within `abstract_call_known`
+# (and thus `early_inline_special_case` doesn't handle them yet)
+# NOTE we manually inline the method bodies, and so the logic here needs to precisely sync with their definitions
 function late_inline_special_case!(
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(type), sig::Signature,
     params::OptimizationParams)
@@ -1423,6 +1424,10 @@ function late_inline_special_case!(
             length(stmt.args) < 4 ? Bottom : stmt.args[3],
             length(stmt.args) == 2 ? Any : stmt.args[end])
         return SomeCase(typevar_call)
+    elseif isinlining && f === UnionAll && length(argtypes) == 3 && (argtypes[2] ⊑ TypeVar)
+        unionall_call = Expr(:foreigncall, QuoteNode(:jl_type_unionall), Any, svec(Any, Any),
+            0, QuoteNode(:ccall), stmt.args[2], stmt.args[3])
+        return SomeCase(unionall_call)
     elseif is_return_type(f)
         if isconstType(type)
             return SomeCase(quoted(type.parameters[1]))
