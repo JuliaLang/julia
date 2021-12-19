@@ -1070,3 +1070,13 @@ end
     @allocated test(arr)
     @test (@allocated test(arr)) == 0
 end
+
+@testset "Fix type unstable .&& #43470" begin
+    function test(x, y)
+        return (x .> 0.0) .&& (y .> 0.0)
+    end
+    x = randn(2)
+    y = randn(2)
+    z = test(x, y)
+    @test z isa BitVector
+end
