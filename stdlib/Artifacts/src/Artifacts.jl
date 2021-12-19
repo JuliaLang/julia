@@ -375,6 +375,15 @@ function artifact_meta(name::String, artifacts_toml::String;
     return artifact_meta(name, artifact_dict, artifacts_toml; platform=platform)
 end
 
+function to_dl_dict(meta, name, artifacts_toml)
+    dl_dict = Dict{AbstractPlatform,Dict{String,Any}}()
+    for x in meta
+        x::Dict{String}
+        dl_dict[unpack_platform(x, name, artifacts_toml)] = x
+    end
+    return dl_dict
+end
+
 function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform())
     if !haskey(artifact_dict, name)
@@ -384,11 +393,7 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
 
     # If it's an array, find the entry that best matches our current platform
     if isa(meta, Vector)
-        dl_dict = Dict{AbstractPlatform,Dict{String,Any}}()
-        for x in meta
-            x::Dict{String}
-            dl_dict[unpack_platform(x, name, artifacts_toml)] = x
-        end
+        dl_dict = to_dl_dict(meta, name, artifacts_toml)
         meta = select_platform(dl_dict, platform)
     # If it's NOT a dict, complain
     elseif !isa(meta, Dict)
@@ -404,6 +409,37 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
 
     # Return the full meta-dict.
     return meta
+end
+
+function all_artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String;
+                           platform::AbstractPlatform = HostPlatform())
+    if !haskey(artifact_dict, name)
+        return nothing
+    end
+    meta = artifact_dict[name]
+
+    # If it's an array, find the entry that best matches our current platform
+    if isa(meta, Vector)
+        dl_dict = to_dl_dict(meta, name, artifacts_toml)
+        metas = filter_by_platform(dl_dict, platform)
+    # If it's NOT a dict, complain
+    elseif !isa(meta, Dict)
+        @error("Invalid artifacts file at $(artifacts_toml): artifact '$name' malformed, must be array or dict!")
+        return nothing
+    else
+        metas = [meta]
+    end
+
+    # This is such a no-no, we are going to call it out right here, right now.
+    for meta in metas
+        if meta !== nothing && !haskey(meta, "git-tree-sha1")
+            @error("Invalid artifacts file at $(artifacts_toml): artifact '$name' contains no `git-tree-sha1`!")
+            return nothing
+        end
+    end
+
+    # Return the full meta-dict.
+    return metas
 end
 
 """

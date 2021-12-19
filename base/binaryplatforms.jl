@@ -1039,6 +1039,10 @@ platforms_match(a::AbstractPlatform, b::AbstractString) = platforms_match(a, str
 platforms_match(a::AbstractString, b::AbstractString) = platforms_match(string(a)::String, string(b)::String)
 
 
+function filter_by_platform(download_info::Dict, platform::AbstractPlatform)
+    return collect(filter(p -> platforms_match(p, platform), keys(download_info)))
+end
+
 """
     select_platform(download_info::Dict, platform::AbstractPlatform = HostPlatform())
 
@@ -1051,8 +1055,7 @@ match exactly, however attributes such as compiler ABI can have wildcards
 within them such as `nothing` which matches any version of GCC.
 """
 function select_platform(download_info::Dict, platform::AbstractPlatform = HostPlatform())
-    ps = collect(filter(p -> platforms_match(p, platform), keys(download_info)))
-
+    ps = filter_by_platform(download_info, platform)
     if isempty(ps)
         return nothing
     end
@@ -1063,6 +1066,10 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
     # down, we just sort by triplet, then pick the last one.  This has the effect
     # of generally choosing the latest release (e.g. a `libgfortran5` tarball
     # rather than a `libgfortran3` tarball)
+    # XXX: The reasoning above seems wrong. We actually need to download all of them
+    #      since some of them could be custom platform tags. Future users should use
+    #      the `filter_by_platform` function instead.
+
     p = last(sort(ps, by = p -> triplet(p)))
     return download_info[p]
 end
