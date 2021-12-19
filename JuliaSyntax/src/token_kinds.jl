@@ -823,7 +823,8 @@ Dict([
 "StringMacroName"    =>  Ts.STRING_MACRO_NAME
 "CmdMacroName"       =>  Ts.CMD_MACRO_NAME
 "UnquotedString"     =>  Ts.UNQUOTED_STRING
-"END_PARSER_TOKENS"  => Ts.end_parser_tokens
+"NothingLiteral"     =>  Ts.NOTHING_LITERAL
+"END_PARSER_TOKENS"  =>  Ts.end_parser_tokens
 
 # Our custom syntax tokens
 "BEGIN_SYNTAX_KINDS" => Ts.begin_syntax_kinds

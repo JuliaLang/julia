@@ -249,6 +249,11 @@ tests = [
         "let ; end"        =>  "(let (block) (block))"
         "let ; body end"   =>  "(let (block) (block :body))"
         "let\na\nb\nend"   =>  "(let (block) (block :a :b))"
+        # return
+        "return\nx"   =>  "(return nothing)"
+        "return)"     =>  "(return nothing)"
+        "return x"    =>  "(return :x)"
+        "return x,y"  =>  "(return (tuple :x :y))"
     ],
     JuliaSyntax.parse_const_local_global => [
         "global x = 1"         =>  "(global (= :x 1))"

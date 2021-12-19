@@ -1486,7 +1486,18 @@ function parse_resword(ps::ParseState)
     elseif word == K"try"
         TODO("parse_resword")
     elseif word == K"return"
-        TODO("parse_resword")
+        bump(ps, TRIVIA_FLAG)
+        k = peek(ps)
+        if k == K"NewlineWs" || is_closing_token(ps, k)
+            # return\nx   ==>  (return nothing)
+            # return)     ==>  (return nothing)
+            bump_invisible(ps, K"NothingLiteral")
+        else
+            # return x    ==>  (return x)
+            # return x,y  ==>  (return (tuple x y))
+            parse_eq(ps)
+        end
+        emit(ps, mark, K"return")
     elseif word in (K"break", K"continue")
         TODO("parse_resword")
     elseif word in (K"module", K"baremodule")

@@ -94,6 +94,8 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             GlobalRef(Core, :var"@doc")
         elseif k == K"core_@cmd"
             GlobalRef(Core, :var"@cmd")
+        elseif k == K"NothingLiteral"
+            nothing
         elseif k == K"error"
             ErrorVal()
         elseif k == K"__dot__"
