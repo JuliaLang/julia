@@ -73,9 +73,9 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
     if (is_complex64(dt) || is_complex128(dt) || (jl_is_primitivetype(dt) && size <= 8))
         return false;
 #if JL_LLVM_VERSION < 120000
-        ab.addAttribute(Attribute::ByVal);
+    ab.addAttribute(Attribute::ByVal);
 #else
-        ab.addByValAttr(Ty);
+    ab.addByValAttr(Ty);
 #endif
     return true;
 }

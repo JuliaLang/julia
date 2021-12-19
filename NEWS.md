@@ -13,8 +13,12 @@ New language features
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
+* Support for Unicode 14.0.0 ([#43443]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
   no errors were thrown. ([#42211])
+* Mutable struct fields may now be annotated as `const` to prevent changing
+  them after construction, providing for greater clarity and optimization
+  ability of these objects ([#43305]).
 
 Language changes
 ----------------

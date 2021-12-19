@@ -624,3 +624,21 @@ end
         @test_broken f(1) == 2
     end
 end
+
+let c1 = Threads.Condition()
+    c2 = Threads.Condition(c1.lock)
+    lock(c2)
+    t = @task nothing
+    Base._wait2(c1, t)
+    c3, c4 = deserialize(IOBuffer(sprint(serialize, [c1, c2])))::Vector{Threads.Condition}
+    @test c3.lock === c4.lock
+    @test islocked(c1)
+    @test !islocked(c3)
+    @test !isempty(c1.waitq)
+    @test isempty(c2.waitq)
+    @test isempty(c3.waitq)
+    @test isempty(c4.waitq)
+    notify(c1)
+    unlock(c2)
+    wait(t)
+end

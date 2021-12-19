@@ -855,6 +855,10 @@ static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st,
         JL_TYPECHKS(name, symbol, arg);
         idx = jl_field_index(st, (jl_sym_t*)arg, 1);
     }
+    if (mutabl && jl_field_isconst(st, idx)) {
+        jl_errorf("%s: const field .%s of type %s cannot be changed", name,
+                jl_symbol_name((jl_sym_t*)jl_svec_ref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
+    }
     return idx;
 }
 
@@ -1604,6 +1608,10 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
            ? dtb->name->atomicfields == NULL
            : (dtb->name->atomicfields != NULL &&
               memcmp(dta->name->atomicfields, dtb->name->atomicfields, (jl_svec_len(dta->name->names) + 31) / 32 * sizeof(uint32_t)) == 0)) &&
+          (dta->name->constfields == NULL
+           ? dtb->name->constfields == NULL
+           : (dtb->name->constfields != NULL &&
+              memcmp(dta->name->constfields, dtb->name->constfields, (jl_svec_len(dta->name->names) + 31) / 32 * sizeof(uint32_t)) == 0)) &&
           jl_egal((jl_value_t*)jl_field_names(dta), (jl_value_t*)jl_field_names(dtb)) &&
           jl_nparams(dta) == jl_nparams(dtb)))
         return 0;

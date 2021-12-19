@@ -415,7 +415,7 @@ typedef struct {
     struct _jl_module_t *module;
     jl_svec_t *names;  // field names
     const uint32_t *atomicfields; // if any fields are atomic, we record them here
-    //const uint32_t *constfields; // if any fields are const, we record them here
+    const uint32_t *constfields; // if any fields are const, we record them here
     // `wrapper` is either the only instantiation of the type (if no parameters)
     // or a UnionAll accepting parameters to make an instantiation.
     jl_value_t *wrapper;
@@ -539,6 +539,7 @@ typedef struct _jl_module_t {
     int8_t compile;
     int8_t infer;
     uint8_t istopmod;
+    int8_t max_methods;
     jl_mutex_t lock;
 } jl_module_t;
 
@@ -1113,7 +1114,6 @@ static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 
 static inline int jl_field_isatomic(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 {
-    // if (!st->mutable) return 0; // TODO: is this fast-path helpful?
     const uint32_t *atomicfields = st->name->atomicfields;
     if (atomicfields != NULL) {
         if (atomicfields[i / 32] & (1 << (i % 32)))
@@ -1121,6 +1121,20 @@ static inline int jl_field_isatomic(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
     }
     return 0;
 }
+
+static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
+{
+    jl_typename_t *tn = st->name;
+    if (!tn->mutabl)
+        return 1;
+    const uint32_t *constfields = tn->constfields;
+    if (constfields != NULL) {
+        if (constfields[i / 32] & (1 << (i % 32)))
+            return 1;
+    }
+    return 0;
+}
+
 
 static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEPOINT
 {
@@ -1538,6 +1552,8 @@ JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_compile(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m);
+JL_DLLEXPORT void jl_set_module_max_methods(jl_module_t *self, int value);
+JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);

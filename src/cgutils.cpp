@@ -2249,10 +2249,10 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             else {
                 ptindex = emit_struct_gep(ctx, cast<StructType>(lt), staddr, byte_offset + fsz);
             }
-            return emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, jt->name->mutabl, union_max, tbaa_unionselbyte);
+            return emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, !jl_field_isconst(jt, idx), union_max, tbaa_unionselbyte);
         }
         assert(jl_is_concrete_type(jfty));
-        if (!jt->name->mutabl && !(maybe_null && (jfty == (jl_value_t*)jl_bool_type ||
+        if (jl_field_isconst(jt, idx) && !(maybe_null && (jfty == (jl_value_t*)jl_bool_type ||
                                             ((jl_datatype_t*)jfty)->layout->npointers))) {
             // just compute the pointer and let user load it when necessary
             return mark_julia_slot(addr, jfty, NULL, tbaa);
@@ -2401,6 +2401,8 @@ static intptr_t arraytype_maxsize(jl_value_t *ty)
     return INTPTR_MAX / elsz;
 }
 
+static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo);
+
 static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *dim)
 {
     size_t ndim;
@@ -2408,6 +2410,13 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *
     if (arraytype_constdim(tinfo.typ, &ndim)) {
         if (ndim == 0)
             return ConstantInt::get(T_size, 1);
+        if (ndim == 1) {
+            if (auto d = dyn_cast<ConstantInt>(dim)) {
+                if (d->getZExtValue() == 1) {
+                    return emit_arraylen(ctx, tinfo);
+                }
+            }
+        }
         if (ndim > 1) {
             if (tinfo.constant && isa<ConstantInt>(dim)) {
                 auto n = cast<ConstantInt>(dim)->getZExtValue() - 1;
@@ -3283,21 +3292,13 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg
     emit_write_barrier(ctx, parent, ptrs);
 }
 
-
 static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         jl_datatype_t *sty, const jl_cgval_t &strct, size_t idx0,
         jl_cgval_t rhs, jl_cgval_t cmp,
-        bool checked, bool wb, AtomicOrdering Order, AtomicOrdering FailOrder,
+        bool wb, AtomicOrdering Order, AtomicOrdering FailOrder,
         bool needlock, bool issetfield, bool isreplacefield, bool isswapfield, bool ismodifyfield,
         const jl_cgval_t *modifyop, const std::string &fname)
 {
-    if (!sty->name->mutabl && checked) {
-        std::string msg = fname + ": immutable struct of type "
-            + std::string(jl_symbol_name(sty->name->name))
-            + " cannot be changed";
-        emit_error(ctx, msg);
-        return jl_cgval_t();
-    }
     assert(strct.ispointer());
     size_t byte_offset = jl_field_offset(sty, idx0);
     Value *addr = data_pointer(ctx, strct);
@@ -3574,7 +3575,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             else
                 need_wb = false;
             emit_typecheck(ctx, rhs, jl_svecref(sty->types, i), "new"); // n.b. ty argument must be concrete
-            emit_setfield(ctx, sty, strctinfo, i, rhs, jl_cgval_t(), false, need_wb, AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, false, true, false, false, false, nullptr, "");
+            emit_setfield(ctx, sty, strctinfo, i, rhs, jl_cgval_t(), need_wb, AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, false, true, false, false, false, nullptr, "");
         }
         return strctinfo;
     }

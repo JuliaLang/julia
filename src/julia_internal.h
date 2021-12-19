@@ -1442,6 +1442,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_all_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_compile_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_force_compile_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_infer_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_max_methods_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_atomic_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_not_atomic_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_unordered_sym;
