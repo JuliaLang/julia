@@ -32,8 +32,7 @@ end
 
 # Read tokens until we find an expected closing token.
 # Bump the big pile of resulting tokens as a single nontrivia error token
-function recover(is_closer::Function, ps, flags=EMPTY_FLAGS; error="unexpected tokens")
-    mark = position(ps)
+function recover(is_closer::Function, ps, flags=EMPTY_FLAGS; mark = position(ps), error="unexpected tokens")
     while true
         k = peek(ps)
         if k == K"EndMarker"
@@ -357,6 +356,9 @@ function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
         end
         return NO_POSITION
     else
+        # a += b  ==>  (+= a b)
+        # FIXME:
+        # a .= b  ==>  (.= a b)
         bump(ps, TRIVIA_FLAG)
         parse_assignment(ps, down, equals_is_kw)
         result_k = (k == K"=" && equals_is_kw) ? K"kw" : k
@@ -365,31 +367,29 @@ function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
     end
 end
 
-# parse-comma is needed for commas outside parens, for example a = b,c
+# parse_comma is needed for commas outside parens, for example a = b,c
 #
 # flisp: (define (parse-comma s)
-function parse_comma(ps::ParseState)
+function parse_comma(ps::ParseState, do_emit=true)
     mark = position(ps)
     n_commas = 0
     parse_pair(ps)
-    first = true
     while true
         if peek(ps) != K","
-            if !first || n_commas > 0
+            if do_emit && n_commas >= 1
                 # FIXME: is use of n_commas correct here? flisp comments say:
                 # () => (tuple)
                 # (ex2 ex1) => (tuple ex1 ex2)
                 # (ex1,) => (tuple ex1)
                 emit(ps, mark, K"tuple")
             end
-            return
+            return n_commas
         end
-        first = false
         bump(ps, TRIVIA_FLAG)
         n_commas += 1
-        if peek(ps) == K"="
-            # Test:
-            # x, = ...
+        if peek_token(ps) == K"="
+            # Allow trailing comma before `=`
+            # x, = xs  ==>  (tuple x)
             continue
         end
         parse_pair(ps)
@@ -1454,6 +1454,7 @@ function parse_resword(ps::ParseState)
         if k in (K"NewlineWs", K";")
             bump(ps, TRIVIA_FLAG)
         elseif k == K"end"
+            # pass
         else
             recover((ps,k)->(is_closing_token(ps,k) || k == K"NewlineWs"),
                     ps, TRIVIA_FLAG,
@@ -1465,10 +1466,8 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"let")
     elseif word in (K"if", K"elseif")
         TODO("parse_resword")
-    elseif word in (K"global", K"local")
-        TODO("parse_resword")
-    elseif word == K"const"
-        TODO("parse_resword")
+    elseif word in (K"const", K"global", K"local")
+        parse_const_local_global(ps)
     elseif word in (K"function", K"macro")
         TODO("parse_resword")
     elseif word == K"abstract"
@@ -1500,6 +1499,68 @@ function parse_resword(ps::ParseState)
         TODO("parse_resword")
     else
         bump(ps, TRIVIA_FLAG, error="unhandled reserved word")
+    end
+end
+
+function parse_const_local_global(ps)
+    mark = position(ps)
+    scope_mark = mark
+    has_const = false
+    scope_k = K"Nothing"
+    k = peek(ps)
+    if k in (K"global", K"local")
+        # global x = 1  ==>  (global (= x 1))
+        # local x = 1   ==>  (local (= x 1))
+        scope_k = k
+        bump(ps, TRIVIA_FLAG)
+        if peek(ps) == K"const"
+            # global const x = 1  ==>  (const (global (= x 1)))
+            # local const x = 1   ==>  (const (local (= x 1)))
+            has_const = true
+            bump(ps, TRIVIA_FLAG)
+        end
+    else
+        has_const = true
+        # const x = 1          ==>  (const (= x 1))
+        # const x,y = 1,2      ==>  (const (= (tuple x y) (tuple 1 2)))
+        bump(ps, TRIVIA_FLAG)
+        k = peek(ps)
+        if k in (K"global", K"local")
+            # const global x = 1   ==>  (const (global (= x 1)))
+            # const local x = 1    ==>  (const (local (= x 1)))
+            scope_k = k
+            scope_mark = position(ps)
+            bump(ps, TRIVIA_FLAG)
+        end
+    end
+    # Like parse_eq, but specialized for error recovery:
+    beforevar_mark = position(ps)
+    n_commas = parse_comma(ps, false)
+    t = peek_token(ps)
+    if is_prec_assignment(t) && !is_decorated(t)
+        if n_commas >= 1
+            emit(ps, beforevar_mark, K"tuple")
+        end
+        bump(ps, TRIVIA_FLAG)
+        parse_comma(ps)
+        emit(ps, beforevar_mark, K"=")
+    elseif has_const
+        # const x  ==> (const (error x))
+        # Recovery heuristic
+        recover(ps, mark=beforevar_mark,
+                error="Expected assignment after `const`") do ps, k
+            k == K"NewlineWs" || (k != K"," && is_closing_token(ps, k))
+        end
+    else
+        # global x    ==>  (global x)
+        # local x     ==>  (local x)
+        # global x,y  ==>  (global x y)
+    end
+    if scope_k != K"Nothing"
+        emit(ps, scope_mark, scope_k)
+    end
+    if has_const
+        emit(ps, mark, K"const")
     end
 end
 
