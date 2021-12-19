@@ -2606,187 +2606,253 @@ end
 end
 
 """
-    stack(arrays)
+    stack(iter; [dims])
 
-Concatenates a collection of arrays, all the same size, into one higher-dimensional array.
+Combine a collection of arrays (or other iterable objects) of equal size
+into one larger array, by arranging them along one or more new dimensions.
 
-The first dimension(s) are those of the individual arrays, followed by those from the
-container. Thus the result has size `(size(first(arrays))..., size(arrays)...)`.
+By default the axes of the elements are placed first,
+giving `size(result) = (size(first(iter))..., size(iter)...)`.
+This has the same order of elements as [`Iterators.flatten`](@ref)`(iter)`.
 
-See also [`cat`](@ref), [`eachcol`](@ref).
+With keyword `dims::Integer`, instead the `i`th element of `iter` becomes the slice
+[`selectdim`](@ref)`(result, dims, i)`, so that `size(result, dims) == length(iter)`.
+This reverses the action of [`eachslice`](@ref) with the same `dims`.
+
+Functions [`vcat`](@ref) and [`hvcat`](@ref) also combine arrays, but work
+mostly by extending their existing dimensions, rather than placing the arrays
+along new dimensions.
 
 !!! compat "Julia 1.8"
     This function requires at least Julia 1.8.
 
 # Examples
 ```jldoctest
-julia> vecs = [[1,2], [3,4], [5,6]]
-3-element Vector{Vector{Int64}}:
- [1, 2]
- [3, 4]
- [5, 6]
+julia> stack((1:2, 3:4, 5.0:6.0))
+2×3 Matrix{Float64}:
+ 1.0  3.0  5.0
+ 2.0  4.0  6.0
 
-julia> mat = stack(vecs)
-2×3 Matrix{Int64}:
- 1  3  5
- 2  4  6
+julia> A = rand(3, 7, 11); E = eachslice(A, dims=2);
 
-julia> mat == reduce(hcat, vecs) == hcat(vecs...)
+julia> (element = size(first(E)), container = size(E))
+(element = (3, 11), container = (7,))
+
+julia> stack(E) == cat(E...; dims=3)
 true
 
-julia> mat == stack(eachcol(mat))
+julia> stack(E; dims=2) == A  # inverse of eachslice
 true
 
-julia> vec(mat) == reduce(vcat, vecs) == vcat(vecs...)
-true
+julia> M = (fill(i,2,3).+rand.() for i in 1:5, j in 1:7);
 
-julia> mats = (fill(i/2,3,4) for i in (1, 10, 100) if i>pi);
+julia> (element = size(first(M)), container = size(M))
+(element = (2, 3), container = (5, 7))
 
-julia> stack(mats)
-3×4×2 Array{Float64, 3}:
-[:, :, 1] =
- 5.0  5.0  5.0  5.0
- 5.0  5.0  5.0  5.0
- 5.0  5.0  5.0  5.0
+julia> stack(M) |> size  # keeps all dimensions
+(2, 3, 5, 7)
 
-[:, :, 2] =
- 50.0  50.0  50.0  50.0
- 50.0  50.0  50.0  50.0
- 50.0  50.0  50.0  50.0
+julia> stack(M; dims=1) |> size  # vec(container) along dims=1
+(35, 2, 3)
 
-julia> ans == cat(mats..., dims=3)
-true
+julia> hvcat(5, M...) |> size  # hvcat puts matrices next to each other
+(14, 15)
 ```
 """
-stack(itr) = _stack_iter(IteratorSize(itr), itr)
-stack(A::AbstractArray{<:AbstractArray}) = _typed_stack(mapreduce(eltype, promote_type, A), A)
+stack(iter; dims=:) = _stack(dims, iter)
 
 """
-    stack(f, args)
+    stack(f, args...; [dims])
 
-Apply `f` to each element of `args`, and `stack` the result.
+Apply a function to each element of a collection, and `stack` the result.
+Or to several collections, [`zip`](@ref)ped together.
 
-See also [`mapslices`](@ref), [`mapreduce`](@ref).
+The function should return arrays (or tuples, or other iterators) all of the same size.
+These become slices of the result, each separated along `dims` (if given) or by default
+along the last dimensions.
+
+See also [`mapslices`](@ref), [`eachcol`](@ref).
 
 # Examples
 ```jldoctest
-julia> stack("julia") do c
-         (c, c-32)
-       end
+julia> stack(c -> (c, c-32), "julia")
 2×5 Matrix{Char}:
  'j'  'u'  'l'  'i'  'a'
  'J'  'U'  'L'  'I'  'A'
 
-julia> ans == mapreduce(c -> [c, c-32], hcat, "julia")
-true
-
-julia> stack(x -> x*x', eachcol([1 2; 10 20; 100 200]))
-3×3×2 Array{Int64, 3}:
-[:, :, 1] =
-   1    10    100
-  10   100   1000
- 100  1000  10000
-
-[:, :, 2] =
-   4    40    400
-  40   400   4000
- 400  4000  40000
-
-julia> ans == cat([1,10,100] * [1,10,100]', [2,20,200] * [2,20,200]'; dims=3)
-true
+julia> stack(eachcol([1 2 3; 4 5 6]), eachrow([1 -1; 10 -10; 100 -100]); dims=1) do col, row
+         vcat(col .* row, 0, col ./ row)
+       end
+3×5 Matrix{Float64}:
+   1.0    -4.0  0.0  1.0   -4.0
+  20.0   -50.0  0.0  0.2   -0.5
+ 300.0  -600.0  0.0  0.03  -0.06
 ```
 """
-stack(f, itr) = stack(Iterators.map(f, itr))
+stack(f, iter; dims=:) = _stack(dims, f(x) for x in iter)
+stack(f, xs, yzs...; dims=:) = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
 
-function _stack_iter(::HasShape, itr)
-    w, val = _vstack_plus(itr)
-    reshape(w, axes(val)..., axes(itr)...)
-end
-function _stack_iter(::IteratorSize, itr)
-    w, val = _vstack_plus(itr)
-    d = length(w) ÷ length(val)
-    reshape(w, axes(val)..., OneTo(d))
-end
+_stack(dims::Union{Integer, Colon}, iter) = _stack(dims, IteratorSize(iter), iter)
 
-function _vstack_plus(itr)
-    z = iterate(itr)
-    z === nothing && throw(ArgumentError("cannot stack an empty collection"))
-    val, state = z
-    val isa Union{AbstractArray, Tuple} || throw(ArgumentError("cannot stack elements of type $(typeof(val))"))
+# Iterating over an unknown length via append! is slower than collecting:
+_stack(dims, ::IteratorSize, iter) = _stack(dims, collect(iter))
 
-    axe = axes(val)
-    len = length(val)
-    n = haslength(itr) ? len*length(itr) : nothing
-
-    v = if val isa Tuple
-        T = mapreduce(typeof, promote_type, val)
-        similar(1:0, T, something(n, len))
-    else
-        similar(val, something(n, len))
-    end
-    copyto!(v, 1, val, firstindex(val), len)
-
-    w = _stack_rest!(v, 0, n, axe, itr, state)
-    w, val
-end
-
-function _stack_rest!(v::AbstractVector, i, n, axe, itr, state)
-    len = prod(length, axe; init=1)
-    while true
-        z = iterate(itr, state)
-        z === nothing && return v
-        val, state = z
-        axes(val) == axe || throw(DimensionMismatch(
-            "expected a consistent size, got axes $(UnitRange.(axes(val))) compared to $(UnitRange.(axe)) for the first"))
-        i += 1
-        T′ = if val isa Tuple
-            promote_type(eltype(v), mapreduce(typeof, promote_type, val))
-        else
-            promote_type(eltype(v), eltype(val))
-        end
-        if T′ <: eltype(v)
-            if n isa Integer
-                copyto!(v, i*len+1, val, firstindex(val), len)
-            else
-                append!(v, val)
-            end
-        else
-            v′ = similar(v, T′)
-            copyto!(v′, v)
-            if n isa Integer
-                copyto!(v′, i*len+1, val, firstindex(val), len)
-            else
-                append!(v′, val)
-            end
-            return _stack_rest!(v′, i, n, axe, itr, state)
-        end
+function _stack(dims, ::Union{HasShape, HasLength}, iter)
+    S = @default_eltype iter
+    T = S != Union{} ? eltype(S) : Any  # Union{} occurs for e.g. stack(1,2), postpone the error
+    if isconcretetype(T)
+        _typed_stack(dims, T, S, iter)
+    else  # Need to look inside, but shouldn't run an expensive iterator twice:
+        array = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+        isempty(array) && return _empty_stack(dims, T, S, iter)
+        T2 = mapreduce(eltype, promote_type, array)
+        # stack(Any[[1,2], [3,4]]) is fine, but stack([Any[1,2], [3,4]]) isa Matrix{Any}
+        _typed_stack(dims, T2, eltype(array), array)
     end
 end
 
-# this implementation is largely copied from typed_hcat
-function _typed_stack(::Type{T}, A::AbstractArray{<:AbstractArray}) where {T}
-    axe = axes(first(A))
-    dense = true
-    for (j, a) in enumerate(A)
-        axes(a) == axe || throw(DimensionMismatch(
-            "expected a consistent size, got axes $(UnitRange.(axes(a))) for element $j, compared to $(UnitRange.(axe)) for the first"))
-        dense &= isa(a, DenseArray)
-    end
-    B = similar(first(A), T, axe..., axes(A)...)
-    if dense
-        off = 1
-        for a in A
-            copyto!(B, off, a, 1, length(a))
-            off += length(a)
+function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_axes(A)) where {T, S}
+    xit = iterate(A)
+    nothing === xit && return _empty_stack(:, T, S, A)
+    x1, _ = xit
+    ax1 = _axes(x1)
+    B = similar(_prototype(x1, A), T, ax1..., Aax...)
+    off = 1
+    if S <: NTuple{<:Any,T} && isbitstype(T) && isbitstype(S)
+        C = reinterpret(reshape, S, B)
+        while xit !== nothing
+            x, state = xit
+            @inbounds C[off] = x
+            off += 1
+            xit = iterate(A, state)
         end
-    else
-        colons = map(Returns(:), axe)
-        for J in CartesianIndices(A)
-            @inbounds B[colons..., Tuple(J)...] = A[J]
+    else  # This is like typed_hcat's path for dense arrays
+        len = length(x1)
+        while xit !== nothing
+            x, state = xit
+            _stack_size_check(x, ax1)
+            copyto!(B, off, x) #, 1, len)
+            off += len
+            xit = iterate(A, state)
         end
     end
     B
 end
+
+# Things like NamedTuples which are HasLength and can be iterated don't neccesarily
+# define axes (as they don't participate in broadcasting?), but we need that here:
+_axes(x) = _axes(x, IteratorSize(x))
+_axes(x, ::HasShape) = axes(x)
+_axes(x, ::HasLength) = (OneTo(length(x)),)
+_axes(x, ::IteratorSize) = axes(x)
+    # throw(ArgumentError("cannot stack iterators of unknown or infinite length"))
+
+# For some dims values, stack(A; dims) == stack(vec(A)), and the : path will be faster
+_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S} =
+    _typed_stack(dims, T, S, IteratorSize(S), A)
+_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasLength, A) where {T,S} =
+    _typed_stack(dims, T, S, HasShape{1}(), A)
+function _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasShape{N}, A) where {T,S,N}
+    if dims == N+1
+        _typed_stack(:, T, S, A, (_vec_axis(A),))
+    else
+        _dim_stack(dims, T, S, A)
+    end
+end
+_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::IteratorSize, A) where {T,S} =
+    _dim_stack(dims, T, S, A)
+
+_vec_axis(A, ax=_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(length, ax; init=1))
+
+function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
+    xit = iterate(A)
+    nothing === xit && return _empty_stack(dims, T, S, A)
+    x1, _ = xit
+    ax1 = _axes(x1)
+    N1 = length(ax1)+1
+    dims in 1:N1 || throw(ArgumentError("cannot stack slices ndims(x) = $(N1-1) along dims = $dims"))
+
+    newaxis = _vec_axis(A)
+    outax = ntuple(d -> d==dims ? newaxis : _axes(x1)[d - (d>dims)], N1)
+    B = similar(_prototype(x1, A), T, outax...)
+
+    iit = iterate(newaxis)
+    while xit !== nothing
+        x, state = xit
+        i, istate = iit
+        _stack_size_check(x, ax1)
+        @inbounds if dims==1
+            inds1 = ntuple(d -> d==1 ? i : Colon(), N1)
+            if x isa AbstractArray
+                B[inds1...] = x
+            else
+                copyto!(view(B, inds1...), x)
+            end
+        elseif dims==2
+            inds2 = ntuple(d -> d==2 ? i : Colon(), N1)
+            if x isa AbstractArray
+                B[inds2...] = x
+            else
+                copyto!(view(B, inds2...), x)
+            end
+        else
+            inds = ntuple(d -> d==dims ? i : Colon(), N1)
+                if x isa AbstractArray
+                B[inds...] = x
+            else
+                # This is where the type-instability of inds hurts, but it is pretty exotic:
+                copyto!(view(B, inds...), x)
+            end
+        end
+        xit = iterate(A, state)
+        iit = iterate(newaxis, istate)
+    end
+    B
+end
+
+@inline function _stack_size_check(x, ax1::Tuple)
+    if _axes(x) != ax1
+        uax1 = UnitRange.(ax1)
+        uaxN = UnitRange.(axes(x))
+        throw(DimensionMismatch(
+            "stack expects uniform slices, got axes(x) = $uaxN while first had $uax1"))
+    end
+end
+
+# For `similar`, the goal is to stack an Array of CuArrays to a CuArray:
+_prototype(x::AbstractArray, A::AbstractArray) = x
+_prototype(x::AbstractArray, A) = x
+_prototype(x, A::AbstractArray) = A
+_prototype(x, A) = 1:0
+
+# With tuple elements, we can make the empty array the right size:
+function _empty_stack(::Colon, ::Type{T}, ::Type{S}, A) where {T, S<:Tuple}
+    similar(_prototype(nothing, A), T, OneTo(length(fieldtypes(S))), axes(A)...)
+end
+function _empty_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T, S<:Tuple}
+    ax1 = OneTo(length(fieldtypes(S)))
+    dims in 1:2 || throw(ArgumentError("cannot stack tuples along dims = $dims"))
+    similar(_prototype(nothing, A), T, ntuple(d -> d==dims ? OneTo(0) : ax1, 2))
+end
+# but with arrays of arrays, we must settle for the right ndims:
+_empty_stack(dims, ::Type{T}, ::Type{S}, A) where {T,S} = _empty_stack(dims, T, IteratorSize(S), A)
+_empty_stack(dims, ::Type{T}, ::HasLength, A) where {T} = _empty_stack(dims, T, HasShape{1}(), A)
+_empty_stack(dims, ::Type{T}, ::IteratorSize, A) where {T} = _empty_stack(dims, T, HasShape{0}(), A)
+
+function _empty_stack(::Colon, ::Type{T}, ::HasShape{N}, A) where {T,N}
+    similar(_prototype(nothing, A), T, ntuple(_->OneTo(1), N)..., _axes(A)...)
+end
+function _empty_stack(dims::Integer, ::Type{T}, ::HasShape{N}, A) where {T,N}
+    # Not sure we should check dims here, e.g. stack(Vector[]; dims=2) is an error
+    dims in 1:N+1 || throw(ArgumentError("cannot stack slices ndims(x) = $N along dims = $dims"))
+    ax = ntuple(d -> d==dims ? _vec_axis(A) : OneTo(1), N+1)
+    similar(_prototype(nothing, A), T, ax...)
+end
+
+# These make stack(()) work like stack([])
+_empty_stack(::Colon, ::Type{T}, ::Type{Union{}}, A) where {T} = _empty_stack(:, T, Array{T,0}, A)
+_empty_stack(dims::Integer, ::Type{T}, ::Type{Union{}}, A) where {T} = _empty_stack(dims, T, Array{T,0}, A)
+
 
 ## Reductions and accumulates ##
 
