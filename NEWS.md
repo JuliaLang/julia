@@ -43,7 +43,7 @@ Compiler/Runtime improvements
   `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
   In deployments that do not need the compiler (e.g. system images where all needed code
   is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
-* Conditional type constraint can now be propagated inter-procedurally from callee to caller ([#42529]).
+* Conditional type constraint can now be forwarded (i.e. propagated inter-procedurally from caller to callee) ([#42529]).
 * Julia-level SROA (Scalar Replacement of Aggregates) has been improved, i.e. allowing elimination of
   `getfield` call with constant global field ([#42355]), enabling elimination of mutable struct with
   uninitialized fields ([#43208]), improving performance ([#43232]), handling more nested `getfield`
