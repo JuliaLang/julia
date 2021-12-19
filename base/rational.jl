@@ -218,11 +218,11 @@ rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} 
 rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
 rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...)::Rational{T}, rationalize(T, x.im; kvs...)::Rational{T})
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
-rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer} = rationalize(T, float(x), tol)::Rational{T}
-rationalize(::Type{T}, x::Rational; tol::Real = zero(x)) where {T<:Integer} = rationalize(T, float(x), tol)::Rational{T}
-rationalize(x::Rational{T}; kvs...) where{T} = rationalize(T, x; kvs...)
+rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer} = Rational{T}(x)
+rationalize(x::Rational, tol::Real) where {T<:Integer} = x
+rationalize(x::Rational{T}; kvs...) where{T} = x
 rationalize(::Type{T}, x::Integer, tol::Real) where {T<:Integer} = Rational{T}(x)
-rationalize(::Type{T}, x::Integer; tol::Real = 0) where {T<:Integer} = Rational(x, 1)
+rationalize(x::Integer, tol::Real) where {T<:Integer} = Rational(x)
 rationalize(x::Integer; kvs...) = Rational(x)
 
 
