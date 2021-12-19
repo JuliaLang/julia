@@ -37,6 +37,8 @@ is_decorated(tok::SyntaxToken) = is_dotted(tok) || is_suffixed(tok)
 Base.:(~)(tok::SyntaxToken, k::Kind) = kind(tok) == k
 Base.:(~)(k::Kind, tok::SyntaxToken) = kind(tok) == k
 
+Base.:(==)(tok::SyntaxToken, k::Kind) = (kind(tok) == k && !is_decorated(tok))
+
 #-------------------------------------------------------------------------------
 
 # Range in the source text which will become a node in the tree. Can be either

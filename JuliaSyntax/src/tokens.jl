@@ -72,10 +72,6 @@ function is_string(t)
     kind(t) in (K"String", K"TripleString")
 end
 
-function is_assignment_op(t)
-    K"BEGIN_ASSIGNMENTS" < kind(t) < K"END_ASSIGNMENTS"
-end
-
 function is_radical_op(t)
     kind(t) in (K"√", K"∛", K"∜")
 end

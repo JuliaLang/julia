@@ -444,6 +444,10 @@ A.@B.x
 # Macro module paths allow calls which gives weird stateful semantics!
 b() = rand() > 0.5 ? Base : Core
 b().@info "hi"
+
+# `const` and `global` allow chained assignment, but the right hand side is not
+# constant. `a` const here but not `b`.
+const a = b = 1
 ```
 
 ## Parsing oddities and warts
@@ -476,4 +480,7 @@ b().@info "hi"
    let x=1,y=2 ; end  ==>  (let (block (= x 1) (= y 2) (block)))
    let x+=1 ; end     ==>  (let (block (+= x 1)) (block))
    ```
+
+* `global const x=1` is normalized by the parser into `(const (global (= x 1)))`
+  This is pretty weird from a concrete syntax point of view!
 

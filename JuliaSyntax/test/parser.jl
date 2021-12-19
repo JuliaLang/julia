@@ -250,6 +250,20 @@ tests = [
         "let ; body end"   =>  "(let (block) (block :body))"
         "let\na\nb\nend"   =>  "(let (block) (block :a :b))"
     ],
+    JuliaSyntax.parse_const_local_global => [
+        "global x = 1"         =>  "(global (= :x 1))"
+        "local x = 1"          =>  "(local (= :x 1))"
+        "global const x = 1"   =>  "(const (global (= :x 1)))"
+        "local const x = 1"    =>  "(const (local (= :x 1)))"
+        "const x = 1"          =>  "(const (= :x 1))"
+        "const x,y = 1,2"      =>  "(const (= (tuple :x :y) (tuple 1 2)))"
+        "const global x = 1"   =>  "(const (global (= :x 1)))"
+        "const local x = 1"    =>  "(const (local (= :x 1)))"
+        "global x"    =>  "(global :x)"
+        "local x"     =>  "(local :x)"
+        "global x,y"  =>  "(global :x :y)"
+        "const x"     => "(const (error :x (error)))"
+    ],
     JuliaSyntax.parse_iteration_spec => [
         "i = rhs"        =>  "(= :i :rhs)"
         "i in rhs"       =>  "(= :i :rhs)"
