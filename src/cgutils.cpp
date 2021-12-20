@@ -2474,8 +2474,7 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
                 return ConstantInt::get(T_size, jl_array_len(tinfo.constant));
             if (auto alloc = dyn_cast<CallInst>(tinfo.V)) {
                 jl_alloc::AllocIdInfo info;
-                if (jl_alloc::getArrayAllocInfo(info, alloc)) {
-                    assert(static_cast<size_t>(info.array.dimcount) == ndim);
+                if (jl_alloc::getArrayAllocInfo(info, alloc) && static_cast<size_t>(info.array.dimcount) == ndim) {
                     llvm::Value *length = alloc->getArgOperand(ndim);
                     for (unsigned i = ndim - 1; i --> 0;) {
                         length = ctx.builder.CreateMul(length, alloc->getArgOperand(i + 1), "", true, true);
