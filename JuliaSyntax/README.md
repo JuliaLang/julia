@@ -432,26 +432,32 @@ replaced by `_` and predicates prefixed by `is_`.
 
 ## Flisp parser bugs
 
-```julia
-# Operator prefix call syntax doesn't work in some cases (tuple is produced)
-+(a;b,c)
+Some things seem to be bugs:
 
-# Misplaced @ in macro module paths is parsed but produces odd AST
-# (macrocall (. A (quote (. B @x))))
-# Should be rejected, or produce (macrocall (. (. A (quote B)) (quote @x)))
-A.@B.x
+* Macro module paths allow calls which gives weird stateful semantics!
+  ```
+  b() = rand() > 0.5 ? Base : Core
+  b().@info "hi"
+  ```
+* Misplaced `@` in macro module paths like `A.@B.x` is parsed as odd
+  broken-looking AST like `(macrocall (. A (quote (. B @x))))`.  It should
+  probably be rejected.
+* Operator prefix call syntax doesn't work in the cases like `+(a;b,c)` where
+  parameters are separated by commas. A tuple is produced instead. 
+* `const` and `global` allow chained assignment, but the right hand side is not
+  constant. `a` const here but not `b`.
+  ```
+  const a = b = 1
+  ```
 
-# Macro module paths allow calls which gives weird stateful semantics!
-b() = rand() > 0.5 ? Base : Core
-b().@info "hi"
+There's various allowed syntaxes which are fairly easily detected in the
+parser, but which will be rejected later during lowering. To allow building
+DSLs this is fine and good but some such allowed syntaxes don't seem very
+useful even for DSLs:
 
-# `const` and `global` allow chained assignment, but the right hand side is not
-# constant. `a` const here but not `b`.
-const a = b = 1
-```
-
-* `macro (x) end` is allowed but is invalid and could easily be detected in the
-  parser.
+* `macro (x) end` is allowed but there are no anonymous macros.
+* `abstract type A < B end` and other subtypes comparisons are allowed, but
+  only `A <: B` makes sense.
 
 ## Parsing oddities and warts
 
@@ -476,13 +482,14 @@ parsing `key=val` pairs inside parentheses.
 
 Other oddities:
 
-* `global const x=1` is normalized by the parser into `(const (global (= x 1)))`
-  Somewhat useful for the AST, but pretty weird from a concrete syntax point of view.
+* `global const x=1` is normalized by the parser into `(const (global (= x 1)))`.
+  I suppose this is somewhat useful for AST consumers, but it seems a bit weird
+  and unnecessary.
 
 * `let` bindings might be stored in a block, or they might not be, depending on
-  context:
+  special cases:
    ```
-   # Not in a block
+   # Special cases not in a block
    let x=1 ; end   ==>  (let (= x 1) (block))
    let x::1 ; end  ==>  (let (:: x 1) (block))
    let x ; end     ==>  (let x (block))
@@ -492,7 +499,7 @@ Other oddities:
    let x+=1 ; end     ==>  (let (block (+= x 1)) (block))
    ```
 
-* `elseif` condition is in a block but not `if` condition. Presumably because
-  of the need to add a line number node.
+* The `elseif` condition is always in a block but not `if` condition.
+  Presumably because of the need to add a line number node in the flisp parser
   `if a xx elseif b yy end   ==>  (if a (block xx) (elseif (block b) (block yy)))`
 

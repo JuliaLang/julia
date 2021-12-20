@@ -38,8 +38,8 @@ function itest_parse(production, code)
 
         printstyled(stdout, "\n\n# flisp Julia Expr:\n", color=:red)
         show(stdout, MIME"text/plain"(), f_ex)
+        return (code, stream, t, s, ex)
     end
-    (code, stream, t, s, ex)
 end
 
 # TODO:
@@ -249,6 +249,12 @@ tests = [
         "let ; end"        =>  "(let (block) (block))"
         "let ; body end"   =>  "(let (block) (block :body))"
         "let\na\nb\nend"   =>  "(let (block) (block :a :b))"
+        # abstract type
+        "abstract type A end"            =>  "(abstract :A)"
+        "abstract type \n\n A \n\n end"  =>  "(abstract :A)"
+        "abstract type A <: B end"       =>  "(abstract (<: :A :B))"
+        "abstract type A <: B{T,S} end"  =>  "(abstract (<: :A (curly :B :T :S)))"
+        "abstract type A < B end"        =>  "(abstract (call :< :A :B))"
         # return
         "return\nx"   =>  "(return nothing)"
         "return)"     =>  "(return nothing)"
