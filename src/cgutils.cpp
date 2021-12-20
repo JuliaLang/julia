@@ -2,6 +2,8 @@
 
 // utility procedures used in code generation
 
+#include "llvm-alloc-helpers.h"
+
 static Value *track_pjlvalue(jl_codectx_t &ctx, Value *V)
 {
     assert(V->getType() == T_pjlvalue);
@@ -2420,9 +2422,19 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *
             }
         }
         if (ndim > 1) {
-            if (tinfo.constant && isa<ConstantInt>(dim)) {
-                auto n = cast<ConstantInt>(dim)->getZExtValue() - 1;
-                return ConstantInt::get(T_size, jl_array_dim(tinfo.constant, n));
+            if (isa<ConstantInt>(dim)) {
+                if (tinfo.constant) {
+                    auto n = cast<ConstantInt>(dim)->getZExtValue() - 1;
+                    return ConstantInt::get(T_size, jl_array_dim(tinfo.constant, n));
+                }
+                if (auto alloc = dyn_cast<CallInst>(tinfo.V)) {
+                    jl_alloc::AllocIdInfo info;
+                    if (jl_alloc::getArrayAllocInfo(info, alloc)) {
+                        assert(static_cast<size_t>(info.array.dimcount) == ndim);
+                        //we actually want dim + 1 here b/c arg 0 is type tag
+                        return alloc->getArgOperand(cast<ConstantInt>(dim)->getZExtValue());
+                    }
+                }
             }
             tbaa = ctx.tbaa().tbaa_const;
         }
@@ -2460,6 +2472,17 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
         if (ndim != 1) {
             if (tinfo.constant)
                 return ConstantInt::get(T_size, jl_array_len(tinfo.constant));
+            if (auto alloc = dyn_cast<CallInst>(tinfo.V)) {
+                jl_alloc::AllocIdInfo info;
+                if (jl_alloc::getArrayAllocInfo(info, alloc)) {
+                    assert(static_cast<size_t>(info.array.dimcount) == ndim);
+                    llvm::Value *length = ConstantInt::get(T_size, 1);
+                    for (unsigned i = 0; i < ndim; i++) {
+                        length = ctx.builder.CreateMul(length, alloc->getArgOperand(i + 1), "", true, true);
+                    }
+                    return length;
+                }
+            }
             tbaa = ctx.tbaa().tbaa_const;
         }
     }
