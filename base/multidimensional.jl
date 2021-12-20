@@ -795,7 +795,7 @@ end
 @inline function iterate(L::LogicalIndex{Int,<:BitArray})
     L.sum == 0 && return nothing
     Bc = L.mask.chunks
-    iterate(L, (1, 1, (), @inbounds Bc[1]))
+    return iterate(L, (1, 1, (), @inbounds Bc[1]))
 end
 @inline function iterate(L::LogicalIndex{<:CartesianIndex,<:BitArray})
     L.sum == 0 && return nothing
