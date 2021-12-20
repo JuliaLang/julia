@@ -255,6 +255,17 @@ tests = [
         "return x"    =>  "(return :x)"
         "return x,y"  =>  "(return (tuple :x :y))"
     ],
+    JuliaSyntax.parse_if_elseif => [
+        "if a xx elseif b yy else zz end" => "(if :a (block :xx) (elseif (block :b) (block :yy) (block :zz)))"
+        "if end"        =>  "(if (error) (block))"
+        "if \n end"     =>  "(if (error) (block))"
+        "if a end"      =>  "(if :a (block))"
+        "if a xx end"   =>  "(if :a (block :xx))"
+        "if a \n\n xx \n\n end"   =>  "(if :a (block :xx))"
+        "if a xx elseif b yy end"   =>  "(if :a (block :xx) (elseif (block :b) (block :yy)))"
+        "if a xx else if b yy end"  =>  "(if :a (block :xx) (error) (elseif (block :b) (block :yy)))"
+        "if a xx else yy end"   =>  "(if :a (block :xx) (block :yy))"
+    ],
     JuliaSyntax.parse_const_local_global => [
         "global x = 1"         =>  "(global (= :x 1))"
         "local x = 1"          =>  "(local (= :x 1))"
@@ -268,6 +279,21 @@ tests = [
         "local x"     =>  "(local :x)"
         "global x,y"  =>  "(global :x :y)"
         "const x"     => "(const (error :x (error)))"
+    ],
+    JuliaSyntax.parse_function => [
+        "function (x) body end"  =>  "(function (tuple :x) (block :body))"
+        "macro (x) end"          =>  "(macro (error (tuple :x)) (block))"
+        "function (x,y) end"     =>  "(function (tuple :x :y) (block))"
+        "function (x=1) end"     =>  "(function (tuple (kw :x 1)) (block))"
+        "function (;x=1) end"    =>  "(function (tuple (parameters (kw :x 1))) (block))"
+        "function begin() end"   =>  "(function (call (error :begin)) (block))"
+        "macro begin() end"      =>  "(macro (call (error :begin)) (block))"
+        "function f() end"       =>  "(function (call :f) (block))"
+        "function \n f() end"    =>  "(function (call :f) (block))"
+        "function f()::T    end" =>  "(function (:: (call :f) :T) (block))"
+        "function f()::g(T) end" =>  "(function (:: (call :f) (call :g :T)) (block))"
+        "function f() \n a \n b end"  =>  "(function (call :f) (block :a :b))"
+        "function f() end"       =>  "(function (call :f) (block))"
     ],
     JuliaSyntax.parse_iteration_spec => [
         "i = rhs"        =>  "(= :i :rhs)"
@@ -322,8 +348,31 @@ tests = [
 
 @testset "Inline test cases" begin
     @testset "$production" for (production, test_specs) in tests
-        @testset "$input" for (input,output) in test_specs
+        @testset "$(repr(input))" for (input,output) in test_specs
             @test test_parse(production, input) == output
         end
     end
+end
+
+@testset "Larger code chunks" begin
+    # Something ever-so-slightly nontrivial for fun -
+    # the sum of the even Fibonacci numbers < 4_000_000
+    # https://projecteuler.net/problem=2
+    code = """
+    let
+        s = 0
+        f1 = 1
+        f2 = 2
+        while f1 < 4000000
+            # println(f1)
+            if f1 % 2 == 0
+                s += f1
+            end
+            f1, f2 = f2, f1+f2
+        end
+        s
+    end
+    """
+    ex = JuliaSyntax.parse_all(Expr, code)
+    @test ex == JuliaSyntax.flisp_parse_all(code)
 end

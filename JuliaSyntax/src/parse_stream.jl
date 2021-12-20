@@ -403,12 +403,12 @@ function emit_diagnostic(stream::ParseStream, mark=nothing, end_mark=nothing;
         begin_tok_i = 1
         end_tok_i = is_whitespace(stream.lookahead[i]) ? i : max(1, i-1)
     end
-    first_byte = isnothing(mark) ?
+    fbyte = isnothing(mark) ?
         first_byte(stream.lookahead[begin_tok_i]) : mark.input_byte
-    last_byte = isnothing(end_mark) ?
+    lbyte = isnothing(end_mark) ?
         last_byte(stream.lookahead[end_tok_i]) : end_mark.input_byte
     # It's a bit weird to require supplying a SyntaxHead here...
-    text_span = TaggedRange(SyntaxHead(K"error", EMPTY_FLAGS), first_byte, last_byte)
+    text_span = TaggedRange(SyntaxHead(K"error", EMPTY_FLAGS), fbyte, lbyte)
     push!(stream.diagnostics, Diagnostic(text_span, error))
     return nothing
 end

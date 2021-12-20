@@ -86,6 +86,10 @@ function is_closing_token(ps::ParseState, k)
                  K"EndMarker") || (k == K"end" && !ps.end_symbol)
 end
 
+function is_closer_or_newline(ps::ParseState, k)
+    is_closing_token(ps,k) || k == K"NewlineWs"
+end
+
 # Closing token which isn't a keyword
 function is_non_keyword_closer(k)
     kind(k) in (K",", K")", K"]", K"}", K";", K"EndMarker")
@@ -1054,33 +1058,6 @@ function parse_unary_prefix(ps::ParseState)
     end
 end
 
-# Parse function and macro signatures
-#
-# flisp: parse-def
-function parse_def(ps::ParseState, is_func, anon)
-    mark = position(ps)
-    k = peek(ps)
-    if (is_func && iskeyword(k)) || is_initial_reserved_word(ps, k)
-        # Forbid things like
-        # function begin() end  ==>  (function (call (error begin)))
-        emark = position(ps)
-        bump(ps)
-        emit(ps, emark, K"error",
-             error="invalid $(is_func ? "function" : "macro") name")
-    else
-        parse_unary_prefix(ps)
-    end
-    parse_call_chain(ps, mark)
-    if is_func && peek(ps) == K"::"
-        bump(ps, TRIVIA_FLAG)
-        parse_call(ps)
-        emit(ps, mark, K"::")
-    end
-    if peek(ps) == K"where"
-        parse_where_chain(ps, mark)
-    end
-end
-
 # Emit an error if the call chain syntax is not a valid module reference
 function emit_modref_error(ps, mark)
     emit(ps, mark, K"error", error="not a valid module reference")
@@ -1435,7 +1412,7 @@ function parse_resword(ps::ParseState)
             m = position(ps)
             n_subexprs = parse_comma_separated(ps, parse_eq_star)
             kb = peek_behind(ps)
-            # AST wart: This ugly logic seems unfortunate. Why not always emit a block?
+            # Wart: This ugly logic seems unfortunate. Why not always emit a block?
             # let x=1 ; end   ==>  (let (= x 1) (block))
             # let x::1 ; end  ==>  (let (:: x 1) (block))
             # let x ; end     ==>  (let x (block))
@@ -1456,20 +1433,19 @@ function parse_resword(ps::ParseState)
         elseif k == K"end"
             # pass
         else
-            recover((ps,k)->(is_closing_token(ps,k) || k == K"NewlineWs"),
-                    ps, TRIVIA_FLAG,
+            recover(is_closer_or_newline, ps, TRIVIA_FLAG,
                     error="let variables should end in `;` or newline")
         end
         # let\na\nb\nend    ==>  (let (block) (block a b))
         parse_block(ps)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"let")
-    elseif word in (K"if", K"elseif")
-        TODO("parse_resword")
+    elseif word == K"if"
+        parse_if_elseif(ps)
     elseif word in (K"const", K"global", K"local")
         parse_const_local_global(ps)
     elseif word in (K"function", K"macro")
-        TODO("parse_resword")
+        parse_function(ps)
     elseif word == K"abstract"
         TODO("parse_resword")
     elseif word == K"struct"
@@ -1499,7 +1475,12 @@ function parse_resword(ps::ParseState)
         end
         emit(ps, mark, K"return")
     elseif word in (K"break", K"continue")
-        TODO("parse_resword")
+        bump(ps, TRIVIA_FLAG)
+        k = peek(ps)
+        if !(k in (K"NewlineWs", K";", K")", K":", K"EndMarker") || (k == K"end" && !ps.end_symbol))
+            recover(is_closer_or_newline, ps, TRIVIA_FLAG,
+                    error="unexpected token after $(untokenize(word))")
+        end
     elseif word in (K"module", K"baremodule")
         TODO("parse_resword")
     elseif word == K"export"
@@ -1511,6 +1492,60 @@ function parse_resword(ps::ParseState)
     else
         bump(ps, TRIVIA_FLAG, error="unhandled reserved word")
     end
+end
+
+# Parse if-elseif-else-end expressions
+#
+# if a xx elseif b yy else zz end   ==>  (if a (block xx) (elseif (block b) (block yy) (block zz)))
+function parse_if_elseif(ps, is_elseif=false, is_elseif_whitespace_err=false)
+    mark = position(ps)
+    word = peek(ps)
+    if is_elseif_whitespace_err
+        # Only get here on recovery from error case - pretend we're parsing elseif.
+        word = K"elseif"
+    else
+        bump(ps, TRIVIA_FLAG)
+    end
+    cond_mark = position(ps)
+    if peek(ps) in (K"NewlineWs", K"end")
+        # if end      ==>  (if (error) (block))
+        # if \n end   ==>  (if (error) (block))
+        bump_trivia(ps, error="missing condition in `$(untokenize(word))`")
+    else
+        # if a end      ==>  (if a (block))
+        # if a xx end   ==>  (if a (block xx))
+        parse_cond(ps)
+    end
+    if is_elseif
+        # Wart: `elseif` condition is in a block but not `if` condition
+        emit(ps, cond_mark, K"block")
+    end
+    # if a \n\n xx \n\n end   ==>  (if a (block xx))
+    parse_block(ps)
+    bump_trivia(ps)
+    k = peek(ps)
+    if k == K"elseif"
+        # if a xx elseif b yy end   ==>  (if a (block xx) (elseif (block b) (block yy)))
+        parse_if_elseif(ps, true)
+    elseif k == K"else"
+        emark = position(ps)
+        bump(ps, TRIVIA_FLAG)
+        if peek(ps) == K"if"
+            # User wrote `else if` by mistake ?
+            # if a xx else if b yy end  ==>  (if a (block xx) (else (error if) (block b) (block yy)))
+            bump(ps, TRIVIA_FLAG)
+            emit(ps, emark, K"error", TRIVIA_FLAG,
+                 error="use `elseif` instead of `else if`")
+            parse_if_elseif(ps, true, true)
+        else
+            # if a xx else yy end   ==>  (if a (block xx) (block yy))
+            parse_block(ps)
+        end
+    end
+    if !is_elseif
+        bump_closing_token(ps, K"end")
+    end
+    emit(ps, mark, word)
 end
 
 function parse_const_local_global(ps)
@@ -1575,6 +1610,73 @@ function parse_const_local_global(ps)
     end
 end
 
+# Parse function and macro definitions
+function parse_function(ps::ParseState)
+    mark = position(ps)
+    word = peek(ps)
+    is_func = word == K"function"
+    bump(ps, TRIVIA_FLAG)
+    bump_trivia(ps)
+
+    def_mark = position(ps)
+    k = peek(ps)
+    if k == K"("
+        # Wart: flisp parser parses anon function arguments as tuples, roughly
+        # like `parse_paren(ps)`, but the code to disambiguate those cases
+        # is kind of awful.
+        #
+        # It seems much more consistent to treat them as function argument lists:
+        # function (x,y) end   ==>  (function (tuple x y) (block))
+        # function (x=1) end   ==>  (function (tuple (kw x 1)) (block))
+        # function (;x=1) end  ==>  (function (tuple (parameters (kw x 1))) (block))
+        bump(ps, TRIVIA_FLAG)
+        parse_call_arglist(ps, K")", false)
+        emit(ps, def_mark, K"tuple")
+        # function (x) body end   ==>  (function (tuple x) (block body))
+        #
+        # Wart: flisp parser allows the following but it's invalid syntax in lowering
+        # macro (x) end   !=>  (macro (tuple x) (block))
+        # Fix is simple:
+        if !is_func
+            # macro (x) end   ==>  (macro (error (tuple x)) (block))
+            emit(ps, def_mark, K"error", error="Expected macro name")
+        end
+    else
+        if iskeyword(k)
+            # Forbid things like
+            # function begin() end  ==>  (function (call (error begin)) (block))
+            # macro begin() end  ==>  (macro (call (error begin)) (block))
+            bump(ps, error="invalid $(untokenize(word)) name")
+            parse_call_chain(ps, def_mark)
+        else
+            # function f() end  ==>  (function (call f) (block))
+            # function \n f() end  ==>  (function (call f) (block))
+            parse_unary_prefix(ps)
+        end
+        parse_call_chain(ps, def_mark)
+    end
+    if is_func && peek(ps) == K"::"
+        # Return type
+        # function f()::T    end   ==>  (function (:: (call f) T) (block))
+        # function f()::g(T) end   ==>  (function (:: (call f) (call g T)) (block))
+        bump(ps, TRIVIA_FLAG)
+        parse_call(ps)
+        emit(ps, def_mark, K"::")
+    end
+    if peek(ps) == K"where"
+        # function f() where {T} end   ==>  (function (where (call f) T) (block))
+        # function f() where T   end   ==>  (function (where (call f) T) (block))
+        parse_where_chain(ps, def_mark)
+    end
+
+    # The function body
+    # function f() \n a \n b end  ==> (function (call f) (block a b))
+    # function f() end            ==> (function (call f) (block))
+    parse_block(ps)
+    bump_closing_token(ps, K"end")
+    emit(ps, mark, word)
+end
+
 #
 # flisp: parse-do
 function parse_do(ps::ParseState)
@@ -1592,6 +1694,7 @@ function parse_do(ps::ParseState)
     end
     emit(ps, mark, K"tuple")
     parse_block(ps)
+    bump_closing_token(ps, K"end")
     emit(ps, mark, K"->")
 end
 
@@ -1792,17 +1895,12 @@ function parse_cat(ps::ParseState, closer, last_end_symbol)
     end
 end
 
-# flisp: parse-paren
-function parse_paren(ps::ParseState, check_identifiers=true)
-    parse_paren_(ps, check_identifiers)
-end
-
 # Parse un-prefixed parenthesized syntax. This is hard because parentheses are
 # *very* overloaded!
 #
-# flisp: parse-paren-
-function parse_paren_(ps0::ParseState, check_identifiers)
-    ps = ParseState(ps0, range_colon_enabled=true,
+# flisp: parse-paren / parse-paren-
+function parse_paren(ps::ParseState, check_identifiers=true)
+    ps = ParseState(ps, range_colon_enabled=true,
                     space_sensitive=false,
                     where_enabled=true,
                     whitespace_newline=true)

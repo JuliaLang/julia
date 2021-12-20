@@ -10,8 +10,8 @@ function _printstyled(io::IO, text; color)
     colreset = "\e[0;0m"
     first = true
     for linepart in split(text, '\n')
-        first || print('\n')
-        print(colcode, linepart, colreset)
+        first || print(io, '\n')
+        print(io, colcode, linepart, colreset)
         first = false
     end
 end
