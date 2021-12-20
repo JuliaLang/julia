@@ -139,6 +139,20 @@ namespace jl_alloc {
     };
 
     void runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options=EscapeAnalysisOptionalArgs());
+
+    struct AllocIdInfo {
+        llvm::Value* type;
+        bool isarray;
+        struct {
+            int dimcount;
+        } array;
+        struct {
+            ssize_t size;
+        } object;
+    };
+
+    bool getArrayAllocInfo(AllocIdInfo &info, llvm::CallInst *call);
+    bool getAllocIdInfo(AllocIdInfo &info, llvm::CallInst *call, llvm::Function *alloc_obj_func);
 }
 
 
