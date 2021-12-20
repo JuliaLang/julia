@@ -317,7 +317,7 @@ static inline void emit_write_barrier_with_builder(llvm::IRBuilder<> &builder, l
         decay_ptrs.push_back(maybe_decay_untracked_with_builder(builder, emit_bitcast_with_builder(builder, ptr, T_prjlvalue)));
     }
     // Inlined prepare_call() / prepare_call_in()
-    *builder.CreateCall(write_barrier_desc().realize(builder.GetInsertBlock()->getModule()), decay_ptrs);
+    builder.CreateCall(write_barrier_desc().realize(builder.GetInsertBlock()->getModule()), decay_ptrs);
 }
 
 // if ptr is NULL this emits a write barrier _back_
