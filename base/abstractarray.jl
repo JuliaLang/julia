@@ -459,11 +459,12 @@ function first(v::AbstractVector, n::Integer)
 end
 
 """
-    last(coll)
+    last(itr)
 
-Get the last element of an ordered collection, if it can be computed in O(1) time. This is
-accomplished by calling [`lastindex`](@ref) to get the last index. Return the end
-point of an [`AbstractRange`](@ref) even if it is empty.
+Get the last element of an ordered collection `itr`, if it can be computed
+in O(1) time. This is accomplished for general iterable collections by
+calling [`first`](@ref) on [`Iterators.reverse(itr)`](@ref Iterators.reverse).
+(Returns the end point of an [`AbstractRange`](@ref) even if it is empty.)
 
 See also [`first`](@ref), [`endswith`](@ref).
 
