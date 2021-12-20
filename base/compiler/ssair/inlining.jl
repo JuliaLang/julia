@@ -1310,7 +1310,8 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             end
             ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
             info = info.info
-        elseif info === false
+        end
+        if info === false
             # Inference determined this couldn't be analyzed. Don't question it.
             continue
         end
