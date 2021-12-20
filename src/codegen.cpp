@@ -294,6 +294,26 @@ static inline void add_named_global(JuliaVariable *name, void *addr)
     add_named_global(name->name, addr);
 }
 
+struct JuliaFunction {
+public:
+    llvm::StringLiteral name;
+    llvm::FunctionType *(*_type)(llvm::LLVMContext &C);
+    llvm::AttributeList (*_attrs)(llvm::LLVMContext &C);
+
+    JuliaFunction(const JuliaFunction&) = delete;
+    JuliaFunction(const JuliaFunction&&) = delete;
+    llvm::Function *realize(llvm::Module *m) {
+        if (llvm::GlobalValue *V = m->getNamedValue(name))
+            return llvm::cast<llvm::Function>(V);
+        llvm::Function *F = llvm::Function::Create(_type(m->getContext()),
+                         llvm::Function::ExternalLinkage,
+                         name, m);
+        if (_attrs)
+            F->setAttributes(_attrs(m->getContext()));
+        return F;
+    }
+};
+
 template<typename T>
 static inline void add_named_global(JuliaFunction *name, T *addr)
 {
@@ -830,10 +850,6 @@ static const auto pointer_from_objref_func = new JuliaFunction{
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
-
-JuliaFunction &write_barrier_desc() {
-    return *jl_write_barrier_func;
-}
 
 static const auto jltuple_func = new JuliaFunction{XSTR(jl_f_tuple), get_func_sig, get_func_attrs};
 static std::map<jl_fptr_args_t, JuliaFunction*> builtin_func_map;
