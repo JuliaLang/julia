@@ -69,6 +69,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
         val = if k == K"Integer"
+            # FIXME: this doesn't work with _'s as in 1_000_000
             Base.parse(Int, val_str)
         elseif k == K"Float"
             # FIXME: Other float types!
@@ -337,3 +338,45 @@ function _to_expr(node::SyntaxNode)
 end
 
 Base.Expr(node::SyntaxNode) = _to_expr(node)
+
+
+#-------------------------------------------------------------------------------
+
+"""
+    parse_all(Expr, code::AbstractString; filename="none")
+
+Parse the given code and convert to a standard Expr
+"""
+function parse_all(::Type{Expr}, code::AbstractString; filename="none")
+    source_file = SourceFile(code, filename=filename)
+
+    stream = ParseStream(code)
+    parse_all(stream)
+
+    if !isempty(stream.diagnostics)
+        buf = IOBuffer()
+        show_diagnostics(IOContext(buf, stdout), stream, code)
+        @error Text(String(take!(buf)))
+    end
+
+    green_tree = to_raw_tree(stream, wrap_toplevel_as_kind=K"toplevel")
+
+    tree = SyntaxNode(source_file, green_tree)
+
+    # convert to Julia expr
+    ex = Expr(tree)
+
+    flisp_ex = flisp_parse_all(code)
+    if ex != flisp_ex && !(!isempty(flisp_ex.args) &&
+                           Meta.isexpr(flisp_ex.args[end], :error))
+        @error "Mismatch with Meta.parse()" ex flisp_ex
+    end
+    ex
+end
+
+
+function flisp_parse_all(code)
+    flisp_ex = Base.remove_linenums!(Meta.parseall(code))
+    filter!(x->!(x isa LineNumberNode), flisp_ex.args)
+    flisp_ex
+end

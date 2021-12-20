@@ -450,23 +450,34 @@ b().@info "hi"
 const a = b = 1
 ```
 
+* `macro (x) end` is allowed but is invalid and could easily be detected in the
+  parser.
+
 ## Parsing oddities and warts
 
-* There's many inconsistencies between how `kw` and `=` are used when parsing
-  `key=val` pairs inside parentheses.
+There's many apparent inconsistencies between how `kw` and `=` are used when
+parsing `key=val` pairs inside parentheses.
 
 * Inconsistent parsing of tuple keyword args inside vs outside of dot calls
   ```julia
   (a=1,)           # (tuple (= a 1))
   f.(a=1)          # (tuple (kw a 1))
   ```
-
-* Mixutres of `,` and `;` in calls give nested parameter AST which parses
+* Mixtures of `,` and `;` in calls give nested parameter AST which parses
   strangely, and is kind-of-horrible to use.
   ```julia
   # (tuple (parameters (parameters e f) c d) a b)
   (a,b; c,d; e,f)
   ```
+* Long-form anonymous functions have argument lists which are parsedj
+  as tuples. But the flisp parser doesn't pass the context that they're
+  function argument lists and needs some ugly disambiguation code. This also
+  leads to more inconsistency in the use of `kw` for keywords.
+
+Other oddities:
+
+* `global const x=1` is normalized by the parser into `(const (global (= x 1)))`
+  Somewhat useful for the AST, but pretty weird from a concrete syntax point of view.
 
 * `let` bindings might be stored in a block, or they might not be, depending on
   context:
@@ -481,6 +492,7 @@ const a = b = 1
    let x+=1 ; end     ==>  (let (block (+= x 1)) (block))
    ```
 
-* `global const x=1` is normalized by the parser into `(const (global (= x 1)))`
-  This is pretty weird from a concrete syntax point of view!
+* `elseif` condition is in a block but not `if` condition. Presumably because
+  of the need to add a line number node.
+  `if a xx elseif b yy end   ==>  (if a (block xx) (elseif (block b) (block yy)))`
 
