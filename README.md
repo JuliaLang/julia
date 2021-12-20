@@ -97,7 +97,7 @@ and running:
 
 Now run `make` to build the `julia` executable.
 
-Building Julia requires 2GiB of disk space and approximately 4GiB of virtual memory.
+Building Julia requires 2GB of disk space and approximately 4GB of virtual memory.
 
 **Note:** The build process will fail badly if any of the build directory's parent directories have spaces or other shell meta-characters such as `$` or `:` in their names (this is due to a limitation in GNU make).
 
