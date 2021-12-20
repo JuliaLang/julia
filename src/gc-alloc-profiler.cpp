@@ -100,10 +100,10 @@ JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
     }
 
     return RawAllocResults{
-        combined_allocs.data(),
-        combined_allocs.size(),
-        combined_frees.data(),
-        combined_frees.size()
+        g_combined_results.combined_allocs.data(),
+        g_combined_results.combined_allocs.size(),
+        g_combined_results.combined_frees.data(),
+        g_combined_results.combined_frees.size()
     };
 }
 
