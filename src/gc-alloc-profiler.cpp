@@ -39,11 +39,16 @@ struct AllocProfile {
     vector<PerThreadAllocProfile> per_thread_profiles;
 };
 
+struct CombinedResults {
+    vector<RawAlloc> combined_allocs;
+    vector<FreeInfo> combined_frees;
+};
+
 // == global variables manipulated by callbacks ==
 
 AllocProfile g_alloc_profile;
-RawAllocResults *g_alloc_profile_results = nullptr;
 int g_alloc_profile_enabled = false;
+CombinedResults g_combined_results; // will live forever
 
 // === stack stuff ===
 
@@ -73,38 +78,33 @@ JL_DLLEXPORT void jl_start_alloc_profile(int skip_every) {
 
 extern "C" {  // Needed since the function doesn't take any arguments.
 
-JL_DLLEXPORT struct RawAllocResults* jl_stop_alloc_profile() {
+JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
     g_alloc_profile_enabled = false;
 
     // combine allocs
-    vector<RawAlloc> combined_allocs;
-    for (auto profile : g_alloc_profile.per_thread_profiles) {
-        for (auto alloc : profile.allocs) {
-            combined_allocs.push_back(alloc);
+    // TODO: interleave to preserve ordering
+    for (const auto& profile : g_alloc_profile.per_thread_profiles) {
+        for (const auto& alloc : profile.allocs) {
+            g_combined_results.combined_allocs.push_back(alloc);
         }
     }
 
     // package up frees
-    vector<FreeInfo> combined_frees;
-    for (auto profile : g_alloc_profile.per_thread_profiles) {
-        for (auto free_info : profile.frees_by_type_address) {
-            combined_frees.push_back(FreeInfo{
+    for (const auto& profile : g_alloc_profile.per_thread_profiles) {
+        for (const auto& free_info : profile.frees_by_type_address) {
+            g_combined_results.combined_frees.push_back(FreeInfo{
                 free_info.first,
                 free_info.second
             });
         }
     }
 
-    auto results = new RawAllocResults{
+    return RawAllocResults{
         combined_allocs.data(),
         combined_allocs.size(),
         combined_frees.data(),
         combined_frees.size()
     };
-
-    g_alloc_profile_results = results;
-
-    return results;
 }
 
 JL_DLLEXPORT void jl_free_alloc_profile() {
@@ -115,10 +115,8 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
     }
     g_alloc_profile.per_thread_profiles.clear();
 
-    if (g_alloc_profile_results != nullptr) {
-        // TODO: does this call its destructors?
-        g_alloc_profile_results = nullptr;
-    }
+    g_combined_results.combined_allocs.clear();
+    g_combined_results.combined_frees.clear();
 }
 
 }

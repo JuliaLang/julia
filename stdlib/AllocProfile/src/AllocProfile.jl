@@ -18,11 +18,6 @@ struct RawAlloc
     size::Csize_t
 end
 
-struct TypeNamePair
-    addr::Csize_t
-    name::Ptr{UInt8}
-end
-
 struct FreeInfo
     type::Ptr{Type}
     count::UInt
@@ -124,11 +119,21 @@ function decode(raw_results::RawAllocResults)::AllocResults
     )
 end
 
+const f = Ref{IOStream}()
+
+function __init__()
+    f[] = open("debug.log", "w")
+end
+
 function load_backtrace(trace::RawBacktrace)::Vector{Ptr{Cvoid}}
+    println(f[], "load_backtrace: trace.data: $(trace.data)")
+    println(f[], "load_backtrace: trace.size: $(trace.size)")
     out = Vector{Ptr{Cvoid}}()
     for i in 1:trace.size
+        println(f[], "  $i")
         push!(out, unsafe_load(trace.data, i))
     end
+
     return out
 end
 
