@@ -2,6 +2,7 @@
 
 #include <utility>
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/IRBuilder.h>
@@ -50,6 +51,26 @@ struct CountTrackedPointers {
     bool all = true;
     bool derived = false;
     CountTrackedPointers(llvm::Type *T);
+};
+
+struct JuliaFunction {
+public:
+    llvm::StringLiteral name;
+    llvm::FunctionType *(*_type)(llvm::LLVMContext &C);
+    llvm::AttributeList (*_attrs)(llvm::LLVMContext &C);
+
+    JuliaFunction(const JuliaFunction&) = delete;
+    JuliaFunction(const JuliaFunction&&) = delete;
+    llvm::Function *realize(llvm::Module *m) {
+        if (llvm::GlobalValue *V = m->getNamedValue(name))
+            return llvm::cast<llvm::Function>(V);
+        llvm::Function *F = llvm::Function::Create(_type(m->getContext()),
+                         llvm::Function::ExternalLinkage,
+                         name, m);
+        if (_attrs)
+            F->setAttributes(_attrs(m->getContext()));
+        return F;
+    }
 };
 
 unsigned TrackWithShadow(llvm::Value *Src, llvm::Type *T, bool isptr, llvm::Value *Dst, llvm::IRBuilder<> &irbuilder);
@@ -271,4 +292,36 @@ inline bool hasAttributesAtIndex(const AttributeList &L, unsigned Index)
 #endif
 }
 
+}
+// Gets the static write barrier function
+extern JuliaFunction &write_barrier_desc();
+
+// Take an arbitrary untracked value and make it gc-tracked
+static inline llvm::Value *maybe_decay_untracked_with_builder(llvm::IRBuilder<> &builder, llvm::Value *V)
+{
+    if (V->getType() == JuliaType::get_pjlvalue_ty(builder.getContext()))
+        return builder.CreateAddrSpaceCast(V, JuliaType::get_prjlvalue_ty(builder.getContext()));
+    assert(V->getType() == JuliaType::get_prjlvalue_ty(builder.getContext()));
+    return V;
+}
+
+static inline void emit_write_barrier_with_builder(llvm::IRBuilder<> &builder, llvm::Value *parent, llvm::ArrayRef<llvm::Value*> ptrs)
+{
+    // if there are no child objects we can skip emission
+    if (ptrs.empty())
+        return;
+    llvm::SmallVector<llvm::Value*, 8> decay_ptrs;
+    auto T_prjlvalue = JuliaType::get_prjlvalue_ty(builder.getContext());
+    decay_ptrs.push_back(maybe_decay_untracked_with_builder(builder, emit_bitcast_with_builder(builder, parent, T_prjlvalue)));
+    for (auto ptr : ptrs) {
+        decay_ptrs.push_back(maybe_decay_untracked_with_builder(builder, emit_bitcast_with_builder(builder, ptr, T_prjlvalue)));
+    }
+    // Inlined prepare_call / prepare_call_in
+    llvm::dbgs() << "Emitting write barrier: " << *builder.CreateCall(write_barrier_desc().realize(builder.GetInsertBlock()->getModule()), decay_ptrs) << "\n";
+}
+
+// if ptr is NULL this emits a write barrier _back_
+static inline void emit_write_barrier_with_builder(llvm::IRBuilder<> &builder, llvm::Value *parent, llvm::Value *ptr)
+{
+    emit_write_barrier_with_builder(builder, parent, llvm::makeArrayRef(ptr));
 }
