@@ -180,7 +180,7 @@ function Broadcasted{Style}(f::F, args::Args, axes=nothing) where {Style, F, Arg
 end
 
 struct AndAnd end
-andand = AndAnd()
+const andand = AndAnd()
 broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
 function broadcasted(::AndAnd, a, bc::Broadcasted)
     bcf = flatten(bc)

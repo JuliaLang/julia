@@ -264,6 +264,9 @@ end
     @test prevpow(2, 3) == 2
     @test prevpow(2, 4) == 4
     @test prevpow(2, 5) == 4
+    @test prevpow(Int64(10), Int64(1234567890123456789)) === Int64(1000000000000000000)
+    @test prevpow(10, 101.0) === 100
+    @test prevpow(10.0, 101) === 100.0
     @test_throws DomainError prevpow(0, 3)
     @test_throws DomainError prevpow(0, 3)
 end

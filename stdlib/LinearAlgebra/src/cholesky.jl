@@ -10,10 +10,10 @@
 # In the methods below, LAPACK is called when possible, i.e. StridedMatrices with Float32,
 # Float64, ComplexF32, and ComplexF64 element types. For other element or
 # matrix types, the unblocked Julia implementation in _chol! is used. For cholesky
-# and cholesky! pivoting is supported through a Val(Bool) argument. A type argument is
+# and cholesky! pivoting is supported through a RowMaximum() argument. A type argument is
 # necessary for type stability since the output of cholesky and cholesky! is either
 # Cholesky or CholeskyPivoted. The latter is only
-# supported for the four LAPACK element types. For other types, e.g. BigFloats Val(true) will
+# supported for the four LAPACK element types. For other types, e.g. BigFloats RowMaximum() will
 # give an error. It is required that the input is Hermitian (including real symmetric) either
 # through the Hermitian and Symmetric views or exact symmetric or Hermitian elements which
 # is checked for and an error is thrown if the check fails.
@@ -106,7 +106,7 @@ Base.iterate(C::Cholesky, ::Val{:done}) = nothing
     CholeskyPivoted
 
 Matrix factorization type of the pivoted Cholesky factorization of a dense symmetric/Hermitian
-positive semi-definite matrix `A`. This is the return type of [`cholesky(_, Val(true))`](@ref),
+positive semi-definite matrix `A`. This is the return type of [`cholesky(_, ::RowMaximum)`](@ref),
 the corresponding matrix factorization function.
 
 The triangular Cholesky factor can be obtained from the factorization `F::CholeskyPivoted`
@@ -126,7 +126,7 @@ julia> X = [1.0, 2.0, 3.0, 4.0];
 
 julia> A = X * X';
 
-julia> C = cholesky(A, Val(true), check = false)
+julia> C = cholesky(A, RowMaximum(), check = false)
 CholeskyPivoted{Float64, Matrix{Float64}}
 U factor with rank 1:
 4×4 UpperTriangular{Float64, Matrix{Float64}}:
@@ -261,7 +261,7 @@ end
 # cholesky!. Destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
 ## No pivoting (default)
-function cholesky!(A::RealHermSymComplexHerm, ::Val{false}=Val(false); check::Bool = true)
+function cholesky!(A::RealHermSymComplexHerm, ::NoPivot = NoPivot(); check::Bool = true)
     C, info = _chol!(A.data, A.uplo == 'U' ? UpperTriangular : LowerTriangular)
     check && checkpositivedefinite(info)
     return Cholesky(C.data, A.uplo, info)
@@ -269,7 +269,7 @@ end
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholesky!(A::StridedMatrix, Val(false); check = true) -> Cholesky
+    cholesky!(A::StridedMatrix, NoPivot(); check = true) -> Cholesky
 
 The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if
@@ -289,41 +289,45 @@ Stacktrace:
 [...]
 ```
 """
-function cholesky!(A::StridedMatrix, ::Val{false}=Val(false); check::Bool = true)
+function cholesky!(A::StridedMatrix, ::NoPivot = NoPivot(); check::Bool = true)
     checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         check && checkpositivedefinite(-1)
         return Cholesky(A, 'U', convert(BlasInt, -1))
     else
-        return cholesky!(Hermitian(A), Val(false); check = check)
+        return cholesky!(Hermitian(A), NoPivot(); check = check)
     end
 end
+@deprecate cholesky!(A::StridedMatrix, ::Val{false}; check::Bool = true) cholesky!(A, NoPivot(); check) false
+@deprecate cholesky!(A::RealHermSymComplexHerm, ::Val{false}; check::Bool = true) cholesky!(A, NoPivot(); check) false
 
 ## With pivoting
 ### BLAS/LAPACK element types
 function cholesky!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix},
-                   ::Val{true}; tol = 0.0, check::Bool = true)
+                   ::RowMaximum; tol = 0.0, check::Bool = true)
     AA, piv, rank, info = LAPACK.pstrf!(A.uplo, A.data, tol)
     C = CholeskyPivoted{eltype(AA),typeof(AA)}(AA, A.uplo, piv, rank, tol, info)
     check && chkfullrank(C)
     return C
 end
+@deprecate cholesky!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, ::Val{true}; kwargs...) cholesky!(A, RowMaximum(); kwargs...) false
 
 ### Non BLAS/LAPACK element types (generic). Since generic fallback for pivoted Cholesky
 ### is not implemented yet we throw an error
-cholesky!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0, check::Bool = true) =
+cholesky!(A::RealHermSymComplexHerm{<:Real}, ::RowMaximum; tol = 0.0, check::Bool = true) =
     throw(ArgumentError("generic pivoted Cholesky factorization is not implemented yet"))
+@deprecate cholesky!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; kwargs...) cholesky!(A, RowMaximum(); kwargs...) false
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholesky!(A::StridedMatrix, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
+    cholesky!(A::StridedMatrix, RowMaximum(); tol = 0.0, check = true) -> CholeskyPivoted
 
 The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if the
 factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
-function cholesky!(A::StridedMatrix, ::Val{true}; tol = 0.0, check::Bool = true)
+function cholesky!(A::StridedMatrix, ::RowMaximum; tol = 0.0, check::Bool = true)
     checksquare(A)
     if !ishermitian(A)
         C = CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
@@ -331,15 +335,16 @@ function cholesky!(A::StridedMatrix, ::Val{true}; tol = 0.0, check::Bool = true)
         check && chkfullrank(C)
         return C
     else
-        return cholesky!(Hermitian(A), Val(true); tol = tol, check = check)
+        return cholesky!(Hermitian(A), RowMaximum(); tol = tol, check = check)
     end
 end
+@deprecate cholesky!(A::StridedMatrix, ::Val{true}; kwargs...) cholesky!(A, RowMaximum(); kwargs...) false
 
 # cholesky. Non-destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
 ## No pivoting (default)
 """
-    cholesky(A, Val(false); check = true) -> Cholesky
+    cholesky(A, NoPivot(); check = true) -> Cholesky
 
 Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
 and return a [`Cholesky`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref) or [`Hermitian`](@ref)
@@ -391,17 +396,18 @@ true
 ```
 """
 cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
-    ::Val{false}=Val(false); check::Bool = true) = cholesky!(cholcopy(A); check = check)
+    ::NoPivot=NoPivot(); check::Bool = true) = cholesky!(cholcopy(A); check = check)
+@deprecate cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{false}; check::Bool = true) cholesky(A, NoPivot(); check) false
 
-function cholesky(A::Union{StridedMatrix{Float16},RealHermSymComplexHerm{Float16,<:StridedMatrix}}, ::Val{false}=Val(false); check::Bool = true)
+function cholesky(A::Union{StridedMatrix{Float16},RealHermSymComplexHerm{Float16,<:StridedMatrix}}, ::NoPivot=NoPivot(); check::Bool = true)
     X = cholesky!(cholcopy(A); check = check)
     return Cholesky{Float16}(X)
 end
-
+@deprecate cholesky(A::Union{StridedMatrix{Float16},RealHermSymComplexHerm{Float16,<:StridedMatrix}}, ::Val{false}; check::Bool = true) cholesky(A, NoPivot(); check) false
 
 ## With pivoting
 """
-    cholesky(A, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
+    cholesky(A, RowMaximum(); tol = 0.0, check = true) -> CholeskyPivoted
 
 Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
 and return a [`CholeskyPivoted`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref)
@@ -431,7 +437,7 @@ julia> X = [1.0, 2.0, 3.0, 4.0];
 
 julia> A = X * X';
 
-julia> C = cholesky(A, Val(true), check = false)
+julia> C = cholesky(A, RowMaximum(), check = false)
 CholeskyPivoted{Float64, Matrix{Float64}}
 U factor with rank 1:
 4×4 UpperTriangular{Float64, Matrix{Float64}}:
@@ -456,8 +462,9 @@ true
 ```
 """
 cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
-    ::Val{true}; tol = 0.0, check::Bool = true) =
-    cholesky!(cholcopy(A), Val(true); tol = tol, check = check)
+    ::RowMaximum; tol = 0.0, check::Bool = true) =
+    cholesky!(cholcopy(A), RowMaximum(); tol = tol, check = check)
+@deprecate cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0, check::Bool = true) cholesky(A, RowMaximum(); tol, check) false
 
 ## Number
 function cholesky(x::Number, uplo::Symbol=:U)

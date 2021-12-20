@@ -601,8 +601,6 @@ void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlev
         PM->add(createGVNPass());
 }
 
-
-
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
@@ -729,7 +727,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createLoopUnswitchPass());
     PM->add(createLICMPass());
     PM->add(createJuliaLICMPass());
-    PM->add(createInductiveRangeCheckEliminationPass());
+    PM->add(createInductiveRangeCheckEliminationPass()); // Must come before indvars
     // Subsequent passes not stripping metadata from terminator
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createLoopIdiomPass());
@@ -749,13 +747,21 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createMemCpyOptPass());
     PM->add(createSCCPPass());
 
+    //These next two passes must come before IRCE to eliminate the bounds check in #43308
+    PM->add(createCorrelatedValuePropagationPass());
+    PM->add(createDeadCodeEliminationPass());
+
+    PM->add(createInductiveRangeCheckEliminationPass()); // Must come between the two GVN passes
+
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
     // This needs to be InstCombine instead of InstSimplify to allow
     // loops over Union-typed arrays to vectorize.
     PM->add(createInstructionCombiningPass());
     PM->add(createJumpThreadingPass());
-    PM->add(createCorrelatedValuePropagationPass());
+    if (opt_level >= 3) {
+        PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
+    }
     PM->add(createDeadStoreEliminationPass());
 
     // More dead allocation (store) deletion before loop optimization

@@ -1064,6 +1064,16 @@ static void jl_write_values(jl_serializer_state *s)
                     arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
                     ios_write(s->const_data, (char*)tn->atomicfields, nb);
                 }
+                if (tn->constfields != NULL) {
+                    size_t nb = (jl_svec_len(tn->names) + 31) / 32 * sizeof(uint32_t);
+                    uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
+                    write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
+                    newtn->constfields = NULL; // relocation offset
+                    layout /= sizeof(void*);
+                    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_typename_t, constfields))); // relocation location
+                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
+                    ios_write(s->const_data, (char*)tn->constfields, nb);
+                }
             }
             else if (((jl_datatype_t*)(jl_typeof(v)))->name == jl_idtable_typename) {
                 // will need to rehash this, later (after types are fully constructed)

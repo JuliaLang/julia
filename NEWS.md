@@ -13,8 +13,12 @@ New language features
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
+* Support for Unicode 14.0.0 ([#43443]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
   no errors were thrown. ([#42211])
+* Mutable struct fields may now be annotated as `const` to prevent changing
+  them after construction, providing for greater clarity and optimization
+  ability of these objects ([#43305]).
 
 Language changes
 ----------------
@@ -76,6 +80,7 @@ Standard library changes
 
 * `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
 * `precision` and `setprecision` now accept a `base` keyword ([#42428]).
+* `Iterators.reverse` (and hence `last`) now supports `eachline` iterators ([#42225]).
 * The `length` function on certain ranges of certain specific element types no longer checks for integer
   overflow in most cases. The new function `checked_length` is now available, which will try to use checked
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
@@ -91,6 +96,10 @@ Standard library changes
 
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `spr!` ([#42830]).
+
+* `cholesky[!]` now supports `LinearAlgebra.PivotingStrategy` (singleton type) values
+  as its optional `pivot` argument: the default is `cholesky(A, NoPivot())` (vs.
+  `cholesky(A, RowMaximum())`); the former `Val{true/false}`-based calls are deprecated. ([#41640])
 
 #### Markdown
 

@@ -371,6 +371,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_uint8(s->s, m->optlevel);
     write_uint8(s->s, m->compile);
     write_uint8(s->s, m->infer);
+    write_uint8(s->s, m->max_methods);
 }
 
 static int jl_serialize_generic(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED
@@ -837,6 +838,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 write_int32(s->s, nb);
                 if (nb)
                     ios_write(s->s, (char*)tn->atomicfields, nb);
+                nb = tn->constfields ? (jl_svec_len(tn->names) + 31) / 32 * sizeof(uint32_t) : 0;
+                write_int32(s->s, nb);
+                if (nb)
+                    ios_write(s->s, (char*)tn->constfields, nb);
             }
             return;
         }
@@ -1678,6 +1683,7 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
     m->optlevel = read_int8(s->s);
     m->compile = read_int8(s->s);
     m->infer = read_int8(s->s);
+    m->max_methods = read_int8(s->s);
     m->primary_world = jl_atomic_load_acquire(&jl_world_counter);
     return (jl_value_t*)m;
 }
@@ -1783,6 +1789,11 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             if (nfields) {
                 tn->atomicfields = (uint32_t*)malloc(nfields);
                 ios_read(s->s, (char*)tn->atomicfields, nfields);
+            }
+            nfields = read_int32(s->s);
+            if (nfields) {
+                tn->constfields = (uint32_t*)malloc(nfields);
+                ios_read(s->s, (char*)tn->constfields, nfields);
             }
         }
         else {

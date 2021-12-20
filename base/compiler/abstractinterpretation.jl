@@ -16,9 +16,16 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[frame.currpc])
 
+function get_max_methods(mod::Module, interp::AbstractInterpreter)
+    max_methods = ccall(:jl_get_module_max_methods, Cint, (Any,), mod) % Int
+    max_methods < 0 ? InferenceParams(interp).MAX_METHODS : max_methods
+end
+
+const empty_bitset = BitSet()
+
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, @nospecialize(atype),
-                                  sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
+                                  sv::InferenceState, max_methods::Int = get_max_methods(sv.mod, interp))
     if sv.params.unoptimize_throw_blocks && is_stmt_throw_block(get_curr_ssaflag(sv))
         add_remark!(interp, sv, "Skipped call in throw block")
         return CallMeta(Any, false)
@@ -93,6 +100,20 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
             end
         else
+            if infer_compilation_signature(interp)
+                # Also infer the compilation signature for this method, so it's available
+                # to the compiler in case it ends up needing it (which is likely).
+                csig = get_compileable_sig(method, sig, match.sparams)
+                if csig !== nothing && csig !== sig
+                    # The result of this inference is not directly used, so temporarily empty
+                    # the use set for the current SSA value.
+                    saved_uses = sv.ssavalue_uses[sv.currpc]
+                    sv.ssavalue_uses[sv.currpc] = empty_bitset
+                    abstract_call_method(interp, method, csig, match.sparams, multiple_matches, sv)
+                    sv.ssavalue_uses[sv.currpc] = saved_uses
+                end
+            end
+
             result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
             this_rt, edge = result.rt, result.edge
             if edge !== nothing
@@ -1011,7 +1032,7 @@ end
 
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState,
-                        max_methods::Int = InferenceParams(interp).MAX_METHODS)
+                        max_methods::Int = get_max_methods(sv.mod, interp))
     itft = argtype_by_index(argtypes, 2)
     aft = argtype_by_index(argtypes, 3)
     (itft === Bottom || aft === Bottom) && return CallMeta(Bottom, false)
@@ -1364,7 +1385,7 @@ end
 # call where the function is known exactly
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, sv::InferenceState,
-        max_methods::Int = InferenceParams(interp).MAX_METHODS)
+        max_methods::Int = get_max_methods(sv.mod, interp))
     (; fargs, argtypes) = arginfo
     la = length(argtypes)
 
@@ -1419,12 +1440,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         # handle Conditional propagation through !Bool
         aty = argtypes[2]
         if isa(aty, Conditional)
-            call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Bool]), Tuple{typeof(f), Bool}, sv) # make sure we've inferred `!(::Bool)`
+            call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Bool]), Tuple{typeof(f), Bool}, sv, max_methods) # make sure we've inferred `!(::Bool)`
             return CallMeta(Conditional(aty.var, aty.elsetype, aty.vtype), call.info)
         end
     elseif la == 3 && istopfunction(f, :!==)
         # mark !== as exactly a negated call to ===
-        rty = abstract_call_known(interp, (===), arginfo, sv).rt
+        rty = abstract_call_known(interp, (===), arginfo, sv, max_methods).rt
         if isa(rty, Conditional)
             return CallMeta(Conditional(rty.var, rty.elsetype, rty.vtype), false) # swap if-else
         elseif isa(rty, Const)
@@ -1440,7 +1461,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             fargs = nothing
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
-        return CallMeta(abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), sv).rt, false)
+        return CallMeta(abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), sv, max_methods).rt, false)
     elseif la == 2 &&
            (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
            istopfunction(f, :length)
@@ -1500,7 +1521,7 @@ end
 
 # call where the function is any lattice element
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
-                       sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
+                       sv::InferenceState, max_methods::Int = get_max_methods(sv.mod, interp))
     argtypes = arginfo.argtypes
     ft = argtypes[1]
     f = singleton_type(ft)
