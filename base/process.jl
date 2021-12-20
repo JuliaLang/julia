@@ -641,6 +641,7 @@ show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p),
 for f in (:length, :firstindex, :lastindex, :keys, :first, :last, :iterate)
     @eval $f(cmd::Cmd) = $f(cmd.exec)
 end
+Iterators.reverse(cmd::Cmd) = Iterators.reverse(cmd.exec)
 eltype(::Type{Cmd}) = eltype(fieldtype(Cmd, :exec))
 for f in (:iterate, :getindex)
     @eval $f(cmd::Cmd, i) = $f(cmd.exec, i)
