@@ -1077,6 +1077,5 @@ end
     end
     x = randn(2)
     y = randn(2)
-    z = test(x, y)
-    @test z isa BitVector
+    @inferred(test(x, y)) == [0, 0]
 end
