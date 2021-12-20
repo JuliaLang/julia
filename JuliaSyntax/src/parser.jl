@@ -936,7 +936,7 @@ function parse_unary_call(ps::ParseState)
             emit(ps, mark, op_node_kind)
         end
     elseif !is_unary_op(op_k)
-        emit_diagnostic(error="expected a unary operator")
+        emit_diagnostic(ps, error="expected a unary operator")
     else
         bump(ps, op_tok_flags)
         parse_unary(ps)
@@ -1318,29 +1318,12 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false, is_doc_macro
     end
 end
 
-# flisp: (define (parse-subtype-spec s)
+# flisp: parse-subtype-spec
 function parse_subtype_spec(ps::ParseState)
-    TODO("parse_subtype_spec unimplemented")
-end
-
-# flisp: (define (valid-func-sig? paren sig)
-function is_valid_func_sig(paren, sig)
-    TODO("is_valid_func_sig unimplemented")
-end
-
-# flisp: (define (valid-1arg-func-sig? sig)
-function is_valid_1arg_func_sig(sig)
-    TODO("is_valid_1arg_func_sig unimplemented")
-end
-
-# flisp: (define (unwrap-where x)
-function unwrap_where(x)
-    TODO("unwrap_where unimplemented")
-end
-
-# flisp: (define (rewrap-where x w)
-function rewrap_where(x, w)
-    TODO("rewrap_where unimplemented")
+    # Wart: why isn't the flisp parser more strict here?
+    # <: is the only operator which isn't a syntax error, but parse_comparison
+    # allows all sorts of things.
+    parse_comparison(ps)
 end
 
 # flisp: parse-struct-def
@@ -1348,14 +1331,11 @@ function parse_struct_def(ps::ParseState, mark, is_mut)
     TODO("parse_struct_def unimplemented")
 end
 
-# consume any number of line endings from a token stream
+# parse expressions or blocks introduced by syntactic reserved words.
 #
-# flisp: (define (take-lineendings s)
-function take_lineendings(s)
-    TODO("take_lineendings unimplemented")
-end
-
-# parse expressions or blocks introduced by syntactic reserved words
+# The caller should use peek_initial_reserved_words to determine whether
+# to call parse_resword, or whether contextural keywords like `mutable` are
+# simple identifiers.
 #
 # flisp: parse-resword
 function parse_resword(ps::ParseState)
@@ -1447,16 +1427,21 @@ function parse_resword(ps::ParseState)
     elseif word in (K"function", K"macro")
         parse_function(ps)
     elseif word == K"abstract"
-        TODO("parse_resword")
-    elseif word == K"struct"
-        parse_struct_def(ps, mark, false)
-    elseif word == K"mutable"
-        if peek(ps) != K"struct"
-            bump(ps, remap_kind=K"Identifier")
-            parse_call_chain(ps, mark)
-        else
-            parse_struct_def(ps, mark, true)
-        end
+        # Abstract type definitions
+        # abstract type A end             ==>  (abstract A)
+        # abstract type \n\n A \n\n end   ==>  (abstract A)
+        # abstract type A <: B end        ==>  (abstract (<: A B))
+        # abstract type A <: B{T,S} end   ==>  (abstract (<: A (curly B T S)))
+        # Oddities allowed by parser
+        # abstract type A < B end         ==>  (abstract (call < A B))
+        bump(ps, TRIVIA_FLAG)
+        @assert peek(ps) == K"type"
+        bump(ps, TRIVIA_FLAG)
+        parse_subtype_spec(ps)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"abstract")
+    elseif word in (K"struct", K"mutable")
+        parse_struct_def(ps, mark)
     elseif word == K"primitive"
         TODO("parse_resword")
     elseif word == K"try"
