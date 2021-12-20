@@ -145,39 +145,14 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                             break;
                         }
                     }
-                    // if (use_info.refstore) {
-                    //     // We need to add write barriers to any stores
-                    //     // that may start crossing generations
-                    //     continue;
-                    // }
-                    if (valid) {
-                        dbgs() << "Hoisting allocation " << *call << "\n";
-                        call->moveBefore(preheader->getTerminator());
-                        changed = true;
-                    }
                     if (use_info.refstore) {
                         // We need to add write barriers to any stores
                         // that may start crossing generations
-
-                        // For now, just insert a write barrier before
-                        // each such possible store
-                        IRBuilder<> builder(preheader->getTerminator());
-                        for (auto &memop : use_info.memops) {
-                            for (auto &access : memop.second.accesses) {
-                                if (access.isobjref) {
-                                    dbgs() << "Looking at inst " << *access.inst << "\n";
-                                    if (auto store = dyn_cast<StoreInst>(access.inst)) {
-                                        auto child = store->getValueOperand();
-                                        if (isa<Instruction>(child)/* && !DT->dominates(cast<Instruction>(child), call)*/) {
-                                            // If our child is loop invariant put the wb outside the loop, otherwise after the store
-                                            builder.SetInsertPoint(/*L->isLoopInvariant(child) ? preheader->getTerminator() : */store->getNextNode());
-                                            emit_write_barrier_with_builder(builder, call, child);
-                                            dbgs() << "emitted write barrier to compensate\n";
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        continue;
+                    }
+                    if (valid) {
+                        call->moveBefore(preheader->getTerminator());
+                        changed = true;
                     }
                 }
             }
