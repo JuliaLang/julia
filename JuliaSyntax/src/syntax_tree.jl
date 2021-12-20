@@ -74,6 +74,10 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif k == K"Float"
             # FIXME: Other float types!
             Base.parse(Float64, val_str)
+        elseif k == K"true"
+            true
+        elseif k == K"false"
+            false
         elseif k == K"Identifier"
             Symbol(val_str)
         elseif k == K"VarIdentifier"

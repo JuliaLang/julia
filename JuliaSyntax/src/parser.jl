@@ -106,13 +106,22 @@ function is_initial_reserved_word(ps::ParseState, k)
     return is_iresword && !(k == K"begin" && ps.end_symbol)
 end
 
+function is_contextural_keyword(k)
+    kind(k) ∈ (K"mutable", K"primitive", K"abstract")
+end
+
+function is_reserved_word(k)
+    k = kind(k)
+    iskeyword(k) && !is_contextural_keyword(k)
+end
+
 # Return true if the next word (or word pair) is reserved, introducing a
 # syntactic structure.
 function peek_initial_reserved_words(ps::ParseState)
     k = peek(ps)
     if is_initial_reserved_word(ps, k)
         return true
-    elseif k in (K"mutable", K"primitive", K"abstract")
+    elseif is_contextural_keyword(k)
         k2 = peek(ps,2)
         return (k == K"mutable"   && k2 == K"struct") ||
                (k == K"primitive" && k2 == K"type")   ||
@@ -691,7 +700,7 @@ function parse_unary_subtype(ps::ParseState)
     elseif k in (K"<:", K">:")
         # FIXME add test cases
         k2 = peek(ps, 2)
-        if is_closing_token(k2) || k2 in (K"NewlineWs", K"=")
+        if is_closing_token(ps, k2) || k2 in (K"NewlineWs", K"=")
             # return operator by itself, as in (<:)
             bump(ps)
             return
@@ -1320,15 +1329,41 @@ end
 
 # flisp: parse-subtype-spec
 function parse_subtype_spec(ps::ParseState)
-    # Wart: why isn't the flisp parser more strict here?
-    # <: is the only operator which isn't a syntax error, but parse_comparison
-    # allows all sorts of things.
-    parse_comparison(ps)
+    k = peek(ps)
+    if is_reserved_word(k)
+        # Recovery
+        # struct try end  ==>  (struct false (error try) (block))
+        bump(ps, error="Invalid type name `$(untokenize(k))`")
+        m = position(ps)
+        if is_prec_comparison(peek(ps))
+            bump(ps)
+            parse_pipe_lt(ps)
+            emit(ps, m, K"error", TRIVIA_FLAG)
+        end
+    else
+        # Wart: why isn't the flisp parser more strict here?
+        # <: is the only operator which isn't a syntax error, but
+        # parse_subtype_spec allows all sorts of things.
+        parse_comparison(ps)
+    end
 end
 
+# Parse struct definitions. The caller must arrange for the next tokens to be
+# `struct` or `mutable struct`.
+#
 # flisp: parse-struct-def
-function parse_struct_def(ps::ParseState, mark, is_mut)
-    TODO("parse_struct_def unimplemented")
+function parse_struct_def(ps::ParseState)
+    mark = position(ps)
+    is_mutable = peek(ps) == K"mutable"
+    if is_mutable
+        bump(ps, TRIVIA_FLAG)
+    end
+    @assert peek(ps) == K"struct"
+    bump(ps, TRIVIA_FLAG)
+    k = peek(ps)
+    if is_reserved_word(k)
+        bump(ps, error="Invalid type name `$(untokenize(k))`")
+    end
 end
 
 # parse expressions or blocks introduced by syntactic reserved words.
@@ -1441,11 +1476,32 @@ function parse_resword(ps::ParseState)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"abstract")
     elseif word in (K"struct", K"mutable")
-        parse_struct_def(ps, mark)
+        # struct A <: B \n a::X \n end  ==>  (struct false (<: A B) (block (:: a X)))
+        if word == K"mutable"
+            # mutable struct A end  ==>  (struct true A (block))
+            bump(ps, remap_kind=K"true")
+        else
+            # struct A end  ==>  (struct false A (block))
+            bump_invisible(ps, K"false")
+        end
+        @assert peek(ps) == K"struct"
+        bump(ps, TRIVIA_FLAG)
+        parse_subtype_spec(ps)
+        parse_block(ps)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"struct")
     elseif word == K"primitive"
-        TODO("parse_resword")
+        # primitive type A 32 end             ==> (primitive A 32)
+        # primitive type A <: B \n 8 \n end   ==> (primitive (<: A B) 8)
+        bump(ps, TRIVIA_FLAG)
+        @assert peek(ps) == K"type"
+        bump(ps, TRIVIA_FLAG)
+        parse_subtype_spec(ps)
+        parse_cond(ps)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"primitive")
     elseif word == K"try"
-        TODO("parse_resword")
+        parse_try(ps)
     elseif word == K"return"
         bump(ps, TRIVIA_FLAG)
         k = peek(ps)
@@ -1467,15 +1523,28 @@ function parse_resword(ps::ParseState)
                     error="unexpected token after $(untokenize(word))")
         end
     elseif word in (K"module", K"baremodule")
-        TODO("parse_resword")
+        # module A end  ==> (module true A (block))
+        # baremodule A end ==> (module false A (block))
+        bump(ps, remap_kind= (word == K"module") ? K"true" : K"false")
+        if is_reserved_word(peek(ps))
+            # module do \n end  ==>  (module true (error do) (block))
+            bump(ps, error="Invalid module name")
+        else
+            # module $A end  ==>  (module true ($ A) (block))
+            parse_unary_prefix(ps)
+        end
+        # module A \n a \n b \n end  ==>  (module true A (block a b))
+        parse_block(ps)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"module")
     elseif word == K"export"
         TODO("parse_resword")
     elseif word in (K"import", K"using")
         TODO("parse_resword")
     elseif word == K"do"
-        TODO("parse_resword")
+        bump(ps, TRIVIA_FLAG, error="invalid `do` syntax")
     else
-        bump(ps, TRIVIA_FLAG, error="unhandled reserved word")
+        error("unhandled reserved word")
     end
 end
 
@@ -1662,6 +1731,10 @@ function parse_function(ps::ParseState)
     emit(ps, mark, word)
 end
 
+function parse_try(ps)
+    TODO("parse_try")
+    mark = position(ps)
+end
 #
 # flisp: parse-do
 function parse_do(ps::ParseState)

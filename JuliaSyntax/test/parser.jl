@@ -255,11 +255,25 @@ tests = [
         "abstract type A <: B end"       =>  "(abstract (<: :A :B))"
         "abstract type A <: B{T,S} end"  =>  "(abstract (<: :A (curly :B :T :S)))"
         "abstract type A < B end"        =>  "(abstract (call :< :A :B))"
+        # primitive type
+        "primitive type A 32 end"  =>  "(primitive :A 32)"
+        "primitive type A <: B \n 8 \n end"  =>  "(primitive (<: :A :B) 8)"
+        # struct
+        "struct A <: B \n a::X \n end"  =>  "(struct false (<: :A :B) (block (:: :a :X)))"
+        "mutable struct A end"          =>  "(struct true :A (block))"
+        "struct A end"    =>  "(struct false :A (block))"
+        "struct try end"  =>  "(struct false (error :try) (block))"
         # return
         "return\nx"   =>  "(return nothing)"
         "return)"     =>  "(return nothing)"
         "return x"    =>  "(return :x)"
         "return x,y"  =>  "(return (tuple :x :y))"
+        # module
+        "module A end"      =>  "(module true :A (block))"
+        "baremodule A end"  =>  "(module false :A (block))"
+        "module do \n end"  =>  "(module true (error :do) (block))"
+        "module \$A end"    =>  "(module true (\$ :A) (block))"
+        "module A \n a \n b \n end"  =>  "(module true :A (block :a :b))"
     ],
     JuliaSyntax.parse_if_elseif => [
         "if a xx elseif b yy else zz end" => "(if :a (block :xx) (elseif (block :b) (block :yy) (block :zz)))"
