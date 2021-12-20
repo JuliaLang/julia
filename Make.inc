@@ -1408,7 +1408,7 @@ endif
 endef
 
 # Overridable in Make.user
-WINE = wine
+WINE ?= wine
 
 # many of the following targets must be = not := because the expansion of the makefile functions (and $1) shouldn't happen until later
 ifeq ($(BUILD_OS), WINNT) # MSYS
@@ -1420,7 +1420,7 @@ cygpath_w = `cygpath -w $(1)`
 else
 ifeq ($(OS), WINNT) # unix-to-Windows cross-compile
 spawn = $(WINE) $(1)
-cygpath_w = `winepath -w $(1)`
+cygpath_w = `$(WINE) winepath.exe -w $(1)`
 else # not Windows
 spawn = $(1)
 cygpath_w = $(1)
