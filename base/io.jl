@@ -1167,9 +1167,6 @@ end
 isdone(r::Iterators.Reverse{<:EachLine}, state) = isempty(state.chunks)
 isdone(r::Iterators.Reverse{<:EachLine}) = isdone(r.itr)
 
-# use reverse iteration to get end of EachLines (if possible)
-last(itr::EachLine) = first(Iterators.reverse(itr))
-
 struct ReadEachIterator{T, IOT <: IO}
     stream::IOT
 end

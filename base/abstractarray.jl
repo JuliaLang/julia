@@ -476,7 +476,8 @@ julia> last([1; 2; 3; 4])
 4
 ```
 """
-last(a) = a[end]
+last(a) = first(Iterators.reverse(itr))
+last(a::Union{AbstractArray,Tuple}) = a[end]
 
 """
     last(itr, n::Integer)
