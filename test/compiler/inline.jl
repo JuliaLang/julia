@@ -388,12 +388,12 @@ get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 
 # check if `x` is a dynamic call of a given function
 iscall(y) = @nospecialize(x) -> iscall(y, x)
-function iscall((src, f)::Tuple{Core.CodeInfo,Function}, @nospecialize(x))
+function iscall((src, f)::Tuple{Core.CodeInfo,Base.Callable}, @nospecialize(x))
     return iscall(x) do @nospecialize x
         singleton_type(argextype(x, src, EMPTY_SPTYPES)) === f
     end
 end
-iscall(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
+iscall(pred::Base.Callable, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
 
 # check if `x` is a statically-resolved call of a function whose name is `sym`
 isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
@@ -859,4 +859,18 @@ let # aggressive static dispatch of single, abstract method match
     @test count(isinvoke(:checkBadType!), src.code) == 2
     # `checkBadType!(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
     @test count(iscall((src,checkBadType!)), src.code) == 1
+end
+
+@testset "late_inline_special_case!" begin
+    let src = code_typed((Symbol,Any,Any)) do a, b, c
+            TypeVar(a, b, c)
+        end |> only |> first
+        @test count(iscall((src,TypeVar)), src.code) == 0
+        @test count(iscall((src,Core._typevar)), src.code) == 1
+    end
+    let src = code_typed((TypeVar,Any)) do a, b
+            UnionAll(a, b)
+        end |> only |> first
+        @test count(iscall((src,UnionAll)), src.code) == 0
+    end
 end
