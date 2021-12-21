@@ -418,4 +418,13 @@ end
     @test lu(A1, RowMaximum(); check = false) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
 end
 
+@testset "can push to vector after 3-arg ldiv! (#43507)" begin
+    u = rand(3)
+    A = rand(3,3)
+    b = rand(3)
+    ldiv!(u,lu(A),b)
+    push!(b,4.0)
+    @test length(b) == 4
+end
+
 end # module TestLU
