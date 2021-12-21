@@ -538,13 +538,13 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     @timeit "SROA"      ir = sroa_pass!(ir)
     @timeit "ADCE"      ir = adce_pass!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
-    # @timeit "compact 3" ir = compact!(ir)
     nargs = let def = sv.linfo.def
         isa(def, Method) ? Int(def.nargs) : 0
     end
     esc_state = find_escapes(ir, nargs)
-    setindex!(GLOBAL_ESCAPE_CACHE, esc_state, sv.linfo)
-    ir = memory_opt!(ir, esc_state)
+    # setindex!(GLOBAL_ESCAPE_CACHE, esc_state, sv.linfo)
+    @timeit "memory opt" ir = memory_opt!(ir, esc_state)
+    # @timeit "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end

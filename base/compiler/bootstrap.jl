@@ -14,7 +14,7 @@ let
     fs = Any[
         # we first create caches for the optimizer, because they contain many loop constructions
         # and they're better to not run in interpreter even during bootstrapping
-        run_passes,
+        find_escapes, run_passes,
         # then we create caches for inference entries
         typeinf_ext, typeinf, typeinf_edge,
     ]
