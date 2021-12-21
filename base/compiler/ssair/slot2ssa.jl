@@ -67,7 +67,7 @@ function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx, slot, @nospecialize(typ
     stmt = code[idx]
     @assert isexpr(stmt, :(=))
     code[idx] = stmt.args[2]
-    ci.ssavaluetypes[idx] = typ
+    (ci.ssavaluetypes::Vector{Any})[idx] = typ
     idx
 end
 
@@ -209,16 +209,16 @@ end
 function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{Any}, idx::Int, slottypes::Vector{Any})
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sptypes[x.args[1]]
+            return sptypes[x.args[1]::Int]
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
             return typ_for_val(x.args[1], ci, sptypes, idx, slottypes)
         end
-        return ci.ssavaluetypes[idx]
+        return (ci.ssavaluetypes::Vector{Any})[idx]
     end
     isa(x, GlobalRef) && return abstract_eval_global(x.mod, x.name)
-    isa(x, SSAValue) && return ci.ssavaluetypes[x.id]
+    isa(x, SSAValue) && return (ci.ssavaluetypes::Vector{Any})[x.id]
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return DelayedTyp(x)
     isa(x, QuoteNode) && return Const(x.value)
