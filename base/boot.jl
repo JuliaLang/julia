@@ -278,13 +278,10 @@ struct BoundsError <: Exception
     # Eventually, we want to figure out if the copy is needed to save the performance of copying
     # (i.e., if a escapes elsewhere, don't bother to make a copy)
 
-    BoundsError(@nospecialize(a)) = a isa Array ?
-                                    (@noinline; new(Core.maybecopy(a))) :
-                                    (@noinline; new(a))
-
-    BoundsError(@nospecialize(a), i) = a isa Array ?
-                                       (@noinline; new(Core.maybecopy(a), i)) :
-                                       (@noinline; new(a, i))
+    BoundsError(@nospecialize(a)) = (@noinline;
+        a isa Array ? new(Core.maybecopy(a)) : new(a))
+    BoundsError(@nospecialize(a), i) = (@noinline;
+        a isa Array ? new(Core.maybecopy(a), i) : new(a, i))
 end
 struct DivideError         <: Exception end
 struct OutOfMemoryError    <: Exception end
