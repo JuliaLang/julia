@@ -163,7 +163,9 @@ tests = [
         "\$\$a"  => "(\$ (\$ :a))"
     ],
     JuliaSyntax.parse_call => [
-        "f(a,b)" => "(call :f :a :b)"
+        "f(x)"    =>  "(call :f :x)"
+        "\$f(x)"  =>  "(call (\$ :f) :x)"
+        "f(a,b)"  => "(call :f :a :b)"
         "f(a).g(b)" => "(call (. (call :f :a) (quote :g)) :b)"
         # do
         "f() do x, y\n body end"  =>  "(do (call :f) (-> (tuple :x :y) (block :body)))"
@@ -172,25 +174,26 @@ tests = [
         "f(x) do y,z body end"  =>  "(do (call :f :x) (-> (tuple :y :z) (block :body)))"
         # Keyword arguments depend on call vs macrocall
         "foo(a=1)"  =>  "(call :foo (kw :a 1))"
-        "@foo(a=1)" =>  "(macrocall :foo (= :a 1))"
+        "@foo(a=1)" =>  """(macrocall Symbol("@foo") (= :a 1))"""
         # f(x) do y body end  ==>  (do (call :f :x) (-> (tuple :y) (block :body)))
-        "@foo a b"     =>  "(macrocall :foo :a :b)"
-        "A.@foo a b"   =>  "(macrocall (. :A (quote :foo)) :a :b)"
-        "@A.foo a b"   =>  "(macrocall (. :A (quote :foo)) :a :b)"
+        "@foo a b"     =>  """(macrocall Symbol("@foo") :a :b)"""
+        "A.@foo a b"   =>  """(macrocall (. :A (quote Symbol("@foo"))) :a :b)"""
+        "@A.foo a b"   =>  """(macrocall (. :A (quote Symbol("@foo"))) :a :b)"""
         # Special @doc parsing rules
-        "@doc x\ny"    =>  "(macrocall :doc :x :y)"
-        "A.@doc x\ny"  =>  "(macrocall (. :A (quote :doc)) :x :y)"
-        "@A.doc x\ny"  =>  "(macrocall (. :A (quote :doc)) :x :y)"
-        "@doc x y\nz"  =>  "(macrocall :doc :x :y)"
-        "@doc x\n\ny"  =>  "(macrocall :doc :x)"
-        "@doc x\nend"  =>  "(macrocall :doc :x)"
+        "@doc x\ny"    =>  """(macrocall Symbol("@doc") :x :y)"""
+        "A.@doc x\ny"  =>  """(macrocall (. :A (quote Symbol("@doc"))) :x :y)"""
+        "@A.doc x\ny"  =>  """(macrocall (. :A (quote Symbol("@doc"))) :x :y)"""
+        "@doc x y\nz"  =>  """(macrocall Symbol("@doc") :x :y)"""
+        "@doc x\n\ny"  =>  """(macrocall Symbol("@doc") :x)"""
+        "@doc x\nend"  =>  """(macrocall Symbol("@doc") :x)"""
         # Allow `@` in macrocall only in first and last position
-        "A.B.@x"    =>  "(macrocall (. (. :A (quote :B)) (quote :x)))"
-        "@A.B.x"    =>  "(macrocall (. (. :A (quote :B)) (quote :x)))"
-        "A.@B.x"    =>  "(macrocall (. (. :A (quote :B)) (error) (quote :x)))"
-        "a().@x(y)" => "(macrocall (error (. (call :a) (quote :x))) :y)"
-        "a().@x y"  => "(macrocall (error (. (call :a) (quote :x))) :y)"
-        "a().@x{y}" => "(macrocall (error (. (call :a) (quote :x))) (braces :y))"
+        "A.B.@x"    =>  """(macrocall (. (. :A (quote :B)) (quote Symbol("@x"))))"""
+        "@A.B.x"    =>  """(macrocall (. (. :A (quote :B)) (quote Symbol("@x"))))"""
+        "A.@B.x"    =>  """(macrocall (. (. :A (quote :B)) (error) (quote Symbol("@x"))))"""
+        "A.@. y"    =>  """(macrocall (. :A (quote Symbol("@__dot__"))) :y)"""
+        "a().@x(y)" =>  """(macrocall (error (. (call :a) (quote :x))) :y)"""
+        "a().@x y"  =>  """(macrocall (error (. (call :a) (quote :x))) :y)"""
+        "a().@x{y}" =>  """(macrocall (error (. (call :a) (quote :x))) (braces :y))"""
         # Keyword params always use kw inside tuple in dot calls
         "f.(a,b)"   =>  "(. :f (tuple :a :b))"
         "f.(a=1)"   =>  "(. :f (tuple (kw :a 1)))"
@@ -206,16 +209,16 @@ tests = [
         "f'"  => "(' :f)"
         "f'ᵀ" => "(call Symbol(\"'ᵀ\") :f)"
         # Curly calls
-        "@S{a,b}" => "(macrocall :S (braces :a :b))"
+        "@S{a,b}" => """(macrocall Symbol("@S") (braces :a :b))"""
         "S{a,b}"  => "(curly :S :a :b)"
         # String macros
-        """x"str\"""" => """(macrocall :x_str "str")"""
-        """x`str`"""  => """(macrocall :x_cmd "str")"""
+        """x"str\"""" => """(macrocall Symbol("@x_str") "str")"""
+        """x`str`"""  => """(macrocall Symbol("@x_cmd") "str")"""
         # Macro sufficies can include keywords and numbers
-        "x\"s\"y"    => """(macrocall :x_str "s" "y")"""
-        "x\"s\"end"  => """(macrocall :x_str "s" "end")"""
-        "x\"s\"2"    => """(macrocall :x_str "s" 2)"""
-        "x\"s\"10.0" => """(macrocall :x_str "s" 10.0)"""
+        "x\"s\"y"    => """(macrocall Symbol("@x_str") "s" "y")"""
+        "x\"s\"end"  => """(macrocall Symbol("@x_str") "s" "end")"""
+        "x\"s\"2"    => """(macrocall Symbol("@x_str") "s" 2)"""
+        "x\"s\"10.0" => """(macrocall Symbol("@x_str") "s" 10.0)"""
     ],
     JuliaSyntax.parse_resword => [
         # block
@@ -268,12 +271,19 @@ tests = [
         "return)"     =>  "(return nothing)"
         "return x"    =>  "(return :x)"
         "return x,y"  =>  "(return (tuple :x :y))"
-        # module
+        # module/baremodule
         "module A end"      =>  "(module true :A (block))"
         "baremodule A end"  =>  "(module false :A (block))"
         "module do \n end"  =>  "(module true (error :do) (block))"
         "module \$A end"    =>  "(module true (\$ :A) (block))"
         "module A \n a \n b \n end"  =>  "(module true :A (block :a :b))"
+        # export
+        "export @a"  =>  "(export Symbol(\"@a\"))"
+        "export a, \n @b"  =>  "(export :a Symbol(\"@b\"))"
+        "export a"  =>  "(export :a)"
+        "export \n a"  =>  "(export :a)"
+        "export \$a, \$(a*b)"  =>  "(export (\$ :a) (\$ (call :* :a :b)))"
+        # import
     ],
     JuliaSyntax.parse_if_elseif => [
         "if a xx elseif b yy else zz end" => "(if :a (block :xx) (elseif (block :b) (block :yy) (block :zz)))"
@@ -310,6 +320,7 @@ tests = [
         "macro begin() end"      =>  "(macro (call (error :begin)) (block))"
         "function f() end"       =>  "(function (call :f) (block))"
         "function \n f() end"    =>  "(function (call :f) (block))"
+        "function \$f() end"     =>  "(function (call (\$ :f)) (block))"
         "function f()::T    end" =>  "(function (:: (call :f) :T) (block))"
         "function f()::g(T) end" =>  "(function (:: (call :f) (call :g :T)) (block))"
         "function f() \n a \n b end"  =>  "(function (call :f) (block :a :b))"
@@ -355,9 +366,9 @@ tests = [
         ":(end)" => "(quote (error :end))"
         ":<:"  => "(quote :<:)"
         # Macro names can be keywords
-        "@end x" => "(macrocall :end :x)"
+        "@end x" => """(macrocall Symbol("@end") :x)"""
         # __dot__ macro
-        "@. x y" => "(macrocall :__dot__ :x :y)"
+        "@. x y" => """(macrocall Symbol("@__dot__") :x :y)"""
         # Errors
         ": foo" => "(quote (error) :foo)"
     ],

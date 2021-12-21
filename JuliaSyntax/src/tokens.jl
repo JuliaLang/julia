@@ -64,6 +64,14 @@ function is_syntax_kind(t)
     K"BEGIN_SYNTAX_KINDS" < kind(t) < K"END_SYNTAX_KINDS"
 end
 
+function is_identifier(k)
+    kind(k) in (K"Identifier", K"VarIdentifier")
+end
+
+function is_macro_name(k)
+    K"BEGIN_MACRO_NAMES" < kind(k) < K"END_MACRO_NAMES"
+end
+
 function is_number(t)
     kind(t) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float")
 end
@@ -81,14 +89,7 @@ function is_whitespace(t)
 end
 
 function _kind_str(k::Kind)
-    u = untokenize(k)
-    return !isnothing(u)                           ? u            :
-           k in (K"Identifier", K"VarIdentifier")  ? "Identifier" :
-           isliteral(k)                            ? "Literal"    :
-           k == K"Comment"                         ? "Comment"    :
-           k == K"Whitespace"                      ? "Whitespace" :
-           k == K"NewlineWs"                       ? "NewlineWs"  :
-           lowercase(string(k))
+    _kind_to_str[k]
 end
 
 """

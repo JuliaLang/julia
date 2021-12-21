@@ -813,17 +813,27 @@ Dict([
 "END_OPS" => Ts.end_ops
 
 "BEGIN_PARSER_TOKENS" => Ts.begin_parser_tokens
+
 "TOMBSTONE"          =>  Ts.TOMBSTONE
-"core_@doc"          =>  Ts.CORE_AT_DOC
-"core_@cmd"          =>  Ts.CORE_AT_CMD
-"core_@int128_str"   =>  Ts.CORE_AT_INT128_STR
-"core_@uint128_str"  =>  Ts.CORE_AT_UINT128_STR
-"core_@big_str"      =>  Ts.CORE_AT_BIG_STR
-"__dot__"            =>  Ts.DOT_MACRO_NAME
-"StringMacroName"    =>  Ts.STRING_MACRO_NAME
-"CmdMacroName"       =>  Ts.CMD_MACRO_NAME
-"UnquotedString"     =>  Ts.UNQUOTED_STRING
 "NothingLiteral"     =>  Ts.NOTHING_LITERAL
+"UnquotedString"     =>  Ts.UNQUOTED_STRING
+
+# Macro names are modelled as a special kind of identifier because the
+# @ may not be attached to the macro name in the source (or may not be
+# associated with a token at all in the case of implied macro calls
+# like CORE_DOC_MACRO_NAME)
+"BEGIN_MACRO_NAMES" => Ts.begin_macro_names
+"MacroName"          =>  Ts.MACRO_NAME                  # A macro name identifier
+"@."                 =>  Ts.DOT_MACRO_NAME              # The macro name of @.
+"VarMacroName"       =>  Ts.VAR_MACRO_NAME              # @var"..."
+"StringMacroName"    =>  Ts.STRING_MACRO_NAME           # macname"some_str"
+"CmdMacroName"       =>  Ts.CMD_MACRO_NAME              # macname`some_str`
+"core_@doc"          =>  Ts.CORE_DOC_MACRO_NAME         # Core.@doc
+"core_@cmd"          =>  Ts.CORE_CMD_MACRO_NAME         # Core.@cmd
+"core_@int128_str"   =>  Ts.CORE_INT128_STR_MACRO_NAME  # Core.@int128_str
+"core_@uint128_str"  =>  Ts.CORE_UINT128_STR_MACRO_NAME # Core.@uint128_str
+"core_@big_str"      =>  Ts.CORE_BIG_STR_MACRO_NAME     # Core.@big_str
+"END_MACRO_NAMES"    =>  Ts.end_macro_names
 "END_PARSER_TOKENS"  =>  Ts.end_parser_tokens
 
 # Our custom syntax tokens
@@ -879,3 +889,5 @@ for kw in split("""abstract baremodule begin break catch const
                    """)
     _kind_to_str_unique[_str_to_kind[kw]] = kw
 end
+
+const _kind_to_str = Dict(s=>k for (k,s) in _str_to_kind)
