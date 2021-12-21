@@ -168,20 +168,3 @@ void _record_freed_value(jl_taggedvalue_t *tagged_val) JL_NOTSAFEPOINT {
         profile.frees_by_type_address[type_address->second] = frees->second + 1;
     }
 }
-
-// TODO: remove these or make them toggle-able.
-
-void _report_gc_started() JL_NOTSAFEPOINT {
-    // ...
-}
-
-// TODO: figure out how to pass all of these in as a struct
-void _report_gc_finished(
-    uint64_t pause, uint64_t freed, uint64_t allocd, int full, int recollect
-) JL_NOTSAFEPOINT {
-    // TODO: figure out how to put in commas
-    jl_safe_printf("GC: pause %fms. collected %fMB. %lld allocs total. %s %s\n",
-        pause/1e6, freed/1e6, allocd,
-        full ? "full" : "incr", recollect ? "recollect" : ""
-    );
-}
