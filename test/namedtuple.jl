@@ -314,6 +314,10 @@ end
     @test @NamedTuple{a::Int, b} === NamedTuple{(:a, :b),Tuple{Int,Any}}
     @test_throws LoadError include_string(Main, "@NamedTuple{a::Int, b, 3}")
     @test_throws LoadError include_string(Main, "@NamedTuple(a::Int, b)")
+    @test (a=1,b=true) isa @NamedTuple{a::Int, b::Bool}
+    @test (a=1,b=true) isa @NamedTuple{<:(a::Int, b::Bool)}
+    @test (a=1,b=true) isa @NamedTuple{<:(a::Int, b::Union{Bool,Nothing})}
+    @test (a=1,b=nothing) isa @NamedTuple{<:(a::Int, b::Union{Bool,Nothing})}
 end
 
 # issue #29333, implicit names
