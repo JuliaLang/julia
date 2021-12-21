@@ -151,10 +151,16 @@ function stacktrace_memoized(
     return stack
 end
 
+# Precompile once for the package cache,
 precompile(start, ())
 precompile(stop, ())
 
 function __init__()
+    # And once when loading the package, to get the full machine code precompiled.
+    # TOOD: Although actually, we probably don't need this since this package will be
+    # precompiled into the sysimg, so the top-level statements will be enough to get the
+    # machine code codegen precompiled as well. :)
+    # We can delete this function once we make this package a stdlib.
     precompile(start, ())
     precompile(stop, ())
 end
