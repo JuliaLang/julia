@@ -376,3 +376,58 @@ end
     a = reinterpret(reshape, NTuple{4,Float64}, rand(Float64, 4, 4))
     @test typeof(Base.unaliascopy(a)) === typeof(a)
 end
+
+
+@testset "singleton types" begin
+    mutable struct NotASingleton end # not a singleton because it is mutable
+    struct SomeSingleton
+        # A singleton type that does not have the internal constructor SomeSingleton()
+        SomeSingleton(x) = new()
+    end
+
+    @test reinterpret(Nothing, missing) === nothing
+    @test reinterpret(SomeSingleton, ()) === SomeSingleton(4)
+    @test reinterpret(Tuple{}, SomeSingleton(2)) === ()
+    @test reinterpret(SomeSingleton, SomeSingleton(:x)) === SomeSingleton("a")
+
+    @test_throws ErrorException reinterpret(Int, nothing)
+    @test_throws ErrorException reinterpret(Missing, 3)
+    @test_throws ErrorException reinterpret(Missing, NotASingleton())
+    @test_throws ErrorException reinterpret(NotASingleton, ())
+
+    t = fill(nothing, 3, 5)
+    @test reinterpret(SomeSingleton, t) == reinterpret(reshape, SomeSingleton, t)
+    @test reinterpret(SomeSingleton, t) == [SomeSingleton(i*j) for i in 1:3, j in 1:5]
+    @test reinterpret(Int, t) == fill(17, 0, 5)
+    @test_throws ArgumentError reinterpret(reshape, Float64, t)
+    @test_throws ArgumentError reinterpret(Nothing, 1:6)
+    @test_throws ArgumentError reinterpret(reshape, Missing, [0.0])
+
+    # reintepret of empty array with reshape
+    @test reinterpret(reshape, Nothing, fill(missing, (0,0,0))) == fill(nothing, (0,0,0))
+    @test_throws ArgumentError reinterpret(reshape, Nothing, fill(3.2, (0,0)))
+    @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, 0))
+
+    # reinterpret of 0-dimensional array
+    @test reinterpret(Tuple{}, fill(missing, ())) == fill((), ())
+    @test reinterpret(reshape, SomeSingleton, fill(nothing, ())) == fill(SomeSingleton(0xa), ())
+    @test_throws ArgumentError reinterpret(UInt8, fill(nothing, ()))
+    @test_throws ArgumentError reinterpret(Missing, fill(1f0, ()))
+    @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, ()))
+    @test_throws ArgumentError reinterpret(reshape, Nothing, fill(17, ()))
+
+
+    @test @inferred(ndims(reinterpret(reshape, SomeSingleton, t))) == 2
+    @test @inferred(axes(reinterpret(reshape, Tuple{}, t))) == (Base.OneTo(3),Base.OneTo(5))
+    @test @inferred(size(reinterpret(reshape, Missing, t))) == (3,5)
+
+    x = reinterpret(Tuple{}, t)
+    @test x == reinterpret(reshape, Tuple{}, t)
+    @test x[3,5] === ()
+    x[1,1] = ()
+    @test x == fill((), (3, 5))
+    x = reinterpret(reshape, Tuple{}, t)
+    @test x[2,3] === ()
+    x[3,5] = ()
+    @test x == fill((), (3, 5))
+end
