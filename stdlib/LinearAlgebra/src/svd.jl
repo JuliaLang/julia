@@ -333,13 +333,13 @@ Q factor:
  1.0  0.0
  0.0  1.0
 D1 factor:
-2×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:
- 0.707107   ⋅
-  ⋅        0.707107
+2×2 Matrix{Float64}:
+ 0.707107  0.0
+ 0.0       0.707107
 D2 factor:
-2×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:
- 0.707107   ⋅
-  ⋅        0.707107
+2×2 Matrix{Float64}:
+ 0.707107  0.0
+ 0.0       0.707107
 R0 factor:
 2×2 Matrix{Float64}:
  1.41421   0.0
@@ -352,8 +352,8 @@ julia> F.U*F.D1*F.R0*F.Q'
 
 julia> F.V*F.D2*F.R0*F.Q'
 2×2 Matrix{Float64}:
- 0.0  1.0
- 1.0  0.0
+ -0.0  1.0
+  1.0  0.0
 ```
 """
 struct GeneralizedSVD{T,S} <: Factorization{T}
