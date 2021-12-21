@@ -176,12 +176,6 @@ function vect(X...)
     return copyto!(Vector{T}(undef, length(X)), X)
 end
 
-# Freeze and thaw constructors
-ImmutableArray(a::Array) = Core.arrayfreeze(a)
-Array(a::ImmutableArray) = Core.arraythaw(a)
-
-ImmutableArray(a::AbstractArray{T,N}) where {T,N} = ImmutableArray{T,N}(a)
-
 # Size functions for arrays, both mutable and immutable
 size(a::IMArray, d::Integer) = arraysize(a, convert(Int, d))
 size(a::IMVector) = (arraysize(a,1),)
@@ -258,20 +252,6 @@ function isassigned(a::IMArray, i::Int...)
     @boundscheck ii < length(a) % UInt || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
-
-# function isassigned(a::Array, i::Int...)
-#     @_inline_meta
-#     ii = (_sub2ind(size(a), i...) % UInt) - 1
-#     @boundscheck ii < length(a) % UInt || return false
-#     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
-# end
-
-# function isassigned(a::ImmutableArray, i::Int...)
-#     @_inline_meta
-#     ii = (_sub2ind(size(a), i...) % UInt) - 1
-#     @boundscheck ii < length(a) % UInt || return false
-#     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
-# end
 
 ## copy ##
 
@@ -427,9 +407,6 @@ similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(undef, size(a,1)
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
-
-ImmutableArray{T}(undef::UndefInitializer, m::Int) where T = ImmutableArray(Array{T}(undef, m))
-ImmutableArray{T}(undef::UndefInitializer, dims::Dims) where T = ImmutableArray(Array{T}(undef, dims))
 
 """
     maybecopy(x)
@@ -674,7 +651,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 ## Conversions ##
 
 convert(::Type{Union{}}, a::AbstractArray) = throw(MethodError(convert, (Union{}, a)))
-convert(T::Union{Type{<:Array},Type{<:Core.ImmutableArray}}, a::AbstractArray) = a isa T ? a : T(a)
+convert(T::Type{<:IMArray}, a::AbstractArray) = a isa T ? a : T(a)
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -986,9 +963,6 @@ function getindex end
 
 @eval getindex(A::ImmutableArray, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
 @eval getindex(A::ImmutableArray, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
-
-# @eval getindex(A::IMArray,  i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
-# @eval getindex(A::IMArray, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})

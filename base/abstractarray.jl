@@ -1078,10 +1078,7 @@ function copy(a::AbstractArray)
     @_propagate_inbounds_meta
     copymutable(a)
 end
-
-function copy(a::Core.ImmutableArray)
-    a
-end
+copy(a::Core.ImmutableArray) = a
 
 function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
                A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}

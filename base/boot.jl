@@ -475,10 +475,9 @@ Array{T,N}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = ccall(:jl_new_arr
 Array{T}(::UndefInitializer, m::Int) where {T} = Array{T,1}(undef, m)
 Array{T}(::UndefInitializer, m::Int, n::Int) where {T} = Array{T,2}(undef, m, n)
 Array{T}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} = Array{T,3}(undef, m, n, o)
-Array{T}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d)
+Array{T}(::UndefInitializer, d::NTuple{N,Int}#=::Dims=#) where {T,N} = Array{T,N}(undef, d)
 # empty vector constructor
 Array{T,1}() where {T} = Array{T,1}(undef, 0)
-
 
 (Array{T,N} where T)(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
 
@@ -486,6 +485,14 @@ Array(A::AbstractArray{T,N})    where {T,N}   = Array{T,N}(A)
 Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
 
 AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
+
+# freeze and thaw constructors
+ImmutableArray(a::Array) = arrayfreeze(a)
+ImmutableArray(a::AbstractArray{T,N}) where {T,N} = ImmutableArray{T,N}(a)
+Array(a::ImmutableArray) = arraythaw(a)
+# undef initializers
+ImmutableArray{T,N}(::UndefInitializer, args...) where {T,N} = ImmutableArray(Array{T,N}(undef, args...))
+ImmutableArray{T}(::UndefInitializer, args...) where {T} = ImmutableArray(Array{T}(undef, args...))
 
 # primitive Symbol constructors
 eval(Core, :(function Symbol(s::String)
