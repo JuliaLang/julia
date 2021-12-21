@@ -95,20 +95,24 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             isempty(val_range)  ?
                 Symbol(untokenize(k)) : # synthetic invisible tokens
                 Symbol(val_str)
-        elseif k == K"core_@doc"
-            GlobalRef(Core, :var"@doc")
-        elseif k == K"core_@cmd"
-            GlobalRef(Core, :var"@cmd")
         elseif k == K"NothingLiteral"
             nothing
         elseif k == K"error"
             ErrorVal()
-        elseif k == K"__dot__"
-            :__dot__
+        elseif k == K"@."
+            :var"@__dot__"
+        elseif k == K"MacroName"
+            Symbol("@$val_str")
+        elseif k == K"VarMacroName"
+            Symbol("@$(val_str[5:end-1])")
         elseif k == K"StringMacroName"
-            Symbol(val_str*"_str")
+            Symbol("@$(val_str)_str")
         elseif k == K"CmdMacroName"
-            Symbol(val_str*"_cmd")
+            Symbol("@$(val_str)_cmd")
+        elseif k == K"core_@doc"
+            GlobalRef(Core, :var"@doc")
+        elseif k == K"core_@cmd"
+            GlobalRef(Core, :var"@cmd")
         elseif is_syntax_kind(raw)
             nothing
         else
@@ -298,18 +302,6 @@ end
 #-------------------------------------------------------------------------------
 # Conversion to Base.Expr
 
-function _macroify_name(name)
-    if name isa Symbol
-        Symbol('@', name)
-    else
-        if Meta.isexpr(name, :.) && name.args[2] isa QuoteNode
-            Expr(:., name.args[1], QuoteNode(_macroify_name(name.args[2].value)))
-        else
-            name
-        end
-    end
-end
-
 function _to_expr(node::SyntaxNode)
     if haschildren(node)
         args = Vector{Any}(undef, length(children(node)))
@@ -317,7 +309,6 @@ function _to_expr(node::SyntaxNode)
         # Convert elements
         if head(node) == :macrocall
             line_node = source_location(LineNumberNode, node.source, node.position)
-            args[1] = _macroify_name(args[1])
             insert!(args, 2, line_node)
         elseif head(node) == :call
             if length(args) > 1 && Meta.isexpr(args[end], :parameters)

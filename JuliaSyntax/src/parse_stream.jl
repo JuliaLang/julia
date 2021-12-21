@@ -201,8 +201,22 @@ function peek(stream::ParseStream, n::Integer=1, skip_newlines=false)
     kind(peek_token(stream, n, skip_newlines))
 end
 
+function _peek_equal_to(stream, first_byte, len, str)
+    # Humongous but should-be-allocation-free hack: peek at the underlying data
+    # buffer. TODO: Attach the code string to the stream so we don't have to
+    # dig into the lexer?
+    buf = stream.lexer.io.data
+    cbuf = codeunits(str)
+    for i = 1:len
+        if buf[first_byte + i - 1] != cbuf[i]
+            return false
+        end
+    end
+    return true
+end
+
 """
-Return true if the next token equals the string `str`
+Return true if the token equals the string `str`
 
 This is a hack (ideally the tokenizer would provide tokens for any
 identifiers which need special treatment) But occasionally the parser needs
@@ -211,37 +225,42 @@ syntactic constructs.
 
 For example, the special parsing rules for `@doc` line contination :-/
 """
-function peek_equal_to(stream::ParseStream, str::String)
+function peek_equal_to(stream::ParseStream, pos::ParseStreamPosition, str::String)
     t = peek_token(stream)
     if span(t) != ncodeunits(str)
         return false
     end
-    # Humongous but should-be-allocation-free hack: peek at the underlying data
-    # buffer. TODO: Attach the code string to the stream so we don't have to
-    # dig into the lexer?
-    buf = stream.lexer.io.data
-    cbuf = codeunits(str)
-    for i = 1:span(t)
-        if buf[first_byte(t) + i - 1] != cbuf[i]
-            return false
-        end
-    end
-    return true
+    return _peek_equal_to(stream, first_byte(t), span(t), str)
+end
+
+function peek_behind_str(stream::ParseStream, pos::ParseStreamPosition, str::String)
+    s = stream.spans[pos.output_index]
+    return _peek_equal_to(stream, first_byte(s), span(s), str)
 end
 
 """
-Return the kind of the previous non-trivia span which was inserted.
+Return the kind of span which was previously inserted into the output,
+defaulting to the most previous nontrivia node.
 
-Looking backward is a bit hacky but can be handy on occasion.
+Retroactively inspecting/modifying the parser's output can be confusing, so
+using this function should be avoided where possible.
 """
-function peek_behind(stream::ParseStream)
-    for i = length(stream.spans):-1:1
-        s = stream.spans[i]
-        if !istrivia(head(s))
-            return kind(s)
+function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
+    if skip_trivia
+        for i = length(stream.spans):-1:1
+            s = stream.spans[i]
+            if !istrivia(head(s))
+                return kind(s)
+            end
         end
+    elseif !isempty(stream.spans)
+        return kind(last(stream.spans))
     end
     return K"Nothing"
+end
+
+function peek_behind(stream::ParseStream, pos::ParseStreamPosition)
+    return kind(stream.spans[pos.output_index])
 end
 
 #-------------------------------------------------------------------------------
@@ -550,8 +569,12 @@ function peek_equal_to(ps::ParseState, args...)
     peek_equal_to(ps.stream, args...)
 end
 
-function peek_behind(ps::ParseState)
-    peek_behind(ps.stream)
+function peek_behind_str(ps::ParseState, args...)
+    peek_behind_str(ps.stream, args...)
+end
+
+function peek_behind(ps::ParseState, args...)
+    peek_behind(ps.stream, args...)
 end
 
 function bump(ps::ParseState, flags=EMPTY_FLAGS; skip_newlines=nothing, kws...)

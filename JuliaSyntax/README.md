@@ -459,6 +459,8 @@ useful even for DSLs:
 * `abstract type A < B end` and other subtypes comparisons are allowed, but
   only `A <: B` makes sense.
 
+* `export a, \n $b` is rejected, but `export a, \n b` parses fine.
+
 ## Parsing oddities and warts
 
 There's many apparent inconsistencies between how `kw` and `=` are used when
