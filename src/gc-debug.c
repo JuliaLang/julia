@@ -1386,16 +1386,15 @@ JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
     gc_logging_enabled = enable;
 }
 
-// TODO: figure out how to pass all of these in as a struct
-void _report_gc_finished(
-    uint64_t pause, uint64_t freed, uint64_t allocd, int full, int recollect
-) JL_NOTSAFEPOINT {
-    if (gc_logging_enabled) {
-        jl_safe_printf("GC: pause %fms. collected %fMB. %lld allocs total. %s %s\n",
-            pause/1e6, freed/1e6, allocd,
-            full ? "full" : "incr", recollect ? "recollect" : ""
-        );
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT {
+    if (!gc_logging_enabled) {
+        return;
     }
+    jl_safe_printf("GC: pause %fms. collected %fMB. %s %s\n",
+        pause/1e6, freed/1e6,
+        full ? "full" : "incr",
+        recollect ? "recollect" : ""
+    );
 }
 
 #ifdef __cplusplus
