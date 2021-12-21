@@ -1384,12 +1384,21 @@ function cfg_simplify!(ir::IRCode)
     return finish(compact)
 end
 
-is_array_allocation(stmt::Expr) =
-    is_known_fcall(stmt,
-        (:jl_alloc_array_1d,
-        :jl_alloc_array_2d,
-        :jl_alloc_array_3d,
-        :jl_new_array))
+is_array_allocation(stmt::Expr) = _is_known_fcall(stmt, (
+    :jl_alloc_array_1d,
+    :jl_alloc_array_2d,
+    :jl_alloc_array_3d,
+    :jl_new_array))
+function _is_known_fcall(stmt::Expr, funcs)
+    isexpr(stmt, :foreigncall) || return false
+    s = stmt.args[1]
+    isa(s, QuoteNode) && (s = s.value)
+    isa(s, Symbol) || return false
+    for func in funcs
+        s === func && return true
+    end
+    return false
+end
 
 function memory_opt!(ir::IRCode, escape_state)
     compact = IncrementalCompact(ir, false)
