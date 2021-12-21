@@ -1390,7 +1390,7 @@ void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect
     if (!gc_logging_enabled) {
         return;
     }
-    jl_safe_printf("GC: pause %fms. collected %fMB. %s %s\n",
+    jl_safe_printf("GC: pause %.2fms. collected %fMB. %s %s\n",
         pause/1e6, freed/1e6,
         full ? "full" : "incr",
         recollect ? "recollect" : ""
