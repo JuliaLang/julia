@@ -159,19 +159,31 @@ lt(o::Lt,                    a, b) = o.lt(_id(a),_id(b))
     lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
 end
 
-# If the 4th argument to _ord is Val{false}, then the `by` function
+# This is necessary in case Base.Val is not yet defined during
+# the bootstrap process
+
+
+struct _Val{x}
+end
+
+_Val(x) = _Val{x}()
+
+
+
+
+# If the 4th argument to _ord is _Val{false}, then the `by` function
 # is skipped for any element a of the form maybe_skip_by(a)
 
-_ord(lt::typeof(isless), by::typeof(identity), order::Ordering, ::Val{true}) = 
+_ord(lt::typeof(isless), by::typeof(identity), order::Ordering, ::_Val{true}) = 
     order
-_ord(lt::typeof(isless), by::typeof(identity), order::Ordering, ::Val{false}) =
+_ord(lt::typeof(isless), by::typeof(identity), order::Ordering, ::_Val{false}) =
     order
-_ord(lt::typeof(isless), by,                   order::Ordering, ::Val{true}) =
+_ord(lt::typeof(isless), by,                   order::Ordering, ::_Val{true}) =
     By(by, order)
-_ord(lt::typeof(isless), by,                   order::Ordering, ::Val{false}) =
+_ord(lt::typeof(isless), by,                   order::Ordering, ::_Val{false}) =
     MaybeBy(by, order)
 
-function _ord(lt, by, order::Ordering, ::Val{false})
+function _ord(lt, by, order::Ordering, ::_Val{false})
     if order === Forward
         return Lt((x, y) -> lt(maybe_apply(by,x), maybe_apply(by,y)))
     elseif order === Reverse
@@ -181,7 +193,7 @@ function _ord(lt, by, order::Ordering, ::Val{false})
     end
 end
 
-function _ord(lt, by, order::Ordering, ::Val{true})
+function _ord(lt, by, order::Ordering, ::_Val{true})
     if order === Forward
         return Lt((x, y) -> lt(always_apply(by,x), always_apply(by,y)))
     elseif order === Reverse
@@ -221,10 +233,10 @@ in the searchsorted family of functions.
 
 """
 ord(lt, by, rev::Nothing, order::Ordering=Forward, require_by=true) =
-    _ord(lt, by, order, Val(require_by))
+    _ord(lt, by, order, _Val(require_by))
 
 function ord(lt, by, rev::Bool, order::Ordering=Forward, require_by=true)
-    o = _ord(lt, by, order, Val(require_by))
+    o = _ord(lt, by, order, _Val(require_by))
     return rev ? ReverseOrdering(o) : o
 end
 
