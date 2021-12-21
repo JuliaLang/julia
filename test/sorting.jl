@@ -86,7 +86,11 @@ end
                 Float16, Float32, Float64, BigInt, BigFloat]
 
     @test searchsorted([1:10;], 1, by=(x -> x >= 5)) == 1:4
+    @test searchsorted([1:10;], false, by=(x -> x >= 5),
+                       apply_by_to_key=false) == 1:4
     @test searchsorted([1:10;], 10, by=(x -> x >= 5)) == 5:10
+    @test searchsorted([1:10;], true, by=(x -> x >= 5),
+                       apply_by_to_key=false) == 5:10
     @test searchsorted([1:5; 1:5; 1:5], 1, 6, 10, Forward) == 6:6
     @test searchsorted(fill(1, 15), 1, 6, 10, Forward) == 6:10
 
@@ -346,6 +350,7 @@ end
 
     @test insorted(1, collect(1:10), by=(>=(5)))
     @test insorted(10, collect(1:10), by=(>=(5)))
+    @test insorted(true, collect(1:10), by=(>=(5)), apply_by_to_key=false)
 
     for R in numTypes, T in numTypes
         @test !insorted(T(0), R[1, 1, 2, 2, 3, 3])
@@ -393,6 +398,7 @@ end
     @test !insorted(0, [1,2,3])
     @test !insorted(4, [1,2,3])
     @test insorted(3, [10,8,6,9,4,7,2,5,3,1], by=(x -> iseven(x) ? x+5 : x), rev=true)
+    @test insorted(4, [10,8,6,9,4,7,2,5,3,1], by=(x -> iseven(x) ? x+6 : x+1), rev=true, apply_by_to_key=false)
 end
 @testset "PartialQuickSort" begin
     a = rand(1:10000, 1000)

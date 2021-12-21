@@ -181,7 +181,7 @@ function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::key
     hi = hi + u
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if lt(o, v[m], x)
+        if lt(o, v[m], maybe_skip_by(x))
             lo = m
         else
             hi = m
@@ -198,7 +198,7 @@ function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keyt
     hi = hi + u
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if lt(o, x, v[m])
+        if lt(o, maybe_skip_by(x), v[m])
             hi = m
         else
             lo = m
@@ -216,9 +216,9 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     hi = ihi + u
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if lt(o, v[m], x)
+        if lt(o, v[m], maybe_skip_by(x))
             lo = m
-        elseif lt(o, x, v[m])
+        elseif lt(o, maybe_skip_by(x), v[m])
             hi = m
         else
             a = searchsortedfirst(v, x, max(lo,ilo), m, o)
@@ -294,18 +294,23 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
         $s(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o))
         $s(v::AbstractVector, x;
-           lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
-            $s(v,x,ord(lt,by,rev,order))
+           lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward, apply_by_to_key=true) =
+            $s(v,x,ord(lt,by,rev,order,apply_by_to_key))
     end
 end
 
 """
-    searchsorted(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsorted(a, x; by=<transform>, lt=<comparison>, rev=false,
+      apply_by_to_key=true)
 
 Return the range of indices of `a` which compare as equal to `x` (using binary search)
 according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
 is already sorted in that order. Return an empty range located at the insertion point
-if `a` does not contain values equal to `x`.
+if `a` does not contain values equal to `x`.  If the `apply_by_to_key`
+keyword is set to `true`, then the `by` function is also appied
+to the key `x` (default, for legacy reasons).  If the `apply_by_to_key`
+keyword is false, then the `by` function is applied to the elements of `a`
+but not the key (more typical usage).
 
 See also: [`insorted`](@ref), [`searchsortedfirst`](@ref), [`sort`](@ref), [`findall`](@ref).
 
@@ -329,7 +334,8 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 """ searchsorted
 
 """
-    searchsortedfirst(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsortedfirst(a, x; by=<transform>, lt=<comparison>, rev=false,
+                      apply_by_to_key=true)
 
 Return the index of the first value in `a` greater than or equal to `x`, according to the
 specified order. Return `lastindex(a) + 1` if `x` is greater than all values in `a`.
@@ -357,7 +363,8 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 """ searchsortedfirst
 
 """
-    searchsortedlast(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsortedlast(a, x; by=<transform>, lt=<comparison>, rev=false,
+                     apply_by_to_key=true)
 
 Return the index of the last value in `a` less than or equal to `x`, according to the
 specified order. Return `firstindex(a) - 1` if `x` is less than all values in `a`. `a` is
@@ -383,7 +390,8 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 """ searchsortedlast
 
 """
-    insorted(a, x; by=<transform>, lt=<comparison>, rev=false) -> Bool
+    insorted(a, x; by=<transform>, lt=<comparison>, rev=false,
+             apply_by_to_key=true) -> Bool
 
 Determine whether an item is in the given sorted collection, in the sense that
 it is [`==`](@ref) to one of the values of the collection according to the order

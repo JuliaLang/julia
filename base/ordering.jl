@@ -16,7 +16,7 @@ export # not exported by Base
     By, Lt, Perm,
     ReverseOrdering, ForwardOrdering,
     DirectOrdering,
-    lt, ord, ordtype
+    lt, ord, ordtype, maybe_skip_by
 
 """
     Base.Order.Ordering
@@ -70,6 +70,30 @@ Reverse ordering according to [`isless`](@ref).
 """
 const Reverse = ReverseOrdering()
 
+struct MaybeSkipBy{T}
+    id::T
+end
+
+"""
+    Base.maybe_skip_by(a)
+
+Generates an object such that if the `require_by` flag is set
+in `ord` or the By class is used, then `by` is applied to `a`.
+But if the `require_by` flag is cleared  the `MaybeBy` class is
+used, then `by` is applied to `a`.  This exists to support the
+apply_by_to_key=false option in the searchsorted family of
+functions.
+"""
+maybe_skip_by(a) = MaybeSkipBy(a)
+
+maybe_apply(by, a) = by(a)
+maybe_apply(::Any, a::MaybeSkipBy) = a.id
+always_apply(by, a) = by(a)
+always_apply(by, a::MaybeSkipBy) = by(a.id)
+_id(a) = a
+_id(a::MaybeSkipBy) = a.id
+
+
 """
     By(by, order::Ordering=Forward)
 
@@ -80,6 +104,12 @@ struct By{T, O} <: Ordering
     by::T
     order::O
 end
+
+struct MaybeBy{T, O} <: Ordering
+    by::T
+    order::O
+end
+
 
 # backwards compatibility with VERSION < v"1.5-"
 By(by) = By(by, Forward)
@@ -107,6 +137,7 @@ struct Perm{O<:Ordering,V<:AbstractVector} <: Ordering
 end
 
 ReverseOrdering(by::By) = By(by.by, ReverseOrdering(by.order))
+ReverseOrdering(by::MaybeBy) = MaybeBy(by.by, ReverseOrdering(by.order))
 ReverseOrdering(perm::Perm) = Perm(ReverseOrdering(perm.order), perm.data)
 
 """
@@ -114,10 +145,13 @@ ReverseOrdering(perm::Perm) = Perm(ReverseOrdering(perm.order), perm.data)
 
 Test whether `a` is less than `b` according to the ordering `o`.
 """
-lt(o::ForwardOrdering,       a, b) = isless(a,b)
-lt(o::ReverseOrdering,       a, b) = lt(o.fwd,b,a)
-lt(o::By,                    a, b) = lt(o.order,o.by(a),o.by(b))
-lt(o::Lt,                    a, b) = o.lt(a,b)
+lt(o::ForwardOrdering,       a, b) = isless(_id(a),_id(b))
+lt(o::ReverseOrdering,       a, b) = lt(o.fwd,_id(b),_id(a))
+lt(o::By,                    a, b) =
+    lt(o.order, always_apply(o.by,a), always_apply(o.by,b))
+lt(o::MaybeBy,               a, b) =
+    lt(o.order, maybe_apply(o.by,a), maybe_apply(o.by,b))
+lt(o::Lt,                    a, b) = o.lt(_id(a),_id(b))
 
 @propagate_inbounds function lt(p::Perm, a::Integer, b::Integer)
     da = p.data[a]
@@ -125,21 +159,44 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
     lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
 end
 
-_ord(lt::typeof(isless), by::typeof(identity), order::Ordering) = order
-_ord(lt::typeof(isless), by,                   order::Ordering) = By(by, order)
+# If the 4th argument to _ord is Val{false}, then the `by` function
+# is skipped for any element a of the form maybe_skip_by(a)
 
-function _ord(lt, by, order::Ordering)
+_ord(lt::typeof(isless), by::typeof(identity), order::Ordering, ::Val{true}) = 
+    order
+_ord(lt::typeof(isless), by::typeof(identity), order::Ordering, ::Val{false}) =
+    order
+_ord(lt::typeof(isless), by,                   order::Ordering, ::Val{true}) =
+    By(by, order)
+_ord(lt::typeof(isless), by,                   order::Ordering, ::Val{false}) =
+    MaybeBy(by, order)
+
+function _ord(lt, by, order::Ordering, ::Val{false})
     if order === Forward
-        return Lt((x, y) -> lt(by(x), by(y)))
+        return Lt((x, y) -> lt(maybe_apply(by,x), maybe_apply(by,y)))
     elseif order === Reverse
-        return Lt((x, y) -> lt(by(y), by(x)))
+        return Lt((x, y) -> lt(maybe_apply(by,y), maybe_apply(by,x)))
     else
         error("Passing both lt= and order= arguments is ambiguous; please pass order=Forward or order=Reverse (or leave default)")
     end
 end
 
+function _ord(lt, by, order::Ordering, ::Val{true})
+    if order === Forward
+        return Lt((x, y) -> lt(always_apply(by,x), always_apply(by,y)))
+    elseif order === Reverse
+        return Lt((x, y) -> lt(always_apply(by,y), always_apply(by,x)))
+    else
+        error("Passing both lt= and order= arguments is ambiguous; please pass order=Forward or order=Reverse (or leave default)")
+    end
+end
+
+
+ 
+
 """
-    ord(lt, by, rev::Union{Bool, Nothing}, order::Ordering=Forward)
+    ord(lt, by, rev::Union{Bool, Nothing}, 
+        order::Ordering=Forward, require_by=true)
 
 Construct an [`Ordering`](@ref) object from the same arguments used by
 [`sort!`](@ref).
@@ -153,11 +210,21 @@ Passing an `lt` other than `isless` along with an `order` other than
 [`Base.Order.Forward`](@ref) or [`Base.Order.Reverse`](@ref) is not permitted,
 otherwise all options are independent and can be used together in all possible
 combinations.
-"""
-ord(lt, by, rev::Nothing, order::Ordering=Forward) = _ord(lt, by, order)
 
-function ord(lt, by, rev::Bool, order::Ordering=Forward)
-    o = _ord(lt, by, order)
+If `require_by` is true, then function `maybe_skip_by(a)` 
+is the same as `identity(a)` and therefore
+`by` is  applied in all cases.
+If `require_by` is false then the `by` function is
+not applied to element of the form `maybe_skip_by(a)`; instead `a` itself
+is returned.   This option exists to support the `apply_by_to_key` option
+in the searchsorted family of functions.
+
+"""
+ord(lt, by, rev::Nothing, order::Ordering=Forward, require_by=true) =
+    _ord(lt, by, order, Val(require_by))
+
+function ord(lt, by, rev::Bool, order::Ordering=Forward, require_by=true)
+    o = _ord(lt, by, order, Val(require_by))
     return rev ? ReverseOrdering(o) : o
 end
 
