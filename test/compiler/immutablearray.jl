@@ -1,4 +1,3 @@
-using Base.Experimental: ImmutableArray
 using Test
 
 function test_allocate1()

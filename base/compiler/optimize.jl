@@ -113,6 +113,93 @@ function ir_to_codeinf!(opt::OptimizationState)
     end
 end
 
+##################
+# EscapeAnalysis #
+##################
+
+struct EscapeLattice
+    Analyzed::Bool
+    ReturnEscape
+    ThrownEscape::Bool
+    GlobalEscape::Bool
+    # TODO: ArgEscape::Int
+end
+
+function (==)(x::EscapeLattice, y::EscapeLattice)
+    return x.Analyzed === y.Analyzed &&
+            x.ReturnEscape == y.ReturnEscape &&
+            x.ThrownEscape === y.ThrownEscape &&
+            x.GlobalEscape === y.GlobalEscape
+end
+
+const NO_RETURN = BitSet()
+const ARGUMENT_RETURN = BitSet(0)
+NotAnalyzed() = EscapeLattice(false, NO_RETURN, false, false) # not formally part of the lattice
+NoEscape() = EscapeLattice(true, NO_RETURN, false, false)
+ReturnEscape(pcs::BitSet) = EscapeLattice(true, pcs, false, false)
+ReturnEscape(pc::Int) = ReturnEscape(BitSet(pc))
+ArgumentReturnEscape() = ReturnEscape(ARGUMENT_RETURN)
+ThrownEscape() = EscapeLattice(true, NO_RETURN, true, false)
+GlobalEscape() = EscapeLattice(true, NO_RETURN, false, true)
+let
+    all_return = BitSet(0:100_000)
+    global AllReturnEscape() = ReturnEscape(all_return) # used for `show`
+    global AllEscape() = EscapeLattice(true, all_return, true, true)
+end
+
+function ⊑(x::EscapeLattice, y::EscapeLattice)
+    if x.Analyzed ≤ y.Analyzed &&
+       x.ReturnEscape ⊆ y.ReturnEscape &&
+       x.ThrownEscape ≤ y.ThrownEscape &&
+       x.GlobalEscape ≤ y.GlobalEscape
+       return true
+    end
+    return false
+end
+
+⋤(x::EscapeLattice, y::EscapeLattice) = ⊑(x, y) && !⊑(y, x)
+
+function ⊔(x::EscapeLattice, y::EscapeLattice)
+    return EscapeLattice(
+        x.Analyzed | y.Analyzed,
+        x.ReturnEscape ∪ y.ReturnEscape,
+        x.ThrownEscape | y.ThrownEscape,
+        x.GlobalEscape | y.GlobalEscape,
+        )
+end
+
+function ⊓(x::EscapeLattice, y::EscapeLattice)
+    return EscapeLattice(
+        x.Analyzed & y.Analyzed,
+        x.ReturnEscape ∩ y.ReturnEscape,
+        x.ThrownEscape & y.ThrownEscape,
+        x.GlobalEscape & y.GlobalEscape,
+        )
+end
+
+has_not_analyzed(x::EscapeLattice) = x == NotAnalyzed()
+has_no_escape(x::EscapeLattice) = x ⊑ NoEscape()
+has_return_escape(x::EscapeLattice) = !isempty(x.ReturnEscape)
+has_return_escape(x::EscapeLattice, pc::Int) = pc in x.ReturnEscape
+has_thrown_escape(x::EscapeLattice) = x.ThrownEscape
+has_global_escape(x::EscapeLattice) = x.GlobalEscape
+has_all_escape(x::EscapeLattice) = AllEscape() == x
+
+const Change  = Pair{Union{Argument,SSAValue},EscapeLattice}
+const Changes = Vector{Change}
+
+struct EscapeState
+    arguments::Vector{EscapeLattice}
+    ssavalues::Vector{EscapeLattice}
+end
+
+function EscapeState(nslots::Int, nargs::Int, nstmts::Int)
+    arguments = EscapeLattice[
+        1 ≤ i ≤ nargs ? ArgumentReturnEscape() : NotAnalyzed() for i in 1:nslots]
+    ssavalues = EscapeLattice[NotAnalyzed() for _ in 1:nstmts]
+    return EscapeState(arguments, ssavalues)
+end
+
 #############
 # constants #
 #############
@@ -144,6 +231,9 @@ const _PURE_OR_ERROR_BUILTINS = [
 ]
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
+
+const GLOBAL_ESCAPE_CACHE = IdDict{MethodInstance, EscapeState}()
+__clear_escape_cache!() = empty!(GLOBAL_ESCAPE_CACHE)
 
 #########
 # logic #
@@ -312,8 +402,9 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
         isa(def, Method) ? Int(def.nargs) : 0
     end
     esc_state = find_escapes(ir, nargs)
-    @eval Main (esc = $esc_state)
-    ir = memory_opt!(ir)
+    setindex!(GLOBAL_ESCAPE_CACHE, esc_state, sv.linfo)
+    # @eval Main (esc = $esc_state)
+    ir = memory_opt!(ir, esc_state)
     #@Base.show ir
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
@@ -591,6 +682,17 @@ function is_known_call(e::Expr, @nospecialize(func), src, sptypes::Vector{Any}, 
     return isa(f, Const) && f.val === func
 end
 
+function is_known_fcall(stmt::Expr, funcs)
+    isexpr(stmt, :foreigncall) || return false
+    s = stmt.args[1]
+    isa(s, QuoteNode) && (s = s.value)
+    isa(s, Symbol) || return false
+    for func in funcs
+        s === func && return true
+    end
+    return false
+end
+
 function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int})
     return renumber_ir_elements!(body, changemap, changemap)
 end
@@ -673,89 +775,6 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
     end
 end
 
-struct EscapeLattice
-    Analyzed::Bool
-    ReturnEscape::BitSet
-    ThrownEscape::Bool
-    GlobalEscape::Bool
-    # TODO: ArgEscape::Int
-end
-
-function (==)(x::EscapeLattice, y::EscapeLattice)
-    return x.Analyzed === y.Analyzed &&
-            x.ReturnEscape == y.ReturnEscape &&
-            x.ThrownEscape === y.ThrownEscape &&
-            x.GlobalEscape === y.GlobalEscape
-end
-
-const NO_RETURN = BitSet()
-const ARGUMENT_RETURN = BitSet(0)
-NotAnalyzed() = EscapeLattice(false, NO_RETURN, false, false) # not formally part of the lattice
-NoEscape() = EscapeLattice(true, NO_RETURN, false, false)
-ReturnEscape(pcs::BitSet) = EscapeLattice(true, pcs, false, false)
-ReturnEscape(pc::Int) = ReturnEscape(BitSet(pc))
-ArgumentReturnEscape() = ReturnEscape(ARGUMENT_RETURN)
-ThrownEscape() = EscapeLattice(true, NO_RETURN, true, false)
-GlobalEscape() = EscapeLattice(true, NO_RETURN, false, true)
-let
-    all_return = BitSet(0:100_000)
-    global AllReturnEscape() = ReturnEscape(all_return) # used for `show`
-    global AllEscape() = EscapeLattice(true, all_return, true, true)
-end
-
-has_not_analyzed(x::EscapeLattice) = x == NotAnalyzed()
-has_no_escape(x::EscapeLattice) = x ⊑ NoEscape()
-has_return_escape(x::EscapeLattice) = !isempty(x.ReturnEscape)
-has_return_escape(x::EscapeLattice, pc::Int) = pc in x.ReturnEscape
-has_thrown_escape(x::EscapeLattice) = x.ThrownEscape
-has_global_escape(x::EscapeLattice) = x.GlobalEscape
-has_all_escape(x::EscapeLattice) = AllEscape() == x
-
-function ⊑(x::EscapeLattice, y::EscapeLattice)
-    if x.Analyzed ≤ y.Analyzed &&
-       x.ReturnEscape ⊆ y.ReturnEscape &&
-       x.ThrownEscape ≤ y.ThrownEscape &&
-       x.GlobalEscape ≤ y.GlobalEscape
-       return true
-    end
-    return false
-end
-
-⋤(x::EscapeLattice, y::EscapeLattice) = ⊑(x, y) && !⊑(y, x)
-
-function ⊔(x::EscapeLattice, y::EscapeLattice)
-    return EscapeLattice(
-        x.Analyzed | y.Analyzed,
-        x.ReturnEscape ∪ y.ReturnEscape,
-        x.ThrownEscape | y.ThrownEscape,
-        x.GlobalEscape | y.GlobalEscape,
-        )
-end
-
-function ⊓(x::EscapeLattice, y::EscapeLattice)
-    return EscapeLattice(
-        x.Analyzed & y.Analyzed,
-        x.ReturnEscape ∩ y.ReturnEscape,
-        x.ThrownEscape & y.ThrownEscape,
-        x.GlobalEscape & y.GlobalEscape,
-        )
-end
-
-struct EscapeState
-    arguments::Vector{EscapeLattice}
-    ssavalues::Vector{EscapeLattice}
-end
-
-function EscapeState(nslots::Int, nargs::Int, nstmts::Int)
-    arguments = EscapeLattice[
-        1 ≤ i ≤ nargs ? ArgumentReturnEscape() : NotAnalyzed() for i in 1:nslots]
-    ssavalues = EscapeLattice[NotAnalyzed() for _ in 1:nstmts]
-    return EscapeState(arguments, ssavalues)
-end
-
-const Change  = Pair{Union{Argument,SSAValue},EscapeLattice}
-const Changes = Vector{Change}
-
 function propagate_changes!(state::EscapeState, changes::Changes)
     local anychanged = false
 
@@ -808,10 +827,10 @@ function escape_invoke!(args::Vector{Any}, pc::Int,
     linfo = first(args)::MethodInstance
     cache = get(GLOBAL_ESCAPE_CACHE, linfo, nothing)
     args = args[2:end]
-    if isnothing(cache)
+    if cache === nothing
         add_changes!(args, ir, AllEscape(), changes)
     else
-        (linfostate, _ #=ir::IRCode=#) = cache
+        linfostate = cache
         retinfo = state.ssavalues[pc] # escape information imposed on the call statement
         method = linfo.def::Method
         nargs = Int(method.nargs)
@@ -855,7 +874,7 @@ function escape_call!(args::Vector{Any}, pc::Int,
         return false # COMBAK we may break soundness here, e.g. `pointerref`
     end
     ishandled = escape_builtin!(f, args, pc, state, ir, changes)::Union{Nothing,Bool}
-    Main.Base.isnothing(ishandled) && return false # nothing to propagate
+    ishandled === nothing && return false # nothing to propagate
     if !ishandled
         # if this call hasn't been handled by any of pre-defined handlers,
         # we escape this call conservatively

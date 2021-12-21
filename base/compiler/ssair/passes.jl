@@ -1256,138 +1256,42 @@ function cfg_simplify!(ir::IRCode)
     return finish(compact)
 end
 
-function is_known_fcall(stmt::Expr, funcs)
-    isexpr(stmt, :foreigncall) || return false
-    s = stmt.args[1]
-    isa(s, QuoteNode) && (s = s.value)
-    isa(s, Symbol) || return false
-    for func in funcs
-        s === func && return true
-    end
-    return false
-end
-
-is_array_allocation(stmt::Expr) = 
-    is_known_fcall(stmt, 
+is_array_allocation(stmt::Expr) =
+    is_known_fcall(stmt,
         (:jl_alloc_array_1d,
         :jl_alloc_array_2d,
         :jl_alloc_array_3d,
         :jl_new_array))
 
-function memory_opt!(ir::IRCode, state)
+function memory_opt!(ir::IRCode, escape_state)
     compact = IncrementalCompact(ir, false)
-    ir = finish(compact)
-    println("analyzed escapes : ", state)
-    return ir
-end
-
-function memory_opt!(ir::IRCode)
-    compact = IncrementalCompact(ir, false)
-    uses = IdDict{Int, Vector{Int}}()
-    relevant = IdSet{Int}() # allocations
+    # relevant = IdSet{Int}() # allocations
     revisit = Int[] # potential targets for a mutating_arrayfreeze drop-in
     maybecopies = Int[] # calls to maybecopy
 
-    function mark_escape(@nospecialize val)
-        isa(val, SSAValue) || return
-        #println(val.id, " escaped.")
-        val.id in relevant && pop!(relevant, val.id)
-    end
+    # function mark_escape(@nospecialize val)
+    #     isa(val, SSAValue) || return
+    #     #println(val.id, " escaped.")
+    #     val.id in relevant && pop!(relevant, val.id)
+    # end
 
-    function mark_use(val, idx)
-        isa(val, SSAValue) || return
-        id = val.id
-        id in relevant || return
-        (haskey(uses, id)) || (uses[id] = Int[])
-        push!(uses[id], idx)
-    end
+    # function mark_use(val, idx)
+    #     isa(val, SSAValue) || return
+    #     id = val.id
+    #     id in relevant || return
+    #     (haskey(uses, id)) || (uses[id] = Int[])
+    #     push!(uses[id], idx)
+    # end
 
     for ((_, idx), stmt) in compact
-
-        #println("idx: ", idx, " = ", stmt)
-
-        if isa(stmt, ReturnNode)
-            isdefined(stmt, :val) || continue
-            val = stmt.val
-            mark_use(val, idx)
-            continue
-
-        # check for phinodes that are possibly allocations
-        elseif isa(stmt, PhiNode)
-
-            # ensure all of the phinode values are defined
-            defined = true
-            for i = 1:length(stmt.values)
-                if !isassigned(stmt.values, i)
-                    defined = false
-                end
-            end
-
-            defined || continue
-
-            for val in stmt.values
-                if isa(val, SSAValue) && val.id in relevant
-                    push!(relevant, idx)
-                end
-            end
-        end
-
         (isexpr(stmt, :call) || isexpr(stmt, :foreigncall)) || continue
 
         if is_known_call(stmt, Core.maybecopy, compact)
             push!(maybecopies, idx)
-            continue
-        end
-
-        if is_array_allocation(stmt)
-            push!(relevant, idx)
-            # TODO: Mark everything else here
-            continue
-        end
-
-        if is_known_call(stmt, arrayset, compact) && length(stmt.args) >= 5
-            # The value being set escapes, everything else doesn't
-            mark_escape(stmt.args[4])
-            arr = stmt.args[3]
-            mark_use(arr, idx)
-
-        elseif is_known_call(stmt, arrayref, compact) && length(stmt.args) == 4
-            arr = stmt.args[3]
-            mark_use(arr, idx)
-
-        # elseif is_known_call(stmt, setindex!, compact) && length(stmt.args) == 4
-        #     # handle similarly to arrayset
-        #     val = stmt.args[3]
-        #     mark_escape(val)
-
-        #     arr = stmt.args[2]
-        #     mark_use(arr, idx)
-
-        elseif is_known_call(stmt, (===), compact) && length(stmt.args) == 3
-            arr1 = stmt.args[2]
-            arr2 = stmt.args[3]
-
-            mark_use(arr1, idx)
-            mark_use(arr2, idx)
-
-        # these foreigncalls have similar structure and don't escape our array, so handle them all at once
-        elseif is_known_fcall(stmt, (:jl_array_ptr, :jl_array_copy)) && length(stmt.args) == 6
-            arr = stmt.args[6]
-            mark_use(arr, idx)
-
-        elseif is_known_call(stmt, arraysize, compact) && isa(stmt.args[2], SSAValue)
-            arr = stmt.args[2]
-            mark_use(arr, idx)
-
+        # elseif is_array_allocation(stmt)
+        #     push!(relevant, idx)
         elseif is_known_call(stmt, Core.arrayfreeze, compact) && isa(stmt.args[2], SSAValue)
-            # mark these for potential replacement with mutating_arrayfreeze
             push!(revisit, idx)
-
-        else
-            # Assume everything else escapes
-            for ur in userefs(stmt)
-                mark_escape(ur[])
-            end
         end
     end
 
@@ -1397,13 +1301,11 @@ function memory_opt!(ir::IRCode)
     domtree = construct_domtree(ir.cfg.blocks)
 
     for idx in revisit
-        # Make sure that the value we reference didn't escape
         stmt = ir.stmts[idx][:inst]::Expr
-        #println("test, stmt : ", stmt)
-        id = (stmt.args[2]::SSAValue).id
-        (id in relevant) || continue
-
-        #println("Revisiting ", stmt)
+        id = stmt.args[2].id
+        # if our escape analysis has determined that this array doesn't escape, we can potentially eliminate an allocation
+        # @eval Main (ir = $ir; rev = $revisit; esc_state = $escape_state)
+        has_no_escape(escape_state.ssavalues[id]) || continue
 
         # We're ok to steal the memory if we don't dominate any uses
         ok = true
@@ -1416,6 +1318,7 @@ function memory_opt!(ir::IRCode)
             end
         end
         ok || continue
+        println("saved an allocation here :", stmt)
         stmt.args[1] = Core.mutating_arrayfreeze
     end
 
@@ -1426,14 +1329,6 @@ function memory_opt!(ir::IRCode)
     #     #println(stmt.args)
     #     arr = stmt.args[2]
     #     id = isa(arr, SSAValue) ? arr.id : arr.n # SSAValue or Core.Argument
-
-    #     if (id in relevant) # didn't escape elsewhere, so make a copy to keep it un-escaped
-    #         #println("didn't escape maybecopy")
-    #         stmt.args[1] = Main.Base.copy
-    #     else # already escaped, so save the cost of copying and just pass the actual object
-    #         #println("escaped maybecopy")
-    #         ir.stmts[idx][:inst] = arr
-    #     end
     # end
 
     return ir
