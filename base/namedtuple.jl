@@ -396,13 +396,16 @@ NamedTuple{(:a, :b), Tuple{Float64, String}}
 !!! compat "Julia 1.5"
     This macro is available as of Julia 1.5.
 """
-macro NamedTuple(ex)
-    Meta.isexpr(ex, :braces) || Meta.isexpr(ex, :block) ||
-        throw(ArgumentError("@NamedTuple expects {...} or begin...end"))
-    decls = filter(e -> !(e isa LineNumberNode), ex.args)
-    all(e -> e isa Symbol || Meta.isexpr(e, :(::)), decls) ||
+macro NamedTuple(x)
+    Meta.isexpr(x, (:braces, :block)) || throw(ArgumentError("@NamedTuple expects {...} or begin...end"))
+    covar = length(x.args)==1 && Meta.isexpr(x.args[1], :<:)
+    covar && (x = x.args[1])
+    xdecls = filter(xa -> !(xa isa LineNumberNode), x.args)
+    all(xa -> xa isa Symbol || Meta.isexpr(xa, :(::)), xdecls) ||
         throw(ArgumentError("@NamedTuple must contain a sequence of name or name::type expressions"))
-    vars = [QuoteNode(e isa Symbol ? e : e.args[1]) for e in decls]
-    types = [esc(e isa Symbol ? :Any : e.args[2]) for e in decls]
-    return :(NamedTuple{($(vars...),), Tuple{$(types...)}})
+    vars = [QuoteNode(xa isa Symbol ? xa : xa.args[1]) for xa in xdecls]
+    types = [esc(xa isa Symbol ? :Any : xa.args[2]) for xa in xdecls]
+    covar ?
+        :(NamedTuple{($(vars...),), <:Tuple{$(types...)}}) :
+        :(NamedTuple{($(vars...),), Tuple{$(types...)}})
 end
