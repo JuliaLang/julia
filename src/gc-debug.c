@@ -1380,6 +1380,17 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
     jl_set_safe_restore(old_buf);
 }
 
+// TODO: figure out how to pass all of these in as a struct
+void _report_gc_finished(
+    uint64_t pause, uint64_t freed, uint64_t allocd, int full, int recollect
+) JL_NOTSAFEPOINT {
+    // TODO: figure out how to put in commas
+    jl_safe_printf("GC: pause %fms. collected %fMB. %lld allocs total. %s %s\n",
+        pause/1e6, freed/1e6, allocd,
+        full ? "full" : "incr", recollect ? "recollect" : ""
+    );
+}
+
 #ifdef __cplusplus
 }
 #endif

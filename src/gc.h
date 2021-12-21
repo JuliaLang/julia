@@ -696,6 +696,10 @@ void gc_count_pool(void);
 
 size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
 
+void _report_gc_finished(
+    uint64_t pause, uint64_t freed, uint64_t allocd, int full, int recollect
+) JL_NOTSAFEPOINT;
+
 #ifdef __cplusplus
 }
 #endif
