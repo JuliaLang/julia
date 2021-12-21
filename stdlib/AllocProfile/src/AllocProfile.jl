@@ -151,4 +151,12 @@ function stacktrace_memoized(
     return stack
 end
 
+precompile(start, ())
+precompile(stop, ())
+
+function __init__()
+    precompile(start, ())
+    precompile(stop, ())
+end
+
 end
