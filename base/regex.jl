@@ -335,6 +335,20 @@ function endswith(s::SubString, r::Regex)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
 
+function chopprefix(s::AbstractString, prefix::Regex)
+    m = match(prefix, s, firstindex(s), PCRE.ANCHORED)
+    m === nothing && return SubString(s)
+    return SubString(s, ncodeunits(m.match) + 1)
+end
+
+function chopsuffix(s::AbstractString, suffix::Regex)
+    m = match(suffix, s, firstindex(s), PCRE.ENDANCHORED)
+    m === nothing && return SubString(s)
+    isempty(m.match) && return SubString(s)
+    return SubString(s, firstindex(s), prevind(s, m.offset))
+end
+
+
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
@@ -528,6 +542,7 @@ end
 Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
 
+# Examples
 ```jldoctest
 julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
 s"Hello \\g<name>, it's \\1"
@@ -564,6 +579,7 @@ Construct a substitution string, used for regular expression substitutions.  Wit
 string, sequences of the form `\\N` refer to the Nth capture group in the regex, and
 `\\g<groupname>` refers to a named capture group with name `groupname`.
 
+# Examples
 ```jldoctest
 julia> msg = "#Hello# from Julia";
 

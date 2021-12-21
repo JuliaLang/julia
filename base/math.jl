@@ -41,6 +41,24 @@ end
 
 # non-type specific math functions
 
+@inline function two_mul(x::Float64, y::Float64)
+    if Core.Intrinsics.have_fma(Float64)
+        xy = x*y
+        return xy, fma(x, y, -xy)
+    end
+    return Base.twomul(x,y)
+end
+
+@inline function two_mul(x::T, y::T) where T<: Union{Float16, Float32}
+    if Core.Intrinsics.have_fma(T)
+        xy = x*y
+        return xy, fma(x, y, -xy)
+    end
+    xy = widen(x)*y
+    Txy = T(xy)
+    return Txy, T(xy-Txy)
+end
+
 """
     clamp(x, lo, hi)
 
@@ -48,6 +66,9 @@ Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo
 are promoted to a common type.
 
 See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` as the first argument requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -97,6 +118,9 @@ clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
 
 Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` entries in `array` require at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -272,8 +296,7 @@ end
     hi, lo = p[end], zero(x)
     for i in length(p)-1:-1:1
         pi = p[i]
-        prod = hi*x
-        err = fma(hi, x, -prod)
+        prod, err = two_mul(hi,x)
         hi = pi+prod
         lo = fma(lo, x, prod - (hi - pi) + err)
     end
@@ -616,6 +639,8 @@ The article is available online at ArXiv at the link
 
 Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
 
+See also `norm` in the [`LinearAlgebra`](@ref man-linalg) standard library.
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> a = Int64(10)^10;
@@ -637,6 +662,11 @@ julia> hypot(-5.7)
 
 julia> hypot(3, 4im, 12.0)
 13.0
+
+julia> using LinearAlgebra
+
+julia> norm([a, a, a, a]) == hypot(a, a, a, a)
+true
 ```
 """
 hypot(x::Number) = abs(float(x))
@@ -680,7 +710,7 @@ function _hypot(x, y)
     end
     h = sqrt(muladd(ax, ax, ay*ay))
     # This branch is correctly rounded but requires a native hardware fma.
-    if Base.Math.FMA_NATIVE
+    if Core.Intrinsics.have_fma(typeof(h))
         hsquared = h*h
         axsquared = ax*ax
         h -= (fma(-ay, ay, hsquared-axsquared) + fma(h, h,-hsquared) - fma(ax, ax, -axsquared))/(2*h)
@@ -696,7 +726,20 @@ function _hypot(x, y)
     end
     return h*scale*oneunit(axu)
 end
-_hypot(x::Float16, y::Float16) = Float16(_hypot(Float32(x), Float32(y)))
+@inline function _hypot(x::Float32, y::Float32)
+    if isinf(x) || isinf(y)
+        return Inf32
+    end
+    _x, _y = Float64(x), Float64(y)
+    return Float32(sqrt(muladd(_x, _x, _y*_y)))
+end
+@inline function _hypot(x::Float16, y::Float16)
+    if isinf(x) || isinf(y)
+        return Inf16
+    end
+    _x, _y = Float32(x), Float32(y)
+    return Float16(sqrt(muladd(_x, _x, _y*_y)))
+end
 _hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
 
 function _hypot(x...)
@@ -874,11 +917,39 @@ function frexp(x::T) where T<:IEEEFloat
     return reinterpret(T, xu), k
 end
 
-rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
-    ccall((:remainder, libm),Float64,(Float64,Float64),x,y)
-rem(x::Float32, y::Float32, ::RoundingMode{:Nearest}) =
-    ccall((:remainderf, libm),Float32,(Float32,Float32),x,y)
-rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) = Float16(rem(Float32(x), Float32(y), r))
+# NOTE: This `rem` method is adapted from the msun `remainder` and `remainderf`
+# functions, which are under the following license:
+#
+# Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+#
+# Developed at SunSoft, a Sun Microsystems, Inc. business.
+# Permission to use, copy, modify, and distribute this
+# software is freely granted, provided that this notice
+# is preserved.
+function rem(x::T, p::T, ::RoundingMode{:Nearest}) where T<:IEEEFloat
+    (iszero(p) || !isfinite(x) || isnan(p)) && return T(NaN)
+    x == p && return copysign(zero(T), x)
+    oldx = x
+    x = abs(rem(x, 2p))  # 2p may overflow but that's okay
+    p = abs(p)
+    if p < 2 * floatmin(T)  # Check whether dividing p by 2 will underflow
+        if 2x > p
+            x -= p
+            if 2x >= p
+                x -= p
+            end
+        end
+    else
+        p_half = p / 2
+        if x > p_half
+            x -= p
+            if x >= p_half
+                x -= p
+            end
+        end
+    end
+    return flipsign(x, oldx)
+end
 
 
 """
@@ -898,49 +969,67 @@ julia> modf(-3.5)
 """
 modf(x) = isinf(x) ? (flipsign(zero(x), x), x) : (rem(x, one(x)), trunc(x))
 
-function modf(x::Float32)
-    temp = Ref{Float32}()
-    f = ccall((:modff, libm), Float32, (Float32, Ptr{Float32}), x, temp)
-    f, temp[]
+function modf(x::T) where T<:IEEEFloat
+    isinf(x) && return (copysign(zero(T), x), x)
+    ix = trunc(x)
+    rx = copysign(x - ix, x)
+    return (rx, ix)
 end
 
-function modf(x::Float64)
-    temp = Ref{Float64}()
-    f = ccall((:modf, libm), Float64, (Float64, Ptr{Float64}), x, temp)
-    f, temp[]
+function ^(x::Float64, y::Float64)
+    yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
+    y == yint && return x^yint
+    x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    x == 1 && return 1.0
+    !isfinite(x) && return x*(y>0 || isnan(x))
+    x==0 && return abs(y)*Inf*(!(y>0))
+    logxhi,logxlo = Base.Math._log_ext(x)
+    xyhi = logxhi*y
+    xylo = logxlo*y
+    hi = xyhi+xylo
+    return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
+end
+function ^(x::T, y::T) where T <: Union{Float16, Float32}
+    yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
+    y == yint && return x^yint
+    x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    x == 1 && return one(T)
+    !isfinite(x) && return x*(y>0 || isnan(x))
+    x==0 && return abs(y)*T(Inf)*(!(y>0))
+    return T(exp2(log2(abs(widen(x))) * y))
 end
 
-@inline function ^(x::Float64, y::Float64)
-    z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
-    if isnan(z) & !isnan(x+y)
-        throw_exp_domainerror(x)
+# compensated power by squaring
+function ^(x::Float64, n::Integer)
+    n == 0 && return one(x)
+    y = 1.0
+    xnlo = ynlo = 0.0
+    if n < 0
+        rx = inv(x)
+        n==-2 && return rx*rx #keep compatability with literal_pow
+        isfinite(x) && (xnlo = -fma(x, rx, -1.) * rx)
+        x = rx
+        n = -n
     end
-    z
-end
-@inline function ^(x::Float32, y::Float32)
-    z = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y)
-    if isnan(z) & !isnan(x+y)
-        throw_exp_domainerror(x)
+    n == 3 && return x*x*x # keep compatibility with literal_pow
+    while n > 1
+        if n&1 > 0
+            err = muladd(y, xnlo, x*ynlo)
+            y, ynlo = two_mul(x,y)
+            ynlo += err
+        end
+        err = x*2*xnlo
+        x, xnlo = two_mul(x, x)
+        xnlo += err
+        n >>>= 1
     end
-    z
+    !isfinite(x) && return x*y
+    return muladd(x, y, muladd(y, xnlo, x*ynlo))
 end
-@inline ^(x::Float16, y::Float16) = Float16(Float32(x)^Float32(y))  # TODO: optimize
-
-@inline function ^(x::Float64, y::Integer)
-    y == -1 && return inv(x)
-    y == 0 && return one(x)
-    y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
-end
-@inline function ^(x::Float32, y::Integer)
-    y == -1 && return inv(x)
-    y == 0 && return one(x)
-    y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+function ^(x::Float32, n::Integer)
+    n < 0 && return inv(x)^(-n)
+    n == 3 && return x*x*x #keep compatibility with literal_pow
+    Float32(Base.power_by_squaring(Float64(x),n))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))

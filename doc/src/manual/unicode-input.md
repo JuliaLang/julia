@@ -46,7 +46,7 @@ end
 
 # Surround combining characters with no-break spaces (i.e '\u00A0'). Follows the same format
 # for how unicode is displayed on the unicode.org website:
-# http://unicode.org/cldr/utility/character.jsp?a=0300
+# https://util.unicode.org/UnicodeJsps/character.jsp?a=0300
 function fix_combining_chars(char)
     cat = Base.Unicode.category_code(char)
     return cat == 6 || cat == 8 ? "$NBSP$char$NBSP" : "$char"

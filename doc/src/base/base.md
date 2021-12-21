@@ -39,9 +39,10 @@ Base.methods
 Base.@show
 ans
 Base.active_project
+Base.set_active_project
 ```
 
-## Keywords
+## [Keywords](@id Keywords)
 
 This is the list of reserved keywords in Julia:
 `baremodule`, `begin`, `break`, `catch`, `const`, `continue`, `do`,
@@ -179,7 +180,12 @@ Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
+Core.fieldtype
+Base.fieldtypes
+Base.fieldcount
 Base.hasfield
+Core.nfields
+Base.isconst
 ```
 
 ### Memory layout
@@ -189,9 +195,6 @@ Base.sizeof(::Type)
 Base.isconcretetype
 Base.isbits
 Base.isbitstype
-Core.fieldtype
-Base.fieldtypes
-Base.fieldcount
 Base.fieldoffset
 Base.datatype_alignment
 Base.datatype_haspadding
@@ -320,6 +323,7 @@ Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
 Base.@time
+Base.@showtime
 Base.@timev
 Base.@timed
 Base.@elapsed
@@ -416,8 +420,6 @@ Base.@__DIR__
 Base.@__LINE__
 Base.fullname
 Base.names
-Core.nfields
-Base.isconst
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
@@ -443,6 +445,7 @@ Base.@macroexpand1
 Base.code_lowered
 Base.code_typed
 Base.precompile
+Base.jit_total_bytes
 ```
 
 ## Meta

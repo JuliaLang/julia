@@ -6,9 +6,6 @@
 
 extern "C" JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
-#if defined _MSC_VER
-    __cpuid(CPUInfo, InfoType);
-#else
     asm volatile (
 #if defined(__i386__) && defined(__PIC__)
         "xchg %%ebx, %%esi;"
@@ -24,14 +21,10 @@ extern "C" JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
         "=d" (CPUInfo[3]) :
         "a" (InfoType)
         );
-#endif
 }
 
 extern "C" JL_DLLEXPORT void jl_cpuidex(int32_t CPUInfo[4], int32_t InfoType, int32_t subInfoType)
 {
-#if defined _MSC_VER
-    __cpuidex(CPUInfo, InfoType, subInfoType);
-#else
     asm volatile (
 #if defined(__i386__) && defined(__PIC__)
         "xchg %%ebx, %%esi;"
@@ -48,7 +41,6 @@ extern "C" JL_DLLEXPORT void jl_cpuidex(int32_t CPUInfo[4], int32_t InfoType, in
         "a" (InfoType),
         "c" (subInfoType)
         );
-#endif
 }
 
 namespace X86 {
@@ -298,13 +290,9 @@ const int SIG_AMD = 0x68747541; // Auth
 
 static uint64_t get_xcr0(void)
 {
-#if defined _MSC_VER
-    return _xgetbv(_XCR_XFEATURE_ENABLED_MASK);
-#else
     uint32_t eax, edx;
     asm volatile ("xgetbv" : "=a" (eax), "=d" (edx) : "c" (0));
     return (uint64_t(edx) << 32) | eax;
-#endif
 }
 
 static CPU get_intel_processor_name(uint32_t family, uint32_t model, uint32_t brand_id,
@@ -889,6 +877,8 @@ static void ensure_jit_target(bool imaging)
         auto &t = jit_targets[i];
         if (t.en.flags & JL_TARGET_CLONE_ALL)
             continue;
+        // Always clone when code checks CPU features
+        t.en.flags |= JL_TARGET_CLONE_CPU;
         // The most useful one in general...
         t.en.flags |= JL_TARGET_CLONE_LOOP;
         auto &features0 = jit_targets[t.base].en.features;
@@ -1011,21 +1001,21 @@ jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
     return parse_sysimg(hdl, sysimg_init_cb);
 }
 
-std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
 {
     ensure_jit_target(imaging);
     flags = jit_targets[0].en.flags;
     return get_llvm_target_vec(jit_targets[0]);
 }
 
-const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
+extern "C" JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
 {
     static const auto res = get_llvm_target_str(TargetData<feature_sz>{"generic", "",
             {feature_masks, 0}, {{}, 0}, 0});
     return res;
 }
 
-std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");

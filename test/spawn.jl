@@ -579,8 +579,8 @@ end
 @test_throws ArgumentError run(Base.AndCmds(`$truecmd`, ``))
 
 # tests for reducing over collection of Cmd
-@test_throws ArgumentError reduce(&, Base.AbstractCmd[])
-@test_throws ArgumentError reduce(&, Base.Cmd[])
+@test_throws "reducing over an empty collection is not allowed" reduce(&, Base.AbstractCmd[])
+@test_throws "reducing over an empty collection is not allowed" reduce(&, Base.Cmd[])
 @test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
 
 # readlines(::Cmd), accidentally broken in #20203
@@ -650,7 +650,7 @@ end
 psep = if Sys.iswindows() ";" else ":" end
 withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
     julia_exe = joinpath(Sys.BINDIR, Base.julia_exename())
-    @test Sys.which("julia") == abspath(julia_exe)
+    @test Sys.which(Base.julia_exename()) == abspath(julia_exe)
     @test Sys.which(julia_exe) == abspath(julia_exe)
 end
 
@@ -771,6 +771,12 @@ let text = "input-test-text"
     @test proc.out === out
     @test read(out, String) == text
     @test success(proc)
+
+    out = PipeBuffer()
+    proc = run(catcmd, IOBuffer(SubString(text)), out)
+    @test success(proc)
+    @test proc.out === proc.err === proc.in === devnull
+    @test String(take!(out)) == text
 end
 
 
@@ -811,6 +817,33 @@ end
         cmd2 = addenv(cmd, "FOO" => "foo2", "BAR" => "bar"; inherit=true)
         @test strip(String(read(cmd2))) == "foo2 bar"
     end
+    # Keys with value === nothing are deleted
+    cmd = Cmd(`$shcmd -c "echo \$FOO \$BAR"`, env=Dict("FOO" => "foo", "BAR" => "bar"))
+    cmd2 = addenv(cmd, "FOO" => nothing)
+    @test strip(String(read(cmd2))) == "bar"
+    # addenv keeps the cmd's dir (#42131)
+    dir = joinpath(pwd(), "dir")
+    cmd = addenv(setenv(`julia`; dir=dir), Dict())
+    @test cmd.dir == dir
+end
+
+@testset "setenv with dir (with tests for #42131)" begin
+    dir1 = joinpath(pwd(), "dir1")
+    dir2 = joinpath(pwd(), "dir2")
+    cmd = Cmd(`julia`; dir=dir1)
+    @test cmd.dir == dir1
+    @test Cmd(cmd).dir == dir1
+    @test Cmd(cmd; dir=dir2).dir == dir2
+    @test Cmd(cmd; dir="").dir == ""
+    @test setenv(cmd).dir == dir1
+    @test setenv(cmd; dir=dir2).dir == dir2
+    @test setenv(cmd; dir="").dir == ""
+    @test setenv(cmd, "FOO"=>"foo").dir == dir1
+    @test setenv(cmd, "FOO"=>"foo"; dir=dir2).dir == dir2
+    @test setenv(cmd, "FOO"=>"foo"; dir="").dir == ""
+    @test setenv(cmd, Dict("FOO"=>"foo")).dir == dir1
+    @test setenv(cmd, Dict("FOO"=>"foo"); dir=dir2).dir == dir2
+    @test setenv(cmd, Dict("FOO"=>"foo"); dir="").dir == ""
 end
 
 

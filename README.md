@@ -13,7 +13,6 @@ Documentation:
 
 Continuous integration:
 [![Continuous integration (master)][buildkite-master-img]][buildkite-master-url]
-[![Continuous integration (master->scheduled)][buildkite-master-scheduled-img]][buildkite-master-scheduled-url]
 
 <!--
 To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
@@ -21,13 +20,6 @@ You need to go to the Buildkite website and get the SVG URL for the correct pipe
 -->
 [buildkite-master-img]: https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master "Continuous integration (master)"
 [buildkite-master-url]: https://buildkite.com/julialang/julia-master
-
-<!--
-To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
-You need to go to the Buildkite website and get the SVG URL for the correct pipeline.
--->
-[buildkite-master-scheduled-img]: https://badge.buildkite.com/d5ae34dbbf6fefe615300c4f3118bf63cb4a5ae7fd962263c1.svg?branch=master "Continuous integration (master->scheduled)"
-[buildkite-master-scheduled-url]: https://buildkite.com/julialang/julia-master-scheduled
 
 Code coverage:
 [![Code coverage (Coveralls)][coveralls-img]][coveralls-url]
@@ -91,17 +83,17 @@ recommend you use the official Julia binaries instead.
 ## Building Julia
 
 First, make sure you have all the [required
-dependencies](https://github.com/JuliaLang/julia/blob/master/doc/build/build.md#required-build-tools-and-external-libraries) installed.
+dependencies](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/build.md#required-build-tools-and-external-libraries) installed.
 Then, acquire the source code by cloning the git repository:
 
     git clone https://github.com/JuliaLang/julia.git
 
 By default you will be building the latest unstable version of
-Julia. However, most users should use the most recent stable version
+Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.6.1
+    git checkout v1.7.0
 
 Now run `make` to build the `julia` executable.
 
@@ -123,8 +115,8 @@ You can read about [getting
 started](https://docs.julialang.org/en/v1/manual/getting-started/)
 in the manual.
 
-In case this default build path did not work, detailed build instructions
-are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/build).
+Detailed build instructions, should they be necessary,
+are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/).
 
 ### Uninstalling Julia
 
@@ -142,10 +134,9 @@ The Julia source code is organized as follows:
 | `base/`           | source code for the Base module (part of Julia's standard library) |
 | `stdlib/`         | source code for other standard library packages                    |
 | `cli/`            | source for the command line interface/REPL                         |
-| `contrib/`        | editor support for Julia source, miscellaneous scripts             |
+| `contrib/`        | miscellaneous scripts                                              |
 | `deps/`           | external dependencies                                              |
-| `doc/src/manual/` | source for the user manual                                         |
-| `doc/build/`      | detailed notes for building Julia                                  |
+| `doc/src/`        | source for the user manual                                         |
 | `src/`            | source for Julia language core                                     |
 | `test/`           | test suites                                                        |
 | `usr/`            | binaries and shared libraries loaded by Julia's standard libraries |
@@ -166,7 +157,8 @@ Support for editing Julia is available for many
 [Sublime Text](https://github.com/JuliaEditorSupport/Julia-sublime), and many
 others.
 
-Supported IDEs include: [julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode) (VS
-Code plugin), [Juno](http://junolab.org/) (Atom plugin). [Jupyter](https://jupyter.org/)
-notebooks are available through the [IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
-[Pluto](https://github.com/fonsp/Pluto.jl) notebooks through the Pluto.jl package.
+For users who prefer IDEs, we recommend using VS Code with the
+[julia-vscode](https://www.julia-vscode.org/) plugin.
+For notebook users, [Jupyter](https://jupyter.org/) notebook support is available through the
+[IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
+the [Pluto.jl](https://github.com/fonsp/Pluto.jl) package provides Pluto notebooks.

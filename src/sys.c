@@ -13,7 +13,6 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#include "llvm-version.h"
 
 #ifdef _OS_WINDOWS_
 #include <psapi.h>
@@ -49,18 +48,11 @@
 #include <xmmintrin.h>
 #endif
 
-#if defined _MSC_VER
-#include <io.h>
-#include <intrin.h>
-#endif
-
 #ifdef _COMPILER_MSAN_ENABLED_
 #include <sanitizer/msan_interface.h>
 #endif
 
 #include "julia_assert.h"
-
-#include <llvm-c/Core.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -232,7 +224,25 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
     return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
 }
 
-JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, size_t uid)
+JL_DLLEXPORT unsigned long jl_getuid(void)
+{
+#ifdef _OS_WINDOWS_
+    return -1;
+#else
+    return getuid();
+#endif
+}
+
+JL_DLLEXPORT unsigned long jl_geteuid(void)
+{
+#ifdef _OS_WINDOWS_
+    return -1;
+#else
+    return geteuid();
+#endif
+}
+
+JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, unsigned long uid)
 {
 #ifdef _OS_WINDOWS_
   return UV_ENOTSUP;
@@ -345,11 +355,11 @@ JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, size_t uid)
 
 typedef struct jl_group_s {
     char* groupname;
-    long gid;
+    unsigned long gid;
     char** members;
 } jl_group_t;
 
-JL_DLLEXPORT int jl_os_get_group(jl_group_t *grp, size_t gid)
+JL_DLLEXPORT int jl_os_get_group(jl_group_t *grp, unsigned long gid)
 {
 #ifdef _OS_WINDOWS_
   return UV_ENOTSUP;
@@ -587,6 +597,15 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
+// Apple's M1 processor is a big.LITTLE style processor, with 4x "performance"
+// cores, and 4x "efficiency" cores.  Because Julia expects to be able to run
+// things like heavy linear algebra workloads on all cores, it's best for us
+// to only spawn as many threads as there are performance cores.  Once macOS
+// 12 is released, we'll be able to query the multiple "perf levels" of the
+// cores of a CPU (see this PR [0] to pytorch/cpuinfo for an example) but
+// until it's released, we will just recognize the M1 by its CPU family
+// identifier, then subtract how many efficiency cores we know it has.
+
 JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
@@ -599,6 +618,19 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
         sysctl(nm, 2, &count, &len, NULL, 0);
         if (count < 1) { count = 1; }
     }
+
+#if defined(__APPLE__) && defined(_CPU_AARCH64_)
+    // Manually subtract efficiency cores for Apple's big.LITTLE cores
+    int32_t family = 0;
+    len = 4;
+    sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
+    if (family >= 1 && count > 1) {
+        if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
+            // We know the Apple M1 has 4 efficiency cores, so subtract them out.
+            count -= 4;
+        }
+    }
+#endif
     return count;
 #elif defined(_SC_NPROCESSORS_ONLN)
     long count = sysconf(_SC_NPROCESSORS_ONLN);
@@ -651,7 +683,7 @@ JL_DLLEXPORT jl_value_t *jl_environ(int i)
 
 // -- child process status --
 
-#if defined _MSC_VER || defined _OS_WINDOWS_
+#if defined _OS_WINDOWS_
 /* Native Woe32 API.  */
 #include <process.h>
 #define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
@@ -828,12 +860,11 @@ JL_DLLEXPORT int jl_dllist(jl_array_t *list)
     } while (cb < cbNeeded);
     for (i = 0; i < cbNeeded / sizeof(HMODULE); i++) {
         const char *path = jl_pathname_for_handle(hMods[i]);
-        // XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
         if (path == NULL)
             continue;
         jl_array_grow_end((jl_array_t*)list, 1);
         jl_value_t *v = jl_cstr_to_string(path);
-        free(path);
+        free((char*)path);
         jl_array_ptr_set(list, jl_array_dim0(list) - 1, v);
     }
     free(hMods);
@@ -882,37 +913,6 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 
 #else
     return (size_t)0;
-#endif
-}
-
-JL_DLLEXPORT int jl_threading_enabled(void)
-{
-    return 1;
-}
-
-JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT {
-#if defined(_OS_WINDOWS_)
-    HMODULE mod;
-    // FIXME: GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS on LLVMContextCreate,
-    //        but that just points to libjulia.dll
-#if JL_LLVM_VERSION <= 110000
-    const char* libLLVM = "LLVM";
-#else
-    const char* libLLVM = "libLLVM";
-#endif
-
-    if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, libLLVM, &mod))
-        return jl_nothing;
-
-    char path[MAX_PATH];
-    if (!GetModuleFileNameA(mod, path, sizeof(path)))
-        return jl_nothing;
-    return (jl_value_t*) jl_symbol(path);
-#else
-    Dl_info dli;
-    if (!dladdr(LLVMContextCreate, &dli))
-        return jl_nothing;
-    return (jl_value_t*) jl_symbol(dli.dli_fname);
 #endif
 }
 

@@ -1509,8 +1509,18 @@ let ex = Meta.parse("@test27521(2) do y; y; end")
     @test macroexpand(@__MODULE__, ex) == Expr(:tuple, fex, 2)
 end
 
+# issue #43018
+module M43018
+    macro test43018(fn)
+        quote $(fn)() end
+    end
+end
+@test :(@M43018.test43018() do; end) == :(M43018.@test43018() do; end)
+@test @macroexpand(@M43018.test43018() do; end) == @macroexpand(M43018.@test43018() do; end)
+@test @M43018.test43018() do; 43018 end == 43018
+
 # issue #27129
-f27129(x = 1) = (@Base._inline_meta; x)
+f27129(x = 1) = (@inline; x)
 for meth in methods(f27129)
     @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end
@@ -2493,6 +2503,10 @@ import .Mod: x as x2
 @test x2 == 1
 @test !@isdefined(x)
 
+module_names = names(@__MODULE__; all=true, imported=true)
+@test :x2 ∈ module_names
+@test :x ∉ module_names
+
 import .Mod2.y as y2
 
 @test y2 == 2
@@ -2959,3 +2973,118 @@ end
     ex.args = fill!(Vector{Any}(undef, 600000), 1)
     @test_throws ErrorException("syntax: expression too large") eval(ex)
 end
+
+# issue 25678
+@generated f25678(x::T) where {T} = code_lowered(sin, Tuple{x})[]
+@test f25678(pi/6) === sin(pi/6)
+
+@generated g25678(x) = return :x
+@test g25678(7) === 7
+
+# issue #19012
+@test Meta.parse("\U2200", raise=false) == Symbol("∀")
+@test Meta.parse("\U2203", raise=false) == Symbol("∃")
+@test Meta.parse("a\U2203", raise=false) == Symbol("a∃")
+@test Meta.parse("\U2204", raise=false) == Symbol("∄")
+
+# issue 42220
+macro m42220()
+    return quote
+        function foo(::Type{T}=Float64) where {T}
+            return Vector{T}(undef, 10)
+        end
+    end
+end
+@test @m42220()() isa Vector{Float64}
+@test @m42220()(Bool) isa Vector{Bool}
+
+@testset "try else" begin
+    fails(f) = try f() catch; true else false end
+    @test fails(error)
+    @test !fails(() -> 1 + 2)
+
+    @test_throws ParseError Meta.parse("try foo() else bar() end")
+    @test_throws ParseError Meta.parse("try foo() else bar() catch; baz() end")
+    @test_throws ParseError Meta.parse("try foo() catch; baz() finally foobar() else bar() end")
+    @test_throws ParseError Meta.parse("try foo() finally foobar() else bar() catch; baz() end")
+
+    err = try
+        try
+            1 + 2
+        catch
+        else
+            error("foo")
+        end
+    catch e
+        e
+    end
+    @test err == ErrorException("foo")
+
+    x = 0
+    err = try
+        try
+            1 + 2
+        catch
+        else
+            error("foo")
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == ErrorException("foo")
+    @test x == 1
+
+    x = 0
+    err = try
+        try
+            1 + 2
+        catch
+            5 + 6
+        else
+            3 + 4
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == 3 + 4
+    @test x == 1
+
+    x = 0
+    err = try
+        try
+            error()
+        catch
+            5 + 6
+        else
+            3 + 4
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == 5 + 6
+    @test x == 1
+end
+
+@test_throws ParseError Meta.parse("""
+function checkUserAccess(u::User)
+	if u.accessLevel != "user\u202e \u2066# users are not allowed\u2069\u2066"
+		return true
+	end
+	return false
+end
+""")
+
+@test_throws ParseError Meta.parse("""
+function checkUserAccess(u::User)
+	#=\u202e \u2066if (u.isAdmin)\u2069 \u2066 begin admins only =#
+		return true
+	#= end admin only \u202e \u2066end\u2069 \u2066=#
+	return false
+end
+""")

@@ -26,7 +26,7 @@ static inline void arrayassign_safe(int hasptr, jl_value_t *parent, char *dst, c
     assert(nb >= jl_datatype_size(jl_typeof(src))); // nb might move some undefined bits, but we should be okay with that
     if (hasptr) {
         size_t nptr = nb / sizeof(void*);
-        memmove_refs((void**)dst, (void**)src, nptr);
+        memmove_refs((void**)dst, (void* const*)src, nptr);
         jl_gc_multi_wb(parent, src);
     }
     else {
@@ -219,51 +219,28 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
                                           jl_value_t *_dims)
 {
     jl_task_t *ct = jl_current_task;
-    jl_array_t *a;
+    assert(jl_types_equal(jl_tparam0(jl_typeof(data)), jl_tparam0(atype)));
+
     size_t ndims = jl_nfields(_dims);
     assert(is_ntuple_long(_dims));
     size_t *dims = (size_t*)_dims;
-    assert(jl_types_equal(jl_tparam0(jl_typeof(data)), jl_tparam0(atype)));
-
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = sizeof(jl_array_t) + ndimwords * sizeof(size_t) + sizeof(void*);
-    a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
+    jl_array_t *a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
     // No allocation or safepoint allowed after this
+    // copy data (except dims) from the old object
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
     a->flags.ndims = ndims;
     a->offset = 0;
     a->data = NULL;
     a->flags.isaligned = data->flags.isaligned;
-    jl_array_t *owner = (jl_array_t*)jl_array_owner(data);
-    jl_value_t *eltype = jl_tparam0(atype);
-    size_t elsz = 0, align = 0;
-    int isboxed = !jl_islayout_inline(eltype, &elsz, &align);
-    assert(isboxed == data->flags.ptrarray);
-    if (!isboxed) {
-        a->elsize = LLT_ALIGN(elsz, align);
-        jl_value_t *ownerty = jl_typeof(owner);
-        size_t oldelsz = 0, oldalign = 0;
-        if (ownerty == (jl_value_t*)jl_string_type) {
-            oldalign = 1;
-        }
-        else {
-            jl_islayout_inline(jl_tparam0(ownerty), &oldelsz, &oldalign);
-        }
-        if (oldalign < align)
-            jl_exceptionf(jl_argumenterror_type,
-                          "reinterpret from alignment %d bytes to alignment %d bytes not allowed",
-                          (int) oldalign, (int) align);
-        a->flags.ptrarray = 0;
-        a->flags.hasptr = data->flags.hasptr;
-    }
-    else {
-        a->elsize = sizeof(void*);
-        a->flags.ptrarray = 1;
-        a->flags.hasptr = 0;
-    }
+    a->elsize = data->elsize;
+    a->flags.ptrarray = data->flags.ptrarray;
+    a->flags.hasptr = data->flags.hasptr;
 
     // if data is itself a shared wrapper,
     // owner should point back to the original array
+    jl_array_t *owner = (jl_array_t*)jl_array_owner(data);
     jl_array_data_owner(a) = (jl_value_t*)owner;
 
     a->flags.how = 3;
@@ -588,7 +565,7 @@ JL_DLLEXPORT jl_value_t *jl_ptrarrayref(jl_array_t *a JL_PROPAGATES_ROOT, size_t
 {
     assert(i < jl_array_len(a));
     assert(a->flags.ptrarray);
-    jl_value_t *elt = jl_atomic_load_relaxed(((jl_value_t**)a->data) + i);
+    jl_value_t *elt = jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)a->data) + i);
     if (elt == NULL)
         jl_throw(jl_undefref_exception);
     return elt;
@@ -617,7 +594,7 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
 {
     if (a->flags.ptrarray) {
-        return jl_atomic_load_relaxed(((jl_value_t**)jl_array_data(a)) + i) != NULL;
+        return jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)jl_array_data(a)) + i) != NULL;
     }
     else if (a->flags.hasptr) {
          jl_datatype_t *eltype = (jl_datatype_t*)jl_tparam0(jl_typeof(a));
@@ -656,7 +633,7 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs
         arrayassign_safe(hasptr, jl_array_owner(a), &((char*)a->data)[i * a->elsize], rhs, a->elsize);
     }
     else {
-        jl_atomic_store_relaxed(((jl_value_t**)a->data) + i, rhs);
+        jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)a->data) + i, rhs);
         jl_gc_wb(jl_array_owner(a), rhs);
     }
 }
@@ -666,7 +643,7 @@ JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
     if (i >= jl_array_len(a))
         jl_bounds_error_int((jl_value_t*)a, i + 1);
     if (a->flags.ptrarray)
-        jl_atomic_store_relaxed(((jl_value_t**)a->data) + i, NULL);
+        jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)a->data) + i, NULL);
     else if (a->flags.hasptr) {
         size_t elsize = a->elsize;
         jl_assume(elsize >= sizeof(void*) && elsize % sizeof(void*) == 0);
@@ -1243,9 +1220,11 @@ static NOINLINE ssize_t jl_array_ptr_copy_forward(jl_value_t *owner,
                                                   void **src_p, void **dest_p,
                                                   ssize_t n) JL_NOTSAFEPOINT
 {
+    _Atomic(void*) *src_pa = (_Atomic(void*)*)src_p;
+    _Atomic(void*) *dest_pa = (_Atomic(void*)*)dest_p;
     for (ssize_t i = 0; i < n; i++) {
-        void *val = jl_atomic_load_relaxed(src_p + i);
-        jl_atomic_store_relaxed(dest_p + i, val);
+        void *val = jl_atomic_load_relaxed(src_pa + i);
+        jl_atomic_store_relaxed(dest_pa + i, val);
         // `val` is young or old-unmarked
         if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
             jl_gc_queue_root(owner);
@@ -1259,9 +1238,11 @@ static NOINLINE ssize_t jl_array_ptr_copy_backward(jl_value_t *owner,
                                                    void **src_p, void **dest_p,
                                                    ssize_t n) JL_NOTSAFEPOINT
 {
+    _Atomic(void*) *src_pa = (_Atomic(void*)*)src_p;
+    _Atomic(void*) *dest_pa = (_Atomic(void*)*)dest_p;
     for (ssize_t i = 0; i < n; i++) {
-        void *val = jl_atomic_load_relaxed(src_p + n - i - 1);
-        jl_atomic_store_relaxed(dest_p + n - i - 1, val);
+        void *val = jl_atomic_load_relaxed(src_pa + n - i - 1);
+        jl_atomic_store_relaxed(dest_pa + n - i - 1, val);
         // `val` is young or old-unmarked
         if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
             jl_gc_queue_root(owner);

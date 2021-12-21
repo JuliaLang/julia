@@ -8,14 +8,7 @@ Base.Threads.threadid
 Base.Threads.nthreads
 ```
 
-## Synchronization
-
-```@docs
-Base.Threads.Condition
-Base.Threads.Event
-```
-
-See also [Synchronization](@ref lib-task-sync).
+See also [Multi-Threading](@ref man-multithreading).
 
 ## Atomic operations
 

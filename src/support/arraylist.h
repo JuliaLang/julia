@@ -39,7 +39,7 @@ void small_arraylist_free(small_arraylist_t *a) JL_NOTSAFEPOINT;
 
 void small_arraylist_push(small_arraylist_t *a, void *elt) JL_NOTSAFEPOINT;
 void *small_arraylist_pop(small_arraylist_t *a) JL_NOTSAFEPOINT;
-void small_arraylist_grow(small_arraylist_t *a, uint32_t n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void small_arraylist_grow(small_arraylist_t *a, uint32_t n) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

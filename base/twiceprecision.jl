@@ -63,7 +63,7 @@ representation, even though it is exact from the standpoint of binary
 representation.
 
 Example:
-```julia
+```julia-repl
 julia> 1.0 + 1.0001e-15
 1.000000000000001
 
@@ -94,7 +94,7 @@ numbers. Mathematically, `zhi + zlo = x * y`, where `zhi` contains the
 most significant bits and `zlo` the least significant.
 
 Example:
-```julia
+```julia-repl
 julia> x = Float32(π)
 3.1415927f0
 
@@ -126,7 +126,7 @@ numbers. Mathematically, `zhi + zlo ≈ x / y`, where `zhi` contains the
 most significant bits and `zlo` the least significant.
 
 Example:
-```julia
+```julia-repl
 julia> x, y = Float32(π), 3.1f0
 (3.1415927f0, 3.1f0)
 
@@ -162,7 +162,18 @@ div12(x, y) = div12(promote(x, y)...)
     TwicePrecision{T}((num, denom))
 
 A number with twice the precision of `T`, e.g., quad-precision if `T =
-Float64`. `hi` represents the high bits (most significant bits) and
+Float64`.
+
+!!! warn
+    `TwicePrecision` is an internal type used to increase the
+    precision of floating-point ranges, and not intended for external use.
+    If you encounter them in real code, the most likely explanation is
+    that you are directly accessing the fields of a range. Use
+    the function interface instead, `step(r)` rather than `r.step`
+
+# Extended help
+
+`hi` represents the high bits (most significant bits) and
 `lo` the low bits (least significant bits). Rational values
 `num//denom` can be approximated conveniently using the syntax
 `TwicePrecision{T}((num, denom))`.
@@ -463,7 +474,7 @@ end
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
 function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer) where T
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
-    @_inline_meta
+    @inline
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     u = i - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
@@ -766,7 +777,7 @@ narrow(::Type{Float32}) = Float16
 narrow(::Type{Float16}) = Float16
 
 function _tp_prod(t::TwicePrecision, x, y...)
-    @_inline_meta
+    @inline
     _tp_prod(t * x, y...)
 end
 _tp_prod(t::TwicePrecision) = t

@@ -181,7 +181,7 @@ Stacktrace:
 [...]
 ```
 
-If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
+If `T` is a [`AbstractFloat`](@ref) type,
 then it will return the closest value to `x` representable by `T`.
 
 ```jldoctest
@@ -191,11 +191,8 @@ julia> x = 1/3
 julia> convert(Float32, x)
 0.33333334f0
 
-julia> convert(Rational{Int32}, x)
-1//3
-
-julia> convert(Rational{Int64}, x)
-6004799503160661//18014398509481984
+julia> convert(BigFloat, x)
+0.333333333333333314829616256247390992939472198486328125
 ```
 
 If `T` is a collection type and `x` a collection, the result of
@@ -213,8 +210,8 @@ See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@r
 """
 function convert end
 
-convert(::Type{Union{}}, x) = throw(MethodError(convert, (Union{}, x)))
-convert(::Type{Any}, x) = x
+convert(::Type{Union{}}, @nospecialize x) = throw(MethodError(convert, (Union{}, x)))
+convert(::Type{Any}, @nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
@@ -331,7 +328,7 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-_tuple_error(T::Type, x) = (@_noinline_meta; throw(MethodError(convert, (T, x))))
+_tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
 
 convert(::Type{T}, x::T) where {T<:Tuple} = x
 function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
@@ -340,7 +337,7 @@ function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
     if typeintersect(NTuple{N,Any}, T) === Union{}
         _tuple_error(T, x)
     end
-    cvt1(n) = (@_inline_meta; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
+    cvt1(n) = (@inline; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
     return ntuple(cvt1, Val(N))::NTuple{N,Any}
 end
 
@@ -476,6 +473,22 @@ Stacktrace:
 ```
 """
 sizeof(x) = Core.sizeof(x)
+
+"""
+    ifelse(condition::Bool, x, y)
+
+Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in
+that it is an ordinary function, so all the arguments are evaluated first. In some cases,
+using `ifelse` instead of an `if` statement can eliminate the branch in generated code and
+provide higher performance in tight loops.
+
+# Examples
+```jldoctest
+julia> ifelse(1 > 2, 1, 2)
+2
+```
+"""
+ifelse(condition::Bool, x, y) = Core.ifelse(condition, x, y)
 
 # simple Array{Any} operations needed for bootstrap
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)

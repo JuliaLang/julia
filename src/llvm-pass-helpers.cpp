@@ -15,31 +15,36 @@
 #include "codegen_shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
+#include "jl_internal_funcs.inc"
 
 using namespace llvm;
-
-extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false);
 
 JuliaPassContext::JuliaPassContext()
     : T_size(nullptr), T_int8(nullptr), T_int32(nullptr),
         T_pint8(nullptr), T_jlvalue(nullptr), T_prjlvalue(nullptr),
         T_ppjlvalue(nullptr), T_pjlvalue(nullptr), T_pjlvalue_der(nullptr),
-        T_ppjlvalue_der(nullptr), pgcstack_getter(nullptr), gc_flush_func(nullptr),
+        T_ppjlvalue_der(nullptr),
+
+        tbaa_gcframe(nullptr), tbaa_tag(nullptr),
+
+        pgcstack_getter(nullptr), gc_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), mutating_arrayfreeze_func(nullptr),
         write_barrier_func(nullptr), module(nullptr)
 {
-    tbaa_gcframe = tbaa_make_child("jtbaa_gcframe").first;
-    MDNode *tbaa_data;
-    MDNode *tbaa_data_scalar;
-    std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child("jtbaa_data");
-    tbaa_tag = tbaa_make_child("jtbaa_tag", tbaa_data_scalar).first;
 }
 
 void JuliaPassContext::initFunctions(Module &M)
 {
     module = &M;
+    LLVMContext &llvmctx = M.getContext();
+
+    tbaa_gcframe = tbaa_make_child_with_context(llvmctx, "jtbaa_gcframe").first;
+    MDNode *tbaa_data;
+    MDNode *tbaa_data_scalar;
+    std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child_with_context(llvmctx, "jtbaa_data");
+    tbaa_tag = tbaa_make_child_with_context(llvmctx, "jtbaa_tag", tbaa_data_scalar).first;
 
     pgcstack_getter = M.getFunction("julia.get_pgcstack");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
@@ -211,9 +216,9 @@ namespace jl_intrinsics {
 }
 
 namespace jl_well_known {
-    static const char *GC_BIG_ALLOC_NAME = "jl_gc_big_alloc";
-    static const char *GC_POOL_ALLOC_NAME = "jl_gc_pool_alloc";
-    static const char *GC_QUEUE_ROOT_NAME = "jl_gc_queue_root";
+    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
+    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc);
+    static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
 
     using jl_intrinsics::addGCAllocAttributes;
 

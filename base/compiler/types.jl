@@ -17,6 +17,11 @@ If `interp` is an `AbstractInterpreter`, it is expected to provide at least the 
 """
 abstract type AbstractInterpreter end
 
+struct ArgInfo
+    fargs::Union{Nothing,Vector{Any}}
+    argtypes::Vector{Any}
+end
+
 """
     InferenceResult
 
@@ -29,12 +34,13 @@ mutable struct InferenceResult
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     valid_worlds::WorldRange # if inference and optimization is finished
-    function InferenceResult(linfo::MethodInstance, given_argtypes = nothing, va_override=false)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes, va_override)
+    function InferenceResult(linfo::MethodInstance,
+                             arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing,
+                             va_override::Bool = false)
+        argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo, va_override)
         return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange())
     end
 end
-
 
 """
     OptimizationParams
@@ -54,8 +60,6 @@ struct OptimizationParams
     MAX_TUPLE_SPLAT::Int
     MAX_UNION_SPLITTING::Int
 
-    unoptimize_throw_blocks::Bool
-
     function OptimizationParams(;
             inlining::Bool = inlining_enabled(),
             inline_cost_threshold::Int = 100,
@@ -65,7 +69,6 @@ struct OptimizationParams
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
-            unoptimize_throw_blocks::Bool = true,
         )
         return new(
             inlining,
@@ -76,7 +79,6 @@ struct OptimizationParams
             max_methods,
             tuple_splat,
             union_splitting,
-            unoptimize_throw_blocks,
         )
     end
 end
@@ -218,7 +220,6 @@ may_discard_trees(::AbstractInterpreter) = true
 verbose_stmt_info(::AbstractInterpreter) = false
 
 method_table(interp::AbstractInterpreter) = InternalMethodTable(get_world_counter(interp))
-inlining_policy(::AbstractInterpreter) = default_inlining_policy
 
 """
 By default `AbstractInterpreter` implements the following inference bail out logic:
@@ -235,3 +236,14 @@ bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) 
     return rt === Any
 bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
     return rt === Any
+
+"""
+    infer_compilation_signature(::AbstractInterpreter)::Bool
+
+For some call sites (for example calls to varargs methods), the signature to be compiled
+and executed at run time can differ from the argument types known at the call site.
+This flag controls whether we should always infer the compilation signature in addition
+to the call site signature.
+"""
+infer_compilation_signature(::AbstractInterpreter) = false
+infer_compilation_signature(::NativeInterpreter) = true

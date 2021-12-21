@@ -338,7 +338,7 @@ For example with `OProfile` you can try a simple recording :
 >opreport -l `which ./julia`
 ```
 
-Or similary with `perf` :
+Or similarly with `perf` :
 
 ```
 $ ENABLE_JITPROFILING=1 perf record -o /tmp/perf.data --call-graph dwarf -k 1 ./julia /test/fastmath.jl
@@ -347,7 +347,7 @@ $ perf report --call-graph -G -i /tmp/perf-jit.data
 ```
 
 There are many more interesting things that you can measure about your program, to get a comprehensive list
-please read the [Linux perf examples page](http://www.brendangregg.com/perf.html).
+please read the [Linux perf examples page](https://www.brendangregg.com/perf.html).
 
 Remember that perf saves for each execution a `perf.data` file that, even for small programs, can get
 quite large. Also the perf LLVM module saves temporarily debug objects in `~/.debug/jit`, remember

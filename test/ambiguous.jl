@@ -66,7 +66,7 @@ end
 ## Other ways of accessing functions
 # Test that non-ambiguous cases work
 let io = IOBuffer()
-    @test @test_logs precompile(ambig, (Int, Int))
+    @test precompile(ambig, (Int, Int))
     cf = @eval @cfunction(ambig, Int, (Int, Int))
     @test ccall(cf, Int, (Int, Int), 1, 2) == 4
     @test length(code_lowered(ambig, (Int, Int))) == 1
@@ -75,7 +75,7 @@ end
 
 # Test that ambiguous cases fail appropriately
 let io = IOBuffer()
-    @test @test_logs (:warn,) precompile(ambig, (UInt8, Int))
+    @test !precompile(ambig, (UInt8, Int))
     cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
     @test_throws(MethodError(ambig, (UInt8(1), Int(2)), get_world_counter()),
                  ccall(cf, Int, (UInt8, Int), 1, 2))
@@ -385,5 +385,13 @@ end
 (::Type{T})(x::X) where {T <: A12814, X <: Array} = 1
 @test_throws MethodError B12814{3, Float64}([1, 2, 3]) # ambiguous
 @test B12814{3,Float64}((1, 2, 3)).x === (1.0, 2.0, 3.0)
+
+# issue #43040
+module M43040
+   struct C end
+   stripType(::Type{C}) where {T} = C # where {T} is intentionally incorrect
+end
+
+@test isempty(detect_ambiguities(M43040; recursive=true))
 
 nothing

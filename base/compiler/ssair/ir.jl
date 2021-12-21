@@ -172,7 +172,7 @@ end
 NewInstruction(@nospecialize(stmt), @nospecialize(type)) =
     NewInstruction(stmt, type, nothing)
 NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Nothing, Int32}) =
-    NewInstruction(stmt, type, nothing, line, 0x00, false)
+    NewInstruction(stmt, type, nothing, line, IR_FLAG_NULL, false)
 
 effect_free(inst::NewInstruction) =
     NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | IR_FLAG_EFFECT_FREE, true)
@@ -193,7 +193,7 @@ function InstructionStream(len::Int)
     info = Array{Any}(undef, len)
     fill!(info, nothing)
     lines = fill(Int32(0), len)
-    flags = fill(0x00, len)
+    flags = fill(IR_FLAG_NULL, len)
     return InstructionStream(insts, types, info, lines, flags)
 end
 InstructionStream() = InstructionStream(0)
@@ -221,7 +221,7 @@ function resize!(stmts::InstructionStream, len)
     resize!(stmts.flag, len)
     for i in (old_length + 1):len
         stmts.line[i] = 0
-        stmts.flag[i] = 0x00
+        stmts.flag[i] = IR_FLAG_NULL
         stmts.info[i] = nothing
     end
     return stmts
@@ -358,13 +358,8 @@ getindex(it::UseRefIterator) = it.use[1].stmt
 #    use::Int
 #end
 
-struct OOBToken
-end
-
-struct UndefToken
-end
-const undef_token = UndefToken()
-
+struct OOBToken end; const OOB_TOKEN = OOBToken()
+struct UndefToken end; const UNDEF_TOKEN = UndefToken()
 
 function getindex(x::UseRef)
     stmt = x.stmt
@@ -372,45 +367,46 @@ function getindex(x::UseRef)
         rhs = stmt.args[2]
         if isa(rhs, Expr)
             if is_relevant_expr(rhs)
-                x.op > length(rhs.args) && return OOBToken()
+                x.op > length(rhs.args) && return OOB_TOKEN
                 return rhs.args[x.op]
             end
         end
-        x.op == 1 || return OOBToken()
+        x.op == 1 || return OOB_TOKEN
         return rhs
     elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
-        x.op > length(stmt.args) && return OOBToken()
+        x.op > length(stmt.args) && return OOB_TOKEN
         return stmt.args[x.op]
     elseif isa(stmt, GotoIfNot)
-        x.op == 1 || return OOBToken()
+        x.op == 1 || return OOB_TOKEN
         return stmt.cond
     elseif isa(stmt, ReturnNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        x.op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, PiNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        x.op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, UpsilonNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        x.op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, PhiNode)
-        x.op > length(stmt.values) && return OOBToken()
-        isassigned(stmt.values, x.op) || return UndefToken()
+        x.op > length(stmt.values) && return OOB_TOKEN
+        isassigned(stmt.values, x.op) || return UNDEF_TOKEN
         return stmt.values[x.op]
     elseif isa(stmt, PhiCNode)
-        x.op > length(stmt.values) && return OOBToken()
-        isassigned(stmt.values, x.op) || return UndefToken()
+        x.op > length(stmt.values) && return OOB_TOKEN
+        isassigned(stmt.values, x.op) || return UNDEF_TOKEN
         return stmt.values[x.op]
     else
-        return OOBToken()
+        return OOB_TOKEN
     end
 end
 
 function is_relevant_expr(e::Expr)
-    return e.head in (:call, :invoke, :new, :splatnew, :(=), :(&),
+    return e.head in (:call, :invoke, :invoke_modify,
+                      :new, :splatnew, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
                       :undefcheck, :throw_undef_if_not,
@@ -474,8 +470,8 @@ iterate(it::UseRefIterator) = (it.use[1].op = 0; iterate(it, nothing))
     while true
         use.op += 1
         y = use[]
-        y === OOBToken() && return nothing
-        y === UndefToken() || return it.use
+        y === OOB_TOKEN && return nothing
+        y === UNDEF_TOKEN || return it.use
     end
 end
 
@@ -531,7 +527,7 @@ function insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::
     node[:line] = something(inst.line, ir.stmts[pos][:line])
     flag = inst.flag
     if !inst.effect_free_computed
-        if stmt_effect_free(inst.stmt, inst.type, ir, ir.sptypes)
+        if stmt_effect_free(inst.stmt, inst.type, ir)
             flag |= IR_FLAG_EFFECT_FREE
         end
     end
@@ -730,7 +726,7 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
     elseif isa(before, OldSSAValue)
         pos = before.id
         if pos < compact.idx
-            renamed = compact.ssa_rename[pos]
+            renamed = compact.ssa_rename[pos]::AnySSAValue
             count_added_node!(compact, inst.stmt)
             line = something(inst.line, compact.result[renamed.id][:line])
             node = add!(compact.new_new_nodes, renamed.id, attach_after)
@@ -776,7 +772,7 @@ function insert_node_here!(compact::IncrementalCompact, inst::NewInstruction, re
         resize!(compact, result_idx)
     end
     flag = inst.flag
-    if !inst.effect_free_computed && stmt_effect_free(inst.stmt, inst.type, compact, compact.ir.sptypes)
+    if !inst.effect_free_computed && stmt_effect_free(inst.stmt, inst.type, compact)
         flag |= IR_FLAG_EFFECT_FREE
     end
     node = compact.result[result_idx]
@@ -1322,10 +1318,12 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         compact.result[old_result_idx][:inst]), (compact.idx, active_bb)
 end
 
-function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing)
+function maybe_erase_unused!(
+    extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int,
+    callback = null_dce_callback)
     stmt = compact.result[idx][:inst]
     stmt === nothing && return false
-    if compact_exprtype(compact, SSAValue(idx)) === Bottom
+    if argextype(SSAValue(idx), compact) === Bottom
         effect_free = false
     else
         effect_free = compact.result[idx][:flag] & IR_FLAG_EFFECT_FREE != 0
@@ -1415,18 +1413,20 @@ function just_fixup!(compact::IncrementalCompact)
     end
 end
 
-function simple_dce!(compact::IncrementalCompact)
+function simple_dce!(compact::IncrementalCompact, callback = null_dce_callback)
     # Perform simple DCE for unused values
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        maybe_erase_unused!(extra_worklist, compact, idx)
+        maybe_erase_unused!(extra_worklist, compact, idx, callback)
     end
     while !isempty(extra_worklist)
-        maybe_erase_unused!(extra_worklist, compact, pop!(extra_worklist))
+        maybe_erase_unused!(extra_worklist, compact, pop!(extra_worklist), callback)
     end
 end
+
+null_dce_callback(x::SSAValue) = return
 
 function non_dce_finish!(compact::IncrementalCompact)
     result_idx = compact.result_idx

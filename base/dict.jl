@@ -367,6 +367,7 @@ end
         # > 3/4 deleted or > 2/3 full
         rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
     end
+    nothing
 end
 
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
@@ -391,6 +392,22 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
 
     return h
 end
+
+function setindex!(h::Dict{K,Any}, v, key::K) where K
+    @nospecialize v
+    index = ht_keyindex2!(h, key)
+
+    if index > 0
+        h.age += 1
+        @inbounds h.keys[index] = key
+        @inbounds h.vals[index] = v
+    else
+        @inbounds _setindex!(h, v, key, -index)
+    end
+
+    return h
+end
+
 
 """
     get!(collection, key, default)
@@ -826,6 +843,6 @@ length(t::ImmutableDict) = count(Returns(true), t)
 isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
-_similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K, V} = empty(c, K, V)
-_similar_for(c::AbstractDict, ::Type{T}, itr, isz) where {T} =
+_similar_for(c::AbstractDict, ::Type{Pair{K,V}}, itr, isz, len) where {K, V} = empty(c, K, V)
+_similar_for(c::AbstractDict, ::Type{T}, itr, isz, len) where {T} =
     throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))

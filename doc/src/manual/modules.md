@@ -189,7 +189,7 @@ nice(::Cat) = "nice 😸"
 ```
 
 Which one you choose is a matter of style. The first form makes it clear that you are adding a
-method to a function in another module (remember, that the imports and the method defintion may be
+method to a function in another module (remember, that the imports and the method definition may be
 in separate files), while the second one is shorter, which is especially convenient if you are
 defining multiple methods.
 
@@ -205,7 +205,7 @@ For example, `Base` exports the function name `read`, but the CSV.jl package als
 If we are going to invoke CSV reading many times, it would be convenient to drop the `CSV.` qualifier.
 But then it is ambiguous whether we are referring to `Base.read` or `CSV.read`:
 
-```julia
+```julia-repl
 julia> read;
 
 julia> import CSV: read
@@ -214,7 +214,7 @@ WARNING: ignoring conflicting import of CSV.read into Main
 
 Renaming provides a solution:
 
-```julia
+```julia-repl
 julia> import CSV: read as rd
 ```
 
@@ -303,7 +303,7 @@ include(p) = Base.include(Mod, p)
 end
 ```
 
-If even `Core` is not wanted, a module that imports nothing at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref).
+If even `Core` is not wanted, a module that imports nothing and defines no names at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref).
 
 ### Standard modules
 

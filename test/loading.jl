@@ -132,18 +132,6 @@ end
 @test_throws ArgumentError parse(UUID, "not a UUID")
 @test tryparse(UUID, "either is this") === nothing
 
-function subset(v::Vector{T}, m::Int) where T
-    T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
-end
-
-function perm(p::Vector, i::Int)
-    for j = length(p):-1:1
-        i, k = divrem(i, j)
-        p[j], p[k+1] = p[k+1], p[j]
-    end
-    return p
-end
-
 @testset "explicit_project_deps_get" begin
     mktempdir() do dir
         project_file = joinpath(dir, "Project.toml")
@@ -152,52 +140,94 @@ end
         proj_uuid = dummy_uuid(project_file)
         root_uuid = uuid4()
         this_uuid = uuid4()
-        # project file to subset/permute
-        lines = split("""
-        name = "Root"
-        uuid = "$root_uuid"
-        [deps]
-        This = "$this_uuid"
-        """, '\n')
-        N = length(lines)
-        # test every permutation of every subset of lines
-        for m = 0:2^N-1
-            s = subset(lines, m) # each subset of lines
-            for i = 1:factorial(count_ones(m))
-                p = perm(s, i) # each permutation of the subset
-                open(project_file, write=true) do io
-                    for line in p
-                        println(io, line)
-                    end
-                end
-                # look at lines and their order
-                n = findfirst(line -> startswith(line, "name"), p)
-                u = findfirst(line -> startswith(line, "uuid"), p)
-                d = findfirst(line -> line == "[deps]", p)
-                t = findfirst(line -> startswith(line, "This"), p)
-                # look up various packages by name
-                root = Base.explicit_project_deps_get(project_file, "Root")
-                this = Base.explicit_project_deps_get(project_file, "This")
-                that = Base.explicit_project_deps_get(project_file, "That")
-                # test that the correct answers are given
-                @test root == (something(n, N+1) ≥ something(d, N+1) ? nothing :
-                               something(u, N+1) < something(d, N+1) ? root_uuid : proj_uuid)
-                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : nothing)
-                @test that == nothing
-            end
+
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [project_file])
+            write(project_file, """
+            name = "Root"
+            uuid = "$root_uuid"
+            [deps]
+            This = "$this_uuid"
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == root_uuid
+            @test this.uuid == this_uuid
+            @test that == nothing
+
+            write(project_file, """
+            name = "Root"
+            This = "$this_uuid"
+            [deps]
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == proj_uuid
+            @test this == nothing
+            @test that == nothing
+        finally
+            copy!(LOAD_PATH, old_load_path)
         end
     end
 end
+
+# extras
+@testset "extras" begin
+    mktempdir() do dir
+        project_file = joinpath(dir, "Project.toml")
+        touch(project_file) # dummy_uuid calls realpath
+        # various UUIDs to work with
+        proj_uuid = dummy_uuid(project_file)
+        root_uuid = uuid4()
+        this_uuid = uuid4()
+
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [project_file])
+            write(project_file, """
+            name = "Root"
+            uuid = "$root_uuid"
+            [extras]
+            This = "$this_uuid"
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == root_uuid
+            @test this == nothing
+            @test that == nothing
+
+            @test Base.get_uuid_name(project_file, this_uuid) == "This"
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
+    end
+end
+
 
 ## functional testing of package identification, location & loading ##
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
 saved_active_project = Base.ACTIVE_PROJECT[]
+watcher_counter = Ref(0)
+push!(Base.active_project_callbacks, () -> watcher_counter[] += 1)
+push!(Base.active_project_callbacks, () -> error("broken"))
 
 push!(empty!(LOAD_PATH), joinpath(@__DIR__, "project"))
 append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
-Base.ACTIVE_PROJECT[] = nothing
+@test watcher_counter[] == 0
+@test_logs (:error, r"active project callback .* failed") Base.set_active_project(nothing)
+@test watcher_counter[] == 1
 
 @test load_path() == [joinpath(@__DIR__, "project", "Project.toml")]
 
@@ -609,10 +639,10 @@ end == "opening file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")
 try
-    Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
+    Base.set_active_project(joinpath(@__DIR__, "TestPkg"))
     @eval using TestPkg
 finally
-    Base.ACTIVE_PROJECT[] = old_act_proj
+    Base.set_active_project(old_act_proj)
     popfirst!(LOAD_PATH)
 end
 
@@ -695,7 +725,9 @@ end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-Base.ACTIVE_PROJECT[] = saved_active_project
+for _ = 1:2 pop!(Base.active_project_callbacks) end
+Base.set_active_project(saved_active_project)
+@test watcher_counter[] == 3
 
 # issue #28190
 module Foo; import Libdl; end
@@ -754,5 +786,19 @@ end
         raw_manifest = Base.parsed_toml(manifest_file)
         @test Base.is_v1_format_manifest(raw_manifest) == false
         @test Base.get_deps(raw_manifest) == deps
+    end
+end
+
+@testset "error message loading pkg bad module name" begin
+    mktempdir() do tmp
+        old_loadpath = copy(LOAD_PATH)
+        try
+            push!(LOAD_PATH, tmp)
+            write(joinpath(tmp, "BadCase.jl"), "module badcase end")
+            @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
+                                        check for typos in package module name") (@eval using BadCase)
+        finally
+            copy!(LOAD_PATH, old_loadpath)
+        end
     end
 end

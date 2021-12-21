@@ -982,6 +982,26 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
     end
 end
 
+
+#issue 40164
+@testset "llvm parameter attributes on cfunction closures" begin
+    struct Struct40164
+        x::Cdouble
+        y::Cdouble
+        z::Cdouble
+    end
+
+    function test_40164()
+        ret = Struct40164[]
+        f = x::Struct40164 -> (push!(ret, x); nothing)
+        f_c = @cfunction($f, Cvoid, (Struct40164,))
+        ccall(f_c.ptr, Ptr{Cvoid}, (Struct40164,), Struct40164(0, 1, 2))
+        ret
+    end
+
+    @test test_40164() == [Struct40164(0, 1, 2)]
+end
+
 else
 
 @test_broken "cfunction: no support for closures on this platform"
@@ -1781,6 +1801,11 @@ ccall_with_undefined_lib() = ccall((:time, xx_nOt_DeFiNeD_xx), Cint, (Ptr{Cvoid}
     b8  = transcode(UInt8, b)
     b16 = transcode(UInt16, b8)
     @test b16 == b
+end
+
+@testset "transcode String to String" begin
+    a = "Julia strings and things"
+    @test transcode(String, a) === a
 end
 
 # issue 33413

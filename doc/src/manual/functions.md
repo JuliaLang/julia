@@ -74,11 +74,11 @@ and the `::Integer` specification means that it will only be callable when `n` i
 
 Argument-type declarations **normally have no impact on performance**: regardless of what argument types (if any) are declared, Julia compiles a specialized version of the function for the actual argument types passed by the caller.   For example, calling `fib(1)` will trigger the compilation of specialized version of `fib` optimized specifically for `Int` arguments, which is then re-used if `fib(7)` or `fib(15)` are called.  (There are rare exceptions when an argument-type declaration can trigger additional compiler specializations; see: [Be aware of when Julia avoids specializing](@ref).)  The most common reasons to declare argument types in Julia are, instead:
 
-* **Dispatch:** As explained in [Methods](@ref), you can have different versions ("methods") of a function for different argument types, in which case the argument types are used to determine which implementation is called for which arguments.  For example, you might implement a completely different algorithm `fib(x::Number) = ...` that works for any `Number` type by using [Binet's formula](https://en.wikipedia.org/wiki/Fibonacci_number#Binet's_formula) to extend it to non-integer values.
+* **Dispatch:** As explained in [Methods](@ref), you can have different versions ("methods") of a function for different argument types, in which case the argument types are used to determine which implementation is called for which arguments.  For example, you might implement a completely different algorithm `fib(x::Number) = ...` that works for any `Number` type by using [Binet's formula](https://en.wikipedia.org/wiki/Fibonacci_number#Binet%27s_formula) to extend it to non-integer values.
 * **Correctness:** Type declarations can be useful if your function only returns correct results for certain argument types.  For example, if we omitted argument types and wrote `fib(n) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)`, then `fib(1.5)` would silently give us the nonsensical answer `1.0`.
 * **Clarity:** Type declarations can serve as a form of documentation about the expected arguments.
 
-However, it is a **common mistake to overly restrict the argument types**, which can unnecessarily limit the applicability of the function and prevent it from being re-used in circumstances you did not anticipate.    For example, the `fib(n::Integer)` function above works equally well for `Int` arguments (machine integers) and `BigInt` arbitrary-precision integers (see [BigFloats and BigInts](@ref)), which is especially useful because Fibonacci numbers grow exponentially rapidly and will quickly overflow any fixed-precision type like `Int` (see [Overflow behavior](@ref)).  If we had declared our function as `fib(n::Int)`, however, the application to `BigInt` would have been prevented for no reason.   In general, you should use the most general applicable abstract types for arguments, and **when in doubt, omit the argument types**.  You can always add argument-type specifications later if they become necessary, and you don't sacrifice performance or functionality by omitting them.
+However, it is a **common mistake to overly restrict the argument types**, which can unnecessarily limit the applicability of the function and prevent it from being re-used in circumstances you did not anticipate.    For example, the `fib(n::Integer)` function above works equally well for `Int` arguments (machine integers) and `BigInt` arbitrary-precision integers (see [BigFloats and BigInts](@ref BigFloats-and-BigInts)), which is especially useful because Fibonacci numbers grow exponentially rapidly and will quickly overflow any fixed-precision type like `Int` (see [Overflow behavior](@ref)).  If we had declared our function as `fib(n::Int)`, however, the application to `BigInt` would have been prevented for no reason.   In general, you should use the most general applicable abstract types for arguments, and **when in doubt, omit the argument types**.  You can always add argument-type specifications later if they become necessary, and you don't sacrifice performance or functionality by omitting them.
 
 ## The `return` Keyword
 
@@ -481,7 +481,7 @@ Instead of destructuring based on iteration, the right side of assignments can a
 This follows the syntax for NamedTuples, and works by assigning to each variable on the left a
 property of the right side of the assignment with the same name using `getproperty`:
 
-```julia
+```jldoctest
 julia> (; b, a) = (a=1, b=2, c=3)
 (a = 1, b = 2, c = 3)
 
@@ -498,7 +498,7 @@ The destructuring feature can also be used within a function argument.
 If a function argument name is written as a tuple (e.g. `(x, y)`) instead of just
 a symbol, then an assignment `(x, y) = argument` will be inserted for you:
 
-```julia
+```julia-repl
 julia> minmax(x, y) = (y < x) ? (y, x) : (x, y)
 
 julia> gap((min, max)) = max - min
@@ -512,7 +512,7 @@ would be a two-argument function, and this example would not work.
 
 Similarly, property destructuring can also be used for function arguments:
 
-```julia
+```julia-repl
 julia> foo((; x, y)) = x + y
 foo (generic function with 1 method)
 
