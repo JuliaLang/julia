@@ -1192,7 +1192,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
         throw(ArgumentError("argument is not a generic function"))
     end
     if isa(f, Core.OpaqueClosure)
-        return code_typed_opaque_closure(f, types; optimize, debuginfo, interp)
+        return code_typed_opaque_closure(f; optimize, debuginfo, interp)
     end
     ft = Core.Typeof(f)
     if isa(types, Type)
@@ -1258,10 +1258,11 @@ function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure);
         debuginfo::Symbol=:default,
         interp = Core.Compiler.NativeInterpreter(closure.world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    if isa(closure.source, Method)
-        code = _uncompressed_ir(closure.source, closure.source.source)
+    m = closure.source
+    if isa(m, Method)
+        code = _uncompressed_ir(m, m.source)
         debuginfo === :none && remove_linenums!(code)
-        return Any[Pair{CodeInfo,Any}(code, code.rettype)]
+        return Any[(code => code.rettype)]
     else
         error("encountered invalid Core.OpaqueClosure object")
     end

@@ -211,3 +211,7 @@ end
 const GLOBAL_OPAQUE_CLOSURE = @opaque () -> 123
 call_global_opaque_closure() = GLOBAL_OPAQUE_CLOSURE()
 @test call_global_opaque_closure() == 123
+
+let oc = @opaque a->sin(a)
+    @test length(code_typed(oc, (Int,))) == 1
+end
