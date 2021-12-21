@@ -398,7 +398,7 @@ NamedTuple{(:a, :b), Tuple{Float64, String}}
 """
 macro NamedTuple(x)
     Meta.isexpr(x, (:braces, :block)) || throw(ArgumentError("@NamedTuple expects {...} or begin...end"))
-    covar = length(x.args)==1 && Meta.isexpr(x.args[1], :<:)
+    covar = Meta.isexpr(x,:braces,1) && Meta.isexpr(x.args[1], :<:)
     covar && (x = x.args[1])
     xdecls = filter(xa -> !(xa isa LineNumberNode), x.args)
     all(xa -> xa isa Symbol || Meta.isexpr(xa, :(::)), xdecls) ||
