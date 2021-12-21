@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-58fd2211-1a18-454c-ad92-e373304a94c7",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-7b93ad83-27bf-433f-b769-cde3288fe3a1",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-12-06T07:52:05Z"
+        "created": "2021-12-21T07:13:19Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -18,9 +18,9 @@
         {
             "name": "Julia",
             "SPDXID": "SPDXRef-JuliaMain",
-            "versionInfo": "v1.8.0",
+            "versionInfo": "1.8.0-DEV",
             "packageFileName": "./",
-            "downloadLocation": "git+https://github.com/JuliaLang/julia.git@v1.8.0",
+            "downloadLocation": "git+https://github.com/JuliaLang/julia.git@v1.8.0-DEV",
             "filesAnalyzed": false,
             "homepage": "https://julialang.org",
             "licenseConcluded": "MIT",
