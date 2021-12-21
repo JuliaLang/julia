@@ -230,7 +230,7 @@ let src = code_typed1((Any,Any,Any)) do x, y, z
     end
 end
 # FIXME? in order to handle nested mutable `getfield` calls, we run SROA iteratively until
-# any nested mutable `getfield` calls become no longer eliminatable:
+# any nested mutable `getfield` calls become no longer eliminable:
 # it's probably not the most efficient option and we may want to introduce some sort of
 # alias analysis and eliminates all the loads at once.
 # mutable(immutable(...)) case
@@ -306,6 +306,207 @@ let # NOTE `sroa_mutables!` eliminate from innermost definitions, so that it sho
         (Ref(Ref(Ref(Ref(Ref(Ref(Ref(Ref(Ref(Ref((x))))))))))))[][][][][][][][][][]
     end
     @test !any(isnew, src.code)
+end
+
+# ϕ-allocation elimination
+# ------------------------
+mutable struct MutableSome
+    x::Any
+    MutableSome(@nospecialize x) = new(x)
+    MutableSome() = new()
+end
+Base.getindex(s::MutableSome) = s.x
+Base.setindex!(s::MutableSome, @nospecialize x) = s.x = x
+@testset "mutable ϕ-allocation elimination" begin
+    # safe cases
+    let src = code_typed1((Bool,Any,Any)) do cond, x, y
+            if cond
+                ϕ = MutableSome(x)
+            else
+                ϕ = MutableSome(y)
+            end
+            ϕ[]
+        end
+        @test !any(isnew, src.code)
+        @test count(src.code) do @nospecialize x
+            isa(x, Core.PhiNode) &&
+            #=x=# Core.Argument(3) in x.values &&
+            #=y=# Core.Argument(4) in x.values
+        end == 1
+    end
+    let src = code_typed1((Bool,Bool,Any,Any,Any)) do cond1, cond2, x, y, z
+            if cond1
+                ϕ = MutableSome(x)
+            elseif cond2
+                ϕ = MutableSome(y)
+            else
+                ϕ = MutableSome(z)
+            end
+            ϕ[]
+        end
+        @test !any(isnew, src.code)
+        @test count(src.code) do @nospecialize x
+            isa(x, Core.PhiNode) &&
+            #=x=# Core.Argument(4) in x.values &&
+            #=y=# Core.Argument(5) in x.values &&
+            #=z=# Core.Argument(6) in x.values
+        end == 1
+    end
+    let src = code_typed1((Bool,Any,Any,Any)) do cond, x, y, z
+            if cond
+                ϕ = MutableSome(x)
+            else
+                ϕ = MutableSome(y)
+                ϕ[] = z
+            end
+            ϕ[]
+        end
+        @test !any(isnew, src.code)
+        @test !any(iscall((src, setfield!)), src.code)
+        @test count(src.code) do @nospecialize x
+            isa(x, Core.PhiNode) &&
+            #=x=# Core.Argument(3) in x.values &&
+            #=z=# Core.Argument(5) in x.values
+        end == 1
+    end
+    let src = code_typed1((Bool,Any,Any,Any)) do cond, x, y, z
+            if cond
+                ϕ = MutableSome(x)
+            else
+                ϕ = MutableSome(y)
+            end
+            ϕ[] = z
+            ϕ[]
+        end
+        @test !any(isnew, src.code)
+        @test !any(iscall((src, setfield!)), src.code)
+        @test count(src.code) do @nospecialize x
+            isa(x, Core.ReturnNode) &&
+            #=z=# Core.Argument(5) === x.val
+        end == 1
+    end
+    let src = code_typed1((Bool,Any,Any,)) do cond, x, y
+            if cond
+                ϕ = MutableSome(x)
+                out1 = ϕ[]
+            else
+                ϕ = MutableSome(y)
+                out1 = ϕ[]
+            end
+            out2 = ϕ[]
+            out1, out2
+        end
+        @test !any(isnew, src.code)
+        @test count(src.code) do @nospecialize x
+            isa(x, Core.PhiNode) &&
+            #=x=# Core.Argument(3) in x.values &&
+            #=y=# Core.Argument(4) in x.values
+        end == 2
+    end
+    let src = code_typed1((Bool,Any,Any,Any)) do cond, x, y, z
+            if cond
+                ϕ = MutableSome(x)
+                out1 = ϕ[]
+            else
+                ϕ = MutableSome(y)
+                out1 = ϕ[]
+                ϕ[] = z
+            end
+            out2 = ϕ[]
+            out1, out2
+        end
+        @test !any(isnew, src.code)
+        @test !any(iscall((src, setfield!)), src.code)
+        @test count(src.code) do @nospecialize x
+            isa(x, Core.PhiNode) &&
+            #=x=# Core.Argument(3) in x.values &&
+            #=y=# Core.Argument(4) in x.values
+        end == 1
+        @test count(src.code) do @nospecialize x
+            isa(x, Core.PhiNode) &&
+            #=x=# Core.Argument(3) in x.values &&
+            #=z=# Core.Argument(5) in x.values
+        end == 1
+    end
+
+    # unsafe cases
+    let src = code_typed1((Bool,Any,Any)) do cond, x, y
+            if cond
+                ϕ = MutableSome(x)
+            else
+                ϕ = MutableSome(y)
+            end
+            some_escape(ϕ)
+            ϕ[]
+        end
+        @test count(isnew, src.code) == 2
+    end
+    let src = code_typed1((Bool,Any,Any)) do cond, x, y
+            if cond
+                ϕ = MutableSome(x)
+                some_escape(ϕ)
+            else
+                ϕ = MutableSome(y)
+            end
+            ϕ[]
+        end
+        @test count(isnew, src.code) == 2
+    end
+    let src = code_typed1((Bool,Any,)) do cond, x
+            if cond
+                ϕ = MutableSome(x)
+            else
+                ϕ = MutableSome()
+            end
+            ϕ[]
+        end
+        @test count(isnew, src.code) == 2
+    end
+    let src = code_typed1((Bool,Any,Any)) do cond, x, y
+            if cond
+                ϕ = MutableSome(x)
+            else
+                ϕ = MutableSome()
+                ϕ[] = y
+            end
+            ϕ[]
+        end
+        @test !any(isnew, src.code)
+        @test !any(iscall((src, setfield!)), src.code)
+        @test count(src.code) do @nospecialize x
+            isa(x, Core.PhiNode) &&
+            #=x=# Core.Argument(3) in x.values &&
+            #=y=# Core.Argument(4) in x.values
+        end == 1
+    end
+
+    # FIXME allocation forming multiple ϕ
+    let src = code_typed1((Bool,Any,Any)) do cond, x, y
+            if cond
+                ϕ2 = ϕ1 = MutableSome(x)
+            else
+                ϕ2 = ϕ1 = MutableSome(y)
+            end
+            ϕ1[], ϕ2[]
+        end
+        @test_broken !any(isnew, src.code)
+        @test_broken count(src.code) do @nospecialize x
+            isa(x, Core.PhiNode) &&
+            #=x=# Core.Argument(3) in x.values &&
+            #=y=# Core.Argument(4) in x.values
+        end == 1
+    end
+end
+function mutable_ϕ_elim(x, xs)
+    r = Ref(x)
+    for x in xs
+        r = Ref(x)
+    end
+    return r[]
+end
+let xs = String[string(gensym()) for _ in 1:100]
+    mutable_ϕ_elim("init", xs)
+    @test @allocated(mutable_ϕ_elim("init", xs)) == 0
 end
 
 # should work nicely with inlining to optimize away a complicated case
