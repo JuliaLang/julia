@@ -33,22 +33,29 @@ struct RawAllocResults
 end
 
 """
-    AllocProfile.@profile(skip_every::Int, ex)
+    AllocProfile.@profile [skip_every=10_000] ex
 
 Profile allocations that happen during `my_function`, returning
 both the result and and AllocResults struct.
 """
-macro profile(skip_every, ex)
+macro profile(opts, ex)
+    _prof_expr(ex, opts)
+end
+macro profile(ex)
+    _prof_expr(ex, :(skip_every=1000))
+end
+
+function _prof_expr(expr, opts)
     quote
-        $start($skip_every)
-        local res = $(esc(ex))
+        $start(; $(esc(opts)))
+        local res = $(esc(expr))
         local profile = $stop()
         $clear()
         (res, profile)
     end
 end
 
-function start(skip_every::Int=0)
+function start(; skip_every::Int)
     ccall(:jl_start_alloc_profile, Cvoid, (Cint,), skip_every)
 end
 
