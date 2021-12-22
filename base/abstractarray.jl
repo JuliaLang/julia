@@ -904,10 +904,10 @@ function copyto!(dest::AbstractArray, src)
     if haslength(src)
         length(dest) < length(src) &&
             throw(ArgumentError("destination has fewer elements than required"))
-        I = firstindex(dest)
+        i = Int(firstindex(dest))
         @inbounds for x in src
-            dest[I] = x
-            I = nextind(dest, I)
+            dest[i] = x
+            i += 1
         end
     else
         destiter = eachindex(dest)
