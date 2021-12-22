@@ -1139,4 +1139,6 @@ function warning_empty(;summary = false)
     end
 end
 
+include("AllocProfile.jl")
+
 end # module
