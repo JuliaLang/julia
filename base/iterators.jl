@@ -80,7 +80,7 @@ Not all iterator types `T` support reverse-order iteration.  If `T`
 doesn't, then iterating over `Iterators.reverse(itr::T)` will throw a [`MethodError`](@ref)
 because of the missing [`iterate`](@ref) methods for `Iterators.Reverse{T}`.
 (To implement these methods, the original iterator
-`itr::T` can be obtained from `r = Iterators.reverse(itr)` by `r.itr`.)
+`itr::T` can be obtained from an `r::Iterators.Reverse{T}` object by `r.itr`.)
 
 # Examples
 ```jldoctest
