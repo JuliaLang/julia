@@ -1294,7 +1294,7 @@ let matchend = Dict("\"" => r"\"", "\"\"\"" => r"\"\"\"", "'" => r"'",
                 end
             elseif match[1] != '#' # quote match: check non-escaped
                 while j !== nothing
-                    notbackslash = findprev(!=('\\'), code, previn(code, first(j)))::Int
+                    notbackslash = findprev(!=('\\'), code, prevind(code, first(j)))::Int
                     isodd(first(j) - notbackslash) && break # not escaped
                     j = findnext(matchend[match]::Regex, code, nextind(code, first(j)))
                 end
