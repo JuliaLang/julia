@@ -1284,28 +1284,28 @@ let matchend = Dict("\"" => r"\"", "\"\"\"" => r"\"\"\"", "'" => r"'",
             i = findnext(r"\"(?!\"\")|\"\"\"|'|`(?!``)|```|#(?!=)|#=", code, pos)
             isnothing(i) && break
             match = SubString(code, i)
-            j = findnext(matchend[match]::Regex, code, last(i) + 1)
+            j = findnext(matchend[match]::Regex, code, nextind(code, last(i)))
             if match == "#=" # possibly nested
                 nested = 1
                 while j !== nothing
                     nested += SubString(code, j) == "#=" ? +1 : -1
                     iszero(nested) && break
-                    j = findnext(r"=#|#=", code, last(j) + 1)
+                    j = findnext(r"=#|#=", code, nextind(code, last(j)))
                 end
             elseif match[1] != '#' # quote match: check non-escaped
                 while j !== nothing
-                    notbackslash = findprev(!=('\\'), code, first(j) - 1)::Int
+                    notbackslash = findprev(!=('\\'), code, previn(code, first(j)))::Int
                     isodd(first(j) - notbackslash) && break # not escaped
-                    j = findnext(matchend[match]::Regex, code, first(j) + 1)
+                    j = findnext(matchend[match]::Regex, code, nextind(code, first(j)))
                 end
             end
             isnothing(j) && break
             if match[1] == '#'
-                print(buf, SubString(code, pos, first(i) - 1))
+                print(buf, SubString(code, pos, prevind(code, first(i))))
             else
                 print(buf, SubString(code, pos, last(i)), ' ', SubString(code, j))
             end
-            pos = last(j) + 1
+            pos = nextind(code, last(j))
         end
         print(buf, SubString(code, pos, lastindex(code)))
         return String(take!(buf))
