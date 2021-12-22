@@ -2633,18 +2633,24 @@ julia> stack((1:2, 3:4, 5.0:6.0))
  1.0  3.0  5.0
  2.0  4.0  6.0
 
-julia> A = rand(3, 7, 11); E = eachslice(A, dims=2);
+julia> A = rand(5, 7, 11);  summary(A)
+"5×7×11 Array{Float64, 3}"
+
+julia> E = eachslice(A, dims=2);
 
 julia> (element = size(first(E)), container = size(E))
-(element = (3, 11), container = (7,))
+(element = (5, 11), container = (7,))
 
-julia> stack(E) == cat(E...; dims=3)
+julia> stack(E) |> size
+(5, 11, 7)
+
+julia> stack(E) == stack(E; dims=3) == cat(E...; dims=3)
 true
 
 julia> stack(E; dims=2) == A  # inverse of eachslice
 true
 
-julia> M = (fill(i,2,3).+rand.() for i in 1:5, j in 1:7);
+julia> M = (fill(10i+j, 2, 3) for i in 1:5, j in 1:7);
 
 julia> (element = size(first(M)), container = size(M))
 (element = (2, 3), container = (5, 7))
@@ -2694,7 +2700,6 @@ stack(f, xs, yzs...; dims=:) = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
 
 _stack(dims::Union{Integer, Colon}, iter) = _stack(dims, IteratorSize(iter), iter)
 
-# Iterating over an unknown length via append! is slower than collecting:
 _stack(dims, ::IteratorSize, iter) = _stack(dims, collect(iter))
 
 function _stack(dims, ::Union{HasShape, HasLength}, iter)
@@ -2706,7 +2711,6 @@ function _stack(dims, ::Union{HasShape, HasLength}, iter)
         array = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
         isempty(array) && return _empty_stack(dims, T, S, iter)
         T2 = mapreduce(eltype, promote_type, array)
-        # stack(Any[[1,2], [3,4]]) is fine, but stack([Any[1,2], [3,4]]) isa Matrix{Any}
         _typed_stack(dims, T2, eltype(array), array)
     end
 end
@@ -2726,7 +2730,7 @@ function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_axes(A)) where {T, 
             off += 1
             xit = iterate(A, state)
         end
-    else  # This is like typed_hcat's path for dense arrays
+    else
         len = length(x1)
         while xit !== nothing
             x, state = xit
@@ -2739,8 +2743,6 @@ function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_axes(A)) where {T, 
     B
 end
 
-# Things like NamedTuples which are HasLength and can be iterated don't neccesarily
-# define axes (as they don't participate in broadcasting?), but we need that here:
 _axes(x) = _axes(x, IteratorSize(x))
 _axes(x, ::HasShape) = axes(x)
 _axes(x, ::HasLength) = (OneTo(length(x)),)
