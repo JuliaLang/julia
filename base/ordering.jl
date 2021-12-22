@@ -174,7 +174,7 @@ _Val(x) = _Val{x}()
 # If the 4th argument to _ord is _Val{false}, then the `by` function
 # is skipped for any element a of the form maybe_skip_by(a)
 
-_ord(lt::typeof(isless), by::typeof(identity), order::Ordering, ::_Val{true}) = 
+_ord(lt::typeof(isless), by::typeof(identity), order::Ordering, ::_Val{true}) =
     order
 _ord(lt::typeof(isless), by::typeof(identity), order::Ordering, ::_Val{false}) =
     order
@@ -204,10 +204,10 @@ function _ord(lt, by, order::Ordering, ::_Val{true})
 end
 
 
- 
+
 
 """
-    ord(lt, by, rev::Union{Bool, Nothing}, 
+    ord(lt, by, rev::Union{Bool, Nothing},
         order::Ordering=Forward, require_by=true)
 
 Construct an [`Ordering`](@ref) object from the same arguments used by
@@ -223,7 +223,7 @@ Passing an `lt` other than `isless` along with an `order` other than
 otherwise all options are independent and can be used together in all possible
 combinations.
 
-If `require_by` is true, then function `maybe_skip_by(a)` 
+If `require_by` is true, then function `maybe_skip_by(a)`
 is the same as `identity(a)` and therefore
 `by` is  applied in all cases.
 If `require_by` is false then the `by` function is
