@@ -1274,31 +1274,49 @@ answer_color(r::StreamREPL) = r.answer_color
 input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
 
-function _without_strings_and_comments(s::AbstractString)
-    # """hello"""
-    s = replace(s, r"\"\"\".*?[^\\]\"\"\""s => "julia")
-    # "hello"
-    s = replace(s, r"\"(\\\\\"|[^\"])*\"" => "philip")
-    # ```hello```
-    s = replace(s, r"```.*?```"s => "the")
-    # `hello`
-    s = replace(s, r"`(\\`|[^`])*`" => "corgi")
-
-    # multi-line #= comments =#
-    s = replace(s, r"\#=(?:([^\#\=]|\=(?!\#)|\#(?!\=))+|(?R))*+=\#" => "")
-    # single-line # comments
-    s = replace(s, r"#.*" => "")
-    return s
+let matchend = Dict("\"" => r"\"", "\"\"\"" => r"\"\"\"", "'" => r"'",
+    "`" => r"`", "```" => r"```", "#" => r"$"m, "#=" => r"=#|#=")
+    global _rm_strings_and_comments
+    function _rm_strings_and_comments(code::Union{String,SubString{String}})
+        buf = IOBuffer(sizehint = sizeof(code))
+        pos = 1
+        while true
+            i = findnext(r"\"(?!\"\")|\"\"\"|'|`(?!``)|```|#(?!=)|#=", code, pos)
+            isnothing(i) && break
+            match = SubString(code, i)
+            j = findnext(matchend[match]::Regex, code, last(i) + 1)
+            if match == "#=" # possibly nested
+                nested = 1
+                while j !== nothing
+                    nested += SubString(code, j) == "#=" ? +1 : -1
+                    iszero(nested) && break
+                    j = findnext(r"=#|#=", code, last(j) + 1)
+                end
+            elseif match[1] != '#' # quote match: check non-escaped
+                while j !== nothing
+                    notbackslash = findprev(!=('\\'), code, first(j) - 1)::Int
+                    isodd(first(j) - notbackslash) && break # not escaped
+                    j = findnext(matchend[match]::Regex, code, first(j) + 1)
+                end
+            end
+            isnothing(j) && break
+            if match[1] == '#'
+                print(buf, SubString(code, pos, first(i) - 1))
+            else
+                print(buf, SubString(code, pos, last(i)), ' ', SubString(code, j))
+            end
+            pos = last(j) + 1
+        end
+        print(buf, SubString(code, pos, lastindex(code)))
+        return String(take!(buf))
+    end
 end
 
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
-function ends_with_semicolon(line::AbstractString)
-    stripped_line = _without_strings_and_comments(line)
-    match = findlast(isequal(';'), stripped_line)::Union{Nothing,Int}
-
-    return match !== nothing && all(isspace, stripped_line[(match + 1):end])
-end
+ends_with_semicolon(code::AbstractString) = ends_with_semicolon(String(code))
+ends_with_semicolon(code::Union{String,SubString{String}}) =
+    contains(_rm_strings_and_comments(code), r";\s*$")
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     have_color = hascolor(repl)
