@@ -915,11 +915,11 @@ end
 function copyto!(dest::AbstractArray, dstart::Integer, src)
     i = Int(dstart)
     if haslength(src)
-        checkbounds(dest, i)
         checkbounds(dest, i + length(src) - 1)
-        for x in src
-            @inbounds dest[i] = x
-            i += 1
+        I = eachindex(dest)[i]
+        @inbounds for x in src
+            dest[I] = x
+            I = nextind(dest, I)
         end
     else
         for x in src
