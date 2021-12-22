@@ -2722,32 +2722,20 @@ function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_axes(A)) where {T, 
     ax1 = _axes(x1)
     B = similar(_prototype(x1, A), T, ax1..., Aax...)
     off = 1
-    if S <: NTuple{<:Any,T} && isbitstype(T) && isbitstype(S)
-        C = reinterpret(reshape, S, B)
-        while xit !== nothing
-            x, state = xit
-            @inbounds C[off] = x
-            off += 1
-            xit = iterate(A, state)
-        end
-    else
-        len = length(x1)
-        while xit !== nothing
-            x, state = xit
-            _stack_size_check(x, ax1)
-            copyto!(B, off, x) #, 1, len)
-            off += len
-            xit = iterate(A, state)
-        end
+    len = length(x1)
+    while xit !== nothing
+        x, state = xit
+        _stack_size_check(x, ax1)
+        copyto!(B, off, x)
+        off += len
+        xit = iterate(A, state)
     end
     B
 end
 
 _axes(x) = _axes(x, IteratorSize(x))
-_axes(x, ::HasShape) = axes(x)
 _axes(x, ::HasLength) = (OneTo(length(x)),)
 _axes(x, ::IteratorSize) = axes(x)
-    # throw(ArgumentError("cannot stack iterators of unknown or infinite length"))
 
 # For some dims values, stack(A; dims) == stack(vec(A)), and the : path will be faster
 _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S} =
@@ -2789,13 +2777,6 @@ function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
                 B[inds1...] = x
             else
                 copyto!(view(B, inds1...), x)
-            end
-        elseif dims==2
-            inds2 = ntuple(d -> d==2 ? i : Colon(), N1)
-            if x isa AbstractArray
-                B[inds2...] = x
-            else
-                copyto!(view(B, inds2...), x)
             end
         else
             inds = ntuple(d -> d==dims ? i : Colon(), N1)
