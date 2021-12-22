@@ -1,4 +1,4 @@
-module AllocProfile
+module Allocs
 
 using Base.StackTraces: StackTrace, StackFrame, lookup
 using Base: InterpreterIP
