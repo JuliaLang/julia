@@ -18,6 +18,6 @@ using AllocProfile
     @test first_alloc.size > 0
     @test length(first_alloc.stacktrace) > 0
     @test length(string(first_alloc.type)) > 0
-    
+
     @test length(profile.frees) > 0
 end
