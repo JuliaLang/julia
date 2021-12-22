@@ -1380,7 +1380,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
     jl_set_safe_restore(old_buf);
 }
 
-int gc_logging_enabled = 0;
+static int gc_logging_enabled = 0;
 
 JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
     gc_logging_enabled = enable;

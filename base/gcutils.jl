@@ -127,15 +127,6 @@ function disable_finalizers() @inline
 end
 
 """
-    GC.enable_logging(on::Bool)
-
-When turned on, print statistics about each GC to stdout.
-"""
-function enable_logging(on::Bool=true)
-    ccall(:jl_enable_gc_logging, Cvoid, (Cint,), on)
-end
-
-"""
     GC.@preserve x1 x2 ... xn expr
 
 Mark the objects `x1, x2, ...` as being *in use* during the evaluation of the
