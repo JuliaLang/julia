@@ -923,6 +923,8 @@ let ends_with_semicolon = REPL.ends_with_semicolon
     @test ends_with_semicolon("1;\r\n   \t\f")
     @test ends_with_semicolon("1;#text\n")
     @test ends_with_semicolon("""1;\n#text\n""")
+    @test !ends_with_semicolon("\"\\\";\"#\"")
+    @test ends_with_semicolon("\"\\\\\";#\"")
     @test !ends_with_semicolon("begin\na;\nb;\nend")
     @test !ends_with_semicolon("begin\na; #=#=#\n=#b=#\nend")
     @test ends_with_semicolon("\na; #=#=#\n=#b=#\n# test\n#=\nfoobar\n=##bazbax\n")
@@ -933,7 +935,7 @@ let ends_with_semicolon = REPL.ends_with_semicolon
     @test !ends_with_semicolon(""" "f()= 1; # a" """)
     @test ends_with_semicolon("f()= 1;")
     # the next result does not matter because this is not legal syntax
-   @test_nowarn ends_with_semicolon("1; #=# 2")
+    @test_nowarn ends_with_semicolon("1; #=# 2")
 end
 
 # PR #20794, TTYTerminal with other kinds of streams
