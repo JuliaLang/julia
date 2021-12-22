@@ -121,13 +121,11 @@ end
 
 function decode(raw_results::RawAllocResults)::AllocResults
     cache = BacktraceCache()
-    @info "ALLOCS"
     allocs = [
         decode_alloc(cache, unsafe_load(raw_results.allocs, i))
         for i in 1:raw_results.num_allocs
     ]
 
-    @info "FREES"
     frees = Dict{Type,UInt}()
     for i in 1:raw_results.num_frees
         free = unsafe_load(raw_results.frees, i)
