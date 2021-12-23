@@ -464,7 +464,10 @@ useful even for DSLs:
 * In try-catch-finally, the `finally` clause is allowed before the `catch`, but
   always executes afterward. (Presumably was this a mistake? It seems pretty awful!)
 
-## Parsing oddities and warts
+* When parsing `"[x \n\n ]"` the flisp parser gets confused, but `"[x \n ]"` is
+  parsed as `Expr(:vect)`
+
+## Parsing / AST oddities and warts
 
 There's many apparent inconsistencies between how `kw` and `=` are used when
 parsing `key=val` pairs inside parentheses.
@@ -508,3 +511,37 @@ Other oddities:
   Presumably because of the need to add a line number node in the flisp parser
   `if a xx elseif b yy end   ==>  (if a (block xx) (elseif (block b) (block yy)))`
 
+
+Flattened generators are hard because the Julia AST doesn't respect a key
+rule we normally expect: that the children of an AST node are a contiguous
+range in the source text. This is because the `for`s in
+`[xy for x in xs for y in ys]` are parsed in the normal order of a for loop as
+
+```
+for x in xs
+  for y in ys
+    push!(xy, collection)
+```
+
+and the standard Julia AST is like this:
+
+```
+(flatten
+ (generator
+  (generator
+   xy
+   (= y ys))
+  (= x xs))
+```
+
+however, note that if this tree were flattened, the order of tokens would be
+`(xy) (y in ys) (x in xs)` which is *not* the source order.  So in this case
+our tree needs to deviate from the Julia AST. The natural representation seems
+to be to flatten the generators:
+
+```
+(flatten
+  xy
+  (= x xs)
+  (= y ys))
+```

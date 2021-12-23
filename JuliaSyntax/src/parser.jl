@@ -220,7 +220,7 @@ end
 # Returns true if the block was nontrivial and a node needs to be emitted by
 # the caller.
 #
-# flisp: (define (parse-Nary s down ops head closer? add-linenums)
+# flisp: parse-Nary
 function parse_Nary(ps::ParseState, down, delimiters, closing_tokens)
     bump_trivia(ps)
     k = peek(ps)
@@ -264,7 +264,7 @@ end
 # end
 # ==> (block a b)
 #
-# flisp: (define (parse-block s (down parse-eq))
+# flisp: parse-block
 function parse_block(ps::ParseState, down=parse_eq, mark=position(ps),
                      consume_end=false)
     parse_block_inner(ps::ParseState, down)
@@ -282,7 +282,7 @@ end
 # a;b;c   ==>  (toplevel a b c)
 # a;;;b;; ==>  (toplevel a b)
 #
-# flisp: (define (parse-stmts s)
+# flisp: parse-stmts
 function parse_stmts(ps::ParseState)
     mark = position(ps)
     do_emit = parse_Nary(ps, parse_docstring, (K";",), (K"NewlineWs",))
@@ -301,7 +301,7 @@ function parse_stmts(ps::ParseState)
     end
 end
 
-# flisp: (define (parse-eq s) (parse-assignment s parse-comma))
+# flisp: parse-eq
 function parse_eq(ps::ParseState)
     parse_assignment(ps, parse_comma, false)
 end
@@ -311,7 +311,7 @@ end
 # If an `(= x y)` node was emitted, returns the position of that node in the
 # output list so that it can be changed to `(kw x y)` later if necessary.
 #
-# flisp: (define (parse-eq* s)
+# flisp: parse-eq*
 function parse_eq_star(ps::ParseState, equals_is_kw=false)
     k = peek(ps)
     k2 = peek(ps,2)
@@ -325,14 +325,14 @@ function parse_eq_star(ps::ParseState, equals_is_kw=false)
     end
 end
 
-# flisp: (define (eventually-call? ex)
+# flisp: eventually-call?
 function is_eventually_call(ex)
     TODO("is_eventually_call unimplemented")
 end
 
 # a = b  ==>  (= a b)
 #
-# flisp: (define (parse-assignment s down)
+# flisp: parse-assignment
 function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
     mark = position(ps)
     down(ps)
@@ -366,7 +366,7 @@ end
 
 # parse_comma is needed for commas outside parens, for example a = b,c
 #
-# flisp: (define (parse-comma s)
+# flisp: parse-comma
 function parse_comma(ps::ParseState, do_emit=true)
     mark = position(ps)
     n_commas = 0
@@ -393,7 +393,7 @@ function parse_comma(ps::ParseState, do_emit=true)
     end
 end
 
-# flisp: (define (parse-pair s) (parse-RtoL s parse-cond is-prec-pair? #f parse-pair))
+# flisp: parse-pair
 function parse_pair(ps::ParseState)
     parse_RtoL(ps, parse_cond, is_prec_pair, false, parse_pair)
 end
@@ -401,7 +401,7 @@ end
 # Parse short form conditional expression
 # a ? b : c ==> (if a b c)
 #
-# flisp: (define (parse-cond s)
+# flisp: parse-cond
 function parse_cond(ps::ParseState)
     mark = position(ps)
     parse_arrow(ps)
@@ -478,7 +478,7 @@ function parse_comparison(ps::ParseState)
     mark = position(ps)
     parse_pipe_lt(ps)
     n_comparisons = 0
-    op_pos = 0
+    op_pos = NO_POSITION
     initial_kind = peek(ps)
     while is_prec_comparison(peek(ps))
         n_comparisons += 1
@@ -605,7 +605,7 @@ end
 
 # parse left to right chains of a given binary operator
 #
-# flisp: (define (parse-chain s down op)
+# flisp: parse-chain
 function parse_chain(ps::ParseState, down, op_kind)
     while (t = peek_token(ps); kind(t) == op_kind)
         if ps.space_sensitive && t.had_whitespace &&
@@ -722,7 +722,7 @@ function parse_where_chain(ps0::ParseState, mark)
     end
 end
 
-# flisp: (define (parse-where s down)
+# flisp: parse-where
 function parse_where(ps::ParseState, down)
     # `where` needs to be below unary for the following to work
     # +(x::T,y::T) where {T} = x
@@ -795,7 +795,7 @@ end
 
 # Deal with numeric literal prefixes and unary calls
 #
-# flisp: (define (parse-unary s)
+# flisp: parse-unary
 function parse_unary(ps::ParseState)
     mark = position(ps)
     bump_trivia(ps)
@@ -890,11 +890,12 @@ function parse_unary_call(ps::ParseState)
         #    +(a;b)   ==>  (call + (block a b))
         #    +(a=1)   ==>  (call + (= a 1))
         #
-        #    However this heuristic fails in some cases:
-        #    +(a;b,c)  ??>  (call + (tuple a (parameters b c)))
+        # But this heuristic fails in some cases so here we use a simpler rule:
+        # if there were any commas, it was a function call. Then we also parse
+        # things like the following in a useful way:
         #
-        # Here we use a simpler rule: if there were any commas, it was a
-        # function call.
+        #    +(a;b,c)  ==>  (call + (tuple a (parameters b c)))
+        #
         is_call = false
         is_block = false
         parse_brackets(ps, K")") do had_commas,  num_semis, num_subexprs
@@ -954,7 +955,7 @@ end
 
 # flisp: parse-factor-with-initial-ex
 function parse_factor_with_initial_ex(ps::ParseState, mark)
-    parse_call_with_initial_ex(ps, mark)
+    parse_call_chain(ps, mark)
     parse_decl_with_initial_ex(ps, mark)
     if is_prec_power(peek(ps))
         bump(ps)
@@ -1009,14 +1010,8 @@ function parse_call(ps::ParseState)
         # f(x)   ==>  (call f x)
         # $f(x)  ==>  (call ($ f) x)
         parse_unary_prefix(ps)
-        parse_call_with_initial_ex(ps, mark)
+        parse_call_chain(ps, mark)
     end
-end
-
-# flisp: parse-call-with-initial-ex
-function parse_call_with_initial_ex(ps::ParseState, mark)
-    # FIXME: Remove parse_call_with_initial_ex which is redundant now?
-    parse_call_chain(ps, mark)
 end
 
 # parse syntactic unary operators
@@ -1110,7 +1105,7 @@ end
 # f(a,b)    ==> (call f a b)
 # f(a).g(b) ==> (call (. (call f a) (quote g)) b)
 #
-# flisp: (define (parse-call-chain s ex macrocall?)
+# flisp: parse-call-chain, parse-call-with-initial-ex
 function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
     if is_number(peek_behind(ps)) && peek(ps) == K"("
         # juxtaposition with numbers is multiply, not call
@@ -1192,22 +1187,22 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             end
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
-            parse_cat(ParseState(ps, end_symbol=true), K"]")
+            ckind = parse_cat(ParseState(ps, end_symbol=true), K"]", ps.end_symbol)
+            # a[i]    ==>  (ref a i)
+            # a[i,j]  ==>  (ref a i j)
+            # T[x for x in xs]  ==>  (typed_comprehension T (generator x (= x xs)))
+            # TODO: other test cases
+            out_kind = ckind == K"vect"          ? K"ref"                  :
+                       ckind == K"hcat"          ? K"typed_hcat"           :
+                       ckind == K"vcat"          ? K"typed_vcat"           :
+                       ckind == K"comprehension" ? K"typed_comprehension"  :
+                       ckind == K"ncat"          ? K"typed_ncat"           :
+                       error("Unrecognized kind in parse_cat")
+            emit(ps, mark, out_kind)
             if is_macrocall
                 emit(ps, mark, K"macrocall")
                 break
             end
-            # ref is syntax, so we can distinguish
-            # a[i] = x  from
-            # ref(a,i) = x
-            #
-            # FIXME: Big list of rewrites
-            #
-            #   vect           ->  ref
-            #   hcat           ->  typed_hcat
-            #   vcat           ->  typed_vcat
-            #   comprehension  ->  typed_comprehension
-            #   ncat           ->  typed_ncat
         elseif k == K"."
             bump_disallowed_space(ps)
             if peek(ps, 2) == K"'"
@@ -1872,7 +1867,7 @@ function parse_do(ps::ParseState)
     emit(ps, mark, K"->")
 end
 
-# flisp: (define (parse-imports s word)
+# flisp: parse-imports
 function parse_imports(ps::ParseState, word)
     TODO("parse_imports unimplemented")
 end
@@ -1901,22 +1896,22 @@ function parse_macro_name(ps::ParseState; remap_kind=false)
     end
 end
 
-# flisp: (define (parse-atsym s)
+# flisp: parse-atsym
 function parse_atsym(ps::ParseState)
     TODO("parse_atsym unimplemented")
 end
 
-# flisp: (define (parse-import-dots s)
+# flisp: parse-import-dots
 function parse_import_dots(ps::ParseState)
     TODO("parse_import_dots unimplemented")
 end
 
-# flisp: (define (parse-import-path s word)
+# flisp: parse-import-path
 function parse_import_path(ps::ParseState, word)
     TODO("parse_import_path unimplemented")
 end
 
-# flisp: (define (parse-import s word from)
+# flisp: parse-import
 function parse_import(ps::ParseState, word, from)
     TODO("parse_import unimplemented")
 end
@@ -1938,7 +1933,7 @@ function parse_comma_separated(ps::ParseState, down)
     return n_subexprs
 end
 
-# flisp: (define (parse-comma-separated-assignments s)
+# flisp: parse-comma-separated-assignments
 function parse_comma_separated_assignments(ps::ParseState)
     TODO("parse_comma_separated_assignments unimplemented")
 end
@@ -1962,7 +1957,7 @@ end
 # i = 1:10       ==>  (= i (call : 1 10))
 # (i,j) in iter  ==>  (= (tuple i j) iter)
 #
-# flisp: (define (parse-iteration-spec s)
+# flisp: parse-iteration-spec
 function parse_iteration_spec(ps::ParseState)
     mark = position(ps)
     k = peek(ps)
@@ -1995,7 +1990,7 @@ function parse_comma_separated_iters(ps::ParseState)
     parse_comma_separated(ps, parse_iteration_spec)
 end
 
-# flisp: (define (parse-space-separated-exprs s)
+# flisp: parse-space-separated-exprs
 function parse_space_separated_exprs(ps::ParseState)
     with_space_sensitive(ps) do ps
         n_sep = 0
@@ -2012,16 +2007,6 @@ function parse_space_separated_exprs(ps::ParseState)
     end
 end
 
-# flisp: (define (has-parameters? lst)
-function is_has_parameters(lst)
-    TODO("is_has_parameters unimplemented")
-end
-
-# flisp: (define (to-kws lst)
-function to_kws(lst)
-    TODO("to_kws unimplemented")
-end
-
 # like parse-arglist, but with `for` parsed as a generator
 #
 # flisp: parse-call-arglist
@@ -2036,44 +2021,119 @@ function parse_call_arglist(ps::ParseState, closer, is_macrocall)
     end
 end
 
+# Parse the suffix of comma-separated array expressions such as
+# [x, suffix].  Consumes `closer`, but does not emit the AST node for the
+# surrounding brackets.
+#
 # flisp: parse-vect
-function parse_vect(ps::ParseState, first, closer)
-    TODO("parse_vect unimplemented")
+function parse_vect(ps::ParseState, closer)
+    # [x, y]        ==>  (vect x y)
+    # [x, y]        ==>  (vect x y)
+    # [x,y ; z]     ==>  (vect x y (parameters z))
+    # [x=1, y=2]    ==>  (vect (= x 1) (= y 2))
+    # [x=1, ; y=2]  ==>  (vect (= x 1) (parameters (= y 2)))
+    parse_brackets(ps, closer) do _, _, _
+        bump_closing_token(ps, closer)
+        return (needs_parameters=true,
+                eq_is_kw_before_semi=false,
+                eq_is_kw_after_semi=false)
+    end
+    return K"vect"
 end
 
-# flisp: (define (parse-generator s first)
-function parse_generator(ps::ParseState, first)
-    TODO("parse_generator unimplemented")
+# Flattened generators are hard because the Julia AST doesn't respect a key
+# rule we normally expect: that the children of an AST node are a contiguous
+# range in the source text. This is because the `for`s in
+# `[xy for x in xs for y in ys]` are parsed in the normal order of a for as
+#
+# (flatten
+#  (generator
+#   (generator
+#    xy
+#    y in ys)
+#   x in xs))
+#
+# A reasonable way to deal with this is to emit only the flatten:
+#
+# (flatten xy (= x xs) (= y ys))
+#
+# then reconstruct the nested generators when converting to Expr.
+#
+# flisp: parse-generator
+function parse_generator(ps::ParseState, mark, flatten=false)
+    # (x for x in xs) ==>  (generator x (= x xs))
+    t = peek_token(ps)
+    if !t.had_whitespace
+        # [(x)for x in xs]  ==>  (comprehension (generator x (error) (= x xs)))
+        bump_invisible(ps, K"error", TRIVIA_FLAG,
+                       error="Expected space before `for` in generator")
+    end
+    @assert kind(t) == K"for"
+    bump(ps, TRIVIA_FLAG)
+    filter_mark = position(ps)
+    parse_comma_separated_iters(ps)
+    if peek(ps) == K"if"
+        bump(ps, TRIVIA_FLAG)
+        parse_cond(ps)
+        emit(ps, filter_mark, K"filter")
+    end
+    t = peek_token(ps)
+    if kind(t) == K"for"
+        # [xy for x in xs for y in ys]   ==>  (comprehension (flatten xy (= x xs) (= y ys)))
+        parse_generator(ps, mark, true)
+        emit(ps, mark, K"flatten")
+    elseif !flatten
+        emit(ps, mark, K"generator")
+    end
 end
 
-# flisp: (define (parse-comprehension s first closer)
-function parse_comprehension(ps::ParseState, first, closer)
-    TODO("parse_comprehension unimplemented")
+# flisp: parse-comprehension
+function parse_comprehension(ps::ParseState, mark, closer)
+    ps = ParseState(ps, whitespace_newline=true,
+                    space_sensitive=false)
+    parse_generator(ps, mark)
+    bump_closing_token(ps, closer)
+    return K"comprehension"
 end
 
-# flisp: (define (parse-array s first closer gotnewline last-end-symbol)
-function parse_array(ps::ParseState, first, closer, gotnewline, last_end_symbol)
+# flisp: parse-array
+function parse_array(ps::ParseState, closer, gotnewline, end_is_symbol)
     TODO("parse_array unimplemented")
 end
 
-# flisp: (define (expect-space-before s t)
-function expect_space_before(s, t)
-    TODO("expect_space_before unimplemented")
-end
-
-# Parse syntax inside of `[]` or `{}`
+# Parse array concatenation/construction/indexing syntax inside of `[]` or `{}`.
 #
-# flisp: (define (parse-cat s closer last-end-symbol)
-function parse_cat(ps::ParseState, closer, last_end_symbol)
-    TODO("parse_cat unimplemented")
-    ps = ParseState(ps0, range_colon_enabled=true,
+# flisp: parse-cat
+function parse_cat(ps::ParseState, closer, end_is_symbol)
+    ps = ParseState(ps, range_colon_enabled=true,
                     space_sensitive=true,
                     where_enabled=true,
                     whitespace_newline=false,
                     for_generator=true)
-    if require_token(ps) == closer
-        take_token!(ps)
-        return 
+    k = peek(ps, skip_newlines=true)
+    if k == closer
+        # []  ==>  (vect)
+        return parse_vect(ps, closer)
+    end
+    mark = position(ps)
+    parse_eq_star(ps)
+    k = peek(ps, skip_newlines=true)
+    if k in (K",", closer)
+        if k == K","
+            # [x,]  ==>  (vect x)
+            bump(ps, TRIVIA_FLAG)
+        end
+        # [x]  ==>  (vect x)
+        # [x \n ]  ==>  (vect x)
+        parse_vect(ps, closer)
+    elseif k == K"for"
+        # [x for x in xs]  ==>  (comprehension (generator x (= x xs)))
+        # [x \n\n for x in xs]  ==>  (comprehension (generator x (= x xs)))
+        parse_comprehension(ps, mark, closer)
+    else
+        # [x y]  ==>  (hcat x y)
+        # and other forms; See parse_array.
+        parse_array(ps, closer, false, end_is_symbol)
     end
 end
 
@@ -2116,6 +2176,10 @@ function parse_paren(ps::ParseState, check_identifiers=true)
         is_tuple = false
         is_block = false
         parse_brackets(ps, K")") do had_commas, num_semis, num_subexprs
+            # Parentheses used for grouping
+            # (a * b)     ==>  (call-i * a b)
+            # (a=1)       ==>  (= a 1)
+            # (x)         ==>  x
             is_tuple = had_commas ||
                        (initial_semi && (num_semis == 1 || num_subexprs > 0))
             is_block = num_semis > 0
@@ -2153,9 +2217,9 @@ end
 # Handle bracketed syntax inside any of () [] or {} where there's a mixture
 # of commas and semicolon delimiters.
 #
-# This is hard because there's various ambiguities depending on context.
-# In general (X; Y) is difficult when X and Y are subexpressions possibly
-# containing `,` and `=`.
+# For parentheses this is hard because there's various ambiguities depending on
+# context. In general (X; Y) is difficult when X and Y are subexpressions
+# possibly containing `,` and `=`.
 #
 # For example, (a=1; b=2) could be seen to parse four different ways!
 #
@@ -2169,7 +2233,7 @@ end
 # syntax so the parse tree is pretty strange in these cases!  Some macros
 # probably use it though.  Example:
 #
-# (a,b=1; c,d=2; e,f=3)  ==>  (tuple a (= b 1) (parameters c (kw d 2) (parameters e (kw f 3))
+# (a,b=1; c,d=2; e,f=3)  ==>  (tuple a (= b 1) (parameters c (kw d 2) (parameters e (kw f 3))))
 #
 # Deciding which of these representations to use depends on both the prefix
 # context and the contained expressions. To distinguish between blocks vs
@@ -2195,7 +2259,7 @@ function parse_brackets(after_parse::Function,
         if k == closing_kind
             break
         elseif k == K";"
-            # Start of "parameters" list
+            # Start of parameters list
             # a, b; c d  ==>  a b (parameters c d)
             push!(params_marks, position(ps))
             if num_semis == 0
@@ -2222,12 +2286,6 @@ function parse_brackets(after_parse::Function,
                 continue
             elseif k == K"for"
                 # Generator syntax
-                # (i for i in 1:10)
-                if !t.had_whitespace
-                    bump_invisible(ps, K"error",
-                                   error="expected whitespace before for")
-                end
-                bump(ps, TRIVIA_FLAG)
                 parse_generator(ps, mark)
             else
                 k_str = untokenize(k)
@@ -2266,74 +2324,49 @@ function parse_brackets(after_parse::Function,
     end
 end
 
-# flisp: (define (not-eof-for delim c)
-function not_eof_for(delim, c)
-    TODO("not_eof_for unimplemented")
-end
-
-# flisp: (define (take-char p)
-function take_char(p)
-    TODO("take_char unimplemented")
-end
-
-# map the first element of lst
-#
-# flisp: (define (map-first f lst)
-function map_first(f, lst)
-    TODO("map_first unimplemented")
-end
-
-# map the elements of lst where (pred index) is true
-# e.g., (map-at odd? (lambda (x) 0) '(a b c d)) -> '(a 0 c 0)
-#
-# flisp: (define (map-at pred f lst)
-function map_at(pred, f, lst)
-    TODO("map_at unimplemented")
-end
-
-# flisp: (define (parse-raw-literal s delim)
+# flisp: parse-raw-literal
 function parse_raw_literal(ps::ParseState, delim)
     TODO("parse_raw_literal unimplemented")
 end
 
-# flisp: (define (unescape-parsed-string-literal strs)
+# flisp: unescape-parsed-string-literal
 function unescape_parsed_string_literal(strs)
     TODO("unescape_parsed_string_literal unimplemented")
 end
 
-# flisp: (define (strip-escaped-newline s raw)
+# flisp: strip-escaped-newline
 function strip_escaped_newline(s, raw)
     TODO("strip_escaped_newline unimplemented")
 end
 
 # remove `\` followed by a newline
 #
-# flisp: (define (strip-escaped-newline- s)
+# flisp: strip-escaped-newline-
 function strip_escaped_newline_(s)
     TODO("strip_escaped_newline_ unimplemented")
 end
 
-# flisp: (define (parse-string-literal s delim raw)
+# flisp: parse-string-literal
 function parse_string_literal(ps::ParseState, delim, raw)
     TODO("parse_string_literal unimplemented")
 end
 
-# flisp: (define (strip-leading-newline s)
+# flisp: strip-leading-newline
 function strip_leading_newline(s)
     TODO("strip_leading_newline unimplemented")
 end
 
-# flisp: (define (dedent-triplequoted-string lst)
+# flisp: dedent-triplequoted-string
 function dedent_triplequoted_string(lst)
     TODO("dedent_triplequoted_string unimplemented")
 end
 
-# flisp: (define (triplequoted-string-indentation lst)
+# flisp: triplequoted-string-indentation
 function triplequoted_string_indentation(lst)
     TODO("triplequoted_string_indentation unimplemented")
 end
 
-# flisp: (define (triplequoted-string-indentation- s)
+# flisp: triplequoted-string-indentation-
 function triplequoted_string_indentation_(s)
     TODO("triplequoted_string_indentation_ unimplemented")
 end
@@ -2341,46 +2374,46 @@ end
 # return the longest common prefix of the elements of l
 # e.g., (longest-common-prefix ((1 2) (1 4))) -> (1)
 #
-# flisp: (define (longest-common-prefix l)
+# flisp: longest-common-prefix
 function longest_common_prefix(l)
     TODO("longest_common_prefix unimplemented")
 end
 
 # return the longest common prefix of lists a & b
 #
-# flisp: (define (longest-common-prefix2 a b)
+# flisp: longest-common-prefix2
 function longest_common_prefix2(a, b)
     TODO("longest_common_prefix2 unimplemented")
 end
 
-# flisp: (define (longest-common-prefix2- a b p)
+# flisp: longest-common-prefix2-
 function longest_common_prefix2_(a, b, p)
     TODO("longest_common_prefix2_ unimplemented")
 end
 
-# flisp: (define (string-split s sep)
+# flisp: string-split
 function string_split(s, sep)
     TODO("string_split unimplemented")
 end
 
-# flisp: (define (string-split- s sep start splits)
+# flisp: string-split-
 function string_split_(s, sep, start, splits)
     TODO("string_split_ unimplemented")
 end
 
 # replace all occurrences of a in s with b
 #
-# flisp: (define (string-replace s a b)
+# flisp: string-replace
 function string_replace(s, a, b)
     TODO("string_replace unimplemented")
 end
 
-# flisp: (define (ends-interpolated-atom? c)
+# flisp: ends-interpolated-atom?
 function is_ends_interpolated_atom(c)
     TODO("is_ends_interpolated_atom unimplemented")
 end
 
-# flisp: (define (parse-interpolate s)
+# flisp: parse-interpolate
 function parse_interpolate(ps::ParseState)
     TODO("parse_interpolate unimplemented")
 end
@@ -2389,17 +2422,12 @@ end
 # when raw is #t, unescape only \\ and delimiter
 # otherwise do full unescaping, and parse interpolations too
 #
-# flisp: (define (parse-string-literal- n p s delim raw)
+# flisp: parse-string-literal-
 function parse_string_literal_(n, p, s, delim, raw)
     TODO("parse_string_literal_ unimplemented")
 end
 
-# flisp: (define (not-eof-1 c)
-function not_eof_1(c)
-    TODO("not_eof_1 unimplemented")
-end
-
-# flisp: (define (unescape-string s)
+# flisp: unescape-string
 function unescape_string_(s)
     TODO("unescape_string_ unimplemented")
 end
@@ -2412,10 +2440,9 @@ end
 # flisp: parse-atom
 function parse_atom(ps::ParseState, check_identifiers=true)
     bump_trivia(ps)
-    atom_mark = position(ps)
+    mark = position(ps)
     leading_kind = peek(ps)
-    # TODO: Reorder to put most likely tokens first. This can be done because
-    # our tokens are richer in information than the flisp parser.
+    # TODO: Reorder to put most likely tokens first?
     if leading_kind == K":"
         # symbol/expression quote
         # :foo  =>  (quote foo)
@@ -2451,7 +2478,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             # a[:(end)]  ==>  (ref a (quote (error-t end)))
             parse_atom(ParseState(ps, end_symbol=false), false)
         end
-        emit(ps, atom_mark, K"quote")
+        emit(ps, mark, K"quote")
     elseif leading_kind == K"="
         bump(ps, TRIVIA_FLAG, error="unexpected `=`")
     elseif leading_kind == K"Identifier"
@@ -2481,21 +2508,29 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     elseif leading_kind == K"(" # parens or tuple
         parse_paren(ps, check_identifiers)
     elseif leading_kind == K"[" # cat expression
-        TODO("parse_cat unimplemented")
-        parse_cat(ps, tok, K"]", ps.end_symbol)
+        bump(ps, TRIVIA_FLAG)
+        ckind = parse_cat(ps, K"]", ps.end_symbol)
+        emit(ps, mark, ckind)
     elseif leading_kind == K"{" # cat expression
-        TODO("""parse_cat(ps, K"}", )""")
+        bump(ps, TRIVIA_FLAG)
+        ckind = parse_cat(ps, K"}", ps.end_symbol)
+        if ckind == K"hcat"
+            # {x y}  ==>  (bracescat (row x y))
+            emit(ps, K"row", mark)
+        end
+        out_kind = ckind in (K"vect", K"comprehension") ? K"braces" : K"bracescat"
+        emit(ps, mark, out_kind)
     elseif is_string(leading_kind)
         bump(ps)
         # FIXME parse_string_literal(ps)
     elseif leading_kind == K"@" # macro call
         bump(ps, TRIVIA_FLAG)
         parse_macro_name(ps)
-        parse_call_chain(ps, atom_mark, true)
+        parse_call_chain(ps, mark, true)
     elseif leading_kind in (K"Cmd", K"TripleCmd")
         bump_invisible(ps, K"core_@cmd")
         bump(ps)
-        emit(ps, atom_mark, K"macrocall")
+        emit(ps, mark, K"macrocall")
     elseif isliteral(leading_kind)
         bump(ps)
     elseif is_closing_token(ps, leading_kind)
@@ -2510,40 +2545,10 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     end
 end
 
-# flisp: (define (macroify-name e . suffixes)
-function macroify_name(e, _, suffixes)
-    TODO("macroify_name unimplemented")
-end
-
-# flisp: (define (macroify-call s call startloc)
-function macroify_call(s, call, startloc)
-    TODO("macroify_call unimplemented")
-end
-
-# flisp: (define (called-macro-name e)
-function called_macro_name(e)
-    TODO("called_macro_name unimplemented")
-end
-
-# flisp: (define (maybe-docstring s e)
-function maybe_docstring(s, e)
-    TODO("maybe_docstring unimplemented")
-end
-
-# flisp: (define (simple-string-literal? e) (string? e))
-function is_simple_string_literal(e)
-    TODO("is_simple_string_literal unimplemented")
-end
-
-# flisp: (define (doc-string-literal? s e)
-function is_doc_string_literal(s, e)
-    TODO("is_doc_string_literal unimplemented")
-end
-
 # Parse docstrings attached by a space or single newline
 # "doc" foo  ==>  
 #
-# flisp: (define (parse-docstring s production)
+# flisp: parse-docstring
 function parse_docstring(ps::ParseState, down=parse_eq)
     mark = position(ps)
     # TODO? This is not quite equivalent to the flisp parser which accepts

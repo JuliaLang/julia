@@ -199,7 +199,7 @@ Like `peek`, but return the full token information rather than just the kind.
 function peek_token(stream::ParseStream, n::Integer=1; skip_newlines=false)
     stream.peek_count += 1
     if stream.peek_count > 100_000
-        error("The parser seems stuck at byte $(position(stream))")
+        error("The parser seems stuck at byte $(stream.next_byte)")
     end
     stream.lookahead[_lookahead_index(stream, n, skip_newlines)]
 end
@@ -292,7 +292,7 @@ end
 Shift the current token from the input to the output, adding the given flags.
 """
 function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
-              error=nothing, remap_kind=K"Nothing")
+              error=nothing, remap_kind::Kind=K"Nothing")
     emark = position(stream)
     _bump_n(stream, _lookahead_index(stream, 1, skip_newlines), flags, remap_kind)
     if !isnothing(error)
