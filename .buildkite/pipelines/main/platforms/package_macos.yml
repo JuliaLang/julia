@@ -13,7 +13,7 @@ steps:
       SHORT_COMMIT=`echo $${BUILDKITE_COMMIT:?} | cut -c1-$${SHORT_COMMIT_LENGTH:?}`
       ARTIFACT_FILE_EXTENSION="tar.gz"
       ARTIFACT_FILENAME="julia-$${SHORT_COMMIT:?}-${PLATFORM?}${ARCH?}.$${ARTIFACT_FILE_EXTENSION:?}"
-      JULIA_BINARYDIST_FILENAME=`make print-JULIA_BINARYDIST_FILENAME ${MAKE_FLAGS?} | cut -c27- | tr -s ' '`
+      JULIA_BINARYDIST_FILENAME=`gmake print-JULIA_BINARYDIST_FILENAME ${MAKE_FLAGS?} | cut -c27- | tr -s ' '`
       JULIA_BINARYDIST="$${JULIA_BINARYDIST_FILENAME:?}.$${ARTIFACT_FILE_EXTENSION:?}"
 
       echo "The full commit is:                     $${BUILDKITE_COMMIT:?}"
@@ -22,7 +22,7 @@ steps:
 
       echo "--- Build Julia from source"
       rm -rf $${ARTIFACT_FILENAME:?}
-      make --output-sync -j 8 ${MAKE_FLAGS?}
+      gmake --output-sync -j 8 ${MAKE_FLAGS?}
 
       echo "--- Check that the working directory is clean"
       if [ -z "$(git status --short)" ]; then echo "INFO: The working directory is clean."; else echo "ERROR: The working directory is dirty."; echo "Output of git status:"; git status; exit 1; fi
@@ -31,7 +31,7 @@ steps:
       ./julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
 
       echo "--- Create build artifacts"
-      make --output-sync -j 8 binary-dist ${MAKE_FLAGS?}
+      gmake --output-sync -j 8 binary-dist ${MAKE_FLAGS?}
       ls -l $${JULIA_BINARYDIST:?}
       if [[ "$${JULIA_BINARYDIST:?}" != "$${ARTIFACT_FILENAME:?}" ]]; then
           mv $${JULIA_BINARYDIST:?} $${ARTIFACT_FILENAME:?}
