@@ -420,7 +420,8 @@ function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub
     ub = Any
     ub_certain = lb_certain = true
     if isa(n, Const)
-        isa(n.val, Symbol) || return Union{}
+        nval = n.val
+        isa(nval, Symbol) || return Union{}
         if isa(lb_arg, Const)
             lb = lb_arg.val
         elseif isType(lb_arg)
@@ -437,7 +438,7 @@ function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub
         else
             return TypeVar
         end
-        tv = TypeVar(n.val, lb, ub)
+        tv = TypeVar(nval, lb, ub)
         return PartialTypeVar(tv, lb_certain, ub_certain)
     end
     return TypeVar
@@ -1273,11 +1274,10 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
         return Union{}
     end
     uw = unwrap_unionall(headtype)
-    isnamedtuple = isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME
     uncertain = false
     canconst = true
     tparams = Any[]
-    outervars = Any[]
+    outervars = TypeVar[]
     varnamectr = 1
     ua = headtype
     for i = 1:largs
@@ -1324,7 +1324,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
             #    end
             else
                 # Is this the second parameter to a NamedTuple?
-                if isnamedtuple && isa(ua, UnionAll) && uw.parameters[2] === ua.var
+                if isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME && isa(ua, UnionAll) && uw.parameters[2] === ua.var
                     # If the names are known, keep the upper bound, but otherwise widen to Tuple.
                     # This is a widening heuristic to avoid keeping type information
                     # that's unlikely to be useful.
@@ -1510,9 +1510,11 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         # Additionally check element type compatibility
         a = widenconst(argtypes[2])
         # Check that we can determine the element type
-        (isa(a, DataType) && isa(a.parameters[1], Type)) || return false
+        isa(a, DataType) || return false
+        ap1 = a.parameters[1]
+        isa(ap1, Type) || return false
         # Check that the element type is compatible with the element we're assigning
-        (argtypes[3] ⊑ a.parameters[1]) || return false
+        argtypes[3] ⊑ ap1 || return false
         return true
     elseif f === arrayref || f === const_arrayref
         return array_builtin_common_nothrow(argtypes, 3)
@@ -1568,7 +1570,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
     end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
-            argvals = anymap(a::Const -> a.val, argtypes)
+            argvals = anymap(@nospecialize(a) -> (a::Const).val, argtypes)
             try
                 return Const(f(argvals...))
             catch

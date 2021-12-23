@@ -51,7 +51,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
 
     if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
         val = pure_eval_call(f, argtypes)
-        if val !== false
+        if val !== nothing
             # TODO: add some sort of edge(s)
             return CallMeta(val, MethodResultPure(info))
         end
@@ -1143,16 +1143,16 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any})
     for i = 2:length(argtypes)
         a = widenconditional(argtypes[i])
         if !(isa(a, Const) || isconstType(a))
-            return false
+            return nothing
         end
     end
-
-    args = Any[ (a = widenconditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
+    args = Any[ (a = widenconditional(argtypes[i]);
+        isa(a, Const) ? a.val : (a::DataType).parameters[1]) for i in 2:length(argtypes) ]
     try
         value = Core._apply_pure(f, args)
         return Const(value)
     catch
-        return false
+        return nothing
     end
 end
 
@@ -1481,7 +1481,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         max_methods = 1
     elseif la == 3 && istopfunction(f, :typejoin)
         val = pure_eval_call(f, argtypes)
-        return CallMeta(val === false ? Type : val, MethodResultPure())
+        return CallMeta(val === nothing ? Type : val, MethodResultPure())
     end
     atype = argtypes_to_type(argtypes)
     return abstract_call_gf_by_type(interp, f, arginfo, atype, sv, max_methods)
