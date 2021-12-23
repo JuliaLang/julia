@@ -1,11 +1,10 @@
-agents:
-  queue: "julia"
-  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
-  sandbox.jl: "true"
-  os: "linux"
 steps:
   - label: "asan"
     key: "asan"
+    agents:
+      queue: "julia"
+      sandbox.jl: "true"
+      os: "linux"
     plugins:
       - JuliaCI/julia#v1:
           # Drop default "registries" directory, so it is not persisted from execution to execution
@@ -27,6 +26,10 @@ steps:
       contrib/asan/build.sh ./tmp/test-asan -j$${JULIA_CPU_THREADS:?} debug
   - label: "tsan"
     key: "tsan"
+    agents:
+      queue: "julia"
+      sandbox.jl: "true"
+      os: "linux"
     plugins:
       - JuliaCI/julia#v1:
           # Drop default "registries" directory, so it is not persisted from execution to execution

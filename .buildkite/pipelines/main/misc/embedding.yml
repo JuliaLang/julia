@@ -1,11 +1,10 @@
-agents:
-  queue: "julia"
-  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
-  sandbox.jl: "true"
-  os: "linux"
 steps:
   - label: "embedding"
     key: "embedding"
+    agents:
+      queue: "julia"
+      sandbox.jl: "true"
+      os: "linux"
     plugins:
       - JuliaCI/julia#v1:
           # Drop default "registries" directory, so it is not persisted from execution to execution

@@ -31,4 +31,5 @@ steps:
       # as possible.
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/whitespace.yml
     agents:
-      queue: julia
+      queue: "julia"
+      sandbox.jl: "true"

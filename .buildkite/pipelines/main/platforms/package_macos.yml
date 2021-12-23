@@ -1,12 +1,12 @@
-agents:
-  queue: "julia"
-  # Only run on macOS machines
-  os: "macos"
-  arch: "${ARCH_ROOTFS}"
 steps:
   - label: "package_${PLATFORM?}${LABEL?}"
     key: package_${PLATFORM?}${LABEL?}
     timeout_in_minutes: ${TIMEOUT_BK?}
+    agents:
+      queue: "julia"
+      # Only run on macOS machines
+      os: "macos"
+      arch: "${ARCH_ROOTFS}"
     commands: |
       echo "--- Print the full and short commit hashes"
       SHORT_COMMIT_LENGTH=10

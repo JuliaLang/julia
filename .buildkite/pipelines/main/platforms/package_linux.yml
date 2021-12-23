@@ -1,11 +1,11 @@
-agents:
-  queue: "julia"
-  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
-  sandbox.jl: "true"
-  os: "linux"
 steps:
   - label: "package_${PLATFORM?}${LABEL?}"
     key: package_${PLATFORM?}${LABEL?}
+    agents:
+      queue: "julia"
+      # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+      sandbox.jl: "true"
+      os: "linux"
     plugins:
       - JuliaCI/julia#v1:
           # Drop default "registries" directory, so it is not persisted from execution to execution

@@ -1,11 +1,11 @@
 # This file represents what is put into the webUI.
 # It is purely for keeping track of the changes we make to the webUI configuration; modifying this file has no effect.
 # We use the `cryptic` buildkite plugin to provide secrets management, which requires some integration into the WebUI's steps.
-agents:
-  queue: "julia"
-  sandbox.jl: "true"
 steps:
   - label: ":unlock: Unlock secrets, launch pipelines"
+    agents:
+      queue: "julia"
+      sandbox.jl: "true"
     plugins:
       - staticfloat/cryptic:
           # Our list of pipelines that should be launched (but don't require a signature)
