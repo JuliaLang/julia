@@ -2,7 +2,7 @@ agents:
   queue: "julia"
   # Only run on macOS machines
   os: "macos"
-  arch: "${ARCH}"
+  arch: "${ARCH_ROOTFS}"
 steps:
   - label: "package_${PLATFORM?}${LABEL?}"
     key: package_${PLATFORM?}${LABEL?}
