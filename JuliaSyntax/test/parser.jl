@@ -12,7 +12,7 @@ function test_parse(production, code; v=v"1.6")
 end
 
 # Version of test_parse for interactive exploration
-function itest_parse(production, code, julia_version::VersionNumber)
+function itest_parse(production, code, julia_version::VersionNumber=v"1.6")
     stream = ParseStream(code)
     production(JuliaSyntax.ParseState(stream; julia_version))
     t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
@@ -195,6 +195,10 @@ tests = [
         "a().@x(y)" =>  """(macrocall (error (. (call :a) (quote :x))) :y)"""
         "a().@x y"  =>  """(macrocall (error (. (call :a) (quote :x))) :y)"""
         "a().@x{y}" =>  """(macrocall (error (. (call :a) (quote :x))) (braces :y))"""
+        # array indexing, typed comprehension, etc
+        "a[i]"  =>  "(ref :a :i)"
+        "a[i,j]"  =>  "(ref :a :i :j)"
+        "T[x for x in xs]"  =>  "(typed_comprehension :T (generator :x (= :x :xs)))"
         # Keyword params always use kw inside tuple in dot calls
         "f.(a,b)"   =>  "(. :f (tuple :a :b))"
         "f.(a=1)"   =>  "(. :f (tuple (kw :a 1)))"
@@ -352,11 +356,11 @@ tests = [
     ],
     JuliaSyntax.parse_paren => [
         # Parentheses used for grouping
-        # NB: The toplevel below is an artificial part of the test setup
         "(a * b)"     =>  "(call :* :a :b)"
         "(a=1)"       =>  "(= :a 1)"
         "(x)"         =>  ":x"
         # Tuple syntax with commas
+        "()"          =>  "(tuple)"
         "(x,)"        =>  "(tuple :x)"
         "(x,y)"       =>  "(tuple :x :y)"
         "(x=1, y=2)"  =>  "(tuple (= :x 1) (= :y 2))"
@@ -372,6 +376,8 @@ tests = [
         "(a=1;)"      =>  "(block (= :a 1))"
         "(a;b;;c)"    =>  "(block :a :b :c)"
         "(a=1; b=2)"  =>  "(block (= :a 1) (= :b 2))"
+        # Generators
+        "(x for x in xs)"  =>  "(generator :x (= :x :xs))"
     ],
     JuliaSyntax.parse_atom => [
         ":foo" => "(quote :foo)"
@@ -386,6 +392,26 @@ tests = [
         "@end x" => """(macrocall Symbol("@end") :x)"""
         # __dot__ macro
         "@. x y" => """(macrocall Symbol("@__dot__") :x :y)"""
+        # parse_cat
+        "[]"        =>  "(vect)"
+        "[x,]"      =>  "(vect :x)"
+        "[x]"       =>  "(vect :x)"
+        "[x \n ]"   =>  "(vect :x)"
+        "[x \n\n ]" =>  "(vect :x)"
+        # parse_comprehension / parse_generator
+        "[x for x in xs]" => "(comprehension (generator :x (= :x :xs)))"
+        "[x \n\n for x in xs]" => "(comprehension (generator :x (= :x :xs)))"
+        "[(x)for x in xs]" =>  "(comprehension (generator :x (error) (= :x :xs)))"
+        "[xy for x in xs for y in ys]" => "(comprehension (flatten :xy (= :x :xs) (= :y :ys)))"
+        # parse_vect
+        "[x, y]"        =>  "(vect :x :y)"
+        "[x, y]"        =>  "(vect :x :y)"
+        "[x,y ; z]"     =>  "(vect :x :y (parameters :z))"
+        "[x=1, y=2]"    =>  "(vect (= :x 1) (= :y 2))"
+        "[x=1, ; y=2]"  =>  "(vect (= :x 1) (parameters (= :y 2)))"
+        # parse_paren
+        ":(=)"  =>  "(quote :(=))"
+        ":(::)"  =>  "(quote :(::))"
         # Errors
         ": foo" => "(quote (error) :foo)"
     ],

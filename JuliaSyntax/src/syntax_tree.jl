@@ -4,13 +4,13 @@
 #-------------------------------------------------------------------------------
 
 const RawFlags = UInt32
-EMPTY_FLAGS = RawFlags(0)
-TRIVIA_FLAG = RawFlags(1<<0)
+const EMPTY_FLAGS = RawFlags(0)
+const TRIVIA_FLAG = RawFlags(1<<0)
 # The following flags are head-specific and could probably be allowed to cover
 # the same bits
-INFIX_FLAG  = RawFlags(1<<1)
+const INFIX_FLAG  = RawFlags(1<<1)
 # try-finally-catch
-TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<2)
+const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<2)
 # ERROR_FLAG = 0x80000000
 
 struct SyntaxHead
@@ -317,13 +317,13 @@ function _to_expr(node::SyntaxNode)
         if head(node) == :macrocall
             line_node = source_location(LineNumberNode, node.source, node.position)
             insert!(args, 2, line_node)
-        elseif head(node) == :call
+        elseif head(node) in (:call, :ref)
             # Move parameters block to args[2]
             if length(args) > 1 && Meta.isexpr(args[end], :parameters)
                 insert!(args, 2, args[end])
                 pop!(args)
             end
-        elseif head(node) == :tuple || head(node) == :parameters
+        elseif head(node) in (:tuple, :parameters, :vect)
             # Move parameters blocks to args[1]
             if length(args) > 1 && Meta.isexpr(args[end], :parameters)
                 pushfirst!(args, args[end])
@@ -355,6 +355,18 @@ function _to_expr(node::SyntaxNode)
             if else_ !== false
                 push!(args, else_)
             end
+        elseif head(node) == :filter
+            pushfirst!(args, last(args))
+            pop!(args)
+        elseif head(node) == :flatten
+            # The order of nodes inside the generators in Julia's flatten AST
+            # is noncontiguous in the source text, so need to reconstruct
+            # Julia's AST here from our alternative `flatten` expression.
+            gen = Expr(:generator, args[1], args[end])
+            for i in length(args)-1:-1:2
+                gen = Expr(:generator, gen, args[i])
+            end
+            args = [gen]
         end
         if head(node) == :inert || (head(node) == :quote &&
                                     length(args) == 1 && !(only(args) isa Expr))
@@ -403,7 +415,6 @@ function parse_all(::Type{Expr}, code::AbstractString; filename="none")
     end
     ex
 end
-
 
 function flisp_parse_all(code)
     flisp_ex = Base.remove_linenums!(Meta.parseall(code))
