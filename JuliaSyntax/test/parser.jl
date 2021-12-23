@@ -1,7 +1,7 @@
-function test_parse(production, code)
+function test_parse(production, code; v=v"1.6")
     stream = ParseStream(code)
-    production(JuliaSyntax.ParseState(stream))
-    t = JuliaSyntax.to_raw_tree(stream, wrap_toplevel_as_kind=K"Nothing")
+    production(JuliaSyntax.ParseState(stream; julia_version=v))
+    t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"Nothing")
     source = SourceFile(code)
     s = SyntaxNode(source, t)
     if JuliaSyntax.kind(s) == K"Nothing"
@@ -12,10 +12,10 @@ function test_parse(production, code)
 end
 
 # Version of test_parse for interactive exploration
-function itest_parse(production, code)
+function itest_parse(production, code, julia_version::VersionNumber)
     stream = ParseStream(code)
-    production(JuliaSyntax.ParseState(stream))
-    t = JuliaSyntax.to_raw_tree(stream, wrap_toplevel_as_kind=K"toplevel")
+    production(JuliaSyntax.ParseState(stream; julia_version))
+    t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
 
     println(stdout, "# Code:\n$code\n")
 
@@ -38,8 +38,9 @@ function itest_parse(production, code)
 
         printstyled(stdout, "\n\n# flisp Julia Expr:\n", color=:red)
         show(stdout, MIME"text/plain"(), f_ex)
-        return (code, stream, t, s, ex)
+        # return (code, stream, t, s, ex)
     end
+    nothing
 end
 
 # TODO:
@@ -326,6 +327,22 @@ tests = [
         "function f() \n a \n b end"  =>  "(function (call :f) (block :a :b))"
         "function f() end"       =>  "(function (call :f) (block))"
     ],
+    JuliaSyntax.parse_try => [
+        "try \n x \n catch e \n y \n finally \n z end" =>
+            "(try (block :x) :e (block :y) false (block :z))"
+        ((v=v"1.8",), "try \n x \n catch e \n y \n else z finally \n w end") =>
+            "(try (block :x) :e (block :y) (block :z) (block :w))"
+        "try x catch ; y end"   =>  "(try (block :x) false (block :y) false false)"
+        "try x catch \n y end"  =>  "(try (block :x) false (block :y) false false)"
+        "try x catch e y end"   =>  "(try (block :x) :e (block :y) false false)"
+        "try x finally y end"   =>  "(try (block :x) false false false (block :y))"
+        # v1.8 only
+        ((v=v"1.8",), "try catch ; else end") => "(try (block) false (block) (block) false)"
+        ((v=v"1.8",), "try else end") => "(try (block) false false (error (block)) false)"
+        ((v=v"1.7",), "try catch ; else end")  =>  "(try (block) false (block) (error (block)) false)"
+        # finally before catch :-(
+        "try x finally y catch e z end"  =>  "(try (block :x) false false false (block :y) :e (block :z))"
+    ],
     JuliaSyntax.parse_iteration_spec => [
         "i = rhs"        =>  "(= :i :rhs)"
         "i in rhs"       =>  "(= :i :rhs)"
@@ -380,7 +397,12 @@ tests = [
 @testset "Inline test cases" begin
     @testset "$production" for (production, test_specs) in tests
         @testset "$(repr(input))" for (input,output) in test_specs
-            @test test_parse(production, input) == output
+            if !(input isa AbstractString)
+                opts,input = input
+            else
+                opts = (;)
+            end
+            @test test_parse(production, input; opts...) == output
         end
     end
 end

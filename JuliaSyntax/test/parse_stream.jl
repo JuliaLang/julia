@@ -68,7 +68,7 @@ st = ParseStream(code)
     emit(st, p1, K"toplevel")
 end
 
-@test JuliaSyntax.to_raw_tree(st) isa JuliaSyntax.GreenNode
+@test JuliaSyntax.build_tree(GreenNode, st) isa JuliaSyntax.GreenNode
 
 # ## Input code
 #=

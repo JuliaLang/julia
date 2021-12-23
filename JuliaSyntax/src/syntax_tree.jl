@@ -4,9 +4,13 @@
 #-------------------------------------------------------------------------------
 
 const RawFlags = UInt32
-EMPTY_FLAGS = 0x00000000
-TRIVIA_FLAG = 0x00000001
-INFIX_FLAG = 0x00000002
+EMPTY_FLAGS = RawFlags(0)
+TRIVIA_FLAG = RawFlags(1<<0)
+# The following flags are head-specific and could probably be allowed to cover
+# the same bits
+INFIX_FLAG  = RawFlags(1<<1)
+# try-finally-catch
+TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<2)
 # ERROR_FLAG = 0x80000000
 
 struct SyntaxHead
@@ -17,8 +21,10 @@ end
 kind(head::SyntaxHead) = head.kind
 flags(head::SyntaxHead) = head.flags
 
-istrivia(head::SyntaxHead) = flags(head) & TRIVIA_FLAG != 0
-isinfix(head::SyntaxHead)  = flags(head) & INFIX_FLAG != 0
+istrivia(head::SyntaxHead) = hasflags(head, TRIVIA_FLAG)
+isinfix(head::SyntaxHead)  = hasflags(head, INFIX_FLAG)
+hasflags(head::SyntaxHead, flags_) = (flags(head) & flags_) == flags_
+
 iserror(head::SyntaxHead)  = kind(head) == K"error"
 
 function Base.summary(head::SyntaxHead)
@@ -151,6 +157,7 @@ end
 
 iserror(node::SyntaxNode) = iserror(node.raw)
 istrivia(node::SyntaxNode) = istrivia(node.raw)
+hasflags(node::SyntaxNode, f) = hasflags(head(node.raw), f)
 
 head(node::SyntaxNode) = node.head
 kind(node::SyntaxNode)  = kind(node.raw)
@@ -311,14 +318,42 @@ function _to_expr(node::SyntaxNode)
             line_node = source_location(LineNumberNode, node.source, node.position)
             insert!(args, 2, line_node)
         elseif head(node) == :call
+            # Move parameters block to args[2]
             if length(args) > 1 && Meta.isexpr(args[end], :parameters)
                 insert!(args, 2, args[end])
                 pop!(args)
             end
         elseif head(node) == :tuple || head(node) == :parameters
+            # Move parameters blocks to args[1]
             if length(args) > 1 && Meta.isexpr(args[end], :parameters)
                 pushfirst!(args, args[end])
                 pop!(args)
+            end
+        elseif head(node) == :try
+            # Try children in source order:
+            #   try_block catch_var catch_block else_block finally_block
+            # Expr ordering:
+            #   try_block catch_var catch_block [finally_block] [else_block]
+            catch_ = nothing
+            if hasflags(node, TRY_CATCH_AFTER_FINALLY_FLAG)
+                catch_ = pop!(args)
+                catch_var = pop!(args)
+            end
+            finally_ = pop!(args)
+            else_ = pop!(args)
+            if hasflags(node, TRY_CATCH_AFTER_FINALLY_FLAG)
+                pop!(args)
+                pop!(args)
+                push!(args, catch_var)
+                push!(args, catch_)
+            end
+            # At this poin args is
+            # [try_block catch_var catch_block]
+            if finally_ !== false
+                push!(args, finally_)
+            end
+            if else_ !== false
+                push!(args, else_)
             end
         end
         if head(node) == :inert || (head(node) == :quote &&
@@ -354,7 +389,7 @@ function parse_all(::Type{Expr}, code::AbstractString; filename="none")
         @error Text(String(take!(buf)))
     end
 
-    green_tree = to_raw_tree(stream, wrap_toplevel_as_kind=K"toplevel")
+    green_tree = build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
 
     tree = SyntaxNode(source_file, green_tree)
 

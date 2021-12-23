@@ -1769,11 +1769,89 @@ function parse_function(ps::ParseState)
     emit(ps, mark, word)
 end
 
-function parse_try(ps)
-    TODO("parse_try")
-    mark = position(ps)
-end
+# Parse a try block
 #
+# try \n x \n catch e \n y \n finally \n z end  ==>  (try (block x) e (block y) false (block z))
+#v1.8: try \n x \n catch e \n y \n else z finally \n w end  ==>  (try (block x) e (block y) (block z) (block w))
+#
+# flisp: embedded in parse_resword
+function parse_try(ps)
+    mark = position(ps)
+    bump(ps, TRIVIA_FLAG)
+    parse_block(ps)
+    has_catch = false
+    has_else = false
+    has_finally = false
+    bump_trivia(ps)
+    flags = EMPTY_FLAGS
+    bump_trivia(ps)
+    if peek(ps) == K"catch"
+        has_catch = true
+        parse_catch(ps)
+    else
+        bump_invisible(ps, K"false")
+        bump_invisible(ps, K"false")
+    end
+    bump_trivia(ps)
+    if peek(ps) == K"else"
+        # catch-else syntax: https://github.com/JuliaLang/julia/pull/42211
+        #
+        #v1.8: try catch ; else end ==> (try (block) false (block) (block) false)
+        has_else = true
+        else_mark = position(ps)
+        bump(ps, TRIVIA_FLAG)
+        parse_block(ps)
+        if !has_catch
+            #v1.8: try else end ==> (try (block) false false (error (block)) false)
+            emit(ps, else_mark, K"error", error="Expected `catch` before `else`")
+        end
+        if ps.julia_version < v"1.8"
+            #v1.7: try catch ; else end ==> (try (block) false (block) (error (block)) false)
+            emit(ps, else_mark, K"error",
+                 error="`else` in `try` requires at least Julia 1.8")
+        end
+    else
+        bump_invisible(ps, K"false")
+    end
+    bump_trivia(ps)
+    if peek(ps) == K"finally"
+        # try x finally y end  ==>  (try (block x) false false false (block y))
+        has_finally = true
+        bump(ps, TRIVIA_FLAG)
+        parse_block(ps)
+    else
+        bump_invisible(ps, K"false")
+    end
+    # Wart: the flisp parser allows finally before catch, the *opposite* order
+    # in which these blocks execute.
+    bump_trivia(ps)
+    if !has_catch && peek(ps) == K"catch"
+        # try x finally y catch e z end  ==>  (try (block x) false false false (block y) e (block z))
+        flags |= TRY_CATCH_AFTER_FINALLY_FLAG
+        m = position(ps)
+        parse_catch(ps)
+        emit_diagnostic(ps, m, position(ps),
+                        warning="`catch` after `finally` will execute out of order")
+    end
+    bump_closing_token(ps, K"end")
+    emit(ps, mark, K"try", flags)
+end
+
+function parse_catch(ps::ParseState)
+    bump(ps, TRIVIA_FLAG)
+    k = peek(ps)
+    if k in (K";", K"NewlineWs") || is_closing_token(ps, k)
+        # try x catch ; y end  ==>  (try (block x) false (block y) false false)
+        # try x catch \n y end  ==>  (try (block x) false (block y) false false)
+        bump_invisible(ps, K"false")
+        bump(ps, TRIVIA_FLAG)
+    else
+        # try x catch e y end  ==>  (try (block x) e (block y) false false)
+        parse_identifier_or_interpolate(ps)
+    end
+    parse_block(ps)
+end
+
 # flisp: parse-do
 function parse_do(ps::ParseState)
     ps = normal_context(ps)

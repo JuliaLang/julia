@@ -461,6 +461,9 @@ useful even for DSLs:
 
 * `export a, \n $b` is rejected, but `export a, \n b` parses fine.
 
+* In try-catch-finally, the `finally` clause is allowed before the `catch`, but
+  always executes afterward. (Presumably was this a mistake? It seems pretty awful!)
+
 ## Parsing oddities and warts
 
 There's many apparent inconsistencies between how `kw` and `=` are used when
