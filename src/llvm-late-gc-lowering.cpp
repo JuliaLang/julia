@@ -398,12 +398,8 @@ CountTrackedPointers::CountTrackedPointers(Type *T) {
         if (isa<ArrayType>(T))
             count *= cast<ArrayType>(T)->getNumElements();
         else if (isa<VectorType>(T)) {
-#if JL_LLVM_VERSION >= 120000
             ElementCount EC = cast<VectorType>(T)->getElementCount();
             count *= EC.getKnownMinValue();
-#else
-            count *= cast<VectorType>(T)->getNumElements();
-#endif
         }
     }
     if (count == 0)
@@ -416,12 +412,8 @@ unsigned getCompositeNumElements(Type *T) {
     else if (auto *AT = dyn_cast<ArrayType>(T))
         return AT->getNumElements();
     else {
-#if JL_LLVM_VERSION >= 120000
         ElementCount EC = cast<VectorType>(T)->getElementCount();
         return EC.getKnownMinValue();
-#else
-        return cast<VectorType>(T)->getNumElements();
-#endif
     }
 }
 
@@ -650,12 +642,8 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
     std::vector<int> Numbers;
     unsigned NumRoots = 1;
     if (auto VTy = dyn_cast<VectorType>(SI->getType())) {
-#if JL_LLVM_VERSION >= 120000
         ElementCount EC = VTy->getElementCount();
         Numbers.resize(EC.getKnownMinValue(), -1);
-#else
-        Numbers.resize(VTy->getNumElements(), -1);
-#endif
     }
     else
         assert(isa<PointerType>(SI->getType()) && "unimplemented");
@@ -716,12 +704,8 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
             assert(NumRoots == 1);
             int Number = Numbers[0];
             Numbers.resize(0);
-#if JL_LLVM_VERSION >= 120000
             ElementCount EC = VTy->getElementCount();
             Numbers.resize(EC.getKnownMinValue(), Number);
-#else
-            Numbers.resize(VTy->getNumElements(), Number);
-#endif
         }
     }
     if (!isa<PointerType>(SI->getType()))

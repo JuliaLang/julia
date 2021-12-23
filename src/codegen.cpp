@@ -70,9 +70,7 @@
 // for configuration options
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/CommandLine.h>
-#if JL_LLVM_VERSION >= 120000
 #include <llvm/Support/Process.h>
-#endif
 
 #include <llvm/IR/InlineAsm.h>
 #if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
@@ -8117,11 +8115,7 @@ extern "C" void jl_init_llvm(void)
             // This is the only way I can find to print the help message once.
             // It'll be nice if we can iterate through the features and print our own help
             // message...
-#if JL_LLVM_VERSION >= 120000
             MSTI->setDefaultFeatures("help", "", "");
-#else
-            MSTI->setDefaultFeatures("help", "");
-#endif
         }
     }
     // Package up features to be passed to target/subtarget

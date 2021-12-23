@@ -214,6 +214,9 @@ SparseArrays.nnz
 SparseArrays.findnz
 SparseArrays.spzeros
 SparseArrays.spdiagm
+SparseArrays.sparse_hcat
+SparseArrays.sparse_vcat
+SparseArrays.sparse_hvcat
 SparseArrays.blockdiag
 SparseArrays.sprand
 SparseArrays.sprandn

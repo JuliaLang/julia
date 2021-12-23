@@ -1031,11 +1031,7 @@ std::string generate_func_sig(const char *fname)
         else if (abi->use_sret((jl_datatype_t*)rt, jl_LLVMContext)) {
             AttrBuilder retattrs = AttrBuilder();
 #if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
-#if JL_LLVM_VERSION < 120000
-            retattrs.addAttribute(Attribute::StructRet);
-#else
             retattrs.addStructRetAttr(lrt);
-#endif
 #endif
             retattrs.addAttribute(Attribute::NoAlias);
             paramattrs.push_back(std::move(retattrs));

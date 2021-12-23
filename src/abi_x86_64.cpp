@@ -182,11 +182,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
 {
     Classification cl = classify(dt);
     if (cl.isMemory) {
-#if JL_LLVM_VERSION < 120000
-        ab.addAttribute(Attribute::ByVal);
-#else
         ab.addByValAttr(Ty);
-#endif
         return true;
     }
 
@@ -206,12 +202,8 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
     else if (jl_is_structtype(dt)) {
         // spill to memory even though we would ordinarily pass
         // it in registers
-#if JL_LLVM_VERSION < 120000
-        ab.addAttribute(Attribute::ByVal);
-#else
         Type* Ty = preferred_llvm_type(dt, false, ctx);
         ab.addByValAttr(Ty);
-#endif
         return true;
     }
     return false;
