@@ -56,15 +56,15 @@ precompile_test_harness(false) do dir
           """)
     write(Foo2_file,
           """
-          module $Foo2_module
-              export override
-              override(x::Integer) = 2
-              override(x::AbstractFloat) = Float64(override(1))
-          end
+          using Base
+          export override
+          override(x::Integer) = 2
+          override(x::AbstractFloat) = Float64(override(1))
           """)
     write(Foo_file,
           """
           module $Foo_module
+          baremodule $Foo_module
               import $FooBase_module, $FooBase_module.typeA
               import $Foo2_module: $Foo2_module, override
               import $FooBase_module.hash
@@ -197,6 +197,7 @@ precompile_test_harness(false) do dir
               # check that @ccallable works from precompiled modules
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
           end
+          end
           """)
     # make sure `sin` didn't have a kwfunc (which would invalidate the attempted test)
     @test !isdefined(typeof(sin).name.mt, :kwsorter)
@@ -264,7 +265,7 @@ precompile_test_harness(false) do dir
     # the module doesn't reload from the image:
     @test_warn "@ccallable was already defined for this method name" begin
         @test_logs (:warn, "Replacing module `$Foo_module`") begin
-            ms = Base._require_from_serialized(cachefile)
+            ms = @lock Base.require_lock Base._require_from_serialized(cachefile)
             @test isa(ms, Array{Any,1})
         end
     end
@@ -304,7 +305,7 @@ precompile_test_harness(false) do dir
             Dict(let m = Base.PkgId(s)
                     m => Base.module_build_id(Base.root_module(m))
                  end for s in
-                 [ "Base", "Core", "Main",
+                 [ "Base", "Core",
                    string(Foo2_module), string(FooBase_module) ]),
             # plus modules included in the system image
             Dict(let m = Base.root_module(Base, s)
@@ -481,7 +482,7 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    @test_warn r"LoadError: break me\nStacktrace:\n \[1\] [\e01m\[]*error" try
+    @test_warn r"LoadError: break me\nStacktrace:\n  \[1\] [\e01m\[]*error" try
             Base.require(Main, :FooBar2)
             error("the \"break me\" test failed")
         catch exc
@@ -493,7 +494,10 @@ precompile_test_harness(false) do dir
     FooBar3_file = joinpath(dir, "FooBar3.jl")
     FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
     write(FooBar3_inc, "x=1\n")
-    for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
+    for code in [
+            "Core.eval(Main.Base, :(x=1))",
+            "using Base; Base.include(Base, \"FooBar3_inc.jl\")",
+            "using Base: @eval; @eval Main module Base end"]
         write(FooBar3_file, code)
         @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
                 Base.require(Main, :FooBar3)

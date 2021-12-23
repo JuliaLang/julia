@@ -349,8 +349,6 @@ end
 # options #
 ###########
 
-is_root_module(m::Module) = false
-
 inlining_enabled() = (JLOptions().can_inline == 1)
 function coverage_enabled(m::Module)
     ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches

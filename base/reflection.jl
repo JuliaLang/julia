@@ -33,6 +33,8 @@ Base
 """
 parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
+is_root_module(m::Module) = m === Base || parentmodule(m) === m
+
 """
     moduleroot(m::Module) -> Module
 
