@@ -21,7 +21,7 @@ You can also use a stream for large amounts of data:
 
 !!! warning
     `HTML` is currently exported to maintain
-    backwards-compatibility, but this export
+    backwards compatibility, but this export
     is deprecated. It is recommended to use
     this type as `Docs.HTML` or to explicitly
     import it from `Docs`.
@@ -79,7 +79,7 @@ You can also use a stream for large amounts of data:
 
 !!! warning
     `Text` is currently exported to maintain
-    backwards-compatibility, but this export
+    backwards compatibility, but this export
     is deprecated. It is recommended to use
     this type as `Docs.Text` or to explicitly
     import it from `Docs`.
