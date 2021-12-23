@@ -23,6 +23,7 @@ steps:
 
       # Launch all of the platform jobs.
       bash .buildkite/utilities/platforms/platforms.sh .buildkite/pipelines/main/platforms/package_linux.arches .buildkite/pipelines/main/platforms/package_linux.yml
+      bash .buildkite/utilities/platforms/platforms.sh .buildkite/pipelines/main/platforms/package_macos.arches .buildkite/pipelines/main/platforms/package_macos.yml
       bash .buildkite/utilities/platforms/platforms.sh .buildkite/pipelines/main/platforms/tester_linux.arches .buildkite/pipelines/main/platforms/tester_linux.yml
 
       # Launch the `whitespace` job last. Uploading it last actually causes it to start
