@@ -133,7 +133,8 @@ function ldiv!(Y::AbstractMatrix, A::Factorization, B::AbstractMatrix)
         ldiv!(A, Bc)
         return copyto!(Y, view(Bc, 1:n, :))
     else
-        return ldiv!(A, copyto!(Y, view(B, 1:m, :)))
+        copyto!(view(Y, 1:m, :), view(B, 1:m, :))
+        return ldiv!(A, Y)
     end
 end
 
