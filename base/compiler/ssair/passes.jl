@@ -1451,18 +1451,18 @@ function memory_opt!(ir::IRCode, escape_state)
         # @eval Main (ir = $ir; rev = $revisit; esc_state = $escape_state)
         has_no_escape(escape_state.ssavalues[id]) || continue
 
-        # We're ok to steal the memory if we don't dominate any uses
-        ok = true
-        if haskey(uses, id)
-            for use in uses[id]
-                if ssadominates(ir, domtree, idx, use)
-                    ok = false
-                    break
-                end
-            end
-        end
-        ok || continue
-        println("saved an allocation here :", stmt)
+        # # We're ok to steal the memory if we don't dominate any uses
+        # ok = true
+        # if haskey(uses, id)
+        #     for use in uses[id]
+        #         if ssadominates(ir, domtree, idx, use)
+        #             ok = false
+        #             break
+        #         end
+        #     end
+        # end
+        # ok || continue
+        # println("saved an allocation here :", stmt)
         stmt.args[1] = Core.mutating_arrayfreeze
     end
 
