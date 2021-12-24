@@ -139,9 +139,6 @@ extern void _chkstk(void);
 #endif
 }
 
-// llvm state
-extern JITEventListener *CreateJuliaJITEventListener();
-
 // for image reloading
 bool imaging_mode = false;
 

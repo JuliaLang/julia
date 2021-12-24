@@ -194,7 +194,6 @@ private:
     TargetMachine *TMs[4];
     MCContext *Ctx;
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
-    std::unique_ptr<JITEventListener> JuliaListener;
 
 
     orc::ThreadSafeContext TSCtx;

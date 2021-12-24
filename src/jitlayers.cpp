@@ -477,11 +477,7 @@ public:
 };
 
 
-// Custom object emission notification handler for the JuliaOJIT
-extern JITEventListener *CreateJuliaJITEventListener();
-
-JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
-                                         const object::ObjectFile &obj,
+JL_DLLEXPORT void ORCNotifyObjectEmitted(const object::ObjectFile &obj,
                                          const RuntimeDyld::LoadedObjectInfo &L,
                                          RTDyldMemoryManager *memmgr);
 
@@ -489,7 +485,7 @@ template <typename ObjT, typename LoadResult>
 void JuliaOJIT::registerObject(const ObjT &Obj, const LoadResult &LO)
 {
     const ObjT* Object = &Obj;
-    ORCNotifyObjectEmitted(JuliaListener.get(), *Object, *LO, MemMgr.get());
+    ORCNotifyObjectEmitted(*Object, *LO, MemMgr.get());
 }
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
@@ -612,7 +608,6 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
     DL(TM.createDataLayout()),
     ObjStream(ObjBufferSV),
     MemMgr(createRTDyldMemoryManager()),
-    JuliaListener(CreateJuliaJITEventListener()),
     TSCtx(std::unique_ptr<LLVMContext>(LLVMCtx)),
 #if JL_LLVM_VERSION >= 130000
     ES(cantFail(orc::SelfExecutorProcessControl::Create())),

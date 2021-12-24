@@ -4,7 +4,6 @@
 
 #include "llvm-version.h"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
-#include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/DebugInfo/DIContext.h>
 #include <llvm/DebugInfo/DWARF/DWARFContext.h>
 #include <llvm/Object/SymbolSize.h>
@@ -177,15 +176,13 @@ struct revcomp {
     { return lhs>rhs; }
 };
 
-class JuliaJITEventListener: public JITEventListener
+
+class JuliaJITEventListener
 {
     std::map<size_t, ObjectInfo, revcomp> objectmap;
     std::map<size_t, std::pair<size_t, jl_method_instance_t *>, revcomp> linfomap;
 
 public:
-    JuliaJITEventListener(){}
-    virtual ~JuliaJITEventListener() {}
-
     jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT
     {
         uv_rwlock_rdlock(&threadsafe);
@@ -197,15 +194,9 @@ public:
         return linfo;
     }
 
-    virtual void NotifyObjectEmitted(const object::ObjectFile &Object,
-                                     const RuntimeDyld::LoadedObjectInfo &L)
-    {
-        return _NotifyObjectEmitted(Object, L, nullptr);
-    }
-
-    virtual void _NotifyObjectEmitted(const object::ObjectFile &Object,
-                                      const RuntimeDyld::LoadedObjectInfo &L,
-                                      RTDyldMemoryManager *memmgr)
+    void NotifyObjectEmitted(const object::ObjectFile &Object,
+                             const RuntimeDyld::LoadedObjectInfo &L,
+                             RTDyldMemoryManager *memmgr)
     {
         jl_ptls_t ptls = jl_current_task->ptls;
         // This function modify codeinst->fptr in GC safe region.
@@ -413,12 +404,12 @@ public:
     }
 };
 
-JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
-                                         const object::ObjectFile &Object,
+static JuliaJITEventListener jl_jit_events;
+JL_DLLEXPORT void ORCNotifyObjectEmitted(const object::ObjectFile &Object,
                                          const RuntimeDyld::LoadedObjectInfo &L,
                                          RTDyldMemoryManager *memmgr)
 {
-    ((JuliaJITEventListener*)Listener)->_NotifyObjectEmitted(Object, L, memmgr);
+    jl_jit_events.NotifyObjectEmitted(Object, L, memmgr);
 }
 
 // TODO: convert the safe names from aotcomile.cpp:makeSafeName back into symbols
@@ -452,13 +443,6 @@ static std::pair<char *, bool> jl_demangle(const char *name) JL_NOTSAFEPOINT
     return std::make_pair(ret, true);
 done:
     return std::make_pair(strdup(name), false);
-}
-
-static JuliaJITEventListener *jl_jit_events;
-JITEventListener *CreateJuliaJITEventListener(void)
-{
-    jl_jit_events = new JuliaJITEventListener();
-    return jl_jit_events;
 }
 
 // *frames is a one element array containing whatever we could come up
@@ -1194,7 +1178,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
 {
     int found = 0;
     uv_rwlock_wrlock(&threadsafe);
-    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
+    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events.getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
 
     if (symsize)
@@ -1228,7 +1212,7 @@ extern "C" JL_DLLEXPORT int jl_getFunctionInfo_impl(jl_frame_t **frames_out, siz
     int64_t slide;
     uint64_t symsize;
     if (jl_DI_for_fptr(pointer, &symsize, &slide, &Section, &context)) {
-        frames[0].linfo = jl_jit_events->lookupLinfo(pointer);
+        frames[0].linfo = jl_jit_events.lookupLinfo(pointer);
         int nf = lookup_pointer(Section, context, frames_out, pointer, slide, true, noInline);
         return nf;
     }
@@ -1237,7 +1221,7 @@ extern "C" JL_DLLEXPORT int jl_getFunctionInfo_impl(jl_frame_t **frames_out, siz
 
 extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p) JL_NOTSAFEPOINT
 {
-    return jl_jit_events->lookupLinfo((size_t)p);
+    return jl_jit_events.lookupLinfo((size_t)p);
 }
 
 #if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
@@ -1659,7 +1643,7 @@ uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr)
 {
     // Might be called from unmanaged thread
     uv_rwlock_rdlock(&threadsafe);
-    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
+    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events.getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
     uint64_t ipstart = 0; // ip of the start of the section (if found)
     if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {
