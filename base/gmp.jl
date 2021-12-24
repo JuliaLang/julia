@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer
+             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, iroot
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -971,6 +971,12 @@ function Base.://(x::Rational{BigInt}, y::Rational{BigInt})
     return sync_rational!(zq)
 end
 
+function iroot(x::BigInt, n::Integer)
+    n < 0 && throw(DomainError(n, "`n` must be positive."))
+    ans = BigInt()
+    ccall((:__gmpz_root, :libgmp), Cvoid, (Ref{BigInt}, Ref{BigInt}, Culong), ans, BigInt(x), Int(n))
+    ans
+end
 end # MPQ module
 
 end # module
