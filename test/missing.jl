@@ -111,7 +111,7 @@ end
             
 @testset "two-argument functions" begin
     two_argument_functions = [atan]
-    
+
     # All two-argument functions return missing when operating on two missing's
     # All two-argument functions return missing when operating on a scalar and an missing
     # All two-argument functions return missing when operating on an missing and a scalar
