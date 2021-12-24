@@ -129,4 +129,9 @@ Base.sincos(::Irrational{:π}) = (0.0, -1.0)
 Base.tan(::Irrational{:π}) = 0.0
 Base.cot(::Irrational{:π}) = -1/0
 
+Base.rem2pi(::Irrational{:π}, ::RoundingMode{:Nearest}) = π
+Base.rem2pi(::Irrational{:π}, ::RoundingMode{:ToZero}) = π
+Base.rem2pi(::Irrational{:π}, ::RoundingMode{:Down}) = π
+Base.rem2pi(::Irrational{:π}, ::RoundingMode{:Up}) = -π
+
 end # module

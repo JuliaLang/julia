@@ -2611,6 +2611,14 @@ end
     @test rem2pi(T(-8), RoundUp)      ≈ -8+2pi
 end
 
+@testset "rem2pi irrational" begin
+    @test rem2pi(π, RoundNearest) ≈ rem2pi(float(π), RoundNearest)
+    @test rem2pi(π, RoundToZero) ≈ rem2pi(float(π), RoundToZero)
+    @test rem2pi(π, RoundDown) ≈ rem2pi(float(π), RoundDown)
+    @test rem2pi(π, RoundUp) ≈ rem2pi(float(π), RoundUp)
+    @test rem2pi(ℯ, RoundNearest) ≈ rem2pi(float(ℯ), RoundNearest)
+end
+
 import Base.^
 struct PR20530; end
 struct PR20889; x; end

@@ -1202,9 +1202,13 @@ end
 rem2pi(x::Float32, r::RoundingMode) = Float32(rem2pi(Float64(x), r))
 rem2pi(x::Float16, r::RoundingMode) = Float16(rem2pi(Float64(x), r))
 rem2pi(x::Int32, r::RoundingMode) = rem2pi(Float64(x), r)
-function rem2pi(x::Int64, r::RoundingMode)
+function rem2pi(x::Integer, r::RoundingMode)
     fx = Float64(x)
-    fx == x || throw(ArgumentError("Int64 argument to rem2pi is too large: $x"))
+    fx == x || throw(ArgumentError("Integer argument to rem2pi is too large: $x"))
+    rem2pi(fx, r)
+end
+function rem2pi(x::Real, r::RoundingMode)
+    fx = Float64(x)
     rem2pi(fx, r)
 end
 
