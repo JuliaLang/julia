@@ -510,6 +510,8 @@ end
              LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
         @test allunique(r) == invoke(allunique, Tuple{Any}, r)
     end
+    @test allunique([1:2000;])
+    @test !allunique([1:2000; 500])
 end
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
