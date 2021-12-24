@@ -1075,3 +1075,18 @@ function binomial(n::T, k::T) where T<:Integer
     end
     copysign(x, sgn)
 end
+
+"""
+    inthroot(n::Integer, r::Int)
+computes floor(n^(1/r)) precisely
+"""
+function iroot(x::T, n::Integer) where T<:BitInteger
+    n < 0 && throw(DomainError(n, "`n` must be positive."))
+    u, s = 1<<((8*sizeof(T)-leading_zeros(x)) ÷ n), x
+    while u != s
+        s = u
+        t = (n-1) * s + x ÷ (s ^ (n-1))
+        u = t ÷ n
+    end
+    return s
+end
