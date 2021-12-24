@@ -1077,7 +1077,7 @@ function binomial(n::T, k::T) where T<:Integer
 end
 
 """
-    inthroot(n::Integer, r::Int)
+    iroot(n::Integer, r::Integer)
 computes floor(n^(1/r)) precisely
 """
 function iroot(x::T, n::Integer) where T<:BitInteger
