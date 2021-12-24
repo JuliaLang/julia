@@ -842,7 +842,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # returns `true` if require found a precompile cache for this sourcepath, but couldn't load it
 # returns `false` if the module isn't known to be precompilable
 # returns the set of modules restored if the cache load succeeded
-function _require_search_from_serialized(pkg::PkgId, sourcepath::String, depth::Int = 0)
+@constprop :none function _require_search_from_serialized(pkg::PkgId, sourcepath::String, depth::Int = 0)
     t_before = time_ns()
     paths = find_all_in_cache_path(pkg)
     for path_to_try in paths::Vector{String}
@@ -876,8 +876,8 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String, depth::
         else
             if TIMING_IMPORTS[] > 0
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
-                tree_prefix = depth == 0 ? "" : "$("  "^(depth-1))┌ "
-                print("$(lpad(elapsed, 9)) ms  ")
+                tree_prefix = depth == 0 ? "" : "  "^(depth-1)*"┌ "
+                print(lpad(elapsed, 9), " ms  ")
                 printstyled(tree_prefix, color = :light_black)
                 println(pkg.name)
             end
@@ -1076,7 +1076,7 @@ const module_keys = IdDict{Module,PkgId}() # the reverse
 is_root_module(m::Module) = @lock require_lock haskey(module_keys, m)
 root_module_key(m::Module) = @lock require_lock module_keys[m]
 
-function register_root_module(m::Module)
+@constprop :none function register_root_module(m::Module)
     # n.b. This is called from C after creating a new module in `Base.__toplevel__`,
     # instead of adding them to the binding table there.
     @lock require_lock begin
@@ -1859,7 +1859,7 @@ get_compiletime_preferences(::Nothing) = String[]
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl"
 # otherwise returns the list of dependencies to also check
-function stale_cachefile(modpath::String, cachefile::String; ignore_loaded = false)
+@constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false)
     io = open(cachefile, "r")
     try
         if !isvalid_cache_header(io)

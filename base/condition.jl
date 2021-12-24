@@ -139,7 +139,7 @@ is raised as an exception in the woken tasks.
 
 Return the count of tasks woken up. Return 0 if no tasks are waiting on `condition`.
 """
-notify(c::GenericCondition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
+@constprop :none notify(c::GenericCondition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
 function notify(c::GenericCondition, @nospecialize(arg), all, error)
     assert_havelock(c)
     cnt = 0
