@@ -6,10 +6,10 @@
 #include <llvm/IR/Value.h>
 #include "llvm/IR/LegacyPassManager.h"
 
-#include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
+#include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"

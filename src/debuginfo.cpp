@@ -3,7 +3,6 @@
 #include "platform.h"
 
 #include "llvm-version.h"
-#include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/DebugInfo/DIContext.h>
 #include <llvm/DebugInfo/DWARF/DWARFContext.h>
 #include <llvm/Object/SymbolSize.h>
@@ -14,6 +13,7 @@
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Mangler.h>
+#include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
 #include <llvm/ExecutionEngine/RuntimeDyld.h>
 #include <llvm/BinaryFormat/Magic.h>
 #include <llvm/Object/MachO.h>
