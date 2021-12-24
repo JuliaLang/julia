@@ -228,8 +228,8 @@ end
 
 function show(io::IO, M::Bidiagonal)
     # TODO: make this readable and one-line
-    summary(io, M); println(io, ":")
-    print(io, " diag:")
+    summary(io, M)
+    print(io, ":\n diag:")
     print_matrix(io, (M.dv)')
     print(io, M.uplo == 'U' ? "\n super:" : "\n sub:")
     print_matrix(io, (M.ev)')
