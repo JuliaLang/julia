@@ -121,7 +121,6 @@ end
         @test ismissing(f(missing, 1))
     end
                     
-    end
 end
 
 @testset "bit operators" begin
