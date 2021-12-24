@@ -108,7 +108,7 @@ end
         end
     end
 end
-            
+
 @testset "two-argument functions" begin
     two_argument_functions = [atan]
 
