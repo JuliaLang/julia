@@ -1080,13 +1080,15 @@ end
     iroot(n::Integer, r::Integer)
 computes floor(n^(1/r)) precisely
 """
-function iroot(x::T, n::Integer) where T<:BitInteger
+iroot(x::Integer, n::Integer) = iroot(promote(x, n)...)
+function iroot(x::T, n::T) where T<:BitInteger
     n < 0 && throw(DomainError(n, "`n` must be positive."))
-    u, s = 1<<((8*sizeof(T)-leading_zeros(x)) ÷ n), x
+    n >=  8*sizeof(T) && return one(T)
+    u, s = 1<<((8*sizeof(T) - leading_zeros(x))÷n), x
     while u != s
         s = u
         t = (n-1) * s + x ÷ (s ^ (n-1))
-        u = t ÷ n
+        u = max(t ÷ n, one(T))
     end
     return s
 end

@@ -636,6 +636,13 @@ end
 
 powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
 
+function iroot(x::BigInt, n::Integer)
+    n < 0 && throw(DomainError(n, "`n` must be positive."))
+    ans = BigInt()
+    ccall((:__gmpz_root, :libgmp), Cvoid, (Ref{BigInt}, Ref{BigInt}, Culong), ans, BigInt(x), Int(n))
+    ans
+end
+
 function gcdx(a::BigInt, b::BigInt)
     if iszero(b) # shortcut this to ensure consistent results with gcdx(a,b)
         return a < 0 ? (-a,-ONE,b) : (a,one(BigInt),b)
@@ -971,12 +978,6 @@ function Base.://(x::Rational{BigInt}, y::Rational{BigInt})
     return sync_rational!(zq)
 end
 
-function iroot(x::BigInt, n::Integer)
-    n < 0 && throw(DomainError(n, "`n` must be positive."))
-    ans = BigInt()
-    ccall((:__gmpz_root, :libgmp), Cvoid, (Ref{BigInt}, Ref{BigInt}, Culong), ans, BigInt(x), Int(n))
-    ans
-end
 end # MPQ module
 
 end # module

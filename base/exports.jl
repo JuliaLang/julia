@@ -281,6 +281,7 @@ export
     imag,
     inv,
     invmod,
+    iroot,
     isapprox,
     iseven,
     isfinite,
