@@ -294,12 +294,6 @@ rmul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}
 *(adjA::Adjoint{<:Any,<:Union{QRCompactWYQ, QRPackedQ}}, B::BiTriSym) =
     lmul!(adjA, copyto!(Array{promote_type(eltype(adjA), eltype(B))}(undef, size(B)...), B))
 
-function (*)(A::Matrix, B::Union{SymTridiagonal, Tridiagonal})
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    C = similar(A, TS, (size(A,1), size(B,2)))
-    A_mul_B_td!(C, A, B)
-end
-
 # fill[stored]! methods
 fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)
 fillstored!(A::Bidiagonal, x) = (fill!(A.dv, x); fill!(A.ev, x); A)
