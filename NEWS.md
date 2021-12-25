@@ -32,14 +32,24 @@ Language changes
 * Iterating an `Iterators.Reverse` now falls back on reversing the eachindex interator, if possible ([#43110]).
 * Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
   to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
+* `Base.ifelse` is now defined as a generic function rather than a builtin one, allowing packages to
+  extend its definition ([#37343]).
 
 Compiler/Runtime improvements
 -----------------------------
 
+* Bootstrapping time has been improved by about 25% ([#41794]).
 * The LLVM-based compiler has been separated from the run-time library into a new library,
   `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
   In deployments that do not need the compiler (e.g. system images where all needed code
   is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
+* Conditional type constraint can now be forwarded interprocedurally (i.e. propagated from caller to callee) ([#42529]).
+* Julia-level SROA (Scalar Replacement of Aggregates) has been improved, i.e. allowing elimination of
+  `getfield` call with constant global field ([#42355]), enabling elimination of mutable struct with
+  uninitialized fields ([#43208]), improving performance ([#43232]), handling more nested `getfield`
+  calls ([#43239]).
+* Abstract callsite can now be inlined or statically resolved as far as the callsite has a single
+  matching method ([#43113]).
 
 Command-line option changes
 ---------------------------

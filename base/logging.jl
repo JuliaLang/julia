@@ -73,7 +73,7 @@ catch_exceptions(logger) = true
 
 # Prevent invalidation when packages define custom loggers
 # Using invoke in combination with @nospecialize eliminates backedges to these methods
-function _invoked_shouldlog(logger, level, _module, group, id)
+Base.@constprop :none function _invoked_shouldlog(logger, level, _module, group, id)
     @nospecialize
     return invoke(
         shouldlog,
@@ -494,7 +494,7 @@ function current_logstate()
 end
 
 # helper function to get the current logger, if enabled for the specified message type
-@noinline function current_logger_for_env(std_level::LogLevel, group, _module)
+@noinline Base.@constprop :none function current_logger_for_env(std_level::LogLevel, group, _module)
     logstate = current_logstate()
     if std_level >= logstate.min_enabled_level || env_override_minlevel(group, _module)
         return logstate.logger
@@ -536,7 +536,7 @@ end
 let _debug_groups_include::Vector{Symbol} = Symbol[],
     _debug_groups_exclude::Vector{Symbol} = Symbol[],
     _debug_str::String = ""
-global function env_override_minlevel(group, _module)
+global Base.@constprop :none function env_override_minlevel(group, _module)
     debug = get(ENV, "JULIA_DEBUG", "")
     if !(debug === _debug_str)
         _debug_str = debug

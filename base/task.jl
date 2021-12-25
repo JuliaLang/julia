@@ -717,7 +717,7 @@ the woken task.
 
 !!! warning
     It is incorrect to use `schedule` on an arbitrary `Task` that has already been started.
-    See [the API reference](@id low-level-schedule-wait) for more information.
+    See [the API reference](@ref low-level-schedule-wait) for more information.
 
 # Examples
 ```jldoctest
