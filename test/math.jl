@@ -1289,7 +1289,11 @@ end
 end
 
 @testset "fma" begin
-    for func in (fma, Base.fma_emulated, Base.fma_float) # use fma_float to test runtime fma
+    fma_list = (fma, Base.fma_emulated)
+    if !(Sys.islinux() && Int == Int32) # test runtime fma (skip linux32)
+        fma_list = (fma_list..., Base.fma_float)
+    end
+    for func in fma_list
         @test func(nextfloat(1.),nextfloat(1.),-1.0) === 4.440892098500626e-16
         @test func(nextfloat(1f0),nextfloat(1f0),-1f0) === 2.3841858f-7
         @testset "$T" for T in (Float32, Float64)
