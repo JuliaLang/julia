@@ -694,6 +694,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // Running `memcpyopt` between this and `sroa` seems to give `sroa` a hard time
     // merging the `alloca` for the unboxed data and the `alloca` created by the `alloc_opt`
     // pass.
+    PM->add(createArraylenOptPass());
     PM->add(createAllocOptPass());
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
@@ -770,6 +771,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
     // More dead allocation (store) deletion before loop optimization
     // consider removing this:
+    PM->add(createArraylenOptPass());
     PM->add(createAllocOptPass());
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
