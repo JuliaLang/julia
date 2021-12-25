@@ -1779,6 +1779,33 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             JL_GC_POP();
             return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);
         }
+    } else if (is_libjulia_func(jl_alloc_array_1d) || is_libjulia_func(jl_alloc_array_2d)
+            || is_libjulia_func(jl_alloc_array_3d)) {
+        jl_cgval_t retval = sig.emit_a_ccall(
+                ctx,
+                symarg,
+                argv,
+                gc_uses,
+                static_rt);
+        if (auto array_alloc = dyn_cast<CallInst>(retval.V)) {
+            array_alloc->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
+            array_alloc->setMetadata("allocation.array", MDNode::get(jl_LLVMContext, {}));
+        }
+        JL_GC_POP();
+        return retval;
+    } else if (is_libjulia_func(jl_new_array)) {
+        jl_cgval_t retval = sig.emit_a_ccall(
+                ctx,
+                symarg,
+                argv,
+                gc_uses,
+                static_rt);
+        if (auto array_alloc = dyn_cast<CallInst>(retval.V)) {
+            array_alloc->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
+            array_alloc->setMetadata("allocation.array.dyn", MDNode::get(jl_LLVMContext, {}));
+        }
+        JL_GC_POP();
+        return retval;
     }
 
     jl_cgval_t retval = sig.emit_a_ccall(

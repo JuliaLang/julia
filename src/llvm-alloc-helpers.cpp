@@ -307,29 +307,15 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
 //function which doesn't have the same function pointer as the bare alloc_array
 //functions
 bool jl_alloc::getArrayAllocInfo(AllocIdInfo &info, llvm::CallInst *call) {
-    if (auto cexpr = dyn_cast<ConstantExpr>(call->getCalledOperand())) {
-        if (cexpr->getOpcode() == Instruction::IntToPtr) {
-            if (auto cint = dyn_cast<ConstantInt>(cexpr->getOperand(0))) {
-                std::size_t faddr = cint->getZExtValue();
-                if (faddr == reinterpret_cast<std::uintptr_t>(jl_alloc_array_1d)) {
-                    assert(call->getNumArgOperands() == 2);
-                    info.array.dimcount = 1;
-                } else if (faddr == reinterpret_cast<std::uintptr_t>(jl_alloc_array_2d)) {
-                    assert(call->getNumArgOperands() == 3);
-                    info.array.dimcount = 2;
-                } else if (faddr == reinterpret_cast<std::uintptr_t>(jl_alloc_array_3d)) {
-                    assert(call->getNumArgOperands() == 4);
-                    info.array.dimcount = 3;
-                } else if (faddr == reinterpret_cast<std::uintptr_t>(jl_new_array)) {
-                    assert(call->getNumArgOperands() == 2);
-                    info.array.dimcount = 0;
-                } else {
-                    return false;
-                }
-                info.isarray = true;
-                info.type = call->getArgOperand(0);
-                return true;
-            }
+    if (call->getMetadata("allocation.array")) {
+        info.isarray = true;
+        info.array.dimcount = call->getNumArgOperands() - 1;
+        return true;
+    } else {
+        if (call->getMetadata("allocation.array.dyn")) {
+            info.isarray = true;
+            info.array.dimcount = 0;
+            return true;
         }
     }
     return false;
