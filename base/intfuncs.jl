@@ -1084,11 +1084,13 @@ iroot(x::Integer, n::Integer) = iroot(promote(x, n)...)
 function iroot(x::T, n::T) where T<:BitInteger
     n < 0 && throw(DomainError(n, "`n` must be positive."))
     n >=  8*sizeof(T) && return one(T)
-    u, s = 1<<((8*sizeof(T) - leading_zeros(x))÷n), x
+    # u is an initial guess computed using
+    # x^(1/n) = exp2(log2(x)/n) ≈ exp2(div(round(log2(x)), n))
+    u, s = one(T)<<div((8*sizeof(T) - leading_zeros(x)), n, RoundNearest), x
     while u != s
         s = u
-        t = (n-1) * s + x ÷ (s ^ (n-1))
-        u = max(t ÷ n, one(T))
+        t = (n-1) * s + div(x, (s ^ (n-1)))
+        u = t ÷ n
     end
     return s
 end
