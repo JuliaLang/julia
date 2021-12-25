@@ -2429,8 +2429,7 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *
                 }
                 if (auto alloc = dyn_cast<CallInst>(tinfo.V)) {
                     jl_alloc::AllocIdInfo info;
-                    if (jl_alloc::getArrayAllocInfo(info, alloc)) {
-                        assert(static_cast<size_t>(info.array.dimcount) == ndim);
+                    if (jl_alloc::getArrayAllocInfo(info, alloc) && static_cast<size_t>(info.array.dimcount) == ndim) {
                         //we actually want dim + 1 here b/c arg 0 is type tag
                         return alloc->getArgOperand(cast<ConstantInt>(dim)->getZExtValue());
                     }
