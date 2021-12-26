@@ -2475,8 +2475,30 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
                 jl_alloc::AllocIdInfo info;
                 if (jl_alloc::getArrayAllocInfo(info, alloc) && static_cast<size_t>(info.array.dimcount) == ndim) {
                     llvm::Value *length = alloc->getArgOperand(ndim);
+                    // We can't annotate the initial operand with a range because
+                    // it may not actually possess that range for all of its uses
+                    // e.g. the initial conditional branch can't be optimized out
+                    /*
+                    function f(length)
+                        if length >= 0
+                            s = 0
+                            arr = ones(length, length)
+                            ...
+                        else
+                            return length
+                        end
+                    end
+                    */
+                    //We create the length computation at the array creation site
+                    //to maximize likelihood of CSE removing the repeated multiplies
+                    IRBuilder<> lenbuilder(alloc);
+                    MDBuilder MDB(jl_LLVMContext);
+                    auto rng = MDB.createRange(V_size0, ConstantInt::get(T_size, arraytype_maxsize(tinfo.typ)));
                     for (unsigned i = ndim - 1; i --> 0;) {
-                        length = ctx.builder.CreateMul(length, alloc->getArgOperand(i + 1), "", true, true);
+                        length = lenbuilder.CreateMul(length, alloc->getArgOperand(i + 1), "", true, true);
+                        if (auto inst = dyn_cast<Instruction>(length)) {
+                            inst->setMetadata(LLVMContext::MD_range, rng);
+                        }
                     }
                     return length;
                 }
