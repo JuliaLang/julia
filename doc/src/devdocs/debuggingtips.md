@@ -107,11 +107,11 @@ Since this function is used for every call, you will make everything 1000x slowe
 
 ## Dealing with signals
 
-Julia requires a few signal to function property. The profiler uses `SIGUSR2` for sampling and
+Julia requires a few signals to function property. The profiler uses `SIGUSR2` for sampling and
 the garbage collector uses `SIGSEGV` for threads synchronization. If you are debugging some code
 that uses the profiler or multiple threads, you may want to let the debugger ignore these signals
 since they can be triggered very often during normal operations. The command to do this in GDB
-is (replace `SIGSEGV` with `SIGUSRS` or other signals you want to ignore):
+is (replace `SIGSEGV` with `SIGUSR2` or other signals you want to ignore):
 
 ```
 (gdb) handle SIGSEGV noprint nostop pass
