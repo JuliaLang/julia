@@ -695,6 +695,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // merging the `alloca` for the unboxed data and the `alloca` created by the `alloc_opt`
     // pass.
     PM->add(createArrayOptPass());
+    //ArrayOpt needs DCE to run after it to eliminate RAUW-ed loads/cmps
+    PM->add(createDeadCodeEliminationPass());
     PM->add(createAllocOptPass());
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
@@ -742,6 +744,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
     // Run our own SROA on heap objects before LLVM's
     PM->add(createArrayOptPass());
+    PM->add(createDeadCodeEliminationPass());
     PM->add(createAllocOptPass());
     // Re-run SROA after loop-unrolling (useful for small loops that operate,
     // over the structure of an aggregate)

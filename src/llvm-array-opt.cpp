@@ -31,6 +31,7 @@ namespace {
     struct ArrayAllocation {
         CallInst *allocation;
         int dimcount;
+        bool escaped;
     };
 
     struct ArrayOpt;
@@ -44,7 +45,7 @@ namespace {
         Optimizer(ArrayOpt *pass) : pass(pass) {}
 
         void initializeAllocations(Function &F);
-        bool propagate1DArrayLengths();
+        bool elideArrayLoads();
         bool optimizeCmpInsts();
 
         void reset() {
@@ -62,10 +63,10 @@ namespace {
         bool runOnFunction(Function &F) override {
             initAll(*F.getParent());
             optimizer.initializeAllocations(F);
-            bool propagation_changed = optimizer.propagate1DArrayLengths();
+            bool elided = optimizer.elideArrayLoads();
             //Propagating 1D array allocations may allow more cmp insts to be folded
             bool cmp_folded = optimizer.optimizeCmpInsts();
-            return propagation_changed || cmp_folded;
+            return elided || cmp_folded;
         }
         void getAnalysisUsage(AnalysisUsage &AU) const override
         {
@@ -85,7 +86,7 @@ namespace {
                 if (auto call = dyn_cast<CallInst>(&I)) {
                     if (jl_alloc::getArrayAllocInfo(info, call) && info.array.dimcount) {
                         std::size_t idx = array_allocations.size();
-                        array_allocations.push_back({call, info.array.dimcount});
+                        array_allocations.push_back({call, info.array.dimcount, true});
                         for (int i = 0; i < info.array.dimcount; i++) {
                             lengths[call->getArgOperand(i + 1)].insert(idx);
                         }
@@ -95,14 +96,14 @@ namespace {
         }
     }
 
-    bool Optimizer::propagate1DArrayLengths() {
+    bool Optimizer::elideArrayLoads() {
         bool changed = false;
         jl_alloc::AllocUseInfo use_info;
         jl_alloc::CheckInst::Stack check_stack;
         for (auto &allocation : array_allocations) {
+            jl_alloc::EscapeAnalysisRequiredArgs args{use_info, check_stack, *pass, *DL};
+            jl_alloc::runEscapeAnalysis(allocation.allocation, args);
             if (allocation.dimcount == 1) {
-                jl_alloc::EscapeAnalysisRequiredArgs args{use_info, check_stack, *pass, *DL};
-                jl_alloc::runEscapeAnalysis(allocation.allocation, args);
                 if (use_info.escaped) {
                     continue;
                 }
@@ -155,6 +156,24 @@ namespace {
                                 memop.inst->eraseFromParent();
                             }
                         }
+                    }
+                    allocation.escaped = false;
+                } else {
+                    //We can't make guarantees about array shape, just don't optimize further
+                    continue;
+                }
+            }
+            //At this point, either this is a multidimensional array
+            //or it's a 1D array that doesn't escape.
+            //Either way, we can hoist the data pointer
+            IRBuilder<> data_builder(allocation.allocation->getNextNode());
+            auto ppdata = data_builder.CreatePointerCast(allocation.allocation, PointerType::get(PointerType::get(Type::getInt8Ty(data_builder.getContext()), AddressSpace::Loaded), cast<PointerType>(allocation.allocation->getType())->getAddressSpace()));
+            auto pdata = data_builder.CreateAlignedLoad(ppdata, llvm::Align(sizeof(size_t)), "arraydata");
+            for (auto &field : use_info.memops) {
+                for (auto &memop : field.second.accesses) {
+                    if (memop.offset == offsetof(jl_array_t, data)) {
+                        auto data_load = cast<LoadInst>(memop.inst);
+                        data_load->replaceAllUsesWith(data_builder.CreatePointerCast(pdata, data_load->getType(), "arraydata_casted"));
                     }
                 }
             }
