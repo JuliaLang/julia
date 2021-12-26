@@ -453,4 +453,31 @@ end
     @test Bl + S ≈ Mbl + Ms
 end
 
+@testset "Ensure Strided * (Sym)Tridiagonal is Dense" begin
+    x = rand(3)
+    y = rand(3)
+    z = rand(2)
+
+    l = rand(12, 12)
+    # strided but not a Matrix
+    v = @view l[1:4:end, 1:4:end]
+    M_v = Matrix(v)
+    m = rand(3, 3)
+
+    S = SymTridiagonal(x, y)
+    T = Tridiagonal(z, x, z)
+    M_S = Matrix(S)
+    M_T = Matrix(T)
+
+    @test m * T ≈ m * M_T
+    @test m * S ≈ m * M_S
+    @test v * T ≈ M_v * T
+    @test v * S ≈ M_v * S
+
+    @test m * T isa Matrix
+    @test m * S isa Matrix
+    @test v * T isa Matrix
+    @test v * S isa Matrix
+end
+
 end # module TestSpecial
