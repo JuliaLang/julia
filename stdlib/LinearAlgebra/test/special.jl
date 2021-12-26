@@ -457,7 +457,7 @@ end
     x = rand(3)
     y = rand(3)
     z = rand(2)
-    
+
     l = rand(12, 12)
     # strided but not a Matrix
     v = @view l[1:4:end, 1:4:end]
