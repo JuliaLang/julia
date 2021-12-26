@@ -737,7 +737,7 @@ function generic_offset_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat
     end
 
     @inbounds begin
-    if tA == 'T'  
+    if tA == 'T'
         if isempty(nA_axis)
             for k in mA_axis
                 _modify!(_add, false, C, k)
