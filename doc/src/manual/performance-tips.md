@@ -949,7 +949,7 @@ Sometimes you can circumvent the need to allocate memory on each function call b
 the output. As a trivial example, compare
 
 ```jldoctest prealloc
-julia> function xinc(x)
+julia> @noinline function xinc(x)
            return [x, x+1, x+2]
        end;
 
@@ -966,7 +966,7 @@ julia> function loopinc()
 with
 
 ```jldoctest prealloc
-julia> function xinc!(ret::AbstractVector{T}, x::T) where T
+julia> @noinline function xinc!(ret::AbstractVector{T}, x::T) where T
            ret[1] = x
            ret[2] = x+1
            ret[3] = x+2
