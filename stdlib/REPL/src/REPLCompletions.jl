@@ -466,11 +466,22 @@ function get_type(sym::Expr, fn::Module)
     val, found = try_get_type(sym, fn)
     found && return val, found
     # https://github.com/JuliaLang/julia/issues/27184
-    if isexpr(sym, :macrocall)
+    newsym = if isexpr(sym, :macrocall)
         _, found = get_type(first(sym.args), fn)
         found || return Any, false
+        try
+            Meta.lower(fn, sym)
+        catch e
+            e isa LoadError && return Any, false
+            # If e is not a LoadError then Meta.lower crashed in an unexpected way.
+            # Since this is not a specific to the user code but an internal error,
+            # rethrow the error to allow reporting it.
+            rethrow()
+        end
+    else
+        Meta.lower(fn, sym)
     end
-    return try_get_type(Meta.lower(fn, sym), fn)
+    return try_get_type(newsym, fn)
 end
 
 function get_type(sym, fn::Module)

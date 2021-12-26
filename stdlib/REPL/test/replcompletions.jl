@@ -31,6 +31,25 @@ let ex = quote
         macro foobar()
             :()
         end
+        macro barfoo(ex)
+            ex
+        end
+        macro error_expanding()
+            error("cannot expand @error_expanding")
+            :()
+        end
+        macro error_lowering_conditional(a)
+            if isa(a, Number)
+                return a
+            end
+            throw(AssertionError("Not a Number"))
+            :()
+        end
+        macro error_throwing()
+            return quote
+                error("@error_throwing throws an error")
+            end
+        end
 
         primitive type NonStruct 8 end
         Base.propertynames(::NonStruct) = (:a, :b, :c)
@@ -1159,6 +1178,26 @@ let
     (test_complete("@noexist."); @test true)
     (test_complete("Main.@noexist."); @test true)
     (test_complete("@Main.noexist."); @test true)
+end
+
+let # Check that completion does not crash on (possibly invalid) macro calls
+    (test_complete("@show."); @test true)
+    (test_complete("@macroexpand."); @test true)
+    (test_complete("@.."); @test true)
+    (test_complete("CompletionFoo.@foobar."); @test true)
+    (test_complete("CompletionFoo.@foobar()."); @test true)
+    (test_complete("CompletionFoo.@foobar(4)."); @test true)
+    (test_complete("CompletionFoo.@barfoo."); @test true)
+    (test_complete("CompletionFoo.@barfoo()."); @test true)
+    (test_complete("CompletionFoo.@barfoo(6)."); @test true)
+    (test_complete("CompletionFoo.@error_expanding."); @test true)
+    (test_complete("CompletionFoo.@error_expanding()."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional()."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional(3)."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional('a')."); @test true)
+    (test_complete("CompletionFoo.@error_throwing."); @test true)
+    (test_complete("CompletionFoo.@error_throwing()."); @test true)
 end
 
 @testset "https://github.com/JuliaLang/julia/issues/40247" begin
