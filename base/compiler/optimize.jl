@@ -452,9 +452,9 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     nargs = let def = sv.linfo.def
         isa(def, Method) ? Int(def.nargs) : 0
     end
-    esc_state = find_escapes(ir, nargs)
-    # setindex!(GLOBAL_ESCAPE_CACHE, esc_state, sv.linfo)
-    @timeit "memory opt" ir = memory_opt!(ir, esc_state)
+    estate = find_escapes(ir, nargs)
+    setindex!(GLOBAL_ESCAPE_CACHE, estate.escapes[1:estate.nargs], sv.linfo)
+    @timeit "memory opt" ir = memory_opt!(ir, estate)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end

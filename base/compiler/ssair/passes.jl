@@ -1407,7 +1407,8 @@ function _is_known_fcall(stmt::Expr, funcs)
     return false
 end
 
-function memory_opt!(ir::IRCode, escape_state)
+function memory_opt!(ir::IRCode, estate)
+    estate = estate::EscapeAnalysis.EscapeState
     compact = IncrementalCompact(ir, false)
     # relevant = IdSet{Int}() # allocations
     revisit = Int[] # potential targets for a mutating_arrayfreeze drop-in
@@ -1434,22 +1435,23 @@ function memory_opt!(ir::IRCode, escape_state)
             push!(maybecopies, idx)
         # elseif is_array_allocation(stmt)
         #     push!(relevant, idx)
-        elseif is_known_call(stmt, Core.arrayfreeze, compact) && isa(stmt.args[2], SSAValue)
-            push!(revisit, idx)
+        elseif is_known_call(stmt, Core.arrayfreeze, compact)
+            if isa(stmt.args[2], SSAValue)
+                push!(revisit, idx)
+            end
         end
     end
 
     ir = finish(compact)
     isempty(revisit) && isempty(maybecopies) && return ir
 
-    domtree = construct_domtree(ir.cfg.blocks)
+    # domtree = construct_domtree(ir.cfg.blocks)
 
     for idx in revisit
         stmt = ir.stmts[idx][:inst]::Expr
-        id = stmt.args[2].id
+        arg = stmt.args[2]::SSAValue
         # if our escape analysis has determined that this array doesn't escape, we can potentially eliminate an allocation
-        # @eval Main (ir = $ir; rev = $revisit; esc_state = $escape_state)
-        has_no_escape(escape_state.ssavalues[id]) || continue
+        has_no_escape(estate[arg]) || continue
 
         # # We're ok to steal the memory if we don't dominate any uses
         # ok = true

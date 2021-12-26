@@ -2,6 +2,7 @@ baremodule EscapeAnalysis
 
 export
     find_escapes,
+    GLOBAL_ESCAPE_CACHE,
     has_not_analyzed,
     has_no_escape,
     has_return_escape,
@@ -16,7 +17,7 @@ export
 const _TOP_MOD = ccall(:jl_base_relative_to, Any, (Any,), EscapeAnalysis)::Module
 
 # imports
-import ._TOP_MOD: ==
+import ._TOP_MOD: ==, getindex, setindex!
 # usings
 import Core:
     MethodInstance, Const, Argument, SSAValue, PiNode, PhiNode, UpsilonNode, PhiCNode,
@@ -58,7 +59,7 @@ else
     include(@__MODULE__, "compiler/EscapeAnalysis/disjoint_set.jl")
 end
 
-const EscapeSet  = IdSet{Any}
+const EscapeSet  = BitSet # XXX better to be IdSet{Int}?
 const EscapeSets = Vector{EscapeSet}
 
 """
@@ -318,53 +319,88 @@ end
 # TODO setup a more effient struct for cache
 # which can discard escape information on SSS values and arguments that don't join dispatch signature
 
+const AliasSet = IntDisjointSet{Int}
+
 """
-    state::EscapeState
+    estate::EscapeState
 
 Extended lattice that maps arguments and SSA values to escape information represented as `EscapeLattice`:
-- `state.arguments::Vector{EscapeLattice}`: escape information about "arguments";
+- `estate.arguments::Vector{EscapeLattice}`: escape information about "arguments";
   note that "argument" can include both call arguments and slots appearing in analysis frame
 - `ssavalues::Vector{EscapeLattice}`: escape information about each SSA value
 - `aliaset::IntDisjointSet{Int}`: a disjoint set that maintains aliased arguments and SSA values
 """
 struct EscapeState
-    arguments::Vector{EscapeLattice}
-    ssavalues::Vector{EscapeLattice}
-    aliasset::IntDisjointSet{Int}
+    escapes::Vector{EscapeLattice}
+    aliasset::AliasSet
+    nargs::Int
 end
-function EscapeState(nslots::Int, nargs::Int, nstmts::Int)
-    arguments = EscapeLattice[
-        1 ≤ i ≤ nargs ? ArgumentReturnEscape() : NotAnalyzed() for i in 1:nslots]
-    ssavalues = EscapeLattice[NotAnalyzed() for _ in 1:nstmts]
-    aliaset = AliasSet(nslots+nstmts)
-    return EscapeState(arguments, ssavalues, aliaset)
+function EscapeState(nargs::Int, nstmts::Int)
+    escapes = EscapeLattice[
+        1 ≤ i ≤ nargs ? ArgumentReturnEscape() : NotAnalyzed() for i in 1:(nargs+nstmts)]
+    aliaset = AliasSet(nargs+nstmts)
+    return EscapeState(escapes, aliaset, nargs)
 end
-
-const AliasSet = IntDisjointSet{Int}
-function alias_idx(@nospecialize(x), ir::IRCode)
-    if isa(x, Argument)
-        return x.n
-    elseif isa(x, SSAValue)
-        return x.id + length(ir.argtypes)
+function getindex(estate::EscapeState, @nospecialize(x))
+    if isa(x, Argument) || isa(x, SSAValue)
+        return estate.escapes[iridx(x, estate)]
     else
         return nothing
     end
 end
-function alias_val(idx::Int, ir::IRCode)
-    n = length(ir.argtypes)
-    return idx > n ? SSAValue(idx-n) : Argument(idx)
+function setindex!(estate::EscapeState, v::EscapeLattice, @nospecialize(x))
+    if isa(x, Argument) || isa(x, SSAValue)
+        estate.escapes[iridx(x, estate)] = v
+    end
+    return estate
 end
-function get_aliases(aliasset::AliasSet, @nospecialize(key), ir::IRCode)
-    idx = alias_idx(key, ir)
-    idx === nothing && return nothing
-    root = find_root!(aliasset, idx)
-    if idx ≠ root || aliasset.ranks[idx] > 0
+
+"""
+    iridx(x, estate::EscapeState) -> xidx::Union{Int,Nothing}
+
+Tries to convert analyzable IR element `x::Union{Argument,SSAValue}` to
+its unique identifier number `xidx` that is valid in the analysis context of `estate`.
+Returns `nothing` if `x` isn't maintained by `estate` and thus unanalyzable (e.g. `x::GlobalRef`).
+
+`irval` can be used as an inverse function of `iridx`, i.e.
+`irval(iridx(x::Union{Argument,SSAValue}, state), state) === x`.
+"""
+function iridx(@nospecialize(x), estate::EscapeState)
+    if isa(x, Argument)
+        xidx = x.n
+        @assert 1 ≤ xidx ≤ estate.nargs "invalid Argument"
+    elseif isa(x, SSAValue)
+        xidx = x.id + estate.nargs
+    else
+        return nothing
+    end
+    return xidx
+end
+
+"""
+    irval(xidx::Int, estate::EscapeState) -> x::Union{Argument,SSAValue}
+
+Converts its unique identifier number `xidx` to the original IR element `x::Union{Argument,SSAValue}`
+that is analyzable in the context of `estate`.
+
+`iridx` can be used as an inverse function of `irval`, i.e.
+`iridx(irval(xidx, state), state) === xidx`.
+"""
+function irval(xidx::Int, estate::EscapeState)
+    x = xidx > estate.nargs ? SSAValue(xidx-estate.nargs) : Argument(xidx)
+    return x
+end
+
+function getaliases(xidx::Int, estate::EscapeState)
+    aliasset = estate.aliasset
+    root = find_root!(aliasset, xidx)
+    if xidx ≠ root || aliasset.ranks[xidx] > 0
         # the size of this alias set containing `key` is larger than 1,
         # collect the entire alias set
-        aliases = Union{Argument,SSAValue}[]
-        for i in 1:length(aliasset.parents)
-            if aliasset.parents[i] == root
-                push!(aliases, alias_val(i, ir))
+        aliases = Int[]
+        for aidx in 1:length(aliasset.parents)
+            if aliasset.parents[aidx] == root
+                push!(aliases, aidx)
             end
         end
         return aliases
@@ -373,13 +409,29 @@ function get_aliases(aliasset::AliasSet, @nospecialize(key), ir::IRCode)
     end
 end
 
-# we preserve `IRCode` as well just for debugging purpose
-const GLOBAL_ESCAPE_CACHE = IdDict{MethodInstance,Tuple{EscapeState,IRCode}}()
+if _TOP_MOD !== Core.Compiler
+    struct EscapeCache
+        state::EscapeState
+        ir::IRCode # we preserve `IRCode` as well just for debugging purpose
+    end
+    const GLOBAL_ESCAPE_CACHE = IdDict{MethodInstance,EscapeCache}()
+    argescapes_from_cache(cache::EscapeCache) =
+        cache.state.escapes[1:cache.state.nargs]
+else
+    const GLOBAL_ESCAPE_CACHE = IdDict{MethodInstance,Vector{EscapeLattice}}()
+    argescapes_from_cache(cache::Vector{EscapeLattice}) = cache
+end
 __clear_escape_cache!() = empty!(GLOBAL_ESCAPE_CACHE)
 
-const EscapeChange = Pair{Union{Argument,SSAValue},EscapeLattice}
+const EscapeChange = Pair{Int,EscapeLattice}
 const AliasChange  = Pair{Int,Int}
 const Changes      = Vector{Union{EscapeChange,AliasChange}}
+
+struct AnalysisState
+    ir::IRCode
+    estate::EscapeState
+    changes::Changes
+end
 
 """
     find_escapes(ir::IRCode, nargs::Int) -> EscapeState
@@ -388,12 +440,13 @@ Analyzes escape information in `ir`.
 `nargs` is the number of actual arguments of the analyzed call.
 """
 function find_escapes(ir::IRCode, nargs::Int)
-    (; stmts, sptypes, argtypes) = ir
+    stmts = ir.stmts
     nstmts = length(stmts)
 
     # only manage a single state, some flow-sensitivity is encoded as `EscapeLattice` properties
-    state = EscapeState(length(argtypes), nargs, nstmts)
+    estate = EscapeState(nargs, nstmts)
     changes = Changes() # stashes changes that happen at current statement
+    astate = AnalysisState(ir, estate, changes)
 
     local debug_itr_counter = 0
     while true
@@ -410,30 +463,30 @@ function find_escapes(ir::IRCode, nargs::Int)
             if isa(stmt, Expr)
                 head = stmt.head
                 if head === :call
-                    has_changes = escape_call!(ir, pc, stmt.args, state, changes)
+                    has_changes = escape_call!(astate, pc, stmt.args)
                     # TODO throwness ≠ "effect-free-ness"
                     if !is_effect_free
                         for x in stmt.args
-                            add_escape_change!(x, ir, ThrownEscape(pc), changes)
+                            add_escape_change!(astate, x, ThrownEscape(pc))
                         end
                     else
                         has_changes || continue
                     end
                 elseif head === :invoke
-                    escape_invoke!(ir, pc, stmt.args, state, changes)
+                    escape_invoke!(astate, pc, stmt.args)
                 elseif head === :new || head === :splatnew
-                    escape_new!(ir, pc, stmt.args, state, changes)
+                    escape_new!(astate, pc, stmt.args)
                 elseif head === :(=)
                     lhs, rhs = stmt.args
                     if isa(lhs, GlobalRef) # global store
-                        add_escape_change!(rhs, ir, AllEscape(), changes)
+                        add_escape_change!(astate, rhs, AllEscape())
                     else
                         invalid_escape_assignment!(ir, pc)
                     end
                 elseif head === :foreigncall
-                    escape_foreigncall!(ir, pc, stmt.args, state, changes)
+                    escape_foreigncall!(astate, pc, stmt.args)
                 elseif head === :throw_undef_if_not # XXX when is this expression inserted ?
-                    add_escape_change!(stmt.args[1], ir, ThrownEscape(pc), changes)
+                    add_escape_change!(astate, stmt.args[1], ThrownEscape(pc))
                 elseif is_meta_expr_head(head)
                     # meta expressions doesn't account for any usages
                     continue
@@ -465,28 +518,28 @@ function find_escapes(ir::IRCode, nargs::Int)
                     continue
                 else
                     for x in stmt.args
-                        add_escape_change!(x, ir, AllEscape(), changes)
+                        add_escape_change!(astate, x, AllEscape())
                     end
                 end
             elseif isa(stmt, ReturnNode)
                 if isdefined(stmt, :val)
-                    add_escape_change!(stmt.val, ir, ReturnEscape(pc), changes)
+                    add_escape_change!(astate, stmt.val, ReturnEscape(pc))
                 end
             elseif isa(stmt, PhiNode)
-                escape_edges!(ir, pc, stmt.values, state, changes)
+                escape_edges!(astate, pc, stmt.values)
             elseif isa(stmt, PiNode)
-                escape_val!(ir, pc, stmt, state, changes)
+                escape_val!(astate, pc, stmt)
             elseif isa(stmt, PhiCNode)
-                escape_edges!(ir, pc, stmt.values, state, changes)
+                escape_edges!(astate, pc, stmt.values)
             elseif isa(stmt, UpsilonNode)
-                escape_val!(ir, pc, stmt, state, changes)
+                escape_val!(astate, pc, stmt)
             elseif isa(stmt, GlobalRef) # global load
-                add_escape_change!(SSAValue(pc), ir, AllEscape(), changes)
+                add_escape_change!(astate, SSAValue(pc), AllEscape())
             elseif isa(stmt, SSAValue)
                 # NOTE after SROA, we may see SSA value as statement
-                info = state.ssavalues[pc]
-                add_escape_change!(stmt, ir, info, changes)
-                add_alias_change!(stmt, SSAValue(pc), ir, changes)
+                info = estate[SSAValue(pc)]
+                add_escape_change!(astate, stmt, info)
+                add_alias_change!(astate, stmt, SSAValue(pc))
             else
                 @assert stmt isa GotoNode || stmt isa GotoIfNot || stmt === nothing # TODO remove me
                 continue
@@ -494,7 +547,7 @@ function find_escapes(ir::IRCode, nargs::Int)
 
             isempty(changes) && continue
 
-            anyupdate |= propagate_changes!(state, changes, ir)
+            anyupdate |= propagate_changes!(estate, changes)
 
             empty!(changes)
         end
@@ -508,95 +561,85 @@ function find_escapes(ir::IRCode, nargs::Int)
     #     println("[EA] excessive iteration count found ", debug_itr_counter, " (", singleton_type(ir.argtypes[1]), ")")
     # end
 
-    return state
+    return estate
 end
 
 # propagate changes, and check convergence
-function propagate_changes!(state::EscapeState, changes::Changes, ir::IRCode)
+function propagate_changes!(estate::EscapeState, changes::Changes)
     local anychanged = false
     for change in changes
         if isa(change, EscapeChange)
-            anychanged |= propagate_escape_change!(state, change)
-            x, info = change
-            aliases = get_aliases(state.aliasset, x, ir)
+            anychanged |= propagate_escape_change!(estate, change)
+            xidx, info = change
+            aliases = getaliases(xidx, estate)
             if aliases !== nothing
-                for alias in aliases
-                    morechange = EscapeChange(alias, info)
-                    anychanged |= propagate_escape_change!(state, morechange)
+                for aidx in aliases
+                    morechange = EscapeChange(aidx, info)
+                    anychanged |= propagate_escape_change!(estate, morechange)
                 end
             end
         else
-            anychanged |= propagate_alias_change!(state, change)
+            anychanged |= propagate_alias_change!(estate, change)
         end
     end
     return anychanged
 end
 
-function propagate_escape_change!(state::EscapeState, change::EscapeChange)
-    x, info = change
-    if isa(x, Argument)
-        old = state.arguments[x.n]
-        new = old ⊔ info
-        if old ≠ new
-            state.arguments[x.n] = new
-            return true
-        end
-    else
-        x = x::SSAValue
-        old = state.ssavalues[x.id]
-        new = old ⊔ info
-        if old ≠ new
-            state.ssavalues[x.id] = new
-            return true
-        end
-    end
-    return false
-end
-
-function propagate_alias_change!(state::EscapeState, change::AliasChange)
-    x, y = change
-    xroot = find_root!(state.aliasset, x)
-    yroot = find_root!(state.aliasset, y)
-    if xroot ≠ yroot
-        union!(state.aliasset, xroot, yroot)
+function propagate_escape_change!(estate::EscapeState, change::EscapeChange)
+    xidx, info = change
+    old = estate.escapes[xidx]
+    new = old ⊔ info
+    if old ≠ new
+        estate.escapes[xidx] = new
         return true
     end
     return false
 end
 
-function add_escape_change!(@nospecialize(x), ir::IRCode, info::EscapeLattice, changes::Changes)
-    if isa(x, Argument) || isa(x, SSAValue)
-        if !isbitstype(widenconst(argextype(x, ir)))
-            push!(changes, EscapeChange(x, info))
+function propagate_alias_change!(estate::EscapeState, change::AliasChange)
+    xidx, yidx = change
+    xroot = find_root!(estate.aliasset, xidx)
+    yroot = find_root!(estate.aliasset, yidx)
+    if xroot ≠ yroot
+        union!(estate.aliasset, xroot, yroot)
+        return true
+    end
+    return false
+end
+
+function add_escape_change!(astate::AnalysisState, @nospecialize(x), info::EscapeLattice)
+    xidx = iridx(x, astate.estate)
+    if xidx !== nothing
+        if !isbitstype(widenconst(argextype(x, astate.ir)))
+            push!(astate.changes, EscapeChange(xidx, info))
         end
     end
 end
 
-function add_alias_change!(@nospecialize(x), @nospecialize(y), ir::IRCode, changes::Changes)
-    xidx = alias_idx(x, ir)
-    yidx = alias_idx(y, ir)
+function add_alias_change!(astate::AnalysisState, @nospecialize(x), @nospecialize(y))
+    xidx = iridx(x, astate.estate)
+    yidx = iridx(y, astate.estate)
     if xidx !== nothing && yidx !== nothing
-        push!(changes, AliasChange(xidx, yidx))
+        push!(astate.changes, AliasChange(xidx, yidx))
     end
 end
 
-function escape_edges!(ir::IRCode, pc::Int, edges::Vector{Any},
-                       state::EscapeState, changes::Changes)
-    info = state.ssavalues[pc]
+function escape_edges!(astate::AnalysisState, pc::Int, edges::Vector{Any})
+    info = astate.estate[SSAValue(pc)]
     for i in 1:length(edges)
         if isassigned(edges, i)
             v = edges[i]
-            add_escape_change!(v, ir, info, changes)
-            add_alias_change!(SSAValue(pc), v, ir, changes)
+            add_escape_change!(astate, v, info)
+            add_alias_change!(astate, SSAValue(pc), v)
         end
     end
 end
 
-function escape_val!(ir::IRCode, pc::Int, x, state::EscapeState, changes::Changes)
+function escape_val!(astate::AnalysisState, pc::Int, x)
     if isdefined(x, :val)
-        info = state.ssavalues[pc]
-        add_escape_change!(x.val, ir, info, changes)
-        add_alias_change!(SSAValue(pc), x.val, ir, changes)
+        info = astate.estate[SSAValue(pc)]
+        add_escape_change!(astate, x.val, info)
+        add_alias_change!(astate, SSAValue(pc), x.val)
     end
 end
 
@@ -604,42 +647,39 @@ end
 # soemthing like below: it essentially incorporates forward escape propagation in our default
 # backward propagation, and leads to inefficient convergence that requires more iterations
 # # lhs = rhs: propagate escape information of `rhs` to `lhs`
-# function escape_alias!(@nospecialize(lhs), @nospecialize(rhs),
-#     ir::IRCode, state::EscapeState, changes::Changes)
-#     if isa(rhs, SSAValue)
-#         vinfo = state.ssavalues[rhs.id]
-#     elseif isa(rhs, Argument)
-#         vinfo = state.arguments[rhs.n]
+# function escape_alias!(astate::AnalysisState, @nospecialize(lhs), @nospecialize(rhs))
+#     if isa(rhs, SSAValue) || isa(rhs, Argument)
+#         vinfo = astate.estate[rhs]
 #     else
 #         return
 #     end
-#     add_escape_change!(lhs, ir, vinfo, changes)
+#     add_escape_change!(astate, lhs, vinfo)
 # end
 
-function escape_invoke!(ir::IRCode, pc::Int, args::Vector{Any},
-                        state::EscapeState, changes::Changes)
+function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     linfo = first(args)::MethodInstance
     cache = get(GLOBAL_ESCAPE_CACHE, linfo, nothing)
     args = args[2:end]
     if cache === nothing
         for x in args
-            add_escape_change!(x, ir, AllEscape(), changes)
+            add_escape_change!(astate, x, AllEscape())
         end
     else
-        (linfostate, #=, ir::IRCode=#) = cache
-        retinfo = state.ssavalues[pc] # escape information imposed on the call statement
+        argescapes = argescapes_from_cache(cache)
+        retinfo = astate.estate[SSAValue(pc)] # escape information imposed on the call statement
         method = linfo.def::Method
         nargs = Int(method.nargs)
         for i in 1:length(args)
             arg = args[i]
             if i ≤ nargs
-                arginfo = linfostate.arguments[i]
+                argi = i
             else # handle isva signature: COMBAK will this be invalid once we take alias information into account ?
-                arginfo = linfostate.arguments[nargs]
+                argi = nargs
             end
-            isempty(arginfo.ReturnEscape) && invalid_escape_invoke!(ir, linfo)
+            arginfo = argescapes[argi]
+            isempty(arginfo.ReturnEscape) && invalid_escape_invoke!(astate, linfo, linfo_estate)
             info = from_interprocedural(arginfo, retinfo, pc)
-            add_escape_change!(arg, ir, info, changes)
+            add_escape_change!(astate, arg, info)
         end
     end
 end
@@ -672,9 +712,9 @@ function from_interprocedural(arginfo::EscapeLattice, retinfo::EscapeLattice, pc
     end
 end
 
-@noinline function invalid_escape_invoke!(ir::IRCode, linfo::MethodInstance)
-    @eval Main (ir = $ir; linfo = $linfo)
-    error("invalid escape lattice element returned from inter-procedural context: inspect `Main.ir` and `Main.linfo`")
+@noinline function invalid_escape_invoke!(astate::AnalysisState, linfo::MethodInstance, linfo_estate::EscapeState)
+    @eval Main (astate = $astate; linfo = $linfo; linfo_estate = $linfo_estate)
+    error("invalid escape lattice element returned from inter-procedural context: inspect `Main.astate`, `Main.linfo` and `Main.linfo_estate`")
 end
 
 @noinline function invalid_escape_assignment!(ir::IRCode, pc::Int)
@@ -682,9 +722,8 @@ end
     error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
 end
 
-function escape_new!(ir::IRCode, pc::Int, args::Vector{Any},
-                     state::EscapeState, changes::Changes)
-    objinfo = state.ssavalues[pc]
+function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
+    objinfo = astate.estate[SSAValue(pc)]
     if objinfo == NotAnalyzed()
         objinfo = NoEscape()
     end
@@ -694,43 +733,38 @@ function escape_new!(ir::IRCode, pc::Int, args::Vector{Any},
         # the fields couldn't be analyzed precisely: directly propagate the escape information
         # of this object to all its fields (which is the most conservative option)
         for i in 2:nargs
-            add_escape_change!(args[i], ir, objinfo, changes)
+            add_escape_change!(astate, args[i], objinfo)
         end
     else
         # fields are known: propagate escape information imposed on recorded possibilities
         nf = length(FieldEscapes)
         for i in 2:nargs
             i-1 > nf && break # may happen when e.g. ϕ-node merges values with different types
-            escape_field!(args[i], FieldEscapes[i-1], ir, state, changes)
+            escape_field!(astate, args[i], FieldEscapes[i-1])
         end
     end
 end
 
-function escape_field!(@nospecialize(v), FieldEscape::EscapeSet, ir::IRCode, state::EscapeState, changes::Changes)
-    for x in FieldEscape
-        if isa(x, SSAValue)
-            add_escape_change!(v, ir, state.ssavalues[x.id], changes)
-        elseif isa(x, Argument)
-            add_escape_change!(v, ir, state.arguments[x.n], changes)
-        else
-            continue
-        end
-        add_alias_change!(v, x, ir, changes)
+function escape_field!(astate::AnalysisState, @nospecialize(v), FieldEscape::EscapeSet)
+    estate = astate.estate
+    for xidx in FieldEscape
+        x = irval(xidx, estate)::SSAValue # TODO remove me once we implement ArgEscape
+        add_escape_change!(astate, v, estate[x])
+        add_alias_change!(astate, v, x)
     end
 end
 
 # escape every argument `(args[6:length(args[3])])` and the name `args[1]`
 # TODO: we can apply a similar strategy like builtin calls to specialize some foreigncalls
-function escape_foreigncall!(ir::IRCode, pc::Int, args::Vector{Any},
-                             state::EscapeState, changes::Changes)
+function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     foreigncall_nargs = length((args[3])::SimpleVector)
     name = args[1]
     # if normalize(name) === :jl_gc_add_finalizer_th
     #     # add `FinalizerEscape` ?
     # end
-    add_escape_change!(name, ir, ThrownEscape(pc), changes)
+    add_escape_change!(astate, name, ThrownEscape(pc))
     for i in 6:5+foreigncall_nargs
-        add_escape_change!(args[i], ir, ThrownEscape(pc), changes)
+        add_escape_change!(astate, args[i], ThrownEscape(pc))
     end
 end
 
@@ -738,21 +772,21 @@ end
 # TODO implement more builtins, make them more accurate
 # TODO use `T_IFUNC`-like logic and don't not abuse dispatch ?
 
-function escape_call!(ir::IRCode, pc::Int, args::Vector{Any},
-                      state::EscapeState, changes::Changes)
+function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
+    ir = astate.ir
     ft = argextype(first(args), ir, ir.sptypes, ir.argtypes)
     f = singleton_type(ft)
     if isa(f, Core.IntrinsicFunction)
         return false # COMBAK we may break soundness here, e.g. `pointerref`
     end
-    result = escape_builtin!(f, ir, pc, args, state, changes)
+    result = escape_builtin!(f, astate, pc, args)
     if result === false
         return false # nothing to propagate
     elseif result === missing
         # if this call hasn't been handled by any of pre-defined handlers,
         # we escape this call conservatively
         for i in 2:length(args)
-            add_escape_change!(args[i], ir, AllEscape(), changes)
+            add_escape_change!(astate, args[i], AllEscape())
         end
         return true
     else
@@ -771,54 +805,54 @@ escape_builtin!(::typeof(===), _...) = return false
 escape_builtin!(::typeof(isdefined), _...) = return false
 escape_builtin!(::typeof(throw), _...) = return false
 
-function escape_builtin!(::typeof(Core.ifelse), ir::IRCode, pc::Int, args::Vector{Any}, state::EscapeState, changes::Changes)
+function escape_builtin!(::typeof(Core.ifelse), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 4 || return nothing
     f, cond, th, el = args
-    info = state.ssavalues[pc]
-    condt = argextype(cond, ir)
     ret = SSAValue(pc)
+    info = astate.estate[ret]
+    condt = argextype(cond, astate.ir)
     if isa(condt, Const) && (cond = condt.val; isa(cond, Bool))
         if cond
-            add_escape_change!(th, ir, info, changes)
-            add_alias_change!(th, ret, ir, changes)
+            add_escape_change!(astate, th, info)
+            add_alias_change!(astate, th, ret)
         else
-            add_escape_change!(el, ir, info, changes)
-            add_alias_change!(el, ret, ir, changes)
+            add_escape_change!(astate, el, info)
+            add_alias_change!(astate, el, ret)
         end
     else
-        add_escape_change!(th, ir, info, changes)
-        add_escape_change!(el, ir, info, changes)
-        add_alias_change!(th, ret, ir, changes)
-        add_alias_change!(el, ret, ir, changes)
+        add_escape_change!(astate, th, info)
+        add_alias_change!(astate, th, ret)
+        add_escape_change!(astate, el, info)
+        add_alias_change!(astate, el, ret)
     end
     return nothing
 end
 
-function escape_builtin!(::typeof(typeassert), ir::IRCode, pc::Int, args::Vector{Any}, state::EscapeState, changes::Changes)
+function escape_builtin!(::typeof(typeassert), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 3 || return nothing
     f, obj, typ = args
-    info = state.ssavalues[pc]
-    add_escape_change!(obj, ir, info, changes)
-    add_alias_change!(SSAValue(pc), obj, ir, changes)
+    ret = SSAValue(pc)
+    info = astate.estate[ret]
+    add_escape_change!(astate, obj, info)
+    add_alias_change!(astate, ret, obj)
     return nothing
 end
 
-function escape_builtin!(::typeof(tuple), ir::IRCode, pc::Int, args::Vector{Any}, state::EscapeState, changes::Changes)
-    escape_new!(ir, pc, args, state, changes)
+function escape_builtin!(::typeof(tuple), astate::AnalysisState, pc::Int, args::Vector{Any})
+    escape_new!(astate, pc, args)
     return nothing
 end
 
-function escape_builtin!(::typeof(getfield), ir::IRCode, pc::Int, args::Vector{Any}, state::EscapeState, changes::Changes)
+function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 3 || return nothing
+    ir, estate = astate.ir, astate.estate
     obj = args[2]
     typ = widenconst(argextype(obj, ir))
     if hasintersect(typ, Module) # global load
-        add_escape_change!(SSAValue(pc), ir, AllEscape(), changes)
+        add_escape_change!(astate, SSAValue(pc), AllEscape())
     end
-    if isa(obj, SSAValue)
-        objinfo = state.ssavalues[obj.id]
-    elseif isa(obj, Argument)
-        objinfo = state.arguments[obj.n]
+    if isa(obj, SSAValue) || isa(obj, Argument)
+        objinfo = estate[obj]
     else
         return
     end
@@ -835,11 +869,11 @@ function escape_builtin!(::typeof(getfield), ir::IRCode, pc::Int, args::Vector{A
         # the field couldn't be analyzed precisely: directly propagate the escape information
         # imposed on the return value of this `getfield` call to the object (which is the most conservative option)
         # but also with updated field information
-        ssainfo = state.ssavalues[pc]
+        ssainfo = estate[SSAValue(pc)]
         if ssainfo == NotAnalyzed()
             ssainfo = NoEscape()
         end
-        add_escape_change!(obj, ir, EscapeLattice(ssainfo, TOP_FIELD_SETS), changes)
+        add_escape_change!(astate, obj, EscapeLattice(ssainfo, TOP_FIELD_SETS))
     else
         # fields are known: record the return value of this `getfield` call as a possibility that imposes escape
         FieldEscapes = copy(FieldEscapes)
@@ -853,28 +887,27 @@ function escape_builtin!(::typeof(getfield), ir::IRCode, pc::Int, args::Vector{A
         end
         if fidx !== nothing
             # the field is known precisely: propagate this escape information to the field
-            push!(FieldEscapes[fidx], SSAValue(pc))
+            push!(FieldEscapes[fidx], iridx(SSAValue(pc), estate))
         else
             # the field isn't known precisely: propagate this escape information to all the fields
             for FieldEscape in FieldEscapes
-                push!(FieldEscape, SSAValue(pc))
+                push!(FieldEscape, iridx(SSAValue(pc), estate))
             end
         end
-        add_escape_change!(obj, ir, EscapeLattice(objinfo, FieldEscapes), changes)
+        add_escape_change!(astate, obj, EscapeLattice(objinfo, FieldEscapes))
     end
     return nothing
 end
 
-function escape_builtin!(::typeof(setfield!), ir::IRCode, pc::Int, args::Vector{Any}, state::EscapeState, changes::Changes)
+function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 4 || return nothing
+    ir, estate = astate.ir, astate.estate
     obj, fld, val = args[2:4]
-    if isa(obj, SSAValue)
-        objinfo = state.ssavalues[obj.id]
-    elseif isa(obj, Argument)
-        objinfo = state.arguments[obj.n]
+    if isa(obj, SSAValue) || isa(obj, Argument)
+        objinfo = estate[obj]
     else
         # unanalyzable object (e.g. obj::GlobalRef): escape field value conservatively
-        add_escape_change!(val, ir, AllEscape(), changes)
+        add_escape_change!(astate, val, AllEscape())
         return
     end
     FieldEscapes = objinfo.FieldEscapes
@@ -887,16 +920,16 @@ function escape_builtin!(::typeof(setfield!), ir::IRCode, pc::Int, args::Vector{
                 # unsuccessful field analysis: update obj's escape information with new field information
                 FieldEscapes = EscapeSet[EscapeSet() for _ in 1:nfields]
                 objinfo = EscapeLattice(objinfo, FieldEscapes)
-                add_escape_change!(obj, ir, objinfo, changes)
+                add_escape_change!(astate, obj, objinfo)
                 @goto add_field_escape
             end
             # unsuccessful field analysis: update obj's escape information with new field information
             objinfo = EscapeLattice(objinfo, TOP_FIELD_SETS)
-            add_escape_change!(obj, ir, objinfo, changes)
+            add_escape_change!(astate, obj, objinfo)
         end
         # the field couldn't be analyzed precisely: directly propagate the escape information
         # of this object to the field (which is the most conservative option)
-        add_escape_change!(val, ir, objinfo, changes)
+        add_escape_change!(astate, val, objinfo)
     else
         # fields are known: propagate escape information imposed on recorded possibilities
         typ = widenconst(argextype(obj, ir))
@@ -909,20 +942,20 @@ function escape_builtin!(::typeof(setfield!), ir::IRCode, pc::Int, args::Vector{
         end
         if fidx !== nothing
             # the field is known precisely: propagate this escape information to the field
-            escape_field!(val, FieldEscapes[fidx], ir, state, changes)
+            escape_field!(astate, val, FieldEscapes[fidx])
         else
             # the field isn't known precisely: propagate this escape information to all the fields
             for FieldEscape in FieldEscapes
-                escape_field!(val, FieldEscape, ir, state, changes)
+                escape_field!(astate, val, FieldEscape)
             end
         end
     end
     # also propagate escape information imposed on the return value of this `setfield!`
-    ssainfo = state.ssavalues[pc]
+    ssainfo = estate[SSAValue(pc)]
     if ssainfo == NotAnalyzed()
         ssainfo = NoEscape()
     end
-    add_escape_change!(val, ir, ssainfo, changes)
+    add_escape_change!(astate, val, ssainfo)
     return nothing
 end
 
