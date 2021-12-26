@@ -314,10 +314,12 @@ bool jl_alloc::getArrayAllocInfo(AllocIdInfo &info, llvm::CallInst *call) {
                 if (mds->getString() == "allocation") {
                     info.isarray = true;
                     info.array.dimcount = call->arg_size() - 1;
+                    info.type = call->getArgOperand(0);
                     return true;
                 } else if (mds->getString() == "allocation.dyn") {
                     info.isarray = true;
                     info.array.dimcount = 0;
+                    info.type = call->getArgOperand(0);
                     return true;
                 } else {
                     assert(false && "Expected julia.array metadata to be either 'allocation' or 'allocation.dyn'!");

@@ -2449,11 +2449,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
             jl_alloc::AllocIdInfo info;
             if (auto call = dyn_cast<CallInst>(val)) {
                 if (jl_alloc::getAllocIdInfo(info, call, alloc_obj_func)) {
-                    if (auto cexpr = dyn_cast<ConstantExpr>(info.type->stripPointerCasts())) {
-                        if (cexpr->getOpcode() == Instruction::IntToPtr) {
-                            return builder.CreateZExtOrBitCast(cexpr->getOperand(0), T_size);
-                        }
-                    }
+                    return builder.CreatePtrToInt(info.type, T_size, "type_tag");
                 }
             }
             return EmitLoadTag(builder, val);
