@@ -44,7 +44,7 @@ end
 function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S<:Real}
     TS = promote_op(matprod, T, S)
     y = isconcretetype(TS) ? convert(AbstractVector{TS}, x) : x
-    mul!(similar(x, TS, size(A,1)), A, y)
+    mul!(similar(x, TS, axes(A,1)), A, y)
 end
 function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
     TS = promote_op(matprod, T, S)
@@ -77,11 +77,11 @@ end
 
 function *(tA::Transpose{<:Any,<:StridedMatrix{T}}, x::StridedVector{S}) where {T<:BlasFloat,S}
     TS = promote_op(matprod, T, S)
-    mul!(similar(x, TS, size(tA, 1)), tA, convert(AbstractVector{TS}, x))
+    mul!(similar(x, TS, axes(tA, 1)), tA, convert(AbstractVector{TS}, x))
 end
 function *(tA::Transpose{<:Any,<:AbstractMatrix{T}}, x::AbstractVector{S}) where {T,S}
     TS = promote_op(matprod, T, S)
-    mul!(similar(x, TS, size(tA, 1)), tA, x)
+    mul!(similar(x, TS, axes(tA, 1)), tA, x)
 end
 @inline mul!(y::StridedVector{T}, tA::Transpose{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
                       alpha::Number, beta::Number) where {T<:BlasFloat} =
@@ -92,11 +92,11 @@ end
 
 function *(adjA::Adjoint{<:Any,<:StridedMatrix{T}}, x::StridedVector{S}) where {T<:BlasFloat,S}
     TS = promote_op(matprod, T, S)
-    mul!(similar(x, TS, size(adjA, 1)), adjA, convert(AbstractVector{TS}, x))
+    mul!(similar(x, TS, axes(adjA, 1)), adjA, convert(AbstractVector{TS}, x))
 end
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix{T}}, x::AbstractVector{S}) where {T,S}
     TS = promote_op(matprod, T, S)
-    mul!(similar(x, TS, size(adjA, 1)), adjA, x)
+    mul!(similar(x, TS, axes(adjA, 1)), adjA, x)
 end
 
 @inline mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
@@ -130,18 +130,18 @@ julia> [1 1; 0 1] * [1 0; 1 1]
 """
 function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
+    mul!(similar(B, TS, (axes(A,1), axes(B,2))), A, B)
 end
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
 # which is better handled by reinterpreting rather than promotion
 function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasFloat})
     TS = promote_type(eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    mul!(similar(B, TS, (axes(A,1), axes(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
 end
 function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMatrix{<:BlasComplex})
     TS = promote_type(eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    mul!(similar(B, TS, (axes(A,1), axes(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
 end
 
 @inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
