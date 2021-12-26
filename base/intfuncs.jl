@@ -1078,7 +1078,16 @@ end
 
 """
     iroot(n::Integer, r::Integer)
-computes floor(n^(1/r)) precisely
+
+Computes floor(n^(1/r)) precisely.
+# Examples
+```jldoctest
+julia> iroot(100, 2)
+10
+
+julia> iroot(99,2)
+9
+```
 """
 iroot(x::Integer, n::Integer) = iroot(promote(x, n)...)
 function iroot(x::T, n::T) where T<:BitInteger
