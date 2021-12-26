@@ -161,11 +161,6 @@ namespace {
                     if (checked.find(user) == checked.end() && next_check.find(user) == next_check.end()) {
                         if (auto inst = dyn_cast<Instruction>(user)) {
                             auto dominators = get_dominators(inst);
-                            if (dominators.empty()) {
-                                //No allocation dominates this instruction, we can't necessarily
-                                //optimize it away
-                                continue;
-                            }
                             auto adjust_dominators = [&](decltype(checked) &check, Value *val){
                                 auto it = check.find(val);
                                 if (it != check.end()) {
@@ -184,8 +179,8 @@ namespace {
                                 case Instruction::Mul: {
                                     std::size_t idx = inst->getOperand(0) == dim.first; // 1 if equal, 0 if not
                                     auto val = inst->getOperand(idx);
-                                    if (adjust_dominators(checked, val) || adjust_dominators(next_check, val) || adjust_dominators(lengths, val)) {
-                                        if (dominators.empty()) {
+                                    if (inst->hasNoSignedWrap() || adjust_dominators(checked, val) || adjust_dominators(next_check, val) || adjust_dominators(lengths, val)) {
+                                        if (!inst->hasNoSignedWrap() && dominators.empty()) {
                                             //We don't have an allocation that uses both
                                             //operands of the mul instruction AND dominates
                                             //the mul instruction; therefore this mul could
