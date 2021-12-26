@@ -40,11 +40,15 @@ static Value *maybe_decay_tracked(jl_codectx_t &ctx, Value *V)
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
+static Value *mark_callee_rooted_with_builder(IRBuilder<> &builder, Value *V) {
+    assert(V->getType() == JuliaType::get_pjlvalue_ty(builder.getContext()) || V->getType() == JuliaType::get_prjlvalue_ty(builder.getContext()));
+    return builder.CreateAddrSpaceCast(V,
+        PointerType::get(JuliaType::get_jlvalue_ty(builder.getContext()), AddressSpace::CalleeRooted));
+}
+
 static Value *mark_callee_rooted(jl_codectx_t &ctx, Value *V)
 {
-    assert(V->getType() == T_pjlvalue || V->getType() == T_prjlvalue);
-    return ctx.builder.CreateAddrSpaceCast(V,
-        PointerType::get(T_jlvalue, AddressSpace::CalleeRooted));
+    return mark_callee_rooted_with_builder(ctx.builder, V);
 }
 
 AtomicOrdering get_llvm_atomic_order(enum jl_memory_order order)
@@ -1030,28 +1034,48 @@ static void error_unless(jl_codectx_t &ctx, Value *cond, const std::string &msg)
     ctx.builder.SetInsertPoint(passBB);
 }
 
+static void raise_exception_with_builder(IRBuilder<> &builder, Value *exc,
+                            BasicBlock *contBB=nullptr)
+{
+    builder.CreateCall(prepare_call_in(builder.GetInsertBlock()->getModule(), jlthrow_func), { mark_callee_rooted_with_builder(builder, exc) });
+    builder.CreateUnreachable();
+    if (!contBB) {
+        contBB = BasicBlock::Create(builder.getContext(), "after_throw", builder.GetInsertBlock()->getParent());
+    }
+    else {
+        builder.GetInsertBlock()->getParent()->getBasicBlockList().push_back(contBB);
+    }
+    builder.SetInsertPoint(contBB);
+}
+
+// DO NOT PASS IN A CONST CONDITION!
+static void raise_exception_unless_with_builder(IRBuilder<> &builder, Value *cond, Value *exc)
+{
+    BasicBlock *failBB = BasicBlock::Create(builder.getContext(),"fail",builder.GetInsertBlock()->getParent());
+    BasicBlock *passBB = BasicBlock::Create(builder.getContext(),"pass");
+    builder.CreateCondBr(cond, passBB, failBB);
+    builder.SetInsertPoint(failBB);
+    raise_exception_with_builder(builder, exc, passBB);
+}
+
+void shared_raise_exception(IRBuilder<> &builder, Value *exc, BasicBlock *contBB) {
+    raise_exception_with_builder(builder, exc, contBB);
+}
+
+void shared_raise_exception_unless(IRBuilder<> &builder, Value *cond, Value *exc) {
+    raise_exception_unless_with_builder(builder, cond, exc);
+}
+
 static void raise_exception(jl_codectx_t &ctx, Value *exc,
                             BasicBlock *contBB=nullptr)
 {
-    ctx.builder.CreateCall(prepare_call(jlthrow_func), { mark_callee_rooted(ctx, exc) });
-    ctx.builder.CreateUnreachable();
-    if (!contBB) {
-        contBB = BasicBlock::Create(ctx.builder.getContext(), "after_throw", ctx.f);
-    }
-    else {
-        ctx.f->getBasicBlockList().push_back(contBB);
-    }
-    ctx.builder.SetInsertPoint(contBB);
+    raise_exception_with_builder(ctx.builder, exc, contBB);
 }
 
 // DO NOT PASS IN A CONST CONDITION!
 static void raise_exception_unless(jl_codectx_t &ctx, Value *cond, Value *exc)
 {
-    BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(),"fail",ctx.f);
-    BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(),"pass");
-    ctx.builder.CreateCondBr(cond, passBB, failBB);
-    ctx.builder.SetInsertPoint(failBB);
-    raise_exception(ctx, exc, passBB);
+    raise_exception_unless_with_builder(ctx.builder, cond, exc);
 }
 
 static Value *null_pointer_cmp(jl_codectx_t &ctx, Value *v)

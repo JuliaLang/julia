@@ -34,6 +34,7 @@
 
 #include <map>
 #include <set>
+#include <limits>
 
 #include "julia_assert.h"
 
@@ -125,6 +126,8 @@ private:
 
     void optimizeObject(CallInst *orig, jl_alloc::AllocIdInfo &info);
     void optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info);
+
+    bool insertArrayLengthExceptionGuard(CallInst *orig);
 
     bool isSafepoint(Instruction *inst);
     Instruction *getFirstSafepoint(BasicBlock *bb);
@@ -240,7 +243,9 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
                                                         !object_escape_info.refstore);
     //Trivially dead array
     if (may_be_removable && !object_escape_info.hasload) {
-        removeAlloc(orig, info.type);
+        if (insertArrayLengthExceptionGuard(orig)) {
+            removeAlloc(orig, info.type);
+        }
         return;
     }
     checkArrayEscapes();
@@ -251,7 +256,9 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
     if (may_be_removable && !array_escape_info.addrescaped
         && !array_escape_info.hasload
         && (!array_escape_info.haspreserve || !array_escape_info.refstore)) {
-        removeAlloc(orig, info.type, true);
+        if (insertArrayLengthExceptionGuard(orig)) {
+            removeAlloc(orig, info.type, true);
+        }
         return;
     }
 }
@@ -1200,6 +1207,30 @@ cleanup:
             continue;
         PromoteMemToReg({slot.slot}, getDomTree());
     }
+}
+
+bool Optimizer::insertArrayLengthExceptionGuard(CallInst *orig) {
+    //This is needed to maintain nonnegative length guarantee
+    //after allocation and exception otherwise
+    bool guaranteedPositive = true;
+    bool guaranteedNegative = false;
+    size_t constantLength = 1;
+    for (unsigned i = 1; i < orig->getNumArgOperands(); i++) {
+        if (auto ci = dyn_cast<ConstantInt>(orig->getArgOperand(i))) {
+            if (ci->isNegative()) {
+                guaranteedPositive = false;
+                guaranteedNegative = true;
+                break;
+            } else {
+                constantLength *= ci->getZExtValue();
+            }
+        } else {
+            guaranteedPositive = false;
+        }
+    }
+    //FIXME: insert exception throw if guaranteedNegative,
+    //or conditional throw if dynamic length
+    return guaranteedPositive && constantLength <= std::numeric_limits<ssize_t>::max();
 }
 
 bool AllocOpt::doInitialization(Module &M)
