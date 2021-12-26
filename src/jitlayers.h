@@ -221,7 +221,7 @@ Pass *createRemoveNIPass();
 Pass *createJuliaLICMPass();
 Pass *createMultiVersioningPass();
 Pass *createAllocOptPass();
-Pass *createArraylenOptPass();
+Pass *createArrayOptPass();
 Pass *createDemoteFloat16Pass();
 Pass *createCPUFeaturesPass();
 // Whether the Function is an llvm or julia intrinsic.
