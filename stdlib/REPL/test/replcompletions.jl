@@ -832,6 +832,45 @@ let s, c, r
 end
 end
 
+#test that it does not crash on files for which `stat` errors
+let current_dir, forbidden
+    # Issue #36855
+    if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+        mktempdir() do path
+            selfsymlink = joinpath(path, "selfsymlink")
+            symlink(selfsymlink, selfsymlink)
+            @test try
+                stat(selfsymlink) # should crash with a IOError
+                false
+            catch e
+                e isa Base.IOError && occursin("ELOOP", e.msg)
+            end
+            c, r = test_complete("\"$(joinpath(path, "selfsym"))")
+            @test c == ["selfsymlink"]
+        end
+    end
+
+    # Issue #32797
+    forbidden = Sys.iswindows() ? "C:\\S" : "/root/x"
+    test_complete(forbidden); @test true # simply check that it did not crash
+
+     # Issue #19310
+    if Sys.iswindows()
+        current_dir = pwd()
+        cd("C:")
+        test_complete("C"); @test true
+        test_complete("C:"); @test true
+        test_complete("C:\\"); @test true
+        if isdir("D:")
+            cd("D:")
+            test_complete("C"); @test true
+            test_complete("C:"); @test true
+            test_complete("C:\\"); @test true
+        end
+        cd(current_dir)
+    end
+end
+
 #test that it can auto complete with spaces in file/path
 mktempdir() do path
     space_folder = randstring() * " α"

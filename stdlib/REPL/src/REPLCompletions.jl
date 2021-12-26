@@ -622,6 +622,21 @@ function afterusing(string::String, startpos::Int)
     return occursin(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
 end
 
+function close_path_completion(str, startpos, r, paths, pos)
+    length(paths) == 1 || return false  # Only close if there's a single choice...
+    _path = str[startpos:prevind(str, first(r))] * (paths[1]::PathCompletion).path
+    path = expanduser(replace(_path, r"\\ " => " "))
+    # ...except if it's a directory...
+    try
+        isdir(path)
+    catch e
+        e isa Base.IOError || rethrow() # `path` cannot be determined to be a file
+    end && return false
+    # ...and except if there's already a " at the cursor.
+    return lastindex(str) <= pos || str[nextind(str, pos)] != '"'
+end
+
+
 function bslash_completions(string::String, pos::Int)
     slashpos = something(findprev(isequal('\\'), string, pos), 0)
     if (something(findprev(in(bslash_separators), string, pos), 0) < slashpos &&
@@ -758,13 +773,8 @@ function completions(string::String, pos::Int, context_module::Module=Main)
 
         paths, r, success = complete_path(replace(string[r], r"\\ " => " "), pos)
 
-        if inc_tag === :string &&
-           length(paths) == 1 &&  # Only close if there's a single choice,
-           !isdir(expanduser(replace(string[startpos:prevind(string, first(r))] * paths[1].path,
-                                     r"\\ " => " "))) &&  # except if it's a directory
-           (lastindex(string) <= pos ||
-            string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
-            paths[1] = PathCompletion(paths[1].path * "\"")
+        if inc_tag === :string && close_path_completion(string, startpos, r, paths, pos)
+            paths[1] = PathCompletion((paths[1]::PathCompletion).path * "\"")
         end
 
         #Latex symbols can be completed for strings
