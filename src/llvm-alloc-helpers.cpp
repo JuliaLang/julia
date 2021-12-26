@@ -348,5 +348,4 @@ bool jl_alloc::getAllocIdInfo(AllocIdInfo &info, llvm::CallInst *call, llvm::Fun
     } else {
         return getArrayAllocInfo(info, call);
     }
-    return false;
 }

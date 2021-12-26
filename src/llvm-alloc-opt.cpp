@@ -128,7 +128,6 @@ private:
 
     bool isSafepoint(Instruction *inst);
     Instruction *getFirstSafepoint(BasicBlock *bb);
-    ssize_t getGCAllocSize(Instruction *I);
     void pushInstruction(Instruction *I);
 
     void insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert);
@@ -136,10 +135,11 @@ private:
     void insertLifetime(Value *ptr, Constant *sz, Instruction *orig);
 
     void checkObjectEscapes(Instruction *I);
+    void checkArrayEscapes();
 
     void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
                                  Instruction *orig_i, Instruction *new_i);
-    void removeAlloc(CallInst *orig_inst, llvm::Value *tag);
+    void removeAlloc(CallInst *orig_inst, llvm::Value *tag, bool remove_array_load = false);
     void moveToStack(CallInst *orig_inst, llvm::Value *tag, size_t sz, bool has_ref);
     void splitOnStack(CallInst *orig_inst, llvm::Value *tag);
     void optimizeTag(CallInst *orig_inst, llvm::Value *tag);
@@ -200,8 +200,10 @@ void Optimizer::pushInstruction(Instruction *I)
 {
     if (auto call = dyn_cast<CallInst>(I)) {
         jl_alloc::AllocIdInfo info;
-        if (jl_alloc::getAllocIdInfo(info, call, pass.alloc_obj_func) && (info.isarray || info.object.size != -1)) {
-            worklist[call] = std::move(info);
+        if (jl_alloc::getAllocIdInfo(info, call, pass.alloc_obj_func)) {
+            if (info.isarray || info.object.size != -1) {
+                worklist[call] = std::move(info);
+            }
         }
     }
 }
@@ -216,6 +218,11 @@ void Optimizer::initialize()
 }
 
 void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
+    //Array escape analysis differs from object escape analysis because:
+    //1. we care about the outer array object shell escaping
+    //2. we care about the inner array data operations
+    //Thus the types of escapes and optimizations that are possible
+    //differ slightly from what is possible via optimizeObject
     checkObjectEscapes(orig);
     //Upfront remove the typeof calls
     if (object_escape_info.hastypeof) {
@@ -227,6 +234,21 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
     }
     //Optimizations on coalescing and hoisting/sinking go here
     if (object_escape_info.haserror || object_escape_info.returned) {
+        return;
+    }
+    //Trivially dead array
+    if (!object_escape_info.addrescaped && !object_escape_info.hasload && (!object_escape_info.haspreserve ||
+                                                        !object_escape_info.refstore)) {
+        removeAlloc(orig, info.type);
+        return;
+    }
+    checkArrayEscapes();
+    if (array_escape_info.escaped) {
+        return;
+    }
+    //Array dead by nobody loading from the data pointer
+    if (!array_escape_info.addrescaped && !array_escape_info.hasload && (!array_escape_info.haspreserve || !array_escape_info.refstore)) {
+        removeAlloc(orig, info.type, true);
         return;
     }
 }
@@ -339,24 +361,25 @@ Instruction *Optimizer::getFirstSafepoint(BasicBlock *bb)
     return first;
 }
 
-ssize_t Optimizer::getGCAllocSize(Instruction *I)
-{
-    auto call = dyn_cast<CallInst>(I);
-    if (!call)
-        return -1;
-    if (call->getCalledOperand() != pass.alloc_obj_func)
-        return -1;
-    assert(call->arg_size() == 3);
-    size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
-    if (sz < IntegerType::MAX_INT_BITS / 8 && sz < INT32_MAX)
-        return sz;
-    return -1;
-}
-
 void Optimizer::checkObjectEscapes(Instruction *I)
 {
     jl_alloc::EscapeAnalysisRequiredArgs required{object_escape_info, check_stack, pass, *pass.DL};
     jl_alloc::runEscapeAnalysis(I, required);
+}
+
+void Optimizer::checkArrayEscapes() {
+    if (object_escape_info.memops.size() == 1 && object_escape_info.memops.begin()->second.accesses.size() == 1) {
+        auto &memop = *object_escape_info.memops.begin()->second.accesses.begin();
+        if (memop.offset == 0 && isa<LoadInst>(memop.inst)) {
+            jl_alloc::EscapeAnalysisRequiredArgs required{array_escape_info, check_stack, pass, *pass.DL};
+            jl_alloc::runEscapeAnalysis(memop.inst, required);
+            assert(!array_escape_info.hastypeof);
+            assert(!array_escape_info.returned);
+            return;
+        }
+    }
+    //Any non-escaping array load should have been coalesced by ArrayOpt already
+    array_escape_info.escaped = true;
 }
 
 void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
@@ -741,7 +764,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, llvm::Value *tag, size_t sz, bo
 
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
-void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag)
+void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag, bool remove_array_load)
 {
     removed.push_back(orig_inst);
     auto simple_remove = [&] (Instruction *orig_i) {
@@ -807,6 +830,10 @@ void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag)
         }
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user) ||
                  isa<GetElementPtrInst>(user)) {
+            push_frame(user);
+        } else if (remove_array_load && isa<LoadInst>(user)) {
+            remove_array_load = false; // We only remove the first data load,
+            //any other loads are a sign of failure so we abort
             push_frame(user);
         }
         else {
@@ -1175,8 +1202,6 @@ cleanup:
 bool AllocOpt::doInitialization(Module &M)
 {
     initAll(M);
-    if (!alloc_obj_func)
-        return false;
 
     DL = &M.getDataLayout();
 
@@ -1190,8 +1215,6 @@ bool AllocOpt::doInitialization(Module &M)
 
 bool AllocOpt::runOnFunction(Function &F)
 {
-    if (!alloc_obj_func)
-        return false;
     Optimizer optimizer(F, *this);
     optimizer.initialize();
     optimizer.optimizeAll();
