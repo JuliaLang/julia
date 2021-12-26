@@ -122,6 +122,10 @@ struct Optimizer {
     void optimizeAll();
     bool finalize();
 private:
+
+    void optimizeObject(CallInst *orig, jl_alloc::AllocIdInfo &info);
+    void optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info);
+
     bool isSafepoint(Instruction *inst);
     Instruction *getFirstSafepoint(BasicBlock *bb);
     ssize_t getGCAllocSize(Instruction *I);
@@ -131,14 +135,14 @@ private:
     // insert llvm.lifetime.* calls for `ptr` with size `sz` based on the use of `orig`.
     void insertLifetime(Value *ptr, Constant *sz, Instruction *orig);
 
-    void checkInst(Instruction *I);
+    void checkObjectEscapes(Instruction *I);
 
     void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
                                  Instruction *orig_i, Instruction *new_i);
-    void removeAlloc(CallInst *orig_inst);
-    void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref);
-    void splitOnStack(CallInst *orig_inst);
-    void optimizeTag(CallInst *orig_inst);
+    void removeAlloc(CallInst *orig_inst, llvm::Value *tag);
+    void moveToStack(CallInst *orig_inst, llvm::Value *tag, size_t sz, bool has_ref);
+    void splitOnStack(CallInst *orig_inst, llvm::Value *tag);
+    void optimizeTag(CallInst *orig_inst, llvm::Value *tag);
 
     Function &F;
     AllocOpt &pass;
@@ -182,9 +186,10 @@ private:
         typedef SmallVector<Frame,4> Stack;
     };
 
-    SetVector<std::pair<CallInst*,size_t>> worklist;
+    std::map<CallInst *, jl_alloc::AllocIdInfo> worklist;
     SmallVector<CallInst*,6> removed;
-    AllocUseInfo use_info;
+    AllocUseInfo object_escape_info;
+    AllocUseInfo array_escape_info;
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
     ReplaceUses::Stack replace_stack;
@@ -193,9 +198,11 @@ private:
 
 void Optimizer::pushInstruction(Instruction *I)
 {
-    ssize_t sz = getGCAllocSize(I);
-    if (sz != -1) {
-        worklist.insert(std::make_pair(cast<CallInst>(I), sz));
+    if (auto call = dyn_cast<CallInst>(I)) {
+        jl_alloc::AllocIdInfo info;
+        if (jl_alloc::getAllocIdInfo(info, call, pass.alloc_obj_func) && (info.isarray || info.object.size != -1)) {
+            worklist[call] = std::move(info);
+        }
     }
 }
 
@@ -208,57 +215,83 @@ void Optimizer::initialize()
     }
 }
 
+void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
+    checkObjectEscapes(orig);
+    //Upfront remove the typeof calls
+    if (object_escape_info.hastypeof) {
+        optimizeTag(orig, info.type);
+        object_escape_info.hastypeof = false;
+    }
+    if (object_escape_info.escaped) {
+        return;
+    }
+    //Optimizations on coalescing and hoisting/sinking go here
+    if (object_escape_info.haserror || object_escape_info.returned) {
+        return;
+    }
+}
+
+void Optimizer::optimizeObject(CallInst *orig, jl_alloc::AllocIdInfo &info) {
+    checkObjectEscapes(orig);
+    if (object_escape_info.escaped) {
+        if (object_escape_info.hastypeof)
+            optimizeTag(orig, info.type);
+        return;
+    }
+    //Optimizations on coalescing and hoisting/sinking go here
+    if (object_escape_info.haserror || object_escape_info.returned) {
+        if (object_escape_info.hastypeof)
+            optimizeTag(orig, info.type);
+        return;
+    }
+    if (!object_escape_info.addrescaped && !object_escape_info.hasload && (!object_escape_info.haspreserve ||
+                                                        !object_escape_info.refstore)) {
+        // No one took the address, no one reads anything and there's no meaningful
+        // preserve of fields (either no preserve/ccall or no object reference fields)
+        // We can just delete all the uses.
+        removeAlloc(orig, info.type);
+        return;
+    }
+    bool has_ref = false;
+    bool has_refaggr = false;
+    for (auto memop: object_escape_info.memops) {
+        auto &field = memop.second;
+        if (field.hasobjref) {
+            has_ref = true;
+            // This can be relaxed a little based on hasload
+            // TODO: add support for hasaggr load/store
+            if (field.hasaggr || field.multiloc || field.size != sizeof(void*)) {
+                has_refaggr = true;
+                break;
+            }
+        }
+    }
+    if (!object_escape_info.hasunknownmem && !object_escape_info.addrescaped && !has_refaggr) {
+        // No one actually care about the memory layout of this object, split it.
+        splitOnStack(orig, info.type);
+        return;
+    }
+    if (has_refaggr) {
+        if (object_escape_info.hastypeof)
+            optimizeTag(orig, info.type);
+        return;
+    }
+    // The object has no fields with mix reference access
+    moveToStack(orig, info.type, info.object.size, has_ref);
+}
+
 void Optimizer::optimizeAll()
 {
     while (!worklist.empty()) {
-        auto item = worklist.pop_back_val();
-        auto orig = item.first;
-        size_t sz = item.second;
-        checkInst(orig);
-        if (use_info.escaped) {
-            if (use_info.hastypeof)
-                optimizeTag(orig);
-            continue;
+        auto it = worklist.begin();
+        auto orig = it->first;
+        auto info = it->second;
+        worklist.erase(it);
+        if (info.isarray) {
+            optimizeArray(orig, info);
+        } else {
+            optimizeObject(orig, info);
         }
-        if (use_info.haserror || use_info.returned) {
-            if (use_info.hastypeof)
-                optimizeTag(orig);
-            continue;
-        }
-        if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
-                                                           !use_info.refstore)) {
-            // No one took the address, no one reads anything and there's no meaningful
-            // preserve of fields (either no preserve/ccall or no object reference fields)
-            // We can just delete all the uses.
-            removeAlloc(orig);
-            continue;
-        }
-        bool has_ref = false;
-        bool has_refaggr = false;
-        for (auto memop: use_info.memops) {
-            auto &field = memop.second;
-            if (field.hasobjref) {
-                has_ref = true;
-                // This can be relaxed a little based on hasload
-                // TODO: add support for hasaggr load/store
-                if (field.hasaggr || field.multiloc || field.size != sizeof(void*)) {
-                    has_refaggr = true;
-                    break;
-                }
-            }
-        }
-        if (!use_info.hasunknownmem && !use_info.addrescaped && !has_refaggr) {
-            // No one actually care about the memory layout of this object, split it.
-            splitOnStack(orig);
-            continue;
-        }
-        if (has_refaggr) {
-            if (use_info.hastypeof)
-                optimizeTag(orig);
-            continue;
-        }
-        // The object has no fields with mix reference access
-        moveToStack(orig, sz, has_ref);
     }
 }
 
@@ -320,9 +353,9 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     return -1;
 }
 
-void Optimizer::checkInst(Instruction *I)
+void Optimizer::checkObjectEscapes(Instruction *I)
 {
-    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass, *pass.DL};
+    jl_alloc::EscapeAnalysisRequiredArgs required{object_escape_info, check_stack, pass, *pass.DL};
     jl_alloc::runEscapeAnalysis(I, required);
 }
 
@@ -355,7 +388,7 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
     std::set<BasicBlock*> bbs{def_bb};
     auto &DT = getDomTree();
     // Collect all BB where the allocation is live
-    for (auto use: use_info.uses) {
+    for (auto use: object_escape_info.uses) {
         auto bb = use->getParent();
         if (!bbs.insert(bb).second)
             continue;
@@ -395,7 +428,7 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
     // Record extra BBs that contain invisible uses.
     SmallSet<BasicBlock*, 8> extra_use;
     SmallVector<DomTreeNodeBase<BasicBlock>*, 8> dominated;
-    for (auto preserve: use_info.preserves) {
+    for (auto preserve: object_escape_info.preserves) {
         for (auto RN = DT.getNode(preserve->getParent()); RN;
              RN = dominated.empty() ? nullptr : dominated.pop_back_val()) {
             for (auto N: *RN) {
@@ -448,7 +481,7 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
         }
         else {
             for (auto it = bb->rbegin(), end = bb->rend(); it != end; ++it) {
-                if (use_info.uses.count(&*it)) {
+                if (object_escape_info.uses.count(&*it)) {
                     --it;
                     first_dead.push_back(&*it);
                     break;
@@ -549,9 +582,8 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
 
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
-void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
+void Optimizer::moveToStack(CallInst *orig_inst, llvm::Value *tag, size_t sz, bool has_ref)
 {
-    auto tag = orig_inst->getArgOperand(2);
     removed.push_back(orig_inst);
     // The allocation does not escape or get used in a phi node so none of the derived
     // SSA from it are live when we run the allocation again.
@@ -709,9 +741,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
 
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
-void Optimizer::removeAlloc(CallInst *orig_inst)
+void Optimizer::removeAlloc(CallInst *orig_inst, llvm::Value *tag)
 {
-    auto tag = orig_inst->getArgOperand(2);
     removed.push_back(orig_inst);
     auto simple_remove = [&] (Instruction *orig_i) {
         if (orig_i->user_empty()) {
@@ -796,9 +827,8 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
 }
 
 // Unable to optimize out the allocation, do store to load forwarding on the tag instead.
-void Optimizer::optimizeTag(CallInst *orig_inst)
+void Optimizer::optimizeTag(CallInst *orig_inst, llvm::Value *tag)
 {
-    auto tag = orig_inst->getArgOperand(2);
     // `julia.typeof` is only legal on the original pointer, no need to scan recursively
     size_t last_deleted = removed.size();
     for (auto user: orig_inst->users()) {
@@ -817,9 +847,8 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
         removed[last_deleted++]->replaceUsesOfWith(orig_inst, UndefValue::get(orig_inst->getType()));
 }
 
-void Optimizer::splitOnStack(CallInst *orig_inst)
+void Optimizer::splitOnStack(CallInst *orig_inst, llvm::Value *tag)
 {
-    auto tag = orig_inst->getArgOperand(2);
     removed.push_back(orig_inst);
     IRBuilder<> prolog_builder(&F.getEntryBlock().front());
     struct SplitSlot {
@@ -829,12 +858,12 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         uint32_t size;
     };
     SmallVector<SplitSlot,8> slots;
-    for (auto memop: use_info.memops) {
+    for (auto memop: object_escape_info.memops) {
         auto offset = memop.first;
         auto &field = memop.second;
         // If the field has no reader and is not a object reference field that we
         // need to preserve at some point, there's no need to allocate the field.
-        if (!field.hasload && (!field.hasobjref || !use_info.haspreserve))
+        if (!field.hasload && (!field.hasobjref || !object_escape_info.haspreserve))
             continue;
         SplitSlot slot{nullptr, field.hasobjref, offset, field.size};
         Type *allocty;
