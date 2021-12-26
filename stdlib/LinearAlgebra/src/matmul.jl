@@ -624,6 +624,7 @@ end
 # cases are handled here
 
 lapack_size(t::AbstractChar, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
+lapack_axes(t::AbstractChar, M::AbstractVecOrMat) = (axes(M, t=='N' ? 1 : 2), axes(M, t=='N' ? 2 : 1))
 
 function copyto!(B::AbstractVecOrMat, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
@@ -653,7 +654,9 @@ end
 
 function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::AbstractVector,
                             _add::MulAddMul = MulAddMul()) where R
-    require_one_based_indexing(C, A, B)
+    if has_offset_axes(C, A, B)
+        return generic_offset_matvecmul!(C, tA, A, B, _add)  # avoids linear indexing
+    end
     mB = length(B)
     mA, nA = lapack_size(tA, A)
     if mB != nA
@@ -718,9 +721,71 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
     C
 end
 
+function generic_offset_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::AbstractVector,
+                            _add::MulAddMul = MulAddMul()) where R
+    @info "generic_offset_matvecmul!" axes(C)
+    mB_axis = axes1(B)
+    mA_axis, nA_axis = lapack_axes(tA, A)
+    if mB_axis != nA_axis
+        throw(DimensionMismatch("mul! can't contract axis $(UnitRange(nA_axis)) from A with axes(B) == ($(UnitRange(mB_axis)),)"))
+    end
+    if mA_axis != axes1(C)
+        throw(DimensionMismatch("mul! got axes(C) == ($(UnitRange(axes1(C))),), expected $(UnitRange(mA_axis))"))
+    end
+
+    @inbounds begin
+    if tA == 'T'  
+        if isempty(nA_axis)
+            for k in mA_axis
+                _modify!(_add, false, C, k)
+            end
+        else
+            for k in mA_axis
+                s = zero(A[begin, k]*B[begin] + A[begin, k]*B[begin])
+                for i in nA_axis
+                    s += transpose(A[i, k]) * B[i]
+                end
+                _modify!(_add, s, C, k)
+            end
+        end
+    elseif tA == 'C'
+        if isempty(nA_axis)
+            for k in mA_axis
+                _modify!(_add, false, C, k)
+            end
+        else
+            for k in mA_axis
+                s = zero(A[begin, k]*B[begin] + A[begin, k]*B[begin])
+                for i in nA_axis
+                    s += adjoint(A[i, k]) * B[i]
+                end
+                _modify!(_add, s, C, k)
+            end
+        end
+    else # tA == 'N'
+        for i in mA_axis
+            if !iszero(_add.beta)
+                C[i] *= _add.beta
+            elseif isempty(mB_axis)
+                C[i] = false
+            else
+                C[i] = zero(A[i, begin]*B[begin] + A[i, begin]*B[begin])
+            end
+        end
+        for k in nA_axis
+            b = _add(B[k], false)
+            for i in mA_axis
+                C[i] += A[i, k] * b
+            end
+        end
+    end
+    end # @inbounds
+    C
+end
+
 function generic_matmatmul(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatrix{S}) where {T,S}
-    mA, nA = lapack_size(tA, A)
-    mB, nB = lapack_size(tB, B)
+    mA, nA = lapack_axes(tA, A)
+    mB, nB = lapack_axes(tB, B)
     C = similar(B, promote_op(matprod, T, S), mA, nB)
     generic_matmatmul!(C, tA, tB, A, B)
 end
@@ -729,6 +794,7 @@ const tilebufsize = 10800  # Approximately 32k/3
 
 function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                             _add::MulAddMul=MulAddMul())
+    has_offset_axes(A,B,C) && @info "generic_matmatmul! with offsets" axes(C)
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     mC, nC = size(C)
@@ -750,14 +816,18 @@ generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::Abstract
 
 function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S},
                              _add::MulAddMul) where {T,S,R}
-    require_one_based_indexing(C, A, B)
+
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
-    if mB != nA
-        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA), matrix B has dimensions ($mB,$nB)"))
-    end
-    if size(C,1) != mA || size(C,2) != nB
-        throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA,$nB)"))
+    mA_axis, nA_axis = lapack_axes(tA, A)
+    mB_axis, nB_axis = lapack_axes(tB, B)
+
+    if nA_axis != mB_axis
+        throw(DimensionMismatch("mul! can't contract axis $(UnitRange(nA_axis)) from A with $(UnitRange(mB_axis)) from B"))
+    elseif mA_axis != axes(C,1)
+        throw(DimensionMismatch("mul! got axes(C,1) == $(UnitRange(axes(C,1))), expected $(UnitRange(mA_axis)) from A"))
+    elseif nB_axis != axes(C,2)
+        throw(DimensionMismatch("mul! got axes(C,2) == $(UnitRange(axes(C,2))), expected $(UnitRange(nB_axis)) from B"))
     end
 
     if iszero(_add.alpha) || isempty(A) || isempty(B)
@@ -769,7 +839,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
         tile_size = floor(Int, sqrt(tilebufsize / max(sizeof(R), sizeof(S), sizeof(T), 1)))
     end
     @inbounds begin
-    if tile_size > 0
+    if tile_size > 0 && !has_offset_axes(A, B, C)
         sz = (tile_size, tile_size)
         Atile = Array{T}(undef, sz)
         Btile = Array{S}(undef, sz)
@@ -829,28 +899,28 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
         # Multiplication for non-plain-data uses the naive algorithm
         if tA == 'N'
             if tB == 'N'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[i, 1]*B[1, j] + A[i, 1]*B[1, j])
+                for i in mA_axis, j in nB_axis
+                    z2 = zero(A[i, begin]*B[begin, j] + A[i, begin]*B[begin, j])
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
+                    for k in nA_axis
                         Ctmp += A[i, k]*B[k, j]
                     end
                     _modify!(_add, Ctmp, C, (i,j))
                 end
             elseif tB == 'T'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[i, 1]*transpose(B[j, 1]) + A[i, 1]*transpose(B[j, 1]))
+                for i in mA_axis, j in nB_axis
+                    z2 = zero(A[i, begin]*transpose(B[j, begin]) + A[i, begin]*transpose(B[j, begin]))
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
+                    for k in nA_axis
                         Ctmp += A[i, k] * transpose(B[j, k])
                     end
                     _modify!(_add, Ctmp, C, (i,j))
                 end
             else
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[i, 1]*B[j, 1]' + A[i, 1]*B[j, 1]')
+                for i in mA_axis, j in nB_axis
+                    z2 = zero(A[i, begin]*B[j, begin]' + A[i, begin]*B[j, begin]')
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
+                    for k in nA_axis
                         Ctmp += A[i, k]*B[j, k]'
                     end
                     _modify!(_add, Ctmp, C, (i,j))
@@ -858,28 +928,28 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
             end
         elseif tA == 'T'
             if tB == 'N'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(transpose(A[1, i])*B[1, j] + transpose(A[1, i])*B[1, j])
+                for i in mA_axis, j in nB_axis
+                    z2 = zero(transpose(A[begin, i])*B[begin, j] + transpose(A[begin, i])*B[begin, j])
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
+                    for k in nA_axis
                         Ctmp += transpose(A[k, i]) * B[k, j]
                     end
                     _modify!(_add, Ctmp, C, (i,j))
                 end
             elseif tB == 'T'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(transpose(A[1, i])*transpose(B[j, 1]) + transpose(A[1, i])*transpose(B[j, 1]))
+                for i in mA_axis, j in nB_axis
+                    z2 = zero(transpose(A[begin, i])*transpose(B[j, begin]) + transpose(A[begin, i])*transpose(B[j, begin]))
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
+                    for k in nA_axis
                         Ctmp += transpose(A[k, i]) * transpose(B[j, k])
                     end
                     _modify!(_add, Ctmp, C, (i,j))
                 end
             else
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(transpose(A[1, i])*B[j, 1]' + transpose(A[1, i])*B[j, 1]')
+                for i in mA_axis, j in nB_axis
+                    z2 = zero(transpose(A[begin, i])*B[j, begin]' + transpose(A[begin, i])*B[j, begin]')
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
+                    for k in nA_axis
                         Ctmp += transpose(A[k, i]) * adjoint(B[j, k])
                     end
                     _modify!(_add, Ctmp, C, (i,j))
@@ -887,28 +957,28 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
             end
         else
             if tB == 'N'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[1, i]'*B[1, j] + A[1, i]'*B[1, j])
+                for i in mA_axis, j in nB_axis
+                    z2 = zero(A[begin, i]'*B[begin, j] + A[begin, i]'*B[begin, j])
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
+                    for k in nA_axis
                         Ctmp += A[k, i]'B[k, j]
                     end
                     _modify!(_add, Ctmp, C, (i,j))
                 end
             elseif tB == 'T'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[1, i]'*transpose(B[j, 1]) + A[1, i]'*transpose(B[j, 1]))
+                for i in mA_axis, j in nB_axis
+                    z2 = zero(A[begin, i]'*transpose(B[j, begin]) + A[begin, i]'*transpose(B[j, begin]))
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
+                    for k in nA_axis
                         Ctmp += adjoint(A[k, i]) * transpose(B[j, k])
                     end
                     _modify!(_add, Ctmp, C, (i,j))
                 end
             else
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[1, i]'*B[j, 1]' + A[1, i]'*B[j, 1]')
+                for i in mA_axis, j in nB_axis
+                    z2 = zero(A[begin, i]'*B[j, begin]' + A[begin, i]'*B[j, begin]')
                     Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
+                    for k in nA_axis
                         Ctmp += A[k, i]'B[j, k]'
                     end
                     _modify!(_add, Ctmp, C, (i,j))
@@ -928,7 +998,9 @@ end
 
 function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
-    require_one_based_indexing(C, A, B)
+    if has_offset_axes(C, A, B)
+        return _generic_matmatmul!(C, tA, tB, A, B, _add)
+    end
     if !(size(A) == size(B) == size(C) == (2,2))
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end
@@ -966,12 +1038,15 @@ end
 
 # Multiply 3x3 matrices
 function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
+    require_one_based_indexing(A, B) # ??
     matmul3x3!(similar(B, promote_op(matprod, T, S), 3, 3), tA, tB, A, B)
 end
 
 function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
-    require_one_based_indexing(C, A, B)
+    if has_offset_axes(C, A, B)
+        return _generic_matmatmul!(C, tA, tB, A, B, _add)
+    end
     if !(size(A) == size(B) == size(C) == (3,3))
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end
