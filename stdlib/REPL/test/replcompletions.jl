@@ -31,6 +31,25 @@ let ex = quote
         macro foobar()
             :()
         end
+        macro barfoo(ex)
+            ex
+        end
+        macro error_expanding()
+            error("cannot expand @error_expanding")
+            :()
+        end
+        macro error_lowering_conditional(a)
+            if isa(a, Number)
+                return a
+            end
+            throw(AssertionError("Not a Number"))
+            :()
+        end
+        macro error_throwing()
+            return quote
+                error("@error_throwing throws an error")
+            end
+        end
 
         primitive type NonStruct 8 end
         Base.propertynames(::NonStruct) = (:a, :b, :c)
@@ -813,6 +832,45 @@ let s, c, r
 end
 end
 
+#test that it does not crash on files for which `stat` errors
+let current_dir, forbidden
+    # Issue #36855
+    if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+        mktempdir() do path
+            selfsymlink = joinpath(path, "selfsymlink")
+            symlink(selfsymlink, selfsymlink)
+            @test try
+                stat(selfsymlink) # should crash with a IOError
+                false
+            catch e
+                e isa Base.IOError && occursin("ELOOP", e.msg)
+            end
+            c, r = test_complete("\"$(joinpath(path, "selfsym"))")
+            @test c == ["selfsymlink"]
+        end
+    end
+
+    # Issue #32797
+    forbidden = Sys.iswindows() ? "C:\\S" : "/root/x"
+    test_complete(forbidden); @test true # simply check that it did not crash
+
+     # Issue #19310
+    if Sys.iswindows()
+        current_dir = pwd()
+        cd("C:")
+        test_complete("C"); @test true
+        test_complete("C:"); @test true
+        test_complete("C:\\"); @test true
+        if isdir("D:")
+            cd("D:")
+            test_complete("C"); @test true
+            test_complete("C:"); @test true
+            test_complete("C:\\"); @test true
+        end
+        cd(current_dir)
+    end
+end
+
 #test that it can auto complete with spaces in file/path
 mktempdir() do path
     space_folder = randstring() * " α"
@@ -1159,6 +1217,26 @@ let
     (test_complete("@noexist."); @test true)
     (test_complete("Main.@noexist."); @test true)
     (test_complete("@Main.noexist."); @test true)
+end
+
+let # Check that completion does not crash on (possibly invalid) macro calls
+    (test_complete("@show."); @test true)
+    (test_complete("@macroexpand."); @test true)
+    (test_complete("@.."); @test true)
+    (test_complete("CompletionFoo.@foobar."); @test true)
+    (test_complete("CompletionFoo.@foobar()."); @test true)
+    (test_complete("CompletionFoo.@foobar(4)."); @test true)
+    (test_complete("CompletionFoo.@barfoo."); @test true)
+    (test_complete("CompletionFoo.@barfoo()."); @test true)
+    (test_complete("CompletionFoo.@barfoo(6)."); @test true)
+    (test_complete("CompletionFoo.@error_expanding."); @test true)
+    (test_complete("CompletionFoo.@error_expanding()."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional()."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional(3)."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional('a')."); @test true)
+    (test_complete("CompletionFoo.@error_throwing."); @test true)
+    (test_complete("CompletionFoo.@error_throwing()."); @test true)
 end
 
 @testset "https://github.com/JuliaLang/julia/issues/40247" begin
