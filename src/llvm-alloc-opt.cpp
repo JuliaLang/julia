@@ -236,22 +236,22 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
     if (object_escape_info.haserror || object_escape_info.returned) {
         return;
     }
-    if (!object_escape_info.addrescaped && !object_escape_info.hasload && (!object_escape_info.haspreserve ||
-                                                        !object_escape_info.refstore)) {
-        if (!object_escape_info.hasload) {
-            //Trivially dead array
-            removeAlloc(orig, info.type);
-        } else {
-            if (!array_escape_info.addrescaped && !array_escape_info.hasload && (!array_escape_info.haspreserve || !array_escape_info.refstore)) {
-            //Array dead by nobody loading from the data pointer
-                removeAlloc(orig, info.type, true);
-                return;
-            }
-        }
+    bool may_be_removable = !object_escape_info.addrescaped && (!object_escape_info.haspreserve ||
+                                                        !object_escape_info.refstore);
+    //Trivially dead array
+    if (may_be_removable && !object_escape_info.hasload) {
+        removeAlloc(orig, info.type);
         return;
     }
     checkArrayEscapes();
     if (array_escape_info.escaped) {
+        return;
+    }
+    //Array dead by nobody loading from the data pointer
+    if (may_be_removable && !array_escape_info.addrescaped
+        && !array_escape_info.hasload
+        && (!array_escape_info.haspreserve || !array_escape_info.refstore)) {
+        removeAlloc(orig, info.type, true);
         return;
     }
 }
