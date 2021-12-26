@@ -145,64 +145,117 @@ namespace {
     bool Optimizer::optimizeCmpInsts() {
         bool changed = false;
         auto &dtree = pass->getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-        for (auto &dim : lengths) {
-            for (auto user : dim.first->users()) {
-                if (auto cmp = dyn_cast<CmpInst>(user)) {
+        std::map<Value *, SmallSet<std::size_t, 2>> checked, next_check;
+        while (!lengths.empty()) {
+            for (auto &dim : lengths) {
+                auto get_dominators = [&](Instruction *inst) {
+                    llvm::SmallSet<std::size_t, 2> dominators;
                     for (auto idx : dim.second) {
-                        if (dtree.dominates(array_allocations[idx].allocation, cmp)) {
-                            //gets operand 1 if 0 is dim.first, otherwise operand 0
-                            auto value = cmp->getOperand(cmp->getOperand(0) == dim.first);
-                            if (auto ci = dyn_cast<ConstantInt>(value)) {
-                                if (ci->isNegative()) {
-                                    changed = true;
-                                    switch (cmp->getPredicate()) {
-                                        case CmpInst::Predicate::ICMP_SLT:
-                                        case CmpInst::Predicate::ICMP_SLE:
-                                        case CmpInst::Predicate::ICMP_EQ:
-                                            return ConstantInt::getFalse(cmp->getContext());
-                                        case CmpInst::Predicate::ICMP_SGE:
-                                        case CmpInst::Predicate::ICMP_SGT:
-                                        case CmpInst::Predicate::ICMP_NE:
-                                            return ConstantInt::getTrue(cmp->getContext());
-                                        default:
-                                            assert(false && "Unsigned compare on negative value!");
-                                            break;
-                                    }
-                                } else if (cmp->isSigned()) {
-                                    changed = true;
-                                    cmp->setPredicate(cmp->getUnsignedPredicate());
-                                }
-                            } else if (cmp->isSigned()) {
-                                bool positive = false;
-                                if (auto inst = dyn_cast<Instruction>(value)) {
-                                    if (auto range = inst->getMetadata(LLVMContext::MD_range)) {
-                                        auto cr = getConstantRangeFromMetadata(*range);
-                                        if (cr.getLower().sge(0)) {
-                                            positive = true;
+                        if (dtree.dominates(array_allocations[idx].allocation, inst)) {
+                            dominators.insert(idx);
+                        }
+                    }
+                    return dominators;
+                };
+                for (auto user : dim.first->users()) {
+                    if (checked.find(user) == checked.end() && next_check.find(user) == next_check.end()) {
+                        if (auto inst = dyn_cast<Instruction>(user)) {
+                            auto dominators = get_dominators(inst);
+                            if (dominators.empty()) {
+                                //No allocation dominates this instruction, we can't necessarily
+                                //optimize it away
+                                continue;
+                            }
+                            auto adjust_dominators = [&](decltype(checked) &check, Value *val){
+                                auto it = check.find(val);
+                                if (it != check.end()) {
+                                    llvm::SmallSet<std::size_t, 2> actual_dominators;
+                                    for (auto dominator : dominators) {
+                                        if (it->second.contains(dominator)) {
+                                            actual_dominators.insert(dominator);
                                         }
                                     }
+                                    std::swap(actual_dominators, dominators);
+                                    return true;
                                 }
-                                if (!positive) {
-                                    auto dim2 = lengths.find(value);
-                                    if (dim2 != lengths.end()) {
-                                        for (auto idx2 : dim2->second) {
-                                            if (dtree.dominates(array_allocations[idx2].allocation, cmp)) {
-                                                positive = true;
-                                            }
+                                return false;
+                            };
+                            switch (inst->getOpcode()) {
+                                case Instruction::Mul: {
+                                    std::size_t idx = inst->getOperand(0) == dim.first; // 1 if equal, 0 if not
+                                    auto val = inst->getOperand(idx);
+                                    if (adjust_dominators(checked, val) || adjust_dominators(next_check, val) || adjust_dominators(lengths, val)) {
+                                        if (dominators.empty()) {
+                                            //We don't have an allocation that uses both
+                                            //operands of the mul instruction AND dominates
+                                            //the mul instruction; therefore this mul could
+                                            //overflow and become negative, invalidating
+                                            //our comparison check.
+                                            continue;
                                         }
+                                        //This mul is probably part of a length instruction;
+                                        //We'll push it to be checked for cmp optimization
+                                        next_check[inst] = std::move(dominators);
                                     }
-                                }
-                                if (positive) {
-                                    changed = true;
-                                    cmp->setPredicate(cmp->getUnsignedPredicate());
                                     break;
                                 }
+                                case Instruction::ICmp: {
+                                    auto cmp = cast<ICmpInst>(inst);
+                                    std::size_t idx = inst->getOperand(0) == dim.first;
+                                    auto val = inst->getOperand(idx);
+                                    if (auto ci = dyn_cast<ConstantInt>(val)) {
+                                        if (!ci->isNegative()) {
+                                            //Should automagically take care of major constant cases (0 and 1)
+                                            if (cmp->isSigned()) {
+                                                changed = true;
+                                                cmp->setPredicate(cmp->getUnsignedPredicate());
+                                            }
+                                        } else {
+                                            // Negative constant == fully predictable
+                                            switch (cmp->getPredicate()) {
+                                                case CmpInst::Predicate::ICMP_SLE:
+                                                case CmpInst::Predicate::ICMP_SLT:
+                                                case CmpInst::Predicate::ICMP_EQ:
+                                                    changed = true;
+                                                    cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
+                                                    break;
+                                                case CmpInst::Predicate::ICMP_SGE:
+                                                case CmpInst::Predicate::ICMP_SGT:
+                                                case CmpInst::Predicate::ICMP_NE:
+                                                    changed = true;
+                                                    cmp->replaceAllUsesWith(ConstantInt::getTrue(cmp->getContext()));
+                                                    break;
+                                                default:
+                                                    break;
+                                            }
+                                        }
+                                    } else {
+                                        if (cmp->isSigned() && (adjust_dominators(checked, val) || adjust_dominators(next_check, val) || adjust_dominators(lengths, val))) {
+                                            if (dominators.empty()) {
+                                                continue;
+                                            }
+                                            //We know that both operands to this cmp are nonnegative,
+                                            //because both were used as nonoverflowing array dimensions
+                                            //and this compare is definitely after an allocation that
+                                            //guarantees the above property. Therefore, we can make this
+                                            //an unsigned compare, regardless of what kind of comparison
+                                            //was being made (because the operands are nonnegative)
+                                            changed = true;
+                                            cmp->setPredicate(cmp->getUnsignedPredicate());
+                                        }
+                                    }
+                                    break;
+                                }
+                                default:
+                                    break;
                             }
-                            break;
                         }
                     }
                 }
+                checked.emplace(std::move(dim));
             }
+            std::swap(lengths, next_check);
+            next_check.clear();
         }
         return changed;
     }
