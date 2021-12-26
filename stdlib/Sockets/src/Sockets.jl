@@ -97,7 +97,7 @@ end
 function TCPSocket(fd::OS_HANDLE)
     tcp = TCPSocket()
     iolock_begin()
-    err = ccall(:uv_tcp_open, Int32, (Ptr{Cvoid}, OS_HANDLE), pipe.handle, fd)
+    err = ccall(:uv_tcp_open, Int32, (Ptr{Cvoid}, OS_HANDLE), tcp.handle, fd)
     uv_error("tcp_open", err)
     tcp.status = StatusOpen
     iolock_end()
