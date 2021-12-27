@@ -833,6 +833,20 @@ static void post_boot_hooks(void)
     }
 }
 
+volatile int ld_library_path_is_set;
+
+static int check_ld_library_path(void)
+{
+    if ( getenv("LD_LIBRARY_PATH") ) {
+        ld_library_path_is_set = 1;
+    }
+    else {
+        ld_library_path_is_set = 0;
+    }
+}
+
+check_ld_library_path();
+
 #ifdef __cplusplus
 }
 #endif

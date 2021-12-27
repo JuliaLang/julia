@@ -221,8 +221,14 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
     HANDLE_MACH_ERROR("thread_set_state", ret);
 }
 
+extern volatile int ld_library_path_is_set;
+
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
+    if(ld_library_path_is_set) {
+      jl_safe_printf("WARN: LD_LIBRARY_PATH environment variable is set.\n");
+      jl_safe_printf("WARN: You may want to try unsetting the LD_LIBRARY_PATH environment variable.\n");
+    }
     assert(sig == SIGSEGV || sig == SIGBUS);
     if (jl_get_safe_restore()) { // restarting jl_ or jl_unwind_stepn
         jl_task_t *ct = jl_get_current_task();

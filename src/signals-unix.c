@@ -311,8 +311,14 @@ static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
             is_addr_on_sigstack(ptls, (void*)jl_get_rsp_from_ctx(context)));
 }
 
+extern volatile int ld_library_path_is_set;
+
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
+    if(ld_library_path_is_set) {
+      jl_safe_printf("WARN: LD_LIBRARY_PATH environment variable is set.\n");
+      jl_safe_printf("WARN: You may want to try unsetting the LD_LIBRARY_PATH environment variable.\n");
+    }
     if (jl_get_safe_restore()) { // restarting jl_ or profile
         jl_call_in_ctx(NULL, &jl_sig_throw, sig, context);
         return;

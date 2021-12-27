@@ -766,3 +766,35 @@ end
 
 # issue #39259, shadowing `ARGS`
 @test success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)
+
+@testset "In the SIGSEGV handler, warn if the LD_LIBRARY_PATH environment variable is set" begin
+    my_cmd = `$(Base.julia_cmd()) -e 'unsafe_load(Ptr{Int}(rand(Int)))'`
+
+    run_my_cmd = (env) -> begin
+        err = Pipe()
+        proc = run(pipeline(setenv(my_cmd, env); stderr = err); wait = false)
+        close(err.in)
+        wait(proc)
+        @test !success(proc)
+        @test Base.process_signaled(proc)
+        str = read(err, String)::String
+        @test occursin("Segmentation fault", str)
+        return str
+    end
+
+    @testset "LD_LIBRARY_PATH is not set" begin
+        env = copy(ENV);
+        delete!(env, "LD_LIBRARY_PATH");
+
+        str = run_my_cmd(env)
+        @test !occursin("LD_LIBRARY_PATH", str)
+    end
+
+    @testset "LD_LIBRARY_PATH is set" begin
+        env = copy(ENV);
+        env["LD_LIBRARY_PATH"] = mktempdir(; cleanup = true)
+
+        str = run_my_cmd(env)
+        @test occursin("LD_LIBRARY_PATH", str)
+    end
+end
