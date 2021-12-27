@@ -44,7 +44,7 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
 {
     auto replace = Constant::getNullValue(val->getType());
     call->replaceUsesOfWith(val, replace);
-    for (auto &arg: call->arg_operands()) {
+    for (auto &arg: call->args()) {
         if (!isa<Constant>(arg.get())) {
             return;
         }
@@ -416,7 +416,7 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
         return -1;
     if (call->getCalledOperand() != pass.alloc_obj_func)
         return -1;
-    assert(call->getNumArgOperands() == 3);
+    assert(call->arg_size() == 3);
     size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
     if (sz < IntegerType::MAX_INT_BITS / 8 && sz < INT32_MAX)
         return sz;
@@ -571,7 +571,7 @@ void Optimizer::checkInst(Instruction *I)
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
                 if (auto id = II->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
-                        assert(call->getNumArgOperands() == 4);
+                        assert(call->arg_size() == 4);
                         if (cur.offset == UINT32_MAX ||
                             !isa<ConstantInt>(call->getArgOperand(2)) ||
                             !isa<ConstantInt>(call->getArgOperand(1)) ||
@@ -870,7 +870,7 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
 void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
                                         Instruction *orig_i, Instruction *new_i)
 {
-    auto nargs = call->getNumArgOperands();
+    auto nargs = call->arg_size();
     SmallVector<Value*, 8> args(nargs);
     SmallVector<Type*, 8> argTys(nargs);
     for (unsigned i = 0; i < nargs; i++) {
@@ -904,8 +904,8 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     auto newCall = CallInst::Create(newF, args, "", call);
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
-    newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), old_attrs.getFnAttributes(),
-                                              old_attrs.getRetAttributes(), {}));
+    newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), getFnAttrs(old_attrs),
+                                              getRetAttrs(old_attrs), {}));
     newCall->setDebugLoc(call->getDebugLoc());
     call->replaceAllUsesWith(newCall);
     call->eraseFromParent();
@@ -1422,7 +1422,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             }
             if (pass.gc_preserve_begin_func == callee) {
                 SmallVector<Value*,8> operands;
-                for (auto &arg: call->arg_operands()) {
+                for (auto &arg: call->args()) {
                     if (arg.get() == orig_i || isa<Constant>(arg.get()))
                         continue;
                     operands.push_back(arg.get());

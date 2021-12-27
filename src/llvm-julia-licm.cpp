@@ -81,7 +81,7 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                 // corresponding `end` can be moved to the loop exit.
                 if (callee == gc_preserve_begin_func) {
                     bool canhoist = true;
-                    for (Use &U : call->arg_operands()) {
+                    for (Use &U : call->args()) {
                         // Check if all arguments are generated outside the loop
                         auto origin = dyn_cast<Instruction>(U.get());
                         if (!origin)

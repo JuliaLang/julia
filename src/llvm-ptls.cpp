@@ -67,8 +67,8 @@ private:
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
 {
-    pgcstack->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
-    pgcstack->addAttribute(AttributeList::FunctionIndex, Attribute::NoUnwind);
+    addFnAttr(pgcstack, Attribute::ReadNone);
+    addFnAttr(pgcstack, Attribute::NoUnwind);
 }
 
 Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefore) const
