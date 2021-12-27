@@ -16,7 +16,7 @@ memory pools disabled.  The compile-time flag `MEMDEBUG` disables memory pools i
 `MEMDEBUG2` disables memory pools in FemtoLisp.  To build `julia` with both flags, add the following
 line to `Make.user`:
 
-```julia
+```make
 CFLAGS = -DMEMDEBUG -DMEMDEBUG2
 ```
 
