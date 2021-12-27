@@ -140,8 +140,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     let expanded = abspath(Base.load_path_expand("@foo"))
         @test expanded == readchomp(`$exename --project='@foo' -e 'println(Base.active_project())'`)
         @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir(), "JULIA_DEPOT_PATH" => "$(Base.DEPOT_PATH[1])"))
-        
-        
     end
 
     # --quiet, --banner
