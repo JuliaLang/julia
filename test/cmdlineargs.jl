@@ -132,7 +132,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     if !Sys.iswindows()
         let expanded = abspath(expanduser("~/foo/Project.toml"))
             @test expanded == readchomp(`$exename --project='~/foo' -e 'println(Base.active_project())'`)
-            @test expanded == readchomp(setenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir()))
+            @test expanded == readchomp(setenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir(), , "JULIA_DEPOT_PATH" => ENV["JULIA_DEPOT_PATH"]))
         end
     end
 
