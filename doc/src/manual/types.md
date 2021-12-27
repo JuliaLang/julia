@@ -464,6 +464,9 @@ one can declare these fields as such using `const` as shown below. This enables 
 but not all of the optimizations of immutable structs, and can be used to enforce invariants
 on the particular fields marked as `const`.
 
+!!! compat "Julia 1.8"
+    `const` annotating fields of mutable structs requires at least Julia 1.8.
+
 ```jldoctest baztype
 julia> mutable struct Baz
            a::Int
