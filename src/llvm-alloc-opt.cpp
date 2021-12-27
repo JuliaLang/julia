@@ -139,6 +139,7 @@ private:
 
     void checkObjectEscapes(Instruction *I);
     void checkArrayEscapes();
+    void checkArraySize(CallInst *orig, jl_alloc::AllocIdInfo &info);
 
     void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
                                  Instruction *orig_i, Instruction *new_i);
@@ -189,10 +190,40 @@ private:
         typedef SmallVector<Frame,4> Stack;
     };
 
+    struct ArrayTypeData {
+        constexpr static auto MAX_SIZE = std::numeric_limits<ssize_t>::max();
+
+        jl_value_t *type;
+        size_t numels;
+        size_t total_size;
+        bool throws_invalid_dims;
+        bool throws_invalid_size;
+        bool dynamic_type;
+        bool dynamic_size;
+
+        void reset() {
+            type = nullptr;
+            numels = total_size = 0;
+            throws_invalid_dims = throws_invalid_size = false;
+            dynamic_type = dynamic_size = false;
+        }
+
+        void dump() {
+            jl_safe_printf("Array Size Info:\n");
+            jl_safe_printf("numels: %zd\n", numels);
+            jl_safe_printf("total_size: %zd\n", total_size);
+            jl_safe_printf("throws_invalid_dims: %d\n", throws_invalid_dims);
+            jl_safe_printf("throws_invalid_size: %d\n", throws_invalid_size);
+            jl_safe_printf("dynamic_type: %d\n", dynamic_type);
+            jl_safe_printf("dynamic_size: %d\n", dynamic_size);
+        }
+    };
+
     std::map<CallInst *, jl_alloc::AllocIdInfo> worklist;
     SmallVector<CallInst*,6> removed;
     AllocUseInfo object_escape_info;
     AllocUseInfo array_escape_info;
+    ArrayTypeData array_type_data;
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
     ReplaceUses::Stack replace_stack;
@@ -241,6 +272,7 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
     }
     bool may_be_removable = !object_escape_info.addrescaped && (!object_escape_info.haspreserve ||
                                                         !object_escape_info.refstore);
+    checkArraySize(orig, info);
     //Trivially dead array
     if (may_be_removable && !object_escape_info.hasload) {
         if (insertArrayLengthExceptionGuard(orig)) {
@@ -1209,28 +1241,74 @@ cleanup:
     }
 }
 
+void Optimizer::checkArraySize(CallInst *orig, jl_alloc::AllocIdInfo &info) {
+    array_type_data.reset();
+    if (info.array.dimcount == 0) {
+        array_type_data.dynamic_size = true;
+        return;
+    }
+    array_type_data.numels = 1;
+    for (unsigned i = 0; i < info.array.dimcount; i++) {
+        if (auto cint = dyn_cast<ConstantInt>(orig->getArgOperand(i + 1))) {
+            if (cint->isNegative()) {
+                array_type_data.throws_invalid_dims = true;
+                return;
+            } else {
+                array_type_data.numels *= cint->getZExtValue();
+                if (array_type_data.numels > ArrayTypeData::MAX_SIZE) {
+                    array_type_data.throws_invalid_dims = true;
+                    return;
+                }
+            }
+        } else {
+            array_type_data.dynamic_size = true;
+        }
+    }
+    if (auto ce = dyn_cast<ConstantExpr>(info.type->stripPointerCasts())) {
+        if (ce->getOpcode() == Instruction::IntToPtr) {
+            if (auto ci = dyn_cast<ConstantInt>(ce->getOperand(0))) {
+                array_type_data.type = reinterpret_cast<jl_value_t*>(ci->getZExtValue());
+                if (!array_type_data.dynamic_size) {
+                    jl_value_t *eltype = jl_tparam0(array_type_data.type);
+                    size_t elsz = 0, al = 0;
+                    bool isunboxed = jl_islayout_inline(eltype, &elsz, &al);
+                    if (isunboxed) {
+                        elsz = LLT_ALIGN(elsz, al);
+                    } else {
+                        elsz = sizeof(void*);
+                        al = elsz;
+                    }
+                    array_type_data.total_size = elsz * array_type_data.numels;
+                    array_type_data.throws_invalid_size = array_type_data.total_size > ArrayTypeData::MAX_SIZE;
+                    if (array_type_data.throws_invalid_size) {
+                        return;
+                    }
+                    if (isunboxed) {
+                        if (jl_is_uniontype(eltype)) {
+                            array_type_data.total_size += array_type_data.numels;
+                        } else if (elsz == 1) {
+                            array_type_data.total_size++;
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+    }
+    array_type_data.dynamic_type = true;
+}
+
+//True if was able to insert the exception guard, false otherwise
 bool Optimizer::insertArrayLengthExceptionGuard(CallInst *orig) {
     //This is needed to maintain nonnegative length guarantee
     //after allocation and exception otherwise
-    bool guaranteedPositive = true;
-    bool guaranteedNegative = false;
-    size_t constantLength = 1;
-    for (unsigned i = 1; i < orig->getNumArgOperands(); i++) {
-        if (auto ci = dyn_cast<ConstantInt>(orig->getArgOperand(i))) {
-            if (ci->isNegative()) {
-                guaranteedPositive = false;
-                guaranteedNegative = true;
-                break;
-            } else {
-                constantLength *= ci->getZExtValue();
-            }
-        } else {
-            guaranteedPositive = false;
-        }
+    if (!array_type_data.throws_invalid_dims && !array_type_data.throws_invalid_size && !array_type_data.dynamic_size) {
+        //We have a positive array size that we know will never error out
+        return true;
     }
-    //FIXME: insert exception throw if guaranteedNegative,
-    //or conditional throw if dynamic length
-    return guaranteedPositive && constantLength <= std::numeric_limits<ssize_t>::max();
+    //FIXME: insert exception throw if guaranteed negative,
+    //or unlikely conditional throw if dynamic length
+    return false;
 }
 
 bool AllocOpt::doInitialization(Module &M)
