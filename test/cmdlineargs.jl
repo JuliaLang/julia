@@ -778,7 +778,10 @@ end
         @test !success(proc)
         @test Base.process_signaled(proc)
         str = read(err, String)::String
-        @test occursin("Segmentation fault", str)
+        segfault_text = occursin("signal (11): Segmentation fault", str)
+        buserror_text = occursin("signal (10): Bus error", str)
+        windows_eav_text = occursin("Exception: EXCEPTION_ACCESS_VIOLATION", str)
+        @test segfault_text || buserror_text || windows_eav_text
         return str
     end
 
