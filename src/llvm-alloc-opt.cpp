@@ -147,6 +147,9 @@ private:
     void moveToStack(CallInst *orig_inst, llvm::Value *tag, size_t sz, bool has_ref);
     void splitOnStack(CallInst *orig_inst, llvm::Value *tag);
     void optimizeTag(CallInst *orig_inst, llvm::Value *tag);
+    
+    void moveArrayToStack(CallInst *orig_inst, llvm::Value *tag);
+    void splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag);
 
     Function &F;
     AllocOpt &pass;
@@ -196,6 +199,7 @@ private:
         jl_value_t *type;
         size_t numels;
         size_t total_size;
+        size_t align;
         bool throws_invalid_dims;
         bool throws_invalid_size;
         bool dynamic_type;
@@ -291,6 +295,23 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
         if (insertArrayLengthExceptionGuard(orig)) {
             removeAlloc(orig, info.type, true);
         }
+        return;
+    }
+    if (array_type_data.dynamic_size || array_type_data.dynamic_type
+        || array_type_data.throws_invalid_dims || array_type_data.throws_invalid_size) {
+        //Stack split/stack move require known array size
+        return;
+    }
+    if (may_be_removable && (array_escape_info.refstore || array_escape_info.haspreserve)) {
+        //Avoid messing with GC-tracked pointers for now
+        return;
+    }
+    if (!array_escape_info.hasunknownmem) {
+        splitArrayOnStack(orig, info.type);
+        return;
+    }
+    if (array_type_data.total_size <= ARRAY_INLINE_NBYTES) {
+        moveArrayToStack(orig, info.type);
         return;
     }
 }
@@ -1270,13 +1291,15 @@ void Optimizer::checkArraySize(CallInst *orig, jl_alloc::AllocIdInfo &info) {
                 array_type_data.type = reinterpret_cast<jl_value_t*>(ci->getZExtValue());
                 if (!array_type_data.dynamic_size) {
                     jl_value_t *eltype = jl_tparam0(array_type_data.type);
-                    size_t elsz = 0, al = 0;
-                    bool isunboxed = jl_islayout_inline(eltype, &elsz, &al);
+                    size_t elsz = 0;
+                    array_type_data.align = 0;
+                    bool isunboxed = jl_islayout_inline(eltype, &elsz, &array_type_data.align);
                     if (isunboxed) {
-                        elsz = LLT_ALIGN(elsz, al);
+                        elsz = LLT_ALIGN(elsz, array_type_data.align);
+                        array_type_data.align = std::min(elsz, alignof(std::max_align_t));
                     } else {
                         elsz = sizeof(void*);
-                        al = elsz;
+                        array_type_data.align = elsz;
                     }
                     array_type_data.total_size = elsz * array_type_data.numels;
                     array_type_data.throws_invalid_size = array_type_data.total_size > ArrayTypeData::MAX_SIZE;
@@ -1309,6 +1332,25 @@ bool Optimizer::insertArrayLengthExceptionGuard(CallInst *orig) {
     //FIXME: insert exception throw if guaranteed negative,
     //or unlikely conditional throw if dynamic length
     return false;
+}
+    
+void Optimizer::moveArrayToStack(CallInst *orig_inst, llvm::Value *tag) {
+    assert(object_escape_info.memops.size() == 1);
+    assert(object_escape_info.memops.begin()->second.accesses.size() == 1);
+    assert(isa<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst));
+    IRBuilder<> array_builder(&*orig_inst->getFunction()->getEntryBlock().getFirstInsertionPt());
+    auto array = array_builder.CreateAlloca(pass.T_int8, ConstantInt::get(pass.T_size, array_type_data.total_size));
+    array->takeName(orig_inst);
+    array->setAlignment(Align(array_type_data.align));
+    auto load = cast<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst);
+    load->replaceAllUsesWith(array_builder.CreatePointerCast(array, load->getType()));
+    removeAlloc(orig_inst, tag, true);
+}
+void Optimizer::splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag) {
+    assert(object_escape_info.memops.size() == 1);
+    assert(object_escape_info.memops.begin()->second.accesses.size() == 1);
+    assert(isa<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst));
+    //TODO
 }
 
 bool AllocOpt::doInitialization(Module &M)
