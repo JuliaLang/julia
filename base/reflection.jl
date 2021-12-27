@@ -351,22 +351,24 @@ function datatype_alignment(dt::DataType)
     return Int(alignment)
 end
 
-function uniontype_layout(T::Type)
+function uniontype_layout(@nospecialize T::Type)
     sz = RefValue{Csize_t}(0)
     algn = RefValue{Csize_t}(0)
     isinline = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, algn) != 0
-    (isinline, sz[], algn[])
+    (isinline, Int(sz[]), Int(algn[]))
 end
 
+LLT_ALIGN(x, sz) = (x + sz - 1) & -sz
+
 # amount of total space taken by T when stored in a container
-function aligned_sizeof(T::Type)
+function aligned_sizeof(@nospecialize T::Type)
     @_pure_meta
     if isbitsunion(T)
         _, sz, al = uniontype_layout(T)
-        return (sz + al - 1) & -al
+        return LLT_ALIGN(sz, al)
     elseif allocatedinline(T)
         al = datatype_alignment(T)
-        return (Core.sizeof(T) + al - 1) & -al
+        return LLT_ALIGN(Core.sizeof(T), al)
     else
         return Core.sizeof(Ptr{Cvoid})
     end

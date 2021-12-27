@@ -45,6 +45,7 @@
     XX(jl_array_to_string) \
     XX(jl_array_typetagdata) \
     XX(jl_arrayunset) \
+    XX(jl_array_validate_dims) \
     XX(jl_atexit_hook) \
     XX(jl_atomic_bool_cmpswap_bits) \
     XX(jl_atomic_cmpswap_bits) \
@@ -564,4 +565,3 @@
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
     YY(LLVMExtraAddCPUFeaturesPass) \
-
