@@ -712,8 +712,13 @@ function parse_where_chain(ps0::ParseState, mark)
         k = peek(ps)
         if k == K"{"
             # x where {T,S}  ==>  (where x T S)
-            TODO("bracescat, braces etc allowed here??")
-            parse_cat(ps, K"}", ps.end_symbol)
+            ckind, cflags = parse_cat(ps, K"}", ps.end_symbol)
+            if ckind != K"vect"
+                # Various nonsensical forms permitted here
+                # x where {T S}  ==>  (where x (bracescat (row T S)))
+                # x where {y for y in ys}  ==>  (where x (braces (generator y (= y ys))))
+                emit_braces(ps, mark, ckind, cflags)
+            end
             emit(ps, mark, K"where")
         else
             parse_comparison(ps)
@@ -1061,7 +1066,6 @@ function parse_identifier_or_interpolate(ps::ParseState, outermost=true)
     else
         parse_atom(ps)
         if outermost && !is_identifier(peek_behind(ps))
-            @info "" peek_behind(ps)
             emit(ps, mark, K"error",
                  error="Expected identifier or interpolation syntax")
         end
@@ -1187,18 +1191,19 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             end
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
-            ckind = parse_cat(ParseState(ps, end_symbol=true), K"]", ps.end_symbol)
+            ckind, cflags = parse_cat(ParseState(ps, end_symbol=true),
+                                      K"]", ps.end_symbol)
             # a[i]    ==>  (ref a i)
             # a[i,j]  ==>  (ref a i j)
             # T[x for x in xs]  ==>  (typed_comprehension T (generator x (= x xs)))
             # TODO: other test cases
-            out_kind = ckind == K"vect"          ? K"ref"                  :
-                       ckind == K"hcat"          ? K"typed_hcat"           :
-                       ckind == K"vcat"          ? K"typed_vcat"           :
-                       ckind == K"comprehension" ? K"typed_comprehension"  :
-                       ckind == K"ncat"          ? K"typed_ncat"           :
-                       error("Unrecognized kind in parse_cat")
-            emit(ps, mark, out_kind)
+            outk = ckind == K"vect"          ? K"ref"                  :
+                   ckind == K"hcat"          ? K"typed_hcat"           :
+                   ckind == K"vcat"          ? K"typed_vcat"           :
+                   ckind == K"comprehension" ? K"typed_comprehension"  :
+                   ckind == K"ncat"          ? K"typed_ncat"           :
+                   error("Unrecognized kind in parse_cat")
+            emit(ps, mark, outk, cflags)
             if is_macrocall
                 emit(ps, mark, K"macrocall")
                 break
@@ -1572,7 +1577,7 @@ function parse_resword(ps::ParseState)
         parse_comma_separated(ps, parse_export_symbol)
         emit(ps, mark, K"export")
     elseif word in (K"import", K"using")
-        TODO("parse_resword")
+        TODO("parse_resword - $word")
     elseif word == K"do"
         bump(ps, TRIVIA_FLAG, error="invalid `do` syntax")
     else
@@ -2038,7 +2043,7 @@ function parse_vect(ps::ParseState, closer)
                 eq_is_kw_before_semi=false,
                 eq_is_kw_after_semi=false)
     end
-    return K"vect"
+    return (K"vect", EMPTY_FLAGS)
 end
 
 # Flattened generators are hard because the Julia AST doesn't respect a key
@@ -2093,12 +2098,165 @@ function parse_comprehension(ps::ParseState, mark, closer)
                     space_sensitive=false)
     parse_generator(ps, mark)
     bump_closing_token(ps, closer)
-    return K"comprehension"
+    return (K"comprehension", EMPTY_FLAGS)
 end
 
+# Parse array concatenation syntax with multiple semicolons
+#
+# Normal matrix construction syntax
+# [x y ; z w]     ==>  (vcat (row x y) (row z w))
+# [x y ; z w ; a b]  ==>  (vcat (row x y) (row z w) (row a b))
+# [x ; y ; z]     ==>  (vcat x y z)
+# [x;]            ==>  (vcat x)
+# [x y]           ==>  (hcat x y)
+#
+# Mismatched rows
+# [x y ; z]     ==>  (vcat (row x y) z)
+#
+# Double semicolon with spaces allowed (only) for line continuation
+# [x y ;;\n z w]  ==>  (hcat x y z w)
+# [x y ;; z w]    ==>  (hcat x y (error) z w)
+#
+# Single elements in rows
+# [x ; y ;; z ]  ==>  (ncat 2 (nrow 1 x y) z)
+# [x  y ;;; z ]  ==>  (ncat 3 (row x y) z)
+#
+# Higher dimensional ncat
+# Row major
+# [x y ; z w ;;; a b ; c d]  ==>
+#     (ncat 3 (nrow 1 (row x y) (row z w)) (nrow 1 (row a b) (row c d)))
+# Column major
+# [x ; y ;; z ; w ;;; a ; b ;; c ; d]  ==>
+#     (ncat 3 (nrow 2 (nrow 1 x y) (nrow 1 z w)) (nrow 2 (nrow 1 a b) (nrow 1 c d)))
+#
 # flisp: parse-array
-function parse_array(ps::ParseState, closer, gotnewline, end_is_symbol)
-    TODO("parse_array unimplemented")
+function parse_array(ps::ParseState, mark, closer, end_is_symbol)
+    ps = ParseState(ps, end_symbol=end_is_symbol)
+
+    # Outer array parsing loop - parse chain of separators with descending
+    # precedence such as
+    # [a ; b ;; c ;;; d ;;;; e] ==> (ncat-4 (ncat-3 (ncat-2 (ncat-1 a b) c) d) e)
+    #
+    # Ascending and equal precedence is handled by parse_array_inner.
+    #
+    # This is a variant of a Pratt parser, but we have a separate outer loop
+    # because there's no minimum precedence/binding power - you can always get
+    # a lower binding power by adding more semicolons.
+    #
+    # For an excellent overview of Pratt parsing, see
+    # https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html
+    (dim, binding_power) = parse_array_separator(ps)
+    while true
+        (next_dim, next_bp) = parse_array_inner(ps, binding_power)
+        if next_bp == typemin(Int)
+            break
+        end
+        if binding_power == 0
+            emit(ps, mark, K"row")
+        else
+            emit(ps, mark, K"nrow", numeric_flags(dim))
+        end
+        dim = next_dim
+        binding_power = next_bp
+    end
+    bump_closing_token(ps, closer)
+    return binding_power == -1 ? (K"vcat", EMPTY_FLAGS) :
+           binding_power ==  0 ? (K"hcat", EMPTY_FLAGS) :
+           (K"ncat", numeric_flags(dim))
+end
+
+# Parse equal and ascending precedence chains of array concatenation operators
+# (semicolons, newlines and whitespace). Invariants:
+#
+# * The caller must have already consumed
+#   - The left hand side
+#   - The concatenation operator, providing the current binding_power.
+#   So eg, we're here in the input stream
+#                |
+#          [a ;; b ; c ]
+#          [a ;; ]
+#
+# * The caller must call emit() to delimit the AST node for this binding power.
+#
+function parse_array_inner(ps, binding_power)
+    mark = NO_POSITION
+    dim = -1
+    bp = binding_power
+    while true
+        if bp < binding_power
+            return (dim, bp)
+        end
+        # Allow trailing separators
+        # [a ;] ==> (vcat a)
+        # [a ; b;;] ==> (ncat-2 (nrow-1 a b))
+        if is_closing_token(ps, peek(ps))
+            return (typemin(Int), typemin(Int))
+        end
+        if bp == binding_power
+            # Parse one expression
+            mark = position(ps)
+            parse_eq_star(ps)
+            (next_dim, next_bp) = parse_array_separator(ps)
+        else # bp > binding_power
+            # Recurse to parse a separator with greater binding power. Eg:
+            # [a ;; b ; c ]
+            #       |   ^------ the next input is here
+            #       '---------- the mark is here
+            (next_dim, next_bp) = parse_array_inner(ps, bp)
+            if bp == 0
+                emit(ps, mark, K"row")
+            else
+                emit(ps, mark, K"nrow", numeric_flags(dim))
+            end
+        end
+        dim, bp = next_dim, next_bp
+    end
+end
+
+# Parse a separator in an array concatenation
+#
+# Here we aim to identify:
+# * Dimension on which the next separator acts
+# * Binding power (precedence) of the separator, where whitespace binds
+#   tightest:  ... < `;;;` < `;;` < `;`,`\n` < whitespace. We choose binding
+#   power of 0 for whitespace and negative numbers for other separators.
+function parse_array_separator(ps)
+    t = peek_token(ps)
+    k = kind(t)
+    if k == K";"
+        n_semis = 1
+        while true
+            bump(ps, TRIVIA_FLAG)
+            t = peek_token(ps)
+            if kind(t) != K";" || t.had_whitespace
+                break
+            end
+            n_semis += 1
+        end
+        # FIXME - following is ncat, not line continuation
+        # [a ;; \n c]
+        if n_semis == 2 && peek(ps) == K"NewlineWs"
+            # Line continuation
+            # [a b ;; \n \n c]
+            # TODO: Should this only consume a single newline?
+            while peek(ps) == K"NewlineWs"
+                bump(ps, TRIVIA_FLAG)
+            end
+            return (2, 0)
+        else
+            return (n_semis, -n_semis)
+        end
+    elseif k == K"NewlineWs"
+        bump_trivia(ps)
+        # Newlines separate the first dimension
+        return (1, -1)
+    else
+        if t.had_whitespace && !is_closing_token(ps, k)
+            return (2, 0)
+        else
+            return (typemin(Int), typemin(Int))
+        end
+    end
 end
 
 # Parse array concatenation/construction/indexing syntax inside of `[]` or `{}`.
@@ -2123,7 +2281,7 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
             # [x,]  ==>  (vect x)
             bump(ps, TRIVIA_FLAG)
         end
-        # [x]  ==>  (vect x)
+        # [x]      ==>  (vect x)
         # [x \n ]  ==>  (vect x)
         parse_vect(ps, closer)
     elseif k == K"for"
@@ -2133,7 +2291,7 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
     else
         # [x y]  ==>  (hcat x y)
         # and other forms; See parse_array.
-        parse_array(ps, closer, false, end_is_symbol)
+        parse_array(ps, mark, closer, end_is_symbol)
     end
 end
 
@@ -2509,17 +2667,12 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         parse_paren(ps, check_identifiers)
     elseif leading_kind == K"[" # cat expression
         bump(ps, TRIVIA_FLAG)
-        ckind = parse_cat(ps, K"]", ps.end_symbol)
-        emit(ps, mark, ckind)
+        ckind, cflags = parse_cat(ps, K"]", ps.end_symbol)
+        emit(ps, mark, ckind, cflags)
     elseif leading_kind == K"{" # cat expression
         bump(ps, TRIVIA_FLAG)
-        ckind = parse_cat(ps, K"}", ps.end_symbol)
-        if ckind == K"hcat"
-            # {x y}  ==>  (bracescat (row x y))
-            emit(ps, K"row", mark)
-        end
-        out_kind = ckind in (K"vect", K"comprehension") ? K"braces" : K"bracescat"
-        emit(ps, mark, out_kind)
+        ckind, cflags = parse_cat(ps, K"}", ps.end_symbol)
+        emit_braces(ps, mark, ckind, cflags)
     elseif is_string(leading_kind)
         bump(ps)
         # FIXME parse_string_literal(ps)
@@ -2543,6 +2696,18 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     else
         bump(ps, error="invalid syntax atom")
     end
+end
+
+function emit_braces(ps, mark, ckind, cflags)
+    if ckind == K"hcat"
+        # {x y}  ==>  (bracescat (row x y))
+        emit(ps, K"row", mark, cflags)
+    elseif ckind == K"ncat"
+        # {x ;;; y}  ==>  (bracescat (nrow-3 x y))
+        emit(ps, K"nrow", mark, cflags)
+    end
+    outk = ckind in (K"vect", K"comprehension") ? K"braces" : K"bracescat"
+    emit(ps, mark, outk)
 end
 
 # Parse docstrings attached by a space or single newline

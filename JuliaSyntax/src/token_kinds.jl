@@ -860,6 +860,7 @@ Dict([
 "typed_vcat"           =>  Ts.TYPED_VCAT
 "typed_ncat"           =>  Ts.TYPED_NCAT
 "row"                  =>  Ts.ROW
+"nrow"                 =>  Ts.NROW
 "generator"            =>  Ts.GENERATOR
 "filter"               =>  Ts.FILTER
 "flatten"              =>  Ts.FLATTEN
@@ -884,7 +885,7 @@ for kw in split("""abstract baremodule begin break catch const
 
                    block call comparison curly string inert macrocall kw parameters
                    toplevel tuple ref vect braces bracescat hcat
-                   vcat ncat typed_hcat typed_vcat typed_ncat row generator
+                   vcat ncat typed_hcat typed_vcat typed_ncat row nrow generator
                    filter flatten comprehension typed_comprehension
 
                    error
