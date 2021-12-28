@@ -149,7 +149,6 @@ private:
     void optimizeTag(CallInst *orig_inst, llvm::Value *tag);
     
     void moveArrayToStack(CallInst *orig_inst, llvm::Value *tag);
-    void splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag);
 
     Function &F;
     AllocOpt &pass;
@@ -304,10 +303,6 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
     }
     if (may_be_removable && (array_escape_info.refstore || array_escape_info.haspreserve)) {
         //Avoid messing with GC-tracked pointers for now
-        return;
-    }
-    if (!array_escape_info.hasunknownmem) {
-        splitArrayOnStack(orig, info.type);
         return;
     }
     if (array_type_data.total_size <= ARRAY_INLINE_NBYTES) {
@@ -1345,12 +1340,6 @@ void Optimizer::moveArrayToStack(CallInst *orig_inst, llvm::Value *tag) {
     auto load = cast<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst);
     load->replaceAllUsesWith(array_builder.CreatePointerCast(array, load->getType()));
     removeAlloc(orig_inst, tag, true);
-}
-void Optimizer::splitArrayOnStack(CallInst *orig_inst, llvm::Value *tag) {
-    assert(object_escape_info.memops.size() == 1);
-    assert(object_escape_info.memops.begin()->second.accesses.size() == 1);
-    assert(isa<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst));
-    //TODO
 }
 
 bool AllocOpt::doInitialization(Module &M)
