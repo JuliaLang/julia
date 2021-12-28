@@ -671,7 +671,7 @@ mktempdir() do dir
     vdir = vdir[2:end] # remove @
     vpath = joinpath(dir, "environments", vdir)
     mkpath(vpath)
-    withenv("JULIA_DEPOT_PATH" => dir) do
+    withenv("JULIA_DEPOT_PATH" => dir, "JULIA_PROJECT" => nothing, "JULIA_LOAD_PATH" => nothing) do
         script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
         @test success(`$(Base.julia_cmd()) --startup-file=no -e $(script)`)
     end

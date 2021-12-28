@@ -571,6 +571,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     ENV2["JULIA_DEPOT_PATH"] = mktempdir(; cleanup = true)
+    ENV2["JULIA_PROJECT"] = mktempdir(; cleanup = true)
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
