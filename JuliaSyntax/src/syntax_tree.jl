@@ -11,7 +11,9 @@ const TRIVIA_FLAG = RawFlags(1<<0)
 const INFIX_FLAG  = RawFlags(1<<1)
 # try-finally-catch
 const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<2)
-# ERROR_FLAG = 0x80000000
+# Flags holding the dimension of an nrow or other UInt8 not held in the source
+const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
+# Todo ERROR_FLAG = 0x80000000 ?
 
 struct SyntaxHead
     kind::Kind
@@ -36,6 +38,14 @@ function raw_flags(; trivia::Bool=false, infix::Bool=false)
     trivia && (flags |= TRIVIA_FLAG)
     infix  && (flags |= INFIX_FLAG)
     return flags::RawFlags
+end
+
+function numeric_flags(n::Integer)
+    RawFlags(UInt8(n)) << 8
+end
+
+function extract_numeric_flags(f::RawFlags)
+    Int((f >> 8) % UInt8)
 end
 
 kind(node::GreenNode{SyntaxHead})  = head(node).kind
@@ -84,6 +94,9 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             true
         elseif k == K"false"
             false
+        elseif k == K"Char"
+            # FIXME: Escape sequences...
+            unescape_string(val_str)[2]
         elseif k == K"Identifier"
             Symbol(val_str)
         elseif k == K"VarIdentifier"
@@ -161,7 +174,7 @@ hasflags(node::SyntaxNode, f) = hasflags(head(node.raw), f)
 
 head(node::SyntaxNode) = node.head
 kind(node::SyntaxNode)  = kind(node.raw)
-flags(node::SyntaxNode) = kind(node.raw)
+flags(node::SyntaxNode) = flags(node.raw)
 
 haschildren(node::SyntaxNode) = node.head !== :leaf
 children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : ()
@@ -347,7 +360,7 @@ function _to_expr(node::SyntaxNode)
                 push!(args, catch_var)
                 push!(args, catch_)
             end
-            # At this poin args is
+            # At this point args is
             # [try_block catch_var catch_block]
             if finally_ !== false
                 push!(args, finally_)
@@ -367,6 +380,10 @@ function _to_expr(node::SyntaxNode)
                 gen = Expr(:generator, gen, args[i])
             end
             args = [gen]
+        elseif head(node) in (:nrow, :ncat)
+            # For lack of a better place, the dimension argument to nrow/ncat
+            # is stored in the flags
+            pushfirst!(args, extract_numeric_flags(flags(node)))
         end
         if head(node) == :inert || (head(node) == :quote &&
                                     length(args) == 1 && !(only(args) isa Expr))

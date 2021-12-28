@@ -432,7 +432,7 @@ replaced by `_` and predicates prefixed by `is_`.
 
 ## Flisp parser bugs
 
-Some things seem to be bugs:
+Here's some behaviors which seem to be bugs:
 
 * Macro module paths allow calls which gives weird stateful semantics!
   ```
@@ -449,25 +449,31 @@ Some things seem to be bugs:
   ```
   const a = b = 1
   ```
-
-There's various allowed syntaxes which are fairly easily detected in the
-parser, but which will be rejected later during lowering. To allow building
-DSLs this is fine and good but some such allowed syntaxes don't seem very
-useful even for DSLs:
-
-* `macro (x) end` is allowed but there are no anonymous macros.
-* `abstract type A < B end` and other subtypes comparisons are allowed, but
-  only `A <: B` makes sense.
-
+* Parsing the `ncat` array concatenation syntax within braces gives
+  strange AST: `{a ;; b}` parses to `(bracescat 2 a b)` which is the same as
+  `{2 ; a ; b}`, but should probably be `(bracescat (nrow 2 a b))` in analogy
+  to how `{a b}` produces `(bracescat (row a b))`.
 * `export a, \n $b` is rejected, but `export a, \n b` parses fine.
-
 * In try-catch-finally, the `finally` clause is allowed before the `catch`, but
   always executes afterward. (Presumably was this a mistake? It seems pretty awful!)
-
 * When parsing `"[x \n\n ]"` the flisp parser gets confused, but `"[x \n ]"` is
   parsed as `Expr(:vect)`
 
 ## Parsing / AST oddities and warts
+
+### Questionable allowed forms
+
+There's various allowed syntaxes which are fairly easily detected in the
+parser, but which will be rejected later during lowering. To allow building
+DSLs this is fine and good but some such allowed syntaxes don't seem very
+useful, even for DSLs:
+
+* `macro (x) end` is allowed but there are no anonymous macros.
+* `abstract type A < B end` and other subtypes comparisons are allowed, but
+  only `A <: B` makes sense.
+* `x where {S T}` produces `(where x (bracescat (row S T)))`
+
+### `kw` and `=` inconsistencies
 
 There's many apparent inconsistencies between how `kw` and `=` are used when
 parsing `key=val` pairs inside parentheses.
@@ -483,12 +489,48 @@ parsing `key=val` pairs inside parentheses.
   # (tuple (parameters (parameters e f) c d) a b)
   (a,b; c,d; e,f)
   ```
-* Long-form anonymous functions have argument lists which are parsedj
-  as tuples. But the flisp parser doesn't pass the context that they're
-  function argument lists and needs some ugly disambiguation code. This also
-  leads to more inconsistency in the use of `kw` for keywords.
+* Long-form anonymous functions have argument lists which are parsed
+  as tuples rather than argument lists. This leads to more inconsistency in the
+  use of `kw` for keywords.
 
-Other oddities:
+
+### Flattened generators
+
+Flattened generators are hard because the Julia AST doesn't respect a key
+rule we normally expect: that the children of an AST node are a contiguous
+range in the source text. This is because the `for`s in
+`[xy for x in xs for y in ys]` are parsed in the normal order of a for loop as
+
+```
+for x in xs
+for y in ys
+  push!(xy, collection)
+```
+
+and the standard Julia AST is like this:
+
+```
+(flatten
+(generator
+(generator
+ xy
+ (= y ys))
+(= x xs))
+```
+
+however, note that if this tree were flattened, the order of tokens would be
+`(xy) (y in ys) (x in xs)` which is *not* the source order.  So in this case
+our tree needs to deviate from the Julia AST. The natural representation seems
+to be to flatten the generators:
+
+```
+(flatten
+xy
+(= x xs)
+(= y ys))
+```
+
+### Other oddities
 
 * `global const x=1` is normalized by the parser into `(const (global (= x 1)))`.
   I suppose this is somewhat useful for AST consumers, but it seems a bit weird
@@ -507,41 +549,6 @@ Other oddities:
    let x+=1 ; end     ==>  (let (block (+= x 1)) (block))
    ```
 
-* The `elseif` condition is always in a block but not `if` condition.
+* The `elseif` condition is always in a block but not the `if` condition.
   Presumably because of the need to add a line number node in the flisp parser
   `if a xx elseif b yy end   ==>  (if a (block xx) (elseif (block b) (block yy)))`
-
-
-Flattened generators are hard because the Julia AST doesn't respect a key
-rule we normally expect: that the children of an AST node are a contiguous
-range in the source text. This is because the `for`s in
-`[xy for x in xs for y in ys]` are parsed in the normal order of a for loop as
-
-```
-for x in xs
-  for y in ys
-    push!(xy, collection)
-```
-
-and the standard Julia AST is like this:
-
-```
-(flatten
- (generator
-  (generator
-   xy
-   (= y ys))
-  (= x xs))
-```
-
-however, note that if this tree were flattened, the order of tokens would be
-`(xy) (y in ys) (x in xs)` which is *not* the source order.  So in this case
-our tree needs to deviate from the Julia AST. The natural representation seems
-to be to flatten the generators:
-
-```
-(flatten
-  xy
-  (= x xs)
-  (= y ys))
-```

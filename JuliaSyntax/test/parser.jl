@@ -415,6 +415,31 @@ tests = [
         # Errors
         ": foo" => "(quote (error) :foo)"
     ],
+    JuliaSyntax.parse_atom => [
+        # parse_array
+        # Normal matrix construction syntax
+        "[x y ; z w]"  =>  "(vcat (row :x :y) (row :z :w))"
+        "[x y ; z w ; a b]"  =>  "(vcat (row :x :y) (row :z :w) (row :a :b))"
+        "[x ; y ; z]"  =>  "(vcat :x :y :z)"
+        "[x;]"  =>  "(vcat :x)"
+        "[x y]"  =>  "(hcat :x :y)"
+        # Mismatched rows
+        "[x y ; z]"  =>  "(vcat (row :x :y) :z)"
+        # Double semicolon with spaces allowed (only) for line continuation
+        "[x y ;;\n z w]"  =>  "(hcat :x :y :z :w)"
+        # "[x y ;; z w]"  =>  "(hcat x y (error) z w)" # FIXME
+        # FIXME: S-expr printing issues with ncat
+        # # Single elements in rows
+        # "[x ; y ;; z ]"  =>  "(ncat 2 (nrow 1 :x :y) :z)"
+        # "[x  y ;;; z ]"  =>  "(ncat 3 (row :x :y) :z)"
+        # # Higher dimensional ncat
+        # # Row major
+        # "[x y ; z w ;;; a b ; c d]"  =>
+        #     "(ncat 3 (nrow 1 (row :x :y) (row :z :w)) (nrow 1 (row :a :b) (row :c :d)))"
+        # # Column major
+        # "[x ; y ;; z ; w ;;; a ; b ;; c ; d]"  =>
+        #     "(ncat 3 (nrow 2 (nrow 1 :x :y) (nrow 1 :z :w)) (nrow 2 (nrow 1 :a :b) (nrow 1 :c :d)))"
+    ],
     JuliaSyntax.parse_docstring => [
         "\"doc\" foo" => "(macrocall :(Core.var\"@doc\") \"doc\" :foo)"
     ],
