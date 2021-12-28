@@ -599,7 +599,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test Base.current_project() === nothing
             @test success(`$exename -e "exit(0)"`)
             for load_path in ["", "@", "@."]
-                withenv("JULIA_LOAD_PATH" => load_path, "JULIA_PROJECT" => "") do
+                withenv("JULIA_LOAD_PATH" => load_path, "JULIA_PROJECT" => nothing) do
                     @test success(`$exename -e "exit(!(Base.load_path() == []))"`)
                 end
             end
