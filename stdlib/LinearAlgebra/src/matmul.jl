@@ -142,7 +142,7 @@ end
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
 # which is better handled by reinterpreting rather than promotion
-function (*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::StridedMaybeAdjOrTransMat{<:BlasFloat})
+function (*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))),
          wrapperop(A)(convert(AbstractArray{TS}, _parent(A))),
@@ -173,6 +173,16 @@ function (*)(A::AdjOrTransStridedMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMa
          copy_oftype(A, TS), # remove AdjOrTrans to use reinterpret trick below
          wrapperop(B)(convert(AbstractArray{real(TS)}, _parent(B))))
 end
+# the following case doesn't seem to benefit from the translation A*B = (B' * A')'
+function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasComplex})
+    TS = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         convert(AbstractArray{TS}, A),
+         convert(AbstractArray{TS}, B))
+end
+(*)(A::AdjOrTransStridedMat{<:BlasReal}, B::StridedMatrix{<:BlasComplex}) = copy(transpose(transpose(B) * parent(A)))
+(*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::AdjOrTransStridedMat{<:BlasComplex}) = copy(wrapperop(B)(parent(B) * transpose(A)))
+
 for elty in (Float32,Float64)
     @eval begin
         @inline function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty},
