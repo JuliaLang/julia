@@ -71,7 +71,7 @@ void jl_makecontext(win32_ucontext_t *ucp, void (*func)(void))
     jmpbuf->Rip = (unsigned long long)func;
     jmpbuf->Rsp = (unsigned long long)stack_top;
     jmpbuf->Rbp = 0;
-    jmpbuf->Frame = 0; // SEH frame
+    jmpbuf->Frame = ~0L; // SEH frame
 #elif defined(_CPU_X86_)
     jmpbuf->Eip = (unsigned long)func;
     jmpbuf->Esp = (unsigned long)stack_top;
