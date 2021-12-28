@@ -1723,9 +1723,11 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         const jl_cgval_t &val = argv[1];
         const jl_cgval_t &n = argv[2];
         Value *destp = emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type);
+        Value *val32 = emit_unbox(ctx, T_int32, val, (jl_value_t*)jl_uint32_type);
+        Value *val8 = ctx.builder.CreateTrunc(val32, T_int8, "memset_val");
         ctx.builder.CreateMemSet(
             emit_inttoptr(ctx, destp, T_pint8),
-            emit_unbox(ctx, T_int32, val, (jl_value_t*)jl_uint32_type),
+            val8,
             emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
             MaybeAlign(1)
         );
