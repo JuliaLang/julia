@@ -460,8 +460,8 @@ norm_sqr(x) = norm(x)^2
 norm_sqr(x::T) where {T<:Number} = abs2(promote_type(T,Float64)(x))
 
 function generic_norm2(x)
-    isempty(x) && return float(norm(zero(eltype(itr))))
-    T = typeof(float(norm(first(x))))
+    isempty(x) && return norm(zero(eltype(x)))
+    T = typeof(norm(first(x)))
     sT = promote_type(T, Float64)
     ans = mapreduce(norm_sqr, +, x)
     ans in (0, Inf) || return convert(T, sqrt(ans))
