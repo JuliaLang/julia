@@ -147,7 +147,7 @@ private:
     void moveToStack(CallInst *orig_inst, llvm::Value *tag, size_t sz, bool has_ref);
     void splitOnStack(CallInst *orig_inst, llvm::Value *tag);
     void optimizeTag(CallInst *orig_inst, llvm::Value *tag);
-    
+
     void moveArrayToStack(CallInst *orig_inst, llvm::Value *tag);
 
     Function &F;
@@ -1328,7 +1328,7 @@ bool Optimizer::insertArrayLengthExceptionGuard(CallInst *orig) {
     //or unlikely conditional throw if dynamic length
     return false;
 }
-    
+
 void Optimizer::moveArrayToStack(CallInst *orig_inst, llvm::Value *tag) {
     assert(object_escape_info.memops.size() == 1);
     assert(object_escape_info.memops.begin()->second.accesses.size() == 1);
