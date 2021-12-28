@@ -315,6 +315,10 @@ one(D::Diagonal) = Diagonal(one.(D.diag))
 one(A::Bidiagonal{T}) where T = Bidiagonal(fill!(similar(A.dv, typeof(one(T))), one(T)), fill!(similar(A.ev, typeof(one(T))), zero(one(T))), A.uplo)
 one(A::Tridiagonal{T}) where T = Tridiagonal(fill!(similar(A.du, typeof(one(T))), zero(one(T))), fill!(similar(A.d, typeof(one(T))), one(T)), fill!(similar(A.dl, typeof(one(T))), zero(one(T))))
 one(A::SymTridiagonal{T}) where T = SymTridiagonal(fill!(similar(A.dv, typeof(one(T))), one(T)), fill!(similar(A.ev, typeof(one(T))), zero(one(T))))
+for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTriangular)
+    @eval one(A::$t) = $t(one(parent(A)))
+    @eval oneunit(A::$t) = $t(oneunit(parent(A)))
+end
 
 zero(D::Diagonal) = Diagonal(zero.(D.diag))
 oneunit(D::Diagonal) = Diagonal(oneunit.(D.diag))
