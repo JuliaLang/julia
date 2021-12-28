@@ -1569,7 +1569,6 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         return tuple_tfunc(argtypes)
     elseif f === Core.arrayfreeze || f === Core.arraythaw
         if length(argtypes) != 1
-            isva && return Any
             return Bottom
         end
         a = widenconst(argtypes[1])
