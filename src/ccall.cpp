@@ -1718,6 +1718,21 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         return rt == (jl_value_t*)jl_nothing_type ? ghostValue(jl_nothing_type) :
             mark_or_box_ccall_result(ctx, destp, retboxed, rt, unionall, static_rt);
     }
+    else if (is_libjulia_func(memset) && (rt == (jl_value_t*)jl_nothing_type || jl_is_cpointer_type(rt))) {
+        const jl_cgval_t &dst = argv[0];
+        const jl_cgval_t &val = argv[1];
+        const jl_cgval_t &n = argv[2];
+        Value *destp = emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type);
+        ctx.builder.CreateMemSet(
+            emit_inttoptr(ctx, destp, T_pint8),
+            emit_unbox(ctx, T_int32, val, (jl_value_t*)jl_uint32_type),
+            emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
+            MaybeAlign(1)
+        );
+        JL_GC_POP();
+        return rt == (jl_value_t*)jl_nothing_type ? ghostValue(jl_nothing_type) :
+            mark_or_box_ccall_result(ctx, destp, retboxed, rt, unionall, static_rt);
+    }
     else if (is_libjulia_func(jl_object_id) && nccallargs == 1 &&
             rt == (jl_value_t*)jl_ulong_type) {
         jl_cgval_t val = argv[0];
