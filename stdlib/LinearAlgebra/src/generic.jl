@@ -457,44 +457,39 @@ generic_norm1(x) = mapreduce(float ∘ norm, +, x)
 
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
-norm_sqr(x::Number) = abs2(x)
-norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
+norm_sqr(x::T) where {T<:Number} = abs2(promote_type(T,Float64)(x))
 
 function generic_norm2(x)
-    maxabs = normInf(x)
-    (ismissing(maxabs) || maxabs == 0 || isinf(maxabs)) && return maxabs
-    T = typeof(maxabs)
-    sT = promote_type(Float64, T)
-    maxabs_st = sT(maxabs)
-    if isfinite(length(x)*maxabs_st*maxabs_st) && maxabs_st*maxabs_st != 0 # Scaling not necessary
-        return convert(T, sqrt(mapreduce(v -> convert(sT, norm_sqr(v)), +, x)))
-    else
-        invmaxabs = inv(maxabs_st)
-        if isfinite(invmaxabs)
-            return convert(T, maxabs*sqrt(mapreduce(v -> abs2((norm(v))*invmaxabs), +, x)))
-        end
-        return convert(T, maxabs*sqrt(mapreduce(v -> abs2((norm(v))/maxabs_st), +, x)))
+    isempty(x) && return float(norm(zero(eltype(itr))))
+    T = typeof(float(norm(first(x))))
+    sT = promote_type(T, Float64)
+    ans = mapreduce(norm_sqr, +, x)
+    ans in (0, Inf) || return convert(T, sqrt(ans))
+    maxabs = sT(normInf(x))
+    ans = sT(0)
+    for v in x
+        ans += (norm(v)/maxabs)^2
     end
+    return convert(T, maxabs*sqrt(ans))
 end
 
 # Compute L_p norm ‖x‖ₚ = sum(abs(x).^p)^(1/p)
 # (Not technically a "norm" for p < 1.)
 function generic_normp(x, p)
+    isempty(x) && return float(norm(zero(eltype(itr))))
     T = typeof(float(norm(first(x))))
-    spp::promote_type(Float64, T) = p
-    if p > 1 || p < -1 # might need to rescale to avoid overflow
-        maxabs = p > 1 ? normInf(x) : normMinusInf(x)
-        (maxabs == 0 || isinf(maxabs)) && return maxabs
-        max_el_norm = maxabs^spp
-        if !(isfinite(length(x)*max_el_norm) && max_el_norm != 0) # rescaling necessary
-            invmaxabs = inv(maxabs)
-            if isfinite(invmaxabs)
-                return convert(T, maxabs*mapreduce(v -> (norm(v)*invmaxabs)^spp, +, x)^inv(spp))
-            end
-            return convert(T, maxabs*mapreduce(v -> (norm(v)/maxabs)^spp, +, x)^inv(spp))
-        end
+    sT = promote_type(T, Float64)
+    ans = sT(0)
+    for v in x
+        ans += sT(norm(v))^p
     end
-    return convert(T, mapreduce(v -> norm(v)^spp, +, x)^inv(spp))
+    ans in (0, Inf) || return convert(T, ans^inv(spp))
+    maxabs = p > 1 ? normInf(x) : normMinusInf(x)
+    ans = sT(0)
+    for v in x
+        ans += (sT(norm(v))/maxabs)^p
+    end
+    return convert(T, ans^inv(p))
 end
 
 normMinusInf(x) = generic_normMinusInf(x)
