@@ -460,7 +460,25 @@ end
 add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
-add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
+
+function arraysize_tfunc(@nospecialize(ary), @nospecialize(dim))
+    hasintersect(widenconst(ary), Array) || return Bottom
+    hasintersect(widenconst(dim), Int) || return Bottom
+    return Int
+end
+add_tfunc(arraysize, 2, 2, arraysize_tfunc, 4)
+
+function arraysize_nothrow(argtypes::Vector{Any})
+    length(argtypes) == 2 || return false
+    ary = argtypes[1]
+    dim = argtypes[2]
+    ary ⊑ Array || return false
+    if isa(dim, Const)
+        dimval = dim.val
+        return isa(dimval, Int) && dimval > 0
+    end
+    return false
+end
 
 function pointer_eltype(@nospecialize(ptr))
     a = widenconst(ptr)
@@ -1442,8 +1460,38 @@ function tuple_tfunc(argtypes::Vector{Any})
     return anyinfo ? PartialStruct(typ, argtypes) : typ
 end
 
-function arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(a), @nospecialize i...)
-    a = widenconst(a)
+function arrayref_tfunc(@nospecialize(boundcheck), @nospecialize(ary),
+    @nospecialize idxs...)
+    isempty(idxs) && return Bottom
+    array_builtin_common_errorcheck(boundcheck, ary, idxs) || return Bottom
+    return array_elmtype(ary)
+end
+add_tfunc(arrayref, 3, INT_INF, arrayref_tfunc, 20)
+add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
+
+function arrayset_tfunc(@nospecialize(boundcheck), @nospecialize(ary), @nospecialize(item),
+    @nospecialize idxs...)
+    isempty(idxs) && return Bottom
+    array_builtin_common_errorcheck(boundcheck, ary, idxs) || return Bottom
+    hasintersect(widenconst(item), array_elmtype(ary)) || return Bottom
+    return ary
+end
+add_tfunc(arrayset, 4, INT_INF, arrayset_tfunc, 20)
+
+function array_builtin_common_errorcheck(@nospecialize(boundcheck), @nospecialize(ary),
+    @nospecialize idxs)
+    hasintersect(widenconst(boundcheck), Bool) || return false
+    hasintersect(widenconst(ary), Array) || return false
+    for i = 1:length(idxs)
+        idx = idxs[i]
+        idx = isvarargtype(idx) ? unwrapva(idx) : widenconst(idx)
+        hasintersect(idx, Int) || return false
+    end
+    return true
+end
+
+function array_elmtype(@nospecialize ary)
+    a = widenconst(ary)
     if !has_free_typevars(a) && a <: Array
         a0 = a
         if isa(a, UnionAll)
@@ -1457,13 +1505,6 @@ function arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(a), @nospecial
     end
     return Any
 end
-add_tfunc(arrayref, 3, INT_INF, arrayref_tfunc, 20)
-add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
-function arrayset_tfunc(@nospecialize(boundscheck), @nospecialize(a), @nospecialize(v), @nospecialize i...)
-    # TODO: we could check that the type-intersect of arrayref_tfunc and v is non-empty or always throws
-    return a
-end
-add_tfunc(arrayset, 4, INT_INF, arrayset_tfunc, 20)
 
 function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
         @nospecialize(lb), @nospecialize(ub), @nospecialize(source), env::Vector{Any},
@@ -1546,6 +1587,8 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
         return array_builtin_common_nothrow(argtypes, 3)
+    elseif f === arraysize
+        return arraysize_nothrow(argtypes)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
