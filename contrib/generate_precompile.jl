@@ -254,8 +254,8 @@ function generate_precompile_statements()
               module $pkgname
               end
               """)
-        tmp_prec = tempname()
-        tmp_proc = tempname()
+        tmp_prec = tempname(prec_path)
+        tmp_proc = tempname(prec_path)
         s = """
             pushfirst!(DEPOT_PATH, $(repr(prec_path)));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
