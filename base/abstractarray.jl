@@ -2720,7 +2720,7 @@ function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_axes(A)) where {T, 
     nothing === xit && return _empty_stack(:, T, S, A)
     x1, _ = xit
     ax1 = _axes(x1)
-    B = similar(_prototype(x1, A), T, ax1..., Aax...)
+    B = similar(_first_array(x1, A), T, ax1..., Aax...)
     off = firstindex(B)
     len = length(x1)
     while xit !== nothing
@@ -2764,7 +2764,7 @@ function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
 
     newaxis = _vec_axis(A)
     outax = ntuple(d -> d==dims ? newaxis : _axes(x1)[d - (d>dims)], N1)
-    B = similar(_prototype(x1, A), T, outax...)
+    B = similar(_first_array(x1, A), T, outax...)
 
     iit = iterate(newaxis)
     while xit !== nothing
@@ -2803,19 +2803,18 @@ end
 end
 
 # For `similar`, the goal is to stack an Array of CuArrays to a CuArray:
-_prototype(x::AbstractArray, A::AbstractArray) = x
-_prototype(x::AbstractArray, A) = x
-_prototype(x, A::AbstractArray) = A
-_prototype(x, A) = 1:0
+_first_array(x::AbstractArray, ys...) = x
+_first_array(x, ys...) = _first_array(ys...)
+_first_array() = 1:0
 
 # With tuple elements, we can make the empty array the right size:
 function _empty_stack(::Colon, ::Type{T}, ::Type{S}, A) where {T, S<:Tuple}
-    similar(_prototype(nothing, A), T, OneTo(length(fieldtypes(S))), axes(A)...)
+    similar(_first_array(A), T, OneTo(length(fieldtypes(S))), axes(A)...)
 end
 function _empty_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T, S<:Tuple}
     ax1 = OneTo(length(fieldtypes(S)))
     dims in 1:2 || throw(ArgumentError("cannot stack tuples along dims = $dims"))
-    similar(_prototype(nothing, A), T, ntuple(d -> d==dims ? OneTo(0) : ax1, 2))
+    similar(_first_array(A), T, ntuple(d -> d==dims ? OneTo(0) : ax1, 2))
 end
 # but with arrays of arrays, we must settle for the right ndims:
 _empty_stack(dims, ::Type{T}, ::Type{S}, A) where {T,S} = _empty_stack(dims, T, IteratorSize(S), A)
@@ -2823,13 +2822,13 @@ _empty_stack(dims, ::Type{T}, ::HasLength, A) where {T} = _empty_stack(dims, T, 
 _empty_stack(dims, ::Type{T}, ::IteratorSize, A) where {T} = _empty_stack(dims, T, HasShape{0}(), A)
 
 function _empty_stack(::Colon, ::Type{T}, ::HasShape{N}, A) where {T,N}
-    similar(_prototype(nothing, A), T, ntuple(_->OneTo(1), N)..., _axes(A)...)
+    similar(_first_array(A), T, ntuple(_->OneTo(1), N)..., _axes(A)...)
 end
 function _empty_stack(dims::Integer, ::Type{T}, ::HasShape{N}, A) where {T,N}
     # Not sure we should check dims here, e.g. stack(Vector[]; dims=2) is an error
     dims in 1:N+1 || throw(ArgumentError("cannot stack slices ndims(x) = $N along dims = $dims"))
     ax = ntuple(d -> d==dims ? _vec_axis(A) : OneTo(1), N+1)
-    similar(_prototype(nothing, A), T, ax...)
+    similar(_first_array(A), T, ax...)
 end
 
 # These make stack(()) work like stack([])
