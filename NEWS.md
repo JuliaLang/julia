@@ -73,6 +73,7 @@ New library functions
 
 * `hardlink(src, dst)` can be used to create hard links. ([#41639])
 * `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
+* `@check cond [msg]` can be used to check if a condition holds and to error otherwise ([#41342])
 
 New library features
 --------------------
