@@ -362,10 +362,12 @@ Base.backtrace
 Base.catch_backtrace
 Base.current_exceptions
 Base.@assert
+Base.@check
 Base.Experimental.register_error_hint
 Base.Experimental.show_error_hints
 Base.ArgumentError
 Base.AssertionError
+Base.CheckError
 Core.BoundsError
 Base.CompositeException
 Base.DimensionMismatch

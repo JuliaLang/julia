@@ -63,6 +63,65 @@ let deepthought(x, y) = 42
     end
 end
 
+# Test the `@check` macro
+@test_throws CheckError (@check 1 == 2)
+@test_throws CheckError (@check false)
+@test_throws CheckError (@check false "this is a test")
+@test_throws CheckError (@check false "this is a test" "another test")
+@test_throws CheckError (@check false :a)
+let
+    try
+        @check 1 == 2
+        error("unexpected")
+    catch ex
+        @test isa(ex, CheckError)
+        @test occursin("1 == 2", ex.msg)
+    end
+end
+# test @check message
+let
+    try
+        @check 1 == 2 "this is a test"
+        error("unexpected")
+    catch ex
+        @test isa(ex, CheckError)
+        @test ex.msg == "this is a test"
+    end
+end
+# @check only uses the first message string
+let
+    try
+        @check 1 == 2 "this is a test" "this is another test"
+        error("unexpected")
+    catch ex
+        @test isa(ex, CheckError)
+        @test ex.msg == "this is a test"
+    end
+end
+# @check calls string() on second argument
+let
+    try
+        @check 1 == 2 :random_object
+        error("unexpected")
+    catch ex
+        @test isa(ex, CheckError)
+        @test !occursin("1 == 2", ex.msg)
+        @test occursin("random_object", ex.msg)
+    end
+end
+# if the second argument is an expression, c
+let deepthought(x, y) = 42
+    try
+        @check 1 == 2 string("the answer to the ultimate question: ",
+                             deepthought(6, 9))
+        error("unexpected")
+    catch ex
+        @test isa(ex, CheckError)
+        @test ex.msg == "the answer to the ultimate question: 42"
+    end
+end
+
+
 let # test the process title functions, issue #9957
     oldtitle = Sys.get_process_title()
     Sys.set_process_title("julia0x1")

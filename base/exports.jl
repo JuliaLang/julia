@@ -122,6 +122,7 @@ export
 
 # Exceptions
     CapturedException,
+    CheckError,
     CompositeException,
     DimensionMismatch,
     EOFError,
