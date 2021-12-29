@@ -7,12 +7,40 @@
 #include "llvm/IR/LegacyPassManager.h"
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
-#include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
-#include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
+
+// As of LLVM 13, there are two runtime JIT linker implementations, the older
+// RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
+// (used via orc::ObjectLinkingLayer).
+//
+// JITLink is not only more flexible (which isn't of great importance for us, as
+// we do only single-threaded in-process codegen), but crucially supports using
+// the Small code model, where the linker needs to fix up relocations between
+// object files that end up far apart in address space. RuntimeDyld can't do
+// that and relies on the Large code model instead, which is broken on
+// aarch64-darwin (macOS on ARM64), and not likely to ever be supported there
+// (see https://bugs.llvm.org/show_bug.cgi?id=52029).
+//
+// However, JITLink is a relatively young library and lags behind in platform
+// and feature support (e.g. Windows, JITEventListeners for various profilers,
+// etc.). Thus, we currently only use JITLink where absolutely required, that is,
+// for Mac/aarch64.
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+# if JL_LLVM_VERSION < 130000
+#  warning "On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults"
+# endif
+# define JL_USE_JITLINK
+#endif
+
+#ifdef JL_USE_JITLINK
+# include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
+#else
+# include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
+# include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
+#endif
 
 using namespace llvm;
 
@@ -159,13 +187,22 @@ class JuliaOJIT {
     void registerObject(const ObjT &Obj, const LoadResult &LO);
 
 public:
+#ifdef JL_USE_JITLINK
+    typedef orc::ObjectLinkingLayer ObjLayerT;
+#else
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
+#endif
     typedef orc::IRCompileLayer CompileLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
     JuliaOJIT(TargetMachine &TM, LLVMContext *Ctx);
 
+    void enableJITDebuggingSupport();
+#ifndef JL_USE_JITLINK
+    // JITLink doesn't support old JITEventListeners (yet).
     void RegisterJITEventListener(JITEventListener *L);
+#endif
+
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addModule(std::unique_ptr<Module> M);
 
@@ -193,14 +230,15 @@ private:
     legacy::PassManager PM3;
     TargetMachine *TMs[4];
     MCContext *Ctx;
-    std::shared_ptr<RTDyldMemoryManager> MemMgr;
-
 
     orc::ThreadSafeContext TSCtx;
     orc::ExecutionSession ES;
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
 
+#ifndef JL_USE_JITLINK
+    std::shared_ptr<RTDyldMemoryManager> MemMgr;
+#endif
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer;
 
