@@ -2721,7 +2721,7 @@ function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_axes(A)) where {T, 
     x1, _ = xit
     ax1 = _axes(x1)
     B = similar(_prototype(x1, A), T, ax1..., Aax...)
-    off = 1
+    off = firstindex(B)
     len = length(x1)
     while xit !== nothing
         x, state = xit
