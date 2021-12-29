@@ -1735,6 +1735,25 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         return rt == (jl_value_t*)jl_nothing_type ? ghostValue(jl_nothing_type) :
             mark_or_box_ccall_result(ctx, destp, retboxed, rt, unionall, static_rt);
     }
+    else if (is_libjulia_func(memmove) && (rt == (jl_value_t*)jl_nothing_type || jl_is_cpointer_type(rt))) {
+        const jl_cgval_t &dst = argv[0];
+        const jl_cgval_t &src = argv[1];
+        const jl_cgval_t &n = argv[2];
+        Value *destp = emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type);
+
+        ctx.builder.CreateMemMove(
+                emit_inttoptr(ctx, destp, T_pint8),
+                MaybeAlign(1),
+                emit_inttoptr(ctx,
+                    emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type),
+                    T_pint8),
+                MaybeAlign(0),
+                emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
+                false);
+        JL_GC_POP();
+        return rt == (jl_value_t*)jl_nothing_type ? ghostValue(jl_nothing_type) :
+            mark_or_box_ccall_result(ctx, destp, retboxed, rt, unionall, static_rt);
+    }
     else if (is_libjulia_func(jl_object_id) && nccallargs == 1 &&
             rt == (jl_value_t*)jl_ulong_type) {
         jl_cgval_t val = argv[0];
