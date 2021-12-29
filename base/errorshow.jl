@@ -153,6 +153,7 @@ showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
 showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
+showerror(io::IO, ex::CheckError) = print(io, "CheckError: ", ex.msg)
 showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
 showerror(io::IO, ex::UndefKeywordError) =
