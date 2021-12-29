@@ -230,7 +230,6 @@ macro assert(ex, msgs...)
                 (Core.println(msg); "Error during bootstrap. See stdout.")
         end
     end
-
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
 
