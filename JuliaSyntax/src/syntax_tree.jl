@@ -6,11 +6,13 @@
 const RawFlags = UInt32
 const EMPTY_FLAGS = RawFlags(0)
 const TRIVIA_FLAG = RawFlags(1<<0)
-# The following flags are head-specific and could probably be allowed to cover
-# the same bits
+# Some of the following flags are head-specific and could probably be allowed
+# to cover the same bits...
 const INFIX_FLAG  = RawFlags(1<<1)
+# Record whether syntactic operators were dotted
+const DOTOP_FLAG = RawFlags(1<<2)
 # try-finally-catch
-const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<2)
+const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<3)
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
 # Todo ERROR_FLAG = 0x80000000 ?
@@ -22,15 +24,25 @@ end
 
 kind(head::SyntaxHead) = head.kind
 flags(head::SyntaxHead) = head.flags
+hasflags(head::SyntaxHead, flags_) = (flags(head) & flags_) == flags_
 
 istrivia(head::SyntaxHead) = hasflags(head, TRIVIA_FLAG)
 isinfix(head::SyntaxHead)  = hasflags(head, INFIX_FLAG)
-hasflags(head::SyntaxHead, flags_) = (flags(head) & flags_) == flags_
 
 iserror(head::SyntaxHead)  = kind(head) == K"error"
 
+is_dotted(head::SyntaxHead) = hasflags(head, DOTOP_FLAG)
+
 function Base.summary(head::SyntaxHead)
     _kind_str(kind(head))
+end
+
+function untokenize(head::SyntaxHead)
+    str = untokenize(kind(head))
+    if is_dotted(head)
+        str = "."*str
+    end
+    str
 end
 
 function raw_flags(; trivia::Bool=false, infix::Bool=false)
@@ -140,10 +152,9 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         end
         return SyntaxNode(source, raw, position, nothing, :leaf, val)
     else
-        k = kind(raw)
-        str = k == K"Nothing" ? "Nothing" : untokenize(k)
-        head = !isnothing(str) ? Symbol(str) :
-               error("Can't untokenize head of kind $k")
+        str = untokenize(head(raw))
+        headsym = !isnothing(str) ? Symbol(str) :
+            error("Can't untokenize head of kind $(kind(raw))")
         cs = SyntaxNode[]
         pos = position
         for (i,rawchild) in enumerate(children(raw))
@@ -160,7 +171,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         if isinfix(raw)
             cs[2], cs[1] = cs[1], cs[2]
         end
-        node = SyntaxNode(source, raw, position, nothing, head, cs)
+        node = SyntaxNode(source, raw, position, nothing, headsym, cs)
         for c in cs
             c.parent = node
         end
@@ -217,7 +228,7 @@ function _show_syntax_node_sexpr(io, node)
             print(io, repr(node.val))
         end
     else
-        print(io, "(", _kind_str(kind(node.raw)))
+        print(io, "(", untokenize(head(node.raw)))
         first = true
         for n in children(node)
             print(io, ' ')

@@ -888,7 +888,7 @@ for kw in split("""abstract baremodule begin break catch const
                    vcat ncat typed_hcat typed_vcat typed_ncat row nrow generator
                    filter flatten comprehension typed_comprehension
 
-                   error
+                   error Nothing
                    """)
     _kind_to_str_unique[_str_to_kind[kw]] = kw
 end
