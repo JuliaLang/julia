@@ -815,12 +815,13 @@ end
     ten = OffsetArray([1,10,100,1000], 10:13)
 
     @test stack(ten) == ten
+    @test stack(ten .+ nought') == ten .+ nought'
     @test stack(x^2 for x in ten) == ten.^2
 
     @test axes(stack(nought for _ in ten)) == (0:2, 10:13)
     @test axes(stack([nought for _ in ten])) == (0:2, 10:13)
     @test axes(stack(nought for _ in ten; dims=1)) == (10:13, 0:2)
-    @test axes(stack((x, x^2) for x in nought)) == 1:2, 0:2
+    @test axes(stack((x, x^2) for x in nought)) == (1:2, 0:2)
     @test axes(stack(x -> x[end-1:end], ten for _ in nought, _ in nought)) == (1:2, 0:2, 0:2)
     @test axes(stack([ten[end-1:end] for _ in nought, _ in nought])) == (1:2, 0:2, 0:2)
 end
