@@ -1,4 +1,4 @@
-using Tokenize.Tokens: Kind, isliteral, iskeyword, isoperator
+using .Tokenize.Tokens: Kind, isliteral, iskeyword, isoperator
 
 include("token_kinds.jl")
 
