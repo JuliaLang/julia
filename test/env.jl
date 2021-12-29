@@ -27,6 +27,16 @@ end
         @test isempty(ENV) || first(ENV) in c
     end
 end
+
+# issue #43486
+struct Obj43486 end
+(::Obj43486)() = ENV["KEY"] == "VALUE"
+let
+    f = Obj43486()
+    @test !(f isa Function)
+    @test withenv(f, "KEY" => "VALUE")
+end
+
 @testset "non-existent keys" begin
     key = randstring(25)
     @test !haskey(ENV,key)
