@@ -1,7 +1,9 @@
 module JuliaSyntax
 
-import Tokenize
-using Tokenize.Tokens: RawToken
+# Use a git subtree for a modified version of Tokenize.jl, as we need several
+# significant changes
+include("../Tokenize/src/Tokenize.jl")
+using .Tokenize.Tokens: RawToken
 const TzTokens = Tokenize.Tokens
 
 include("utils.jl")
