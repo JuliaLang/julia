@@ -57,6 +57,17 @@ tests = [
         "a;b;c"   => "(toplevel :a :b :c)"
         "a;;;b;;" => "(toplevel :a :b)"
     ],
+    JuliaSyntax.parse_eq => [
+        # parse_assignment
+        "a = b"       =>  "(= :a :b)"
+        "a .= b"      =>  "(.= :a :b)"
+        "a += b"      =>  "(+= :a :b)"
+        "a .+= b"     =>  "(.+= :a :b)"
+        "a, b = c, d" =>  "(= (tuple :a :b) (tuple :c :d))"
+        "x, = xs"     =>  "(= (tuple :x) :xs)"
+        "[a ~b]"      =>  "(hcat :a (call :~ :b))"
+        "[a ~ b c]"   =>  "(hcat (call :~ :a :b) :c)"
+    ],
     JuliaSyntax.parse_cond => [
         "a ? b : c"   => "(if :a :b :c)"
         "a ?\nb : c"  => "(if :a :b :c)"

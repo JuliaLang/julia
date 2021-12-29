@@ -301,6 +301,14 @@ function parse_stmts(ps::ParseState)
     end
 end
 
+# Parse assignments with comma separated lists on each side
+# a = b         ==>  (= a b)
+# a .= b        ==>  (.= a b)
+# a += b        ==>  (+= a b)
+# a .+= b       ==>  (.+= a b)
+# a, b = c, d   ==>  (= (tuple a b) (tuple c d))
+# x, = xs       ==>  (= (tuple x) xs)
+#
 # flisp: parse-eq
 function parse_eq(ps::ParseState)
     parse_assignment(ps, parse_comma, false)
@@ -325,42 +333,40 @@ function parse_eq_star(ps::ParseState, equals_is_kw=false)
     end
 end
 
-# flisp: eventually-call?
-function is_eventually_call(ex)
-    TODO("is_eventually_call unimplemented")
-end
-
 # a = b  ==>  (= a b)
 #
 # flisp: parse-assignment
 function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
     mark = position(ps)
     down(ps)
-    k = peek(ps)
+    t = peek_token(ps)
+    k = kind(t)
     if !is_prec_assignment(k)
         return NO_POSITION
     end
     if k == K"~"
-        bump(ps)
-        if ps.space_sensitive # && ...
-            # Prefix operator ~x ?
-            TODO("parse_assignment... ~ not implemented")
-        else
-            # ~ is the only non-syntactic assignment-precedence operator.
-            # a ~ b  ==>  (call-i a ~ b)
-            parse_assignment(ps, down, equals_is_kw)
-            emit(ps, mark, K"call", INFIX_FLAG)
+        if ps.space_sensitive && !peek_token(ps, 2).had_whitespace
+            # Unary ~ in space sensitive context is not assignment precedence
+            # [a ~b]  ==>  (hcat a (call ~ b))
+            return NO_POSITION
         end
+        # ~ is the only non-syntactic assignment-precedence operator.
+        # a ~ b  ==>  (call-i a ~ b)
+        # [a ~ b c]  ==>  (hcat (call-i a ~ b) c)
+        bump(ps)
+        parse_assignment(ps, down, equals_is_kw)
+        emit(ps, mark, K"call", INFIX_FLAG)
         return NO_POSITION
     else
         # a += b  ==>  (+= a b)
-        # FIXME:
-        # a .= b  ==>  (.= a b)
         bump(ps, TRIVIA_FLAG)
         parse_assignment(ps, down, equals_is_kw)
-        result_k = (k == K"=" && equals_is_kw) ? K"kw" : k
-        equals_pos = emit(ps, mark, result_k)
-        return k == K"=" ? equals_pos : NO_POSITION
+        plain_eq = (k == K"=" && !is_dotted(t))
+        result_k = 
+        equals_pos =
+            emit(ps, mark, plain_eq && equals_is_kw ? K"kw" : k,
+                 is_dotted(t) ? DOTOP_FLAG : EMPTY_FLAGS)
+        return plain_eq ? equals_pos : NO_POSITION
     end
 end
 
