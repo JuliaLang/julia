@@ -67,12 +67,26 @@ once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with
 
 Note: `interval` is subject to accumulating time skew. If you need precise events at a particular
 absolute time, create a new timer at each expiration with the difference to the next time computed.
+
+A Timer can also be used to construct a timed loop, where `t` is the elapsed time in seconds.
+
+```julia-repl
+julia> for t in Timer(2)
+        @show t
+        sleep(0.5)
+    end
+t = 0.0
+t = 0.5017449855804443
+t = 1.0032310485839844
+t = 1.5049281120300293
+```
 """
 mutable struct Timer
     handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
     isopen::Bool
     @atomic set::Bool
+    starttime::Float64
 
     function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
@@ -82,13 +96,14 @@ mutable struct Timer
         intervalms = ceil(UInt64, interval * 1000)
         loop = eventloop()
 
-        this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false)
+        this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false, 0)
         associate_julia_struct(this.handle, this)
         iolock_begin()
         err = ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), loop, this)
         @assert err == 0
         finalizer(uvfinalize, this)
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), loop)
+        this.starttime = time()
         err = ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
             this, @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},)),
             timeoutms, intervalms)
@@ -97,6 +112,9 @@ mutable struct Timer
         return this
     end
 end
+
+iterate(t::Timer, i=1) = (isopen(t) ? (time() - t.starttime, i + 1) : nothing)
+collect(::Timer) = error("Collecting all times from a Timer is not possible")
 
 unsafe_convert(::Type{Ptr{Cvoid}}, t::Timer) = t.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle

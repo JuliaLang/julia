@@ -477,6 +477,13 @@ end
     end
 end
 
+@testset "Timer loop" begin
+    te = @elapsed for t in Timer(1)
+       sleep(0.1)
+    end
+    @test te < 2
+end
+
 @testset "check_channel_state" begin
     c = Channel(1)
     close(c)
