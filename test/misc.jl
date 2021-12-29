@@ -5,122 +5,79 @@ include("testhelpers/withlocales.jl")
 
 # Tests that do not really go anywhere else
 
-# test @assert macro
-@test_throws AssertionError (@assert 1 == 2)
-@test_throws AssertionError (@assert false)
-@test_throws AssertionError (@assert false "this is a test")
-@test_throws AssertionError (@assert false "this is a test" "another test")
-@test_throws AssertionError (@assert false :a)
-let
-    try
-        @assert 1 == 2
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test occursin("1 == 2", ex.msg)
+# test @assert and `@check` macro
+# These have the same semantics (except `@assert` is allowed
+# to be disabled in the future), so we test them with the same tests.
+ASSERT_OR_CHECK = Ref(:assert)
+macro assert_or_check(expr...)
+    if ASSERT_OR_CHECK[] == :assert
+        var"@assert"(__source__, __module__, expr...)
+    else
+        var"@check"(__source__, __module__, expr...)
     end
 end
-# test @assert message
-let
-    try
-        @assert 1 == 2 "this is a test"
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "this is a test"
+@testset "@$(val)" for val in (:assert, :check)
+    ASSERT_OR_CHECK[] = val
+    @eval begin # eval to delay macro expansion until after we've assigned `val`
+        E = ASSERT_OR_CHECK[] == :assert ? AssertionError : CheckError
+        @test_throws E (@assert_or_check 1 == 2)
+        @test_throws E (@assert_or_check false)
+        @test_throws E (@assert_or_check false "this is a test")
+        @test_throws E (@assert_or_check false "this is a test" "another test")
+        @test_throws E (@assert_or_check false :a)
+        let
+            try
+                @assert_or_check 1 == 2
+                error("unexpected")
+            catch ex
+                @test isa(ex, E)
+                @test occursin("1 == 2", ex.msg)
+            end
+        end
+        # test the macro's message
+        let
+            try
+                @assert_or_check 1 == 2 "this is a test"
+                error("unexpected")
+            catch ex
+                @test isa(ex, E)
+                @test ex.msg == "this is a test"
+            end
+        end
+        # the macro only uses the first message string
+        let
+            try
+                @assert_or_check 1 == 2 "this is a test" "this is another test"
+                error("unexpected")
+            catch ex
+                @test isa(ex, E)
+                @test ex.msg == "this is a test"
+            end
+        end
+        # the macro calls string() on second argument
+        let
+            try
+                @assert_or_check 1 == 2 :random_object
+                error("unexpected")
+            catch ex
+                @test isa(ex, E)
+                @test !occursin("1 == 2", ex.msg)
+                @test occursin("random_object", ex.msg)
+            end
+        end
+        # if the second argument is an expression, c
+        let deepthought(x, y) = 42
+            try
+                @assert_or_check 1 == 2 string("the answer to the ultimate question: ",
+                                    deepthought(6, 9))
+                error("unexpected")
+            catch ex
+                @test isa(ex, E)
+                @test ex.msg == "the answer to the ultimate question: 42"
+            end
+        end
     end
 end
-# @assert only uses the first message string
-let
-    try
-        @assert 1 == 2 "this is a test" "this is another test"
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "this is a test"
-    end
-end
-# @assert calls string() on second argument
-let
-    try
-        @assert 1 == 2 :random_object
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test !occursin("1 == 2", ex.msg)
-        @test occursin("random_object", ex.msg)
-    end
-end
-# if the second argument is an expression, c
-let deepthought(x, y) = 42
-    try
-        @assert 1 == 2 string("the answer to the ultimate question: ",
-                              deepthought(6, 9))
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "the answer to the ultimate question: 42"
-    end
-end
-
-# Test the `@check` macro
-@test_throws CheckError (@check 1 == 2)
-@test_throws CheckError (@check false)
-@test_throws CheckError (@check false "this is a test")
-@test_throws CheckError (@check false "this is a test" "another test")
-@test_throws CheckError (@check false :a)
-let
-    try
-        @check 1 == 2
-        error("unexpected")
-    catch ex
-        @test isa(ex, CheckError)
-        @test occursin("1 == 2", ex.msg)
-    end
-end
-# test @check message
-let
-    try
-        @check 1 == 2 "this is a test"
-        error("unexpected")
-    catch ex
-        @test isa(ex, CheckError)
-        @test ex.msg == "this is a test"
-    end
-end
-# @check only uses the first message string
-let
-    try
-        @check 1 == 2 "this is a test" "this is another test"
-        error("unexpected")
-    catch ex
-        @test isa(ex, CheckError)
-        @test ex.msg == "this is a test"
-    end
-end
-# @check calls string() on second argument
-let
-    try
-        @check 1 == 2 :random_object
-        error("unexpected")
-    catch ex
-        @test isa(ex, CheckError)
-        @test !occursin("1 == 2", ex.msg)
-        @test occursin("random_object", ex.msg)
-    end
-end
-# if the second argument is an expression, c
-let deepthought(x, y) = 42
-    try
-        @check 1 == 2 string("the answer to the ultimate question: ",
-                             deepthought(6, 9))
-        error("unexpected")
-    catch ex
-        @test isa(ex, CheckError)
-        @test ex.msg == "the answer to the ultimate question: 42"
-    end
-end
-
 
 let # test the process title functions, issue #9957
     oldtitle = Sys.get_process_title()
