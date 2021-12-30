@@ -371,6 +371,40 @@ tests = [
         # finally before catch :-(
         "try x finally y catch e z end"  =>  "(try-f (block x) false false false (block y) e (block z))"
     ],
+    JuliaSyntax.parse_imports => [
+        "import A as B: x"  => "(import (: (error (as (. A) B)) (. x)))"
+        "import x, y"       => "(import (. x) (. y))"
+        "import A: x, y"    => "(import (: (. A) (. x) (. y)))"
+        "import A: x, B: y" => "(import (: (. A) (. x) (. B) (error-t (. y))))"
+        "import A: x"       => "(import (: (. A) (. x)))"
+        "using  A"          => "(using (. A))"
+        "import A"          => "(import (. A))"
+        # parse_import
+        "import A: x, y"   =>  "(import (: (. A) (. x) (. y)))"
+        "import A as B"    =>  "(import (as (. A) B))"
+        "import A: x as y" =>  "(import (: (. A) (as (. x) y)))"
+        "using  A: x as y" =>  "(using (: (. A) (as (. x) y)))"
+        ((v=v"1.5",), "import A as B") =>  "(import (error (as (. A) B)))"
+        "using A as B"     =>  "(using (error (as (. A) B)))"
+        "using A, B as C"  =>  "(using (. A) (error (as (. B) C)))"
+        # parse_import_path
+        # When parsing import we must split these into single dots
+        "import .A"  =>  "(import (. . A))"
+        "import ..A"  =>  "(import (. . . A))"
+        "import ...A"  =>  "(import (. . . . A))"
+        "import ....A"  =>  "(import (. . . . . A))"
+        # Dots with spaces are allowed (a misfeature?)
+        "import . .A"  =>  "(import (. . . A))"
+        # Expressions allowed in import paths
+        "import @x"  =>  "(import (. @x))"
+        "import \$A"  =>  "(import (. (\$ A)))"
+        "import \$A.@x"  =>  "(import (. (\$ A) @x))"
+        "import A.B"  =>  "(import (. A B))"
+        "import A.B.C"  =>  "(import (. A B C))"
+        "import A; B"  =>  "(import (. A))"
+        "import A.."  =>  "(import (. A .))"
+        "import A..."  =>  "(import (. A ..))"
+    ],
     JuliaSyntax.parse_iteration_spec => [
         "i = rhs"        =>  "(= i rhs)"
         "i in rhs"       =>  "(= i rhs)"

@@ -347,19 +347,23 @@ function bump_glue(stream::ParseStream, kind, flags, num_tokens)
 end
 
 """
-Bump a token, splitting it into two pieces.
+Bump a token, splitting it into several pieces
 
 Wow, this is a hack! It helps resolves the occasional lexing ambiguities. For
-example whether .+ should be a single token or a composite (. +)
+example
+* Whether .+ should be a single token or a composite (. +)
+* Whether ... is splatting (most of the time) or three . tokens in import paths
 """
-function bump_split(stream::ParseStream, num_bytes, kind1, flags1, kind2, flags2)
+function bump_split(stream::ParseStream, split_spec...)
     tok = popfirst!(stream.lookahead)
-    push!(stream.ranges, TaggedRange(SyntaxHead(kind1, flags1),
-                                    first_byte(tok), first_byte(tok)+num_bytes-1,
-                                    lastindex(stream.ranges) + 1))
-    push!(stream.ranges, TaggedRange(SyntaxHead(kind2, flags2),
-                                    first_byte(tok)+num_bytes, last_byte(tok),
-                                    lastindex(stream.ranges) + 1))
+    fbyte = first_byte(tok)
+    for (i, (nbyte, kind, flags)) in enumerate(split_spec)
+        lbyte = i == length(split_spec) ? last_byte(tok) : fbyte + nbyte - 1
+        push!(stream.ranges, TaggedRange(SyntaxHead(kind, flags),
+                                         fbyte, lbyte,
+                                         lastindex(stream.ranges) + 1))
+        fbyte += nbyte
+    end
     # Returning position(stream) like the other bump* methods would be
     # ambiguous here; return nothing instead.
     nothing

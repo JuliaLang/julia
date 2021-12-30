@@ -15,6 +15,7 @@ Dict([
 "BEGIN_KEYWORDS" => Ts.begin_keywords
 "Keyword"     =>  Ts.KEYWORD
 "abstract"    =>  Ts.ABSTRACT
+"as"          =>  Ts.AS
 "baremodule"  =>  Ts.BAREMODULE
 "begin"       =>  Ts.BEGIN
 "break"       =>  Ts.BREAK
@@ -877,7 +878,7 @@ const _kind_to_str_unique =
 for c in "([{}])@,;"
     _kind_to_str_unique[_str_to_kind[string(c)]] = string(c)
 end
-for kw in split("""abstract baremodule begin break catch const
+for kw in split("""as abstract baremodule begin break catch const
                    continue do else elseif end export finally for
                    function global if import let local
                    macro module mutable new outer primitive quote
