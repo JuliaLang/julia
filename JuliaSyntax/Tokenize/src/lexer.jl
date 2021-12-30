@@ -1073,6 +1073,7 @@ end
 
 kws = [
 Tokens.ABSTRACT,
+Tokens.AS,
 Tokens.BAREMODULE,
 Tokens.BEGIN,
 Tokens.BREAK,
