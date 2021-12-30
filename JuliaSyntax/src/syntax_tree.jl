@@ -420,6 +420,8 @@ function _to_expr(node::SyntaxNode)
         # For lack of a better place, the dimension argument to nrow/ncat
         # is stored in the flags
         pushfirst!(args, numeric_flags(flags(node)))
+    elseif head(node) == :typed_ncat
+        insert!(args, 2, numeric_flags(flags(node)))
     end
     if head(node) == :inert || (head(node) == :quote &&
                                 length(args) == 1 && !(only(args) isa Expr))
