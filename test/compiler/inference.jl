@@ -1608,7 +1608,7 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test Core.Compiler.getfield_tfunc(Core.TypeName, Const(:flags)) == UInt8
 
 # getfield on abstract named tuples. issue #32698
-import Core.Compiler.getfield_tfunc
+import Core.Compiler: getfield_tfunc, Const
 @test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
                      Const(:y)) == Union{Missing, Float64}
 @test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
@@ -1621,6 +1621,23 @@ import Core.Compiler.getfield_tfunc
                      Int) == Union{Missing, Float64, Int}
 @test getfield_tfunc(NamedTuple{<:Any, T} where {T <: Tuple{Int, Union{Float64, Missing}}},
                      Const(:x)) == Union{Missing, Float64, Int}
+
+mutable struct ARef{T}
+    @atomic x::T
+end
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Bool) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Bool) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Vararg{Symbol}) === Int # `Vararg{Symbol}` might be empty
+@test getfield_tfunc(ARef{Int},Const(:x),Vararg{Symbol}) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,Any) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,Vararg{Any}) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Vararg{Any}) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Int) === Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Bool,Symbol) === Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Symbol) === Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Bool,Bool) === Union{}
 
 struct Foo_22708
     x::Ptr{Foo_22708}
