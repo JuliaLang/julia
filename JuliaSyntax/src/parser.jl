@@ -870,9 +870,7 @@ function parse_unary_call(ps::ParseState)
             # .+ =  ==>  (. +)
             # .+)   ==>  (. +)
             bump_trivia(ps)
-            bump_split(ps, 1,
-                       K".", TRIVIA_FLAG,
-                       op_k, EMPTY_FLAGS)
+            bump_split(ps, (1, K".", TRIVIA_FLAG), (0, op_k, EMPTY_FLAGS))
             emit(ps, mark, K".")
         else
             # return operator by itself, as in
@@ -1082,21 +1080,6 @@ function parse_identifier_or_interpolate(ps::ParseState, outermost=true)
             emit(ps, mark, K"error",
                  error="Expected identifier or interpolation syntax")
         end
-    end
-end
-
-function parse_export_symbol(ps::ParseState)
-    bump_trivia(ps)
-    if peek(ps) == K"@"
-        # export @a  ==>  (export @a)
-        # export a, \n @b  ==>  (export a @b)
-        bump(ps, TRIVIA_FLAG)
-        parse_macro_name(ps, remap_kind=true)
-    else
-        # export a  ==>  (export a)
-        # export \n a  ==>  (export a)
-        # export $a, $(a*b)  ==>  (export ($ a) ($ (call * a b)))
-        parse_identifier_or_interpolate(ps)
     end
 end
 
@@ -1548,10 +1531,10 @@ function parse_resword(ps::ParseState)
         # export a
         # export a, b,
         bump(ps, TRIVIA_FLAG)
-        parse_comma_separated(ps, parse_export_symbol)
+        parse_comma_separated(ps, parse_atsym)
         emit(ps, mark, K"export")
     elseif word in (K"import", K"using")
-        TODO("parse_resword - $word")
+        parse_imports(ps)
     elseif word == K"do"
         bump(ps, TRIVIA_FLAG, error="invalid `do` syntax")
     else
@@ -1846,11 +1829,6 @@ function parse_do(ps::ParseState)
     emit(ps, mark, K"->")
 end
 
-# flisp: parse-imports
-function parse_imports(ps::ParseState, word)
-    TODO("parse_imports unimplemented")
-end
-
 function macro_name_kind(k)
     return k == K"Identifier"    ? K"MacroName"    :
            k == K"."             ? K"@."           :
@@ -1875,24 +1853,154 @@ function parse_macro_name(ps::ParseState; remap_kind=false)
     end
 end
 
+# Parse an identifier, interpolation of @-prefixed symbol
+#
 # flisp: parse-atsym
 function parse_atsym(ps::ParseState)
-    TODO("parse_atsym unimplemented")
+    bump_trivia(ps)
+    if peek(ps) == K"@"
+        # export @a  ==>  (export @a)
+        # export a, \n @b  ==>  (export a @b)
+        bump(ps, TRIVIA_FLAG)
+        parse_macro_name(ps, remap_kind=true)
+    else
+        # export a  ==>  (export a)
+        # export \n a  ==>  (export a)
+        # export $a, $(a*b)  ==>  (export ($ a) ($ (call * a b)))
+        parse_identifier_or_interpolate(ps)
+    end
 end
 
-# flisp: parse-import-dots
-function parse_import_dots(ps::ParseState)
-    TODO("parse_import_dots unimplemented")
+# Parse import and using syntax
+#
+# flisp: parse-imports
+function parse_imports(ps::ParseState)
+    mark = position(ps)
+    word = peek(ps)
+    @assert word in (K"import", K"using")
+    bump(ps, TRIVIA_FLAG)
+    emark = position(ps)
+    initial_as = parse_import(ps, word, false)
+    t = peek_token(ps) 
+    k = kind(t)
+    has_import_prefix = false  # true if we have `prefix:` in `import prefix: stuff`
+    has_comma = false
+    if k == K":" && !t.had_whitespace
+        bump(ps, TRIVIA_FLAG)
+        has_import_prefix = true
+        if initial_as
+            # import A as B: x  ==>  (import (: (error (as (. A) B)) (. x)))
+            emit(ps, emark, K"error", error="`as` before `:` in import/using")
+        end
+    elseif k == K","
+        bump(ps, TRIVIA_FLAG)
+        has_comma = true
+    end
+    if has_import_prefix || has_comma
+        # import x, y     ==>  (import (. x) (. y))
+        # import A: x, y  ==>  (import (: (. A) (. x) (. y)))
+        parse_comma_separated(ps, ps1->parse_import(ps1, word, has_import_prefix))
+        if peek(ps) == K":"
+            # Error recovery
+            # import A: x, B: y ==> (import (: (. A) (. x) (. B) (error-t (. y))))
+            emark = position(ps)
+            bump(ps, TRIVIA_FLAG)
+            parse_comma_separated(ps, ps1->parse_import(ps1, word, has_import_prefix))
+            emit(ps, emark, K"error", TRIVIA_FLAG,
+                 error="`:` can only be used when importing a single module. Split imports into multiple lines")
+        end
+    end
+    if has_import_prefix
+        # import A: x  ==>  (import (: (. A) (. x)))
+        emit(ps, mark, K":")
+    end
+    # using  A  ==>  (using (. A))
+    # import A  ==>  (import (. A))
+    emit(ps, mark, word)
+end
+
+# Parse individual module path and renaming with `as`
+#
+# flisp: parse-import
+function parse_import(ps::ParseState, word, has_import_prefix)
+    mark = position(ps)
+    parse_import_path(ps)
+    # import A: x, y   ==>  (import (: (. A) (. x) (. y)))
+    if peek(ps) == K"as"
+        # import A as B     ==>  (import (as (. A) B))
+        # import A: x as y  ==>  (import (: (. A) (as (. x) y)))
+        # using  A: x as y  ==>  (using (: (. A) (as (. x) y)))
+        bump(ps, TRIVIA_FLAG)
+        parse_atsym(ps)
+        emit(ps, mark, K"as")
+        if ps.julia_version < v"1.6"
+            #v1.5: import A as B     ==>  (import (error (as (. A) B)))
+            emit(ps, mark, K"error",
+                 error="`import` with renaming using `as` requires at least Julia 1.6")
+        elseif word == K"using" && !has_import_prefix
+            # using A as B     ==>  (using (error (as (. A) B)))
+            # using A, B as C  ==>  (using (. A) (error (as (. B) C)))
+            emit(ps, mark, K"error",
+                 error="`using` with `as` renaming requires a `:` and context module")
+        end
+        return true
+    else
+        return false
+    end
 end
 
 # flisp: parse-import-path
-function parse_import_path(ps::ParseState, word)
-    TODO("parse_import_path unimplemented")
-end
-
-# flisp: parse-import
-function parse_import(ps::ParseState, word, from)
-    TODO("parse_import unimplemented")
+function parse_import_path(ps::ParseState)
+    mark = position(ps)
+    bump_trivia(ps)
+    # The tokenizer produces conjoined dotted tokens .. and ...
+    # When parsing import we must split these into single dots
+    # import .A     ==> (import (. . A))
+    # import ..A    ==> (import (. . . A))
+    # import ...A   ==> (import (. . . . A))
+    # import ....A  ==> (import (. . . . . A))
+    # Dots with spaces are allowed (a misfeature?)
+    # import . .A    ==> (import (. . . A))
+    while true
+        k = peek(ps)
+        if k == K"."
+            bump(ps)
+        elseif k == K".."
+            bump_split(ps, (1,K".",EMPTY_FLAGS), (1,K".",EMPTY_FLAGS))
+        elseif k == K"..."
+            bump_split(ps, (1,K".",EMPTY_FLAGS), (1,K".",EMPTY_FLAGS), (1,K".",EMPTY_FLAGS))
+        else
+            break
+        end
+    end
+    # import @x     ==>  (import (. @x))
+    # import $A     ==>  (import (. ($ A)))
+    parse_atsym(ps)
+    while true
+        k = peek(ps)
+        if k == K"."
+            # import A.B    ==>  (import (. A B))
+            # import $A.@x  ==>  (import (. ($ A) @x))
+            # import A.B.C  ==>  (import (. A B C))
+            bump_disallowed_space(ps)
+            bump(ps, TRIVIA_FLAG)
+            parse_atsym(ps)
+        elseif k in (K"NewlineWs", K";", K",", K":", K"EndMarker")
+            # import A; B  ==>  (import (. A))
+            break
+        elseif k == K".."
+            # Nonsensical??
+            # import A..  ==>  (import (. A .))
+            bump_split(ps, (1,K".",TRIVIA_FLAG), (1,K".",EMPTY_FLAGS))
+        elseif k == K"..."
+            # Import the .. operator
+            # import A...  ==>  (import (. A ..))
+            bump_split(ps, (1,K".",TRIVIA_FLAG), (2,K"..",EMPTY_FLAGS))
+        else
+            break
+        end
+    end
+    emit(ps, mark, K".")
 end
 
 # parse comma-separated assignments, like "i=1:n,j=1:m,..."
@@ -1910,11 +2018,6 @@ function parse_comma_separated(ps::ParseState, down)
         end
     end
     return n_subexprs
-end
-
-# flisp: parse-comma-separated-assignments
-function parse_comma_separated_assignments(ps::ParseState)
-    TODO("parse_comma_separated_assignments unimplemented")
 end
 
 # FIXME(sschaub): for backwards compatibility, allows newline before =/in/∈
@@ -1961,12 +2064,6 @@ function parse_iteration_spec(ps::ParseState)
         # TODO: or try parse_pipe_lt ???
     end
     emit(ps, mark, K"=")
-end
-
-# flisp: parse-comma-separated-iters
-function parse_comma_separated_iters(ps::ParseState)
-    # FIXME REmove?
-    parse_comma_separated(ps, parse_iteration_spec)
 end
 
 # flisp: parse-space-separated-exprs
@@ -2050,7 +2147,7 @@ function parse_generator(ps::ParseState, mark, flatten=false)
     @assert kind(t) == K"for"
     bump(ps, TRIVIA_FLAG)
     filter_mark = position(ps)
-    parse_comma_separated_iters(ps)
+    parse_comma_separated(ps, parse_iteration_spec)
     if peek(ps) == K"if"
         bump(ps, TRIVIA_FLAG)
         parse_cond(ps)

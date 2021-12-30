@@ -552,3 +552,9 @@ xy
 * The `elseif` condition is always in a block but not the `if` condition.
   Presumably because of the need to add a line number node in the flisp parser
   `if a xx elseif b yy end   ==>  (if a (block xx) (elseif (block b) (block yy)))`
+
+* `import . .A` is allowed, and parsed the same as `import ..A`
+
+* `import A..` produces `(import (. A .))` which is arguably nonsensical, as `.`
+  can't be a normal identifier.
+
