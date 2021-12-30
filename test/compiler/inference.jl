@@ -1639,6 +1639,112 @@ end
 @test getfield_tfunc(ARef{Int},Const(:x),Symbol,Symbol) === Union{}
 @test getfield_tfunc(ARef{Int},Const(:x),Bool,Bool) === Union{}
 
+import Core.Compiler: setfield!_tfunc, setfield!_nothrow, Const
+mutable struct XY{X,Y}
+    x::X
+    y::Y
+end
+mutable struct ABCDconst
+    const a
+    const b::Int
+    c
+    const d::Union{Int,Nothing}
+end
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Int, Int) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:x), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:x), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(1), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(1), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Int, Int) === Int
+@test setfield!_tfunc(XY{Any,Any}, Const(1), Int) === Int
+@test setfield!_tfunc(XY{Any,Any}, Const(2), Float64) === Float64
+@test setfield!_tfunc(XY{Int,Float64}, Const(1), Int) === Int
+@test setfield!_tfunc(XY{Int,Float64}, Const(2), Float64) === Float64
+@test setfield!_tfunc(ABCDconst, Const(:c), Any) === Any
+@test setfield!_tfunc(ABCDconst, Const(3), Any) === Any
+@test setfield!_tfunc(ABCDconst, Symbol, Any) === Any
+@test setfield!_tfunc(ABCDconst, Int, Any) === Any
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(:x), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(1), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(1), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Symbol, Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Symbol, Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Int, Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Int, Int) === Int
+@test setfield!_tfunc(Any, Symbol, Int) === Int
+@test setfield!_tfunc(Any, Int, Int) === Int
+@test setfield!_tfunc(Any, Any, Int) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Float64) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Float64, Symbol) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Float64) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Float64, Symbol) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Int, Float64) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:y), Int) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:y), Int, Bool) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(2), Int) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(2), Int, Bool) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, String, Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Const(:value), Int) === Union{}
+@test setfield!_tfunc(Some, Const(:value), Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Const(1), Int) === Union{}
+@test setfield!_tfunc(Some, Const(1), Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Symbol, Int) === Union{}
+@test setfield!_tfunc(Some, Symbol, Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Int, Int) === Union{}
+@test setfield!_tfunc(Some, Int, Int) === Union{}
+@test setfield!_tfunc(Const(@__MODULE__), Const(:v), Int) === Union{}
+@test setfield!_tfunc(Const(@__MODULE__), Int, Int) === Union{}
+@test setfield!_tfunc(Module, Const(:v), Int) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(:a), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(:b), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(:d), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(1), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(2), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(4), Any) === Union{}
+@test setfield!_nothrow(Base.RefValue{Int}, Const(:x), Int)
+@test setfield!_nothrow(Base.RefValue{Int}, Const(1), Int)
+@test setfield!_nothrow(Base.RefValue{Any}, Const(:x), Int)
+@test setfield!_nothrow(Base.RefValue{Any}, Const(1), Int)
+@test setfield!_nothrow(XY{Any,Any}, Const(:x), Int)
+@test setfield!_nothrow(XY{Any,Any}, Const(:x), Any)
+@test setfield!_nothrow(XY{Int,Float64}, Const(:x), Int)
+@test setfield!_nothrow(ABCDconst, Const(:c), Any)
+@test setfield!_nothrow(ABCDconst, Const(3), Any)
+@test !setfield!_nothrow(XY{Int,Float64}, Symbol, Any)
+@test !setfield!_nothrow(XY{Int,Float64}, Int, Any)
+@test !setfield!_nothrow(Base.RefValue{Int}, Const(:x), Any)
+@test !setfield!_nothrow(Base.RefValue{Int}, Const(1), Any)
+@test !setfield!_nothrow(Any[Base.RefValue{Any}, Const(:x), Int, Symbol])
+@test !setfield!_nothrow(Base.RefValue{Any}, Symbol, Int)
+@test !setfield!_nothrow(Base.RefValue{Any}, Int, Int)
+@test !setfield!_nothrow(XY{Int,Float64}, Const(:y), Int)
+@test !setfield!_nothrow(XY{Int,Float64}, Symbol, Int)
+@test !setfield!_nothrow(XY{Int,Float64}, Int, Int)
+@test !setfield!_nothrow(ABCDconst, Const(:a), Any)
+@test !setfield!_nothrow(ABCDconst, Const(:b), Any)
+@test !setfield!_nothrow(ABCDconst, Const(:d), Any)
+@test !setfield!_nothrow(ABCDconst, Symbol, Any)
+@test !setfield!_nothrow(ABCDconst, Const(1), Any)
+@test !setfield!_nothrow(ABCDconst, Const(2), Any)
+@test !setfield!_nothrow(ABCDconst, Const(4), Any)
+@test !setfield!_nothrow(ABCDconst, Int, Any)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Const(:x), Int)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Const(1), Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Const(1), Int)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Symbol, Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Symbol, Int)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Int, Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Int, Int)
+@test !setfield!_nothrow(Any, Symbol, Int)
+@test !setfield!_nothrow(Any, Int, Int)
+@test !setfield!_nothrow(Any, Any, Int)
+
 struct Foo_22708
     x::Ptr{Foo_22708}
 end
@@ -3181,7 +3287,7 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Vararg}) == Bool
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Vararg}) == Bool
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Vararg{Symbol}}) == Symbol
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Vararg{Symbol}}) == Union{}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Vararg{Symbol}}) == Symbol
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Vararg{Integer}}) == Integer
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Vararg}) == Integer
