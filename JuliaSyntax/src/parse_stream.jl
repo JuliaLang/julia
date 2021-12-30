@@ -343,6 +343,8 @@ function bump_glue(stream::ParseStream, kind, flags, num_tokens)
                        lastindex(stream.ranges) + 1)
     Base._deletebeg!(stream.lookahead, num_tokens)
     push!(stream.ranges, span)
+    stream.next_byte = last_byte(last(stream.ranges)) + 1
+    stream.peek_count = 0
     return position(stream)
 end
 
@@ -364,6 +366,8 @@ function bump_split(stream::ParseStream, split_spec...)
                                          lastindex(stream.ranges) + 1))
         fbyte += nbyte
     end
+    stream.next_byte = last_byte(last(stream.ranges)) + 1
+    stream.peek_count = 0
     # Returning position(stream) like the other bump* methods would be
     # ambiguous here; return nothing instead.
     nothing
