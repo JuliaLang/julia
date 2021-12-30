@@ -2,7 +2,8 @@
 # Syntax tree types
 
 #-------------------------------------------------------------------------------
-
+# Flags hold auxilary information about tokens/nonterminals which the Kind
+# doesn't capture in a nice way.
 const RawFlags = UInt32
 const EMPTY_FLAGS = RawFlags(0)
 const TRIVIA_FLAG = RawFlags(1<<0)
@@ -17,6 +18,37 @@ const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<3)
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
 # Todo ERROR_FLAG = 0x80000000 ?
 
+function set_numeric_flags(n::Integer)
+    f = RawFlags((n << 8) & NUMERIC_FLAGS)
+    if numeric_flags(f) != n
+        error("Numeric flags unable to hold large integer $n")
+    end
+    f
+end
+
+function numeric_flags(f::RawFlags)
+    Int((f >> 8) % UInt8)
+end
+
+# Return true if any of `test_flags` are set
+has_flags(flags::RawFlags, test_flags) = (flags & test_flags) != 0
+
+# Function for combining flags. (Do we want this?)
+function flags(; trivia::Bool=false,
+               infix::Bool=false,
+               dotop::Bool=false,
+               try_catch_after_finally::Bool=false,
+               numeric::Int=0)
+    flags = RawFlags(0)
+    trivia && (flags |= TRIVIA_FLAG)
+    infix  && (flags |= INFIX_FLAG)
+    dotop  && (flags |= DOTOP_FLAG)
+    try_catch_after_finally && (flags |= TRY_CATCH_AFTER_FINALLY_FLAG)
+    numeric != 0 && (flags |= set_numeric_flags(numeric))
+    return flags::RawFlags
+end
+
+#-------------------------------------------------------------------------------
 struct SyntaxHead
     kind::Kind
     flags::RawFlags
@@ -24,46 +56,38 @@ end
 
 kind(head::SyntaxHead) = head.kind
 flags(head::SyntaxHead) = head.flags
-hasflags(head::SyntaxHead, flags_) = (flags(head) & flags_) == flags_
+has_flags(head::SyntaxHead, test_flags) = has_flags(flags(head), test_flags)
 
-istrivia(head::SyntaxHead) = hasflags(head, TRIVIA_FLAG)
-isinfix(head::SyntaxHead)  = hasflags(head, INFIX_FLAG)
-
-iserror(head::SyntaxHead)  = kind(head) == K"error"
-
-is_dotted(head::SyntaxHead) = hasflags(head, DOTOP_FLAG)
+is_trivia(head::SyntaxHead) = has_flags(head, TRIVIA_FLAG)
+is_infix(head::SyntaxHead)  = has_flags(head, INFIX_FLAG)
+is_dotted(head::SyntaxHead) = has_flags(head, DOTOP_FLAG)
+numeric_flags(head::SyntaxHead) = numeric_flags(flags(head))
+is_error(head::SyntaxHead)  = kind(head) == K"error"
 
 function Base.summary(head::SyntaxHead)
     _kind_str(kind(head))
 end
 
-function untokenize(head::SyntaxHead)
+function untokenize(head::SyntaxHead; include_flag_suff=true)
     str = untokenize(kind(head))
     if is_dotted(head)
         str = "."*str
     end
+    if include_flag_suff && flags(head) ∉ (EMPTY_FLAGS, DOTOP_FLAG)
+        str = str*"-"
+        is_trivia(head)  && (str = str*"t")
+        is_infix(head)   && (str = str*"i")
+        has_flags(head, TRY_CATCH_AFTER_FINALLY_FLAG) && (str = str*"f")
+        n = numeric_flags(head)
+        n != 0 && (str = str*string(n))
+    end
     str
-end
-
-function raw_flags(; trivia::Bool=false, infix::Bool=false)
-    flags = RawFlags(0)
-    trivia && (flags |= TRIVIA_FLAG)
-    infix  && (flags |= INFIX_FLAG)
-    return flags::RawFlags
-end
-
-function numeric_flags(n::Integer)
-    RawFlags(UInt8(n)) << 8
-end
-
-function extract_numeric_flags(f::RawFlags)
-    Int((f >> 8) % UInt8)
 end
 
 kind(node::GreenNode{SyntaxHead})  = head(node).kind
 flags(node::GreenNode{SyntaxHead}) = head(node).flags
 
-isinfix(node) = isinfix(head(node))
+is_infix(node) = is_infix(head(node))
 
 # Value of an error node with no children
 struct ErrorVal
@@ -113,8 +137,8 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             Symbol(val_str)
         elseif k == K"VarIdentifier"
             Symbol(val_str[5:end-1])
-        elseif iskeyword(k)
-            # This only happens nodes nested inside errors
+        elseif is_keyword(k)
+            # This should only happen for tokens nested inside errors
             Symbol(val_str)
         elseif k in (K"String", K"Cmd")
             unescape_string(source[position+1:position+span(raw)-2])
@@ -122,7 +146,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             unescape_string(source[position+3:position+span(raw)-4])
         elseif k == K"UnquotedString"
             String(val_str)
-        elseif isoperator(k)
+        elseif is_operator(k)
             isempty(val_range)  ?
                 Symbol(untokenize(k)) : # synthetic invisible tokens
                 Symbol(val_str)
@@ -152,24 +176,17 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         end
         return SyntaxNode(source, raw, position, nothing, :leaf, val)
     else
-        str = untokenize(head(raw))
+        str = untokenize(head(raw), include_flag_suff=false)
         headsym = !isnothing(str) ? Symbol(str) :
             error("Can't untokenize head of kind $(kind(raw))")
         cs = SyntaxNode[]
         pos = position
         for (i,rawchild) in enumerate(children(raw))
-            # FIXME: Allowing trivia iserror nodes here corrupts the tree layout.
-            if !istrivia(rawchild) || iserror(rawchild)
+            # FIXME: Allowing trivia is_error nodes here corrupts the tree layout.
+            if !is_trivia(rawchild) || is_error(rawchild)
                 push!(cs, SyntaxNode(source, rawchild, pos))
             end
             pos += rawchild.span
-        end
-        # Julia's standard `Expr` ASTs have children stored in a canonical
-        # order which is not always source order.
-        #
-        # Swizzle the children here as necessary to get the canonical order.
-        if isinfix(raw)
-            cs[2], cs[1] = cs[1], cs[2]
         end
         node = SyntaxNode(source, raw, position, nothing, headsym, cs)
         for c in cs
@@ -179,9 +196,9 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
     end
 end
 
-iserror(node::SyntaxNode) = iserror(node.raw)
-istrivia(node::SyntaxNode) = istrivia(node.raw)
-hasflags(node::SyntaxNode, f) = hasflags(head(node.raw), f)
+is_error(node::SyntaxNode) = is_error(node.raw)
+is_trivia(node::SyntaxNode) = is_trivia(node.raw)
+has_flags(node::SyntaxNode, f) = has_flags(head(node.raw), f)
 
 head(node::SyntaxNode) = node.head
 kind(node::SyntaxNode)  = kind(node.raw)
@@ -201,9 +218,9 @@ function _show_syntax_node(io, current_filename, node, indent)
     fname = node.source.filename
     line, col = source_location(node.source, node.position)
     posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(node.position,6)):$(rpad(node.position+span(node)-1,6))│"
-    nodestr = !haschildren(node) ?
-              repr(node.val) :
-              "[$(_kind_str(kind(node.raw)))]"
+    nodestr = haschildren(node)   ?  "[$(untokenize(head(node.raw)))]" :
+              node.val isa Symbol ? string(node.val) :
+              repr(node.val)
     treestr = string(indent, nodestr)
     # Add filename if it's changed from the previous node
     if fname != current_filename[]
@@ -222,10 +239,10 @@ end
 
 function _show_syntax_node_sexpr(io, node)
     if !haschildren(node)
-        if iserror(node)
+        if is_error(node)
             print(io, "(error)")
         else
-            print(io, repr(node.val))
+            print(io, node.val isa Symbol ? string(node.val) : repr(node.val))
         end
     else
         print(io, "(", untokenize(head(node.raw)))
@@ -334,76 +351,81 @@ end
 # Conversion to Base.Expr
 
 function _to_expr(node::SyntaxNode)
-    if haschildren(node)
-        args = Vector{Any}(undef, length(children(node)))
-        args = map!(_to_expr, args, children(node))
-        # Convert elements
-        if head(node) == :macrocall
-            line_node = source_location(LineNumberNode, node.source, node.position)
-            insert!(args, 2, line_node)
-        elseif head(node) in (:call, :ref)
-            # Move parameters block to args[2]
-            if length(args) > 1 && Meta.isexpr(args[end], :parameters)
-                insert!(args, 2, args[end])
-                pop!(args)
-            end
-        elseif head(node) in (:tuple, :parameters, :vect)
-            # Move parameters blocks to args[1]
-            if length(args) > 1 && Meta.isexpr(args[end], :parameters)
-                pushfirst!(args, args[end])
-                pop!(args)
-            end
-        elseif head(node) == :try
-            # Try children in source order:
-            #   try_block catch_var catch_block else_block finally_block
-            # Expr ordering:
-            #   try_block catch_var catch_block [finally_block] [else_block]
-            catch_ = nothing
-            if hasflags(node, TRY_CATCH_AFTER_FINALLY_FLAG)
-                catch_ = pop!(args)
-                catch_var = pop!(args)
-            end
-            finally_ = pop!(args)
-            else_ = pop!(args)
-            if hasflags(node, TRY_CATCH_AFTER_FINALLY_FLAG)
-                pop!(args)
-                pop!(args)
-                push!(args, catch_var)
-                push!(args, catch_)
-            end
-            # At this point args is
-            # [try_block catch_var catch_block]
-            if finally_ !== false
-                push!(args, finally_)
-            end
-            if else_ !== false
-                push!(args, else_)
-            end
-        elseif head(node) == :filter
-            pushfirst!(args, last(args))
+    if !haschildren(node)
+        return node.val
+    end
+    args = Vector{Any}(undef, length(children(node)))
+    args = map!(_to_expr, args, children(node))
+    # Julia's standard `Expr` ASTs have children stored in a canonical
+    # order which is often not always source order. We permute the children
+    # here as necessary to get the canonical order.
+    if is_infix(node.raw)
+        args[2], args[1] = args[1], args[2]
+    end
+    # Convert elements
+    if head(node) == :macrocall
+        line_node = source_location(LineNumberNode, node.source, node.position)
+        insert!(args, 2, line_node)
+    elseif head(node) in (:call, :ref)
+        # Move parameters block to args[2]
+        if length(args) > 1 && Meta.isexpr(args[end], :parameters)
+            insert!(args, 2, args[end])
             pop!(args)
-        elseif head(node) == :flatten
-            # The order of nodes inside the generators in Julia's flatten AST
-            # is noncontiguous in the source text, so need to reconstruct
-            # Julia's AST here from our alternative `flatten` expression.
-            gen = Expr(:generator, args[1], args[end])
-            for i in length(args)-1:-1:2
-                gen = Expr(:generator, gen, args[i])
-            end
-            args = [gen]
-        elseif head(node) in (:nrow, :ncat)
-            # For lack of a better place, the dimension argument to nrow/ncat
-            # is stored in the flags
-            pushfirst!(args, extract_numeric_flags(flags(node)))
         end
-        if head(node) == :inert || (head(node) == :quote &&
-                                    length(args) == 1 && !(only(args) isa Expr))
-            QuoteNode(only(args))
-        else
-            Expr(head(node), args...)
+    elseif head(node) in (:tuple, :parameters, :vect)
+        # Move parameters blocks to args[1]
+        if length(args) > 1 && Meta.isexpr(args[end], :parameters)
+            pushfirst!(args, args[end])
+            pop!(args)
         end
+    elseif head(node) == :try
+        # Try children in source order:
+        #   try_block catch_var catch_block else_block finally_block
+        # Expr ordering:
+        #   try_block catch_var catch_block [finally_block] [else_block]
+        catch_ = nothing
+        if has_flags(node, TRY_CATCH_AFTER_FINALLY_FLAG)
+            catch_ = pop!(args)
+            catch_var = pop!(args)
+        end
+        finally_ = pop!(args)
+        else_ = pop!(args)
+        if has_flags(node, TRY_CATCH_AFTER_FINALLY_FLAG)
+            pop!(args)
+            pop!(args)
+            push!(args, catch_var)
+            push!(args, catch_)
+        end
+        # At this point args is
+        # [try_block catch_var catch_block]
+        if finally_ !== false
+            push!(args, finally_)
+        end
+        if else_ !== false
+            push!(args, else_)
+        end
+    elseif head(node) == :filter
+        pushfirst!(args, last(args))
+        pop!(args)
+    elseif head(node) == :flatten
+        # The order of nodes inside the generators in Julia's flatten AST
+        # is noncontiguous in the source text, so need to reconstruct
+        # Julia's AST here from our alternative `flatten` expression.
+        gen = Expr(:generator, args[1], args[end])
+        for i in length(args)-1:-1:2
+            gen = Expr(:generator, gen, args[i])
+        end
+        args = [gen]
+    elseif head(node) in (:nrow, :ncat)
+        # For lack of a better place, the dimension argument to nrow/ncat
+        # is stored in the flags
+        pushfirst!(args, numeric_flags(flags(node)))
+    end
+    if head(node) == :inert || (head(node) == :quote &&
+                                length(args) == 1 && !(only(args) isa Expr))
+        return QuoteNode(only(args))
     else
-        node.val
+        return Expr(head(node), args...)
     end
 end
 

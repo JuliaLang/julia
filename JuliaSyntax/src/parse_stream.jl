@@ -241,7 +241,7 @@ function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
     if skip_trivia
         for i = length(stream.ranges):-1:1
             s = stream.ranges[i]
-            if !istrivia(head(s))
+            if !is_trivia(head(s))
                 return kind(s)
             end
         end
@@ -296,7 +296,7 @@ function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
     emark = position(stream)
     _bump_n(stream, _lookahead_index(stream, 1, skip_newlines), flags, remap_kind)
     if !isnothing(error)
-        emit(stream, emark, K"error", TRIVIA_FLAG, error=error)
+        emit(stream, emark, K"error", flags, error=error)
     end
     # Return last token location in output if needed for reset_node!
     return position(stream)
@@ -307,11 +307,12 @@ Bump comments and whitespace tokens preceding the next token
 
 **Skips newlines** by default.  Set skip_newlines=false to avoid that.
 """
-function bump_trivia(stream::ParseStream; skip_newlines=true, error=nothing)
+function bump_trivia(stream::ParseStream, flags=EMPTY_FLAGS;
+                     skip_newlines=true, error=nothing)
     emark = position(stream)
     _bump_n(stream, _lookahead_index(stream, 1, skip_newlines) - 1, EMPTY_FLAGS)
     if !isnothing(error)
-        emit(stream, emark, K"error", TRIVIA_FLAG, error=error)
+        emit(stream, emark, K"error", flags, error=error)
     end
     return position(stream)
 end

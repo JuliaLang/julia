@@ -63,16 +63,14 @@ span(node::GreenNode)        = node.span
 head(node::GreenNode)        = node.head
 
 # Predicates
-#
-# FIXME: All predicates should be consistently named, either with istrivia or is_trivia.
-istrivia(node::GreenNode) = istrivia(node.head)
-iserror(node::GreenNode)  = iserror(node.head)
+is_trivia(node::GreenNode) = is_trivia(node.head)
+is_error(node::GreenNode)  = is_error(node.head)
 
 Base.summary(node::GreenNode) = summary(node.head)
 
 # Pretty printing
 function _show_green_node(io, node, indent, pos, str, show_trivia)
-    if !show_trivia && istrivia(node)
+    if !show_trivia && is_trivia(node)
         return
     end
     posstr = "$(lpad(pos, 6)):$(rpad(pos+span(node)-1, 6)) │"
@@ -82,17 +80,17 @@ function _show_green_node(io, node, indent, pos, str, show_trivia)
     else
         line = string(posstr, indent, '[', summary(node), "]")
     end
-    if !istrivia(node) && is_leaf
+    if !is_trivia(node) && is_leaf
         line = rpad(line, 40) * "✔"
     end
-    if iserror(node)
+    if is_error(node)
         line = rpad(line, 41) * "✘"
     end
     if is_leaf && !isnothing(str)
         line = string(rpad(line, 43), ' ', repr(str[pos:prevind(str, pos + span(node))]))
     end
     line = line*"\n"
-    if iserror(node)
+    if is_error(node)
         printstyled(io, line, color=:light_red)
     else
         print(io, line)

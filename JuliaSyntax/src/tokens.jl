@@ -1,4 +1,4 @@
-using .Tokenize.Tokens: Kind, isliteral, iskeyword, isoperator
+using .Tokenize.Tokens: Kind
 
 include("token_kinds.jl")
 
@@ -23,6 +23,11 @@ end
 
 kind(k::Kind) = k
 kind(raw::TzTokens.RawToken) = TzTokens.exactkind(raw)
+
+# Some renaming for consistency
+is_literal(k::Kind) = TzTokens.isliteral(k)
+is_keyword(k::Kind) = TzTokens.iskeyword(k)
+is_operator(k::Kind) = TzTokens.isoperator(k)
 
 # Predicates for operator precedence
 is_prec_assignment(t)  = K"BEGIN_ASSIGNMENTS" < kind(t) < K"END_ASSIGNMENTS"
