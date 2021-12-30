@@ -12,6 +12,7 @@
     begin_keywords,
         KEYWORD, # general
         ABSTRACT,
+        AS,
         BAREMODULE,
         BEGIN,
         BREAK,
