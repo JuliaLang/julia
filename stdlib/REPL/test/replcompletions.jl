@@ -539,7 +539,7 @@ for s in ("CompletionFoo.kwtest2(1; x=1,",
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
-    @test occursin("a; x, y, w...", c[1])
+    @test occursin("a::Any; x, y, w...", c[1])
 end
 
 #################################################################
@@ -548,8 +548,8 @@ end
 let s = "CompletionFoo.?([1,2,3], 2.0)"
     c, r, res = test_complete(s)
     @test !res
-    @test  any(str->occursin("test(x::AbstractArray{T}, y) where T<:Real", str), c)
-    @test  any(str->occursin("test(args...)", str), c)
+    @test  any(str->occursin("test(x::AbstractArray{T}, y::Any) where T<:Real", str), c)
+    @test  any(str->occursin("test(args::Any...)", str), c)
     @test !any(str->occursin("test3(x::AbstractArray{Int", str), c)
     @test !any(str->occursin("test4", str), c)
 end
