@@ -3088,3 +3088,62 @@ function checkUserAccess(u::User)
 	return false
 end
 """)
+
+@testset "typed globals" begin
+    m = Module()
+    @eval m begin
+        x::Int = 1
+        f(y) = x + y
+    end
+    @test Base.return_types(m.f, (Int,)) == [Int]
+
+    m = Module()
+    @eval m begin
+        global x::Int
+        f(y) = x + y
+    end
+    @test Base.return_types(m.f, (Int,)) == [Int]
+
+    m = Module()
+    @eval m begin
+        function f()
+            global x
+            x::Int = 1
+            x = 2.
+        end
+        g() = x
+    end
+    @test m.f() === 2.
+    @test m.x === 2
+    @test Base.return_types(m.g, ()) == [Int]
+
+    @test Meta.isexpr(Meta.@lower(function f()
+        global x
+        x::Int = 1
+        x::Float64 = 2.
+    end), :error)
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x::Int = 1
+        x::Float64 = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x::Int = 1
+        const x = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        const x = 1
+        x::Int = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x = 1
+        global x::Float64
+    end
+end

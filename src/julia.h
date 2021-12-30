@@ -503,12 +503,12 @@ typedef struct {
     jl_sym_t *name;
     _Atomic(jl_value_t*) value;
     _Atomic(jl_value_t*) globalref;  // cached GlobalRef for this binding
-    jl_value_t *ty                   // add type for globals
     struct _jl_module_t* owner;  // for individual imported bindings -- TODO: make _Atomic
     uint8_t constp:1;
     uint8_t exportp:1;
     uint8_t imported:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
+    jl_value_t *ty;                  // add type for globals
 } jl_binding_t;
 
 typedef struct {
