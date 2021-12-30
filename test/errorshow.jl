@@ -779,7 +779,7 @@ end
 
 # issue #37587
 # TODO: enable on more platforms
-if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
+if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
     single_repeater() = single_repeater()
     pair_repeater_a() = pair_repeater_b()
     pair_repeater_b() = pair_repeater_a()
@@ -803,7 +803,7 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
             @test occursin(r"the last 2 lines are repeated \d+ more times", bt_str)
         end
     end
-end  # Sys.isapple()
+end
 
 @testset "ScheduledAfterSyncException" begin
     t = :DummyTask
