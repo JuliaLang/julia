@@ -151,12 +151,13 @@ end
 end
 
 function fully_eliminated(f, args)
+    @nospecialize f args
     let code = code_typed(f, args)[1][1].code
         return length(code) == 1 && isa(code[1], ReturnNode)
     end
 end
-
 function fully_eliminated(f, args, retval)
+    @nospecialize f args
     let code = code_typed(f, args)[1][1].code
         return length(code) == 1 && isa(code[1], ReturnNode) && code[1].val == retval
     end

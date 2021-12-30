@@ -341,7 +341,7 @@ function sizeof_nothrow(@nospecialize(x))
     exact || return false # Could always be the type Bottom at runtime, for example, which throws
     t === DataType && return true # DataType itself has a size
     if isa(x, Union)
-        isinline, sz, _ = uniontype_layout(x)
+        isinline = uniontype_layout(x)[1]
         return isinline # even any subset of this union would have a size
     end
     isa(x, DataType) || return false
@@ -381,7 +381,7 @@ function sizeof_tfunc(@nospecialize(x),)
         # Normalize the query to ask about that type.
         x = unwrap_unionall(t)
         if exact && isa(x, Union)
-            isinline, sz, _ = uniontype_layout(x)
+            isinline = uniontype_layout(x)[1]
             return isinline ? Const(Int(Core.sizeof(x))) : Bottom
         end
         isa(x, DataType) || return Int
@@ -1470,30 +1470,27 @@ function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
 end
 
 # whether getindex for the elements can potentially throw UndefRef
-function array_type_undefable(@nospecialize(a))
-    if isa(a, Union)
-        return array_type_undefable(a.a) || array_type_undefable(a.b)
-    elseif isa(a, UnionAll)
+function array_type_undefable(@nospecialize(arytype))
+    if isa(arytype, Union)
+        return array_type_undefable(arytype.a) || array_type_undefable(arytype.b)
+    elseif isa(arytype, UnionAll)
         return true
     else
-        etype = (a::DataType).parameters[1]
-        return !(etype isa Type && (isbitstype(etype) || isbitsunion(etype)))
+        elmtype = (arytype::DataType).parameters[1]
+        return !(elmtype isa Type && (isbitstype(elmtype) || isbitsunion(elmtype)))
     end
 end
 
-function array_builtin_common_nothrow(argtypes::Array{Any,1}, first_idx_idx::Int)
+function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
     length(argtypes) >= 4 || return false
-    atype = argtypes[2]
-    (argtypes[1] ⊑ Bool && atype ⊑ Array) || return false
-    for i = first_idx_idx:length(argtypes)
-        argtypes[i] ⊑ Int || return false
-    end
+    boundcheck = argtypes[1]
+    arytype = argtypes[2]
+    array_builtin_common_typecheck(boundcheck, arytype, argtypes, first_idx_idx) || return false
     # If we could potentially throw undef ref errors, bail out now.
-    atype = widenconst(atype)
-    array_type_undefable(atype) && return false
+    arytype = widenconst(arytype)
+    array_type_undefable(arytype) && return false
     # If we have @inbounds (first argument is false), we're allowed to assume
     # we don't throw bounds errors.
-    boundcheck = argtypes[1]
     if isa(boundcheck, Const)
         !(boundcheck.val::Bool) && return true
     end
@@ -1503,19 +1500,33 @@ function array_builtin_common_nothrow(argtypes::Array{Any,1}, first_idx_idx::Int
     return false
 end
 
+function array_builtin_common_typecheck(
+    @nospecialize(boundcheck), @nospecialize(arytype),
+    argtypes::Vector{Any}, first_idx_idx::Int)
+    (boundcheck ⊑ Bool && arytype ⊑ Array) || return false
+    for i = first_idx_idx:length(argtypes)
+        argtypes[i] ⊑ Int || return false
+    end
+    return true
+end
+
+function arrayset_typecheck(@nospecialize(arytype), @nospecialize(elmtype))
+    # Check that we can determine the element type
+    arytype = widenconst(arytype)
+    isa(arytype, DataType) || return false
+    elmtype_expected = arytype.parameters[1]
+    isa(elmtype_expected, Type) || return false
+    # Check that the element type is compatible with the element we're assigning
+    elmtype ⊑ elmtype_expected || return false
+    return true
+end
+
 # Query whether the given builtin is guaranteed not to throw given the argtypes
 function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
     if f === arrayset
         array_builtin_common_nothrow(argtypes, 4) || return true
         # Additionally check element type compatibility
-        a = widenconst(argtypes[2])
-        # Check that we can determine the element type
-        isa(a, DataType) || return false
-        ap1 = a.parameters[1]
-        isa(ap1, Type) || return false
-        # Check that the element type is compatible with the element we're assigning
-        argtypes[3] ⊑ ap1 || return false
-        return true
+        return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
         return array_builtin_common_nothrow(argtypes, 3)
     elseif f === Core._expr
