@@ -96,7 +96,7 @@ end
 
 function is_reserved_word(k)
     k = kind(k)
-    iskeyword(k) && !is_contextural_keyword(k)
+    is_keyword(k) && !is_contextural_keyword(k)
 end
 
 # Return true if the next word (or word pair) is reserved, introducing a
@@ -153,7 +153,7 @@ end
 function is_initial_operator(k)
     k = kind(k)
     # TODO(jb): `?` should probably not be listed here except for the syntax hack in osutils.jl
-    isoperator(k)                      &&
+    is_operator(k)                     &&
     !(k in (K":", K"'", K".'", K"?"))  &&
     !is_syntactic_unary_op(k)          &&
     !is_syntactic_operator(k)
@@ -323,7 +323,7 @@ end
 function parse_eq_star(ps::ParseState, equals_is_kw=false)
     k = peek(ps)
     k2 = peek(ps,2)
-    if (isliteral(k) || is_identifier(k)) && k2 in (K",", K")", K"}", K"]")
+    if (is_literal(k) || is_identifier(k)) && k2 in (K",", K")", K"}", K"]")
         # optimization: skip checking the whole precedence stack if we have a
         # simple token followed by a common closing token
         bump(ps)
@@ -351,7 +351,7 @@ function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
             return NO_POSITION
         end
         # ~ is the only non-syntactic assignment-precedence operator.
-        # a ~ b  ==>  (call-i a ~ b)
+        # a ~ b      ==>  (call-i a ~ b)
         # [a ~ b c]  ==>  (hcat (call-i a ~ b) c)
         bump(ps)
         parse_assignment(ps, down, equals_is_kw)
@@ -474,15 +474,20 @@ function parse_and(ps::ParseState)
     parse_RtoL(ps, parse_comparison, is_prec_lazy_and, true, parse_and)
 end
 
-# Parse comparison chains like
-# x > y        ==> (call-i x > y)
-# x < y < z    ==> (comparison x < y < z)
-# x == y < z   ==> (comparison x == y < z)
+# Parse binary comparisons and comparison chains
 #
 # flisp: parse-comparison
-function parse_comparison(ps::ParseState)
+function parse_comparison(ps::ParseState, subtype_comparison=false)
     mark = position(ps)
-    parse_pipe_lt(ps)
+    if subtype_comparison && is_reserved_word(peek(ps))
+        # Recovery
+        # struct try end  ==>  (struct false (error try) (block))
+        name = untokenize(peek(ps))
+        bump(ps)
+        emit(ps, mark, K"error", error="Invalid type name `$name`")
+    else
+        parse_pipe_lt(ps)
+    end
     n_comparisons = 0
     op_pos = NO_POSITION
     initial_kind = peek(ps)
@@ -499,9 +504,14 @@ function parse_comparison(ps::ParseState)
             reset_node!(ps, op_pos, flags=TRIVIA_FLAG)
             emit(ps, mark, initial_kind)
         else
+            # Normal binary comparisons
+            # x < y  ==>  (call-i x < y)
             emit(ps, mark, K"call", INFIX_FLAG)
         end
     elseif n_comparisons > 1
+        # Comparison chains
+        # x < y < z    ==> (comparison x < y < z)
+        # x == y < z   ==> (comparison x == y < z)
         emit(ps, mark, K"comparison")
     end
 end
@@ -544,8 +554,8 @@ function parse_range(ps::ParseState)
                     peek_token(ps).had_whitespace &&
                     !peek_token(ps, 2).had_whitespace
                 # Tricky cases in space sensitive mode
-                # [1 :a]      ==>  (vcat 1 (quote a))
-                # [1 2:3 :a]  ==>  (vcat 1 (call-i 2 : 3) (quote a))
+                # [1 :a]      ==>  (hcat 1 (quote a))
+                # [1 2:3 :a]  ==>  (hcat 1 (call-i 2 : 3) (quote a))
                 break
             end
             t2 = peek_token(ps,2)
@@ -579,10 +589,7 @@ function parse_range(ps::ParseState)
             end
             if t.had_newline
                 # Error message for people coming from python
-                # ===
-                # 1:
-                # 2
-                # ==> (call-i 1 : (error))
+                # 1:\n2 ==> (call-i 1 : (error))
                 emit_diagnostic(ps, whitespace=true,
                                 error="line break after `:` in range expression")
                 bump_invisible(ps, K"error")
@@ -609,20 +616,19 @@ function parse_range(ps::ParseState)
     end
 end
 
-# parse left to right chains of a given binary operator
+# a - b - c  ==>  (call-i (call-i a - b) - c)
+# a + b + c  ==>  (call-i a + b c)
 #
-# flisp: parse-chain
-function parse_chain(ps::ParseState, down, op_kind)
-    while (t = peek_token(ps); kind(t) == op_kind)
-        if ps.space_sensitive && t.had_whitespace &&
-            is_both_unary_and_binary(kind(t)) &&
-            !peek_token(ps, 2).had_whitespace
-            # [x +y]  ==>  (hcat x (call + y))
-            break
-        end
-        bump(ps, TRIVIA_FLAG)
-        down(ps)
-    end
+# flisp: parse-expr
+function parse_expr(ps::ParseState)
+    parse_with_chains(ps, parse_term, is_prec_plus, (K"+", K"++"))
+end
+
+# a * b * c  ==>  (call-i a * b c)
+#
+# flisp: parse-term
+function parse_term(ps::ParseState)
+    parse_with_chains(ps, parse_rational, is_prec_times, (K"*",))
 end
 
 # Parse left to right, combining any of `chain_ops` into one call
@@ -637,9 +643,9 @@ function parse_with_chains(ps::ParseState, down, is_op, chain_ops)
             !peek_token(ps, 2).had_whitespace
             # The following is two elements of a hcat
             # [x+y +z]   ==>  (hcat (call-i x + y) (call + z))
-            # Conversely
-            # [x+y+z]    ==>  (hcat (call-i x + y z))
-            # [x+y + z]  ==>  (hcat (call-i x + y z))
+            # Conversely the following are infix calls
+            # [x+y+z]    ==>  (vect (call-i x + y z))
+            # [x+y + z]  ==>  (vect (call-i x + y z))
             break
         end
         bump(ps)
@@ -654,19 +660,20 @@ function parse_with_chains(ps::ParseState, down, is_op, chain_ops)
     end
 end
 
-# a - b - c  ==>  (call-i (call-i a - b) - c)
-# a + b + c  ==>  (call-i a + b c)
+# parse left to right chains of a given binary operator
 #
-# flisp: parse-expr
-function parse_expr(ps::ParseState)
-    parse_with_chains(ps, parse_term, is_prec_plus, (K"+", K"++"))
-end
-
-# a * b * c  ==>  (call-i a * b c)
-#
-# flisp: parse-term
-function parse_term(ps::ParseState)
-    parse_with_chains(ps, parse_rational, is_prec_times, (K"*",))
+# flisp: parse-chain
+function parse_chain(ps::ParseState, down, op_kind)
+    while (t = peek_token(ps); kind(t) == op_kind)
+        if ps.space_sensitive && t.had_whitespace &&
+            is_both_unary_and_binary(kind(t)) &&
+            !peek_token(ps, 2).had_whitespace
+            # [x +y]  ==>  (hcat x (call + y))
+            break
+        end
+        bump(ps, TRIVIA_FLAG)
+        down(ps)
+    end
 end
 
 # flisp: parse-rational
@@ -758,7 +765,7 @@ function is_juxtapose(ps, prev_k, t)
          !(is_block_form(prev_k)         ||
            is_syntactic_unary_op(prev_k) ||
            is_initial_reserved_word(ps, prev_k) )))  &&
-    (!isoperator(k) || is_radical_op(k))             &&
+    (!is_operator(k) || is_radical_op(k))            &&
     !is_closing_token(ps, k)                         &&
     !is_initial_reserved_word(ps, k)
 end
@@ -858,7 +865,10 @@ function parse_unary_call(ps::ParseState)
     if is_closing_token(ps, k2) || k2 in (K"NewlineWs", K"=")
         if is_dotted(op_t)
             # standalone dotted operators are parsed as (|.| op)
-            # .+  ==>  (. +)
+            # .+    ==>  (. +)
+            # .+\n  ==>  (. +)
+            # .+ =  ==>  (. +)
+            # .+)   ==>  (. +)
             bump_trivia(ps)
             bump_split(ps, 1,
                        K".", TRIVIA_FLAG,
@@ -866,16 +876,24 @@ function parse_unary_call(ps::ParseState)
             emit(ps, mark, K".")
         else
             # return operator by itself, as in
-            # (+)  ==>  +
+            # +)  ==>  +
             bump(ps)
         end
     elseif k2 == K"{" || (!is_unary_op(op_k) && k2 == K"(")
-        # this case is +{T}(x::T) = ...
+        # Call with type parameters or non-unary prefix call
+        # +{T}(x::T)  ==>  (call (curly + T) (:: x T))
+        # *(x)  ==>  (call * x)
         parse_factor(ps)
     elseif k2 == K"("
-        # Cases like +(a,b) and +(a)
+        # Cases like +(a;b) are ambiguous: are they prefix calls to + with b as
+        # a keyword argument, or is `a;b` a block?  We resolve this with a
+        # simple heuristic: if there were any commas, it was a function call.
         #
-        # Bump the operator
+        #
+        # (The flisp parser only considers commas before `;` and thus gets this
+        # last case wrong)
+        #
+
         bump(ps, op_tok_flags)
 
         # Setup possible whitespace error between operator and (
@@ -886,27 +904,6 @@ function parse_unary_call(ps::ParseState)
 
         mark_before_paren = position(ps)
         bump(ps, TRIVIA_FLAG) # (
-        # There's two tricky parts for unary-prefixed parenthesized expressions
-        # like `+(a,b)`
-        #
-        # 1. The ambiguity between a function call arglist or a block. The
-        #    flisp parser resolves in favor of a block if there's no initial
-        #    commas before semicolons:
-        #
-        #    Function calls:
-        #    +(a,b)   ==>  (call + a b)
-        #    +(a=1,)  ==>  (call + (kw a 1))
-        #
-        #    Not function calls:
-        #    +(a;b)   ==>  (call + (block a b))
-        #    +(a=1)   ==>  (call + (= a 1))
-        #
-        # But this heuristic fails in some cases so here we use a simpler rule:
-        # if there were any commas, it was a function call. Then we also parse
-        # things like the following in a useful way:
-        #
-        #    +(a;b,c)  ==>  (call + (tuple a (parameters b c)))
-        #
         is_call = false
         is_block = false
         parse_brackets(ps, K")") do had_commas,  num_semis, num_subexprs
@@ -918,31 +915,42 @@ function parse_unary_call(ps::ParseState)
                     eq_is_kw_after_semi=is_call)
         end
 
-        if is_call && t2.had_whitespace
-            reset_node!(ps, ws_error_pos, kind=K"error")
-            emit_diagnostic(ps, ws_mark, ws_mark_end,
-                error="whitespace not allowed between prefix function call and argument list")
-        end
-
-        # 2. The precedence between unary + and any following infix ^ depends
-        #    on whether the parens are a function call or not
+        # The precedence between unary + and any following infix ^ depends on
+        # whether the parens are a function call or not
         if is_call
-            # Prefix operator call
+            if t2.had_whitespace
+                # Whitespace not allowed before prefix function call bracket
+                # + (a,b)   ==> (call + (error) a b)
+                reset_node!(ps, ws_error_pos, kind=K"error")
+                emit_diagnostic(ps, ws_mark, ws_mark_end,
+                                error="whitespace not allowed between prefix function call and argument list")
+            end
+            # Prefix function calls for operators which are both binary and unary
+            # +(a,b)    ==>  (call + a b)
+            # +(a=1,)   ==>  (call + (kw a 1))
+            # +(a;b,c)  ==>  (call + a (parameters b c))
+            # Prefix calls have higher precedence than ^
             # +(a,b)^2  ==>  (call-i (call + a b) ^ 2)
             emit(ps, mark, op_node_kind)
             parse_factor_with_initial_ex(ps, mark)
         else
+            # Unary function calls with brackets as grouping, not an arglist
             if is_block
+                # +(a;b)   ==>  (call + (block a b))
                 emit(ps, mark_before_paren, K"block")
             end
-            # Not a prefix operator call
-            # +(a)^2    ==>  (call + (call-i ^ a 2))
+            # Not a prefix operator call but a block; `=` is not `kw`
+            # +(a=1)  ==>  (call + (= a 1))
+            # Unary operators have lower precedence than ^
+            # +(a)^2  ==>  (call + (call-i a ^ 2))
             parse_factor_with_initial_ex(ps, mark_before_paren)
             emit(ps, mark, op_node_kind)
         end
     elseif !is_unary_op(op_k)
         emit_diagnostic(ps, error="expected a unary operator")
     else
+        # Normal unary calls
+        # +x  ==>  (call + x)
         bump(ps, op_tok_flags)
         parse_unary(ps)
         emit(ps, mark, op_node_kind)
@@ -1000,10 +1008,9 @@ function parse_decl_with_initial_ex(ps::ParseState, mark)
         emit(ps, mark, K"::")
     end
     if peek(ps) == K"->"
+        # -> is unusual: it binds tightly on the left and loosely on the right.
         # a::b->c   ==>   (-> (:: a b) c)
         bump(ps, TRIVIA_FLAG)
-        # -> is unusual: it binds tightly on the left and
-        # loosely on the right.
         parse_eq_star(ps)
         emit(ps, mark, K"->")
     end
@@ -1220,9 +1227,9 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 emark = position(ps)
                 bump(ps)
                 bump(ps)
-                "f.'"  =>  "f (error . ')"
+                "f.'"  =>  "f (error-t . ')"
                 emit(ps, emark, K"error", TRIVIA_FLAG,
-                     error="the .' operator is discontinued")
+                     error="the .' operator for transpose is discontinued")
                 is_valid_modref = false
                 continue
             end
@@ -1230,7 +1237,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # Allow `@` in macrocall only in first and last position
                 # A.B.@x  ==>  (macrocall (. (. A (quote B)) (quote @x)))
                 # @A.B.x  ==>  (macrocall (. (. A (quote B)) (quote @x)))
-                # A.@B.x  ==>  (macrocall (. (. A (error) B) (quote @x)))
+                # A.@B.x  ==>  (macrocall (. (. A (error-t) B) (quote @x)))
                 emit_diagnostic(ps, macro_atname_range,
                     error="`@` must appear on first or last macro name component")
                 bump(ps, TRIVIA_FLAG, error="Unexpected `.` after macro name")
@@ -1348,13 +1355,13 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             bump(ps)
             t = peek_token(ps)
             k = kind(t)
-            if !t.had_whitespace && (k == K"Identifier" || iskeyword(k) || is_number(k))
+            if !t.had_whitespace && (k == K"Identifier" || is_keyword(k) || is_number(k))
                 # Macro sufficies can include keywords and numbers
                 # x"s"y ==> (macrocall x_str "s" "y")
                 # x"s"end ==> (macrocall x_str "s" "end")
                 # x"s"2 ==> (macrocall x_str "s" 2)
                 # x"s"10.0 ==> (macrocall x_str "s" 10.0)
-                suffix_kind = (k == K"Identifier" || iskeyword(k)) ?
+                suffix_kind = (k == K"Identifier" || is_keyword(k)) ?
                               K"UnquotedString" : k
                 bump(ps, remap_kind=suffix_kind)
             end
@@ -1366,43 +1373,14 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
     end
 end
 
+# Parse the `A<:B` part of type definitions like `struct A<:B end`
+#
 # flisp: parse-subtype-spec
 function parse_subtype_spec(ps::ParseState)
-    k = peek(ps)
-    if is_reserved_word(k)
-        # Recovery
-        # struct try end  ==>  (struct false (error try) (block))
-        bump(ps, error="Invalid type name `$(untokenize(k))`")
-        m = position(ps)
-        if is_prec_comparison(peek(ps))
-            bump(ps)
-            parse_pipe_lt(ps)
-            emit(ps, m, K"error", TRIVIA_FLAG)
-        end
-    else
-        # Wart: why isn't the flisp parser more strict here?
-        # <: is the only operator which isn't a syntax error, but
-        # parse_subtype_spec allows all sorts of things.
-        parse_comparison(ps)
-    end
-end
-
-# Parse struct definitions. The caller must arrange for the next tokens to be
-# `struct` or `mutable struct`.
-#
-# flisp: parse-struct-def
-function parse_struct_def(ps::ParseState)
-    mark = position(ps)
-    is_mutable = peek(ps) == K"mutable"
-    if is_mutable
-        bump(ps, TRIVIA_FLAG)
-    end
-    @assert peek(ps) == K"struct"
-    bump(ps, TRIVIA_FLAG)
-    k = peek(ps)
-    if is_reserved_word(k)
-        bump(ps, error="Invalid type name `$(untokenize(k))`")
-    end
+    # Wart: why isn't the flisp parser more strict here?
+    # <: is the only operator which isn't a syntax error, but
+    # parse_comparison allows all sorts of things.
+    parse_comparison(ps, true)
 end
 
 # parse expressions or blocks introduced by syntactic reserved words.
@@ -1431,12 +1409,7 @@ function parse_resword(ps::ParseState)
         end
     elseif word == K"while"
         # while cond body end  ==>  (while cond (block body))
-        # ===
-        # while x < y
-        #     a
-        #     b
-        # end
-        # ==> (while (call < x y) (block a b))
+        # while x < y \n a \n b \n end ==> (while (call-i x < y) (block a b))
         bump(ps, TRIVIA_FLAG)
         parse_cond(ps)
         parse_block(ps)
@@ -1444,12 +1417,7 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"while")
     elseif word == K"for"
         # for x in xs end  ==>  (for (= x xs) (block))
-        # ===
-        # for x in xs, y in ys
-        #     a
-        #     b
-        # end
-        # ==> (for (block (= x xs) (= y ys)) (block a b))
+        # for x in xs, y in ys \n a \n end ==> (for (block (= x xs) (= y ys)) (block a))
         bump(ps, TRIVIA_FLAG)
         m = position(ps)
         n_subexprs = parse_comma_separated(ps, parse_iteration_spec)
@@ -1507,7 +1475,7 @@ function parse_resword(ps::ParseState)
         # abstract type A <: B end        ==>  (abstract (<: A B))
         # abstract type A <: B{T,S} end   ==>  (abstract (<: A (curly B T S)))
         # Oddities allowed by parser
-        # abstract type A < B end         ==>  (abstract (call < A B))
+        # abstract type A < B end         ==>  (abstract (call-i A < B))
         bump(ps, TRIVIA_FLAG)
         @assert peek(ps) == K"type"
         bump(ps, TRIVIA_FLAG)
@@ -1628,8 +1596,8 @@ function parse_if_elseif(ps, is_elseif=false, is_elseif_whitespace_err=false)
         emark = position(ps)
         bump(ps, TRIVIA_FLAG)
         if peek(ps) == K"if"
-            # User wrote `else if` by mistake ?
-            # if a xx else if b yy end  ==>  (if a (block xx) (else (error if) (block b) (block yy)))
+            # Recovery: User wrote `else if` by mistake ?
+            # if a xx else if b yy end  ==>  (if a (block xx) (error-t) (elseif (block b) (block yy)))
             bump(ps, TRIVIA_FLAG)
             emit(ps, emark, K"error", TRIVIA_FLAG,
                  error="use `elseif` instead of `else if`")
@@ -1739,7 +1707,7 @@ function parse_function(ps::ParseState)
             emit(ps, def_mark, K"error", error="Expected macro name")
         end
     else
-        if iskeyword(k)
+        if is_keyword(k)
             # Forbid things like
             # function begin() end  ==>  (function (call (error begin)) (block))
             # macro begin() end  ==>  (macro (call (error begin)) (block))
@@ -1832,7 +1800,7 @@ function parse_try(ps)
     # in which these blocks execute.
     bump_trivia(ps)
     if !has_catch && peek(ps) == K"catch"
-        # try x finally y catch e z end  ==>  (try (block x) false false false (block y) e (block z))
+        # try x finally y catch e z end  ==>  (try-f (block x) false false false (block y) e (block z))
         flags |= TRY_CATCH_AFTER_FINALLY_FLAG
         m = position(ps)
         parse_catch(ps)
@@ -2124,16 +2092,16 @@ end
 # [x y ;; z w]    ==>  (hcat x y (error) z w)
 #
 # Single elements in rows
-# [x ; y ;; z ]  ==>  (ncat 2 (nrow 1 x y) z)
-# [x  y ;;; z ]  ==>  (ncat 3 (row x y) z)
+# [x ; y ;; z ]  ==>  (ncat-2 (nrow-1 x y) z)
+# [x  y ;;; z ]  ==>  (ncat-3 (row x y) z)
 #
 # Higher dimensional ncat
 # Row major
 # [x y ; z w ;;; a b ; c d]  ==>
-#     (ncat 3 (nrow 1 (row x y) (row z w)) (nrow 1 (row a b) (row c d)))
+#     (ncat-3 (nrow-1 (row x y) (row z w)) (nrow-1 (row a b) (row c d)))
 # Column major
 # [x ; y ;; z ; w ;;; a ; b ;; c ; d]  ==>
-#     (ncat 3 (nrow 2 (nrow 1 x y) (nrow 1 z w)) (nrow 2 (nrow 1 a b) (nrow 1 c d)))
+#     (ncat-3 (nrow-2 (nrow-1 x y) (nrow-1 z w)) (nrow-2 (nrow-1 a b) (nrow-1 c d)))
 #
 # flisp: parse-array
 function parse_array(ps::ParseState, mark, closer, end_is_symbol)
@@ -2160,7 +2128,7 @@ function parse_array(ps::ParseState, mark, closer, end_is_symbol)
         if binding_power == 0
             emit(ps, mark, K"row")
         else
-            emit(ps, mark, K"nrow", numeric_flags(dim))
+            emit(ps, mark, K"nrow", set_numeric_flags(dim))
         end
         dim = next_dim
         binding_power = next_bp
@@ -2168,7 +2136,7 @@ function parse_array(ps::ParseState, mark, closer, end_is_symbol)
     bump_closing_token(ps, closer)
     return binding_power == -1 ? (K"vcat", EMPTY_FLAGS) :
            binding_power ==  0 ? (K"hcat", EMPTY_FLAGS) :
-           (K"ncat", numeric_flags(dim))
+           (K"ncat", set_numeric_flags(dim))
 end
 
 # Parse equal and ascending precedence chains of array concatenation operators
@@ -2212,7 +2180,7 @@ function parse_array_inner(ps, binding_power)
             if bp == 0
                 emit(ps, mark, K"row")
             else
-                emit(ps, mark, K"nrow", numeric_flags(dim))
+                emit(ps, mark, K"nrow", set_numeric_flags(dim))
             end
         end
         dim, bp = next_dim, next_bp
@@ -2612,7 +2580,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         # :foo  =>  (quote foo)
         t = peek_token(ps, 2)
         k = kind(t)
-        if is_closing_token(ps, k) && (!iskeyword(k) || t.had_whitespace)
+        if is_closing_token(ps, k) && (!is_keyword(k) || t.had_whitespace)
             # : is a literal colon in some circumstances
             # :)     ==>  :
             # : end  ==>  :
@@ -2626,7 +2594,8 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             # :
             # a
             # ==> (quote (error))
-            bump_trivia(ps, error="whitespace not allowed after `:` used for quoting")
+            bump_trivia(ps, TRIVIA_FLAG,
+                        error="whitespace not allowed after `:` used for quoting")
             # Heuristic recovery
             if kind(t) == K"NewlineWs"
                 bump_invisible(ps, K"error")
@@ -2650,10 +2619,10 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     elseif leading_kind == K"VarIdentifier"
         bump(ps)
         t = peek_token(ps)
-        if !t.had_whitespace && !(isoperator(kind(t)) || is_non_keyword_closer(t))
+        if !t.had_whitespace && !(is_operator(kind(t)) || is_non_keyword_closer(t))
             bump(ps, error="suffix not allowed after var\"...\" syntax")
         end
-    elseif isoperator(leading_kind)
+    elseif is_operator(leading_kind)
         # Operators and keywords are generally turned into identifiers if used
         # as atoms.
         if check_identifiers && is_syntactic_operator(leading_kind)
@@ -2661,7 +2630,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         else
             bump(ps)
         end
-    elseif iskeyword(leading_kind)
+    elseif is_keyword(leading_kind)
         if check_identifiers && is_closing_token(ps, leading_kind)
             # :(end)  ==>  (quote (error end))
             bump(ps, error="invalid identifier")
@@ -2690,7 +2659,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         bump_invisible(ps, K"core_@cmd")
         bump(ps)
         emit(ps, mark, K"macrocall")
-    elseif isliteral(leading_kind)
+    elseif is_literal(leading_kind)
         bump(ps)
     elseif is_closing_token(ps, leading_kind)
         # Leave closing token in place for other productions to 
