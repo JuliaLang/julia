@@ -218,8 +218,8 @@ julia> methods(+)
    [4] +(c::Union{UInt16, UInt32, UInt64, UInt8}, x::BigFloat) @ Base.MPFR mpfr.jl:376
    [5] +(c::Union{Int16, Int32, Int64, Int8}, x::BigFloat) @ Base.MPFR mpfr.jl:384
    [6] +(c::Union{Float16, Float32, Float64}, x::BigFloat) @ Base.MPFR mpfr.jl:392
-   [7] +(x::Union{Dates.CompoundPeriod, Dates.Period}) @ Dates /Users/me/.julia/dev/julia/usr/share/julia/stdlib/v1.7/Dates/src/periods.jl:372
-   [8] +(r1::OrdinalRange, r2::OrdinalRange) @ range.jl:1245
+   [7] +(x::Union{Dates.CompoundPeriod, Dates.Period}) @ Dates stdlib/v1.8/Dates/src/periods.jl:372
+   [8] +(A::UpperHessenberg, B::UpperHessenberg) @ LinearAlgebra stdlib/v1.8/LinearAlgebra/src/hessenberg.jl:101
 ...
  [203] +(x::Float32, y::Float32) @ float.jl:388
  [204] +(x::Number) @ operators.jl:592
