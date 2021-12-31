@@ -762,7 +762,7 @@ let repr = sprint(show, "text/html", methods(f5971))
 end
 f16580(x, y...; z=1, w=y+x, q...) = nothing
 let repr = sprint(show, "text/html", methods(f16580))
-    @tes occursin("f16580(x, y; <i>z, w, q...</i>)", repr)
+    @test occursin("f16580(x, y; <i>z, w, q...</i>)", repr)
 end
 
 function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
