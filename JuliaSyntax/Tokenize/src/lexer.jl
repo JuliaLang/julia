@@ -804,7 +804,7 @@ end
 # Lex var"..." identifiers.
 # The prefix `var"` has been consumed
 function lex_var(l::Lexer)
-    if read_string(l, Tokens.STRING)
+    if read_raw_string(l, Tokens.STRING)
         return emit(l, Tokens.VAR_IDENTIFIER)
     else
         return emit_error(l, Tokens.EOF_VAR)
@@ -828,8 +828,37 @@ function string_terminated(l, kind::Tokens.Kind)
     return false
 end
 
+# Read a raw string for use with custom string macros
+#
+# Raw strings treat all characters as literals with the exception that the
+# closing quotes can be escaped with an odd number of \ characters.
+function read_raw_string(l::Lexer, kind::Tokens.Kind)
+    delim = kind == Tokens.STRING || kind == Tokens.TRIPLE_STRING ? '"' : '`'
+    while true
+        c = readchar(l)
+        if c == '\\'
+            n = 0
+            while c == '\\'
+                n += 1
+                c = readchar(l)
+            end
+            if c == delim && !iseven(n)
+                c = readchar(l)
+            end
+        end
+        if string_terminated(l, kind)
+            return true
+        elseif eof(c)
+            return false
+        end
+    end
+end
+
 # We just consumed a ", """, `, or ```
 function read_string(l::Lexer, kind::Tokens.Kind)
+    if l.last_token == Tokens.IDENTIFIER || l.last_token == Tokens.KEYWORD
+        return read_raw_string(l, kind)
+    end
     while true
         c = readchar(l)
         if c == '\\'
