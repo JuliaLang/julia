@@ -262,6 +262,8 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
             print(io, " for anonymous function ", namedisplay, ":")
         elseif mt === _TYPE_NAME.mt
             print(io, " for type constructor:")
+        else
+            print(io, ":")
         end
     end
 end

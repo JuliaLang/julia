@@ -1894,7 +1894,7 @@ end
     @test startswith(_methodsstr(typeof), "# built-in function; no methods")
 end
 @testset "show callable object methods" begin
-    @test_broken occursin("methods:", _methodsstr(:))  # this is missing a :  ??
+    @test occursin("methods:", _methodsstr(:))
 end
 @testset "#20111 show for function" begin
     K20111(x) = y -> x
