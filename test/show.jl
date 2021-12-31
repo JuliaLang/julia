@@ -755,14 +755,14 @@ end
 
 f5971(x, y...; z=1, w...) = nothing
 let repr = sprint(show, "text/plain", methods(f5971))
-    @test occursin("f5971(x::Any, y::Any...; z, w...)", repr)
+    @test occursin("f5971(x, y...; z, w...)", repr)
 end
-let repr = sprint(show, "text/html", methods(f5971))  # this is missing ::Any ??
-    @test_broken occursin("f5971(x<b>::Any</b>, y<b>::Any...</b>; <i>z, w...</i>)", repr)
+let repr = sprint(show, "text/html", methods(f5971))
+    @test occursin("f5971(x, y; <i>z, w...</i>)", repr)
 end
 f16580(x, y...; z=1, w=y+x, q...) = nothing
-let repr = sprint(show, "text/html", methods(f16580))  # ditto ??
-    @test_broken occursin("f16580(x<b>::Any</b>, y<b>::Any...</b>; <i>z, w, q...</i>)", repr)
+let repr = sprint(show, "text/html", methods(f16580))
+    @tes occursin("f16580(x, y; <i>z, w, q...</i>)", repr)
 end
 
 function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
@@ -2269,18 +2269,16 @@ for s in (Symbol("'"), Symbol("'⁻¹"))
     @test Base.ispostfixoperator(s)
 end
 
-@testset "method printing with non-standard identifiers ($mime)" for mime in (
-    MIME("text/plain"), MIME("text/html"),
-)
+@testset "method printing with non-standard identifiers ($mime)" for mime in ("text/plain", "text/html")
     _show(io, x) = show(io, MIME(mime), x)
+    _Any = mime == "text/html" ? "" : "::Any"
+    italic(s) = mime == "text/html" ? "<i>$s</i>" : s
 
     @eval var","(x) = x
-    @test_skip occursin("var\",\"(x::Any)", sprint(_show, methods(var",")))  # html fails to have ::Any ??
+    @test occursin("var\",\"(x$_Any)", sprint(_show, methods(var",")))
 
     @eval f1(var"a.b") = 3
-    @test_skip occursin("f1(var\"a.b\"::Any)", sprint(_show, methods(f1)))  # ditto ??
-
-    italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
+    @test occursin("f1(var\"a.b\"$_Any)", sprint(_show, methods(f1)))
 
     @eval f2(; var"123") = 5
     @test occursin("f2(; $(italic("var\"123\"")))", sprint(_show, methods(f2)))
