@@ -911,9 +911,9 @@ end
     @test IndexStyle(bc) == IndexLinear()
     @test reduce(paren, bc) == reduce(paren, xs)
     # If `Broadcasted` does not have `IndexLinear` style, it should
-    # hit the `foldl` branch:
+    # behave like a cartesian-indexed Array (PR #43618)
     @test IndexStyle(bcraw) == IndexCartesian()
-    @test reduce(paren, bcraw) == foldl(paren, xs)
+    @test reduce(paren, bcraw) == reduce(paren, view(xs, 1:length(xs), 1:1))
 
     # issue #41055
     bc = Broadcast.instantiate(Broadcast.broadcasted(Base.literal_pow, Ref(^), [1,2], Ref(Val(2))))

@@ -360,8 +360,8 @@ mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
 mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
 mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 
-mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
-mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
+mapreduce_empty(::typeof(abs),  ::typeof(max), T) = abs(zero(T))
+mapreduce_empty(::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
 # For backward compatibility:
 mapreduce_empty_iter(f, op, itr, ItrEltype) =
@@ -412,6 +412,10 @@ mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
 _mapreduce(f, op, A::AbstractArrayOrBroadcasted) = _mapreduce(f, op, IndexStyle(A), A)
 
+_mapreduce(f, op, A::AbstractVector) = _mapreduce(f, op, IndexLinear(), A)
+
+_mapreduce(f, op, A::AbstractZeroDimArray) = mapreduce_first(f, op, A[])
+
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     inds = LinearIndices(A)
     n = length(inds)
@@ -437,7 +441,14 @@ end
 
 mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f, op, A)
+function _mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted)
+    (isempty(A) || length(axes1(A)) < 16) && return mapfoldl(f, op, A)
+    mapfoldl(op, CartesianIndices(tail(axes(A)))) do IA
+        @inline elf(i) = @inbounds f(A[i, IA])
+        ax1 = axes1(A)
+        mapreduce_impl(elf, op, ax1, firstindex(ax1), lastindex(ax1))
+    end
+end
 
 """
     reduce(op, itr; [init])
