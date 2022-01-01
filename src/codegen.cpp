@@ -7712,16 +7712,16 @@ static std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *pare
     return std::make_pair(n, scalar);
 }
 
-std::vector<std::pair<jl_value_t**, JuliaVariable*>> gv_for_global;
+std::vector<std::pair<jl_value_t**, std::unique_ptr<JuliaVariable>>> gv_for_global;
 static void global_jlvalue_to_llvm(JuliaVariable *var, jl_value_t **addr)
 {
-    gv_for_global.push_back(std::make_pair(addr, var));
+    gv_for_global.push_back(std::make_pair(addr, std::unique_ptr<JuliaVariable>(var)));
 }
 static JuliaVariable *julia_const_gv(jl_value_t *val)
 {
     for (auto &kv : gv_for_global) {
         if (*kv.first == val)
-            return kv.second;
+            return kv.second.get();
     }
     return nullptr;
 }
