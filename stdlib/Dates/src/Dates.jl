@@ -39,6 +39,7 @@ using Base.Iterators
 
 include("types.jl")
 include("periods.jl")
+include("exceptions.jl")
 include("accessors.jl")
 include("query.jl")
 include("arithmetic.jl")
