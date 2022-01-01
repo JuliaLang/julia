@@ -267,18 +267,25 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(axes1(R))
+        ax1 = axes1(A)
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            r = R[i1,IR]
-            @simd for i in axes(A, 1)
-                r = op(r, f(A[i, IA]))
+            if op === min || op ===  max #|| op === _extrema_op
+                elf(i) = @inbounds f(A[i, IA])
+                r = mapreduce_impl(elf, op, ax1, firstindex(ax1), lastindex(ax1))
+                R[i1,IR] = op(R[i1,IR], r)
+            else
+                r = R[i1,IR]
+                @simd for i in ax1
+                    r = op(r, f(A[i, IA]))
+                end
+                R[i1,IR] = r
             end
-            R[i1,IR] = r
         end
     else
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @simd for i in axes(A, 1)
+            @simd for i in axes1(A)
                 R[i,IR] = op(R[i,IR], f(A[i,IA]))
             end
         end
