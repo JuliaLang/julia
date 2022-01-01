@@ -1079,3 +1079,15 @@ end
     y = randn(2)
     @inferred(test(x, y)) == [0, 0]
 end
+
+@testset "axes1 and axes" begin
+    bc = Base.broadcasted(+, reshape(1:6,3,:), 1)
+    @test Base.axes(bc) == (Base.OneTo(3),Base.OneTo(2))
+    @test Base.axes1(bc) == axes(bc, 1) == Base.OneTo(3)
+    bc = Broadcast.instantiate(bc)
+    @test Base.axes(bc) == (Base.OneTo(3),Base.OneTo(2))
+    @test Base.axes1(bc) == axes(bc, 1) == Base.OneTo(3)
+    bc = Base.broadcasted(+, fill(1), 1)
+    @test Base.axes(bc) == ()
+    @test Base.axes1(bc) == axes(bc, 1) == Base.OneTo(1)
+end

@@ -226,6 +226,11 @@ _axes(bc::Broadcasted{<:AbstractArrayStyle{0}}, ::Nothing) = ()
 
 @inline Base.axes(bc::Broadcasted{<:Any, <:NTuple{N}}, d::Integer) where N =
     d <= N ? axes(bc)[d] : OneTo(1)
+@inline Base.axes(bc::Broadcasted{<:Any, Nothing}, d::Integer) =
+    (ax = axes(bc); d <= length(ax) ? ax[d] : OneTo(1))
+
+Base.axes1(bc::Broadcasted) = axes(bc, 1)
+Base.axes1(bc::Broadcasted{<:AbstractArrayStyle{0}}) = OneTo(1)
 
 BroadcastStyle(::Type{<:Broadcasted{Style}}) where {Style} = Style()
 BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
