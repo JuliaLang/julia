@@ -1,8 +1,9 @@
 using Test, Printf
 
-import Tokenize
+import JuliaSyntax.Tokenize
 
-include("lex_yourself.jl")
+# Takes 10s to run
+# include("lex_yourself.jl")
 @testset "lexer" begin
 include("lexer.jl")
 end
