@@ -60,6 +60,12 @@ julia> randstring(MersenneTwister(3), 'a':'z', 6)
 
 julia> randstring("ACGT")
 "TGCTCCTC"
+
+julia> randstring(12)
+"SR5UY9TBNQuw"
+
+julia> randstring(['A':'Z'; '0':'9'], 8)
+"52A69RJ5"
 ```
 
 !!! note
