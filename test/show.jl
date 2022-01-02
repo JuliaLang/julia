@@ -758,14 +758,14 @@ let repr = sprint(show, "text/plain", methods(f5971))
     @test occursin("f5971(x::Any, y::Any...; z, w...)", repr)
 end
 let repr = sprint(show, "text/html", methods(f5971))
-    @test occursin("f5971(x, y::<b>Any...</b>; <i>z, w...</i>)", repr)
+    @test occursin("f5971(x::<b>Any</b>, y::<b>Any...</b>; <i>z, w...</i>)", repr)
 end
 f16580(x, y...; z=1, w=y+x, q...) = nothing
 let repr = sprint(show, "text/plain", methods(f16580))
     @test occursin("f16580(x::Any, y::Any...; z, w, q...)", repr)
 end
 let repr = sprint(show, "text/html", methods(f16580))
-    @test occursin("f16580(x, y::<b>Any...</b>; <i>z, w, q...</i>)", repr)
+    @test occursin("f16580(x::<b>Any</b>, y::<b>Any...</b>; <i>z, w, q...</i>)", repr)
 end
 
 function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
@@ -2274,7 +2274,7 @@ end
 
 @testset "method printing with non-standard identifiers ($mime)" for mime in ("text/plain", "text/html")
     _show(io, x) = show(io, MIME(mime), x)
-    _Any = mime == "text/html" ? "" : "::Any"
+    _Any = mime == "text/html" ? "::<b>Any</b>" : "::Any"
     italic(s) = mime == "text/html" ? "<i>$s</i>" : s
 
     @eval var","(x) = x

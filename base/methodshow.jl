@@ -397,7 +397,7 @@ function show(io::IO, ::MIME"text/html", m::Method)
     join(
         io,
         String[
-            isempty(d[2]) ? d[1] : string(d[1], "::<b>", d[2], "</b>") for d in decls[2:end]
+            string(d[1], "::<b>", isempty(d[2]) ? "Any" : d[2], "</b>") for d in decls[2:end]
         ],
         ", ",
         ", ",
