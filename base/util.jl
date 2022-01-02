@@ -292,7 +292,8 @@ Displays the `message` then waits for user input. Input is terminated when a new
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
 then the user can enter just a newline character to select the `default`.
 
-See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
+Do not use this function for entering passwords. See `Base.getpass` and `Base.winprompt` for
+secure entry of passwords.
 
 # Example
 
