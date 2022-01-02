@@ -755,14 +755,17 @@ end
 
 f5971(x, y...; z=1, w...) = nothing
 let repr = sprint(show, "text/plain", methods(f5971))
-    @test occursin("f5971(x, y...; z, w...)", repr)
+    @test occursin("f5971(x::Any, y::Any...; z, w...)", repr)
 end
 let repr = sprint(show, "text/html", methods(f5971))
-    @test occursin("f5971(x, y; <i>z, w...</i>)", repr)
+    @test occursin("f5971(x, y::<b>Any...</b>; <i>z, w...</i>)", repr)
 end
 f16580(x, y...; z=1, w=y+x, q...) = nothing
+let repr = sprint(show, "text/plain", methods(f16580))
+    @test occursin("f16580(x::Any, y::Any...; z, w, q...)", repr)
+end
 let repr = sprint(show, "text/html", methods(f16580))
-    @test occursin("f16580(x, y; <i>z, w, q...</i>)", repr)
+    @test occursin("f16580(x, y::<b>Any...</b>; <i>z, w, q...</i>)", repr)
 end
 
 function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
