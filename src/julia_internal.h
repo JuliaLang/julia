@@ -646,7 +646,11 @@ jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t 
 JL_DLLEXPORT void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
 int jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
+
+extern int currently_serializing;
+extern int currently_deserializing;
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isva, jl_value_t *rt_lb,
     jl_value_t *rt_ub, jl_value_t *source,  jl_value_t **env, size_t nenv);

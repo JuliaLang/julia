@@ -66,6 +66,13 @@ htable_t edges_map;
 // list of requested ccallable signatures
 static arraylist_t ccallable_list;
 
+// state of (de)serialization:
+//   0: not (de)serializing
+//   1: (de)serializing internal methods/types/etc
+//   2: (de)serializing external MethodInstances
+int currently_serializing = 0;
+int currently_deserializing = 0;
+
 typedef struct {
     ios_t *s;
     jl_ptls_t ptls;
@@ -700,13 +707,14 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             jl_serialize_value(s, (jl_value_t*)mi->uninferred);
         jl_serialize_value(s, (jl_value_t*)mi->specTypes);
         jl_serialize_value(s, mi->def.value);
-        if (!internal)
+        if (!internal && currently_serializing < 2)
             return;
         jl_serialize_value(s, (jl_value_t*)mi->sparam_vals);
         jl_array_t *backedges = mi->backedges;
         if (backedges) {
             // filter backedges to only contain pointers
             // to items that we will actually store (internal == 2)
+            // FIXME: might need adjustment for cached external methods?
             size_t ins, i, l = jl_array_len(backedges);
             jl_method_instance_t **b_edges = (jl_method_instance_t**)jl_array_data(backedges);
             for (ins = i = 0; i < l; i++) {
@@ -1574,7 +1582,8 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
         assert(loc != NULL && loc != HT_NOTFOUND);
         arraylist_push(&flagref_list, loc);
         arraylist_push(&flagref_list, (void*)pos);
-        return (jl_value_t*)mi;
+        if (currently_deserializing < 2)
+            return (jl_value_t*)mi;
     }
 
     if (internal == 1) {
@@ -1797,6 +1806,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             }
         }
         else {
+            assert(m);
             jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(jl_get_global(m, sym));
             assert(jl_is_datatype(dt));
             tn = dt->name;
@@ -2267,6 +2277,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     }
     JL_GC_PUSH2(&mod_array, &udeps);
     mod_array = jl_get_loaded_modules();
+    currently_serializing = 1;
 
     serializer_worklist = worklist;
     write_header(&f);
@@ -2376,6 +2387,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     write_int32(&f, 0); // mark the end of the source text
     ios_close(&f);
     JL_GC_POP();
+    currently_serializing = 0;
 
     return 0;
 }
@@ -2671,6 +2683,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     }
 
     // prepare to deserialize
+    currently_deserializing = 1;
     int en = jl_gc_enable(0);
     jl_gc_enable_finalizers(ct, 0);
     jl_atomic_fetch_add(&jl_world_counter, 1); // reserve a world age for the deserialization
@@ -2746,6 +2759,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     arraylist_free(&ccallable_list);
     jl_value_t *ret = (jl_value_t*)jl_svec(2, restored, init_order);
     JL_GC_POP();
+    currently_deserializing = 0;
 
     return (jl_value_t*)ret;
 }
