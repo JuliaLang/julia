@@ -837,6 +837,8 @@ end
     @test occursin("Evaluated: 0.9 ≈ 0.1 (nans=true, atol=0.01)", msg)
 end
 
+erronce() = @error "an error" maxlog=1
+
 @testset "@test_logs" begin
     function foo(n)
         @info "Doing foo with n=$n"
@@ -864,6 +866,10 @@ end
     @test_logs (Info,"Doing foo with n=2") (Debug,"Iteration 1") (Debug,"Iteration 2") min_level=Debug foo(2)
 
     @test_logs (Debug,"Iteration 5") min_level=Debug match_mode=:any foo(10)
+
+    # Respect `maxlog`
+    @test_logs (:error, "an error") erronce()
+    @test_logs erronce()
 
     # Test failures
     fails = @testset NoThrowTestSet "check that @test_logs detects bad input" begin
