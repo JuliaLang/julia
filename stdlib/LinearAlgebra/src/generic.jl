@@ -1120,8 +1120,6 @@ For input matrices/vectors `B` and `X` where the number of columns of `B` and `X
 the resultant matrice `A` such that `A*X ≈ B`. The size of the resultant matrice depends on the row size
 of `B` and row size of `X`.
 
-See also: [`pinv`](@ref).
-
 # Examples
 ```jldoctest
 julia> X = Float64[1 4 2; 3 4 2; 8 7 1]; B = Float64[1 4 5; 3 9 2];
