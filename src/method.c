@@ -752,6 +752,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->is_for_opaque_closure = 0;
     m->constprop = 0;
     JL_MUTEX_INIT(&m->writelock);
+    m->newrootsindex = INT32_MAX;
     return m;
 }
 

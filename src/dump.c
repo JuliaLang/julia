@@ -710,6 +710,21 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         if (!internal && currently_serializing < 2)
             return;
         jl_serialize_value(s, (jl_value_t*)mi->sparam_vals);
+        // Serialize additional roots of the method
+        if (!internal) {
+            jl_method_t *m = mi->def.method;
+            int newrootsindex = m->newrootsindex;
+            if (newrootsindex >= 0 && newrootsindex < INT32_MAX) {  // newrootsindex marks the start of the new roots
+                size_t i, l = jl_array_len(m->roots);
+                write_int32(s->s, l - newrootsindex);
+                for (i = newrootsindex; i < l; i++) {
+                    jl_serialize_value(s, (jl_value_t*)jl_array_ptr_ref(m->roots, i));
+                }
+                m->newrootsindex ^= (~INT32_MAX);  // flip the sign bit to indicate that the new roots have been serialized
+            } else {
+                write_int32(s->s, 0);
+            }
+        }
         jl_array_t *backedges = mi->backedges;
         if (backedges) {
             // filter backedges to only contain pointers
@@ -1493,6 +1508,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         (jl_method_t*)jl_gc_alloc(s->ptls, sizeof(jl_method_t),
                                   jl_method_type);
     memset(m, 0, sizeof(jl_method_t));
+    m->newrootsindex = INT32_MAX;
     uintptr_t pos = backref_list.len;
     arraylist_push(&backref_list, m);
     m->sig = (jl_value_t*)jl_deserialize_value(s, (jl_value_t**)&m->sig);
@@ -1592,6 +1608,24 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     }
     mi->sparam_vals = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&mi->sparam_vals);
     jl_gc_wb(mi, mi->sparam_vals);
+    if (!internal) {
+        // non-internal MethodInstances serialize extra Method roots, deserialize them now
+        int i, oldlen, nroots = read_int32(s->s);
+        if (nroots != 0) {
+            jl_method_t *m = mi->def.method;
+            assert(jl_is_method(m));
+            if (!m->roots) {
+                m->roots = jl_alloc_vec_any(0);
+                jl_gc_wb(m,  m->roots);
+            }
+            m->newrootsindex = oldlen = jl_array_len(m->roots);
+            jl_array_grow_end(m->roots, nroots);
+            jl_value_t **rootsdata = (jl_value_t**)jl_array_data(m->roots);
+            for (i = 0; i < nroots; i++) {
+                rootsdata[i+oldlen] = jl_deserialize_value(s, &(rootsdata[i+oldlen]));
+            }
+        }
+    }
     mi->backedges = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&mi->backedges);
     if (mi->backedges)
         jl_gc_wb(mi, mi->backedges);

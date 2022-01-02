@@ -326,6 +326,12 @@ typedef struct _jl_method_t {
 // hidden fields:
     // lock for modifications to the method
     jl_mutex_t writelock;
+    // During precompilation, mark the beginning of newly-added roots to externally-defined methods.
+    // The "resting state" is typemax(Int32), and only gets set to length(roots) at the first
+    // MethodInstance addition when jl_parent_module(module) != jl_precompile_toplevel_module.
+    // The top bit gets set during serialization after the new roots have been serialized, and after
+    // serialization finishes we reset the whole thing to typemax(Int32).
+    int32_t newrootsindex;
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method

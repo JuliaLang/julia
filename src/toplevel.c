@@ -269,9 +269,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
 
-    if (jl_generating_output()) {
-        jl_precompile_toplevel_module = newm;
-    }
+    jl_precompile_toplevel_module = old_toplevel_module;
 
     JL_GC_POP();
     return (jl_value_t*)newm;

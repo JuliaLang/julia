@@ -964,6 +964,8 @@ static void jl_write_values(jl_serializer_state *s)
 
             if (jl_is_method(v)) {
                 write_padding(s->s, sizeof(jl_method_t) - tot);
+                arraylist_push(&reinit_list, (void*)item);
+                arraylist_push(&reinit_list, (void*)4);
                 if (((jl_method_t*)v)->ccallable) {
                     arraylist_push(&ccallable_list, (void*)item);
                     arraylist_push(&ccallable_list, (void*)3);
@@ -1477,6 +1479,11 @@ static void jl_reinit_item(jl_value_t *v, int how) JL_GC_DISABLED
             jl_svec_t *sv = ((jl_method_t*)v)->ccallable;
             int success = jl_compile_extern_c(NULL, NULL, jl_sysimg_handle, jl_svecref(sv, 0), jl_svecref(sv, 1));
             assert(success); (void)success;
+            break;
+        }
+        case 4: { // reset newrootsindex
+            jl_method_t *m = (jl_method_t*)v;
+            m->newrootsindex = INT32_MAX;
             break;
         }
         default:

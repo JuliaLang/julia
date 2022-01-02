@@ -7419,12 +7419,18 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     // if we created any new roots during codegen
     if (ctx.roots) {
         jl_method_t *m = lam->def.method;
+        bool added = false;
+        bool external = jl_precompile_toplevel_module != NULL && jl_parent_module(m->module) != jl_precompile_toplevel_module;
+        int rootslen;
         JL_LOCK(&m->writelock);
         if (m->roots == NULL) {
+            rootslen = 0;
             m->roots = ctx.roots;
             jl_gc_wb(m, m->roots);
+            added = true;
         }
         else {
+            rootslen = jl_array_len(m->roots);
             size_t i, ilen = jl_array_dim0(ctx.roots);
             size_t j, jlen = jl_array_dim0(m->roots);
             for (i = 0; i < ilen; i++) {
@@ -7434,11 +7440,18 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                     if (ival == jval)
                         break;
                 }
-                if (j == jlen) // not found - add to array
+                if (j == jlen) { // not found - add to array
                     jl_array_ptr_1d_push(m->roots, ival);
+                    added = true;
+                }
             }
         }
         ctx.roots = NULL;
+        if (added & external) {
+            if (m->newrootsindex == INT32_MAX) {
+                m->newrootsindex = rootslen;
+            }
+        }
         JL_UNLOCK(&m->writelock);
     }
 

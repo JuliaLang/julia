@@ -62,8 +62,9 @@ extern "C" {
 #define TAG_GOTOIFNOT          54
 #define TAG_RETURNNODE         55
 #define TAG_ARGUMENT           56
+#define TAG_EXTERN_METHODROOT  57
 
-#define LAST_TAG 56
+#define LAST_TAG 57
 
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
