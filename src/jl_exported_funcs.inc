@@ -545,6 +545,8 @@
     YY(jl_unlock_profile) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
+    YY(jl_dump_emitted_mi_name) \
+    YY(jl_dump_llvm_opt) \
     YY(jl_dump_fptr_asm) \
     YY(jl_get_function_id) \
     YY(jl_type_to_llvm) \

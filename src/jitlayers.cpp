@@ -43,7 +43,7 @@ void jl_dump_compiles_impl(void *s)
 }
 JL_STREAM *dump_llvm_opt_stream = NULL;
 extern "C" JL_DLLEXPORT
-void jl_dump_llvm_opt(void *s)
+void jl_dump_llvm_opt_impl(void *s)
 {
     dump_llvm_opt_stream = (JL_STREAM*)s;
 }
