@@ -517,7 +517,7 @@ Enter your name:
 julia> your_name = readline()
 Logan
 "Logan"
-```   
+```
 ```jldoctest
 julia> open("my_file.txt", "w") do io
            write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
