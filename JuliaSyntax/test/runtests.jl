@@ -27,6 +27,10 @@ N(k, args::GreenNode...) = GreenNode(SyntaxHead(k, flags()), args...)
 # Non-trivia, infix form
 NI(k, args::GreenNode...) = GreenNode(SyntaxHead(k, flags(infix=true)), args...)
 
+module TokenizeTests
+    include("../Tokenize/test/runtests.jl")
+end
+
 include("parse_stream.jl")
 include("parser.jl")
 

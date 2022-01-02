@@ -1,5 +1,5 @@
-using Tokenize
-using Tokenize.Lexers
+using JuliaSyntax.Tokenize
+using JuliaSyntax.Tokenize.Lexers
 using Test
 
 const T = Tokenize.Tokens
@@ -485,7 +485,7 @@ end
 
 
 @testset "dotted and suffixed operators" begin
-ops = collect(values(Main.Tokenize.Tokens.UNICODE_OPS_REVERSE))
+ops = collect(values(Tokenize.Tokens.UNICODE_OPS_REVERSE))
 
 for op in ops
     op in (:isa, :in, :where, Symbol('\''), :?, :(:)) && continue
