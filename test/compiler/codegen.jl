@@ -51,7 +51,7 @@ end
 
 # This function tests if functions are output when compiled if jl_dump_compiles is enabled.
 # Have to go through pains with recursive function (eval probably not required) to make sure
-# that inlining won't happen.
+# that inlining won't happen. (Tests SnoopCompile.jl's @snoopc.)
 function test_jl_dump_compiles()
     tfile = tempname()
     io = open(tfile, "w")
@@ -67,7 +67,7 @@ function test_jl_dump_compiles()
 end
 
 # This function tests if a toplevel thunk is output if jl_dump_compiles is enabled.
-# The eval statement creates the toplevel thunk.
+# The eval statement creates the toplevel thunk. (Tests SnoopCompile.jl's @snoopc.)
 function test_jl_dump_compiles_toplevel_thunks()
     tfile = tempname()
     io = open(tfile, "w")
@@ -85,6 +85,25 @@ function test_jl_dump_compiles_toplevel_thunks()
     tempty = tstats.size == 0
     rm(tfile)
     @test tempty == true
+end
+
+# This function tests if LLVM optimization info is dumped when enabled (Tests
+# SnoopCompile.jl's @snoopl.)
+function test_jl_dump_llvm_opt()
+    func_file, llvm_file = tempname(), tempname()
+    func_io, llvm_io = open(func_file, "w"), open(llvm_file, "w")
+    @eval(test_jl_dump_compiles_internal(x) = x)
+    ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), func_io.handle)
+    ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), llvm_io.handle)
+    @eval test_jl_dump_compiles_internal(1)
+    ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), C_NULL)
+    ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), C_NULL)
+    close(func_io)
+    close(llvm_io)
+    @test stat(func_file).size !== 0
+    @test stat(llvm_file).size !== 0
+    rm(func_file)
+    rm(llvm_file)
 end
 
 if opt_level > 0
@@ -108,6 +127,7 @@ if opt_level > 0
 
     test_jl_dump_compiles()
     test_jl_dump_compiles_toplevel_thunks()
+    test_jl_dump_llvm_opt()
 end
 
 # Make sure we will not elide the allocation
