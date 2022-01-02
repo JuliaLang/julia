@@ -53,57 +53,55 @@ end
 # Have to go through pains with recursive function (eval probably not required) to make sure
 # that inlining won't happen. (Tests SnoopCompile.jl's @snoopc.)
 function test_jl_dump_compiles()
-    tfile = tempname()
-    io = open(tfile, "w")
-    @eval(test_jl_dump_compiles_internal(x) = x)
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
-    @eval test_jl_dump_compiles_internal(1)
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
-    close(io)
-    tstats = stat(tfile)
-    tempty = tstats.size == 0
-    rm(tfile)
-    @test tempty == false
+    mktemp() do tfile, io
+        @eval(test_jl_dump_compiles_internal(x) = x)
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
+        @eval test_jl_dump_compiles_internal(1)
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
+        close(io)
+        tstats = stat(tfile)
+        tempty = tstats.size == 0
+        @test tempty == false
+    end
 end
 
 # This function tests if a toplevel thunk is output if jl_dump_compiles is enabled.
 # The eval statement creates the toplevel thunk. (Tests SnoopCompile.jl's @snoopc.)
 function test_jl_dump_compiles_toplevel_thunks()
-    tfile = tempname()
-    io = open(tfile, "w")
-    # Make sure to cause compilation of the eval function
-    # before calling it below.
-    Core.eval(Main, Any[:(nothing)][1])
-    GC.enable(false)  # avoid finalizers to be compiled
-    topthunk = Meta.lower(Main, :(for i in 1:10; end))
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
-    Core.eval(Main, topthunk)
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
-    close(io)
-    GC.enable(true)
-    tstats = stat(tfile)
-    tempty = tstats.size == 0
-    rm(tfile)
-    @test tempty == true
+    mktemp() do tfile, io
+        # Make sure to cause compilation of the eval function
+        # before calling it below.
+        Core.eval(Main, Any[:(nothing)][1])
+        GC.enable(false)  # avoid finalizers to be compiled
+        topthunk = Meta.lower(Main, :(for i in 1:10; end))
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
+        Core.eval(Main, topthunk)
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
+        close(io)
+        GC.enable(true)
+        tstats = stat(tfile)
+        tempty = tstats.size == 0
+        @test tempty == true
+    end
 end
 
 # This function tests if LLVM optimization info is dumped when enabled (Tests
 # SnoopCompile.jl's @snoopl.)
 function test_jl_dump_llvm_opt()
-    func_file, llvm_file = tempname(), tempname()
-    func_io, llvm_io = open(func_file, "w"), open(llvm_file, "w")
-    @eval(test_jl_dump_compiles_internal(x) = x)
-    ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), func_io.handle)
-    ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), llvm_io.handle)
-    @eval test_jl_dump_compiles_internal(1)
-    ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), C_NULL)
-    ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), C_NULL)
-    close(func_io)
-    close(llvm_io)
-    @test stat(func_file).size !== 0
-    @test stat(llvm_file).size !== 0
-    rm(func_file)
-    rm(llvm_file)
+    mktemp() do func_file, func_io
+        mktemp() do llvm_file, llvm_io
+            @eval(test_jl_dump_compiles_internal(x) = x)
+            ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), func_io.handle)
+            ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), llvm_io.handle)
+            @eval test_jl_dump_compiles_internal(1)
+            ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), C_NULL)
+            ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), C_NULL)
+            close(func_io)
+            close(llvm_io)
+            @test stat(func_file).size !== 0
+            @test stat(llvm_file).size !== 0
+        end
+    end
 end
 
 if opt_level > 0
