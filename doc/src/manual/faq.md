@@ -140,6 +140,25 @@ parsing the file once it reaches to the `exec` statement.
     @show ARGS  # put any Julia code here
     ```
     instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
+    
+### Why doesn't `run` support `*` or pipes for scripting external programs?
+
+Julia's [`run`](@ref) function launches external programs *directly*, without
+invoking an [operating-system shell](https://en.wikipedia.org/wiki/Shell_(computing))
+(unlike the `system("...")` function in other languages like Python, R, or C).
+That means that `run` does not perform wildcard expansion of `*` (["globbing"](https://en.wikipedia.org/wiki/Glob_(programming))),
+nor does it interpret [shell pipelines](https://en.wikipedia.org/wiki/Pipeline_(Unix)) like `|` or `>`.
+
+You can still do globbing and pipelines using Julia features, however.  For example, the built-in
+[`pipeline`](@ref)` function allows you to chain external programs and files, similar to shell pipes, and
+the [Glob.jl package](https://github.com/vtjnash/Glob.jl) implements POSIX-compatible globbing.
+
+Alternatively, you can run programs through the shell simply by passing a shell and a command string to `run`,
+e.g. ``` run(`sh -c "ls * > files.txt"`) ``` to use the Unix [Bourne shell](https://en.wikipedia.org/wiki/Bourne_shell).
+The reason why we don't do this by default, and generally prefer pure-Julia scripting to relying on the shell, is
+that [shelling out sucks](https://julialang.org/blog/2012/03/shelling-out-sucks/): launching processes via the shell is
+slow, fragile to quoting of special characters, has poor error handling, and is problematic for portability.  (The Python
+developers came to a [similar conclusion](https://www.python.org/dev/peps/pep-0324/#motivation).)
 
 ## Functions
 
