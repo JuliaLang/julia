@@ -2575,6 +2575,22 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *mi
     if (ti == jl_bottom_type)
         env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
     jl_method_instance_t *_new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env);
+    if (_new->cache == NULL) {
+        jl_code_instance_t *ci = mi->cache;
+        if (ci) {
+            _new->cache = ci;
+            jl_printf(JL_STDOUT, "Recached codeinst for ");
+            jl_(mi);
+        }
+        while (ci) {
+            if (ci->inferred && ci->inferred != jl_nothing) {
+                // A decompression/compression cycle is needed to restore absolute root indexing
+                assert(jl_is_array(ci->inferred));
+                ci->inferred = (jl_value_t*) jl_compress_ir(m, jl_uncompress_ir(m, ci, (jl_array_t*)ci->inferred));
+            }
+            ci = ci->next;
+        }
+    }
     return _new;
 }
 
