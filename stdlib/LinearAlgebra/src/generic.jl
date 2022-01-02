@@ -1112,6 +1112,34 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
+
+"""
+    /(B, X)
+
+For input matrices/vectors `B` and `X` where the number of columns of `B` and `X` should be same, 
+the resultant matrice `A` such that `A*X ≈ B`. The size of the resultant matrice depends on the row size
+of `B` and row size of `X`.
+
+See also: [`pinv`](@ref).
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra
+
+julia> X = Float64[1 4 2; 3 4 2; 8 7 1]; B = Float64[1 4 5; 3 9 2];
+
+julia> A = B/X
+2×3 Matrix{Float64}:
+ -0.65   3.75  -1.2
+  3.25  -2.75   1.0
+
+julia> A ≈ B*pinv(X)
+true  
+
+julia> A*X ≈ B
+true
+```
+"""
 function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
     size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
     return copy(adjoint(adjoint(B) \ adjoint(A)))
