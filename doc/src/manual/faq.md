@@ -150,7 +150,7 @@ That means that `run` does not perform wildcard expansion of `*` (["globbing"](h
 nor does it interpret [shell pipelines](https://en.wikipedia.org/wiki/Pipeline_(Unix)) like `|` or `>`.
 
 You can still do globbing and pipelines using Julia features, however.  For example, the built-in
-[`pipeline`](@ref)` function allows you to chain external programs and files, similar to shell pipes, and
+[`pipeline`](@ref) function allows you to chain external programs and files, similar to shell pipes, and
 the [Glob.jl package](https://github.com/vtjnash/Glob.jl) implements POSIX-compatible globbing.
 
 Alternatively, you can run programs through the shell simply by passing a shell and a command string to `run`,
