@@ -1124,8 +1124,6 @@ See also: [`pinv`](@ref).
 
 # Examples
 ```jldoctest
-julia> using LinearAlgebra
-
 julia> X = Float64[1 4 2; 3 4 2; 8 7 1]; B = Float64[1 4 5; 3 9 2];
 
 julia> A = B/X
