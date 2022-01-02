@@ -86,7 +86,6 @@ const SpawnIOs = Vector{Any} # convenience name for readability
         handle = Libc.malloc(_sizeof_uv_process)
         disassociate_julia_struct(handle) # ensure that data field is set to C_NULL
         (; exec, flags, env, dir) = cmd
-        ccall(:jl_profile_atomic_lock, Cvoid, ())
         err = ccall(:jl_spawn, Int32,
                   (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                    Ptr{Tuple{Cint, UInt}}, Int,
@@ -97,7 +96,6 @@ const SpawnIOs = Vector{Any} # convenience name for readability
             env === nothing ? C_NULL : env,
             isempty(dir) ? C_NULL : dir,
             @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
-        ccall(:jl_profile_atomic_unlock, Cvoid, ())
     end
     if err != 0
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually

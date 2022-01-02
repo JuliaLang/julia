@@ -33,8 +33,6 @@ JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
 void jl_lock_profile(void);
 void jl_unlock_profile(void);
-void jl_profile_atomic_lock(void);
-void jl_profile_atomic_unlock(void);
 void jl_shuffle_int_array_inplace(volatile uint64_t *carray, size_t size, uint64_t *seed);
 
 JL_DLLEXPORT int jl_profile_is_buffer_full(void)

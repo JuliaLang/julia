@@ -114,6 +114,8 @@ extern jl_mutex_t jl_uv_mutex;
 extern _Atomic(int) jl_uv_n_waiters;
 void JL_UV_LOCK(void);
 #define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
+void jl_profile_atomic_lock(void);
+void jl_profile_atomic_unlock(void);
 
 #ifdef __cplusplus
 extern "C" {
