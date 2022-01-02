@@ -77,49 +77,49 @@ end # testset
             T.OP,T.IDENTIFIER,T.RBRACE,T.LPAREN,T.IDENTIFIER,T.OP,
             T.LBRACE,T.IDENTIFIER,T.RBRACE,T.OP,T.INTEGER,T.RPAREN,
 
-            T.WHITESPACE,T.AT_SIGN,T.IDENTIFIER,T.WHITESPACE,T.LPAREN,
+            T.NEWLINE_WS,T.AT_SIGN,T.IDENTIFIER,T.WHITESPACE,T.LPAREN,
             T.IDENTIFIER,T.OP,T.IDENTIFIER,T.COMMA,T.WHITESPACE,
             T.IDENTIFIER,T.OP,T.IDENTIFIER,T.RPAREN,T.SEMICOLON,
 
-            T.WHITESPACE,T.KEYWORD,
+            T.NEWLINE_WS,T.KEYWORD,
 
-            T.WHITESPACE,T.KEYWORD,
-            T.WHITESPACE,T.IDENTIFIER,
-            T.WHITESPACE,T.KEYWORD,
-            T.WHITESPACE,T.IDENTIFIER,
-            T.WHITESPACE,T.KEYWORD,
+            T.NEWLINE_WS,T.KEYWORD,
+            T.NEWLINE_WS,T.IDENTIFIER,
+            T.NEWLINE_WS,T.KEYWORD,
+            T.NEWLINE_WS,T.IDENTIFIER,
+            T.NEWLINE_WS,T.KEYWORD,
 
-            T.WHITESPACE,T.AT_SIGN,T.IDENTIFIER,T.WHITESPACE,T.IDENTIFIER,
+            T.NEWLINE_WS,T.AT_SIGN,T.IDENTIFIER,T.WHITESPACE,T.IDENTIFIER,
             T.OP,T.IDENTIFIER,
 
-            T.WHITESPACE,T.IDENTIFIER,T.LSQUARE,T.LSQUARE,T.INTEGER,T.WHITESPACE,
+            T.NEWLINE_WS,T.IDENTIFIER,T.LSQUARE,T.LSQUARE,T.INTEGER,T.WHITESPACE,
             T.INTEGER,T.WHITESPACE,T.INTEGER,T.RSQUARE,T.RSQUARE,
 
-            T.WHITESPACE,T.LSQUARE,T.INTEGER,T.OP,T.INTEGER,T.COMMA,T.INTEGER,
+            T.NEWLINE_WS,T.LSQUARE,T.INTEGER,T.OP,T.INTEGER,T.COMMA,T.INTEGER,
             T.SEMICOLON,T.INTEGER,T.COMMA,T.INTEGER,T.RSQUARE,
 
-            T.WHITESPACE,T.STRING,T.SEMICOLON,T.WHITESPACE,T.CHAR,
+            T.NEWLINE_WS,T.DQUOTE,T.STRING,T.DQUOTE,T.SEMICOLON,T.WHITESPACE,T.CHAR,
 
-            T.WHITESPACE,T.LPAREN,T.IDENTIFIER,T.OP,T.IDENTIFIER,T.RPAREN,T.OP,
+            T.NEWLINE_WS,T.LPAREN,T.IDENTIFIER,T.OP,T.IDENTIFIER,T.RPAREN,T.OP,
             T.LPAREN,T.IDENTIFIER,T.OP,T.IDENTIFIER,T.RPAREN,
 
-            T.WHITESPACE,T.COMMENT,
+            T.NEWLINE_WS,T.COMMENT,
 
-            T.WHITESPACE,T.COMMENT,
+            T.NEWLINE_WS,T.COMMENT,
 
-            T.WHITESPACE,T.INTEGER,T.OP,T.INTEGER,
+            T.NEWLINE_WS,T.INTEGER,T.OP,T.INTEGER,
 
-            T.WHITESPACE,T.IDENTIFIER,T.OP,T.OP,T.IDENTIFIER,T.OP,
+            T.NEWLINE_WS,T.IDENTIFIER,T.OP,T.OP,T.IDENTIFIER,T.OP,
 
-            T.WHITESPACE,T.IDENTIFIER,T.OP,T.OP,T.OP,T.IDENTIFIER,T.OP,T.OP,
+            T.NEWLINE_WS,T.IDENTIFIER,T.OP,T.OP,T.OP,T.IDENTIFIER,T.OP,T.OP,
 
-            T.WHITESPACE,T.CMD,
+            T.NEWLINE_WS,T.BACKTICK,T.STRING,T.BACKTICK,
 
-            T.WHITESPACE,T.INTEGER,T.IDENTIFIER,T.LPAREN,T.INTEGER,T.RPAREN,
+            T.NEWLINE_WS,T.INTEGER,T.IDENTIFIER,T.LPAREN,T.INTEGER,T.RPAREN,
 
-            T.WHITESPACE,T.LBRACE,T.RBRACE,
+            T.NEWLINE_WS,T.LBRACE,T.RBRACE,
 
-            T.WHITESPACE,T.ERROR,T.ENDMARKER]
+            T.NEWLINE_WS,T.ERROR,T.ENDMARKER]
 
     for (i, n) in enumerate(tokenize(str))
         @test Tokens.kind(n) == kinds[i]
@@ -213,9 +213,9 @@ end
        1
        """))
 
-    kinds = [T.COMMENT, T.WHITESPACE,
-             T.TRIPLE_STRING, T.WHITESPACE,
-             T.INTEGER, T.WHITESPACE,
+    kinds = [T.COMMENT, T.NEWLINE_WS,
+             T.TRIPLE_DQUOTE, T.STRING, T.TRIPLE_DQUOTE, T.NEWLINE_WS,
+             T.INTEGER, T.NEWLINE_WS,
              T.ENDMARKER]
     @test T.kind.(toks) == kinds
 end
@@ -244,6 +244,7 @@ end
 @testset "keywords" begin
       for kw in    ["function",
                     "abstract",
+                    "as",
                     "baremodule",
                     "begin",
                     "break",
@@ -264,7 +265,6 @@ end
                     "local",
                     "if",
                     "import",
-                    "importall",
                     "macro",
                     "module",
                     "mutable",
@@ -290,9 +290,6 @@ end
     @test tok("#=   #=   =#",           1).kind == T.ERROR
     @test tok("'dsadsa",                1).kind == T.ERROR
     @test tok("aa **",                  3).kind == T.ERROR
-    @test tok("aa \"   ",               3).kind == T.ERROR
-    @test tok("aa \"\"\" \"dsad\" \"\"",3).kind == T.ERROR
-
 end
 
 @testset "xor_eq" begin
@@ -305,33 +302,111 @@ end
 
 @testset "show" begin
     io = IOBuffer()
-    show(io, collect(tokenize("\"abc\nd\"ef"))[1])
-    @test String(take!(io)) == "1,1-2,2          STRING         \"\\\"abc\\nd\\\"\""
+    show(io, collect(tokenize("\"abc\nd\"ef"))[2])
+    @test String(take!(io)) == "1,2-2,1          STRING         \"abc\\nd\""
 end
 
+~(tok::T.AbstractToken, t::Tuple) = tok.kind == t[1] && untokenize(tok) == t[2]
+
+@testset "raw strings" begin
+    ts = collect(tokenize(raw""" str"x $ \ y" """))
+    @test ts[1] ~ (T.WHITESPACE , " "        )
+    @test ts[2] ~ (T.IDENTIFIER , "str"      )
+    @test ts[3] ~ (T.DQUOTE     , "\""       )
+    @test ts[4] ~ (T.STRING     , "x \$ \\ y")
+    @test ts[5] ~ (T.DQUOTE     , "\""       )
+    @test ts[6] ~ (T.WHITESPACE , " "        )
+    @test ts[7] ~ (T.ENDMARKER  , ""         )
+
+    ts = collect(tokenize(raw"""`x $ \ y`"""))
+    @test ts[1] ~ (T.BACKTICK  , "`"         )
+    @test ts[2] ~ (T.STRING    , "x \$ \\ y" )
+    @test ts[3] ~ (T.BACKTICK  , "`"         )
+    @test ts[4] ~ (T.ENDMARKER , ""          )
+end
 
 @testset "interpolation" begin
-    str = """"str: \$(g("str: \$(h("str"))"))" """
-    ts = collect(tokenize(str))
-    @test length(ts)==3
-    @test ts[1].kind == Tokens.STRING
-    @test ts[1].val == strip(str)
-    ts = collect(tokenize("""\"\$\""""))
-    @test ts[1].kind == Tokens.STRING
+    @testset "basic interpolation" begin
+        ts = collect(tokenize("\"\$x \$y\""))
+        @test ts[1]  ~ (T.DQUOTE     , "\"")
+        @test ts[2]  ~ (T.EX_OR      , "\$")
+        @test ts[3]  ~ (T.IDENTIFIER , "x" )
+        @test ts[4]  ~ (T.STRING     , " " )
+        @test ts[5]  ~ (T.EX_OR      , "\$")
+        @test ts[6]  ~ (T.IDENTIFIER , "y" )
+        @test ts[7]  ~ (T.DQUOTE     , "\"")
+        @test ts[8]  ~ (T.ENDMARKER  , ""  )
+    end
 
-    # issue 73:
-    t_err = tok("\"\$(fdsf\"")
-    @test t_err.kind == Tokens.ERROR
-    @test t_err.token_error == Tokens.EOF_STRING
-    @test Tokenize.Tokens.startpos(t_err) == (1,1)
-    @test Tokenize.Tokens.endpos(t_err) == (1,8)
+    @testset "nested interpolation" begin
+        str = """"str: \$(g("str: \$(h("str"))"))" """
+        ts = collect(tokenize(str))
+        @test length(ts) == 23
+        @test ts[1]  ~ (T.DQUOTE    , "\""   )
+        @test ts[2]  ~ (T.STRING    , "str: ")
+        @test ts[3]  ~ (T.EX_OR     , "\$"   )
+        @test ts[4]  ~ (T.LPAREN    , "("    )
+        @test ts[5]  ~ (T.IDENTIFIER, "g"    )
+        @test ts[6]  ~ (T.LPAREN    , "("    )
+        @test ts[7]  ~ (T.DQUOTE    , "\""   )
+        @test ts[8]  ~ (T.STRING    , "str: ")
+        @test ts[9]  ~ (T.EX_OR     , "\$"   )
+        @test ts[10] ~ (T.LPAREN    , "("    )
+        @test ts[11] ~ (T.IDENTIFIER, "h"    )
+        @test ts[12] ~ (T.LPAREN    , "("    )
+        @test ts[13] ~ (T.DQUOTE    , "\""   )
+        @test ts[14] ~ (T.STRING    , "str"  )
+        @test ts[15] ~ (T.DQUOTE    , "\""   )
+        @test ts[16] ~ (T.RPAREN    , ")"    )
+        @test ts[17] ~ (T.RPAREN    , ")"    )
+        @test ts[18] ~ (T.DQUOTE    , "\""   )
+        @test ts[19] ~ (T.RPAREN    , ")"    )
+        @test ts[20] ~ (T.RPAREN    , ")"    )
+        @test ts[21] ~ (T.DQUOTE    , "\""   )
+        @test ts[22] ~ (T.WHITESPACE, " "    )
+        @test ts[23] ~ (T.ENDMARKER , ""     )
+    end
 
-    # issue 178:
-    str = """"\$uₕx \$(uₕx - ux)" """
-    ts = collect(tokenize(str))
-    @test length(ts)==3
-    @test ts[1].kind == Tokens.STRING
-    @test ts[1].val == strip(str)
+    @testset "duplicate \$ in interpolation" begin
+        ts = collect(tokenize("\"\$\$\""))
+        @test ts[1]  ~ (T.DQUOTE     , "\"")
+        @test ts[2]  ~ (T.EX_OR      , "\$")
+        @test ts[3]  ~ (T.EX_OR      , "\$")
+        @test ts[4]  ~ (T.DQUOTE     , "\"")
+        @test ts[5]  ~ (T.ENDMARKER  , ""  )
+    end
+
+    @testset "Unmatched parens in interpolation" begin
+        # issue 73: https://github.com/JuliaLang/Tokenize.jl/issues/73
+        ts = collect(tokenize("\"\$(fdsf\""))
+        @test ts[1] ~ (T.DQUOTE     , "\""   )
+        @test ts[2] ~ (T.EX_OR      , "\$"   )
+        @test ts[3] ~ (T.LPAREN     , "("    )
+        @test ts[4] ~ (T.IDENTIFIER , "fdsf" )
+        @test ts[5] ~ (T.DQUOTE     , "\""   )
+        @test ts[6] ~ (T.ENDMARKER  , ""     )
+    end
+
+    @testset "Unicode in interpolation" begin
+        # issue 178: https://github.com/JuliaLang/Tokenize.jl/issues/178
+        ts = collect(tokenize(""" "\$uₕx \$(uₕx - ux)" """))
+        @test ts[ 1] ~ (T.WHITESPACE , " "   )
+        @test ts[ 2] ~ (T.DQUOTE     , "\""  )
+        @test ts[ 3] ~ (T.EX_OR      , "\$"  )
+        @test ts[ 4] ~ (T.IDENTIFIER , "uₕx" )
+        @test ts[ 5] ~ (T.STRING     , " "   )
+        @test ts[ 6] ~ (T.EX_OR      , "\$"  )
+        @test ts[ 7] ~ (T.LPAREN     , "("   )
+        @test ts[ 8] ~ (T.IDENTIFIER , "uₕx" )
+        @test ts[ 9] ~ (T.WHITESPACE , " "   )
+        @test ts[10] ~ (T.MINUS      , "-"   )
+        @test ts[11] ~ (T.WHITESPACE , " "   )
+        @test ts[12] ~ (T.IDENTIFIER , "ux"  )
+        @test ts[13] ~ (T.RPAREN     , ")"   )
+        @test ts[14] ~ (T.DQUOTE     , "\""  )
+        @test ts[15] ~ (T.WHITESPACE , " "   )
+        @test ts[16] ~ (T.ENDMARKER  , ""    )
+    end
 end
 
 @testset "inferred" begin
@@ -446,11 +521,21 @@ end
 end
 
 @testset "CMDs" begin
-    @test tok("`cmd`").kind == T.CMD
-    @test tok("```cmd```", 1).kind == T.TRIPLE_CMD
-    @test tok("```cmd```", 2).kind == T.ENDMARKER
-    @test tok("```cmd````cmd`", 1).kind == T.TRIPLE_CMD
-    @test tok("```cmd````cmd`", 2).kind == T.CMD
+    @test tok("`cmd`",1).kind == T.BACKTICK
+    @test tok("`cmd`",2).kind == T.STRING
+    @test tok("`cmd`",3).kind == T.BACKTICK
+    @test tok("`cmd`",4).kind == T.ENDMARKER
+    @test tok("```cmd```", 1).kind == T.TRIPLE_BACKTICK
+    @test tok("```cmd```", 2).kind == T.STRING
+    @test tok("```cmd```", 3).kind == T.TRIPLE_BACKTICK
+    @test tok("```cmd```", 4).kind == T.ENDMARKER
+    @test tok("```cmd````cmd`", 1).kind == T.TRIPLE_BACKTICK
+    @test tok("```cmd````cmd`", 2).kind == T.STRING
+    @test tok("```cmd````cmd`", 3).kind == T.TRIPLE_BACKTICK
+    @test tok("```cmd````cmd`", 4).kind == T.BACKTICK
+    @test tok("```cmd````cmd`", 5).kind == T.STRING
+    @test tok("```cmd````cmd`", 6).kind == T.BACKTICK
+    @test tok("```cmd````cmd`", 7).kind == T.ENDMARKER
 end
 
 @testset "where" begin
@@ -463,24 +548,12 @@ end
     @test length(collect(tokenize(io))) == 4
 end
 
-@testset "complicated interpolations" begin
-    @test length(collect(tokenize("\"\$(())\""))) == 2
-    @test length(collect(tokenize("\"\$(#=inline ) comment=#\"\")\""))) == 2
-    @test length(collect(tokenize("\"\$(string(`inline ')' cmd`)\"\")\""))) == 2
-    # These would require special interpolation support in the parse (Base issue #3150).
-    # If that gets implemented, thses should all be adjust to `== 2`
-    @test length(collect(tokenize("`\$((``))`"))) == 2
-    @test length(collect(tokenize("`\$(#=inline ) comment=#``)`"))) == 2
-    @test length(collect(tokenize("`\$(\"inline ) string\"*string(``))`"))) == 2
-end
-
-
 @testset "hex/bin/octal errors" begin
-@test tok("0x").kind == T.ERROR
-@test tok("0b").kind == T.ERROR
-@test tok("0o").kind == T.ERROR
-@test tok("0x 2", 1).kind == T.ERROR
-@test tok("0x.1p1").kind == T.FLOAT
+    @test tok("0x").kind == T.ERROR
+    @test tok("0b").kind == T.ERROR
+    @test tok("0o").kind == T.ERROR
+    @test tok("0x 2", 1).kind == T.ERROR
+    @test tok("0x.1p1").kind == T.FLOAT
 end
 
 
@@ -563,16 +636,6 @@ end
     @test tok("1.?").kind == Tokens.ERROR
 end
 
-@testset "interpolation of char within string" begin
-    s = "\"\$('\"')\""
-    @test collect(tokenize(s))[1].kind == Tokenize.Tokens.STRING
-end
-
-@testset "interpolation of prime within string" begin
-    s = "\"\$(a')\""
-    @test collect(tokenize(s))[1].kind == Tokenize.Tokens.STRING
-end
-
 @testset "comments" begin
     s = "#=# text=#"
     @test length(collect(tokenize(s, Tokens.RawToken))) == 2
@@ -624,53 +687,59 @@ end
     @test all(s->Base.isoperator(Symbol(s)) == Tokens.isoperator(first(collect(tokenize(s))).kind), allops)
 end
 
-@testset "simple_hash" begin
-    is_kw(x) = uppercase(x) in (
-        "ABSTRACT",
-        "BAREMODULE",
-        "BEGIN",
-        "BREAK",
-        "CATCH",
-        "CONST",
-        "CONTINUE",
-        "DO",
-        "ELSE",
-        "ELSEIF",
-        "END",
-        "EXPORT",
-        "FINALLY",
-        "FOR",
-        "FUNCTION",
-        "GLOBAL",
-        "IF",
-        "IMPORT",
-        "IMPORTALL",
-        "LET",
-        "LOCAL",
-        "MACRO",
-        "MODULE",
-        "MUTABLE",
-        "OUTER",
-        "PRIMITIVE",
-        "QUOTE",
-        "RETURN",
-        "STRUCT",
-        "TRY",
-        "TYPE",
-        "USING",
-        "WHILE",
-        "IN",
-        "ISA",
-        "WHERE",
-        "TRUE",
-        "FALSE",
-    )
-    for len in 1:5
-        for cs in Iterators.product(['a':'z' for _ in 1:len]...)
-            str = String([cs...])
-            is_kw(str) && continue
+const all_kws = Set(["abstract",
+    "as",
+    "baremodule",
+    "begin",
+    "break",
+    "catch",
+    "const",
+    "continue",
+    "do",
+    "else",
+    "elseif",
+    "end",
+    "export",
+    "finally",
+    "for",
+    "function",
+    "global",
+    "if",
+    "import",
+    "let",
+    "local",
+    "macro",
+    "module",
+    "mutable",
+    "outer",
+    "primitive",
+    "quote",
+    "return",
+    "struct",
+    "try",
+    "type",
+    "using",
+    "while",
+    "in",
+    "isa",
+    "where",
+    "true",
+    "false",
+])
 
-            @test Tokenize.Lexers.simple_hash(str) ∉ keys(Tokenize.Lexers.kw_hash)
+function check_kw_hashes(iter)
+    for cs in iter
+        str = String([cs...])
+        if Lexers.simple_hash(str) in keys(Tokenize.Lexers.kw_hash)
+            @test str in all_kws
         end
+    end
+end
+
+@testset "simple_hash" begin
+    @test length(all_kws) == length(Tokenize.Lexers.kw_hash)
+
+    @testset "Length $len keywords" for len in 1:5
+        check_kw_hashes(String([cs...]) for cs in Iterators.product(['a':'z' for _ in 1:len]...))
     end
 end
