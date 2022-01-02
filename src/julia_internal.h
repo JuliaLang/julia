@@ -606,6 +606,7 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
 void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), void *env);
 void jl_init_main_module(void);
 JL_DLLEXPORT int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_module_t *jl_parent_module(jl_module_t *module);
 jl_array_t *jl_get_loaded_modules(void);
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree);
 

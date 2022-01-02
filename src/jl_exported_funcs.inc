@@ -360,6 +360,7 @@
     XX(jl_object_id_) \
     XX(jl_obvious_subtype) \
     XX(jl_operator_precedence) \
+    XX(jl_parent_module) \
     XX(jl_parse) \
     XX(jl_parse_all) \
     XX(jl_parse_input_line) \
