@@ -202,9 +202,11 @@ by setting: ``` export JULIA_PKG_SERVER="" ```
 ### `JULIA_PKG_SERVER_REGISTRY_PREFERENCE`
 
 Specifies the preferred registry flavor. Currently supported values are `conservative`
-(the default), which will only publish resources that have been processed, and `eager`,
-which will closely track the upstream repository, but may not have all resources
-available.
+(the default), which will only publish resources that have been processed by the storage
+server (and thereby have a higher probability of being available from the PkgServers),
+whereas `eager` will publish registries whose resources have not necessarily been
+processed by the storage servers.  Users behind restrictive firewalls that do not allow
+downloading from arbitrary servers should not use the `eager` flavor.
 
 !!! compat "Julia 1.7"
     This only affects Julia 1.7 and above.
