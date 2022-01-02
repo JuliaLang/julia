@@ -65,23 +65,36 @@ extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void)
     uv_rwlock_rdunlock(&threadsafe);
 }
 
+#ifndef _OS_WINDOWS_
+sigset_t sset;
+sigset_t oset;
+#endif
+
+extern "C" JL_DLLEXPORT void jl_profile_atomic_lock_impl(void)
+{
+    uv_rwlock_wrlock(&threadsafe);
+#ifndef _OS_WINDOWS_
+    sigfillset(&sset);
+    pthread_sigmask(SIG_BLOCK, &sset, &oset);
+#endif
+}
+
+extern "C" JL_DLLEXPORT void jl_profile_atomic_unlock_impl(void)
+{
+#ifndef _OS_WINDOWS_
+    pthread_sigmask(SIG_SETMASK, &oset, NULL);
+#endif
+    uv_rwlock_wrunlock(&threadsafe);
+}
+
 // some actions aren't signal (especially profiler) safe so we acquire a lock
 // around them to establish a mutual exclusion with unwinding from a signal
 template <typename T>
 static void jl_profile_atomic(T f)
 {
-    uv_rwlock_wrlock(&threadsafe);
-#ifndef _OS_WINDOWS_
-    sigset_t sset;
-    sigset_t oset;
-    sigfillset(&sset);
-    pthread_sigmask(SIG_BLOCK, &sset, &oset);
-#endif
+    jl_profile_atomic_lock_impl();
     f();
-#ifndef _OS_WINDOWS_
-    pthread_sigmask(SIG_SETMASK, &oset, NULL);
-#endif
-    uv_rwlock_wrunlock(&threadsafe);
+    jl_profile_atomic_unlock_impl();
 }
 
 

@@ -74,6 +74,14 @@ JL_DLLEXPORT void jl_unlock_profile_fallback(void)
 {
 }
 
+JL_DLLEXPORT void jl_profile_atomic_lock_fallback(void)
+{
+}
+
+JL_DLLEXPORT void jl_profile_atomic_unlock_fallback(void)
+{
+}
+
 JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)

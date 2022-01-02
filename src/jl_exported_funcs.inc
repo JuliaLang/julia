@@ -543,6 +543,8 @@
     YY(jl_jit_total_bytes) \
     YY(jl_lock_profile) \
     YY(jl_unlock_profile) \
+    YY(jl_profile_atomic_lock) \
+    YY(jl_profile_atomic_unlock) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_fptr_asm) \
