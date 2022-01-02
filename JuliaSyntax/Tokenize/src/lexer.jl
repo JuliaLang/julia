@@ -24,6 +24,21 @@ export tokenize
 @inline isoctal(c::Char) =  '0' ≤ c ≤ '7'
 @inline iswhitespace(c::Char) = Base.isspace(c)
 
+struct StringState
+    triplestr::Bool
+    raw::Bool
+    delim::Char
+    paren_depth::Int
+end
+
+"""
+`Lexer` reads from an input stream and emits a single token each time
+`next_token` is called.
+
+Ideally a lexer is stateless but some state is needed here for:
+* Disambiguating cases like x' (adjoint) vs 'x' (character literal)
+* Tokenizing code within string interpolations
+"""
 mutable struct Lexer{IO_t <: IO, T <: AbstractToken}
     io::IO_t
     io_startpos::Int
@@ -37,9 +52,10 @@ mutable struct Lexer{IO_t <: IO, T <: AbstractToken}
     current_pos::Int
 
     last_token::Tokens.Kind
+    string_states::Vector{StringState}
     charstore::IOBuffer
-    chars::Tuple{Char,Char,Char}
-    charspos::Tuple{Int,Int,Int}
+    chars::Tuple{Char,Char,Char,Char}
+    charspos::Tuple{Int,Int,Int,Int}
     doread::Bool
     dotop::Bool
 end
@@ -50,18 +66,27 @@ function Lexer(io::IO_t, T::Type{TT} = Token) where {IO_t,TT <: AbstractToken}
     if eof(io)
         c2, p2 = EOF_CHAR, p1
         c3, p3 = EOF_CHAR, p1
+        c4, p4 = EOF_CHAR, p1
     else
         c2 = read(io, Char)
         p2 = position(io)
         if eof(io)
             c3, p3 = EOF_CHAR, p1
+            c4, p4 = EOF_CHAR, p1
         else
             c3 = read(io, Char)
             p3 = position(io)
+            if eof(io)
+                c4, p4 = EOF_CHAR, p1
+            else
+                c4 = read(io, Char)
+                p4 = position(io)
+            end
         end
-
     end
-    Lexer{IO_t,T}(io, position(io), 1, 1, position(io), 1, 1, position(io), Tokens.ERROR, IOBuffer(), (c1,c2,c3), (p1,p2,p3), false, false)
+    Lexer{IO_t,T}(io, position(io), 1, 1, position(io), 1, 1, position(io),
+                  Tokens.ERROR, Vector{StringState}(), IOBuffer(),
+                  (c1,c2,c3,c4), (p1,p2,p3,p4), false, false)
 end
 Lexer(str::AbstractString, T::Type{TT} = Token) where TT <: AbstractToken = Lexer(IOBuffer(str), T)
 
@@ -145,6 +170,13 @@ Returns the next two characters without changing the lexer's state.
 dpeekchar(l::Lexer) = l.chars[2], l.chars[3]
 
 """
+peekchar3(l::Lexer)
+
+Returns the next three characters without changing the lexer's state.
+"""
+peekchar3(l::Lexer) = l.chars[2], l.chars[3], l.chars[4]
+
+"""
     position(l::Lexer)
 
 Returns the current position.
@@ -181,8 +213,8 @@ function readchar end
 
 function readchar(l::Lexer{I}) where {I <: IO}
     c = readchar(l.io)
-    l.chars = (l.chars[2], l.chars[3], c)
-    l.charspos = (l.charspos[2], l.charspos[3], position(l.io))
+    l.chars = (l.chars[2], l.chars[3], l.chars[4], c)
+    l.charspos = (l.charspos[2], l.charspos[3], l.charspos[4], position(l.io))
     if l.doread
         write(l.charstore, l.chars[1])
     end
@@ -248,7 +280,7 @@ end
 
 Returns a `Token` of kind `kind` with contents `str` and starts a new `Token`.
 """
-function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR) where IO_t
+function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR, triplestr::Bool=false) where IO_t
     suffix = false
     if kind in (Tokens.ERROR, Tokens.STRING, Tokens.TRIPLE_STRING, Tokens.CMD, Tokens.TRIPLE_CMD)
         str = String(l.io.data[(l.token_startpos + 1):position(l)])
@@ -266,14 +298,14 @@ function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR)
     tok = Token(kind, (l.token_start_row, l.token_start_col),
             (l.current_row, l.current_col - 1),
             startpos(l), position(l) - 1,
-            str, err, l.dotop, suffix)
+            str, err, l.dotop, suffix, triplestr)
     l.dotop = false
     l.last_token = kind
     readoff(l)
     return tok
 end
 
-function emit(l::Lexer{IO_t,RawToken}, kind::Kind, err::TokenError = Tokens.NO_ERR) where IO_t
+function emit(l::Lexer{IO_t,RawToken}, kind::Kind, err::TokenError = Tokens.NO_ERR, triplestr::Bool=false) where IO_t
     suffix = false
     if optakessuffix(kind)
         while isopsuffix(peekchar(l))
@@ -284,7 +316,7 @@ function emit(l::Lexer{IO_t,RawToken}, kind::Kind, err::TokenError = Tokens.NO_E
 
     tok = RawToken(kind, (l.token_start_row, l.token_start_col),
                   (l.current_row, l.current_col - 1),
-                  startpos(l), position(l) - 1, err, l.dotop, suffix)
+                  startpos(l), position(l) - 1, err, l.dotop, suffix, triplestr)
 
     l.dotop = false
     l.last_token = kind
@@ -309,7 +341,14 @@ Returns the next `Token`.
 """
 function next_token(l::Lexer, start = true)
     start && start_token!(l)
-    c = readchar(l)
+    if !isempty(l.string_states)
+        lex_string_chunk(l)
+    else
+        _next_token(l, readchar(l))
+    end
+end
+
+function _next_token(l::Lexer, c)
     if eof(c)
         return emit(l, Tokens.ENDMARKER)
     elseif iswhitespace(c)
@@ -379,9 +418,9 @@ function next_token(l::Lexer, start = true)
     elseif c == '-'
         return lex_minus(l);
     elseif c == '`'
-        return lex_cmd(l);
+        return lex_backtick(l);
     elseif is_identifier_start_char(c)
-        return lex_identifier(l, c)
+        return lex_identifier(l, c, true)
     elseif isdigit(c)
         return lex_digit(l, Tokens.INTEGER)
     elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR
@@ -391,6 +430,81 @@ function next_token(l::Lexer, start = true)
     end
 end
 
+# We're inside a string; possibly reading the string characters, or maybe in
+# Julia code within an interpolation.
+function lex_string_chunk(l)
+    state = last(l.string_states)
+    if state.paren_depth > 0
+        # Read normal Julia code inside an interpolation but track nesting of
+        # parentheses.
+        c = readchar(l)
+        if c == '('
+            l.string_states[end] = StringState(state.triplestr, state.raw, state.delim,
+                                               state.paren_depth + 1)
+            return emit(l, Tokens.LPAREN)
+        elseif c == ')'
+            l.string_states[end] = StringState(state.triplestr, state.raw, state.delim,
+                                               state.paren_depth - 1)
+            return emit(l, Tokens.RPAREN)
+        else
+            return _next_token(l, c)
+        end
+    elseif l.last_token == Tokens.EX_OR
+        pc = peekchar(l)
+        # Interpolated symbol or expression
+        if pc == '('
+            readchar(l)
+            l.string_states[end] = StringState(state.triplestr, state.raw, state.delim,
+                                               state.paren_depth + 1)
+            return emit(l, Tokens.LPAREN)
+        elseif is_identifier_start_char(pc)
+            return lex_identifier(l, readchar(l), false)
+        else
+            # Getting here is a syntax error - fall through to reading string
+            # characters and let the parser deal with it.
+        end
+    end
+    pc = peekchar(l)
+    if eof(pc)
+        return emit(l, Tokens.ENDMARKER)
+    elseif !state.raw && pc == '$'
+        # Start interpolation
+        readchar(l)
+        return emit(l, Tokens.EX_OR)
+    elseif pc == state.delim && string_terminates(l, state.delim, state.triplestr)
+        # Terminate string
+        pop!(l.string_states)
+        readchar(l)
+        if state.triplestr
+            readchar(l); readchar(l)
+            return emit(l, state.delim == '"' ?
+                        Tokens.TRIPLE_DQUOTE : Tokens.TRIPLE_BACKTICK)
+        else
+            return emit(l, state.delim == '"' ? Tokens.DQUOTE : Tokens.BACKTICK)
+        end
+    end
+    readon(l)
+    # Read a chunk of string characters
+    if state.raw
+        read_raw_string(l, state.delim, state.triplestr)
+    else
+        while true
+            pc = peekchar(l)
+            if pc == '$' || eof(pc)
+                break
+            elseif pc == state.delim && string_terminates(l, state.delim, state.triplestr)
+                break
+            end
+            c = readchar(l)
+            if c == '\\'
+                c = readchar(l)
+                eof(c) && break
+                continue
+            end
+        end
+    end
+    return emit(l, Tokens.STRING, Tokens.NO_ERR, state.triplestr)
+end
 
 # Lex whitespace, a whitespace char `c` has been consumed
 function lex_whitespace(l::Lexer, c)
@@ -780,60 +894,57 @@ end
 
 # Parse a token starting with a quote.
 # A '"' has been consumed
-function lex_quote(l::Lexer, doemit=true)
-    readon(l)
-    if accept(l, '"') # ""
-        if accept(l, '"') # """
-            if read_string(l, Tokens.TRIPLE_STRING)
-                return doemit ? emit(l, Tokens.TRIPLE_STRING) : EMPTY_TOKEN(token_type(l))
-            else
-                return doemit ? emit_error(l, Tokens.EOF_STRING) : EMPTY_TOKEN(token_type(l))
-            end
-        else # empty string
-            return doemit ? emit(l, Tokens.STRING) : EMPTY_TOKEN(token_type(l))
-        end
-    else # "?, ? != '"'
-        if read_string(l, Tokens.STRING)
-            return doemit ? emit(l, Tokens.STRING) : EMPTY_TOKEN(token_type(l))
-        else
-            return doemit ? emit_error(l, Tokens.EOF_STRING) : EMPTY_TOKEN(token_type(l))
-        end
+function lex_quote(l::Lexer)
+    raw = l.last_token == Tokens.IDENTIFIER || l.last_token == Tokens.KEYWORD
+    pc, dpc = dpeekchar(l)
+    triplestr = pc == '"' && dpc == '"'
+    push!(l.string_states, StringState(triplestr, raw, '"', 0))
+    if triplestr
+        readchar(l)
+        readchar(l)
+        emit(l, Tokens.TRIPLE_DQUOTE)
+    else
+        emit(l, Tokens.DQUOTE)
     end
 end
 
 # Lex var"..." identifiers.
 # The prefix `var"` has been consumed
 function lex_var(l::Lexer)
-    if read_raw_string(l, Tokens.STRING)
+    read_raw_string(l, '"', false)
+    if readchar(l) == '"'
         return emit(l, Tokens.VAR_IDENTIFIER)
     else
         return emit_error(l, Tokens.EOF_VAR)
     end
 end
 
-function string_terminated(l, kind::Tokens.Kind)
-    if kind == Tokens.STRING && l.chars[1] == '"'
-        return true
-    elseif kind == Tokens.TRIPLE_STRING && l.chars[1] == l.chars[2] == l.chars[3] == '"'
-        readchar(l)
-        readchar(l)
-        return true
-    elseif kind == Tokens.CMD && l.chars[1] == '`'
-        return true
-    elseif kind == Tokens.TRIPLE_CMD && l.chars[1] == l.chars[2] == l.chars[3] == '`'
-        readchar(l)
-        readchar(l)
-        return true
+function string_terminates(l, delim::Char, triplestr::Bool)
+    if triplestr
+        c1, c2, c3 = peekchar3(l)
+        c1 === delim && c2 === delim && c3 === delim
+    else
+        peekchar(l) === delim
     end
-    return false
+end
+
+function terminate_string(l, delim::Char, triplestr::Bool)
+    # @assert string_terminates(l, delim, triplestr)
+    readchar(l)
+    if triplestr
+        readchar(l)
+        readchar(l)
+        return delim == '"' ? Tokens.TRIPLE_DQUOTE : Tokens.TRIPLE_BACKTICK
+    else
+        return delim == '"' ? Tokens.DQUOTE : Tokens.BACKTICK
+    end
 end
 
 # Read a raw string for use with custom string macros
 #
 # Raw strings treat all characters as literals with the exception that the
 # closing quotes can be escaped with an odd number of \ characters.
-function read_raw_string(l::Lexer, kind::Tokens.Kind)
-    delim = kind == Tokens.STRING || kind == Tokens.TRIPLE_STRING ? '"' : '`'
+function read_raw_string(l::Lexer, delim::Char, triplestr::Bool)
     while true
         c = readchar(l)
         if c == '\\'
@@ -846,62 +957,8 @@ function read_raw_string(l::Lexer, kind::Tokens.Kind)
                 c = readchar(l)
             end
         end
-        if string_terminated(l, kind)
-            return true
-        elseif eof(c)
-            return false
-        end
-    end
-end
-
-# We just consumed a ", """, `, or ```
-function read_string(l::Lexer, kind::Tokens.Kind)
-    if l.last_token == Tokens.IDENTIFIER || l.last_token == Tokens.KEYWORD
-        return read_raw_string(l, kind)
-    end
-    while true
-        c = readchar(l)
-        if c == '\\'
-            eof(readchar(l)) && return false
-            continue
-        end
-        if string_terminated(l, kind)
-            return true
-        elseif eof(c)
-            return false
-        end
-        if c == '$'
-            c = readchar(l)
-            if string_terminated(l, kind)
-                return true
-            elseif eof(c)
-                return false
-            elseif c == '('
-                o = 1
-                last_token = l.last_token
-                token_start_row = l.token_start_row
-                token_start_col = l.token_start_col
-                token_startpos = l.token_startpos
-                while o > 0
-                    t = next_token(l)
-
-                    if Tokens.kind(t) == Tokens.ENDMARKER
-                        l.last_token = last_token
-                        l.token_start_row = token_start_row
-                        l.token_start_col = token_start_col
-                        l.token_startpos = token_startpos
-                        return false
-                    elseif Tokens.kind(t) == Tokens.LPAREN
-                        o += 1
-                    elseif Tokens.kind(t) == Tokens.RPAREN
-                        o -= 1
-                    end
-                end
-                l.last_token = last_token
-                l.token_start_row = token_start_row
-                l.token_start_col = token_start_col
-                l.token_startpos = token_startpos
-            end
+        if string_terminates(l, delim, triplestr) || eof(c)
+            return
         end
     end
 end
@@ -943,7 +1000,7 @@ function lex_dot(l::Lexer)
         pc, dpc = dpeekchar(l)
         if dotop1(pc)
             l.dotop = true
-            return next_token(l, false)
+            return _next_token(l, readchar(l))
         elseif pc =='+'
             l.dotop = true
             readchar(l)
@@ -1033,29 +1090,24 @@ function lex_dot(l::Lexer)
 end
 
 # A ` has been consumed
-function lex_cmd(l::Lexer, doemit=true)
-    readon(l)
-    if accept(l, '`') #
-        if accept(l, '`') # """
-            if read_string(l, Tokens.TRIPLE_CMD)
-                return doemit ? emit(l, Tokens.TRIPLE_CMD) : EMPTY_TOKEN(token_type(l))
-            else
-                return doemit ? emit_error(l, Tokens.EOF_CMD) : EMPTY_TOKEN(token_type(l))
-            end
-        else # empty cmd
-            return doemit ? emit(l, Tokens.CMD) : EMPTY_TOKEN(token_type(l))
-        end
+function lex_backtick(l::Lexer)
+    pc, dpc = dpeekchar(l)
+    triplestr = pc == '`' && dpc == '`'
+    # Backticks always contain raw strings only. See discussion on bug
+    # https://github.com/JuliaLang/julia/issues/3150
+    raw = true
+    push!(l.string_states, StringState(triplestr, raw, '`', 0))
+    if triplestr
+        readchar(l)
+        readchar(l)
+        emit(l, Tokens.TRIPLE_BACKTICK)
     else
-        if read_string(l, Tokens.CMD)
-            return doemit ? emit(l, Tokens.CMD) : EMPTY_TOKEN(token_type(l))
-        else
-            return doemit ? emit_error(l, Tokens.EOF_CMD) : EMPTY_TOKEN(token_type(l))
-        end
+        emit(l, Tokens.BACKTICK)
     end
 end
 
 const MAX_KW_LENGTH = 10
-function lex_identifier(l::Lexer{IO_t,T}, c) where {IO_t,T}
+function lex_identifier(l::Lexer{IO_t,T}, c, allow_var) where {IO_t,T}
     if T == Token
         readon(l)
     end
@@ -1074,7 +1126,8 @@ function lex_identifier(l::Lexer{IO_t,T}, c) where {IO_t,T}
     if n > MAX_KW_LENGTH
         emit(l, IDENTIFIER)
     else
-        if h == var_kw_hash && accept(l, '"')
+        # FIXME: var"" not allowed in strings
+        if allow_var && h == var_kw_hash && accept(l, '"')
             return lex_var(l)
         else
             return emit(l, get(kw_hash, h, IDENTIFIER))

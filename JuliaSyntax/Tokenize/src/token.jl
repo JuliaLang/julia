@@ -61,12 +61,13 @@ struct Token <: AbstractToken
     token_error::TokenError
     dotop::Bool
     suffix::Bool
+    triplestr::Bool
 end
 function Token(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
     startbyte::Int, endbyte::Int, val::String)
-Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR, false, false)
+Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR, false, false, false)
 end
-Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN, false, false)
+Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN, false, false, false)
 
 struct RawToken <: AbstractToken
     kind::Kind
@@ -78,12 +79,13 @@ struct RawToken <: AbstractToken
     token_error::TokenError
     dotop::Bool
     suffix::Bool
+    triplestr::Bool
 end
 function RawToken(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
     startbyte::Int, endbyte::Int)
-RawToken(kind, startposition, endposition, startbyte, endbyte, NO_ERR, false, false)
+RawToken(kind, startposition, endposition, startbyte, endbyte, NO_ERR, false, false, false)
 end
-RawToken() = RawToken(ERROR, (0,0), (0,0), 0, 0, UNKNOWN, false, false)
+RawToken() = RawToken(ERROR, (0,0), (0,0), 0, 0, UNKNOWN, false, false, false)
 
 
 const _EMPTY_TOKEN = Token()
@@ -125,6 +127,14 @@ function untokenize(t::Token)
         return "]"
     elseif t.kind == RBRACE
         return "}"
+    elseif t.kind == DQUOTE
+        return "\""
+    elseif t.kind == TRIPLE_DQUOTE
+        return "\"\"\""
+    elseif t.kind == BACKTICK
+        return "`"
+    elseif t.kind == TRIPLE_BACKTICK
+        return "```"
     elseif t.kind == AT_SIGN
         return "@"
     elseif t.kind == COMMA

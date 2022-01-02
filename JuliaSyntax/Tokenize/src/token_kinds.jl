@@ -63,7 +63,8 @@
         HEX_INT, # 0x0
         OCT_INT, # 0o0
         FLOAT, # 3.5, 3.7e+3
-        STRING, # "foo"
+        STRING, # "foo" (without the " delimiters)
+        # TODO: Remove this and TRIPLE_CMD; use flag?
         TRIPLE_STRING, # """ foo \n """
         CHAR, # 'a'
         CMD, # `cmd ...`
@@ -78,6 +79,10 @@
         RBRACE, # }
         LPAREN, # (
         RPAREN,  # )
+        DQUOTE,  # " (double quote)
+        TRIPLE_DQUOTE, # """
+        BACKTICK,  # `
+        TRIPLE_BACKTICK, # ```
     end_delimiters,
 
     begin_ops,
@@ -830,6 +835,7 @@
     begin_parser_tokens,
         TOMBSTONE,           # Empty placeholder for kind to be filled later
         NOTHING_LITERAL,     # A literal Julia `nothing` in the AST
+        # FIXME: Remove
         UNQUOTED_STRING,     # An unquoted range of the source as a string
 
         # Macro names are modelled as a special kind of identifier because the
