@@ -867,12 +867,8 @@ erronce() = @error "an error" maxlog=1
 
     @test_logs (Debug,"Iteration 5") min_level=Debug match_mode=:any foo(10)
 
-    # Respect `maxlog` (#41625)
-    logs, _ = Test.collect_test_logs() do
-        erronce()
-        erronce()
-    end
-    @test length(logs) == 1
+    # Respect `maxlog` (#41625). We check we only find one logging message.
+    @test_logs (:error, "an error") (erronce(); erronce())
 
     # Test failures
     fails = @testset NoThrowTestSet "check that @test_logs detects bad input" begin
