@@ -513,7 +513,6 @@ line.
 ```jldoctest
 julia> print("Enter your name: ")
 Enter your name:
-    
 julia> your_name = readline()
 Logan
 "Logan"
