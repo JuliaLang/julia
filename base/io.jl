@@ -516,7 +516,7 @@ Enter your name:
 
 julia> your_name = readline()
 Logan
-"Logan"  
+"Logan"
 ```   
 ```jldoctest
 julia> open("my_file.txt", "w") do io
