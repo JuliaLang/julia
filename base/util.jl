@@ -303,7 +303,6 @@ Enter your name: Logan
 julia> your_name
 "Logan"
 ```
-             
 """
 function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
     msg = !isempty(default) ? "$message [$default]: " : "$message: "
