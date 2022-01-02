@@ -510,13 +510,15 @@ line before it is returned. When `keep` is true, they are returned as part of th
 line.
 
 # Examples
-```jldoctest
+```julia-repl
 julia> print("Enter your name: ")
 Enter your name:
+
 julia> your_name = readline()
 Logan
-"Logan"
-
+"Logan"  
+```   
+```jldoctest
 julia> open("my_file.txt", "w") do io
            write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
        end
