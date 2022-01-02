@@ -310,11 +310,11 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
         }
     }
     opts.exit_cb = cb;
-    JL_UV_LOCK();
     jl_profile_atomic_lock();
+    JL_UV_LOCK();
     int r = uv_spawn(loop, proc, &opts);
-    jl_profile_atomic_unlock();
     JL_UV_UNLOCK();
+    jl_profile_atomic_unlock();
     return r;
 }
 
