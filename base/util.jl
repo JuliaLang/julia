@@ -294,8 +294,9 @@ then the user can enter just a newline character to select the `default`.
 
 See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
 """
-function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
-    msg = !isempty(default) ? "$message [$default]: " : "$message: "
+function prompt(input::IO, output::IO, message::AbstractString; default::Union{AbstractString,Nothing}="")
+    has_default = (default !== nothing) && !isempty(default)
+    msg = has_default ? "$message [$default]: " : "$message: "
     print(output, msg)
     uinput = readline(input, keep=true)
     isempty(uinput) && return nothing  # Encountered an EOF
@@ -305,7 +306,7 @@ end
 
 # allow new prompt methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-prompt(message::AbstractString; default::AbstractString="") = prompt(stdin, stdout, message, default=default)
+prompt(message::AbstractString; default::Union{AbstractString,Nothing}="") = prompt(stdin, stdout, message, default=default)
 
 # Windows authentication prompt
 if Sys.iswindows()
