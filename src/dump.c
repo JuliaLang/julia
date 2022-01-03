@@ -1308,6 +1308,8 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *
 
 static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc) JL_GC_DISABLED;
 
+static jl_method_t *jl_lookup_method(jl_methtable_t *mt, jl_datatype_t *sig, size_t world);
+
 static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_value_t **loc) JL_GC_DISABLED
 {
     assert(pos == backref_list.len - 1 && "nothing should have been deserialized since assigning pos");
@@ -1624,6 +1626,12 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
         if (nroots != 0) {
             jl_method_t *m = mi->def.method;
             assert(jl_is_method(m));
+            // Add roots to the "real" method, not the deserialized stub (this is most of what jl_recache_method does)
+            assert(!m->is_for_opaque_closure);
+            jl_datatype_t *sig = (jl_datatype_t*)m->sig;
+            jl_methtable_t *mt = jl_method_get_table(m);
+            assert((jl_value_t*)mt != jl_nothing);
+            m = jl_lookup_method(mt, sig, m->module->primary_world);
             jl_printf(JL_STDOUT, "Deserializing %d new roots for ", nroots);
             jl_(m);
             if (!m->roots) {
