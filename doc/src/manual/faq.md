@@ -154,8 +154,8 @@ You can still do globbing and pipelines using Julia features, however.  For exam
 the [Glob.jl package](https://github.com/vtjnash/Glob.jl) implements POSIX-compatible globbing.
 
 You can, of course, run programs through the shell by explicitly passing a shell and a command string to `run`,
-e.g. ``` run(`sh -c "ls > files.txt"`) ``` to use the Unix [Bourne shell](https://en.wikipedia.org/wiki/Bourne_shell),
-but you should generally prefer pure-Julia code like ```run(pipeline(`ls`, "files.txt"))```.
+e.g. ```run(`sh -c "ls > files.txt"`)``` to use the Unix [Bourne shell](https://en.wikipedia.org/wiki/Bourne_shell),
+but you should generally prefer pure-Julia scripting like ```run(pipeline(`ls`, "files.txt"))```.
 The reason why we avoid the shell by default is that [shelling out sucks](https://julialang.org/blog/2012/03/shelling-out-sucks/):
 launching processes via the shell is slow, fragile to quoting of special characters,  has poor error handling, and is
 problematic for portability.  (The Python developers came to a [similar conclusion](https://www.python.org/dev/peps/pep-0324/#motivation).)
