@@ -33,6 +33,7 @@ _add_kws()
     EOF_VAR,
     INVALID_NUMERIC_CONSTANT,
     INVALID_OPERATOR,
+    INVALID_INTERPOLATION_TERMINATOR,
     UNKNOWN,
 )
 
@@ -45,6 +46,7 @@ TOKEN_ERROR_DESCRIPTION = Dict{TokenError, String}(
     EOF_VAR => "unterminated var\"...\" identifier",
     INVALID_NUMERIC_CONSTANT => "invalid numeric constant",
     INVALID_OPERATOR => "invalid operator",
+    INVALID_INTERPOLATION_TERMINATOR => "interpolated variable ends with invalid character; use `\$(...)` instead",
     UNKNOWN => "unknown",
 )
 

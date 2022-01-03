@@ -422,6 +422,14 @@ end
         @test ts[10] ~ (T.WHITESPACE , " "   )
         @test ts[11] ~ (T.ENDMARKER  , ""    )
     end
+
+    @testset "invalid chars after identifier" begin
+        ts = collect(tokenize(""" "\$x෴" """))
+        @test ts[4] ~ (T.IDENTIFIER , "x" )
+        @test ts[5] ~ (T.ERROR      , ""  )
+        @test ts[6] ~ (T.STRING     , "෴" )
+        @test ts[5].token_error == Tokens.INVALID_INTERPOLATION_TERMINATOR
+    end
 end
 
 @testset "inferred" begin

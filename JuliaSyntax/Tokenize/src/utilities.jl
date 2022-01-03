@@ -118,6 +118,32 @@ function is_identifier_start_char(c::Char)
     return Base.is_id_start_char(c)
 end
 
+# Chars that we will never allow to be part of a valid non-operator identifier
+function is_never_id_char(ch::Char)
+    cat = Unicode.category_code(ch)
+    c = UInt32(ch)
+    return (
+        # spaces and control characters:
+        (cat >= Unicode.UTF8PROC_CATEGORY_ZS && cat <= Unicode.UTF8PROC_CATEGORY_CS) ||
+
+        # ASCII and Latin1 non-connector punctuation
+        (c < 0xff &&
+         cat >= Unicode.UTF8PROC_CATEGORY_PD && cat <= Unicode.UTF8PROC_CATEGORY_PO) ||
+
+        c == UInt32('`') ||
+
+        # mathematical brackets
+        (c >= 0x27e6 && c <= 0x27ef) ||
+        # angle, corner, and lenticular brackets
+        (c >= 0x3008 && c <= 0x3011) ||
+        # tortoise shell, square, and more lenticular brackets
+        (c >= 0x3014 && c <= 0x301b) ||
+        # fullwidth parens
+        (c == 0xff08 || c == 0xff09) ||
+        # fullwidth square brackets
+        (c == 0xff3b || c == 0xff3d)
+    )
+end
 
 function peekchar(io::Base.GenericIOBuffer)
     if !io.readable || io.ptr > io.size
