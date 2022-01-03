@@ -724,8 +724,8 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             int newrootsindex = m->newrootsindex;
             if (newrootsindex >= 0 && newrootsindex < INT32_MAX) {  // newrootsindex marks the start of the new roots
                 size_t i, l = jl_array_len(m->roots);
-                jl_printf(JL_STDOUT, "Serializing %ld new roots for ", l - newrootsindex);
-                jl_(m);
+                // jl_printf(JL_STDOUT, "Serializing %ld new roots for ", l - newrootsindex);
+                // jl_(m);
                 write_int32(s->s, l - newrootsindex);
                 for (i = newrootsindex; i < l; i++) {
                     jl_serialize_value(s, (jl_value_t*)jl_array_ptr_ref(m->roots, i));
@@ -1632,15 +1632,15 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
             jl_methtable_t *mt = jl_method_get_table(m);
             assert((jl_value_t*)mt != jl_nothing);
             m = jl_lookup_method(mt, sig, m->module->primary_world);
-            jl_printf(JL_STDOUT, "Deserializing %d new roots for ", nroots);
-            jl_(m);
+            // jl_printf(JL_STDOUT, "Deserializing %d new roots for ", nroots);
+            // jl_(m);
             if (!m->roots) {
                 m->roots = jl_alloc_vec_any(0);
                 jl_gc_wb(m,  m->roots);
             }
             m->newrootsindex = oldlen = jl_array_len(m->roots);
             jl_array_grow_end(m->roots, nroots);
-            jl_printf(JL_STDOUT, " (oldlen = %d, newlen = %ld)\n", oldlen, jl_array_len(m->roots));
+            // jl_printf(JL_STDOUT, " (oldlen = %d, newlen = %ld)\n", oldlen, jl_array_len(m->roots));
             jl_value_t **rootsdata = (jl_value_t**)jl_array_data(m->roots);
             for (i = 0; i < nroots; i++) {
                 rootsdata[i+oldlen] = jl_deserialize_value(s, &(rootsdata[i+oldlen]));
@@ -2332,8 +2332,8 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     }
     JL_GC_PUSH2(&mod_array, &udeps);
     mod_array = jl_get_loaded_modules();
-    jl_printf(JL_STDOUT, "Serializing ");
-    jl_(worklist);
+    // jl_printf(JL_STDOUT, "Serializing ");
+    // jl_(worklist);
     currently_serializing = 1;
 
     serializer_worklist = worklist;
@@ -2408,18 +2408,18 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     if (n_ext_mis != n_mis)
         jl_array_del_end(newly_inferred, n_mis - n_ext_mis);
     write_uint64(s.s, n_ext_mis);
-    jl_printf(JL_STDOUT, "Serializing %ld external MIs:\n", n_ext_mis);
+    // jl_printf(JL_STDOUT, "Serializing %ld external MIs:\n", n_ext_mis);
     // Serialize the extra MethodInstances
     currently_serializing = 2;
     for (i = 0; i < n_ext_mis; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*) newmis[i];
-        jl_(mi);
-        size_t nroots = 0;
+        // jl_(mi);
+        // size_t nroots = 0;
         jl_method_t *m = mi->def.method;
         assert(jl_is_method(m));
-        if (m->roots)
-            nroots = jl_array_len(m->roots);
-        jl_printf(JL_STDOUT, " method has %ld roots and newrootsindex is %d\n", nroots, mi->def.method->newrootsindex);
+        // if (m->roots)
+        //     nroots = jl_array_len(m->roots);
+        // jl_printf(JL_STDOUT, " method has %ld roots and newrootsindex is %d\n", nroots, mi->def.method->newrootsindex);
         jl_serialize_value(&s, newmis[i]);
     }
     currently_serializing = 1;
@@ -2647,6 +2647,7 @@ static void jl_recache_types(void) JL_GC_DISABLED
             flagref_list.items[i + 1] = flagref_list.items[flagref_list.len + 1];
         }
     }
+    // jl_printf(JL_STDOUT, "original %ld, new %ld\n", len, flagref_list.len);
 }
 
 // look up a method from a previously deserialized dependent module
@@ -2689,8 +2690,8 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *mi
         jl_code_instance_t *ci = mi->cache;
         if (ci) {
             _new->cache = ci;
-            jl_printf(JL_STDOUT, "Recached codeinst for ");
-            jl_(_new);
+            // jl_printf(JL_STDOUT, "Recached codeinst for ");
+            // jl_(_new);
         }
         while (ci) {
             if (ci->inferred && ci->inferred != jl_nothing) {

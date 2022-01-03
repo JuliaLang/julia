@@ -7447,10 +7447,10 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             }
         }
         ctx.roots = NULL;
-        if (added) {
-            jl_printf(JL_STDOUT, "Increased roots from %d to %ld (external = %d) for ", rootslen, jl_array_len(m->roots), external);
-            jl_(m);
-        }
+        // if (added) {
+        //     jl_printf(JL_STDOUT, "Increased roots from %d to %ld (external = %d) for ", rootslen, jl_array_len(m->roots), external);
+        //     jl_(m);
+        // }
         if (added & external) {
             if (m->newrootsindex == INT32_MAX) {
                 m->newrootsindex = rootslen;

@@ -51,8 +51,8 @@ static int literal_val_id(jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
     if (jl_precompile_toplevel_module != NULL && jl_parent_module(s->method->module) != jl_precompile_toplevel_module) {
         if (s->method->newrootsindex == INT32_MAX) {
             s->method->newrootsindex = l;
-            jl_printf(JL_STDOUT, "Set newrootsindex to %d for ", l);
-            jl_(s->method);
+            // jl_printf(JL_STDOUT, "Set newrootsindex to %d for ", l);
+            // jl_(s->method);
         }
     }
     jl_array_ptr_1d_push(rs, v);
