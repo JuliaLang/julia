@@ -1913,3 +1913,5 @@ function read!(s::IO, B::BitArray)
 end
 
 sizeof(B::BitArray) = sizeof(B.chunks)
+
+promote_rule(::Type{BitArray{N}},::Type{Array{T,M}}) where {T,N,M} = Array{T}

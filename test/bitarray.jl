@@ -98,6 +98,22 @@ end
 
 timesofar("conversions")
 
+@testset "Promotions for size $sz" for (sz, T) in allsizes
+    a1 = falses(sz...)
+    t1 = zeros(sz...)
+    @test isequal(promote(a1,t1),(t1,t1))
+
+    a2 = falses(sz...)
+    t2 = zeros(sz...)
+    @test isequal(promote(a2,t2),(t2,t2))
+
+    a3 = bitrand(sz...)
+    t3 = convert(T,a3)
+    @test isequal(promote(a3,t3),(t3,t3))
+end
+
+timesofar("promotions")
+
 @testset "utility functions" begin
     b1 = bitrand(v1)
     @test isequal(fill!(b1, true), trues(size(b1)))
