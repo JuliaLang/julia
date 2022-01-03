@@ -510,14 +510,6 @@ line before it is returned. When `keep` is true, they are returned as part of th
 line.
 
 # Examples
-```julia-repl
-julia> print("Enter your name: ")
-Enter your name:
-
-julia> your_name = readline()
-Logan
-"Logan"
-```
 ```jldoctest
 julia> open("my_file.txt", "w") do io
            write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
@@ -531,6 +523,14 @@ julia> readline("my_file.txt", keep=true)
 "JuliaLang is a GitHub organization.\\n"
 
 julia> rm("my_file.txt")
+```
+```julia-repl
+julia> print("Enter your name: ")
+Enter your name:
+
+julia> your_name = readline()
+Logan
+"Logan"
 ```
 """
 function readline(filename::AbstractString; keep::Bool=false)
