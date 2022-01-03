@@ -153,12 +153,12 @@ You can still do globbing and pipelines using Julia features, however.  For exam
 [`pipeline`](@ref) function allows you to chain external programs and files, similar to shell pipes, and
 the [Glob.jl package](https://github.com/vtjnash/Glob.jl) implements POSIX-compatible globbing.
 
-Alternatively, you can run programs through the shell simply by passing a shell and a command string to `run`,
-e.g. ``` run(`sh -c "ls * > files.txt"`) ``` to use the Unix [Bourne shell](https://en.wikipedia.org/wiki/Bourne_shell).
-The reason why we don't do this by default, and generally prefer pure-Julia scripting to relying on the shell, is
-that [shelling out sucks](https://julialang.org/blog/2012/03/shelling-out-sucks/): launching processes via the shell is
-slow, fragile to quoting of special characters, has poor error handling, and is problematic for portability.  (The Python
-developers came to a [similar conclusion](https://www.python.org/dev/peps/pep-0324/#motivation).)
+You can, of course run programs through the shell by explicitly passing a shell and a command string to `run`,
+e.g. ``` run(`sh -c "ls > files.txt"`) ``` to use the Unix [Bourne shell](https://en.wikipedia.org/wiki/Bourne_shell),
+but you should generally prefer pure-Julia code like ```run(pipeline(`ls`, "files.txt"))```.
+The reason why we avoid the shell by default is that [shelling out sucks](https://julialang.org/blog/2012/03/shelling-out-sucks/):
+launching processes via the shell is slow, fragile to quoting of special characters,  has poor error handling, and is
+problematic for portability.  (The Python developers came to a [similar conclusion](https://www.python.org/dev/peps/pep-0324/#motivation).)
 
 ## Functions
 
