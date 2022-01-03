@@ -293,6 +293,16 @@ is encountered or EOF (^D) character is entered on a blank line. If a `default` 
 then the user can enter just a newline character to select the `default`.
 
 See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
+
+# Example
+
+```julia-repl
+julia> your_name = Base.prompt("Enter your name");
+Enter your name: Logan
+
+julia> your_name
+"Logan"
+```
 """
 function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
     msg = !isempty(default) ? "$message [$default]: " : "$message: "
