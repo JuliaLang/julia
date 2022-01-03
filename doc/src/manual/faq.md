@@ -140,7 +140,7 @@ parsing the file once it reaches to the `exec` statement.
     @show ARGS  # put any Julia code here
     ```
     instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
-    
+
 ### Why doesn't `run` support `*` or pipes for scripting external programs?
 
 Julia's [`run`](@ref) function launches external programs *directly*, without
