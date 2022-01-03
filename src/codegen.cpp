@@ -7415,8 +7415,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         }
     }
 
+    // if we created any new roots during codegen,
     // copy ctx.roots into m->roots
-    // if we created any new roots during codegen
     if (ctx.roots) {
         jl_method_t *m = lam->def.method;
         bool added = false;
@@ -7447,6 +7447,10 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             }
         }
         ctx.roots = NULL;
+        if (added) {
+            jl_printf(JL_STDOUT, "Increased roots from %d to %ld (external = %d) for ", rootslen, jl_array_len(m->roots), external);
+            jl_(m);
+        }
         if (added & external) {
             if (m->newrootsindex == INT32_MAX) {
                 m->newrootsindex = rootslen;

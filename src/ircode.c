@@ -48,6 +48,13 @@ static int literal_val_id(jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
                 return i;
         }
     }
+    if (jl_precompile_toplevel_module != NULL && jl_parent_module(s->method->module) != jl_precompile_toplevel_module) {
+        if (s->method->newrootsindex == INT32_MAX) {
+            s->method->newrootsindex = l;
+            jl_printf(JL_STDOUT, "Set newrootsindex to %d for ", l);
+            jl_(s->method);
+        }
+    }
     jl_array_ptr_1d_push(rs, v);
     return jl_array_len(rs) - 1;
 }
@@ -323,13 +330,14 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
                              jl_is_slot(v) || jl_is_ssavalue(v))) {
             int id = literal_val_id(s, v);
             assert(id >= 0);
-            int newrootsindex = s->method->newrootsindex & INT32_MAX;
-            if (id >= newrootsindex) {
-                if (currently_serializing) {
-                    // We only need to use relative root indexing when serializing packages.
-                    // During Julia's bootstrap compilation of its own libraries, we can use absolute indexing
-                    // because the order of library compilation is fixed.
-                    assert(currently_serializing == 2);
+            if (currently_serializing == 2) {
+                // We only need to use relative root indexing when serializing packages.
+                // During Julia's bootstrap compilation of its own libraries, we can use absolute indexing
+                // because the order of library compilation is fixed.
+                // Moreover, during CodeInstance recaching we need to deserialize with relative indexes but
+                // serialize with absolute indexes.
+                int newrootsindex = s->method->newrootsindex & INT32_MAX;
+                if (id >= newrootsindex) {
                     assert(s->method->newrootsindex < 0);      // new roots already serialized
                     write_uint8(s->s, TAG_EXTERN_METHODROOT);
                     id -= newrootsindex;

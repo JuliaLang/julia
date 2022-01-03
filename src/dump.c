@@ -114,6 +114,14 @@ jl_value_t *jl_deser_symbol(uint8_t tag)
     return deser_symbols[tag];
 }
 
+// This gets called by inference, which tracks newly-inferred MethodInstances during precompilation
+static jl_array_t *newly_inferred = NULL;
+JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
+{
+    assert(jl_is_array(_newly_inferred));
+    newly_inferred = (jl_array_t*) _newly_inferred;
+}
+
 // --- serialize ---
 
 #define jl_serialize_value(s, v) jl_serialize_value_((s), (jl_value_t*)(v), 0)
@@ -716,6 +724,8 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             int newrootsindex = m->newrootsindex;
             if (newrootsindex >= 0 && newrootsindex < INT32_MAX) {  // newrootsindex marks the start of the new roots
                 size_t i, l = jl_array_len(m->roots);
+                jl_printf(JL_STDOUT, "Serializing %ld new roots for ", l - newrootsindex);
+                jl_(m);
                 write_int32(s->s, l - newrootsindex);
                 for (i = newrootsindex; i < l; i++) {
                     jl_serialize_value(s, (jl_value_t*)jl_array_ptr_ref(m->roots, i));
@@ -1614,12 +1624,15 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
         if (nroots != 0) {
             jl_method_t *m = mi->def.method;
             assert(jl_is_method(m));
+            jl_printf(JL_STDOUT, "Deserializing %d new roots for ", nroots);
+            jl_(m);
             if (!m->roots) {
                 m->roots = jl_alloc_vec_any(0);
                 jl_gc_wb(m,  m->roots);
             }
             m->newrootsindex = oldlen = jl_array_len(m->roots);
             jl_array_grow_end(m->roots, nroots);
+            jl_printf(JL_STDOUT, " (oldlen = %d, newlen = %ld)\n", oldlen, jl_array_len(m->roots));
             jl_value_t **rootsdata = (jl_value_t**)jl_array_data(m->roots);
             for (i = 0; i < nroots; i++) {
                 rootsdata[i+oldlen] = jl_deserialize_value(s, &(rootsdata[i+oldlen]));
@@ -2311,6 +2324,8 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     }
     JL_GC_PUSH2(&mod_array, &udeps);
     mod_array = jl_get_loaded_modules();
+    jl_printf(JL_STDOUT, "Serializing ");
+    jl_(worklist);
     currently_serializing = 1;
 
     serializer_worklist = worklist;
@@ -2364,10 +2379,50 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     };
     jl_serialize_value(&s, worklist);
     jl_serialize_value(&s, lambdas);
+
+    // Discard internal MethodInstances and serialize external ones
+    size_t n_ext_mis = 0, n_mis = 0;
+    jl_value_t **newmis = NULL;
+    if (newly_inferred) {
+        n_mis = jl_array_len(newly_inferred);
+        newmis = (jl_value_t**)jl_array_data(newly_inferred);
+    }
+    //jl_printf(JL_STDOUT, "There were %ld new MIs\n", n_mis);
+    for (i = 0; i < n_mis; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*) newmis[i];
+        if (jl_is_method(mi->def.method) && !module_in_worklist(mi->def.method->module)) {
+            newmis[n_ext_mis++] = (jl_value_t*)mi;
+        }
+    }
+    if (n_ext_mis != n_mis)
+        jl_array_del_end(newly_inferred, n_mis - n_ext_mis);
+    write_uint64(s.s, n_ext_mis);
+    jl_printf(JL_STDOUT, "Serializing %ld external MIs:\n", n_ext_mis);
+    // Serialize the extra MethodInstances
+    currently_serializing = 2;
+    for (i = 0; i < n_ext_mis; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*) newmis[i];
+        jl_(mi);
+        size_t nroots = 0;
+        jl_method_t *m = mi->def.method;
+        assert(jl_is_method(m));
+        if (m->roots)
+            nroots = jl_array_len(m->roots);
+        jl_printf(JL_STDOUT, " method has %ld roots and newrootsindex is %d\n", nroots, mi->def.method->newrootsindex);
+        jl_serialize_value(&s, newmis[i]);
+    }
+    currently_serializing = 1;
+
     jl_serialize_value(&s, edges);
     jl_serialize_value(&s, targets);
     jl_finalize_serializer(&s);
     serializer_worklist = NULL;
+
+    // Reset method newrootsindex
+    for (i = 0; i < n_ext_mis; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*) jl_ptrarrayref(newly_inferred, i);
+        mi->def.method->newrootsindex = INT32_MAX;  // mark the roots table as serialized
+    }
 
     jl_gc_enable(en);
     htable_reset(&edges_map, 0);
@@ -2626,12 +2681,14 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *mi
         if (ci) {
             _new->cache = ci;
             jl_printf(JL_STDOUT, "Recached codeinst for ");
-            jl_(mi);
+            jl_(_new);
         }
         while (ci) {
             if (ci->inferred && ci->inferred != jl_nothing) {
                 // A decompression/compression cycle is needed to restore absolute root indexing
                 assert(jl_is_array(ci->inferred));
+                assert(currently_deserializing == 2);
+                assert(currently_serializing == 0);
                 ci->inferred = (jl_value_t*) jl_compress_ir(m, jl_uncompress_ir(m, ci, (jl_array_t*)ci->inferred));
             }
             ci = ci->next;
@@ -2740,6 +2797,19 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 
     // get list of external generic functions
     jl_value_t *external_methods = jl_deserialize_value(&s, &external_methods);
+
+    // load MethodInstances of externally-defined Methods
+    size_t i, n_ext_mis = read_uint64(f);
+    //jl_printf(JL_STDOUT, "Deserializing %ld external MethodInstances:\n", n_ext_mis);
+    jl_array_t *external_method_instances = jl_alloc_vec_any(n_ext_mis);  // must be held until jl_recache_other()
+    jl_value_t **ext_mis = (jl_value_t**) jl_array_data(external_method_instances);
+    currently_deserializing = 2;
+    for (i = 0; i < n_ext_mis; i++) {
+        ext_mis[i] = jl_deserialize_value(&s, &(ext_mis[i]));
+        //jl_(ext_mis[i]);
+    }
+    currently_deserializing = 1;
+
     jl_value_t *external_backedges = jl_deserialize_value(&s, &external_backedges);
     jl_value_t *external_edges = jl_deserialize_value(&s, &external_edges);
 
@@ -2752,7 +2822,15 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     jl_recache_types(); // make all of the types identities correct
     htable_reset(&uniquing_table, 0);
     jl_insert_methods((jl_array_t*)external_methods); // hook up methods of external generic functions (needs to be after recache types)
+    currently_deserializing = 2;
     jl_recache_other(); // make all of the other objects identities correct (needs to be after insert methods)
+    // Reset methods newrootsindex
+    for (i = 0; i < n_ext_mis; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)ext_mis[i];
+        mi->def.method->newrootsindex = INT32_MAX;    // mark the roots table as deserialized
+    }
+    currently_deserializing = 1;
+
     htable_free(&uniquing_table);
     jl_array_t *init_order = jl_finalize_deserializer(&s, tracee_list); // done with f and s (needs to be after recache)
     if (init_order == NULL)
