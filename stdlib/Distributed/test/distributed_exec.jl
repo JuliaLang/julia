@@ -634,7 +634,7 @@ let error_thrown = false
     try
         pmap(x -> x == 50 ? error("foobar") : x, 1:100)
     catch e
-        @test e.ex.captured.ex.msg == "foobar"
+        @test e.captured.ex.msg == "foobar"
         error_thrown = true
     end
     @test error_thrown
@@ -1723,10 +1723,9 @@ let (h, t) = Distributed.head_and_tail(Int[], 0)
 end
 
 # issue #35937
-let e = @test_throws CapturedException pmap(1) do _
+let e = @test_throws RemoteException pmap(1) do _
             wait(@async error(42))
         end
-    @test e.value.ex isa RemoteException
     # check that the inner TaskFailedException is correctly formed & can be printed
     es = sprint(showerror, e.value)
     @test contains(es, ":\nTaskFailedException\nStacktrace:\n")

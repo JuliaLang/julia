@@ -236,7 +236,7 @@ function start_worker_task!(worker_tasks, exec_func, chnl, batch_size=nothing)
             end
         catch e
             close(chnl)
-            retval = CapturedException(e, catch_backtrace())
+            retval = capture_exception(e, catch_backtrace())
         end
         retval
     end

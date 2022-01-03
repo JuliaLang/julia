@@ -25,6 +25,10 @@ function showerror(io::IO, ce::CapturedException)
     showerror(io, ce.ex, ce.processed_bt, backtrace=true)
 end
 
+# wraps `CapturedException` but can be overloaded to be a no-op
+# when a stacktrace is already captured (e.g. `Distributed.RemoteException`).
+capture_exception(ex, bt) = CapturedException(ex, bt)
+
 """
     CompositeException
 

@@ -44,6 +44,8 @@ struct RemoteException <: Exception
     captured::CapturedException
 end
 
+Base.capture_exception(ex::RemoteException, bt) = ex
+
 """
     RemoteException(captured)
 
