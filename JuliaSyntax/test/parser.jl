@@ -199,6 +199,7 @@ tests = [
         "f(x)"    =>  "(call f x)"
         "\$f(x)"  =>  "(call (\$ f) x)"
         "f(a,b)"  => "(call f a b)"
+        "f (a)" => "(call f (error-t) a)"
         "f(a).g(b)" => "(call (. (call f a) (quote g)) b)"
         # do
         "f() do x, y\n body end"  =>  "(do (call f) (-> (tuple x y) (block body)))"
@@ -231,23 +232,28 @@ tests = [
         "a().@x{y}" =>  """(macrocall (error (. (call a) (quote x))) (braces y))"""
         # array indexing, typed comprehension, etc
         "a[i]"  =>  "(ref a i)"
+        "a [i]"  =>  "(ref a (error-t) i)"
         "a[i,j]"  =>  "(ref a i j)"
         "T[x for x in xs]"  =>  "(typed_comprehension T (generator x (= x xs)))"
         # Keyword params always use kw inside tuple in dot calls
         "f.(a,b)"   =>  "(. f (tuple a b))"
         "f.(a=1)"   =>  "(. f (tuple (kw a 1)))"
+        "f. (x)"    =>  "(. f (error-t) (tuple x))"
         # Other dotted syntax
         "A.:+"      =>  "(. A (quote +))"
+        "A.: +"     =>  "(. A (quote (error-t) +))"
         "f.\$x"     =>  "(. f (inert (\$ x)))"
         "f.\$(x+y)" =>  "(. f (inert (\$ (call-i x + y))))"
         # Field/property syntax
         "f.x.y"  =>  "(. (. f (quote x)) (quote y))"
+        "x .y"   =>  "(. x (error-t) (quote y))"
         # Adjoint
         "f'"  => "(' f)"
         "f'ᵀ" => "(call-i f 'ᵀ)"
         # Curly calls
         "@S{a,b}" => """(macrocall @S (braces a b))"""
         "S{a,b}"  => "(curly S a b)"
+        "S {a}"   =>  "(curly S (error-t) a)"
         # String macros
         """x"str\"""" => """(macrocall @x_str "str")"""
         """x`str`"""  => """(macrocall @x_cmd "str")"""
@@ -474,7 +480,7 @@ tests = [
         ": foo" => "(quote (error-t) foo)"
     ],
     JuliaSyntax.parse_atom => [
-        # parse_array
+        # Actually parse_array
         # Normal matrix construction syntax
         "[x y ; z w]"  =>  "(vcat (row x y) (row z w))"
         "[x y ; z w ; a b]"  =>  "(vcat (row x y) (row z w) (row a b))"
@@ -496,6 +502,17 @@ tests = [
         # Column major
         "[x ; y ;; z ; w ;;; a ; b ;; c ; d]"  =>
             "(ncat-3 (nrow-2 (nrow-1 x y) (nrow-1 z w)) (nrow-2 (nrow-1 a b) (nrow-1 c d)))"
+    ],
+    JuliaSyntax.parse_string => [
+        "\"a \$(x + y) b\""  =>  "(string \"a \" (call-i x + y) \" b\")"
+        "\"hi\$(\"ho\")\""  =>  "(string \"hi\" (string \"ho\"))"
+        ((v=v"1.5",), "\"hi\$(\"ho\")\"") =>  "(string \"hi\" \"ho\")"
+        "\"a \$foo b\""  =>  "(string \"a \" foo \" b\")"
+        "\"\""  =>  "\"\""
+        "\"\$x\$y\$z\""  =>  "(string x y z)"
+        "\"\$(x)\""  =>  "(string x)"
+        "\"\$x\""  =>  "(string x)"
+        "\"str\""  =>  "\"str\""
     ],
     JuliaSyntax.parse_docstring => [
         "\"doc\" foo" => "(macrocall :(Core.var\"@doc\") \"doc\" foo)"

@@ -67,21 +67,22 @@ Dict([
 "OctInt"         =>  Ts.OCT_INT
 "Float"          =>  Ts.FLOAT
 "String"         =>  Ts.STRING
-"TripleString"   =>  Ts.TRIPLE_STRING
 "Char"           =>  Ts.CHAR
-"Cmd"            =>  Ts.CMD
-"TripleCmd"      =>  Ts.TRIPLE_CMD
 "true"           =>  Ts.TRUE
 "false"          =>  Ts.FALSE
 "END_LITERAL"    =>  Ts.end_literal
 
 "BEGIN_DELIMITERS"  => Ts.begin_delimiters
-"["  =>  Ts.LSQUARE
-"]"  =>  Ts.RSQUARE
-"{"  =>  Ts.LBRACE
-"}"  =>  Ts.RBRACE
-"("  =>  Ts.LPAREN
-")"  =>  Ts.RPAREN
+"["      =>  Ts.LSQUARE
+"]"      =>  Ts.RSQUARE
+"{"      =>  Ts.LBRACE
+"}"      =>  Ts.RBRACE
+"("      =>  Ts.LPAREN
+")"      =>  Ts.RPAREN
+"\""     =>  Ts.DQUOTE
+"\"\"\"" =>  Ts.TRIPLE_DQUOTE
+"`"      =>  Ts.BACKTICK
+"```"    =>  Ts.TRIPLE_BACKTICK
 "END_DELIMITERS"    => Ts.end_delimiters
 
 "BEGIN_OPS"  => Ts.begin_ops
@@ -875,22 +876,22 @@ end
 # Mapping from kinds to their unique string representation, if it exists
 const _kind_to_str_unique =
     Dict{Kind,String}(k=>string(s) for (k,s) in TzTokens.UNICODE_OPS_REVERSE)
-for c in "([{}])@,;"
-    _kind_to_str_unique[_str_to_kind[string(c)]] = string(c)
-end
-for kw in split("""as abstract baremodule begin break catch const
-                   continue do else elseif end export finally for
-                   function global if import let local
-                   macro module mutable new outer primitive quote
-                   return struct try type using while
+for kw in split("""
+        ( [ { } ] ) @ , ; " \"\"\" ` ```
 
-                   block call comparison curly string inert macrocall kw parameters
-                   toplevel tuple ref vect braces bracescat hcat
-                   vcat ncat typed_hcat typed_vcat typed_ncat row nrow generator
-                   filter flatten comprehension typed_comprehension
+        as abstract baremodule begin break catch const
+        continue do else elseif end export finally for
+        function global if import let local
+        macro module mutable new outer primitive quote
+        return struct try type using while
 
-                   error Nothing
-                   """)
+        block call comparison curly string inert macrocall kw parameters
+        toplevel tuple ref vect braces bracescat hcat
+        vcat ncat typed_hcat typed_vcat typed_ncat row nrow generator
+        filter flatten comprehension typed_comprehension
+
+        error Nothing
+    """)
     _kind_to_str_unique[_str_to_kind[kw]] = kw
 end
 

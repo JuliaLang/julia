@@ -558,3 +558,6 @@ xy
 * `import A..` produces `(import (. A .))` which is arguably nonsensical, as `.`
   can't be a normal identifier.
 
+* When lexing raw strings, more than two backslashes are treated strangely at
+  the end of the string: `raw"\\\\ "` contains four backslashes, whereas
+  `raw"\\\\"` contains only two.

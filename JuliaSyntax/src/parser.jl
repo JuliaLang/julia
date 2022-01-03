@@ -50,7 +50,8 @@ end
 # flisp: disallow-space
 function bump_disallowed_space(ps)
     if peek_token(ps).had_whitespace
-        bump_trivia(ps, skip_newlines=false, error="whitespace is not allowed here")
+        bump_trivia(ps, TRIVIA_FLAG, skip_newlines=false,
+                    error="whitespace is not allowed here")
     end
 end
 
@@ -791,7 +792,7 @@ function parse_juxtapose(ps::ParseState)
         if n_terms == 1
             bump_invisible(ps, K"*")
         end
-        if is_string(prev_kind) || is_string(t)
+        if prev_kind == K"String" || is_string_delim(t)
             # issue #20575
             #
             # "a""b"  ==>  (call-i "a" * (error) "b")
@@ -1124,8 +1125,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
         t = peek_token(ps)
         k = kind(t)
         if (ps.space_sensitive && t.had_whitespace &&
-                # TODO: Is `'` adjoint or Char here?
-                k in (K"(", K"[", K"{", K"\\", K"'", K"Char", K"String", K"TripleString"))
+                k in (K"(", K"[", K"{", K"\\", K"'", K"Char", K"\"", K"\"\"\"", K"`", K"```"))
+            # [f (x)]  ==>  (hcat f x)
             break
         end
         if k == K"("
@@ -1134,6 +1135,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 finish_macroname(ps, mark, is_valid_modref, macro_name_position)
             end
             # f(a,b)  ==>  (call f a b)
+            # f (a)  ==>  (call f (error-t) a b)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             # Keyword arguments depends on call vs macrocall
@@ -1185,6 +1187,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # a().@x[1]  ==> FIXME
                 finish_macroname(ps, mark, is_valid_modref, macro_name_position)
             end
+            # a [i]  ==>  (ref a (error-t) i)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             ckind, cflags = parse_cat(ParseState(ps, end_symbol=true),
@@ -1205,12 +1208,13 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 break
             end
         elseif k == K"."
+            # x .y  ==>  (. x (error-t) (quote y))
             bump_disallowed_space(ps)
             if peek(ps, 2) == K"'"
+                # f.'  =>  f (error-t . ')
                 emark = position(ps)
                 bump(ps)
                 bump(ps)
-                "f.'"  =>  "f (error-t . ')"
                 emit(ps, emark, K"error", TRIVIA_FLAG,
                      error="the .' operator for transpose is discontinued")
                 is_valid_modref = false
@@ -1237,6 +1241,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # Keyword params always use kw inside tuple in dot calls
                 # f.(a,b)   ==>  (. f (tuple a b))
                 # f.(a=1)   ==>  (. f (tuple (kw a 1)))
+                # f. (x)    ==>  (. f (error-t) (tuple x))
                 bump_disallowed_space(ps)
                 m = position(ps)
                 bump(ps, TRIVIA_FLAG)
@@ -1245,6 +1250,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 emit(ps, mark, K".")
             elseif k == K":"
                 # A.:+  ==>  (. A (quote +))
+                # A.: +  ==>  (. A (error-t) (quote +))
                 m = position(ps)
                 bump(ps, TRIVIA_FLAG)
                 bump_disallowed_space(ps)
@@ -1308,6 +1314,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 finish_macroname(ps, mark, is_valid_modref, macro_name_position)
             end
             m = position(ps)
+            # S {a} ==> (curly S (error-t) a)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             parse_call_arglist(ps, K"}", is_macrocall)
@@ -1325,7 +1332,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # S{a,b} ==> (curly S a b)
                 emit(ps, mark, K"curly")
             end
-        elseif k in (K"String", K"TripleString", K"Cmd", K"TripleCmd") &&
+        elseif k in (K"\"", K"\"\"\"", K"`", K"```") &&
                 !t.had_whitespace && is_valid_modref
             # Custom string and command literals
             # x"str" ==> (macrocall x_str "str")
@@ -1333,9 +1340,9 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
 
             # Use a special token kind for string and cmd macro names so the
             # names can be expanded later as necessary.
-            mackind = is_string(k) ? K"StringMacroName" : K"CmdMacroName"
-            finish_macroname(ps, mark, is_valid_modref, macro_name_position, mackind)
-            bump(ps)
+            outk = is_string_delim(k) ? K"StringMacroName" : K"CmdMacroName"
+            finish_macroname(ps, mark, is_valid_modref, macro_name_position, outk)
+            parse_raw_string(ps)
             t = peek_token(ps)
             k = kind(t)
             if !t.had_whitespace && (k == K"Identifier" || is_keyword(k) || is_number(k))
@@ -2553,112 +2560,80 @@ function parse_brackets(after_parse::Function,
     end
 end
 
-# flisp: parse-raw-literal
-function parse_raw_literal(ps::ParseState, delim)
-    TODO("parse_raw_literal unimplemented")
-end
-
-# flisp: unescape-parsed-string-literal
-function unescape_parsed_string_literal(strs)
-    TODO("unescape_parsed_string_literal unimplemented")
-end
-
-# flisp: strip-escaped-newline
-function strip_escaped_newline(s, raw)
-    TODO("strip_escaped_newline unimplemented")
-end
-
-# remove `\` followed by a newline
+# Parse a string, possibly with embedded interpolations
 #
-# flisp: strip-escaped-newline-
-function strip_escaped_newline_(s)
-    TODO("strip_escaped_newline_ unimplemented")
+# flisp: parse-string-literal-, parse-interpolate
+function parse_string(ps::ParseState)
+    mark = position(ps)
+    closer = peek(ps)
+    bump(ps, TRIVIA_FLAG)
+    n_components = 0
+    while true
+        k = peek(ps)
+        if k == K"$"
+            n_components += 1
+            bump(ps, TRIVIA_FLAG)
+            k = peek(ps)
+            if k == K"("
+                # "a $(x + y) b"  ==> (string "a " (call-i x + y) " b")
+                m = position(ps)
+                parse_atom(ps)
+                if ps.julia_version >= v"1.6" && peek_behind(ps) == K"String"
+                    # Wrap interpolated literal strings in (string) so we can
+                    # distinguish them from the surrounding text (issue #38501)
+                    #v1.6: "hi$("ho")"  ==>  (string "hi" (string "ho"))
+                    emit(ps, m, K"string")
+                end
+            elseif is_identifier(k)
+                # "a $foo b"  ==> (string "a " foo " b")
+                bump(ps)
+            else
+                # It should be impossible for the lexer to get us into this state.
+                bump_invisible(ps, K"error",
+                    error="Identifier or parenthesized expression expected after \$ in string")
+            end
+        elseif k == K"String"
+            bump(ps)
+        elseif k == closer
+            if n_components == 0
+                # "" ==> ""
+                bump_invisible(ps, K"String")
+            end
+            bump(ps, TRIVIA_FLAG)
+            break
+        else
+            # Recovery
+            # "str   ==> "str" (error-t)
+            bump_invisible(ps, K"error", TRIVIA_FLAG, error="Unterminated string literal")
+            break
+        end
+        n_components += 1
+    end
+    if n_components > 1
+        # "$x$y$z" ==> (string x y z)
+        # "$(x)" ==> (string x)
+        # "$x"   ==> (string x)
+        emit(ps, mark, K"string")
+    else
+        # "str" ==> "str"
+    end
 end
 
-# flisp: parse-string-literal
-function parse_string_literal(ps::ParseState, delim, raw)
-    TODO("parse_string_literal unimplemented")
-end
-
-# flisp: strip-leading-newline
-function strip_leading_newline(s)
-    TODO("strip_leading_newline unimplemented")
-end
-
-# flisp: dedent-triplequoted-string
-function dedent_triplequoted_string(lst)
-    TODO("dedent_triplequoted_string unimplemented")
-end
-
-# flisp: triplequoted-string-indentation
-function triplequoted_string_indentation(lst)
-    TODO("triplequoted_string_indentation unimplemented")
-end
-
-# flisp: triplequoted-string-indentation-
-function triplequoted_string_indentation_(s)
-    TODO("triplequoted_string_indentation_ unimplemented")
-end
-
-# return the longest common prefix of the elements of l
-# e.g., (longest-common-prefix ((1 2) (1 4))) -> (1)
-#
-# flisp: longest-common-prefix
-function longest_common_prefix(l)
-    TODO("longest_common_prefix unimplemented")
-end
-
-# return the longest common prefix of lists a & b
-#
-# flisp: longest-common-prefix2
-function longest_common_prefix2(a, b)
-    TODO("longest_common_prefix2 unimplemented")
-end
-
-# flisp: longest-common-prefix2-
-function longest_common_prefix2_(a, b, p)
-    TODO("longest_common_prefix2_ unimplemented")
-end
-
-# flisp: string-split
-function string_split(s, sep)
-    TODO("string_split unimplemented")
-end
-
-# flisp: string-split-
-function string_split_(s, sep, start, splits)
-    TODO("string_split_ unimplemented")
-end
-
-# replace all occurrences of a in s with b
-#
-# flisp: string-replace
-function string_replace(s, a, b)
-    TODO("string_replace unimplemented")
-end
-
-# flisp: ends-interpolated-atom?
-function is_ends_interpolated_atom(c)
-    TODO("is_ends_interpolated_atom unimplemented")
-end
-
-# flisp: parse-interpolate
-function parse_interpolate(ps::ParseState)
-    TODO("parse_interpolate unimplemented")
-end
-
-# raw = raw string literal
-# when raw is #t, unescape only \\ and delimiter
-# otherwise do full unescaping, and parse interpolations too
-#
-# flisp: parse-string-literal-
-function parse_string_literal_(n, p, s, delim, raw)
-    TODO("parse_string_literal_ unimplemented")
-end
-
-# flisp: unescape-string
-function unescape_string_(s)
-    TODO("unescape_string_ unimplemented")
+function parse_raw_string(ps::ParseState)
+    emark = position(ps)
+    delim_k = peek(ps)
+    bump(ps, TRIVIA_FLAG)
+    if peek(ps) == K"String"
+        bump(ps)
+    else
+        bump_invisible(ps, K"String")
+    end
+    if peek(ps) == delim_k
+        bump(ps, TRIVIA_FLAG)
+    else
+        # Recovery
+        bump_invisible(ps, K"error", error="Unterminated string literal")
+    end
 end
 
 # parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
@@ -2745,16 +2720,15 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         bump(ps, TRIVIA_FLAG)
         ckind, cflags = parse_cat(ps, K"}", ps.end_symbol)
         emit_braces(ps, mark, ckind, cflags)
-    elseif is_string(leading_kind)
-        bump(ps)
-        # FIXME parse_string_literal(ps)
+    elseif is_string_delim(leading_kind)
+        parse_string(ps)
     elseif leading_kind == K"@" # macro call
         bump(ps, TRIVIA_FLAG)
         parse_macro_name(ps)
         parse_call_chain(ps, mark, true)
-    elseif leading_kind in (K"Cmd", K"TripleCmd")
+    elseif leading_kind in (K"`", K"```")
         bump_invisible(ps, K"core_@cmd")
-        bump(ps)
+        parse_raw_string(ps)
         emit(ps, mark, K"macrocall")
     elseif is_literal(leading_kind)
         bump(ps)
@@ -2793,7 +2767,7 @@ function parse_docstring(ps::ParseState, down=parse_eq)
     #! ("doc") foo  ==>  (macrocall core_@doc "doc" foo)
     # TODO: Also, all these TOMBSTONEs seem kind of inefficient. Perhaps we can
     # improve things?
-    maybe_doc = is_string(peek(ps))
+    maybe_doc = is_string_delim(peek(ps))
     atdoc_mark = bump_invisible(ps, K"TOMBSTONE")
     down(ps)
     if maybe_doc

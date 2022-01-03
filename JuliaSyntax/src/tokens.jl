@@ -81,8 +81,8 @@ function is_number(t)
     kind(t) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float")
 end
 
-function is_string(t)
-    kind(t) in (K"String", K"TripleString")
+function is_string_delim(t)
+    kind(t) in (K"\"", K"\"\"\"")
 end
 
 function is_radical_op(t)
