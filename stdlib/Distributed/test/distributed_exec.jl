@@ -1726,6 +1726,7 @@ end
 let e = @test_throws CapturedException pmap(1) do _
             wait(@async error(42))
         end
+    @test e.value.ex isa RemoteException
     # check that the inner TaskFailedException is correctly formed & can be printed
     es = sprint(showerror, e.value)
     @test contains(es, ":\nTaskFailedException\nStacktrace:\n")
