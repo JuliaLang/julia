@@ -62,10 +62,10 @@ julia> randstring("ACGT")
 "TGCTCCTC"
 
 julia> randstring(12)
-"SR5UY9TBNQuw"
+"SHXK1CKamNtK"
 
 julia> randstring(['A':'Z'; '0':'9'], 8)
-"52A69RJ5"
+"V4X39GKG"
 ```
 
 !!! note
