@@ -326,7 +326,7 @@ end
 end
 
 @testset "interpolation" begin
-    @testset "basic interpolation" begin
+    @testset "basic" begin
         ts = collect(tokenize("\"\$x \$y\""))
         @test ts[1]  ~ (T.DQUOTE     , "\"")
         @test ts[2]  ~ (T.EX_OR      , "\$")
@@ -338,7 +338,7 @@ end
         @test ts[8]  ~ (T.ENDMARKER  , ""  )
     end
 
-    @testset "nested interpolation" begin
+    @testset "nested" begin
         str = """"str: \$(g("str: \$(h("str"))"))" """
         ts = collect(tokenize(str))
         @test length(ts) == 23
@@ -367,7 +367,7 @@ end
         @test ts[23] ~ (T.ENDMARKER , ""     )
     end
 
-    @testset "duplicate \$ in interpolation" begin
+    @testset "duplicate \$" begin
         ts = collect(tokenize("\"\$\$\""))
         @test ts[1]  ~ (T.DQUOTE     , "\"")
         @test ts[2]  ~ (T.EX_OR      , "\$")
@@ -376,7 +376,7 @@ end
         @test ts[5]  ~ (T.ENDMARKER  , ""  )
     end
 
-    @testset "Unmatched parens in interpolation" begin
+    @testset "Unmatched parens" begin
         # issue 73: https://github.com/JuliaLang/Tokenize.jl/issues/73
         ts = collect(tokenize("\"\$(fdsf\""))
         @test ts[1] ~ (T.DQUOTE     , "\""   )
@@ -387,7 +387,7 @@ end
         @test ts[6] ~ (T.ENDMARKER  , ""     )
     end
 
-    @testset "Unicode in interpolation" begin
+    @testset "Unicode" begin
         # issue 178: https://github.com/JuliaLang/Tokenize.jl/issues/178
         ts = collect(tokenize(""" "\$uₕx \$(uₕx - ux)" """))
         @test ts[ 1] ~ (T.WHITESPACE , " "   )
@@ -406,6 +406,21 @@ end
         @test ts[14] ~ (T.DQUOTE     , "\""  )
         @test ts[15] ~ (T.WHITESPACE , " "   )
         @test ts[16] ~ (T.ENDMARKER  , ""    )
+    end
+
+    @testset "var\"...\" disabled in interpolations" begin
+        ts = collect(tokenize(""" "\$var"x" " """))
+        @test ts[ 1] ~ (T.WHITESPACE , " "   )
+        @test ts[ 2] ~ (T.DQUOTE     , "\""  )
+        @test ts[ 3] ~ (T.EX_OR      , "\$"  )
+        @test ts[ 4] ~ (T.IDENTIFIER , "var" )
+        @test ts[ 5] ~ (T.DQUOTE     , "\""  )
+        @test ts[ 6] ~ (T.IDENTIFIER , "x"   )
+        @test ts[ 7] ~ (T.DQUOTE     , "\""  )
+        @test ts[ 8] ~ (T.STRING     , " "   )
+        @test ts[ 9] ~ (T.DQUOTE     , "\""  )
+        @test ts[10] ~ (T.WHITESPACE , " "   )
+        @test ts[11] ~ (T.ENDMARKER  , ""    )
     end
 end
 
