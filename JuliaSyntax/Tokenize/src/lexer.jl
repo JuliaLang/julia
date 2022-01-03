@@ -449,7 +449,9 @@ function lex_string_chunk(l)
         else
             return _next_token(l, c)
         end
-    elseif l.last_token == Tokens.EX_OR
+    end
+    pc = peekchar(l)
+    if l.last_token == Tokens.EX_OR
         pc = peekchar(l)
         # Interpolated symbol or expression
         if pc == '('
@@ -463,8 +465,12 @@ function lex_string_chunk(l)
             # Getting here is a syntax error - fall through to reading string
             # characters and let the parser deal with it.
         end
+    elseif l.last_token == Tokens.IDENTIFIER &&
+            !(eof(pc) || is_operator_start_char(pc) || is_never_id_char(pc))
+        # Only allow certain characters after interpolated vars
+        # https://github.com/JuliaLang/julia/pull/25234
+        return emit_error(l, Tokens.INVALID_INTERPOLATION_TERMINATOR)
     end
-    pc = peekchar(l)
     if eof(pc)
         return emit(l, Tokens.ENDMARKER)
     elseif !state.raw && pc == '$'
