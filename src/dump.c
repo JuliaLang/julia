@@ -2388,6 +2388,9 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     jl_serialize_value(&s, worklist);
     jl_serialize_value(&s, lambdas);
 
+    jl_serialize_value(&s, edges);
+    jl_serialize_value(&s, targets);
+
     // Discard internal MethodInstances and serialize external ones
     size_t n_ext_mis = 0, n_mis = 0;
     jl_value_t **newmis = NULL;
@@ -2421,8 +2424,6 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     }
     currently_serializing = 1;
 
-    jl_serialize_value(&s, edges);
-    jl_serialize_value(&s, targets);
     jl_finalize_serializer(&s);
     serializer_worklist = NULL;
 
@@ -2697,7 +2698,10 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *mi
                 assert(jl_is_array(ci->inferred));
                 assert(currently_deserializing == 2);
                 assert(currently_serializing == 0);
-                ci->inferred = (jl_value_t*) jl_compress_ir(m, jl_uncompress_ir(m, ci, (jl_array_t*)ci->inferred));
+                jl_code_info_t *src = jl_uncompress_ir(m, ci, (jl_array_t*)ci->inferred);
+                src->parent = _new;
+                // jl_(src);
+                ci->inferred = (jl_value_t*) jl_compress_ir(m, src);
             }
             ci = ci->next;
         }
@@ -2805,19 +2809,6 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 
     // get list of external generic functions
     jl_value_t *external_methods = jl_deserialize_value(&s, &external_methods);
-
-    // load MethodInstances of externally-defined Methods
-    size_t i, n_ext_mis = read_uint64(f);
-    //jl_printf(JL_STDOUT, "Deserializing %ld external MethodInstances:\n", n_ext_mis);
-    jl_array_t *external_method_instances = jl_alloc_vec_any(n_ext_mis);  // must be held until jl_recache_other()
-    jl_value_t **ext_mis = (jl_value_t**) jl_array_data(external_method_instances);
-    currently_deserializing = 2;
-    for (i = 0; i < n_ext_mis; i++) {
-        ext_mis[i] = jl_deserialize_value(&s, &(ext_mis[i]));
-        //jl_(ext_mis[i]);
-    }
-    currently_deserializing = 1;
-
     jl_value_t *external_backedges = jl_deserialize_value(&s, &external_backedges);
     jl_value_t *external_edges = jl_deserialize_value(&s, &external_edges);
 
@@ -2829,8 +2820,23 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     // now all of the interconnects will be created
     jl_recache_types(); // make all of the types identities correct
     htable_reset(&uniquing_table, 0);
+    // jl_printf(JL_STDOUT, "1: flagref_list.len = %ld\n", flagref_list.len);
     jl_insert_methods((jl_array_t*)external_methods); // hook up methods of external generic functions (needs to be after recache types)
+    // jl_printf(JL_STDOUT, "2: flagref_list.len = %ld\n", flagref_list.len);
+
+    // load MethodInstances of externally-defined Methods
+    size_t i, n_ext_mis = read_uint64(f);
+    //jl_printf(JL_STDOUT, "Deserializing %ld external MethodInstances:\n", n_ext_mis);
+    jl_array_t *external_method_instances = jl_alloc_vec_any(n_ext_mis);  // must be held until jl_recache_other()
+    jl_value_t **ext_mis = (jl_value_t**) jl_array_data(external_method_instances);
     currently_deserializing = 2;
+    for (i = 0; i < n_ext_mis; i++) {
+        ext_mis[i] = jl_deserialize_value(&s, &(ext_mis[i]));
+        //jl_(ext_mis[i]);
+    }
+    // jl_printf(JL_STDOUT, "3: flagref_list.len = %ld\n", flagref_list.len);
+    jl_recache_types(); // do it again after deserializing external MIs
+    // jl_printf(JL_STDOUT, "4: flagref_list.len = %ld\n", flagref_list.len);
     jl_recache_other(); // make all of the other objects identities correct (needs to be after insert methods)
     // Reset methods newrootsindex
     for (i = 0; i < n_ext_mis; i++) {
