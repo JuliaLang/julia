@@ -140,10 +140,8 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif is_keyword(k)
             # This should only happen for tokens nested inside errors
             Symbol(val_str)
-        elseif k in (K"String", K"Cmd")
-            unescape_string(source[position+1:position+span(raw)-2])
-        elseif k in (K"TripleString", K"TripleCmd")
-            unescape_string(source[position+3:position+span(raw)-4])
+        elseif k == K"String"
+            unescape_string(val_str)
         elseif k == K"UnquotedString"
             String(val_str)
         elseif is_operator(k)
