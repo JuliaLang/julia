@@ -31,8 +31,8 @@ function itest_parse(production, code, julia_version::VersionNumber=v"1.6")
     println(stdout, "\n\n# Julia Expr:")
     show(stdout, MIME"text/plain"(), ex)
 
-    f_ex = Base.remove_linenums!(Meta.parse(code, raise=false))
-    if ex != f_ex
+    f_ex = JuliaSyntax.remove_linenums!(Meta.parse(code, raise=false))
+    if JuliaSyntax.remove_linenums!(ex) != f_ex
         println(stdout, "\n\n# AST dump")
         dump(ex)
 
@@ -183,9 +183,16 @@ tests = [
         "+x" => "(call + x)"
     ],
     JuliaSyntax.parse_decl => [
-        "a::b"     =>   "(:: a b)"
-        "a->b"     =>   "(-> a (block b))"
-        "a::b->c"  =>  "(-> (:: a b) (block c))"
+        "a::b"     =>  "(:: a b)"
+        "a->b"     =>  "(-> a b)"
+        "a::b->c"  =>  "(-> (:: a b) c)"
+    ],
+    JuliaSyntax.parse_unary_subtype => [ # Really for parse_where
+        "x where {T,S}"  =>  "(where x T S)"
+        "x where {T S}"  =>  "(where x (bracescat (row T S)))"
+        "x where {y for y in ys}"  =>  "(where x (braces (generator y (= y ys))))"
+        "x where T"  =>  "(where x T)"
+        "x where T<:S"  =>  "(where x (<: T S))"
     ],
     JuliaSyntax.parse_unary_prefix => [
         "&)"   => "&"
@@ -479,6 +486,9 @@ tests = [
         # parse_paren
         ":(=)"  =>  "(quote =)"
         ":(::)"  =>  "(quote ::)"
+        # braces
+        "{x y}"      =>  "(bracescat (row x y))"
+        "{x ;;; y}"  =>  "(bracescat (nrow-3 x y))"
         # Errors
         ": foo" => "(quote (error-t) foo)"
     ],
@@ -555,5 +565,5 @@ end
     end
     """
     ex = JuliaSyntax.parse_all(Expr, code)
-    @test ex == JuliaSyntax.flisp_parse_all(code)
+    @test ex == JuliaSyntax.remove_linenums!(JuliaSyntax.flisp_parse_all(code))
 end

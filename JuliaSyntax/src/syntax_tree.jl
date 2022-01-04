@@ -12,8 +12,10 @@ const TRIVIA_FLAG = RawFlags(1<<0)
 const INFIX_FLAG  = RawFlags(1<<1)
 # Record whether syntactic operators were dotted
 const DOTOP_FLAG = RawFlags(1<<2)
+# Set when kind == K"String" was triple-delimited as with """ or ```
+const TRIPLE_STRING_FLAG = RawFlags(1<<3)
 # try-finally-catch
-const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<3)
+const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<4)
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
 # Todo ERROR_FLAG = 0x80000000 ?
@@ -115,7 +117,52 @@ Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
 function unescape_julia_string(str, triplequote=false)
     # FIXME: do this properly
     str = replace(str, "\\\$" => '$')
-    unescape_string(str)
+    str = unescape_string(str)
+    if triplequote
+        # FIXME: All sorts of rules need to be added here, and the separate
+        # fragments need to be aware of each other.
+        if startswith(str, '\n')
+            str = str[2:end]
+        end
+        lines = split(str, '\n')
+        indent = typemax(Int)
+        for line in lines
+            if isempty(line)
+                continue
+            end
+            j = findfirst(!=(' '), line)
+            indent = min(indent, j == nothing ? length(line) : j-1)
+        end
+        if isempty(last(lines))
+            indent = 0
+        end
+        str = join((l[indent+1:end] for l in lines), '\n')
+    end
+    str
+end
+
+function julia_string_to_number(T, str, kind)
+    # FIXME: do this properly!
+    if kind == K"Integer"
+        str = replace(str, '_'=>"")
+    end
+    x = Base.parse(T, str)
+    if kind == K"HexInt"
+        if length(str) <= 4
+            x = UInt8(x)
+        elseif length(str) <= 6
+            x = UInt16(x)
+        elseif length(str) <= 10
+            x = UInt32(x)
+        elseif length(str) <= 18
+            x = UInt64(x)
+        elseif length(str) <= 34
+            x = UInt128(x)
+        else
+            TODO("BigInt")
+        end
+    end
+    x
 end
 
 function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::Integer=1)
@@ -126,12 +173,11 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         val_str = source[val_range]
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
-        val = if k == K"Integer"
-            # FIXME: this doesn't work with _'s as in 1_000_000
-            Base.parse(Int, val_str)
+        val = if k in (K"Integer", K"BinInt", K"OctInt", K"HexInt")
+            julia_string_to_number(Int, val_str, k)
         elseif k == K"Float"
             # FIXME: Other float types!
-            Base.parse(Float64, val_str)
+            julia_string_to_number(Float64, val_str, k)
         elseif k == K"true"
             true
         elseif k == K"false"
@@ -147,7 +193,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             # This should only happen for tokens nested inside errors
             Symbol(val_str)
         elseif k == K"String"
-            unescape_julia_string(val_str)
+            unescape_julia_string(val_str, has_flags(head(raw), TRIPLE_STRING_FLAG))
         elseif k == K"UnquotedString"
             String(val_str)
         elseif is_operator(k)
@@ -354,6 +400,11 @@ end
 #-------------------------------------------------------------------------------
 # Conversion to Base.Expr
 
+function is_eventually_call(ex)
+    return Meta.isexpr(ex, :call) || (Meta.isexpr(ex, (:where, :(::))) &&
+                                      is_eventually_call(ex.args[1]))
+end
+
 function _to_expr(node::SyntaxNode)
     if !haschildren(node)
         return node.val
@@ -366,10 +417,10 @@ function _to_expr(node::SyntaxNode)
     if is_infix(node.raw)
         args[2], args[1] = args[1], args[2]
     end
+    loc = source_location(LineNumberNode, node.source, node.position)
     # Convert elements
     if head(node) == :macrocall
-        line_node = source_location(LineNumberNode, node.source, node.position)
-        insert!(args, 2, line_node)
+        insert!(args, 2, loc)
     elseif head(node) in (:call, :ref)
         # Move parameters block to args[2]
         if length(args) > 1 && Meta.isexpr(args[end], :parameters)
@@ -426,6 +477,22 @@ function _to_expr(node::SyntaxNode)
         pushfirst!(args, numeric_flags(flags(node)))
     elseif head(node) == :typed_ncat
         insert!(args, 2, numeric_flags(flags(node)))
+    elseif head(node) == :(=)
+        if is_eventually_call(args[1])
+            if Meta.isexpr(args[2], :block)
+                pushfirst!(args[2].args, loc)
+            else
+                # Add block for short form function locations
+                args[2] = Expr(:block, loc, args[2])
+            end
+        end
+    elseif head(node) == :(->)
+        if Meta.isexpr(args[2], :block)
+            pushfirst!(args[2].args, loc)
+        else
+            # Add block for source locations
+            args[2] = Expr(:block, loc, args[2])
+        end
     end
     if head(node) == :inert || (head(node) == :quote &&
                                 length(args) == 1 && !(only(args) isa Expr))
@@ -464,16 +531,23 @@ function parse_all(::Type{Expr}, code::AbstractString; filename="none")
     # convert to Julia expr
     ex = Expr(tree)
 
-    flisp_ex = flisp_parse_all(code)
-    if ex != flisp_ex && !(!isempty(flisp_ex.args) &&
+    # TODO: Don't remove line nums; try to get them consistent with Base.
+    flisp_ex = remove_linenums!(flisp_parse_all(code))
+    if remove_linenums!(deepcopy(ex)) != flisp_ex && !(!isempty(flisp_ex.args) &&
                            Meta.isexpr(flisp_ex.args[end], :error))
         @error "Mismatch with Meta.parse()" ex flisp_ex
     end
     ex
 end
 
+function remove_linenums!(ex)
+    ex = Base.remove_linenums!(ex)
+    if Meta.isexpr(ex, :toplevel)
+        filter!(x->!(x isa LineNumberNode), ex.args)
+    end
+    ex
+end
+
 function flisp_parse_all(code)
-    flisp_ex = Base.remove_linenums!(Meta.parseall(code))
-    filter!(x->!(x isa LineNumberNode), flisp_ex.args)
-    flisp_ex
+    Meta.parseall(code)
 end

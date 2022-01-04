@@ -725,16 +725,20 @@ function parse_where_chain(ps0::ParseState, mark)
         bump(ps, TRIVIA_FLAG) # where
         k = peek(ps)
         if k == K"{"
+            m = position(ps)
+            bump(ps, TRIVIA_FLAG)
             # x where {T,S}  ==>  (where x T S)
             ckind, cflags = parse_cat(ps, K"}", ps.end_symbol)
             if ckind != K"vect"
                 # Various nonsensical forms permitted here
                 # x where {T S}  ==>  (where x (bracescat (row T S)))
                 # x where {y for y in ys}  ==>  (where x (braces (generator y (= y ys))))
-                emit_braces(ps, mark, ckind, cflags)
+                emit_braces(ps, m, ckind, cflags)
             end
             emit(ps, mark, K"where")
         else
+            # x where T     ==>  (where x T)
+            # x where T<:S  ==>  (where x (<: T S))
             parse_comparison(ps)
             emit(ps, mark, K"where")
         end
@@ -1007,13 +1011,11 @@ function parse_decl_with_initial_ex(ps::ParseState, mark)
         emit(ps, mark, K"::")
     end
     if peek(ps) == K"->"
-        # x -> y    ==>  (-> x (block y))
-        # a::b->c   ==>   (-> (:: a b) (block c))
-        # -> is unusual: it binds tightly on the left and loosely on the right.
+        # x -> y    ==>  (-> x y)
+        # a::b->c   ==>  (-> (:: a b) c)
         bump(ps, TRIVIA_FLAG)
-        m = position(ps)
+        # -> is unusual: it binds tightly on the left and loosely on the right.
         parse_eq_star(ps)
-        emit(ps, m, K"block")
         emit(ps, mark, K"->")
     end
 end
@@ -2343,6 +2345,7 @@ function parse_array_separator(ps)
 end
 
 # Parse array concatenation/construction/indexing syntax inside of `[]` or `{}`.
+# The opening bracket has been consumed.
 #
 # flisp: parse-cat
 function parse_cat(ps::ParseState, closer, end_is_symbol)
@@ -2752,10 +2755,10 @@ end
 function emit_braces(ps, mark, ckind, cflags)
     if ckind == K"hcat"
         # {x y}  ==>  (bracescat (row x y))
-        emit(ps, K"row", mark, cflags)
+        emit(ps, mark, K"row", cflags)
     elseif ckind == K"ncat"
         # {x ;;; y}  ==>  (bracescat (nrow-3 x y))
-        emit(ps, K"nrow", mark, cflags)
+        emit(ps, mark, K"nrow", cflags)
     end
     outk = ckind in (K"vect", K"comprehension") ? K"braces" : K"bracescat"
     emit(ps, mark, outk)
