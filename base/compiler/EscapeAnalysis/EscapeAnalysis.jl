@@ -802,7 +802,7 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
         # this object has been used as array, but it is allocated as struct here (i.e. should throw)
         # update obj's field information and just handle this case conservatively
         @assert isa(AliasEscapes, ArrayEscapes)
-        objinfo = resolve_conflict!(astate, obj, objinfo)
+        objinfo = escape_unanalyzable_obj!(astate, obj, objinfo)
         @goto conservative_propagation
     end
     if !(astate.ir.stmts.flag[pc] & IR_FLAG_EFFECT_FREE ≠ 0)
@@ -819,7 +819,7 @@ function escape_field!(astate::AnalysisState, @nospecialize(v), xf::FieldEscape)
     end
 end
 
-function resolve_conflict!(astate::AnalysisState, @nospecialize(obj), objinfo::EscapeLattice)
+function escape_unanalyzable_obj!(astate::AnalysisState, @nospecialize(obj), objinfo::EscapeLattice)
     objinfo = EscapeLattice(objinfo, TOP_ALIAS_ESCAPES)
     add_escape_change!(astate, obj, objinfo)
     return objinfo
@@ -982,8 +982,7 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
                 @goto record_field_escape
             end
             # unsuccessful field analysis: update obj's field information
-            objinfo = EscapeLattice(objinfo, TOP_ALIAS_ESCAPES)
-            add_escape_change!(astate, obj, objinfo)
+            objinfo = escape_unanalyzable_obj!(astate, obj, objinfo)
         end
         @label conservative_propagation
         # the field couldn't be analyzed precisely: propagate the escape information
@@ -995,9 +994,21 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
         end
         add_escape_change!(astate, obj, ssainfo)
     elseif isa(AliasEscapes, FieldEscapes)
+        nfields = fieldcount_noerror(typ)
+        if nfields === nothing
+            # unsuccessful field analysis: update obj's field information
+            objinfo = escape_unanalyzable_obj!(astate, obj, objinfo)
+            @goto conservative_propagation
+        else
+            AliasEscapes = copy(AliasEscapes)
+            if nfields > length(AliasEscapes)
+                for _ in 1:(nfields-length(AliasEscapes))
+                    push!(AliasEscapes, FieldEscape())
+                end
+            end
+        end
         # fields are known: record the return value of this `getfield` call as a possibility
         # that imposes escape on field(s) being referenced
-        AliasEscapes = copy(AliasEscapes)
         @label record_field_escape
         if isa(typ, DataType)
             fld = args[3]
@@ -1020,7 +1031,7 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
         # this object has been used as array, but it is used as struct here (i.e. should throw)
         # update obj's field information and just handle this case conservatively
         @assert isa(AliasEscapes, ArrayEscapes)
-        objinfo = resolve_conflict!(astate, obj, objinfo)
+        objinfo = escape_unanalyzable_obj!(astate, obj, objinfo)
         @goto conservative_propagation
     end
     return false
@@ -1052,16 +1063,26 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
                 @goto add_field_escape
             end
             # unsuccessful field analysis: update obj's field information
-            objinfo = EscapeLattice(objinfo, TOP_ALIAS_ESCAPES)
-            add_escape_change!(astate, obj, objinfo)
+            objinfo = escape_unanalyzable_obj!(astate, obj, objinfo)
         end
         @label conservative_propagation
         # the field couldn't be analyzed precisely: propagate the entire escape information
         # of this object to the value being assigned as the most conservative propagation
         add_escape_change!(astate, val, objinfo)
     elseif isa(AliasEscapes, FieldEscapes)
-        # fields are known: propagate escape information imposed on recorded possibilities
         typ = widenconst(argextype(obj, ir))
+        nfields = fieldcount_noerror(typ)
+        if nfields === nothing
+            # unsuccessful field analysis: update obj's field information
+            objinfo = escape_unanalyzable_obj!(astate, obj, objinfo)
+            @goto conservative_propagation
+        elseif nfields > length(AliasEscapes)
+            AliasEscapes = copy(AliasEscapes)
+            for _ in 1:(nfields-length(AliasEscapes))
+                push!(AliasEscapes, FieldEscape())
+            end
+        end
+        # fields are known: propagate escape information imposed on recorded possibilities
         @label add_field_escape
         if isa(typ, DataType)
             fld = args[3]
@@ -1085,7 +1106,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
         # this object has been used as array, but it is "used" as struct here (i.e. should throw)
         # update obj's field information and just handle this case conservatively
         @assert isa(AliasEscapes, ArrayEscapes)
-        objinfo = resolve_conflict!(astate, obj, objinfo)
+        objinfo = escape_unanalyzable_obj!(astate, obj, objinfo)
         @goto conservative_propagation
     end
     # also propagate escape information imposed on the return value of this `setfield!`
@@ -1154,7 +1175,7 @@ function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, arg
         # this object has been used as struct, but it is used as array here (thus should throw)
         # update ary's element information and just handle this case conservatively
         @assert isa(AliasEscapes, FieldEscapes)
-        aryinfo = resolve_conflict!(astate, ary, aryinfo)
+        aryinfo = escape_unanalyzable_obj!(astate, ary, aryinfo)
         @goto conservative_propagation
     end
     return true
@@ -1212,7 +1233,7 @@ function escape_builtin!(::typeof(arrayset), astate::AnalysisState, pc::Int, arg
         # this object has been used as struct, but it is "used" as array here (thus should throw)
         # update ary's element information and just handle this case conservatively
         @assert isa(AliasEscapes, FieldEscapes)
-        aryinfo = resolve_conflict!(astate, ary, aryinfo)
+        aryinfo = escape_unanalyzable_obj!(astate, ary, aryinfo)
         @goto conservative_propagation
     end
     # also propagate escape information imposed on the return value of this `arrayset`
@@ -1301,7 +1322,7 @@ function escape_array_resize!(bounderror::Bool, ninds::Int,
                 # this object has been used as struct, but it is used as array here (thus should throw)
                 # update ary's element information and just handle this case conservatively
                 @assert isa(AliasEscapes, FieldEscapes)
-                aryinfo = resolve_conflict!(astate, ary, aryinfo)
+                aryinfo = escape_unanalyzable_obj!(astate, ary, aryinfo)
                 @goto conservative_propagation
             end
         end
