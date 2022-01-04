@@ -482,7 +482,7 @@ function parse_comparison(ps::ParseState, subtype_comparison=false)
     mark = position(ps)
     if subtype_comparison && is_reserved_word(peek(ps))
         # Recovery
-        # struct try end  ==>  (struct false (error try) (block))
+        # struct try end  ==>  (struct false (error (try)) (block))
         name = untokenize(peek(ps))
         bump(ps)
         emit(ps, mark, K"error", error="Invalid type name `$name`")
@@ -1007,10 +1007,13 @@ function parse_decl_with_initial_ex(ps::ParseState, mark)
         emit(ps, mark, K"::")
     end
     if peek(ps) == K"->"
+        # x -> y    ==>  (-> x (block y))
+        # a::b->c   ==>   (-> (:: a b) (block c))
         # -> is unusual: it binds tightly on the left and loosely on the right.
-        # a::b->c   ==>   (-> (:: a b) c)
         bump(ps, TRIVIA_FLAG)
+        m = position(ps)
         parse_eq_star(ps)
+        emit(ps, m, K"block")
         emit(ps, mark, K"->")
     end
 end
@@ -1513,7 +1516,9 @@ function parse_resword(ps::ParseState)
         end
         emit(ps, mark, K"return")
     elseif word in (K"break", K"continue")
-        bump(ps, TRIVIA_FLAG)
+        # break     ==>  (break)
+        # continue  ==>  (continue)
+        bump(ps)
         k = peek(ps)
         if !(k in (K"NewlineWs", K";", K")", K":", K"EndMarker") || (k == K"end" && !ps.end_symbol))
             recover(is_closer_or_newline, ps, TRIVIA_FLAG,
@@ -1699,8 +1704,8 @@ function parse_function(ps::ParseState)
     else
         if is_keyword(k)
             # Forbid things like
-            # function begin() end  ==>  (function (call (error begin)) (block))
-            # macro begin() end  ==>  (macro (call (error begin)) (block))
+            # function begin() end  ==>  (function (call (error (begin))) (block))
+            # macro begin() end  ==>  (macro (call (error (begin))) (block))
             bump(ps, error="invalid $(untokenize(word)) name")
             parse_call_chain(ps, def_mark)
         else
@@ -2678,7 +2683,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             # Being inside quote makes keywords into identifiers at at the
             # first level of nesting
             # :end ==> (quote end)
-            # :(end) ==> (quote (error end))
+            # :(end) ==> (quote (error (end)))
             # Being inside quote makes end non-special again (issue #27690)
             # a[:(end)]  ==>  (ref a (quote (error-t end)))
             parse_atom(ParseState(ps, end_symbol=false), false)

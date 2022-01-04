@@ -29,6 +29,10 @@ is_literal(k::Kind) = TzTokens.isliteral(k)
 is_keyword(k::Kind) = TzTokens.iskeyword(k)
 is_operator(k::Kind) = TzTokens.isoperator(k)
 
+is_literal(k)  = is_literal(kind(k))
+is_keyword(k)  = is_keyword(kind(k))
+is_operator(k) = is_operator(kind(k))
+
 # Predicates for operator precedence
 is_prec_assignment(t)  = K"BEGIN_ASSIGNMENTS" < kind(t) < K"END_ASSIGNMENTS"
 is_prec_pair(t)        = K"BEGIN_PAIRARROW"   < kind(t) < K"END_PAIRARROW"
