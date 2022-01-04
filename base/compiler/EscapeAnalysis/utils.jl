@@ -181,7 +181,7 @@ end # register_init_hook!() do
 import Core: Argument, SSAValue
 import .CC: widenconst, singleton_type
 import .EA:
-    EscapeLattice, EscapeState, TOP_ESCAPE_SITES, BOT_FIELD_SETS, ⊑, ⊏, __clear_escape_cache!
+    EscapeLattice, EscapeState, TOP_ESCAPE_SITES, BOT_ALIAS_ESCAPES, ⊑, ⊏, __clear_escape_cache!
 
 # in order to run a whole analysis from ground zero (e.g. for benchmarking, etc.)
 __clear_caches!() = (__clear_code_cache!(); __clear_escape_cache!())
@@ -192,9 +192,9 @@ function get_name_color(x::EscapeLattice, symbol::Bool = false)
         name, color = (getname(EA.NotAnalyzed), "◌"), :plain
     elseif EA.has_no_escape(x)
         name, color = (getname(EA.NoEscape), "✓"), :green
-    elseif EA.NoEscape() ⊏ EA.ignore_fieldsets(x) ⊑ AllReturnEscape()
+    elseif EA.NoEscape() ⊏ EA.ignore_aliasescapes(x) ⊑ AllReturnEscape()
         name, color = (getname(EA.ReturnEscape), "↑"), :cyan
-    elseif EA.NoEscape() ⊏ EA.ignore_fieldsets(x) ⊑ AllThrownEscape()
+    elseif EA.NoEscape() ⊏ EA.ignore_aliasescapes(x) ⊑ AllThrownEscape()
         name, color = (getname(EA.ThrownEscape), "↓"), :yellow
     elseif EA.has_all_escape(x)
         name, color = (getname(EA.AllEscape), "X"), :red
@@ -202,14 +202,14 @@ function get_name_color(x::EscapeLattice, symbol::Bool = false)
         name, color = (nothing, "*"), :red
     end
     name = symbol ? last(name) : first(name)
-    if name !== nothing && EA.has_fieldsets(x)
+    if name !== nothing && EA.has_aliasescapes(x)
         name = string(name, "′")
     end
     return name, color
 end
 
-AllReturnEscape() = EscapeLattice(true, true, false, TOP_ESCAPE_SITES, BOT_FIELD_SETS)
-AllThrownEscape() = EscapeLattice(true, false, true, TOP_ESCAPE_SITES, BOT_FIELD_SETS)
+AllReturnEscape() = EscapeLattice(true, true, false, TOP_ESCAPE_SITES, BOT_ALIAS_ESCAPES)
+AllThrownEscape() = EscapeLattice(true, false, true, TOP_ESCAPE_SITES, BOT_ALIAS_ESCAPES)
 
 # pcs = sprint(show, collect(x.EscapeSites); context=:limit=>true)
 function Base.show(io::IO, x::EscapeLattice)
