@@ -594,11 +594,23 @@ function complete_methods!(out::Vector{Completion}, @nospecialize(func), args_ex
     end
 
     for (method::Method, orig_method) in zip(ml, orig_ml)
-        ms = method.sig
-
+        completed_t_in = if !moreargs || (length(args_ex) > 0 && args_ex[end] isa Core.TypeofVararg)
+            t_in
+        else
+            Tuple{t_in.parameters..., Vararg{Any}}
+        end
+        intersec = typeintersect(method.sig, completed_t_in)
         # Check if the method's type signature intersects the input types
-        if typeintersect(Base.rewrap_unionall(Tuple{(Base.unwrap_unionall(ms)::DataType).parameters[1 : min(na, end)]...}, ms), t_in) != Union{}
-            push!(out, MethodCompletion(func, t_in, method, orig_method))
+        if intersec != Union{}
+            most_specific = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), intersec, typemax(UInt))
+            # `most_specific == method` indicates that there is no strictly more specific
+            # method signature for these input types.
+            # `isnothing(most_specific)` indicates that the completed function call will
+            # not actually work. This can happen in case of method ambiguity.
+            # The completion is kept since it can be helpful to debug such ambiguity errors
+            if isnothing(most_specific) || (most_specific::Method) == method
+                push!(out, MethodCompletion(func, t_in, method, orig_method))
+            end
         end
     end
 end
@@ -794,7 +806,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     ok && return ret
 
     # Make sure that only bslash_completions is working on strings
-    inc_tag==:string && return Completion[], 0:-1, false
+    inc_tag === :string && return Completion[], 0:-1, false
+    inc_tag === :comment && return Completion[], 0:-1, false
     if inc_tag === :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         # strip preceding ! operator
@@ -808,8 +821,6 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                 return complete_methods(ex, context_module), first(frange):(method_name_end - 1), false
             end
         end
-    elseif inc_tag === :comment
-        return Completion[], 0:-1, false
     end
 
     dotpos = something(findprev(isequal('.'), string, pos), 0)
