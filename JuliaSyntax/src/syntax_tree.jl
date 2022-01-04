@@ -165,6 +165,15 @@ function julia_string_to_number(T, str, kind)
     x
 end
 
+function unescape_julia_char(str)
+    # FIXME: Do this properly!
+    if str == "\\'"
+        '\''
+    else
+        unescape_julia_string(str)[1]
+    end
+end
+
 function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::Integer=1)
     if !haschildren(raw) && !(is_syntax_kind(raw) || is_keyword(raw))
         # Leaf node
@@ -183,8 +192,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif k == K"false"
             false
         elseif k == K"Char"
-            # FIXME: Escape sequences...
-            unescape_julia_string(val_str)[2]
+            unescape_julia_char(val_str[2:end-1])
         elseif k == K"Identifier"
             Symbol(val_str)
         elseif k == K"VarIdentifier"

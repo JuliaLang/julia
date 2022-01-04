@@ -1,8 +1,0 @@
-# This file is machine-generated - editing it directly is not advised
-
-[[Tokenize]]
-git-tree-sha1 = "433847efd9ac3d09deef4b136f0c435f22b967d9"
-repo-rev = "cjf/julia-syntax-hacks"
-repo-url = "https://github.com/c42f/Tokenize.jl.git"
-uuid = "0796e94c-ce3b-5d07-9a54-7f471281c624"
-version = "0.5.21"

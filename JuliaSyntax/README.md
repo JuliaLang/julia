@@ -394,6 +394,9 @@ Some resources:
     - [From Bob Nystrom (munificent - one of the Dart devs, etc](http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/)
   - Some discussion of error recovery
 
+* Some notes about stateful lexers for parsing shell-like string interpolations:
+  http://www.oilshell.org/blog/2017/12/17.html
+
 # Parser devdocs
 
 # Differences from the flisp parser
