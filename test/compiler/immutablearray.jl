@@ -1,4 +1,29 @@
 using Test
+import Core: ImmutableArray
+import Core.Compiler: arrayfreeze_tfunc, mutating_arrayfreeze_tfunc, arraythaw_tfunc
+const ImmutableVector{T} = Core.ImmutableArray{T,1}
+
+@test arrayfreeze_tfunc(Vector{Int}) === ImmutableVector{Int}
+@test arrayfreeze_tfunc(Vector) === ImmutableVector
+@test arrayfreeze_tfunc(Array) === ImmutableArray
+@test arrayfreeze_tfunc(Any) === ImmutableArray
+@test arrayfreeze_tfunc(ImmutableVector{Int}) === Union{}
+@test arrayfreeze_tfunc(ImmutableVector) === Union{}
+@test arrayfreeze_tfunc(ImmutableArray) === Union{}
+@test mutating_arrayfreeze_tfunc(Vector{Int}) === ImmutableVector{Int}
+@test mutating_arrayfreeze_tfunc(Vector) === ImmutableVector
+@test mutating_arrayfreeze_tfunc(Array) === ImmutableArray
+@test mutating_arrayfreeze_tfunc(Any) === ImmutableArray
+@test mutating_arrayfreeze_tfunc(ImmutableVector{Int}) === Union{}
+@test mutating_arrayfreeze_tfunc(ImmutableVector) === Union{}
+@test mutating_arrayfreeze_tfunc(ImmutableArray) === Union{}
+@test arraythaw_tfunc(ImmutableVector{Int}) === Vector{Int}
+@test arraythaw_tfunc(ImmutableVector) === Vector
+@test arraythaw_tfunc(ImmutableArray) === Array
+@test arraythaw_tfunc(Any) === Array
+@test arraythaw_tfunc(Vector{Int}) === Union{}
+@test arraythaw_tfunc(Vector) === Union{}
+@test arraythaw_tfunc(Array) === Union{}
 
 function test_allocate1()
     a = Vector{Float64}(undef, 5)
@@ -456,4 +481,3 @@ end
 
 #     sol
 # end
-
