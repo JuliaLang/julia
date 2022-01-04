@@ -112,8 +112,14 @@ end
 
 Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
 
+function unescape_julia_string(str, triplequote=false)
+    # FIXME: do this properly
+    str = replace(str, "\\\$" => '$')
+    unescape_string(str)
+end
+
 function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::Integer=1)
-    if !haschildren(raw) && !is_syntax_kind(raw)
+    if !haschildren(raw) && !(is_syntax_kind(raw) || is_keyword(raw))
         # Leaf node
         k = kind(raw)
         val_range = position:position + span(raw) - 1
@@ -132,7 +138,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             false
         elseif k == K"Char"
             # FIXME: Escape sequences...
-            unescape_string(val_str)[2]
+            unescape_julia_string(val_str)[2]
         elseif k == K"Identifier"
             Symbol(val_str)
         elseif k == K"VarIdentifier"
@@ -141,7 +147,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             # This should only happen for tokens nested inside errors
             Symbol(val_str)
         elseif k == K"String"
-            unescape_string(val_str)
+            unescape_julia_string(val_str)
         elseif k == K"UnquotedString"
             String(val_str)
         elseif is_operator(k)

@@ -184,8 +184,8 @@ tests = [
     ],
     JuliaSyntax.parse_decl => [
         "a::b"     =>   "(:: a b)"
-        "a->b"     =>   "(-> a b)"
-        "a::b->c"  =>  "(-> (:: a b) c)"
+        "a->b"     =>   "(-> a (block b))"
+        "a::b->c"  =>  "(-> (:: a b) (block c))"
     ],
     JuliaSyntax.parse_unary_prefix => [
         "&)"   => "&"
@@ -300,16 +300,19 @@ tests = [
         "struct A <: B \n a::X \n end"  =>  "(struct false (<: A B) (block (:: a X)))"
         "mutable struct A end"          =>  "(struct true A (block))"
         "struct A end"    =>  "(struct false A (block))"
-        "struct try end"  =>  "(struct false (error try) (block))"
+        "struct try end"  =>  "(struct false (error (try)) (block))"
         # return
         "return\nx"   =>  "(return nothing)"
         "return)"     =>  "(return nothing)"
         "return x"    =>  "(return x)"
         "return x,y"  =>  "(return (tuple x y))"
+        # break/continue
+        "break"    => "(break)"
+        "continue" => "(continue)"
         # module/baremodule
         "module A end"      =>  "(module true A (block))"
         "baremodule A end"  =>  "(module false A (block))"
-        "module do \n end"  =>  "(module true (error do) (block))"
+        "module do \n end"  =>  "(module true (error (do)) (block))"
         "module \$A end"    =>  "(module true (\$ A) (block))"
         "module A \n a \n b \n end"  =>  "(module true A (block a b))"
         # export
@@ -351,8 +354,8 @@ tests = [
         "function (x,y) end"     =>  "(function (tuple x y) (block))"
         "function (x=1) end"     =>  "(function (tuple (kw x 1)) (block))"
         "function (;x=1) end"    =>  "(function (tuple (parameters (kw x 1))) (block))"
-        "function begin() end"   =>  "(function (call (error begin)) (block))"
-        "macro begin() end"      =>  "(macro (call (error begin)) (block))"
+        "function begin() end"   =>  "(function (call (error (begin))) (block))"
+        "macro begin() end"      =>  "(macro (call (error (begin))) (block))"
         "function f() end"       =>  "(function (call f) (block))"
         "function \n f() end"    =>  "(function (call f) (block))"
         "function \$f() end"     =>  "(function (call (\$ f)) (block))"
@@ -450,7 +453,7 @@ tests = [
         ": end"   => ":"
         # Special symbols quoted
         ":end" => "(quote end)"
-        ":(end)" => "(quote (error end))"
+        ":(end)" => "(quote (error (end)))"
         ":<:"  => "(quote <:)"
         # Macro names can be keywords
         "@end x" => """(macrocall @end x)"""
