@@ -21,6 +21,22 @@ macro K_str(str)
     end
 end
 
+"""
+A set of kinds which can be used with the `in` operator.  For example
+
+    k in KSet`+ - *`
+"""
+macro KSet_cmd(str)
+    kinds = [get(_str_to_kind, s) do
+        error("unknown token kind K$(repr(str))")
+    end
+    for s in split(str)]
+
+    quote
+        ($(kinds...),)
+    end
+end
+
 kind(k::Kind) = k
 kind(raw::TzTokens.RawToken) = TzTokens.exactkind(raw)
 

@@ -17,7 +17,7 @@ function bump_closing_token(ps, closing_kind)
     mark = position(ps)
     while true
         k = peek(ps)
-        if is_closing_token(ps, k) && !(k in (K",", K";"))
+        if is_closing_token(ps, k) && !(k in KSet`, ;`)
             break
         end
         bump(ps)
@@ -66,9 +66,8 @@ end
 
 function is_closing_token(ps::ParseState, k)
     k = kind(k)
-    return k in (K"else", K"elseif", K"catch", K"finally",
-                 K",", K")", K"]", K"}", K";",
-                 K"EndMarker") || (k == K"end" && !ps.end_symbol)
+    return k in KSet`else elseif catch finally , ) ] } ; EndMarker` ||
+        (k == K"end" && !ps.end_symbol)
 end
 
 function is_closer_or_newline(ps::ParseState, k)
@@ -77,22 +76,20 @@ end
 
 # Closing token which isn't a keyword
 function is_non_keyword_closer(k)
-    kind(k) in (K",", K")", K"]", K"}", K";", K"EndMarker")
+    kind(k) in KSet`, ) ] } ; EndMarker`
 end
 
 function is_initial_reserved_word(ps::ParseState, k)
     k = kind(k)
-    is_iresword = k in (
-        K"begin", K"while", K"if", K"for", K"try", K"return", K"break",
-        K"continue", K"function", K"macro", K"quote", K"let", K"local",
-        K"global", K"const", K"do", K"struct", K"module", K"baremodule",
-        K"using", K"import", K"export")
+    is_iresword = k in KSet`begin while if for try return break continue function
+                            macro quote let local global const do struct module
+                            baremodule using import export`
     # `begin` means firstindex(a) inside a[...]
     return is_iresword && !(k == K"begin" && ps.end_symbol)
 end
 
 function is_contextural_keyword(k)
-    kind(k) ∈ (K"mutable", K"primitive", K"abstract")
+    kind(k) ∈ KSet`mutable primitive abstract`
 end
 
 function is_reserved_word(k)
@@ -117,46 +114,44 @@ function peek_initial_reserved_words(ps::ParseState)
 end
 
 function is_block_form(k)
-    kind(k) in (K"block", K"quote", K"if", K"for", K"while",
-                K"let", K"function", K"macro", K"abstract",
-                K"primitive", K"struct", K"try", K"module")
+    kind(k) in KSet`block quote if for while let function macro
+                    abstract primitive struct try module`
 end
 
 function is_syntactic_operator(k)
     k = kind(k)
-    return k in (K"&&", K"||", K".", K"...", K"->") ||
-           (is_prec_assignment(k) && k != K"~")
+    return k in KSet`&& || . ... ->` || (is_prec_assignment(k) && k != K"~")
 end
 
 function is_syntactic_unary_op(k)
-    kind(k) in (K"$", K"&", K"::")
+    kind(k) in KSet`$ & ::`
 end
 
 function is_type_operator(k)
-    kind(k) in (K"<:", K">:")
+    kind(k) in KSet`<: >:`
 end
 
 function is_unary_op(k)
-    kind(k) in (
-        K"<:", K">:",  # TODO: dotop disallowed ?
-        K"+", K"-", K"!", K"~", K"¬", K"√", K"∛", K"∜", K"⋆", K"±", K"∓" # dotop allowed
-    )
+    k = kind(k)
+    k in KSet`<: >:` ||  # TODO: dotop disallowed ?
+    k in KSet`+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓` # dotop allowed
 end
 
 # Operators which are both unary and binary
 function is_both_unary_and_binary(k)
+    k = kind(k)
     # TODO: Do we need to check dotop as well here?
-    kind(k) in (K"$", K"&", K"~",             # <- dotop disallowed?
-                K"+", K"-", K"⋆", K"±", K"∓") # dotop allowed
+    k in KSet`$ & ~`      || # dotop disallowed?
+    k in KSet`+ - ⋆ ± ∓`     # dotop allowed
 end
 
 # operators handled by parse_unary at the start of an expression
 function is_initial_operator(k)
     k = kind(k)
     # TODO(jb): `?` should probably not be listed here except for the syntax hack in osutils.jl
-    is_operator(k)                     &&
-    !(k in (K":", K"'", K".'", K"?"))  &&
-    !is_syntactic_unary_op(k)          &&
+    is_operator(k)             &&
+    !(k in KSet`: ' .' ?`)       &&
+    !is_syntactic_unary_op(k)  &&
     !is_syntactic_operator(k)
 end
 
@@ -165,7 +160,7 @@ function is_valid_identifier(k)
     k = kind(k)
     # TODO: flisp also had K"...." disallowed. But I don't know what that's
     # for! Tokenize doesn't have an equivalent here.
-    !(is_syntactic_operator(k) || k in (K"?", K".'"))
+    !(is_syntactic_operator(k) || k in KSet`? .'`)
 end
 
 #-------------------------------------------------------------------------------
@@ -274,8 +269,7 @@ end
 
 # Parse a block, but leave emitting the block up to the caller.
 function parse_block_inner(ps::ParseState, down)
-    parse_Nary(ps, down, (K"NewlineWs", K";"),
-               (K"end", K"else", K"elseif", K"catch", K"finally"))
+    parse_Nary(ps, down, KSet`NewlineWs ;`, KSet`end else elseif catch finally`)
 end
 
 # ";" at the top level produces a sequence of top level expressions
@@ -289,7 +283,7 @@ function parse_stmts(ps::ParseState)
     do_emit = parse_Nary(ps, parse_docstring, (K";",), (K"NewlineWs",))
     # check for unparsed junk after an expression
     junk_mark = position(ps)
-    while peek(ps) ∉ (K"EndMarker", K"NewlineWs")
+    while peek(ps) ∉ KSet`EndMarker NewlineWs`
         # Error recovery
         bump(ps)
     end
@@ -324,7 +318,7 @@ end
 function parse_eq_star(ps::ParseState, equals_is_kw=false)
     k = peek(ps)
     k2 = peek(ps,2)
-    if (is_literal(k) || is_identifier(k)) && k2 in (K",", K")", K"}", K"]")
+    if (is_literal(k) || is_identifier(k)) && k2 in KSet`, ) } ]`
         # optimization: skip checking the whole precedence stack if we have a
         # simple token followed by a common closing token
         bump(ps)
@@ -560,7 +554,7 @@ function parse_range(ps::ParseState)
                 break
             end
             t2 = peek_token(ps,2)
-            if kind(t2) in (K"<", K">") && !t2.had_whitespace
+            if kind(t2) in KSet`< >` && !t2.had_whitespace
                 # Error heuristic: we found `:>` or `:<` which are invalid lookalikes
                 # for `<:` and `>:`. Attempt to recover by treating them as a
                 # comparison operator.
@@ -622,14 +616,14 @@ end
 #
 # flisp: parse-expr
 function parse_expr(ps::ParseState)
-    parse_with_chains(ps, parse_term, is_prec_plus, (K"+", K"++"))
+    parse_with_chains(ps, parse_term, is_prec_plus, KSet`+ ++`)
 end
 
 # a * b * c  ==>  (call-i a * b c)
 #
 # flisp: parse-term
 function parse_term(ps::ParseState)
-    parse_with_chains(ps, parse_rational, is_prec_times, (K"*",))
+    parse_with_chains(ps, parse_rational, is_prec_times, KSet`*`)
 end
 
 # Parse left to right, combining any of `chain_ops` into one call
@@ -695,15 +689,15 @@ function parse_unary_subtype(ps::ParseState)
     if k == K"EndMarker"
         parse_atom(ps)
         return 
-    elseif k in (K"<:", K">:")
+    elseif k in KSet`<: >:`
         # FIXME add test cases
         k2 = peek(ps, 2)
-        if is_closing_token(ps, k2) || k2 in (K"NewlineWs", K"=")
+        if is_closing_token(ps, k2) || k2 in KSet`NewlineWs =`
             # return operator by itself, as in (<:)
             bump(ps)
             return
         end
-        if k2 in (K"{", K"(")
+        if k2 in KSet`{ (`
             # parse <:{T}(x::T) or <:(x::T) like other unary operators
             parse_where(ps, parse_juxtapose)
         else
@@ -827,11 +821,11 @@ function parse_unary(ps::ParseState)
         parse_factor(ps)
         return
     end
-    if k in (K"-", K"+")
+    if k in KSet`- +`
         t2 = peek_token(ps, 2)
-        if !t2.had_whitespace && kind(t2) in (K"Integer", K"Float")
+        if !t2.had_whitespace && kind(t2) in KSet`Integer Float`
             k3 = peek(ps, 3)
-            if is_prec_power(k3) || k3 in (K"[", K"{")
+            if is_prec_power(k3) || k3 in KSet`[ {`
                 # `[`, `{` (issue #18851) and `^` have higher precedence than
                 # unary negation
                 # -2^x      ==>  (call - (call-i 2 ^ x))
@@ -867,7 +861,7 @@ function parse_unary_call(ps::ParseState)
     op_tok_flags = is_type_operator(op_t) ? TRIVIA_FLAG : EMPTY_FLAGS
     t2 = peek_token(ps, 2)
     k2 = kind(t2)
-    if is_closing_token(ps, k2) || k2 in (K"NewlineWs", K"=")
+    if is_closing_token(ps, k2) || k2 in KSet`NewlineWs =`
         if is_dotted(op_t)
             # standalone dotted operators are parsed as (|.| op)
             # .+    ==>  (. +)
@@ -1048,13 +1042,13 @@ function parse_unary_prefix(ps::ParseState)
     k = peek(ps)
     if is_syntactic_unary_op(k)
         k2 = peek(ps, 2)
-        if k in (K"&", K"$") && (is_closing_token(ps, k2) || k2 == K"NewlineWs")
+        if k in KSet`& $` && (is_closing_token(ps, k2) || k2 == K"NewlineWs")
             # &)   ==>  &
             # $\n  ==>  $
             bump(ps)
         else
             bump(ps, TRIVIA_FLAG)
-            if k in (K"&", K"::")
+            if k in KSet`& ::`
                 # &a   ==>  (& a)
                 parse_where(ps, parse_call)
             else
@@ -1130,7 +1124,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
         t = peek_token(ps)
         k = kind(t)
         if (ps.space_sensitive && t.had_whitespace &&
-                k in (K"(", K"[", K"{", K"\\", K"'", K"Char", K"\"", K"\"\"\"", K"`", K"```"))
+                k in KSet`( [ { \ ' Char " """ \` \`\`\``)
             # [f (x)]  ==>  (hcat f x)
             break
         end
@@ -1337,7 +1331,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # S{a,b} ==> (curly S a b)
                 emit(ps, mark, K"curly")
             end
-        elseif k in (K"\"", K"\"\"\"", K"`", K"```") &&
+        elseif k in KSet` " """ \` \`\`\` ` &&
                 !t.had_whitespace && is_valid_modref
             # Custom string and command literals
             # x"str" ==> (macrocall x_str "str")
@@ -1389,7 +1383,7 @@ function parse_resword(ps::ParseState)
     ps = normal_context(ps)
     mark = position(ps)
     word = peek(ps)
-    if word in (K"begin", K"quote")
+    if word in KSet`begin quote`
         # begin end         ==>  (block)
         # begin a ; b end   ==>  (block a b)
         # begin\na\nb\nend  ==>  (block a b)
@@ -1424,7 +1418,7 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"for")
     elseif word == K"let"
         bump(ps, TRIVIA_FLAG)
-        if peek(ps) ∉ (K"NewlineWs", K";")
+        if peek(ps) ∉ KSet`NewlineWs ;`
             # let x=1\n end    ==>  (let (= x 1) (block))
             m = position(ps)
             n_subexprs = parse_comma_separated(ps, parse_eq_star)
@@ -1433,7 +1427,7 @@ function parse_resword(ps::ParseState)
             # let x=1 ; end   ==>  (let (= x 1) (block))
             # let x::1 ; end  ==>  (let (:: x 1) (block))
             # let x ; end     ==>  (let x (block))
-            if n_subexprs > 1 || !(kb in (K"Identifier", K"=", K"::"))
+            if n_subexprs > 1 || !(kb in KSet`Identifier = ::`)
                 # let x=1,y=2 ; end  ==>  (let (block (= x 1) (= y 2) (block)))
                 # let x+=1 ; end     ==>  (let (block (+= x 1)) (block))
                 emit(ps, m, K"block")
@@ -1445,7 +1439,7 @@ function parse_resword(ps::ParseState)
             bump_invisible(ps, K"block")
         end
         k = peek(ps)
-        if k in (K"NewlineWs", K";")
+        if k in KSet`NewlineWs ;`
             bump(ps, TRIVIA_FLAG)
         elseif k == K"end"
             # pass
@@ -1459,9 +1453,9 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"let")
     elseif word == K"if"
         parse_if_elseif(ps)
-    elseif word in (K"const", K"global", K"local")
+    elseif word in KSet`const global local`
         parse_const_local_global(ps)
-    elseif word in (K"function", K"macro")
+    elseif word in KSet`function macro`
         parse_function(ps)
     elseif word == K"abstract"
         # Abstract type definitions
@@ -1477,7 +1471,7 @@ function parse_resword(ps::ParseState)
         parse_subtype_spec(ps)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"abstract")
-    elseif word in (K"struct", K"mutable")
+    elseif word in KSet`struct mutable`
         # struct A <: B \n a::X \n end  ==>  (struct false (<: A B) (block (:: a X)))
         if word == K"mutable"
             # mutable struct A end  ==>  (struct true A (block))
@@ -1517,16 +1511,16 @@ function parse_resword(ps::ParseState)
             parse_eq(ps)
         end
         emit(ps, mark, K"return")
-    elseif word in (K"break", K"continue")
+    elseif word in KSet`break continue`
         # break     ==>  (break)
         # continue  ==>  (continue)
         bump(ps)
         k = peek(ps)
-        if !(k in (K"NewlineWs", K";", K")", K":", K"EndMarker") || (k == K"end" && !ps.end_symbol))
+        if !(k in KSet`NewlineWs ; ) : EndMarker` || (k == K"end" && !ps.end_symbol))
             recover(is_closer_or_newline, ps, TRIVIA_FLAG,
                     error="unexpected token after $(untokenize(word))")
         end
-    elseif word in (K"module", K"baremodule")
+    elseif word in KSet`module baremodule`
         # module A end  ==> (module true A (block))
         # baremodule A end ==> (module false A (block))
         bump(ps, remap_kind= (word == K"module") ? K"true" : K"false")
@@ -1547,7 +1541,7 @@ function parse_resword(ps::ParseState)
         bump(ps, TRIVIA_FLAG)
         parse_comma_separated(ps, parse_atsym)
         emit(ps, mark, K"export")
-    elseif word in (K"import", K"using")
+    elseif word in KSet`import using`
         parse_imports(ps)
     elseif word == K"do"
         bump(ps, TRIVIA_FLAG, error="invalid `do` syntax")
@@ -1569,7 +1563,7 @@ function parse_if_elseif(ps, is_elseif=false, is_elseif_whitespace_err=false)
         bump(ps, TRIVIA_FLAG)
     end
     cond_mark = position(ps)
-    if peek(ps) in (K"NewlineWs", K"end")
+    if peek(ps) in KSet`NewlineWs end`
         # if end      ==>  (if (error) (block))
         # if \n end   ==>  (if (error) (block))
         bump_trivia(ps, error="missing condition in `$(untokenize(word))`")
@@ -1616,7 +1610,7 @@ function parse_const_local_global(ps)
     has_const = false
     scope_k = K"Nothing"
     k = peek(ps)
-    if k in (K"global", K"local")
+    if k in KSet`global local`
         # global x = 1  ==>  (global (= x 1))
         # local x = 1   ==>  (local (= x 1))
         scope_k = k
@@ -1633,7 +1627,7 @@ function parse_const_local_global(ps)
         # const x,y = 1,2      ==>  (const (= (tuple x y) (tuple 1 2)))
         bump(ps, TRIVIA_FLAG)
         k = peek(ps)
-        if k in (K"global", K"local")
+        if k in KSet`global local`
             # const global x = 1   ==>  (const (global (= x 1)))
             # const local x = 1    ==>  (const (local (= x 1)))
             scope_k = k
@@ -1811,7 +1805,7 @@ end
 function parse_catch(ps::ParseState)
     bump(ps, TRIVIA_FLAG)
     k = peek(ps)
-    if k in (K";", K"NewlineWs") || is_closing_token(ps, k)
+    if k in KSet`NewlineWs ;` || is_closing_token(ps, k)
         # try x catch ; y end  ==>  (try (block x) false (block y) false false)
         # try x catch \n y end  ==>  (try (block x) false (block y) false false)
         bump_invisible(ps, K"false")
@@ -1827,7 +1821,7 @@ end
 function parse_do(ps::ParseState)
     ps = normal_context(ps)
     mark = position(ps)
-    if peek(ps) in (K"NewlineWs", K";")
+    if peek(ps) in KSet`NewlineWs ;`
         # f() do\nend        ==>  (do (call f) (-> (tuple) (block)))
         # f() do ; body end  ==>  (do (call f) (-> (tuple) (block body)))
         # this trivia needs to go into the tuple due to the way position()
@@ -1891,7 +1885,7 @@ end
 function parse_imports(ps::ParseState)
     mark = position(ps)
     word = peek(ps)
-    @assert word in (K"import", K"using")
+    @assert word in KSet`import using`
     bump(ps, TRIVIA_FLAG)
     emark = position(ps)
     initial_as = parse_import(ps, word, false)
@@ -1999,7 +1993,7 @@ function parse_import_path(ps::ParseState)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             parse_atsym(ps)
-        elseif k in (K"NewlineWs", K";", K",", K":", K"EndMarker")
+        elseif k in KSet`NewlineWs ; , : EndMarker`
             # import A; B  ==>  (import (. A))
             break
         elseif k == K".."
@@ -2058,7 +2052,7 @@ function parse_iteration_spec(ps::ParseState)
     mark = position(ps)
     k = peek(ps)
     # Handle `outer` contextual keyword
-    is_outer_kw = k == K"outer" && !(peek_skip_newline_in_gen(ps, 2) in (K"=", K"in", K"∈"))
+    is_outer_kw = k == K"outer" && !(peek_skip_newline_in_gen(ps, 2) in KSet`= in ∈`)
     if is_outer_kw
         # outer i = rhs  ==>  (= (outer i) rhs)
         bump(ps, TRIVIA_FLAG)
@@ -2067,13 +2061,13 @@ function parse_iteration_spec(ps::ParseState)
     if is_outer_kw
         emit(ps, mark, K"outer")
     end
-    if peek_skip_newline_in_gen(ps) in (K"=", K"in", K"∈")
+    if peek_skip_newline_in_gen(ps) in KSet`= in ∈`
         bump(ps, TRIVIA_FLAG)
         parse_pipe_lt(ps)
     else
         # Recovery heuristic
         recover(ps, error="invalid iteration spec: expected one of `=` `in` or `∈`") do ps, k
-            k in (K",", K"NewlineWs") || is_closing_token(ps, k)
+            k in KSet`, NewlineWs` || is_closing_token(ps, k)
         end
         # TODO: or try parse_pipe_lt ???
     end
@@ -2362,7 +2356,7 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
     mark = position(ps)
     parse_eq_star(ps)
     k = peek(ps, skip_newlines=true)
-    if k in (K",", closer)
+    if k == K"," || k == closer
         if k == K","
             # [x,]  ==>  (vect x)
             bump(ps, TRIVIA_FLAG)
@@ -2734,7 +2728,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         bump(ps, TRIVIA_FLAG)
         parse_macro_name(ps)
         parse_call_chain(ps, mark, true)
-    elseif leading_kind in (K"`", K"```")
+    elseif leading_kind in KSet`\` \`\`\``
         bump_invisible(ps, K"core_@cmd")
         parse_raw_string(ps)
         emit(ps, mark, K"macrocall")
@@ -2760,7 +2754,7 @@ function emit_braces(ps, mark, ckind, cflags)
         # {x ;;; y}  ==>  (bracescat (nrow-3 x y))
         emit(ps, mark, K"nrow", cflags)
     end
-    outk = ckind in (K"vect", K"comprehension") ? K"braces" : K"bracescat"
+    outk = ckind in KSet`vect comprehension` ? K"braces" : K"bracescat"
     emit(ps, mark, outk)
 end
 
