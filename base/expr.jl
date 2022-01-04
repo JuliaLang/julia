@@ -464,7 +464,7 @@ Mark `var` or `ex` as being performed atomically, if `ex` is a supported express
 
     @atomic a.b.x = new
     @atomic a.b.x += addend
-    @atomic :acquire_release a.b.x = new
+    @atomic :release a.b.x = new
     @atomic :acquire_release a.b.x += addend
 
 Perform the store operation expressed on the right atomically and return the
