@@ -55,8 +55,7 @@ CombinedResults g_combined_results; // will live forever
 RawBacktrace get_raw_backtrace() {
     static jl_bt_element_t static_bt_data[JL_MAX_BT_SIZE];
 
-    // TODO: tune the number of frames that are skipped
-    size_t bt_size = rec_backtrace(static_bt_data, JL_MAX_BT_SIZE, 1);
+    size_t bt_size = rec_backtrace(static_bt_data, JL_MAX_BT_SIZE, 2);
 
     size_t bt_bytes = bt_size * sizeof(jl_bt_element_t);
     jl_bt_element_t *bt_data = (jl_bt_element_t*) malloc(bt_bytes);
