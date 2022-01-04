@@ -400,7 +400,7 @@ function highlight(code::String, node, path::Int...; color=(40,40,70))
     node, p, span = child_position_span(node, path...)
     q = p + span
     print(stdout, code[1:p-1])
-    _printstyled(stdout, code[p:q-1]; color)
+    _printstyled(stdout, code[p:q-1]; color=color)
     print(stdout, code[q:end])
 end
 
@@ -557,5 +557,9 @@ function remove_linenums!(ex)
 end
 
 function flisp_parse_all(code)
-    Meta.parseall(code)
+    if VERSION >= v"1.6"
+        Meta.parseall(code)
+    else
+        Base.parse_input_line(code)
+    end
 end

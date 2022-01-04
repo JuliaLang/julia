@@ -36,7 +36,7 @@ function core_parser_hook(code, filename, offset, options)
             ex = Expr(:error, ParseError(code, stream))
         else
             green_tree = build_tree(GreenNode, stream)
-            src = SourceFile(code; filename)
+            src = SourceFile(code; filename=filename)
             tree = SyntaxNode(src, green_tree)
             ex = Expr(tree)
         end
