@@ -230,6 +230,21 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         }
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
     }
+    // Next, if we're on Linux/FreeBSD, set up fast TLS.
+#if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_)
+    void (*jl_pgcstack_setkey)(void*, void*(*)(void)) = lookup_symbol(libjulia_internal, "jl_pgcstack_setkey");
+    if (jl_pgcstack_setkey == NULL) {
+        jl_loader_print_stderr("ERROR: Cannot find jl_pgcstack_setkey() function within libjulia-internal!\n");
+        exit(1);
+    }
+    void *fptr = lookup_symbol(RTLD_DEFAULT, "jl_get_pgcstack_static");
+    void *(*key)(void) = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_addr_static");
+    if (fptr == NULL || key == NULL) {
+        jl_loader_print_stderr("ERROR: Cannot find jl_get_pgcstack_static(), must define this symbol within calling executable!\n");
+        exit(1);
+    }
+    jl_pgcstack_setkey(fptr, key);
+#endif
 
     // jl_options must be initialized very early, in case an embedder sets some
     // values there before calling jl_init
@@ -247,22 +262,6 @@ JL_DLLEXPORT int jl_load_repl(int argc, char * argv[]) {
             exit(1);
         }
     }
-    // Next, if we're on Linux/FreeBSD, set up fast TLS.
-#if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_)
-    void (*jl_pgcstack_setkey)(void*, void*(*)(void)) = lookup_symbol(libjulia_internal, "jl_pgcstack_setkey");
-    if (jl_pgcstack_setkey == NULL) {
-        jl_loader_print_stderr("ERROR: Cannot find jl_pgcstack_setkey() function within libjulia-internal!\n");
-        exit(1);
-    }
-    void *fptr = lookup_symbol(RTLD_DEFAULT, "jl_get_pgcstack_static");
-    void *(*key)(void) = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_addr_static");
-    if (fptr == NULL || key == NULL) {
-        jl_loader_print_stderr("ERROR: Cannot find jl_get_pgcstack_static(), must define this symbol within calling executable!\n");
-        exit(1);
-    }
-    jl_pgcstack_setkey(fptr, key);
-#endif
-
     // Load the repl entrypoint symbol and jump into it!
     int (*entrypoint)(int, char **) = (int (*)(int, char **))lookup_symbol(libjulia_internal, "jl_repl_entrypoint");
     if (entrypoint == NULL) {
