@@ -43,6 +43,18 @@ function source_location(source::SourceFile, byte_index)
     line, column
 end
 
+"""
+Get byte range of the source line at byte_index, buffered by
+`context_lines_before` and `context_lines_after` before and after.
+"""
+function source_line_range(source::SourceFile, byte_index;
+                           context_lines_before=0, context_lines_after=0)
+    line = searchsortedlast(source.line_starts, byte_index)
+    fbyte = source.line_starts[max(line-context_lines_before, 1)]
+    lbyte = source.line_starts[min(line+1+context_lines_after, end)] - 1
+    fbyte,lbyte
+end
+
 function source_location(::Type{LineNumberNode}, source::SourceFile, byte_index)
     LineNumberNode(source_line(source, byte_index), source.filename)
 end

@@ -62,28 +62,55 @@ end
 first_byte(d::Diagnostic) = d.first_byte
 last_byte(d::Diagnostic)  = d.last_byte
 
-function show_diagnostic(io::IO, diagnostic::Diagnostic, code)
+function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
     col,prefix = diagnostic.level == :error   ? (:light_red, "Error")      :
                  diagnostic.level == :warning ? (:light_yellow, "Warning") :
                  diagnostic.level == :note    ? (:light_blue, "Note")      :
                  (:normal, "Info")
     printstyled(io, "$prefix: ", color=col)
     print(io, diagnostic.message, ":\n")
+
     p = first_byte(diagnostic)
     q = last_byte(diagnostic)
-    if !isvalid(code, q)
-        # Transform byte range into valid text range
-        q = prevind(code, q)
-    end
+    code = source.code
     if q < p || (p == q && code[p] == '\n')
         # An empty or invisible range!  We expand it symmetrically to make it
         # visible.
         p = max(firstindex(code), prevind(code, p))
         q = min(lastindex(code), nextind(code, q))
     end
-    print(io, code[1:prevind(code, p)])
-    _printstyled(io, code[p:q]; color=(100,40,40))
-    print(io, code[nextind(code, q):end], '\n')
+
+    # p and q mark the start and end of the diagnostic range. For context,
+    # buffer these out to the surrouding lines.
+    a,b = source_line_range(source, p, context_lines_before=2, context_lines_after=1)
+    c,d = source_line_range(source, q, context_lines_before=1, context_lines_after=2)
+    
+    hicol = (100,40,40)
+
+    print(io, source[a:prevind(code, p)])
+    # There's two situations, either
+    if b >= c
+        # The diagnostic range is compact and we show the whole thing
+        # a...............
+        # .....p...q......
+        # ...............b
+        
+        _printstyled(io, source[p:q]; color=hicol)
+    else
+        # Or large and we trucate the code to show only the region around the
+        # start and end of the error.
+        # a...............
+        # .....p..........
+        # ...............b
+        # (snip)
+        # c...............
+        # .....q..........
+        # ...............d
+        _printstyled(io, source[p:b]; color=hicol)
+        println(io, "…")
+        _printstyled(io, source[c:q]; color=hicol)
+    end
+    print(io, source[nextind(code,q):d])
 end
 
 struct ParseStreamPosition
@@ -127,9 +154,15 @@ function Base.show(io::IO, mime::MIME"text/plain", stream::ParseStream)
     println(io, "ParseStream at position $(stream.next_byte)")
 end
 
-function show_diagnostics(io::IO, stream::ParseStream, code)
+function show_diagnostics(io::IO, stream::ParseStream, code::SourceFile)
     for d in stream.diagnostics
         show_diagnostic(io, d, code)
+    end
+end
+
+function show_diagnostics(io::IO, stream::ParseStream, code)
+    if !isempty(stream.diagnostics)
+        show_diagnostics(io, stream, SourceFile(code))
     end
 end
 
@@ -266,7 +299,7 @@ function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"Nothing")
     if n <= 0
         return
     end
-    for i=1:n
+    for i = 1:n
         tok = stream.lookahead[i]
         k = kind(tok)
         if k == K"EndMarker"
