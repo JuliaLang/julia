@@ -918,7 +918,7 @@ end
 # The prefix `var"` has been consumed
 function lex_var(l::Lexer)
     read_raw_string(l, '"', false)
-    if readchar(l) == '"'
+    if accept(l, '"')
         return emit(l, Tokens.VAR_IDENTIFIER)
     else
         return emit_error(l, Tokens.EOF_VAR)
@@ -952,19 +952,22 @@ end
 # closing quotes can be escaped with an odd number of \ characters.
 function read_raw_string(l::Lexer, delim::Char, triplestr::Bool)
     while true
+        if string_terminates(l, delim, triplestr) || eof(peekchar(l))
+            return
+        end
         c = readchar(l)
         if c == '\\'
-            n = 0
-            while c == '\\'
+            n = 1
+            while true
+                readchar(l)
                 n += 1
-                c = readchar(l)
+                if peekchar(l) != '\\'
+                    break
+                end
             end
-            if c == delim && !iseven(n)
-                c = readchar(l)
+            if peekchar(l) == delim && !iseven(n)
+                readchar(l)
             end
-        end
-        if string_terminates(l, delim, triplestr) || eof(c)
-            return
         end
     end
 end
