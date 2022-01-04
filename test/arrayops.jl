@@ -2969,6 +2969,7 @@ end
     K = spzeros(3,3)
     b = zeros(3,3)
     b[3,:] = [1,2,3]
-    @test (K[3,1:3] += [1.0 2.0 3.0]') == b
+    K[3,1:3] += [1.0 2.0 3.0]'
+    @test K == b
     @test_throws DimensionMismatch K[3,1:2] += [1.0 2.0 3.0]'
 end
