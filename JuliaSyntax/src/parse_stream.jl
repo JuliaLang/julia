@@ -307,10 +307,12 @@ function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"Nothing")
         end
         is_trivia = k ∈ (K"Whitespace", K"Comment", K"NewlineWs")
         f = is_trivia ? TRIVIA_FLAG : flags
+        tok.raw.dotop     && (f |= DOTOP_FLAG)
+        tok.raw.triplestr && (f |= TRIPLE_STRING_FLAG)
         k = (is_trivia || remap_kind == K"Nothing") ? k : remap_kind
-        span = TaggedRange(SyntaxHead(k, f), first_byte(tok),
-                           last_byte(tok), lastindex(stream.ranges)+1)
-        push!(stream.ranges, span)
+        range = TaggedRange(SyntaxHead(k, f), first_byte(tok),
+                            last_byte(tok), lastindex(stream.ranges)+1)
+        push!(stream.ranges, range)
     end
     Base._deletebeg!(stream.lookahead, n)
     stream.next_byte = last_byte(last(stream.ranges)) + 1
@@ -600,7 +602,7 @@ end
 
 # Normal context
 function ParseState(stream::ParseStream; julia_version=VERSION)
-    ParseState(stream, julia_version, true, false, true, false, false, false)
+    ParseState(stream, julia_version, true, false, false, false, false, true)
 end
 
 function ParseState(ps::ParseState; range_colon_enabled=nothing,
