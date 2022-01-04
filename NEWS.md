@@ -188,7 +188,7 @@ External dependencies
 
 Tooling Improvements
 ---------------------
-* `Base.Experimental.enable_gc_logging(true)` can be used to log each garbage collection, with the
+* `GC.enable_logging(true)` can be used to log each garbage collection, with the
   time it took and the amount of memory that was collected.
 
 

@@ -344,13 +344,4 @@ adding them to the global method table.
 """
 :@MethodTable
 
-"""
-    Experimental.enable_gc_logging(on::Bool)
-
-When turned on, print statistics about each GC to stderr.
-"""
-function enable_gc_logging(on::Bool=true)
-    ccall(:jl_enable_gc_logging, Cvoid, (Cint,), on)
-end
-
 end
