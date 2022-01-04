@@ -297,11 +297,17 @@ on the author's laptop).
 
 ## Memory allocation analysis
 
-One of the most common techniques to improve performance is to reduce memory allocation. The
-total amount of allocation can be measured with [`@time`](@ref) and [`@allocated`](@ref), and
+One of the most common techniques to improve performance is to reduce memory allocation. Julia
+provides several tools measure this:
+
+### `@time`
+
+The total amount of allocation can be measured with [`@time`](@ref) and [`@allocated`](@ref), and
 specific lines triggering allocation can often be inferred from profiling via the cost of garbage
 collection that these lines incur. However, sometimes it is more efficient to directly measure
 the amount of memory allocated by each line of code.
+
+### Line-by-Line Allocation Tracking
 
 To measure allocation line-by-line, start Julia with the `--track-allocation=<setting>` command-line
 option, for which you can choose `none` (the default, do not measure allocation), `user` (measure
@@ -320,6 +326,15 @@ memory allocation). The recommended procedure is to force compilation by executi
 you want to analyze, then call [`Profile.clear_malloc_data()`](@ref) to reset all allocation counters.
  Finally, execute the desired commands and quit Julia to trigger the generation of the `.mem`
 files.
+
+### GC Logging
+
+While [`@time`](@ref) logs high-level stats about memory usage and garbage collection over the course
+of evaluating an expression, it can be useful to log each garbage collection event, to get an
+intuitive sense of how often the garbage collector is running, how long it's running each time,
+and how much garbage it collects each time. This can be enabled with
+[`GC.enable_logging(true)`](@ref), which causes Julia to log to stderr every time
+a garbage collection happens.
 
 ## External Profiling
 

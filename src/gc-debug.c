@@ -1380,6 +1380,23 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
     jl_set_safe_restore(old_buf);
 }
 
+static int gc_logging_enabled = 0;
+
+JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
+    gc_logging_enabled = enable;
+}
+
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT {
+    if (!gc_logging_enabled) {
+        return;
+    }
+    jl_safe_printf("GC: pause %.2fms. collected %fMB. %s %s\n",
+        pause/1e6, freed/1e6,
+        full ? "full" : "incr",
+        recollect ? "recollect" : ""
+    );
+}
+
 #ifdef __cplusplus
 }
 #endif

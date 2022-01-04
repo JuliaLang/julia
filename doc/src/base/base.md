@@ -433,6 +433,7 @@ Base.GC.gc
 Base.GC.enable
 Base.GC.@preserve
 Base.GC.safepoint
+Base.GC.enable_logging
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)
