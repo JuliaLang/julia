@@ -45,9 +45,9 @@ struct RemoteException <: Exception
 end
 
 """
-    capture_exception(ex::RemoteException, bt) = ex
+    capture_exception(ex::RemoteException, bt)
 
-Returns `ex` which has already captured a backtrace (via it's [`CapturedException`](@ref)).
+Returns `ex::RemoteException` which has already captured a backtrace (via it's [`CapturedException`](@ref) field `captured`).
 """
 Base.capture_exception(ex::RemoteException, bt) = ex
 
