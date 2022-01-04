@@ -1391,90 +1391,39 @@ function cfg_simplify!(ir::IRCode)
     return finish(compact)
 end
 
-is_array_allocation(stmt::Expr) = _is_known_fcall(stmt, (
-    :jl_alloc_array_1d,
-    :jl_alloc_array_2d,
-    :jl_alloc_array_3d,
-    :jl_new_array))
-function _is_known_fcall(stmt::Expr, funcs)
-    isexpr(stmt, :foreigncall) || return false
-    s = stmt.args[1]
-    isa(s, QuoteNode) && (s = s.value)
-    isa(s, Symbol) || return false
-    for func in funcs
-        s === func && return true
-    end
-    return false
-end
-
 function memory_opt!(ir::IRCode, estate)
     estate = estate::EscapeAnalysis.EscapeState
-    compact = IncrementalCompact(ir, false)
-    # relevant = IdSet{Int}() # allocations
-    revisit = Int[] # potential targets for a mutating_arrayfreeze drop-in
+    revisit = Int[]     # potential targets for a mutating_arrayfreeze drop-in
     maybecopies = Int[] # calls to maybecopy
 
-    # function mark_escape(@nospecialize val)
-    #     isa(val, SSAValue) || return
-    #     #println(val.id, " escaped.")
-    #     val.id in relevant && pop!(relevant, val.id)
-    # end
-
-    # function mark_use(val, idx)
-    #     isa(val, SSAValue) || return
-    #     id = val.id
-    #     id in relevant || return
-    #     (haskey(uses, id)) || (uses[id] = Int[])
-    #     push!(uses[id], idx)
-    # end
-
-    for ((_, idx), stmt) in compact
-        (isexpr(stmt, :call) || isexpr(stmt, :foreigncall)) || continue
-
-        if is_known_call(stmt, Core.maybecopy, compact)
+    for idx in 1:length(ir.stmts)
+        stmt = ir.stmts[idx][:inst]
+        isexpr(stmt, :call) || continue
+        if is_known_call(stmt, Core.maybecopy, ir)
             push!(maybecopies, idx)
-        # elseif is_array_allocation(stmt)
-        #     push!(relevant, idx)
-        elseif is_known_call(stmt, Core.arrayfreeze, compact)
+        elseif is_known_call(stmt, Core.arrayfreeze, ir)
             if isa(stmt.args[2], SSAValue)
                 push!(revisit, idx)
             end
         end
     end
 
-    ir = finish(compact)
-    isempty(revisit) && isempty(maybecopies) && return ir
-
-    # domtree = construct_domtree(ir.cfg.blocks)
-
-    for idx in revisit
-        stmt = ir.stmts[idx][:inst]::Expr
-        arg = stmt.args[2]::SSAValue
-        # if our escape analysis has determined that this array doesn't escape, we can potentially eliminate an allocation
-        has_no_escape(estate[arg]) || continue
-
-        # # We're ok to steal the memory if we don't dominate any uses
-        # ok = true
-        # if haskey(uses, id)
-        #     for use in uses[id]
-        #         if ssadominates(ir, domtree, idx, use)
-        #             ok = false
-        #             break
-        #         end
-        #     end
-        # end
-        # ok || continue
-        # println("saved an allocation here :", stmt)
-        stmt.args[1] = Core.mutating_arrayfreeze
+    if !isempty(revisit)
+        # if array doesn't escape, we can just change the tag and avoid allocation
+        for idx in revisit
+            stmt = ir.stmts[idx][:inst]::Expr
+            arg = stmt.args[2]::SSAValue
+            has_no_escape(estate[arg]) || continue
+            stmt.args[1] = GlobalRef(Core, :mutating_arrayfreeze)
+        end
     end
 
-    # TODO: Use escape analysis info to determine if maybecopy should copy
-
-    # for idx in maybecopies
-    #     stmt = ir.stmts[idx][:inst]::Expr
-    #     #println(stmt.args)
-    #     arr = stmt.args[2]
-    #     id = isa(arr, SSAValue) ? arr.id : arr.n # SSAValue or Core.Argument
+    # if !isempty(maybecopies)
+    #     for idx in maybecopies
+    #         stmt = ir.stmts[idx][:inst]::Expr
+    #         arr = stmt.args[2]
+    #         id = isa(arr, SSAValue) ? arr.id : arr.n # SSAValue or Core.Argument
+    #     end
     # end
 
     return ir
