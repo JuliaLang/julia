@@ -96,6 +96,11 @@ let ex = quote
         test10(a, d::Integer, z::Signed...) = pass
         test10(s::String...) = pass
 
+        test11(a::Integer, b, c) = pass
+        test11(u, v::Integer, w) = pass
+        test11(x::Int, y::Int, z) = pass
+        test11(_, _, s::String) = pass
+
         kwtest(; x=1, y=2, w...) = pass
         kwtest2(a; x=1, y=2, w...) = pass
 
@@ -593,14 +598,16 @@ end
 let s = "CompletionFoo.?(false, \"a\", 3, "
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 1
+    @test length(c) == 2
     @test occursin("test(args...)", c[1])
+    @test occursin("test11(a::Integer, b, c)", c[2])
 end
 
 let s = "CompletionFoo.?(false, \"a\", 3, "
     c, r, res = test_complete_noshift(s)
     @test !res
-    @test isempty(c)
+    @test length(c) == 1
+    @test occursin("test11(a::Integer, b, c)", c[1])
 end
 
 let s = "CompletionFoo.?(\"a\", 3, "
@@ -682,6 +689,57 @@ let s = "CompletionFoo.test10(\"a\", Union{Signed,Bool,String}[3][1], "
     @test all(startswith("test10("), c)
     @test allunique(c)
     @test !any(str->occursin("test10(a::Integer, b::Integer, c)", str), c)
+end
+
+# Test method completion with ambiguity
+let s = "CompletionFoo.test11(Integer[false][1], Integer[14][1], "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 4
+    @test all(startswith("test11("), c)
+    @test allunique(c)
+end
+
+let s = "CompletionFoo.test11(Integer[-7][1], Integer[0x6][1], 6,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test any(str->occursin("test11(a::Integer, b, c)", str), c)
+    @test any(str->occursin("test11(u, v::Integer, w)", str), c)
+    @test any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
+end
+
+let s = "CompletionFoo.test11(3, 4,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
+end
+
+let s = "CompletionFoo.test11(0x8, 5,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test any(str->occursin("test11(a::Integer, b, c)", str), c)
+    @test any(str->occursin("test11(u, v::Integer, w)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
+end
+
+let s = "CompletionFoo.test11(0x8, 'c',"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test any(str->occursin("test11(a::Integer, b, c)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
+end
+
+let s = "CompletionFoo.test11('d', 3,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test any(str->occursin("test11(u, v::Integer, w)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
 end
 
 # Test of inference based getfield completion

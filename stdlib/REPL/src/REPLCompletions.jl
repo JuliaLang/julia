@@ -605,9 +605,10 @@ function complete_methods!(out::Vector{Completion}, @nospecialize(func), args_ex
             most_specific = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), intersec, typemax(UInt))
             # `most_specific == method` indicates that there is no strictly more specific
             # method signature for these input types.
-            # `isnothing(most_specific)` indicates that the completed function call will
-            # not actually work. This can happen in case of method ambiguity.
-            # The completion is kept since it can be helpful to debug such ambiguity errors
+            # `isnothing(most_specific)` indicates that the completed function invoke will
+            # not actually work. This can happen in case of method ambiguity, or if the
+            # inferred argument types are not tight enough, which would make an invoke
+            # error because of the ambiguity, but the concrete function call still work.
             if isnothing(most_specific) || (most_specific::Method) == method
                 push!(out, MethodCompletion(func, t_in, method, orig_method))
             end
