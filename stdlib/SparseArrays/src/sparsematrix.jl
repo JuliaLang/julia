@@ -2887,7 +2887,12 @@ function setindex!(A::AbstractSparseMatrixCSC{Tv,Ti}, V::AbstractVecOrMat, Ix::U
     (I, J) = Base.ensure_indexable(to_indices(A, (Ix, Jx)))
     checkbounds(A, I, J)
     Base.setindex_shape_check(V, length(I), length(J))
-    B = _to_same_csc(A, V, I, J)
+
+    if  any(x -> x==length(V), size(V)) #Check if the array has only one dimension != 1 to allow the assignment
+        B = _to_same_csc(A, vec(V), I, J)
+    else
+        B = _to_same_csc(A, V, I, J)
+    end
 
     issortedI = issorted(I)
     issortedJ = issorted(J)
