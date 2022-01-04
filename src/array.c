@@ -76,27 +76,40 @@ typedef uint64_t wideint_t;
 
 #define MAXINTVAL (((size_t)-1)>>1)
 
-static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
-                               int8_t isunboxed, int8_t hasptr, int8_t isunion, int8_t zeroinit, int elsz)
+JL_DLLEXPORT int jl_array_validate_dims(size_t *nel, size_t *tot, uint32_t ndims, size_t *dims, size_t elsz)
 {
-    jl_task_t *ct = jl_current_task;
-    size_t i, tot, nel=1;
-    void *data;
-    jl_array_t *a;
-
+    size_t i;
+    size_t _nel = 1;
     for(i=0; i < ndims; i++) {
         size_t di = dims[i];
-        wideint_t prod = (wideint_t)nel * (wideint_t)di;
-        if (prod > (wideint_t) MAXINTVAL || di > MAXINTVAL)
-            jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
-        nel = prod;
+        wideint_t prod = (wideint_t)_nel * (wideint_t)di;
+        if (prod >= (wideint_t) MAXINTVAL || di >= MAXINTVAL)
+            return 1;
+        _nel = prod;
     }
+    wideint_t prod = (wideint_t)elsz * (wideint_t)_nel;
+    if (prod >= (wideint_t) MAXINTVAL)
+        return 2;
+    *nel = _nel;
+    *tot = (size_t)prod;
+    return 0;
+}
+
+static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
+                               int8_t isunboxed, int8_t hasptr, int8_t isunion, int8_t zeroinit, size_t elsz)
+{
+    jl_task_t *ct = jl_current_task;
+    size_t i, tot, nel;
+    void *data;
+    jl_array_t *a;
+    assert(isunboxed || elsz == sizeof(void*));
     assert(atype == NULL || isunion == jl_is_uniontype(jl_tparam0(atype)));
+    int validated = jl_array_validate_dims(&nel, &tot, ndims, dims, elsz);
+    if (validated == 1)
+        jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
+    else if (validated == 2)
+        jl_error("invalid Array size");
     if (isunboxed) {
-        wideint_t prod = (wideint_t)elsz * (wideint_t)nel;
-        if (prod > (wideint_t) MAXINTVAL)
-            jl_error("invalid Array size");
-        tot = prod;
         if (elsz == 1 && !isunion) {
             // extra byte for all julia allocated byte arrays
             tot++;
@@ -105,12 +118,6 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
             // an extra byte for each isbits union array element, stored after a->maxsize
             tot += nel;
         }
-    }
-    else {
-        wideint_t prod = (wideint_t)sizeof(void*) * (wideint_t)nel;
-        if (prod > (wideint_t) MAXINTVAL)
-            jl_error("invalid Array size");
-        tot = prod;
     }
 
     int ndimwords = jl_array_ndimwords(ndims);
@@ -196,7 +203,7 @@ static inline jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
                                              int isunboxed, int hasptr, int isunion, int elsz)
 {
-    return _new_array_(atype, ndims, dims, isunboxed, hasptr, isunion, 0, elsz);
+    return _new_array_(atype, ndims, dims, isunboxed, hasptr, isunion, 0, (size_t)elsz);
 }
 
 #ifndef JL_NDEBUG

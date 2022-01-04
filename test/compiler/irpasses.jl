@@ -704,3 +704,57 @@ let
     @test length(preserves) == 2
     @test all(alloc -> alloc in preserves, refs)
 end
+
+# test `stmt_effect_free` and DCE
+# ===============================
+
+function fully_eliminated(f, args)
+    @nospecialize f args
+    let code = code_typed(f, args)[1][1].code
+        return length(code) == 1 && isa(code[1], ReturnNode)
+    end
+end
+function fully_eliminated(f, args, retval)
+    @nospecialize f args
+    let code = code_typed(f, args)[1][1].code
+        return length(code) == 1 && isa(code[1], ReturnNode) && code[1].val == retval
+    end
+end
+
+let # effect-freeness computation for array allocation
+
+    # should eliminate dead allocations
+    good_dims = (0, 2)
+    for dim in good_dims, N in 0:10
+        dims = ntuple(i->dim, N)
+        @eval @test fully_eliminated(()) do
+            Array{Int,$N}(undef, $(dims...))
+            nothing
+        end
+    end
+
+    # shouldn't eliminate errorneous dead allocations
+    bad_dims = [-1,           # should keep "invalid Array dimensions"
+                typemax(Int)] # should keep "invalid Array size"
+    for dim in bad_dims, N in 1:10
+        dims = ntuple(i->dim, N)
+        @eval @test !fully_eliminated(()) do
+            Array{Int,$N}(undef, $(dims...))
+            nothing
+        end
+    end
+
+    # some high-level examples
+    @test fully_eliminated(()) do
+        Int[]
+        nothing
+    end
+    @test fully_eliminated(()) do
+        Matrix{Tuple{String,String}}(undef, 4, 4)
+        nothing
+    end
+    @test fully_eliminated(()) do
+        IdDict{Any,Any}()
+        nothing
+    end
+end

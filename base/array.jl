@@ -223,17 +223,17 @@ end
 
 
 """
-    Base.bitsunionsize(U::Union)
+    Base.bitsunionsize(U::Union) -> Int
 
 For a `Union` of [`isbitstype`](@ref) types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`.
 
 # Examples
 ```jldoctest
 julia> Base.bitsunionsize(Union{Float64, UInt8})
-0x0000000000000008
+8
 
 julia> Base.bitsunionsize(Union{Float64, UInt8, Int128})
-0x0000000000000010
+16
 ```
 """
 function bitsunionsize(u::Union)

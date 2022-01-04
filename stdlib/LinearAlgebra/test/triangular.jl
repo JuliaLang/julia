@@ -800,4 +800,28 @@ let A = [0.9999999999999998 4.649058915617843e-16 -1.3149405273715513e-16 9.9959
     B = [0.09648289218436859 0.023497875751503007 0.0 0.0; 0.023497875751503007 0.045787575150300804 0.0 0.0; 0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0]
     @test sqrt(A*B*A')^2 ≈ A*B*A'
 end
+
+@testset "one and oneunit for triangular" begin
+    m = rand(4,4)
+    function test_one_oneunit_triangular(a)
+        b = Matrix(a)
+        @test (@inferred a^1) == b^1
+        @test (@inferred a^-1) == b^-1
+        @test one(a) == one(b)
+        @test one(a)*a == a
+        @test a*one(a) == a
+        @test oneunit(a) == oneunit(b)
+        @test oneunit(a) isa typeof(a)
+    end
+    for T in [UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular]
+        a = T(m)
+        test_one_oneunit_triangular(a)
+    end
+    # more complicated examples
+    b = UpperTriangular(LowerTriangular(m))
+    test_one_oneunit_triangular(b)
+    c = UpperTriangular(Diagonal(rand(2)))
+    test_one_oneunit_triangular(c)
+end
+
 end # module TestTriangular

@@ -194,7 +194,9 @@ function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
         end
     end
     for arg in ast.args
-        arg isa Expr && modules_to_be_loaded(arg, mods)
+        if arg isa Expr && arg.head in [:block, :if, :using, :import]
+            modules_to_be_loaded(arg, mods)
+        end
     end
     filter!(mod -> !in(String(mod), ["Base", "Main", "Core"]), mods) # Exclude special non-package modules
     return unique(mods)

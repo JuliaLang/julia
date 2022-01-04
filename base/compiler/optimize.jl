@@ -236,6 +236,8 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
                 eT ⊑ fT || return false
             end
             return true
+        elseif head === :foreigncall
+            return foreigncall_effect_free(stmt, rt, src)
         elseif head === :new_opaque_closure
             length(args) < 5 && return false
             typ = argextype(args[1], src)
@@ -258,6 +260,76 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
         end
     end
     return true
+end
+
+function foreigncall_effect_free(stmt::Expr, @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
+    args = stmt.args
+    name = args[1]
+    isa(name, QuoteNode) && (name = name.value)
+    isa(name, Symbol) || return false
+    ndims = alloc_array_ndims(name)
+    if ndims !== nothing
+        if ndims == 0
+            return new_array_no_throw(args, src)
+        else
+            return alloc_array_no_throw(args, ndims, src)
+        end
+    end
+    return false
+end
+
+function alloc_array_ndims(name::Symbol)
+    if name === :jl_alloc_array_1d
+        return 1
+    elseif name === :jl_alloc_array_2d
+        return 2
+    elseif name === :jl_alloc_array_3d
+        return 3
+    elseif name === :jl_new_array
+        return 0
+    end
+    return nothing
+end
+
+function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,IncrementalCompact})
+    length(args) ≥ ndims+6 || return false
+    atype = widenconst(argextype(args[6], src))
+    isType(atype) || return false
+    atype = atype.parameters[1]
+    dims = Csize_t[]
+    for i in 1:ndims
+        dim = argextype(args[i+6], src)
+        isa(dim, Const) || return false
+        dimval = dim.val
+        isa(dimval, Int) || return false
+        push!(dims, reinterpret(Csize_t, dimval))
+    end
+    return _new_array_no_throw(atype, ndims, dims)
+end
+
+function new_array_no_throw(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
+    length(args) ≥ 7 || return false
+    atype = widenconst(argextype(args[6], src))
+    isType(atype) || return false
+    atype = atype.parameters[1]
+    dims = argextype(args[7], src)
+    isa(dims, Const) || return dims === Tuple{}
+    dimsval = dims.val
+    isa(dimsval, Tuple{Vararg{Int}}) || return false
+    ndims = nfields(dimsval)
+    isa(ndims, Int) || return false
+    dims = Csize_t[reinterpret(Csize_t, dimval) for dimval in dimsval]
+    return _new_array_no_throw(atype, ndims, dims)
+end
+
+function _new_array_no_throw(@nospecialize(atype), ndims::Int, dims::Vector{Csize_t})
+    isa(atype, DataType) || return false
+    eltype = atype.parameters[1]
+    iskindtype(typeof(eltype)) || return false
+    elsz = aligned_sizeof(eltype)
+    return ccall(:jl_array_validate_dims, Cint,
+        (Ptr{Csize_t}, Ptr{Csize_t}, UInt32, Ptr{Csize_t}, Csize_t),
+        #=nel=#RefValue{Csize_t}(), #=tot=#RefValue{Csize_t}(), ndims, dims, elsz) == 0
 end
 
 """

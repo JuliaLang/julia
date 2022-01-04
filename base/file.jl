@@ -554,15 +554,52 @@ end
 
 const temp_prefix = "jl_"
 
-if Sys.iswindows()
+# Use `Libc.rand()` to generate random strings
+function _rand_filename(len = 10)
+    slug = Base.StringVector(len)
+    chars = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for i = 1:len
+        slug[i] = chars[(Libc.rand() % length(chars)) + 1]
+    end
+    return String(slug)
+end
 
-function _win_tempname(temppath::AbstractString, uunique::UInt32)
+
+# Obtain a temporary filename.
+function tempname(parent::AbstractString=tempdir(); max_tries::Int = 100, cleanup::Bool=true)
+    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
+
+    prefix = joinpath(parent, temp_prefix)
+    filename = nothing
+    for i in 1:max_tries
+        filename = string(prefix, _rand_filename())
+        if ispath(filename)
+            filename = nothing
+        else
+            break
+        end
+    end
+
+    if filename === nothing
+        error("tempname: max_tries exhausted")
+    end
+
+    cleanup && temp_cleanup_later(filename)
+    return filename
+end
+
+if Sys.iswindows()
+# While this isn't a true analog of `mkstemp`, it _does_ create an
+# empty file for us, ensuring that other simultaneous calls to
+# `_win_mkstemp()` won't collide, so it's a better name for the
+# function than `tempname()`.
+function _win_mkstemp(temppath::AbstractString)
     tempp = cwstring(temppath)
     temppfx = cwstring(temp_prefix)
     tname = Vector{UInt16}(undef, 32767)
     uunique = ccall(:GetTempFileNameW, stdcall, UInt32,
                     (Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt16}),
-                    tempp, temppfx, uunique, tname)
+                    tempp, temppfx, UInt32(0), tname)
     windowserror("GetTempFileName", uunique == 0)
     lentname = something(findfirst(iszero, tname))
     @assert lentname > 0
@@ -571,48 +608,12 @@ function _win_tempname(temppath::AbstractString, uunique::UInt32)
 end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    filename = _win_tempname(parent, UInt32(0))
+    filename = _win_mkstemp(parent)
     cleanup && temp_cleanup_later(filename)
     return (filename, Base.open(filename, "r+"))
 end
 
-# generate a random string from random bytes
-function _rand_string()
-    nchars = 10
-    A = Vector{UInt8}(undef, nchars)
-    windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
-        (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-            A, sizeof(A)))
-
-    slug = Base.StringVector(10)
-    chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    for i = 1:nchars
-        slug[i] = chars[(A[i] % length(chars)) + 1]
-    end
-    return name = String(slug)
-end
-
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    name = _rand_string()
-    filename = joinpath(parent, temp_prefix * name)
-    @assert !ispath(filename)
-    cleanup && temp_cleanup_later(filename)
-    return filename
-end
-
 else # !windows
-
-# Obtain a temporary filename.
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    p = ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
-    systemerror(:tempnam, p == C_NULL)
-    s = unsafe_string(p)
-    Libc.free(p)
-    cleanup && temp_cleanup_later(s)
-    return s
-end
 
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
@@ -622,7 +623,6 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     cleanup && temp_cleanup_later(b)
     return (b, fdio(p, true))
 end
-
 
 end # os-test
 

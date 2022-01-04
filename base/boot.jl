@@ -450,7 +450,6 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
-
 ## primitive Array constructors
 struct UndefInitializer end
 const undef = UndefInitializer()

@@ -109,6 +109,19 @@ end
     end
 end
 
+@testset "two-argument functions" begin
+    two_argument_functions = [atan]
+
+    # All two-argument functions return missing when operating on two missing's
+    # All two-argument functions return missing when operating on a scalar and an missing
+    # All two-argument functions return missing when operating on an missing and a scalar
+    for f in two_argument_functions
+        @test ismissing(f(missing, missing))
+        @test ismissing(f(1, missing))
+        @test ismissing(f(missing, 1))
+    end
+end
+
 @testset "bit operators" begin
     bit_operators = [&, |, ⊻]
 

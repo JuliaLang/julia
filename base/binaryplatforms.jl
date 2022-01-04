@@ -3,7 +3,7 @@
 module BinaryPlatforms
 
 export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
-       os_version, libc, compiler_abi, libgfortran_version, libstdcxx_version,
+       os_version, libc, libgfortran_version, libstdcxx_version,
        cxxstring_abi, parse_dl_name_version, detect_libgfortran_version,
        detect_libstdcxx_version, detect_cxxstring_abi, call_abi, wordsize, triplet,
        select_platform, platforms_match, platform_name

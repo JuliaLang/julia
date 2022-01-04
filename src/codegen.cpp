@@ -103,7 +103,7 @@ typedef Instruction TerminatorInst;
 
 JL_STREAM *dump_emitted_mi_name_stream = NULL;
 extern "C" JL_DLLEXPORT
-void jl_dump_emitted_mi_name(void *s)
+void jl_dump_emitted_mi_name_impl(void *s)
 {
     dump_emitted_mi_name_stream = (JL_STREAM*)s;
 }
