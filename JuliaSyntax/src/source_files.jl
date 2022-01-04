@@ -74,7 +74,7 @@ function Base.getindex(source::SourceFile, rng::AbstractRange)
     # out of the valid unicode check. The SubString{String} inner constructor
     # has some @boundscheck, but using @inbounds depends on inlining choices.)
     j = prevind(source.code, last(rng)+1)
-    @view source.code[i:j]
+    VERSION >= v"1.6" ? @view(source.code[i:j]) : source.code[i:j]
 end
 
 function Base.getindex(source::SourceFile, i::Int)

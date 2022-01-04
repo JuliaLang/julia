@@ -221,7 +221,7 @@ single newline is returned as kind `K"NewlineWs"` unless `skip_newlines` is
 true.
 """
 function peek(stream::ParseStream, n::Integer=1; skip_newlines::Bool=false)
-    kind(peek_token(stream, n; skip_newlines))
+    kind(peek_token(stream, n; skip_newlines=skip_newlines))
 end
 
 """
@@ -521,7 +521,7 @@ traverse the list of ranges backward rather than forward.)
 """
 function build_tree(::Type{NodeType}, stream::ParseStream;
                     wrap_toplevel_as_kind=nothing) where NodeType
-    stack = Vector{@NamedTuple{range::TaggedRange, node::NodeType}}()
+    stack = Vector{NamedTuple{(:range,:node),Tuple{TaggedRange,NodeType}}}()
     for (span_index, range) in enumerate(stream.ranges)
         if kind(range) == K"TOMBSTONE"
             # Ignore invisible tokens which were created but never finalized.

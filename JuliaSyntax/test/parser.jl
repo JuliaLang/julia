@@ -14,7 +14,7 @@ end
 # Version of test_parse for interactive exploration
 function itest_parse(production, code, julia_version::VersionNumber=v"1.6")
     stream = ParseStream(code)
-    production(JuliaSyntax.ParseState(stream; julia_version))
+    production(JuliaSyntax.ParseState(stream; julia_version=julia_version))
     t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
 
     println(stdout, "# Code:\n$code\n")
@@ -538,7 +538,7 @@ tests = [
             if !(input isa AbstractString)
                 opts,input = input
             else
-                opts = (;)
+                opts = NamedTuple()
             end
             @test test_parse(production, input; opts...) == output
         end
