@@ -323,6 +323,22 @@ end
     @test ts[2] ~ (T.STRING    , "x \$ \\ y" )
     @test ts[3] ~ (T.BACKTICK  , "`"         )
     @test ts[4] ~ (T.ENDMARKER , ""          )
+
+    # str"\\"
+    ts = collect(tokenize("str\"\\\\\""))
+    @test ts[1] ~ (T.IDENTIFIER , "str"  )
+    @test ts[2] ~ (T.DQUOTE     , "\""   )
+    @test ts[3] ~ (T.STRING     , "\\\\" )
+    @test ts[4] ~ (T.DQUOTE     , "\""   )
+    @test ts[5] ~ (T.ENDMARKER  , ""     )
+
+    # str"\\\""
+    ts = collect(tokenize("str\"\\\\\\\"\""))
+    @test ts[1] ~ (T.IDENTIFIER , "str"      )
+    @test ts[2] ~ (T.DQUOTE     , "\""       )
+    @test ts[3] ~ (T.STRING     , "\\\\\\\"" )
+    @test ts[4] ~ (T.DQUOTE     , "\""       )
+    @test ts[5] ~ (T.ENDMARKER  , ""         )
 end
 
 @testset "interpolation" begin
