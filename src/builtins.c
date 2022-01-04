@@ -78,20 +78,20 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
 // See comment above for an explanation of NOINLINE.
 static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
-    size_t f, nf = jl_datatype_nfields(dt);
-    for (f = 0; f < nf; f++) {
+    size_t nf = jl_datatype_nfields(dt);
+    // npointers is used at end, but fetched here for locality with nfields.
+    int npointers = ((jl_datatype_t*)dt)->layout->npointers;
+    for (size_t f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *ao = (char*)a + offs;
         char *bo = (char*)b + offs;
         if (jl_field_isptr(dt, f)) {
             jl_value_t *af = *(jl_value_t**)ao;
             jl_value_t *bf = *(jl_value_t**)bo;
-            if (af != bf) {
-                if (af == NULL || bf == NULL)
-                    return 0;
-                if (!jl_egal(af, bf))
-                    return 0;
-            }
+            if (af != bf && (af == NULL || bf == NULL))
+                return 0;
+            // Save ptr recursion until the end -- only recurse if otherwise equal
+            continue;
         }
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(dt, f);
@@ -121,6 +121,18 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                 if (!compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft))
                     return 0;
             }
+        }
+    }
+    // If we've gotten here, the objects are bitwise equal, besides their pointer fields.
+    // Now, we will recurse into jl_egal for the pointed-to elements, which might be
+    // arbitrarily expensive.
+    for (size_t p = 0; p < npointers; p++) {
+        size_t offs = jl_ptr_offset(dt, p);
+        jl_value_t *af = ((jl_value_t**)a)[offs];
+        jl_value_t *bf = ((jl_value_t**)b)[offs];
+        if (af != bf) {
+            if (!jl_egal(af, bf))
+                return 0;
         }
     }
     return 1;
