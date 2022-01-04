@@ -333,7 +333,7 @@ While [`@time`](@ref) logs high-level stats about memory usage and garbage colle
 of evaluating an expression, it can be useful to log each garbage collection event, to get an
 intuitive sense of how often the garbage collector is running, how long it's running each time,
 and how much garbage it collects each time. This can be enabled with
-[`Base.Experimental.enable_gc_logging(true)`](@ref), which causes Julia to log to stderr every time
+[`GC.enable_logging(true)`](@ref), which causes Julia to log to stderr every time
 a garbage collection happens.
 
 ## External Profiling
