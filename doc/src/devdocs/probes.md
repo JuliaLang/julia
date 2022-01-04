@@ -96,8 +96,11 @@ the probe handler.
 
 ### Task runtime probes
 
-1. `julia:rt__ctx__switch(last, next, ptls)`: Switching from task `last` to task `next` on thread associated with PTLS `ptls`.
-2. `julia:rt__new__task(parent, child, ptls)`: Task `parent` created task `child` on thread associated with PTLS `ptls`.
+1. `julia:rt__run__task(task)`: Switching to task `task` on current thread.
+2. `julia:rt__pause__task(task)`: Switching from task `task` on current thread.
+3. `julia:rt__new__task(parent, child)`: Task `parent` created task `child` on current thread.
+4. `julia:rt__start__process__events(task)`: Task `task` started processing libuv events.
+5. `julia:rt__finish__process__events(task)`: Task `task` finished processing libuv events.
 
 #### GC stop-the-world latency
 
