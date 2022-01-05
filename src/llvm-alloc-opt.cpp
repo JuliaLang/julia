@@ -203,12 +203,15 @@ private:
         bool throws_invalid_size;
         bool dynamic_type;
         bool dynamic_size;
+        bool isunboxed;
+        bool isunion;
 
         void reset() {
             type = nullptr;
             numels = total_size = 0;
             throws_invalid_dims = throws_invalid_size = false;
             dynamic_type = dynamic_size = false;
+            isunboxed = isunion = false;
         }
 
         void dump() {
@@ -219,6 +222,8 @@ private:
             jl_safe_printf("throws_invalid_size: %d\n", throws_invalid_size);
             jl_safe_printf("dynamic_type: %d\n", dynamic_type);
             jl_safe_printf("dynamic_size: %d\n", dynamic_size);
+            jl_safe_printf("isunboxed: %d\n", isunboxed);
+            jl_safe_printf("isunion: %d\n", isunion);
         }
     };
 
@@ -263,6 +268,7 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
     checkObjectEscapes(orig);
     //Upfront remove the typeof calls
     if (object_escape_info.hastypeof) {
+        dbgs() << "Optimizing typeof tag\n";
         optimizeTag(orig, info.type);
         object_escape_info.hastypeof = false;
     }
@@ -279,6 +285,7 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
     //Trivially dead array
     if (may_be_removable && !object_escape_info.hasload) {
         if (insertArrayLengthExceptionGuard(orig)) {
+            dbgs() << "removing allocation\n";
             removeAlloc(orig, info.type);
         }
         return;
@@ -292,6 +299,7 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
         && !array_escape_info.hasload
         && (!array_escape_info.haspreserve || !array_escape_info.refstore)) {
         if (insertArrayLengthExceptionGuard(orig)) {
+            dbgs() << "removing allocation 2\n";
             removeAlloc(orig, info.type, true);
         }
         return;
@@ -301,11 +309,15 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
         //Stack split/stack move require known array size
         return;
     }
-    if (may_be_removable && (array_escape_info.refstore || array_escape_info.haspreserve)) {
+    if (!may_be_removable) {
+        return;
+    }
+    if (array_escape_info.refstore || array_escape_info.haspreserve) {
         //Avoid messing with GC-tracked pointers for now
         return;
     }
     if (array_type_data.total_size <= ARRAY_INLINE_NBYTES) {
+        dbgs() << "heap2stack\n";
         moveArrayToStack(orig, info.type);
         return;
     }
@@ -1288,21 +1300,22 @@ void Optimizer::checkArraySize(CallInst *orig, jl_alloc::AllocIdInfo &info) {
                     jl_value_t *eltype = jl_tparam0(array_type_data.type);
                     size_t elsz = 0;
                     array_type_data.align = 0;
-                    bool isunboxed = jl_islayout_inline(eltype, &elsz, &array_type_data.align);
-                    if (isunboxed) {
+                    array_type_data.isunboxed = jl_islayout_inline(eltype, &elsz, &array_type_data.align);
+                    if (array_type_data.isunboxed) {
                         elsz = LLT_ALIGN(elsz, array_type_data.align);
                         array_type_data.align = std::min(elsz, alignof(std::max_align_t));
                     } else {
                         elsz = sizeof(void*);
                         array_type_data.align = elsz;
                     }
+                    array_type_data.isunion = jl_is_uniontype(eltype);
                     array_type_data.total_size = elsz * array_type_data.numels;
                     array_type_data.throws_invalid_size = array_type_data.total_size > ArrayTypeData::MAX_SIZE;
                     if (array_type_data.throws_invalid_size) {
                         return;
                     }
-                    if (isunboxed) {
-                        if (jl_is_uniontype(eltype)) {
+                    if (array_type_data.isunboxed) {
+                        if (array_type_data.isunion) {
                             array_type_data.total_size += array_type_data.numels;
                         } else if (elsz == 1) {
                             array_type_data.total_size++;
@@ -1333,11 +1346,30 @@ void Optimizer::moveArrayToStack(CallInst *orig_inst, llvm::Value *tag) {
     assert(object_escape_info.memops.size() == 1);
     assert(object_escape_info.memops.begin()->second.accesses.size() == 1);
     assert(isa<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst));
+    auto load = cast<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst);
+    //Remove write barriers pointing at the initial array data pointer
+    std::size_t removed_start = removed.size();
+    for (auto use : array_escape_info.uses) {
+        if (auto call = dyn_cast<CallInst>(use)) {
+            if (call->getCalledOperand() == pass.write_barrier_func) {
+                removed.push_back(call);
+            }
+        }
+    }
+    for (; removed_start < removed.size(); removed_start++) {
+        auto wb = removed[removed_start];
+        for (auto &op : wb->operands()) {
+            if (auto inst = dyn_cast<Instruction>(op.get())) {
+                if (array_escape_info.uses.contains(inst)) {
+                    wb->setOperand(op.getOperandNo(), UndefValue::get(inst->getType()));
+                }
+            }
+        }
+    }
     IRBuilder<> array_builder(&*orig_inst->getFunction()->getEntryBlock().getFirstInsertionPt());
     auto array = array_builder.CreateAlloca(pass.T_int8, ConstantInt::get(pass.T_size, array_type_data.total_size));
     array->takeName(orig_inst);
     array->setAlignment(Align(array_type_data.align));
-    auto load = cast<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst);
     load->replaceAllUsesWith(array_builder.CreatePointerCast(array, load->getType()));
     removeAlloc(orig_inst, tag, true);
 }
