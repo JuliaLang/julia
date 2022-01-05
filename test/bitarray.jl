@@ -103,13 +103,14 @@ timesofar("conversions")
     t1 = zeros(sz...)
     @test isequal(promote(a1,t1),(t1,t1))
 
-    a2 = falses(sz...)
-    t2 = zeros(sz...)
+    a2 = trues(sz...)
+    t2 = ones(sz...)
     @test isequal(promote(a2,t2),(t2,t2))
 
-    a3 = bitrand(sz...)
-    t3 = convert(T,a3)
-    @test isequal(promote(a3,t3),(t3,t3))
+    ae = falses((sz.+1)...)
+    @test_throws ErrorException promote(ae,t1)
+    @test_throws ErrorException promote(a1,[t1])
+
 end
 
 timesofar("promotions")
