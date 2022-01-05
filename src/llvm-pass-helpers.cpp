@@ -129,8 +129,8 @@ namespace jl_intrinsics {
     // The allocation size is set to the first argument.
     static Function *addGCAllocAttributes(Function *target, LLVMContext &context)
     {
-        target->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
-        target->addAttribute(AttributeList::ReturnIndex, Attribute::NonNull);
+        addRetAttr(target, Attribute::NoAlias);
+        addRetAttr(target, Attribute::NonNull);
         target->addFnAttr(Attribute::getWithAllocSizeArgs(context, 1, None)); // returns %1 bytes
         return target;
     }
@@ -168,8 +168,8 @@ namespace jl_intrinsics {
                 FunctionType::get(PointerType::get(context.T_prjlvalue, 0), {context.T_int32}, false),
                 Function::ExternalLinkage,
                 NEW_GC_FRAME_NAME);
-            intrinsic->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
-            intrinsic->addAttribute(AttributeList::ReturnIndex, Attribute::NonNull);
+            addRetAttr(intrinsic, Attribute::NoAlias);
+            addRetAttr(intrinsic, Attribute::NonNull);
 
             return intrinsic;
         });
