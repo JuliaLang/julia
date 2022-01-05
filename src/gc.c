@@ -582,10 +582,10 @@ static void gc_sweep_foreign_objs(void)
 static int64_t last_gc_total_bytes = 0;
 
 #ifdef _P64
-static size_t default_collect_interval = 200 * 1024 * 1024;
+static size_t default_collect_interval = 32 * 1024 * 1024;
 static size_t max_collect_interval = 1250000000UL;
 #else
-static size_t default_collect_interval = 32 * 1024 * 1024;
+static size_t default_collect_interval = 8 * 1024 * 1024;
 static size_t max_collect_interval =  500000000UL;
 #endif
 
@@ -3366,11 +3366,11 @@ void jl_gc_init(void)
 
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
- 
+
     char *s = getenv("JULIA_GC_COLLECT_INTERVAL");
     if (s && atoi(s)!= 0)
       default_collect_interval = atoi(s) * 1024 * 1024;
-    
+
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
     gc_num.allocd = 0;
