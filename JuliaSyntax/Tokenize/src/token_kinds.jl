@@ -64,11 +64,8 @@
         OCT_INT, # 0o0
         FLOAT, # 3.5, 3.7e+3
         STRING, # "foo" (without the " delimiters)
-        # TODO: Remove this and TRIPLE_CMD; use flag?
-        TRIPLE_STRING, # """ foo \n """
         CHAR, # 'a'
-        CMD, # `cmd ...`
-        TRIPLE_CMD, # ```cmd ...```
+        CMD, # `cmd ...` (without delimiters)
         TRUE, FALSE,
     end_literal,
 
@@ -835,8 +832,6 @@
     begin_parser_tokens,
         TOMBSTONE,           # Empty placeholder for kind to be filled later
         NOTHING_LITERAL,     # A literal Julia `nothing` in the AST
-        # FIXME: Remove
-        UNQUOTED_STRING,     # An unquoted range of the source as a string
 
         # Macro names are modelled as a special kind of identifier because the
         # @ may not be attached to the macro name in the source (or may not be

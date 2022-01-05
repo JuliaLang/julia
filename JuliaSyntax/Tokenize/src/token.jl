@@ -27,9 +27,7 @@ _add_kws()
 @enum(TokenError,
     NO_ERR,
     EOF_MULTICOMMENT,
-    EOF_STRING,
     EOF_CHAR,
-    EOF_CMD,
     EOF_VAR,
     INVALID_NUMERIC_CONSTANT,
     INVALID_OPERATOR,
@@ -40,9 +38,7 @@ _add_kws()
 # Error kind => description
 TOKEN_ERROR_DESCRIPTION = Dict{TokenError, String}(
     EOF_MULTICOMMENT => "unterminated multi-line comment #= ... =#",
-    EOF_STRING => "unterminated string literal",
     EOF_CHAR => "unterminated character literal",
-    EOF_CMD => "unterminated cmd literal",
     EOF_VAR => "unterminated var\"...\" identifier",
     INVALID_NUMERIC_CONSTANT => "invalid numeric constant",
     INVALID_OPERATOR => "invalid operator",
@@ -63,13 +59,12 @@ struct Token <: AbstractToken
     token_error::TokenError
     dotop::Bool
     suffix::Bool
-    triplestr::Bool
 end
 function Token(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
     startbyte::Int, endbyte::Int, val::String)
-Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR, false, false, false)
+Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR, false, false)
 end
-Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN, false, false, false)
+Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN, false, false)
 
 struct RawToken <: AbstractToken
     kind::Kind
@@ -81,13 +76,12 @@ struct RawToken <: AbstractToken
     token_error::TokenError
     dotop::Bool
     suffix::Bool
-    triplestr::Bool
 end
 function RawToken(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
     startbyte::Int, endbyte::Int)
-RawToken(kind, startposition, endposition, startbyte, endbyte, NO_ERR, false, false, false)
+RawToken(kind, startposition, endposition, startbyte, endbyte, NO_ERR, false, false)
 end
-RawToken() = RawToken(ERROR, (0,0), (0,0), 0, 0, UNKNOWN, false, false, false)
+RawToken() = RawToken(ERROR, (0,0), (0,0), 0, 0, UNKNOWN, false, false)
 
 
 const _EMPTY_TOKEN = Token()
