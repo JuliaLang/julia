@@ -107,7 +107,7 @@ timesofar("conversions")
     t2 = ones(sz...)
     @test isequal(promote(a2,t2),(t2,t2))
 
-    ae = falses((sz.+1)...)
+    ae = falses(1,sz...)
     @test_throws ErrorException promote(ae,t1)
     @test_throws ErrorException promote(a1,[t1])
 
