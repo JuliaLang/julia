@@ -2445,23 +2445,16 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
         }
         IRBuilder<> builder(CI);
         builder.SetCurrentDebugLocation(CI->getDebugLoc());
-        auto get_tag = [&](Value *val) {
-            jl_alloc::AllocIdInfo info;
-            if (auto call = dyn_cast<CallInst>(val)) {
-                if (jl_alloc::getAllocIdInfo(info, call, alloc_obj_func)) {
-                    return builder.CreatePtrToInt(info.type, T_size, "type_tag");
-                }
-            }
-            return EmitLoadTag(builder, val);
-        };
-        auto parBits = builder.CreateAnd(get_tag(parent), 3);
+        //These low 2 bits in the type tag are GC tracking bits, not part
+        //of the actual type tag pointer.
+        auto parBits = builder.CreateAnd(EmitLoadTag(builder, parent), 3);
         auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, 3));
         auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
         builder.SetInsertPoint(mayTrigTerm);
         Value *anyChldNotMarked = NULL;
         for (unsigned i = 1; i < CI->arg_size(); i++) {
             Value *child = CI->getArgOperand(i);
-            Value *chldBit = builder.CreateAnd(get_tag(child), 1);
+            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, child), 1);
             Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0));
             anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
         }
