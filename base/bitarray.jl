@@ -1914,4 +1914,7 @@ end
 
 sizeof(B::BitArray) = sizeof(B.chunks)
 
-promote_rule(::Type{BitArray{N}},::Type{Array{T,M}}) where {T,N,M} = Array{T}
+function promote_rule(::Type{BitArray{N}},::Type{Array{T,N}}) where {T,N}
+    typejoin(Bool,T) == Any && return promote_rule(Bool,T)
+    Array{T,N}
+end
