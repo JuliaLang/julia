@@ -365,6 +365,7 @@ static int wake_thread(int16_t tid)
 
     if (jl_atomic_load_relaxed(&other->sleep_check_state) == sleeping) {
         if (jl_atomic_cmpswap_relaxed(&other->sleep_check_state, &state, not_sleeping)) {
+            JL_PROBE_RT_SLEEP_CHECK_WAKE(other, state);
             uv_mutex_lock(&sleep_locks[tid]);
             uv_cond_signal(&wake_signals[tid]);
             uv_mutex_unlock(&sleep_locks[tid]);
@@ -394,8 +395,10 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
     if (tid == self || tid == -1) {
         // we're already awake, but make sure we'll exit uv_run
         jl_ptls_t ptls = ct->ptls;
-        if (jl_atomic_load_relaxed(&ptls->sleep_check_state) == sleeping)
+        if (jl_atomic_load_relaxed(&ptls->sleep_check_state) == sleeping) {
             jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping);
+            JL_PROBE_RT_SLEEP_CHECK_WAKEUP(ptls);
+        }
         if (uvlock == ct)
             uv_stop(jl_global_event_loop());
     }
@@ -482,24 +485,31 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             // acquire sleep-check lock
             jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping);
             jl_fence(); // [^store_buffering_1]
+            JL_PROBE_RT_SLEEP_CHECK_SLEEP(ptls);
             if (!multiq_check_empty()) { // uses relaxed loads
-                if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)
+                if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
                     jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
+                    JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls);
+                }
                 continue;
             }
             task = get_next_task(trypoptask, q); // note: this should not yield
             if (ptls != ct->ptls) {
                 // sigh, a yield was detected, so let's go ahead and handle it anyway by starting over
                 ptls = ct->ptls;
-                if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)
+                if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
                     jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
+                    JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
+                }
                 if (task)
                     return task;
                 continue;
             }
             if (task) {
-                if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)
+                if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
                     jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
+                    JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
+                }
                 return task;
             }
 
@@ -554,8 +564,10 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
                 if (!jl_atomic_load_relaxed(&_threadedregion) && active && ptls->tid == 0) {
                     // thread 0 is the only thread permitted to run the event loop
                     // so it needs to stay alive, just spin-looping if necessary
-                    if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)
+                    if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
                         jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
+                        JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls);
+                    }
                     start_cycles = 0;
                     continue;
                 }

@@ -1545,6 +1545,12 @@ uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 #define JL_PROBE_RT_NEW_TASK(parent, child) do ; while (0)
 #define JL_PROBE_RT_START_PROCESS_EVENTS(task) do ; while (0)
 #define JL_PROBE_RT_FINISH_PROCESS_EVENTS(task) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_WAKE(other, old_state) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_WAKEUP(ptls) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_SLEEP(ptls) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls) do ; while (0)
 
 #define JL_PROBE_GC_BEGIN_ENABLED() (0)
 #define JL_PROBE_GC_STOP_THE_WORLD_ENABLED() (0)
@@ -1559,6 +1565,12 @@ uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 #define JL_PROBE_RT_NEW_TASK_ENABLED() (0)
 #define JL_PROBE_RT_START_PROCESS_EVENTS_ENABLED() (0)
 #define JL_PROBE_RT_FINISH_PROCESS_EVENTS_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_WAKE_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_WAKEUP_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_SLEEP_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_UV_WAKE_ENABLED() (0)
 #endif
 
 #endif

@@ -29,3 +29,33 @@ usdt:usr/lib/libjulia-internal.so:julia:rt__finish__process__events
 {
     printf("Task processed libuv events: %x\n", arg0);
 }
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__wake
+{
+    printf("Thread waking: %x (was sleeping?: %d)\n", arg0, arg1);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__wakeup
+{
+    printf("Thread wakeup: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__sleep
+{
+    printf("Thread trying to sleep: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__taskq__wake
+{
+    printf("Thread waking due to non-empty task queue: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__task__wake
+{
+    printf("Thread waking due to popped task: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__uv__wake
+{
+    printf("Thread waking due to libuv: %x\n", arg0);
+}
