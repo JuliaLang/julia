@@ -268,7 +268,6 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
     checkObjectEscapes(orig);
     //Upfront remove the typeof calls
     if (object_escape_info.hastypeof) {
-        dbgs() << "Optimizing typeof tag\n";
         optimizeTag(orig, info.type);
         object_escape_info.hastypeof = false;
     }
@@ -285,7 +284,6 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
     //Trivially dead array
     if (may_be_removable && !object_escape_info.hasload) {
         if (insertArrayLengthExceptionGuard(orig)) {
-            dbgs() << "removing allocation\n";
             removeAlloc(orig, info.type);
         }
         return;
@@ -299,7 +297,6 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
         && !array_escape_info.hasload
         && (!array_escape_info.haspreserve || !array_escape_info.refstore)) {
         if (insertArrayLengthExceptionGuard(orig)) {
-            dbgs() << "removing allocation 2\n";
             removeAlloc(orig, info.type, true);
         }
         return;
@@ -317,7 +314,6 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
         return;
     }
     if (array_type_data.total_size <= ARRAY_INLINE_NBYTES) {
-        dbgs() << "heap2stack\n";
         moveArrayToStack(orig, info.type);
         return;
     }
