@@ -657,6 +657,8 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, ((jl_tvar_t*)v)->ub);
     }
     else if (jl_is_method(v)) {
+        jl_printf(JL_STDOUT, "Serializing method ");
+        jl_(v);
         write_uint8(s->s, TAG_METHOD);
         jl_method_t *m = (jl_method_t*)v;
         int serialization_mode = 0, newrootsindex = 0;
@@ -2350,6 +2352,8 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
     JL_TIMING(SAVE_MODULE);
+    jl_printf(JL_STDOUT, "Serializing ");
+    jl_(worklist);
     ios_t f;
     jl_array_t *mod_array = NULL, *udeps = NULL;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
@@ -2487,6 +2491,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     JL_GC_POP();
     currently_serializing = 0;
 
+    jl_printf(JL_STDOUT, "Done\n");
     return 0;
 }
 
@@ -2668,16 +2673,46 @@ static jl_method_t *jl_recache_method(jl_method_t *m)
     assert((jl_value_t*)mt != jl_nothing);
     jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
     jl_method_t *_new = jl_lookup_method(mt, sig, m->module->primary_world);
+    return _new;
+}
+
+// Copy new roots to the running method
+// This has to be done after recache_other but before recompress_cis
+static void copy_roots(jl_method_t *dest, jl_method_t *src)
+{
+    assert(jl_is_method(dest));  // don't check src, it has already been invalidated with 0x30
     // copy any new roots
-    if (m->roots) {
-        if (_new->roots)
-            jl_array_ptr_1d_append(_new->roots, m->roots);
+    if (src->roots) {
+        // The roots may have references to recached items, fix that
+        size_t i, len = jl_array_len(src->roots);
+        for (i = 0; i < len; i++) {
+            jl_value_t *r = jl_array_ptr_ref(src->roots, i);
+            jl_value_t *newr = (jl_value_t*)ptrhash_get(&uniquing_table, r);
+            if (newr != HT_NOTFOUND)
+                jl_array_ptr_set(src->roots, i, newr);
+        }
+        // jl_printf(JL_STDOUT, "Copying roots:");
+        // jl_(src->roots);
+        if (dest->roots)
+            jl_array_ptr_1d_append(dest->roots, src->roots);
         else {
-            _new->roots = m->roots;
-            jl_gc_wb(_new, _new->roots);
+            dest->roots = src->roots;
+            jl_gc_wb(dest, dest->roots);
         }
     }
-    return _new;
+}
+
+static void copy_roots_all(jl_array_t *list)
+{
+    assert(jl_is_array(list));
+    size_t i, len = jl_array_len(list);
+    for (i = 0; i < len; i++) {
+        jl_method_instance_t *mi    = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+        // jl_printf(JL_STDOUT, "Fetching %p\n", mi);
+        jl_method_instance_t *newmi = (jl_method_instance_t*)ptrhash_get(&uniquing_table, (jl_value_t*)mi);
+        assert(mi != newmi);
+        copy_roots(newmi->def.method, mi->def.method);
+    }
 }
 
 // A decompression/compression cycle is needed to restore absolute root indexing
@@ -2700,7 +2735,7 @@ static void recompress_cis(jl_array_t *list)
                 assert(jl_is_array(ci->inferred));
                 assert(currently_deserializing == 2);
                 assert(currently_serializing == 0);
-                jl_array_ptr_1d_push(srcs, jl_uncompress_ir(m, ci, (jl_array_t*)ci->inferred));
+                jl_array_ptr_1d_push(srcs, (jl_value_t*)jl_uncompress_ir(m, ci, (jl_array_t*)ci->inferred));
             }
             ci = ci->next;
         }
@@ -2713,11 +2748,18 @@ static void recompress_cis(jl_array_t *list)
                 assert(jl_is_array(ci->inferred));
                 assert(currently_deserializing == 2);
                 assert(currently_serializing == 0);
-                ci->inferred = jl_compress_ir(m, jl_array_ptr_ref(srcs, j++));
+                ci->inferred = (jl_value_t*)jl_compress_ir(m, (jl_code_info_t*)jl_array_ptr_ref(srcs, j++));
             }
             ci = ci->next;
         }
     }
+}
+
+static void show_pointers(jl_array_t *list, int tag)
+{
+    size_t i, len = jl_array_len(list);
+    for (i = 0; i < len; i++)
+        jl_printf(JL_STDOUT, "tag %d, pointer %p\n", tag, jl_array_ptr_ref(list, i));
 }
 
 static jl_value_t *jl_recache_other_(jl_value_t *o);
@@ -2728,6 +2770,8 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *mi
     m = (jl_method_t*)jl_recache_other_((jl_value_t*)m);
     assert(jl_is_method(m));
     jl_datatype_t *argtypes = (jl_datatype_t*)mi->specTypes;
+    // jl_printf(JL_STDOUT, "Nuking %p to type 0x40: ", mi);
+    // jl_(mi);
     jl_set_typeof(mi, (void*)(intptr_t)0x40); // invalidate the old value to help catch errors
     jl_svec_t *env = jl_emptysvec;
     jl_value_t *ti = jl_type_intersection_env((jl_value_t*)argtypes, (jl_value_t*)m->sig, &env);
@@ -2739,8 +2783,8 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *mi
         jl_code_instance_t *ci = mi->cache;
         if (ci) {
             _new->cache = ci;
-            jl_printf(JL_STDOUT, "Recaching codeinst for ");
-            jl_(_new);
+            // jl_printf(JL_STDOUT, "Recaching codeinst for ");
+            // jl_(_new);
         }
         /* while (ci) { */
         /*     if (ci->inferred && ci->inferred != jl_nothing) { */
@@ -2768,7 +2812,6 @@ static jl_value_t *jl_recache_other_(jl_value_t *o)
     if (jl_is_method(o)) {
         // lookup the real Method based on the placeholder sig
         newo = (jl_value_t*)jl_recache_method((jl_method_t*)o);
-        ptrhash_put(&uniquing_table, newo, newo);
     }
     else if (jl_is_method_instance(o)) {
         // lookup the real MethodInstance based on the placeholder specTypes
@@ -2777,6 +2820,9 @@ static jl_value_t *jl_recache_other_(jl_value_t *o)
     else {
         abort();
     }
+    ptrhash_put(&uniquing_table, newo, newo);
+    // jl_printf(JL_STDOUT, "Putting %p on the uniquing table for %p: ", o, newo);
+    // jl_(newo);
     ptrhash_put(&uniquing_table, o, newo);
     return newo;
 }
@@ -2788,6 +2834,8 @@ static void jl_recache_other(void)
         jl_value_t **loc = (jl_value_t**)flagref_list.items[i + 0];
         int offs = (int)(intptr_t)flagref_list.items[i + 1];
         jl_value_t *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
+        jl_printf(JL_STDOUT, "recaching index %ld, %p: ", i, o);
+        jl_(o);
         i += 2;
         jl_value_t *newo = jl_recache_other_(o);
         if (loc)
@@ -2854,8 +2902,11 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
         ct->ptls,
         mod_array
     };
+    jl_printf(JL_STDOUT, "Deserializing ");
     jl_array_t *restored = (jl_array_t*)jl_deserialize_value(&s, (jl_value_t**)&restored);
     serializer_worklist = restored;
+    jl_(restored);
+
     assert(jl_isa((jl_value_t*)restored, jl_array_any_type));
 
     // restore newly-compiled external functions
@@ -2868,6 +2919,8 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     jl_value_t *external_backedges = jl_deserialize_value(&s, &external_backedges);
     jl_value_t *external_edges = jl_deserialize_value(&s, &external_edges);
 
+    jl_printf(JL_STDOUT, "here 1\n");
+
     arraylist_t *tracee_list = NULL;
     if (jl_newmeth_tracer)
         tracee_list = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
@@ -2875,12 +2928,21 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     // at this point, the AST is fully reconstructed, but still completely disconnected
     // now all of the interconnects will be created
     jl_recache_types(); // make all of the types identities correct
+    jl_printf(JL_STDOUT, "here 2\n");
     htable_reset(&uniquing_table, 0);
     jl_insert_methods((jl_array_t*)external_methods); // hook up methods of external generic functions (needs to be after recache types)
+    jl_printf(JL_STDOUT, "here 3\n");
     currently_deserializing = 2;
     // before fully recaching MethodInstances, we need to ucompress CodeInstances of external methods so the refs get properly updated
+    // show_pointers((jl_array_t*)ext_mis, 1);
+    jl_array_t *ext_mis_copy = jl_array_copy((jl_array_t*)ext_mis);
+    jl_printf(JL_STDOUT, "here 4\n");
     jl_recache_other(); // make method identities correct (needs to be to be after insert methods)
+    // show_pointers((jl_array_t*)ext_mis_copy, 2);
+    copy_roots_all((jl_array_t*)ext_mis_copy);
+    jl_printf(JL_STDOUT, "here 5\n");
     recompress_cis((jl_array_t*)ext_mis);
+    jl_printf(JL_STDOUT, "here 6\n");
     currently_deserializing = 1;
 
     htable_free(&uniquing_table);
@@ -2924,6 +2986,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     jl_value_t *ret = (jl_value_t*)jl_svec(2, restored, init_order);
     JL_GC_POP();
     currently_deserializing = 0;
+    jl_printf(JL_STDOUT, "Done\n");
 
     return (jl_value_t*)ret;
 }
