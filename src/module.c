@@ -800,7 +800,7 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
     }
 }
 
-JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     if (b->ty && !jl_isa(rhs, b->ty)) {
         jl_errorf("Cannot assign a value of an incompatible type to the typed global %s.",
