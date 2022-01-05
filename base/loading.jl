@@ -1377,8 +1377,8 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
         exit(125) # we define status = 125 means PrecompileableError
     end
-    ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
     Core.Compiler.track_newly_inferred.x = false
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()

@@ -627,6 +627,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     JL_MUTEX_INIT(&jl_modules_mutex);
     if (jl_generating_output()) {
         jl_precompile_toplevel_module = NULL;
+        jl_set_newly_inferred((jl_value_t*)NULL);
     }
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
