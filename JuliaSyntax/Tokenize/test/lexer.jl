@@ -113,7 +113,7 @@ end # testset
 
             T.NEWLINE_WS,T.IDENTIFIER,T.OP,T.OP,T.OP,T.IDENTIFIER,T.OP,T.OP,
 
-            T.NEWLINE_WS,T.BACKTICK,T.STRING,T.BACKTICK,
+            T.NEWLINE_WS,T.BACKTICK,T.CMD,T.BACKTICK,
 
             T.NEWLINE_WS,T.INTEGER,T.IDENTIFIER,T.LPAREN,T.INTEGER,T.RPAREN,
 
@@ -320,7 +320,7 @@ end
 
     ts = collect(tokenize(raw"""`x $ \ y`"""))
     @test ts[1] ~ (T.BACKTICK  , "`"         )
-    @test ts[2] ~ (T.STRING    , "x \$ \\ y" )
+    @test ts[2] ~ (T.CMD       , "x \$ \\ y" )
     @test ts[3] ~ (T.BACKTICK  , "`"         )
     @test ts[4] ~ (T.ENDMARKER , ""          )
 
@@ -561,18 +561,18 @@ end
 
 @testset "CMDs" begin
     @test tok("`cmd`",1).kind == T.BACKTICK
-    @test tok("`cmd`",2).kind == T.STRING
+    @test tok("`cmd`",2).kind == T.CMD
     @test tok("`cmd`",3).kind == T.BACKTICK
     @test tok("`cmd`",4).kind == T.ENDMARKER
     @test tok("```cmd```", 1).kind == T.TRIPLE_BACKTICK
-    @test tok("```cmd```", 2).kind == T.STRING
+    @test tok("```cmd```", 2).kind == T.CMD
     @test tok("```cmd```", 3).kind == T.TRIPLE_BACKTICK
     @test tok("```cmd```", 4).kind == T.ENDMARKER
     @test tok("```cmd````cmd`", 1).kind == T.TRIPLE_BACKTICK
-    @test tok("```cmd````cmd`", 2).kind == T.STRING
+    @test tok("```cmd````cmd`", 2).kind == T.CMD
     @test tok("```cmd````cmd`", 3).kind == T.TRIPLE_BACKTICK
     @test tok("```cmd````cmd`", 4).kind == T.BACKTICK
-    @test tok("```cmd````cmd`", 5).kind == T.STRING
+    @test tok("```cmd````cmd`", 5).kind == T.CMD
     @test tok("```cmd````cmd`", 6).kind == T.BACKTICK
     @test tok("```cmd````cmd`", 7).kind == T.ENDMARKER
 end
