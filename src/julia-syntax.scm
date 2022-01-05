@@ -4055,7 +4055,7 @@ f(x) = yt(x)
                             (put! globals ref rhs)
                             `(toplevel-butfirst
                                ,(if temp `(block (= ,temp ,rhs0) (null)) '(null))
-                               (call (core _set_typeof!) ,(cadr ref) (inert ,(caddr ref)) ,(caddr e))))
+                               (call (core _set_binding_type!) ,(cadr ref) (inert ,(caddr ref)) ,(caddr e))))
                           `(call (core typeassert) ,@(cdr e))))
                     fname lam namemap defined toplevel interp opaq globals))))
           ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars

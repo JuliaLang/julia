@@ -65,7 +65,7 @@ JL_CALLABLE(jl_f__abstracttype);
 JL_CALLABLE(jl_f__primitivetype);
 JL_CALLABLE(jl_f__setsuper);
 JL_CALLABLE(jl_f__equiv_typedef);
-JL_CALLABLE(jl_f__set_typeof);
+JL_CALLABLE(jl_f__set_binding_type);
 
 #ifdef __cplusplus
 }
