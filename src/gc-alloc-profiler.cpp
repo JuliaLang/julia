@@ -137,8 +137,8 @@ void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
     }
 
     auto type = (jl_datatype_t*)jl_typeof(val);
-    // TODO: this info is later used when counting frees, but is that
-    // necessary?
+    // Used when counting frees. We can't get type type info then,
+    // because it gets corrupted during garbage collection.
     profile.type_address_by_value_address[(size_t)val] = (size_t)type;
     profile.allocs.emplace_back(RawAlloc{
         type,
