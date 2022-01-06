@@ -2824,8 +2824,6 @@ Parse a sequence of top level statements.
 
 `input` may be a `ParseStream` or other input source which will be passed to
 the `ParseStream` constructor. The `ParseStream` is returned.
-
-flisp: parse-all
 """
 function parse_all(stream::ParseStream)
     ps = ParseState(stream)

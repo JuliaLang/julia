@@ -486,12 +486,7 @@ Base.Expr(node::SyntaxNode) = _to_expr(node)
 
 #-------------------------------------------------------------------------------
 
-"""
-    parse_all(Expr, code::AbstractString; filename="none")
-
-Parse the given code and convert to a standard Expr
-"""
-function parse_all(::Type{Expr}, code::AbstractString; filename="none")
+function parse_all(::Type{SyntaxNode}, code::AbstractString; filename="none")
     source_file = SourceFile(code, filename=filename)
 
     stream = ParseStream(code)
@@ -505,7 +500,17 @@ function parse_all(::Type{Expr}, code::AbstractString; filename="none")
 
     green_tree = build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
 
-    tree = SyntaxNode(source_file, green_tree)
+    SyntaxNode(source_file, green_tree)
+end
+
+
+"""
+    parse_all(Expr, code::AbstractString; filename="none")
+
+Parse the given code and convert to a standard Expr
+"""
+function parse_all(::Type{Expr}, code::AbstractString; filename="none")
+    tree = parse_all(SyntaxNode, code; filename=filename)
 
     # convert to Julia expr
     ex = Expr(tree)

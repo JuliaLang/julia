@@ -500,9 +500,6 @@ end
 
 #-------------------------------------------------------------------------------
 # Tree construction from the list of text ranges held by ParseStream
-#
-# Note that this is largely independent of GreenNode, and could easily be
-# made completely independent with a tree builder interface.
 
 """
     build_tree(::Type{NodeType}, stream::ParseStream;
@@ -572,11 +569,17 @@ function build_tree(::Type{NodeType}, stream::ParseStream;
     elseif !isnothing(wrap_toplevel_as_kind)
         # Mostly for debugging
         children = [x.node for x in stack]
-        return GreenNode(SyntaxHead(wrap_toplevel_as_kind, EMPTY_FLAGS), children...)
+        return NodeType(SyntaxHead(wrap_toplevel_as_kind, EMPTY_FLAGS), children...)
     else
         error("Found multiple nodes at top level")
     end
 end
+
+function parse_all(::Type{GreenNode}, code)
+    stream = parse_all(code)
+    build_tree(GreenNode, stream)
+end
+
 
 #-------------------------------------------------------------------------------
 """
