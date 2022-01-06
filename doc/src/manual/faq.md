@@ -171,7 +171,7 @@ while x < 10
     x += 1
 end
 ```
-and notice that it works fine in an interactive environment (like the Julia REPL)
+and notice that it works fine in an interactive environment (like the Julia REPL),
 but gives `UndefVarError: x not defined` when you try to run it in script or other
 file.   What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
 
