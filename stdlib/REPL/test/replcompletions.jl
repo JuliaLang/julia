@@ -89,6 +89,18 @@ let ex = quote
         test8() = Any[1][1]
         test9(x::Char) = pass
         test9(x::Char, i::Int) = pass
+
+        test10(a, x::Int...) = pass
+        test10(a::Integer, b::Integer, c) = pass
+        test10(a, y::Bool...) = pass
+        test10(a, d::Integer, z::Signed...) = pass
+        test10(s::String...) = pass
+
+        test11(a::Integer, b, c) = pass
+        test11(u, v::Integer, w) = pass
+        test11(x::Int, y::Int, z) = pass
+        test11(_, _, s::String) = pass
+
         kwtest(; x=1, y=2, w...) = pass
         kwtest2(a; x=1, y=2, w...) = pass
 
@@ -380,11 +392,14 @@ let
 end
 
 # Test completion of methods with input concrete args and args where typeinference determine their type
-let s = "CompletionFoo.test(1,1, "
+let s = "CompletionFoo.test(1, 1, "
     c, r, res = test_complete(s)
     @test !res
     @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
-    @test length(c) == 3
+    @test c[2] == string(first(methods(Main.CompletionFoo.test, Tuple{}))) # corresponding to the vararg
+    @test length(c) == 2
+    # In particular, this checks that test(x::Real, y::Real) is not a valid completion
+    # since it is strictly less specific than test(x::T, y::T) where T
     @test r == 1:18
     @test s[r] == "CompletionFoo.test"
 end
@@ -402,6 +417,7 @@ let s = "CompletionFoo.test(1,1,1,"
     c, r, res = test_complete(s)
     @test !res
     @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Any, Any, Any})))
+    @test length(c) == 1
     @test r == 1:18
     @test s[r] == "CompletionFoo.test"
 end
@@ -548,6 +564,15 @@ end
 let s = "CompletionFoo.?([1,2,3], 2.0)"
     c, r, res = test_complete(s)
     @test !res
+    @test length(c) == 1
+    @test occursin("test(x::AbstractArray{T}, y) where T<:Real", c[1])
+    # In particular, this checks that test(args...) is not a valid completion
+    # since it is strictly less specific than test(x::AbstractArray{T}, y)
+end
+
+let s = "CompletionFoo.?([1,2,3], 2.0"
+    c, r, res = test_complete(s)
+    @test !res
     @test  any(str->occursin("test(x::AbstractArray{T}, y) where T<:Real", str), c)
     @test  any(str->occursin("test(args...)", str), c)
     @test !any(str->occursin("test3(x::AbstractArray{Int", str), c)
@@ -558,6 +583,7 @@ let s = "CompletionFoo.?('c')"
     c, r, res = test_complete(s)
     @test !res
     @test  any(str->occursin("test9(x::Char)", str), c)
+    @test  any(str->occursin("test10(a, ", str), c)
     @test !any(str->occursin("test9(x::Char, i::Int", str), c)
 end
 
@@ -565,20 +591,31 @@ let s = "CompletionFoo.?('c'"
     c, r, res = test_complete(s)
     @test !res
     @test  any(str->occursin("test9(x::Char)", str), c)
+    @test  any(str->occursin("test10(a, ", str), c)
     @test  any(str->occursin("test9(x::Char, i::Int", str), c)
 end
 
 let s = "CompletionFoo.?(false, \"a\", 3, "
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 1
+    @test length(c) == 2
     @test occursin("test(args...)", c[1])
+    @test occursin("test11(a::Integer, b, c)", c[2])
 end
 
 let s = "CompletionFoo.?(false, \"a\", 3, "
     c, r, res = test_complete_noshift(s)
     @test !res
-    @test isempty(c)
+    @test length(c) == 1
+    @test occursin("test11(a::Integer, b, c)", c[1])
+end
+
+let s = "CompletionFoo.?(\"a\", 3, "
+    c, r, res = test_complete(s)
+    @test !res
+    @test  any(str->occursin("test10(a, x::$Int...)", str), c)
+    @test !any(str->occursin("test10(a, y::Bool...)", str), c)
+    @test !any(str->occursin("test10(s::String...)", str), c)
 end
 
 let s = "CompletionFoo.?()"
@@ -592,10 +629,118 @@ end
 let s = "CompletionFoo.?()"
     c, r, res = test_complete_noshift(s)
     @test !res
-    @test isempty(c)
+    @test length(c) == 1
+    @test occursin("test10(s::String...)", c[1])
 end
 
 #################################################################
+
+# Test method completion with varargs
+let s = "CompletionFoo.test10(z, Integer[]...,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 5
+    @test all(startswith("test10("), c)
+    @test allunique(c)
+end
+
+let s = "CompletionFoo.test10(3, Integer[]...,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 4
+    @test all(startswith("test10("), c)
+    @test allunique(c)
+    @test !any(str->occursin("test10(s::String...)", str), c)
+end
+
+let s = "CompletionFoo.test10(3, 4,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test any(str->occursin("test10(a, x::$Int...)", str), c)
+    @test any(str->occursin("test10(a::Integer, b::Integer, c)", str), c)
+    @test any(str->occursin("test10(a, d::Integer, z::Signed...)", str), c)
+end
+
+let s = "CompletionFoo.test10(3, 4, 5,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test any(str->occursin("test10(a, x::$Int...)", str), c)
+    @test any(str->occursin("test10(a::Integer, b::Integer, c)", str), c) # show it even though the call would result in an ambiguity error
+    @test any(str->occursin("test10(a, d::Integer, z::Signed...)", str), c)
+    # the last one is not eliminated by specificity since the complete call could be
+    # test10(3, 4, 5, Int8(6)) for instance
+end
+
+let s = "CompletionFoo.test10(z, z, 0, "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test any(str->occursin("test10(a, x::$Int...)", str), c)
+    @test any(str->occursin("test10(a::Integer, b::Integer, c)", str), c) # show it even though the call would result in an ambiguity error
+    @test any(str->occursin("test10(a, d::Integer, z::Signed...)", str), c)
+end
+
+let s = "CompletionFoo.test10(\"a\", Union{Signed,Bool,String}[3][1], "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 4
+    @test all(startswith("test10("), c)
+    @test allunique(c)
+    @test !any(str->occursin("test10(a::Integer, b::Integer, c)", str), c)
+end
+
+# Test method completion with ambiguity
+let s = "CompletionFoo.test11(Integer[false][1], Integer[14][1], "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 4
+    @test all(startswith("test11("), c)
+    @test allunique(c)
+end
+
+let s = "CompletionFoo.test11(Integer[-7][1], Integer[0x6][1], 6,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test any(str->occursin("test11(a::Integer, b, c)", str), c)
+    @test any(str->occursin("test11(u, v::Integer, w)", str), c)
+    @test any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
+end
+
+let s = "CompletionFoo.test11(3, 4,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 4
+    @test any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
+end
+
+let s = "CompletionFoo.test11(0x8, 5,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 3
+    @test any(str->occursin("test11(a::Integer, b, c)", str), c)
+    @test any(str->occursin("test11(u, v::Integer, w)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
+end
+
+let s = "CompletionFoo.test11(0x8, 'c',"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test any(str->occursin("test11(a::Integer, b, c)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
+end
+
+let s = "CompletionFoo.test11('d', 3,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+    @test any(str->occursin("test11(u, v::Integer, w)", str), c)
+    @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
+end
 
 # Test of inference based getfield completion
 let s = "(1+2im)."
@@ -1204,7 +1349,10 @@ let s = "test(1,1, "
     c, r, res = test_complete_foo(s)
     @test !res
     @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
-    @test length(c) == 3
+    @test c[2] == string(first(methods(Main.CompletionFoo.test, Tuple{})))  # corresponding to the vararg
+    @test length(c) == 2
+    # In particular, this checks that test(x::Real, y::Real) is not a valid completion
+    # since it is strictly less specific than test(x::T, y::T) where T
     @test r == 1:4
     @test s[r] == "test"
 end
@@ -1302,13 +1450,11 @@ end
         end
 
         c, r = test_complete_context("foo().r.", m)
-        # the current implementation of `REPL.REPLCompletions.completions(::String, ::Int, ::Module)`
-        # cuts off "foo().r." to `.r.`, and the getfield type completion doesn't work for this simpler case
         @test m.var === nothing # getfield type completion should never execute `foo()`
-        @test_broken length(c) == fieldcount(Regex)
+        @test length(c) == fieldcount(Regex)
 
         c, r = test_complete_context("foo(#=#=# =#= =#).r.", m)
         @test m.var === nothing # getfield type completion should never execute `foo()`
-        @test_broken length(c) == fieldcount(Regex)
+        @test length(c) == fieldcount(Regex)
     end
 end
