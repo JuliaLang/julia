@@ -28,13 +28,10 @@ struct PerThreadAllocProfile {
     vector<RawAlloc> allocs;
     unordered_map<size_t, size_t> type_address_by_value_address;
     unordered_map<size_t, size_t> frees_by_type_address;
-
-    size_t alloc_counter;
-    size_t last_recorded_alloc;
 };
 
 struct AllocProfile {
-    int skip_every;
+    double sample_rate;
 
     vector<PerThreadAllocProfile> per_thread_profiles;
 };
@@ -69,8 +66,8 @@ RawBacktrace get_raw_backtrace() {
 
 // == exported interface ==
 
-JL_DLLEXPORT void jl_start_alloc_profile(int skip_every) {
-    g_alloc_profile = AllocProfile{skip_every};
+JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate) {
+    g_alloc_profile = AllocProfile{sample_rate};
 
     for (int i = 0; i < jl_n_threads; i++) {
         g_alloc_profile.per_thread_profiles.push_back(PerThreadAllocProfile{});
@@ -131,20 +128,18 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
 
 void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
     auto& global_profile = g_alloc_profile;
-
     auto& profile = global_profile.per_thread_profiles[jl_threadid()];
 
-    profile.alloc_counter++;
-    auto diff = profile.alloc_counter - profile.last_recorded_alloc;
-    if (diff < g_alloc_profile.skip_every) {
+    auto sample_val = double(rand()) / double(RAND_MAX);
+    auto should_record = sample_val <= global_profile.sample_rate;
+    if (!should_record) {
         return;
     }
-    profile.last_recorded_alloc = profile.alloc_counter;
 
     auto type = (jl_datatype_t*)jl_typeof(val);
-
+    // TODO: this info is later used when counting frees, but is that
+    // necessary?
     profile.type_address_by_value_address[(size_t)val] = (size_t)type;
-
     profile.allocs.emplace_back(RawAlloc{
         type,
         get_raw_backtrace(),

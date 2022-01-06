@@ -23,7 +23,7 @@ struct RawAllocResults {
     size_t num_frees;
 };
 
-JL_DLLEXPORT void jl_start_alloc_profile(int skip_every);
+JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate);
 JL_DLLEXPORT struct RawAllocResults jl_fetch_alloc_profile(void);
 JL_DLLEXPORT void jl_stop_alloc_profile(void);
 JL_DLLEXPORT void jl_free_alloc_profile(void);

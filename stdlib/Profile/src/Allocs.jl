@@ -42,7 +42,7 @@ macro profile(opts, ex)
     _prof_expr(ex, opts)
 end
 macro profile(ex)
-    _prof_expr(ex, :(skip_every=1000))
+    _prof_expr(ex, :(sample_rate=1.0))
 end
 
 function _prof_expr(expr, opts)
@@ -54,8 +54,8 @@ function _prof_expr(expr, opts)
     end
 end
 
-function start(; skip_every::Int)
-    ccall(:jl_start_alloc_profile, Cvoid, (Cint,), skip_every)
+function start(; sample_rate::Float64)
+    ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), sample_rate)
 end
 
 function stop()
