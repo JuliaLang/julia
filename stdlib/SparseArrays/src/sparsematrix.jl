@@ -2887,12 +2887,20 @@ function setindex!(A::AbstractSparseMatrixCSC{Tv,Ti}, V::AbstractVecOrMat, Ix::U
     require_one_based_indexing(A, V, Ix, Jx)
     (I, J) = Base.ensure_indexable(to_indices(A, (Ix, Jx)))
     checkbounds(A, I, J)
-    Base.setindex_shape_check(V, length(I), length(J))
+    nJ = length(J)
+    Base.setindex_shape_check(V, length(I), nJ)
     B = _to_same_csc(A, V, I, J)
+
+    m, n = size(A)
+    if (!isempty(I) && (I[1] < 1 || I[end] > m)) || (!isempty(J) && (J[1] < 1 || J[end] > n))
+        throw(BoundsError(A, (I, J)))
+    end
+    if isempty(I) || isempty(J)
+        return A
+    end
 
     issortedI = issorted(I)
     issortedJ = issorted(J)
-
     if !issortedI && !issortedJ
         pI = sortperm(I); @inbounds I = I[pI]
         pJ = sortperm(J); @inbounds J = J[pJ]
@@ -2904,20 +2912,6 @@ function setindex!(A::AbstractSparseMatrixCSC{Tv,Ti}, V::AbstractVecOrMat, Ix::U
         pJ = sortperm(J); @inbounds J = J[pJ]
         B = B[:, pJ]
     end
-
-    m, n = size(A)
-    mB, nB = size(B)
-
-    if (!isempty(I) && (I[1] < 1 || I[end] > m)) || (!isempty(J) && (J[1] < 1 || J[end] > n))
-        throw(BoundsError(A, (I, J)))
-    end
-
-    if isempty(I) || isempty(J)
-        return A
-    end
-
-    nI = length(I)
-    nJ = length(J)
 
     colptrA = getcolptr(A); rowvalA = rowvals(A); nzvalA = nonzeros(A)
     colptrB = getcolptr(B); rowvalB = rowvals(B); nzvalB = nonzeros(B)
@@ -2932,7 +2926,6 @@ function setindex!(A::AbstractSparseMatrixCSC{Tv,Ti}, V::AbstractVecOrMat, Ix::U
     resize!(nzvalA, nnzS)
 
     colB = 1
-    asgn_col = J[colB]
 
     I_asgn = falses(m)
     fill!(view(I_asgn, I), true)
