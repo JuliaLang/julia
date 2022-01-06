@@ -423,7 +423,7 @@ evaluated first. One might imagine that the `s` on the first line of the loop co
 the `s` on the second line of the loop is local, but that's not possible since the two lines are in
 the same scope block and each variable can only mean one thing in a given scope.
 
-#### On Soft Scope
+#### [On Soft Scope](@id on-soft-scope)
 
 We have now covered all the local scope rules, but before wrapping up this section, perhaps a few
 words should be said about why the ambiguous soft scope case is handled differently in interactive

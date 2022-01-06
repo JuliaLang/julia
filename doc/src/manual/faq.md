@@ -160,6 +160,34 @@ The reason why we avoid the shell by default is that [shelling out sucks](https:
 launching processes via the shell is slow, fragile to quoting of special characters,  has poor error handling, and is
 problematic for portability.  (The Python developers came to a [similar conclusion](https://www.python.org/dev/peps/pep-0324/#motivation).)
 
+## Variables and Assignments
+
+### Why am I getting `UndefVarError` from a simple loop?
+
+You might have something like:
+```
+x = 0
+while x < 10
+    x += 1
+end
+```
+and notice that it works fine in an interactive environment (like the Julia REPL)
+but gives `UndefVarError: x not defined` when you try to run it in script or other
+file.   What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
+
+Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
+an assignment to a global in that local scope.   You typically have three options:
+
+1. Explicitly mark `x` as `global` inside the local scope before assigning to it, e.g. write `global x += 1`.
+2. Put the code into a function (so that `x` is a *local* variable in a function). In general, it is good software engineering to use functions rather than global scripts (search online for "why global variables bad" to see many explanations). In Julia, global variables are also [slow](@ref man-performance-tips).
+3. Wrap the code in a [`let`](@ref) block.  (This makes `x` a local variable within the `let ... end` statement, again eliminating the need for `global`).
+
+As mentioned above, Julia (version 1.5 or later) allows you to omit the `global`
+keyword for code in the REPL (and many other interactive environments), to simplify
+exploration (e.g. copy-pasting code from a function to run interactively).
+However, once you move to code in files, Julia requires a more disciplined approach
+to global variables.  More explanation can be found in the manual section [on soft scope](@ref on-soft-scope).
+
 ## Functions
 
 ### I passed an argument `x` to a function, modified it inside that function, but on the outside, the variable `x` is still unchanged. Why?
