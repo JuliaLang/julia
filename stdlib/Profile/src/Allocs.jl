@@ -59,7 +59,6 @@ function _prof_expr(expr, opts)
 end
 
 function start(; sample_rate::Number)
-    println(typeof(sample_rate))
     ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), Float64(sample_rate))
 end
 
