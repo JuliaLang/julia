@@ -31,14 +31,13 @@ JL_DLLEXPORT void jl_free_alloc_profile(void);
 // Functions to call from GC when alloc profiling is enabled
 // ---------------------------------------------------------------------
 
-void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT;
-void _record_freed_value(jl_taggedvalue_t *tagged_val) JL_NOTSAFEPOINT;
+void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size) JL_NOTSAFEPOINT;
 
 extern int g_alloc_profile_enabled;
 
-static inline void record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
+static inline void maybe_record_alloc_to_profile(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
     if (__unlikely(g_alloc_profile_enabled)) {
-        _record_allocated_value(val, size);
+        _maybe_record_alloc_to_profile(val, size);
     }
 }
 

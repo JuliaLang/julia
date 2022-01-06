@@ -112,7 +112,7 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
 
 // == callbacks called into by the outside ==
 
-void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
+void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
     auto& global_profile = g_alloc_profile;
     auto& profile = global_profile.per_thread_profiles[jl_threadid()];
 
