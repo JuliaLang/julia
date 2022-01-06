@@ -1318,9 +1318,12 @@ for f in (:sin, :cos, :tan, :asin, :atan, :acos,
     end
     @eval $(f)(::Missing) = missing
 end
-atan(::Missing, ::Missing) = missing
-atan(::Number, ::Missing) = missing
-atan(::Missing, ::Number) = missing
+
+for f in (:atan, :hypot, :log)
+    @eval $(f)(::Missing, ::Missing) = missing
+    @eval $(f)(::Number, ::Missing) = missing
+    @eval $(f)(::Missing, ::Number) = missing
+end
 
 exp2(x::AbstractFloat) = 2^x
 exp10(x::AbstractFloat) = 10^x
