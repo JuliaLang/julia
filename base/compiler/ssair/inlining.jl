@@ -441,10 +441,7 @@ end
 
 function fix_va_argexprs!(compact::IncrementalCompact,
     argexprs::Vector{Any}, nargs_def::Int, line_idx::Int32)
-    newargexprs = Any[]
-    for i in 1:(nargs_def-1)
-        push!(newargexprs, argexprs[i])
-    end
+    newargexprs = argexprs[1:(nargs_def-1)]
     tuple_call = Expr(:call, TOP_TUPLE)
     tuple_typs = Any[]
     for i in nargs_def:length(argexprs)

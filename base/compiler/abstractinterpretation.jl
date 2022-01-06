@@ -156,9 +156,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
     end
 
-    # inliner uses this information only when there is a single match that has been improved
-    # by constant analysis, but let's create `ConstCallInfo` if there has been any successful
-    # constant propagation happened since other consumers may be interested in this
     if any_const_result && seen == napplicable
         @assert napplicable == nmatches(info) == length(const_results)
         info = ConstCallInfo(info, const_results)
@@ -183,7 +180,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             delete!(sv.pclimitations, caller)
         end
     end
-    #print("=> ", rettype, "\n")
     return CallMeta(rettype, info)
 end
 
@@ -1908,7 +1904,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
         # make progress on the active ip set
         local pc::Int = frame.pc´´
         while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
-            #print(pc,": ",s[pc],"\n")
             local pc´::Int = pc + 1 # next program-counter (after executing instruction)
             if pc == frame.pc´´
                 # want to update pc´´ to point at the new lowest instruction in W
