@@ -1283,8 +1283,8 @@ end
             end
         end
 
-        c, r = test_complete_context("foo().rs[1].", m)
-        @test m.var ≠ 1 # getfield type completion should never execute `foo()`
+        c, r = test_complete_context("foo(#=#==#=##==#).rs[1].", m)
+        @test m.var === nothing # getfield type completion should never execute `foo()`
         @test length(c) == fieldcount(Regex)
     end
 
@@ -1304,6 +1304,11 @@ end
         c, r = test_complete_context("foo().r.", m)
         # the current implementation of `REPL.REPLCompletions.completions(::String, ::Int, ::Module)`
         # cuts off "foo().r." to `.r.`, and the getfield type completion doesn't work for this simpler case
+        @test m.var === nothing # getfield type completion should never execute `foo()`
+        @test_broken length(c) == fieldcount(Regex)
+
+        c, r = test_complete_context("foo(#=#=# =#= =#).r.", m)
+        @test m.var === nothing # getfield type completion should never execute `foo()`
         @test_broken length(c) == fieldcount(Regex)
     end
 end

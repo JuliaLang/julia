@@ -335,9 +335,25 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     in_single_quotes = false
     in_double_quotes = false
     in_back_ticks = false
+    in_comment = 0
     while i <= ncodeunits(r)
         c, i = iterate(r, i)
-        if !in_single_quotes && !in_double_quotes && !in_back_ticks
+        if c == '#' && i <= ncodeunits(r) && iterate(r, i)[1] == '='
+            c, i = iterate(r, i) # consume '='
+            new_comments = 1
+            # handle #=#=#=#, by counting =# pairs
+            while i <= ncodeunits(r) && iterate(r, i)[1] == '#'
+                c, i = iterate(r, i) # consume '#'
+                iterate(r, i)[1] == '=' || break
+                c, i = iterate(r, i) # consume '='
+                new_comments += 1
+            end
+            if c == '='
+                in_comment += new_comments
+            else
+                in_comment -= new_comments
+            end
+        elseif !in_single_quotes && !in_double_quotes && !in_back_ticks && in_comment == 0
             if c == c_start
                 braces += 1
             elseif c == c_end
@@ -350,15 +366,31 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 in_back_ticks = true
             end
         else
-            if !in_back_ticks && !in_double_quotes &&
+            if in_single_quotes &&
                 c == '\'' && i <= ncodeunits(r) && iterate(r, i)[1] != '\\'
-                in_single_quotes = !in_single_quotes
-            elseif !in_back_ticks && !in_single_quotes &&
+                in_single_quotes = false
+            elseif in_double_quotes &&
                 c == '"' && i <= ncodeunits(r) && iterate(r, i)[1] != '\\'
-                in_double_quotes = !in_double_quotes
-            elseif !in_single_quotes && !in_double_quotes &&
+                in_double_quotes = false
+            elseif in_back_ticks &&
                 c == '`' && i <= ncodeunits(r) && iterate(r, i)[1] != '\\'
-                in_back_ticks = !in_back_ticks
+                in_back_ticks = false
+            elseif in_comment > 0 &&
+                c == '=' && i <= ncodeunits(r) && iterate(r, i)[1] == '#'
+                # handle =#=#=#=, by counting #= pairs
+                c, i = iterate(r, i) # consume '#'
+                old_comments = 1
+                while i <= ncodeunits(r) && iterate(r, i)[1] == '='
+                    c, i = iterate(r, i) # consume '='
+                    iterate(r, i)[1] == '#' || break
+                    c, i = iterate(r, i) # consume '#'
+                    old_comments += 1
+                end
+                if c == '#'
+                    in_comment -= old_comments
+                else
+                    in_comment += old_comments
+                end
             end
         end
         braces == 1 && break
