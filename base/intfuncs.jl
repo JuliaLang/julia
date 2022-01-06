@@ -1077,9 +1077,9 @@ function binomial(n::T, k::T) where T<:Integer
 end
 
 """
-    iroot(n::Integer, r::Integer)
+    iroot(x::Integer, n::Integer)
 
-Computes floor(n^(1/r)) precisely.
+Computes floor(x^(1/n)) precisely.
 # Examples
 ```jldoctest
 julia> iroot(100, 2)
@@ -1091,7 +1091,7 @@ julia> iroot(99,2)
 """
 iroot(x::Integer, n::Integer) = iroot(promote(x, n)...)
 function iroot(x::T, n::T) where T<:BitInteger
-    n < 0 && throw(DomainError(n, "`n` must be positive."))
+    n <= 0 && throw(DomainError(n, "`n` must be positive."))
     n >=  8*sizeof(T) && return one(T)
     # u is an initial guess computed using
     # x^(1/n) = exp2(log2(x)/n) ≈ exp2(div(round(log2(x)), n))
