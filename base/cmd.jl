@@ -310,7 +310,8 @@ end
 Set the CPU affinity of the `command` by a list of CPU IDs (1-based) `cpus`.  Passing
 `cpus = nothing` means to unset the CPU affinity if the `original_command` has any.
 
-This function is tested only on Linux.
+This function is supported only in Linux and Windows.  It is not supported in macOS because
+libuv does not support affinity setting.
 
 !!! compat "Julia 1.8"
     This function requires at least Julia 1.8.
