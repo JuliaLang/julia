@@ -178,9 +178,9 @@ file.   What is going on is that Julia generally requires you to **be explicit a
 Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
 an assignment to a global in that local scope.   You typically have three options:
 
-1. Explicitly mark `x` as `global` inside the local scope before assigning to it, e.g. write `global x += 1`.
-2. Put the code into a function (so that `x` is a *local* variable in a function). In general, it is good software engineering to use functions rather than global scripts (search online for "why global variables bad" to see many explanations). In Julia, global variables are also [slow](@ref man-performance-tips).
-3. Wrap the code in a [`let`](@ref) block.  (This makes `x` a local variable within the `let ... end` statement, again eliminating the need for `global`).
+1. Put the code into a function (so that `x` is a *local* variable in a function). In general, it is good software engineering to use functions rather than global scripts (search online for "why global variables bad" to see many explanations). In Julia, global variables are also [slow](@ref man-performance-tips).
+2. Wrap the code in a [`let`](@ref) block.  (This makes `x` a local variable within the `let ... end` statement, again eliminating the need for `global`).
+3. Explicitly mark `x` as `global` inside the local scope before assigning to it, e.g. write `global x += 1`.
 
 As mentioned above, Julia (version 1.5 or later) allows you to omit the `global`
 keyword for code in the REPL (and many other interactive environments), to simplify
