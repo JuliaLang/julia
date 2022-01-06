@@ -461,6 +461,9 @@ Here's some behaviors which seem to be bugs:
   always executes afterward. (Presumably was this a mistake? It seems pretty awful!)
 * When parsing `"[x \n\n ]"` the flisp parser gets confused, but `"[x \n ]"` is
   parsed as `Expr(:vect)`
+* `f(x for x in in xs)` is accepted, and parsed very strangely.
+* Octal escape sequences saturate rather than being reported as errors. Eg,
+  `"\777"` results in `"\xff"`.
 
 ## Parsing / AST oddities and warts
 

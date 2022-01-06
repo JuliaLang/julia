@@ -68,6 +68,7 @@ Dict([
 "Float"          =>  Ts.FLOAT
 "String"         =>  Ts.STRING
 "Char"           =>  Ts.CHAR
+"CmdString"      =>  Ts.CMD
 "true"           =>  Ts.TRUE
 "false"          =>  Ts.FALSE
 "END_LITERAL"    =>  Ts.end_literal
@@ -818,7 +819,6 @@ Dict([
 
 "TOMBSTONE"          =>  Ts.TOMBSTONE
 "NothingLiteral"     =>  Ts.NOTHING_LITERAL
-"UnquotedString"     =>  Ts.UNQUOTED_STRING
 
 # Macro names are modelled as a special kind of identifier because the
 # @ may not be attached to the macro name in the source (or may not be

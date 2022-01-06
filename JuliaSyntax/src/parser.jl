@@ -59,6 +59,10 @@ function TODO(str)
     error("TODO: $str")
 end
 
+@noinline function internal_error(strs...)
+    error("Internal error: ", strs...)
+end
+
 #-------------------------------------------------------------------------------
 # Parsing-specific predicates on tokens/kinds
 #
@@ -1200,7 +1204,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                    ckind == K"vcat"          ? K"typed_vcat"           :
                    ckind == K"comprehension" ? K"typed_comprehension"  :
                    ckind == K"ncat"          ? K"typed_ncat"           :
-                   error("Unrecognized kind in parse_cat")
+                   internal_error("unrecognized kind in parse_cat", ckind)
             emit(ps, mark, outk, cflags)
             if is_macrocall
                 emit(ps, mark, K"macrocall")
@@ -1350,8 +1354,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # x"s"end ==> (macrocall x_str "s" "end")
                 # x"s"2 ==> (macrocall x_str "s" 2)
                 # x"s"10.0 ==> (macrocall x_str "s" 10.0)
-                suffix_kind = (k == K"Identifier" || is_keyword(k)) ?
-                              K"UnquotedString" : k
+                suffix_kind = (k == K"Identifier" || is_keyword(k)) ? K"String" : k
                 bump(ps, remap_kind=suffix_kind)
             end
             emit(ps, mark, K"macrocall")
@@ -1546,7 +1549,7 @@ function parse_resword(ps::ParseState)
     elseif word == K"do"
         bump(ps, TRIVIA_FLAG, error="invalid `do` syntax")
     else
-        error("unhandled reserved word")
+        internal_error("unhandled reserved word ", word)
     end
 end
 
@@ -1841,7 +1844,7 @@ function macro_name_kind(k)
     return k == K"Identifier"    ? K"MacroName"    :
            k == K"."             ? K"@."           :
            k == K"VarIdentifier" ? K"VarMacroName" :
-           error("Unrecognized source kind for macro name $k")
+           internal_error("unrecognized source kind for macro name ", k)
 end
 
 # If remap_kind is false, the kind will be remapped by parse_call_chain after
@@ -2562,12 +2565,13 @@ function parse_brackets(after_parse::Function,
     end
 end
 
-# Parse a string, possibly with embedded interpolations
+# Parse a string and any embedded interpolations
 #
 # flisp: parse-string-literal-, parse-interpolate
 function parse_string(ps::ParseState)
     mark = position(ps)
-    closer = peek(ps)
+    delim_k = peek(ps)
+    str_flags = delim_k == K"\"" ? EMPTY_FLAGS : TRIPLE_STRING_FLAG
     bump(ps, TRIVIA_FLAG)
     n_components = 0
     while true
@@ -2580,26 +2584,30 @@ function parse_string(ps::ParseState)
                 # "a $(x + y) b"  ==> (string "a " (call-i x + y) " b")
                 m = position(ps)
                 parse_atom(ps)
-                if ps.julia_version >= v"1.6" && peek_behind(ps) == K"String"
-                    # Wrap interpolated literal strings in (string) so we can
-                    # distinguish them from the surrounding text (issue #38501)
-                    #v1.6: "hi$("ho")"  ==>  (string "hi" (string "ho"))
-                    emit(ps, m, K"string")
+                if ps.julia_version >= v"1.6"
+                    head = peek_token_behind(ps)
+                    if kind(head) == K"String"
+                        # Wrap interpolated literal strings in (string) so we can
+                        # distinguish them from the surrounding text (issue #38501)
+                        # "hi$("ho")"      ==>  (string "hi" (string "ho"))
+                        # "hi$("""ho""")"  ==>  (string "hi" (string-s "ho"))
+                        #v1.5: "hi$("ho")" ==>  (string "hi" "ho")
+                        emit(ps, m, K"string", flags(head))
+                    end
                 end
             elseif is_identifier(k)
                 # "a $foo b"  ==> (string "a " foo " b")
                 bump(ps)
             else
-                # It should be impossible for the lexer to get us into this state.
                 bump_invisible(ps, K"error",
                     error="Identifier or parenthesized expression expected after \$ in string")
             end
         elseif k == K"String"
-            bump(ps)
-        elseif k == closer
+            bump(ps, str_flags)
+        elseif k == delim_k
             if n_components == 0
                 # "" ==> ""
-                bump_invisible(ps, K"String")
+                bump_invisible(ps, K"String", str_flags)
             end
             bump(ps, TRIVIA_FLAG)
             break
@@ -2612,11 +2620,13 @@ function parse_string(ps::ParseState)
         n_components += 1
     end
     if n_components > 1
-        # "$x$y$z" ==> (string x y z)
-        # "$(x)" ==> (string x)
-        # "$x"   ==> (string x)
-        emit(ps, mark, K"string")
+        # "$x$y$z"  ==> (string x y z)
+        # "$(x)"    ==> (string x)
+        # "$x"      ==> (string x)
+        # """$x"""  ==> (string-s x)
+        emit(ps, mark, K"string", str_flags)
     else
+        # Strings with no interpolations
         # "str" ==> "str"
     end
 end
@@ -2625,10 +2635,15 @@ function parse_raw_string(ps::ParseState)
     emark = position(ps)
     delim_k = peek(ps)
     bump(ps, TRIVIA_FLAG)
-    if peek(ps) == K"String"
-        bump(ps)
+    flags = RAW_STRING_FLAG | (delim_k in KSet`""" \`\`\`` ?
+                               TRIPLE_STRING_FLAG : EMPTY_FLAGS)
+    if peek(ps) in KSet`String CmdString`
+        bump(ps, flags)
     else
-        bump_invisible(ps, K"String")
+        outk = delim_k in KSet`" """`     ? K"String"    :
+               delim_k == KSet`\` \`\`\`` ? K"CmdString" :
+               internal_error("unexpected delimiter ", delim_k)
+        bump_invisible(ps, outk, flags)
     end
     if peek(ps) == delim_k
         bump(ps, TRIVIA_FLAG)

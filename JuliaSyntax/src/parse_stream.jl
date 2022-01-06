@@ -271,17 +271,21 @@ Retroactively inspecting/modifying the parser's output can be confusing, so
 using this function should be avoided where possible.
 """
 function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
+    kind(peek_token_behind(stream; skip_trivia=skip_trivia))
+end
+
+function peek_token_behind(stream::ParseStream; skip_trivia::Bool=true)
     if skip_trivia
         for i = length(stream.ranges):-1:1
             s = stream.ranges[i]
             if !is_trivia(head(s))
-                return kind(s)
+                return head(s)
             end
         end
     elseif !isempty(stream.ranges)
-        return kind(last(stream.ranges))
+        return head(last(stream.ranges))
     end
-    return K"Nothing"
+    return SyntaxHead(K"Nothing", EMPTY_FLAGS)
 end
 
 function peek_behind(stream::ParseStream, pos::ParseStreamPosition)
@@ -308,7 +312,6 @@ function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"Nothing")
         is_trivia = k ∈ (K"Whitespace", K"Comment", K"NewlineWs")
         f = is_trivia ? TRIVIA_FLAG : flags
         tok.raw.dotop     && (f |= DOTOP_FLAG)
-        tok.raw.triplestr && (f |= TRIPLE_STRING_FLAG)
         k = (is_trivia || remap_kind == K"Nothing") ? k : remap_kind
         range = TaggedRange(SyntaxHead(k, f), first_byte(tok),
                             last_byte(tok), lastindex(stream.ranges)+1)
@@ -654,6 +657,10 @@ end
 
 function peek_behind(ps::ParseState, args...)
     peek_behind(ps.stream, args...)
+end
+
+function peek_token_behind(ps::ParseState, args...; kws...)
+    peek_token_behind(ps.stream, args...; kws...)
 end
 
 function bump(ps::ParseState, flags=EMPTY_FLAGS; skip_newlines=nothing, kws...)

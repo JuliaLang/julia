@@ -14,8 +14,10 @@ const INFIX_FLAG  = RawFlags(1<<1)
 const DOTOP_FLAG = RawFlags(1<<2)
 # Set when kind == K"String" was triple-delimited as with """ or ```
 const TRIPLE_STRING_FLAG = RawFlags(1<<3)
+# Set when the string is "raw" and needs minimal unescaping
+const RAW_STRING_FLAG = RawFlags(1<<4)
 # try-finally-catch
-const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<4)
+const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<5)
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
 # Todo ERROR_FLAG = 0x80000000 ?
@@ -79,6 +81,8 @@ function untokenize(head::SyntaxHead; include_flag_suff=true)
         str = str*"-"
         is_trivia(head)  && (str = str*"t")
         is_infix(head)   && (str = str*"i")
+        has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"s")
+        has_flags(head, RAW_STRING_FLAG) && (str = str*"r")
         has_flags(head, TRY_CATCH_AFTER_FINALLY_FLAG) && (str = str*"f")
         n = numeric_flags(head)
         n != 0 && (str = str*string(n))
@@ -114,66 +118,6 @@ end
 
 Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
 
-function unescape_julia_string(str, triplequote=false)
-    # FIXME: do this properly
-    str = replace(str, "\\\$" => '$')
-    str = unescape_string(str)
-    if triplequote
-        # FIXME: All sorts of rules need to be added here, and the separate
-        # fragments need to be aware of each other.
-        if startswith(str, '\n')
-            str = str[2:end]
-        end
-        lines = split(str, '\n')
-        indent = typemax(Int)
-        for line in lines
-            if isempty(line)
-                continue
-            end
-            j = findfirst(!=(' '), line)
-            indent = min(indent, j == nothing ? length(line) : j-1)
-        end
-        if isempty(last(lines))
-            indent = 0
-        end
-        str = join((l[indent+1:end] for l in lines), '\n')
-    end
-    str
-end
-
-function julia_string_to_number(T, str, kind)
-    # FIXME: do this properly!
-    if kind == K"Integer"
-        str = replace(str, '_'=>"")
-    end
-    x = Base.parse(T, str)
-    if kind == K"HexInt"
-        if length(str) <= 4
-            x = UInt8(x)
-        elseif length(str) <= 6
-            x = UInt16(x)
-        elseif length(str) <= 10
-            x = UInt32(x)
-        elseif length(str) <= 18
-            x = UInt64(x)
-        elseif length(str) <= 34
-            x = UInt128(x)
-        else
-            TODO("BigInt")
-        end
-    end
-    x
-end
-
-function unescape_julia_char(str)
-    # FIXME: Do this properly!
-    if str == "\\'"
-        '\''
-    else
-        unescape_julia_string(str)[1]
-    end
-end
-
 function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::Integer=1)
     if !haschildren(raw) && !(is_syntax_kind(raw) || is_keyword(raw))
         # Leaf node
@@ -192,7 +136,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif k == K"false"
             false
         elseif k == K"Char"
-            unescape_julia_char(val_str[2:end-1])
+            unescape_julia_string(val_str, false, false)[2]
         elseif k == K"Identifier"
             Symbol(val_str)
         elseif k == K"VarIdentifier"
@@ -200,10 +144,12 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif is_keyword(k)
             # This should only happen for tokens nested inside errors
             Symbol(val_str)
-        elseif k == K"String"
-            unescape_julia_string(val_str, has_flags(head(raw), TRIPLE_STRING_FLAG))
-        elseif k == K"UnquotedString"
-            String(val_str)
+        elseif k in KSet`String CmdString`
+            is_cmd = k == K"CmdString"
+            is_raw = has_flags(head(raw), RAW_STRING_FLAG)
+            has_flags(head(raw), TRIPLE_STRING_FLAG) ?
+                process_triple_strings!([val_str], is_raw)[1] :
+                unescape_julia_string(val_str, is_cmd, is_raw)
         elseif is_operator(k)
             isempty(val_range)  ?
                 Symbol(untokenize(k)) : # synthetic invisible tokens
@@ -239,12 +185,37 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             error("Can't untokenize head of kind $(kind(raw))")
         cs = SyntaxNode[]
         pos = position
-        for (i,rawchild) in enumerate(children(raw))
-            # FIXME: Allowing trivia is_error nodes here corrupts the tree layout.
-            if !is_trivia(rawchild) || is_error(rawchild)
-                push!(cs, SyntaxNode(source, rawchild, pos))
+        if kind(raw) == K"string" && has_flags(head(raw), TRIPLE_STRING_FLAG)
+            # Triple quoted strings need special processing of sibling String literals
+            strs = SubString[]
+            str_nodes = SyntaxNode[]
+            for (i,rawchild) in enumerate(children(raw))
+                if !is_trivia(rawchild) || is_error(rawchild)
+                    if kind(rawchild) == K"String"
+                        val_range = pos:pos + span(rawchild) - 1
+                        push!(strs, source[val_range])
+                        n = SyntaxNode(source, rawchild, pos, nothing, :leaf, nothing)
+                        push!(cs, n)
+                        push!(str_nodes, n)
+                    else
+                        push!(cs, SyntaxNode(source, rawchild, pos))
+                    end
+                end
+                pos += rawchild.span
             end
-            pos += rawchild.span
+            is_raw = has_flags(head(raw), RAW_STRING_FLAG)
+            process_triple_strings!(strs, is_raw)
+            for (s,n) in zip(strs, str_nodes)
+                n.val = s
+            end
+        else
+            for (i,rawchild) in enumerate(children(raw))
+                # FIXME: Allowing trivia is_error nodes here corrupts the tree layout.
+                if !is_trivia(rawchild) || is_error(rawchild)
+                    push!(cs, SyntaxNode(source, rawchild, pos))
+                end
+                pos += rawchild.span
+            end
         end
         node = SyntaxNode(source, raw, position, nothing, headsym, cs)
         for c in cs
