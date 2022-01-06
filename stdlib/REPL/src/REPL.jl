@@ -1202,7 +1202,12 @@ function setup_interface(
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "REPL[")
                 @goto writeback
             end
-            InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+            try
+                InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+            catch ex
+                ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
+                @info "edit failed" _exception=ex
+            end
             LineEdit.refresh_line(s)
             return
             @label writeback
