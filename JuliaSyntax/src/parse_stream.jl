@@ -84,7 +84,7 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
     # buffer these out to the surrouding lines.
     a,b = source_line_range(source, p, context_lines_before=2, context_lines_after=1)
     c,d = source_line_range(source, q, context_lines_before=1, context_lines_after=2)
-    
+
     hicol = (100,40,40)
 
     print(io, source[a:prevind(code, p)])
@@ -94,7 +94,6 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
         # a...............
         # .....p...q......
         # ...............b
-        
         _printstyled(io, source[p:q]; color=hicol)
     else
         # Or large and we trucate the code to show only the region around the
