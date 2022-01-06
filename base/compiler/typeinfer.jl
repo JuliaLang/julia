@@ -392,7 +392,10 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
         inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src)
         code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
         if track_newly_inferred[]
-            push!(newly_inferred, linfo)
+            m = linfo.def
+            if isa(m, Method)
+                m.module != Core && push!(newly_inferred, linfo)
+            end
         end
     end
     unlock_mi_inference(interp, linfo)
