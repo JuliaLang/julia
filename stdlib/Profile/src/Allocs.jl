@@ -5,9 +5,12 @@ using Base: InterpreterIP
 
 # --- Raw results structs, originally defined in C ---
 
+# The C jl_bt_element_t object contains either an IP pointer (size_t) or a void*.
+const BTElement = Csize_t;
+
 # matches RawBacktrace on the C side
 struct RawBacktrace
-    data::Ptr{Csize_t} # in C: *jl_bt_element_t
+    data::Ptr{BTElement} # in C: *jl_bt_element_t
     size::Csize_t
 end
 
@@ -33,13 +36,19 @@ struct RawAllocResults
 end
 
 """
-    Profile.Allocs.@profile [sample_rate=0.0001] ex
+    Profile.Allocs.@profile [sample_rate=0.0001] expr
 
-Profile allocations that happen during `my_function`, returning
+Profile allocations that happen during `expr`, returning
 both the result and and AllocResults struct.
 
 ```julia
-# TODO: Add example
+julia> Profile.Allocs.@profile sample_rate=0.01 peakflops()
+1.03733270279065e11
+
+julia> results = Profile.Allocs.fetch();
+
+julia> last(sort(results.allocs, by=x->x.size))
+Profile.Allocs.Alloc(Vector{Any}, Base.StackTraces.StackFrame[_new_array_ at array.c:127, ...], 5576)
 ```
 """
 macro profile(opts, ex)
@@ -95,8 +104,7 @@ function Base.show(io::IO, a::Alloc)
     print(io, "$Alloc($(a.type), $StackFrame[$stacktrace_sample], $(a.size))")
 end
 
-const BacktraceEntry = Union{Ptr{Cvoid}, InterpreterIP}
-const BacktraceCache = Dict{BacktraceEntry,Vector{StackFrame}}
+const BacktraceCache = Dict{BTElement,Vector{StackFrame}}
 
 # copied from julia_internal.h
 const JL_BUFF_TAG = UInt(0x4eadc000)
@@ -141,8 +149,8 @@ function decode(raw_results::RawAllocResults)::AllocResults
     )
 end
 
-function load_backtrace(trace::RawBacktrace)::Vector{Ptr{Cvoid}}
-    out = Vector{Ptr{Cvoid}}()
+function load_backtrace(trace::RawBacktrace)::Vector{BTElement}
+    out = Vector{BTElement}()
     for i in 1:trace.size
         push!(out, unsafe_load(trace.data, i))
     end
@@ -152,7 +160,7 @@ end
 
 function stacktrace_memoized(
     cache::BacktraceCache,
-    trace::Vector{Ptr{Cvoid}},
+    trace::Vector{BTElement},
     c_funcs::Bool=true
 )::StackTrace
     stack = StackTrace()
