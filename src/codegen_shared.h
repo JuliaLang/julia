@@ -10,6 +10,7 @@
 #define STR(csym)           #csym
 #define XSTR(csym)          STR(csym)
 #include "julia.h"
+#include "llvm-version.h"
 
 enum AddressSpace {
     Generic = 0,
