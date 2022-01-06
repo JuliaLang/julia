@@ -100,15 +100,19 @@ end
 const BacktraceEntry = Union{Ptr{Cvoid}, InterpreterIP}
 const BacktraceCache = Dict{BacktraceEntry,Vector{StackFrame}}
 
-# loading anything below this seems to segfault
-# TODO: find out what's going on
-TYPE_PTR_LOW_THRESHOLD = 0x0000000100000000
+# copied from julia_internal.h
+const JL_BUFF_TAG = UInt(0x4eadc000)
+
+struct CorruptType end
+struct BufferType end
 
 function load_type(ptr::Ptr{Type})
-    if TYPE_PTR_LOW_THRESHOLD < UInt(ptr)
-        return unsafe_pointer_to_objref(ptr)
+    if UInt(ptr) < UInt(4096)
+        return CorruptType
+    elseif UInt(ptr) == JL_BUFF_TAG
+        return BufferType
     end
-    return Missing
+    return unsafe_pointer_to_objref(ptr)
 end
 
 function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
