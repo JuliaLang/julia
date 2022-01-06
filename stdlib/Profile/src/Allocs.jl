@@ -64,7 +64,7 @@ function start(; sample_rate::Number)
 end
 
 function stop()
-    ccall(:jl_stop_alloc_profile, RawAllocResults, ())
+    ccall(:jl_stop_alloc_profile, Cvoid, ())
 end
 
 function clear()
