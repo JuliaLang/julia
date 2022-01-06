@@ -149,7 +149,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         throw(ArgumentError("argument is not a generic function"))
     end
     # get the MethodInstance for the method match
-    world = typemax(UInt)
+    world = Base.get_world_counter()
     match = Base._which(signature_type(f, t), world)
     linfo = Core.Compiler.specialize_method(match)
     # get the code for it

@@ -1232,7 +1232,7 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
         throw(ArgumentError("argument is not a generic function"))
     end
     # get the MethodInstance for the method match
-    match = Base._which(Base.signature_type(f, t), typemax(UInt))
+    match = Base._which(Base.signature_type(f, t), Base.get_world_counter())
     precompile(match.spec_types)
     return Core.Compiler.specialize_method(match)
 end
