@@ -104,7 +104,7 @@ end
 end
 
 # FINAL-LABEL: @julia_notunroll
-function notunroll(J, I)
+@eval function notunroll(J, I)
     for i in 1:10
         for j in J
             1 <= j <= I && continue
@@ -113,6 +113,7 @@ function notunroll(J, I)
 # FINAL: call void @j_iteration
 # FINAL-NOT: call void @j_iteration
         end
+        $(Expr(:loopinfo, (Symbol("llvm.loop.unroll.disable"),)))
     end
 end
 
