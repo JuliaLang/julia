@@ -49,9 +49,8 @@ function _prof_expr(expr, opts)
     quote
         $start(; $(esc(opts)))
         local res = $(esc(expr))
-        local profile = $stop()
-        $clear()
-        (res, profile)
+        $stop()
+        res
     end
 end
 
@@ -60,13 +59,17 @@ function start(; skip_every::Int)
 end
 
 function stop()
-    raw_results = ccall(:jl_stop_alloc_profile, RawAllocResults, ())
-    decoded_results = decode(raw_results)
-    return decoded_results
+    ccall(:jl_stop_alloc_profile, RawAllocResults, ())
 end
 
 function clear()
     ccall(:jl_free_alloc_profile, Cvoid, ())
+end
+
+function fetch()
+    raw_results = ccall(:jl_fetch_alloc_profile, RawAllocResults, ())
+    decoded_results = decode(raw_results)
+    return decoded_results
 end
 
 # decoded results

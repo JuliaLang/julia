@@ -81,7 +81,17 @@ JL_DLLEXPORT void jl_start_alloc_profile(int skip_every) {
 
 extern "C" {  // Needed since the function doesn't take any arguments.
 
-JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
+JL_DLLEXPORT struct RawAllocResults jl_fetch_alloc_profile() {
+    // TODO: check that the results exist
+    return RawAllocResults{
+        g_combined_results.combined_allocs.data(),
+        g_combined_results.combined_allocs.size(),
+        g_combined_results.combined_frees.data(),
+        g_combined_results.combined_frees.size()
+    };
+}
+
+JL_DLLEXPORT void jl_stop_alloc_profile() {
     g_alloc_profile_enabled = false;
 
     // combine allocs
@@ -101,13 +111,6 @@ JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile() {
             });
         }
     }
-
-    return RawAllocResults{
-        g_combined_results.combined_allocs.data(),
-        g_combined_results.combined_allocs.size(),
-        g_combined_results.combined_frees.data(),
-        g_combined_results.combined_frees.size()
-    };
 }
 
 JL_DLLEXPORT void jl_free_alloc_profile() {

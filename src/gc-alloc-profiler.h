@@ -24,7 +24,8 @@ struct RawAllocResults {
 };
 
 JL_DLLEXPORT void jl_start_alloc_profile(int skip_every);
-JL_DLLEXPORT struct RawAllocResults jl_stop_alloc_profile(void);
+JL_DLLEXPORT struct RawAllocResults jl_fetch_alloc_profile(void);
+JL_DLLEXPORT void jl_stop_alloc_profile(void);
 JL_DLLEXPORT void jl_free_alloc_profile(void);
 
 void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT;
