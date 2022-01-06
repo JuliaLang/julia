@@ -4,7 +4,11 @@
 #define JL_GC_ALLOC_PROFILER_H
 
 #include "julia.h"
+#include "julia_internal.h"
 #include "ios.h"
+
+// struct _jl_bt_element_t;  // Forward-declaration, defined in gc.h.
+// typedef struct _jl_bt_element_t jl_bt_element_t;
 
 #ifdef __cplusplus
 extern "C" {
