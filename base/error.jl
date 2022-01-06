@@ -19,8 +19,9 @@
 """
     throw(e)
 
-Throw an object as an exception. To rethrow the current exception from
-within a `catch` block, use [`rethrow`](@ref).
+Throw an object as an exception.
+
+See also: [`rethrow`](@ref).
 """
 throw
 
