@@ -1660,10 +1660,8 @@ JL_CALLABLE(jl_f__get_binding_type)
     JL_NARGS(_get_binding_type, 2, 2);
     JL_TYPECHK(_get_binding_type, module, args[0]);
     JL_TYPECHK(_get_binding_type, symbol, args[1]);
-    jl_binding_t *b = jl_get_binding((jl_module_t*)args[0], (jl_sym_t*)args[1]);
-    if (b == NULL || b->ty == NULL)
-        return (jl_value_t*)jl_any_type;
-    return b->ty;
+    jl_value_t* ty = jl_binding_type((jl_module_t*)args[0], (jl_sym_t*)args[1]);
+    return ty;
 }
 
 JL_CALLABLE(jl_f__set_binding_type)

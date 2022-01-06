@@ -377,6 +377,19 @@ JL_DLLEXPORT jl_value_t *jl_binding_owner(jl_module_t *m, jl_sym_t *var)
     return (jl_value_t*)b->owner;
 }
 
+// get type of binding m.var, without resolving the binding
+JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var)
+{
+    JL_LOCK(&m->lock);
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    if (b == HT_NOTFOUND || b->owner == NULL)
+        b = using_resolve_binding(m, var, NULL, 0);
+    JL_UNLOCK(&m->lock);
+    if (b == NULL || b->ty == NULL)
+        return (jl_value_t*)jl_any_type;
+    return b->ty;
+}
+
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 {
     return jl_get_binding_(m, var, NULL);
