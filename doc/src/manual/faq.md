@@ -176,7 +176,7 @@ but gives `UndefVarError: x not defined` when you try to run it in script or oth
 file.   What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
 
 Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
-an assignment to a global in that local scope.   You typically have three options:
+an assignment to a global in that local scope.   You have least three options:
 
 1. Put the code into a function (so that `x` is a *local* variable in a function). In general, it is good software engineering to use functions rather than global scripts (search online for "why global variables bad" to see many explanations). In Julia, global variables are also [slow](@ref man-performance-tips).
 2. Wrap the code in a [`let`](@ref) block.  (This makes `x` a local variable within the `let ... end` statement, again eliminating the need for `global`).
