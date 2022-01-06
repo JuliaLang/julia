@@ -2734,9 +2734,9 @@ static void copy_roots(jl_method_t *dest, jl_array_t *newroots)
     // copy any new roots
     if (newroots && dest->newrootsindex == INT32_MAX) {
         assert(jl_is_array(newroots));
-        jl_printf(JL_STDOUT, "copying %ld roots for ", jl_array_len(newroots));
-        jl_(dest);
-        jl_printf(JL_STDOUT, "dest newrootsindex: %d; roots length %ld\n", dest->newrootsindex, dest->roots ? jl_array_len(dest->roots) : 0);
+        // jl_printf(JL_STDOUT, "copying %ld roots for ", jl_array_len(newroots));
+        // jl_(dest);
+        // jl_printf(JL_STDOUT, "dest newrootsindex: %d; roots length %ld\n", dest->newrootsindex, dest->roots ? jl_array_len(dest->roots) : 0);
         // The roots may have references to recached items, fix that
         size_t i, len = jl_array_len(newroots);
         for (i = 0; i < len; i++) {
@@ -2778,7 +2778,7 @@ static void recompress_cis(jl_array_t *list)
     jl_array_t *srcs = jl_alloc_vec_any(0);
     for (i = 0; i < n; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
-        jl_(mi);
+        // jl_(mi);
         assert(jl_is_method_instance(mi));
         jl_method_t *m = mi->def.method;
         assert(jl_is_method(m));
@@ -2972,13 +2972,13 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     jl_value_t *ext_mis = jl_deserialize_value(&s, &ext_mis);
     currently_deserializing = 1;
     jl_printf(JL_STDOUT, "Length of ext_mis: %ld\n", jl_array_len(ext_mis));
-    jl_(ext_mis);
+    // jl_(ext_mis);
     jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
 
     // get list of external generic functions
     jl_value_t *external_methods = jl_deserialize_value(&s, &external_methods);
-    jl_printf(JL_STDOUT, "external_methods:\n");
-    jl_(external_methods);
+    // jl_printf(JL_STDOUT, "external_methods:\n");
+    // jl_(external_methods);
     jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
     // check_unique(&flagref_list, 0, 2);
     jl_value_t *external_backedges = jl_deserialize_value(&s, &external_backedges);
@@ -3040,9 +3040,11 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     jl_gc_enable(en); // subtyping can allocate a lot, not valid before recache-other
 
     jl_insert_backedges((jl_array_t*)external_backedges, (jl_array_t*)external_edges); // restore external backedges (needs to be last)
+    jl_printf(JL_STDOUT, "Done inserting backedges\n");
 
     // check new CodeInstances and validate any that lack external backedges
     validate_new_code_instances();
+    jl_printf(JL_STDOUT, "Done validating code instances\n");
 
     serializer_worklist = NULL;
     htable_free(&new_code_instance_validate);
