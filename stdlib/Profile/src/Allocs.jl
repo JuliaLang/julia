@@ -21,18 +21,10 @@ struct RawAlloc
     size::Csize_t
 end
 
-struct FreeInfo
-    type::Ptr{Type}
-    count::Csize_t
-end
-
 # matches RawAllocResults on the C side
 struct RawAllocResults
     allocs::Ptr{RawAlloc}
     num_allocs::Csize_t
-
-    frees::Ptr{FreeInfo}
-    num_frees::Csize_t
 end
 
 """
@@ -95,7 +87,6 @@ end
 
 struct AllocResults
     allocs::Vector{Alloc}
-    frees::Dict{Type,UInt}
 end
 
 # Without this, the
@@ -135,18 +126,7 @@ function decode(raw_results::RawAllocResults)::AllocResults
         decode_alloc(cache, unsafe_load(raw_results.allocs, i))
         for i in 1:raw_results.num_allocs
     ]
-
-    frees = Dict{Type,UInt}()
-    for i in 1:raw_results.num_frees
-        free = unsafe_load(raw_results.frees, i)
-        type = load_type(free.type)
-        frees[type] = free.count
-    end
-
-    return AllocResults(
-        allocs,
-        frees
-    )
+    return AllocResults(allocs)
 end
 
 function load_backtrace(trace::RawBacktrace)::Vector{BTElement}

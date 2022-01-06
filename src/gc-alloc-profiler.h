@@ -17,17 +17,9 @@ extern "C" {
 // Forward-declaration to avoid depenency in header file.
 struct RawAlloc;  // Defined in gc-alloc-profiler.cpp
 
-struct FreeInfo {
-    size_t type_addr;
-    size_t count;
-};
-
 struct RawAllocResults {
     struct RawAlloc *allocs;
     size_t num_allocs;
-
-    struct FreeInfo *frees;
-    size_t num_frees;
 };
 
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate);
@@ -47,12 +39,6 @@ extern int g_alloc_profile_enabled;
 static inline void record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
     if (__unlikely(g_alloc_profile_enabled)) {
         _record_allocated_value(val, size);
-    }
-}
-
-static inline void record_freed_value(jl_taggedvalue_t *tagged_val) JL_NOTSAFEPOINT {
-    if (__unlikely(g_alloc_profile_enabled != 0)) {
-        _record_freed_value(tagged_val);
     }
 }
 

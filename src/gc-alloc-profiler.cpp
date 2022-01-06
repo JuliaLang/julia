@@ -28,8 +28,6 @@ struct RawAlloc {
 // callbacks to store profile results. ==
 struct PerThreadAllocProfile {
     vector<RawAlloc> allocs;
-    unordered_map<size_t, size_t> type_address_by_value_address;
-    unordered_map<size_t, size_t> frees_by_type_address;
 };
 
 struct AllocProfile {
@@ -40,7 +38,6 @@ struct AllocProfile {
 
 struct CombinedResults {
     vector<RawAlloc> combined_allocs;
-    vector<FreeInfo> combined_frees;
 };
 
 // == Global variables manipulated by callbacks ==
@@ -102,16 +99,6 @@ JL_DLLEXPORT void jl_stop_alloc_profile() {
             g_combined_results.combined_allocs.push_back(alloc);
         }
     }
-
-    // package up frees
-    for (const auto& profile : g_alloc_profile.per_thread_profiles) {
-        for (const auto& free_info : profile.frees_by_type_address) {
-            g_combined_results.combined_frees.push_back(FreeInfo{
-                free_info.first,
-                free_info.second
-            });
-        }
-    }
 }
 
 JL_DLLEXPORT void jl_free_alloc_profile() {
@@ -123,7 +110,6 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
     g_alloc_profile.per_thread_profiles.clear();
 
     g_combined_results.combined_allocs.clear();
-    g_combined_results.combined_frees.clear();
 }
 
 // == callbacks called into by the outside ==
@@ -139,33 +125,11 @@ void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
     }
 
     auto type = (jl_datatype_t*)jl_typeof(val);
-    // Used when counting frees. We can't get type type info then,
-    // because it gets corrupted during garbage collection.
-    profile.type_address_by_value_address[(size_t)val] = (size_t)type;
     profile.allocs.emplace_back(RawAlloc{
         type,
         get_raw_backtrace(),
         size
     });
-}
-
-void _record_freed_value(jl_taggedvalue_t *tagged_val) JL_NOTSAFEPOINT {
-    jl_value_t *val = jl_valueof(tagged_val);
-
-    auto& profile = g_alloc_profile.per_thread_profiles[jl_threadid()];
-
-    auto value_address = (size_t)val;
-    auto type_address = profile.type_address_by_value_address.find(value_address);
-    if (type_address == profile.type_address_by_value_address.end()) {
-        return; // TODO: warn
-    }
-    auto frees = profile.frees_by_type_address.find(type_address->second);
-
-    if (frees == profile.frees_by_type_address.end()) {
-        profile.frees_by_type_address[type_address->second] = 1;
-    } else {
-        profile.frees_by_type_address[type_address->second] = frees->second + 1;
-    }
 }
 
 }  // extern "C"
