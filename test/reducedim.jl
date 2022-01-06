@@ -445,8 +445,8 @@ end
 
 @testset "argmin/argmax" begin
     B = reshape(3^3:-1:1, (3, 3, 3))
-    @test B[argmax(B, dims=[2, 3])] == maximum(B, dims=[2, 3])
-    @test B[argmin(B, dims=[2, 3])] == minimum(B, dims=[2, 3])
+    @test B[argmax(B, dims=[2, 3])] == @inferred(maximum(B, dims=[2, 3]))
+    @test B[argmin(B, dims=[2, 3])] == @inferred(minimum(B, dims=[2, 3]))
 end
 
 @testset "in-place reductions with mismatched dimensionalities" begin
@@ -505,4 +505,8 @@ end
         @test eltype(r_red) == T
         @test r_red == [3]
     end
+end
+
+@testset "type stability (issue #43461)" begin
+    @test (@inferred maximum(Float64, reshape(1:4,2,:); dims = 2)) == reshape([3,4],2,1)
 end
