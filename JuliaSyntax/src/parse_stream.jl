@@ -110,6 +110,7 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
         _printstyled(io, source[c:q]; color=hicol)
     end
     print(io, source[nextind(code,q):d])
+    println(io)
 end
 
 struct ParseStreamPosition

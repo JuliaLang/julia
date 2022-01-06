@@ -51,6 +51,8 @@ tests = [
     JuliaSyntax.parse_block => [
         "a;b;c"   => "(block a b c)"
         "a;;;b;;" => "(block a b)"
+        ";a"      => "(block a)"
+        "\n a"    => "(block a)"
         "a\nb"    => "(block a b)"
     ],
     JuliaSyntax.parse_stmts => [
@@ -187,7 +189,14 @@ tests = [
         "a->b"     =>  "(-> a b)"
         "a::b->c"  =>  "(-> (:: a b) c)"
     ],
-    JuliaSyntax.parse_unary_subtype => [ # Really for parse_where
+    JuliaSyntax.parse_unary_subtype => [
+        "<: )"    =>  "<:"
+        "<: \n"   =>  "<:"
+        "<: ="    =>  "<:"
+        "<:{T}(x::T)"   =>  "(call (curly <: T) (:: x T))"
+        "<:(x::T)"      =>  "(<: (:: x T))"
+        "<: A where B"  =>  "(<: (where A B))"
+        # Really for parse_where
         "x where {T,S}"  =>  "(where x T S)"
         "x where {T S}"  =>  "(where x (bracescat (row T S)))"
         "x where {y for y in ys}"  =>  "(where x (braces (generator y (= y ys))))"
@@ -347,12 +356,12 @@ tests = [
         "global const x = 1"   =>  "(const (global (= x 1)))"
         "local const x = 1"    =>  "(const (local (= x 1)))"
         "const x = 1"          =>  "(const (= x 1))"
-        "const x,y = 1,2"      =>  "(const (= (tuple x y) (tuple 1 2)))"
         "const global x = 1"   =>  "(const (global (= x 1)))"
         "const local x = 1"    =>  "(const (local (= x 1)))"
         "global x"    =>  "(global x)"
         "local x"     =>  "(local x)"
         "global x,y"  =>  "(global x y)"
+        "const x,y = 1,2"      =>  "(const (= (tuple x y) (tuple 1 2)))"
         "const x"     => "(const (error x (error)))"
     ],
     JuliaSyntax.parse_function => [

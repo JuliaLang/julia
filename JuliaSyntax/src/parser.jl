@@ -227,12 +227,12 @@ function parse_Nary(ps::ParseState, down, delimiters, closing_tokens)
     if k in closing_tokens
         return true
     end
-    # Skip leading delimiter
     n_delims = 0
     if k in delimiters
-        bump(ps, TRIVIA_FLAG)
-        n_delims += 1
+        # allow leading delimiters
+        # ; a  ==>  (block a)
     else
+        # a ; b  ==>  (block a b)
         down(ps)
     end
     while peek(ps) in delimiters
@@ -255,14 +255,11 @@ end
 
 # Parse a newline or semicolon-delimited list of expressions. 
 # Repeated delimiters are allowed but ignored
-# (a;b;c)     ==>  (block a b c)
-# (a;;;b;;)   ==>  (block a b)
-# ===
-# begin
-#   a
-#   b
-# end
-# ==> (block a b)
+# a;b;c     ==>  (block a b c)
+# a;;;b;;   ==>  (block a b)
+# ;a        ==>  (block a)
+# \n a      ==>  (block a)
+# a \n b    ==>  (block a b)
 #
 # flisp: parse-block
 function parse_block(ps::ParseState, down=parse_eq, mark=position(ps),
@@ -361,10 +358,8 @@ function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
         bump(ps, TRIVIA_FLAG)
         parse_assignment(ps, down, equals_is_kw)
         plain_eq = (k == K"=" && !is_dotted(t))
-        result_k = 
-        equals_pos =
-            emit(ps, mark, plain_eq && equals_is_kw ? K"kw" : k,
-                 is_dotted(t) ? DOTOP_FLAG : EMPTY_FLAGS)
+        equals_pos = emit(ps, mark, plain_eq && equals_is_kw ? K"kw" : k,
+                          is_dotted(t) ? DOTOP_FLAG : EMPTY_FLAGS)
         return plain_eq ? equals_pos : NO_POSITION
     end
 end
@@ -690,26 +685,28 @@ end
 # flisp: parse-unary-subtype
 function parse_unary_subtype(ps::ParseState)
     k = peek(ps, skip_newlines=true)
-    if k == K"EndMarker"
-        parse_atom(ps)
-        return 
-    elseif k in KSet`<: >:`
-        # FIXME add test cases
+    if k in KSet`<: >:`
         k2 = peek(ps, 2)
         if is_closing_token(ps, k2) || k2 in KSet`NewlineWs =`
-            # return operator by itself, as in (<:)
+            # return operator by itself
+            # <: )  ==>  <:
+            # <: \n ==>  <:
+            # <: =  ==>  <:
             bump(ps)
-            return
-        end
-        if k2 in KSet`{ (`
+        elseif k2 in KSet`{ (`
             # parse <:{T}(x::T) or <:(x::T) like other unary operators
+            # <:{T}(x::T)  ==>  (call (curly <: T) (:: x T))
+            # <:(x::T)     ==>  (<: (:: x T))
             parse_where(ps, parse_juxtapose)
         else
-            TODO("parse_unary_subtype")
+            # <: A where B  ==>  (<: (where A B))
+            mark = position(ps)
+            bump(ps, TRIVIA_FLAG)
             parse_where(ps, parse_juxtapose)
             if peek_behind(ps) == K"tuple"
-                # Argh
+                TODO("Can this even happen?")
             end
+            emit(ps, mark, k)
         end
     else
         parse_where(ps, parse_juxtapose)
@@ -1627,7 +1624,6 @@ function parse_const_local_global(ps)
     else
         has_const = true
         # const x = 1          ==>  (const (= x 1))
-        # const x,y = 1,2      ==>  (const (= (tuple x y) (tuple 1 2)))
         bump(ps, TRIVIA_FLAG)
         k = peek(ps)
         if k in KSet`global local`
@@ -1638,12 +1634,13 @@ function parse_const_local_global(ps)
             bump(ps, TRIVIA_FLAG)
         end
     end
-    # Like parse_eq, but specialized for error recovery:
+    # Like parse_eq/parse_assignment, but specialized in case we need error recovery
     beforevar_mark = position(ps)
     n_commas = parse_comma(ps, false)
     t = peek_token(ps)
     if is_prec_assignment(t) && !is_decorated(t)
         if n_commas >= 1
+            # const x,y = 1,2      ==>  (const (= (tuple x y) (tuple 1 2)))
             emit(ps, beforevar_mark, K"tuple")
         end
         bump(ps, TRIVIA_FLAG)
@@ -2302,6 +2299,8 @@ end
 # * Binding power (precedence) of the separator, where whitespace binds
 #   tightest:  ... < `;;;` < `;;` < `;`,`\n` < whitespace. We choose binding
 #   power of 0 for whitespace and negative numbers for other separators.
+#
+# FIXME: Error messages for mixed spaces and ;; delimiters
 function parse_array_separator(ps)
     t = peek_token(ps)
     k = kind(t)
