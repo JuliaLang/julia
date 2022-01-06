@@ -69,17 +69,6 @@ function clear()
     ccall(:jl_free_alloc_profile, Cvoid, ())
 end
 
-# top-level entry point
-# TODO: should probably be a macro instead of a
-# higher-order function
-function profile(f::Function, skip_every::Int=0)
-    start(skip_every)
-    res = f()
-    profile = stop()
-    clear()
-    return res, profile
-end
-
 # decoded results
 
 struct Alloc
