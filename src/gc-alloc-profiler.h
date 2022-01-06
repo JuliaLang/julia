@@ -10,6 +10,10 @@
 extern "C" {
 #endif
 
+// ---------------------------------------------------------------------
+// The public interface to call from Julia for allocations profiling
+// ---------------------------------------------------------------------
+
 struct FreeInfo {
     size_t type_addr;
     size_t count;
@@ -28,12 +32,12 @@ JL_DLLEXPORT struct RawAllocResults jl_fetch_alloc_profile(void);
 JL_DLLEXPORT void jl_stop_alloc_profile(void);
 JL_DLLEXPORT void jl_free_alloc_profile(void);
 
+// ---------------------------------------------------------------------
+// Functions to call from GC when alloc profiling is enabled
+// ---------------------------------------------------------------------
+
 void _record_allocated_value(jl_value_t *val, size_t size) JL_NOTSAFEPOINT;
 void _record_freed_value(jl_taggedvalue_t *tagged_val) JL_NOTSAFEPOINT;
-
-// ---------------------------------------------------------------------
-// functions to call from GC when alloc profiling is enabled
-// ---------------------------------------------------------------------
 
 extern int g_alloc_profile_enabled;
 
