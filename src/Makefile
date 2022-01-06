@@ -124,7 +124,11 @@ else
 ifneq ($(USE_LLVM_SHLIB),1)
 CG_LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs $(CG_LLVM_LIBS) --link-static) $($(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
 else
+ifeq ($(OS), Darwin)
 CG_LLVMLINK += $(LLVM_LDFLAGS) -lLLVM
+else
+CG_LLVMLINK += $(LLVM_LDFLAGS) -lLLVM-13jl
+endif
 endif
 endif
 ifeq ($(USE_LLVM_SHLIB),1)
