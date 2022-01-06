@@ -10,11 +10,6 @@
 extern "C" {
 #endif
 
-struct TypeNamePair {
-    size_t addr;
-    const char *name;
-};
-
 struct FreeInfo {
     size_t type_addr;
     size_t count;
