@@ -69,11 +69,12 @@ RawBacktrace get_raw_backtrace() {
 extern "C" {  // Needed since the function doesn't take any arguments.
 
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate) {
-    g_alloc_profile = AllocProfile{sample_rate};
-
-    for (int i = 0; i < jl_n_threads; i++) {
+    // We only need to do this once, the first time this is called.
+    while (g_alloc_profile.per_thread_profiles.size() < jl_n_threads) {
         g_alloc_profile.per_thread_profiles.push_back(PerThreadAllocProfile{});
     }
+
+    g_alloc_profile.sample_rate = sample_rate;
 
     g_alloc_profile_enabled = true;
 }
@@ -103,8 +104,8 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
         for (auto alloc : profile.allocs) {
             free(alloc.backtrace.data);
         }
+        profile.allocs.clear();
     }
-    g_alloc_profile.per_thread_profiles.clear();
 
     g_combined_results.combined_allocs.clear();
 }
