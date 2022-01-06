@@ -6,7 +6,6 @@
 #include "gc.h"
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 using std::string;
