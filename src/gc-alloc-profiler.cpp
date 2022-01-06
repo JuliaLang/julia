@@ -83,8 +83,6 @@ JL_DLLEXPORT struct RawAllocResults jl_fetch_alloc_profile() {
     return RawAllocResults{
         g_combined_results.combined_allocs.data(),
         g_combined_results.combined_allocs.size(),
-        g_combined_results.combined_frees.data(),
-        g_combined_results.combined_frees.size()
     };
 }
 
