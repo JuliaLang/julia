@@ -7,7 +7,7 @@ agents:
 steps:
   - label: ":unlock: Unlock secrets, launch pipelines"
     plugins:
-      - staticfloat/cryptic:
+      - staticfloat/cryptic#v1:
           # Our list of pipelines that should be launched (but don't require a signature)
           # These pipelines can be modified by any contributor and CI will still run.
           # Build secrets will not be available in these pipelines (or their children)
