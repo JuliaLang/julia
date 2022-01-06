@@ -637,7 +637,7 @@ end
 powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
 
 function iroot(x::BigInt, n::Integer)
-    n < 0 && throw(DomainError(n, "`n` must be positive."))
+    n <= 0 && throw(DomainError(n, "`n` must be positive."))
     ans = BigInt()
     ccall((:__gmpz_root, :libgmp), Cvoid, (Ref{BigInt}, Ref{BigInt}, Culong), ans, BigInt(x), Int(n))
     ans
