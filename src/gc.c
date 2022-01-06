@@ -582,7 +582,7 @@ static void gc_sweep_foreign_objs(void)
 static int64_t last_gc_total_bytes = 0;
 
 #ifdef _P64
-static size_t default_collect_interval = 32 * 1024 * 1024;
+static size_t default_collect_interval = 128 * 1024 * 1024;
 static size_t max_collect_interval = 1250000000UL;
 #else
 static size_t default_collect_interval = 8 * 1024 * 1024;
