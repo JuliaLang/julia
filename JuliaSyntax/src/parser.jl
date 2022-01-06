@@ -2817,16 +2817,7 @@ end
 #-------------------------------------------------------------------------------
 # Parser entry points
 
-"""
-    parse_all(input)
-
-Parse a sequence of top level statements.
-
-`input` may be a `ParseStream` or other input source which will be passed to
-the `ParseStream` constructor. The `ParseStream` is returned.
-"""
-function parse_all(stream::ParseStream)
-    ps = ParseState(stream)
+function parse_all(ps::ParseState)
     mark = position(ps)
     while true
         if peek(ps, skip_newlines=true) == K"EndMarker"
@@ -2844,6 +2835,19 @@ function parse_all(stream::ParseStream)
         end
     end
     emit(ps, mark, K"toplevel")
+    nothing
+end
+
+"""
+    parse_all(input)
+
+Parse a sequence of top level statements.
+
+`input` may be a `ParseStream` or other input source which will be passed to
+the `ParseStream` constructor. The `ParseStream` is returned.
+"""
+function parse_all(stream::ParseStream)
+    parse_all(ParseState(stream))
     return stream
 end
 
