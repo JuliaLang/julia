@@ -2975,5 +2975,7 @@ end
     @test K == b
     K[3,1:3] += zeros(3)
     @test K == b
+    K[3,:] += zeros(3,1)
+    @test K == b
     @test_throws DimensionMismatch K[3,1:2] += [1.0 2.0 3.0]'
 end
