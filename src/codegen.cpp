@@ -7453,6 +7453,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         // }
         if (added & external) {
             if (m->newrootsindex == INT32_MAX) {
+                jl_printf(JL_STDOUT, "codegen: set newroots to %d for ", rootslen);
+                jl_(m);
                 m->newrootsindex = rootslen;
             }
         }

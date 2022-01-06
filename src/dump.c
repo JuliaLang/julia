@@ -84,6 +84,39 @@ static jl_typename_t *jl_idtable_typename = NULL;
 static jl_value_t *jl_bigint_type = NULL;
 static int gmp_limb_size = 0;
 
+static void check_unique(arraylist_t *listp, int i0, int step)
+{
+    arraylist_t list = *listp;
+    htable_t uitems;
+    htable_new(&uitems, 0);
+    int i;
+    // for (i = i0; i < list.len; i += step) {
+    //     jl_value_t *item = (jl_value_t*)list.items[i];
+    for (i = 0; i < list.len; i += 2) {
+        jl_value_t **loc = (jl_value_t**)list.items[i + 0];
+        int offs = (int)(intptr_t)list.items[i + 1];
+        jl_value_t *item = loc ? *loc : (jl_value_t*)backref_list.items[offs];
+        // jl_printf(JL_STDOUT, "%p\n", item);
+        jl_value_t *val  = (jl_value_t*)ptrhash_get(&uitems, item);
+        if (val != HT_NOTFOUND) {
+            jl_(item);
+            jl_error("was found more than once");
+        }
+        ptrhash_put(&uitems, item, item);
+    }
+    htable_free(&uitems);
+}
+static void print_items(arraylist_t *listp, int i0, int step)
+{
+    arraylist_t list = *listp;
+    int i;
+    for (i = i0; i < list.len; i += step) {
+        jl_value_t *item = (jl_value_t*)list.items[i];
+        jl_printf(JL_STDOUT, "%d: %p, ", i, item);
+        jl_(item);
+    }
+}
+
 static void write_uint64(ios_t *s, uint64_t i) JL_NOTSAFEPOINT
 {
     ios_write(s, (char*)&i, 8);
@@ -212,6 +245,8 @@ static size_t filter_external_mis(jl_array_t *list)
         assert(jl_is_method_instance(mi));
         if (jl_is_method(mi->def.method) && !module_in_worklist(mi->def.method->module)) {
             listdata[n++] = (jl_value_t*)mi;
+            jl_printf(JL_STDOUT, "newrootsindex %d for ", mi->def.method->newrootsindex);
+            jl_(mi);
         }
     }
     if (n != n0)
@@ -728,6 +763,8 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)m->recursion_relation);
     }
     else if (jl_is_method_instance(v)) {
+        jl_printf(JL_STDOUT, "Serializing method instance ");
+        jl_(v);
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
         if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure) {
             jl_error("unimplemented: serialization of MethodInstances for OpaqueClosure");
@@ -1415,6 +1452,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
 
     if (tag == 10 || tag == 11 || tag == 12) {
         assert(pos > 0);
+        // jl_printf(JL_STDOUT, "adding 5\n");
         arraylist_push(&flagref_list, loc == HT_NOTFOUND ? NULL : loc);
         arraylist_push(&flagref_list, (void*)(uintptr_t)pos);
         ptrhash_put(&uniquing_table, dt, NULL);
@@ -1572,6 +1610,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     }
     if (!(serialization_mode & METHOD_INTERNAL)) {
         assert(loc != NULL && loc != HT_NOTFOUND);
+        // jl_printf(JL_STDOUT, "adding 4\n");
         arraylist_push(&flagref_list, loc);
         arraylist_push(&flagref_list, (void*)pos);
         if (serialization_mode & METHOD_HAS_NEW_ROOTS) {
@@ -1655,6 +1694,7 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
 
     if (!internal) {
         assert(loc != NULL && loc != HT_NOTFOUND);
+        // jl_printf(JL_STDOUT, "adding 3\n");
         arraylist_push(&flagref_list, loc);
         arraylist_push(&flagref_list, (void*)pos);
         if (currently_deserializing < 2)
@@ -1784,6 +1824,7 @@ static jl_value_t *jl_deserialize_value_singleton(jl_serializer_state *s, jl_val
     // stored. this happens if a field might store a 0-size value, but the field itself is
     // not 0 size, e.g. `::Union{Int,Nothing}`
     if (loc != NULL) {
+        // jl_printf(JL_STDOUT, "adding 2\n");
         arraylist_push(&flagref_list, loc);
         arraylist_push(&flagref_list, (void*)pos);
     }
@@ -1936,6 +1977,7 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
             if (loc != NULL) {
                 // as in jl_deserialize_value_singleton, the caller won't have a place to
                 // store this reference given a field type like Union{Int,Nothing}
+                // jl_printf(JL_STDOUT, "adding 1\n");
                 arraylist_push(&flagref_list, loc);
                 arraylist_push(&flagref_list, (void*)(uintptr_t)-1);
             }
@@ -2392,9 +2434,8 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 
     // newly_inferred: discard internal MethodInstances, as these will be handled by "ordinary" module traversal
     size_t n_ext_mis = filter_external_mis(newly_inferred);
-    /* jl_value_t **newmis = NULL; */
-    /* if (n_ext_mis > 0) */
-    /*     newmis = (jl_value_t**)jl_array_data(newly_inferred); */
+    // jl_printf(JL_STDOUT, "newly_inferred:\n");
+    // jl_(newly_inferred);
 
     int en = jl_gc_enable(0); // edges map is not gc-safe
     jl_array_t *lambdas = jl_alloc_vec_any(0);
@@ -2417,6 +2458,10 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
         collect_backedges((jl_method_instance_t*)jl_array_ptr_ref(newly_inferred, i));
 
     jl_collect_backedges(edges, targets);
+    jl_printf(JL_STDOUT, "edges:\n");
+    jl_(edges);
+    jl_printf(JL_STDOUT, "targets:\n");
+    jl_(targets);
 
     jl_serializer_state s = {
         &f,
@@ -2424,13 +2469,18 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
         mod_array
     };
     jl_serialize_value(&s, worklist);
+    jl_printf(JL_STDOUT, "Done with worklist\n");
     currently_serializing = 2;
     jl_serialize_value(&s, newly_inferred);
     currently_serializing = 1;
+    jl_printf(JL_STDOUT, "Done with newly_inferred\n");
     jl_serialize_value(&s, lambdas);
+    jl_printf(JL_STDOUT, "Done with lambdas\n");
 
     jl_serialize_value(&s, edges);
+    jl_printf(JL_STDOUT, "Done with edges\n");
     jl_serialize_value(&s, targets);
+    jl_printf(JL_STDOUT, "Done with targets\n");
 
     jl_finalize_serializer(&s);
     serializer_worklist = NULL;
@@ -2678,40 +2728,45 @@ static jl_method_t *jl_recache_method(jl_method_t *m)
 
 // Copy new roots to the running method
 // This has to be done after recache_other but before recompress_cis
-static void copy_roots(jl_method_t *dest, jl_method_t *src)
+static void copy_roots(jl_method_t *dest, jl_array_t *newroots)
 {
-    assert(jl_is_method(dest));  // don't check src, it has already been invalidated with 0x30
+    assert(jl_is_method(dest));
     // copy any new roots
-    if (src->roots) {
+    if (newroots && dest->newrootsindex == INT32_MAX) {
+        assert(jl_is_array(newroots));
+        jl_printf(JL_STDOUT, "copying %ld roots for ", jl_array_len(newroots));
+        jl_(dest);
+        jl_printf(JL_STDOUT, "dest newrootsindex: %d; roots length %ld\n", dest->newrootsindex, dest->roots ? jl_array_len(dest->roots) : 0);
         // The roots may have references to recached items, fix that
-        size_t i, len = jl_array_len(src->roots);
+        size_t i, len = jl_array_len(newroots);
         for (i = 0; i < len; i++) {
-            jl_value_t *r = jl_array_ptr_ref(src->roots, i);
+            jl_value_t *r = jl_array_ptr_ref(newroots, i);
             jl_value_t *newr = (jl_value_t*)ptrhash_get(&uniquing_table, r);
             if (newr != HT_NOTFOUND)
-                jl_array_ptr_set(src->roots, i, newr);
+                jl_array_ptr_set(newroots, i, newr);
         }
-        // jl_printf(JL_STDOUT, "Copying roots:");
-        // jl_(src->roots);
-        if (dest->roots)
-            jl_array_ptr_1d_append(dest->roots, src->roots);
+        if (dest->roots) {
+            dest->newrootsindex = jl_array_len(dest->roots);
+            jl_array_ptr_1d_append(dest->roots, newroots);
+        }
         else {
-            dest->roots = src->roots;
+            dest->newrootsindex = 0;
+            dest->roots = newroots;
             jl_gc_wb(dest, dest->roots);
         }
     }
 }
 
-static void copy_roots_all(jl_array_t *list)
+static void copy_roots_all(jl_array_t *list, jl_array_t *roots)
 {
     assert(jl_is_array(list));
     size_t i, len = jl_array_len(list);
     for (i = 0; i < len; i++) {
         jl_method_instance_t *mi    = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
         // jl_printf(JL_STDOUT, "Fetching %p\n", mi);
-        jl_method_instance_t *newmi = (jl_method_instance_t*)ptrhash_get(&uniquing_table, (jl_value_t*)mi);
-        assert(mi != newmi);
-        copy_roots(newmi->def.method, mi->def.method);
+        // jl_array_t *newroots = (jl_array_t*)ptrhash_get(&uniquing_table, (jl_value_t*)mi);
+        jl_array_t *newroots = (jl_array_t*)jl_array_ptr_ref(roots, i);
+        copy_roots(mi->def.method, newroots);
     }
 }
 
@@ -2834,8 +2889,8 @@ static void jl_recache_other(void)
         jl_value_t **loc = (jl_value_t**)flagref_list.items[i + 0];
         int offs = (int)(intptr_t)flagref_list.items[i + 1];
         jl_value_t *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
-        jl_printf(JL_STDOUT, "recaching index %ld, %p: ", i, o);
-        jl_(o);
+        // jl_printf(JL_STDOUT, "recaching index %ld, %p: ", i, o);
+        // jl_(o);
         i += 2;
         jl_value_t *newo = jl_recache_other_(o);
         if (loc)
@@ -2909,13 +2964,23 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 
     assert(jl_isa((jl_value_t*)restored, jl_array_any_type));
 
+    jl_printf(JL_STDOUT, "here 0\n");
+    jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
+    // check_unique(&flagref_list, 0, 2);
     // restore newly-compiled external functions
     currently_deserializing = 2;
     jl_value_t *ext_mis = jl_deserialize_value(&s, &ext_mis);
     currently_deserializing = 1;
+    jl_printf(JL_STDOUT, "Length of ext_mis: %ld\n", jl_array_len(ext_mis));
+    jl_(ext_mis);
+    jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
 
     // get list of external generic functions
     jl_value_t *external_methods = jl_deserialize_value(&s, &external_methods);
+    jl_printf(JL_STDOUT, "external_methods:\n");
+    jl_(external_methods);
+    jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
+    // check_unique(&flagref_list, 0, 2);
     jl_value_t *external_backedges = jl_deserialize_value(&s, &external_backedges);
     jl_value_t *external_edges = jl_deserialize_value(&s, &external_edges);
 
@@ -2927,22 +2992,42 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 
     // at this point, the AST is fully reconstructed, but still completely disconnected
     // now all of the interconnects will be created
+    jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
+    // check_unique(&flagref_list, 0, 2);
     jl_recache_types(); // make all of the types identities correct
     jl_printf(JL_STDOUT, "here 2\n");
-    htable_reset(&uniquing_table, 0);
+    jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
+    // check_unique(&flagref_list, 0, 2);
+    // htable_reset(&uniquing_table, 0);
     jl_insert_methods((jl_array_t*)external_methods); // hook up methods of external generic functions (needs to be after recache types)
     jl_printf(JL_STDOUT, "here 3\n");
+    jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
+    // check_unique(&flagref_list, 0, 2);
+    // print_items(&flagref_list, 0, 2);
     currently_deserializing = 2;
-    // before fully recaching MethodInstances, we need to ucompress CodeInstances of external methods so the refs get properly updated
+    // before fully recaching MethodInstances, we need to uncompress CodeInstances of external methods so the refs get properly updated
     // show_pointers((jl_array_t*)ext_mis, 1);
-    jl_array_t *ext_mis_copy = jl_array_copy((jl_array_t*)ext_mis);
-    jl_printf(JL_STDOUT, "here 4\n");
+    jl_array_t *ext_mis_roots = jl_alloc_vec_any(jl_array_len(ext_mis));
+    size_t i;
+    for (i = 0; i < jl_array_len(ext_mis); i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(ext_mis, i);
+        assert(jl_is_method_instance(mi));
+        jl_array_ptr_set(ext_mis_roots, i, (jl_value_t*)mi->def.method->roots);
+    }
+    // jl_array_t *ext_mis_copy = jl_array_copy((jl_array_t*)ext_mis);
     jl_recache_other(); // make method identities correct (needs to be to be after insert methods)
+    jl_printf(JL_STDOUT, "here 4\n");
+    jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
+    // check_unique(&flagref_list, 0, 2);
     // show_pointers((jl_array_t*)ext_mis_copy, 2);
-    copy_roots_all((jl_array_t*)ext_mis_copy);
+    copy_roots_all((jl_array_t*)ext_mis, ext_mis_roots);
     jl_printf(JL_STDOUT, "here 5\n");
+    jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
+    // check_unique(&flagref_list, 0, 2);
     recompress_cis((jl_array_t*)ext_mis);
     jl_printf(JL_STDOUT, "here 6\n");
+    jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
+    // check_unique(&flagref_list, 0, 2);
     currently_deserializing = 1;
 
     htable_free(&uniquing_table);

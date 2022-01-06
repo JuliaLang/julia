@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Distributed, Random
+using Base: get_world_counter
 
 Foo_module = :Foo4b3a94a1a081a8cb
 Foo2_module = :F2oo4b3a94a1a081a8cb
@@ -533,6 +534,55 @@ precompile_test_harness(false) do dir
     @test Base.stale_cachefile(FooBarT2_file, joinpath(cachedir2, "FooBarT2.ji")) === true
     @test Base.require(Main, :FooBarT2) isa Module
 end
+end
+
+precompile_test_harness("code caching") do dir
+    Cache_module = :Cacheb8321416e8a3e2f1
+    write(joinpath(dir, "$Cache_module.jl"),
+          """
+          module $Cache_module
+              struct X end
+              @noinline f(dest) = push!(dest, X())
+              g(dest) = push!(dest, X())
+              function callboth()
+                  f([])
+                  g([])
+                  g(X[])
+                  nothing
+              end
+
+              precompile(callboth, ())
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(Cache_module)))
+    @eval using $Cache_module
+    M = getfield(Main, Cache_module)
+    for name in (:f, :g, :callboth)
+        func = getfield(M, name)
+        m = only(collect(methods(func)))
+        mi = m.specializations[1]
+        @test mi.cache isa Core.CodeInstance
+        @test mi.cache.min_world <= get_world_counter()
+        @test mi.cache.max_world == typemax(UInt)
+        if name == :g
+            @test m.specializations[2] isa Core.MethodInstance       # for Vector{Any} and Vector{X}
+            @test m.specializations[2].cache isa Core.CodeInstance
+        end
+    end
+    m = which(push!, (Vector{Any}, Any))
+    hasmi = hasci = false
+    for i = 1:length(m.specializations)
+        if isassigned(m.specializations, i)
+            mi = m.specializations[i]
+            if mi.specTypes.parameters[3] == M.X
+                hasmi = true
+                hasci = isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance)
+                break
+            end
+        end
+    end
+    @test hasmi
+    @test hasci
 end
 
 # test --compiled-modules=no command line option

@@ -401,6 +401,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var)
 {
     JL_LOCK(&m->lock);
+    assert(jl_is_module(m));
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
     if (b == HT_NOTFOUND) {
         JL_UNLOCK(&m->lock);
