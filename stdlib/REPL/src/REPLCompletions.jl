@@ -911,6 +911,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                 end
                 frange, end_of_identifier = find_start_brace(string[1:prevind(string, i)], c_start=c_start, c_end=c_end)
                 startpos = first(frange)
+                startpos == 0 && break
                 i = prevind(string, startpos)
             elseif c in ('\'', '\"', '\`')
                 s = "$c$c"*string[startpos:pos]
