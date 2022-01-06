@@ -156,7 +156,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 const _PURE_OR_ERROR_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, arraysize, isdefined, Core.sizeof,
-    Core.kwfunc, Core.ifelse, Core._typevar, (<:)
+    Core.kwfunc, Core.ifelse, Core._typevar, (<:), Core._get_binding_type,
 ]
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
