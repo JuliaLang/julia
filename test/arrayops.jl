@@ -2105,6 +2105,16 @@ end
     @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
 end
 
+@testset "empty copyto!" begin
+    @test isempty(copyto!(Int[], ()))
+    @test isempty(copyto!(Int[], Int[]))
+    @test copyto!([1,2], ()) == [1,2]
+
+    @test isempty(copyto!(Int[], 1, ()))
+    @test isempty(copyto!(Int[], 1, Int[]))
+    @test copyto!([1,2], 1, ()) == [1,2]
+end
+
 module RetTypeDecl
     using Test
     import Base: +, *, broadcast, convert
