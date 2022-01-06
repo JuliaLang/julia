@@ -296,23 +296,22 @@ static inline void add_named_global(JuliaVariable *name, void *addr)
 
 struct JuliaFunction {
 public:
-    StringLiteral name;
-    FunctionType *(*_type)(LLVMContext &C);
-    AttributeList (*_attrs)(LLVMContext &C);
+    llvm::StringLiteral name;
+    llvm::FunctionType *(*_type)(llvm::LLVMContext &C);
+    llvm::AttributeList (*_attrs)(llvm::LLVMContext &C);
 
     JuliaFunction(const JuliaFunction&) = delete;
     JuliaFunction(const JuliaFunction&&) = delete;
-    Function *realize(Module *m) {
-        if (GlobalValue *V = m->getNamedValue(name))
-            return cast<Function>(V);
-        Function *F = Function::Create(_type(m->getContext()),
-                         Function::ExternalLinkage,
+    llvm::Function *realize(llvm::Module *m) {
+        if (llvm::GlobalValue *V = m->getNamedValue(name))
+            return llvm::cast<llvm::Function>(V);
+        llvm::Function *F = llvm::Function::Create(_type(m->getContext()),
+                         llvm::Function::ExternalLinkage,
                          name, m);
         if (_attrs)
             F->setAttributes(_attrs(m->getContext()));
         return F;
     }
-    Function *realize(jl_codectx_t &ctx);
 };
 
 template<typename T>
