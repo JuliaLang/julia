@@ -15,7 +15,6 @@
 #include "codegen_shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
-#include "jl_internal_funcs.inc"
 
 using namespace llvm;
 

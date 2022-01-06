@@ -1,5 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
-//
+
 // Lower intrinsics that expose subtarget information to the language. This makes it
 // possible to write code that changes behavior based on, e.g., the availability of
 // specific CPU features.
