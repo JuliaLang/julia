@@ -4,11 +4,7 @@
 #define JL_GC_ALLOC_PROFILER_H
 
 #include "julia.h"
-#include "julia_internal.h"
 #include "ios.h"
-
-// struct _jl_bt_element_t;  // Forward-declaration, defined in gc.h.
-// typedef struct _jl_bt_element_t jl_bt_element_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,20 +14,12 @@ extern "C" {
 // The public interface to call from Julia for allocations profiling
 // ---------------------------------------------------------------------
 
+// Forward-declaration to avoid depenency in header file.
+struct RawAlloc;  // Defined in gc-alloc-profiler.cpp
+
 struct FreeInfo {
     size_t type_addr;
     size_t count;
-};
-
-struct RawBacktrace {
-    jl_bt_element_t *data;
-    size_t size;
-};
-
-struct RawAlloc {
-    jl_datatype_t *type_address;
-    struct RawBacktrace backtrace;
-    size_t size;
 };
 
 struct RawAllocResults {
