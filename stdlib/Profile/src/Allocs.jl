@@ -3,7 +3,7 @@ module Allocs
 using Base.StackTraces: StackTrace, StackFrame, lookup
 using Base: InterpreterIP
 
-# raw results
+# --- Raw results structs, originally defined in C ---
 
 # matches RawBacktrace on the C side
 struct RawBacktrace
@@ -20,7 +20,7 @@ end
 
 struct FreeInfo
     type::Ptr{Type}
-    count::UInt
+    count::Csize_t
 end
 
 # matches RawAllocResults on the C side
@@ -33,10 +33,14 @@ struct RawAllocResults
 end
 
 """
-    AllocProfile.@profile [skip_every=10_000] ex
+    Profile.Allocs.@profile [sample_rate=0.0001] ex
 
 Profile allocations that happen during `my_function`, returning
 both the result and and AllocResults struct.
+
+```julia
+# TODO: Add example
+```
 """
 macro profile(opts, ex)
     _prof_expr(ex, opts)
@@ -54,8 +58,9 @@ function _prof_expr(expr, opts)
     end
 end
 
-function start(; sample_rate::Float64)
-    ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), sample_rate)
+function start(; sample_rate::Number)
+    println(typeof(sample_rate))
+    ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), Float64(sample_rate))
 end
 
 function stop()
@@ -85,8 +90,10 @@ struct AllocResults
     frees::Dict{Type,UInt}
 end
 
-function Base.show(io::IO, ::AllocResults)
-    print(io, "AllocResults")
+# Without this, the
+function Base.show(io::IO, a::Alloc)
+    stacktrace_sample = length(a.stacktrace) >= 1 ? "$(a.stacktrace[1]), ..." : ""
+    print(io, "$Alloc($(a.type), $StackFrame[$stacktrace_sample], $(a.size))")
 end
 
 const BacktraceEntry = Union{Ptr{Cvoid}, InterpreterIP}
@@ -167,17 +174,8 @@ function stacktrace_memoized(
 end
 
 # Precompile once for the package cache,
-precompile(start, ())
-precompile(stop, ())
-
-function __init__()
-    # And once when loading the package, to get the full machine code precompiled.
-    # TOOD: Although actually, we probably don't need this since this package will be
-    # precompiled into the sysimg, so the top-level statements will be enough to get the
-    # machine code codegen precompiled as well. :)
-    # We can delete this function once we make this package a stdlib.
-    precompile(start, ())
-    precompile(stop, ())
-end
+@assert precompile(start, ())
+@assert precompile(stop, ())
+@assert precompile(fetch, ())
 
 end
