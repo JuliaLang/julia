@@ -2,20 +2,96 @@
 
 [![Build Status](https://github.com/c42f/JuliaSyntax.jl/workflows/CI/badge.svg)](https://github.com/c42f/JuliaSyntax.jl/actions)
 
-Yet another Julia frontend, written in Julia.
+A Julia frontend, written in Julia.
 
-Goals:
-* Parse Julia code with precise source mapping
-* Avoid worrying about how much work this will be 😅
+## Goals
 
-Nice to have:
+* Lossless parsing of Julia code with precise source mapping
+* Production quality error recovery, reporting and unit testing.
+* Parser structure comprehensible to people who know Julia's
+  flisp-based parser. Replace the flisp frontend once bootstrapping can be
+  solved.
 * Speedy enough for interactive editing
-* Production quality error recovery and reporting
-* "Compilation as an API" to support all sorts of tooling
-* Make the code easy to maintain in parallel with Julia's flisp frontend
-* Go further than parsing - macro expansion, syntax desugaring and scope analysis
+* "Compilation as an API" to support all sorts of tooling. Not just parsing but
+  the whole compiler frontend:
+  - Parsing
+  - Macro expansion
+  - Syntax desugaring
+  - Scope analysis
+* Try not to worry about how much work this will be 😅
 
-## Design
+## Parser overview
+
+The parsing technology is intentionally simple: it's a recursive descent parser
+which closely follows the high level structure of the flisp reference parser.
+This gives a lot of flexibility for the hard part: designing the data
+structures and APIs for parsing. It also reduces porting bugs and is a natural
+fit because the language was designed around the constraints of this kind of
+parser.
+
+The main parser innovation is the `ParseStream` interface which provides a
+stream-like I/O interface for writing the parser:
+* The parser consumes a flat list of tokens as *input*
+* It produces a flat list of text spans as *output*
+* Diagnostics are emitted as separate text spans
+
+Notably, the parser does not depend on or produce any concrete tree data
+structure as part of the parsing phase but the output spans can be
+post-processed into various tree data structures as required. This is very
+similar to the design of rust-analyzer, though our output format is simpler.
+
+## Lossless syntax trees
+
+Our goal is to losslessly represent the source text with a tree; this may be
+called a "lossless syntax tree". (We avoid the term "concrete syntax tree"
+because this has traditionally been a different concept — a parse tree of the
+full formal grammar for a language, including any grammar hacks required to
+solve ambiguities, etc. We don't need such a formal grammar as we're writing
+the parser by hand.)
+
+Structurally, the output of a `ParseStream`-based parser can most naturally be
+assembled into a "green tree" in Roslyn (C# compiler) terminology. The most
+basic properties of a green tree are:
+* Every node spans a complete and contiguous range of source code bytes
+* Child nodes are in the order of the source text
+
+Additionally, green trees are usually designed so that
+* Nodes are immutable, do not point to their parents and don't know their
+  absolute position in the source. This means they can be cached and reused
+  when building the tree.
+* Nodes are homogenously typed at the language level so they can be efficiently
+  stored and accessed, with the node type held as a "syntax kind" enumeration.
+
+## Representing erroneous source code
+
+The goal of the parser is to produce well-formed heirarchical structure from
+the source text. For interactive tools we need this to work even when the
+source text contains errors; it's the job of the parser to include the recovery
+heuristics to make this work.
+
+Concretely, the parser in `JuliaSyntax` should always produce a green tree
+which is *well formed* in the sense that `GreenNode`s of a given `Kind` have
+well-defined layout of children. This means the `GreenNode` to `SyntaxNode`
+transformation is deterministic and tools can assume they're working with a
+"mostly valid" AST.
+
+What does "mostly valid" mean? We allow the tree to contain the following types
+of error nodes:
+
+* Missing tokens or nodes may be **added** as placeholders when they're needed
+  to complete a piece of syntax. For example, we could parse `a + (b *` as
+  `(call-i a + (call-i * b XXX))` where `XXX` is a placeholder error node.
+* A sequence of unexpected tokens may be **removed** by collecting
+  them as children of an error node and treating them as syntax trivia during
+  AST construction. For example, `a + b end * c` could be parsed as the green
+  tree `(call-i a + b (error-t end * c))`, and turned into the AST `(call + a b)`.
+
+We want to encode both these cases in a way which is simplest for downstream
+tools to use. This is an open question, but for now we use `K"error"` as the
+node head, with the `TRIVIA_FLAG` set for unexpected syntax.
+
+
+# Prototyping approach
 
 The tree datastructure design here is hard:
 
@@ -59,7 +135,7 @@ Let's tackle it by prototyping several important work flows:
 
 ### Raw syntax tree / Green tree
 
-Raw syntax tree (RST, or "Green tree" in the terminology from Roslyn)
+Raw syntax tree (or "Green tree" in the terminology from Roslyn)
 
 We want GreenNode to be
 * *structurally minimal* — For efficiency and generality
@@ -115,8 +191,8 @@ L - literal
     - "end"
 ```
 
-Call represents a challange for the AST vs RST in terms of node placement /
-iteration for infix operators vs normal prefix function calls.
+Call represents a challange for the AST vs Green tree in terms of node
+placement / iteration for infix operators vs normal prefix function calls.
 
 - The normal problem of `a + 1` vs `+(a, 1)`
 - Or worse, `a + 1 + 2` vs `+(a, 1, 2)`
@@ -164,32 +240,6 @@ interpolation syntax. Eg, if you do `:(y + $x)`, lowering expands this to
 `Core._expr(:call, :+, :y, _add_source_symbol(_module_we_are_lowering_into, x))`?
 
 ## Parsing
-
-The goal of the parser is to produce well-formed heirarchical structure from
-the source text. For interactive tools we need this to work even when the
-source text contains errors, so it's the job of the parser to include the
-recovery heuristics necessary to make this work.
-
-Concretely, the parser in `JuliaSyntax` should always produce a green tree
-which is *well formed* in the sense that `GreenNode`s of a given `Kind` have
-well-defined layout of children. This means the `GreenNode` to `SyntaxNode`
-transformation is deterministic and tools can assume they're working with a
-"mostly valid" AST.
-
-What does "mostly valid" mean? We allow the tree to contain the following types
-of error nodes:
-
-* Missing tokens or nodes may be **added** as placeholders when they're needed
-  to complete a piece of syntax. For example, we could parse `a + (b *` as
-  `(call-i a + (call-i * b XXX))` where `XXX` is a placeholder.
-* A sequence of unexpected tokens may be **removed** by collecting
-  them as children of an error node and treating them as syntax trivia during
-  AST construction. For example, `a + b end * c` could be parsed as the green
-  tree `(call-i a + b (error end * c))`, and turned into the AST `(call + a b)`.
-
-We want to encode both these cases in a way which is simplest for downstream
-tools to use. This is an open question, but for now we use `K"error"` as the
-token head, with the `TRIVIA_FLAG` set for unexpected syntax.
 
 ### Error recovery
 
