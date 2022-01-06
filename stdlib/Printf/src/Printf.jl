@@ -880,8 +880,8 @@ julia> @printf "%.0f %.1f %f" 0.5 0.025 -0.0078125
 0 0.0 -0.007812
 ```
 
-!!! compat "Julia 1.7"
-    Starting in Julia 1.7, `%s` (string) and `%c` (character) widths are computed
+!!! compat "Julia 1.8"
+    Starting in Julia 1.8, `%s` (string) and `%c` (character) widths are computed
     using [`textwidth`](@ref), which e.g. ignores zero-width characters
     (such as combining characters for diacritical marks) and treats certain
     "wide" characters (e.g. emoji) as width `2`.
