@@ -19,8 +19,19 @@ struct FreeInfo {
     size_t count;
 };
 
+struct RawBacktrace {
+    jl_bt_element_t *data;
+    size_t size;
+};
+
+struct RawAlloc {
+    jl_datatype_t *type_address;
+    struct RawBacktrace backtrace;
+    size_t size;
+};
+
 struct RawAllocResults {
-    void *allocs; // Alloc* (see gc-alloc-profiler.cpp)
+    struct RawAlloc *allocs;
     size_t num_allocs;
 
     struct FreeInfo *frees;

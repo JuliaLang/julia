@@ -13,17 +13,6 @@ using std::string;
 using std::unordered_map;
 using std::vector;
 
-struct RawBacktrace {
-    jl_bt_element_t *data;
-    size_t size;
-};
-
-struct RawAlloc {
-    jl_datatype_t *type_address;
-    RawBacktrace backtrace;
-    size_t size;
-};
-
 // == These structs define the global singleton profile buffer that will be used by
 // callbacks to store profile results. ==
 struct PerThreadAllocProfile {
