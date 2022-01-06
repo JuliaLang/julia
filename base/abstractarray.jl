@@ -901,23 +901,13 @@ end
 typeof(function copyto! end).name.max_methods = UInt8(1)
 
 function copyto!(dest::AbstractArray, src)
-    if haslength(src)
-        length(dest) < length(src) &&
+    destiter = eachindex(dest)
+    y = iterate(destiter)
+    for x in src
+        y === nothing &&
             throw(ArgumentError("destination has fewer elements than required"))
-        i = Int(firstindex(dest))
-        @inbounds for x in src
-            dest[i] = x
-            i += 1
-        end
-    else
-        destiter = eachindex(dest)
-        y = iterate(destiter)
-        for x in src
-            y === nothing &&
-                throw(ArgumentError("destination has fewer elements than required"))
-            dest[y[1]] = x
-            y = iterate(destiter, y[2])
-        end
+        dest[y[1]] = x
+        y = iterate(destiter, y[2])
     end
     return dest
 end
