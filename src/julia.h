@@ -307,11 +307,11 @@ typedef struct _jl_method_t {
     // the default recusion relation.
     jl_value_t *recursion_relation;
 
-    int32_t nargs;
-    int32_t called;        // bit flags: whether each of the first 8 arguments is called
-    int32_t nospecialize;  // bit flags: which arguments should not be specialized
-    int32_t nkw;           // # of leading arguments that are actually keyword arguments
-                           // of another method.
+    uint32_t nargs;
+    uint32_t called;        // bit flags: whether each of the first 8 arguments is called
+    uint32_t nospecialize;  // bit flags: which arguments should not be specialized
+    uint32_t nkw;           // # of leading arguments that are actually keyword arguments
+                            // of another method.
     uint8_t isva;
     uint8_t pure;
     uint8_t is_for_opaque_closure;
@@ -1781,7 +1781,7 @@ STATIC_INLINE jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
     return jl_apply_generic(args[0], &args[1], nargs - 1);
 }
 
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t **args, int32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t **args, uint32_t nargs);
 JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED);

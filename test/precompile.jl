@@ -242,7 +242,7 @@ precompile_test_harness(false) do dir
 
               # create a backedge that includes Type{Union{}}, to ensure lookup can handle that
               call_bottom() = show(stdout::IO, Union{})
-              Core.Compiler.return_type(call_bottom, ())
+              Core.Compiler.return_type(call_bottom, Tuple{})
 
               # check that @ccallable works from precompiled modules
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)

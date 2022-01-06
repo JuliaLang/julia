@@ -294,9 +294,10 @@ static int compile_all_enq__(jl_typemap_entry_t *ml, void *env)
 }
 
 
-static void compile_all_enq_(jl_methtable_t *mt, void *env)
+static int compile_all_enq_(jl_methtable_t *mt, void *env)
 {
     jl_typemap_visitor(mt->defs, compile_all_enq__, env);
+    return 1;
 }
 
 static void jl_compile_all_defs(void)
@@ -363,9 +364,9 @@ static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *c
     return 1;
 }
 
-static void precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
+static int precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
 {
-    jl_typemap_visitor(mt->defs, precompile_enq_all_specializations__, env);
+    return jl_typemap_visitor(mt->defs, precompile_enq_all_specializations__, env);
 }
 
 static void *jl_precompile(int all)
