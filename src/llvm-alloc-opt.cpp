@@ -1343,25 +1343,6 @@ void Optimizer::moveArrayToStack(CallInst *orig_inst, llvm::Value *tag) {
     assert(object_escape_info.memops.begin()->second.accesses.size() == 1);
     assert(isa<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst));
     auto load = cast<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst);
-    //Remove write barriers pointing at the initial array data pointer
-    std::size_t removed_start = removed.size();
-    for (auto use : array_escape_info.uses) {
-        if (auto call = dyn_cast<CallInst>(use)) {
-            if (call->getCalledOperand() == pass.write_barrier_func) {
-                removed.push_back(call);
-            }
-        }
-    }
-    for (; removed_start < removed.size(); removed_start++) {
-        auto wb = removed[removed_start];
-        for (auto &op : wb->operands()) {
-            if (auto inst = dyn_cast<Instruction>(op.get())) {
-                if (array_escape_info.uses.contains(inst)) {
-                    wb->setOperand(op.getOperandNo(), UndefValue::get(inst->getType()));
-                }
-            }
-        }
-    }
     IRBuilder<> array_builder(&*orig_inst->getFunction()->getEntryBlock().getFirstInsertionPt());
     auto array = array_builder.CreateAlloca(pass.T_int8, ConstantInt::get(pass.T_size, array_type_data.total_size));
     array->takeName(orig_inst);
