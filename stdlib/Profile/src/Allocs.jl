@@ -42,7 +42,7 @@ macro profile(opts, ex)
     _prof_expr(ex, opts)
 end
 macro profile(ex)
-    _prof_expr(ex, :(sample_rate=1.0))
+    _prof_expr(ex, :(sample_rate=0.0001))
 end
 
 function _prof_expr(expr, opts)
