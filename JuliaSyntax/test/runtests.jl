@@ -33,6 +33,7 @@ end
 
 include("parse_stream.jl")
 include("parser.jl")
+include("value_parsing.jl")
 
 # Prototypes
 #include("syntax_trees.jl")

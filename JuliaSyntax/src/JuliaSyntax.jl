@@ -18,6 +18,7 @@ include("syntax_tree.jl")
 include("parse_stream.jl")
 
 include("parser.jl")
+include("value_parsing.jl")
 
 include("hooks.jl")
 

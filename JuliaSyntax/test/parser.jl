@@ -518,7 +518,8 @@ tests = [
     ],
     JuliaSyntax.parse_string => [
         "\"a \$(x + y) b\""  =>  "(string \"a \" (call-i x + y) \" b\")"
-        "\"hi\$(\"ho\")\""  =>  "(string \"hi\" (string \"ho\"))"
+        "\"hi\$(\"ho\")\""   =>  "(string \"hi\" (string \"ho\"))"
+        "\"hi\$(\"\"\"ho\"\"\")\""  =>  "(string \"hi\" (string-s \"ho\"))"
         ((v=v"1.5",), "\"hi\$(\"ho\")\"") =>  "(string \"hi\" \"ho\")"
         "\"a \$foo b\""  =>  "(string \"a \" foo \" b\")"
         "\"\""  =>  "\"\""
