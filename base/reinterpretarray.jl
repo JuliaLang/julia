@@ -365,6 +365,10 @@ end
 @inline @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
+        if sizeof(T) == 0 # singleton types
+            @boundscheck checkbounds(a, i1, tailinds...)
+            return T.instance
+        end
         return reinterpret(T, a.parent[i1, tailinds...])
     else
         @boundscheck checkbounds(a, i1, tailinds...)
@@ -409,6 +413,10 @@ end
 @inline @propagate_inbounds function _getindex_ra(a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
+        if sizeof(T) == 0 # singleton types
+            @boundscheck checkbounds(a, i1, tailinds...)
+            return T.instance
+        end
         return reinterpret(T, a.parent[i1, tailinds...])
     end
     @boundscheck checkbounds(a, i1, tailinds...)
@@ -489,6 +497,10 @@ end
     v = convert(T, v)::T
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
+        if sizeof(T) == 0 # singleton types
+            @boundscheck checkbounds(a, i1, tailinds...)
+            return T.instance # setindex! is a noop here
+        end
         return setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
     else
         @boundscheck checkbounds(a, i1, tailinds...)
@@ -550,6 +562,10 @@ end
     v = convert(T, v)::T
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
+        if sizeof(T) == 0 # singleton types
+            @boundscheck checkbounds(a, i1, tailinds...)
+            return T.instance # setindex! is a noop here
+        end
         return setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
     end
     @boundscheck checkbounds(a, i1, tailinds...)

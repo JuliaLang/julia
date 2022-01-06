@@ -385,11 +385,6 @@ end
         SomeSingleton(x) = new()
     end
 
-    @test reinterpret(Nothing, missing) === nothing
-    @test reinterpret(SomeSingleton, ()) === SomeSingleton(4)
-    @test reinterpret(Tuple{}, SomeSingleton(2)) === ()
-    @test reinterpret(SomeSingleton, SomeSingleton(:x)) === SomeSingleton("a")
-
     @test_throws ErrorException reinterpret(Int, nothing)
     @test_throws ErrorException reinterpret(Missing, 3)
     @test_throws ErrorException reinterpret(Missing, NotASingleton())
@@ -409,8 +404,11 @@ end
     @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, 0))
 
     # reinterpret of 0-dimensional array
-    @test reinterpret(Tuple{}, fill(missing, ())) == fill((), ())
-    @test reinterpret(reshape, SomeSingleton, fill(nothing, ())) == fill(SomeSingleton(0xa), ())
+    z = reinterpret(Tuple{}, fill(missing, ()))
+    @test z == fill((), ())
+    @test z == reinterpret(reshape, Tuple{}, fill(nothing, ()))
+    @test_throws BoundsError z[2]
+    @test_throws BoundsError z[3] = ()
     @test_throws ArgumentError reinterpret(UInt8, fill(nothing, ()))
     @test_throws ArgumentError reinterpret(Missing, fill(1f0, ()))
     @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, ()))
@@ -424,10 +422,18 @@ end
     x = reinterpret(Tuple{}, t)
     @test x == reinterpret(reshape, Tuple{}, t)
     @test x[3,5] === ()
-    x[1,1] = ()
+    @test (x[1,1] = (); true)
+    @test_throws BoundsError x[17]
+    @test_throws BoundsError x[4,2]
+    @test_throws BoundsError x[1,2,3]
+    @test_throws BoundsError x[18] = ()
+    @test_throws MethodError x[1,3] = missing
     @test x == fill((), (3, 5))
     x = reinterpret(reshape, Tuple{}, t)
+    @test_throws BoundsError x[19]
+    @test_throws BoundsError x[2,6] = ()
     @test x[2,3] === ()
-    x[3,5] = ()
+    @test (x[3,5] = (); true)
     @test x == fill((), (3, 5))
+    @test_throws MethodError x[2,4] = nothing
 end

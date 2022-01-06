@@ -437,13 +437,7 @@ julia> reinterpret(Float32, UInt32[1 2 3 4 5])
  1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 ```
 """
-function reinterpret(::Type{T}, x::S) where {T,S}
-    if isdefined(T, :instance) && isdefined(S, :instance)
-        T.instance # singleton type conversion
-    else
-        bitcast(T, x)
-    end
-end
+reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 
 """
     sizeof(T::DataType)
