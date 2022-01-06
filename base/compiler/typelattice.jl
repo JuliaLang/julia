@@ -7,29 +7,6 @@
 const __NULL_CONSTANT__ = :__NULL_CONSTANT__
 const __NULL_CONSTANT_ID__ = objectid(__NULL_CONSTANT__)
 
-const PartialFields = Vector{Any} # TODO (lattice overhaul) Vector{LatticeElement}
-
-struct ConditionalInfo
-    slot_id::Int
-    vtype    # TODO (lattice overhaul) ::LatticeElement
-    elsetype # TODO (lattice overhaul) ::LatticeElement
-    inter::Bool
-    function ConditionalInfo(
-        slot_id::Int, @nospecialize(vtype), @nospecialize(elsetype), inter::Bool)
-        return new(slot_id, vtype, elsetype, inter)
-    end
-end
-const __NULL_CONDITIONAL__ = ConditionalInfo(0, Any, Any, false)
-
-struct PartialTypeVarInfo
-    tv::TypeVar
-    PartialTypeVarInfo(tv::TypeVar) = new(tv)
-end
-const Special = Union{PartialTypeVarInfo, PartialOpaque, Core.TypeofVararg}
-const __NULL_SPECIAL__ = PartialTypeVarInfo(TypeVar(:__NULL_SPECIAL__))
-
-const __NULL_CAUSES__ = nothing
-
 """
     x::LatticeElement
 
@@ -99,7 +76,7 @@ a partial lattice whose height is infinite.
   `x.special::PartialTypeVarInfo` tracks an identity of `TypeVar` so that `x` can produce
   better inference for `UnionAll` construction.
   `x.special::PartialOpaque` holds opaque closure information.
-  By default `x.special` is initialized with `__NULL_SPECIAL__::PartialTypeVarInfo` (no information).
+  By default `x.special` is initialized with `nothing` (no information).
 
   See also:
   - constructor: `PartialTypeVar(::TypeVar, lb_certain::Bool, ub_certain::Bool)` / `mkPartialOpaque`
@@ -135,45 +112,40 @@ struct LatticeElement
     typ # ::Type
 
     constant # ::Any (constant value) or ::PartialFields
-    conditional::ConditionalInfo
-    special::Special
+
+    # some special information for this lattice element
+    special # ::Union{ConditionalInfo, PartialTypeVarInfo, PartialOpaque, Core.TypeofVararg} or nothing
 
     # abstract interpretation specific attributes
-    causes # ::IdSet{InferenceState}
+    causes # ::IdSet{InferenceState} or nothing
 
     # optimization specific specific attributes
     maybeundef::Bool
 
-    function LatticeElement(@nospecialize(typ),
-        @nospecialize(constant = __NULL_CONSTANT__);
-        conditional::ConditionalInfo = __NULL_CONDITIONAL__,
-        special::Special = __NULL_SPECIAL__,
-        causes#=::IdSet{InferenceState}=# = __NULL_CAUSES__,
-        maybeundef::Bool = false,
-        )
+    function LatticeElement(typ,
+        constant = __NULL_CONSTANT__, special = nothing;
+        causes#=::IdSet{InferenceState}=# = nothing, maybeundef::Bool = false)
+        @nospecialize typ constant special
         if isvarargtype(typ)
-            @assert special === __NULL_SPECIAL__
+            @assert special === nothing
             special = typ
             typ = Any # COMBAK (lattice overhaul) what `typ` should this have ?
         end
+        @assert isa(typ, Type)
         return new(typ,
                    constant,
-                   conditional,
                    special,
                    causes,
                    maybeundef,
                    )
     end
     function LatticeElement(x::LatticeElement,
-        @nospecialize(constant = x.constant);
-        conditional::ConditionalInfo = x.conditional,
-        special::Special = x.special,
-        causes#=::IdSet{InferenceState}=# = x.causes,
-        maybeundef::Bool = x.maybeundef,
-        )
+        constant = x.constant, special = x.special;
+        causes#=::IdSet{InferenceState}=# = x.causes::Union{Nothing,IdSet{InferenceState}},
+        maybeundef::Bool = x.maybeundef)
+        @nospecialize constant special
         return new(x.typ,
                    constant,
-                   conditional,
                    special,
                    causes,
                    maybeundef,
@@ -183,17 +155,10 @@ end
 
 NativeType(@nospecialize typ) = typ === Any ? ⊤ : typ === Bottom ? ⊥ : LatticeElement(typ)
 isNativeType(@nospecialize typ) = true
-isNativeType(typ::LatticeElement) = !(
-    hasConstant(typ) ||
-    hasConditional(typ) ||
-    hasSpecial(typ) ||
-    hasCauses(typ) ||
-    typ.maybeundef !== false)
+isNativeType(typ::LatticeElement) = !(hasConstant(typ) || hasSpecial(typ) || hasCauses(typ) || typ.maybeundef !== false)
 hasConstant(typ::LatticeElement) = (val = typ.constant;
     !isa(val, Symbol) || objectid(val) !== __NULL_CONSTANT_ID__)
-hasConditional(typ::LatticeElement) = typ.conditional.slot_id ≠ 0
-hasSpecial(typ::LatticeElement) = (special = typ.special;
-    !isa(special, PartialTypeVarInfo) || special.tv.name !== :__NULL_SPECIAL__)
+hasSpecial(typ::LatticeElement) = typ.special !== nothing
 hasCauses(typ::LatticeElement) = typ.causes !== nothing
 
 # NOTE once we pack all extended lattice types into `LatticeElement`, we don't need this `unwraptype`:
@@ -210,11 +175,12 @@ isConst(@nospecialize typ) = false
 isConst(typ::LatticeElement) = hasConstant(typ) && !_isPartialStruct(typ)
 constant(x::LatticeElement) = x.constant
 
+const PartialFields = Vector{LatticeElement}
 function PartialStruct(@nospecialize(typ), fields::PartialFields)
     @assert (isconcretetype(typ) || istupletype(typ)) && !ismutabletype(typ) "invalid PartialStruct typ"
     @assert !isempty(fields) "invalid PartialStruct fields"
-    for field in fields
-        @assert !isConditional(field) "invalid PartialStruct field"
+    for i = 1:length(fields)
+        @assert !isConditional(fields[i]) "invalid PartialStruct field"
     end
     return LatticeElement(typ, fields)
 end
@@ -224,8 +190,19 @@ isPartialStruct(typ::LatticeElement) = hasConstant(typ) && _isPartialStruct(typ)
 _isPartialStruct(typ::LatticeElement) = isa(typ.constant, PartialFields) && !(typ.typ <: PartialFields)
 partialfields(x::LatticeElement) = x.constant::PartialFields
 
-# TODO (lattice overhaul) do some assertions ?
-function _Conditional(slot_id::Int, @nospecialize(vtype), @nospecialize(elsetype), inter::Bool)
+struct ConditionalInfo
+    slot_id::Int
+    vtype::LatticeElement
+    elsetype::LatticeElement
+    inter::Bool
+    function ConditionalInfo(
+        slot_id::Int, vtype::LatticeElement, elsetype::LatticeElement, inter::Bool)
+        @assert !isAnyConditional(vtype) "nested Conditional vtype"
+        @assert !isAnyConditional(elsetype) "nested Conditional elsetype"
+        return new(slot_id, vtype, elsetype, inter)
+    end
+end
+function _Conditional(slot_id::Int, vtype::LatticeElement, elsetype::LatticeElement, inter::Bool)
     if vtype == ⊥
         constant = false
     elseif elsetype == ⊥
@@ -234,39 +211,47 @@ function _Conditional(slot_id::Int, @nospecialize(vtype), @nospecialize(elsetype
         constant = __NULL_CONSTANT__
     end
     conditional = ConditionalInfo(slot_id, vtype, elsetype, inter)
-    return LatticeElement(Bool, constant; conditional)
+    return LatticeElement(Bool, constant, conditional)
 end
-Conditional(slot_id::Int, @nospecialize(vtype), @nospecialize(elsetype)) =
+Conditional(slot_id::Int, vtype::LatticeElement, elsetype::LatticeElement) =
     _Conditional(slot_id, vtype, elsetype, false)
-InterConditional(slot_id::Int, @nospecialize(vtype), @nospecialize(elsetype)) =
+InterConditional(slot_id::Int, vtype::LatticeElement, elsetype::LatticeElement) =
     _Conditional(slot_id, vtype, elsetype, true)
 isConditional(@nospecialize typ) = false
-isConditional(typ::LatticeElement) = hasConditional(typ) && !typ.conditional.inter
+isConditional(typ::LatticeElement) = (special = typ.special; isa(special, ConditionalInfo) && !special.inter)
 isInterConditional(@nospecialize typ) = false
-isInterConditional(typ::LatticeElement) = hasConditional(typ) && typ.conditional.inter
+isInterConditional(typ::LatticeElement) = (special = typ.special; isa(special, ConditionalInfo) && special.inter)
 isAnyConditional(@nospecialize typ) = false
-isAnyConditional(typ::LatticeElement) = hasConditional(typ)
-# access to the `x.conditional` field with improved type instability where
-# `isConditional(x)` or `isInterConditional(x)` hold
-# TODO (lattice overhaul) once https://github.com/JuliaLang/julia/pull/41199 is merged,
-# all usages of this function can be simply replaced with `x.conditional`
-@inline conditional((; conditional)::LatticeElement) = (@assert !conditional.inter; conditional)
-@inline interconditional((; conditional)::LatticeElement) = (@assert conditional.inter; conditional)
-widenconditional(typ::LatticeElement) = isAnyConditional(typ) ? LatticeElement(typ; conditional = __NULL_CONDITIONAL__) : typ
+isAnyConditional(typ::LatticeElement) = (special = typ.special; isa(special, ConditionalInfo))
+@inline function conditional(typ::LatticeElement)
+    conditional = typ.special::ConditionalInfo
+    @assert !conditional.inter
+    return conditional
+end
+@inline function interconditional(typ::LatticeElement)
+    conditional = typ.special::ConditionalInfo
+    @assert conditional.inter
+    return conditional
+end
+widenconditional(typ::LatticeElement) = isAnyConditional(typ) ? LatticeElement(typ, typ.constant, nothing) : typ
 
+struct PartialTypeVarInfo
+    tv::TypeVar
+    PartialTypeVarInfo(tv::TypeVar) = new(tv)
+end
 function PartialTypeVar(
     tv::TypeVar,
     # N.B.: Currently unused, but could be used to form something like `Constant`
     # if the bounds are pulled out of this `TypeVar`
     lb_certain::Bool, ub_certain::Bool)
-    return LatticeElement(TypeVar; special = PartialTypeVarInfo(tv))
+    return LatticeElement(TypeVar, __NULL_CONSTANT__, PartialTypeVarInfo(tv))
 end
 isPartialTypeVar(@nospecialize typ) = false
-isPartialTypeVar(typ::LatticeElement) = hasSpecial(typ) && isa(typ.special, PartialTypeVarInfo)
+isPartialTypeVar(typ::LatticeElement) = isa(typ.special, PartialTypeVarInfo)
 @inline partialtypevar(typ::LatticeElement) = typ.special::PartialTypeVarInfo
 
 function mkPartialOpaque(@nospecialize(typ), @nospecialize(env), isva::Bool, parent::MethodInstance, source::Method)
-    return LatticeElement(typ; special = PartialOpaque(typ, env, isva, parent, source))
+    return LatticeElement(typ, __NULL_CONSTANT__, PartialOpaque(typ, env, isva, parent, source))
 end
 isPartialOpaque(@nospecialize typ) = false
 isPartialOpaque(typ::LatticeElement) = isa(typ.special, PartialOpaque)
@@ -275,6 +260,7 @@ isPartialOpaque(typ::LatticeElement) = isa(typ.special, PartialOpaque)
 isVararg(@nospecialize typ) = false
 isVararg(typ::LatticeElement) = isa(typ.special, TypeofVararg)
 @inline vararg(typ::LatticeElement) = typ.special::TypeofVararg
+unwrapva_𝑳(x::LatticeElement) = isVararg(x) ? NativeType(unwrapva(vararg(x))) : x
 
 function LimitedAccuracy(x::LatticeElement, causes#=::IdSet{InferenceState}=#)
     causes = causes::IdSet{InferenceState}
@@ -285,7 +271,7 @@ end
 isLimitedAccuracy(@nospecialize typ) = false
 isLimitedAccuracy(typ::LatticeElement) = hasCauses(typ)
 ignorelimited(typ::LatticeElement) = isLimitedAccuracy(typ) ? _ignorelimited(typ) : typ
-_ignorelimited(typ::LatticeElement) = LatticeElement(typ; causes = __NULL_CAUSES__)
+_ignorelimited(typ::LatticeElement) = LatticeElement(typ; causes = nothing)
 @inline causes(typ::LatticeElement) = typ.causes::IdSet{InferenceState}
 
 MaybeUndef(x::LatticeElement) = LatticeElement(x; maybeundef = true)
@@ -293,6 +279,9 @@ isMaybeUndef(@nospecialize typ) = false
 isMaybeUndef(typ::LatticeElement) = typ.maybeundef
 ignoremaybeundef(@nospecialize typ) = typ
 ignoremaybeundef(typ::LatticeElement) = LatticeElement(typ; maybeundef = false)
+
+const ⊤, ⊥ = LatticeElement(Any), LatticeElement(Bottom)
+const LBool, LInt, LNothing = NativeType(Bool), NativeType(Int), NativeType(Nothing)
 
 # The type of a variable load is either a value or an UndefVarError
 # (only used in abstractinterpret, doesn't appear in optimize)
@@ -348,7 +337,7 @@ x::LatticeElement == y::Type = unwraptype(x) === y
 # `Conditional` and `InterConditional` are valid in opposite contexts
 # (i.e. local inference and inter-procedural call), as such they will never be compared
 function issubconditional(a::LatticeElement, b::LatticeElement)
-    a, b = a.conditional, b.conditional
+    a, b = a.special, b.special
     @assert a.inter === b.inter "invalid conditional lattice element comparison"
     if is_same_conditionals(a, b)
         if a.vtype ⊑ b.vtype
@@ -362,16 +351,21 @@ end
 
 is_same_conditionals(a::ConditionalInfo, b::ConditionalInfo) = a.slot_id == b.slot_id
 
-is_lattice_bool(typ::LatticeElement) = typ !== ⊥ && typ ⊑ Bool
+function is_lattice_bool(typ::LatticeElement)
+    ty = widenconst(typ)
+    return ty !== Bottom && ty <: Bool
+end
 
 function maybe_extract_const_bool(x::LatticeElement)
     if isConst(x)
         val = constant(x)
         return isa(val, Bool) ? val : nothing
     end
-    cnd = x.conditional
-    (cnd.vtype === Bottom && !(cnd.elsetype === Bottom)) && return false
-    (cnd.elsetype === Bottom && !(cnd.vtype === Bottom)) && return true
+    if isAnyConditional(x)
+        cnd = x.special::ConditionalInfo
+        (cnd.vtype === ⊥ && !(cnd.elsetype === ⊥)) && return false
+        (cnd.elsetype === ⊥ && !(cnd.vtype === ⊥)) && return true
+    end
     return nothing
 end
 maybe_extract_const_bool(@nospecialize c) = nothing
@@ -495,16 +489,19 @@ where we can safely assume `a ⊑ b` holds.
 """
 @nospecialize(a) ⋤ @nospecialize(b) = !⊑(b, a)
 
+a::LatticeElement ⊑ₜ @nospecialize(b#=::Type=#) = widenconst(a) <: b
+a::LatticeElement ⊏ₜ @nospecialize(b#=::Type=#) = widenconst(a) <: b && !(b <: widenconst(a))
+a::LatticeElement ⋤ₜ @nospecialize(b#=::Type=#) = !(b <: widenconst(a))
+
 # Check if two lattice elements are partial order equivalent. This is basically
 # `a ⊑ b && b ⊑ a` but with extra performance optimizations.
-function is_lattice_equal(@nospecialize(a), @nospecialize(b))
-    # TODO (lattice overhaul) this egal comparison is really senseless now
+function is_lattice_equal(a::LatticeElement, b::LatticeElement)
     a === b && return true
     if isPartialStruct(a)
         isPartialStruct(b) || return false
+        widenconst(a) == widenconst(b) || return false
         afields, bfields = partialfields(a), partialfields(b)
         length(afields) == length(bfields) || return false
-        widenconst(a) == widenconst(b) || return false
         for i in 1:length(afields)
             is_lattice_equal(afields[i], bfields[i]) || return false
         end
@@ -513,12 +510,14 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
     isPartialStruct(b) && return false
     if isConst(a)
         isConst(b) && return constant(a) === constant(b)
+        b = widenconst(b)
         if issingletontype(b)
             return constant(a) === b.instance
         end
         return false
     end
     if isConst(b)
+        a = widenconst(a)
         if issingletontype(a)
             return a.instance === constant(b)
         end

@@ -2010,10 +2010,13 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     end
     lines1 = split(repr(ir), '\n')
     @test all(isspace, pop!(lines1))
-    Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(1), Val{1}), false)
-    Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(2), Val{2}), true)
-    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(3), Val{3}), false)
-    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(4), Val{4}), true)
+    insert_node! = Core.Compiler.insert_node!
+    NewInstruction = Core.Compiler.NewInstruction
+    LatticeElement = Core.Compiler.LatticeElement
+    insert_node!(ir, 1, NewInstruction(QuoteNode(1), LatticeElement(Val{1})), false)
+    insert_node!(ir, 1, NewInstruction(QuoteNode(2), LatticeElement(Val{2})), true)
+    insert_node!(ir, length(ir.stmts.inst), NewInstruction(QuoteNode(3), LatticeElement(Val{3})), false)
+    insert_node!(ir, length(ir.stmts.inst), NewInstruction(QuoteNode(4), LatticeElement(Val{4})), true)
     lines2 = split(repr(ir), '\n')
     @test all(isspace, pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"

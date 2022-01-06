@@ -330,7 +330,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         push!(linetable, newentry)
     end
     if coverage && spec.ir.stmts[1][:line] + linetable_offset != topline
-        insert_node_here!(compact, NewInstruction(Expr(:code_coverage_effect), Nothing, topline))
+        insert_node_here!(compact, NewInstruction(Expr(:code_coverage_effect), LNothing, topline))
     end
     if def.isva
         nargs_def = Int(def.nargs::Int32)
@@ -400,7 +400,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                         inline_compact.result[idx′][:type] =
                             argextype(val, isa(val, Expr) ? compact : inline_compact)
                         insert_node_here!(inline_compact, NewInstruction(GotoNode(post_bb_id),
-                                          Any, compact.result[idx′][:line]),
+                                          ⊤, compact.result[idx′][:line]),
                                           true)
                         push!(pn.values, SSAValue(idx′))
                     else
@@ -443,11 +443,11 @@ function fix_va_argexprs!(compact::IncrementalCompact,
     argexprs::Vector{Any}, nargs_def::Int, line_idx::Int32)
     newargexprs = argexprs[1:(nargs_def-1)]
     tuple_call = Expr(:call, TOP_TUPLE)
-    tuple_typs = Any[]
+    tuple_typs = LatticeElement[]
     for i in nargs_def:length(argexprs)
         arg = argexprs[i]
         push!(tuple_call.args, arg)
-        push!(tuple_typs, unwraptype(argextype(arg, compact)))
+        push!(tuple_typs, argextype(arg, compact))
     end
     tuple_typ = tuple_tfunc(tuple_typs)
     push!(newargexprs, insert_node_here!(compact, NewInstruction(tuple_call, tuple_typ, line_idx)))
@@ -480,15 +480,15 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
             a <: m && continue
             # Generate isa check
             isa_expr = Expr(:call, isa, argexprs[i], m)
-            ssa = insert_node_here!(compact, NewInstruction(isa_expr, Bool, line))
+            ssa = insert_node_here!(compact, NewInstruction(isa_expr, LBool, line))
             if cond === true
                 cond = ssa
             else
                 and_expr = Expr(:call, and_int, cond, ssa)
-                cond = insert_node_here!(compact, NewInstruction(and_expr, Bool, line))
+                cond = insert_node_here!(compact, NewInstruction(and_expr, LBool, line))
             end
         end
-        insert_node_here!(compact, NewInstruction(GotoIfNot(cond, next_cond_bb), Union{}, line))
+        insert_node_here!(compact, NewInstruction(GotoIfNot(cond, next_cond_bb), ⊥, line))
         bb = next_cond_bb - 1
         finish_current_bb!(compact, 0)
         argexprs′ = argexprs
@@ -500,7 +500,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
                 a, m = aparams[i], mparams[i]
                 if !(a <: m)
                     argexprs′[i] = insert_node_here!(compact,
-                        NewInstruction(PiNode(argex, m), m, line))
+                        NewInstruction(PiNode(argex, m), NativeType(m), line))
                 end
             end
         end
@@ -517,10 +517,10 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
             push!(pn.edges, bb)
             push!(pn.values, val)
             insert_node_here!(compact,
-                NewInstruction(GotoNode(join_bb), Union{}, line))
+                NewInstruction(GotoNode(join_bb), ⊥, line))
         else
             insert_node_here!(compact,
-                NewInstruction(ReturnNode(), Union{}, line))
+                NewInstruction(ReturnNode(), ⊥, line))
         end
         finish_current_bb!(compact, 0)
     end
@@ -528,14 +528,14 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
     # We're now in the fall through block, decide what to do
     if fully_covered
         e = Expr(:call, GlobalRef(Core, :throw), FATAL_TYPE_BOUND_ERROR)
-        insert_node_here!(compact, NewInstruction(e, Union{}, line))
-        insert_node_here!(compact, NewInstruction(ReturnNode(), Union{}, line))
+        insert_node_here!(compact, NewInstruction(e, ⊥, line))
+        insert_node_here!(compact, NewInstruction(ReturnNode(), ⊥, line))
         finish_current_bb!(compact, 0)
     else
         ssa = insert_node_here!(compact, NewInstruction(stmt, typ, line))
         push!(pn.edges, bb)
         push!(pn.values, ssa)
-        insert_node_here!(compact, NewInstruction(GotoNode(join_bb), Union{}, line))
+        insert_node_here!(compact, NewInstruction(GotoNode(join_bb), ⊥, line))
         finish_current_bb!(compact, 0)
     end
 
@@ -642,7 +642,7 @@ function rewrite_apply_exprargs!(
         if thisarginfo === nothing
             if isPartialStruct(def_type)
                 # def_type.typ <: Tuple is assumed
-                def_argtypes = LatticeElement[LatticeElement(t) for t in partialfields(def_type)]
+                def_argtypes = partialfields(def_type)
             else
                 def_argtypes = LatticeElement[]
                 if isConst(def_type) # && isa(constant(def_type), Union{Tuple, SimpleVector}) is implied
@@ -699,15 +699,15 @@ function rewrite_apply_exprargs!(
                         new_sig, istate, todo)
                 end
                 if i != length(thisarginfo.each)
-                    valT = getfield_tfunc(unwraptype(call.rt), Const(1))
+                    valT = getfield_tfunc(call.rt, Const(1))
                     val_extracted = insert_node!(ir, idx, NewInstruction(
                         Expr(:call, GlobalRef(Core, :getfield), state1, 1),
                         valT))
                     push!(new_argexprs, val_extracted)
-                    push!(new_argtypes, LatticeElement(valT))
+                    push!(new_argtypes, valT)
                     state_extracted = insert_node!(ir, idx, NewInstruction(
                         Expr(:call, GlobalRef(Core, :getfield), state1, 2),
-                        getfield_tfunc(unwraptype(call.rt), Const(2))))
+                        getfield_tfunc(call.rt, Const(2))))
                     state = Core.svec(state_extracted)
                 end
             end
@@ -892,19 +892,19 @@ function is_valid_type_for_apply_rewrite(typ::LatticeElement, params::Optimizati
 end
 
 function inline_splatnew!(ir::IRCode, idx::Int, stmt::Expr, rt::LatticeElement)
-    nf = nfields_tfunc(unwraptype(rt))
+    nf = nfields_tfunc(rt)
     if isConst(nf)
         eargs = stmt.args
         tup = eargs[2]
         tt = argextype(tup, ir)
-        tnf = nfields_tfunc(unwraptype(tt))
+        tnf = nfields_tfunc(tt)
         # TODO: hoisting this constant(tnf) === constant(nf) check into codegen
         # would enable us to almost always do this transform
         if isConst(tnf) && constant(tnf) === constant(nf)
             n = constant(tnf)::Int
             new_argexprs = Any[eargs[1]]
             for j = 1:n
-                atype = getfield_tfunc(unwraptype(tt), Const(j))
+                atype = getfield_tfunc(tt, Const(j))
                 new_call = Expr(:call, Core.getfield, tup, j)
                 new_argexpr = insert_node!(ir, idx, NewInstruction(new_call, atype))
                 push!(new_argexprs, new_argexpr)
@@ -1036,14 +1036,14 @@ end
 function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), state::InliningState)
     if isa(info, OpaqueClosureCreateInfo)
         lbt = argextype(stmt.args[3], ir)
-        lb, exact = instanceof_tfunc(unwraptype(lbt))
+        lb, exact = instanceof_tfunc(lbt)
         exact || return
         ubt = argextype(stmt.args[4], ir)
-        ub, exact = instanceof_tfunc(unwraptype(ubt))
+        ub, exact = instanceof_tfunc(ubt)
         exact || return
         # Narrow opaque closure type
-        newT = widenconst(tmeet(tmerge(lb, info.unspec.rt), ub))
-        if newT != ub
+        newT = widenconst(tmerge(lb, info.unspec.rt) ⊓ ub)
+        if newT !== ub
             # N.B.: Narrowing the ub requires a backdge on the mi whose type
             # information we're using, since a change in that function may
             # invalidate ub result.
@@ -1434,7 +1434,7 @@ function late_inline_special_case!(
             return SomeCase(quoted(constant(type)))
         end
         cmp_call = Expr(:call, GlobalRef(Core, :(===)), stmt.args[2], stmt.args[3])
-        cmp_call_ssa = insert_node!(ir, idx, effect_free(NewInstruction(cmp_call, Bool)))
+        cmp_call_ssa = insert_node!(ir, idx, effect_free(NewInstruction(cmp_call, LBool)))
         not_call = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), cmp_call_ssa)
         return SomeCase(not_call)
     elseif isinlining && length(argtypes) == 3 && istopfunction(f, :(>:))

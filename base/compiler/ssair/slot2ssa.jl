@@ -90,13 +90,13 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecializ
     # We'll do so later
     if ssa === UNDEF_TOKEN
         insert_node!(ir, idx, NewInstruction(
-            Expr(:throw_undef_if_not, ci.slotnames[slot], false), Any))
+            Expr(:throw_undef_if_not, ci.slotnames[slot], false), ⊤))
         return UNDEF_TOKEN
     end
     if !isa(ssa, Argument) && !(ssa === nothing) && ((ci.slotflags[slot] & SLOT_USEDUNDEF) != 0)
         # insert a temporary node. type_lift_pass! will remove it
         insert_node!(ir, idx, NewInstruction(
-            Expr(:undefcheck, ci.slotnames[slot], ssa), Any))
+            Expr(:undefcheck, ci.slotnames[slot], ssa), ⊤))
     end
     if isa(stmt, SlotNumber)
         return ssa
@@ -157,7 +157,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
             end
             op[] = x
         elseif isa(val, GlobalRef) && !(isdefined(val.mod, val.name) && isconst(val.mod, val.name))
-            op[] = NewSSAValue(insert_node!(ir, idx, NewInstruction(val, Any)).id - length(ir.stmts))
+            op[] = NewSSAValue(insert_node!(ir, idx, NewInstruction(val, ⊤)).id - length(ir.stmts))
         end
     end
     return urs[]
@@ -221,7 +221,7 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Argtypes, idx::Int
         if x.head === :static_parameter
             return sptypes[x.args[1]::Int]
         elseif x.head === :boundscheck
-            return NativeType(Bool)
+            return LBool
         elseif x.head === :copyast
             return typ_for_val(x.args[1], ci, sptypes, idx, slottypes)#::LatticeElement
         end
@@ -487,7 +487,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 # Add an explicit goto node in the next basic block (we accounted for this above)
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), NativeType(Any), 0
+                node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), ⊤, 0
             end
             result[inst_range[end]][:inst] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
@@ -500,7 +500,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 # Add an explicit goto node
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), NativeType(Any), 0
+                node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), ⊤, 0
                 inst_range = first(inst_range):(last(inst_range) + 1)
             end
         end
@@ -640,7 +640,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 ssaval = nothing
                 for use in slot.uses[]
                     insert_node!(ir, use,
-                        NewInstruction(Expr(:throw_undef_if_not, ci.slotnames[idx], false), Union{}))
+                        NewInstruction(Expr(:throw_undef_if_not, ci.slotnames[idx], false), ⊥))
                 end
                 fixup_uses!(ir, ci, code, slot.uses, idx, nothing)
             else
@@ -661,7 +661,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 node = PhiCNode(Any[])
                 phic_ssa = NewSSAValue(
                     insert_node!(ir, first_insert_for_bb(code, cfg, li),
-                        NewInstruction(node, Union{})).id - length(ir.stmts))
+                        NewInstruction(node, ⊥)).id - length(ir.stmts))
                 push!(phicnodes[li], (SlotNumber(idx), phic_ssa, node))
                 # Inform IDF that we now have a def in the catch block
                 if !(li in live.def_bbs)
@@ -674,7 +674,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             push!(phi_slots[block], idx)
             node = PhiNode()
             ssa = NewSSAValue(insert_node!(ir,
-                first_insert_for_bb(code, cfg, block), NewInstruction(node, Union{})).id - length(ir.stmts))
+                first_insert_for_bb(code, cfg, block), NewInstruction(node, ⊥)).id - length(ir.stmts))
             push!(phi_nodes[block], ssa=>node)
         end
     end

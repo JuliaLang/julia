@@ -105,6 +105,17 @@ include("ordering.jl")
 using .Order
 include("sort.jl")
 using .Sort
+# required by sort/sort! functions
+function extrema(x::Array)
+    isempty(x) && throw(ArgumentError("collection must be non-empty"))
+    vmin = vmax = x[1]
+    for i in 2:length(x)
+        xi = x[i]
+        vmax = max(vmax, xi)
+        vmin = min(vmin, xi)
+    end
+    return vmin, vmax
+end
 
 # We don't include some.jl, but this definition is still useful.
 something(x::Nothing, y...) = something(y...)
@@ -137,78 +148,6 @@ include("compiler/stmtinfo.jl")
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities
-
-# required for bootstrap
-# TODO: find why this is needed and remove it.
-function extrema(x::Array)
-    isempty(x) && throw(ArgumentError("collection must be non-empty"))
-    vmin = vmax = x[1]
-    for i in 2:length(x)
-        xi = x[i]
-        vmax = max(vmax, xi)
-        vmin = min(vmin, xi)
-    end
-    return vmin, vmax
-end
-
-# function show(io::IO, xs::Vector)
-#     print(io, eltype(xs), '[')
-#     show_itr(io, xs)
-#     print(io, ']')
-# end
-# function show(io::IO, xs::Tuple)
-#     print(io, '(')
-#     show_itr(io, xs)
-#     print(io, ')')
-# end
-# function show_itr(io::IO, xs)
-#     n = length(xs)
-#     for i in 1:n
-#         show(io, xs[i])
-#         i == n || print(io, ", ")
-#     end
-# end
-# function show(io::IO, typ′::LatticeElement)
-#     function name(x)
-#         if isLimitedAccuracy(typ′)
-#             return (nameof(x), '′',)
-#         else
-#             return (nameof(x),)
-#         end
-#     end
-#     typ = ignorelimited(typ′)
-#     if isConditional(typ)
-#         show(io, conditional(typ))
-#     elseif isConst(typ)
-#         print(io, name(Const)..., '(', constant(typ), ')')
-#     elseif isPartialStruct(typ)
-#         print(io, name(PartialStruct)..., '(', widenconst(typ), ", [")
-#         n = length(partialfields(typ))
-#         for i in 1:n
-#             show(io, partialfields(typ)[i])
-#             i == n || print(io, ", ")
-#         end
-#         print(io, "])")
-#     elseif isPartialTypeVar(typ)
-#         print(io, name(PartialTypeVar)..., '(')
-#         show(io, typ.partialtypevar.tv)
-#         print(io, ')')
-#     else
-#         print(io, name(NativeType)..., '(', widenconst(typ), ')')
-#     end
-# end
-# function show(io::IO, typ::ConditionalInfo)
-#     if typ === __NULL_CONDITIONAL__
-#         return print(io, "__NULL_CONDITIONAL__")
-#     end
-#     print(io, nameof(Conditional), '(')
-#     show(io, typ.var)
-#     print(io, ", ")
-#     show(io, typ.vtype)
-#     print(io, ", ")
-#     show(io, typ.elsetype)
-#     print(io, ')')
-# end
 
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)

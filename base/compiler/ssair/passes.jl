@@ -340,7 +340,7 @@ const LiftedLeaves = IdDict{Any, Union{Nothing,LiftedValue}}
 # try to compute lifted values that can replace `getfield(x, field)` call
 # where `x` is an immutable struct that are defined at any of `leaves`
 function lift_leaves(compact::IncrementalCompact,
-                     @nospecialize(result_t), field::Int, leaves::Vector{Any})
+                     result_t::LatticeElement, field::Int, leaves::Vector{Any})
     # For every leaf, the lifted value
     lifted_leaves = LiftedLeaves()
     maybe_undef = false
@@ -536,7 +536,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
     cmp = argextype(target, compact)
     lifted_leaves = nothing
     for leaf in leaves
-        result = tfunc(unwraptype(argextype(leaf, compact)), cmp)
+        result = tfunc(argextype(leaf, compact), cmp)
         if isConst(result)
             if lifted_leaves === nothing
                 lifted_leaves = LiftedLeaves()
@@ -549,7 +549,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
 
     # perform lifting
     lifted_val = perform_lifting!(compact,
-        visited_phinodes, cmp, lifting_cache, Bool,
+        visited_phinodes, cmp, lifting_cache, LBool,
         lifted_leaves::LiftedLeaves, val)::LiftedValue
 
     compact[idx] = lifted_val.x
@@ -570,7 +570,7 @@ end
 function perform_lifting!(compact::IncrementalCompact,
     visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val))
+    result_t::LatticeElement, lifted_leaves::LiftedLeaves, @nospecialize(stmt_val))
     reverse_mapping = IdDict{AnySSAValue, Int}(ssa => id for (id, ssa) in enumerate(visited_phinodes))
 
     # Insert PhiNodes
@@ -820,7 +820,7 @@ function sroa_pass!(ir::IRCode)
         if any_undef
             if val === nothing
                 insert_node!(compact, SSAValue(idx),
-                    non_effect_free(NewInstruction(Expr(:throw_undef_if_not, Symbol("##getfield##"), false), Nothing)))
+                    non_effect_free(NewInstruction(Expr(:throw_undef_if_not, Symbol("##getfield##"), false), LNothing)))
             else
                 # val must be defined
             end
@@ -942,7 +942,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 phinodes = IdDict{Int, SSAValue}()
                 for b in phiblocks
                     phinodes[b] = insert_node!(ir, first(ir.cfg.blocks[b].stmts),
-                        NewInstruction(PhiNode(), ftyp))
+                        NewInstruction(PhiNode(), NativeType(ftyp)))
                 end
                 # Now go through all uses and rewrite them
                 for stmt in du.uses
@@ -1184,7 +1184,7 @@ function type_lift_pass!(ir::IRCode)
                         new_phi = if length(values) == 0
                             false
                         else
-                            insert_node!(ir, item, NewInstruction(PhiNode(edges, values), Bool))
+                            insert_node!(ir, item, NewInstruction(PhiNode(edges, values), LBool))
                         end
                     else
                         def = def::PhiCNode
@@ -1192,7 +1192,7 @@ function type_lift_pass!(ir::IRCode)
                         new_phi = if length(values) == 0
                             false
                         else
-                            insert_node!(ir, item, NewInstruction(PhiCNode(values), Bool))
+                            insert_node!(ir, item, NewInstruction(PhiCNode(values), LBool))
                         end
                     end
                     processed[item] = new_phi
@@ -1243,7 +1243,7 @@ function type_lift_pass!(ir::IRCode)
                         if isa(def, PhiNode)
                             values[i] = val
                         else
-                            values[i] = insert_node!(ir, up_id, NewInstruction(UpsilonNode(val), Bool))
+                            values[i] = insert_node!(ir, up_id, NewInstruction(UpsilonNode(val), LBool))
                         end
                     end
                     if which !== SSAValue(0)
@@ -1252,7 +1252,7 @@ function type_lift_pass!(ir::IRCode)
                             phi.values[use] = new_phi
                         else
                             phi = phi::PhiCNode
-                            phi.values[use] = insert_node!(ir, w_up_id, NewInstruction(UpsilonNode(new_phi), Bool))
+                            phi.values[use] = insert_node!(ir, w_up_id, NewInstruction(UpsilonNode(new_phi), LBool))
                         end
                     end
                 end

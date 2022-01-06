@@ -166,7 +166,7 @@ struct NewInstruction
     # Don't bother redoing so on insertion.
     effect_free_computed::Bool
 
-    function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info),
+    function NewInstruction(@nospecialize(stmt), type::LatticeElement, @nospecialize(info),
             line::Union{Int32, Nothing}, flag::UInt8, effect_free_computed::Bool)
         if isa(type, Type)
             type = NativeType(type)
@@ -174,9 +174,9 @@ struct NewInstruction
         return new(stmt, type, info, line, flag, effect_free_computed)
     end
 end
-NewInstruction(@nospecialize(stmt), @nospecialize(type)) =
+NewInstruction(@nospecialize(stmt), type::LatticeElement) =
     NewInstruction(stmt, type, nothing)
-NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Nothing, Int32}) =
+NewInstruction(@nospecialize(stmt), type::LatticeElement, line::Union{Nothing, Int32}) =
     NewInstruction(stmt, type, nothing, line, IR_FLAG_NULL, false)
 
 effect_free(inst::NewInstruction) =
@@ -1163,7 +1163,7 @@ function finish_current_bb!(compact::IncrementalCompact, active_bb, old_result_i
             if unreachable
                 node[:inst], node[:type], node[:line] = ReturnNode(), ⊥, 0
             else
-                node[:inst], node[:type], node[:line] = nothing, NativeType(Nothing), 0
+                node[:inst], node[:type], node[:line] = nothing, LNothing, 0
             end
             compact.result_idx = old_result_idx + 1
         elseif compact.cfg_transforms_enabled && compact.result_idx - 1 == first(bb.stmts)

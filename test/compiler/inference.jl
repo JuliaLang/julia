@@ -1,16 +1,54 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: LatticeElement, Const, Conditional, InterConditional, NativeType,
-                      ⊑, tmerge, Bottom, is_lattice_equal, ReturnNode, GotoIfNot
+import Core.Compiler: LatticeElement, NativeType, Bottom, Const, ⊑, tmerge
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
+function PartialStruct(@nospecialize(typ), fields::Vector{Any})
+    fields = LatticeElement[LatticeElement(fields[i]) for i = 1:length(fields)]
+    return Core.Compiler.PartialStruct(typ, fields)
+end
+function Conditional(@nospecialize(typ), @nospecialize(thentype), @nospecialize(elsetype))
+    isa(thentype, LatticeElement) || (thentype = LatticeElement(thentype))
+    isa(elsetype, LatticeElement) || (elsetype = LatticeElement(elsetype))
+    return Core.Compiler.Conditional(typ, thentype, elsetype)
+end
+function InterConditional(@nospecialize(typ), @nospecialize(thentype), @nospecialize(elsetype))
+    isa(thentype, LatticeElement) || (thentype = LatticeElement(thentype))
+    isa(elsetype, LatticeElement) || (elsetype = LatticeElement(elsetype))
+    return Core.Compiler.InterConditional(typ, thentype, elsetype)
+end
+
+function latticeop(f)
+    function (vs...)
+        if isa(vs, Tuple{Vector{Any}})
+            vs = vs[1]
+            newvs = LatticeElement[]
+            for i = 1:length(vs)
+                v = vs[i]
+                isa(v, LatticeElement) || (v = NativeType(v))
+                push!(newvs, v)
+            end
+            return f(newvs)
+        else
+            newvs = LatticeElement[]
+            for i = 1:length(vs)
+                v = vs[i]
+                isa(v, LatticeElement) || (v = NativeType(v))
+                push!(newvs, v)
+            end
+            return f(newvs...)
+        end
+    end
+end
+const is_lattice_equal = latticeop(Core.Compiler.is_lattice_equal)
+
 # HACK
-Base.:(==)(a::LatticeElement, b::Type) = Core.Compiler.unwraptype(a) == b
-Base.:(==)(a::Type, b::LatticeElement) = a == Core.Compiler.unwraptype(b)
+Base.:(==)(a::LatticeElement, b::Type) = Core.Compiler.widenconst(a) == b
+Base.:(==)(a::Type, b::LatticeElement) = a == Core.Compiler.widenconst(b)
 
 f39082(x::Vararg{T}) where {T <: Number} = x[1]
 let ast = only(code_typed(f39082, Tuple{Vararg{Rational}}))[1]
@@ -275,20 +313,6 @@ barTuple1() = fooTuple{(:y,)}()
 barTuple2() = fooTuple{tuple(:y)}()
 
 @test Base.return_types(barTuple1,Tuple{})[1] == Base.return_types(barTuple2,Tuple{})[1] == fooTuple{(:y,)}
-
-# issue #6050
-@test Core.Compiler.getfield_tfunc(
-          Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
-          Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
-
-# assert robustness of `getfield_tfunc`
-struct GetfieldRobustness
-    field::String
-end
-@test Base.return_types((GetfieldRobustness,String,)) do obj, s
-    t = (10, s) # to form `PartialStruct`
-    getfield(obj, t)
-end |> only === Union{}
 
 # issue #12476
 function f12476(a)
@@ -720,9 +744,9 @@ mutable struct HasAbstractlyTypedField
 end
 f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
 @test Base.return_types(f_infer_abstract_fieldtype, ()) == Any[Type{Union{Int,String}}]
-let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
-    fieldtype_nothrow = Core.Compiler.fieldtype_nothrow
-    @test fieldtype_tfunc(Union{}, :x) == Union{}
+let
+    fieldtype_tfunc = latticeop(Core.Compiler.fieldtype_tfunc)
+    @test fieldtype_tfunc(Union{}, Const(:x)) == Union{}
     @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) == Union{}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Array}, Const(:x)) == Type{<:Array}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Real}, Const(:x)) == Type{<:Real}
@@ -732,6 +756,10 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type{<:Real}
     @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Any
     @test fieldtype_tfunc(Type{<:Tuple}, Any) == Any
+    let t = Core.Compiler.widenconst(fieldtype_tfunc(Any, Any))
+        @test TypeVar <: t
+    end
+    fieldtype_nothrow = latticeop(Core.Compiler.fieldtype_nothrow)
     @test fieldtype_nothrow(Type{Base.RefValue{<:Real}}, Const(:x))
     @test !fieldtype_nothrow(Type{Union{}}, Const(:x))
     @test !fieldtype_nothrow(Union{Type{Base.RefValue{T}}, Int32} where {T<:Real}, Const(:x))
@@ -748,7 +776,6 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(2))
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
     @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
-    @test TypeVar <: fieldtype_tfunc(Any, Any)
 end
 
 # issue #11480
@@ -1117,12 +1144,12 @@ let f(x) = isdefined(x, :NonExistentField) ? 1 : ""
     @test Base.return_types(f, (ComplexF32,)) == Any[String]
     @test Union{Int,String} <: Base.return_types(f, (AbstractArray,))[1]
 end
-import Core.Compiler: isdefined_tfunc
-@test isdefined_tfunc(ComplexF32, Const(())) === Union{}
-@test isdefined_tfunc(ComplexF32, Const(1)) === Const(true)
-@test isdefined_tfunc(ComplexF32, Const(2)) === Const(true)
-@test isdefined_tfunc(ComplexF32, Const(3)) === Const(false)
-@test isdefined_tfunc(ComplexF32, Const(0)) === Const(false)
+const isdefined_tfunc = latticeop(Core.Compiler.isdefined_tfunc)
+@test isdefined_tfunc(ComplexF32, Const(())) == Union{}
+@test isdefined_tfunc(ComplexF32, Const(1)) == Const(true)
+@test isdefined_tfunc(ComplexF32, Const(2)) == Const(true)
+@test isdefined_tfunc(ComplexF32, Const(3)) == Const(false)
+@test isdefined_tfunc(ComplexF32, Const(0)) == Const(false)
 mutable struct SometimesDefined
     x
     function SometimesDefined()
@@ -1134,35 +1161,35 @@ mutable struct SometimesDefined
     end
 end
 @test isdefined_tfunc(SometimesDefined, Const(:x)) == Bool
-@test isdefined_tfunc(SometimesDefined, Const(:y)) === Const(false)
-@test isdefined_tfunc(Const(Base), Const(:length)) === Const(true)
+@test isdefined_tfunc(SometimesDefined, Const(:y)) == Const(false)
+@test isdefined_tfunc(Const(Base), Const(:length)) == Const(true)
 @test isdefined_tfunc(Const(Base), Symbol) == Bool
 @test isdefined_tfunc(Const(Base), Const(:NotCurrentlyDefinedButWhoKnows)) == Bool
-@test isdefined_tfunc(Core.SimpleVector, Const(1)) === Const(false)
+@test isdefined_tfunc(Core.SimpleVector, Const(1)) == Const(false)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Symbol)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
 @test isdefined_tfunc(Vector{Int}, Const(1)) == Const(false)
 @test isdefined_tfunc(Vector{Any}, Const(1)) == Const(false)
-@test isdefined_tfunc(Module, Int) === Union{}
-@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(0)) === Const(false)
-@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(1)) === Const(true)
-@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(2)) === Bool
-@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(3)) === Bool
+@test isdefined_tfunc(Module, Int) == Union{}
+@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(0)) == Const(false)
+@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(1)) == Const(true)
+@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(2)) == Bool
+@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(3)) == Bool
 @testset "isdefined check for `NamedTuple`s" begin
     # concrete `NamedTuple`s
-    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:x)) === Const(true)
-    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:y)) === Const(true)
-    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:z)) === Const(false)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:x)) == Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:y)) == Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:z)) == Const(false)
     # non-concrete `NamedTuple`s
-    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:x)) === Const(true)
-    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:y)) === Const(true)
-    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:z)) === Const(false)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:x)) == Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:y)) == Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:z)) == Const(false)
 end
 struct UnionIsdefinedA; x; end
 struct UnionIsdefinedB; x; end
-@test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
-@test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
-@test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === NativeType(Bool)
+@test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) == Const(true)
+@test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) == Const(false)
+@test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) == NativeType(Bool)
 
 @noinline map3_22347(f, t::Tuple{}) = ()
 @noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)
@@ -1333,157 +1360,155 @@ isdefined_f3(x) = isdefined(x, 3)
 @test @inferred(isdefined_f3(())) == false
 @test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]), isdefined, 3)
 
-let isa_tfunc = Core.Compiler.isa_tfunc
-    @test isa_tfunc(Array, Const(AbstractArray)) === Const(true)
-    @test isa_tfunc(Array, Type{AbstractArray}) === Const(true)
+let
+    isa_tfunc = latticeop(Core.Compiler.isa_tfunc)
+    @test isa_tfunc(Array, Const(AbstractArray)) == Const(true)
+    @test isa_tfunc(Array, Type{AbstractArray}) == Const(true)
     @test isa_tfunc(Array, Type{AbstractArray{Int}}) == Bool
-    @test isa_tfunc(Array{Real}, Type{AbstractArray{Int}}) === Const(false)
-    @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Real, 2})) === Const(true)
-    @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Int, 2})) === Const(false)
-    @test isa_tfunc(DataType, Int) === Union{}
-    @test isa_tfunc(DataType, Const(Type{Int})) === Bool
-    @test isa_tfunc(DataType, Const(Type{Array})) === Bool
-    @test isa_tfunc(UnionAll, Const(Type{Int})) === Bool # could be improved
-    @test isa_tfunc(UnionAll, Const(Type{Array})) === Bool
-    @test isa_tfunc(Union, Const(Union{Float32, Float64})) === Bool
-    @test isa_tfunc(Union, Type{Union}) === Const(true)
-    @test isa_tfunc(typeof(Union{}), Const(Int)) === Const(false)
-    @test isa_tfunc(typeof(Union{}), Const(Union{})) === Const(false)
-    @test isa_tfunc(typeof(Union{}), typeof(Union{})) === Const(false)
-    @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
-    @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
-    @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
+    @test isa_tfunc(Array{Real}, Type{AbstractArray{Int}}) == Const(false)
+    @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Real, 2})) == Const(true)
+    @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Int, 2})) == Const(false)
+    @test isa_tfunc(DataType, Int) == Union{}
+    @test isa_tfunc(DataType, Const(Type{Int})) == Bool
+    @test isa_tfunc(DataType, Const(Type{Array})) == Bool
+    @test isa_tfunc(UnionAll, Const(Type{Int})) == Bool # could be improved
+    @test isa_tfunc(UnionAll, Const(Type{Array})) == Bool
+    @test isa_tfunc(Union, Const(Union{Float32, Float64})) == Bool
+    @test isa_tfunc(Union, Type{Union}) == Const(true)
+    @test isa_tfunc(typeof(Union{}), Const(Int)) == Const(false)
+    @test isa_tfunc(typeof(Union{}), Const(Union{})) == Const(false)
+    @test isa_tfunc(typeof(Union{}), typeof(Union{})) == Const(false)
+    @test isa_tfunc(typeof(Union{}), Union{}) == Union{} # any result is ok
+    @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) == Const(true)
+    @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) == Const(true)
     let c = Conditional(0, Const(Union{}), Const(Union{}))
-        @test isa_tfunc(c, Const(Bool)) === Const(true)
-        @test isa_tfunc(c, Type{Bool}) === Const(true)
-        @test isa_tfunc(c, Const(Real)) === Const(true)
-        @test isa_tfunc(c, Type{Real}) === Const(true)
-        @test isa_tfunc(c, Const(Signed)) === Const(false)
-        @test isa_tfunc(c, Type{Complex}) === Const(false)
-        @test isa_tfunc(c, Type{Complex{T}} where T) === Const(false)
+        @test isa_tfunc(c, Const(Bool)) == Const(true)
+        @test isa_tfunc(c, Type{Bool}) == Const(true)
+        @test isa_tfunc(c, Const(Real)) == Const(true)
+        @test isa_tfunc(c, Type{Real}) == Const(true)
+        @test isa_tfunc(c, Const(Signed)) == Const(false)
+        @test isa_tfunc(c, Type{Complex}) == Const(false)
+        @test isa_tfunc(c, Type{Complex{T}} where T) == Const(false)
     end
-    @test isa_tfunc(Val{1}, Type{Val{T}} where T) === Bool
-    @test isa_tfunc(Val{1}, DataType) === Bool
-    @test isa_tfunc(Any, Const(Any)) === Const(true)
-    @test isa_tfunc(Any, Union{}) === Union{} # any result is ok
-    @test isa_tfunc(Any, Type{Union{}}) === Const(false)
-    @test isa_tfunc(Union{Int64, Float64}, Type{Real}) === Const(true)
-    @test isa_tfunc(Union{Int64, Float64}, Type{Integer}) === Bool
-    @test isa_tfunc(Union{Int64, Float64}, Type{AbstractArray}) === Const(false)
+    @test isa_tfunc(Val{1}, Type{Val{T}} where T) == Bool
+    @test isa_tfunc(Val{1}, DataType) == Bool
+    @test isa_tfunc(Any, Const(Any)) == Const(true)
+    @test isa_tfunc(Any, Union{}) == Union{} # any result is ok
+    @test isa_tfunc(Any, Type{Union{}}) == Const(false)
+    @test isa_tfunc(Union{Int64, Float64}, Type{Real}) == Const(true)
+    @test isa_tfunc(Union{Int64, Float64}, Type{Integer}) == Bool
+    @test isa_tfunc(Union{Int64, Float64}, Type{AbstractArray}) == Const(false)
 end
 
-let subtype_tfunc = Core.Compiler.subtype_tfunc
-    @test subtype_tfunc(Type{<:Array}, Const(AbstractArray)) === Const(true)
-    @test subtype_tfunc(Type{<:Array}, Type{AbstractArray}) === Const(true)
+let
+    subtype_tfunc = latticeop(Core.Compiler.subtype_tfunc)
+    @test subtype_tfunc(Type{<:Array}, Const(AbstractArray)) == Const(true)
+    @test subtype_tfunc(Type{<:Array}, Type{AbstractArray}) == Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray{Int}}) == Bool
-    @test subtype_tfunc(Type{<:Array{Real}}, Type{AbstractArray{Int}}) === Const(false)
-    @test subtype_tfunc(Type{<:Array{Real, 2}}, Const(AbstractArray{Real, 2})) === Const(true)
-    @test subtype_tfunc(Type{Array{Real, 2}}, Const(AbstractArray{Int, 2})) === Const(false)
-    @test subtype_tfunc(DataType, Int) === Bool
-    @test subtype_tfunc(DataType, Const(Type{Int})) === Bool
-    @test subtype_tfunc(DataType, Const(Type{Array})) === Bool
-    @test subtype_tfunc(UnionAll, Const(Type{Int})) === Bool
-    @test subtype_tfunc(UnionAll, Const(Type{Array})) === Bool
-    @test subtype_tfunc(Union, Const(Union{Float32, Float64})) === Bool
-    @test subtype_tfunc(Union, Type{Union}) === Bool
-    @test subtype_tfunc(Union{}, Const(Int)) === Const(true) # any result is ok
-    @test subtype_tfunc(Union{}, Const(Union{})) === Const(true) # any result is ok
-    @test subtype_tfunc(Union{}, typeof(Union{})) === Const(true) # any result is ok
-    @test subtype_tfunc(Union{}, Union{}) === Const(true) # any result is ok
-    @test subtype_tfunc(Union{}, Type{typeof(Union{})}) === Const(true) # any result is ok
-    @test subtype_tfunc(Union{}, Const(typeof(Union{}))) === Const(true) # any result is ok
-    @test subtype_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true) # Union{} <: typeof(Union{})
-    @test subtype_tfunc(typeof(Union{}), Const(Int)) === Const(true) # Union{} <: Int
-    @test subtype_tfunc(typeof(Union{}), Const(Union{})) === Const(true) # Union{} <: Union{}
-    @test subtype_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true) # Union{} <: Union{}
-    @test subtype_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true) # Union{} <: typeof(Union{})
-    @test subtype_tfunc(typeof(Union{}), Type{Union{}}) === Const(true) # Union{} <: Union{}
-    @test subtype_tfunc(Type{Union{}}, typeof(Union{})) === Const(true) # Union{} <: Union{}
-    @test subtype_tfunc(Type{Union{}}, Const(typeof(Union{}))) === Const(true) # Union{} <: typeof(Union{})
-    @test subtype_tfunc(Type{Union{}}, Const(Int)) === Const(true) # Union{} <: typeof(Union{})
-    @test subtype_tfunc(Type{Union{}}, Any) === Const(true) # Union{} <: Any
-    @test subtype_tfunc(Type{Union{}}, Union{Type{Int64}, Type{Float64}}) === Const(true)
-    @test subtype_tfunc(Type{Union{}}, Union{Type{T}, Type{Float64}} where T) === Const(true)
+    @test subtype_tfunc(Type{<:Array{Real}}, Type{AbstractArray{Int}}) == Const(false)
+    @test subtype_tfunc(Type{<:Array{Real, 2}}, Const(AbstractArray{Real, 2})) == Const(true)
+    @test subtype_tfunc(Type{Array{Real, 2}}, Const(AbstractArray{Int, 2})) == Const(false)
+    @test subtype_tfunc(DataType, Int) == Bool
+    @test subtype_tfunc(DataType, Const(Type{Int})) == Bool
+    @test subtype_tfunc(DataType, Const(Type{Array})) == Bool
+    @test subtype_tfunc(UnionAll, Const(Type{Int})) == Bool
+    @test subtype_tfunc(UnionAll, Const(Type{Array})) == Bool
+    @test subtype_tfunc(Union, Const(Union{Float32, Float64})) == Bool
+    @test subtype_tfunc(Union, Type{Union}) == Bool
+    @test subtype_tfunc(Union{}, Const(Int)) == Const(true) # any result is ok
+    @test subtype_tfunc(Union{}, Const(Union{})) == Const(true) # any result is ok
+    @test subtype_tfunc(Union{}, typeof(Union{})) == Const(true) # any result is ok
+    @test subtype_tfunc(Union{}, Union{}) == Const(true) # any result is ok
+    @test subtype_tfunc(Union{}, Type{typeof(Union{})}) == Const(true) # any result is ok
+    @test subtype_tfunc(Union{}, Const(typeof(Union{}))) == Const(true) # any result is ok
+    @test subtype_tfunc(typeof(Union{}), Const(typeof(Union{}))) == Const(true) # Union{} <: typeof(Union{})
+    @test subtype_tfunc(typeof(Union{}), Const(Int)) == Const(true) # Union{} <: Int
+    @test subtype_tfunc(typeof(Union{}), Const(Union{})) == Const(true) # Union{} <: Union{}
+    @test subtype_tfunc(typeof(Union{}), Type{typeof(Union{})}) == Const(true) # Union{} <: Union{}
+    @test subtype_tfunc(typeof(Union{}), Type{typeof(Union{})}) == Const(true) # Union{} <: typeof(Union{})
+    @test subtype_tfunc(typeof(Union{}), Type{Union{}}) == Const(true) # Union{} <: Union{}
+    @test subtype_tfunc(Type{Union{}}, typeof(Union{})) == Const(true) # Union{} <: Union{}
+    @test subtype_tfunc(Type{Union{}}, Const(typeof(Union{}))) == Const(true) # Union{} <: typeof(Union{})
+    @test subtype_tfunc(Type{Union{}}, Const(Int)) == Const(true) # Union{} <: typeof(Union{})
+    @test subtype_tfunc(Type{Union{}}, Any) == Const(true) # Union{} <: Any
+    @test subtype_tfunc(Type{Union{}}, Union{Type{Int64}, Type{Float64}}) == Const(true)
+    @test subtype_tfunc(Type{Union{}}, Union{Type{T}, Type{Float64}} where T) == Const(true)
     let c = Conditional(0, Const(Union{}), Const(Union{}))
-        @test subtype_tfunc(c, Const(Bool)) === Const(true) # any result is ok
+        @test subtype_tfunc(c, Const(Bool)) == Const(true) # any result is ok
     end
-    @test subtype_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
-    @test subtype_tfunc(Type{Val{1}}, DataType) === Bool
-    @test subtype_tfunc(Type, Type{Val{T}} where T) === Bool
-    @test subtype_tfunc(Type{Val{T}} where T, Type) === Bool
-    @test subtype_tfunc(Any, Const(Any)) === Const(true)
-    @test subtype_tfunc(Type{Any}, Const(Any)) === Const(true)
-    @test subtype_tfunc(Any, Union{}) === Bool # any result is ok
-    @test subtype_tfunc(Type{Any}, Union{}) === Const(false) # any result is ok
-    @test subtype_tfunc(Type, Union{}) === Bool # any result is ok
-    @test subtype_tfunc(Type, Type{Union{}}) === Bool
-    @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{Real}) === Const(true)
-    @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{Integer}) === Bool
-    @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{AbstractArray}) === Const(false)
+    @test subtype_tfunc(Type{Val{1}}, Type{Val{T}} where T) == Bool
+    @test subtype_tfunc(Type{Val{1}}, DataType) == Bool
+    @test subtype_tfunc(Type, Type{Val{T}} where T) == Bool
+    @test subtype_tfunc(Type{Val{T}} where T, Type) == Bool
+    @test subtype_tfunc(Any, Const(Any)) == Const(true)
+    @test subtype_tfunc(Type{Any}, Const(Any)) == Const(true)
+    @test subtype_tfunc(Any, Union{}) == Bool # any result is ok
+    @test subtype_tfunc(Type{Any}, Union{}) == Const(false) # any result is ok
+    @test subtype_tfunc(Type, Union{}) == Bool # any result is ok
+    @test subtype_tfunc(Type, Type{Union{}}) == Bool
+    @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{Real}) == Const(true)
+    @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{Integer}) == Bool
+    @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{AbstractArray}) == Const(false)
 end
 
-let egal_tfunc
-    function egal_tfunc(a, b)
-        r = Core.Compiler.egal_tfunc(a, b)
-        @test r === Core.Compiler.egal_tfunc(b, a)
-        return r
-    end
+let
+    egal_tfunc = latticeop(Core.Compiler.egal_tfunc)
     @test egal_tfunc(Const(12345.12345), Const(12344.12345 + 1)) == Const(true)
-    @test egal_tfunc(Array, Const(Array)) === Const(false)
-    @test egal_tfunc(Array, Type{Array}) === Const(false)
+    @test egal_tfunc(Array, Const(Array)) == Const(false)
+    @test egal_tfunc(Array, Type{Array}) == Const(false)
     @test egal_tfunc(Int, Int) == Bool
     @test egal_tfunc(Array, Array) == Bool
     @test egal_tfunc(Array, AbstractArray{Int}) == Bool
-    @test egal_tfunc(Array{Real}, AbstractArray{Int}) === Const(false)
-    @test egal_tfunc(Array{Real, 2}, AbstractArray{Real, 2}) === Bool
-    @test egal_tfunc(Array{Real, 2}, AbstractArray{Int, 2}) === Const(false)
-    @test egal_tfunc(DataType, Int) === Const(false)
-    @test egal_tfunc(DataType, Const(Int)) === Bool
-    @test egal_tfunc(DataType, Const(Array)) === Const(false)
-    @test egal_tfunc(UnionAll, Const(Int)) === Const(false)
-    @test egal_tfunc(UnionAll, Const(Array)) === Bool
-    @test egal_tfunc(Union, Const(Union{Float32, Float64})) === Bool
-    @test egal_tfunc(Const(Union{Float32, Float64}), Const(Union{Float32, Float64})) === Const(true)
-    @test egal_tfunc(Type{Union{Float32, Float64}}, Type{Union{Float32, Float64}}) === Bool
-    @test egal_tfunc(typeof(Union{}), typeof(Union{})) === Bool # could be improved
-    @test egal_tfunc(Const(typeof(Union{})), Const(typeof(Union{}))) === Const(true)
+    @test egal_tfunc(Array{Real}, AbstractArray{Int}) == Const(false)
+    @test egal_tfunc(Array{Real, 2}, AbstractArray{Real, 2}) == Bool
+    @test egal_tfunc(Array{Real, 2}, AbstractArray{Int, 2}) == Const(false)
+    @test egal_tfunc(DataType, Int) == Const(false)
+    @test egal_tfunc(DataType, Const(Int)) == Bool
+    @test egal_tfunc(DataType, Const(Array)) == Const(false)
+    @test egal_tfunc(UnionAll, Const(Int)) == Const(false)
+    @test egal_tfunc(UnionAll, Const(Array)) == Bool
+    @test egal_tfunc(Union, Const(Union{Float32, Float64})) == Bool
+    @test egal_tfunc(Const(Union{Float32, Float64}), Const(Union{Float32, Float64})) == Const(true)
+    @test egal_tfunc(Type{Union{Float32, Float64}}, Type{Union{Float32, Float64}}) == Bool
+    @test egal_tfunc(typeof(Union{}), typeof(Union{})) == Bool # could be improved
+    @test egal_tfunc(Const(typeof(Union{})), Const(typeof(Union{}))) == Const(true)
     let c = Conditional(1, Const(Union{}), Const(Union{}))
-        @test egal_tfunc(c, Const(Bool)) === Const(false)
-        @test egal_tfunc(c, Type{Bool}) === Const(false)
-        @test egal_tfunc(c, Const(Real)) === Const(false)
-        @test egal_tfunc(c, Type{Real}) === Const(false)
-        @test egal_tfunc(c, Const(Signed)) === Const(false)
-        @test egal_tfunc(c, Type{Complex}) === Const(false)
-        @test egal_tfunc(c, Type{Complex{T}} where T) === Const(false)
-        @test egal_tfunc(c, Bool) === Bool
-        @test egal_tfunc(c, Any) === Bool
+        @test egal_tfunc(c, Const(Bool)) == Const(false)
+        @test egal_tfunc(c, Type{Bool}) == Const(false)
+        @test egal_tfunc(c, Const(Real)) == Const(false)
+        @test egal_tfunc(c, Type{Real}) == Const(false)
+        @test egal_tfunc(c, Const(Signed)) == Const(false)
+        @test egal_tfunc(c, Type{Complex}) == Const(false)
+        @test egal_tfunc(c, Type{Complex{T}} where T) == Const(false)
+        @test egal_tfunc(c, Bool) == Bool
+        @test egal_tfunc(c, Any) == Bool
     end
-    let c = Conditional(1, Union{}, Const(Union{})) # === Const(false)
-        cnd = c.conditional
-        @test egal_tfunc(c, Const(false)) === Conditional(cnd.slot_id, cnd.elsetype, Union{})
-        @test egal_tfunc(c, Const(true)) === Conditional(cnd.slot_id, Union{}, cnd.elsetype)
-        @test egal_tfunc(c, Const(nothing)) === Const(false)
-        @test egal_tfunc(c, Int) === Const(false)
-        @test egal_tfunc(c, Bool) === Bool
-        @test egal_tfunc(c, Any) === Bool
+    let c = Conditional(1, Union{}, Const(Union{})) # == Const(false)
+        cnd = c.special
+        @test egal_tfunc(c, Const(false)) == Conditional(cnd.slot_id, cnd.elsetype, Union{})
+        @test egal_tfunc(c, Const(true)) == Conditional(cnd.slot_id, Union{}, cnd.elsetype)
+        @test egal_tfunc(c, Const(nothing)) == Const(false)
+        @test egal_tfunc(c, Int) == Const(false)
+        @test egal_tfunc(c, Bool) == Bool
+        @test egal_tfunc(c, Any) == Bool
     end
-    let c = Conditional(1, Const(Union{}), Union{}) # === Const(true)
-        cnd = c.conditional
-        @test egal_tfunc(c, Const(false)) === Conditional(cnd.slot_id, Union{}, cnd.vtype)
-        @test egal_tfunc(c, Const(true)) === Conditional(cnd.slot_id, cnd.vtype, Union{})
-        @test egal_tfunc(c, Const(nothing)) === Const(false)
-        @test egal_tfunc(c, Int) === Const(false)
-        @test egal_tfunc(c, Bool) === Bool
-        @test egal_tfunc(c, Any) === Bool
+    let c = Conditional(1, Const(Union{}), Union{}) # == Const(true)
+        cnd = c.special
+        @test egal_tfunc(c, Const(false)) == Conditional(cnd.slot_id, Union{}, cnd.vtype)
+        @test egal_tfunc(c, Const(true)) == Conditional(cnd.slot_id, cnd.vtype, Union{})
+        @test egal_tfunc(c, Const(nothing)) == Const(false)
+        @test egal_tfunc(c, Int) == Const(false)
+        @test egal_tfunc(c, Bool) == Bool
+        @test egal_tfunc(c, Any) == Bool
     end
-    @test egal_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
-    @test egal_tfunc(Type{Val{1}}, DataType) === Bool
-    @test egal_tfunc(Const(Any), Const(Any)) === Const(true)
-    @test egal_tfunc(Any, Union{}) === Const(false) # any result is ok
-    @test egal_tfunc(Type{Any}, Type{Union{}}) === Const(false)
-    @test egal_tfunc(Union{Int64, Float64}, Real) === Bool
-    @test egal_tfunc(Union{Int64, Float64}, Integer) === Bool
-    @test egal_tfunc(Union{Int64, Float64}, AbstractArray) === Const(false)
+    @test egal_tfunc(Type{Val{1}}, Type{Val{T}} where T) == Bool
+    @test egal_tfunc(Type{Val{1}}, DataType) == Bool
+    @test egal_tfunc(Const(Any), Const(Any)) == Const(true)
+    @test egal_tfunc(Any, Union{}) == Const(false) # any result is ok
+    @test egal_tfunc(Type{Any}, Type{Union{}}) == Const(false)
+    @test egal_tfunc(Union{Int64, Float64}, Real) == Bool
+    @test egal_tfunc(Union{Int64, Float64}, Integer) == Bool
+    @test egal_tfunc(Union{Int64, Float64}, AbstractArray) == Const(false)
 end
 egal_conditional_lattice1(x, y) = x === y ? "" : 1
 egal_conditional_lattice2(x, y) = x + x === y ? "" : 1
@@ -1495,9 +1520,11 @@ egal_conditional_lattice3(x, y) = x === y + y ? "" : 1
 @test Base.return_types(egal_conditional_lattice3, (Int64, Int64)) == Any[Union{Int, String}]
 @test Base.return_types(egal_conditional_lattice3, (Int32, Int64)) == Any[Int]
 
-using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
-@test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
-@test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
+const sizeof_tfunc = latticeop(Core.Compiler.sizeof_tfunc)
+const nfields_tfunc = latticeop(Core.Compiler.nfields_tfunc)
+const sizeof_nothrow = latticeop(Core.Compiler.sizeof_nothrow)
+@test sizeof_tfunc(Const(Ptr)) == sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) == Const(Sys.WORD_SIZE ÷ 8)
+@test sizeof_tfunc(Type{Ptr}) == Const(sizeof(Ptr))
 @test sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
 @test sizeof_nothrow(Const(Ptr))
 @test sizeof_nothrow(Type{Ptr})
@@ -1509,31 +1536,31 @@ using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
 @test !sizeof_nothrow(Type{String})
 @test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
 let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
-    @test sizeof_tfunc(PT) === Const(16)
-    @test nfields_tfunc(PT) === Const(2)
+    @test sizeof_tfunc(PT) == Const(16)
+    @test nfields_tfunc(PT) == Const(2)
     @test sizeof_nothrow(PT)
 end
-@test nfields_tfunc(Type) === Int
-@test nfields_tfunc(Number) === Int
-@test nfields_tfunc(Int) === Const(0)
-@test nfields_tfunc(Complex) === Const(2)
-@test nfields_tfunc(Type{Type{Int}}) === Const(nfields(DataType))
-@test nfields_tfunc(UnionAll) === Const(2)
-@test nfields_tfunc(DataType) === Const(nfields(DataType))
-@test nfields_tfunc(Type{Int}) === Const(nfields(DataType))
-@test nfields_tfunc(Type{Integer}) === Const(nfields(DataType))
-@test nfields_tfunc(Type{Complex}) === Int
-@test nfields_tfunc(typeof(Union{})) === Const(0)
-@test nfields_tfunc(Type{Union{}}) === Const(0)
-@test nfields_tfunc(Tuple{Int, Vararg{Int}}) === Int
-@test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
-@test nfields_tfunc(Union{Tuple{Int, Float64}, Tuple{Int, Int}}) === Const(2)
+@test nfields_tfunc(Type) == Int
+@test nfields_tfunc(Number) == Int
+@test nfields_tfunc(Int) == Const(0)
+@test nfields_tfunc(Complex) == Const(2)
+@test nfields_tfunc(Type{Type{Int}}) == Const(nfields(DataType))
+@test nfields_tfunc(UnionAll) == Const(2)
+@test nfields_tfunc(DataType) == Const(nfields(DataType))
+@test nfields_tfunc(Type{Int}) == Const(nfields(DataType))
+@test nfields_tfunc(Type{Integer}) == Const(nfields(DataType))
+@test nfields_tfunc(Type{Complex}) == Int
+@test nfields_tfunc(typeof(Union{})) == Const(0)
+@test nfields_tfunc(Type{Union{}}) == Const(0)
+@test nfields_tfunc(Tuple{Int, Vararg{Int}}) == Int
+@test nfields_tfunc(Tuple{Int, Integer}) == Const(2)
+@test nfields_tfunc(Union{Tuple{Int, Float64}, Tuple{Int, Int}}) == Const(2)
 
-using Core.Compiler: typeof_tfunc
+const typeof_tfunc = latticeop(Core.Compiler.typeof_tfunc)
 @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
 @test typeof_tfunc(Tuple{Any}) == Type{<:Tuple{Any}}
-@test typeof_tfunc(Type{Array}) === DataType
-@test typeof_tfunc(Type{<:Array}) === DataType
+@test typeof_tfunc(Type{Array}) == DataType
+@test typeof_tfunc(Type{<:Array}) == DataType
 @test typeof_tfunc(Array{Int}) == Type{Array{Int,N}} where N
 @test typeof_tfunc(AbstractArray{Int}) == Type{<:AbstractArray{Int,N}} where N
 @test typeof_tfunc(Union{<:T, <:Real} where T<:Complex) == Union{Type{Complex{T}} where T<:Real, Type{<:Real}}
@@ -1542,32 +1569,34 @@ f_typeof_tfunc(x) = typeof(x)
 @test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Type{Int}, Type{Complex{T}} where T<:Real}]
 
 # arrayref / arrayset / arraysize
-import Core.Compiler: Const, arrayref_tfunc, arrayset_tfunc, arraysize_tfunc
-@test arrayref_tfunc(Const(true), Vector{Int}, Int) === Int
-@test arrayref_tfunc(Const(true), Vector{<:Integer}, Int) === Integer
-@test arrayref_tfunc(Const(true), Vector, Int) === Any
-@test arrayref_tfunc(Const(true), Vector{Int}, Int, Vararg{Int}) === Int
-@test arrayref_tfunc(Const(true), Vector{Int}, Vararg{Int}) === Int
-@test arrayref_tfunc(Const(true), Vector{Int}) === Union{}
-@test arrayref_tfunc(Const(true), String, Int) === Union{}
-@test arrayref_tfunc(Const(true), Vector{Int}, Float64) === Union{}
-@test arrayref_tfunc(Int, Vector{Int}, Int) === Union{}
-@test arrayset_tfunc(Const(true), Vector{Int}, Int, Int) === Vector{Int}
+const arrayref_tfunc = latticeop(Core.Compiler.arrayref_tfunc)
+const arrayset_tfunc = latticeop(Core.Compiler.arrayset_tfunc)
+const arraysize_tfunc = latticeop(Core.Compiler.arraysize_tfunc)
+@test arrayref_tfunc(Const(true), Vector{Int}, Int) == Int
+@test arrayref_tfunc(Const(true), Vector{<:Integer}, Int) == Integer
+@test arrayref_tfunc(Const(true), Vector, Int) == Any
+@test arrayref_tfunc(Const(true), Vector{Int}, Int, Vararg{Int}) == Int
+@test arrayref_tfunc(Const(true), Vector{Int}, Vararg{Int}) == Int
+@test arrayref_tfunc(Const(true), Vector{Int}) == Union{}
+@test arrayref_tfunc(Const(true), String, Int) == Union{}
+@test arrayref_tfunc(Const(true), Vector{Int}, Float64) == Union{}
+@test arrayref_tfunc(Int, Vector{Int}, Int) == Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Int, Int) == Vector{Int}
 let ua = Vector{<:Integer}
-    @test arrayset_tfunc(Const(true), ua, Int, Int) === ua
+    @test arrayset_tfunc(Const(true), ua, Int, Int) == ua
 end
-@test arrayset_tfunc(Const(true), Vector, Int, Int) === Vector
-@test arrayset_tfunc(Const(true), Any, Int, Int) === Any
-@test arrayset_tfunc(Const(true), Vector{String}, String, Int, Vararg{Int}) === Vector{String}
-@test arrayset_tfunc(Const(true), Vector{String}, String, Vararg{Int}) === Vector{String}
-@test arrayset_tfunc(Const(true), Vector{String}, String) === Union{}
-@test arrayset_tfunc(Const(true), String, Char, Int) === Union{}
-@test arrayset_tfunc(Const(true), Vector{Int}, Int, Float64) === Union{}
-@test arrayset_tfunc(Int, Vector{Int}, Int, Int) === Union{}
-@test arrayset_tfunc(Const(true), Vector{Int}, Float64, Int) === Union{}
-@test arraysize_tfunc(Vector, Int) === Int
-@test arraysize_tfunc(Vector, Float64) === Union{}
-@test arraysize_tfunc(String, Int) === Union{}
+@test arrayset_tfunc(Const(true), Vector, Int, Int) == Vector
+@test arrayset_tfunc(Const(true), Any, Int, Int) == Any
+@test arrayset_tfunc(Const(true), Vector{String}, String, Int, Vararg{Int}) == Vector{String}
+@test arrayset_tfunc(Const(true), Vector{String}, String, Vararg{Int}) == Vector{String}
+@test arrayset_tfunc(Const(true), Vector{String}, String) == Union{}
+@test arrayset_tfunc(Const(true), String, Char, Int) == Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Int, Float64) == Union{}
+@test arrayset_tfunc(Int, Vector{Int}, Int, Int) == Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Float64, Int) == Union{}
+@test arraysize_tfunc(Vector, Int) == Int
+@test arraysize_tfunc(Vector, Float64) == Union{}
+@test arraysize_tfunc(String, Int) == Union{}
 
 function f23024(::Type{T}, ::Int) where T
     1 + 1
@@ -1637,13 +1666,14 @@ g_test_constant() = (f_constant(3) == 3 && f_constant(4) == 4 ? true : "BAD")
 f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test @inferred f_pure_add()
 
+const getfield_tfunc = latticeop(Core.Compiler.getfield_tfunc)
+
 # inference of `T.mutable`
-@test Core.Compiler.getfield_tfunc(Const(Int.name), Const(:flags)) == Const(0x4)
-@test Core.Compiler.getfield_tfunc(Const(Vector{Int}.name), Const(:flags)) == Const(0x2)
-@test Core.Compiler.getfield_tfunc(Core.TypeName, Const(:flags)) == UInt8
+@test getfield_tfunc(Const(Int.name), Const(:flags)) == Const(0x4)
+@test getfield_tfunc(Const(Vector{Int}.name), Const(:flags)) == Const(0x2)
+@test getfield_tfunc(Core.TypeName, Const(:flags)) == UInt8
 
 # getfield on abstract named tuples. issue #32698
-import Core.Compiler: getfield_tfunc, Const
 @test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
                      Const(:y)) == Union{Missing, Float64}
 @test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
@@ -1660,21 +1690,37 @@ import Core.Compiler: getfield_tfunc, Const
 mutable struct ARef{T}
     @atomic x::T
 end
-@test getfield_tfunc(ARef{Int},Const(:x),Symbol) === Int
-@test getfield_tfunc(ARef{Int},Const(:x),Bool) === Int
-@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Bool) === Int
-@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Vararg{Symbol}) === Int # `Vararg{Symbol}` might be empty
-@test getfield_tfunc(ARef{Int},Const(:x),Vararg{Symbol}) === Int
-@test getfield_tfunc(ARef{Int},Const(:x),Any,) === Int
-@test getfield_tfunc(ARef{Int},Const(:x),Any,Any) === Int
-@test getfield_tfunc(ARef{Int},Const(:x),Any,Vararg{Any}) === Int
-@test getfield_tfunc(ARef{Int},Const(:x),Vararg{Any}) === Int
-@test getfield_tfunc(ARef{Int},Const(:x),Int) === Union{}
-@test getfield_tfunc(ARef{Int},Const(:x),Bool,Symbol) === Union{}
-@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Symbol) === Union{}
-@test getfield_tfunc(ARef{Int},Const(:x),Bool,Bool) === Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol) == Int
+@test getfield_tfunc(ARef{Int},Const(:x),Bool) == Int
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Bool) == Int
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Vararg{Symbol}) == Int # `Vararg{Symbol}` might be empty
+@test getfield_tfunc(ARef{Int},Const(:x),Vararg{Symbol}) == Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,) == Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,Any) == Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,Vararg{Any}) == Int
+@test getfield_tfunc(ARef{Int},Const(:x),Vararg{Any}) == Int
+@test getfield_tfunc(ARef{Int},Const(:x),Int) == Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Bool,Symbol) == Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Symbol) == Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Bool,Bool) == Union{}
 
-import Core.Compiler: setfield!_tfunc, setfield!_nothrow, Const
+# issue #6050
+@test getfield_tfunc(
+    Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
+    Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
+
+# assert robustness of `getfield_tfunc`
+struct GetfieldRobustness
+    field::String
+end
+@test Base.return_types((GetfieldRobustness,String,)) do obj, s
+    t = (10, s) # to form `PartialStruct`
+    getfield(obj, t)
+end |> only === Union{}
+
+const setfield!_tfunc = latticeop(Core.Compiler.setfield!_tfunc)
+const setfield!_nothrow = latticeop(Core.Compiler.setfield!_nothrow)
+
 mutable struct XY{X,Y}
     x::X
     y::Y
@@ -1685,63 +1731,63 @@ mutable struct ABCDconst
     c
     const d::Union{Int,Nothing}
 end
-@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Int) === Int
-@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Int, Symbol) === Int
-@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Int) === Int
-@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Int, Symbol) === Int
-@test setfield!_tfunc(Base.RefValue{Int}, Int, Int) === Int
-@test setfield!_tfunc(Base.RefValue{Any}, Const(:x), Int) === Int
-@test setfield!_tfunc(Base.RefValue{Any}, Const(:x), Int, Symbol) === Int
-@test setfield!_tfunc(Base.RefValue{Any}, Const(1), Int) === Int
-@test setfield!_tfunc(Base.RefValue{Any}, Const(1), Int, Symbol) === Int
-@test setfield!_tfunc(Base.RefValue{Any}, Int, Int) === Int
-@test setfield!_tfunc(XY{Any,Any}, Const(1), Int) === Int
-@test setfield!_tfunc(XY{Any,Any}, Const(2), Float64) === Float64
-@test setfield!_tfunc(XY{Int,Float64}, Const(1), Int) === Int
-@test setfield!_tfunc(XY{Int,Float64}, Const(2), Float64) === Float64
-@test setfield!_tfunc(ABCDconst, Const(:c), Any) === Any
-@test setfield!_tfunc(ABCDconst, Const(3), Any) === Any
-@test setfield!_tfunc(ABCDconst, Symbol, Any) === Any
-@test setfield!_tfunc(ABCDconst, Int, Any) === Any
-@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int) === Int
-@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(:x), Int) === Int
-@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(1), Int) === Int
-@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(1), Int) === Int
-@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Symbol, Int) === Int
-@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Symbol, Int) === Int
-@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Int, Int) === Int
-@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Int, Int) === Int
-@test setfield!_tfunc(Any, Symbol, Int) === Int
-@test setfield!_tfunc(Any, Int, Int) === Int
-@test setfield!_tfunc(Any, Any, Int) === Int
-@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Float64) === Union{}
-@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Float64, Symbol) === Union{}
-@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Float64) === Union{}
-@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Float64, Symbol) === Union{}
-@test setfield!_tfunc(Base.RefValue{Int}, Int, Float64) === Union{}
-@test setfield!_tfunc(Base.RefValue{Any}, Const(:y), Int) === Union{}
-@test setfield!_tfunc(Base.RefValue{Any}, Const(:y), Int, Bool) === Union{}
-@test setfield!_tfunc(Base.RefValue{Any}, Const(2), Int) === Union{}
-@test setfield!_tfunc(Base.RefValue{Any}, Const(2), Int, Bool) === Union{}
-@test setfield!_tfunc(Base.RefValue{Any}, String, Int) === Union{}
-@test setfield!_tfunc(Some{Any}, Const(:value), Int) === Union{}
-@test setfield!_tfunc(Some, Const(:value), Int) === Union{}
-@test setfield!_tfunc(Some{Any}, Const(1), Int) === Union{}
-@test setfield!_tfunc(Some, Const(1), Int) === Union{}
-@test setfield!_tfunc(Some{Any}, Symbol, Int) === Union{}
-@test setfield!_tfunc(Some, Symbol, Int) === Union{}
-@test setfield!_tfunc(Some{Any}, Int, Int) === Union{}
-@test setfield!_tfunc(Some, Int, Int) === Union{}
-@test setfield!_tfunc(Const(@__MODULE__), Const(:v), Int) === Union{}
-@test setfield!_tfunc(Const(@__MODULE__), Int, Int) === Union{}
-@test setfield!_tfunc(Module, Const(:v), Int) === Union{}
-@test setfield!_tfunc(Union{Module,Base.RefValue{Any}}, Const(:v), Int) === Union{}
-@test setfield!_tfunc(ABCDconst, Const(:a), Any) === Union{}
-@test setfield!_tfunc(ABCDconst, Const(:b), Any) === Union{}
-@test setfield!_tfunc(ABCDconst, Const(:d), Any) === Union{}
-@test setfield!_tfunc(ABCDconst, Const(1), Any) === Union{}
-@test setfield!_tfunc(ABCDconst, Const(2), Any) === Union{}
-@test setfield!_tfunc(ABCDconst, Const(4), Any) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Int) == Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Int, Symbol) == Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Int) == Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Int, Symbol) == Int
+@test setfield!_tfunc(Base.RefValue{Int}, Int, Int) == Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:x), Int) == Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:x), Int, Symbol) == Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(1), Int) == Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(1), Int, Symbol) == Int
+@test setfield!_tfunc(Base.RefValue{Any}, Int, Int) == Int
+@test setfield!_tfunc(XY{Any,Any}, Const(1), Int) == Int
+@test setfield!_tfunc(XY{Any,Any}, Const(2), Float64) == Float64
+@test setfield!_tfunc(XY{Int,Float64}, Const(1), Int) == Int
+@test setfield!_tfunc(XY{Int,Float64}, Const(2), Float64) == Float64
+@test setfield!_tfunc(ABCDconst, Const(:c), Any) == Any
+@test setfield!_tfunc(ABCDconst, Const(3), Any) == Any
+@test setfield!_tfunc(ABCDconst, Symbol, Any) == Any
+@test setfield!_tfunc(ABCDconst, Int, Any) == Any
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int) == Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(:x), Int) == Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(1), Int) == Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(1), Int) == Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Symbol, Int) == Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Symbol, Int) == Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Int, Int) == Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Int, Int) == Int
+@test setfield!_tfunc(Any, Symbol, Int) == Int
+@test setfield!_tfunc(Any, Int, Int) == Int
+@test setfield!_tfunc(Any, Any, Int) == Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Float64) == Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Float64, Symbol) == Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Float64) == Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Float64, Symbol) == Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Int, Float64) == Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:y), Int) == Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:y), Int, Bool) == Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(2), Int) == Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(2), Int, Bool) == Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, String, Int) == Union{}
+@test setfield!_tfunc(Some{Any}, Const(:value), Int) == Union{}
+@test setfield!_tfunc(Some, Const(:value), Int) == Union{}
+@test setfield!_tfunc(Some{Any}, Const(1), Int) == Union{}
+@test setfield!_tfunc(Some, Const(1), Int) == Union{}
+@test setfield!_tfunc(Some{Any}, Symbol, Int) == Union{}
+@test setfield!_tfunc(Some, Symbol, Int) == Union{}
+@test setfield!_tfunc(Some{Any}, Int, Int) == Union{}
+@test setfield!_tfunc(Some, Int, Int) == Union{}
+@test setfield!_tfunc(Const(@__MODULE__), Const(:v), Int) == Union{}
+@test setfield!_tfunc(Const(@__MODULE__), Int, Int) == Union{}
+@test setfield!_tfunc(Module, Const(:v), Int) == Union{}
+@test setfield!_tfunc(Union{Module,Base.RefValue{Any}}, Const(:v), Int) == Union{}
+@test setfield!_tfunc(ABCDconst, Const(:a), Any) == Union{}
+@test setfield!_tfunc(ABCDconst, Const(:b), Any) == Union{}
+@test setfield!_tfunc(ABCDconst, Const(:d), Any) == Union{}
+@test setfield!_tfunc(ABCDconst, Const(1), Any) == Union{}
+@test setfield!_tfunc(ABCDconst, Const(2), Any) == Union{}
+@test setfield!_tfunc(ABCDconst, Const(4), Any) == Union{}
 @test setfield!_nothrow(Base.RefValue{Int}, Const(:x), Int)
 @test setfield!_nothrow(Base.RefValue{Int}, Const(1), Int)
 @test setfield!_nothrow(Base.RefValue{Any}, Const(:x), Int)
@@ -2884,7 +2930,7 @@ end
 @test @inferred(foo30783(2)) == Val(1)
 
 # PartialStruct tmerge
-using Core.Compiler: PartialStruct, tmerge, Const, ⊑
+using Core.Compiler: tmerge, Const, ⊑
 struct FooPartial
     a::Int
     b::Int
@@ -3020,9 +3066,9 @@ const DenseIdx = Union{IntRange,Integer}
 # Non uniformity in expressions with PartialTypeVar
 @test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
 let N = TypeVar(:N)
-    @test Core.Compiler.apply_type_nothrow(Any[Const(NTuple),
+    @test Core.Compiler.apply_type_nothrow(LatticeElement[Const(NTuple),
         Core.Compiler.PartialTypeVar(N, true, true),
-        Const(Any)], Type{Tuple{Vararg{Any,N}}})
+        Const(Any)], NativeType(Type{Tuple{Vararg{Any,N}}}))
 end
 
 # issue #33768
@@ -3291,8 +3337,8 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 
 # Issue #36710 - sizeof(::UnionAll) tfunc correctness
 @test (sizeof(Ptr),) == sizeof.((Ptr,)) == sizeof.((Ptr{Cvoid},))
-@test Core.Compiler.sizeof_tfunc(UnionAll) === Int
-@test !Core.Compiler.sizeof_nothrow(UnionAll)
+@test sizeof_tfunc(UnionAll) == Int
+@test !sizeof_nothrow(UnionAll)
 
 @test Base.return_types(Expr) == Any[Expr]
 
@@ -3358,9 +3404,13 @@ f_apply_cglobal(args...) = cglobal(args...)
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Type{Int}, Vararg{Type{Int}}}) == Union{}
 
 # issue #37532
-@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{Int}}, Int])
-@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{T}} where T, Ptr])
-@test !Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr}, Ptr])
+function intrinsic_nothrow(@nospecialize(f::Core.IntrinsicFunction), argtypes::Vector{Any})
+    argtypes = LatticeElement[LatticeElement(argtypes[i]) for i = 1:length(argtypes)]
+    return Core.Compiler.intrinsic_nothrow(f, argtypes)
+end
+@test intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{Int}}, Int])
+@test intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{T}} where T, Ptr])
+@test !intrinsic_nothrow(Core.bitcast, Any[Type{Ptr}, Ptr])
 f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
 @test Base.return_types(f37532, Tuple{Any, Int}) == Any[Int]
 

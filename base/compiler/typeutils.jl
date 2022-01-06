@@ -25,7 +25,7 @@ function hasuniquerep(@nospecialize t)
     return false
 end
 
-function has_nontrivial_const_info(@nospecialize t #=TODO (lattice overhaul) ::LatticeElement=#)
+function has_nontrivial_const_info(t::LatticeElement)
     isPartialStruct(t) && return true
     isPartialOpaque(t) && return true
     isConst(t) || return false
@@ -189,7 +189,7 @@ end
 
 # N.B.: typename maps type equivalence classes to a single value
 function typename_static(t::LatticeElement)
-    isConditional(t) && return NativeType(Bool.name)
+    isConditional(t) && return Const(Bool.name)
     isConst(t) && return _typename(constant(t))
     t = unwrap_unionall(widenconst(t))
     return isType(t) ? _typename(t.parameters[1]) : NativeType(Core.TypeName)

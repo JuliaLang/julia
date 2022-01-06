@@ -356,17 +356,17 @@ function _tmerge(@nospecialize(typea), @nospecialize(typeb))
     if isConditional(typea) && !isConditional(typeb) && isConst(typeb)
         cnd = conditional(typea)
         if constant(typeb) === true
-            typeb = Conditional(cnd.slot_id, Any, Bottom)
+            typeb = Conditional(cnd.slot_id, ⊤, ⊥)
         elseif constant(typeb) === false
-            typeb = Conditional(cnd.slot_id, Bottom, Any)
+            typeb = Conditional(cnd.slot_id, ⊥, ⊤)
         end
     end
     if isConditional(typeb) && !isConditional(typea) && isConst(typea)
         cnd = conditional(typeb)
         if constant(typea) === true
-            typea = Conditional(cnd.slot_id, Any, Bottom)
+            typea = Conditional(cnd.slot_id, ⊤, ⊥)
         elseif constant(typea) === false
-            typea = Conditional(cnd.slot_id, Bottom, Any)
+            typea = Conditional(cnd.slot_id, ⊥, ⊤)
         end
     end
     if isConditional(typea) && isConditional(typeb)
@@ -388,17 +388,17 @@ function _tmerge(@nospecialize(typea), @nospecialize(typeb))
     if isInterConditional(typea) && !isInterConditional(typeb) && isConst(typeb)
         cnd = interconditional(typea)
         if constant(typeb) === true
-            typeb = InterConditional(cnd.slot_id, Any, Bottom)
+            typeb = InterConditional(cnd.slot_id, ⊤, ⊥)
         elseif constant(typeb) === false
-            typeb = InterConditional(cnd.slot_id, Bottom, Any)
+            typeb = InterConditional(cnd.slot_id, ⊥, ⊤)
         end
     end
     if isInterConditional(typeb) && !isInterConditional(typea) && isConst(typea)
         cnd = interconditional(typeb)
         if constant(typea) === true
-            typea = InterConditional(cnd.slot_id, Any, Bottom)
+            typea = InterConditional(cnd.slot_id, ⊤, ⊥)
         elseif constant(typea) === false
-            typea = InterConditional(cnd.slot_id, Bottom, Any)
+            typea = InterConditional(cnd.slot_id, ⊥, ⊤)
         end
     end
     if isInterConditional(typea) && isInterConditional(typeb)
@@ -429,7 +429,7 @@ function _tmerge(@nospecialize(typea), @nospecialize(typeb))
             type_nfields = constant(typea_nfields)::Int
             type_nfields === constant(typeb_nfields)::Int || return aty
             type_nfields == 0 && return aty
-            fields = Vector{Any}(undef, type_nfields)
+            fields = Vector{LatticeElement}(undef, type_nfields)
             anyconst = false
             for i = 1:type_nfields
                 ai = getfield_tfunc(typea, Const(i))
@@ -633,15 +633,22 @@ end
 
 # compute typeintersect over the extended inference lattice
 # where v is in the extended lattice, and t is a Type
-function tmeet(@nospecialize(v), @nospecialize(t))
+"""
+    v::LatticeElement ⊓ t::Type -> x::LatticeElement
+
+`⊓` computes `typeintersect` over the type inference lattice.
+Note that this operation is not the valid "meet" operation,
+since `v` is in the extended lattice while `t` needs to be a `Type`.
+"""
+v::LatticeElement ⊓ @nospecialize(t) = begin
     if isConditional(v)
         if !(Bool <: t)
-            return Bottom
+            return ⊥
         end
         return v
     elseif isConst(v)
         if !has_free_typevars(t) && !isa(constant(v), t)
-            return Bottom
+            return ⊥
         end
         return v
     elseif isPartialStruct(v)
@@ -651,24 +658,24 @@ function tmeet(@nospecialize(v), @nospecialize(t))
             return v
         end
         ti = typeintersect(widev, t)
-        valid_as_lattice(ti) || return Bottom
+        valid_as_lattice(ti) || return ⊥
         @assert widev <: Tuple
         vfields = partialfields(v)
-        new_fields = Vector{Any}(undef, length(vfields))
-        for i = 1:length(new_fields)
+        nfields = length(vfields)
+        new_fields = Vector{LatticeElement}(undef, nfields)
+        for i = 1:nfields
             vfi = vfields[i]
-            if isvarargtype(vfi)
+            if isVararg(vfi)
                 new_fields[i] = vfi
             else
-                new_fields[i] = tmeet(vfi, widenconst(getfield_tfunc(t, Const(i))))
-                if new_fields[i] === Bottom
-                    return Bottom
-                end
+                nf = vfi ⊓ widenconst(getfield_tfunc(NativeType(t), Const(i)))
+                nf === ⊥ && return ⊥
+                new_fields[i] = nf
             end
         end
         return tuple_tfunc(new_fields)
     end
     ti = typeintersect(widenconst(v), t)
-    valid_as_lattice(ti) || return Bottom
-    return ti
+    valid_as_lattice(ti) || return ⊥
+    return NativeType(ti)
 end
