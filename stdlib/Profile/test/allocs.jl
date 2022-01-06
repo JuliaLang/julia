@@ -2,7 +2,7 @@ using Test
 using Profile: Allocs
 
 @testset "alloc profiler doesn't segfault" begin
-    res = Allocs.@profile sample_rate=1 begin
+    res = Allocs.@profile sample_rate=1.0 begin
         # test the allocations during compilation
         using Base64
     end
@@ -30,10 +30,6 @@ end
             end
         end
         close(ch)
-        # for obj in ch
-        #     # ...
-        # end
-        GC.gc()
     end
 
     # call once to make sure it's compiled
