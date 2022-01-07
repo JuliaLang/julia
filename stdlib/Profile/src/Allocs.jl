@@ -74,7 +74,7 @@ end
 function fetch()
     raw_results = ccall(:jl_fetch_alloc_profile, RawAllocResults, ())
     decoded_results = decode(raw_results)
-    @warn("this allocation profiler currently misses some allocations. " *
+    @warn("This allocation profiler currently misses some allocations. " *
     "For more info see https://github.com/JuliaLang/julia/issues/43688")
     return decoded_results
 end
