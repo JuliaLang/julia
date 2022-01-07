@@ -198,6 +198,25 @@ namespace {
                                 }
                                 case Instruction::ICmp: {
                                     auto cmp = cast<ICmpInst>(inst);
+                                    if (dominators.empty()) {
+                                        if (auto ci = dyn_cast<ConstantInt>(dim.first)) {
+                                            if (ci->isNegative()) {
+                                                //We can't optimize this comparison instruction
+                                                //to be unsigned if it's a negative length!
+                                                continue;
+                                            }
+                                        } else if (auto dinst = dyn_cast<Instruction>(dim.first)) {
+                                            if (!dinst->hasNoSignedWrap()) {
+                                                //This might have overflowed, can't make
+                                                //comparisons unsigned
+                                                continue;
+                                            }
+                                        } else {
+                                            // We don't know what this value is,
+                                            // can't make the comparison unsigned
+                                            continue;
+                                        }
+                                    }
                                     std::size_t idx = inst->getOperand(0) == dim.first;
                                     auto val = inst->getOperand(idx);
                                     if (auto ci = dyn_cast<ConstantInt>(val)) {
