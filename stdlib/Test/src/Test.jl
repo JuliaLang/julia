@@ -1720,6 +1720,7 @@ function detect_ambiguities(mods::Module...;
         end
     end
     work = Base.loaded_modules_array()
+    filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
@@ -1754,8 +1755,8 @@ function detect_unbound_args(mods...;
     mods = collect(mods)::Vector{Module}
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
-            has_unbound_vars(m.sig) || continue
             is_in_mods(m.module, recursive, mods) || continue
+            has_unbound_vars(m.sig) || continue
             tuple_sig = Base.unwrap_unionall(m.sig)::DataType
             if Base.isvatuple(tuple_sig)
                 params = tuple_sig.parameters[1:(end - 1)]
@@ -1769,6 +1770,7 @@ function detect_unbound_args(mods...;
         end
     end
     work = Base.loaded_modules_array()
+    filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
