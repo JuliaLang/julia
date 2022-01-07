@@ -758,6 +758,9 @@ end
 function is_juxtapose(ps, prev_k, t)
     k = kind(t)
 
+    # FIXME:
+    # https://github.com/JuliaLang/julia/issues/16356
+    # https://github.com/JuliaLang/julia/commit/e3eacbb4a4479a6df4f588089490aeefc6e8cad8
     return !t.had_whitespace                         &&
     (is_number(prev_k) ||
         (!is_number(k) &&  # disallow "x.3" and "sqrt(2)2"
@@ -1129,35 +1132,15 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # [f (x)]  ==>  (hcat f x)
             break
         end
-        if k == K"("
-            if is_macrocall
-                # a().@x(y)  ==> (macrocall (error (. (call a) (quote x))) y)
-                finish_macroname(ps, mark, is_valid_modref, macro_name_position)
-            end
-            # f(a,b)  ==>  (call f a b)
-            # f (a)  ==>  (call f (error-t) a b)
-            bump_disallowed_space(ps)
-            bump(ps, TRIVIA_FLAG)
-            # Keyword arguments depends on call vs macrocall
-            #  foo(a=1)  ==>  (call foo (kw a 1))
-            # @foo(a=1)  ==>  (macrocall @foo (= a 1))
-            parse_call_arglist(ps, K")", is_macrocall)
-            emit(ps, mark, is_macrocall ? K"macrocall" : K"call")
-            if peek(ps) == K"do"
-                # f(x) do y body end  ==>  (do (call :f :x) (-> (tuple :y) (block :body)))
-                bump(ps, TRIVIA_FLAG)
-                parse_do(ps)
-                emit(ps, mark, K"do")
-            end
-            if is_macrocall
-                break
-            end
-        elseif is_macrocall && (t.had_whitespace || is_closing_token(ps, k))
-            # a().@x y  ==> (macrocall (error (. (call a) (quote x))) y)
+        if is_macrocall && (t.had_whitespace || is_closing_token(ps, k))
+            # Macro calls with space-separated arguments
+            # @foo a b      ==> (macrocall @foo a b)
+            # @foo (x)    ==> (macrocall @foo x)
+            # @foo (x,y)  ==> (macrocall @foo (tuple x y))
+            # a().@x y    ==> (macrocall (error (. (call a) (quote x))) y)
             finish_macroname(ps, mark, is_valid_modref, macro_name_position)
             with_space_sensitive(ps) do ps
                 # Space separated macro arguments
-                # @foo a b      ==> (macrocall @foo a b)
                 # A.@foo a b    ==> (macrocall (. A (quote @foo)) a b)
                 # @A.foo a b    ==> (macrocall (. A (quote @foo)) a b)
                 n_args = parse_space_separated_exprs(ps)
@@ -1182,6 +1165,29 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 emit(ps, mark, K"macrocall")
             end
             break
+        elseif k == K"("
+            if is_macrocall
+                # a().@x(y)  ==> (macrocall (error (. (call a) (quote x))) y)
+                finish_macroname(ps, mark, is_valid_modref, macro_name_position)
+            end
+            # f(a,b)  ==>  (call f a b)
+            # f (a)  ==>  (call f (error-t) a b)
+            bump_disallowed_space(ps)
+            bump(ps, TRIVIA_FLAG)
+            # Keyword arguments depends on call vs macrocall
+            #  foo(a=1)  ==>  (call foo (kw a 1))
+            # @foo(a=1)  ==>  (macrocall @foo (= a 1))
+            parse_call_arglist(ps, K")", is_macrocall)
+            emit(ps, mark, is_macrocall ? K"macrocall" : K"call")
+            if peek(ps) == K"do"
+                # f(x) do y body end  ==>  (do (call :f :x) (-> (tuple :y) (block :body)))
+                bump(ps, TRIVIA_FLAG)
+                parse_do(ps)
+                emit(ps, mark, K"do")
+            end
+            if is_macrocall
+                break
+            end
         elseif k == K"["
             if is_macrocall
                 # a().@x[1]  ==> FIXME
