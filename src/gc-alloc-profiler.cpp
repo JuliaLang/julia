@@ -66,7 +66,7 @@ RawBacktrace get_raw_backtrace() {
 
 // == exported interface ==
 
-extern "C" {  // Needed since the function doesn't take any arguments.
+extern "C" {  // Needed since these functions doesn't take any arguments.
 
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate) {
     // We only need to do this once, the first time this is called.
@@ -75,7 +75,6 @@ JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate) {
     }
 
     g_alloc_profile.sample_rate = sample_rate;
-
     g_alloc_profile_enabled = true;
 }
 
@@ -118,7 +117,7 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
     g_combined_results.combined_allocs.clear();
 }
 
-// == callbacks called into by the outside ==
+// == callback called into by the outside ==
 
 void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
     auto& global_profile = g_alloc_profile;
