@@ -101,13 +101,16 @@ JL_DLLEXPORT void jl_stop_alloc_profile() {
 }
 
 JL_DLLEXPORT void jl_free_alloc_profile() {
-    for (auto profile : g_alloc_profile.per_thread_profiles) {
+    // Free any allocs that remain in the per-thread profiles, that haven't
+    // been combined yet (which happens in fetch_alloc_profiles()).
+    for (auto& profile : g_alloc_profile.per_thread_profiles) {
         for (auto alloc : profile.allocs) {
             free(alloc.backtrace.data);
         }
         profile.allocs.clear();
     }
 
+    // Free the allocs that have been already combined into the combined results object.
     for (auto alloc : g_combined_results.combined_allocs) {
         free(alloc.backtrace.data);
     }

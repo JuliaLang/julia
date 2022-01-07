@@ -85,4 +85,24 @@ end
 
     Allocs.clear()
     @test length(Allocs.fetch().allocs) == 0
+
+    # Clear without fetching
+
+    Allocs.@profile sample_rate=1 do_work()
+    Allocs.clear()
+    @test length(Allocs.fetch().allocs) == 0
+
+    # And things still work like normal afterwards
+
+    Allocs.@profile sample_rate=1 do_work()
+    Allocs.@profile sample_rate=1 do_work()
+    Allocs.@profile sample_rate=1 do_work()
+    @test length(Allocs.fetch().allocs) > 10
+
+    Allocs.@profile sample_rate=1 do_work()
+    Allocs.@profile sample_rate=1 do_work()
+    @test length(Allocs.fetch().allocs) > 10
+
+    Allocs.clear()
+
 end
