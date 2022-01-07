@@ -1534,7 +1534,7 @@ end
     end
 end
 
-isassigned(a::Array, i::CartesianIndex) = isassigned(a, to_indices(a, (), (i, ))...)
+isassigned(a::Array, i::CartesianIndex) = isassigned(a, Tuple(i)...)
 isassigned(a::Array, i::Union{Int, CartesianIndex}...) = isassigned(a, CartesianIndex(i))
 
 ## permutedims
