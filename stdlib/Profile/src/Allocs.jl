@@ -81,7 +81,7 @@ function stop()
 end
 
 """
-    Profile.Allocs.stop()
+    Profile.Allocs.clear()
 
 Clear allocation information from memory.
 """

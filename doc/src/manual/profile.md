@@ -339,8 +339,8 @@ a garbage collection happens.
 ### Allocation Profiler
 
 The allocation profiler records the stack trace, type, and size of each
- allocation while it is running. It can be invoked with
- [`Profile.Allocs.@profile`](@ref).
+allocation while it is running. It can be invoked with
+[`Profile.Allocs.@profile`](@ref).
 
 This information about the allocations is returned as an array of `Alloc`
 objects, wrapped in an `AllocResults` object. The best way to visualize
@@ -348,10 +348,10 @@ these is currently with the [PProf.jl](https://github.com/JuliaPerf/PProf.jl)
 library, which can visualize the call stacks which are making the most
 allocations.
 
-The allocation profiler does have significant overhead, so a `sample_interval`
+The allocation profiler does have significant overhead, so a `sample_rate`
 argument can be passed to speed it up by making it skip some allocations.
-Passing `sample_interval=1.0` will make it record everything (which is slow);
-`sample_interval=0.1` will record only 10% of the allocations (faster), etc.
+Passing `sample_rate=1.0` will make it record everything (which is slow);
+`sample_rate=0.1` will record only 10% of the allocations (faster), etc.
 
 ## External Profiling
 
