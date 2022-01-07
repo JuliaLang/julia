@@ -23,6 +23,7 @@ no heap allocations).
 
 # Examples
 ```jldoctest
+julia> using Random;
 julia> rng = Xoshiro(1234);
 julia> x1 = rand(rng, 2)
 2-element Vector{Float64}:
