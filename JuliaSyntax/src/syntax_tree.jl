@@ -112,7 +112,7 @@ mutable struct SyntaxNode
     raw::GreenNode{SyntaxHead}
     position::Int
     parent::Union{Nothing,SyntaxNode}
-    head::Symbol
+    is_leaf::Bool
     val::Any
 end
 
@@ -178,11 +178,8 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             @error "Leaf node of kind $k unknown to SyntaxNode"
             val = nothing
         end
-        return SyntaxNode(source, raw, position, nothing, :leaf, val)
+        return SyntaxNode(source, raw, position, nothing, true, val)
     else
-        str = untokenize(head(raw), include_flag_suff=false)
-        headsym = !isnothing(str) ? Symbol(str) :
-            error("Can't untokenize head of kind $(kind(raw))")
         cs = SyntaxNode[]
         pos = position
         if kind(raw) == K"string" && has_flags(head(raw), TRIPLE_STRING_FLAG)
@@ -194,7 +191,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
                     if kind(rawchild) == K"String"
                         val_range = pos:pos + span(rawchild) - 1
                         push!(strs, source[val_range])
-                        n = SyntaxNode(source, rawchild, pos, nothing, :leaf, nothing)
+                        n = SyntaxNode(source, rawchild, pos, nothing, true, nothing)
                         push!(cs, n)
                         push!(str_nodes, n)
                     else
@@ -217,7 +214,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
                 pos += rawchild.span
             end
         end
-        node = SyntaxNode(source, raw, position, nothing, headsym, cs)
+        node = SyntaxNode(source, raw, position, nothing, false, cs)
         for c in cs
             c.parent = node
         end
@@ -227,27 +224,27 @@ end
 
 is_error(node::SyntaxNode) = is_error(node.raw)
 is_trivia(node::SyntaxNode) = is_trivia(node.raw)
-has_flags(node::SyntaxNode, f) = has_flags(head(node.raw), f)
+has_flags(node::SyntaxNode, f) = has_flags(head(node), f)
 
-head(node::SyntaxNode) = node.head
+head(node::SyntaxNode) = head(node.raw)
 kind(node::SyntaxNode)  = kind(node.raw)
 flags(node::SyntaxNode) = flags(node.raw)
 
-haschildren(node::SyntaxNode) = node.head !== :leaf
+haschildren(node::SyntaxNode) = !node.is_leaf
 children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : ()
 
 span(node::SyntaxNode) = span(node.raw)
 
 function interpolate_literal(node::SyntaxNode, val)
-    @assert node.head == :$
-    SyntaxNode(node.source, node.raw, node.position, node.parent, :leaf, val)
+    @assert kind(node) == K"$"
+    SyntaxNode(node.source, node.raw, node.position, node.parent, true, val)
 end
 
 function _show_syntax_node(io, current_filename, node, indent)
     fname = node.source.filename
     line, col = source_location(node.source, node.position)
     posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(node.position,6)):$(rpad(node.position+span(node)-1,6))│"
-    nodestr = haschildren(node)   ?  "[$(untokenize(head(node.raw)))]" :
+    nodestr = haschildren(node)   ?  "[$(untokenize(head(node)))]" :
               node.val isa Symbol ? string(node.val) :
               repr(node.val)
     treestr = string(indent, nodestr)
@@ -274,7 +271,7 @@ function _show_syntax_node_sexpr(io, node)
             print(io, node.val isa Symbol ? string(node.val) : repr(node.val))
         end
     else
-        print(io, "(", untokenize(head(node.raw)))
+        print(io, "(", untokenize(head(node)))
         first = true
         for n in children(node)
             print(io, ' ')
@@ -397,22 +394,26 @@ function _to_expr(node::SyntaxNode)
         args[2], args[1] = args[1], args[2]
     end
     loc = source_location(LineNumberNode, node.source, node.position)
+
+    headstr = untokenize(head(node), include_flag_suff=false)
+    headsym = !isnothing(headstr) ? Symbol(headstr) :
+        error("Can't untokenize head of kind $(kind(node))")
     # Convert elements
-    if head(node) == :macrocall
+    if headsym == :macrocall
         insert!(args, 2, loc)
-    elseif head(node) in (:call, :ref)
+    elseif headsym in (:call, :ref)
         # Move parameters block to args[2]
         if length(args) > 1 && Meta.isexpr(args[end], :parameters)
             insert!(args, 2, args[end])
             pop!(args)
         end
-    elseif head(node) in (:tuple, :parameters, :vect)
+    elseif headsym in (:tuple, :parameters, :vect)
         # Move parameters blocks to args[1]
         if length(args) > 1 && Meta.isexpr(args[end], :parameters)
             pushfirst!(args, args[end])
             pop!(args)
         end
-    elseif head(node) == :try
+    elseif headsym == :try
         # Try children in source order:
         #   try_block catch_var catch_block else_block finally_block
         # Expr ordering:
@@ -438,10 +439,10 @@ function _to_expr(node::SyntaxNode)
         if else_ !== false
             push!(args, else_)
         end
-    elseif head(node) == :filter
+    elseif headsym == :filter
         pushfirst!(args, last(args))
         pop!(args)
-    elseif head(node) == :flatten
+    elseif headsym == :flatten
         # The order of nodes inside the generators in Julia's flatten AST
         # is noncontiguous in the source text, so need to reconstruct
         # Julia's AST here from our alternative `flatten` expression.
@@ -450,13 +451,13 @@ function _to_expr(node::SyntaxNode)
             gen = Expr(:generator, gen, args[i])
         end
         args = [gen]
-    elseif head(node) in (:nrow, :ncat)
+    elseif headsym in (:nrow, :ncat)
         # For lack of a better place, the dimension argument to nrow/ncat
         # is stored in the flags
         pushfirst!(args, numeric_flags(flags(node)))
-    elseif head(node) == :typed_ncat
+    elseif headsym == :typed_ncat
         insert!(args, 2, numeric_flags(flags(node)))
-    elseif head(node) == :(=)
+    elseif headsym == :(=)
         if is_eventually_call(args[1])
             if Meta.isexpr(args[2], :block)
                 pushfirst!(args[2].args, loc)
@@ -465,7 +466,7 @@ function _to_expr(node::SyntaxNode)
                 args[2] = Expr(:block, loc, args[2])
             end
         end
-    elseif head(node) == :(->)
+    elseif headsym == :(->)
         if Meta.isexpr(args[2], :block)
             pushfirst!(args[2].args, loc)
         else
@@ -473,11 +474,11 @@ function _to_expr(node::SyntaxNode)
             args[2] = Expr(:block, loc, args[2])
         end
     end
-    if head(node) == :inert || (head(node) == :quote &&
+    if headsym == :inert || (headsym == :quote &&
                                 length(args) == 1 && !(only(args) isa Expr))
         return QuoteNode(only(args))
     else
-        return Expr(head(node), args...)
+        return Expr(headsym, args...)
     end
 end
 
