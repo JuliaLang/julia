@@ -1094,6 +1094,14 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     struct link_map *extra_info;
     dladdr_success = dladdr1((void*)pointer, &dlinfo, (void**)&extra_info, RTLD_DL_LINKMAP) != 0;
 #else
+#ifdef _OS_DARWIN_
+    // On macOS 12, dladdr(-1, …) succeeds and returns the main executable image,
+    // despite there never actually being an image there. This is not what we want,
+    // as we use -1 as a known-invalid value e.g. in the test suite.
+    if (pointer == ~(size_t)0) {
+        return false;
+    }
+#endif
     dladdr_success = dladdr((void*)pointer, &dlinfo) != 0;
 #endif
     if (!dladdr_success || !dlinfo.dli_fname)
