@@ -410,7 +410,7 @@ void Optimizer::checkObjectEscapes(Instruction *I)
 }
 
 void Optimizer::checkArrayEscapes() {
-    if (object_escape_info.memops.size() == 1 && object_escape_info.memops.begin()->second.accesses.size() == 1) {
+    if (!object_escape_info.hasunknownmem && object_escape_info.memops.size() == 1 && object_escape_info.memops.begin()->second.accesses.size() == 1) {
         auto &memop = *object_escape_info.memops.begin()->second.accesses.begin();
         if (memop.offset == 0 && isa<LoadInst>(memop.inst)) {
             jl_alloc::EscapeAnalysisRequiredArgs required{array_escape_info, check_stack, pass, *pass.DL};
