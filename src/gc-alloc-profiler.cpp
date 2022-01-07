@@ -9,7 +9,6 @@
 #include <vector>
 
 using std::string;
-using std::unordered_map;
 using std::vector;
 
 struct RawBacktrace {
