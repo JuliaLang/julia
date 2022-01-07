@@ -5,28 +5,62 @@
 """
 Convert a Julia source code string into a number.
 """
-function julia_string_to_number(T, str::AbstractString, kind)
-    # Fix this up... it's barely functional.
+function julia_string_to_number(str::AbstractString, kind)
+    str = replace(str, '_'=>"")
     if kind == K"Integer"
-        str = replace(str, '_'=>"")
-    end
-    x = Base.parse(T, str)
-    if kind == K"HexInt"
-        if length(str) <= 4
-            x = UInt8(x)
-        elseif length(str) <= 6
-            x = UInt16(x)
-        elseif length(str) <= 10
-            x = UInt32(x)
-        elseif length(str) <= 18
-            x = UInt64(x)
-        elseif length(str) <= 34
-            x = UInt128(x)
-        else
-            TODO("BigInt")
+        x = Base.tryparse(Int, str)
+        if Int === Int32 && isnothing(x)
+            x = Base.tryparse(Int64, str)
         end
+        if isnothing(x)
+            # TODO: flisp parses BigInt and Int128 as string macros rather than
+            # literals. Is this necessary or can we get away with using values
+            # here?
+            x = Base.tryparse(Int128, str)
+            if isnothing(x)
+                x = Base.parse(BigInt, str)
+            end
+        end
+        return x
+    elseif kind == K"Float"
+        if 'f' in str
+            # This is kind of awful. Should we have a separate Float32 literal
+            # type produced by the lexer?  The `f` suffix is nonstandard after all.
+            return Base.parse(Float32, replace(str, 'f'=>'e'))
+        else
+            return Base.parse(Float64, str)
+        end
+    elseif kind == K"HexInt"
+        ndigits = length(str)-2
+        return ndigits <= 2  ? Base.parse(UInt8, str)   :
+               ndigits <= 4  ? Base.parse(UInt16, str)  :
+               ndigits <= 8  ? Base.parse(UInt32, str)  :
+               ndigits <= 16 ? Base.parse(UInt64, str)  :
+               ndigits <= 32 ? Base.parse(UInt128, str) :
+               Base.parse(BigInt, str)
+    elseif kind == K"BinInt"
+        ndigits = length(str)-2
+        return ndigits <= 8   ? Base.parse(UInt8, str)   :
+               ndigits <= 16  ? Base.parse(UInt16, str)  :
+               ndigits <= 32  ? Base.parse(UInt32, str)  :
+               ndigits <= 64  ? Base.parse(UInt64, str)  :
+               ndigits <= 128 ? Base.parse(UInt128, str) :
+               Base.parse(BigInt, str)
+    elseif kind == K"OctInt"
+        x = Base.tryparse(UInt64, str)
+        if isnothing(x)
+            x = Base.tryparse(UInt128, str)
+            if isnothing(x)
+                x = Base.parse(BigInt, str)
+            end
+        else
+            x = x <= typemax(UInt8)  ? UInt8(x)  :
+                x <= typemax(UInt16) ? UInt16(x) :
+                x <= typemax(UInt32) ? UInt32(x) :
+                x
+        end
+        return x
     end
-    x
 end
 
 """

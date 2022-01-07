@@ -126,11 +126,8 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         val_str = source[val_range]
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
-        val = if k in (K"Integer", K"BinInt", K"OctInt", K"HexInt")
-            julia_string_to_number(Int, val_str, k)
-        elseif k == K"Float"
-            # FIXME: Other float types!
-            julia_string_to_number(Float64, val_str, k)
+        val = if k in KSet`Integer Float BinInt OctInt HexInt`
+            julia_string_to_number(val_str, k)
         elseif k == K"true"
             true
         elseif k == K"false"
