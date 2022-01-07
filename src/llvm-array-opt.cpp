@@ -127,10 +127,14 @@ namespace {
                     //length/dim loads directly to the allocated amount
                     for (auto &field : use_info.memops) {
                         for (auto &memop : field.second.accesses) {
-                            if (memop.offset == offsetof(jl_array_t, length)) {
+                            if (memop.offset == offsetof(jl_array_t, length) || memop.offset == offsetof(jl_array_t, nrows) || memop.offset == offsetof(jl_array_t, maxsize)) {
                                 changed = true;
                                 IRBuilder<> builder(memop.inst);
                                 memop.inst->replaceAllUsesWith(builder.CreateIntCast(allocation.allocation->getArgOperand(1), memop.inst->getType(), false, "arraylen"));
+                                memop.inst->eraseFromParent();
+                            } else if (memop.offset == offsetof(jl_array_t, offset)) {
+                                changed = true;
+                                memop.inst->replaceAllUsesWith(ConstantInt::get(memop.inst->getType(), 0));
                                 memop.inst->eraseFromParent();
                             }
                         }
