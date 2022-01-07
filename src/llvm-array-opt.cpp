@@ -109,7 +109,6 @@ namespace {
                 //we must necessarily clobber the array length
                 //This allows us to track all clobbers via the
                 //array length field
-                #ifdef STORE_ARRAY_LEN
                 bool arraylen_clobbered = false;
                 for (auto &field : use_info.memops) {
                     for (auto &memop : field.second.accesses) {
@@ -140,7 +139,6 @@ namespace {
                         }
                     }
                 }
-                #endif
             }
         }
         return changed;
