@@ -239,11 +239,8 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     }
     void *fptr = lookup_symbol(RTLD_DEFAULT, "jl_get_pgcstack_static");
     void *(*key)(void) = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_addr_static");
-    if (fptr == NULL || key == NULL) {
-        jl_loader_print_stderr("ERROR: Cannot find jl_get_pgcstack_static(), must define this symbol within calling executable!\n");
-        exit(1);
-    }
-    jl_pgcstack_setkey(fptr, key);
+    if (fptr != NULL && key != NULL)
+        jl_pgcstack_setkey(fptr, key);
 #endif
 
     // jl_options must be initialized very early, in case an embedder sets some

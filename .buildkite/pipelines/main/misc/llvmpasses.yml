@@ -26,7 +26,6 @@ steps:
     timeout_in_minutes: 60
   - label: "llvmpasses"
     key: "llvmpasses"
-    soft_fail: true # TODO: delete this line
     plugins:
       - JuliaCI/julia#v1:
           # Drop default "registries" directory, so it is not persisted from execution to execution
