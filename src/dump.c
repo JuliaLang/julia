@@ -247,6 +247,10 @@ static size_t filter_external_mis(jl_array_t *list)
             listdata[n++] = (jl_value_t*)mi;
             jl_printf(JL_STDOUT, "newrootsindex %d for ", mi->def.method->newrootsindex);
             jl_(mi);
+            jl_printf(JL_STDOUT, " owned by ");
+            jl_(mi->def.method->module);
+            jl_printf(JL_STDOUT, " and compiled in ");
+            jl_(serializer_worklist);
         }
     }
     if (n != n0)
@@ -550,9 +554,16 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
 
     write_uint8(s->s, TAG_CODE_INSTANCE);
     write_uint8(s->s, flags);
-    jl_serialize_value(s, (jl_value_t*)codeinst->def);
+    jl_method_instance_t *mi = codeinst->def;
+    jl_serialize_value(s, mi);
     if (write_ret_type) {
-        jl_serialize_value(s, codeinst->inferred);
+        if (currently_serializing >= 2 && codeinst->inferred && codeinst->inferred != jl_nothing && jl_is_method(mi->def.value)) {
+            // We need a decompress-compress cycle to ensure relative indexing
+            jl_method_t *m = (jl_method_t*)mi->def.value;
+            jl_serialize_value(s, jl_compress_ir(m, jl_uncompress_ir(m, codeinst, (jl_array_t*)codeinst->inferred)));
+        }
+        else
+            jl_serialize_value(s, codeinst->inferred);
         jl_serialize_value(s, codeinst->rettype_const);
         jl_serialize_value(s, codeinst->rettype);
     }
@@ -692,8 +703,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, ((jl_tvar_t*)v)->ub);
     }
     else if (jl_is_method(v)) {
-        jl_printf(JL_STDOUT, "Serializing method ");
-        jl_(v);
+        if (currently_serializing == 2) {
+            jl_printf(JL_STDOUT, "Serializing method ");
+            jl_(v);
+        }
         write_uint8(s->s, TAG_METHOD);
         jl_method_t *m = (jl_method_t*)v;
         int serialization_mode = 0, newrootsindex = 0;
@@ -706,8 +719,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             *bp |= 1;
             // check for new roots
             newrootsindex = m->newrootsindex;
-            if (newrootsindex >= 0 && newrootsindex < INT32_MAX)
+            if (newrootsindex >= 0 && newrootsindex < INT32_MAX) {
                 serialization_mode |= METHOD_HAS_NEW_ROOTS;
+                jl_printf(JL_STDOUT, " has new roots, set to %d\n", newrootsindex);
+                newrootsindex &= INT32_MAX;  // make it positive
+            }
         }
         jl_serialize_value(s, (jl_value_t*)m->sig);
         jl_serialize_value(s, (jl_value_t*)m->module);
@@ -730,13 +746,15 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         if (serialization_mode & METHOD_HAS_NEW_ROOTS) {
             size_t i, l = jl_array_len(m->roots);
-            // jl_printf(JL_STDOUT, "Serializing %ld new roots for ", l - newrootsindex);
-            // jl_(m);
+            jl_printf(JL_STDOUT, "Serializing %ld new roots for ", l - newrootsindex);
+            jl_(m);
+            if (m->newrootsindex >= 0)
+                m->newrootsindex ^= (~INT32_MAX);  // flip the sign bit to indicate that the new roots have been serialized
+            jl_printf(JL_STDOUT, "newrootsindex is now %d\n", m->newrootsindex);
             write_int32(s->s, l - newrootsindex);
             for (i = newrootsindex; i < l; i++) {
                 jl_serialize_value(s, (jl_value_t*)jl_array_ptr_ref(m->roots, i));
             }
-            m->newrootsindex ^= (~INT32_MAX);  // flip the sign bit to indicate that the new roots have been serialized
         }
         if (!(serialization_mode & METHOD_INTERNAL))
             return;
@@ -763,8 +781,8 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)m->recursion_relation);
     }
     else if (jl_is_method_instance(v)) {
-        jl_printf(JL_STDOUT, "Serializing method instance ");
-        jl_(v);
+        // jl_printf(JL_STDOUT, "Serializing method instance ");
+        // jl_(v);
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
         if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure) {
             jl_error("unimplemented: serialization of MethodInstances for OpaqueClosure");
@@ -2391,6 +2409,12 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
     newly_inferred = (jl_array_t*) _newly_inferred;
 }
 
+JL_DLLEXPORT int jl_get_method_newrootsindex(jl_value_t* m)
+{
+    assert(jl_is_method(m));
+    return ((jl_method_t*)m)->newrootsindex;
+}
+
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
     JL_TIMING(SAVE_MODULE);
@@ -2434,8 +2458,8 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 
     // newly_inferred: discard internal MethodInstances, as these will be handled by "ordinary" module traversal
     size_t n_ext_mis = filter_external_mis(newly_inferred);
-    // jl_printf(JL_STDOUT, "newly_inferred:\n");
-    // jl_(newly_inferred);
+    jl_printf(JL_STDOUT, "newly_inferred:\n");
+    jl_(newly_inferred);
 
     int en = jl_gc_enable(0); // edges map is not gc-safe
     jl_array_t *lambdas = jl_alloc_vec_any(0);
@@ -2734,9 +2758,9 @@ static void copy_roots(jl_method_t *dest, jl_array_t *newroots)
     // copy any new roots
     if (newroots && dest->newrootsindex == INT32_MAX) {
         assert(jl_is_array(newroots));
-        // jl_printf(JL_STDOUT, "copying %ld roots for ", jl_array_len(newroots));
-        // jl_(dest);
-        // jl_printf(JL_STDOUT, "dest newrootsindex: %d; roots length %ld\n", dest->newrootsindex, dest->roots ? jl_array_len(dest->roots) : 0);
+        jl_printf(JL_STDOUT, "copying %ld roots for %p aka ", jl_array_len(newroots), dest);
+        jl_(dest);
+        jl_printf(JL_STDOUT, "dest newrootsindex: %d; roots length %ld\n", dest->newrootsindex, dest->roots ? jl_array_len(dest->roots) : 0);
         // The roots may have references to recached items, fix that
         size_t i, len = jl_array_len(newroots);
         for (i = 0; i < len; i++) {
@@ -2754,6 +2778,7 @@ static void copy_roots(jl_method_t *dest, jl_array_t *newroots)
             dest->roots = newroots;
             jl_gc_wb(dest, dest->roots);
         }
+        jl_printf(JL_STDOUT, "newrootsindex is now %d\n", dest->newrootsindex);
     }
 }
 
@@ -2778,7 +2803,7 @@ static void recompress_cis(jl_array_t *list)
     jl_array_t *srcs = jl_alloc_vec_any(0);
     for (i = 0; i < n; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
-        // jl_(mi);
+        jl_(mi);
         assert(jl_is_method_instance(mi));
         jl_method_t *m = mi->def.method;
         assert(jl_is_method(m));
@@ -2786,6 +2811,7 @@ static void recompress_cis(jl_array_t *list)
         jl_array_del_end(srcs, jl_array_len(srcs));
         // decompress all code instances while the newrootsindex is set for relative root indexing
         while (ci) {
+            jl_printf(JL_STDOUT, "child\n");
             if (ci->inferred && ci->inferred != jl_nothing) {
                 assert(jl_is_array(ci->inferred));
                 assert(currently_deserializing == 2);
@@ -2794,8 +2820,8 @@ static void recompress_cis(jl_array_t *list)
             }
             ci = ci->next;
         }
-        m->newrootsindex = INT32_MAX;
-        // recompress now that we're set for absolute indexing
+        int newrootsindex = m->newrootsindex;
+        m->newrootsindex = INT32_MAX;   // set for absolute indexing
         ci = mi->cache;
         j = 0;
         while (ci) {
@@ -2807,6 +2833,7 @@ static void recompress_cis(jl_array_t *list)
             }
             ci = ci->next;
         }
+        m->newrootsindex = newrootsindex;   // set for relative indexing (may have more instances of same method)
     }
 }
 
@@ -3025,6 +3052,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
     // check_unique(&flagref_list, 0, 2);
     recompress_cis((jl_array_t*)ext_mis);
+    jl_reset_root_index(ext_mis);
     jl_printf(JL_STDOUT, "here 6\n");
     jl_printf(JL_STDOUT, "Length of flagref: %ld\n", flagref_list.len);
     // check_unique(&flagref_list, 0, 2);
