@@ -33,7 +33,7 @@ end
 Profile allocations that happen during `expr`, returning
 both the result and and AllocResults struct.
 
-A sample rate of 1 will record everything; 0 will record nothing.
+A sample rate of 1.0 will record everything; 0.0 will record nothing.
 
 ```julia
 julia> Profile.Allocs.@profile sample_rate=0.01 peakflops()
@@ -62,12 +62,12 @@ function _prof_expr(expr, opts)
 end
 
 """
-    Profile.Allocs.start(sample_rate::Number)
+    Profile.Allocs.start(sample_rate::Real)
 
 Begin recording allocations with the given sample rate
-A sample rate of 1 will record everything; 0 will record nothing.
+A sample rate of 1.0 will record everything; 0.0 will record nothing.
 """
-function start(; sample_rate::Number)
+function start(; sample_rate::Real)
     ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), Float64(sample_rate))
 end
 
@@ -83,7 +83,7 @@ end
 """
     Profile.Allocs.clear()
 
-Clear allocation information from memory.
+Clear all previously profiled allocation information from memory.
 """
 function clear()
     ccall(:jl_free_alloc_profile, Cvoid, ())

@@ -27,8 +27,8 @@ Profile.Allocs.@profile
 The methods in `Profile.Allocs` are not exported and need to be called e.g. as `Profile.Allocs.fetch()`.
 
 ```@docs
-Profile.Allocs.start
-Profile.Allocs.stop
 Profile.Allocs.clear
 Profile.Allocs.fetch
+Profile.Allocs.start
+Profile.Allocs.stop
 ```
