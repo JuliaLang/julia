@@ -80,7 +80,16 @@ JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate) {
 }
 
 JL_DLLEXPORT struct RawAllocResults jl_fetch_alloc_profile() {
-    // TODO: check that the results exist
+    // combine allocs
+    // TODO: interleave to preserve ordering
+    for (auto& profile : g_alloc_profile.per_thread_profiles) {
+        for (const auto& alloc : profile.allocs) {
+            g_combined_results.combined_allocs.push_back(alloc);
+        }
+
+        profile.allocs.clear();
+    }
+
     return RawAllocResults{
         g_combined_results.combined_allocs.data(),
         g_combined_results.combined_allocs.size(),
@@ -89,14 +98,6 @@ JL_DLLEXPORT struct RawAllocResults jl_fetch_alloc_profile() {
 
 JL_DLLEXPORT void jl_stop_alloc_profile() {
     g_alloc_profile_enabled = false;
-
-    // combine allocs
-    // TODO: interleave to preserve ordering
-    for (const auto& profile : g_alloc_profile.per_thread_profiles) {
-        for (const auto& alloc : profile.allocs) {
-            g_combined_results.combined_allocs.push_back(alloc);
-        }
-    }
 }
 
 JL_DLLEXPORT void jl_free_alloc_profile() {
@@ -105,6 +106,10 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
             free(alloc.backtrace.data);
         }
         profile.allocs.clear();
+    }
+
+    for (auto alloc : g_combined_results.combined_allocs) {
+        free(alloc.backtrace.data);
     }
 
     g_combined_results.combined_allocs.clear();
