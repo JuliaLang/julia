@@ -376,6 +376,30 @@ function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
     return Documenter.Writers.HTMLWriter.expand_versions(dir, v.versions)
 end
 
+function Documenter.Writers.LaTeXWriter.writeheader(io::IO, doc::Documenter.Documents.Document)
+    custom = joinpath(doc.user.root, doc.user.source, "assets", "custom.sty")
+    isfile(custom) ? cp(custom, "custom.sty"; force = true) : touch("custom.sty")
+    preamble =
+        """
+        \\documentclass[oneside]{memoir}
+        \\usepackage{./documenter}
+        \\usepackage{./custom}
+        \\settocdepth{section}
+        \\title{
+            {\\HUGE $(doc.user.sitename)}\\\\
+            {\\Large $(get(ENV, "TRAVIS_TAG", ""))}
+        }
+        \\author{$(doc.user.authors)}
+        \\begin{document}
+        \\frontmatter
+        \\maketitle
+        \\clearpage
+        \\tableofcontents
+        \\mainmatter
+        """
+    _println(io, preamble)
+end
+
 deploydocs(
     repo = "github.com/JuliaLang/docs.julialang.org.git",
     deploy_config = BuildBotConfig(),
