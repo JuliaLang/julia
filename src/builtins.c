@@ -1675,7 +1675,8 @@ JL_CALLABLE(jl_f__set_binding_type)
     if (b->constp && ty != (jl_value_t*)jl_any_type) {
         jl_errorf("cannot set type for constant %s", jl_symbol_name(b->name));
     }
-    if (b->value && !jl_isa(b->value, ty)) {
+    jl_value_t *val = jl_atomic_load_relaxed(&b->value);
+    if (val && !jl_isa(val, ty)) {
         jl_errorf("cannot set type for global %s. It already has a value of a different type.",
                   jl_symbol_name(b->name));
     }
