@@ -952,7 +952,7 @@ Applies a function to the preceding argument. This allows for easy function chai
 
 # Examples
 ```jldoctest
-julia> [1:5;] |> x->x.^2 |> sum |> inv
+julia> [1:5;] |> (x->x.^2) |> sum |> inv
 0.01818181818181818
 ```
 """
