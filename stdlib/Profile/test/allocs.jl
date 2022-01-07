@@ -55,3 +55,34 @@ end
     # were actually scheduled onto multiple threads,
     # and we see allocs from all threads in the profile
 end
+
+@testset "alloc profiler start stop fetch clear" begin
+    function do_work()
+        # Compiling allocates a lot
+        for f in (gensym() for _ in 1:10)
+            @eval begin
+                $f() = 10
+                $f()
+            end
+        end
+    end
+
+    Allocs.@profile sample_rate=1 do_work()
+    @test length(Allocs.fetch().allocs) > 10
+
+    Allocs.clear()
+    @test length(Allocs.fetch().allocs) == 0
+    Allocs.clear()
+    @test length(Allocs.fetch().allocs) == 0
+
+    Allocs.@profile sample_rate=1 do_work()
+    curr_allocs = length(Allocs.fetch().allocs)
+    @test curr_allocs > 10
+
+    # Do _more_ work, adding into the same profile
+    Allocs.@profile sample_rate=1 do_work()
+    @test length(Allocs.fetch().allocs) > curr_allocs
+
+    Allocs.clear()
+    @test length(Allocs.fetch().allocs) == 0
+end
