@@ -310,14 +310,14 @@ function Documenter.Writers.LaTeXWriter.writeheader(io::IO, doc::Documenter.Docu
         \\documentclass[oneside]{memoir}
         \\usepackage{./documenter}
         \\usepackage{./custom}
-        
+
         %% Title Page
         \\title{
             {\\HUGE $(doc.user.sitename)}\\\\
             {\\Large $(get(ENV, "TRAVIS_TAG", ""))}
         }
         \\author{$(doc.user.authors)}
-        
+
         %% TOC settings
         \\settocdepth{chapter}  % only show "chapter" in TOC
         % -- TOC spacing
@@ -330,7 +330,7 @@ function Documenter.Writers.LaTeXWriter.writeheader(io::IO, doc::Documenter.Docu
         % Chapter num to chapter title spacing
         \\setlength{\\cftchapternumwidth}{2.5em}
         \\makeatother
-        
+
         %% Main document begin
         \\begin{document}
         \\frontmatter
