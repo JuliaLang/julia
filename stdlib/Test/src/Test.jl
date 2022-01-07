@@ -1705,7 +1705,7 @@ function detect_ambiguities(mods::Module...;
         for m in Base.MethodList(mt)
             is_in_mods(m.module, recursive, mods) || continue
             world = Base.get_world_counter()
-            ambig = Int32[0]
+            ambig = Ref{Int32}(0)
             ms = Base._methods_by_ftype(m.sig, nothing, -1, world, true, Ref(typemin(UInt)), Ref(typemax(UInt)), ambig)
             ambig[1] == 0 && continue
             isa(ms, Bool) && continue
