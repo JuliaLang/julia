@@ -194,7 +194,7 @@ function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
         end
     end
     for arg in ast.args
-        if arg isa Expr && arg.head in [:block, :if, :using, :import]
+        if isexpr(arg, (:block, :if, :using, :import))
             modules_to_be_loaded(arg, mods)
         end
     end
