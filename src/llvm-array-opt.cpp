@@ -199,14 +199,24 @@ namespace {
                                 case Instruction::ICmp: {
                                     auto cmp = cast<ICmpInst>(inst);
                                     if (dominators.empty()) {
+                                        // If the instruction isn't dominated by some allocation,
+                                        // it needs to have a mitigating factor to make the cmp
+                                        // signed->unsigned transition
                                         if (auto ci = dyn_cast<ConstantInt>(dim.first)) {
                                             if (ci->isNegative()) {
                                                 //We can't optimize this comparison instruction
                                                 //to be unsigned if it's a negative length!
+
+                                                //This doesn't need to be present if the dominator
+                                                //set is non-empty, because this comparison
+                                                //would happen after an allocation used the negative
+                                                //number and thus the allocation would throw,
+                                                //preventing this comparison from every being
+                                                //reached at runtime.
                                                 continue;
                                             }
                                         } else if (auto dinst = dyn_cast<Instruction>(dim.first)) {
-                                            if (!dinst->hasNoSignedWrap()) {
+                                            if (isa<OverflowingBinaryOperator>(dinst) && !dinst->hasNoSignedWrap()) {
                                                 //This might have overflowed, can't make
                                                 //comparisons unsigned
                                                 continue;
