@@ -118,6 +118,7 @@ endif
 CLANG_LDFLAGS := $(LLVM_LDFLAGS)
 ifeq ($(OS), Darwin)
 CLANG_LDFLAGS += -Wl,-undefined,dynamic_lookup
+OSLIBS += $(SRCDIR)/mach_dyld_atfork.tbd
 endif
 
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)

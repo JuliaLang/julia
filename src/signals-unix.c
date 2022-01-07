@@ -669,54 +669,54 @@ static void *signal_listener(void *arg)
         unw_context_t *signal_context;
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
-        if (critical || profile)
-            jl_lock_profile();
-        for (int i = jl_n_threads; i-- > 0; ) {
-            // notify thread to stop
-            jl_thread_suspend_and_get_state(i, &signal_context);
+        if (critical || profile) {
+                jl_lock_profile();
+            for (int i = jl_n_threads; i-- > 0; ) {
+                // notify thread to stop
+                jl_thread_suspend_and_get_state(i, &signal_context);
 
-            // do backtrace on thread contexts for critical signals
-            // this part must be signal-handler safe
-            if (critical) {
-                bt_size += rec_backtrace_ctx(bt_data + bt_size,
-                        JL_MAX_BT_SIZE / jl_n_threads - 1,
-                        signal_context, NULL);
-                bt_data[bt_size++].uintptr = 0;
-            }
-
-            // do backtrace for profiler
-            if (profile && running) {
-                if (jl_profile_is_buffer_full()) {
-                    // Buffer full: Delete the timer
-                    jl_profile_stop_timer();
+                // do backtrace on thread contexts for critical signals
+                // this part must be signal-handler safe
+                if (critical) {
+                    bt_size += rec_backtrace_ctx(bt_data + bt_size,
+                            JL_MAX_BT_SIZE / jl_n_threads - 1,
+                            signal_context, NULL);
+                    bt_data[bt_size++].uintptr = 0;
                 }
-                else {
-                    // unwinding can fail, so keep track of the current state
-                    // and restore from the SEGV handler if anything happens.
-                    jl_ptls_t ptls = jl_get_ptls_states();
-                    jl_jmp_buf *old_buf = ptls->safe_restore;
-                    jl_jmp_buf buf;
 
-                    ptls->safe_restore = &buf;
-                    if (jl_setjmp(buf, 0)) {
-                        jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
-                    } else {
-                        // Get backtrace data
-                        bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                                bt_size_max - bt_size_cur - 1, signal_context, NULL);
+                // do backtrace for profiler
+                if (profile && running) {
+                    if (jl_profile_is_buffer_full()) {
+                        // Buffer full: Delete the timer
+                        jl_profile_stop_timer();
                     }
-                    ptls->safe_restore = old_buf;
+                    else {
+                        // unwinding can fail, so keep track of the current state
+                        // and restore from the SEGV handler if anything happens.
+                        jl_ptls_t ptls = jl_get_ptls_states();
+                        jl_jmp_buf *old_buf = ptls->safe_restore;
+                        jl_jmp_buf buf;
 
-                    // Mark the end of this block with 0
-                    bt_data_prof[bt_size_cur++].uintptr = 0;
+                        ptls->safe_restore = &buf;
+                        if (jl_setjmp(buf, 0)) {
+                            jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
+                        } else {
+                            // Get backtrace data
+                            bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
+                                    bt_size_max - bt_size_cur - 1, signal_context, NULL);
+                        }
+                        ptls->safe_restore = old_buf;
+
+                        // Mark the end of this block with 0
+                        bt_data_prof[bt_size_cur++].uintptr = 0;
+                    }
                 }
-            }
 
-            // notify thread to resume
-            jl_thread_resume(i, sig);
-        }
-        if (critical || profile)
+                // notify thread to resume
+                jl_thread_resume(i, sig);
+            }
             jl_unlock_profile();
+        }
 #ifndef HAVE_MACH
         if (profile && running) {
 #if defined(HAVE_TIMER)
