@@ -97,7 +97,7 @@ julia> A
 schur!(A::StridedMatrix{<:BlasFloat}) = Schur(LinearAlgebra.LAPACK.gees!('V', A)...)
 
 """
-    schur(A::StridedMatrix) -> F::Schur
+    schur(A::AbstractMatrix) -> F::Schur
 
 Computes the Schur factorization of the matrix `A`. The (quasi) triangular Schur factor can
 be obtained from the `Schur` object `F` with either `F.Schur` or `F.T` and the
@@ -146,25 +146,20 @@ julia> t == F.T && z == F.Z && vals == F.values
 true
 ```
 """
-schur(A::StridedMatrix{<:BlasFloat}) = schur!(copy(A))
-schur(A::StridedMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
-
-schur(A::AbstractMatrix{T}) where {T} = schur!(copy_to_array(A, eigtype(T)))
+schur(A::AbstractMatrix{T}) where {T} = schur!(copy_similar(A, eigtype(T)))
 function schur(A::RealHermSymComplexHerm)
     F = eigen(A; sortby=nothing)
     return Schur(typeof(F.vectors)(Diagonal(F.values)), F.vectors, F.values)
 end
 function schur(A::Union{UnitUpperTriangular{T},UpperTriangular{T}}) where {T}
     t = eigtype(T)
-    Z = Matrix{t}(undef, size(A)...)
-    copyto!(Z, A)
+    Z = copy_similar(A, t)
     return Schur(Z, Matrix{t}(I, size(A)), convert(Vector{t}, diag(A)))
 end
 function schur(A::Union{UnitLowerTriangular{T},LowerTriangular{T}}) where {T}
     t = eigtype(T)
     # double flip the matrix A
-    Z = Matrix{t}(undef, size(A)...)
-    copyto!(Z, A)
+    Z = copy_similar(A, t)
     reverse!(reshape(Z, :))
     # construct "reverse" identity
     n = size(A, 1)
