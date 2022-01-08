@@ -1387,6 +1387,8 @@ end
 #
 # flisp: parse-resword
 function parse_resword(ps::ParseState)
+    # In normal_context
+    # begin f() where T = x end  ==>  (block (= (where (call f) T) x))
     ps = normal_context(ps)
     mark = position(ps)
     word = peek(ps)

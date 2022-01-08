@@ -285,6 +285,8 @@ tests = [
         "x\"s\"10.0" => """(macrocall @x_str "s" 10.0)"""
     ],
     JuliaSyntax.parse_resword => [
+        # In normal_context
+        "begin f() where T = x end" => "(block (= (where (call f) T) x))"
         # block
         "begin end"         =>  "(block)"
         "begin a ; b end"   =>  "(block a b)"
@@ -343,7 +345,6 @@ tests = [
         "export a"  =>  "(export a)"
         "export \n a"  =>  "(export a)"
         "export \$a, \$(a*b)"  =>  "(export (\$ a) (\$ (call-i a * b)))"
-        # import
     ],
     JuliaSyntax.parse_if_elseif => [
         "if a xx elseif b yy else zz end" => "(if a (block xx) (elseif (block b) (block yy) (block zz)))"

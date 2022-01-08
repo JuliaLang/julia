@@ -630,7 +630,7 @@ function normal_context(ps::ParseState)
     ParseState(ps,
                range_colon_enabled=true,
                space_sensitive=false,
-               where_enabled=false,
+               where_enabled=true,
                for_generator=false,
                end_symbol=false,
                whitespace_newline=false)
