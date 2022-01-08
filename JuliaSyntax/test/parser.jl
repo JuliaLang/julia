@@ -149,6 +149,7 @@ tests = [
         "2(x)"       => "(call-i 2 * x)"
         "(2)(3)x"    => "(call-i 2 * 3 x)"
         "(x-1)y"     => "(call-i (call-i x - 1) * y)"
+        "0xenomorph" => "0x0e"  # ie, not juxtoposition
         # errors
         "\"a\"\"b\"" => "(call-i \"a\" * (error) \"b\")"
         "\"a\"x"     => "(call-i \"a\" * (error) x)"
