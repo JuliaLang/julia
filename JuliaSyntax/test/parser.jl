@@ -58,6 +58,8 @@ tests = [
     JuliaSyntax.parse_stmts => [
         "a;b;c"   => "(toplevel a b c)"
         "a;;;b;;" => "(toplevel a b)"
+        """ "x" a ; "y" b """ =>
+            """(toplevel (macrocall :(Core.var"@doc") "x" a) (macrocall :(Core.var"@doc") "y" b))"""
     ],
     JuliaSyntax.parse_eq => [
         # parse_assignment
@@ -334,6 +336,7 @@ tests = [
         "module do \n end"  =>  "(module true (error (do)) (block))"
         "module \$A end"    =>  "(module true (\$ A) (block))"
         "module A \n a \n b \n end"  =>  "(module true A (block a b))"
+        """module A \n "x"\na\n end""" => """(module true A (block (macrocall :(Core.var"@doc") "x" a)))"""
         # export
         "export @a"  =>  "(export @a)"
         "export a, \n @b"  =>  "(export a @b)"
@@ -544,7 +547,7 @@ tests = [
         "\"str\""  =>  "\"str\""
     ],
     JuliaSyntax.parse_docstring => [
-        "\"doc\" foo" => "(macrocall :(Core.var\"@doc\") \"doc\" foo)"
+        """ "doc" foo """ => """(macrocall :(Core.var"@doc") "doc" foo)"""
     ],
 ]
 

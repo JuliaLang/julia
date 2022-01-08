@@ -277,6 +277,7 @@ end
 #
 # a;b;c   ==>  (toplevel a b c)
 # a;;;b;; ==>  (toplevel a b)
+# "x" a ; "y" b ==>  (toplevel (macrocall core_@doc "x" a) (macrocall core_@doc "y" b))
 #
 # flisp: parse-stmts
 function parse_stmts(ps::ParseState)
@@ -1538,7 +1539,8 @@ function parse_resword(ps::ParseState)
             parse_unary_prefix(ps)
         end
         # module A \n a \n b \n end  ==>  (module true A (block a b))
-        parse_block(ps)
+        # module A \n "x"\na \n end  ==>  (module true A (block (core_@doc "x" a)))
+        parse_block(ps, parse_docstring)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"module")
     elseif word == K"export"
@@ -2787,7 +2789,7 @@ function emit_braces(ps, mark, ckind, cflags)
 end
 
 # Parse docstrings attached by a space or single newline
-# "doc" foo  ==>  
+# "doc" foo  ==>  (macrocall core_@doc "doc" foo)
 #
 # flisp: parse-docstring
 function parse_docstring(ps::ParseState, down=parse_eq)
