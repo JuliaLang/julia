@@ -1704,9 +1704,10 @@ function detect_ambiguities(mods::Module...;
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
             is_in_mods(m.module, recursive, mods) || continue
-            ambig = Int32[0]
-            ms = Base._methods_by_ftype(m.sig, nothing, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
-            ambig[1] == 0 && continue
+            world = Base.get_world_counter()
+            ambig = Ref{Int32}(0)
+            ms = Base._methods_by_ftype(m.sig, nothing, -1, world, true, Ref(typemin(UInt)), Ref(typemax(UInt)), ambig)
+            ambig[] == 0 && continue
             isa(ms, Bool) && continue
             for match2 in ms
                 match2 = match2::Core.MethodMatch
@@ -1761,7 +1762,8 @@ function detect_unbound_args(mods...;
             if Base.isvatuple(tuple_sig)
                 params = tuple_sig.parameters[1:(end - 1)]
                 tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
-                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
+                world = Base.get_world_counter()
+                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, world)
                 if mf !== nothing && mf !== m && mf.sig <: tuple_sig
                     continue
                 end
