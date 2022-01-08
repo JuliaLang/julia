@@ -926,9 +926,6 @@ end
 function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt)
     return _methods_by_ftype(t, mt, lim, world, false, RefValue{UInt}(typemin(UInt)), RefValue{UInt}(typemax(UInt)), Ptr{Int32}(C_NULL))
 end
-function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt, ambig::Bool, min::Array{UInt,1}, max::Array{UInt,1}, has_ambig::Array{Int32,1})
-    return ccall(:jl_matching_methods, Any, (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
-end
 function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt, ambig::Bool, min::Ref{UInt}, max::Ref{UInt}, has_ambig::Ref{Int32})
     return ccall(:jl_matching_methods, Any, (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
 end
@@ -1571,9 +1568,9 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             has_bottom_parameter(ti) && return false
         end
         world = get_world_counter()
-        min = UInt[typemin(UInt)]
-        max = UInt[typemax(UInt)]
-        has_ambig = Int32[0]
+        min = Ref{UInt}(typemin(UInt))
+        max = Ref{UInt}(typemax(UInt))
+        has_ambig = Ref{Int32}(0)
         ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
