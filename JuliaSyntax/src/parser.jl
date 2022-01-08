@@ -758,9 +758,6 @@ end
 function is_juxtapose(ps, prev_k, t)
     k = kind(t)
 
-    # FIXME:
-    # https://github.com/JuliaLang/julia/issues/16356
-    # https://github.com/JuliaLang/julia/commit/e3eacbb4a4479a6df4f588089490aeefc6e8cad8
     return !t.had_whitespace                         &&
     (is_number(prev_k) ||
         (!is_number(k) &&  # disallow "x.3" and "sqrt(2)2"
@@ -768,6 +765,9 @@ function is_juxtapose(ps, prev_k, t)
          !(is_block_form(prev_k)         ||
            is_syntactic_unary_op(prev_k) ||
            is_initial_reserved_word(ps, prev_k) )))  &&
+    # https://github.com/JuliaLang/julia/issues/16356
+    # 0xenomorph  ==>  0x0e
+    !(prev_k in KSet`BinInt HexInt OctInt` && k in KSet`Identifier Keyword`) &&
     (!is_operator(k) || is_radical_op(k))            &&
     !is_closing_token(ps, k)                         &&
     !is_initial_reserved_word(ps, k)
