@@ -93,6 +93,10 @@ A = Array{Int}(undef, 0, 3)
 @test_throws "reducing over an empty collection is not allowed" maximum(A; dims=1)
 @test maximum(A; dims=1, init=-1) == reshape([-1,-1,-1], 1, 3)
 
+@test maximum(zeros(0, 2); dims=1, init=-1) == fill(-1, 1, 2)
+@test minimum(zeros(0, 2); dims=1, init=1) == ones(1, 2)
+@test extrema(zeros(0, 2); dims=1, init=(1, -1)) == fill((1, -1), 1, 2)
+
 # Test reduction along first dimension; this is special-cased for
 # size(A, 1) >= 16
 Breduc = rand(64, 3)
