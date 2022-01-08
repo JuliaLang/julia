@@ -1471,19 +1471,17 @@ add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
 
 function arrayset_tfunc(@nospecialize(boundcheck), @nospecialize(ary), @nospecialize(item),
     @nospecialize idxs...)
-    isempty(idxs) && return Bottom
-    array_builtin_common_errorcheck(boundcheck, ary, idxs) || return Bottom
-    hasintersect(widenconst(item), array_elmtype(ary)) || return Bottom
+    hasintersect(widenconst(item), arrayref_tfunc(boundcheck, ary, idxs...)) || return Bottom
     return ary
 end
 add_tfunc(arrayset, 4, INT_INF, arrayset_tfunc, 20)
 
 function array_builtin_common_errorcheck(@nospecialize(boundcheck), @nospecialize(ary),
-    @nospecialize idxs)
+    @nospecialize idxs::Tuple)
     hasintersect(widenconst(boundcheck), Bool) || return false
     hasintersect(widenconst(ary), Array) || return false
     for i = 1:length(idxs)
-        idx = idxs[i]
+        idx = getfield(idxs, i)
         idx = isvarargtype(idx) ? unwrapva(idx) : widenconst(idx)
         hasintersect(idx, Int) || return false
     end
