@@ -939,7 +939,7 @@ end
 function setfield!_nothrow(argtypes::Vector{Any})
     if length(argtypes) == 4
         order = argtypes[4]
-        order === Const(:non_atomic) || return false # TODO: this is assuming not atomic
+        order === Const(:not_atomic) || return false # currently setfield!_nothrow is assuming not atomic
     else
         length(argtypes) == 3 || return false
     end
