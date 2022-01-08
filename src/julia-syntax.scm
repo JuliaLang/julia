@@ -3408,7 +3408,7 @@ f(x) = yt(x)
                             rhs1
                             (let* ((ref (binding-to-globalref var))
                                    (ty `(call (core _get_binding_type) ,(cadr ref) (inert ,(caddr ref)))))
-                              (if (get globals ref #t)
+                              (if (get globals ref #t) ;; no type declaration for constants
                                   (convert-for-type-decl rhs1 ty)
                                   rhs1)))
                         (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f #f interp opaq globals))))
@@ -3432,7 +3432,7 @@ f(x) = yt(x)
                        (make-ssavalue)))
              (ref   (binding-to-globalref var))
              (ty   `(call (core _get_binding_type) ,(cadr ref) (inert ,(caddr ref))))
-             (rhs  (if (get globals ref #t)
+             (rhs  (if (get globals ref #t) ;; no type declaration for constants
                        (convert-for-type-decl rhs1 ty)
                        rhs1))
              (ex   `(= ,var ,rhs)))
@@ -4060,12 +4060,10 @@ f(x) = yt(x)
                            (error (string "multiple type annotations for global \""
                                          (deparse (cadr e)) "\".")))
                       (if ref
-                          (let* ((rhs0 (caddr e))
-                                 (temp (and (not (effect-free? rhs0)) (make-ssavalue)))
-                                 (rhs  (or temp rhs0)))
-                            (put! globals ref rhs)
+                          (begin
+                            (put! globals ref #t)
                             `(toplevel-butfirst
-                               ,(if temp `(block (= ,temp ,rhs0) (null)) '(null))
+                               (null)
                                (call (core _set_binding_type!) ,(cadr ref) (inert ,(caddr ref)) ,(caddr e))))
                           `(call (core typeassert) ,@(cdr e))))
                     fname lam namemap defined toplevel interp opaq globals))))
