@@ -1743,7 +1743,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 
         ctx.builder.CreateMemMove(
                 emit_inttoptr(ctx, destp, T_pint8),
-                MaybeAlign(1),
+                MaybeAlign(0),
                 emit_inttoptr(ctx,
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type),
                     T_pint8),
