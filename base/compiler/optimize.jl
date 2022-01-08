@@ -524,7 +524,7 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     nargs = let def = sv.linfo.def
         isa(def, Method) ? Int(def.nargs) : 0
     end
-    estate = find_escapes(ir, nargs)
+    estate = analyze_escapes(ir, nargs)
     setindex!(GLOBAL_ESCAPE_CACHE, estate.escapes[1:estate.nargs], sv.linfo)
     @timeit "memory opt" ir = memory_opt!(ir, estate)
     if JLOptions().debug_level == 2

@@ -10,26 +10,21 @@ let
     @doc read(README, String) EA
 end
 
-let __init_hooks__ = []
-    global __init__() = foreach(f->f(), __init_hooks__)
-    global register_init_hook!(@nospecialize(f)) = push!(__init_hooks__, f)
-end
-
 # entries
 # -------
 
 using InteractiveUtils
 
-macro analyze_escapes(ex0...)
-    return InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :analyze_escapes, ex0)
+macro code_escapes(ex0...)
+    return InteractiveUtils.gen_call_with_extracted_types_and_kwargs(__module__, :code_escapes, ex0)
 end
 
-function analyze_escapes(@nospecialize(f), @nospecialize(types=Tuple{});
-                         world = get_world_counter(),
-                         interp = Core.Compiler.NativeInterpreter(world))
+function code_escapes(@nospecialize(f), @nospecialize(types=Tuple{});
+                      world = get_world_counter(),
+                      interp = Core.Compiler.NativeInterpreter(world))
     interp = EscapeAnalyzer(interp)
     results = code_typed(f, types; optimize=true, world, interp)
-    isone(length(results)) || throw(ArgumentError("`analyze_escapes` only supports single analysis result"))
+    isone(length(results)) || throw(ArgumentError("`code_escapes` only supports single analysis result"))
     return EscapeResult(interp.ir, interp.state, interp.linfo)
 end
 
@@ -54,14 +49,25 @@ import .CC:
     may_discard_trees,
     verbose_stmt_info,
     code_cache,
-    get_inference_cache
+    @timeit,
+    get_inference_cache,
+    convert_to_ircode,
+    slot2reg,
+    compact!,
+    ssa_inlining_pass!,
+    sroa_pass!,
+    adce_pass!,
+    type_lift_pass!,
+    JLOptions,
+    verify_ir,
+    verify_linetable
 # usings
 import Core:
-    CodeInstance, MethodInstance
+    CodeInstance, MethodInstance, CodeInfo
 import .CC:
     OptimizationState, IRCode
 import .EA:
-    find_escapes, GLOBAL_ESCAPE_CACHE, EscapeCache
+    analyze_escapes, GLOBAL_ESCAPE_CACHE, EscapeCache
 
 mutable struct EscapeAnalyzer{State} <: AbstractInterpreter
     native::NativeInterpreter
@@ -140,40 +146,34 @@ function CC.optimize(interp::EscapeAnalyzer, opt::OptimizationState, params::Opt
     return CC.finish(interp, opt, params, ir, result)
 end
 
-# HACK enable copy and paste from Core.Compiler
-function run_passes_with_ea end
-register_init_hook!() do
-@eval CC begin
-    function $(@__MODULE__).run_passes_with_ea(interp::$EscapeAnalyzer, ci::CodeInfo, sv::OptimizationState)
-        @timeit "convert"   ir = convert_to_ircode(ci, sv)
-        @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
-        # TODO: Domsorting can produce an updated domtree - no need to recompute here
-        @timeit "compact 1" ir = compact!(ir)
-        @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
-        # @timeit "verify 2" verify_ir(ir)
-        @timeit "compact 2" ir = compact!(ir)
-        nargs = let def = sv.linfo.def
-            isa(def, Method) ? Int(def.nargs) : 0
-        end
-        @timeit "collect escape information" state = $find_escapes(ir, nargs)
-        cacheir = copy(ir)
-        # cache this result
-        $setindex!($GLOBAL_ESCAPE_CACHE, $EscapeCache(state, cacheir), sv.linfo)
-        # return back the result
-        interp.ir = cacheir
-        interp.state = state
-        interp.linfo = sv.linfo
-        @timeit "SROA"      ir = sroa_pass!(ir)
-        @timeit "ADCE"      ir = adce_pass!(ir)
-        @timeit "type lift" ir = type_lift_pass!(ir)
-        @timeit "compact 3" ir = compact!(ir)
-        if JLOptions().debug_level == 2
-            @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
-        end
-        return ir
+function run_passes_with_ea(interp::EscapeAnalyzer, ci::CodeInfo, sv::OptimizationState)
+    @timeit "convert"   ir = convert_to_ircode(ci, sv)
+    @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
+    # TODO: Domsorting can produce an updated domtree - no need to recompute here
+    @timeit "compact 1" ir = compact!(ir)
+    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    # @timeit "verify 2" verify_ir(ir)
+    @timeit "compact 2" ir = compact!(ir)
+    nargs = let def = sv.linfo.def
+        isa(def, Method) ? Int(def.nargs) : 0
     end
+    @timeit "collect escape information" state = analyze_escapes(ir, nargs)
+    cacheir = Core.Compiler.copy(ir)
+    # cache this result
+    GLOBAL_ESCAPE_CACHE[sv.linfo] = EscapeCache(state, cacheir)
+    # return back the result
+    interp.ir = cacheir
+    interp.state = state
+    interp.linfo = sv.linfo
+    @timeit "SROA"      ir = sroa_pass!(ir)
+    @timeit "ADCE"      ir = adce_pass!(ir)
+    @timeit "type lift" ir = type_lift_pass!(ir)
+    @timeit "compact 3" ir = compact!(ir)
+    if JLOptions().debug_level == 2
+        @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
+    end
+    return ir
 end
-end # register_init_hook!() do
 
 # printing
 # --------
@@ -304,8 +304,8 @@ end
 end # module EAUtils
 
 using .EAUtils:
-    analyze_escapes,
-    @analyze_escapes
+    code_escapes,
+    @code_escapes
 export
-    analyze_escapes,
-    @analyze_escapes
+    code_escapes,
+    @code_escapes

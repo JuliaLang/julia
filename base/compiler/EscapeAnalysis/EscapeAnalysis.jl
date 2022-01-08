@@ -1,7 +1,7 @@
 baremodule EscapeAnalysis
 
 export
-    find_escapes,
+    analyze_escapes,
     GLOBAL_ESCAPE_CACHE,
     has_not_analyzed,
     has_no_escape,
@@ -31,53 +31,8 @@ import ._TOP_MOD:     # Base definitions
 import Core.Compiler: # Core.Compiler specific definitions
     isbitstype, isexpr, is_meta_expr_head, println,
     IRCode, IR_FLAG_EFFECT_FREE, widenconst, argextype, singleton_type, fieldcount_noerror,
-    try_compute_fieldidx, hasintersect, ⊑ as ⊑ₜ, intrinsic_nothrow
-
-if isdefined(Core.Compiler, :try_compute_field)
-    import Core.Compiler: try_compute_field
-else
-    function try_compute_field(ir::IRCode, @nospecialize(field))
-        # fields are usually literals, handle them manually
-        if isa(field, QuoteNode)
-            field = field.value
-        elseif isa(field, Int) || isa(field, Symbol)
-        # try to resolve other constants, e.g. global reference
-        else
-            field = argextype(field, ir)
-            if isa(field, Const)
-                field = field.val
-            else
-                return nothing
-            end
-        end
-        return isa(field, Union{Int, Symbol}) ? field : nothing
-    end
-end
-
-if isdefined(Core.Compiler, :array_builtin_common_typecheck) &&
-   isdefined(Core.Compiler, :arrayset_typecheck)
-    import Core.Compiler: array_builtin_common_typecheck, arrayset_typecheck
-else
-    function array_builtin_common_typecheck(
-        @nospecialize(boundcheck), @nospecialize(ary),
-        argtypes::Vector{Any}, first_idx_idx::Int)
-        (boundcheck ⊑ₜ Bool && ary ⊑ₜ Array) || return false
-        for i = first_idx_idx:length(argtypes)
-            argtypes[i] ⊑ₜ Int || return false
-        end
-        return true
-    end
-    function arrayset_typecheck(@nospecialize(atype), @nospecialize(elm))
-        # Check that we can determine the element type
-        atype = widenconst(atype)
-        isa(atype, DataType) || return false
-        ap1 = atype.parameters[1]
-        isa(ap1, Type) || return false
-        # Check that the element type is compatible with the element we're assigning
-        elm ⊑ₜ ap1 || return false
-        return true
-    end
-end
+    try_compute_field, try_compute_fieldidx, hasintersect, ⊑ as ⊑ₜ, intrinsic_nothrow,
+    array_builtin_common_typecheck, arrayset_typecheck, setfield!_nothrow
 
 if _TOP_MOD !== Core.Compiler
     include(@__MODULE__, "disjoint_set.jl")
@@ -125,7 +80,7 @@ There are utility constructors to create common `EscapeLattice`s, e.g.,
 - `NoEscape()`: the bottom element of this lattice, meaning it won't escape to anywhere
 - `AllEscape()`: the topmost element of this lattice, meaning it will escape to everywhere
 
-`find_escapes` will transition these elements from the bottom to the top,
+`analyze_escapes` will transition these elements from the bottom to the top,
 in the same direction as Julia's native type inference routine.
 An abstract state will be initialized with the bottom(-like) elements:
 - the call arguments are initialized as `ArgumentReturnEscape()`, because they're visible from a caller immediately
@@ -201,7 +156,6 @@ has_return_escape(x::EscapeLattice) = x.ReturnEscape
 has_return_escape(x::EscapeLattice, pc::Int) = has_return_escape(x) && pc in x.EscapeSites
 has_thrown_escape(x::EscapeLattice) = x.ThrownEscape
 has_thrown_escape(x::EscapeLattice, pc::Int) = has_thrown_escape(x) && pc in x.EscapeSites
-has_only_throw_escape(x::EscapeLattice, pc::Int) = has_thrown_escape(x, pc) && length(x.EscapeSites) == 1
 has_all_escape(x::EscapeLattice) = AllEscape() ⊑ x
 
 ignore_aliasescapes(x::EscapeLattice) = EscapeLattice(x, BOT_ALIAS_ESCAPES)
@@ -496,12 +450,12 @@ struct AnalysisState
 end
 
 """
-    find_escapes(ir::IRCode, nargs::Int) -> EscapeState
+    analyze_escapes(ir::IRCode, nargs::Int) -> EscapeState
 
 Analyzes escape information in `ir`.
 `nargs` is the number of actual arguments of the analyzed call.
 """
-function find_escapes(ir::IRCode, nargs::Int)
+function analyze_escapes(ir::IRCode, nargs::Int)
     stmts = ir.stmts
     nstmts = length(stmts)
 
@@ -873,7 +827,7 @@ end
 
 normalize(@nospecialize x) = isa(x, QuoteNode) ? x.value : x
 
-# NOTE error cases will be handled in `find_escapes` anyway, so we don't need to take care of them below
+# NOTE error cases will be handled in `analyze_escapes` anyway, so we don't need to take care of them below
 # TODO implement more builtins, make them more accurate
 # TODO use `T_IFUNC`-like logic and don't not abuse dispatch ?
 
@@ -1048,7 +1002,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     else
         # unanalyzable object (e.g. obj::GlobalRef): escape field value conservatively
         add_escape_change!(astate, val, AllEscape())
-        return false
+        @goto add_thrown_escapes
     end
     AliasEscapes = objinfo.AliasEscapes
     if isa(AliasEscapes, Bool)
@@ -1116,7 +1070,14 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
         ssainfo = NoEscape()
     end
     add_escape_change!(astate, val, ssainfo)
-    return false
+    # compute the throwness of this setfield! call here since builtin_nothrow doesn't account for that
+    @label add_thrown_escapes
+    argtypes = Any[]
+    for i = 2:length(args)
+        push!(argtypes, argextype(args[i], ir))
+    end
+    setfield!_nothrow(argtypes) || add_thrown_escapes!(astate, pc, args, 2)
+    return true
 end
 
 function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, args::Vector{Any})
@@ -1266,12 +1227,6 @@ function arraysize_typecheck(@nospecialize(ary), @nospecialize(dim), ir::IRCode)
     return true
 end
 
-if isdefined(Core, :arrayfreeze)
-function escape_builtin!(::typeof(Core.arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any})
-    return true # TODO needs to account for `TypeError` etc.
-end
-end # if isdefined(Core, :arrayfreeze)
-
 # returns nothing if this isn't array resizing operation,
 # otherwise returns true if it can throw BoundsError and false if not
 function is_array_resize(name::Symbol)
@@ -1380,6 +1335,22 @@ end
 #     normalize(args[5]) === convension || return false
 #     return true
 # end
+
+if isdefined(Core, :arrayfreeze) && isdefined(Core, :arraythaw) && isdefined(Core, :mutating_arrayfreeze)
+
+escape_builtin!(::typeof(Core.arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
+    escape_immutable_array!(Array, astate, pc, args)
+escape_builtin!(::typeof(Core.mutating_arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
+    escape_immutable_array!(Array, astate, pc, args)
+escape_builtin!(::typeof(Core.arraythaw), astate::AnalysisState, pc::Int, args::Vector{Any}) =
+    escape_immutable_array!(Core.ImmutableArray, astate, pc, args)
+function escape_immutable_array!(@nospecialize(arytype), astate::AnalysisState, pc::Int, args::Vector{Any})
+    length(args) == 2 || return false
+    argextype(args[2], astate.ir) ⊑ₜ arytype || return false
+    return true
+end
+
+end # if isdefined(Core, :arrayfreeze) && isdefined(Core, :arraythaw) &&  isdefined(Core, :mutating_arrayfreeze)
 
 # NOTE define fancy package utilities when developing EA as an external package
 if _TOP_MOD !== Core.Compiler
