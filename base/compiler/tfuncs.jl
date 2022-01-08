@@ -713,11 +713,12 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
             sv = s00.val
         end
         if isa(name, Const)
-            if !isa(name.val, Symbol)
+            nval = name.val
+            if !isa(nval, Symbol)
                 isa(sv, Module) && return false
-                isa(name.val, Int) || return false
+                isa(nval, Int) || return false
             end
-            return isdefined(sv, name.val)
+            return isdefined(sv, nval)
         end
         if !boundscheck && !isa(sv, Module)
             # If bounds checking is disabled and all fields are assigned,
@@ -756,8 +757,24 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
     return false
 end
 
-getfield_tfunc(s00, name, boundscheck_or_order) = (@nospecialize; getfield_tfunc(s00, name))
-getfield_tfunc(s00, name, order, boundscheck) = (@nospecialize; getfield_tfunc(s00, name))
+function getfield_tfunc(s00, name, boundscheck_or_order)
+    @nospecialize
+    t = isvarargtype(boundscheck_or_order) ? unwrapva(boundscheck_or_order) :
+        widenconst(boundscheck_or_order)
+    hasintersect(t, Symbol) || hasintersect(t, Bool) || return Bottom
+    return getfield_tfunc(s00, name)
+end
+function getfield_tfunc(s00, name, order, boundscheck)
+    @nospecialize
+    hasintersect(widenconst(order), Symbol) || return Bottom
+    if isvarargtype(boundscheck)
+        t = unwrapva(boundscheck)
+        hasintersect(t, Symbol) || hasintersect(t, Bool) || return Bottom
+    else
+        hasintersect(widenconst(boundscheck), Bool) || return Bottom
+    end
+    return getfield_tfunc(s00, name)
+end
 function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     s = unwrap_unionall(s00)
     if isa(s, Union)
