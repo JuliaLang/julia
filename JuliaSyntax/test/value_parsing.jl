@@ -14,10 +14,12 @@ using JuliaSyntax: triplequoted_string_indentation,
     # Newline normalization
     @test unesc("a\nb\rc\r\nd") == "a\nb\nc\nd"
 
-    # Removal of backslash-escaped newlines
+    # Removal of backslash-escaped newlines & indentation
     @test unesc("a\\\nb") == "ab"
     @test unesc("a\\\rb") == "ab"
     @test unesc("a\\\r\nb") == "ab"
+    @test unesc("a\\\n  b") == "ab"
+    @test unesc("a\\\r\n \tb") == "ab"
     @test unesc("a\\\n") == "a"
     @test unesc("a\\\r") == "a"
     @test unesc("a\\\r\n") == "a"

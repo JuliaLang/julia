@@ -2,6 +2,8 @@
 # This file contains utility functions for converting undecorated source
 # strings into Julia values.  For example, string->number, string unescaping, etc.
 
+is_indentation(c) = c == ' ' || c == '\t'
+
 """
 Convert a Julia source code string into a number.
 """
@@ -176,8 +178,11 @@ function unescape_julia_string(io::IO, str::AbstractString, dedent::Integer)
             end
             write(io, UInt8(n))
         elseif c == '\n' || c == '\r'
-            # Remove \n \r and \r\n newlines following \
+            # Remove \n \r and \r\n newlines + indentation following \
             if c == '\r' && i < lastidx && str[i+1] == '\n'
+                i += 1
+            end
+            while i < lastidx && is_indentation(str[i+1])
                 i += 1
             end
         else
@@ -249,9 +254,7 @@ function triplequoted_string_indentation(strs)
                     if reflen < 0
                         # Find indentation we'll use as a reference
                         j = i-1
-                        while j+1 <= lastidx
-                            c = str[j+1]
-                            (c == ' ' || c == '\t') || break
+                        while j < lastidx && is_indentation(str[j+1])
                             j += 1
                         end
                         refstr = SubString(str, i, j)
