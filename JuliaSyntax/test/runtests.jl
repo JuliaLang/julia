@@ -17,6 +17,17 @@ using JuliaSyntax: ParseStream,
     emit, emit_diagnostic
 using JuliaSyntax: ParseState
 
+function test_parse_file(root_path, path)
+    fullpath = joinpath(root_path, path)
+    if endswith(path, ".jl") && isfile(fullpath)
+        @testset "Parse $path" begin
+            code = read(fullpath, String)
+            @test JuliaSyntax.remove_linenums!(JuliaSyntax.parse_all(Expr, code)) == 
+                  JuliaSyntax.remove_linenums!(JuliaSyntax.flisp_parse_all(code))
+        end
+    end
+end
+
 # Shortcuts for defining raw syntax nodes
 
 # Trivia nodes
