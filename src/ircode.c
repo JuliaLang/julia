@@ -340,12 +340,13 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
                 // serialize with absolute indexes.
                 int newrootsindex = s->method->newrootsindex & INT32_MAX;
                 if (id >= newrootsindex) {
-                    if (s->method->newrootsindex >= 0)
-                        jl_(s->method);
+                    // if (s->method->newrootsindex >= 0)
+                    //     jl_(s->method);
                     assert(s->method->newrootsindex < 0);      // new roots already serialized
                     write_uint8(s->s, TAG_EXTERN_METHODROOT);
-                    jl_printf(JL_STDOUT, "Absolute root %d, relative root %d, for ", id, id - newrootsindex);
-                    jl_(s->method);
+                    // jl_printf(JL_STDOUT, "Absolute root %d, relative root %d, for ", id, id - newrootsindex);
+                    // jl_(v);
+                    // jl_(s->method);
                     id -= newrootsindex;
                 }
             }
@@ -625,10 +626,10 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         return jl_array_ptr_ref(s->method->roots, read_uint16(s->s));
     case TAG_EXTERN_METHODROOT:
         assert(s->method->newrootsindex >= 0);
-        if (s->method->newrootsindex == INT32_MAX) {
-            jl_printf(JL_STDOUT, "method pointer %p, method ", s->method);
-            jl_(s->method);
-        }
+        // if (s->method->newrootsindex == INT32_MAX) {
+        //     jl_printf(JL_STDOUT, "method pointer %p, method ", s->method);
+        //     jl_(s->method);
+        // }
         assert(s->method->newrootsindex < INT32_MAX);
         assert(currently_deserializing == 2);
         int id;
@@ -639,10 +640,12 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
             id = read_uint16(s->s);
         else
             jl_errorf("unexpected tag %d", tag);
-        jl_printf(JL_STDOUT, "Relative root %d, absolute root %d, for ", id, id + (s->method->newrootsindex & INT32_MAX));
-        jl_(s->method);
+        // jl_printf(JL_STDOUT, "Relative root %d, absolute root %d, total root len %ld for ", id, id + (s->method->newrootsindex & INT32_MAX), jl_array_len(s->method->roots));
         id += (s->method->newrootsindex & INT32_MAX);
-        return jl_array_ptr_ref(s->method->roots, id);
+        jl_value_t *r = jl_array_ptr_ref(s->method->roots, id);
+        // jl_(r);
+        // jl_(s->method);
+        return r;
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_decode_value_svec(s, tag);
     case TAG_COMMONSYM:
