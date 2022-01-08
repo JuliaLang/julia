@@ -1709,12 +1709,20 @@ function parse_function(ps::ParseState)
             # function begin() end  ==>  (function (call (error (begin))) (block))
             # macro begin() end  ==>  (macro (call (error (begin))) (block))
             bump(ps, error="invalid $(untokenize(word)) name")
-            parse_call_chain(ps, def_mark)
         else
             # function f() end  ==>  (function (call f) (block))
             # function \n f() end  ==>  (function (call f) (block))
             # function $f() end  ==>  (function (call ($ f)) (block))
-            parse_unary_prefix(ps)
+            parse_identifier_or_interpolate(ps)
+        end
+        if peek(ps, skip_newlines=true) == K"end"
+            # Function definition with no methods
+            # function f end       ==> (function f)
+            # function f \n\n end  ==> (function f)
+            # function $f end      ==> (function ($ f))
+            bump(ps, TRIVIA_FLAG)
+            emit(ps, mark, word)
+            return
         end
         parse_call_chain(ps, def_mark)
     end
