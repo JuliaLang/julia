@@ -148,12 +148,14 @@ namespace {
                                 replace_lengths(propagated);
                                 memop.inst->replaceAllUsesWith(propagated);
                                 memop.inst->eraseFromParent();
+                                memop.inst = nullptr; // Will cause an early segfault if someone tries to use it later
                             } else if (memop.offset == offsetof(jl_array_t, offset)) {
                                 changed = true;
                                 auto propagated = ConstantInt::get(memop.inst->getType(), 0);
                                 replace_lengths(propagated);
                                 memop.inst->replaceAllUsesWith(propagated);
                                 memop.inst->eraseFromParent();
+                                memop.inst = nullptr;
                             }
                         }
                     }
@@ -167,13 +169,31 @@ namespace {
             //or it's a 1D array that doesn't escape.
             //Either way, we can hoist the data pointer
             IRBuilder<> data_builder(allocation.allocation->getNextNode());
-            auto ppdata = data_builder.CreatePointerCast(allocation.allocation, PointerType::get(PointerType::get(Type::getInt8Ty(data_builder.getContext()), AddressSpace::Loaded), cast<PointerType>(allocation.allocation->getType())->getAddressSpace()));
-            auto pdata = data_builder.CreateAlignedLoad(ppdata, llvm::Align(sizeof(size_t)), "arraydata");
+            LoadInst *pdata_ = nullptr;
+            auto pdata = [&](LoadInst *data_load){
+                if (!pdata_) {
+                    if (data_load->getParent() == data_builder.GetInsertBlock()) {
+                        pdata_ = data_load;
+                    } else {
+                        changed = true;
+                        auto ppdata = data_builder.CreatePointerCast(allocation.allocation, PointerType::get(data_load->getType(), cast<PointerType>(allocation.allocation->getType())->getAddressSpace()));
+                        data_load->setOperand(LoadInst::getPointerOperandIndex(), ppdata);
+                        data_load->moveAfter(cast<Instruction>(ppdata));
+                        pdata_ = data_load;
+                    }
+                }
+                return pdata_;
+            };
             for (auto &field : use_info.memops) {
                 for (auto &memop : field.second.accesses) {
                     if (memop.offset == offsetof(jl_array_t, data)) {
                         auto data_load = cast<LoadInst>(memop.inst);
-                        data_load->replaceAllUsesWith(data_builder.CreatePointerCast(pdata, data_load->getType(), "arraydata_casted"));
+                        auto lifted_load = pdata(data_load);
+                        if (lifted_load != data_load) {
+                            changed = true;
+                            data_load->replaceAllUsesWith(data_builder.CreatePointerCast(lifted_load, data_load->getType(), "arraydata_casted"));
+                            data_load->eraseFromParent();
+                        }
                     }
                 }
             }
