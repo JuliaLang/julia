@@ -775,7 +775,8 @@ function getfield_tfunc(s00, name, order, boundscheck)
     end
     return getfield_tfunc(s00, name)
 end
-function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
+getfield_tfunc(@nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(s00, name, false)
+function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool)
     s = unwrap_unionall(s00)
     if isa(s, Union)
         return tmerge(getfield_tfunc(rewrap_unionall(s.a, s00), name),
@@ -791,6 +792,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         if isa(name, Const)
             nv = name.val
             if isa(sv, Module)
+                setfield && return Bottom
                 if isa(nv, Symbol)
                     return abstract_eval_global(sv, nv)
                 end
@@ -834,9 +836,8 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         return Bottom
     end
     if s <: Module
-        if !(Symbol <: widenconst(name))
-            return Bottom
-        end
+        setfield && return Bottom
+        hasintersect(widenconst(name), Symbol) || return Bottom
         return Any
     end
     if s.name === _NAMEDTUPLE_NAME && !isconcretetype(s)
@@ -857,9 +858,10 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         return getfield_tfunc(_ts, name)
     end
     ftypes = datatype_fieldtypes(s)
+    nf = length(ftypes)
     # If no value has this type, then this statement should be unreachable.
     # Bail quickly now.
-    if !has_concrete_subtype(s) || isempty(ftypes)
+    if !has_concrete_subtype(s) || nf == 0
         return Bottom
     end
     if isa(name, Conditional)
@@ -870,12 +872,14 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         if !(Int <: name || Symbol <: name)
             return Bottom
         end
-        if length(ftypes) == 1
+        if nf == 1
             return rewrap_unionall(unwrapva(ftypes[1]), s00)
         end
         # union together types of all fields
         t = Bottom
-        for _ft in ftypes
+        for i in 1:nf
+            _ft = ftypes[i]
+            setfield && isconst(s, i) && continue
             t = tmerge(t, rewrap_unionall(unwrapva(_ft), s00))
             t === Any && break
         end
@@ -888,11 +892,12 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     if !isa(fld, Int)
         return Bottom
     end
-    nf = length(ftypes)
     if s <: Tuple && fld >= nf && isvarargtype(ftypes[nf])
         return rewrap_unionall(unwrapva(ftypes[nf]), s00)
     end
     if fld < 1 || fld > nf
+        return Bottom
+    elseif setfield && isconst(s, fld)
         return Bottom
     end
     R = ftypes[fld]
@@ -902,8 +907,66 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     return rewrap_unionall(R, s00)
 end
 
-setfield!_tfunc(o, f, v, order) = (@nospecialize; v)
-setfield!_tfunc(o, f, v) = (@nospecialize; v)
+function setfield!_tfunc(o, f, v, order)
+    @nospecialize
+    if !isvarargtype(order)
+        hasintersect(widenconst(order), Symbol) || return Bottom
+    end
+    return setfield!_tfunc(o, f, v)
+end
+function setfield!_tfunc(o, f, v)
+    @nospecialize
+    mutability_errorcheck(o) || return Bottom
+    ft = _getfield_tfunc(o, f, true)
+    ft === Bottom && return Bottom
+    hasintersect(widenconst(v), widenconst(ft)) || return Bottom
+    return v
+end
+function mutability_errorcheck(@nospecialize obj)
+    objt0 = widenconst(obj)
+    objt = unwrap_unionall(objt0)
+    if isa(objt, Union)
+        return mutability_errorcheck(rewrap_unionall(objt.a, objt0)) ||
+               mutability_errorcheck(rewrap_unionall(objt.b, objt0))
+    elseif isa(objt, DataType)
+        # Can't say anything about abstract types
+        isabstracttype(objt) && return true
+        return ismutabletype(objt)
+    end
+    return true
+end
+
+function setfield!_nothrow(argtypes::Vector{Any})
+    if length(argtypes) == 4
+        order = argtypes[4]
+        order === Const(:not_atomic) || return false # currently setfield!_nothrow is assuming not atomic
+    else
+        length(argtypes) == 3 || return false
+    end
+    return setfield!_nothrow(argtypes[1], argtypes[2], argtypes[3])
+end
+function setfield!_nothrow(s00, name, v)
+    @nospecialize
+    s0 = widenconst(s00)
+    s = unwrap_unionall(s0)
+    if isa(s, Union)
+        return setfield!_nothrow(rewrap_unionall(s.a, s00), name, v) &&
+               setfield!_nothrow(rewrap_unionall(s.b, s00), name, v)
+    elseif isa(s, DataType)
+        # Can't say anything about abstract types
+        isabstracttype(s) && return false
+        ismutabletype(s) || return false
+        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering == :not_atomic
+        isa(name, Const) || return false
+        field = try_compute_fieldidx(s, name.val)
+        field === nothing && return false
+        # `try_compute_fieldidx` already check for field index bound.
+        isconst(s, field) && return false
+        v_expected = fieldtype(s0, field)
+        return v ⊑ v_expected
+    end
+    return false
+end
 
 swapfield!_tfunc(o, f, v, order) = (@nospecialize; getfield_tfunc(o, f))
 swapfield!_tfunc(o, f, v) = (@nospecialize; getfield_tfunc(o, f))
