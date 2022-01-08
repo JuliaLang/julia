@@ -569,20 +569,56 @@ precompile_test_harness("code caching") do dir
             @test m.specializations[2].cache isa Core.CodeInstance
         end
     end
-    m = which(push!, (Vector{Any}, Any))
-    hasmi = hasci = false
-    for i = 1:length(m.specializations)
-        if isassigned(m.specializations, i)
-            mi = m.specializations[i]
-            if mi.specTypes.parameters[3] == M.X
-                hasmi = true
-                hasci = isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance)
-                break
+    mA = which(push!, (Vector{Any}, Any))
+    mT = which(push!, (Vector{T} where T, Any))
+    for m = (mA, mT)
+        hasmi = hasci = false
+        for i = 1:length(m.specializations)
+            if isassigned(m.specializations, i)
+                mi = m.specializations[i]
+                if mi.specTypes.parameters[3] == M.X
+                    hasmi = true
+                    hasci = isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance)
+                    break
+                end
             end
         end
+        @test hasmi
+        @test hasci
     end
-    @test hasmi
-    @test hasci
+    @test M.X ∈ mT.roots
+    # PkgA loads PkgB, and both add roots to the same method (both before and after loading B)
+    Cache_module2 = :Cachea1544c83560f0c99
+    write(joinpath(dir, "$Cache_module2.jl"),
+          """
+          module $Cache_module2
+              struct Y end
+              @noinline f(dest) = push!(dest, Y())
+              callf() = f(Y[])
+              callf()
+              using $(Cache_module)
+              struct Z end
+              @noinline g(dest) = push!(dest, Z())
+              callg() = g(Z[])
+              callg()
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(Cache_module2)))
+    @eval using $Cache_module2
+    M2 = getfield(Main, Cache_module2)
+    dest = []
+    Base.invokelatest() do  # use invokelatest to see the results of loading the compile
+        M2.f(dest)
+        M.f(dest)
+        M2.g(dest)
+        @test dest == [M2.Y(), M.X(), M2.Z()]
+        @test M2.callf() == [M2.Y()]
+        @test M2.callg() == [M2.Z()]
+        @test M.f(M.X[]) == [M.X()]
+    end
+    @test M2.Y ∈ mT.roots
+    @test M2.Z ∈ mT.roots
+    @test M.X ∈ mT.roots
 end
 
 # test --compiled-modules=no command line option

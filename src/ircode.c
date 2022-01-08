@@ -578,6 +578,10 @@ static jl_value_t *jl_decode_value_globalref(jl_ircode_state *s) JL_GC_DISABLED
     if (!jl_is_module(mod)) {
         jl_(mod);
         jl_(var);
+        jl_printf(JL_STDOUT, "Method: ");
+        jl_(s->method);
+        jl_printf(JL_STDOUT, "and its roots:");
+        jl_(s->method->roots);
         abort();
     }
     return jl_module_globalref((jl_module_t*)mod, (jl_sym_t*)var);

@@ -717,7 +717,8 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             newrootsindex = m->newrootsindex;
             if (newrootsindex >= 0 && newrootsindex < INT32_MAX) {
                 serialization_mode |= METHOD_HAS_NEW_ROOTS;
-                jl_printf(JL_STDOUT, " has new roots, set to %d\n", newrootsindex);
+                jl_(m);
+                jl_printf(JL_STDOUT, " has %ld new roots, newrootsindex set to %d\n", jl_array_len(m->roots)-newrootsindex, newrootsindex);
                 newrootsindex &= INT32_MAX;  // make it positive
             }
         }
@@ -2752,7 +2753,7 @@ static void copy_roots(jl_method_t *dest, jl_array_t *newroots)
 {
     assert(jl_is_method(dest));
     // copy any new roots
-    if (newroots && dest->newrootsindex == INT32_MAX) {
+    if (newroots) { // } && dest->newrootsindex == INT32_MAX) {
         assert(jl_is_array(newroots));
         jl_printf(JL_STDOUT, "copying %ld roots for %p aka ", jl_array_len(newroots), dest);
         jl_(dest);
@@ -2783,14 +2784,22 @@ static void copy_roots(jl_method_t *dest, jl_array_t *newroots)
 static void copy_roots_all(jl_array_t *list, jl_array_t *roots)
 {
     assert(jl_is_array(list));
+    htable_t umethods;
+    htable_new(&umethods, 0);
     size_t i, len = jl_array_len(list);
     for (i = 0; i < len; i++) {
-        jl_method_instance_t *mi    = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
-        // jl_printf(JL_STDOUT, "Fetching %p\n", mi);
-        // jl_array_t *newroots = (jl_array_t*)ptrhash_get(&uniquing_table, (jl_value_t*)mi);
-        jl_array_t *newroots = (jl_array_t*)jl_array_ptr_ref(roots, i);
-        copy_roots(mi->def.method, newroots);
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+        jl_method_t *m = mi->def.method;
+        assert(jl_is_method(m));
+        if (ptrhash_get(&umethods, m) == HT_NOTFOUND) {
+            ptrhash_put(&umethods, m, m);
+            // jl_printf(JL_STDOUT, "Fetching %p\n", mi);
+            // jl_array_t *newroots = (jl_array_t*)ptrhash_get(&uniquing_table, (jl_value_t*)mi);
+            jl_array_t *newroots = (jl_array_t*)jl_array_ptr_ref(roots, i);
+            copy_roots(mi->def.method, newroots);
+        }
     }
+    htable_free(&umethods);
 }
 
 // A decompression/compression cycle is needed to restore absolute root indexing
@@ -2804,6 +2813,7 @@ static void recompress_cis(jl_array_t *list)
         jl_(mi);
         assert(jl_is_method_instance(mi));
         jl_method_t *m = mi->def.method;
+        jl_printf(JL_STDOUT, "newrootsindex: %d\n", m->newrootsindex);
         assert(jl_is_method(m));
         jl_code_instance_t *ci = mi->cache;
         jl_array_del_end(srcs, jl_array_len(srcs));
