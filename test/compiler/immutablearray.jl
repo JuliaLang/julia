@@ -3,131 +3,147 @@ import Core: ImmutableArray
 import Core.Compiler: arrayfreeze_tfunc, mutating_arrayfreeze_tfunc, arraythaw_tfunc
 const ImmutableVector{T} = Core.ImmutableArray{T,1}
 
-@test arrayfreeze_tfunc(Vector{Int}) === ImmutableVector{Int}
-@test arrayfreeze_tfunc(Vector) === ImmutableVector
-@test arrayfreeze_tfunc(Array) === ImmutableArray
-@test arrayfreeze_tfunc(Any) === ImmutableArray
-@test arrayfreeze_tfunc(ImmutableVector{Int}) === Union{}
-@test arrayfreeze_tfunc(ImmutableVector) === Union{}
-@test arrayfreeze_tfunc(ImmutableArray) === Union{}
-@test mutating_arrayfreeze_tfunc(Vector{Int}) === ImmutableVector{Int}
-@test mutating_arrayfreeze_tfunc(Vector) === ImmutableVector
-@test mutating_arrayfreeze_tfunc(Array) === ImmutableArray
-@test mutating_arrayfreeze_tfunc(Any) === ImmutableArray
-@test mutating_arrayfreeze_tfunc(ImmutableVector{Int}) === Union{}
-@test mutating_arrayfreeze_tfunc(ImmutableVector) === Union{}
-@test mutating_arrayfreeze_tfunc(ImmutableArray) === Union{}
-@test arraythaw_tfunc(ImmutableVector{Int}) === Vector{Int}
-@test arraythaw_tfunc(ImmutableVector) === Vector
-@test arraythaw_tfunc(ImmutableArray) === Array
-@test arraythaw_tfunc(Any) === Array
-@test arraythaw_tfunc(Vector{Int}) === Union{}
-@test arraythaw_tfunc(Vector) === Union{}
-@test arraythaw_tfunc(Array) === Union{}
+@testset "ImmutableArray tfuncs" begin
+    @test arrayfreeze_tfunc(Vector{Int}) === ImmutableVector{Int}
+    @test arrayfreeze_tfunc(Vector) === ImmutableVector
+    @test arrayfreeze_tfunc(Array) === ImmutableArray
+    @test arrayfreeze_tfunc(Any) === ImmutableArray
+    @test arrayfreeze_tfunc(ImmutableVector{Int}) === Union{}
+    @test arrayfreeze_tfunc(ImmutableVector) === Union{}
+    @test arrayfreeze_tfunc(ImmutableArray) === Union{}
+    @test mutating_arrayfreeze_tfunc(Vector{Int}) === ImmutableVector{Int}
+    @test mutating_arrayfreeze_tfunc(Vector) === ImmutableVector
+    @test mutating_arrayfreeze_tfunc(Array) === ImmutableArray
+    @test mutating_arrayfreeze_tfunc(Any) === ImmutableArray
+    @test mutating_arrayfreeze_tfunc(ImmutableVector{Int}) === Union{}
+    @test mutating_arrayfreeze_tfunc(ImmutableVector) === Union{}
+    @test mutating_arrayfreeze_tfunc(ImmutableArray) === Union{}
+    @test arraythaw_tfunc(ImmutableVector{Int}) === Vector{Int}
+    @test arraythaw_tfunc(ImmutableVector) === Vector
+    @test arraythaw_tfunc(ImmutableArray) === Array
+    @test arraythaw_tfunc(Any) === Array
+    @test arraythaw_tfunc(Vector{Int}) === Union{}
+    @test arraythaw_tfunc(Vector) === Union{}
+    @test arraythaw_tfunc(Array) === Union{}
+end
 
-function test_allocate1()
-    a = Vector{Float64}(undef, 5)
-    for i = 1:5
-        a[i] = i
+@testset "ImmutableArray allocation optimization" begin
+    @noinline function op(a::AbstractArray)
+        return reverse(reverse(a))
     end
-    Core.ImmutableArray(a)
+
+    function allo1()
+        a = Vector{Float64}(undef, 5)
+        for i = 1:5
+            a[i] = i
+        end
+        return Core.ImmutableArray(a)
+    end
+
+    function allo2()
+        a = [1,2,3,4,5]
+        return Core.ImmutableArray(a)
+    end
+
+    function allo3()
+        a = Matrix{Float64}(undef, 5, 2)
+        for i = 1:5
+            for j = 1:2
+                a[i, j] = i + j
+            end
+        end
+        return Core.ImmutableArray(a)
+    end
+
+    function allo4() # sanity check
+        return Core.ImmutableArray{Float64}(undef, 5)
+    end
+
+    function allo5() # test that throwing boundserror doesn't escape
+        a = [1,2,3]
+        try
+            getindex(a, 4)
+        catch end
+        return Core.ImmutableArray(a)
+    end
+
+    function allo6()
+        a = ones(5)
+        a = op(a)
+        return Core.ImmutableArray(a)
+    end
+
+    function test_allo()
+        # warmup
+        allo1(); allo2(); allo3();
+        allo4(); allo5(); allo6();
+
+        # these magic values are what the mutable array version would allocate
+        @test @allocated(allo1()) == 96
+        @test @allocated(allo2()) == 96
+        @test @allocated(allo3()) == 144
+        @test @allocated(allo4()) == 96
+        @test @allocated(allo5()) == 160
+        @test @allocated(allo6()) == 288
+    end
+
+    test_allo()
 end
 
-function test_allocate2()
-    a = [1,2,3,4,5]
-    Core.ImmutableArray(a)
-end
+@testset "maybecopy tests" begin
+    g = nothing # global
 
-function test_allocate3()
-    a = Matrix{Float64}(undef, 5, 2)
-    for i = 1:5
-        for j = 1:2
-            a[i, j] = i + j
+    @noinline function escape(arr)
+        g = arr
+        return arr
+    end
+
+    function mc1()
+        a = Vector{Int64}(undef, 5)
+        b = Core.maybecopy(a) # doesn't escape in this function - so a === b
+        @test a === b
+    end
+
+    # XXX broken until maybecopy implementation is correct
+    function mc2()
+        a = Vector{Int64}(undef, 5)
+        try
+            getindex(a, 6)
+        catch e
+            if isa(e, BoundsError)
+                @test_broken !(e.a === a) # only escapes through throw, so this should copy
+            end
         end
     end
-    Core.ImmutableArray(a)
+
+    function mc3()
+        a = Vector{Int64}(undef, 5)
+        escape(a)
+        b = Core.maybecopy(a)
+        @test a === b # escapes elsewhere, so give back the actual object
+    end
+
+    function mc4()
+        a = Vector{Int64}(undef, 5)
+        escape(a)
+        try
+            getindex(a, 6)
+        catch e
+            if isa(e, BoundsError)
+                @test e.a === a # already escaped so we don't copy
+            end
+        end
+    end
+
+    function test_maybecopy()
+        mc1(); mc2(); mc3();
+        mc4();
+    end
+
+    test_maybecopy()
 end
 
-function test_allocate4()
-    a = Core.ImmutableArray{Float64}(undef, 5)
-end
-
-function test_broadcast1()
-    a = Core.ImmutableArray([1,2,3])
-    typeof(a .+ a) <: Core.ImmutableArray
-end
-
-function test_allocate5() # test that throwing boundserror doesn't escape
-    a = [1,2,3]
-    try
-        getindex(a, 4)
-    catch end
-    Core.ImmutableArray(a)
-end
-
-# function test_maybecopy1()
-#     a = Vector{Int64}(undef, 5)
-#     b = Core.maybecopy(a) # doesn't escape in this function - so a !=== b
-#     @test !(a === b)
-# end
-
-# function test_maybecopy2()
-#     a = Vector{Int64}(undef, 5)
-#     try
-#         a[6]
-#     catch e
-#         @test !(e.a === a)
-#     end
-# end
-
-# function test_maybecopy3()
-#     @noinline function escaper(arr)
-#         return arr
-#     end
-
-#     a = Vector{Int64}(undef, 5)
-#     escaper(a)
-#     b = Core.maybecopy(a)
-#     @test a === b # this time, it does escape, so we give back the actual object
-# end
-
-# function test_maybecopy4()
-#     @noinline function escaper(arr)
-#         return arr
-#     end
-
-#     a = Vector{Int64}(undef, 5)
-#     escaper(a)
-#     try
-#         a[6]
-#     catch e
-#         if isa(e, BoundsError)
-#             @test e.a === a # already escaped so we don't copy
-#         end
-#     end
-# end
-
-
-
-
-let
-    # warmup for @allocated
-    a,b,c,d,e = test_allocate1(), test_allocate2(), test_allocate3(), test_allocate4(), test_allocate5()
-
-    # these magic values are ~ what the mutable array version would allocate
-    @test @allocated(test_allocate1()) < 100
-    @test @allocated(test_allocate2()) < 100
-    @test @allocated(test_allocate3()) < 150
-    @test @allocated(test_allocate4()) < 100
-    @test @allocated(test_allocate5()) < 170
-    @test test_broadcast1() == true
-
-    # test_maybecopy1()
-    # test_maybecopy2()
-    # test_maybecopy3()
-    # test_maybecopy4()
-end
-
+@test typeof(Core.ImmutableArray([1,2,3]) .+ Core.ImmutableArray([4,5,6])) <: Core.ImmutableArray
 
 # DiffEq Performance Tests
 

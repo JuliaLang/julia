@@ -274,10 +274,10 @@ struct BoundsError <: Exception
     a::Any
     i::Any
     BoundsError() = new()
-    # For now, always copy arrays to avoid escaping them
-    # Eventually, we want to figure out if the copy is needed to save the performance of copying
-    # (i.e., if a escapes elsewhere, don't bother to make a copy)
-
+    # maybecopy --- non-semantic copy
+    # if escape analysis proves that this throw is the only place where an object would escape local scope,
+    # creates a copy to avoid that escape and enable memory optimization through memory_opt!
+    # otherwise if there are other escapes, maybecopy does not copy and just passes the object
     BoundsError(@nospecialize(a)) = (@noinline;
         a isa Array ? new(Core.maybecopy(a)) : new(a))
     BoundsError(@nospecialize(a), i) = (@noinline;

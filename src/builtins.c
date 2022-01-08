@@ -1403,15 +1403,12 @@ JL_CALLABLE(jl_f_arrayset)
 
 JL_CALLABLE(jl_f_maybecopy)
 {
-    // maybecopy --- this builtin is never actually supposed to be executed
-    // instead, calls to it are analyzed and replaced with either a call to copy
-    // or directly replaced with the object itself that is the target of the maybecopy
-    // therefore, we just check that there is one argument and do a no-op
+    // calls to this builtin are potentially replaced with a call to copy
+    // if not replaced, the default behavior is to typecheck and return the array it was called on
     JL_NARGS(maybecopy, 1, 1);
     JL_TYPECHK(maybecopy, array, args[0]);
     jl_array_t *a = (jl_array_t*)args[0];
-    jl_array_t *na = jl_array_copy(a);
-    return (jl_value_t*)na;
+    return (jl_value_t*)a;
 }
 
 // type definition ------------------------------------------------------------

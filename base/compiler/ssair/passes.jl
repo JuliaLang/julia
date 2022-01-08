@@ -1423,13 +1423,15 @@ function memory_opt!(ir::IRCode, estate)
         end
     end
 
-    # if maybecopies !== nothing
-    #     for idx in maybecopies
-    #         stmt = ir.stmts[idx][:inst]::Expr
-    #         arr = stmt.args[2]
-    #         id = isa(arr, SSAValue) ? arr.id : arr.n # SSAValue or Core.Argument
-    #     end
-    # end
+    if maybecopies !== nothing
+        for idx in maybecopies
+            println("analyzing maybecopy at ", pc)
+            stmt = ir.stmts[idx][:inst]::Expr
+            arg = stmt.args[2]
+            has_no_escape(estate[arg]) || continue # XXX is this correct, or has_only_throw_escape(x, pc) where pc is location of throw that created the maybecopy?
+            stmt.args[1] = GlobalRef(Base, :copy)
+        end
+    end
 
     return ir
 end

@@ -201,6 +201,7 @@ has_return_escape(x::EscapeLattice) = x.ReturnEscape
 has_return_escape(x::EscapeLattice, pc::Int) = has_return_escape(x) && pc in x.EscapeSites
 has_thrown_escape(x::EscapeLattice) = x.ThrownEscape
 has_thrown_escape(x::EscapeLattice, pc::Int) = has_thrown_escape(x) && pc in x.EscapeSites
+has_only_throw_escape(x::EscapeLattice, pc::Int) = has_thrown_escape(x, pc) && length(x.EscapeSites) == 1
 has_all_escape(x::EscapeLattice) = AllEscape() ⊑ x
 
 ignore_aliasescapes(x::EscapeLattice) = EscapeLattice(x, BOT_ALIAS_ESCAPES)
