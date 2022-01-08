@@ -110,7 +110,7 @@ end
 end
 
 @testset "two-argument functions" begin
-    two_argument_functions = [atan]
+    two_argument_functions = [atan, hypot, log]
 
     # All two-argument functions return missing when operating on two missing's
     # All two-argument functions return missing when operating on a scalar and an missing

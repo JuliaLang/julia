@@ -867,9 +867,9 @@ JL_CALLABLE(jl_f_getfield)
     enum jl_memory_order order = jl_memory_order_unspecified;
     JL_NARGS(getfield, 2, 4);
     if (nargs == 4) {
-        JL_TYPECHK(getfield, symbol, args[3]);
-        JL_TYPECHK(getfield, bool, args[4]);
-        order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 0);
+        JL_TYPECHK(getfield, symbol, args[2]);
+        JL_TYPECHK(getfield, bool, args[3]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 0);
     }
     else if (nargs == 3) {
         if (!jl_is_bool(args[2])) {

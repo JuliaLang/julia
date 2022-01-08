@@ -759,13 +759,18 @@ end
 import Base: @constprop
 
 # test union-split callsite with successful and unsuccessful constant-prop' results
-@constprop :aggressive @inline f42840(xs, a::Int) = xs[a]             # should be successful, and inlined
-@constprop :none @noinline f42840(xs::AbstractVector, a::Int) = xs[a] # should be unsuccessful, but still statically resolved
+# (also for https://github.com/JuliaLang/julia/issues/43287)
+@constprop :aggressive @inline f42840(cond::Bool, xs::Tuple, a::Int) =  # should be successful, and inlined with constant prop' result
+    cond ? xs[a] : @noinline(length(xs))
+@constprop :none @noinline f42840(::Bool, xs::AbstractVector, a::Int) = # should be unsuccessful, but still statically resolved
+    xs[a]
 let src = code_typed((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
-             f42840(xs, 2)
+             f42840(true, xs, 2)
          end |> only |> first
-    # `(xs::Tuple{Int,Int,Int})[a::Const(2)]` => `getfield(xs, 2)`
+    # `f43287(true, xs::Tuple{Int,Int,Int}, 2)` => `getfield(xs, 2)`
+    # `f43287(true, xs::Vector{Int}, 2)` => `:invoke f43287(true, xs, 2)`
     @test count(iscall((src, getfield)), src.code) == 1
+    @test count(isinvoke(:length), src.code) == 0
     @test count(isinvoke(:f42840), src.code) == 1
 end
 # a bit weird, but should handle this kind of case as well

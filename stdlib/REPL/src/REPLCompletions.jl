@@ -506,7 +506,7 @@ function complete_methods(ex_org::Expr, context_module::Module=Main)
     return out
 end
 
-function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool)
+function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool, shift::Bool)
     out = Completion[]
     args_ex, kwargs_ex = try
         complete_methods_args(ex_org.args[2:end], ex_org, context_module, false, false)
@@ -530,6 +530,15 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
                     end
                 end
             end
+        end
+    end
+
+    if !shift
+        # Filter out methods where all arguments are `Any`
+        filter!(out) do c
+            isa(c, REPLCompletions.MethodCompletion) || return true
+            sig = Base.unwrap_unionall(c.method.sig)::DataType
+            return !all(T -> T === Any || T === Vararg{Any}, sig.parameters[2:end])
         end
     end
 
@@ -719,7 +728,7 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
     return Completion[PackageCompletion(name) for name in loading_candidates]
 end
 
-function completions(string::String, pos::Int, context_module::Module=Main)
+function completions(string::String, pos::Int, context_module::Module=Main, shift::Bool=true)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
@@ -750,7 +759,7 @@ function completions(string::String, pos::Int, context_module::Module=Main)
         end
         ex_org = Meta.parse(callstr, raise=false, depwarn=false)
         if isa(ex_org, Expr)
-            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
+            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
         end
     end
 

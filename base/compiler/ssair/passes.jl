@@ -29,14 +29,17 @@ SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
 compute_live_ins(cfg::CFG, du::SSADefUse) = compute_live_ins(cfg, du.defs, du.uses)
 
-function try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr)
-    field = stmt.args[3]
+# assume `stmt == getfield(obj, field, ...)` or `stmt == setfield!(obj, field, val, ...)`
+try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr) =
+    try_compute_field(ir, stmt.args[3])
+
+function try_compute_field(ir::Union{IncrementalCompact,IRCode}, @nospecialize(field))
     # fields are usually literals, handle them manually
     if isa(field, QuoteNode)
         field = field.value
-    elseif isa(field, Int)
-    # try to resolve other constants, e.g. global reference
+    elseif isa(field, Int) || isa(field, Symbol)
     else
+        # try to resolve other constants, e.g. global reference
         field = argextype(field, ir)
         if isa(field, Const)
             field = field.val
@@ -44,8 +47,7 @@ function try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr
             return nothing
         end
     end
-    isa(field, Union{Int, Symbol}) || return nothing
-    return field
+    return isa(field, Union{Int, Symbol}) ? field : nothing
 end
 
 function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, typ::DataType)

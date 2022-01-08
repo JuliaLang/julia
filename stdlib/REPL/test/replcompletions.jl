@@ -127,6 +127,7 @@ test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastinde
 test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
 test_complete_context(s, m) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
+test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
 module M32377 end
 test_complete_32377(s) = map_completion_text(completions(s,lastindex(s), M32377))
@@ -565,6 +566,33 @@ let s = "CompletionFoo.?('c'"
     @test !res
     @test  any(str->occursin("test9(x::Char)", str), c)
     @test  any(str->occursin("test9(x::Char, i::Int", str), c)
+end
+
+let s = "CompletionFoo.?(false, \"a\", 3, "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("test(args...)", c[1])
+end
+
+let s = "CompletionFoo.?(false, \"a\", 3, "
+    c, r, res = test_complete_noshift(s)
+    @test !res
+    @test isempty(c)
+end
+
+let s = "CompletionFoo.?()"
+    c, r, res = test_complete(s)
+    @test !res
+    @test any(str->occursin("foo()", str), c)
+    @test any(str->occursin("kwtest(;", str), c)
+    @test any(str->occursin("test(args...)", str), c)
+end
+
+let s = "CompletionFoo.?()"
+    c, r, res = test_complete_noshift(s)
+    @test !res
+    @test isempty(c)
 end
 
 #################################################################
