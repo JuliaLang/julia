@@ -332,7 +332,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
                              jl_is_slot(v) || jl_is_ssavalue(v))) {
             int id = literal_val_id(s, v);
             assert(id >= 0);
-            if (currently_serializing == 2) {
+            // if (currently_serializing == 2) {
                 // We only need to use relative root indexing when serializing packages.
                 // During Julia's bootstrap compilation of its own libraries, we can use absolute indexing
                 // because the order of library compilation is fixed.
@@ -342,14 +342,14 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
                 if (id >= newrootsindex) {
                     // if (s->method->newrootsindex >= 0)
                     //     jl_(s->method);
-                    assert(s->method->newrootsindex < 0);      // new roots already serialized
+                    // assert(s->method->newrootsindex < 0);      // new roots already serialized
                     write_uint8(s->s, TAG_EXTERN_METHODROOT);
                     // jl_printf(JL_STDOUT, "Absolute root %d, relative root %d, for ", id, id - newrootsindex);
                     // jl_(v);
                     // jl_(s->method);
                     id -= newrootsindex;
                 }
-            }
+            // }
             if (id < 256) {
                 write_uint8(s->s, TAG_METHODROOT);
                 write_uint8(s->s, id);
@@ -629,13 +629,13 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
     case TAG_LONG_METHODROOT:
         return jl_array_ptr_ref(s->method->roots, read_uint16(s->s));
     case TAG_EXTERN_METHODROOT:
-        assert(s->method->newrootsindex >= 0);
+        // assert(s->method->newrootsindex >= 0);
         // if (s->method->newrootsindex == INT32_MAX) {
         //     jl_printf(JL_STDOUT, "method pointer %p, method ", s->method);
         //     jl_(s->method);
         // }
         assert(s->method->newrootsindex < INT32_MAX);
-        assert(currently_deserializing == 2);
+        // assert(currently_deserializing == 2);
         int id;
         tag = read_uint8(s->s);
         if (tag == TAG_METHODROOT)

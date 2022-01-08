@@ -66,6 +66,11 @@ htable_t edges_map;
 // list of requested ccallable signatures
 static arraylist_t ccallable_list;
 
+// for methods that had already had their roots tables extended
+// before deserialization started, we need to temporarily
+// move the added roots aside
+htable_t deferred_newroots;
+
 // state of (de)serialization:
 //   0: not (de)serializing
 //   1: (de)serializing internal methods/types/etc
@@ -2743,8 +2748,28 @@ static jl_method_t *jl_recache_method(jl_method_t *m)
     jl_methtable_t *mt = jl_method_get_table(m);
     assert((jl_value_t*)mt != jl_nothing);
     jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
-    jl_method_t *_new = jl_lookup_method(mt, sig, m->module->primary_world);
-    return _new;
+    jl_method_t *mreal = jl_lookup_method(mt, sig, m->module->primary_world);
+    if (mreal->newrootsindex != INT32_MAX) {
+        // this method had already had its roots table extended prior to deserialization, e.g.:
+        //
+        // module A
+        // # run some code here that extends the roots table for `foo(Any)`
+        // using B   # B also extends the roots table for `foo(Any)`
+        // end
+        //
+        // Transiently extract the new roots added by A and later append them after the roots added by B
+        assert(ptrhash_get(&deferred_newroots, mreal) == HT_NOTFOUND);
+        size_t i, nroots = jl_array_len(mreal->roots);
+        jl_printf(JL_STDOUT, "Transiently moving %ld roots out of the way for ", nroots - mreal->newrootsindex);
+        jl_(mreal);
+        jl_array_t *rts = jl_alloc_vec_any(nroots - mreal->newrootsindex);
+        for (i = mreal->newrootsindex; i < nroots; i++)
+            jl_array_ptr_set(rts, i - mreal->newrootsindex, jl_array_ptr_ref(mreal->roots, i));
+        // jl_(rts);
+        ptrhash_put(&deferred_newroots, mreal, rts);
+        jl_array_del_end(mreal->roots, nroots - mreal->newrootsindex);
+    }
+    return mreal;
 }
 
 // Copy new roots to the running method
@@ -2802,19 +2827,35 @@ static void copy_roots_all(jl_array_t *list, jl_array_t *roots)
     htable_free(&umethods);
 }
 
+static void restore_deferred_newroots(void)
+{
+    size_t i;
+    for (i = 0; i < deferred_newroots.size; i += 2) {
+        if (deferred_newroots.table[i+1] != HT_NOTFOUND) {
+            jl_method_t *m = (jl_method_t*)deferred_newroots.table[i];
+            jl_array_t *roots = (jl_array_t*)deferred_newroots.table[i+1];
+            jl_printf(JL_STDOUT, "Resetting %ld roots for ", jl_array_len(roots));
+            copy_roots(m, roots);
+        }
+    }
+}
+
 // A decompression/compression cycle is needed to restore absolute root indexing
 static void recompress_cis(jl_array_t *list)
 {
     assert(jl_is_array(list));
     size_t i, j, n = jl_array_len(list);
     jl_array_t *srcs = jl_alloc_vec_any(0);
+    jl_printf(JL_STDOUT, "Recompressing CIs:\n");
     for (i = 0; i < n; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+        jl_printf(JL_STDOUT, "Recompress CIs for ");
         jl_(mi);
         assert(jl_is_method_instance(mi));
         jl_method_t *m = mi->def.method;
-        jl_printf(JL_STDOUT, "newrootsindex: %d\n", m->newrootsindex);
         assert(jl_is_method(m));
+        // jl_printf(JL_STDOUT, "newrootsindex: %d, roots:\n", m->newrootsindex);
+        // jl_(m->roots);
         jl_code_instance_t *ci = mi->cache;
         jl_array_del_end(srcs, jl_array_len(srcs));
         // decompress all code instances while the newrootsindex is set for relative root indexing
@@ -2824,7 +2865,9 @@ static void recompress_cis(jl_array_t *list)
                 assert(jl_is_array(ci->inferred));
                 assert(currently_deserializing == 2);
                 assert(currently_serializing == 0);
-                jl_array_ptr_1d_push(srcs, (jl_value_t*)jl_uncompress_ir(m, ci, (jl_array_t*)ci->inferred));
+                jl_code_info_t *src = jl_uncompress_ir(m, ci, (jl_array_t*)ci->inferred);
+                // jl_(src);
+                jl_array_ptr_1d_push(srcs, (jl_value_t*)src);
             }
             ci = ci->next;
         }
@@ -2843,6 +2886,7 @@ static void recompress_cis(jl_array_t *list)
         }
         m->newrootsindex = newrootsindex;   // set for relative indexing (may have more instances of same method)
     }
+    jl_printf(JL_STDOUT, "Done recompressing CIs:\n");
 }
 
 static void show_pointers(jl_array_t *list, int tag)
@@ -2986,6 +3030,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     htable_new(&new_code_instance_validate, 0);
     arraylist_new(&ccallable_list, 0);
     htable_new(&uniquing_table, 0);
+    htable_new(&deferred_newroots, 0);
 
     jl_serializer_state s = {
         f,
@@ -3109,6 +3154,8 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     jl_value_t *ret = (jl_value_t*)jl_svec(2, restored, init_order);
     JL_GC_POP();
     currently_deserializing = 0;
+    restore_deferred_newroots();
+    htable_free(&deferred_newroots);
     jl_printf(JL_STDOUT, "Done\n");
 
     return (jl_value_t*)ret;
