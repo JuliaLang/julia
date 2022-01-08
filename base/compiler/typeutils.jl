@@ -177,13 +177,6 @@ end
 
 hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
 
-function tvar_extent(@nospecialize t)
-    while t isa TypeVar
-        t = t.ub
-    end
-    return t
-end
-
 _typename(@nospecialize a) = Union{}
 _typename(a::TypeVar) = Core.TypeName
 function _typename(a::Union)
@@ -201,7 +194,7 @@ function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
     t = init
     for x in ct
         # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
-        t = tmerge(t, tvar_extent(unwrapva(x)))
+        t = tmerge(t, unwraptv(unwrapva(x)))
     end
     return Vararg{widenconst(t)}
 end
