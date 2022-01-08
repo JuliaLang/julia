@@ -1460,25 +1460,27 @@ function tuple_tfunc(argtypes::Vector{Any})
     return anyinfo ? PartialStruct(typ, argtypes) : typ
 end
 
-function arrayref_tfunc(@nospecialize(boundcheck), @nospecialize(ary),
-    @nospecialize idxs...)
+arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(ary), @nospecialize idxs...) =
+    _arrayref_tfunc(boundscheck, ary, idxs)
+function _arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(ary),
+    @nospecialize idxs::Tuple)
     isempty(idxs) && return Bottom
-    array_builtin_common_errorcheck(boundcheck, ary, idxs) || return Bottom
+    array_builtin_common_errorcheck(boundscheck, ary, idxs) || return Bottom
     return array_elmtype(ary)
 end
 add_tfunc(arrayref, 3, INT_INF, arrayref_tfunc, 20)
 add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
 
-function arrayset_tfunc(@nospecialize(boundcheck), @nospecialize(ary), @nospecialize(item),
+function arrayset_tfunc(@nospecialize(boundscheck), @nospecialize(ary), @nospecialize(item),
     @nospecialize idxs...)
-    hasintersect(widenconst(item), arrayref_tfunc(boundcheck, ary, idxs...)) || return Bottom
+    hasintersect(widenconst(item), _arrayref_tfunc(boundscheck, ary, idxs)) || return Bottom
     return ary
 end
 add_tfunc(arrayset, 4, INT_INF, arrayset_tfunc, 20)
 
-function array_builtin_common_errorcheck(@nospecialize(boundcheck), @nospecialize(ary),
+function array_builtin_common_errorcheck(@nospecialize(boundscheck), @nospecialize(ary),
     @nospecialize idxs::Tuple)
-    hasintersect(widenconst(boundcheck), Bool) || return false
+    hasintersect(widenconst(boundscheck), Bool) || return false
     hasintersect(widenconst(ary), Array) || return false
     for i = 1:length(idxs)
         idx = getfield(idxs, i)
@@ -1539,16 +1541,16 @@ end
 
 function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
     length(argtypes) >= 4 || return false
-    boundcheck = argtypes[1]
+    boundscheck = argtypes[1]
     arytype = argtypes[2]
-    array_builtin_common_typecheck(boundcheck, arytype, argtypes, first_idx_idx) || return false
+    array_builtin_common_typecheck(boundscheck, arytype, argtypes, first_idx_idx) || return false
     # If we could potentially throw undef ref errors, bail out now.
     arytype = widenconst(arytype)
     array_type_undefable(arytype) && return false
     # If we have @inbounds (first argument is false), we're allowed to assume
     # we don't throw bounds errors.
-    if isa(boundcheck, Const)
-        !(boundcheck.val::Bool) && return true
+    if isa(boundscheck, Const)
+        !(boundscheck.val::Bool) && return true
     end
     # Else we can't really say anything here
     # TODO: In the future we may be able to track the shapes of arrays though
@@ -1557,9 +1559,9 @@ function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
 end
 
 function array_builtin_common_typecheck(
-    @nospecialize(boundcheck), @nospecialize(arytype),
+    @nospecialize(boundscheck), @nospecialize(arytype),
     argtypes::Vector{Any}, first_idx_idx::Int)
-    (boundcheck ⊑ Bool && arytype ⊑ Array) || return false
+    (boundscheck ⊑ Bool && arytype ⊑ Array) || return false
     for i = first_idx_idx:length(argtypes)
         argtypes[i] ⊑ Int || return false
     end
