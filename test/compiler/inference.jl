@@ -1534,6 +1534,34 @@ using Core.Compiler: typeof_tfunc
 f_typeof_tfunc(x) = typeof(x)
 @test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Type{Int}, Type{Complex{T}} where T<:Real}]
 
+# arrayref / arrayset / arraysize
+import Core.Compiler: Const, arrayref_tfunc, arrayset_tfunc, arraysize_tfunc
+@test arrayref_tfunc(Const(true), Vector{Int}, Int) === Int
+@test arrayref_tfunc(Const(true), Vector{<:Integer}, Int) === Integer
+@test arrayref_tfunc(Const(true), Vector, Int) === Any
+@test arrayref_tfunc(Const(true), Vector{Int}, Int, Vararg{Int}) === Int
+@test arrayref_tfunc(Const(true), Vector{Int}, Vararg{Int}) === Int
+@test arrayref_tfunc(Const(true), Vector{Int}) === Union{}
+@test arrayref_tfunc(Const(true), String, Int) === Union{}
+@test arrayref_tfunc(Const(true), Vector{Int}, Float64) === Union{}
+@test arrayref_tfunc(Int, Vector{Int}, Int) === Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Int, Int) === Vector{Int}
+let ua = Vector{<:Integer}
+    @test arrayset_tfunc(Const(true), ua, Int, Int) === ua
+end
+@test arrayset_tfunc(Const(true), Vector, Int, Int) === Vector
+@test arrayset_tfunc(Const(true), Any, Int, Int) === Any
+@test arrayset_tfunc(Const(true), Vector{String}, String, Int, Vararg{Int}) === Vector{String}
+@test arrayset_tfunc(Const(true), Vector{String}, String, Vararg{Int}) === Vector{String}
+@test arrayset_tfunc(Const(true), Vector{String}, String) === Union{}
+@test arrayset_tfunc(Const(true), String, Char, Int) === Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Int, Float64) === Union{}
+@test arrayset_tfunc(Int, Vector{Int}, Int, Int) === Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Float64, Int) === Union{}
+@test arraysize_tfunc(Vector, Int) === Int
+@test arraysize_tfunc(Vector, Float64) === Union{}
+@test arraysize_tfunc(String, Int) === Union{}
+
 function f23024(::Type{T}, ::Int) where T
     1 + 1
 end
