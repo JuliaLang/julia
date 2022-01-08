@@ -390,6 +390,11 @@ end
     @test_throws ErrorException reinterpret(Missing, NotASingleton())
     @test_throws ErrorException reinterpret(NotASingleton, ())
 
+    @test_throws ArgumentError reinterpret(NotASingleton, fill(nothing, ()))
+    @test_throws ArgumentError reinterpret(reshape, NotASingleton, fill(missing, 3))
+    @test_throws ArgumentError reinterpret(Tuple{}, fill(NotASingleton(), 2))
+    @test_throws ArgumentError reinterpret(reshape, Nothing, fill(NotASingleton(), ()))
+
     t = fill(nothing, 3, 5)
     @test reinterpret(SomeSingleton, t) == reinterpret(reshape, SomeSingleton, t)
     @test reinterpret(SomeSingleton, t) == [SomeSingleton(i*j) for i in 1:3, j in 1:5]
@@ -429,11 +434,11 @@ end
     @test_throws BoundsError x[18] = ()
     @test_throws MethodError x[1,3] = missing
     @test x == fill((), (3, 5))
-    x = reinterpret(reshape, Tuple{}, t)
+    x = reinterpret(reshape, SomeSingleton, t)
     @test_throws BoundsError x[19]
-    @test_throws BoundsError x[2,6] = ()
-    @test x[2,3] === ()
-    @test (x[3,5] = (); true)
-    @test x == fill((), (3, 5))
+    @test_throws BoundsError x[2,6] = SomeSingleton(0xa)
+    @test x[2,3] === SomeSingleton(:x)
+    @test (x[3,5] = SomeSingleton(:); true)
+    @test x == fill(SomeSingleton(nothing), (3, 5))
     @test_throws MethodError x[2,4] = nothing
 end
