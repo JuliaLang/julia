@@ -1892,7 +1892,7 @@ end
 function get_binding_type_tfunc(@nospecialize(M), @nospecialize(s))
     if M isa Const && widenconst(M) === Module &&
         s isa Const && widenconst(s) === Symbol
-        return Type{Core._get_binding_type(M.val, s.val)}
+        return Const(Core._get_binding_type(M.val, s.val))
     end
     return Type
 end
