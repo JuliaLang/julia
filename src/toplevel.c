@@ -148,7 +148,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     if (jl_is__toplevel__mod(parent_module)) {
         newm->parent = newm;
         jl_register_root_module(newm);
-        if (jl_generating_output()) {
+        if (jl_options.incremental) {
             jl_precompile_toplevel_module = newm;
         }
     }
