@@ -1403,12 +1403,16 @@ function memory_opt!(ir::IRCode, estate)
         stmt = ir.stmts[idx][:inst]
         isexpr(stmt, :call) || continue
         if is_known_call(stmt, Core.maybecopy, ir)
-            maybecopies === nothing && (maybecopies = Int[])
-            push!(maybecopies, idx)
+            val = stmt.args[2]
+            if isa(val, Argument) || isa(val, SSAValue)
+                maybecopies === nothing && (maybecopies = Int[])
+                push!(maybecopies, idx)
+            end
         elseif is_known_call(stmt, Core.arrayfreeze, ir)
             # array as SSA value might have been initialized within this frame
             # (thus potentially doesn't escape to anywhere)
-            if isa(stmt.args[2], SSAValue)
+            val = stmt.args[2]
+            if isa(val, SSAValue)
                 revisit === nothing && (revisit = Int[])
                 push!(revisit, idx)
             end
@@ -1427,9 +1431,8 @@ function memory_opt!(ir::IRCode, estate)
 
     if maybecopies !== nothing
         for idx in maybecopies
-            println("analyzing maybecopy at ", pc)
             stmt = ir.stmts[idx][:inst]::Expr
-            arg = stmt.args[2]
+            arg = stmt.args[2]::Union{Argument,SSAValue}
             has_no_escape(estate[arg]) || continue # XXX is this correct, or has_only_throw_escape(x, pc) where pc is location of throw that created the maybecopy?
             stmt.args[1] = GlobalRef(Base, :copy)
         end
