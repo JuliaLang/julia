@@ -83,9 +83,7 @@ function unescape_raw_string(io::IO, str::AbstractString, is_cmd::Bool, dedent::
                 c = '\n'
             end
             if c == '\n'
-                if skip_initial_newline
-                    skip_initial_newline = false
-                else
+                if i > 1 || !skip_initial_newline
                     write(io, c)
                 end
                 if i+1 <= lastidx && str[i+1] != '\n' && str[i+1] != '\r'
@@ -136,9 +134,7 @@ function unescape_julia_string(io::IO, str::AbstractString, dedent::Integer, ski
                 c = '\n'
             end
             if c == '\n'
-                if skip_initial_newline
-                    skip_initial_newline = false
-                else
+                if i > 1 || !skip_initial_newline
                     write(io, c)
                 end
                 if i+1 <= lastidx && str[i+1] != '\n' && str[i+1] != '\r'

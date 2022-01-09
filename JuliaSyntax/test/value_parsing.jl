@@ -141,16 +141,22 @@ end
 end
 
 @testset "Triple quoted string deindentation" begin
-    # Various combinations of dedent + leading newline stripping
-    @test process_triple_strings!(["\n x", "\n y"], false)        == ["x", "\ny"]
-    @test process_triple_strings!(["\n\tx", "\n\ty"], false)      == ["x", "\ny"]
-    @test process_triple_strings!(["\r x", "\r y"], false)        == ["x", "\ny"]
-    @test process_triple_strings!(["\r x\r y"], false)        == ["x\ny"]
-    @test process_triple_strings!(["\r x\r\r y"], false)        == ["x\n\ny"]
-    @test process_triple_strings!(["\n \t x", "\n \t y"], false)  == ["x", "\ny"]
-    # Cases of no dedent + newline normalization
-    @test process_triple_strings!(["\n x", "\ny"], false) == [" x", "\ny"]
-    @test process_triple_strings!(["\nx", "\n y"], false) == ["x", "\n y"]
-    @test process_triple_strings!(["\n y\n"], false) == [" y\n"]
-    @test process_triple_strings!(["\n y\r"], false) == [" y\n"]
+    # Weird thing I noticed: In Julia 1.7 this @testset for loop adds an
+    # absurd amount of testing latency given how trivial it is. Why? Is it
+    # because of compiler heuristics which try to compile all for loops?
+    @testset "Raw=$raw" for raw in (false, true)
+        # Various combinations of dedent + leading newline stripping
+        @test process_triple_strings!(["\n x", "\n y"], raw)        == ["x", "\ny"]
+        @test process_triple_strings!(["\n\tx", "\n\ty"], raw)      == ["x", "\ny"]
+        @test process_triple_strings!(["\r x", "\r y"], raw)        == ["x", "\ny"]
+        @test process_triple_strings!(["\r x\r y"], raw)            == ["x\ny"]
+        @test process_triple_strings!(["\r x\r\r y"], raw)          == ["x\n\ny"]
+        @test process_triple_strings!(["\n \t x", "\n \t y"], raw)  == ["x", "\ny"]
+        @test process_triple_strings!(["x\n\n y", "\n z"], raw)     == ["x\n\ny", "\nz"]
+        # Cases of no dedent + newline normalization
+        @test process_triple_strings!(["\n x", "\ny"], raw) == [" x", "\ny"]
+        @test process_triple_strings!(["\nx", "\n y"], raw) == ["x", "\n y"]
+        @test process_triple_strings!(["\n y\n"], raw) == [" y\n"]
+        @test process_triple_strings!(["\n y\r"], raw) == [" y\n"]
+    end
 end
