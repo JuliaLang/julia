@@ -1745,6 +1745,7 @@ end
 @test setfield!_tfunc(Const(@__MODULE__), Const(:v), Int) === Union{}
 @test setfield!_tfunc(Const(@__MODULE__), Int, Int) === Union{}
 @test setfield!_tfunc(Module, Const(:v), Int) === Union{}
+@test setfield!_tfunc(Union{Module,Base.RefValue{Any}}, Const(:v), Int) === Union{}
 @test setfield!_tfunc(ABCDconst, Const(:a), Any) === Union{}
 @test setfield!_tfunc(ABCDconst, Const(:b), Any) === Union{}
 @test setfield!_tfunc(ABCDconst, Const(:d), Any) === Union{}
