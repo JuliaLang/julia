@@ -1372,10 +1372,11 @@ IteratorEltype(::Type{Stateful{T,VS}}) where {T,VS} = IteratorEltype(T)
 length(s::Stateful) = length(s.itr) - s.taken
 
 """
-    only(x)
+    only(x, [message])
 
 Return the one and only element of collection `x`, or throw an [`ArgumentError`](@ref) if the
-collection has zero or multiple elements.
+collection has zero or multiple elements. An optional error message can be provided to customize
+the message if the collection has zero or multiple elements.
 
 See also [`first`](@ref), [`last`](@ref).
 
@@ -1396,19 +1397,24 @@ Stacktrace:
 [...]
 
 julia> only(('a', 'b'))
-ERROR: ArgumentError: Tuple contains 2 elements, must contain exactly 1 element
+ERROR: ArgumentError: Tuple contains multiple elements, must contain exactly 1 element
+Stacktrace:
+[...]
+
+julia> only(('a', 'b'), "my error message")
+ERROR: ArgumentError: Tuple contains multiple elements, my error message
 Stacktrace:
 [...]
 ```
 """
-@propagate_inbounds function only(x)
+@propagate_inbounds function only(x, message="must contain exactly 1 element")
     i = iterate(x)
     @boundscheck if i === nothing
-        throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
+        throw(ArgumentError("Collection is empty, $message"))
     end
     (ret, state) = i::NTuple{2,Any}
     @boundscheck if iterate(x, state) !== nothing
-        throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
+        throw(ArgumentError("Collection has multiple elements, $message"))
     end
     return ret
 end
