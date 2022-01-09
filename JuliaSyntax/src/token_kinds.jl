@@ -13,7 +13,6 @@ Dict([
 ";"              =>  Ts.SEMICOLON
 
 "BEGIN_KEYWORDS" => Ts.begin_keywords
-"Keyword"     =>  Ts.KEYWORD
 "abstract"    =>  Ts.ABSTRACT
 "as"          =>  Ts.AS
 "baremodule"  =>  Ts.BAREMODULE
@@ -50,17 +49,13 @@ Dict([
 "while"       =>  Ts.WHILE
 "END_KEYWORDS" => Ts.end_keywords
 
+# FIXME: Define precisely what Nothing means; integrate better with other tokens.
 "BEGIN_CSTPARSER"    =>  Ts.begin_cstparser
-"InvisibleBrackets"  =>  Ts.INVISIBLE_BRACKETS
 "Nothing"            =>  Ts.NOTHING
-"Ws"                 =>  Ts.WS
-"SemicolonWs"        =>  Ts.SEMICOLON_WS
 "NewlineWs"          =>  Ts.NEWLINE_WS
-"EmptyWs"            =>  Ts.EMPTY_WS
 "END_CSTPARSER"      =>  Ts.end_cstparser
 
 "BEGIN_LITERAL"  =>  Ts.begin_literal
-"Literal"        =>  Ts.LITERAL
 "Integer"        =>  Ts.INTEGER
 "BinInt"         =>  Ts.BIN_INT
 "HexInt"         =>  Ts.HEX_INT
@@ -87,7 +82,6 @@ Dict([
 "END_DELIMITERS"    => Ts.end_delimiters
 
 "BEGIN_OPS"  => Ts.begin_ops
-"OP"  => Ts.OP
 "..." => Ts.DDDOT
 
 # Level 1

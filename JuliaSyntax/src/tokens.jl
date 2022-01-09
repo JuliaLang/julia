@@ -28,7 +28,7 @@ A set of kinds which can be used with the `in` operator.  For example
 """
 macro KSet_cmd(str)
     kinds = [get(_str_to_kind, s) do
-        error("unknown token kind K$(repr(str))")
+         error("unknown token kind KSet`$(repr(str)[2:end-1])`")
     end
     for s in split(str)]
 
