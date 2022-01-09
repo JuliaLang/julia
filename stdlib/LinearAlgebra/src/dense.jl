@@ -422,21 +422,25 @@ kron!(c::AbstractVecOrMat, a::AbstractVecOrMat, b::Number) = mul!(c, a, b)
 kron!(c::AbstractVecOrMat, a::Number, b::AbstractVecOrMat) = mul!(c, a, b)
 
 Base.@propagate_inbounds function kron!(c::AbstractVector, a::AbstractVector, b::AbstractVector)
-    C = reshape(c, length(a)*length(b), 1)
-    A = reshape(a ,length(a), 1)
-    B = reshape(b, length(b), 1)
+    C = Base.ReshapedArray(c, (length(a)*length(b), 1), ())
+    A = Base.ReshapedArray(a, (length(a), 1), ())
+    B = Base.ReshapedArray(b, (length(b), 1), ())
     kron!(C, A, B)
     return c
 end
 
-Base.@propagate_inbounds kron!(C::AbstractMatrix, a::AbstractMatrix, b::AbstractVector) = kron!(C, a, reshape(b, length(b), 1))
-Base.@propagate_inbounds kron!(C::AbstractMatrix, a::AbstractVector, b::AbstractMatrix) = kron!(C, reshape(a, length(a), 1), b)
+Base.@propagate_inbounds kron!(C::AbstractMatrix, a::AbstractMatrix, b::AbstractVector) = kron!(C, a, Base.ReshapedArray(b, (length(b), 1), ()))
+Base.@propagate_inbounds kron!(C::AbstractMatrix, a::AbstractVector, b::AbstractMatrix) = kron!(C, Base.ReshapedArray(a, (length(a), 1), ()), b)
 
 kron(a::Number, b::Union{Number, AbstractVecOrMat}) = a * b
 kron(a::AbstractVecOrMat, b::Number) = a * b
-kron(a::AbstractVector, b::AbstractVector) = vec(kron(reshape(a ,length(a), 1), reshape(b, length(b), 1)))
-kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
-kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
+
+function kron(a::AbstractVector{T}, b::AbstractVector{S}) where {T,S}
+    c = Vector{promote_op(*,T,S)}(undef, length(a)*length(b))
+    @inbounds kron!(c, a, b)
+end
+kron(a::AbstractMatrix, b::AbstractVector) = kron(a, Base.ReshapedArray(b, (length(b), 1), ()))
+kron(a::AbstractVector, b::AbstractMatrix) = kron(Base.ReshapedArray(a, (length(a), 1), ()), b)
 
 kron(a::AdjointAbsVec, b::AdjointAbsVec) = adjoint(kron(adjoint(a), adjoint(b)))
 kron(a::AdjOrTransAbsVec, b::AdjOrTransAbsVec) = transpose(kron(transpose(a), transpose(b)))
