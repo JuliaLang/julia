@@ -1317,11 +1317,12 @@ _half_reduce(op, x::NTuple{4}) = reduce(op, x)
 
 function mapreduce_impl(f, op::Union{typeof(max),typeof(min)},
                         A::AbstractArrayOrBroadcasted, first::Int, last::Int)
-    @inline elf(i::Int) = @inbounds f(A[i])
-    Eltype = _return_type(elf, Tuple{Int})
+    T = @default_eltype A
+    Eltype = _return_type(f, Tuple{T})
     # Limit this optimization to concrete IEEEFloat. (general fallback is 2x faster for Integer)
     (isconcretetype(Eltype) && Eltype <: IEEEFloat) ||
         return mapreduce_impl(f, op, A, first, last, pairwise_blocksize(f, op))
+    @inline elf(i::Int) = @inbounds f(A[i])
     @noinline firstnan(temp::Tuple) = temp[findfirst(isnan, temp)], last
     function simd_kernal(::Val{N}, ini) where {N}
         # reused kernal for better vectorizable reduction.
