@@ -150,6 +150,7 @@ namespace {
         bool changed = false;
         auto &dtree = pass->getAnalysis<DominatorTreeWrapperPass>().getDomTree();
         std::map<Value *, SmallSet<std::size_t, 2>> checked, next_check;
+        SmallVector<std::pair<CmpInst*, bool>, 4> to_rauw;
         while (!lengths.empty()) {
             for (auto &dim : lengths) {
                 auto get_dominators = [&](Instruction *inst) {
@@ -236,6 +237,7 @@ namespace {
                                             //Should automagically take care of major constant cases (0 and 1)
                                             if (cmp->isSigned()) {
                                                 changed = true;
+                                                //OK to modify in loop, won't affect use iteration
                                                 cmp->setPredicate(cmp->getUnsignedPredicate());
                                             }
                                         } else {
@@ -245,13 +247,13 @@ namespace {
                                                 case CmpInst::Predicate::ICMP_SLT:
                                                 case CmpInst::Predicate::ICMP_EQ:
                                                     changed = true;
-                                                    cmp->replaceAllUsesWith(ConstantInt::getFalse(cmp->getContext()));
+                                                    to_rauw.emplace_back(cmp, false);
                                                     break;
                                                 case CmpInst::Predicate::ICMP_SGE:
                                                 case CmpInst::Predicate::ICMP_SGT:
                                                 case CmpInst::Predicate::ICMP_NE:
                                                     changed = true;
-                                                    cmp->replaceAllUsesWith(ConstantInt::getTrue(cmp->getContext()));
+                                                    to_rauw.emplace_back(cmp, true);
                                                     break;
                                                 default:
                                                     break;
@@ -269,6 +271,7 @@ namespace {
                                             //an unsigned compare, regardless of what kind of comparison
                                             //was being made (because the operands are nonnegative)
                                             changed = true;
+                                            //OK to modify in loop, won't affect use iteration
                                             cmp->setPredicate(cmp->getUnsignedPredicate());
                                         }
                                     }
@@ -284,6 +287,15 @@ namespace {
             }
             std::swap(lengths, next_check);
             next_check.clear();
+        }
+        //Delay RAUW until we're done iterating over uses
+        for (auto &cmp : to_rauw) {
+            if (cmp.second) {
+                cmp.first->replaceAllUsesWith(ConstantInt::getTrue(cmp.first->getContext()));
+            } else {
+                cmp.first->replaceAllUsesWith(ConstantInt::getFalse(cmp.first->getContext()));
+            }
+            cmp.first->eraseFromParent();
         }
         return changed;
     }
