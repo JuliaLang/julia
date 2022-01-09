@@ -1542,9 +1542,17 @@ import Core.Compiler: Const, arrayref_tfunc, arrayset_tfunc, arraysize_tfunc
 @test arrayref_tfunc(Const(true), Vector{Int}, Int, Vararg{Int}) === Int
 @test arrayref_tfunc(Const(true), Vector{Int}, Vararg{Int}) === Int
 @test arrayref_tfunc(Const(true), Vector{Int}) === Union{}
+@test arrayref_tfunc(Const(true), Core.ImmutableArray{Int,1}, Int) === Int
+@test arrayref_tfunc(Const(true), Core.ImmutableArray{<:Integer,1}, Int) === Integer
+@test arrayref_tfunc(Const(true), Core.ImmutableArray, Int) === Any
+@test arrayref_tfunc(Const(true), Core.ImmutableArray{Int,1}, Int, Vararg{Int}) === Int
+@test arrayref_tfunc(Const(true), Core.ImmutableArray{Int,1}, Vararg{Int}) === Int
+@test arrayref_tfunc(Const(true), Core.ImmutableArray{Int,1}) === Union{}
 @test arrayref_tfunc(Const(true), String, Int) === Union{}
 @test arrayref_tfunc(Const(true), Vector{Int}, Float64) === Union{}
 @test arrayref_tfunc(Int, Vector{Int}, Int) === Union{}
+@test arrayref_tfunc(Const(true), Core.ImmutableArray{Int,1}, Float64) === Union{}
+@test arrayref_tfunc(Int, Core.ImmutableArray{Int,1}, Int) === Union{}
 @test arrayset_tfunc(Const(true), Vector{Int}, Int, Int) === Vector{Int}
 let ua = Vector{<:Integer}
     @test arrayset_tfunc(Const(true), ua, Int, Int) === ua
@@ -1553,13 +1561,22 @@ end
 @test arrayset_tfunc(Const(true), Any, Int, Int) === Any
 @test arrayset_tfunc(Const(true), Vector{String}, String, Int, Vararg{Int}) === Vector{String}
 @test arrayset_tfunc(Const(true), Vector{String}, String, Vararg{Int}) === Vector{String}
+@test arrayset_tfunc(Const(true), Core.ImmutableArray{Int,1}, Int, Int) === Union{}
+let ua = Core.ImmutableArray{<:Integer,1}
+    @test arrayset_tfunc(Const(true), ua, Int, Int) === Union{}
+end
+@test arrayset_tfunc(Const(true), Core.ImmutableArray, Int, Int) === Union{}
+@test arrayset_tfunc(Const(true), Core.ImmutableArray{String,1}, String, Int, Vararg{Int}) === Union{}
+@test arrayset_tfunc(Const(true), Core.ImmutableArray{String,1}, String, Vararg{Int}) === Union{}
 @test arrayset_tfunc(Const(true), Vector{String}, String) === Union{}
 @test arrayset_tfunc(Const(true), String, Char, Int) === Union{}
 @test arrayset_tfunc(Const(true), Vector{Int}, Int, Float64) === Union{}
 @test arrayset_tfunc(Int, Vector{Int}, Int, Int) === Union{}
 @test arrayset_tfunc(Const(true), Vector{Int}, Float64, Int) === Union{}
 @test arraysize_tfunc(Vector, Int) === Int
+@test arraysize_tfunc(Core.ImmutableArray, Int) === Int
 @test arraysize_tfunc(Vector, Float64) === Union{}
+@test arraysize_tfunc(Core.ImmutableArray, Float64) === Union{}
 @test arraysize_tfunc(String, Int) === Union{}
 
 function f23024(::Type{T}, ::Int) where T
