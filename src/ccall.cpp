@@ -1789,7 +1789,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 static_rt);
         if (auto array_alloc = dyn_cast<CallInst>(retval.V)) {
             array_alloc->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
-            array_alloc->setMetadata("allocation.array", MDNode::get(jl_LLVMContext, {}));
+            array_alloc->setMetadata("julia.array", MDNode::get(ctx.builder.getContext(), {MDString::get(ctx.builder.getContext(), "allocation")}));
         }
         JL_GC_POP();
         return retval;
@@ -1802,7 +1802,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 static_rt);
         if (auto array_alloc = dyn_cast<CallInst>(retval.V)) {
             array_alloc->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
-            array_alloc->setMetadata("allocation.array.dyn", MDNode::get(jl_LLVMContext, {}));
+            array_alloc->setMetadata("julia.array", MDNode::get(ctx.builder.getContext(), {MDString::get(ctx.builder.getContext(), "allocation.dyn")}));
         }
         JL_GC_POP();
         return retval;
