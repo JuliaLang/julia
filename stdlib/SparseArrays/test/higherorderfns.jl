@@ -736,7 +736,7 @@ end
     @test Float64.(f.(B)) isa SparseVector{Float64}
     @test f.(Float64.(B)) isa SparseVector{Float64}
 end
-            
+
 @testset "issue #42670 - error in sparsevec outer product" begin
     A = spzeros(Int, 4)
     B = copy(A)
