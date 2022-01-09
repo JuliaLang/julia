@@ -1081,9 +1081,12 @@ function parse_identifier_or_interpolate(ps::ParseState, outermost=true)
         emit(ps, mark, K"$")
     else
         parse_atom(ps)
-        if outermost && !is_identifier(peek_behind(ps))
-            emit(ps, mark, K"error",
-                 error="Expected identifier or interpolation syntax")
+        if outermost
+            kb = peek_behind(ps)
+            if !(is_identifier(kb) || is_operator(kb))
+                emit(ps, mark, K"error",
+                     error="Expected identifier or interpolation syntax")
+            end
         end
     end
 end
@@ -1546,8 +1549,12 @@ function parse_resword(ps::ParseState)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"module")
     elseif word == K"export"
-        # export a
-        # export a, b,
+        # export a         ==>  (export a)
+        # export @a        ==>  (export @a)
+        # export a, \n @b  ==>  (export a @b)
+        # export +, ==     ==>  (export + ==)
+        # export \n a      ==>  (export a)
+        # export \$a, \$(a*b) ==> (export (\$ a) (\$ (call-i a * b)))
         bump(ps, TRIVIA_FLAG)
         parse_comma_separated(ps, parse_atsym)
         emit(ps, mark, K"export")
@@ -1923,8 +1930,9 @@ function parse_imports(ps::ParseState)
         has_comma = true
     end
     if has_import_prefix || has_comma
-        # import x, y     ==>  (import (. x) (. y))
-        # import A: x, y  ==>  (import (: (. A) (. x) (. y)))
+        # import A, y      ==>  (import (. A) (. y))
+        # import A: x, y   ==>  (import (: (. A) (. x) (. y)))
+        # import A: +, ==  ==>  (import (: (. A) (. +) (. ==)))
         parse_comma_separated(ps, ps1->parse_import(ps1, word, has_import_prefix))
         if peek(ps) == K":"
             # Error recovery
