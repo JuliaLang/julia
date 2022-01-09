@@ -340,9 +340,10 @@ tests = [
         "module A \n a \n b \n end"  =>  "(module true A (block a b))"
         """module A \n "x"\na\n end""" => """(module true A (block (macrocall :(Core.var"@doc") "x" a)))"""
         # export
+        "export a"  =>  "(export a)"
         "export @a"  =>  "(export @a)"
         "export a, \n @b"  =>  "(export a @b)"
-        "export a"  =>  "(export a)"
+        "export +, =="  =>  "(export + ==)"
         "export \n a"  =>  "(export a)"
         "export \$a, \$(a*b)"  =>  "(export (\$ a) (\$ (call-i a * b)))"
     ],
@@ -408,7 +409,8 @@ tests = [
     ],
     JuliaSyntax.parse_imports => [
         "import A as B: x"  => "(import (: (error (as (. A) B)) (. x)))"
-        "import x, y"       => "(import (. x) (. y))"
+        "import A, y"       => "(import (. A) (. y))"
+        "import A: +, =="       => "(import (: (. A) (. +) (. ==)))"
         "import A: x, y"    => "(import (: (. A) (. x) (. y)))"
         "import A: x, B: y" => "(import (: (. A) (. x) (. B) (error-t (. y))))"
         "import A: x"       => "(import (: (. A) (. x)))"
