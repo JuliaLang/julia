@@ -43,7 +43,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         if N != 0 && sizeof(S) != sizeof(T)
             ax1 = axes(a)[1]
             dim = length(ax1)
-            if isdefined(T, :instance)
+            if Base.issingletontype(T)
                 dim == 0 || throwsingleton(S, T, "a non-empty")
             else
                 rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
@@ -75,11 +75,11 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         if sizeof(S) == sizeof(T)
             N = ndims(a)
         elseif sizeof(S) > sizeof(T)
-            isdefined(T, :instance) && throwsingleton(S, T, "with reshape a")
+            Base.issingletontype(T) && throwsingleton(S, T, "with reshape a")
             rem(sizeof(S), sizeof(T)) == 0 || throwintmult(S, T)
             N = ndims(a) + 1
         else
-            isdefined(S, :instance) && throwfromsingleton(S, T)
+            Base.issingletontype(S) && throwfromsingleton(S, T)
             rem(sizeof(T), sizeof(S)) == 0 || throwintmult(S, T)
             N = ndims(a) - 1
             N > -1 || throwsize0(S, T, "larger")
@@ -300,7 +300,7 @@ unaliascopy(a::ReshapedReinterpretArray{T}) where {T} = reinterpret(reshape, T, 
 
 function size(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
-    size1 = isdefined(T, :instance) ? psize[1] : div(psize[1]*sizeof(S), sizeof(T))
+    size1 = Base.issingletontype(T) ? psize[1] : div(psize[1]*sizeof(S), sizeof(T))
     tuple(size1, tail(psize)...)
 end
 function size(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
@@ -314,7 +314,7 @@ size(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 function axes(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
     f, l = first(paxs[1]), length(paxs[1])
-    size1 = isdefined(T, :instance) ? l : div(l*sizeof(S), sizeof(T))
+    size1 = Base.issingletontype(T) ? l : div(l*sizeof(S), sizeof(T))
     tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
 end
 function axes(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
@@ -365,7 +365,7 @@ end
 @inline @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if isdefined(T, :instance) # singleton types
+        if Base.issingletontype(T) # singleton types
             @boundscheck checkbounds(a, i1, tailinds...)
             return T.instance
         end
@@ -413,7 +413,7 @@ end
 @inline @propagate_inbounds function _getindex_ra(a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if isdefined(T, :instance) # singleton types
+        if Base.issingletontype(T) # singleton types
             @boundscheck checkbounds(a, i1, tailinds...)
             return T.instance
         end
@@ -497,7 +497,7 @@ end
     v = convert(T, v)::T
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if isdefined(T, :instance) # singleton types
+        if Base.issingletontype(T) # singleton types
             @boundscheck checkbounds(a, i1, tailinds...)
             return T.instance # setindex! is a noop here
         end
@@ -562,7 +562,7 @@ end
     v = convert(T, v)::T
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if isdefined(T, :instance) # singleton types
+        if Base.issingletontype(T) # singleton types
             @boundscheck checkbounds(a, i1, tailinds...)
             return T.instance # setindex! is a noop here
         end
