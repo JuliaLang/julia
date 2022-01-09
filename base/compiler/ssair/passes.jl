@@ -1395,7 +1395,6 @@ end
 
 function memory_opt!(ir::IRCode, estate)
     estate = estate::EscapeAnalysis.EscapeState
-    revisit = nothing     # potential targets for a mutating_arrayfreeze drop-in
     maybecopies = nothing # calls to maybecopy
 
     # mark statements that possibly can be optimized
@@ -1411,21 +1410,12 @@ function memory_opt!(ir::IRCode, estate)
         elseif is_known_call(stmt, Core.arrayfreeze, ir)
             # array as SSA value might have been initialized within this frame
             # (thus potentially doesn't escape to anywhere)
-            val = stmt.args[2]
-            if isa(val, SSAValue)
-                revisit === nothing && (revisit = Int[])
-                push!(revisit, idx)
+            ary = stmt.args[2]
+            if isa(ary, SSAValue)
+                # if array doesn't escape, we can just change the tag and avoid allocation
+                has_no_escape(estate[ary]) || continue
+                stmt.args[1] = GlobalRef(Core, :mutating_arrayfreeze)
             end
-        end
-    end
-
-    if revisit !== nothing
-        # if array doesn't escape, we can just change the tag and avoid allocation
-        for idx in revisit
-            stmt = ir.stmts[idx][:inst]::Expr
-            arg = stmt.args[2]::SSAValue
-            has_no_escape(estate[arg]) || continue
-            stmt.args[1] = GlobalRef(Core, :mutating_arrayfreeze)
         end
     end
 
