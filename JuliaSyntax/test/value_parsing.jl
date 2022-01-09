@@ -75,52 +75,82 @@ end
 end
 
 @testset "Triple quoted string indentation" begin
-    @test triplequoted_string_indentation([]) == 0
+    # Alias for non-raw triple str indentation
+    triplestr_indent(str) = triplequoted_string_indentation(str, false)
 
-    # Spaces or tabs
-    @test triplequoted_string_indentation(["  "]) == 2
-    @test triplequoted_string_indentation(["\t "]) == 2
-    @test triplequoted_string_indentation([" \t"]) == 2
-    @test triplequoted_string_indentation(["\t\t"]) == 2
+    @test triplestr_indent([]) == 0
 
-    # Various newlines; empty lines ignored
-    @test triplequoted_string_indentation(["  \n\n  x"]) == 2
-    @test triplequoted_string_indentation(["  \n\r  x"]) == 2
-    @test triplequoted_string_indentation(["  \r\n  x"]) == 2
-    @test triplequoted_string_indentation(["  \r\r  x"]) == 2
-    @test triplequoted_string_indentation(["\n\r\r\n"]) == 0
-    # Empty newline at the end not ignored
-    @test triplequoted_string_indentation(["  \n"]) == 0
-    @test triplequoted_string_indentation(["  \r"]) == 0
-    @test triplequoted_string_indentation(["  \n\n"]) == 0
-    @test triplequoted_string_indentation(["  ", "  \n"]) == 0
+    # Spaces or tabs acceptable
+    @test triplestr_indent(["\n  "]) == 2
+    @test triplestr_indent(["\n\t "]) == 2
+    @test triplestr_indent(["\n \t"]) == 2
+    @test triplestr_indent(["\n\t\t"]) == 2
 
-    # Finds the minimum common prefix
-    @test triplequoted_string_indentation(["  ", "  "]) == 2
-    @test triplequoted_string_indentation([" ", "  "]) == 1
-    @test triplequoted_string_indentation(["  ", " "]) == 1
-    @test triplequoted_string_indentation(["  ", " "]) == 1
-    @test triplequoted_string_indentation([" \t", "  "]) == 1
-    @test triplequoted_string_indentation(["  ", " \t"]) == 1
-    @test triplequoted_string_indentation([" \t", " \t"]) == 2
-    @test triplequoted_string_indentation(["\t ", "\t "]) == 2
-    @test triplequoted_string_indentation(["  \n  "]) == 2
-    @test triplequoted_string_indentation(["  \n "]) == 1
-    @test triplequoted_string_indentation([" \n  "]) == 1
-    @test triplequoted_string_indentation(["\n \n  \n   "]) == 1
-    @test triplequoted_string_indentation(["   \n  \n "]) == 1
+    # Start of the string is not indentation, as it's always preceded by a
+    # delimiter in the source
+    @test triplestr_indent(["  "]) == 0
+    @test triplestr_indent(["  ", "  "]) == 0
 
-    # Cases of no indentation
-    @test triplequoted_string_indentation(["hi"]) == 0
-    @test triplequoted_string_indentation(["x\ny", "z"]) == 0
+    # Various newlines are allowed. empty lines are ignored
+    @test triplestr_indent(["\n\n  x"]) == 2
+    @test triplestr_indent(["\n\r  x"]) == 2
+    @test triplestr_indent(["\r\n  x"]) == 2
+    @test triplestr_indent(["\r\r  x"]) == 2
+    @test triplestr_indent(["\n\r\r\n"]) == 0
+
+    # Empty line at the end of any chunk implies the next source line started
+    # with a delimiter, yielding zero indentation
+    @test triplestr_indent(["  \n"]) == 0
+    @test triplestr_indent(["  \r"]) == 0
+    @test triplestr_indent(["  \n\n"]) == 0
+    @test triplestr_indent(["  ", "  \n"]) == 0
+    @test triplestr_indent(["  \n", "  "]) == 0
+
+    # Find the minimum common prefix in one or several chunks
+    @test triplestr_indent(["\n  ", "\n  "]) == 2
+    @test triplestr_indent(["\n ", "\n  "]) == 1
+    @test triplestr_indent(["\n  ", "\n "]) == 1
+    @test triplestr_indent(["\n  ", "\n "]) == 1
+    @test triplestr_indent(["\n \t", "\n  "]) == 1
+    @test triplestr_indent(["\n  ", "\n \t"]) == 1
+    @test triplestr_indent(["\n \t", "\n \t"]) == 2
+    @test triplestr_indent(["\n\t ", "\n\t "]) == 2
+    @test triplestr_indent(["\n  \n  "]) == 2
+    @test triplestr_indent(["\n  \n "]) == 1
+    @test triplestr_indent(["\n \n  "]) == 1
+    # Increasing widths
+    @test triplestr_indent(["\n\n \n  \n   "]) == 1
+    # Decreasing widths
+    @test triplestr_indent(["\n   \n  \n "]) == 1
+
+    # Some cases of no indentation
+    @test triplestr_indent(["hi"]) == 0
+    @test triplestr_indent(["x\ny", "z"]) == 0
+
+    # Escaped newlines
+    @test triplestr_indent(["\\\n  "]) == 0
+    @test triplestr_indent(["\\\r  "]) == 0
+    @test triplestr_indent(["\\\r\n  "]) == 0
+    @test triplestr_indent(["\\\r\n  "]) == 0
+    @test triplestr_indent(["\n  \\\n "]) == 2
+    @test triplestr_indent(["\n \\\n  "]) == 1
+
+    # Raw strings don't have escaped newline processing
+    @test triplequoted_string_indentation(["\n  \\\n "], true) == 1
+    @test triplequoted_string_indentation(["\n \\\n  "], true) == 1
 end
 
 @testset "Triple quoted string deindentation" begin
-    @test process_triple_strings!([" x", " y"], false)   == ["x", "y"]
-    @test process_triple_strings!([" x", "y"], false)    == [" x", "y"]
-    @test process_triple_strings!(["\n x", " y"], false) == ["x", "y"]
-    @test process_triple_strings!([" x", " y\n"], false) == [" x", " y\n"]
-    @test process_triple_strings!([" \tx", " \ty"], false) == ["x", "y"]
-    @test process_triple_strings!([" \tx", "  y"], false)  == ["\tx", " y"]
+    # Various combinations of dedent + leading newline stripping
+    @test process_triple_strings!(["\n x", "\n y"], false)        == ["x", "\ny"]
+    @test process_triple_strings!(["\n\tx", "\n\ty"], false)      == ["x", "\ny"]
+    @test process_triple_strings!(["\r x", "\r y"], false)        == ["x", "\ny"]
+    @test process_triple_strings!(["\r x\r y"], false)        == ["x\ny"]
+    @test process_triple_strings!(["\r x\r\r y"], false)        == ["x\n\ny"]
+    @test process_triple_strings!(["\n \t x", "\n \t y"], false)  == ["x", "\ny"]
+    # Cases of no dedent + newline normalization
+    @test process_triple_strings!(["\n x", "\ny"], false) == [" x", "\ny"]
+    @test process_triple_strings!(["\nx", "\n y"], false) == ["x", "\n y"]
+    @test process_triple_strings!(["\n y\n"], false) == [" y\n"]
+    @test process_triple_strings!(["\n y\r"], false) == [" y\n"]
 end
-
