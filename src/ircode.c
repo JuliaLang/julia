@@ -25,6 +25,8 @@ typedef struct {
     ios_t *s;
     // method we're compressing for
     jl_method_t *method;
+    // true if we're serializing a method not owned by a worklist module
+    int external;
     jl_ptls_t ptls;
 } jl_ircode_state;
 
@@ -48,7 +50,7 @@ static int literal_val_id(jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
                 return i;
         }
     }
-    if (jl_precompile_toplevel_module != NULL && jl_parent_module(s->method->module) != jl_precompile_toplevel_module) {
+    if (s->external) {
         if (s->method->newrootsindex == INT32_MAX) {
             s->method->newrootsindex = l;
             jl_printf(JL_STDOUT, "Set newrootsindex to %d for ", l);
@@ -634,6 +636,10 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         //     jl_printf(JL_STDOUT, "method pointer %p, method ", s->method);
         //     jl_(s->method);
         // }
+        if (s->method->newrootsindex == INT32_MAX) {
+            jl_printf(JL_STDOUT, "invalid relative root indexing (newrootsindex = %d) for ", s->method->newrootsindex);
+            jl_(s->method);
+        }
         assert(s->method->newrootsindex < INT32_MAX);
         // assert(currently_deserializing == 2);
         int id;
@@ -749,7 +755,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
 
 // --- entry points ---
 
-JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
+jl_array_t *jl_compress_ir_(jl_method_t *m, jl_code_info_t *code, int external)
 {
     JL_TIMING(AST_COMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
@@ -767,6 +773,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     jl_ircode_state s = {
         &dest,
         m,
+        external,
         jl_current_task->ptls
     };
 
@@ -830,7 +837,12 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     return v;
 }
 
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data)
+JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
+{
+    jl_compress_ir_(m, code, 0);
+}
+
+jl_code_info_t *jl_uncompress_ir_(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data, int external)
 {
     if (jl_is_code_info(data))
         return (jl_code_info_t*)data;
@@ -847,6 +859,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     jl_ircode_state s = {
         &src,
         m,
+        external,
         jl_current_task->ptls
     };
 
@@ -908,6 +921,11 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         code->parent = metadata->def;
     }
     return code;
+}
+
+JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data)
+{
+    jl_uncompress_ir_(m, metadata, data, 0);
 }
 
 JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data)

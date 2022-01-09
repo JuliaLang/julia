@@ -62,7 +62,7 @@ uint32_t jl_module_next_counter(jl_module_t *m)
 
 JL_DLLEXPORT jl_module_t *jl_parent_module(jl_module_t *m)
 {
-    while (m != m->parent)
+    while (m->parent != jl_main_module && m->parent != m)
         m = m->parent;
     return m;
 }

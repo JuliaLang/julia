@@ -340,7 +340,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
         cache_the_tree = true
     end
     if cache_the_tree
-        if may_compress(interp)
+        if JLOptions().incremental == Int8(0) && may_compress(interp)
             nslots = length(ci.slotflags)
             resize!(ci.slottypes::Vector{Any}, nslots)
             resize!(ci.slotnames, nslots)
