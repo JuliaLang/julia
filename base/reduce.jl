@@ -1299,64 +1299,61 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
 end
 
 # simd optimization for min/max related reduction
-_fast(::typeof(min),x,y) = min(x,y)
-_fast(::typeof(max),x,y) = max(x,y)
-function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
-    ifelse(isnan(x),
-        x,
-        ifelse(x > y, x, y))
-end
+# general fallback
+_fast(op, x, y) = op(x, y)
+_fast(op) = (x, y) -> _fast(op, x, y)
 
-function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
-    ifelse(isnan(x),
-        x,
-        ifelse(x < y, x, y))
-end
+# The following are used in optimized `mapreduce_impl` for IEEEFloat.
+_fast(::typeof(min), x::T, y::T) where {T<:IEEEFloat} = ifelse(signbit(x-y), x, y)
+_fast(::typeof(max), x::T, y::T) where {T<:IEEEFloat} = ifelse(signbit(y-x), x, y)
 
-isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
-isbadzero(::typeof(min), x::AbstractFloat) = (x == zero(x)) & !signbit(x)
-isbadzero(op, x) = false
-isgoodzero(::typeof(max), x) = isbadzero(min, x)
-isgoodzero(::typeof(min), x) = isbadzero(max, x)
+# Some help function for better vectorization
+# NaN check
+_anynan(x, y) = isnan(x) | isnan(y)
+_anynan(x::NTuple{N}) where {N} = reduce(|, map(_anynan, x[1:N>>1], x[1+N>>1:N]))
+# split then reduce for inputs whose length > 4
+_half_reduce(op, x::NTuple{N}) where {N} = _half_reduce(op, map(op, x[1:N>>1], x[1+N>>1:N]))
+_half_reduce(op, x::NTuple{4}) = reduce(op, x)
 
-function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
+function mapreduce_impl(f, op::Union{typeof(max),typeof(min)},
                         A::AbstractArrayOrBroadcasted, first::Int, last::Int)
-    a1 = @inbounds A[first]
-    v1 = mapreduce_first(f, op, a1)
-    v2 = v3 = v4 = v1
-    chunk_len = 256
-    start = first + 1
-    simdstop  = start + chunk_len - 4
-    while simdstop <= last - 3
-        # short circuit in case of NaN or missing
-        (v1 == v1) === true || return v1
-        (v2 == v2) === true || return v2
-        (v3 == v3) === true || return v3
-        (v4 == v4) === true || return v4
-        @inbounds for i in start:4:simdstop
-            v1 = _fast(op, v1, f(A[i+0]))
-            v2 = _fast(op, v2, f(A[i+1]))
-            v3 = _fast(op, v3, f(A[i+2]))
-            v4 = _fast(op, v4, f(A[i+3]))
+    @inline elf(i::Int) = @inbounds f(A[i])
+    Eltype = _return_type(elf, Tuple{Int})
+    # Limit this optimization to concrete IEEEFloat. (general fallback is 2x faster for Integer)
+    (isconcretetype(Eltype) && Eltype <: IEEEFloat) ||
+        return mapreduce_impl(f, op, A, first, last, pairwise_blocksize(f, op))
+    @noinline firstnan(temp::Tuple) = temp[findfirst(isnan, temp)], last
+    function simd_kernal(::Val{N}, ini) where {N}
+        # reused kernal for better vectorizable reduction.
+        # - `N` is the unroll size.
+        # - `ini` is the initial value of reduction
+        # It returns the reduced result (`v`), and the last processed index (`i`).
+        isnan(ini) && return ini, last
+        vs = ntuple(Returns(ini), Val(N))
+        index = ntuple(identity, Val(N))
+        local i = first
+        while i <= last - N
+            temp = map(elf, i .+ index)
+            _anynan(temp) && return firstnan(temp) # nan check
+            vs = map(_fast(op), vs, temp) # then _fast(op) is safe
+            i += N
         end
-        checkbounds(A, simdstop+3)
-        start += chunk_len
-        simdstop += chunk_len
+        _half_reduce(_fast(op), vs), i
     end
-    v = op(op(v1,v2),op(v3,v4))
-    for i in start:last
-        @inbounds ai = A[i]
-        v = op(v, f(ai))
+    ini = elf(first)
+    rest = last - first
+    v, i = if rest < 8
+        ini, first
+    elseif rest < 64
+        @inline simd_kernal(Val(4), ini)
+    elseif rest < 128
+        simd_kernal(Val(8), ini)
+    else
+        simd_kernal(Val(16), ini)
     end
-
-    # enforce correct order of 0.0 and -0.0
-    # e.g. maximum([0.0, -0.0]) === 0.0
-    # should hold
-    if isbadzero(op, v)
-        for i in first:last
-            x = @inbounds A[i]
-            isgoodzero(op,x) && return x
-        end
+    while i < last
+        v = op(v, elf(i+=1))
     end
+    # Since `0.0/-0.0` were compared correctly, return `v` directly.
     return v
 end
