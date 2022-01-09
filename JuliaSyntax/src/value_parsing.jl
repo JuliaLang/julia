@@ -68,13 +68,10 @@ end
 """
 Process Julia source code escape sequences for raw strings
 """
-function unescape_raw_string(io::IO, str::AbstractString, is_cmd::Bool, dedent::Integer)
+function unescape_raw_string(io::IO, str::AbstractString, is_cmd::Bool, dedent::Integer, skip_initial_newline::Bool)
     delim = is_cmd ? '`' : '"'
     i = firstindex(str)
     lastidx = lastindex(str)
-    if i <= lastidx && str[i] != '\n'
-        i += dedent
-    end
     while i <= lastidx
         c = str[i]
         if c != '\\'
@@ -85,9 +82,17 @@ function unescape_raw_string(io::IO, str::AbstractString, is_cmd::Bool, dedent::
                 end
                 c = '\n'
             end
-            write(io, c)
-            if c == '\n' && i+1 <= lastidx && str[i+1] != '\n'
-                i += dedent
+            if c == '\n'
+                if skip_initial_newline
+                    skip_initial_newline = false
+                else
+                    write(io, c)
+                end
+                if i+1 <= lastidx && str[i+1] != '\n' && str[i+1] != '\r'
+                    i += dedent
+                end
+            else
+                write(io, c)
             end
             i = nextind(str, i)
             continue
@@ -117,8 +122,8 @@ end
 Process Julia source code escape sequences for non-raw strings.
 `str` should be passed without delimiting quotes.
 """
-function unescape_julia_string(io::IO, str::AbstractString, dedent::Integer)
-    i = firstindex(str) + dedent
+function unescape_julia_string(io::IO, str::AbstractString, dedent::Integer, skip_initial_newline::Bool)
+    i = firstindex(str)
     lastidx = lastindex(str)
     while i <= lastidx
         c = str[i]
@@ -130,9 +135,17 @@ function unescape_julia_string(io::IO, str::AbstractString, dedent::Integer)
                 end
                 c = '\n'
             end
-            write(io, c)
-            if c == '\n' && i+1 <= lastidx && str[i+1] != '\n'
-                i += dedent
+            if c == '\n'
+                if skip_initial_newline
+                    skip_initial_newline = false
+                else
+                    write(io, c)
+                end
+                if i+1 <= lastidx && str[i+1] != '\n' && str[i+1] != '\r'
+                    i += dedent
+                end
+            else
+                write(io, c)
             end
             i = nextind(str, i)
             continue
@@ -209,31 +222,34 @@ function unescape_julia_string(io::IO, str::AbstractString, dedent::Integer)
 end
 
 function unescape_julia_string(str::AbstractString, is_cmd::Bool,
-                               is_raw::Bool, dedent::Integer=0)
+                               is_raw::Bool, dedent::Integer=0,
+                               skip_initial_newline=false)
     io = IOBuffer()
     if is_raw
-        unescape_raw_string(io, str, is_cmd, dedent)
+        unescape_raw_string(io, str, is_cmd, dedent, skip_initial_newline)
     else
-        unescape_julia_string(io, str, dedent)
+        unescape_julia_string(io, str, dedent, skip_initial_newline)
     end
     String(take!(io))
 end
 
-# Compute length of longest common prefix of spaces and tabs, in characters
+# Compute length of longest common prefix of mixed spaces and tabs, in
+# characters (/bytes).
 #
-# This runs *before* normalization of newlines so that unescaping/normalization
-# can happen in a single pass.
+# Initial whitespace is never regarded as indentation in any triple quoted
+# string chunk, as it's always preceded in the source code by a visible token
+# of some kind; either a """ delimiter or $() interpolation.
+#
+# This pass runs *before* normalization of newlines so that
+# unescaping/normalization can happen in a single pass.
 #
 # TODO: Should we do triplequoted string splitting as part of the main parser?
 # It would be conceptually clean if the trivial whitespace was emitted as
 # syntax trivia.
 #
 # flisp: triplequoted-string-indentation-
-function triplequoted_string_indentation(strs)
+function triplequoted_string_indentation(strs, is_raw)
     if isempty(strs)
-        return 0
-    end
-    if last(last(strs)) in ('\n', '\r')
         return 0
     end
     refstr = SubString(strs[1], 1, 0)
@@ -243,7 +259,21 @@ function triplequoted_string_indentation(strs)
         lastidx = lastindex(str)
         while i <= lastidx
             c = str[i]
-            if i == 1 || c == '\n' || c == '\r'
+            if c == '\\' && !is_raw
+                # Escaped newlines stop indentation detection for the current
+                # line but do not start detection of indentation on the next
+                # line
+                if i+1 <= lastidx
+                    if str[i+1] == '\n'
+                        i += 1
+                    elseif str[i+1] == '\r'
+                        i += 1
+                        if i+1 <= lastidx && str[i+1] == '\n'
+                            i += 1
+                        end
+                    end
+                end
+            elseif c == '\n' || c == '\r'
                 while i <= lastidx
                     c = str[i]
                     (c == '\n' || c == '\r') || break
@@ -279,26 +309,26 @@ function triplequoted_string_indentation(strs)
                             i = j
                         end
                     end
+                else
+                    # A newline directly before the end of the string means a
+                    # delimiter was in column zero, implying zero indentation.
+                    reflen = 0
                 end
             end
             i <= lastidx || break
             i = nextind(str, i)
         end
     end
-    reflen
+    max(reflen, 0)
 end
 
 function process_triple_strings!(strs, is_raw)
     if isempty(strs)
         return strs
     end
-    dedent = triplequoted_string_indentation(strs)
+    dedent = triplequoted_string_indentation(strs, is_raw)
     for i = 1:length(strs)
-        if i == 1 && strs[1][1] == '\n'
-            strs[i] = unescape_julia_string(SubString(strs[i], 2), false, is_raw, dedent)
-        else
-            strs[i] = unescape_julia_string(strs[i], false, is_raw, dedent)
-        end
+        strs[i] = unescape_julia_string(strs[i], false, is_raw, dedent, i==1)
     end
     strs
 end
