@@ -395,6 +395,9 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
         @test maximum(x) === minimum(x) === missing
         @test extrema(x) === (missing, missing)
     end
+    # inputs containing both missing and NaN
+    minimum([NaN;zeros(255);missing]) === missing
+    maximum([NaN;zeros(255);missing]) === missing
 end
 
 # findmin, findmax, argmin, argmax
