@@ -62,6 +62,36 @@ Additionally, green trees are usually designed so that
 * Nodes are homogenously typed at the language level so they can be efficiently
   stored and accessed, with the node type held as a "syntax kind" enumeration.
 
+## Syntax Kinds and sum types
+
+We generally track the type of syntax nodes with a syntax "kind", stored
+explicitly in each node an integer tag. This effectively makes the node type a
+[sum type](https://blog.waleedkhan.name/union-vs-sum-types/) in the type system
+sense, but with the type tracked explicitly outside of Julia's type system.
+
+Managing the type explicitly brings a few benefits:
+* Code and data structures for manipulating syntax nodes is always concretely
+  typed from the point of view of the compiler.
+* We control the data layout, and can pack the kind very efficiently into very
+  few bits (along with any flags, as desired).
+* Predicates such as `is_operator` can be extremely efficient, given that we
+  know the meaning of the kind's bits.
+* The kind can be applied to several different tree data structures, or
+  manipulated by itself as needed.
+* We can generate very efficient pattern matching code.
+
+There's arguably a few downsides:
+* Normal Julia dispatch can't express dispatch over syntax kind. Luckily,
+  a pattern matching macro can provide a very elegant way of expressing such
+  algorithms over a non-extensible set of kinds, so this is not a big problem.
+* Different node kinds could come with different data fields, but a syntax
+  tree must have generic fields to cater for all kinds. (Consider as an analogy
+  the normal Julia AST `QuoteNode` with a single field vs `Expr` with generic
+  `head` and `args` fields.) This could be a disadvantage for code which
+  processes one specific kind, but for generic code processing many kinds,
+  having a generic but *concrete* data layout should bring a performance
+  advantage.
+
 ## Representing erroneous source code
 
 The goal of the parser is to produce well-formed heirarchical structure from
