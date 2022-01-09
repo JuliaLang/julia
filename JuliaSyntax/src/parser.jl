@@ -1,3 +1,124 @@
+"""
+ParseState carries parser context as we recursively descend into the parse
+tree. For example, normally `x -y` means `(x) - (y)`, but when parsing matrix
+literals we're in `space_sensitive` mode, and `[x -y]` means [(x) (-y)].
+"""
+struct ParseState
+    stream::ParseStream
+    # Vesion of Julia we're parsing this code for. May be different from VERSION!
+    julia_version::VersionNumber
+
+    # Disable range colon for parsing ternary conditional operator
+    range_colon_enabled::Bool
+    # In space-sensitive mode "x -y" is 2 expressions, not a subtraction
+    space_sensitive::Bool
+    # Seeing `for` stops parsing macro arguments and makes a generator
+    for_generator::Bool
+    # Treat 'end' like a normal symbol instead of a reserved word
+    end_symbol::Bool
+    # Treat newline like ordinary whitespace instead of as a potential separator
+    whitespace_newline::Bool
+    # Enable parsing `where` with high precedence
+    where_enabled::Bool
+end
+
+# Normal context
+function ParseState(stream::ParseStream; julia_version=VERSION)
+    ParseState(stream, julia_version, true, false, false, false, false, true)
+end
+
+function ParseState(ps::ParseState; range_colon_enabled=nothing,
+                    space_sensitive=nothing, for_generator=nothing,
+                    end_symbol=nothing, whitespace_newline=nothing,
+                    where_enabled=nothing)
+    ParseState(ps.stream, ps.julia_version,
+        range_colon_enabled === nothing ? ps.range_colon_enabled : range_colon_enabled,
+        space_sensitive === nothing ? ps.space_sensitive : space_sensitive,
+        for_generator === nothing ? ps.for_generator : for_generator,
+        end_symbol === nothing ? ps.end_symbol : end_symbol,
+        whitespace_newline === nothing ? ps.whitespace_newline : whitespace_newline,
+        where_enabled === nothing ? ps.where_enabled : where_enabled)
+end
+
+# Functions to change parse state
+
+function normal_context(ps::ParseState)
+    ParseState(ps,
+               range_colon_enabled=true,
+               space_sensitive=false,
+               where_enabled=true,
+               for_generator=false,
+               end_symbol=false,
+               whitespace_newline=false)
+end
+
+function with_space_sensitive(f::Function, ps::ParseState)
+    f(ParseState(ps,
+                 space_sensitive=true,
+                 whitespace_newline=false))
+end
+
+# Convenient wrappers for ParseStream
+
+function peek(ps::ParseState, n=1; skip_newlines=nothing)
+    skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
+    peek(ps.stream, n; skip_newlines=skip_nl)
+end
+
+function peek_token(ps::ParseState, n=1; skip_newlines=nothing)
+    skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
+    peek_token(ps.stream, n, skip_newlines=skip_nl)
+end
+
+function peek_behind_str(ps::ParseState, args...)
+    peek_behind_str(ps.stream, args...)
+end
+
+function peek_behind(ps::ParseState, args...)
+    peek_behind(ps.stream, args...)
+end
+
+function peek_token_behind(ps::ParseState, args...; kws...)
+    peek_token_behind(ps.stream, args...; kws...)
+end
+
+function bump(ps::ParseState, flags=EMPTY_FLAGS; skip_newlines=nothing, kws...)
+    skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
+    bump(ps.stream, flags; skip_newlines=skip_nl, kws...)
+end
+
+function bump_trivia(ps::ParseState, args...; kws...)
+    bump_trivia(ps.stream, args...; kws...)
+end
+
+function bump_invisible(ps::ParseState, args...; kws...)
+    bump_invisible(ps.stream, args...; kws...)
+end
+
+function bump_glue(ps::ParseState, args...; kws...)
+    bump_glue(ps.stream, args...; kws...)
+end
+
+function bump_split(ps::ParseState, args...; kws...)
+    bump_split(ps.stream, args...; kws...)
+end
+
+function reset_node!(ps::ParseState, args...; kws...)
+    reset_node!(ps.stream, args...; kws...)
+end
+
+function Base.position(ps::ParseState, args...)
+    position(ps.stream, args...)
+end
+
+function emit(ps::ParseState, args...; kws...)
+    emit(ps.stream, args...; kws...)
+end
+
+function emit_diagnostic(ps::ParseState, args...; kws...)
+    emit_diagnostic(ps.stream, args...; kws...)
+end
+
 #-------------------------------------------------------------------------------
 # Parser Utils
 
