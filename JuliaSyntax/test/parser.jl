@@ -317,7 +317,8 @@ tests = [
         "abstract type A <: B{T,S} end"  =>  "(abstract (<: A (curly B T S)))"
         "abstract type A < B end"        =>  "(abstract (call-i A < B))"
         # primitive type
-        "primitive type A 32 end"  =>  "(primitive A 32)"
+        "primitive type A 32 end"   =>  "(primitive A 32)"
+        "primitive type A \$N end"  =>  "(primitive A (\$ N))"
         "primitive type A <: B \n 8 \n end"  =>  "(primitive (<: A B) 8)"
         # struct
         "struct A <: B \n a::X \n end"  =>  "(struct false (<: A B) (block (:: a X)))"

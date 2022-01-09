@@ -1500,12 +1500,13 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"struct")
     elseif word == K"primitive"
         # primitive type A 32 end             ==> (primitive A 32)
+        # primitive type A $N end             ==> (primitive A ($ N))
         # primitive type A <: B \n 8 \n end   ==> (primitive (<: A B) 8)
         bump(ps, TRIVIA_FLAG)
         @assert peek(ps) == K"type"
         bump(ps, TRIVIA_FLAG)
-        parse_subtype_spec(ps)
-        parse_cond(ps)
+        with_space_sensitive(parse_subtype_spec, ps)
+        with_space_sensitive(parse_cond, ps)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"primitive")
     elseif word == K"try"
@@ -1879,7 +1880,9 @@ function parse_macro_name(ps::ParseState; remap_kind=false)
         # @. y  ==>  (macrocall (quote @__dot__) y)
         bump(ps)
     else
-        parse_atom(ps, false)
+        with_space_sensitive(ps) do ps1
+            parse_atom(ps1, false)
+        end
     end
     if remap_kind
         reset_node!(ps, position(ps), kind=macro_name_kind(peek_behind(ps)))
