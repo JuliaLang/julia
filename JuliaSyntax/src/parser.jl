@@ -2804,31 +2804,28 @@ end
 # flisp: parse-docstring
 function parse_docstring(ps::ParseState, down=parse_eq)
     mark = position(ps)
-    # TODO? This is not quite equivalent to the flisp parser which accepts
-    # more than just a string. For example:
-    #! ("doc") foo  ==>  (macrocall core_@doc "doc" foo)
-    # TODO: Also, all these TOMBSTONEs seem kind of inefficient. Perhaps we can
-    # improve things?
-    maybe_doc = is_string_delim(peek(ps))
     atdoc_mark = bump_invisible(ps, K"TOMBSTONE")
     down(ps)
-    if maybe_doc
+    if peek_behind(ps) in KSet`String string`
         is_doc = true
         k = peek(ps)
         if is_closing_token(ps, k)
+            # "notdoc" ] ==> "notdoc"
             is_doc = false
         elseif k == K"NewlineWs"
             k2 = peek(ps, 2)
             if is_closing_token(ps, k2) || k2 == K"NewlineWs"
+                # "notdoc" \n]      ==> "notdoc"
+                # "notdoc" \n\n foo ==> "notdoc"
                 is_doc = false
             else
                 # Allow a single newline
-                # ===
-                # "doc"
-                # foo
-                # ==> (macrocall core_@doc "doc" foo)
+                # "doc" \n foo ==> (macrocall core_@doc "doc" foo)
                 bump(ps, TRIVIA_FLAG) # NewlineWs
             end
+        else
+            # "doc" foo    ==> (macrocall core_@doc "doc" foo)
+            # "doc $x" foo ==> (macrocall core_@doc (string "doc " x) foo)
         end
         if is_doc
             reset_node!(ps, atdoc_mark, kind=K"core_@doc")

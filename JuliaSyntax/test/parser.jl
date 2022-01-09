@@ -550,7 +550,12 @@ tests = [
         "\"str\""  =>  "\"str\""
     ],
     JuliaSyntax.parse_docstring => [
-        """ "doc" foo """ => """(macrocall :(Core.var"@doc") "doc" foo)"""
+        """ "notdoc" ]        """ => "\"notdoc\""
+        """ "notdoc" \n]      """ => "\"notdoc\""
+        """ "notdoc" \n\n foo """ => "\"notdoc\""
+        """ "doc" \n foo      """ => """(macrocall :(Core.var"@doc") "doc" foo)"""
+        """ "doc" foo         """ => """(macrocall :(Core.var"@doc") "doc" foo)"""
+        """ "doc \$x" foo     """ => """(macrocall :(Core.var"@doc") (string "doc " x) foo)"""
     ],
 ]
 
