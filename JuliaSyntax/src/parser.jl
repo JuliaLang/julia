@@ -768,7 +768,7 @@ function is_juxtapose(ps, prev_k, t)
            is_initial_reserved_word(ps, prev_k) )))  &&
     # https://github.com/JuliaLang/julia/issues/16356
     # 0xenomorph  ==>  0x0e
-    !(prev_k in KSet`BinInt HexInt OctInt` && k in KSet`Identifier Keyword`) &&
+    !(prev_k in KSet`BinInt HexInt OctInt` && (is_identifier(k) || is_keyword(k))) &&
     (!is_operator(k) || is_radical_op(k))            &&
     !is_closing_token(ps, k)                         &&
     !is_initial_reserved_word(ps, k)
