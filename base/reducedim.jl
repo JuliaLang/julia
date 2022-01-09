@@ -80,7 +80,6 @@ for (Op, initfun) in ((:(typeof(add_sum)), :zero), (:(typeof(mul_prod)), :one))
     @eval initarray!(a::AbstractArray{T}, ::Any, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && fill!(a, $(initfun)(T)); a)
 end
 
-# for min/max copyfirst is not correct for initialization, use `mapfirst!` instead
 initarray!(a::AbstractArray{T}, f, ::Union{typeof(min),typeof(max),typeof(_extrema_rf)},
     init::Bool, src::AbstractArray) where {T} = (init && mapfirst!(f, a, src); a)
 
