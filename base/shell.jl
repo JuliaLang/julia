@@ -49,22 +49,24 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
         empty!(innerlist)
     end
 
+    C = eltype(str)
+    P = Pair{Int,C}
     for (j, c) in st
-        j, c = j::Int, c::eltype(str)
+        j, c = j::Int, c::C
         if !in_single_quotes && !in_double_quotes && isspace(c)
             i = consume_upto!(arg, s, i, j)
             append_2to1!(args, arg)
             while !isempty(st)
                 # We've made sure above that we don't end in whitespace,
                 # so updating `i` here is ok
-                (i, c) = peek(st)::Pair{Int,eltype(str)}
+                (i, c) = peek(st)::P
                 isspace(c) || break
                 popfirst!(st)
             end
         elseif interpolate && !in_single_quotes && c == '$'
             i = consume_upto!(arg, s, i, j)
             isempty(st) && error("\$ right before end of command")
-            stpos, c = popfirst!(st)::Pair{Int,eltype(str)}
+            stpos, c = popfirst!(st)::P
             isspace(c) && error("space not allowed right after \$")
             if startswith(SubString(s, stpos), "var\"")
                 # Disallow var"#" syntax in cmd interpolations.
@@ -88,12 +90,19 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 in_double_quotes = !in_double_quotes
                 i = consume_upto!(arg, s, i, j)
             elseif !in_single_quotes && c == '\\'
-                if !isempty(st) && peek(st)[2] == '\n'
+                if !isempty(st) && (peek(st)::P)[2] in ('\n', '\r')
                     i = consume_upto!(arg, s, i, j) + 1
-                    _ = popfirst!(st)
+                    if popfirst!(st)[2] == '\r' && (peek(st)::P)[2] == '\n'
+                        i += 1
+                        popfirst!(st)
+                    end
+                    while !isempty(st) && (peek(st)::P)[2] in (' ', '\t')
+                        i = nextind(str, i)
+                        _ = popfirst!(st)
+                    end
                 elseif in_double_quotes
                     isempty(st) && error("unterminated double quote")
-                    k, c′ = peek(st)
+                    k, c′ = peek(st)::P
                     if c′ == '"' || c′ == '$' || c′ == '\\'
                         i = consume_upto!(arg, s, i, j)
                         _ = popfirst!(st)
@@ -254,6 +263,53 @@ julia> Base.shell_escape_posixly("echo", "this", "&&", "that")
 shell_escape_posixly(args::AbstractString...) =
     sprint(print_shell_escaped_posixly, args...)
 
+"""
+    shell_escape_csh(args::Union{Cmd,AbstractString...})
+    shell_escape_csh(io::IO, args::Union{Cmd,AbstractString...})
+
+This function quotes any metacharacters in the string arguments such
+that the string returned can be inserted into a command-line for
+interpretation by the Unix C shell (csh, tcsh), where each string
+argument will form one word.
+
+In contrast to a POSIX shell, csh does not support the use of the
+backslash as a general escape character in double-quoted strings.
+Therefore, this function wraps strings that might contain
+metacharacters in single quotes, except for parts that contain single
+quotes, which it wraps in double quotes instead. It switches between
+these types of quotes as needed. Linefeed characters are escaped with
+a backslash.
+
+This function should also work for a POSIX shell, except if the input
+string contains a linefeed (`"\\n"`) character.
+
+See also: [`shell_escape_posixly`](@ref)
+"""
+function shell_escape_csh(io::IO, args::AbstractString...)
+    first = true
+    for arg in args
+        first || write(io, ' ')
+        first = false
+        i = 1
+        while true
+            for (r,e) = (r"^[A-Za-z0-9/\._-]+\z" => "",
+                         r"^[^']*\z" => "'", r"^[^\$\`\"]*\z" => "\"",
+                         r"^[^']+"  => "'", r"^[^\$\`\"]+"  => "\"")
+                if ((m = match(r, SubString(arg, i))) !== nothing)
+                    write(io, e)
+                    write(io, replace(m.match, '\n' => "\\\n"))
+                    write(io, e)
+                    i += ncodeunits(m.match)
+                    break
+                end
+            end
+            i <= lastindex(arg) || break
+        end
+    end
+end
+shell_escape_csh(args::AbstractString...) =
+    sprint(shell_escape_csh, args...;
+           sizehint = sum(sizeof.(args)) + length(args) * 3)
 
 """
     shell_escape_wincmd(s::AbstractString)

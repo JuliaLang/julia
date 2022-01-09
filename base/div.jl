@@ -113,7 +113,7 @@ What is happening here is that the true value of the floating-point number writt
 as `0.1` is slightly larger than the numerical value 1/10 while `6.0` represents
 the number 6 precisely. Therefore the true value of `6.0 / 0.1` is slightly less
 than 60. When doing division, this is rounded to precisely `60.0`, but
-`fld(6.0, 0.1)` always takes the floor or the true value, so the result is `59.0`.
+`fld(6.0, 0.1)` always takes the floor of the true value, so the result is `59.0`.
 """
 fld(a, b) = div(a, b, RoundDown)
 
@@ -156,6 +156,8 @@ julia> divrem(7,3)
 ```
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
+
+
 function divrem(a, b, r::RoundingMode)
     if r === RoundToZero
         # For compat. Remove in 2.0.
@@ -165,6 +167,25 @@ function divrem(a, b, r::RoundingMode)
         (fld(a, b), mod(a, b))
     else
         (div(a, b, r), rem(a, b, r))
+    end
+end
+#avoids calling rem for Integers-Integers (all modes),
+#a-d*b not precise for Floats - AbstractFloat, AbstractIrrational. Rationals are still slower
+function divrem(a::Integer, b::Integer, r::Union{typeof(RoundUp),
+                                                typeof(RoundDown),
+                                                typeof(RoundToZero)})
+    if r === RoundToZero
+        # For compat. Remove in 2.0.
+        d = div(a, b)
+        (d, a - d*b)
+    elseif r === RoundDown
+        # For compat. Remove in 2.0.
+        d = fld(a, b)
+        (d, a - d*b)
+    elseif r === RoundUp
+        # For compat. Remove in 2.0.
+        d = div(a, b, r)
+        (d, a - d*b)
     end
 end
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))

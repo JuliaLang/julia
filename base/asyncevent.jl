@@ -15,7 +15,7 @@ mutable struct AsyncCondition
     handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
     isopen::Bool
-    set::Bool
+    @atomic set::Bool
 
     function AsyncCondition()
         this = new(Libc.malloc(_sizeof_uv_async), ThreadSynchronizer(), true, false)
@@ -60,22 +60,26 @@ end
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object).
 
-Waiting tasks are woken after an initial delay of `delay` seconds, and then repeating with the given
-`interval` in seconds. If `interval` is equal to `0`, the timer is only triggered once. When
-the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use [`isopen`](@ref)
-to check whether a timer is still active.
+Waiting tasks are woken after an initial delay of at least `delay` seconds, and then repeating after
+at least `interval` seconds again elapse. If `interval` is equal to `0`, the timer is only triggered
+once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
+[`isopen`](@ref) to check whether a timer is still active.
+
+Note: `interval` is subject to accumulating time skew. If you need precise events at a particular
+absolute time, create a new timer at each expiration with the difference to the next time computed.
 """
 mutable struct Timer
     handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
     isopen::Bool
-    set::Bool
+    @atomic set::Bool
 
     function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
         interval ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $interval seconds"))
-        timeout = UInt64(round(timeout * 1000)) + 1
-        interval = UInt64(ceil(interval * 1000))
+        # libuv has a tendency to timeout 1 ms early, so we need +1 on the timeout (in milliseconds), unless it is zero
+        timeoutms = ceil(UInt64, timeout * 1000) + !iszero(timeout)
+        intervalms = ceil(UInt64, interval * 1000)
         loop = eventloop()
 
         this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false)
@@ -87,7 +91,7 @@ mutable struct Timer
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), loop)
         err = ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
             this, @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},)),
-            timeout, interval)
+            timeoutms, intervalms)
         @assert err == 0
         iolock_end()
         return this
@@ -124,7 +128,7 @@ function _trywait(t::Union{Timer, AsyncCondition})
         end
         iolock_end()
     end
-    t.set = false
+    @atomic :monotonic t.set = false
     return set
 end
 
@@ -182,7 +186,7 @@ function uv_asynccb(handle::Ptr{Cvoid})
     async = @handle_as handle AsyncCondition
     lock(async.cond)
     try
-        async.set = true
+        @atomic :monotonic async.set = true
         notify(async.cond, true)
     finally
         unlock(async.cond)
@@ -194,7 +198,7 @@ function uv_timercb(handle::Ptr{Cvoid})
     t = @handle_as handle Timer
     lock(t.cond)
     try
-        t.set = true
+        @atomic :monotonic t.set = true
         if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
             # timer is stopped now
             close(t)
@@ -222,18 +226,18 @@ end
 """
     Timer(callback::Function, delay; interval = 0)
 
-Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) and
-calls the function `callback`.
+Create a timer that runs the function `callback` at each timer expiration.
 
-Waiting tasks are woken and the function `callback` is called after an initial delay of `delay` seconds,
-and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the timer
-is only triggered once. The function `callback` is called with a single argument, the timer itself.
-When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use [`isopen`](@ref)
-to check whether a timer is still active.
+Waiting tasks are woken and the function `callback` is called after an initial delay of `delay`
+seconds, and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the
+callback is only run once. The function `callback` is called with a single argument, the timer
+itself. Stop a timer by calling `close`. The `cb` may still be run one final time, if the timer has
+already expired.
 
 # Examples
 
-Here the first number is printed after a delay of two seconds, then the following numbers are printed quickly.
+Here the first number is printed after a delay of two seconds, then the following numbers are
+printed quickly.
 
 ```julia-repl
 julia> begin

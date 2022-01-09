@@ -46,6 +46,7 @@ module MiniCassette
         # Insert one SSAValue for every argument statement
         prepend!(code, [Expr(:call, getfield, SlotNumber(4), i) for i = 1:nargs])
         prepend!(ci.codelocs, [0 for i = 1:nargs])
+        prepend!(ci.ssaflags, [0x00 for i = 1:nargs])
         ci.ssavaluetypes += nargs
         function map_slot_number(slot)
             if slot == 1
@@ -153,15 +154,18 @@ end
 # short function def
 @overlay mt cos(x::Float64) = 2
 
+# parametric function def
+@overlay mt tan(x::T) where {T} = 3
+
 end
 
-methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, nothing, 1, typemax(UInt))
+methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, nothing, 1, Base.get_world_counter())
 @test only(methods).method.module === Base.Math
 
-methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, typemax(UInt))
+methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
 @test only(methods).method.module === OverlayModule
 
-methods = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, typemax(UInt))
+methods = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())
 @test isempty(methods)
 
 # precompilation

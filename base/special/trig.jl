@@ -1268,7 +1268,11 @@ for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan
                 $($name)(x)
 
             Compute $($fn) of `x`, where `x` is in $($un).
-            If `x` is a matrix, `x` needs to be a square matrix. """ ($fd)(x) = ($f)(($fu).(x))
+            If `x` is a matrix, `x` needs to be a square matrix.
+
+            !!! compat "Julia 1.7"
+                Matrix arguments require Julia 1.7 or later.
+            """ ($fd)(x) = ($f)(($fu).(x))
         end
     end
 end
@@ -1283,7 +1287,11 @@ for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"),
                 $($name)(x)
 
             Compute the inverse $($fn) of `x`, where the output is in $($un).
-            If `x` is a matrix, `x` needs to be a square matrix. """ ($fd)(x) = ($fu).(($f)(x))
+            If `x` is a matrix, `x` needs to be a square matrix.
+
+            !!! compat "Julia 1.7"
+                Matrix arguments require Julia 1.7 or later.
+            """ ($fd)(x) = ($fu).(($f)(x))
         end
     end
 end
@@ -1293,6 +1301,9 @@ end
     atand(y,x)
 
 Compute the inverse tangent of `y` or `y/x`, respectively, where the output is in degrees.
+
+!!! compat "Julia 1.7"
+    The one-argument method supports square matrix arguments as of Julia 1.7.
 """
 atand(y)    = rad2deg.(atan(y))
 atand(y, x) = rad2deg.(atan(y,x))

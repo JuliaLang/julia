@@ -72,7 +72,13 @@ export
     global_logger,
     disable_logging,
     SimpleLogger,
-    ConsoleLogger
+    ConsoleLogger,
+    BelowMinLevel,
+    Debug,
+    Info,
+    Warn,
+    Error,
+    AboveMaxLevel
 
 include("ConsoleLogger.jl")
 

@@ -399,7 +399,7 @@ julia> run(Cmd(`sh -c "echo foo \$HOWLONG"`, env=("HOWLONG" => "ever!",)));
 foo ever!
 ```
 
-See `[`Cmd`](@ref)` for additional keyword arguments. The [`setenv`](@ref) and [`addenv`](@ref) commands
+See [`Cmd`](@ref) for additional keyword arguments. The [`setenv`](@ref) and [`addenv`](@ref) commands
 provide another means for replacing or adding to the `Cmd` execution environment variables, respectively:
 
 ```jldoctest

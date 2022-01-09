@@ -475,7 +475,8 @@ end
     @test precision(z) == 240
     x = BigFloat(12)
     @test precision(x) == old_precision
-    @test_throws DomainError setprecision(1)
+    @test precision(setprecision(1) do; BigFloat(23); end) == 1  # minimum-precision
+    @test_throws DomainError setprecision(0)
     @test_throws DomainError BigFloat(1, precision = 0)
     @test_throws DomainError BigFloat(big(1.1), precision = 0)
     @test_throws DomainError BigFloat(2.5, precision = -900)
@@ -606,7 +607,8 @@ end
         @test log(x) == log(42)
         @test isinf(log(BigFloat(0)))
         @test_throws DomainError log(BigFloat(-1))
-        @test log2(x) == log2(42)
+        # issue #41450
+        @test_skip log2(x) == log2(42)
         @test isinf(log2(BigFloat(0)))
         @test_throws DomainError log2(BigFloat(-1))
         @test log10(x) == log10(42)
@@ -1018,5 +1020,18 @@ end
     for x in (2f0, pi, 7.8, big(ℯ))
         @test big(typeof(x)) == typeof(big(x))
         @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
+    end
+end
+
+@testset "precision base" begin
+    setprecision(53) do
+        @test precision(Float64, base=10) == precision(BigFloat, base=10) == 15
+    end
+    for (p, b) in ((100,10), (50,100))
+        setprecision(p, base=b) do
+            @test precision(BigFloat, base=10) == 100
+            @test precision(BigFloat, base=100) == 50
+            @test precision(BigFloat) == precision(BigFloat, base=2) == 333
+        end
     end
 end

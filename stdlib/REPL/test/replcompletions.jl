@@ -31,6 +31,29 @@ let ex = quote
         macro foobar()
             :()
         end
+        macro barfoo(ex)
+            ex
+        end
+        macro error_expanding()
+            error("cannot expand @error_expanding")
+            :()
+        end
+        macro error_lowering_conditional(a)
+            if isa(a, Number)
+                return a
+            end
+            throw(AssertionError("Not a Number"))
+            :()
+        end
+        macro error_throwing()
+            return quote
+                error("@error_throwing throws an error")
+            end
+        end
+
+        primitive type NonStruct 8 end
+        Base.propertynames(::NonStruct) = (:a, :b, :c)
+        x = reinterpret(NonStruct, 0x00)
 
         # Support non-Dict AbstractDicts, #19441
         mutable struct CustomDict{K, V} <: AbstractDict{K, V}
@@ -64,6 +87,8 @@ let ex = quote
         test6()=[a, a]
         test7() = rand(Bool) ? 1 : 1.0
         test8() = Any[1][1]
+        test9(x::Char) = pass
+        test9(x::Char, i::Int) = pass
         kwtest(; x=1, y=2, w...) = pass
         kwtest2(a; x=1, y=2, w...) = pass
 
@@ -102,6 +127,7 @@ test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastinde
 test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
 test_complete_context(s, m) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
+test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
 module M32377 end
 test_complete_32377(s) = map_completion_text(completions(s,lastindex(s), M32377))
@@ -516,6 +542,61 @@ for s in ("CompletionFoo.kwtest2(1; x=1,",
     @test occursin("a; x, y, w...", c[1])
 end
 
+#################################################################
+
+# method completion with `?` (arbitrary method with given argument types)
+let s = "CompletionFoo.?([1,2,3], 2.0)"
+    c, r, res = test_complete(s)
+    @test !res
+    @test  any(str->occursin("test(x::AbstractArray{T}, y) where T<:Real", str), c)
+    @test  any(str->occursin("test(args...)", str), c)
+    @test !any(str->occursin("test3(x::AbstractArray{Int", str), c)
+    @test !any(str->occursin("test4", str), c)
+end
+
+let s = "CompletionFoo.?('c')"
+    c, r, res = test_complete(s)
+    @test !res
+    @test  any(str->occursin("test9(x::Char)", str), c)
+    @test !any(str->occursin("test9(x::Char, i::Int", str), c)
+end
+
+let s = "CompletionFoo.?('c'"
+    c, r, res = test_complete(s)
+    @test !res
+    @test  any(str->occursin("test9(x::Char)", str), c)
+    @test  any(str->occursin("test9(x::Char, i::Int", str), c)
+end
+
+let s = "CompletionFoo.?(false, \"a\", 3, "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("test(args...)", c[1])
+end
+
+let s = "CompletionFoo.?(false, \"a\", 3, "
+    c, r, res = test_complete_noshift(s)
+    @test !res
+    @test isempty(c)
+end
+
+let s = "CompletionFoo.?()"
+    c, r, res = test_complete(s)
+    @test !res
+    @test any(str->occursin("foo()", str), c)
+    @test any(str->occursin("kwtest(;", str), c)
+    @test any(str->occursin("test(args...)", str), c)
+end
+
+let s = "CompletionFoo.?()"
+    c, r, res = test_complete_noshift(s)
+    @test !res
+    @test isempty(c)
+end
+
+#################################################################
+
 # Test of inference based getfield completion
 let s = "(1+2im)."
     c,r = test_complete(s)
@@ -777,6 +858,45 @@ let s, c, r
         end
     end
 end
+end
+
+#test that it does not crash on files for which `stat` errors
+let current_dir, forbidden
+    # Issue #36855
+    if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+        mktempdir() do path
+            selfsymlink = joinpath(path, "selfsymlink")
+            symlink(selfsymlink, selfsymlink)
+            @test try
+                stat(selfsymlink) # should crash with a IOError
+                false
+            catch e
+                e isa Base.IOError && occursin("ELOOP", e.msg)
+            end
+            c, r = test_complete("\"$(joinpath(path, "selfsym"))")
+            @test c == ["selfsymlink"]
+        end
+    end
+
+    # Issue #32797
+    forbidden = Sys.iswindows() ? "C:\\S" : "/root/x"
+    test_complete(forbidden); @test true # simply check that it did not crash
+
+     # Issue #19310
+    if Sys.iswindows()
+        current_dir = pwd()
+        cd("C:")
+        test_complete("C"); @test true
+        test_complete("C:"); @test true
+        test_complete("C:\\"); @test true
+        if isdir("D:")
+            cd("D:")
+            test_complete("C"); @test true
+            test_complete("C:"); @test true
+            test_complete("C:\\"); @test true
+        end
+        cd(current_dir)
+    end
 end
 
 #test that it can auto complete with spaces in file/path
@@ -1115,11 +1235,36 @@ let s = "test_dict[\"ab"
     @test c == Any["\"abc\"", "\"abcd\""]
 end
 
+let s = "CompletionFoo.x."
+    c, r = test_complete(s)
+    @test "a" in c
+end
+
 # https://github.com/JuliaLang/julia/issues/27184
 let
     (test_complete("@noexist."); @test true)
     (test_complete("Main.@noexist."); @test true)
     (test_complete("@Main.noexist."); @test true)
+end
+
+let # Check that completion does not crash on (possibly invalid) macro calls
+    (test_complete("@show."); @test true)
+    (test_complete("@macroexpand."); @test true)
+    (test_complete("@.."); @test true)
+    (test_complete("CompletionFoo.@foobar."); @test true)
+    (test_complete("CompletionFoo.@foobar()."); @test true)
+    (test_complete("CompletionFoo.@foobar(4)."); @test true)
+    (test_complete("CompletionFoo.@barfoo."); @test true)
+    (test_complete("CompletionFoo.@barfoo()."); @test true)
+    (test_complete("CompletionFoo.@barfoo(6)."); @test true)
+    (test_complete("CompletionFoo.@error_expanding."); @test true)
+    (test_complete("CompletionFoo.@error_expanding()."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional()."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional(3)."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional('a')."); @test true)
+    (test_complete("CompletionFoo.@error_throwing."); @test true)
+    (test_complete("CompletionFoo.@error_throwing()."); @test true)
 end
 
 @testset "https://github.com/JuliaLang/julia/issues/40247" begin

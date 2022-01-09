@@ -13,6 +13,7 @@ write(::DevNull, ::UInt8) = 1
 unsafe_write(::DevNull, ::Ptr{UInt8}, n::UInt)::Int = n
 close(::DevNull) = nothing
 wait_close(::DevNull) = wait()
+bytesavailable(io::DevNull) = 0
 
 let CoreIO = Union{Core.CoreSTDOUT, Core.CoreSTDERR}
     global write(io::CoreIO, x::UInt8) = Core.write(io, x)

@@ -207,9 +207,9 @@ end
 
 ### QcB
 lmul!(adjA::Adjoint{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
-    (A = adjA.parent; LAPACK.ormlq!('L','T',A.factors,A.τ,B))
+    (A = adjA.parent; LAPACK.ormlq!('L', 'T', A.factors, A.τ, B))
 lmul!(adjA::Adjoint{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
-    (A = adjA.parent; LAPACK.ormlq!('L','C',A.factors,A.τ,B))
+    (A = adjA.parent; LAPACK.ormlq!('L', 'C', A.factors, A.τ, B))
 
 function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
     A = adjA.parent
@@ -232,11 +232,11 @@ function *(A::LQPackedQ, adjB::Adjoint{<:Any,<:StridedVecOrMat})
     return lmul!(A, BB)
 end
 function *(adjA::Adjoint{<:Any,<:LQPackedQ}, adjB::Adjoint{<:Any,<:StridedVecOrMat})
-    A, B = adjA.parent, adjB.parent
-    TAB = promote_type(eltype(A), eltype(B))
+    B = adjB.parent
+    TAB = promote_type(eltype(adjA.parent), eltype(B))
     BB = similar(B, TAB, (size(B, 2), size(B, 1)))
     adjoint!(BB, B)
-    return lmul!(adjoint(A), BB)
+    return lmul!(adjA, BB)
 end
 
 # in-place right-application of LQPackedQs

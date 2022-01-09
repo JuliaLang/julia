@@ -34,11 +34,7 @@
 extern "C" {
 #endif
 
-#ifdef _MSC_VER
-JL_DLLEXPORT char *dirname(char *);
-#else
 #include <libgen.h>
-#endif
 
 #ifdef _OS_WINDOWS_
 extern int needsSymRefreshModuleList;
@@ -51,7 +47,7 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
 
-size_t jl_page_size;
+JL_DLLEXPORT size_t jl_page_size;
 
 void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 {
@@ -115,7 +111,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 static void jl_prep_sanitizers(void)
 {
 #if !defined(_OS_WINDOWS_)
-#if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
     struct rlimit rl;
 
     // When using the sanitizers, increase stack size because they bloat
@@ -295,14 +291,14 @@ static void post_boot_hooks(void);
 
 JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;
-void *jl_RTLD_DEFAULT_handle;
+JL_DLLEXPORT void *jl_RTLD_DEFAULT_handle;
 JL_DLLEXPORT void *jl_exe_handle;
 #ifdef _OS_WINDOWS_
 void *jl_ntdll_handle;
 void *jl_kernel32_handle;
 void *jl_crtdll_handle;
 void *jl_winsock_handle;
-extern const char jl_crtdll_name[];
+extern const char *jl_crtdll_name;
 #endif
 
 uv_loop_t *jl_io_loop;
@@ -431,21 +427,7 @@ static void init_stdio(void)
     jl_flush_cstdio();
 }
 
-#ifdef JL_USE_INTEL_JITEVENTS
-char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
-#endif
-
-#ifdef JL_USE_OPROFILE_JITEVENTS
-char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
-#endif
-
-#ifdef JL_USE_PERF_JITEVENTS
-char jl_using_perf_jitevents = 0;
-#endif
-
-char jl_using_gdb_jitevents = 0;
-
-int isabspath(const char *in) JL_NOTSAFEPOINT
+int jl_isabspath(const char *in) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
     char c0 = in[0];
@@ -517,7 +499,7 @@ static char *abspath(const char *in, int nprefix)
 // unless `in` starts with `%`
 static const char *absformat(const char *in)
 {
-    if (in[0] == '%' || isabspath(in))
+    if (in[0] == '%' || jl_isabspath(in))
         return in;
     // get an escaped copy of cwd
     size_t path_size = PATH_MAX;
@@ -572,7 +554,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     free(free_path);
     free_path = NULL;
     if (jl_options.image_file) {
-        if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
+        if (rel == JL_IMAGE_JULIA_HOME && !jl_isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_BINDIR
             free_path = (char*)malloc_s(PATH_MAX);
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
@@ -628,8 +610,14 @@ static void restore_fp_env(void)
     }
 }
 
+static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct);
+
+JL_DLLEXPORT int jl_default_debug_info_kind;
+
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
+    jl_default_debug_info_kind = 0;
+
     jl_init_timing();
     // Make sure we finalize the tls callback before starting any threads.
     (void)jl_get_pgcstack();
@@ -651,16 +639,20 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
 
-    // Load libjulia-internal (which contains this function), and libjulia, explicitly.
     jl_libjulia_internal_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
-    jl_libjulia_handle = jl_load_dynamic_library(JL_LIBJULIA_SONAME, JL_RTLD_DEFAULT, 1);
 #ifdef _OS_WINDOWS_
+    jl_exe_handle = GetModuleHandleA(NULL);
+    jl_RTLD_DEFAULT_handle = jl_libjulia_internal_handle;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCWSTR)&jl_any_type,
+                            (HMODULE*)&jl_libjulia_handle)) {
+        jl_error("could not load base module");
+    }
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
     jl_crtdll_handle = jl_dlopen(jl_crtdll_name, 0);
     jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
-    jl_exe_handle = GetModuleHandleA(NULL);
-    JL_MUTEX_INIT(&jl_in_stackwalk);
+    uv_mutex_init(&jl_in_stackwalk);
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
     if (!SymInitialize(GetCurrentProcess(), "", 1)) {
         jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
@@ -678,53 +670,25 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #endif
 #endif
 
-#if \
-    defined(JL_USE_INTEL_JITEVENTS) || \
-    defined(JL_USE_OPROFILE_JITEVENTS) || \
-    defined(JL_USE_PERF_JITEVENTS)
-    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
-#endif
-
-#if defined(JL_USE_INTEL_JITEVENTS)
-    if (jit_profiling && atoi(jit_profiling)) {
-        jl_using_intel_jitevents = 1;
-    }
-#endif
-
-#if defined(JL_USE_OPROFILE_JITEVENTS)
-    if (jit_profiling && atoi(jit_profiling)) {
-        jl_using_oprofile_jitevents = 1;
-    }
-#endif
-
-#if defined(JL_USE_PERF_JITEVENTS)
-    if (jit_profiling && atoi(jit_profiling)) {
-        jl_using_perf_jitevents= 1;
-    }
-#endif
-
-#if defined(JL_DEBUG_BUILD)
-    jl_using_gdb_jitevents = 1;
-# else
-    const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
-    if (jit_gdb && atoi(jit_gdb)) {
-        jl_using_gdb_jitevents = 1;
-    }
-#endif
-
     if ((jl_options.outputo || jl_options.outputbc || jl_options.outputasm) &&
         (jl_options.code_coverage || jl_options.malloc_log)) {
         jl_error("cannot generate code-coverage or track allocation information while generating a .o, .bc, or .s output file");
     }
 
+    jl_init_runtime_ccall();
     jl_gc_init();
     jl_init_tasks();
     jl_init_threading();
 
     jl_ptls_t ptls = jl_init_threadtls(0);
-    jl_init_root_task(ptls, stack_lo, stack_hi);
-    jl_task_t *ct = jl_current_task;
+    // warning: this changes `jl_current_task`, so be careful not to call that from this function
+    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+    JL_GC_PROMISE_ROOTED(ct);
+    _finish_julia_init(rel, ptls, ct);
+}
 
+static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
+{
     jl_init_threadinginfra();
 
     jl_resolve_sysimg_location(rel);
@@ -734,12 +698,13 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
-    if (jl_options.image_file)
+    if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
-    else
+    } else {
         jl_init_types();
+        jl_init_codegen();
+    }
 
-    jl_init_codegen();
     jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();
@@ -840,6 +805,7 @@ static void post_boot_hooks(void)
     jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
     jl_initerror_type      = (jl_datatype_t*)core("InitError");
+    jl_pair_type           = core("Pair");
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
@@ -852,7 +818,7 @@ static void post_boot_hooks(void)
     for (i = 1; i < jl_core_module->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            jl_value_t *v = b->value;
+            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
             if (v) {
                 if (jl_is_unionall(v))
                     v = jl_unwrap_unionall(v);

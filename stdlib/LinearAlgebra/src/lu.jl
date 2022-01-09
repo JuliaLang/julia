@@ -76,6 +76,9 @@ adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 
 # StridedMatrix
+lu(A::StridedMatrix, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
+    lu!(copy_oftype(A, lutype(eltype(A))), pivot; check=check)
+
 lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
 function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
     lpt = LAPACK.getrf!(A)
@@ -85,6 +88,10 @@ end
 function lu!(A::StridedMatrix{<:BlasFloat}, pivot::NoPivot; check::Bool = true)
     return generic_lufact!(A, pivot; check = check)
 end
+
+lu(A::HermOrSym, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
+    lu!(copy_oftype(A, lutype(eltype(A))), pivot; check=check)
+
 function lu!(A::HermOrSym, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true)
     copytri!(A.data, A.uplo, isa(A, Hermitian))
     lu!(A.data, pivot; check = check)
@@ -276,7 +283,7 @@ true
 """
 function lu(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T}
     S = lutype(T)
-    lu!(copy_oftype(A, S), pivot; check = check)
+    lu!(copy_to_array(A, S), pivot; check = check)
 end
 # TODO: remove for Julia v2.0
 @deprecate lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) lu(A, RowMaximum(); check=check)
@@ -489,6 +496,9 @@ inv!(A::LU{T,<:StridedMatrix}) where {T} =
 inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 
 # Tridiagonal
+
+lu(A::Tridiagonal{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where T =
+    lu!(copy_oftype(A, lutype(T)), pivot; check = check)
 
 # See dgttrf.f
 function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T,V}

@@ -1,6 +1,6 @@
 ## libssh2
 ifneq ($(USE_BINARYBUILDER_LIBSSH2), 1)
-LIBSSH2_GIT_URL := git://github.com/libssh2/libssh2.git
+LIBSSH2_GIT_URL := https://github.com/libssh2/libssh2.git
 LIBSSH2_TAR_URL = https://api.github.com/repos/libssh2/libssh2/tarball/$1
 $(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCCACHE)))
 

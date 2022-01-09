@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: "Cite this paper whenever you use Julia"
+authors:
+- family-names: "Bezanson"
+  given-names: "Jeff"
+- family-names: "Edelman"
+  given-names: "Alan"
+- family-names: "Karpinski"
+  given-names: "Stefan"
+- family-names: "Shah"
+  given-names: "Viral B."
+title: "Julia: A fresh approach to numerical computing"
+version: "v1"
+license: "MIT"
+doi: "10.1137/141000671"
+date-released: 2017-02-07
+url: "https://julialang.org"
+preferred-citation:
+  authors:
+    - family-names: "Bezanson"
+      given-names: "Jeff"
+    - family-names: "Edelman"
+      given-names: "Alan"
+    - family-names: "Karpinski"
+      given-names: "Stefan"
+    - family-names: "Shah"
+      given-names: "Viral B."
+  doi: "10.1137/141000671"
+  journal: "SIAM Review"
+  month: 9
+  start: 65
+  end: 98
+  pages: 33
+  title: "Julia: A fresh approach to numerical computing"
+  type: article
+  volume: 59
+  issue: 1
+  year: 2017
+  publisher:
+    - name: "SIAM"

@@ -30,7 +30,7 @@ macro threadcall(f, rettype, argtypes, argvals...)
     argvals = map(esc, argvals)
 
     # construct non-allocating wrapper to call C function
-    wrapper = :(function (args_ptr::Ptr{Cvoid}, retval_ptr::Ptr{Cvoid})
+    wrapper = :(function (fptr::Ptr{Cvoid}, args_ptr::Ptr{Cvoid}, retval_ptr::Ptr{Cvoid})
         p = args_ptr
         # the rest of the body is created below
     end)
@@ -42,18 +42,19 @@ macro threadcall(f, rettype, argtypes, argvals...)
         push!(body, :(p += Core.sizeof($T)))
         push!(args, arg)
     end
-    push!(body, :(ret = ccall($f, $rettype, ($(argtypes...),), $(args...))))
+    push!(body, :(ret = ccall(fptr, $rettype, ($(argtypes...),), $(args...))))
     push!(body, :(unsafe_store!(convert(Ptr{$rettype}, retval_ptr), ret)))
     push!(body, :(return Int(Core.sizeof($rettype))))
 
     # return code to generate wrapper function and send work request thread queue
     wrapper = Expr(Symbol("hygienic-scope"), wrapper, @__MODULE__)
-    return :(let fun_ptr = @cfunction($wrapper, Int, (Ptr{Cvoid}, Ptr{Cvoid}))
-        do_threadcall(fun_ptr, $rettype, Any[$(argtypes...)], Any[$(argvals...)])
+    return :(let fun_ptr = @cfunction($wrapper, Int, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}))
+        # use cglobal to look up the function on the calling thread
+        do_threadcall(fun_ptr, cglobal($f), $rettype, Any[$(argtypes...)], Any[$(argvals...)])
     end)
 end
 
-function do_threadcall(fun_ptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, argvals::Vector)
+function do_threadcall(fun_ptr::Ptr{Cvoid}, cfptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, argvals::Vector)
     # generate function pointer
     c_notify_fun = @cfunction(
         function notify_fun(idx)
@@ -86,8 +87,8 @@ function do_threadcall(fun_ptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, arg
     GC.@preserve args_arr ret_arr roots begin
         # queue up the work to be done
         ccall(:jl_queue_work, Cvoid,
-            (Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid}, Cint),
-            fun_ptr, args_arr, ret_arr, c_notify_fun, idx)
+            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid}, Cint),
+            fun_ptr, cfptr, args_arr, ret_arr, c_notify_fun, idx)
 
         # wait for a result & return it
         wait(thread_notifiers[idx])

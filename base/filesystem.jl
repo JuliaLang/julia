@@ -45,10 +45,6 @@ export File,
        JL_O_CREAT,
        JL_O_EXCL,
        JL_O_TRUNC,
-       JL_O_TEMPORARY,
-       JL_O_SHORT_LIVED,
-       JL_O_SEQUENTIAL,
-       JL_O_RANDOM,
        JL_O_NOCTTY,
        S_IRUSR, S_IWUSR, S_IXUSR, S_IRWXU,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
@@ -58,7 +54,7 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
+    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
 
 import .Base.RefValue
 
@@ -92,6 +88,7 @@ if OS_HANDLE !== RawFD
 end
 
 rawhandle(file::File) = file.handle
+setup_stdio(file::File, ::Bool) = (file, false)
 
 # Filesystem.open, not Base.open
 function open(path::AbstractString, flags::Integer, mode::Integer=0)

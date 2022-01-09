@@ -8,7 +8,7 @@ A menu that allows a user to select a multiple options from a list.
 
 # Sample Output
 
-```julia
+```julia-repl
 julia> request(MultiSelectMenu(options))
 Select the fruits you like:
 [press: d=done, a=all, n=none]

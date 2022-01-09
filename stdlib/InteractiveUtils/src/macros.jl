@@ -232,6 +232,17 @@ macro code_lowered(ex0...)
     end
 end
 
+macro time_imports(ex)
+    quote
+        try
+            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+            $(esc(ex))
+        finally
+            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+        end
+    end
+end
+
 """
     @functionloc
 
@@ -332,3 +343,36 @@ Set the optional keyword argument `debuginfo` by putting it before the function 
 `debuginfo` may be one of `:source` (default) or `:none`, to specify the verbosity of code comments.
 """
 :@code_native
+
+"""
+    @time_imports
+
+A macro to execute an expression and produce a report of any time spent importing packages and their
+dependencies.
+
+If a package's dependencies have already been imported either globally or by another dependency they will
+not appear under that package and the package will accurately report a faster load time than if it were to
+be loaded in isolation.
+
+```julia-repl
+julia> @time_imports using CSV
+      3.5 ms    ┌ IteratorInterfaceExtensions
+     27.4 ms  ┌ TableTraits
+    614.0 ms  ┌ SentinelArrays
+    138.6 ms  ┌ Parsers
+      2.7 ms  ┌ DataValueInterfaces
+      3.4 ms    ┌ DataAPI
+     59.0 ms  ┌ WeakRefStrings
+     35.4 ms  ┌ Tables
+     49.5 ms  ┌ PooledArrays
+    972.1 ms  CSV
+```
+
+!!! note
+    During the load process a package sequentially imports where necessary all of its dependencies, not just
+    its direct dependencies. That is also true for the dependencies themselves so nested importing will likely
+    occur, but not always. Therefore the nesting shown in this output report is not equivalent to the dependency
+    tree, but does indicate where import time has accumulated.
+
+"""
+:@time_imports

@@ -270,6 +270,21 @@ reasonably represented in the target encoding; it always succeeds for
 conversions between UTF-XX encodings, even for invalid Unicode data.
 
 Only conversion to/from UTF-8 is currently supported.
+
+# Examples
+```jldoctest
+julia> str = "αβγ"
+"αβγ"
+
+julia> transcode(UInt16, str)
+3-element Vector{UInt16}:
+ 0x03b1
+ 0x03b2
+ 0x03b3
+
+julia> transcode(String, transcode(UInt16, str))
+"αβγ"
+```
 """
 function transcode end
 
@@ -533,6 +548,12 @@ function expand_ccallable(rt, def)
     error("expected method definition in @ccallable")
 end
 
+"""
+    @ccallable(def)
+
+Make the annotated function be callable from C using its name. This can, for example,
+be used to expose functionality as a C-API when creating a custom Julia sysimage.
+"""
 macro ccallable(def)
     expand_ccallable(nothing, def)
 end

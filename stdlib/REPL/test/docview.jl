@@ -47,3 +47,7 @@ end
     # shouldn't throw when there is a space in a middle of query
     @test (REPL.matchinds("a ", "a file.txt"); true)
 end
+
+@testset "Unicode doc lookup (#41589)" begin
+    @test REPL.lookup_doc(:(÷=)) isa Markdown.MD
+end

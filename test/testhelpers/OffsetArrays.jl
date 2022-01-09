@@ -68,7 +68,6 @@ offset_coerce(::Type{I}, r::AbstractUnitRange) where I<:AbstractUnitRange{T} whe
 @inline Base.parent(r::IdOffsetRange) = r.parent
 @inline Base.axes(r::IdOffsetRange) = (Base.axes1(r),)
 @inline Base.axes1(r::IdOffsetRange) = IdOffsetRange(Base.axes1(r.parent), r.offset)
-@inline Base.unsafe_indices(r::IdOffsetRange) = (r,)
 @inline Base.length(r::IdOffsetRange) = length(r.parent)
 Base.reduced_index(i::IdOffsetRange) = typeof(i)(first(i):first(i))
 # Workaround for #92 on Julia < 1.4
@@ -298,6 +297,7 @@ Base.reshape(A::OffsetArray, inds::Tuple{Union{Integer,Base.OneTo},Vararg{Union{
 Base.reshape(A::OffsetArray, inds::Dims) = reshape(parent(A), inds)
 Base.reshape(A::OffsetArray, ::Colon) = reshape(parent(A), Colon())
 Base.reshape(A::OffsetVector, ::Colon) = A
+Base.reshape(A::OffsetVector, ::Tuple{Colon}) = A
 Base.reshape(A::OffsetArray, inds::Union{Int,Colon}...) = reshape(parent(A), inds)
 Base.reshape(A::OffsetArray, inds::Tuple{Vararg{Union{Int,Colon}}}) = reshape(parent(A), inds)
 

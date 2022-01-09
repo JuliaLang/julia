@@ -104,7 +104,7 @@ function Parser(str::String; filepath=nothing)
             IdSet{TOMLDict}(),    # defined_tables
             root,
             filepath,
-            isdefined(Base, :loaded_modules) ? get(Base.loaded_modules, DATES_PKGID, nothing) : nothing,
+            isdefined(Base, :maybe_root_module) ? Base.maybe_root_module(DATES_PKGID) : nothing,
         )
     startup(l)
     return l
@@ -323,7 +323,7 @@ function Base.showerror(io::IO, err::ParserError)
     # In this case we want the arrow to point one character
     pos = err.pos::Int
     err.type == ErrUnexpectedEofExpectedValue && (pos += 1)
-    str1, err1 = point_to_line(err.str, pos, pos, io)
+    str1, err1 = point_to_line(err.str::String, pos, pos, io)
     @static if VERSION <= v"1.6.0-DEV.121"
         # See https://github.com/JuliaLang/julia/issues/36015
         format_fixer = get(io, :color, false) == true ? "\e[0m" : ""

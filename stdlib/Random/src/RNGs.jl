@@ -13,6 +13,9 @@ if Sys.iswindows()
         rand!(rd, rd.buffer)
         @inbounds return rd.buffer[1] % sp[]
     end
+
+    show(io::IO, ::RandomDevice) = print(io, RandomDevice, "()")
+
 else # !windows
     struct RandomDevice <: AbstractRNG
         unlimited::Bool
@@ -20,29 +23,20 @@ else # !windows
         RandomDevice(; unlimited::Bool=true) = new(unlimited)
     end
 
+    getfile(rd::RandomDevice) = Base._get_dev_random_fd(rd.unlimited)
+
     rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
     rand(rd::RandomDevice, ::SamplerType{Bool}) = read(getfile(rd), UInt8) % Bool
 
-    function getfile(rd::RandomDevice)
-        devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
-        # TODO: there is a data-race, this can leak up to nthreads() copies of the file descriptors,
-        # so use a "thread-once" utility once available
-        isassigned(devrandom) || (devrandom[] = open(rd.unlimited ? "/dev/urandom" : "/dev/random"))
-        devrandom[]
-    end
-
-    const DEV_RANDOM  = Ref{IOStream}()
-    const DEV_URANDOM = Ref{IOStream}()
-
+    show(io::IO, rd::RandomDevice) =
+        print(io, RandomDevice, rd.unlimited ? "()" : "(unlimited=false)")
 end # os-test
 
 # NOTE: this can't be put within the if-else block above
 for T in (Bool, BitInteger_types...)
     if Sys.iswindows()
         @eval function rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T})
-            Base.windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
-                (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-                  A, sizeof(A)))
+            Base.RtlGenRandom!(A)
             A
         end
     else
@@ -316,14 +310,7 @@ function make_seed()
     catch
         println(stderr,
                 "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
-        seed = reinterpret(UInt64, time())
-        seed = hash(seed, getpid() % UInt)
-        try
-            seed = hash(seed, parse(UInt64,
-                                    read(pipeline(`ifconfig`, `sha1sum`), String)[1:40],
-                                    base = 16) % UInt)
-        catch
-        end
+        Base._ad_hoc_entropy_source()
         return make_seed(seed)
     end
 end
@@ -376,16 +363,17 @@ copy!(::_GLOBAL_RNG, src::Xoshiro) = copy!(default_rng(), src)
 copy(::_GLOBAL_RNG) = copy(default_rng())
 
 GLOBAL_SEED = 0
+set_global_seed!(seed) = global GLOBAL_SEED = seed
 
-seed!(::_GLOBAL_RNG, seed) = (global GLOBAL_SEED = seed; seed!(default_rng(), seed))
-
-function seed!(rng::_GLOBAL_RNG)
-    seed!(rng, (rand(RandomDevice(), UInt64), rand(RandomDevice(), UInt64),
-                rand(RandomDevice(), UInt64), rand(RandomDevice(), UInt64)))
+function seed!(::_GLOBAL_RNG, seed=rand(RandomDevice(), UInt64, 4))
+    global GLOBAL_SEED = seed
+    seed!(default_rng(), seed)
 end
-seed!() = seed!(GLOBAL_RNG)
+
 seed!(rng::_GLOBAL_RNG, ::Nothing) = seed!(rng)  # to resolve ambiguity
-seed!(seed::Union{Integer,Vector{UInt32},Vector{UInt64},NTuple{4,UInt64}}) = seed!(GLOBAL_RNG, seed)
+
+seed!(seed::Union{Nothing,Integer,Vector{UInt32},Vector{UInt64}}=nothing) =
+    seed!(GLOBAL_RNG, seed)
 
 rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
 rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(default_rng(), sp)

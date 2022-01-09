@@ -229,6 +229,7 @@ function edit(@nospecialize f)
     length(ms) == 0 && functionloc(f) # throws
     nothing
 end
+edit(m::Method) = edit(functionloc(m)...)
 edit(@nospecialize(f), idx::Integer) = edit(methods(f).ms[idx])
 edit(f, t)  = (@nospecialize; edit(functionloc(f, t)...))
 edit(file::Nothing, line::Integer) = error("could not find source file for function")

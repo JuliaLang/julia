@@ -330,3 +330,6 @@ end
 # issue #37926
 @test nextind((a=1,), 1) == nextind((1,), 1) == 2
 @test prevind((a=1,), 2) == prevind((1,), 2) == 1
+
+# issue #43045
+@test merge(NamedTuple(), Iterators.reverse(pairs((a=1,b=2)))) === (b = 2, a = 1)

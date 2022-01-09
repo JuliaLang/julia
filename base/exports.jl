@@ -573,11 +573,14 @@ export
     bytes2hex,
     chomp,
     chop,
+    chopprefix,
+    chopsuffix,
     codepoint,
     codeunit,
     codeunits,
     digits,
     digits!,
+    eachsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -803,6 +806,7 @@ export
 
 # I/O and events
     close,
+    closewrite,
     countlines,
     eachline,
     readeach,
@@ -891,10 +895,12 @@ export
     chown,
     cp,
     ctime,
+    diskstat,
     download,
     filemode,
     filesize,
     gperm,
+    hardlink,
     isblockdev,
     ischardev,
     isdir,
@@ -989,6 +995,7 @@ export
 
     # profiling
     @time,
+    @showtime,
     @timed,
     @timev,
     @elapsed,
