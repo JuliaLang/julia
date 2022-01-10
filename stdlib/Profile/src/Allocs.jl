@@ -52,6 +52,13 @@ macro profile(ex)
     _prof_expr(ex, :(sample_rate=0.0001))
 end
 
+# globals used for tracking how many allocs we're missing
+# vs the alloc counters used by @time
+const g_gc_num = Ref{Base.GC_Num}()
+const g_total_allocs = Ref{Int}(0)
+const g_sample_rate = Ref{Real}(0)
+const g_estimated_total_allocs = Ref{Int}(0)
+
 function _prof_expr(expr, opts)
     quote
         $start(; $(esc(opts)))
@@ -69,6 +76,9 @@ A sample rate of 1.0 will record everything; 0.0 will record nothing.
 """
 function start(; sample_rate::Real)
     ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), Float64(sample_rate))
+    
+    g_sample_rate[] = sample_rate
+    g_gc_num[] = Base.gc_num()
 end
 
 """
@@ -78,6 +88,22 @@ Stop recording allocations.
 """
 function stop()
     ccall(:jl_stop_alloc_profile, Cvoid, ())
+
+    gc_num_after = Base.gc_num()
+    gc_diff = Base.GC_Diff(gc_num_after, g_gc_num[])
+    println("gc_diff: $gc_diff")
+    alloc_count = Base.gc_alloc_count(gc_diff)
+    println("adding alloc_count: $alloc_count")
+    g_total_allocs[] = g_total_allocs[] + alloc_count
+
+    # TODO: ugh, fetch has side effects
+    raw_results = ccall(:jl_fetch_alloc_profile, RawAllocResults, ())
+    num_sampled = raw_results.num_allocs
+    println("num sampled $num_sampled; sample_rate: $(g_sample_rate[])")
+    estimated_total = round(Int, Float64(num_sampled) / g_sample_rate[])
+    println("adding estimated_total: $estimated_total")
+
+    g_estimated_total_allocs[] = g_estimated_total_allocs[] + estimated_total
 end
 
 """
@@ -87,6 +113,9 @@ Clear all previously profiled allocation information from memory.
 """
 function clear()
     ccall(:jl_free_alloc_profile, Cvoid, ())
+
+    g_estimated_total_allocs[] = 0
+    g_total_allocs[] = 0
 end
 
 """
@@ -98,7 +127,14 @@ objects which can be analyzed.
 function fetch()
     raw_results = ccall(:jl_fetch_alloc_profile, RawAllocResults, ())
     decoded_results = decode(raw_results)
-    @warn("This allocation profiler currently misses some allocations. " *
+
+    println("total: $(g_total_allocs[])")
+    println("estimated total: $(g_estimated_total_allocs[])")
+
+    missed_allocs = g_total_allocs[] - g_estimated_total_allocs[]
+    missed_percentage = round(Int, Float64(missed_allocs) / Float64(g_total_allocs[]) * 100)
+
+    @warn("This allocation profiler missed $(missed_percentage)% of allocs in the last run. " *
     "For more info see https://github.com/JuliaLang/julia/issues/43688")
     return decoded_results
 end
