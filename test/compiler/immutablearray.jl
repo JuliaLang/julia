@@ -70,14 +70,14 @@ function unescaped1_1(gen)
     a = [1,2,3,4,5]
     return gen(a)
 end
-let src = code_typed1(unescaped1, (Type{Core.ImmutableArray},))
+let src = code_typed1(unescaped1_1, (Type{Core.ImmutableArray},))
     @test count(is_array_alloc, src.code) == 1
     @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 1
     @test count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped1(identity)
-    allocated = @allocated unescaped1(identity)
-    unescaped1(ImmutableArray)
-    @test allocated == @allocated unescaped1(ImmutableArray)
+    unescaped1_1(identity)
+    allocated = @allocated unescaped1_1(identity)
+    unescaped1_1(ImmutableArray)
+    @test allocated == @allocated unescaped1_1(ImmutableArray)
 end
 
 # handle matrix etc. (actually this example also requires inter-procedural escape handling)
