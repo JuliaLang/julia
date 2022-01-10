@@ -91,17 +91,13 @@ function stop()
 
     gc_num_after = Base.gc_num()
     gc_diff = Base.GC_Diff(gc_num_after, g_gc_num[])
-    println("gc_diff: $gc_diff")
     alloc_count = Base.gc_alloc_count(gc_diff)
-    println("adding alloc_count: $alloc_count")
     g_total_allocs[] = g_total_allocs[] + alloc_count
 
     # TODO: ugh, fetch has side effects
     raw_results = ccall(:jl_fetch_alloc_profile, RawAllocResults, ())
     num_sampled = raw_results.num_allocs
-    println("num sampled $num_sampled; sample_rate: $(g_sample_rate[])")
     estimated_total = round(Int, Float64(num_sampled) / g_sample_rate[])
-    println("adding estimated_total: $estimated_total")
 
     g_estimated_total_allocs[] = g_estimated_total_allocs[] + estimated_total
 end
