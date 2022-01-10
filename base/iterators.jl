@@ -1402,12 +1402,12 @@ Stacktrace:
 [...]
 
 julia> only(('a', 'b'))
-ERROR: ArgumentError: Tuple contains multiple elements, must contain exactly 1 element
+ERROR: ArgumentError: Tuple contains 2 elements, must contain exactly 1 element
 Stacktrace:
 [...]
 
 julia> only(('a', 'b'), "my error message")
-ERROR: ArgumentError: Tuple contains multiple elements, must contain exactly 1 element; my error message
+ERROR: ArgumentError: Tuple contains 2 elements, must contain exactly 1 element; my error message
 Stacktrace:
 [...]
 
