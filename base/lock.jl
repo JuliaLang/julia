@@ -315,7 +315,7 @@ function acquire(s::Semaphore)
 end
 
 """
-    acquire(f::Function, s::Semaphore)
+    acquire(f, s::Semaphore)
 
 Execute `f` after acquiring from Semaphore `s`,
 and `release` on completion or error.
@@ -333,8 +333,12 @@ s = Base.Semaphore(2)
     end
 end
 ```
+
+!!! compat "Julia 1.8"
+    This method requires at least Julia 1.8.
+
 """
-function acquire(f::Function, s::Semaphore)
+function acquire(f, s::Semaphore)
     acquire(s)
     try
         f()
