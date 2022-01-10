@@ -1014,7 +1014,6 @@ JL_DLLEXPORT uint64_t jl_current_block_key(jl_method_t *m)
     if (nx2 == 0)
         return 0;
     uint64_t *blocks = (uint64_t*)jl_array_data(m->external_root_blocks);
-    jl_printf(JL_STDOUT, "nblocks*2 = %ld, ptr is %p\n", nx2, blocks);
     return blocks[nx2-2];
 }
 
@@ -1038,7 +1037,6 @@ JL_DLLEXPORT void jl_add_root_block(jl_method_t *m, uint64_t key, size_t offset)
     if (!m->external_root_blocks) {
         m->external_root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
         jl_gc_wb(m, m->external_root_blocks);
-        jl_printf(JL_STDOUT, "allocating from add_root_block with pointer %p\n", m->external_root_blocks);
     }
     jl_array_grow_end(m->external_root_blocks, 2);
     uint64_t *blocks = (uint64_t*)jl_array_data(m->external_root_blocks);
@@ -1077,7 +1075,6 @@ root_reference append_root(jl_method_t *m, uint64_t key, jl_value_t *root)
     if (!m->external_root_blocks) {
         m->external_root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
         jl_gc_wb(m, m->external_root_blocks);
-        jl_printf(JL_STDOUT, "allocating from append_root with pointer %p\n", m->external_root_blocks);
     }
     // key should either be new or match the last module in external_root_blocks
     uint64_t *blocks = (uint64_t*)jl_array_data(m->external_root_blocks);
@@ -1119,9 +1116,6 @@ void append_missing_blocks(jl_method_t *m, jl_array_t *newroots_array, jl_array_
     for (inew = 0; inew < nnewx2; inew += 2) {
         uint64_t key = newblocks[inew];
         if (check_missing_key(blocks, nx2, key)) {
-            jl_printf(JL_STDOUT, "%lx is missing from ", key);
-            jl_(m);
-            jl_(m->external_root_blocks);
             if (!m->roots) {
                 m->roots = jl_alloc_vec_any(0);
                 jl_gc_wb(m, m->roots);
@@ -1136,7 +1130,6 @@ void append_missing_blocks(jl_method_t *m, jl_array_t *newroots_array, jl_array_
             for (j = 0; j < k; j++)
                 roots[start + j] = newroots[newstart + j];
             jl_add_root_block(m, key, start);
-            jl_printf(JL_STDOUT, "copied %ld roots\n", k);
         }
     }
     JL_GC_POP();
@@ -1149,10 +1142,6 @@ jl_value_t *fetch_root(jl_method_t *m, uint64_t key, size_t relative_index)
     assert(key != -1);
     if (key == 0)
         return jl_array_ptr_ref(m->roots, relative_index);
-    if (!m->external_root_blocks) {
-        jl_printf(JL_STDOUT, "key = %lx\n", key);
-        jl_(m);
-    }
     assert(m->external_root_blocks);
     size_t i, nx2 = jl_array_len(m->external_root_blocks);
     uint64_t *blocks = (uint64_t*)jl_array_data(m->external_root_blocks);
@@ -1160,8 +1149,6 @@ jl_value_t *fetch_root(jl_method_t *m, uint64_t key, size_t relative_index)
         if (blocks[i] == key)
             return jl_array_ptr_ref(m->roots, blocks[i+1] + relative_index);
     }
-    jl_(m);
-    jl_(m->external_root_blocks);
     jl_errorf("root with key %lx not found", key);
 }
 

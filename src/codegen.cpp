@@ -7447,16 +7447,10 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             }
         }
         ctx.roots = NULL;
-        // if (added) {
-        //     jl_printf(JL_STDOUT, "Increased roots from %d to %ld (external = %d) for ", rootslen, jl_array_len(m->roots), external);
-        //     jl_(m);
-        // }
         if (added & external) {
             uint64_t key = jl_precompile_toplevel_module->build_id;
             if (jl_current_block_key(m) != key) {
                 jl_add_root_block(m, key, rootslen);
-                jl_printf(JL_STDOUT, "codegen: set newroots to %d for ", rootslen);
-                jl_(m);
             }
         }
         JL_UNLOCK(&m->writelock);

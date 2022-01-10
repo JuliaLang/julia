@@ -290,12 +290,10 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         jl_encode_value(s, jl_typeof(ar));
         size_t l = jl_array_len(ar);
         if (ar->flags.ptrarray) {
-            // jl_(v);
             for (i = 0; i < l; i++) {
                 jl_value_t *e = jl_array_ptr_ref(v, i);
                 jl_encode_value(s, e);
             }
-            // jl_printf(JL_STDOUT, "done\n");
         }
         else if (ar->flags.hasptr) {
             const char *data = (const char*)jl_array_data(ar);
@@ -328,12 +326,6 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
                              jl_is_linenode(v) || jl_is_upsilonnode(v) || jl_is_pinode(v) ||
                              jl_is_slot(v) || jl_is_ssavalue(v))) {
             root_reference rr = literal_val_id(s, v);
-            if (rr.key) {
-                jl_printf(JL_STDOUT, "When serializing ");
-                jl_(s->method);
-                jl_printf(JL_STDOUT, " root reference: key=%lx, block_offset=%ld, relative_index=%d for ", rr.key, rr.block_offset, rr.relative_index);
-                jl_(v);
-            }
             if (rr.key) {
                 write_uint8(s->s, TAG_EXTERN_METHODROOT);
                 write_int64(s->s, rr.key);
@@ -455,7 +447,6 @@ static jl_value_t *jl_decode_value_array(jl_ircode_state *s, uint8_t tag) JL_GC_
         size_t i, numel = jl_array_len(a);
         for (i = 0; i < numel; i++) {
             data[i] = jl_decode_value(s);
-            // jl_(data[i]);
         }
         assert(jl_astaggedvalue(a)->bits.gc == GC_CLEAN); // gc is disabled
     }
@@ -510,12 +501,10 @@ static jl_value_t *jl_decode_value_expr(jl_ircode_state *s, uint8_t tag) JL_GC_D
     if (head == NULL)
         head = (jl_sym_t*)jl_decode_value(s);
     jl_expr_t *e = jl_exprn(head, len);
-    // jl_(e);
     jl_value_t **data = (jl_value_t**)(e->args->data);
     for (i = 0; i < len; i++) {
         data[i] = jl_decode_value(s);
     }
-    // jl_(e);
     return (jl_value_t*)e;
 }
 
@@ -563,15 +552,6 @@ static jl_value_t *jl_decode_value_globalref(jl_ircode_state *s) JL_GC_DISABLED
 {
     jl_value_t *mod = jl_decode_value(s);
     jl_value_t *var = jl_decode_value(s);
-    if (!jl_is_module(mod)) {
-        jl_(mod);
-        jl_(var);
-        jl_printf(JL_STDOUT, "Method: ");
-        jl_(s->method);
-        jl_printf(JL_STDOUT, "and its roots:");
-        jl_(s->method->roots);
-        abort();
-    }
     return jl_module_globalref((jl_module_t*)mod, (jl_sym_t*)var);
 }
 
@@ -842,16 +822,13 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
     ios_readall(s.s, (char*)jl_array_data(code->slotflags), nslots);
 
-    // jl_printf(JL_STDOUT, "CI:");
     for (i = 0; i < 6; i++) {
         if (i == 1)  // skip codelocs
             continue;
-        // jl_printf(JL_STDOUT, " %d", i);
         assert(jl_field_isptr(jl_code_info_type, i));
         jl_value_t **fld = (jl_value_t**)((char*)jl_data_ptr(code) + jl_field_offset(jl_code_info_type, i));
         *fld = jl_decode_value(&s);
     }
-    // jl_printf(JL_STDOUT, "\n");
 
     jl_value_t *slotnames = jl_decode_value(&s);
     if (!jl_is_string(slotnames))
