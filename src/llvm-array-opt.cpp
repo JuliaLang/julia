@@ -199,7 +199,7 @@ namespace {
                             switch (inst->getOpcode()) {
                                 case Instruction::Mul: {
                                     std::size_t idx = inst->getOperand(0) == dim.first; // 1 if equal, 0 if not
-                                    assert(inst->getOperand(!idx) == inst
+                                    assert(inst->getOperand(!idx) == dim.first
                                             && "Expected instruction's operands to include dim!");
                                     auto val = inst->getOperand(idx);
                                     if (inst->hasNoSignedWrap() || adjust_dominators(checked, val) || adjust_dominators(next_check, val) || adjust_dominators(lengths, val)) {
@@ -249,7 +249,7 @@ namespace {
                                         }
                                     }
                                     std::size_t idx = inst->getOperand(0) == dim.first;
-                                    assert(inst->getOperand(!idx) == inst
+                                    assert(inst->getOperand(!idx) == dim.first
                                             && "Expected instruction's operands to include dim!");
                                     auto val = inst->getOperand(idx);
                                     if (auto ci = dyn_cast<ConstantInt>(val)) {
