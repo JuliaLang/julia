@@ -4714,6 +4714,26 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         I->setMetadata("julia.loopinfo", MD);
         return jl_cgval_t();
     }
+    else if (head == jl_funcinfo_sym) {
+        // parse Expr(:funcinfo, (kind, md))
+        // TODO: Errors
+        if (!ctx.f)
+            return jl_cgval_t();
+        for (int i = 0, ie = nargs; i < ie; ++i) {
+            if jl_is_tuple(args[i]) {
+                if (jl_nfields(args[i]) == 2) {
+                    MDNode *MD = MDNode::get(jl_LLVMContext, to_md_tree(jl_fieldref(args[i], 1)));
+                    jl_value_t* kind = jl_fieldref(args[i], 0);
+                    if (jl_is_symbol(kind)) {
+                        ctx.f->setMetadata(jl_symbol_name((jl_sym_t*)kind), MD);
+                    } else if (jl_is_long(kind)) {
+                        ctx.f->setMetadata((unsigned)jl_unbox_long(kind), MD);
+                    }
+                }
+            }
+        }
+        return jl_cgval_t();
+    }
     else if (head == jl_leave_sym || head == jl_coverageeffect_sym
             || head == jl_pop_exception_sym || head == jl_enter_sym || head == jl_inbounds_sym
             || head == jl_aliasscope_sym || head == jl_popaliasscope_sym || head == jl_inline_sym || head == jl_noinline_sym) {

@@ -1408,6 +1408,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_copyast_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_cfunction_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_pure_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_loopinfo_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_funcinfo_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_meta_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_inert_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_polly_sym;

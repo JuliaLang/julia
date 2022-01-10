@@ -183,7 +183,7 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
         return !(t ⊑ Bool)
     end
     if isa(stmt, Expr)
-        return stmt.head !== :loopinfo && stmt.head !== :enter
+        return stmt.head !== :loopinfo && stmt.head !== :enter && stmt.head !== :funcinfo
     end
     return true
 end
