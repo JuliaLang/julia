@@ -168,9 +168,12 @@ namespace {
             //At this point, either this is a multidimensional array
             //or it's a 1D array that doesn't escape.
             //Either way, we can hoist the data pointer
+
+            //Canonicalizing the data pointer gives us an easier time
+            //removing/stack allocating arrays
             IRBuilder<> data_builder(allocation.allocation->getNextNode());
             LoadInst *pdata_ = nullptr;
-            auto pdata = [&](LoadInst *data_load){
+            auto pdata = [&](LoadInst *data_load) {
                 if (!pdata_) {
                     if (data_load->getParent() == data_builder.GetInsertBlock()) {
                         pdata_ = data_load;
@@ -181,6 +184,7 @@ namespace {
                         data_load->moveAfter(cast<Instruction>(ppdata));
                         pdata_ = data_load;
                     }
+                    pdata_->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(pdata_->getContext(), None));
                 }
                 return pdata_;
             };

@@ -17,14 +17,18 @@ top:
   %5 = load i64, i64 addrspace(11)* %4, align 8, !tbaa !30, !range !35
   %6 = icmp slt i64 %5, 0
   ; CHECK: !julia.array
+  ; COM: Check that array data load was hoisted and marked as invariant
+  ; CHECK-NEXT: [[data_cast:%.*]] = bitcast {} addrspace(10)* %1 to i8 addrspace(13)* addrspace(10)*
+  ; CHECK-NEXT: load i8 addrspace(13)*, i8 addrspace(13)* addrspace(10)* [[data_cast]], align 8, !tbaa !3, !invariant.load !8, !nonnull !8
   ; COM: Check that arraylen load was removed
+  ; CHECK: i32 0, i32 1
   ; CHECK-NOT: load
   ; COM: Check that signed->unsigned conversion worked
   ; CHECK: icmp ult i64 100, 0
   %7 = zext i1 %6 to i8
   %8 = trunc i8 %7 to i1
   %9 = xor i1 %8, true
-  ; CHECK: select i1 %8, i64 100, i64 0
+  ; CHECK: select i1 %10, i64 100, i64 0
   %10 = select i1 %9, i64 %5, i64 0
   %11 = icmp slt i64 %10, 1
   %12 = zext i1 %11 to i8
@@ -45,6 +49,8 @@ L16:                                              ; preds = %L16, %top
   %21 = addrspacecast {} addrspace(10)* %1 to {} addrspace(11)*
   %22 = bitcast {} addrspace(11)* %21 to { i8 addrspace(13)*, i64, i16, i16, i32 } addrspace(11)*
   %23 = getelementptr inbounds { i8 addrspace(13)*, i64, i16, i16, i32 }, { i8 addrspace(13)*, i64, i16, i16, i32 } addrspace(11)* %22, i32 0, i32 0
+  ; CHECK: i32 0, i32 0
+  ; CHECK-NOT: [[data_load:%.*]] = load
   %24 = load i8 addrspace(13)*, i8 addrspace(13)* addrspace(11)* %23, align 8, !tbaa !65, !nonnull !4
   %25 = bitcast i8 addrspace(13)* %24 to double addrspace(13)*
   %26 = getelementptr inbounds double, double addrspace(13)* %25, i64 %20
@@ -65,6 +71,8 @@ L35:                                              ; preds = %L16, %top
   %35 = addrspacecast {} addrspace(10)* %1 to {} addrspace(11)*
   %36 = bitcast {} addrspace(11)* %35 to { i8 addrspace(13)*, i64, i16, i16, i32 } addrspace(11)*
   %37 = getelementptr inbounds { i8 addrspace(13)*, i64, i16, i16, i32 }, { i8 addrspace(13)*, i64, i16, i16, i32 } addrspace(11)* %36, i32 0, i32 1
+  ; CHECK: i32 0, i32 1
+  ; CHECK-NOT: [[arraylen2:%.*]] = load
   %38 = load i64, i64 addrspace(11)* %37, align 8, !tbaa !30, !range !35
   ret i64 %38
 }
@@ -75,7 +83,9 @@ top:
   %3 = mul nuw nsw i64 %1, %0
   %4 = call noalias nonnull {} addrspace(10)* inttoptr (i64 140069975219312 to {} addrspace(10)* ({} addrspace(10)*, i64, i64)*)({} addrspace(10)* addrspacecast ({}* inttoptr (i64 140069832560720 to {}*) to {} addrspace(10)*), i64 %0, i64 %1), !julia.array !17
   ; CHECK: !julia.array
-  ; CHECK-NEXT: icmp ult i64 %3, 0
+  ; CHECK-NEXT: [[bitcasted:%.*]] = bitcast {} addrspace(10)* %4 to i8 addrspace(13)* addrspace(10)*
+  ; CHECK-NEXT: %6 = load i8 addrspace(13)*, i8 addrspace(13)* addrspace(10)* [[bitcasted]], align 8, !tbaa !3, !invariant.load !8, !nonnull !8
+  ; CHECK-NEXT: %7 = icmp ult i64 %3, 0
   %5 = icmp slt i64 %3, 0
   %6 = zext i1 %5 to i8
   %7 = trunc i8 %6 to i1
