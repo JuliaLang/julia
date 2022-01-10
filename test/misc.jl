@@ -186,11 +186,12 @@ end
     history = fill!(Vector{Int}(undef, 2n), -1)
     @sync for _ in 1:n
         @async begin
-            Base.acquire(s) do
+            @test Base.acquire(s) do
                 history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
                 sleep(rand(0:0.01:0.1))
                 history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
-            end
+                return :resultvalue
+            end == :resultvalue
         end
     end
     @test all(<=(sem_size), history)
