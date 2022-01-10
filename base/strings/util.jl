@@ -572,7 +572,7 @@ The optional keyword arguments are:
  - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
    a `dlm` argument, `true` with a `dlm` argument.
 
-To split into a tuple with the first N substrings and avoid allocating an array,
+To split into a tuple with the first `N` substrings and avoid allocating an array,
 use `NTuple{N}(eachsplit(str, dlm))`.
 
 See also [`rsplit`](@ref), [`eachsplit`](@ref).
