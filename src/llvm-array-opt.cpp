@@ -60,6 +60,7 @@ namespace {
             llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
         }
         bool runOnFunction(Function &F) override {
+            initAll(*F.getParent());
             optimizer.initializeAllocations(F);
             bool propagation_changed = optimizer.propagate1DArrayLengths();
             //Propagating 1D array allocations may allow more cmp insts to be folded
@@ -126,16 +127,31 @@ namespace {
                     //length/dim loads directly to the allocated amount
                     for (auto &field : use_info.memops) {
                         for (auto &memop : field.second.accesses) {
+                            auto replace_lengths = [&](Value *propagated){
+                                // We need to update lengths anytime we replace an instruction during propagation
+                                auto lengths_it = lengths.find(memop.inst);
+                                if (lengths_it != lengths.end()) {
+                                    auto &add_to = lengths[propagated];
+                                    for (auto idx : lengths_it->second) {
+                                        add_to.insert(idx);
+                                    }
+                                    lengths.erase(lengths_it);
+                                }
+                            };
                             if (memop.offset == offsetof(jl_array_t, length)
                                 || memop.offset == offsetof(jl_array_t, nrows)
                                 || memop.offset == offsetof(jl_array_t, maxsize)) {
                                 changed = true;
                                 IRBuilder<> builder(memop.inst);
-                                memop.inst->replaceAllUsesWith(builder.CreateIntCast(allocation.allocation->getArgOperand(1), memop.inst->getType(), false, "arraylen"));
+                                auto propagated = builder.CreateIntCast(allocation.allocation->getArgOperand(1), memop.inst->getType(), false, "arraylen");
+                                replace_lengths(propagated);
+                                memop.inst->replaceAllUsesWith(propagated);
                                 memop.inst->eraseFromParent();
                             } else if (memop.offset == offsetof(jl_array_t, offset)) {
                                 changed = true;
-                                memop.inst->replaceAllUsesWith(ConstantInt::get(memop.inst->getType(), 0));
+                                auto propagated = ConstantInt::get(memop.inst->getType(), 0);
+                                replace_lengths(propagated);
+                                memop.inst->replaceAllUsesWith(propagated);
                                 memop.inst->eraseFromParent();
                             }
                         }
@@ -150,7 +166,7 @@ namespace {
         bool changed = false;
         auto &dtree = pass->getAnalysis<DominatorTreeWrapperPass>().getDomTree();
         std::map<Value *, SmallSet<std::size_t, 2>> checked, next_check;
-        SmallVector<std::pair<CmpInst*, bool>, 4> to_rauw;
+        SmallDenseMap<CmpInst*, bool> to_rauw;
         while (!lengths.empty()) {
             for (auto &dim : lengths) {
                 auto get_dominators = [&](Instruction *inst) {
@@ -183,6 +199,8 @@ namespace {
                             switch (inst->getOpcode()) {
                                 case Instruction::Mul: {
                                     std::size_t idx = inst->getOperand(0) == dim.first; // 1 if equal, 0 if not
+                                    assert(inst->getOperand(!idx) == inst
+                                            && "Expected instruction's operands to include dim!");
                                     auto val = inst->getOperand(idx);
                                     if (inst->hasNoSignedWrap() || adjust_dominators(checked, val) || adjust_dominators(next_check, val) || adjust_dominators(lengths, val)) {
                                         if (!inst->hasNoSignedWrap() && dominators.empty()) {
@@ -231,6 +249,8 @@ namespace {
                                         }
                                     }
                                     std::size_t idx = inst->getOperand(0) == dim.first;
+                                    assert(inst->getOperand(!idx) == inst
+                                            && "Expected instruction's operands to include dim!");
                                     auto val = inst->getOperand(idx);
                                     if (auto ci = dyn_cast<ConstantInt>(val)) {
                                         if (!ci->isNegative()) {
@@ -247,13 +267,13 @@ namespace {
                                                 case CmpInst::Predicate::ICMP_SLT:
                                                 case CmpInst::Predicate::ICMP_EQ:
                                                     changed = true;
-                                                    to_rauw.emplace_back(cmp, false);
+                                                    to_rauw[cmp] = false;
                                                     break;
                                                 case CmpInst::Predicate::ICMP_SGE:
                                                 case CmpInst::Predicate::ICMP_SGT:
                                                 case CmpInst::Predicate::ICMP_NE:
                                                     changed = true;
-                                                    to_rauw.emplace_back(cmp, true);
+                                                    to_rauw[cmp] = true;
                                                     break;
                                                 default:
                                                     break;
