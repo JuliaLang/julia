@@ -341,11 +341,10 @@ end
 function acquire(f, s::Semaphore)
     acquire(s)
     try
-        f()
+        return f()
     finally
         release(s)
     end
-    return
 end
 
 """
