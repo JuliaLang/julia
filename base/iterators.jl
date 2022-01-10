@@ -1396,41 +1396,73 @@ ERROR: ArgumentError: Tuple contains 0 elements, must contain exactly 1 element
 Stacktrace:
 [...]
 
+julia> only((), "silly me")
+ERROR: ArgumentError: Tuple contains 0 elements, must contain exactly 1 element; silly me
+Stacktrace:
+[...]
+
 julia> only(('a', 'b'))
 ERROR: ArgumentError: Tuple contains multiple elements, must contain exactly 1 element
 Stacktrace:
 [...]
 
 julia> only(('a', 'b'), "my error message")
-ERROR: ArgumentError: Tuple contains multiple elements, my error message
+ERROR: ArgumentError: Tuple contains multiple elements, must contain exactly 1 element; my error message
+Stacktrace:
+[...]
+
+julia> only([1,2,3], "my error message")
+ERROR: ArgumentError: Collection has multiple elements, must contain exactly 1 element; my error message
+Stacktrace:
+[...]
+
+julia> only([], "my error message")
+ERROR: ArgumentError: Collection is empty, must contain exactly 1 element; my error message
 Stacktrace:
 [...]
 ```
 """
-@propagate_inbounds function only(x, message="must contain exactly 1 element")
+@propagate_inbounds function only(x, message="")
     i = iterate(x)
     @boundscheck if i === nothing
-        throw(ArgumentError("Collection is empty, $message"))
+        if message == ""
+            throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
+        else
+            throw(ArgumentError("Collection is empty, must contain exactly 1 element; $message"))
+        end            
     end
     (ret, state) = i::NTuple{2,Any}
     @boundscheck if iterate(x, state) !== nothing
-        throw(ArgumentError("Collection has multiple elements, $message"))
+        if message == "" 
+            throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
+        else
+            throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element; $message"))
+        end
     end
     return ret
 end
 
 # Collections of known size
-only(x::Ref) = x[]
-only(x::Number) = x
-only(x::Char) = x
-only(x::Tuple{Any}) = x[1]
-only(x::Tuple) = throw(
-    ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
+only(x::Ref, message="") = x[]
+only(x::Number, message="") = x
+only(x::Char, message="") = x
+only(x::Tuple{Any}, message="") = x[1]
+only(x::Tuple, message="") = throw(
+    if message == ""
+        ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
+    else
+        ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element; $message")
+    end
 )
-only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
-only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
-only(x::NamedTuple) = throw(
-    ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
+
+only(a::AbstractArray{<:Any, 0}, message="") = @inbounds return a[]
+only(x::NamedTuple{<:Any, <:Tuple{Any}}, message="") = first(x)
+only(x::NamedTuple, messsage="") = throw(
+    if message == ""
+        ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
+    else
+        ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element; $message")
+    end
 )
 
 end
