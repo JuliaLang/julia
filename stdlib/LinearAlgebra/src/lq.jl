@@ -181,7 +181,7 @@ function size(Q::LQPackedQ)
 end
 function size(Q::LQPackedQ, dim::Integer)
     if dim < 1
-        throw(BoundsError())
+        throw_boundserror()
     elseif dim <= 2 # && 1 <= dim
         return size(Q.factors, 2)
     else # 2 < dim

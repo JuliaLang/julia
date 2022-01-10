@@ -326,7 +326,7 @@ function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, 
     n == 0 && return dest
     n > 0 || _throw_argerror()
     if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
-        throw(BoundsError())
+        throw_boundserror()
     end
     unsafe_copyto!(dest, doffs, src, soffs, n)
     return dest
@@ -1568,7 +1568,7 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
             if i < q
                 throw(ArgumentError("indices must be unique and sorted"))
             else
-                throw(BoundsError())
+                throw_boundserror()
             end
         end
         while q < i
@@ -1589,7 +1589,7 @@ end
 # Simpler and more efficient version for logical indexing
 function deleteat!(a::Vector, inds::AbstractVector{Bool})
     n = length(a)
-    length(inds) == n || throw(BoundsError(a, inds))
+    length(inds) == n || throw_boundserror(a, inds)
     p = 1
     for (q, i) in enumerate(inds)
         _copy_item!(a, p, q)
@@ -1864,9 +1864,9 @@ function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
     liv = LinearIndices(v)
     if n <= s  # empty case; ok
     elseif !(first(liv) ≤ s ≤ last(liv))
-        throw(BoundsError(v, s))
+        throw_boundserror(v, s)
     elseif !(first(liv) ≤ n ≤ last(liv))
-        throw(BoundsError(v, n))
+        throw_boundserror(v, n)
     end
     r = n
     @inbounds for i in s:div(s+n-1, 2)

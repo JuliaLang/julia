@@ -40,7 +40,36 @@ function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
-        summary(io, ex.a)
+        a = ex.a
+        if isa(a, Core.Summarized)
+            typ = a.type
+            ax = a.axes
+            if typ <: Tuple
+                # We could give more info here, since we have a.axes, but this is the current behavior.
+                print(io, typ)
+            elseif typ <: AbstractString
+                ax = ax[1]
+                print(io, ax, "-codeunit ", typ)
+            elseif isa(ax, Tuple)
+                if length(ax) == 1
+                    ax = ax[1]
+                    isa(ax, OneTo) && (ax = ax.stop)
+                    isa(ax, Int) && print(io, ax, "-element ", typ)
+                else
+                    for i = 1:length(ax)
+                        if i == length(ax)
+                            print(io, ax[i].stop, " ", typ)
+                        else
+                            print(io, ax[i].stop, "x")
+                        end
+                    end
+                end
+            else
+                print(io, typ)
+            end
+        else
+            summary(io, a)
+        end
         if isdefined(ex, :i)
             print(io, " at index [")
             if ex.i isa AbstractRange

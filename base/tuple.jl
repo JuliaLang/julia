@@ -26,10 +26,11 @@ firstindex(@nospecialize t::Tuple) = 1
 lastindex(@nospecialize t::Tuple) = length(t)
 size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
+throw_boundserror(t::Tuple, i) = (@noinline; throw(BoundsError(axes(t), typeof(t), i)))
 @eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = (eltype(t)[t[ri] for ri in r]...,)
-getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
+getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw_boundserror(t, b)
 getindex(t::Tuple, c::Colon) = t
 
 get(t::Tuple, i::Integer, default) = i in 1:length(t) ? getindex(t, i) : default
@@ -50,7 +51,7 @@ true
 ```
 """
 function setindex(x::Tuple, v, i::Integer)
-    @boundscheck 1 <= i <= length(x) || throw(BoundsError(x, i))
+    @boundscheck 1 <= i <= length(x) || throw_boundserror(x, i)
     @inline
     _setindex(v, i, x...)
 end
@@ -89,12 +90,12 @@ indexed_iterate(t::Tuple, i::Int, state=1) = (@inline; (getfield(t, i), i+1))
 indexed_iterate(a::Array, i::Int, state=1) = (@inline; (a[i], i+1))
 function indexed_iterate(I, i)
     x = iterate(I)
-    x === nothing && throw(BoundsError(I, i))
+    x === nothing && throw_boundserror(I, i)
     x
 end
 function indexed_iterate(I, i, state)
     x = iterate(I, state)
-    x === nothing && throw(BoundsError(I, i))
+    x === nothing && throw_boundserror(I, i)
     x
 end
 

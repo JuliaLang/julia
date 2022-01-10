@@ -78,29 +78,29 @@ false
 isfinite(x::Number) = iszero(x - x)
 
 size(x::Number) = ()
-size(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : 1
+size(x::Number, d::Integer) = d < 1 ? throw_boundserror() : 1
 axes(x::Number) = ()
-axes(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : OneTo(1)
+axes(x::Number, d::Integer) = d < 1 ? throw_boundserror() : OneTo(1)
 eltype(::Type{T}) where {T<:Number} = T
 ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
 firstindex(x::Number) = 1
-firstindex(x::Number, d::Int) = d < 1 ? throw(BoundsError()) : 1
+firstindex(x::Number, d::Int) = d < 1 ? throw_boundserror() : 1
 lastindex(x::Number) = 1
-lastindex(x::Number, d::Int) = d < 1 ? throw(BoundsError()) : 1
+lastindex(x::Number, d::Int) = d < 1 ? throw_boundserror() : 1
 IteratorSize(::Type{<:Number}) = HasShape{0}()
 keys(::Number) = OneTo(1)
 
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
     @inline
-    @boundscheck i == 1 || throw(BoundsError())
+    @boundscheck i == 1 || throw_boundserror()
     x
 end
 function getindex(x::Number, I::Integer...)
     @inline
-    @boundscheck all(isone, I) || throw(BoundsError())
+    @boundscheck all(isone, I) || throw_boundserror()
     x
 end
 get(x::Number, i::Integer, default) = isone(i) ? x : default

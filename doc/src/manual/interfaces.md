@@ -174,7 +174,7 @@ simply needs to define [`getindex`](@ref):
 
 ```jldoctest squaretype
 julia> function Base.getindex(S::Squares, i::Int)
-           1 <= i <= S.count || throw(BoundsError(S, i))
+           1 <= i <= S.count || throw_boundserror(S, i)
            return i*i
        end
 

@@ -164,7 +164,7 @@ end
 
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
 fieldname(t::Type{<:Tuple}, i::Integer) =
-    i < 1 || i > fieldcount(t) ? throw(BoundsError(t, i)) : Int(i)
+    i < 1 || i > fieldcount(t) ? throw_boundserror(t, i) : Int(i)
 
 """
     fieldnames(x::DataType)
@@ -477,7 +477,7 @@ function getindex(dtfd::DataTypeFieldDesc, i::Int)
     layout = unsafe_load(layout_ptr)
     fielddesc_type = (layout.flags >> 1) & 3
     nfields = layout.nfields
-    @boundscheck ((1 <= i <= nfields) || throw(BoundsError(dtfd, i)))
+    @boundscheck ((1 <= i <= nfields) || throw_boundserror(dtfd, i))
     if fielddesc_type == 0
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt8}}(fd_ptr), i))
     elseif fielddesc_type == 1

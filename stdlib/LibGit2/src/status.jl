@@ -25,7 +25,7 @@ function Base.length(status::GitStatus)
 end
 
 function Base.getindex(status::GitStatus, i::Integer)
-    1 <= i <= length(status) || throw(BoundsError())
+    1 <= i <= length(status) || throw_boundserror()
     ensure_initialized()
     GC.@preserve status begin
         entry_ptr = ccall((:git_status_byindex, :libgit2),

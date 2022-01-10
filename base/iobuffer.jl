@@ -196,7 +196,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     require_one_based_indexing(a)
     from.readable || _throw_not_readable()
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
-        throw(BoundsError())
+        throw_boundserror()
     end
     if isbitstype(T) && isa(a,Array)
         nb = UInt(nel * sizeof(T))

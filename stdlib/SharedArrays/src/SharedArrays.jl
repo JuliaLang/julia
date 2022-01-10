@@ -589,7 +589,7 @@ end
 copyto!(S::SharedArray, A::Array) = (copyto!(S.s, A); S)
 
 function copyto!(S::SharedArray, R::SharedArray)
-    length(S) == length(R) || throw(BoundsError())
+    length(S) == length(R) || throw_boundserror()
     ps = intersect(procs(S), procs(R))
     isempty(ps) && throw(ArgumentError("source and destination arrays don't share any process"))
     l = length(S)

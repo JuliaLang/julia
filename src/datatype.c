@@ -1408,7 +1408,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     if (i >= jl_datatype_nfields(st))
-        jl_bounds_error_int(v, i + 1);
+        jl_bounds_error_summarized(jl_nfields(v), (jl_value_t *)st, i + 1);
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
         return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs));

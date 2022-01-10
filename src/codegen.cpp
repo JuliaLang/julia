@@ -617,6 +617,12 @@ static const auto jlboundserror_func = new JuliaFunction{
             {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), getSizeTy(C)}, false); },
     get_attrs_noreturn,
 };
+static const auto jlboundserrorsum_func = new JuliaFunction{
+    XSTR(jl_bounds_error_summarized),
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {getSizeTy(C), PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), getSizeTy(C)}, false); },
+    get_attrs_noreturn,
+};
 static const auto jlvboundserror_func = new JuliaFunction{
     XSTR(jl_bounds_error_tuple_int),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
@@ -8066,6 +8072,7 @@ static void init_jit_functions(void)
     add_named_global(jlundefvarerror_func, &jl_undefined_var_error);
     add_named_global(jlboundserrorv_func, &jl_bounds_error_ints);
     add_named_global(jlboundserror_func, &jl_bounds_error_int);
+    add_named_global(jlboundserrorsum_func, &jl_bounds_error_summarized);
     add_named_global(jlvboundserror_func, &jl_bounds_error_tuple_int);
     add_named_global(jluboundserror_func, &jl_bounds_error_unboxed_int);
     add_named_global(jlnew_func, &jl_new_structv);

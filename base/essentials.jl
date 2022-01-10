@@ -607,7 +607,7 @@ end
 
 function getindex(v::SimpleVector, i::Int)
     @boundscheck if !(1 <= i <= length(v))
-        throw(BoundsError(v,i))
+        throw_boundserror(v,i)
     end
     return ccall(:jl_svec_ref, Any, (Any, Int), v, i - 1)
 end

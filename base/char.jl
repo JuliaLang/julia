@@ -192,7 +192,7 @@ typemax(::Type{Char}) = bitcast(Char, typemax(UInt32))
 typemin(::Type{Char}) = bitcast(Char, typemin(UInt32))
 
 size(c::AbstractChar) = ()
-size(c::AbstractChar, d::Integer) = d < 1 ? throw(BoundsError()) : 1
+size(c::AbstractChar, d::Integer) = d < 1 ? throw_boundserror() : 1
 ndims(c::AbstractChar) = 0
 ndims(::Type{<:AbstractChar}) = 0
 length(c::AbstractChar) = 1
@@ -200,8 +200,8 @@ IteratorSize(::Type{Char}) = HasShape{0}()
 firstindex(c::AbstractChar) = 1
 lastindex(c::AbstractChar) = 1
 getindex(c::AbstractChar) = c
-getindex(c::AbstractChar, i::Integer) = i == 1 ? c : throw(BoundsError())
-getindex(c::AbstractChar, I::Integer...) = all(x -> x == 1, I) ? c : throw(BoundsError())
+getindex(c::AbstractChar, i::Integer) = i == 1 ? c : throw_boundserror()
+getindex(c::AbstractChar, I::Integer...) = all(x -> x == 1, I) ? c : throw_boundserror()
 first(c::AbstractChar) = c
 last(c::AbstractChar) = c
 eltype(::Type{T}) where {T<:AbstractChar} = T

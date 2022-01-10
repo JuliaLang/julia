@@ -1667,6 +1667,9 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v JL_MAYBE_UNROOTED,
                                                 jl_value_t **idxs, size_t nidxs);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v JL_MAYBE_UNROOTED,
                                                   size_t i);
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_summarized(size_t nfields JL_MAYBE_UNROOTED,
+                                                         jl_value_t *ty JL_MAYBE_UNROOTED,
+                                                         size_t i);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_tuple_int(jl_value_t **v,
                                                         size_t nv, size_t i);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *v, jl_value_t *vt, size_t i);

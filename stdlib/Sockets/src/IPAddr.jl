@@ -112,7 +112,7 @@ print_ipv6_field(io,field::UInt16) = print(io,string(field, base = 16))
 print_ipv6_field(io,ip,i) = print_ipv6_field(io,ipv6_field(ip,i))
 function ipv6_field(ip::IPv6,i)
     if i < 0 || i > 7
-        throw(BoundsError())
+        throw_boundserror()
     end
     UInt16((ip.host&(UInt128(0xFFFF)<<(i*16))) >> (i*16))
 end

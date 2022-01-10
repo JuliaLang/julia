@@ -19,10 +19,10 @@ function dot(x::Vector{T}, rx::AbstractRange{TI}, y::Vector{T}, ry::AbstractRang
         throw(DimensionMismatch(lazy"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
     if minimum(rx) < 1 || maximum(rx) > length(x)
-        throw(BoundsError(x, rx))
+        throw_boundserror(x, rx)
     end
     if minimum(ry) < 1 || maximum(ry) > length(y)
-        throw(BoundsError(y, ry))
+        throw_boundserror(y, ry)
     end
     GC.@preserve x y BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
@@ -32,10 +32,10 @@ function dot(x::Vector{T}, rx::AbstractRange{TI}, y::Vector{T}, ry::AbstractRang
         throw(DimensionMismatch(lazy"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
     if minimum(rx) < 1 || maximum(rx) > length(x)
-        throw(BoundsError(x, rx))
+        throw_boundserror(x, rx)
     end
     if minimum(ry) < 1 || maximum(ry) > length(y)
-        throw(BoundsError(y, ry))
+        throw_boundserror(y, ry)
     end
     GC.@preserve x y BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end

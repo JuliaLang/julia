@@ -193,7 +193,7 @@ end
 function _parse_string(text::AbstractString, filename::AbstractString,
                        lineno::Integer, index::Integer, options)
     if index < 1 || index > ncodeunits(text) + 1
-        throw(BoundsError(text, index))
+        throw_boundserror(text, index)
     end
     ex, offset::Int = Core._parse(text, filename, lineno, index-1, options)
     ex, offset+1

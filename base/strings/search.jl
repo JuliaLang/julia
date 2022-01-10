@@ -6,7 +6,7 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
                   s::String, i::Integer)
     if i < 1 || i > sizeof(s)
         i == sizeof(s) + 1 && return nothing
-        throw(BoundsError(s, i))
+        throw_boundserror(s, i)
     end
     @inbounds isvalid(s, i) || string_index_err(s, i)
     c = pred.x
@@ -30,11 +30,11 @@ findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(
 
 function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
     if i < 1
-        throw(BoundsError(a, i))
+        throw_boundserror(a, i)
     end
     n = sizeof(a)
     if i > n
-        return i == n+1 ? 0 : throw(BoundsError(a, i))
+        return i == n+1 ? 0 : throw_boundserror(a, i)
     end
     p = pointer(a)
     q = GC.@preserve a ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
@@ -73,11 +73,11 @@ findprev(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_rsearch
 
 function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
     if i < 1
-        return i == 0 ? 0 : throw(BoundsError(a, i))
+        return i == 0 ? 0 : throw_boundserror(a, i)
     end
     n = sizeof(a)
     if i > n
-        return i == n+1 ? 0 : throw(BoundsError(a, i))
+        return i == n+1 ? 0 : throw_boundserror(a, i)
     end
     p = pointer(a)
     q = GC.@preserve a ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
@@ -152,7 +152,7 @@ findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
 function findnext(testf::Function, s::AbstractString, i::Integer)
     i = Int(i)
     z = ncodeunits(s) + 1
-    1 ≤ i ≤ z || throw(BoundsError(s, i))
+    1 ≤ i ≤ z || throw_boundserror(s, i)
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
     e = lastindex(s)
     while i <= e
@@ -171,7 +171,7 @@ function _searchindex(s::Union{AbstractString,ByteArray},
     x = Iterators.peel(t)
     if isnothing(x)
         return 1 <= i <= nextind(s,lastindex(s))::Int ? i :
-               throw(BoundsError(s, i))
+               throw_boundserror(s, i)
     end
     t1, trest = x
     while true
@@ -207,7 +207,7 @@ function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
     n = length(t)
     m = length(s)
     i = Int(_i) - sentinel
-    (i < 1 || i > m+1) && throw(BoundsError(s, _i))
+    (i < 1 || i > m+1) && throw_boundserror(s, _i)
 
     if n == 0
         return 1 <= i <= m+1 ? max(1, i) : sentinel
@@ -410,7 +410,7 @@ findlast(ch::AbstractChar, string::AbstractString) = findlast(==(ch), string)
 function findprev(testf::Function, s::AbstractString, i::Integer)
     i = Int(i)
     z = ncodeunits(s) + 1
-    0 ≤ i ≤ z || throw(BoundsError(s, i))
+    0 ≤ i ≤ z || throw_boundserror(s, i)
     i == z && return nothing
     @inbounds i == 0 || isvalid(s, i) || string_index_err(s, i)
     while i >= 1
@@ -425,7 +425,7 @@ function _rsearchindex(s::AbstractString,
                        i::Integer)
     if isempty(t)
         return 1 <= i <= nextind(s, lastindex(s))::Int ? i :
-               throw(BoundsError(s, i))
+               throw_boundserror(s, i)
     end
     t1, trest = Iterators.peel(Iterators.reverse(t))::NTuple{2,Any}
     while true
@@ -465,7 +465,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
     n = length(t)
     m = length(s)
     k = Int(_k) - sentinel
-    k < 0 && throw(BoundsError(s, _k))
+    k < 0 && throw_boundserror(s, _k)
 
     if n == 0
         return 0 <= k <= m ? max(k, 1) : sentinel

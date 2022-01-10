@@ -700,8 +700,6 @@ end
 checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@inline; all(x->length(x)==1, IA))
 checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
 
-throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
-
 # check along a single dimension
 """
     checkindex(Bool, inds::AbstractUnitRange, index)
@@ -956,7 +954,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
     if (dstart ∉ inds || dmax ∉ inds) | (sstart < 1)
         sstart < 1 && throw(ArgumentError(LazyString("source start offset (",
             sstart,") is < 1")))
-        throw(BoundsError(dest, dstart:dmax))
+        throw_boundserror(dest, dstart:dmax)
     end
     y = iterate(src)
     for j = 1:(sstart-1)
@@ -974,7 +972,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
         y = iterate(src, st)
         i += 1
     end
-    i <= dmax && throw(BoundsError(dest, i))
+    i <= dmax && throw_boundserror(dest, i)
     return dest
 end
 
@@ -1027,7 +1025,7 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     idf, isf = first(destinds), first(srcinds)
     Δi = idf - isf
     (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
-        throw(BoundsError(dest, srcinds))
+        throw_boundserror(dest, srcinds)
     if deststyle isa IndexLinear
         if srcstyle isa IndexLinear
             # Single-index implementation
@@ -1067,7 +1065,7 @@ end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
     srcinds = LinearIndices(src)
-    checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
+    checkbounds(Bool, srcinds, sstart) || throw_boundserror(src, sstart)
     copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
 
@@ -1078,8 +1076,8 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be nonnegative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
-    (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
+    (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw_boundserror(dest, dstart:dstart+n-1)
+    (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw_boundserror(src,  sstart:sstart+n-1)
     @inbounds for i = 0:(n-1)
         dest[dstart+i] = src[sstart+i]
     end
@@ -1306,7 +1304,7 @@ _to_subscript_indices(A, J::Tuple, Jrem::Tuple) = J # already bounds-checked, sa
 _to_subscript_indices(A::AbstractArray{T,N}, I::Vararg{Int,N}) where {T,N} = I
 _remaining_size(::Tuple{Any}, t::Tuple) = t
 _remaining_size(h::Tuple, t::Tuple) = (@inline; _remaining_size(tail(h), tail(t)))
-_unsafe_ind2sub(::Tuple{}, i) = () # _ind2sub may throw(BoundsError()) in this case
+_unsafe_ind2sub(::Tuple{}, i) = () # _ind2sub may throw_boundserror() in this case
 _unsafe_ind2sub(sz, i) = (@inline; _ind2sub(sz, i))
 
 ## Setindex! is defined similarly. We first dispatch to an internal _setindex!
@@ -2667,7 +2665,7 @@ nextL(L, r::Slice) = L*length(r.indices)
 offsetin(i, l::Integer) = i-1
 offsetin(i, r::AbstractUnitRange) = i-first(r)
 
-_ind2sub(::Tuple{}, ind::Integer) = (@inline; ind == 1 ? () : throw(BoundsError()))
+_ind2sub(::Tuple{}, ind::Integer) = (@inline; ind == 1 ? () : throw_boundserror())
 _ind2sub(dims::DimsInteger, ind::Integer) = (@inline; _ind2sub_recurse(dims, ind-1))
 _ind2sub(inds::Indices, ind::Integer)     = (@inline; _ind2sub_recurse(inds, ind-1))
 _ind2sub(inds::Indices{1}, ind::Integer) =
@@ -3163,7 +3161,7 @@ function _keepat!(a::AbstractVector, inds)
 end
 
 function _keepat!(a::AbstractVector, m::AbstractVector{Bool})
-    length(m) == length(a) || throw(BoundsError(a, m))
+    length(m) == length(a) || throw_boundserror(a, m)
     j = firstindex(a)
     for i in eachindex(a, m)
         @inbounds begin

@@ -61,6 +61,7 @@
     XX(jl_bounds_error) \
     XX(jl_bounds_error_int) \
     XX(jl_bounds_error_ints) \
+    XX(jl_bounds_error_summarized) \
     XX(jl_bounds_error_tuple_int) \
     XX(jl_bounds_error_unboxed_int) \
     XX(jl_bounds_error_v) \

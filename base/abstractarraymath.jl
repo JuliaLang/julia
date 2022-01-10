@@ -253,7 +253,7 @@ julia> selectdim(A, 2, 3:4)
 @noinline function _selectdim(A, d, i, idxs)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $d"))
     nd = ndims(A)
-    d > nd && (i == 1 || throw(BoundsError(A, (ntuple(Returns(Colon()),d-1)..., i))))
+    d > nd && (i == 1 || throw_boundserror(A, (ntuple(Returns(Colon()),d-1)..., i)))
     return view(A, idxs...)
 end
 

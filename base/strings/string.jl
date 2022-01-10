@@ -146,7 +146,7 @@ typemin(::String) = typemin(String)
     i == 0 && return 0
     n = ncodeunits(s)
     i == n + 1 && return i
-    @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
+    @boundscheck between(i, 1, n) || throw_boundserror(s, i)
     @inbounds b = codeunit(s, i)
     (b & 0xc0 == 0x80) & (i-1 > 0) || return i
     @inbounds b = codeunit(s, i-1)
@@ -166,7 +166,7 @@ end
 @inline function _nextind_str(s, i::Int)
     i == 0 && return 1
     n = ncodeunits(s)
-    @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
+    @boundscheck between(i, 1, n) || throw_boundserror(s, i)
     @inbounds l = codeunit(s, i)
     (l < 0x80) | (0xf8 ≤ l) && return i+1
     if l < 0xc0
@@ -286,8 +286,8 @@ length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 
 @inline function length(s::String, i::Int, j::Int)
     @boundscheck begin
-        0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
+        0 < i ≤ ncodeunits(s)+1 || throw_boundserror(s, i)
+        0 ≤ j < ncodeunits(s)+1 || throw_boundserror(s, j)
     end
     j < i && return 0
     @inbounds i, k = thisind(s, i), i

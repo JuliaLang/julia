@@ -97,8 +97,8 @@ isperm(P::Any32) = _isperm(P)
 function swapcols!(a::AbstractMatrix, i, j)
     i == j && return
     cols = axes(a,2)
-    @boundscheck i in cols || throw(BoundsError(a, (:,i)))
-    @boundscheck j in cols || throw(BoundsError(a, (:,j)))
+    @boundscheck i in cols || throw_boundserror(a, (:,i))
+    @boundscheck j in cols || throw_boundserror(a, (:,j))
     for k in axes(a,1)
         @inbounds a[k,i],a[k,j] = a[k,j],a[k,i]
     end
@@ -108,8 +108,8 @@ end
 function swaprows!(a::AbstractMatrix, i, j)
     i == j && return
     rows = axes(a,1)
-    @boundscheck i in rows || throw(BoundsError(a, (:,i)))
-    @boundscheck j in rows || throw(BoundsError(a, (:,j)))
+    @boundscheck i in rows || throw_boundserror(a, (:,i))
+    @boundscheck j in rows || throw_boundserror(a, (:,j))
     for k in axes(a,2)
         @inbounds a[i,k],a[j,k] = a[j,k],a[i,k]
     end

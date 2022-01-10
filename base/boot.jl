@@ -269,14 +269,30 @@ end
 
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
-
+import .Intrinsics: ult_int
+struct Summarized
+    axes #=::Union{Base.OneTo, Integer}=#
+    type::Type
+    function Summarized(a)
+        isa(a, Array) || return a
+        if isdefined(Main, :Base)
+            return new(Main.Base.axes(a), typeof(a))
+        else
+            return new(nothing, typeof(a))
+        end
+    end
+    Summarized(ax, typ) = new(ax, typ)
+end
 struct BoundsError <: Exception
-    a::Any
+    a
     i::Any
     BoundsError() = new()
-    BoundsError(@nospecialize(a)) = (@noinline; new(a))
-    BoundsError(@nospecialize(a), i) = (@noinline; new(a,i))
+    BoundsError(@nospecialize(a)) = (@noinline; new(Summarized(a)))
+    BoundsError(@nospecialize(a), i) = (@noinline; new(Summarized(a), i))
+    BoundsError(ax, typ::Type) = (@noinline; new(Summarized((ax,), typ)))
+    BoundsError(ax, typ::Type, i) = (@noinline; new(Summarized((ax,), typ), i))
 end
+
 struct DivideError         <: Exception end
 struct OutOfMemoryError    <: Exception end
 struct ReadOnlyMemoryError <: Exception end

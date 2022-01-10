@@ -250,7 +250,7 @@ struct ConstantRange{T} <: AbstractRange{T}
 end
 
 Base.length(r::ConstantRange) = r.len
-Base.getindex(r::ConstantRange, i::Int) = (1 <= i <= r.len || throw(BoundsError(r,i)); r.val)
+Base.getindex(r::ConstantRange, i::Int) = (1 <= i <= r.len || throw_boundserror(r,i); r.val)
 Base.step(r::ConstantRange) = 0
 
 @testset "searchsorted method with ranges which check for zero step range" begin

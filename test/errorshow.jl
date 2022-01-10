@@ -281,7 +281,7 @@ struct TypeWithIntParam{T<:Integer, Vector{T}<:A<:AbstractArray{T}} end
 struct Bounded  # not an AbstractArray
     bound::Int
 end
-Base.getindex(b::Bounded, i) = checkindex(Bool, 1:b.bound, i) || throw(BoundsError(b, i))
+Base.getindex(b::Bounded, i) = checkindex(Bool, 1:b.bound, i) || throw_boundserror(b, i)
 Base.summary(io::IO, b::Bounded) = print(io, "$(b.bound)-size Bounded")
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError

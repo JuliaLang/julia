@@ -409,7 +409,7 @@ findnext(re::Regex, str::Union{String,SubString}, idx::Integer) = _findnext_re(r
 # TODO: return only start index and update deprecation
 function _findnext_re(re::Regex, str::Union{String,SubString}, idx::Integer, match_data::Ptr{Cvoid})
     if idx > nextind(str,lastindex(str))
-        throw(BoundsError())
+        throw_boundserror()
     end
     opts = re.match_options
     compile(re)

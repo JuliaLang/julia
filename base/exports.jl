@@ -446,6 +446,7 @@ export
     sum!,
     sum,
     to_indices,
+    throw_boundserror,
     vcat,
     vec,
     view,

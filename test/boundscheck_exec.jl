@@ -126,7 +126,7 @@ else
 end
 
 # elide a throw
-cb(x) = x > 0 || throw(BoundsError())
+cb(x) = x > 0 || throw_boundserror()
 
 @inline function B1()
     y = [1, 2, 3]

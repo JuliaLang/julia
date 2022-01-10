@@ -1338,7 +1338,7 @@ The same thing can be done using recursion:
 julia> sub2ind_rec(dims::Tuple{}) = 1;
 
 julia> sub2ind_rec(dims::Tuple{}, i1::Integer, I::Integer...) =
-           i1 == 1 ? sub2ind_rec(dims, I...) : throw(BoundsError());
+           i1 == 1 ? sub2ind_rec(dims, I...) : throw_boundserror();
 
 julia> sub2ind_rec(dims::Tuple{Integer, Vararg{Integer}}, i1::Integer) = i1;
 

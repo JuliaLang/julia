@@ -1419,9 +1419,9 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
     if length(rx) != length(ry)
         throw(DimensionMismatch("rx has length $(length(rx)), but ry has length $(length(ry))"))
     elseif !checkindex(Bool, eachindex(IndexLinear(), x), rx)
-        throw(BoundsError(x, rx))
+        throw_boundserror(x, rx)
     elseif !checkindex(Bool, eachindex(IndexLinear(), y), ry)
-        throw(BoundsError(y, ry))
+        throw_boundserror(y, ry)
     end
     for (IY, IX) in zip(eachindex(ry), eachindex(rx))
         @inbounds y[ry[IY]] += x[rx[IX]]*α

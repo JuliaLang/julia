@@ -57,6 +57,9 @@ modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
 replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
     (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
+throw_boundserror(a, i) = (@noinline; throw(BoundsError(a, i)))
+throw_boundserror() = (@noinline; throw(BoundsError()))
+
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 include("coreio.jl")

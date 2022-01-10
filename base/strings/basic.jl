@@ -205,6 +205,8 @@ end
 
 ## bounds checking ##
 
+throw_boundserror(s::AbstractString, i) = (@noinline; throw(BoundsError(length(codeunits(s)), typeof(s), i)))
+
 checkbounds(::Type{Bool}, s::AbstractString, i::Integer) =
     1 ≤ i ≤ ncodeunits(s)::Int
 checkbounds(::Type{Bool}, s::AbstractString, r::AbstractRange{<:Integer}) =
@@ -214,7 +216,7 @@ checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Real}) =
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Integer}) =
     all(i -> checkbounds(Bool, s, i), I)
 checkbounds(s::AbstractString, I::Union{Integer,AbstractArray}) =
-    checkbounds(Bool, s, I) ? nothing : throw(BoundsError(s, I))
+    checkbounds(Bool, s, I) ? nothing : throw_boundserror(s, I)
 
 ## construction, conversion, promotion ##
 
@@ -388,8 +390,8 @@ length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s)::Int)
 
 function length(s::AbstractString, i::Int, j::Int)
     @boundscheck begin
-        0 < i ≤ ncodeunits(s)::Int+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)::Int+1 || throw(BoundsError(s, j))
+        0 < i ≤ ncodeunits(s)::Int+1 || throw_boundserror(s, i)
+        0 ≤ j < ncodeunits(s)::Int+1 || throw_boundserror(s, j)
     end
     n = 0
     for k = i:j
@@ -438,7 +440,7 @@ thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
 function thisind(s::AbstractString, i::Int)
     z = ncodeunits(s)::Int + 1
     i == z && return i
-    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
+    @boundscheck 0 ≤ i ≤ z || throw_boundserror(s, i)
     @inbounds while 1 < i && !(isvalid(s, i)::Bool)
         i -= 1
     end
@@ -496,7 +498,7 @@ prevind(s::AbstractString, i::Int)                 = prevind(s, i, 1)
 function prevind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
     z = ncodeunits(s) + 1
-    @boundscheck 0 < i ≤ z || throw(BoundsError(s, i))
+    @boundscheck 0 < i ≤ z || throw_boundserror(s, i)
     n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
     while n > 0 && 1 < i
         @inbounds n -= isvalid(s, i -= 1)
@@ -555,7 +557,7 @@ nextind(s::AbstractString, i::Int)                 = nextind(s, i, 1)
 function nextind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
     z = ncodeunits(s)
-    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
+    @boundscheck 0 ≤ i ≤ z || throw_boundserror(s, i)
     n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
     while n > 0 && i < z
         @inbounds n -= isvalid(s, i += 1)

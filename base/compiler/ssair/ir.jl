@@ -413,38 +413,38 @@ function setindex!(x::UseRef, @nospecialize(v))
         rhs = stmt.args[2]
         if isa(rhs, Expr)
             if is_relevant_expr(rhs)
-                x.op > length(rhs.args) && throw(BoundsError())
+                x.op > length(rhs.args) && throw_boundserror()
                 rhs.args[x.op] = v
                 return v
             end
         end
-        x.op == 1 || throw(BoundsError())
+        x.op == 1 || throw_boundserror()
         stmt.args[2] = v
     elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
-        x.op > length(stmt.args) && throw(BoundsError())
+        x.op > length(stmt.args) && throw_boundserror()
         stmt.args[x.op] = v
     elseif isa(stmt, GotoIfNot)
-        x.op == 1 || throw(BoundsError())
+        x.op == 1 || throw_boundserror()
         x.stmt = GotoIfNot(v, stmt.dest)
     elseif isa(stmt, ReturnNode)
-        x.op == 1 || throw(BoundsError())
+        x.op == 1 || throw_boundserror()
         x.stmt = typeof(stmt)(v)
     elseif isa(stmt, UpsilonNode)
-        x.op == 1 || throw(BoundsError())
+        x.op == 1 || throw_boundserror()
         x.stmt = typeof(stmt)(v)
     elseif isa(stmt, PiNode)
-        x.op == 1 || throw(BoundsError())
+        x.op == 1 || throw_boundserror()
         x.stmt = typeof(stmt)(v, stmt.typ)
     elseif isa(stmt, PhiNode)
-        x.op > length(stmt.values) && throw(BoundsError())
-        isassigned(stmt.values, x.op) || throw(BoundsError())
+        x.op > length(stmt.values) && throw_boundserror()
+        isassigned(stmt.values, x.op) || throw_boundserror()
         stmt.values[x.op] = v
     elseif isa(stmt, PhiCNode)
-        x.op > length(stmt.values) && throw(BoundsError())
-        isassigned(stmt.values, x.op) || throw(BoundsError())
+        x.op > length(stmt.values) && throw_boundserror()
+        isassigned(stmt.values, x.op) || throw_boundserror()
         stmt.values[x.op] = v
     else
-        throw(BoundsError())
+        throw_boundserror()
     end
     return x
 end
