@@ -648,6 +648,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createLowerExcHandlersPass());
             PM->add(createGCInvariantVerifierPass(false));
             PM->add(createRemoveNIPass());
+            PM->add(createUnsafeVerifierPass());
             PM->add(createLateLowerGCFramePass());
             PM->add(createFinalLowerGCPass());
             PM->add(createLowerPTLSPass(dump_native));
@@ -805,6 +806,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         // Needed **before** LateLowerGCFrame on LLVM < 12
         // due to bug in `CreateAlignmentAssumption`.
         PM->add(createRemoveNIPass());
+        PM->add(createUnsafeVerifierPass());
         PM->add(createLateLowerGCFramePass());
         PM->add(createFinalLowerGCPass());
         // We need these two passes and the instcombine below

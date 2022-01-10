@@ -215,6 +215,7 @@ Pass *createFinalLowerGCPass();
 Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);
+Pass *createUnsafeVerifierPass();
 Pass *createPropagateJuliaAddrspaces();
 Pass *createRemoveJuliaAddrspacesPass();
 Pass *createRemoveNIPass();

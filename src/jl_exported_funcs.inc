@@ -565,5 +565,6 @@
     YY(LLVMExtraAddLowerPTLSPass) \
     YY(LLVMExtraAddRemoveNIPass) \
     YY(LLVMExtraAddGCInvariantVerifierPass) \
+    YY(LLVMExtraAddUnsafeVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
     YY(LLVMExtraAddCPUFeaturesPass) \
