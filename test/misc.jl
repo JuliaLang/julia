@@ -1023,6 +1023,10 @@ end
     GC.gc(true); GC.gc(false)
 
     GC.safepoint()
+
+    GC.enable_logging(true)
+    GC.gc()
+    GC.enable_logging(false)
 end
 
 @testset "fieldtypes Module" begin

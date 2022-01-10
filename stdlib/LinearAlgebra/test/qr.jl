@@ -432,21 +432,22 @@ end
     @test eltype(qrnonblas.factors) == eltype(qrnonblas.τ) == ComplexF16
 end
 
+# We use approximate equals to get MKL.jl tests to pass.
 @testset "optimized getindex for an AbstractQ" begin
     for T in [Float64, ComplexF64]
         Q = qr(rand(T, 4, 4))
         Q2 = Q.Q
         M = Matrix(Q2)
         for j in axes(M, 2)
-            @test Q2[:, j] == M[:, j]
+            @test Q2[:, j] ≈ M[:, j]
             for i in axes(M, 1)
-                @test Q2[i, :] == M[i, :]
-                @test Q2[i, j] == M[i, j]
+                @test Q2[i, :] ≈ M[i, :]
+                @test Q2[i, j] ≈ M[i, j]
             end
         end
-        @test Q2[:] == M[:]
-        @test Q2[:, :] == M[:, :]
-        @test Q2[:, :, :] == M[:, :, :]
+        @test Q2[:] ≈ M[:]
+        @test Q2[:, :] ≈ M[:, :]
+        @test Q2[:, :, :] ≈ M[:, :, :]
     end
 end
 

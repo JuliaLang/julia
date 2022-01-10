@@ -397,12 +397,8 @@ CountTrackedPointers::CountTrackedPointers(Type *T) {
         if (isa<ArrayType>(T))
             count *= cast<ArrayType>(T)->getNumElements();
         else if (isa<VectorType>(T)) {
-#if JL_LLVM_VERSION >= 120000
             ElementCount EC = cast<VectorType>(T)->getElementCount();
             count *= EC.getKnownMinValue();
-#else
-            count *= cast<VectorType>(T)->getNumElements();
-#endif
         }
     }
     if (count == 0)
@@ -415,12 +411,8 @@ unsigned getCompositeNumElements(Type *T) {
     else if (auto *AT = dyn_cast<ArrayType>(T))
         return AT->getNumElements();
     else {
-#if JL_LLVM_VERSION >= 120000
         ElementCount EC = cast<VectorType>(T)->getElementCount();
         return EC.getKnownMinValue();
-#else
-        return cast<VectorType>(T)->getNumElements();
-#endif
     }
 }
 
@@ -649,12 +641,8 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
     std::vector<int> Numbers;
     unsigned NumRoots = 1;
     if (auto VTy = dyn_cast<VectorType>(SI->getType())) {
-#if JL_LLVM_VERSION >= 120000
         ElementCount EC = VTy->getElementCount();
         Numbers.resize(EC.getKnownMinValue(), -1);
-#else
-        Numbers.resize(VTy->getNumElements(), -1);
-#endif
     }
     else
         assert(isa<PointerType>(SI->getType()) && "unimplemented");
@@ -715,12 +703,8 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
             assert(NumRoots == 1);
             int Number = Numbers[0];
             Numbers.resize(0);
-#if JL_LLVM_VERSION >= 120000
             ElementCount EC = VTy->getElementCount();
             Numbers.resize(EC.getKnownMinValue(), Number);
-#else
-            Numbers.resize(VTy->getNumElements(), Number);
-#endif
         }
     }
     if (!isa<PointerType>(SI->getType()))
@@ -1537,7 +1521,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (callee) {
                     if (callee == gc_preserve_begin_func) {
                         std::vector<int> args;
-                        for (Use &U : CI->arg_operands()) {
+                        for (Use &U : CI->args()) {
                             Value *V = U;
                             if (isa<Constant>(V))
                                 continue;
@@ -1582,7 +1566,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     continue;
                 }
                 std::vector<int> CalleeRoots;
-                for (Use &U : CI->arg_operands()) {
+                for (Use &U : CI->args()) {
                     // Find all callee rooted arguments.
                     // Record them instead of simply remove them from live values here
                     // since they can be useful during refinement
@@ -2289,7 +2273,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
-                assert(CI->getNumArgOperands() == 3);
+                assert(CI->arg_size() == 3);
 
                 // Initialize an IR builder.
                 IRBuilder<> builder(CI);
@@ -2362,7 +2346,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 // Update the pointer numbering.
                 UpdatePtrNumbering(CI, newI, S);
             } else if (typeof_func && callee == typeof_func) {
-                assert(CI->getNumArgOperands() == 1);
+                assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
                 auto tag = EmitLoadTag(builder, CI->getArgOperand(0));
@@ -2375,7 +2359,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
             } else if (write_barrier_func && callee == write_barrier_func) {
                 // The replacement for this requires creating new BasicBlocks
                 // which messes up the loop. Queue all of them to be replaced later.
-                assert(CI->getNumArgOperands() >= 1);
+                assert(CI->arg_size() >= 1);
                 write_barriers.push_back(CI);
                 ChangesMade = true;
                 ++it;
@@ -2383,7 +2367,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
             } else if (CC == JLCALL_F_CC ||
                        CC == JLCALL_F2_CC) {
                 assert(T_prjlvalue);
-                size_t nargs = CI->getNumArgOperands();
+                size_t nargs = CI->arg_size();
                 size_t nframeargs = nargs;
                 if (CC == JLCALL_F_CC)
                     nframeargs -= 1;
@@ -2425,12 +2409,12 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 auto old_attrs = CI->getAttributes();
                 NewCall->setAttributes(AttributeList::get(CI->getContext(),
-                                                          old_attrs.getFnAttributes(),
-                                                          old_attrs.getRetAttributes(), {}));
+                                                          getFnAttrs(old_attrs),
+                                                          getRetAttrs(old_attrs), {}));
                 NewCall->copyMetadata(*CI);
                 CI->replaceAllUsesWith(NewCall);
                 UpdatePtrNumbering(CI, NewCall, S);
-            } else if (CI->getNumArgOperands() == CI->getNumOperands()) {
+            } else if (CI->arg_size() == CI->getNumOperands()) {
                 /* No operand bundle to lower */
                 ++it;
                 continue;
@@ -2463,7 +2447,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
         auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
         builder.SetInsertPoint(mayTrigTerm);
         Value *anyChldNotMarked = NULL;
-        for (unsigned i = 1; i < CI->getNumArgOperands(); i++) {
+        for (unsigned i = 1; i < CI->arg_size(); i++) {
             Value *child = CI->getArgOperand(i);
             Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, child), 1);
             Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0));

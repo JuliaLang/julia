@@ -207,7 +207,7 @@ cd(@__DIR__) do
 
     local stdin_monitor
     all_tasks = Task[]
-    o_ts_duration = nothing
+    o_ts_duration = 0.0
     try
         # Monitor stdin and kill this task on ^C
         # but don't do this on Windows, because it may deadlock in the kernel

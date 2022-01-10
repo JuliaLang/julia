@@ -16,7 +16,11 @@
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
+#if JL_LLVM_VERSION >= 140000
+#include <llvm/MC/TargetRegistry.h>
+#else
 #include <llvm/Support/TargetRegistry.h>
+#endif
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -43,7 +47,7 @@ void jl_dump_compiles_impl(void *s)
 }
 JL_STREAM *dump_llvm_opt_stream = NULL;
 extern "C" JL_DLLEXPORT
-void jl_dump_llvm_opt(void *s)
+void jl_dump_llvm_opt_impl(void *s)
 {
     dump_llvm_opt_stream = (JL_STREAM*)s;
 }
@@ -481,22 +485,12 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                          const RuntimeDyld::LoadedObjectInfo &L,
                                          RTDyldMemoryManager *memmgr);
 
-#if JL_LLVM_VERSION >= 120000
 template <typename ObjT, typename LoadResult>
 void JuliaOJIT::registerObject(const ObjT &Obj, const LoadResult &LO)
 {
     const ObjT* Object = &Obj;
     ORCNotifyObjectEmitted(JuliaListener.get(), *Object, *LO, MemMgr.get());
 }
-#else
-template <typename ObjT, typename LoadResult>
-void JuliaOJIT::registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO)
-{
-    const ObjT* Object = &Obj;
-    NotifyFinalizer(H, *Object, *LO);
-    ORCNotifyObjectEmitted(JuliaListener.get(), *Object, *LO, MemMgr.get());
-}
-#endif
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 {
@@ -588,7 +582,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
         raw_string_ostream OS(Buf);
         logAllUnhandledErrors(Obj.takeError(), OS, "");
         OS.flush();
-        llvm::report_fatal_error("FATAL: Unable to compile LLVM Module: '" + Buf + "'\n"
+        llvm::report_fatal_error(llvm::Twine("FATAL: Unable to compile LLVM Module: '") + Buf + "'\n"
                                  "The module's content was printed above. Please file a bug report");
     }
 
@@ -636,21 +630,12 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
         ),
     CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT>(this))
 {
-#if JL_LLVM_VERSION >= 120000
     ObjectLayer.setNotifyLoaded(
         [this](orc::MaterializationResponsibility &MR,
                const object::ObjectFile &Object,
                const RuntimeDyld::LoadedObjectInfo &LOS) {
             registerObject(Object, &LOS);
         });
-#else
-    ObjectLayer.setNotifyLoaded(
-        [this](RTDyldObjHandleT H,
-               const object::ObjectFile &Object,
-               const RuntimeDyld::LoadedObjectInfo &LOS) {
-            registerObject(H, Object, &LOS);
-        });
-#endif
     for (int i = 0; i < 4; i++) {
         TMs[i] = TM.getTarget().createTargetMachine(TM.getTargetTriple().getTriple(), TM.getTargetCPU(),
                 TM.getTargetFeatureString(), TM.Options, Reloc::Static, TM.getCodeModel(),
@@ -666,7 +651,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
     // tells DynamicLibrary to load the program, not a library.
     std::string ErrorStr;
     if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &ErrorStr))
-        report_fatal_error("FATAL: unable to dlopen self\n" + ErrorStr);
+        report_fatal_error(llvm::Twine("FATAL: unable to dlopen self\n") + ErrorStr);
 
     GlobalJD.addGenerator(
       cantFail(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
@@ -734,27 +719,14 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
         }
     }
 #endif
-#if JL_LLVM_VERSION >= 120000
     // TODO: what is the performance characteristics of this?
     cantFail(CompileLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
-#else
-    auto key = ES.allocateVModule();
-    // TODO: what is the performance characteristics of this?
-    cantFail(CompileLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx), key));
-#endif
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
         cantFail(ES.lookup({&JD}, Name));
 
 }
-
-#if JL_LLVM_VERSION < 120000
-void JuliaOJIT::removeModule(ModuleHandleT H)
-{
-    //(void)CompileLayer.remove(H);
-}
-#endif
 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
@@ -825,22 +797,8 @@ void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
 {
     if (!L)
         return;
-#if JL_LLVM_VERSION >= 120000
     this->ObjectLayer.registerJITEventListener(*L);
-#else
-    EventListeners.push_back(L);
-#endif
 }
-
-#if JL_LLVM_VERSION < 120000
-void JuliaOJIT::NotifyFinalizer(RTDyldObjHandleT Key,
-                                const object::ObjectFile &Obj,
-                                const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo)
-{
-    for (auto &Listener : EventListeners)
-        Listener->notifyObjectLoaded(Key, Obj, LoadedObjectInfo);
-}
-#endif
 
 const DataLayout& JuliaOJIT::getDataLayout() const
 {

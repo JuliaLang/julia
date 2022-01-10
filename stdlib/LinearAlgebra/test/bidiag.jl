@@ -2,7 +2,7 @@
 
 module TestBidiagonal
 
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasReal, BlasFloat
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
@@ -98,8 +98,8 @@ Random.seed!(1)
         @test similar(ubd).uplo == ubd.uplo
         @test isa(similar(ubd, Int), Bidiagonal{Int})
         @test similar(ubd, Int).uplo == ubd.uplo
-        @test isa(similar(ubd, (3, 2)), SparseMatrixCSC)
-        @test isa(similar(ubd, Int, (3, 2)), SparseMatrixCSC{Int})
+        @test isa(similar(ubd, (3, 2)), Matrix)
+        @test isa(similar(ubd, Int, (3, 2)), Matrix{Int})
 
         # setindex! when off diagonal is zero bug
         Bu = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'U')
@@ -432,9 +432,7 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         exotic_arrays = Any[Tridiagonal(randn(3), randn(4), randn(3)),
         Bidiagonal(randn(3), randn(2), rand([:U,:L])),
         SymTridiagonal(randn(3), randn(2)),
-        sparse(randn(3,4)),
         Diagonal(randn(5)),
-        sparse(rand(3)),
         # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
         # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
         ]

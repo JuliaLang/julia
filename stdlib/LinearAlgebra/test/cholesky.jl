@@ -291,6 +291,13 @@ end
     @test sum(sum(norm, U'*U - XX)) < eps()
 end
 
+@testset "Non-strided Cholesky solves" begin
+    B = randn(5, 5)
+    v = rand(5)
+    @test cholesky(Diagonal(v)) \ B ≈ Diagonal(v) \ B
+    @test B / cholesky(Diagonal(v)) ≈ B / Diagonal(v)
+end
+
 struct WrappedVector{T} <: AbstractVector{T}
     data::Vector{T}
 end

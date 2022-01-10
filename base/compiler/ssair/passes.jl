@@ -29,14 +29,17 @@ SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
 compute_live_ins(cfg::CFG, du::SSADefUse) = compute_live_ins(cfg, du.defs, du.uses)
 
-function try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr)
-    field = stmt.args[3]
+# assume `stmt == getfield(obj, field, ...)` or `stmt == setfield!(obj, field, val, ...)`
+try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr) =
+    try_compute_field(ir, stmt.args[3])
+
+function try_compute_field(ir::Union{IncrementalCompact,IRCode}, @nospecialize(field))
     # fields are usually literals, handle them manually
     if isa(field, QuoteNode)
         field = field.value
-    elseif isa(field, Int)
-    # try to resolve other constants, e.g. global reference
+    elseif isa(field, Int) || isa(field, Symbol)
     else
+        # try to resolve other constants, e.g. global reference
         field = argextype(field, ir)
         if isa(field, Const)
             field = field.val
@@ -44,8 +47,7 @@ function try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr
             return nothing
         end
     end
-    isa(field, Union{Int, Symbol}) || return nothing
-    return field
+    return isa(field, Union{Int, Symbol}) ? field : nothing
 end
 
 function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, typ::DataType)
@@ -820,11 +822,8 @@ function sroa_pass!(ir::IRCode)
 end
 
 function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int})
-    # Compute domtree, needed below, now that we have finished compacting the IR.
-    # This needs to be after we iterate through the IR with `IncrementalCompact`
-    # because removing dead blocks can invalidate the domtree.
-    @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
-
+    # initialization of domtree is delayed to avoid the expensive computation in many cases
+    local domtree = nothing
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
         # Check if there are any uses we did not account for. If so, the variable
@@ -885,16 +884,26 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             isempty(du.uses) && continue
             push!(du.defs, newidx)
             ldu = compute_live_ins(ir.cfg, du)
-            phiblocks = isempty(ldu.live_in_bbs) ? Int[] : iterated_dominance_frontier(ir.cfg, ldu, domtree)
+            if isempty(ldu.live_in_bbs)
+                phiblocks = Int[]
+            else
+                domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
+                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, domtree)
+            end
             allblocks = sort(vcat(phiblocks, ldu.def_bbs))
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
                 for use in du.uses
+                    domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
                     has_safe_def(ir, domtree, allblocks, du, newidx, use) || @goto skip
                 end
             end
         end
-        # Everything accounted for. Go field by field and perform idf
+        # Everything accounted for. Go field by field and perform idf:
+        # Compute domtree now, needed below, now that we have finished compacting the IR.
+        # This needs to be after we iterate through the IR with `IncrementalCompact`
+        # because removing dead blocks can invalidate the domtree.
+        domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
         preserve_uses = isempty(defuse.ccall_preserve_uses) ? nothing :
             IdDict{Int, Vector{Any}}((idx=>Any[] for idx in SPCSet(defuse.ccall_preserve_uses)))
         for fidx in 1:ndefuse

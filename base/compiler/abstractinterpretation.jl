@@ -51,7 +51,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
 
     if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
         val = pure_eval_call(f, argtypes)
-        if val !== false
+        if val !== nothing
             # TODO: add some sort of edge(s)
             return CallMeta(val, MethodResultPure(info))
         end
@@ -156,10 +156,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
     end
 
-    # inliner uses this information only when there is a single match that has been improved
-    # by constant analysis, but let's create `ConstCallInfo` if there has been any successful
-    # constant propagation happened since other consumers may be interested in this
     if any_const_result && seen == napplicable
+        @assert napplicable == nmatches(info) == length(const_results)
         info = ConstCallInfo(info, const_results)
     end
 
@@ -182,7 +180,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             delete!(sv.pclimitations, caller)
         end
     end
-    #print("=> ", rettype, "\n")
     return CallMeta(rettype, info)
 end
 
@@ -1143,16 +1140,16 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any})
     for i = 2:length(argtypes)
         a = widenconditional(argtypes[i])
         if !(isa(a, Const) || isconstType(a))
-            return false
+            return nothing
         end
     end
-
-    args = Any[ (a = widenconditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
+    args = Any[ (a = widenconditional(argtypes[i]);
+        isa(a, Const) ? a.val : (a::DataType).parameters[1]) for i in 2:length(argtypes) ]
     try
         value = Core._apply_pure(f, args)
         return Const(value)
     catch
-        return false
+        return nothing
     end
 end
 
@@ -1481,7 +1478,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         max_methods = 1
     elseif la == 3 && istopfunction(f, :typejoin)
         val = pure_eval_call(f, argtypes)
-        return CallMeta(val === false ? Type : val, MethodResultPure())
+        return CallMeta(val === nothing ? Type : val, MethodResultPure())
     end
     atype = argtypes_to_type(argtypes)
     return abstract_call_gf_by_type(interp, f, arginfo, atype, sv, max_methods)
@@ -1907,7 +1904,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
         # make progress on the active ip set
         local pc::Int = frame.pc´´
         while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
-            #print(pc,": ",s[pc],"\n")
             local pc´::Int = pc + 1 # next program-counter (after executing instruction)
             if pc == frame.pc´´
                 # want to update pc´´ to point at the new lowest instruction in W

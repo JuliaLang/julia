@@ -26,6 +26,16 @@ function showerror(io::IO, ce::CapturedException)
 end
 
 """
+    capture_exception(ex, bt) -> Exception
+
+Returns an exception, possibly incorporating information from a backtrace `bt`. Defaults to returning [`CapturedException(ex, bt)`](@ref).
+
+Used in [`asyncmap`](@ref) and [`asyncmap!`](@ref) to capture exceptions thrown during
+the user-supplied function call.
+"""
+capture_exception(ex, bt) = CapturedException(ex, bt)
+
+"""
     CompositeException
 
 Wrap a `Vector` of exceptions thrown by a [`Task`](@ref) (e.g. generated from a remote worker over a channel
@@ -714,6 +724,10 @@ is otherwise idle, unless the task performs a blocking operation such as [`wait`
 If a second argument `val` is provided, it will be passed to the task (via the return value of
 [`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
 the woken task.
+
+!!! warning
+    It is incorrect to use `schedule` on an arbitrary `Task` that has already been started.
+    See [the API reference](@ref low-level-schedule-wait) for more information.
 
 # Examples
 ```jldoctest

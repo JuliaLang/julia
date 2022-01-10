@@ -524,6 +524,14 @@ julia> readline("my_file.txt", keep=true)
 
 julia> rm("my_file.txt")
 ```
+```julia-repl
+julia> print("Enter your name: ")
+Enter your name:
+
+julia> your_name = readline()
+Logan
+"Logan"
+```
 """
 function readline(filename::AbstractString; keep::Bool=false)
     open(filename) do f

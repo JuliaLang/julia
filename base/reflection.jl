@@ -351,22 +351,24 @@ function datatype_alignment(dt::DataType)
     return Int(alignment)
 end
 
-function uniontype_layout(T::Type)
+function uniontype_layout(@nospecialize T::Type)
     sz = RefValue{Csize_t}(0)
     algn = RefValue{Csize_t}(0)
     isinline = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, algn) != 0
-    (isinline, sz[], algn[])
+    (isinline, Int(sz[]), Int(algn[]))
 end
 
+LLT_ALIGN(x, sz) = (x + sz - 1) & -sz
+
 # amount of total space taken by T when stored in a container
-function aligned_sizeof(T::Type)
+function aligned_sizeof(@nospecialize T::Type)
     @_pure_meta
     if isbitsunion(T)
         _, sz, al = uniontype_layout(T)
-        return (sz + al - 1) & -al
+        return LLT_ALIGN(sz, al)
     elseif allocatedinline(T)
         al = datatype_alignment(T)
-        return (Core.sizeof(T) + al - 1) & -al
+        return LLT_ALIGN(Core.sizeof(T), al)
     else
         return Core.sizeof(Ptr{Cvoid})
     end
@@ -924,9 +926,6 @@ end
 function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt)
     return _methods_by_ftype(t, mt, lim, world, false, RefValue{UInt}(typemin(UInt)), RefValue{UInt}(typemax(UInt)), Ptr{Int32}(C_NULL))
 end
-function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt, ambig::Bool, min::Array{UInt,1}, max::Array{UInt,1}, has_ambig::Array{Int32,1})
-    return ccall(:jl_matching_methods, Any, (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
-end
 function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt, ambig::Bool, min::Ref{UInt}, max::Ref{UInt}, has_ambig::Ref{Int32})
     return ccall(:jl_matching_methods, Any, (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
 end
@@ -978,7 +977,7 @@ function methods(@nospecialize(f), @nospecialize(t),
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
-    world = typemax(UInt)
+    world = get_world_counter()
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
     for m in _methods(f, t, -1, world)::Vector
@@ -993,7 +992,7 @@ methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
 
 function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
-    world = typemax(UInt)
+    world = get_world_counter()
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
     ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))
@@ -1067,7 +1066,7 @@ _uncompressed_ir(ci::Core.CodeInstance, s::Array{UInt8,1}) = ccall(:jl_uncompres
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
 
-function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
+function method_instances(@nospecialize(f), @nospecialize(t), world::UInt=get_world_counter())
     tt = signature_type(f, t)
     results = Core.MethodInstance[]
     for match in _methods_by_ftype(tt, -1, world)::Vector
@@ -1192,7 +1191,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
         throw(ArgumentError("argument is not a generic function"))
     end
     if isa(f, Core.OpaqueClosure)
-        return code_typed_opaque_closure(f, types; optimize, debuginfo, interp)
+        return code_typed_opaque_closure(f; optimize, debuginfo, interp)
     end
     ft = Core.Typeof(f)
     if isa(types, Type)
@@ -1258,10 +1257,11 @@ function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure);
         debuginfo::Symbol=:default,
         interp = Core.Compiler.NativeInterpreter(closure.world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    if isa(closure.source, Method)
-        code = _uncompressed_ir(closure.source, closure.source.source)
+    m = closure.source
+    if isa(m, Method)
+        code = _uncompressed_ir(m, m.source)
         debuginfo === :none && remove_linenums!(code)
-        return Any[Pair{CodeInfo,Any}(code, code.rettype)]
+        return Any[(code => code.rettype)]
     else
         error("encountered invalid Core.OpaqueClosure object")
     end
@@ -1426,7 +1426,7 @@ function parentmodule(@nospecialize(f), @nospecialize(types))
 end
 
 """
-    hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=typemax(UInt)) -> Bool
+    hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=get_world_counter()) -> Bool
 
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
@@ -1461,13 +1461,13 @@ julia> hasmethod(g, Tuple{}, (:a, :b, :c, :d))  # g accepts arbitrary kwargs
 true
 ```
 """
-function hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
+function hasmethod(@nospecialize(f), @nospecialize(t); world::UInt=get_world_counter())
     t = to_tuple_type(t)
     t = signature_type(f, t)
     return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
 end
 
-function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world=typemax(UInt))
+function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
     # TODO: this appears to be doing the wrong queries
     hasmethod(f, t, world=world) || return false
     isempty(kwnames) && return true
@@ -1498,7 +1498,7 @@ function bodyfunction(basemethod::Method)
     #   %1 = mkw(kwvalues..., #self#, args...)
     #        return %1
     # where `mkw` is the name of the "active" keyword body-function.
-    ast = Base.uncompressed_ast(basemethod)
+    ast = uncompressed_ast(basemethod)
     f = nothing
     if isa(ast, Core.CodeInfo) && length(ast.code) >= 2
         callexpr = ast.code[end-1]
@@ -1567,10 +1567,11 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         if !ambiguous_bottom
             has_bottom_parameter(ti) && return false
         end
-        min = UInt[typemin(UInt)]
-        max = UInt[typemax(UInt)]
-        has_ambig = Int32[0]
-        ms = _methods_by_ftype(ti, nothing, -1, typemax(UInt), true, min, max, has_ambig)::Vector
+        world = get_world_counter()
+        min = Ref{UInt}(typemin(UInt))
+        max = Ref{UInt}(typemax(UInt))
+        has_ambig = Ref{Int32}(0)
+        ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
             filter!(ms) do m::Core.MethodMatch

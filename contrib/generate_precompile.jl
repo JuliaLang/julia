@@ -36,6 +36,8 @@ precompile(Tuple{typeof(Base.display_error), Base.ExceptionStack})
 precompile(Tuple{Core.kwftype(typeof(Type)), NamedTuple{(:sizehint,), Tuple{Int}}, Type{IOBuffer}})
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, String, Module))
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
+precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
+precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
 """
 
 for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
@@ -252,8 +254,8 @@ function generate_precompile_statements()
               module $pkgname
               end
               """)
-        tmp_prec = tempname()
-        tmp_proc = tempname()
+        tmp_prec = tempname(prec_path)
+        tmp_proc = tempname(prec_path)
         s = """
             pushfirst!(DEPOT_PATH, $(repr(prec_path)));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));

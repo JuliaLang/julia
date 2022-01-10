@@ -45,6 +45,7 @@
     XX(jl_array_to_string) \
     XX(jl_array_typetagdata) \
     XX(jl_arrayunset) \
+    XX(jl_array_validate_dims) \
     XX(jl_atexit_hook) \
     XX(jl_atomic_bool_cmpswap_bits) \
     XX(jl_atomic_cmpswap_bits) \
@@ -544,6 +545,8 @@
     YY(jl_unlock_profile) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
+    YY(jl_dump_emitted_mi_name) \
+    YY(jl_dump_llvm_opt) \
     YY(jl_dump_fptr_asm) \
     YY(jl_get_function_id) \
     YY(jl_type_to_llvm) \
@@ -564,4 +567,3 @@
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
     YY(LLVMExtraAddCPUFeaturesPass) \
-
