@@ -278,35 +278,63 @@ end
 @test minimum([0.,-0.,0.]) === -0.0
 
 @testset "minimum/maximum checks all elements" begin
-    for N in [2:20;150;300]
+    for N in [2:20;60:72;120:144;150;300]
         for i in 1:N
             arr = fill(0., N)
             truth = rand()
             arr[i] = truth
             @test maximum(arr) == truth
+            if N < 16 # mapreduce_impl is used only for N >= 16
+                @test Base.mapreduce_impl(identity, max, arr, 1, N) == truth
+            end
 
             truth = -rand()
             arr[i] = truth
             @test minimum(arr) == truth
+            if N < 16
+                @test Base.mapreduce_impl(identity, min, arr, 1, N) == truth
+            end
 
             arr[i] = NaN
             @test isnan(maximum(arr))
             @test isnan(minimum(arr))
+            if N < 16
+                @test isnan(Base.mapreduce_impl(identity, min, arr, 1, N))
+                @test isnan(Base.mapreduce_impl(identity, max, arr, 1, N))
+            end
 
             arr = zeros(N)
             @test minimum(arr) === 0.0
             @test maximum(arr) === 0.0
+            if N < 16
+                @test Base.mapreduce_impl(identity, min, arr, 1, N) === 0.0
+                @test Base.mapreduce_impl(identity, max, arr, 1, N) === 0.0
+            end
 
             arr[i] = -0.0
             @test minimum(arr) === -0.0
             @test maximum(arr) ===  0.0
+            if N < 16
+                @test Base.mapreduce_impl(identity, min, arr, 1, N) === -0.0
+                @test Base.mapreduce_impl(identity, max, arr, 1, N) === 0.0
+            end
 
             arr = -zeros(N)
             @test minimum(arr) === -0.0
             @test maximum(arr) === -0.0
+            if N < 16
+                @test Base.mapreduce_impl(identity, min, arr, 1, N) === -0.0
+                @test Base.mapreduce_impl(identity, max, arr, 1, N) === -0.0
+            end
+
             arr[i] = 0.0
             @test minimum(arr) === -0.0
             @test maximum(arr) === 0.0
+            if N < 16
+                @test Base.mapreduce_impl(identity, min, arr, 1, N) === -0.0
+                @test Base.mapreduce_impl(identity, max, arr, 1, N) === 0.0
+            end
+
         end
     end
 end
