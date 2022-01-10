@@ -799,10 +799,10 @@ function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     name = args[1]
     nn = normalize(name)
     if isa(nn, Symbol)
-        bounderror_ninds = is_array_resize(nn)
-        if bounderror_ninds !== nothing
-            bounderror, ninds = bounderror_ninds
-            escape_array_resize!(bounderror, ninds, astate, pc, args)
+        boundserror_ninds = array_resize_info(nn)
+        if boundserror_ninds !== nothing
+            boundserror, ninds = boundserror_ninds
+            escape_array_resize!(boundserror, ninds, astate, pc, args)
             return
         end
         if is_array_copy(nn)
@@ -1230,7 +1230,7 @@ end
 
 # returns nothing if this isn't array resizing operation,
 # otherwise returns true if it can throw BoundsError and false if not
-function is_array_resize(name::Symbol)
+function array_resize_info(name::Symbol)
     if name === :jl_array_grow_beg || name === :jl_array_grow_end
         return false, 1
     elseif name === :jl_array_del_beg || name === :jl_array_del_end
@@ -1244,7 +1244,7 @@ end
 
 # NOTE may potentially throw "cannot resize array with shared data" error,
 # but just ignore it since it doesn't capture anything
-function escape_array_resize!(bounderror::Bool, ninds::Int,
+function escape_array_resize!(boundserror::Bool, ninds::Int,
     astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 6+ninds || return add_thrown_escapes!(astate, pc, args)
     ary = args[6]
@@ -1255,7 +1255,7 @@ function escape_array_resize!(bounderror::Bool, ninds::Int,
         indt = argextype(ind, astate.ir)
         indt ⊑ₜ Integer || return add_thrown_escapes!(astate, pc, args)
     end
-    if bounderror
+    if boundserror
         if isa(ary, SSAValue) || isa(ary, Argument)
             estate = astate.estate
             aryinfo = estate[ary]
