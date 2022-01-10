@@ -26,7 +26,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    151
+#define NUM_TAGS    152
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -106,6 +106,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_array_symbol_type);
         INSERT_TAG(jl_array_uint8_type);
         INSERT_TAG(jl_array_int32_type);
+        INSERT_TAG(jl_array_uint64_type);
         INSERT_TAG(jl_int32_type);
         INSERT_TAG(jl_int64_type);
         INSERT_TAG(jl_bool_type);
@@ -964,8 +965,6 @@ static void jl_write_values(jl_serializer_state *s)
 
             if (jl_is_method(v)) {
                 write_padding(s->s, sizeof(jl_method_t) - tot);
-                arraylist_push(&reinit_list, (void*)item);
-                arraylist_push(&reinit_list, (void*)4);
                 if (((jl_method_t*)v)->ccallable) {
                     arraylist_push(&ccallable_list, (void*)item);
                     arraylist_push(&ccallable_list, (void*)3);
@@ -1479,11 +1478,6 @@ static void jl_reinit_item(jl_value_t *v, int how) JL_GC_DISABLED
             jl_svec_t *sv = ((jl_method_t*)v)->ccallable;
             int success = jl_compile_extern_c(NULL, NULL, jl_sysimg_handle, jl_svecref(sv, 0), jl_svecref(sv, 1));
             assert(success); (void)success;
-            break;
-        }
-        case 4: { // reset newrootsindex
-            jl_method_t *m = (jl_method_t*)v;
-            m->newrootsindex = INT32_MAX;
             break;
         }
         default:

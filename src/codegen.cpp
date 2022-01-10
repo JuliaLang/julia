@@ -7452,10 +7452,11 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         //     jl_(m);
         // }
         if (added & external) {
-            if (m->newrootsindex == INT32_MAX) {
+            uint64_t key = jl_precompile_toplevel_module->build_id;
+            if (jl_current_block_key(m) != key) {
+                jl_add_root_block(m, key, rootslen);
                 jl_printf(JL_STDOUT, "codegen: set newroots to %d for ", rootslen);
                 jl_(m);
-                m->newrootsindex = rootslen;
             }
         }
         JL_UNLOCK(&m->writelock);
@@ -7587,7 +7588,7 @@ jl_compile_result_t jl_emit_codeinst(
                 jl_options.debug_level > 1) {
                 // update the stored code
                 if (codeinst->inferred != (jl_value_t*)src) {
-                    if (jl_is_method(def))
+                    if (jl_is_method(def) && !jl_options.incremental)
                         src = (jl_code_info_t*)jl_compress_ir(def, src);
                     codeinst->inferred = (jl_value_t*)src;
                     jl_gc_wb(codeinst, src);

@@ -25,8 +25,8 @@ typedef struct {
     ios_t *s;
     // method we're compressing for
     jl_method_t *method;
-    // true if we're serializing a method not owned by a worklist module
-    int external;
+    // key is nonzero if we're serializing a CodeInfo for a method owned by a non-worklist module
+    uint64_t key;
     jl_ptls_t ptls;
 } jl_ircode_state;
 
@@ -34,31 +34,26 @@ typedef struct {
 
 #define jl_encode_value(s, v) jl_encode_value_((s), (jl_value_t*)(v), 0)
 
-static int literal_val_id(jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
+static root_reference literal_val_id(jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
 {
     jl_array_t *rs = s->method->roots;
     int i, l = jl_array_len(rs);
     if (jl_is_symbol(v) || jl_is_concrete_type(v)) {
         for (i = 0; i < l; i++) {
             if (jl_array_ptr_ref(rs, i) == v)
-                return i;
+                return get_root_reference(s->method, i);
         }
     }
     else {
         for (i = 0; i < l; i++) {
             if (jl_egal(jl_array_ptr_ref(rs, i), v))
-                return i;
+                return get_root_reference(s->method, i);
         }
     }
-    if (s->external) {
-        if (s->method->newrootsindex == INT32_MAX) {
-            s->method->newrootsindex = l;
-            jl_printf(JL_STDOUT, "Set newrootsindex to %d for ", l);
-            jl_(s->method);
-        }
-    }
-    jl_array_ptr_1d_push(rs, v);
-    return jl_array_len(rs) - 1;
+    uint64_t key = 0;
+    if (jl_parent_module(s->method->module)->build_id != s->key)
+        key = s->key;
+    return append_root(s->method, key, v);
 }
 
 static void jl_encode_int32(jl_ircode_state *s, int32_t x)
@@ -332,34 +327,25 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         if (!as_literal && !(jl_is_uniontype(v) || jl_is_newvarnode(v) || jl_is_tuple(v) ||
                              jl_is_linenode(v) || jl_is_upsilonnode(v) || jl_is_pinode(v) ||
                              jl_is_slot(v) || jl_is_ssavalue(v))) {
-            int id = literal_val_id(s, v);
-            assert(id >= 0);
-            // if (currently_serializing == 2) {
-                // We only need to use relative root indexing when serializing packages.
-                // During Julia's bootstrap compilation of its own libraries, we can use absolute indexing
-                // because the order of library compilation is fixed.
-                // Moreover, during CodeInstance recaching we need to deserialize with relative indexes but
-                // serialize with absolute indexes.
-                int newrootsindex = s->method->newrootsindex & INT32_MAX;
-                if (id >= newrootsindex) {
-                    // if (s->method->newrootsindex >= 0)
-                    //     jl_(s->method);
-                    // assert(s->method->newrootsindex < 0);      // new roots already serialized
-                    write_uint8(s->s, TAG_EXTERN_METHODROOT);
-                    // jl_printf(JL_STDOUT, "Absolute root %d, relative root %d, for ", id, id - newrootsindex);
-                    // jl_(v);
-                    // jl_(s->method);
-                    id -= newrootsindex;
-                }
-            // }
-            if (id < 256) {
+            root_reference rr = literal_val_id(s, v);
+            if (rr.key) {
+                jl_printf(JL_STDOUT, "When serializing ");
+                jl_(s->method);
+                jl_printf(JL_STDOUT, " root reference: key=%lx, block_offset=%ld, relative_index=%d for ", rr.key, rr.block_offset, rr.relative_index);
+                jl_(v);
+            }
+            if (rr.key) {
+                write_uint8(s->s, TAG_EXTERN_METHODROOT);
+                write_int64(s->s, rr.key);
+            }
+            if (rr.relative_index < 256) {
                 write_uint8(s->s, TAG_METHODROOT);
-                write_uint8(s->s, id);
+                write_uint8(s->s, rr.relative_index);
             }
             else {
-                assert(id <= UINT16_MAX);
+                assert(rr.relative_index <= UINT16_MAX);
                 write_uint8(s->s, TAG_LONG_METHODROOT);
-                write_uint16(s->s, id);
+                write_uint16(s->s, rr.relative_index);
             }
             return;
         }
@@ -618,6 +604,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
     assert(!ios_eof(s->s));
     jl_value_t *v;
     size_t i, n;
+    uint64_t key;
     uint8_t tag = read_uint8(s->s);
     if (tag > LAST_TAG)
         return jl_deser_tag(tag);
@@ -631,31 +618,10 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
     case TAG_LONG_METHODROOT:
         return jl_array_ptr_ref(s->method->roots, read_uint16(s->s));
     case TAG_EXTERN_METHODROOT:
-        // assert(s->method->newrootsindex >= 0);
-        // if (s->method->newrootsindex == INT32_MAX) {
-        //     jl_printf(JL_STDOUT, "method pointer %p, method ", s->method);
-        //     jl_(s->method);
-        // }
-        if (s->method->newrootsindex == INT32_MAX) {
-            jl_printf(JL_STDOUT, "invalid relative root indexing (newrootsindex = %d) for ", s->method->newrootsindex);
-            jl_(s->method);
-        }
-        assert(s->method->newrootsindex < INT32_MAX);
-        // assert(currently_deserializing == 2);
-        int id;
+        key = read_uint64(s->s);
         tag = read_uint8(s->s);
-        if (tag == TAG_METHODROOT)
-            id = read_uint8(s->s);
-        else if (tag == TAG_LONG_METHODROOT)
-            id = read_uint16(s->s);
-        else
-            jl_errorf("unexpected tag %d", tag);
-        // jl_printf(JL_STDOUT, "Relative root %d, absolute root %d, total root len %ld for ", id, id + (s->method->newrootsindex & INT32_MAX), jl_array_len(s->method->roots));
-        id += (s->method->newrootsindex & INT32_MAX);
-        jl_value_t *r = jl_array_ptr_ref(s->method->roots, id);
-        // jl_(r);
-        // jl_(s->method);
-        return r;
+        assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
+        return fetch_root(s->method, key, tag == TAG_METHODROOT ? read_uint8(s->s) : read_uint16(s->s));
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_decode_value_svec(s, tag);
     case TAG_COMMONSYM:
@@ -755,7 +721,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
 
 // --- entry points ---
 
-jl_array_t *jl_compress_ir_(jl_method_t *m, jl_code_info_t *code, int external)
+jl_array_t *jl_compress_ir_(jl_method_t *m, jl_code_info_t *code, uint64_t key)
 {
     JL_TIMING(AST_COMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
@@ -773,7 +739,7 @@ jl_array_t *jl_compress_ir_(jl_method_t *m, jl_code_info_t *code, int external)
     jl_ircode_state s = {
         &dest,
         m,
-        external,
+        key,
         jl_current_task->ptls
     };
 
@@ -839,10 +805,10 @@ jl_array_t *jl_compress_ir_(jl_method_t *m, jl_code_info_t *code, int external)
 
 JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 {
-    jl_compress_ir_(m, code, 0);
+    return jl_compress_ir_(m, code, 0);
 }
 
-jl_code_info_t *jl_uncompress_ir_(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data, int external)
+JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data)
 {
     if (jl_is_code_info(data))
         return (jl_code_info_t*)data;
@@ -859,7 +825,7 @@ jl_code_info_t *jl_uncompress_ir_(jl_method_t *m, jl_code_instance_t *metadata, 
     jl_ircode_state s = {
         &src,
         m,
-        external,
+        -1,
         jl_current_task->ptls
     };
 
@@ -921,11 +887,6 @@ jl_code_info_t *jl_uncompress_ir_(jl_method_t *m, jl_code_instance_t *metadata, 
         code->parent = metadata->def;
     }
     return code;
-}
-
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data)
-{
-    jl_uncompress_ir_(m, metadata, data, 0);
 }
 
 JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data)

@@ -299,6 +299,9 @@ typedef struct _jl_method_t {
     _Atomic(struct _jl_method_instance_t*) unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
+    // Mark the beginning of a block of roots added by (de)serialization of a dependent module
+    // Field may be NULL if no external roots have been added, otherwise it's a Vector{UInt64}
+    jl_array_t *external_root_blocks;   // (build_id::UInt64, offset::UInt64) pairs (even/odd indexing)
     jl_svec_t *ccallable; // svec(rettype, sig) if a ccallable entry point is requested for this
 
     // cache of specializations of this method for invoke(), i.e.
@@ -326,12 +329,6 @@ typedef struct _jl_method_t {
 // hidden fields:
     // lock for modifications to the method
     jl_mutex_t writelock;
-    // During precompilation, mark the beginning of newly-added roots to externally-defined methods.
-    // The "resting state" is typemax(Int32), and only gets set to length(roots) at the first
-    // MethodInstance addition when jl_parent_module(module) != jl_precompile_toplevel_module.
-    // The top bit gets set during serialization after the new roots have been serialized, and after
-    // serialization finishes we reset the whole thing to typemax(Int32).
-    int32_t newrootsindex;
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method
@@ -722,6 +719,7 @@ extern JL_DLLIMPORT jl_value_t *jl_array_uint8_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_any_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_symbol_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_int32_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_array_uint64_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_expr_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_globalref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_linenumbernode_type JL_GLOBALLY_ROOTED;
@@ -1590,6 +1588,10 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 {
     return (jl_function_t*)jl_get_global(m, jl_symbol(name));
 }
+
+// methods and method roots
+JL_DLLEXPORT uint64_t jl_current_block_key(jl_method_t *m);
+JL_DLLEXPORT void jl_add_root_block(jl_method_t *m, uint64_t key, size_t offset);
 
 // eq hash tables
 JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int *inserted);

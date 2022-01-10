@@ -505,6 +505,12 @@ typedef union {
     uint8_t packed;
 } jl_code_info_flags_t;
 
+typedef struct {
+    uint64_t key;            // 0 means internal
+    size_t block_offset;
+    int relative_index;
+} root_reference;
+
 // -- functions -- //
 
 // jl_code_info_flag_t code_info_flags(uint8_t pure, uint8_t propagate_inbounds, uint8_t inlineable, uint8_t inferred, uint8_t constprop);
@@ -524,8 +530,14 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ast);
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
                               int binding_effects);
-jl_array_t *jl_compress_ir_(jl_method_t *m, jl_code_info_t *code, int external);
-jl_code_info_t *jl_uncompress_ir_(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data, int external);
+jl_array_t *jl_compress_ir_(jl_method_t *m, jl_code_info_t *code, uint64_t key);
+
+size_t current_block_offset(jl_method_t *m);
+void delete_current_root_block(jl_method_t *m);
+root_reference append_root(jl_method_t *m, uint64_t key, jl_value_t *root);
+void append_missing_blocks(jl_method_t *m, jl_array_t *newroots_array, jl_array_t *newblocks_array);
+jl_value_t *fetch_root(jl_method_t *m, uint64_t key, size_t offset_relative);
+root_reference get_root_reference(jl_method_t *m, size_t i);
 
 int jl_valid_type_param(jl_value_t *v);
 

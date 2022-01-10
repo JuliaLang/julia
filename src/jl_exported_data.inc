@@ -14,6 +14,7 @@
     XX(jl_argument_type) \
     XX(jl_array_any_type) \
     XX(jl_array_int32_type) \
+    XX(jl_array_uint64_type) \
     XX(jl_array_symbol_type) \
     XX(jl_array_type) \
     XX(jl_array_typename) \
