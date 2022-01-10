@@ -86,11 +86,9 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
         char *ao = (char*)a + offs;
         char *bo = (char*)b + offs;
         if (jl_field_isptr(dt, f)) {
-            jl_value_t *af = *(jl_value_t**)ao;
-            jl_value_t *bf = *(jl_value_t**)bo;
-            if (af != bf && (af == NULL || bf == NULL))
-                return 0;
             // Save ptr recursion until the end -- only recurse if otherwise equal
+            // Note that we also skip comparing the pointers for null here, because
+            // null fields are rare so it can save CPU to delay this read too.
             continue;
         }
         else {
@@ -131,6 +129,8 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
         jl_value_t *af = ((jl_value_t**)a)[offs];
         jl_value_t *bf = ((jl_value_t**)b)[offs];
         if (af != bf) {
+            if (af == NULL || bf == NULL)
+                return 0;
             if (!jl_egal(af, bf))
                 return 0;
         }
