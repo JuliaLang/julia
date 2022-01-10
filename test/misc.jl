@@ -159,29 +159,43 @@ for l in (Threads.SpinLock(), ReentrantLock())
 end
 
 @testset "Semaphore" begin
-    sleep_secs = 0.01
     sem_size = 2
     n = 100
-
     s = Base.Semaphore(sem_size)
 
-    t = @elapsed @sync for _ in 1:n
+    # explicit acquire-release form
+    clock = Threads.Atomic{Int}(1)
+    occupied = Threads.Atomic{Int}(0)
+    history = fill!(Vector{Int}(undef, 2n), -1)
+    @sync for _ in 1:n
         @async begin
             Base.acquire(s)
-            sleep(sleep_secs)
+            history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
+            sleep(rand(0:0.01:0.1))
+            history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
             Base.release(s)
         end
     end
-    @test isapprox(t, (n / sem_size) * sleep_secs, rtol = 0.2)
+    @test all(<=(sem_size), history)
+    @test all(>=(0), history)
+    @test history[end] == 0
 
-    t = @elapsed @sync for _ in 1:n
+    # do-block syntax
+    clock = Threads.Atomic{Int}(1)
+    occupied = Threads.Atomic{Int}(0)
+    history = fill!(Vector{Int}(undef, 2n), -1)
+    @sync for _ in 1:n
         @async begin
             Base.acquire(s) do
-                sleep(sleep_secs)
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
+                sleep(rand(0:0.01:0.1))
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
             end
         end
     end
-    @test isapprox(t, (n / sem_size) * sleep_secs, rtol = 0.2)
+    @test all(<=(sem_size), history)
+    @test all(>=(0), history)
+    @test history[end] == 0
 end
 
 # task switching
