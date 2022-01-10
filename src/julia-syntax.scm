@@ -2212,8 +2212,7 @@
                   (cons (expand-forms
                           (lower-tuple-assignment
                             (list (cadr lhs-) tail)
-                            `(call (top split_rest) ,xx (call (top Val) ,(- n i))
-                                   ,@(if (eq? i 1) '() `(,st)))))
+                            `(call (top split_rest) ,xx ,(- n i) ,@(if (eq? i 1) '() `(,st)))))
                         (destructure- 1 (cdr lhss) tail (- n i) st end))))
             (cons (expand-forms
                     (lower-tuple-assignment

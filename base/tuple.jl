@@ -136,8 +136,24 @@ rest(a::Array, i::Int=1) = a[i:end]
 rest(a::Core.SimpleVector, i::Int=1) = a[i:end]
 rest(itr, state...) = Iterators.rest(itr, state...)
 
-split_rest(t::Tuple, ::Val{N}) where {N} = t[1:end-N], t[end-N+1:end]
-split_rest(t::Tuple, ::Val{N}, st) where {N} = t[st:end-N], t[end-N+1:end]
+function split_rest(itr, n::Int, state...)
+    if IteratorSize(itr) == IsInfinite()
+        throw(ArgumentError("Cannot split an infinite iterator in the middle."))
+    end
+    return _split_rest(rest(itr, state...), n)
+end
+_split_rest(itr, n::Int) = _split_rest(collect(itr), n)
+function _check_length_split_rest(len, n)
+    len < n && throw(ArgumentError(
+        "The iterator only contains $len elements, but at least $n were requested."
+    ))
+end
+function _split_rest(a::Union{AbstractArray, Core.SimpleVector}, n::Int)
+    _check_length_split_rest(length(a), n)
+    return a[begin:end-n], a[end-n+1:end]
+end
+
+split_rest(t::Tuple, n::Int, i=1) = t[i:end-n], t[end-n+1:end]
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))

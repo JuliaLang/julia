@@ -780,3 +780,16 @@ julia> codeunits("Juλia")
 ```
 """
 codeunits(s::AbstractString) = CodeUnits(s)
+
+function _split_rest(s::AbstractString, n::Int)
+    lastind = lastindex(s)
+    i = try
+        prevind(s, lastind, n)
+    catch e
+        e isa BoundsError || rethrow()
+        @assert _check_length_split_rest(length(s), n)
+    end
+    last_n = SubString(s, i, lastind)
+    front = s[begin:prevind(s, i)]
+    return front, last_n
+end
