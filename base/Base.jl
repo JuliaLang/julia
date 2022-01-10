@@ -24,6 +24,7 @@ ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 # until after array.jl, and so we will mark them within a function body instead.
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
+macro unsafe() Expr(:funcinfo, (Symbol("julia.unsafe"), true)) end
 
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations

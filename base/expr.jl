@@ -335,6 +335,8 @@ macro noinline(x)
     return annotate_meta_def_or_block(x, :noinline)
 end
 
+macro unsafe() Expr(:funcinfo, (Symbol("julia.unsafe"), true)) end
+
 """
     @pure ex
     @pure(ex)

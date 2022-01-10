@@ -269,6 +269,7 @@ end
 
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
+macro unsafe() Expr(:funcinfo, (Symbol("julia.unsafe"), true)) end
 
 struct BoundsError <: Exception
     a::Any

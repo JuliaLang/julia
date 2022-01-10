@@ -27,6 +27,7 @@ include(mod, x) = Core.include(mod, x)
 # until after array.jl, and so we will mark them within a function body instead.
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
+macro unsafe() Expr(:funcinfo, (Symbol("julia.unsafe"), true)) end
 
 # essential files and libraries
 include("essentials.jl")
