@@ -270,13 +270,46 @@ end
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
+import .Intrinsics: ult_int
+struct Summarized
+    desc::String
+    size
+    type
+    function Summarized(@nospecialize a)
+        # try to get a summary of `a` here now rather than capturing it for later inspection,
+        # in order to allow compiler analyses or optimization passes to assume the invariant
+        # that this `BoundsError` doesn't escape `a` when it is a certain primitive object
+        # that they can reason about
+        if isa(a, Array) || isa(a, Tuple)
+            if isdefined(Main, :Base)
+                Base = Main.Base
+                # these `invoke_in_world`s here essentially prohibits users from changing
+                # the semantics of `BoundsError` by overriding `summary(a)` implementations
+                # (and potentially allowing `a` to be escaped to somewhere)
+                desc = Base.invoke_in_world(Base._BASE_DEFINED_AGE, Base.summary, a)::String
+                if isa(a, Array)
+                    size = Base.invoke_in_world(Base._BASE_DEFINED_AGE, Base.size, a)
+                else
+                    size = (nfields(a),)
+                end
+            else
+                desc = "`summary` implementation not available"
+                size = nothing
+            end
+            type = typeof(a)
+            return new(desc, size, type)
+        end
+        return a
+    end
+end
 struct BoundsError <: Exception
-    a::Any
+    a
     i::Any
     BoundsError() = new()
-    BoundsError(@nospecialize(a)) = (@noinline; new(a))
-    BoundsError(@nospecialize(a), i) = (@noinline; new(a,i))
+    BoundsError(@nospecialize(a)) = (@noinline; new(Summarized(a)))
+    BoundsError(@nospecialize(a), i) = (@noinline; new(Summarized(a), i))
 end
+
 struct DivideError         <: Exception end
 struct OutOfMemoryError    <: Exception end
 struct ReadOnlyMemoryError <: Exception end

@@ -2792,6 +2792,9 @@ function summary(x)
     String(take!(io))
 end
 
+# NOTE `summary(a)` implementations for `Array` and `Tuple` should never escape `a` anywhere,
+# since that invariant can be assumed by some compiler analyses and optimization passes
+
 ## `summary` for AbstractArrays
 # sizes such as 0-dimensional, 4-dimensional, 2x3
 dims2string(d) = isempty(d) ? "0-dimensional" :

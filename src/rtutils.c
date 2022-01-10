@@ -139,11 +139,19 @@ JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_
     jl_throw(jl_new_struct(jl_atomicerror_type, msg));
 }
 
+void JL_NORETURN jl_throw_bounds_error(jl_value_t *v, jl_value_t *t)
+{
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 2);
+    args[0] = v;
+    args[1] = t;
+    jl_throw(jl_apply_generic((jl_value_t*)jl_boundserror_type, args, 2));
+}
 
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t)
 {
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
-    jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
+    jl_throw_bounds_error(v, t);
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs, size_t nidxs)
@@ -152,7 +160,7 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs
     // items in idxs are assumed to already be rooted
     JL_GC_PUSH2(&v, &t); // root v so the caller doesn't need to
     t = jl_f_tuple(NULL, idxs, nidxs);
-    jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
+    jl_throw_bounds_error(v, t);
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_tuple_int(jl_value_t **v, size_t nv, size_t i)
@@ -169,7 +177,7 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *data, jl_value_t
     JL_GC_PUSH2(&v, &t);
     v = jl_new_bits(vt, data);
     t = jl_box_long(i);
-    jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
+    jl_throw_bounds_error(v, t);
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v JL_MAYBE_UNROOTED, size_t i)
@@ -177,7 +185,7 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v JL_MAYBE_UNROOTE
     jl_value_t *t = NULL;
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
     t = jl_box_long(i);
-    jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
+    jl_throw_bounds_error(v, t);
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOTED,
@@ -191,7 +199,7 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOT
         jl_svecset(t, i, jl_box_long(idxs[i]));
     }
     t = jl_f_tuple(NULL, jl_svec_data(t), nidxs);
-    jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
+    jl_throw_bounds_error(v, t);
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)

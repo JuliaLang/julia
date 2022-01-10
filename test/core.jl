@@ -2640,8 +2640,16 @@ end
 
 # pull request #9534
 @test_throws BoundsError((1, 2), 3) begin; a, b, c = 1, 2; end
-let a = []
-    @test try; a[]; catch ex; (ex::BoundsError).a === a && ex.i == (); end
+let a = Any[]
+    try
+        a[]
+    catch ex
+        x = (ex::BoundsError).a
+        @test isa(x, Core.Summarized)
+        @test x.size === (0,)
+        @test x.type === Vector{Any}
+        @test ex.i == ()
+    end
     @test_throws BoundsError(a, (1, 2)) a[1, 2]
     @test_throws BoundsError(a, (10,)) a[10]
 end
@@ -2680,6 +2688,26 @@ f9534g(a, b, c...) = c[0]
 f9534h(a, b, c...) = c[a]
 @test f9534h(4, 2, 3, 4, 5, 6) == 6
 @test_throws BoundsError((3, 4, 5, 6), 5) f9534h(5, 2, 3, 4, 5, 6)
+
+@test let # https://github.com/JuliaLang/julia/pull/43738
+    # BoundsError should never capture arrays
+    code = quote
+        const THROWN_ARRAY = Ref{Any}()
+        function Base.summary(io::IO, a::Array)
+            Main.THROWN_ARRAY[] = a
+            return "bad override"
+        end
+        try
+            a = []
+            a[1]
+        catch err
+        end
+        isdefined(THROWN_ARRAY, :x) && println(stderr, "test failed")
+    end |> string
+    cmd = `$(Base.julia_cmd()) -e $code`
+    stderr = IOBuffer()
+    success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
+end
 
 # issue #7978, comment 332352438
 f7978a() = 1
