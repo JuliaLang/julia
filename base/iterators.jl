@@ -1429,11 +1429,11 @@ Stacktrace:
             throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
         else
             throw(ArgumentError("Collection is empty, must contain exactly 1 element; $message"))
-        end            
+        end
     end
     (ret, state) = i::NTuple{2,Any}
     @boundscheck if iterate(x, state) !== nothing
-        if message == "" 
+        if message == ""
             throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
         else
             throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element; $message"))
