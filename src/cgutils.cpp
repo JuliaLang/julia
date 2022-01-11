@@ -525,11 +525,11 @@ static Type *bitstype_to_llvm(jl_value_t *bt, llvm::LLVMContext &ctxt, bool llvm
     if (bt == (jl_value_t*)jl_int64_type)
         return llvm::Type::getInt64Ty(ctxt);
     if (bt == (jl_value_t*)jl_float16_type)
-        return T_float16;
+        return llvm::Type::getHalfTy(ctxt);
     if (bt == (jl_value_t*)jl_float32_type)
-        return T_float32;
+        return llvm::Type::getFloatTy(ctxt);
     if (bt == (jl_value_t*)jl_float64_type)
-        return T_float64;
+        return llvm::Type::getDoubleTy(ctxt);
     if (jl_is_llvmpointer_type(bt)) {
         jl_value_t *as_param = jl_tparam1(bt);
         int as;

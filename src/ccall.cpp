@@ -1106,7 +1106,7 @@ std::string generate_func_sig(const char *fname)
                 if (pat->isIntegerTy() && pat->getPrimitiveSizeInBits() < sizeof(int) * 8)
                     pat = llvm::Type::getInt32Ty(lrt->getContext());
                 if (pat->isFloatingPointTy() && pat->getPrimitiveSizeInBits() < sizeof(double) * 8)
-                    pat = T_float64;
+                    pat = llvm::Type::getDoubleTy(lrt->getContext());
                 ab.removeAttribute(Attribute::SExt);
                 ab.removeAttribute(Attribute::ZExt);
             }

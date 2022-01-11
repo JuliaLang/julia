@@ -169,11 +169,6 @@ static IntegerType *T_char;
 static IntegerType *T_size;
 static IntegerType *T_sigatomic;
 
-static Type *T_float16;
-static Type *T_float32;
-static Type *T_float64;
-static Type *T_float128;
-
 static Type *T_pint8;
 static Type *T_pint16;
 static Type *T_pint32;
@@ -851,8 +846,8 @@ BOX_FUNC(uint32, T_prjlvalue, llvm::Type::getInt32Ty(C), get_attrs_zext);
 BOX_FUNC(int64, T_prjlvalue, llvm::Type::getInt64Ty(C), get_attrs_sext);
 BOX_FUNC(uint64, T_prjlvalue, llvm::Type::getInt64Ty(C), get_attrs_zext);
 BOX_FUNC(char, T_prjlvalue, T_char, get_attrs_zext);
-BOX_FUNC(float32, T_prjlvalue, T_float32, get_func_attrs);
-BOX_FUNC(float64, T_prjlvalue, T_float64, get_func_attrs);
+BOX_FUNC(float32, T_prjlvalue, llvm::Type::getFloatTy(C), get_func_attrs);
+BOX_FUNC(float64, T_prjlvalue, llvm::Type::getDoubleTy(C), get_func_attrs);
 BOX_FUNC(ssavalue, T_prjlvalue, T_size, get_func_attrs);
 #undef BOX_FUNC
 
@@ -7789,12 +7784,8 @@ static void init_julia_llvm_env(Module *m)
         T_size = llvm::Type::getInt32Ty(m->getContext());
     T_sigatomic = Type::getIntNTy(m->getContext(), sizeof(sig_atomic_t) * 8);
     T_psize = PointerType::get(T_size, 0);
-    T_float16 = Type::getHalfTy(m->getContext());
-    T_float32 = Type::getFloatTy(m->getContext());
-    T_pfloat32 = PointerType::get(T_float32, 0);
-    T_float64 = Type::getDoubleTy(m->getContext());
-    T_pfloat64 = PointerType::get(T_float64, 0);
-    T_float128 = Type::getFP128Ty(m->getContext());
+    T_pfloat32 = PointerType::get(llvm::Type::getFloatTy(m->getContext()), 0);
+    T_pfloat64 = PointerType::get(llvm::Type::getDoubleTy(m->getContext()), 0);
     T_void = Type::getVoidTy(m->getContext());
     T_pvoidfunc = FunctionType::get(T_void, /*isVarArg*/false)->getPointerTo();
 

@@ -103,13 +103,13 @@ static Type *FLOATT(Type *t)
         return t;
     unsigned nb = (t->isPointerTy() ? sizeof(void*) * 8 : t->getPrimitiveSizeInBits());
     if (nb == 64)
-        return T_float64;
+        return llvm::Type::getDoubleTy(t->getContext());
     if (nb == 32)
-        return T_float32;
+        return llvm::Type::getFloatTy(t->getContext());
     if (nb == 16)
-        return T_float16;
+        return llvm::Type::getHalfTy(t->getContext());
     if (nb == 128)
-        return T_float128;
+        return llvm::Type::getFP128Ty(t->getContext());
     return NULL;
 }
 
@@ -120,11 +120,11 @@ static Type *INTT(Type *t)
         return t;
     if (t->isPointerTy())
         return T_size;
-    if (t == T_float64)
+    if (t == llvm::Type::getDoubleTy(t->getContext()))
         return llvm::Type::getInt64Ty(t->getContext());
-    if (t == T_float32)
+    if (t == llvm::Type::getFloatTy(t->getContext()))
         return llvm::Type::getInt32Ty(t->getContext());
-    if (t == T_float16)
+    if (t == llvm::Type::getHalfTy(t->getContext()))
         return llvm::Type::getInt16Ty(t->getContext());
     unsigned nb = t->getPrimitiveSizeInBits();
     assert(t != T_void && nb > 0);
