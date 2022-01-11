@@ -20,10 +20,10 @@ struct jl_raw_alloc_t;  // Defined in gc-alloc-profiler.cpp
 typedef struct {
     struct jl_raw_alloc_t *allocs;
     size_t num_allocs;
-} jl_raw_alloc_results_t;
+} jl_profile_allocs_raw_results_t;
 
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate);
-JL_DLLEXPORT jl_raw_alloc_results_t jl_fetch_alloc_profile(void);
+JL_DLLEXPORT jl_profile_allocs_raw_results_t jl_fetch_alloc_profile(void);
 JL_DLLEXPORT void jl_stop_alloc_profile(void);
 JL_DLLEXPORT void jl_free_alloc_profile(void);
 

@@ -21,8 +21,8 @@ struct RawAlloc
     size::Csize_t
 end
 
-# matches jl_raw_alloc_results_t on the C side
-struct RawAllocResults
+# matches jl_profile_allocs_raw_results_t on the C side
+struct RawResults
     allocs::Ptr{RawAlloc}
     num_allocs::Csize_t
 end
@@ -96,7 +96,7 @@ Retrieve the recorded allocations, and decode them into Julia
 objects which can be analyzed.
 """
 function fetch()
-    raw_results = ccall(:jl_fetch_alloc_profile, RawAllocResults, ())
+    raw_results = ccall(:jl_fetch_alloc_profile, RawResults, ())
     decoded_results = decode(raw_results)
     @warn("This allocation profiler currently misses some allocations. " *
     "For more info see https://github.com/JuliaLang/julia/issues/43688")
@@ -146,7 +146,7 @@ function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
     )
 end
 
-function decode(raw_results::RawAllocResults)::AllocResults
+function decode(raw_results::RawResults)::AllocResults
     cache = BacktraceCache()
     allocs = [
         decode_alloc(cache, unsafe_load(raw_results.allocs, i))
@@ -186,7 +186,7 @@ function stacktrace_memoized(
     return stack
 end
 
-# Precompile once for the package cache,
+# Precompile once for the package cache.
 @assert precompile(start, ())
 @assert precompile(stop, ())
 @assert precompile(fetch, ())

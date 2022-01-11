@@ -77,7 +77,7 @@ JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate) {
     g_alloc_profile_enabled = true;
 }
 
-JL_DLLEXPORT jl_raw_alloc_results_t jl_fetch_alloc_profile() {
+JL_DLLEXPORT jl_profile_allocs_raw_results_t jl_fetch_alloc_profile() {
     // combine allocs
     // TODO: interleave to preserve ordering
     for (auto& profile : g_alloc_profile.per_thread_profiles) {
@@ -88,7 +88,7 @@ JL_DLLEXPORT jl_raw_alloc_results_t jl_fetch_alloc_profile() {
         profile.allocs.clear();
     }
 
-    return jl_raw_alloc_results_t{
+    return jl_profile_allocs_raw_results_t{
         g_combined_results.combined_allocs.data(),
         g_combined_results.combined_allocs.size(),
     };
