@@ -19,6 +19,7 @@ New language features
 * Mutable struct fields may now be annotated as `const` to prevent changing
   them after construction, providing for greater clarity and optimization
   ability of these objects ([#43305]).
+* Empty n-dimensional arrays can now be created using multiple semicolons inside square brackets, i.e. `[;;;]` creates a 0×0×0 `Array`. ([#41618])
 
 Language changes
 ----------------
