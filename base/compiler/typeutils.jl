@@ -4,13 +4,6 @@
 # lattice utilities #
 #####################
 
-function rewrap(@nospecialize(t), @nospecialize(u))
-    if isa(t, TypeVar) || isa(t, Type) || isvarargtype(t)
-        return rewrap_unionall(t, u)
-    end
-    return t
-end
-
 isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 # true if Type{T} is inlineable as constant T
@@ -41,8 +34,6 @@ function has_nontrivial_const_info(@nospecialize t)
 end
 
 has_const_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
-
-has_concrete_subtype(d::DataType) = d.flags & 0x20 == 0x20
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
@@ -89,6 +80,30 @@ function datatype_min_ninitialized(t::DataType)
     return length(t.name.names) - t.name.n_uninitialized
 end
 
+has_concrete_subtype(d::DataType) = d.flags & 0x20 == 0x20 # n.b. often computed only after setting the type and layout fields
+
+# determine whether x is a valid lattice element tag
+# For example, Type{v} is not valid if v is a value
+# Accepts TypeVars also, since it assumes the user will rewrap it correctly
+function valid_as_lattice(@nospecialize(x))
+    x === Bottom && false
+    x isa TypeVar && return valid_as_lattice(x.ub)
+    x isa UnionAll && (x = unwrap_unionall(x))
+    if x isa Union
+        # the Union constructor ensures this (and we'll recheck after
+        # operations that might remove the Union itself)
+        return true
+    end
+    if x isa DataType
+        if isType(x)
+            p = x.parameters[1]
+            p isa Type || p isa TypeVar || return false
+        end
+        return true
+    end
+    return false
+end
+
 # test if non-Type, non-TypeVar `x` can be used to parameterize a type
 function valid_tparam(@nospecialize(x))
     if isa(x, Tuple)
@@ -119,8 +134,10 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
     end
     ua = unwrap_unionall(a)
     if isa(ua, Union)
-        return Union{typesubtract(rewrap_unionall(ua.a, a), b, MAX_UNION_SPLITTING),
-                     typesubtract(rewrap_unionall(ua.b, a), b, MAX_UNION_SPLITTING)}
+        uua = typesubtract(rewrap_unionall(ua.a, a), b, MAX_UNION_SPLITTING)
+        uub = typesubtract(rewrap_unionall(ua.b, a), b, MAX_UNION_SPLITTING)
+        return Union{valid_as_lattice(uua) ? uua : Union{},
+                     valid_as_lattice(uub) ? uub : Union{}}
     elseif a isa DataType
         ub = unwrap_unionall(b)
         if ub isa DataType
@@ -158,12 +175,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
     return a # TODO: improve this bound?
 end
 
-function tvar_extent(@nospecialize t)
-    while t isa TypeVar
-        t = t.ub
-    end
-    return t
-end
+hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
 
 _typename(@nospecialize a) = Union{}
 _typename(a::TypeVar) = Core.TypeName
@@ -182,7 +194,7 @@ function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
     t = init
     for x in ct
         # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
-        t = tmerge(t, tvar_extent(unwrapva(x)))
+        t = tmerge(t, unwraptv(unwrapva(x)))
     end
     return Vararg{widenconst(t)}
 end
@@ -193,10 +205,10 @@ end
 # or outside of the Tuple/Union nesting, though somewhat more expensive to be
 # outside than inside because the representation is larger (because and it
 # informs the callee whether any splitting is possible).
-function unionsplitcost(atypes::Union{SimpleVector,Vector{Any}})
+function unionsplitcost(argtypes::Union{SimpleVector,Vector{Any}})
     nu = 1
     max = 2
-    for ti in atypes
+    for ti in argtypes
         if isa(ti, Union)
             nti = unionlen(ti)
             if nti > max
@@ -244,20 +256,25 @@ end
 
 # unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
 # counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
-function unioncomplexity(u::Union)
-    return unioncomplexity(u.a)::Int + unioncomplexity(u.b)::Int + 1
-end
-function unioncomplexity(t::DataType)
-    t.name === Tuple.name || isvarargtype(t) || return 0
-    c = 0
-    for ti in t.parameters
-        c = max(c, unioncomplexity(ti)::Int)
+unioncomplexity(@nospecialize x) = _unioncomplexity(x)::Int
+function _unioncomplexity(@nospecialize x)
+    if isa(x, DataType)
+        x.name === Tuple.name || isvarargtype(x) || return 0
+        c = 0
+        for ti in x.parameters
+            c = max(c, unioncomplexity(ti))
+        end
+        return c
+    elseif isa(x, Union)
+        return unioncomplexity(x.a) + unioncomplexity(x.b) + 1
+    elseif isa(x, UnionAll)
+        return max(unioncomplexity(x.body), unioncomplexity(x.var.ub))
+    elseif isa(x, TypeofVararg)
+        return isdefined(x, :T) ? unioncomplexity(x.T) : 0
+    else
+        return 0
     end
-    return c
 end
-unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body)::Int, unioncomplexity(u.var.ub)::Int)
-unioncomplexity(t::TypeofVararg) = isdefined(t, :T) ? unioncomplexity(t.T)::Int : 0
-unioncomplexity(@nospecialize(x)) = 0
 
 # convert a Union of Tuple types to a Tuple of Unions
 function unswitchtupleunion(u::Union)

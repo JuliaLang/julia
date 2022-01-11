@@ -13,6 +13,8 @@ echo "    date_string::String"
 echo "    tagged_commit::Bool"
 echo "    fork_master_distance::Int"
 echo "    fork_master_timestamp::Float64"
+echo "    build_system_commit::String"
+echo "    build_system_commit_short::String"
 echo "end"
 echo ""
 
@@ -22,7 +24,7 @@ cd $1
 if [  "$#" = "2"  -a "$2" = "NO_GIT" ]; then
     # this comment is used in base/Makefile to distinguish boilerplate
     echo "# Default output if git is not available."
-    echo "const GIT_VERSION_INFO = GitVersionInfo(\"\" ,\"\" ,\"\" ,0 ,\"\" ,true ,0 ,0.)"
+    echo 'const GIT_VERSION_INFO = GitVersionInfo("", "", "", 0, "", true, 0, 0.0, "", "")'
     exit 0
 fi
 # Collect temporary variables
@@ -82,6 +84,15 @@ if [ -z "$fork_master_timestamp" ]; then
     fork_master_timestamp="0"
 fi
 
+build_system_directory="../.buildkite"
+if [ -d "${build_system_directory}/.git" ]; then
+    build_system_commit=$(git -C "${build_system_directory}" rev-parse HEAD)
+    build_system_commit_short=$(git -C "${build_system_directory}" rev-parse --short HEAD)
+else
+    build_system_commit=""
+    build_system_commit_short=""
+fi
+
 echo "const GIT_VERSION_INFO = GitVersionInfo("
 echo "    \"$commit\","
 echo "    \"$commit_short\","
@@ -90,5 +101,7 @@ echo "    $build_number,"
 echo "    \"$date_string\","
 echo "    $tagged_commit,"
 echo "    $fork_master_distance,"
-echo "    $fork_master_timestamp."
+echo "    $fork_master_timestamp.0,"
+echo "    \"$build_system_commit\","
+echo "    \"$build_system_commit_short\","
 echo ")"

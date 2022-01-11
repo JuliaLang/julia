@@ -117,35 +117,6 @@ bimg  = randn(n,2)/2
         end
     end # for eltyb
 
-@testset "Test diagm for vectors" begin
-    @test diagm(zeros(50)) == diagm(0 => zeros(50))
-    @test diagm(ones(50)) == diagm(0 => ones(50))
-    v = randn(500)
-    @test diagm(v) == diagm(0 => v)
-    @test diagm(500, 501, v) == diagm(500, 501, 0 => v)
-end
-
-@testset "Non-square diagm" begin
-    x = [7, 8]
-    for m=1:4, n=2:4
-        if m < 2 || n < 3
-            @test_throws DimensionMismatch diagm(m,n, 0 => x,  1 => x)
-            @test_throws DimensionMismatch diagm(n,m, 0 => x,  -1 => x)
-        else
-            M = zeros(m,n)
-            M[1:2,1:3] = [7 7 0; 0 8 8]
-            @test diagm(m,n, 0 => x,  1 => x) == M
-            @test diagm(n,m, 0 => x,  -1 => x) == M'
-        end
-    end
-end
-
-@testset "Test pinv (rtol, atol)" begin
-    M = [1 0 0; 0 1 0; 0 0 0]
-    @test pinv(M,atol=1)== zeros(3,3)
-    @test pinv(M,rtol=0.5)== M
-end
-
     for (a, a2) in ((copy(ainit), copy(ainit2)), (view(ainit, 1:n, 1:n), view(ainit2, 1:n, 1:n)))
         @testset "Test pinv" begin
             pinva15 = pinv(a[:,1:n1])
@@ -220,8 +191,40 @@ end
         @test Matrix(factorize(A)) ≈ Matrix(factorize(Tridiagonal(e2,d,e)))
         A = diagm(0 => d, 1 => e, 2 => f)
         @test factorize(A) == UpperTriangular(A)
+
+        x = rand(eltya)
+        @test factorize(x) == x
     end
 end # for eltya
+
+@testset "Test diagm for vectors" begin
+    @test diagm(zeros(50)) == diagm(0 => zeros(50))
+    @test diagm(ones(50)) == diagm(0 => ones(50))
+    v = randn(500)
+    @test diagm(v) == diagm(0 => v)
+    @test diagm(500, 501, v) == diagm(500, 501, 0 => v)
+end
+
+@testset "Non-square diagm" begin
+    x = [7, 8]
+    for m=1:4, n=2:4
+        if m < 2 || n < 3
+            @test_throws DimensionMismatch diagm(m,n, 0 => x,  1 => x)
+            @test_throws DimensionMismatch diagm(n,m, 0 => x,  -1 => x)
+        else
+            M = zeros(m,n)
+            M[1:2,1:3] = [7 7 0; 0 8 8]
+            @test diagm(m,n, 0 => x,  1 => x) == M
+            @test diagm(n,m, 0 => x,  -1 => x) == M'
+        end
+    end
+end
+
+@testset "Test pinv (rtol, atol)" begin
+    M = [1 0 0; 0 1 0; 0 0 0]
+    @test pinv(M,atol=1)== zeros(3,3)
+    @test pinv(M,rtol=0.5)== M
+end
 
 @testset "test out of bounds triu/tril" begin
     local m, n = 5, 7

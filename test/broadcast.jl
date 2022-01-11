@@ -1011,6 +1011,8 @@ end
     @test typeof.([iszero, iszero]) == [typeof(iszero), typeof(iszero)]
     @test isequal(identity.(Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
                   [[1, 2],[missing, 1]])
+    @test broadcast(i -> ((x=i, y=(i==1 ? 1 : "a")), 3), 1:4) isa
+        Vector{Tuple{NamedTuple{(:x, :y)}, Int}}
 end
 
 @testset "Issue #28382: eltype inconsistent with getindex" begin
@@ -1067,4 +1069,13 @@ end
     arr = rand(1000)
     @allocated test(arr)
     @test (@allocated test(arr)) == 0
+end
+
+@testset "Fix type unstable .&& #43470" begin
+    function test(x, y)
+        return (x .> 0.0) .&& (y .> 0.0)
+    end
+    x = randn(2)
+    y = randn(2)
+    @inferred(test(x, y)) == [0, 0]
 end

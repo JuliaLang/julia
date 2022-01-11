@@ -9,12 +9,6 @@
 #undef jl_longjmp
 #endif
 
-//** Configuration options that affect the Julia ABI **//
-// if this is not defined, only individual dimension sizes are
-// stored and not total length, to save space.
-#define STORE_ARRAY_LEN
-//** End Configuration options **//
-
 #include "julia_fasttls.h"
 #include "libsupport.h"
 #include <stdint.h>
@@ -174,9 +168,7 @@ typedef struct {
 JL_EXTENSION typedef struct {
     JL_DATA_TYPE
     void *data;
-#ifdef STORE_ARRAY_LEN
     size_t length;
-#endif
     jl_array_flags_t flags;
     uint16_t elsize;  // element size including alignment (dim 1 memory stride)
     uint32_t offset;  // for 1-d only. does not need to get big.
@@ -415,7 +407,7 @@ typedef struct {
     struct _jl_module_t *module;
     jl_svec_t *names;  // field names
     const uint32_t *atomicfields; // if any fields are atomic, we record them here
-    //const uint32_t *constfields; // if any fields are const, we record them here
+    const uint32_t *constfields; // if any fields are const, we record them here
     // `wrapper` is either the only instantiation of the type (if no parameters)
     // or a UnionAll accepting parameters to make an instantiation.
     jl_value_t *wrapper;
@@ -539,6 +531,7 @@ typedef struct _jl_module_t {
     int8_t compile;
     int8_t infer;
     uint8_t istopmod;
+    int8_t max_methods;
     jl_mutex_t lock;
 } jl_module_t;
 
@@ -919,12 +912,7 @@ STATIC_INLINE jl_value_t *jl_svecset(
 }
 #endif
 
-#ifdef STORE_ARRAY_LEN
 #define jl_array_len(a)   (((jl_array_t*)(a))->length)
-#else
-JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a);
-#define jl_array_len(a)   jl_array_len_((jl_array_t*)(a))
-#endif
 #define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
 #define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
 #define jl_array_dim0(a)  (((jl_array_t*)(a))->nrows)
@@ -1113,7 +1101,6 @@ static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 
 static inline int jl_field_isatomic(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 {
-    // if (!st->mutable) return 0; // TODO: is this fast-path helpful?
     const uint32_t *atomicfields = st->name->atomicfields;
     if (atomicfields != NULL) {
         if (atomicfields[i / 32] & (1 << (i % 32)))
@@ -1121,6 +1108,20 @@ static inline int jl_field_isatomic(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
     }
     return 0;
 }
+
+static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
+{
+    jl_typename_t *tn = st->name;
+    if (!tn->mutabl)
+        return 1;
+    const uint32_t *constfields = tn->constfields;
+    if (constfields != NULL) {
+        if (constfields[i / 32] & (1 << (i % 32)))
+            return 1;
+    }
+    return 0;
+}
+
 
 static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEPOINT
 {
@@ -1480,8 +1481,8 @@ JL_DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *r
 JL_DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
-int jl_uniontype_size(jl_value_t *ty, size_t *sz) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al) JL_NOTSAFEPOINT;
+int jl_uniontype_size(jl_value_t *ty, size_t *sz);
+JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al);
 
 // arrays
 JL_DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims);
@@ -1516,6 +1517,7 @@ JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz);
 JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item);
 JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2);
 JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_value_t *type, size_t dim);
+JL_DLLEXPORT int jl_array_validate_dims(size_t *nel, size_t *tot, uint32_t ndims, size_t *dims, size_t elsz);
 // property access
 JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 JL_DLLEXPORT void *jl_array_eltype(jl_value_t *a);
@@ -1538,6 +1540,8 @@ JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_compile(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m);
+JL_DLLEXPORT void jl_set_module_max_methods(jl_module_t *self, int value);
+JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
@@ -1711,11 +1715,11 @@ enum JL_RTLD_CONSTANT {
 };
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 
-typedef void *jl_uv_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
-JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);
-JL_DLLEXPORT jl_uv_libhandle jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_dlclose(jl_uv_libhandle handle) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_dlsym(jl_uv_libhandle handle, const char *symbol, void ** value, int throw_err) JL_NOTSAFEPOINT;
+typedef void *jl_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
+JL_DLLEXPORT jl_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);
+JL_DLLEXPORT jl_libhandle jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_dlclose(jl_libhandle handle) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_dlsym(jl_libhandle handle, const char *symbol, void ** value, int throw_err) JL_NOTSAFEPOINT;
 
 // evaluation
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v);
@@ -1832,7 +1836,7 @@ typedef struct _jl_task_t {
     jl_gcframe_t *gcstack;
     size_t world_age;
     // quick lookup for current ptls
-    jl_tls_states_t *ptls; // == jl_all_tls_states[tid]
+    jl_ptls_t ptls; // == jl_all_tls_states[tid]
     // saved exception stack
     jl_excstack_t *excstack;
     // current exception handler
@@ -1935,24 +1939,32 @@ extern int had_exception;
 
 // I/O system -----------------------------------------------------------------
 
-#define JL_STREAM uv_stream_t
+struct uv_loop_s;
+struct uv_handle_s;
+struct uv_stream_s;
+#ifdef _OS_WINDOWS_
+typedef HANDLE jl_uv_os_fd_t;
+#else
+typedef int jl_uv_os_fd_t;
+#endif
+#define JL_STREAM struct uv_stream_s
 #define JL_STDOUT jl_uv_stdout
 #define JL_STDERR jl_uv_stderr
 #define JL_STDIN  jl_uv_stdin
 
 JL_DLLEXPORT int jl_process_events(void);
 
-JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void);
+JL_DLLEXPORT struct uv_loop_s *jl_global_event_loop(void);
 
-JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle);
+JL_DLLEXPORT void jl_close_uv(struct uv_handle_s *handle);
 
 JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
 
 typedef struct {
     void *data;
-    uv_loop_t *loop;
-    uv_handle_type type;
-    uv_os_fd_t file;
+    struct uv_loop_s *loop;
+    int type; // enum uv_handle_type
+    jl_uv_os_fd_t file;
 } jl_uv_file_t;
 
 #ifdef __GNUC__
@@ -1962,10 +1974,10 @@ typedef struct {
 #define _JL_FORMAT_ATTR(type, str, arg)
 #endif
 
-JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n);
-JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
+JL_DLLEXPORT void jl_uv_puts(struct uv_stream_s *stream, const char *str, size_t n);
+JL_DLLEXPORT int jl_printf(struct uv_stream_s *s, const char *format, ...)
     _JL_FORMAT_ATTR(printf, 2, 3);
-JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
+JL_DLLEXPORT int jl_vprintf(struct uv_stream_s *s, const char *format, va_list args)
     _JL_FORMAT_ATTR(printf, 2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 1, 2);

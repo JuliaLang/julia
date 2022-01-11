@@ -626,7 +626,8 @@ end
     @test 2 .* ((1:5) .+ A) == 2:2:10
     @test 2 .* (A .+ (1:5)) == 2:2:10
 
-    @test Diagonal(spzeros(5)) \ view(rand(10), 1:5) == [Inf,Inf,Inf,Inf,Inf]
+    # lu(zeros(5,5)) throw SingularException, see #42343
+    @test_throws SingularException Diagonal(spzeros(5)) \ view(rand(10), 1:5)
 end
 
 @testset "Issue #27836" begin

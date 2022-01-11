@@ -124,13 +124,7 @@ module IteratorsMD
     @inline (*)(index::CartesianIndex, a::Integer) = *(a,index)
 
     # comparison
-    @inline isless(I1::CartesianIndex{N}, I2::CartesianIndex{N}) where {N} = _isless(0, I1.I, I2.I)
-    @inline function _isless(ret, I1::Tuple{Int,Vararg{Int}}, I2::Tuple{Int,Vararg{Int}})
-        newret = ifelse(ret==0, icmp(last(I1), last(I2)), ret)
-        return _isless(newret, Base.front(I1), Base.front(I2))
-    end
-    _isless(ret, ::Tuple{}, ::Tuple{}) = ifelse(ret==1, true, false)
-    icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
+    isless(I1::CartesianIndex{N}, I2::CartesianIndex{N}) where {N} = isless(reverse(I1.I), reverse(I2.I))
 
     # conversions
     convert(::Type{T}, index::CartesianIndex{1}) where {T<:Number} = convert(T, index[1])
@@ -1471,7 +1465,7 @@ end
 end
 
 ## fill! contiguous views of BitArrays with a single value
-function fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}}}, x)
+function fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, x)
     B = V.parent
     I0 = V.indices[1]
     l0 = length(I0)
@@ -1480,7 +1474,7 @@ function fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}
     return V
 end
 
-fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, x) =
+fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, x) =
     _unsafe_fill_indices!(V.parent, x, V.indices...)
 
 @generated function _unsafe_fill_indices!(B::BitArray, x,

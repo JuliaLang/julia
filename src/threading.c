@@ -301,7 +301,7 @@ JL_DLLEXPORT int16_t jl_threadid(void)
 jl_ptls_t jl_init_threadtls(int16_t tid)
 {
     jl_ptls_t ptls = (jl_ptls_t)calloc(1, sizeof(jl_tls_states_t));
-    ptls->system_id = jl_thread_self();
+    ptls->system_id = (jl_thread_t)(uintptr_t)uv_thread_self();
     seed_cong(&ptls->rngseed);
 #ifdef _OS_WINDOWS_
     if (tid == 0) {
@@ -500,7 +500,7 @@ void jl_start_threads(void)
         }
         memset(mask, 0, cpumasksize);
         mask[0] = 1;
-        uvtid = (uv_thread_t)uv_thread_self();
+        uvtid = uv_thread_self();
         uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
         mask[0] = 0;
     }

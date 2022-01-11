@@ -192,8 +192,8 @@ export
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!,
-    nfields, throw, tuple, ===, isdefined, eval, ifelse,
-    # sizeof    # not exported, to avoid conflicting with Base.sizeof
+    nfields, throw, tuple, ===, isdefined, eval,
+    # ifelse, sizeof    # not exported, to avoid conflicting with Base
     # type reflection
     <:, typeof, isa, typeassert,
     # method reflection
@@ -443,7 +443,6 @@ cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
-
 
 ## primitive Array constructors
 struct UndefInitializer end

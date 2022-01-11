@@ -172,7 +172,7 @@ hashindex(key, sz) = (((hash(key)::UInt % Int) & (sz-1)) + 1)::Int
 @propagate_inbounds isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
 @propagate_inbounds isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
 
-function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
+@constprop :none function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     olds = h.slots
     oldk = h.keys
     oldv = h.vals
@@ -367,6 +367,7 @@ end
         # > 3/4 deleted or > 2/3 full
         rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
     end
+    nothing
 end
 
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
@@ -391,6 +392,22 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
 
     return h
 end
+
+function setindex!(h::Dict{K,Any}, v, key::K) where K
+    @nospecialize v
+    index = ht_keyindex2!(h, key)
+
+    if index > 0
+        h.age += 1
+        @inbounds h.keys[index] = key
+        @inbounds h.vals[index] = v
+    else
+        @inbounds _setindex!(h, v, key, -index)
+    end
+
+    return h
+end
+
 
 """
     get!(collection, key, default)

@@ -35,7 +35,7 @@ mutable struct InferenceResult
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     valid_worlds::WorldRange # if inference and optimization is finished
     function InferenceResult(linfo::MethodInstance,
-                             arginfo::Union{Nothing,ArgInfo} = nothing,
+                             arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing,
                              va_override::Bool = false)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo, va_override)
         return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange())
@@ -236,3 +236,14 @@ bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) 
     return rt === Any
 bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
     return rt === Any
+
+"""
+    infer_compilation_signature(::AbstractInterpreter)::Bool
+
+For some call sites (for example calls to varargs methods), the signature to be compiled
+and executed at run time can differ from the argument types known at the call site.
+This flag controls whether we should always infer the compilation signature in addition
+to the call site signature.
+"""
+infer_compilation_signature(::AbstractInterpreter) = false
+infer_compilation_signature(::NativeInterpreter) = true

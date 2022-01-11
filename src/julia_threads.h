@@ -5,6 +5,9 @@
 #define JL_THREADS_H
 
 #include "julia_atomics.h"
+#ifndef _OS_WINDOWS_
+#include "pthread.h"
+#endif
 // threading ------------------------------------------------------------------
 
 #ifdef __cplusplus
@@ -192,7 +195,6 @@ typedef struct {
     // this makes sure that a single objects can only appear once in
     // the lists (the mark bit cannot be flipped to `0` without sweeping)
     void *big_obj[1024];
-    uv_mutex_t stack_lock;
     void **pc_stack;
     void **pc_stack_end;
     jl_gc_mark_data_t *data_stack;
@@ -226,8 +228,6 @@ typedef struct _jl_tls_states_t {
     int finalizers_inhibited;
     jl_thread_heap_t heap; // this is very large, and the offset is baked into codegen
     jl_thread_gc_num_t gc_num;
-    uv_mutex_t sleep_lock;
-    uv_cond_t wake_signal;
     volatile sig_atomic_t defer_signal;
     _Atomic(struct _jl_task_t*) current_task;
     struct _jl_task_t *next_task;
@@ -278,6 +278,11 @@ typedef struct _jl_tls_states_t {
 } jl_tls_states_t;
 
 typedef jl_tls_states_t *jl_ptls_t;
+
+#ifndef LIBRARY_EXPORTS
+// deprecated (only for external consumers)
+JL_DLLEXPORT void *jl_get_ptls_states(void);
+#endif
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__
@@ -358,17 +363,6 @@ JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
 extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
-
-// Copied from libuv. Add `JL_CONST_FUNC` so that the compiler
-// can optimize this better.
-static inline jl_thread_t JL_CONST_FUNC jl_thread_self(void)
-{
-#ifdef _OS_WINDOWS_
-    return GetCurrentThreadId();
-#else
-    return pthread_self();
-#endif
-}
 
 #ifdef __cplusplus
 }

@@ -594,6 +594,10 @@ end
         @test findprev(b, T(1)) isa keytype(b)
         @test findprev(b, T(2)) isa keytype(b)
     end
+
+    @testset "issue 43078" begin
+        @test_throws TypeError findall([1])
+    end
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
@@ -2959,4 +2963,19 @@ end
         c = view(b, 1:1, 1:1)
         @test c + zero(c) == c
     end
+end
+
+@testset "Allow assignment of singleton array to sparse array #43644" begin
+    K = spzeros(3,3)
+    b = zeros(3,3)
+    b[3,:] = [1,2,3]
+    K[3,1:3] += [1.0 2.0 3.0]'
+    @test K == b
+    K[3:3,1:3] += zeros(1, 3)
+    @test K == b
+    K[3,1:3] += zeros(3)
+    @test K == b
+    K[3,:] += zeros(3,1)
+    @test K == b
+    @test_throws DimensionMismatch K[3,1:2] += [1.0 2.0 3.0]'
 end

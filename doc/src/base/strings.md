@@ -66,6 +66,8 @@ Base.uppercasefirst
 Base.lowercasefirst
 Base.join
 Base.chop
+Base.chopprefix
+Base.chopsuffix
 Base.chomp
 Base.thisind
 Base.nextind

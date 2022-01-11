@@ -153,13 +153,14 @@
 (define (jl-expand-to-thunk-warn expr file line stmt)
   (let ((warnings '()))
     (with-bindings
-     ((lowering-warning (lambda lst (set! warnings (cons lst warnings)))))
-     (begin0
-      (if stmt
-          (expand-to-thunk-stmt- expr file line)
-          (expand-to-thunk- expr file line))
-      (for-each (lambda (args) (apply julia-logmsg args))
-                (reverse warnings))))))
+     ;; Abuse scm_to_julia here to convert arguments to warn. This is meant for
+     ;; `Expr`s but should be good enough provided we're only passing simple
+     ;; numbers, symbols and strings.
+     ((lowering-warning (lambda lst (set! warnings (cons (cons 'warn lst) warnings)))))
+     (let ((thunk (if stmt
+                      (expand-to-thunk-stmt- expr file line)
+                      (expand-to-thunk- expr file line))))
+       (if (pair? warnings) `(warn ,@(reverse warnings) ,thunk) thunk)))))
 
 (define (jl-expand-to-thunk expr file line)
   (expand-to-thunk- expr file line))
@@ -214,16 +215,6 @@
 ; Utilities for logging messages from the frontend, in a way which can be
 ; controlled from julia code.
 
-; Log a general deprecation message at line node location `lno`
-(define (deprecation-message msg lno)
-  (let* ((lf (extract-line-file lno)) (line (car lf)) (file (cadr lf)))
-    (frontend-depwarn msg file line)))
-
-; Log a syntax deprecation from line node location `lno`
-(define (syntax-deprecation what instead lno)
-  (let* ((lf (extract-line-file lno)) (line (car lf)) (file (cadr lf)))
-    (deprecation-message (format-syntax-deprecation what instead file line #f) lno)))
-
 ; Extract line and file from a line number node, defaulting to (0, none)
 ; respectively if lno is absent (`#f`) or doesn't contain a file
 (define (extract-line-file lno)
@@ -241,21 +232,4 @@
       ""
       (string (if exactloc " at " " around ") file ":" line)))
 
-(define (format-syntax-deprecation what instead file line exactloc)
-  (string "Deprecated syntax `" what "`"
-          (format-file-line file line exactloc)
-          "."
-          (if (equal? instead "") ""
-              (string #\newline "Use `" instead "` instead."))))
-
 (define *scopewarn-opt* 1)
-
-; Corresponds to --depwarn 0="no", 1="yes", 2="error"
-(define *depwarn-opt* 1)
-
-; Emit deprecation warning via julia logging layer.
-(define (frontend-depwarn msg file line)
-  ; (display (string msg "; file = " file "; line = " line #\newline)))
-  (case *depwarn-opt*
-    (1 (julia-logmsg 1000 'depwarn (symbol (string file line)) file line msg))
-    (2 (error msg))))

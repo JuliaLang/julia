@@ -16,7 +16,11 @@
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
+#if JL_LLVM_VERSION >= 140000
+#include <llvm/MC/TargetRegistry.h>
+#else
 #include <llvm/Support/TargetRegistry.h>
+#endif
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -43,7 +47,7 @@ void jl_dump_compiles_impl(void *s)
 }
 JL_STREAM *dump_llvm_opt_stream = NULL;
 extern "C" JL_DLLEXPORT
-void jl_dump_llvm_opt(void *s)
+void jl_dump_llvm_opt_impl(void *s)
 {
     dump_llvm_opt_stream = (JL_STREAM*)s;
 }
@@ -85,10 +89,6 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_code_info_t *src,
         size_t world)
 {
-    // TODO: Merge with jl_dump_compiles?
-    static ios_t f_precompile;
-    static JL_STREAM* s_precompile = NULL;
-
     // caller must hold codegen_lock
     // and have disabled finalizers
     uint64_t start_time = 0;
@@ -182,26 +182,6 @@ static jl_callptr_t _jl_compile_codeinst(
     // then dump the method-instance specialization type to the stream
     jl_method_instance_t *mi = codeinst->def;
     if (jl_is_method(mi->def.method)) {
-        if (jl_options.trace_compile != NULL) {
-            if (s_precompile == NULL) {
-                const char* t = jl_options.trace_compile;
-                if (!strncmp(t, "stderr", 6))
-                    s_precompile = JL_STDERR;
-                else {
-                    if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
-                        jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
-                    s_precompile = (JL_STREAM*) &f_precompile;
-                }
-            }
-            if (!jl_has_free_typevars(mi->specTypes)) {
-                jl_printf(s_precompile, "precompile(");
-                jl_static_show(s_precompile, mi->specTypes);
-                jl_printf(s_precompile, ")\n");
-
-                if (s_precompile != JL_STDERR)
-                    ios_flush(&f_precompile);
-            }
-        }
         if (dump_compiles_stream != NULL) {
             jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", end_time - start_time);
             jl_static_show(dump_compiles_stream, mi->specTypes);
@@ -318,10 +298,12 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     }
     if (src == NULL && jl_is_method(mi->def.method) &&
              jl_symbol_name(mi->def.method->name)[0] != '@') {
-        // If the caller didn't provide the source,
-        // see if it is inferred, or try to infer it for ourself.
-        // (but don't bother with typeinf on macros or toplevel thunks)
-        src = jl_type_infer(mi, world, 0);
+        if (mi->def.method->source != jl_nothing) {
+            // If the caller didn't provide the source and IR is available,
+            // see if it is inferred, or try to infer it for ourself.
+            // (but don't bother with typeinf on macros or toplevel thunks)
+            src = jl_type_infer(mi, world, 0);
+        }
     }
     jl_code_instance_t *compiled = jl_method_compiled(mi, world);
     if (compiled) {
@@ -503,22 +485,12 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                          const RuntimeDyld::LoadedObjectInfo &L,
                                          RTDyldMemoryManager *memmgr);
 
-#if JL_LLVM_VERSION >= 120000
 template <typename ObjT, typename LoadResult>
 void JuliaOJIT::registerObject(const ObjT &Obj, const LoadResult &LO)
 {
     const ObjT* Object = &Obj;
     ORCNotifyObjectEmitted(JuliaListener.get(), *Object, *LO, MemMgr.get());
 }
-#else
-template <typename ObjT, typename LoadResult>
-void JuliaOJIT::registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO)
-{
-    const ObjT* Object = &Obj;
-    NotifyFinalizer(H, *Object, *LO);
-    ORCNotifyObjectEmitted(JuliaListener.get(), *Object, *LO, MemMgr.get());
-}
-#endif
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 {
@@ -535,7 +507,7 @@ static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw
 {
     addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, optlevel);
-    addMachinePasses(&PM, &TM);
+    addMachinePasses(&PM, &TM, optlevel);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
 }
@@ -610,7 +582,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
         raw_string_ostream OS(Buf);
         logAllUnhandledErrors(Obj.takeError(), OS, "");
         OS.flush();
-        llvm::report_fatal_error("FATAL: Unable to compile LLVM Module: '" + Buf + "'\n"
+        llvm::report_fatal_error(llvm::Twine("FATAL: Unable to compile LLVM Module: '") + Buf + "'\n"
                                  "The module's content was printed above. Please file a bug report");
     }
 
@@ -658,21 +630,12 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
         ),
     CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT>(this))
 {
-#if JL_LLVM_VERSION >= 120000
     ObjectLayer.setNotifyLoaded(
         [this](orc::MaterializationResponsibility &MR,
                const object::ObjectFile &Object,
                const RuntimeDyld::LoadedObjectInfo &LOS) {
             registerObject(Object, &LOS);
         });
-#else
-    ObjectLayer.setNotifyLoaded(
-        [this](RTDyldObjHandleT H,
-               const object::ObjectFile &Object,
-               const RuntimeDyld::LoadedObjectInfo &LOS) {
-            registerObject(H, Object, &LOS);
-        });
-#endif
     for (int i = 0; i < 4; i++) {
         TMs[i] = TM.getTarget().createTargetMachine(TM.getTargetTriple().getTriple(), TM.getTargetCPU(),
                 TM.getTargetFeatureString(), TM.Options, Reloc::Static, TM.getCodeModel(),
@@ -688,7 +651,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
     // tells DynamicLibrary to load the program, not a library.
     std::string ErrorStr;
     if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &ErrorStr))
-        report_fatal_error("FATAL: unable to dlopen self\n" + ErrorStr);
+        report_fatal_error(llvm::Twine("FATAL: unable to dlopen self\n") + ErrorStr);
 
     GlobalJD.addGenerator(
       cantFail(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
@@ -756,27 +719,14 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
         }
     }
 #endif
-#if JL_LLVM_VERSION >= 120000
     // TODO: what is the performance characteristics of this?
     cantFail(CompileLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
-#else
-    auto key = ES.allocateVModule();
-    // TODO: what is the performance characteristics of this?
-    cantFail(CompileLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx), key));
-#endif
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
         cantFail(ES.lookup({&JD}, Name));
 
 }
-
-#if JL_LLVM_VERSION < 120000
-void JuliaOJIT::removeModule(ModuleHandleT H)
-{
-    //(void)CompileLayer.remove(H);
-}
-#endif
 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
@@ -847,22 +797,8 @@ void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
 {
     if (!L)
         return;
-#if JL_LLVM_VERSION >= 120000
     this->ObjectLayer.registerJITEventListener(*L);
-#else
-    EventListeners.push_back(L);
-#endif
 }
-
-#if JL_LLVM_VERSION < 120000
-void JuliaOJIT::NotifyFinalizer(RTDyldObjHandleT Key,
-                                const object::ObjectFile &Obj,
-                                const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo)
-{
-    for (auto &Listener : EventListeners)
-        Listener->notifyObjectLoaded(Key, Obj, LoadedObjectInfo);
-}
-#endif
 
 const DataLayout& JuliaOJIT::getDataLayout() const
 {
@@ -1043,7 +979,7 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
             ConstantAggregateZero::get(atype), "__catchjmp") };
     gvs[0]->setSection(".text");
     gvs[1]->setSection(".text");
-    appendToUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
+    appendToCompilerUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
 #endif
     jl_jit_share_data(*m);
     assert(jl_ExecutionEngine);
@@ -1132,7 +1068,7 @@ void add_named_global(StringRef name, void *addr)
 }
 
 extern "C" JL_DLLEXPORT
-size_t jl_jit_total_bytes(void)
+size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
 }

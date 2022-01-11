@@ -125,17 +125,13 @@ AbstractMatrix{T}(S::SymTridiagonal) where {T} =
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = zeros(T, n, n)
-    if n == 0
-        return Mf
+    n == 0 && return Mf
+    @inbounds for i = 1:n-1
+        Mf[i,i] = symmetric(M.dv[i], :U)
+        Mf[i+1,i] = transpose(M.ev[i])
+        Mf[i,i+1] = M.ev[i]
     end
-    @inbounds begin
-        @simd for i = 1:n-1
-            Mf[i,i] = M.dv[i]
-            Mf[i+1,i] = M.ev[i]
-            Mf[i,i+1] = M.ev[i]
-        end
-        Mf[n,n] = M.dv[n]
-    end
+    Mf[n,n] = symmetric(M.dv[n], :U)
     return Mf
 end
 Matrix(M::SymTridiagonal{T}) where {T} = Matrix{T}(M)
@@ -152,12 +148,8 @@ function size(A::SymTridiagonal, d::Integer)
     end
 end
 
-# For S<:SymTridiagonal, similar(S[, neweltype]) should yield a SymTridiagonal matrix.
-# On the other hand, similar(S, [neweltype,] shape...) should yield a sparse matrix.
-# The first method below effects the former, and the second the latter.
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
-# The method below is moved to SparseArrays for now
-# similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
 
 copyto!(dest::SymTridiagonal, src::SymTridiagonal) =
     (copyto!(dest.dv, src.dv); copyto!(dest.ev, _evview(src)); dest)
@@ -588,12 +580,8 @@ end
 Matrix(M::Tridiagonal{T}) where {T} = Matrix{T}(M)
 Array(M::Tridiagonal) = Matrix(M)
 
-# For M<:Tridiagonal, similar(M[, neweltype]) should yield a Tridiagonal matrix.
-# On the other hand, similar(M, [neweltype,] shape...) should yield a sparse matrix.
-# The first method below effects the former, and the second the latter.
 similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), similar(M.d, T), similar(M.du, T))
-# The method below is moved to SparseArrays for now
-# similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
 
 # Operations on Tridiagonal matrices
 copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
@@ -612,8 +600,8 @@ transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
 Base.copy(aS::Adjoint{<:Any,<:Tridiagonal}) = (S = aS.parent; Tridiagonal(map(x -> copy.(adjoint.(x)), (S.du, S.d, S.dl))...))
 Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(x -> copy.(transpose.(x)), (S.du, S.d, S.dl))...))
 
-ishermitian(S::Tridiagonal) = isreal(S.d) && S.du == adjoint.(S.dl)
-issymmetric(S::Tridiagonal) = S.du == S.dl
+ishermitian(S::Tridiagonal) = all(ishermitian, S.d) && all(Iterators.map((x, y) -> x == y', S.du, S.dl))
+issymmetric(S::Tridiagonal) = all(issymmetric, S.d) && all(Iterators.map((x, y) -> x == transpose(y), S.du, S.dl))
 
 \(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = copy(A) \ B
 
@@ -744,8 +732,12 @@ end
 \(B::Number, A::Tridiagonal) = Tridiagonal(B\A.dl, B\A.d, B\A.du)
 
 ==(A::Tridiagonal, B::Tridiagonal) = (A.dl==B.dl) && (A.d==B.d) && (A.du==B.du)
-==(A::Tridiagonal, B::SymTridiagonal) = (A.dl==A.du==B.ev) && (A.d==B.dv)
-==(A::SymTridiagonal, B::Tridiagonal) = (B.dl==B.du==A.ev) && (B.d==A.dv)
+function ==(A::Tridiagonal, B::SymTridiagonal)
+    iseq = all(Iterators.map((x, y) -> x == transpose(y), A.du, A.dl))
+    iseq = iseq && A.du == _evview(B)
+    iseq && all(Iterators.map((x, y) -> x == symmetric(y, :U), A.d, B.dv))
+end
+==(A::SymTridiagonal, B::Tridiagonal) = B == A
 
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
@@ -760,7 +752,10 @@ function SymTridiagonal{T}(M::Tridiagonal) where T
 end
 
 Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
-Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)
+function Base._sum(A::SymTridiagonal, ::Colon)
+    se = sum(_evview(A))
+    symmetric(sum(A.dv), :U) + se + transpose(se)
+end
 
 function Base._sum(A::Tridiagonal, dims::Integer)
     res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
@@ -807,24 +802,24 @@ function Base._sum(A::SymTridiagonal, dims::Integer)
     end
     @inbounds begin
         if dims == 1
-            res[1] = A.ev[1] + A.dv[1]
+            res[1] = transpose(A.ev[1]) + symmetric(A.dv[1], :U)
             for i = 2:n-1
-                res[i] = A.ev[i] + A.dv[i] + A.ev[i-1]
+                res[i] = transpose(A.ev[i]) + symmetric(A.dv[i], :U) + A.ev[i-1]
             end
-            res[n] = A.dv[n] + A.ev[n-1]
+            res[n] = symmetric(A.dv[n], :U) + A.ev[n-1]
         elseif dims == 2
-            res[1] = A.dv[1] + A.ev[1]
+            res[1] = symmetric(A.dv[1], :U) + A.ev[1]
             for i = 2:n-1
-                res[i] = A.ev[i-1] + A.dv[i] + A.ev[i]
+                res[i] = transpose(A.ev[i-1]) + symmetric(A.dv[i], :U) + A.ev[i]
             end
-            res[n] = A.ev[n-1] + A.dv[n]
+            res[n] = transpose(A.ev[n-1]) + symmetric(A.dv[n], :U)
         elseif dims >= 3
             for i = 1:n-1
                 res[i,i+1] = A.ev[i]
-                res[i,i]   = A.dv[i]
-                res[i+1,i] = A.ev[i]
+                res[i,i]   = symmetric(A.dv[i], :U)
+                res[i+1,i] = transpose(A.ev[i])
             end
-            res[n,n] = A.dv[n]
+            res[n,n] = symmetric(A.dv[n], :U)
         end
     end
     res

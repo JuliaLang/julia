@@ -47,7 +47,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         # XXX: this is wrong if `sig` is not a concretetype method
         # more correct would be to use `fieldtype(sig, i)`, but that would obscure / discard Varargs information in show
         sig = linfo.specTypes == Tuple ? Core.svec() : Base.unwrap_unionall(linfo.specTypes).parameters::Core.SimpleVector
-        print_arg(i) = sprint() do io
+        print_arg(i) = sprint(; context=io) do io
             show_unquoted(io, stmt.args[i], indent)
             if (i - 1) <= length(sig)
                 print(io, "::", sig[i - 1])
@@ -82,7 +82,7 @@ function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::Strin
     args = String[let
         e = stmt.edges[i]
         v = !isassigned(stmt.values, i) ? "#undef" :
-            sprint() do io′
+            sprint(; context=io) do io′
                 show_unquoted(io′, stmt.values[i], indent)
             end
         "$prefix$e => $v"

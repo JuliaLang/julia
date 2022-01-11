@@ -9,7 +9,6 @@
 #include "julia.h"
 #include "julia_internal.h"
 #ifdef _OS_WINDOWS_
-#include <windows.h>
 #include <direct.h>
 #else
 #include <unistd.h>

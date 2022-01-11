@@ -32,12 +32,12 @@ precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
 precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
 precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
 precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
-precompile(Tuple{typeof(Base.display_error), MethodError, Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}})
-precompile(Tuple{typeof(Base.display_error), ErrorException})
-precompile(Tuple{typeof(Base.display_error), BoundsError})
+precompile(Tuple{typeof(Base.display_error), Base.ExceptionStack})
 precompile(Tuple{Core.kwftype(typeof(Type)), NamedTuple{(:sizehint,), Tuple{Int}}, Type{IOBuffer}})
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, String, Module))
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
+precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
+precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
 """
 
 for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
@@ -188,7 +188,7 @@ Test = get(Base.loaded_modules,
 if Test !== nothing
     hardcoded_precompile_statements *= """
     precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
-    precompile(Tuple{typeof(Test.testset_beginend), Tuple{String, Expr}, Expr, LineNumberNode})
+    precompile(Tuple{typeof(Test.testset_beginend_call), Tuple{String, Expr}, Expr, LineNumberNode})
     precompile(Tuple{Type{Test.DefaultTestSet}, String})
     precompile(Tuple{Type{Test.DefaultTestSet}, AbstractString})
     precompile(Tuple{Core.kwftype(Type{Test.DefaultTestSet}), Any, Type{Test.DefaultTestSet}, AbstractString})
@@ -254,8 +254,8 @@ function generate_precompile_statements()
               module $pkgname
               end
               """)
-        tmp_prec = tempname()
-        tmp_proc = tempname()
+        tmp_prec = tempname(prec_path)
+        tmp_proc = tempname(prec_path)
         s = """
             pushfirst!(DEPOT_PATH, $(repr(prec_path)));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));

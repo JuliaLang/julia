@@ -9,16 +9,8 @@
 #define JL_LLVM_VERSION (LLVM_VERSION_MAJOR * 10000 + LLVM_VERSION_MINOR * 100 \
                         + LLVM_VERSION_PATCH)
 
-#if JL_LLVM_VERSION < 110000
-    #error Only LLVM versions >= 11.0.0 are supported by Julia
-#endif
-
-#ifndef LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING
-#define LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING 0
-#endif
-
-#ifndef LLVM_ENABLE_STATS
-#define LLVM_ENABLE_STATS 0
+#if JL_LLVM_VERSION < 120000
+    #error Only LLVM versions >= 12.0.0 are supported by Julia
 #endif
 
 #ifdef __cplusplus

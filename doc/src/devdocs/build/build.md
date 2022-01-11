@@ -202,11 +202,11 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 [perl]:         https://www.perl.org
 [cmake]:        https://www.cmake.org
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
-[DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
+[DSFMT]:        https://github.com/MersenneTwister-Lab/dSFMT
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS
 [LAPACK]:       https://www.netlib.org/lapack
 [MKL]:          https://software.intel.com/en-us/articles/intel-mkl
-[SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
+[SuiteSparse]:  https://people.engr.tamu.edu/davis/suitesparse.html
 [PCRE]:         https://www.pcre.org
 [LLVM]:         https://www.llvm.org
 [LLVM libunwind]: https://github.com/llvm/llvm-project/tree/main/libunwind

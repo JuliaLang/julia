@@ -23,7 +23,7 @@ extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM);
+void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
 Module *jl_create_llvm_module(StringRef name);
@@ -52,7 +52,7 @@ struct jl_returninfo_t {
 typedef std::vector<std::tuple<jl_code_instance_t*, jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool>> jl_codegen_call_targets_t;
 typedef std::tuple<std::unique_ptr<Module>, jl_llvm_functions_t> jl_compile_result_t;
 
-typedef struct {
+typedef struct _jl_codegen_params_t {
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     jl_codegen_call_targets_t workqueue;
@@ -143,10 +143,6 @@ typedef JITSymbol JL_JITSymbol;
 // is expected.
 typedef JITSymbol JL_SymbolInfo;
 
-#if JL_LLVM_VERSION < 120000
-using RTDyldObjHandleT = orc::VModuleKey;
-#endif
-
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 
 class JuliaOJIT {
@@ -158,38 +154,21 @@ class JuliaOJIT {
     private:
         JuliaOJIT &jit;
     };
-#if JL_LLVM_VERSION >= 120000
     // Custom object emission notification handler for the JuliaOJIT
     template <typename ObjT, typename LoadResult>
     void registerObject(const ObjT &Obj, const LoadResult &LO);
-#else
-    // Custom object emission notification handler for the JuliaOJIT
-    template <typename ObjT, typename LoadResult>
-    void registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO);
-#endif
 
 public:
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
     typedef orc::IRCompileLayer CompileLayerT;
-#if JL_LLVM_VERSION < 120000
-    typedef RTDyldObjHandleT ModuleHandleT;
-#endif
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
     JuliaOJIT(TargetMachine &TM, LLVMContext *Ctx);
 
     void RegisterJITEventListener(JITEventListener *L);
-#if JL_LLVM_VERSION < 120000
-    std::vector<JITEventListener *> EventListeners;
-    void NotifyFinalizer(RTDyldObjHandleT Key,
-                         const object::ObjectFile &Obj,
-                         const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
-#endif
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addModule(std::unique_ptr<Module> M);
-#if JL_LLVM_VERSION < 120000
-    void removeModule(ModuleHandleT H);
-#endif
+
     JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly);
     JL_JITSymbol findUnmangledSymbol(StringRef Name);
     uint64_t getGlobalValueAddress(StringRef Name);
@@ -243,6 +222,7 @@ Pass *createJuliaLICMPass();
 Pass *createMultiVersioningPass();
 Pass *createAllocOptPass();
 Pass *createDemoteFloat16Pass();
+Pass *createCPUFeaturesPass();
 // Whether the Function is an llvm or julia intrinsic.
 static inline bool isIntrinsicFunction(Function *F)
 {

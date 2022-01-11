@@ -204,12 +204,8 @@ AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
 convert(T::Type{<:Bidiagonal}, m::AbstractMatrix) = m isa T ? m : T(m)
 
-# For B<:Bidiagonal, similar(B[, neweltype]) should yield a Bidiagonal matrix.
-# On the other hand, similar(B, [neweltype,] shape...) should yield a sparse matrix.
-# The first method below effects the former, and the second the latter.
 similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), similar(B.ev, T), B.uplo)
-# The method below is moved to SparseArrays for now
-# similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
 
 
 ###################
@@ -232,8 +228,8 @@ end
 
 function show(io::IO, M::Bidiagonal)
     # TODO: make this readable and one-line
-    summary(io, M); println(io, ":")
-    print(io, " diag:")
+    summary(io, M)
+    print(io, ":\n diag:")
     print_matrix(io, (M.dv)')
     print(io, M.uplo == 'U' ? "\n super:" : "\n sub:")
     print_matrix(io, (M.ev)')
@@ -704,6 +700,11 @@ end
 function *(A::SymTridiagonal, B::Diagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
+end
+
+function *(A::BiTriSym, B::BiTriSym)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    mul!(similar(A, TS, size(A)...), A, B)
 end
 
 function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)

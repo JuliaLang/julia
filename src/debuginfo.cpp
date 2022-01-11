@@ -177,13 +177,6 @@ struct revcomp {
     { return lhs>rhs; }
 };
 
-struct strrefcomp {
-    bool operator() (const StringRef& lhs, const StringRef& rhs) const
-    {
-        return lhs.compare(rhs) > 0;
-    }
-};
-
 class JuliaJITEventListener: public JITEventListener
 {
     std::map<size_t, ObjectInfo, revcomp> objectmap;
@@ -234,11 +227,13 @@ public:
         SavedObject.second.release();
 
         object::section_iterator EndSection = debugObj.section_end();
-        std::map<StringRef, object::SectionRef, strrefcomp> loadedSections;
+        StringMap<object::SectionRef> loadedSections;
         for (const object::SectionRef &lSection: Object.sections()) {
             auto sName = lSection.getName();
-            if (sName)
-                loadedSections[*sName] = lSection;
+            if (sName) {
+                bool inserted = loadedSections.insert(std::make_pair(*sName, lSection)).second;
+                assert(inserted); (void)inserted;
+            }
         }
         auto getLoadAddress = [&] (const StringRef &sName) -> uint64_t {
             auto search = loadedSections.find(sName);
@@ -1099,6 +1094,14 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     struct link_map *extra_info;
     dladdr_success = dladdr1((void*)pointer, &dlinfo, (void**)&extra_info, RTLD_DL_LINKMAP) != 0;
 #else
+#ifdef _OS_DARWIN_
+    // On macOS 12, dladdr(-1, …) succeeds and returns the main executable image,
+    // despite there never actually being an image there. This is not what we want,
+    // as we use -1 as a known-invalid value e.g. in the test suite.
+    if (pointer == ~(size_t)0) {
+        return false;
+    }
+#endif
     dladdr_success = dladdr((void*)pointer, &dlinfo) != 0;
 #endif
     if (!dladdr_success || !dlinfo.dli_fname)

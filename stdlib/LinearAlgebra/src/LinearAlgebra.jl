@@ -372,15 +372,14 @@ algorithm.
 
 See also: `copy_similar`, `copy_to_array`.
 """
-copy_oftype(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A,T), A)
+copy_oftype(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T), A)
 
 """
     copy_similar(A, T)
 
 Copy `A` to a mutable array with eltype `T` based on `similar(A, T, size(A))`.
 
-Compared to `copy_oftype`, the result can be more flexible. For example,
-supplying a tridiagonal matrix results in a sparse array. In general, the type
+Compared to `copy_oftype`, the result can be more flexible. In general, the type
 of the output corresponds to that of the three-argument method `similar(A, T, size(s))`.
 
 See also: `copy_oftype`, `copy_to_array`.

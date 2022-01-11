@@ -8,7 +8,11 @@
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/IR/DataLayout.h>
+#if JL_LLVM_VERSION >= 140000
+#include <llvm/MC/TargetRegistry.h>
+#else
 #include <llvm/Support/TargetRegistry.h>
+#endif
 #include <llvm/Target/TargetMachine.h>
 
 // analysis passes
@@ -493,7 +497,7 @@ void jl_dump_native_impl(void *native_code,
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
     if (bc_fname || obj_fname || asm_fname) {
         addOptimizationPasses(&PM, jl_options.opt_level, true, true);
-        addMachinePasses(&PM, TM.get());
+        addMachinePasses(&PM, TM.get(), jl_options.opt_level);
     }
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
@@ -550,6 +554,10 @@ void jl_dump_native_impl(void *native_code,
     std::unique_ptr<Module> sysimage(new Module("sysimage", Context));
     sysimage->setTargetTriple(data->M->getTargetTriple());
     sysimage->setDataLayout(data->M->getDataLayout());
+#if JL_LLVM_VERSION >= 130000
+    sysimage->setStackProtectorGuard(data->M->getStackProtectorGuard());
+    sysimage->setOverrideStackAlignment(data->M->getOverrideStackAlignment());
+#endif
     data->M.reset(); // free memory for data->M
 
     if (sysimg_data) {
@@ -589,14 +597,13 @@ void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 }
 
 
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel)
 {
     // TODO: don't do this on CPUs that natively support Float16
     PM->add(createDemoteFloat16Pass());
-    PM->add(createGVNPass());
+    if (optlevel > 1)
+        PM->add(createGVNPass());
 }
-
-
 
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
@@ -618,6 +625,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
     PM->add(createConstantMergePass());
     if (opt_level < 2) {
+        if (!dump_native) {
+            // we won't be multiversioning, so lower CPU feature checks early on
+            // so that we can avoid an additional CFG simplification pass at the end.
+            PM->add(createCPUFeaturesPass());
+            if (opt_level == 1)
+                PM->add(createInstSimplifyLegacyPass());
+        }
         PM->add(createCFGSimplificationPass(simplifyCFGOptions));
         if (opt_level == 1) {
             PM->add(createSROAPass());
@@ -642,8 +656,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createRemoveNIPass());
         }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
-        if (dump_native)
+        if (dump_native) {
             PM->add(createMultiVersioningPass());
+            PM->add(createCPUFeaturesPass());
+            // minimal clean-up to get rid of CPU feature checks
+            if (opt_level == 1) {
+                PM->add(createInstSimplifyLegacyPass());
+                PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+            }
+        }
 #if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
@@ -679,6 +700,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createCFGSimplificationPass(simplifyCFGOptions));
     if (dump_native)
         PM->add(createMultiVersioningPass());
+    PM->add(createCPUFeaturesPass());
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createJumpThreadingPass());
@@ -693,7 +715,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAllocOptPass());
     PM->add(createLoopRotatePass());
     // moving IndVarSimplify here prevented removing the loop in perf_sumcartesian(10:-1:1)
-    PM->add(createLoopIdiomPass());
 #ifdef USE_POLLY
     // LCSSA (which has already run at this point due to the dependencies of the
     // above passes) introduces redundant phis that hinder Polly. Therefore we
@@ -710,9 +731,10 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createLoopUnswitchPass());
     PM->add(createLICMPass());
     PM->add(createJuliaLICMPass());
-    PM->add(createInductiveRangeCheckEliminationPass());
+    PM->add(createInductiveRangeCheckEliminationPass()); // Must come before indvars
     // Subsequent passes not stripping metadata from terminator
     PM->add(createInstSimplifyLegacyPass());
+    PM->add(createLoopIdiomPass());
     PM->add(createIndVarSimplifyPass());
     PM->add(createLoopDeletionPass());
     PM->add(createSimpleLoopUnrollPass());
@@ -729,13 +751,21 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createMemCpyOptPass());
     PM->add(createSCCPPass());
 
+    //These next two passes must come before IRCE to eliminate the bounds check in #43308
+    PM->add(createCorrelatedValuePropagationPass());
+    PM->add(createDeadCodeEliminationPass());
+
+    PM->add(createInductiveRangeCheckEliminationPass()); // Must come between the two GVN passes
+
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
     // This needs to be InstCombine instead of InstSimplify to allow
     // loops over Union-typed arrays to vectorize.
     PM->add(createInstructionCombiningPass());
     PM->add(createJumpThreadingPass());
-    PM->add(createCorrelatedValuePropagationPass());
+    if (opt_level >= 3) {
+        PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
+    }
     PM->add(createDeadStoreEliminationPass());
 
     // More dead allocation (store) deletion before loop optimization
@@ -823,7 +853,7 @@ public:
         TPMAdapter Adapter(TPM);
         addTargetPasses(&Adapter, jl_TargetMachine);
         addOptimizationPasses(&Adapter, OptLevel);
-        addMachinePasses(&Adapter, jl_TargetMachine);
+        addMachinePasses(&Adapter, jl_TargetMachine, OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
@@ -861,7 +891,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
         PM = new legacy::PassManager();
         addTargetPasses(PM, jl_TargetMachine);
         addOptimizationPasses(PM, jl_options.opt_level);
-        addMachinePasses(PM, jl_TargetMachine);
+        addMachinePasses(PM, jl_TargetMachine, jl_options.opt_level);
     }
 
     // get the source code for this function

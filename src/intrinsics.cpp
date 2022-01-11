@@ -400,12 +400,12 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
                     (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
                     (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
                     DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
-                Instruction *load = ctx.builder.CreateAlignedLoad(p, Align(alignment));
+                Instruction *load = ctx.builder.CreateAlignedLoad(AllocType, p, Align(alignment));
                 return emit_unboxed_coercion(ctx, to, tbaa_decorate(x.tbaa, load));
             }
         }
         p = maybe_bitcast(ctx, p, ptype);
-        Instruction *load = ctx.builder.CreateAlignedLoad(p, Align(alignment));
+        Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
         return tbaa_decorate(x.tbaa, load);
     }
 }
@@ -489,9 +489,11 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         // but if the v.typ is not well known, use llvmt
         if (isboxed)
             vxt = llvmt;
+        auto storage_type = vxt == T_int1 ? T_int8 : vxt;
         vx = tbaa_decorate(v.tbaa, ctx.builder.CreateLoad(
-                    emit_bitcast(ctx, data_pointer(ctx, v),
-                        vxt == T_int1 ? T_pint8 : vxt->getPointerTo())));
+            storage_type,
+            emit_bitcast(ctx, data_pointer(ctx, v),
+                storage_type->getPointerTo())));
     }
 
     vxt = vx->getType();
@@ -595,7 +597,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
 
     if (ety == (jl_value_t*)jl_any_type) {
         Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
-        LoadInst *load = ctx.builder.CreateAlignedLoad(ctx.builder.CreateInBoundsGEP(T_prjlvalue, thePtr, im1), Align(align_nb));
+        LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, ctx.builder.CreateInBoundsGEP(T_prjlvalue, thePtr, im1), Align(align_nb));
         tbaa_decorate(tbaa_data, load);
         return mark_julia_type(ctx, load, true, ety);
     }
@@ -695,7 +697,7 @@ static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, jl_cgval_t *argv)
 {
     const jl_cgval_t &ord = argv[0];
     if (ord.constant && jl_is_symbol(ord.constant)) {
-        enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, false, false);
+        enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, true);
         if (order == jl_memory_order_invalid) {
             emit_atomic_error(ctx, "invalid atomic ordering");
             return jl_cgval_t(); // unreachable
@@ -726,7 +728,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
 
     if (ety == (jl_value_t*)jl_any_type) {
         Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
-        LoadInst *load = ctx.builder.CreateAlignedLoad(thePtr, Align(sizeof(jl_value_t*)));
+        LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, thePtr, Align(sizeof(jl_value_t*)));
         tbaa_decorate(tbaa_data, load);
         load->setOrdering(llvm_order);
         return mark_julia_type(ctx, load, true, ety);
@@ -1144,6 +1146,27 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         else
             ans = ctx.builder.CreateXor(from, ConstantInt::get(xt, -1, true));
         return mark_julia_type(ctx, ans, false, x.typ);
+    }
+
+    case have_fma: {
+        assert(nargs == 1);
+        const jl_cgval_t &x = argv[0];
+        if (!x.constant || !jl_is_datatype(x.constant))
+            return emit_runtime_call(ctx, f, argv, nargs);
+        jl_datatype_t *dt = (jl_datatype_t*) x.constant;
+
+        // select the appropriated overloaded intrinsic
+        std::string intr_name = "julia.cpu.have_fma.";
+        if (dt == jl_float32_type)
+            intr_name += "f32";
+        else if (dt == jl_float64_type)
+            intr_name += "f64";
+        else
+            return emit_runtime_call(ctx, f, argv, nargs);
+
+        FunctionCallee intr = jl_Module->getOrInsertFunction(intr_name, T_int1);
+        auto ret = ctx.builder.CreateCall(intr);
+        return mark_julia_type(ctx, ret, false, jl_bool_type);
     }
 
     default: {

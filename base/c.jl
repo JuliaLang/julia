@@ -548,6 +548,12 @@ function expand_ccallable(rt, def)
     error("expected method definition in @ccallable")
 end
 
+"""
+    @ccallable(def)
+
+Make the annotated function be callable from C using its name. This can, for example,
+be used to expose functionality as a C-API when creating a custom Julia sysimage.
+"""
 macro ccallable(def)
     expand_ccallable(nothing, def)
 end
