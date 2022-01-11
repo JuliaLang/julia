@@ -2482,30 +2482,29 @@ static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 
 static Value *emit_arrayptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *t, unsigned AS, bool isboxed)
 {
-    Value *addr =
-        ctx.builder.CreateStructGEP(jl_array_llvmt,
-            emit_bitcast(ctx, t, jl_parray_llvmt),
-            0); // index (not offset) of data field in jl_parray_llvmt
+    Value *addr = ctx.builder.CreateStructGEP(jl_array_llvmt,
+                                              emit_bitcast(ctx, t, jl_parray_llvmt), 0);
     // Normally allocated array of 0 dimension always have a inline pointer.
     // However, we can't rely on that here since arrays can also be constructed from C pointers.
-    MDNode *tbaa = arraytype_constshape(tinfo.typ) ? tbaa_const : tbaa_arrayptr;
     PointerType *PT = cast<PointerType>(addr->getType());
-    PointerType *PPT = cast<PointerType>(PT->getElementType());
+    PointerType *PPT = cast<PointerType>(jl_array_llvmt->getElementType(0));
+    PointerType *LoadT = PPT;
+
     if (isboxed) {
-        addr = ctx.builder.CreateBitCast(addr,
-            PointerType::get(PointerType::get(T_prjlvalue, AS),
-            PT->getAddressSpace()));
-    } else if (AS != PPT->getAddressSpace()) {
-        addr = ctx.builder.CreateBitCast(addr,
-            PointerType::get(
-                PointerType::get(PPT->getElementType(), AS),
-                PT->getAddressSpace()));
+        LoadT = PointerType::get(T_prjlvalue, AS);
     }
-    LoadInst *LI = ctx.builder.CreateAlignedLoad(
-        cast<PointerType>(addr->getType())->getElementType(), addr, Align(sizeof(char*)));
+    else if (AS != PPT->getAddressSpace()) {
+        LoadT = PointerType::getWithSamePointeeType(PPT, AS);
+    }
+    if (LoadT != PPT) {
+        const auto Ty = PointerType::get(LoadT, PT->getAddressSpace());
+        addr = ctx.builder.CreateBitCast(addr, Ty);
+    }
+
+    LoadInst *LI = ctx.builder.CreateAlignedLoad(LoadT, addr, Align(sizeof(char *)));
     LI->setOrdering(AtomicOrdering::NotAtomic);
     LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(jl_LLVMContext, None));
-    tbaa_decorate(tbaa, LI);
+    tbaa_decorate(arraytype_constshape(tinfo.typ) ? tbaa_const : tbaa_arrayptr, LI);
     return LI;
 }
 

@@ -271,7 +271,7 @@ static Value *emit_plt(
                 functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, runtime_lib);
     }
     GlobalVariable *got = prepare_global_in(jl_Module, sharedgot);
-    LoadInst *got_val = ctx.builder.CreateAlignedLoad(got->getType()->getElementType(), got, Align(sizeof(void*)));
+    LoadInst *got_val = ctx.builder.CreateAlignedLoad(got->getValueType(), got, Align(sizeof(void*)));
     // See comment in `runtime_sym_lookup` above. This in principle needs a
     // consume ordering too. This is even less likely to cause issues though
     // since the only thing we do to this loaded pointer is to call it

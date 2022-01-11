@@ -159,7 +159,7 @@ static Type *T_pjlvalue;
 static Type *T_prjlvalue;
 static Type *T_ppjlvalue;
 static Type *T_pprjlvalue;
-static Type *jl_array_llvmt;
+static StructType *jl_array_llvmt;
 static Type *jl_parray_llvmt;
 static FunctionType *jl_func_sig;
 static FunctionType *jl_func_sig_sparams;
@@ -1143,7 +1143,7 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
     GlobalValue *local = M->getNamedValue(G->getName());
     if (!local) {
         // Copy the GlobalVariable, but without the initializer, so it becomes a declaration
-        GlobalVariable *proto = new GlobalVariable(*M, G->getType()->getElementType(),
+        GlobalVariable *proto = new GlobalVariable(*M, G->getValueType(),
                 G->isConstant(), GlobalVariable::ExternalLinkage,
                 nullptr, G->getName(), nullptr, G->getThreadLocalMode());
         proto->copyAttributesFrom(G);
@@ -5242,7 +5242,6 @@ static Function* gen_cfun_wrapper(
                 // undo whatever we might have done to this poor argument
                 assert(jl_is_datatype(jargty));
                 if (sig.byRefList.at(i)) {
-                    assert(cast<PointerType>(val->getType())->getElementType() == sig.fargt[i]);
                     val = ctx.builder.CreateAlignedLoad(sig.fargt[i], val, Align(1)); // unknown alignment from C
                 }
                 else {
@@ -5476,7 +5475,7 @@ static Function* gen_cfun_wrapper(
     ctx.builder.ClearInsertionPoint();
 
     if (aliasname) {
-        GlobalAlias::create(cw->getType()->getElementType(), cw->getType()->getAddressSpace(),
+        GlobalAlias::create(cw->getValueType(), cw->getType()->getAddressSpace(),
                             GlobalValue::ExternalLinkage, aliasname, cw, M);
     }
 
