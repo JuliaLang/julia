@@ -1457,7 +1457,7 @@ only(x::Tuple, message="") = throw(
 
 only(a::AbstractArray{<:Any, 0}, message="") = @inbounds return a[]
 only(x::NamedTuple{<:Any, <:Tuple{Any}}, message="") = first(x)
-only(x::NamedTuple, messsage="") = throw(
+only(x::NamedTuple, message="") = throw(
     if message == ""
         ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
     else
