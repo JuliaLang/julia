@@ -54,9 +54,9 @@ end
 
 # globals used for tracking how many allocs we're missing
 # vs the alloc counters used by @time
-const g_gc_num_before = Ref{Base.GC_Num}()
-const g_sample_rate = Ref{Real}()
-const g_expected_sampled_allocs = Ref{Float64}(0)
+const _g_gc_num_before = Ref{Base.GC_Num}()
+const _g_sample_rate = Ref{Real}()
+const _g_expected_sampled_allocs = Ref{Float64}(0)
 
 function _prof_expr(expr, opts)
     quote
@@ -76,8 +76,8 @@ A sample rate of 1.0 will record everything; 0.0 will record nothing.
 function start(; sample_rate::Real)
     ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), Float64(sample_rate))
     
-    g_sample_rate[] = sample_rate
-    g_gc_num_before[] = Base.gc_num()
+    _g_sample_rate[] = sample_rate
+    _g_gc_num_before[] = Base.gc_num()
 end
 
 """
@@ -92,10 +92,10 @@ function stop()
     # the memory profiler to see, based on how many allocs
     # actually happened.
     gc_num_after = Base.gc_num()
-    gc_diff = Base.GC_Diff(gc_num_after, g_gc_num_before[])
+    gc_diff = Base.GC_Diff(gc_num_after, _g_gc_num_before[])
     alloc_count = Base.gc_alloc_count(gc_diff)
-    expected_samples = alloc_count * g_sample_rate[]
-    g_expected_sampled_allocs[] += expected_samples
+    expected_samples = alloc_count * _g_sample_rate[]
+    _g_expected_sampled_allocs[] += expected_samples
 end
 
 """
@@ -106,7 +106,7 @@ Clear all previously profiled allocation information from memory.
 function clear()
     ccall(:jl_free_alloc_profile, Cvoid, ())
 
-    g_expected_sampled_allocs[] = 0
+    _g_expected_sampled_allocs[] = 0
 end
 
 """
@@ -120,12 +120,12 @@ function fetch()
     decoded_results = decode(raw_results)
 
     @show(length(decoded_results.allocs))
-    @show(g_expected_sampled_allocs[])
+    @show(_g_expected_sampled_allocs[])
 
-    missed_allocs = g_expected_sampled_allocs[] - length(decoded_results.allocs)
-    missed_percentage = round(Int, missed_allocs / g_expected_sampled_allocs[] * 100)
+    missed_allocs = _g_expected_sampled_allocs[] - length(decoded_results.allocs)
+    missed_percentage = round(Int, missed_allocs / _g_expected_sampled_allocs[] * 100)
     @warn("The allocation profiler is not fully implemented, and missed $(missed_percentage)% " *
-            "($(round(Int, missed_allocs)) / $(round(Int, g_expected_sampled_allocs[]))) " *
+            "($(round(Int, missed_allocs)) / $(round(Int, _g_expected_sampled_allocs[]))) " *
             "of allocs in the last run. " *
             "For more info see https://github.com/JuliaLang/julia/issues/43688")
     return decoded_results
