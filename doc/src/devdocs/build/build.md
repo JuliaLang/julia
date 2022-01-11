@@ -272,13 +272,13 @@ If you need to build Julia from source with Git checkouts of more than one stdli
 
 ## Building an "assert build" of Julia
 
-An "assert build" of Julia has both `FORCE_ASSERTIONS=1` and `LLVM_ASSERTIONS=1`. To build
-an assert build, you can run the following commands:
+An "assert build" of Julia is a build that was built with both `FORCE_ASSERTIONS=1` and
+`LLVM_ASSERTIONS=1`. To build an assert build, define both of the following variables
+in your `Make.user` file:
 
 ```
-git clone https://github.com/JuliaLang/julia.git
-cd julia
-make FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1
+FORCE_ASSERTIONS=1
+LLVM_ASSERTIONS=1
 ```
 
 Please note that assert builds of Julia will be slower than regular (non-assert) builds.
