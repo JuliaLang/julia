@@ -789,7 +789,7 @@ function _split_rest(s::AbstractString, n::Int)
         e isa BoundsError || rethrow()
         @assert _check_length_split_rest(length(s), n)
     end
-    last_n = SubString(s, i, lastind)
-    front = s[begin:prevind(s, i)]
+    last_n = SubString(s, nextind(s, i), lastind)
+    front = s[begin:i]
     return front, last_n
 end

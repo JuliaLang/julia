@@ -3118,11 +3118,36 @@ end
     @test y == (2:4,)
     @test z == 5
 
-    @test_throws ErrorException begin x, y..., z = 1:1 end
+    @test_throws ArgumentError begin x, y..., z = 1:1 end
     @test_throws BoundsError begin x, y, _..., z = 1, 2 end
 
     last((a..., b)) = b
     front((a..., b)) = a
     @test last(1:3) == 3
     @test front(1:3) == [1, 2]
+
+    res = begin x, y..., z = "abcde" end
+    @test res == "abcde"
+    @test x == 'a'
+    @test y == "bcd"
+    @test z == 'e'
+
+    res = begin x, y..., z = (a=1, b=2, c=3, d=4) end
+    @test res == (a=1, b=2, c=3, d=4)
+    @test x == 1
+    @test y == (b=2, c=3)
+    @test z == 4
+
+    v = rand(Bool, 7)
+    res = begin x, y..., z = v end
+    @test res === v
+    @test x == v[1]
+    @test y == v[2:6]
+    @test z == v[end]
+
+    res = begin x, y..., z = Core.svec(1, 2, 3, 4) end
+    @test res == Core.svec(1, 2, 3, 4)
+    @test x == 1
+    @test y == Core.svec(2, 3)
+    @test z == 4
 end
