@@ -663,7 +663,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, boo
             else if (isTuple || !llvmcall)
                 struct_decl = ArrayType::get(lasttype, ntypes);
             else
-                struct_decl = StructType::get(lasttype->getContext(), latypes);
+                struct_decl = StructType::get(jl_LLVMContext, latypes);
         }
         else {
 #if 0 // stress-test code that tries to assume julia-index == llvm-index
@@ -673,7 +673,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, boo
                 latypes.insert(latypes.begin(), NoopType);
             }
 #endif
-            struct_decl = StructType::get(lasttype->getContext(), latypes);
+            struct_decl = StructType::get(jl_LLVMContext, latypes);
         }
         return struct_decl;
     }
