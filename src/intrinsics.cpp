@@ -362,7 +362,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     Value *p = x.constant ? literal_pointer_val(ctx, x.constant) : x.V;
 
     if (jt == (jl_value_t*)jl_bool_type || to == getInt1Ty(ctx.builder.getContext())) {
-        Instruction *unbox_load = tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(getInt8Ty(ctx.builder.getContext()), maybe_bitcast(ctx, p, T_pint8)));
+        Instruction *unbox_load = tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(getInt8Ty(ctx.builder.getContext()), maybe_bitcast(ctx, p, getInt8PtrTy(ctx.builder.getContext()))));
         if (jt == (jl_value_t*)jl_bool_type)
             unbox_load->setMetadata(LLVMContext::MD_range, MDNode::get(ctx.builder.getContext(), {
                 ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0)),
@@ -608,8 +608,8 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
                                      literal_pointer_val(ctx, ety));
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(getSizeTy(ctx.builder.getContext()),
                     LLT_ALIGN(size, jl_datatype_align(ety))));
-        Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
-        thePtr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), emit_bitcast(ctx, thePtr, T_pint8), im1);
+        Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
+        thePtr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), emit_bitcast(ctx, thePtr, getInt8PtrTy(ctx.builder.getContext())), im1);
         MDNode *tbaa = best_tbaa(ctx.tbaa(), ety);
         emit_memcpy(ctx, strct, tbaa, thePtr, nullptr, size, 1);
         return mark_julia_type(ctx, strct, true, ety);
@@ -674,7 +674,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         tbaa_decorate(ctx.tbaa().tbaa_data, store);
     }
     else if (!jl_isbits(ety)) {
-        thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
+        thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(getSizeTy(ctx.builder.getContext()),
                     LLT_ALIGN(size, jl_datatype_align(ety))));
@@ -750,7 +750,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         uint64_t size = jl_datatype_size(ety);
         Value *strct = emit_allocobj(ctx, size,
                                      literal_pointer_val(ctx, ety));
-        Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
+        Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
         Type *loadT = Type::getIntNTy(ctx.builder.getContext(), nb * 8);
         thePtr = emit_bitcast(ctx, thePtr, loadT->getPointerTo());
         MDNode *tbaa = best_tbaa(ctx.tbaa(), ety);
@@ -844,7 +844,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
     }
 
     if (!jl_isbits(ety)) {
-        //Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
+        //Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
         //uint64_t size = jl_datatype_size(ety);
         return emit_runtime_call(ctx, f, argv, nargs); // TODO: optimizations
     }
@@ -1255,14 +1255,14 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case add_ptr: {
         return ctx.builder.CreatePtrToInt(
             ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()),
-                emit_inttoptr(ctx, x, T_pint8), y), t);
+                emit_inttoptr(ctx, x, getInt8PtrTy(ctx.builder.getContext())), y), t);
 
     }
 
     case sub_ptr: {
         return ctx.builder.CreatePtrToInt(
             ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()),
-                emit_inttoptr(ctx, x, T_pint8), ctx.builder.CreateNeg(y)), t);
+                emit_inttoptr(ctx, x, getInt8PtrTy(ctx.builder.getContext())), ctx.builder.CreateNeg(y)), t);
 
     }
 

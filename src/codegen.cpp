@@ -134,6 +134,24 @@ auto getSizeTy(LLVMContext &ctxt) {
         return getInt32Ty(ctxt);
     }
 }
+auto getInt8PtrTy(LLVMContext &ctxt) {
+    return Type::getInt8PtrTy(ctxt);
+}
+auto getInt16PtrTy(LLVMContext &ctxt) {
+    return Type::getInt16PtrTy(ctxt);
+}
+auto getInt32PtrTy(LLVMContext &ctxt) {
+    return Type::getInt32PtrTy(ctxt);
+}
+auto getInt64PtrTy(LLVMContext &ctxt) {
+    return Type::getInt64PtrTy(ctxt);
+}
+auto getFloatPtrTy(LLVMContext &ctxt) {
+    return Type::getFloatPtrTy(ctxt);
+}
+auto getDoublePtrTy(LLVMContext &ctxt) {
+    return Type::getDoublePtrTy(ctxt);
+}
 
 typedef Instruction TerminatorInst;
 
@@ -210,13 +228,7 @@ static Type *T_pvoidfunc;
 
 static IntegerType *T_sigatomic;
 
-static Type *T_pint8;
-static Type *T_pint16;
-static Type *T_pint32;
-static Type *T_pint64;
 static Type *T_psize;
-static Type *T_pfloat32;
-static Type *T_pfloat64;
 
 static Type *T_ppint8;
 static Type *T_pppint8;
@@ -452,23 +464,23 @@ static AttributeList get_attrs_zext(LLVMContext &C)
 static const auto jlRTLD_DEFAULT_var = new JuliaVariable{
     XSTR(jl_RTLD_DEFAULT_handle),
     true,
-    [](LLVMContext &C) { return T_pint8; },
+    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
 };
 #ifdef _OS_WINDOWS_
 static const auto jlexe_var = new JuliaVariable{
     XSTR(jl_exe_handle),
     true,
-    [](LLVMContext &C) { return T_pint8; },
+    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
 };
 static const auto jldll_var = new JuliaVariable{
     XSTR(jl_libjulia_handle),
     true,
-    [](LLVMContext &C) { return T_pint8; },
+    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
 };
 static const auto jldlli_var = new JuliaVariable{
     XSTR(jl_libjulia_internal_handle),
     true,
-    [](LLVMContext &C) { return T_pint8; },
+    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
 };
 #endif //_OS_WINDOWS_
 
@@ -527,19 +539,19 @@ static const auto jlthrow_func = new JuliaFunction{
 static const auto jlerror_func = new JuliaFunction{
     XSTR(jl_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {T_pint8}, false); },
+            {getInt8PtrTy(C)}, false); },
     get_attrs_noreturn,
 };
 static const auto jlatomicerror_func = new JuliaFunction{
     XSTR(jl_atomic_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {T_pint8}, false); },
+            {getInt8PtrTy(C)}, false); },
     get_attrs_noreturn,
 };
 static const auto jltypeerror_func = new JuliaFunction{
     XSTR(jl_type_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {T_pint8, T_prjlvalue, PointerType::get(T_jlvalue, AddressSpace::CalleeRooted)}, false); },
+            {getInt8PtrTy(C), T_prjlvalue, PointerType::get(T_jlvalue, AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
 static const auto jlundefvarerror_func = new JuliaFunction{
@@ -671,7 +683,7 @@ static const auto jlunlockvalue_func = new JuliaFunction{
 static const auto jlenter_func = new JuliaFunction{
     XSTR(jl_enter_handler),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {T_pint8}, false); },
+            {getInt8PtrTy(C)}, false); },
     nullptr,
 };
 static const auto jl_current_exception_func = new JuliaFunction{
@@ -718,7 +730,7 @@ static const auto jl_alloc_obj_func = new JuliaFunction{
 static const auto jl_newbits_func = new JuliaFunction{
     XSTR(jl_new_bits),
     [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
-                {T_prjlvalue, T_pint8}, false); },
+                {T_prjlvalue, getInt8PtrTy(C)}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             Attributes(C, {Attribute::NonNull}),
@@ -787,7 +799,7 @@ static const auto jl_object_id__func = new JuliaFunction{
 static const auto setjmp_func = new JuliaFunction{
     jl_setjmp_name,
     [](LLVMContext &C) { return FunctionType::get(getInt32Ty(C),
-            {T_pint8,
+            {getInt8PtrTy(C),
 #ifndef _OS_WINDOWS_
             getInt32Ty(C),
 #endif
@@ -800,7 +812,7 @@ static const auto setjmp_func = new JuliaFunction{
 static const auto memcmp_func = new JuliaFunction{
     XSTR(memcmp),
     [](LLVMContext &C) { return FunctionType::get(getInt32Ty(C),
-            {T_pint8, T_pint8, getSizeTy(C)}, false); },
+            {getInt8PtrTy(C), getInt8PtrTy(C), getSizeTy(C)}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             Attributes(C, {Attribute::ReadOnly, Attribute::NoUnwind, Attribute::ArgMemOnly}),
             AttributeSet(),
@@ -810,13 +822,13 @@ static const auto memcmp_func = new JuliaFunction{
 static const auto jldlsym_func = new JuliaFunction{
     XSTR(jl_load_and_lookup),
     [](LLVMContext &C) { return FunctionType::get(T_pvoidfunc,
-            {T_pint8, T_pint8, PointerType::get(T_pint8, 0)}, false); },
+            {getInt8PtrTy(C), getInt8PtrTy(C), PointerType::get(getInt8PtrTy(C), 0)}, false); },
     nullptr,
 };
 static const auto jllazydlsym_func = new JuliaFunction{
     XSTR(jl_lazy_load_and_lookup),
     [](LLVMContext &C) { return FunctionType::get(T_pvoidfunc,
-            {T_prjlvalue, T_pint8}, false); },
+            {T_prjlvalue, getInt8PtrTy(C)}, false); },
     nullptr,
 };
 static const auto jltypeassert_func = new JuliaFunction{
@@ -840,9 +852,9 @@ static const auto jlgetcfunctiontrampoline_func = new JuliaFunction{
             {
                 T_prjlvalue, // f (object)
                 T_pjlvalue, // result
-                T_pint8, // cache
+                getInt8PtrTy(C), // cache
                 T_pjlvalue, // fill
-                FunctionType::get(T_pint8, { T_pint8, T_ppjlvalue }, false)->getPointerTo(), // trampoline
+                FunctionType::get(getInt8PtrTy(C), { getInt8PtrTy(C), T_ppjlvalue }, false)->getPointerTo(), // trampoline
                 T_pjlvalue, // env
                 T_pprjlvalue, // vals
             }, false); },
@@ -1899,7 +1911,7 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
 {
     Value *pv = ConstantExpr::getIntToPtr(
         ConstantInt::get(getSizeTy(ctx.builder.getContext()), (uintptr_t)ptr),
-        T_pint64);
+        getInt64PtrTy(ctx.builder.getContext()));
     Value *v = ctx.builder.CreateLoad(getInt64Ty(ctx.builder.getContext()), pv, true, name);
     v = ctx.builder.CreateAdd(v, addend);
     ctx.builder.CreateStore(v, pv, true); // volatile, not atomic, so this might be an underestimate,
@@ -2385,8 +2397,8 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                 nroots++;
             OperandBundleDef OpBundle("jl_roots", makeArrayRef(gc_uses, nroots));
             auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
-                        ctx.builder.CreateBitCast(varg1, T_pint8),
-                        ctx.builder.CreateBitCast(varg2, T_pint8),
+                        ctx.builder.CreateBitCast(varg1, getInt8PtrTy(ctx.builder.getContext())),
+                        ctx.builder.CreateBitCast(varg2, getInt8PtrTy(ctx.builder.getContext())),
                         ConstantInt::get(getSizeTy(ctx.builder.getContext()), sz) },
                     ArrayRef<OperandBundleDef>(&OpBundle, nroots ? 1 : 0));
             MDNode *tbaa = nullptr;
@@ -2833,7 +2845,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
                         data = ctx.builder.CreateInBoundsGEP(AT, data, idx);
                     }
-                    ptindex = emit_bitcast(ctx, ptindex, T_pint8);
+                    ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
                     ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, offset);
                     ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, idx);
                     *ret = emit_unionload(ctx, data, ptindex, ety, elsz, al, ctx.tbaa().tbaa_arraybuf, true, union_max, ctx.tbaa().tbaa_arrayselbyte);
@@ -2940,7 +2952,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
                             data = ctx.builder.CreateInBoundsGEP(AT, data, idx);
                         }
-                        ptindex = emit_bitcast(ctx, ptindex, T_pint8);
+                        ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
                         ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, offset);
                         ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, idx);
                         tbaa_decorate(ctx.tbaa().tbaa_arrayselbyte, ctx.builder.CreateStore(tindex, ptindex));
@@ -4061,8 +4073,8 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             ctx.builder.CreateMemCpy(phi, MaybeAlign(min_align), dest, MaybeAlign(0), nbytes, false);
             ctx.builder.CreateLifetimeEnd(dest);
             Value *ptr = ctx.builder.CreateSelect(isboxed,
-                maybe_bitcast(ctx, decay_derived(ctx, ptr_phi), T_pint8),
-                maybe_bitcast(ctx, decay_derived(ctx, phi), T_pint8));
+                maybe_bitcast(ctx, decay_derived(ctx, ptr_phi), getInt8PtrTy(ctx.builder.getContext())),
+                maybe_bitcast(ctx, decay_derived(ctx, phi), getInt8PtrTy(ctx.builder.getContext())));
             jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, ctx.tbaa(), ctx.tbaa().tbaa_stack); // XXX: this TBAA is wrong for ptr_phi
             val.Vboxed = ptr_phi;
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, ptr_phi, r));
@@ -5567,7 +5579,7 @@ static Function* gen_cfun_wrapper(
     if (nest) {
         funcName += "make";
         Function *cw_make = Function::Create(
-                FunctionType::get(T_pint8, { T_pint8, T_ppjlvalue }, false),
+                FunctionType::get(getInt8PtrTy(ctx.builder.getContext()), { getInt8PtrTy(ctx.builder.getContext()), T_ppjlvalue }, false),
                 GlobalVariable::ExternalLinkage,
                 funcName, M);
         jl_init_function(cw_make);
@@ -5580,8 +5592,8 @@ static Function* gen_cfun_wrapper(
         Function *adjust_trampoline = Intrinsic::getDeclaration(cw_make->getParent(), Intrinsic::adjust_trampoline);
         cwbuilder.CreateCall(init_trampoline, {
                 Tramp,
-                cwbuilder.CreateBitCast(cw, T_pint8),
-                cwbuilder.CreateBitCast(NVal, T_pint8)
+                cwbuilder.CreateBitCast(cw, getInt8PtrTy(ctx.builder.getContext())),
+                cwbuilder.CreateBitCast(NVal, getInt8PtrTy(ctx.builder.getContext()))
             });
         cwbuilder.CreateRet(cwbuilder.CreateCall(adjust_trampoline, { Tramp }));
         cw = cw_make;
@@ -5719,7 +5731,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         F = ctx.builder.CreateCall(prepare_call(jlgetcfunctiontrampoline_func), {
                  fobj,
                  literal_pointer_val(ctx, output_type),
-                 ctx.builder.CreateBitCast(cache, T_pint8),
+                 ctx.builder.CreateBitCast(cache, getInt8PtrTy(ctx.builder.getContext())),
                  literal_pointer_val(ctx, (jl_value_t*)fill),
                  F,
                  closure_types ? literal_pointer_val(ctx, (jl_value_t*)unionall_env) : Constant::getNullValue(T_pjlvalue),
@@ -6683,7 +6695,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             // the world age.
             if (i == 0 && ctx.is_opaque_closure) {
                 // Load closure world
-                Value *argaddr = emit_bitcast(ctx, maybe_decay_tracked(ctx, data_pointer(ctx, theArg)), T_pint8);
+                Value *argaddr = emit_bitcast(ctx, maybe_decay_tracked(ctx, data_pointer(ctx, theArg)), getInt8PtrTy(ctx.builder.getContext()));
                 Value *worldaddr = ctx.builder.CreateInBoundsGEP(
                         getInt8Ty(ctx.builder.getContext()), argaddr,
                         ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_opaque_closure_t, world)));
@@ -7810,16 +7822,9 @@ static void init_julia_llvm_env(Module *m)
 {
     // every variable or function mapped in this function must be
     // exported from libjulia, to support static compilation
-    T_pint8 = PointerType::get(getInt8Ty(m->getContext()), 0);
-    T_ppint8 = PointerType::get(T_pint8, 0);
+    T_ppint8 = PointerType::get(getInt8PtrTy(m->getContext()), 0);
     T_pppint8 = PointerType::get(T_ppint8, 0);
-    T_pint16 = PointerType::get(getInt16Ty(m->getContext()), 0);
-    T_pint32 = PointerType::get(getInt32Ty(m->getContext()), 0);
-    T_pint64 = PointerType::get(getInt64Ty(m->getContext()), 0);
-    T_sigatomic = Type::getIntNTy(m->getContext(), sizeof(sig_atomic_t) * 8);
-    T_psize = PointerType::get(getSizeTy(m->getContext()), 0);
-    T_pfloat32 = PointerType::get(getFloatTy(m->getContext()), 0);
-    T_pfloat64 = PointerType::get(getDoubleTy(m->getContext()), 0);
+    T_sigatomic = Type::getIntNTy(jl_LLVMContext, sizeof(sig_atomic_t) * 8);
     T_pvoidfunc = FunctionType::get(getVoidTy(m->getContext()), /*isVarArg*/false)->getPointerTo();
 
     // add needed base debugging definitions to our LLVM environment
