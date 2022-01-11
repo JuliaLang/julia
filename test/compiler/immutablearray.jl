@@ -1,8 +1,8 @@
 using Test
-import Core: ImmutableArray
+import Core: ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
 import Core.Compiler: arrayfreeze_tfunc, mutating_arrayfreeze_tfunc, arraythaw_tfunc
-const ImmutableVector{T} = Core.ImmutableArray{T,1}
 
+const ImmutableVector{T} = ImmutableArray{T,1}
 @testset "ImmutableArray tfuncs" begin
     @test arrayfreeze_tfunc(Vector{Int}) === ImmutableVector{Int}
     @test arrayfreeze_tfunc(Vector) === ImmutableVector
@@ -31,20 +31,28 @@ end
     # basic functionality
     let
         a = [1,2,3]
-        b = Core.ImmutableArray(a)
-        @test Core.arrayfreeze(a) === b
-        @test Core.mutating_arrayfreeze(a) === b
-        @test Core.arraythaw(b) == a # arraythaw copies so not ===
+        b = ImmutableArray(a)
+        @test arrayfreeze(a) === b
+        @test mutating_arrayfreeze(a) === b
+        @test arraythaw(b) !== a # arraythaw copies so not ===
     end
     # errors
-    @test_throws ArgumentError Core.arrayfreeze()
-    @test_throws ArgumentError Core.arrayfreeze([1,2,3], nothing)
-    @test_throws TypeError Core.arrayfreeze("not an array")
-    @test_throws ArgumentError Core.mutating_arrayfreeze()
-    @test_throws ArgumentError Core.mutating_arrayfreeze([1,2,3], nothing)
-    @test_throws ArgumentError Core.arraythaw()
-    @test_throws TypeError Core.arraythaw([1,2,3])
+    a = [1,2,3]
+    b = ImmutableArray(a)
+    @test_throws ArgumentError arrayfreeze()
+    @test_throws ArgumentError arrayfreeze([1,2,3], nothing)
+    @test_throws TypeError arrayfreeze(b)
+    @test_throws TypeError arrayfreeze("not an array")
+    @test_throws ArgumentError mutating_arrayfreeze()
+    @test_throws ArgumentError mutating_arrayfreeze([1,2,3], nothing)
+    @test_throws TypeError mutating_arrayfreeze(b)
+    @test_throws TypeError mutating_arrayfreeze("not an array")
+    @test_throws ArgumentError arraythaw()
+    @test_throws ArgumentError arraythaw([1,2,3], nothing)
+    @test_throws TypeError arraythaw(a)
+    @test_throws TypeError arraythaw("not an array")
 end
+
 # mutating_arrayfreeze optimization
 # =================================
 
@@ -80,315 +88,336 @@ function is_array_alloc(@nospecialize x)
     return Core.Compiler.alloc_array_ndims(name) !== nothing
 end
 
-# unescaped examples
-# ------------------
+# optimizable examples
+# --------------------
 
-# simplest -- vector
-function unescaped1_1(gen)
-    a = [1,2,3,4,5]
-    return gen(a)
-end
-let src = code_typed1(unescaped1_1, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 1
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped1_1(identity)
-    allocated = @allocated unescaped1_1(identity)
-    unescaped1_1(ImmutableArray)
-    @test allocated == @allocated unescaped1_1(ImmutableArray)
-end
-
-# handle matrix etc. (actually this example also requires inter-procedural escape handling)
-function unescaped1_2(gen)
-    a = [1 2 3; 4 5 6]
-    b = [1 2 3 4 5 6]
-    return gen(a), gen(b)
-end
-let src = code_typed1(unescaped1_2, (Type{Core.ImmutableArray},))
-    # @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 2
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped1_2(identity)
-    allocated = @allocated unescaped1_2(identity)
-    unescaped1_2(ImmutableArray)
-    @test allocated == @allocated unescaped1_2(ImmutableArray)
-end
-
-# multiple returns don't matter
-function unescaped2(gen)
-    a = [1,2,3,4,5]
-    return gen(a), gen(a)
-end
-let src = code_typed1(unescaped2, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 2
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped2(identity)
-    allocated = @allocated unescaped2(identity)
-    unescaped2(ImmutableArray)
-    @test allocated == @allocated unescaped2(ImmutableArray)
-end
-
-# arrayset
-function unescaped3_1(gen)
-    a = Vector{Int}(undef, 5)
-    for i = 1:5
-        a[i] = i
+let # simplest -- vector
+    function optimizable(gen)
+        a = [1,2,3,4,5]
+        return gen(a)
     end
-    return gen(a)
-end
-let src = code_typed1(unescaped3_1, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 1
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped3_1(identity)
-    allocated = @allocated unescaped3_1(identity)
-    unescaped3_1(ImmutableArray)
-    @test allocated == @allocated unescaped3_1(ImmutableArray)
+    let src = code_typed1(optimizable, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable(identity)
+        allocated = @allocated optimizable(identity)
+        optimizable(ImmutableArray)
+        @test allocated == @allocated optimizable(ImmutableArray)
+    end
 end
 
-function unescaped3_2(gen)
-    a = Matrix{Float64}(undef, 5, 2)
-    for i = 1:5
-        for j = 1:2
-            a[i, j] = i + j
+let # handle matrix etc. (actually this example also requires inter-procedural escape handling)
+    function optimizable(gen)
+        a = [1 2 3; 4 5 6]
+        b = [1 2 3 4 5 6]
+        return gen(a), gen(b)
+    end
+    let src = code_typed1(optimizable, (Type{ImmutableArray},))
+        # @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 2
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable(identity)
+        allocated = @allocated optimizable(identity)
+        optimizable(ImmutableArray)
+        @test allocated == @allocated optimizable(ImmutableArray)
+    end
+end
+
+let # multiple returns don't matter
+    function optimizable(gen)
+        a = [1,2,3,4,5]
+        return gen(a), gen(a)
+    end
+    let src = code_typed1(optimizable, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 2
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable(identity)
+        allocated = @allocated optimizable(identity)
+        optimizable(ImmutableArray)
+        @test allocated == @allocated optimizable(ImmutableArray)
+    end
+end
+
+let # arrayset
+    function optimizable1(gen)
+        a = Vector{Int}(undef, 5)
+        for i = 1:5
+            a[i] = i
         end
+        return gen(a)
     end
-    return gen(a)
-end
-let src = code_typed1(unescaped3_2, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 1
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped3_2(identity)
-    allocated = @allocated unescaped3_2(identity)
-    unescaped3_2(ImmutableArray)
-    @test allocated == @allocated unescaped3_2(ImmutableArray)
+    let src = code_typed1(optimizable1, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable1(identity)
+        allocated = @allocated optimizable1(identity)
+        optimizable1(ImmutableArray)
+        @test allocated == @allocated optimizable1(ImmutableArray)
+    end
+
+    function optimizable2(gen)
+        a = Matrix{Float64}(undef, 5, 2)
+        for i = 1:5
+            for j = 1:2
+                a[i, j] = i + j
+            end
+        end
+        return gen(a)
+    end
+    let src = code_typed1(optimizable2, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable2(identity)
+        allocated = @allocated optimizable2(identity)
+        optimizable2(ImmutableArray)
+        @test allocated == @allocated optimizable2(ImmutableArray)
+    end
 end
 
-# array resize
-function unescaped4(gen, n)
-    a = Int[]
-    for i = 1:n
-        push!(a, i)
+let # arrayref
+    function optimizable(gen)
+        a = [1,2,3]
+        b = getindex(a, 2)
+        return gen(a)
     end
-    return gen(a)
-end
-let src = code_typed1(unescaped4, (Type{Core.ImmutableArray},Int,))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 1
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped4(identity, 42)
-    allocated = @allocated unescaped4(identity, 42)
-    unescaped4(ImmutableArray, 42)
-    @test allocated == @allocated unescaped4(ImmutableArray, 42)
+    let src = code_typed1(optimizable, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable(identity)
+        allocated = @allocated optimizable(identity)
+        optimizable(ImmutableArray)
+        @test allocated == @allocated optimizable(ImmutableArray)
+    end
 end
 
-# inter-procedural
+let # array resize
+    function optimizable(gen, n)
+        a = Int[]
+        for i = 1:n
+            push!(a, i)
+        end
+        return gen(a)
+    end
+    let src = code_typed1(optimizable, (Type{ImmutableArray},Int,))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable(identity, 42)
+        allocated = @allocated optimizable(identity, 42)
+        optimizable(ImmutableArray, 42)
+        @test allocated == @allocated optimizable(ImmutableArray, 42)
+    end
+end
+
 @noinline function same′(a)
     return reverse(reverse(a))
 end
-function unescaped5(gen)
-    a = ones(5)
-    a = same′(a)
-    return gen(a)
-end
-let src = code_typed1(unescaped5, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(isinvoke(:same′), src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 1
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped5(identity)
-    allocated = @allocated unescaped5(identity)
-    unescaped5(ImmutableArray)
-    @test allocated == @allocated unescaped5(ImmutableArray)
-end
-
-# ignore ThrownEscape if it never happens when `arrayfreeze` is called
-function unescaped6(gen, n)
-    a = Int[]
-    for i = 1:n
-        push!(a, i)
+let # inter-procedural
+    function optimizable(gen)
+        a = ones(5)
+        a = same′(a)
+        return gen(a)
     end
-    n > 100 && throw(a)
-    return gen(a)
-end
-let src = code_typed1(unescaped6, (Type{Core.ImmutableArray},Int,))
-    @test count(is_array_alloc, src.code) == 1
-    @test_broken count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 1
-    @test_broken count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped6(identity, 42)
-    allocated = @allocated unescaped6(identity, 42)
-    unescaped6(ImmutableArray, 42)
-    @test_broken allocated == @allocated unescaped6(ImmutableArray, 42)
-end
-
-# arrayref
-function unescaped7_1(gen)
-    a = [1,2,3]
-    b = getindex(a, 2)
-    return gen(a)
-end
-let src = code_typed1(unescaped7_1, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 1
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped7_1(identity)
-    allocated = @allocated unescaped7_1(identity)
-    unescaped7_1(ImmutableArray)
-    @test allocated == @allocated unescaped7_1(ImmutableArray)
+    let src = code_typed1(optimizable, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(isinvoke(:same′), src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable(identity)
+        allocated = @allocated optimizable(identity)
+        optimizable(ImmutableArray)
+        @test allocated == @allocated optimizable(ImmutableArray)
+    end
 end
 
+let # ignore ThrownEscape if it never happens when `arrayfreeze` is called
+    function optimizable(gen, n)
+        a = Int[]
+        for i = 1:n
+            push!(a, i)
+        end
+        n > 100 && throw(a)
+        return gen(a)
+    end
+    let src = code_typed1(optimizable, (Type{ImmutableArray},Int,))
+        @test count(is_array_alloc, src.code) == 1
+        @test_broken count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test_broken count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable(identity, 42)
+        allocated = @allocated optimizable(identity, 42)
+        optimizable(ImmutableArray, 42)
+        @test_broken allocated == @allocated optimizable(ImmutableArray, 42)
+    end
+end
 @noinline function ipo_getindex′(a, n)
     ele = getindex(a, n)
     return ele
 end
-function unescaped7_2(gen)
-    a = [1,2,3]
-    b = ipo_getindex′(a, 2)
-    return gen(a)
-end
-let src = code_typed1(unescaped7_2, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(isinvoke(:ipo_getindex′), src.code) == 1
-    @test_broken count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 1
-    @test_broken count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped7_2(identity)
-    allocated = @allocated unescaped7_2(identity)
-    unescaped7_2(ImmutableArray)
-    @test_broken allocated == @allocated unescaped7_2(ImmutableArray)
-end
-
-# BoundsError (assumes BoundsError doesn't capture arrays)
-function unescaped8_1(gen)
-    a = [1,2,3]
-    try
-        getindex(a, 4)
-    catch
+let # ignore ThrownEscape if it never happens when `arrayfreeze` is called (interprocedural)
+    function optimizable(gen)
+        a = [1,2,3]
+        b = ipo_getindex′(a, 2)
         return gen(a)
     end
-end
-let src = code_typed1(unescaped8_1, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 1
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped8_1(identity)
-    allocated = @allocated unescaped7_1(identity)
-    unescaped8_1(ImmutableArray)
-    @test allocated == @allocated unescaped7_1(ImmutableArray)
+    let src = code_typed1(optimizable, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(isinvoke(:ipo_getindex′), src.code) == 1
+        @test_broken count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test_broken count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable(identity)
+        allocated = @allocated optimizable(identity)
+        optimizable(ImmutableArray)
+        @test_broken allocated == @allocated optimizable(ImmutableArray)
+    end
 end
 
 const g = Ref{Any}()
+let # BoundsError (assumes BoundsError doesn't capture arrays)
+    function optimizable1(gen)
+        a = [1,2,3]
+        try
+            getindex(a, 4)
+        catch
+            return gen(a)
+        end
+    end
+    let src = code_typed1(optimizable1, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable1(identity)
+        allocated = @allocated optimizable1(identity)
+        optimizable1(ImmutableArray)
+        @test allocated == @allocated optimizable1(ImmutableArray)
+    end
 
-function unescaped8_2(gen)
-    a = [1,2,3]
-    try
-        getindex(a, 4)
-    catch e
-        g[] = e.a # XXX these tests pass, but this optimization is actually incorrect until BoundsError doesn't escape its objects
-        return gen(a)
+    function optimizable2(gen)
+        a = [1,2,3]
+        try
+            getindex(a, 4)
+        catch e
+            g[] = e.a # XXX these tests pass, but this optimization is actually incorrect until BoundsError doesn't escape its objects
+            return gen(a)
+        end
+    end
+    let src = code_typed1(optimizable2, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable2(identity)
+        allocated = @allocated optimizable2(identity)
+        optimizable2(ImmutableArray)
+        local ia
+        @test allocated == @allocated ia = optimizable2(ImmutableArray)
+        @test_broken g[] !== ia
     end
 end
-let src = code_typed1(unescaped8_2, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 1
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 0
-    unescaped8_2(identity)
-    allocated = @allocated unescaped7_1(identity)
-    unescaped8_2(ImmutableArray)
-    @test allocated == @allocated unescaped7_1(ImmutableArray)
-end
 
-# escaped examples
-# ----------------
+# unoptimizable examples
+# ----------------------
 
 const Rx = Ref{Any}() # global memory
 
-function escaped01(gen)
-    a = [1,2,3,4,5]
-    return a, gen(a)
-end
-let src = code_typed1(escaped01, (Type{ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 0
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 1
-    escaped01(identity)
-    allocated = @allocated escaped01(identity)
-    escaped01(ImmutableArray)
-    local a, b
-    @test allocated < @allocated a, b = escaped01(ImmutableArray)
-    @test a !== b
-    @test !(a isa ImmutableArray)
-end
-
-escaped02(a, gen) = gen(a)
-let src = code_typed1(escaped02, (Vector{Int}, Type{ImmutableArray},))
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 0
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 1
-    a = [1,2,3]
-    escaped02(a, ImmutableArray)
-    b = escaped02(a, ImmutableArray)
-    @test a !== b
-    @test !(a isa ImmutableArray)
-    @test b isa ImmutableArray
-end
-
-function escaped1(gen)
-    a = [1,2,3,4,5]
-    global global_array = a
-    return gen(a)
-end
-let src = code_typed1(escaped1, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 0
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 1
-    escaped1(identity)
-    allocated = @allocated escaped1(identity)
-    escaped1(ImmutableArray)
-    local a
-    @test allocated < @allocated a = escaped1(ImmutableArray)
-    @test global_array !== a
-    @test !(global_array isa ImmutableArray)
-end
-
-function escaped2(gen)
-    a = [1,2,3,4,5]
-    Rx[] = a
-    return gen(a)
-end
-let src = code_typed1(escaped2, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 0
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 1
-    escaped2(identity)
-    allocated = @allocated escaped2(identity)
-    escaped2(ImmutableArray)
-    local a
-    @test allocated < @allocated a = escaped2(ImmutableArray)
-    @test Rx[] !== a
-    @test !(Rx[] isa ImmutableArray)
-end
-
-function escaped3(gen)
-    a = [1,2,3,4,5]
-    try
-        throw(a)
-    catch err
-        global global_array = err
+let # return escape
+    function unoptimizable(gen)
+        a = [1,2,3,4,5]
+        return a, gen(a)
     end
-    return gen(a)
+    let src = code_typed1(unoptimizable, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 0
+        @test count(iscall((src, arrayfreeze)), src.code) == 1
+        unoptimizable(identity)
+        allocated = @allocated unoptimizable(identity)
+        unoptimizable(ImmutableArray)
+        local a, b
+        @test allocated < @allocated a, b = unoptimizable(ImmutableArray)
+        @test a !== b
+        @test !(a isa ImmutableArray)
+    end
 end
-let src = code_typed1(escaped3, (Type{Core.ImmutableArray},))
-    @test count(is_array_alloc, src.code) == 1
-    @test count(iscall((src, Core.mutating_arrayfreeze)), src.code) == 0
-    @test count(iscall((src, Core.arrayfreeze)), src.code) == 1
-    escaped3(identity)
-    allocated = @allocated escaped3(identity)
-    escaped3(ImmutableArray)
-    local a
-    @test allocated < @allocated a = escaped3(ImmutableArray)
-    @test global_array !== a
-    @test !(global_array isa ImmutableArray)
+
+let # arg escape
+    unoptimizable(a, gen) = gen(a)
+    let src = code_typed1(unoptimizable, (Vector{Int}, Type{ImmutableArray},))
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 0
+        @test count(iscall((src, arrayfreeze)), src.code) == 1
+        a = [1,2,3]
+        unoptimizable(a, ImmutableArray)
+        b = unoptimizable(a, ImmutableArray)
+        @test a !== b
+        @test !(a isa ImmutableArray)
+        @test b isa ImmutableArray
+    end
+end
+
+let # global escape
+    function unoptimizable(gen)
+        a = [1,2,3,4,5]
+        global global_array = a
+        return gen(a)
+    end
+    let src = code_typed1(unoptimizable, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 0
+        @test count(iscall((src, arrayfreeze)), src.code) == 1
+        unoptimizable(identity)
+        allocated = @allocated unoptimizable(identity)
+        unoptimizable(ImmutableArray)
+        local a
+        @test allocated < @allocated a = unoptimizable(ImmutableArray)
+        @test global_array !== a
+        @test !(global_array isa ImmutableArray)
+    end
+end
+
+let # global escape
+    function unoptimizable(gen)
+        a = [1,2,3,4,5]
+        Rx[] = a
+        return gen(a)
+    end
+    let src = code_typed1(unoptimizable, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 0
+        @test count(iscall((src, arrayfreeze)), src.code) == 1
+        unoptimizable(identity)
+        allocated = @allocated unoptimizable(identity)
+        unoptimizable(ImmutableArray)
+        local a
+        @test allocated < @allocated a = unoptimizable(ImmutableArray)
+        @test Rx[] !== a
+        @test !(Rx[] isa ImmutableArray)
+    end
+end
+
+let # escapes via exception
+    function unoptimizable(gen)
+        a = [1,2,3,4,5]
+        try
+            throw(a)
+        catch err
+            global global_array = err
+        end
+        return gen(a)
+    end
+    let src = code_typed1(unoptimizable, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 0
+        @test count(iscall((src, arrayfreeze)), src.code) == 1
+        unoptimizable(identity)
+        allocated = @allocated unoptimizable(identity)
+        unoptimizable(ImmutableArray)
+        local a
+        @test allocated < @allocated a = unoptimizable(ImmutableArray)
+        @test global_array !== a
+        @test !(global_array isa ImmutableArray)
+    end
 end
 
 # @testset "maybecopy tests" begin
@@ -431,7 +460,7 @@ end
 #             getindex(a, 6)
 #         catch e
 #             if isa(e, BoundsError)
-#                 @test e.a === a # already escaped so we don't copy
+#                 @test e.a === a # already unoptimizable_ so we don't copy
 #             end
 #         end
 #     end
@@ -445,4 +474,4 @@ end
 # end
 
 # Check that broadcast precedence is working correctly
-@test typeof(Core.ImmutableArray([1,2,3]) .+ Core.ImmutableArray([4,5,6])) <: Core.ImmutableArray
+@test typeof(ImmutableArray([1,2,3]) .+ ImmutableArray([4,5,6])) <: ImmutableArray
