@@ -347,6 +347,8 @@ tests = [
         "export +, =="  =>  "(export + ==)"
         "export \n a"  =>  "(export a)"
         "export \$a, \$(a*b)"  =>  "(export (\$ a) (\$ (call-i a * b)))"
+        "export (x::T)"  =>  "(export (error (:: x T)))"
+        "export outer"  =>  "(export outer)"
     ],
     JuliaSyntax.parse_if_elseif => [
         "if a xx elseif b yy else zz end" => "(if a (block xx) (elseif (block b) (block yy) (block zz)))"
@@ -374,21 +376,38 @@ tests = [
         "const x"     => "(const (error x (error)))"
     ],
     JuliaSyntax.parse_function => [
-        "function (x) body end"  =>  "(function (tuple x) (block body))"
-        "macro (x) end"          =>  "(macro (error (tuple x)) (block))"
-        "function (x,y) end"     =>  "(function (tuple x y) (block))"
-        "function (x=1) end"     =>  "(function (tuple (kw x 1)) (block))"
-        "function (;x=1) end"    =>  "(function (tuple (parameters (kw x 1))) (block))"
-        "function begin() end"   =>  "(function (call (error (begin))) (block))"
-        "macro begin() end"      =>  "(macro (call (error (begin))) (block))"
-        "function f() end"       =>  "(function (call f) (block))"
-        "function \n f() end"    =>  "(function (call f) (block))"
-        "function \$f() end"     =>  "(function (call (\$ f)) (block))"
-        "function f end"         =>  "(function f)"
-        "function f \n\n end"    =>  "(function f)"
-        "function \$f end"       =>  "(function (\$ f))"
+        "macro while(ex) end"  =>  "(macro (call (error while) ex) (block))"
+        "macro f()     end"    =>  "(macro (call f) (block))"
+        "macro (:)(ex) end"    =>  "(macro (call : ex) (block))"
+        "macro (type)(ex) end" =>  "(macro (call type ex) (block))"
+        "function (x) body end"=>  "(function (tuple x) (block body))"
+        "function (x,y) end"   =>  "(function (tuple x y) (block))"
+        "function (x=1) end"   =>  "(function (tuple (kw x 1)) (block))"
+        "function (;x=1) end"  =>  "(function (tuple (parameters (kw x 1))) (block))"
+        "function (:)() end"   =>  "(function (call :) (block))"
+        "function (x::T)() end"=>  "(function (call (:: x T)) (block))"
+        "function (::T)() end" =>  "(function (call (:: T)) (block))"
+        "function begin() end" =>  "(function (call (error begin)) (block))"
+        "function f() end"     =>  "(function (call f) (block))"
+        "function type() end"  =>  "(function (call type) (block))"
+        "function \n f() end"  =>  "(function (call f) (block))"
+        "function \$f() end"   =>  "(function (call (\$ f)) (block))"
+        "function (:)() end"   =>  "(function (call :) (block))"
+        "function (::Type{T})(x) end"  =>  "(function (call (:: (curly Type T)) x) (block))"
+        # Function/macro definition with no methods
+        "function f end"      =>  "(function f)"
+        "function f \n\n end" =>  "(function f)"
+        "function \$f end"    =>  "(function (\$ f))"
+        "macro f end"         =>  "(macro f)"
+        # Function argument list
+        "function f(x,y) end"    =>  "(function (call f x y) (block))"
+        "function f{T}() end"    =>  "(function (call (curly f T)) (block))"
+        "function A.f()   end"   =>  "(function (call (. A (quote f))) (block))"
+        "function f body end"    =>  "(function (error f) (block body))"
         "function f()::T    end" =>  "(function (:: (call f) T) (block))"
         "function f()::g(T) end" =>  "(function (:: (call f) (call g T)) (block))"
+        "function f() where {T} end"  =>  "(function (where (call f) T) (block))"
+        "function f() where T   end"  =>  "(function (where (call f) T) (block))"
         "function f() \n a \n b end"  =>  "(function (call f) (block a b))"
         "function f() end"       =>  "(function (call f) (block))"
     ],
@@ -480,14 +499,24 @@ tests = [
         # Literal colons
         ":)"   => ":"
         ": end"   => ":"
+        # var syntax
+        """var"x"end"""  =>  "x (error (end))"
+        """var"x"1"""  =>  "x (error 1)"
+        """var"x"y"""  =>  "x (error y)"
+        """var"x")"""  =>  "x"
+        """var"x"+"""  =>  "x"
+        # Syntactic operators
+        "+="  =>  "(error +=)"
+        ".+="  =>  "(error .+=)"
+        # Normal operators
+        "+"  =>  "+"
+        "~"  =>  "~"
+        # Quoted syntactic operators allowed
+        ":+="  =>  "(quote +=)"
         # Special symbols quoted
         ":end" => "(quote end)"
         ":(end)" => "(quote (error (end)))"
         ":<:"  => "(quote <:)"
-        # Macro names can be keywords
-        "@end x" => """(macrocall @end x)"""
-        # __dot__ macro
-        "@. x y" => """(macrocall @__dot__ x y)"""
         # parse_cat
         "[]"        =>  "(vect)"
         "[x,]"      =>  "(vect x)"
@@ -511,6 +540,13 @@ tests = [
         # braces
         "{x y}"      =>  "(bracescat (row x y))"
         "{x ;;; y}"  =>  "(bracescat (nrow-3 x y))"
+        # Macro names can be keywords
+        "@end x" => "(macrocall @end x)"
+        # __dot__ macro
+        "@. x y" => "(macrocall @__dot__ x y)"
+        # cmd strings
+        "`cmd`"      =>  "(macrocall :(Core.var\"@cmd\") \"cmd\")"
+        "```cmd```"  =>  "(macrocall :(Core.var\"@cmd\") \"cmd\")"
         # Errors
         ": foo" => "(quote (error-t) foo)"
     ],

@@ -40,6 +40,7 @@ TODO: Optimize this data structure?  It's very large at the moment.
 """
 struct TaggedRange
     head::SyntaxHead # Kind,flags
+    orig_kind::Kind  # Kind of the original token for leaf tokens, or K"Nothing"
     first_byte::Int  # First byte in the input text
     last_byte::Int   # Last byte in the input text
     start_mark::Int  # Index of first emitted range which this range covers
@@ -263,33 +264,41 @@ function peek_behind_str(stream::ParseStream, pos::ParseStreamPosition, str::Str
     return _peek_equal_to(stream, first_byte(s), span(s), str)
 end
 
-"""
-Return the kind of span which was previously inserted into the output,
-defaulting to the most previous nontrivia node.
+function _peek_behind_fields(ranges, i)
+    r = ranges[i]
+    return (kind=kind(r),
+            flags=flags(r),
+            orig_kind=r.orig_kind,
+            is_leaf=r.start_mark == i)
+end
 
-Retroactively inspecting/modifying the parser's output can be confusing, so
+"""
+    peek_behind(ps; skip_trivia=true)
+    peek_behind(ps, pos::ParseStreamPosition)
+
+Return information about a span which was previously inserted into the output,
+defaulting to the most previous nontrivia node when `skip_trivia` is true, or
+at the provided position `pos`.
+
+Retroactively inspecting or modifying the parser's output can be confusing, so
 using this function should be avoided where possible.
 """
 function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
-    kind(peek_token_behind(stream; skip_trivia=skip_trivia))
-end
-
-function peek_token_behind(stream::ParseStream; skip_trivia::Bool=true)
     if skip_trivia
         for i = length(stream.ranges):-1:1
-            s = stream.ranges[i]
-            if !is_trivia(head(s))
-                return head(s)
+            r = stream.ranges[i]
+            if !is_trivia(head(r))
+                return _peek_behind_fields(stream.ranges, i)
             end
         end
     elseif !isempty(stream.ranges)
-        return head(last(stream.ranges))
+        return _peek_behind_fields(stream.ranges, lastindex(stream.ranges))
     end
-    return SyntaxHead(K"Nothing", EMPTY_FLAGS)
+    internal_error("Can't peek behind at start of stream")
 end
 
 function peek_behind(stream::ParseStream, pos::ParseStreamPosition)
-    return kind(stream.ranges[pos.output_index])
+    return _peek_behind_fields(stream.ranges, pos.output_index)
 end
 
 #-------------------------------------------------------------------------------
@@ -312,8 +321,8 @@ function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"Nothing")
         is_trivia = k ∈ (K"Whitespace", K"Comment", K"NewlineWs")
         f = is_trivia ? TRIVIA_FLAG : flags
         tok.raw.dotop     && (f |= DOTOP_FLAG)
-        k = (is_trivia || remap_kind == K"Nothing") ? k : remap_kind
-        range = TaggedRange(SyntaxHead(k, f), first_byte(tok),
+        outk = (is_trivia || remap_kind == K"Nothing") ? k : remap_kind
+        range = TaggedRange(SyntaxHead(outk, f), k, first_byte(tok),
                             last_byte(tok), lastindex(stream.ranges)+1)
         push!(stream.ranges, range)
     end
@@ -375,7 +384,7 @@ lexing ambiguities. There's no special whitespace handling — bump any
 whitespace if necessary with bump_trivia.
 """
 function bump_glue(stream::ParseStream, kind, flags, num_tokens)
-    span = TaggedRange(SyntaxHead(kind, flags),
+    span = TaggedRange(SyntaxHead(kind, flags), K"Nothing",
                        first_byte(stream.lookahead[1]),
                        last_byte(stream.lookahead[num_tokens]),
                        lastindex(stream.ranges) + 1)
@@ -397,9 +406,9 @@ example
 function bump_split(stream::ParseStream, split_spec...)
     tok = popfirst!(stream.lookahead)
     fbyte = first_byte(tok)
-    for (i, (nbyte, kind, flags)) in enumerate(split_spec)
+    for (i, (nbyte, k, f)) in enumerate(split_spec)
         lbyte = i == length(split_spec) ? last_byte(tok) : fbyte + nbyte - 1
-        push!(stream.ranges, TaggedRange(SyntaxHead(kind, flags),
+        push!(stream.ranges, TaggedRange(SyntaxHead(k, f), kind(tok),
                                          fbyte, lbyte,
                                          lastindex(stream.ranges) + 1))
         fbyte += nbyte
@@ -425,8 +434,8 @@ function reset_node!(stream::ParseStream, mark::ParseStreamPosition;
     k = isnothing(kind)  ? (@__MODULE__).kind(range)  : kind
     f = isnothing(flags) ? (@__MODULE__).flags(range) : flags
     stream.ranges[mark.output_index] =
-        TaggedRange(SyntaxHead(k, f), first_byte(range), last_byte(range),
-                    range.start_mark)
+        TaggedRange(SyntaxHead(k, f), range.orig_kind,
+                    first_byte(range), last_byte(range), range.start_mark)
 end
 
 function Base.position(stream::ParseStream)
@@ -442,7 +451,7 @@ should be a previous return value of `position()`.
 """
 function emit(stream::ParseStream, mark::ParseStreamPosition, kind::Kind,
               flags::RawFlags = EMPTY_FLAGS; error=nothing)
-    range = TaggedRange(SyntaxHead(kind, flags), mark.input_byte,
+    range = TaggedRange(SyntaxHead(kind, flags), K"Nothing", mark.input_byte,
                         stream.next_byte-1, mark.output_index+1)
     if !isnothing(error)
         _emit_diagnostic(stream, first_byte(range), last_byte(range), error=error)
@@ -579,6 +588,3 @@ function parse_all(::Type{GreenNode}, code)
     stream = parse_all(code)
     build_tree(GreenNode, stream)
 end
-
-
-#-------------------------------------------------------------------------------

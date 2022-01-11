@@ -78,10 +78,6 @@ function peek_behind(ps::ParseState, args...)
     peek_behind(ps.stream, args...)
 end
 
-function peek_token_behind(ps::ParseState, args...; kws...)
-    peek_token_behind(ps.stream, args...; kws...)
-end
-
 function bump(ps::ParseState, flags=EMPTY_FLAGS; skip_newlines=nothing, kws...)
     skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
     bump(ps.stream, flags; skip_newlines=skip_nl, kws...)
@@ -214,7 +210,7 @@ function is_initial_reserved_word(ps::ParseState, k)
 end
 
 function is_contextural_keyword(k)
-    kind(k) ∈ KSet`mutable primitive abstract`
+    kind(k) ∈ KSet`as abstract mutable outer primitive type`
 end
 
 function is_reserved_word(k)
@@ -825,7 +821,7 @@ function parse_unary_subtype(ps::ParseState)
             mark = position(ps)
             bump(ps, TRIVIA_FLAG)
             parse_where(ps, parse_juxtapose)
-            if peek_behind(ps) == K"tuple"
+            if peek_behind(ps).kind == K"tuple"
                 TODO("Can this even happen?")
             end
             emit(ps, mark, k)
@@ -908,7 +904,7 @@ function parse_juxtapose(ps::ParseState)
     parse_unary(ps)
     n_terms = 1
     while true
-        prev_kind = peek_behind(ps)
+        prev_kind = peek_behind(ps).kind
         t = peek_token(ps)
         if !is_juxtapose(ps, prev_kind, t)
             break
@@ -1192,22 +1188,21 @@ end
 
 # Parse a symbol or interpolation syntax (a restricted version of
 # parse_unary_prefix)
-function parse_identifier_or_interpolate(ps::ParseState, outermost=true)
+function parse_identifier_or_interpolate(ps::ParseState)
     mark = position(ps)
     if peek(ps) == K"$"
         bump(ps, TRIVIA_FLAG)
         # $a   ==>  ($ a)
         # $$a  ==>  ($ ($ a))
-        parse_identifier_or_interpolate(ps, false)
+        parse_unary_prefix(ps)
         emit(ps, mark, K"$")
     else
         parse_atom(ps)
-        if outermost
-            kb = peek_behind(ps)
-            if !(is_identifier(kb) || is_operator(kb))
-                emit(ps, mark, K"error",
-                     error="Expected identifier or interpolation syntax")
-            end
+        b = peek_behind(ps)
+        # export (x::T) ==> (export (error (:: x T)))
+        # export outer  ==> (export outer)
+        if !b.is_leaf || !(is_identifier(b.kind) || is_operator(b.kind))
+            emit(ps, mark, K"error", error="Expected identifier")
         end
     end
 end
@@ -1221,7 +1216,7 @@ function finish_macroname(ps, mark, is_valid_modref, macro_name_position,
                           name_kind=nothing)
     if is_valid_modref
         if isnothing(name_kind)
-            name_kind = macro_name_kind(peek_behind(ps, macro_name_position))
+            name_kind = macro_name_kind(peek_behind(ps, macro_name_position).kind)
         end
         reset_node!(ps, macro_name_position, kind = name_kind)
     else
@@ -1236,14 +1231,14 @@ end
 #
 # flisp: parse-call-chain, parse-call-with-initial-ex
 function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
-    if is_number(peek_behind(ps)) && peek(ps) == K"("
+    if is_number(peek_behind(ps).kind) && peek(ps) == K"("
         # juxtaposition with numbers is multiply, not call
         # 2(x) ==> (* 2 x)
         return
     end
     # source range of the @-prefixed part of a macro
     macro_atname_range = nothing
-    kb = peek_behind(ps)
+    kb = peek_behind(ps).kind
     is_valid_modref = is_identifier(kb) || kb == K"."
     # We record the last component of chains of dot-separated identifiers so we
     # know which identifier was the macro name.
@@ -1269,6 +1264,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # A.@foo a b    ==> (macrocall (. A (quote @foo)) a b)
                 # @A.foo a b    ==> (macrocall (. A (quote @foo)) a b)
                 n_args = parse_space_separated_exprs(ps)
+                # TODO: Introduce K"doc" to make this hack less awful.
                 is_doc_macro = peek_behind_str(ps, macro_name_position, "doc")
                 if is_doc_macro && n_args == 1
                     # Parse extended @doc args on next line
@@ -1555,7 +1551,7 @@ function parse_resword(ps::ParseState)
             # let x=1\n end    ==>  (let (= x 1) (block))
             m = position(ps)
             n_subexprs = parse_comma_separated(ps, parse_eq_star)
-            kb = peek_behind(ps)
+            kb = peek_behind(ps).kind
             # Wart: This ugly logic seems unfortunate. Why not always emit a block?
             # let x=1 ; end   ==>  (let (= x 1) (block))
             # let x::1 ; end  ==>  (let (:: x 1) (block))
@@ -1608,7 +1604,8 @@ function parse_resword(ps::ParseState)
         # struct A <: B \n a::X \n end  ==>  (struct false (<: A B) (block (:: a X)))
         if word == K"mutable"
             # mutable struct A end  ==>  (struct true A (block))
-            bump(ps, remap_kind=K"true")
+            bump(ps, TRIVIA_FLAG)
+            bump_invisible(ps, K"true")
         else
             # struct A end  ==>  (struct false A (block))
             bump_invisible(ps, K"false")
@@ -1657,7 +1654,8 @@ function parse_resword(ps::ParseState)
     elseif word in KSet`module baremodule`
         # module A end  ==> (module true A (block))
         # baremodule A end ==> (module false A (block))
-        bump(ps, remap_kind= (word == K"module") ? K"true" : K"false")
+        bump(ps, TRIVIA_FLAG)
+        bump_invisible(ps, (word == K"module") ? K"true" : K"false")
         if is_reserved_word(peek(ps))
             # module do \n end  ==>  (module true (error do) (block))
             bump(ps, error="Invalid module name")
@@ -1809,58 +1807,96 @@ end
 function parse_function(ps::ParseState)
     mark = position(ps)
     word = peek(ps)
-    is_func = word == K"function"
+    @assert word in KSet`macro function`
+    is_function = word == K"function"
+    is_anon_func::Bool = false
     bump(ps, TRIVIA_FLAG)
     bump_trivia(ps)
 
     def_mark = position(ps)
-    k = peek(ps)
-    if k == K"("
-        # Wart: flisp parser parses anon function arguments as tuples, roughly
-        # like `parse_paren(ps)`, but the code to disambiguate those cases
-        # is kind of awful.
-        #
-        # It seems much more consistent to treat them as function argument lists:
-        # function (x,y) end   ==>  (function (tuple x y) (block))
-        # function (x=1) end   ==>  (function (tuple (kw x 1)) (block))
-        # function (;x=1) end  ==>  (function (tuple (parameters (kw x 1))) (block))
-        bump(ps, TRIVIA_FLAG)
-        parse_call_arglist(ps, K")", false)
-        emit(ps, def_mark, K"tuple")
-        # function (x) body end   ==>  (function (tuple x) (block body))
-        #
-        # Wart: flisp parser allows the following but it's invalid syntax in lowering
-        # macro (x) end   !=>  (macro (tuple x) (block))
-        # Fix is simple:
-        if !is_func
-            # macro (x) end   ==>  (macro (error (tuple x)) (block))
-            emit(ps, def_mark, K"error", error="Expected macro name")
+    if !is_function
+        # Parse macro name
+        parse_identifier_or_interpolate(ps)
+        kb = peek_behind(ps).orig_kind
+        if is_initial_reserved_word(ps, kb)
+            # macro while(ex) end  ==> (macro (call (error while) ex) (block))
+            emit(ps, def_mark, K"error", error="Invalid macro name")
+        else
+            # macro f()     end  ==>  (macro (call f) (block))
+            # macro (:)(ex) end  ==>  (macro (call : ex) (block))
+            # macro (type)(ex) end  ==>  (macro (call type ex) (block))
         end
     else
-        if is_keyword(k)
-            # Forbid things like
-            # function begin() end  ==>  (function (call (error (begin))) (block))
-            # macro begin() end  ==>  (macro (call (error (begin))) (block))
-            bump(ps, error="invalid $(untokenize(word)) name")
-        else
-            # function f() end  ==>  (function (call f) (block))
-            # function \n f() end  ==>  (function (call f) (block))
-            # function $f() end  ==>  (function (call ($ f)) (block))
-            parse_identifier_or_interpolate(ps)
-        end
-        if peek(ps, skip_newlines=true) == K"end"
-            # Function definition with no methods
-            # function f end       ==> (function f)
-            # function f \n\n end  ==> (function f)
-            # function $f end      ==> (function ($ f))
+        if peek(ps) == K"("
             bump(ps, TRIVIA_FLAG)
-            emit(ps, mark, word)
-            return
+            # When an initial parenthesis is present, we might either have the
+            # function name or the argument list in an anonymous function. We
+            # use parse_brackets directly here (rather than dispatching to it
+            # via parse_atom) so we can distinguish these two cases by peeking
+            # at the following parenthesis, if present.
+            #
+            # The flisp parser disambiguates this case quite differently,
+            # producing less consistent syntax for anonymous functions.
+            parse_brackets(ps, K")") do _, _, _
+                bump_closing_token(ps, K")")
+                is_anon_func = peek(ps) != K"("
+                return (needs_parameters     = is_anon_func,
+                        eq_is_kw_before_semi = is_anon_func,
+                        eq_is_kw_after_semi  = is_anon_func)
+            end
+            if is_anon_func
+                # function (x) body end ==>  (function (tuple x) (block body))
+                # function (x,y) end    ==>  (function (tuple x y) (block))
+                # function (x=1) end    ==>  (function (tuple (kw x 1)) (block))
+                # function (;x=1) end   ==>  (function (tuple (parameters (kw x 1))) (block))
+                emit(ps, def_mark, K"tuple")
+            else
+                # function (:)() end    ==> (function (call :) (block))
+                # function (x::T)() end ==> (function (call (:: x T)) (block))
+                # function (::T)() end  ==> (function (call (:: T)) (block))
+            end
+        else
+            parse_unary_prefix(ps)
         end
-        parse_call_chain(ps, def_mark)
+        if !is_anon_func
+            kb = peek_behind(ps).orig_kind
+            if is_reserved_word(kb)
+                # function begin() end  ==>  (function (call (error begin)) (block))
+                emit(ps, def_mark, K"error", error="Invalid function name")
+            else
+                # function f() end     ==>  (function (call f) (block))
+                # function type() end  ==>  (function (call type) (block))
+                # function \n f() end  ==>  (function (call f) (block))
+                # function $f() end    ==>  (function (call ($ f)) (block))
+                # function (:)() end  ==>  (function (call :) (block))
+                # function (::Type{T})(x) end ==> (function (call (:: (curly Type T)) x) (block))
+            end
+        end
     end
-    if is_func && peek(ps) == K"::"
-        # Return type
+    if peek(ps, skip_newlines=true) == K"end" && !is_anon_func
+        # Function/macro definition with no methods
+        # function f end       ==> (function f)
+        # function f \n\n end  ==> (function f)
+        # function $f end      ==> (function ($ f))
+        # macro f end          ==> (macro f)
+        bump(ps, TRIVIA_FLAG)
+        emit(ps, mark, word)
+        return
+    end
+    if !is_anon_func
+        # Parse function argument list
+        # function f(x,y)  end    ==>  (function (call f x y) (block))
+        # function f{T}()  end    ==>  (function (call (curly f T)) (block))
+        # function A.f()   end    ==>  (function (call (. A (quote f))) (block))
+        parse_call_chain(ps, def_mark)
+        if peek_behind(ps).kind != K"call"
+            # function f body end  ==>  (function (error f) (block body))
+            emit(ps, def_mark, K"error",
+                 error="Invalid signature in $(untokenize(word)) definition")
+        end
+    end
+    if is_function && peek(ps) == K"::"
+        # Function return type
         # function f()::T    end   ==>  (function (:: (call f) T) (block))
         # function f()::g(T) end   ==>  (function (:: (call f) (call g T)) (block))
         bump(ps, TRIVIA_FLAG)
@@ -1868,6 +1904,7 @@ function parse_function(ps::ParseState)
         emit(ps, def_mark, K"::")
     end
     if peek(ps) == K"where"
+        # Function signature where syntax
         # function f() where {T} end   ==>  (function (where (call f) T) (block))
         # function f() where T   end   ==>  (function (where (call f) T) (block))
         parse_where_chain(ps, def_mark)
@@ -2006,7 +2043,7 @@ function parse_macro_name(ps::ParseState; remap_kind=false)
         end
     end
     if remap_kind
-        reset_node!(ps, position(ps), kind=macro_name_kind(peek_behind(ps)))
+        reset_node!(ps, position(ps), kind=macro_name_kind(peek_behind(ps).kind))
     end
 end
 
@@ -2734,14 +2771,14 @@ function parse_string(ps::ParseState)
                 m = position(ps)
                 parse_atom(ps)
                 if ps.julia_version >= v"1.6"
-                    head = peek_token_behind(ps)
-                    if kind(head) == K"String"
+                    prev = peek_behind(ps)
+                    if prev.kind == K"String"
                         # Wrap interpolated literal strings in (string) so we can
                         # distinguish them from the surrounding text (issue #38501)
                         # "hi$("ho")"      ==>  (string "hi" (string "ho"))
                         # "hi$("""ho""")"  ==>  (string "hi" (string-s "ho"))
                         #v1.5: "hi$("ho")" ==>  (string "hi" "ho")
-                        emit(ps, m, K"string", flags(head))
+                        emit(ps, m, K"string", prev.flags)
                     end
                 end
             elseif is_identifier(k)
@@ -2858,14 +2895,24 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         bump(ps)
         t = peek_token(ps)
         if !t.had_whitespace && !(is_operator(kind(t)) || is_non_keyword_closer(t))
+            # var"x"end  ==>  (error (end))
+            # var"x"1    ==>  (error 1)
+            # var"x"y    ==>  (error y)
             bump(ps, error="suffix not allowed after var\"...\" syntax")
+        else
+            # var"x")  ==>  x
+            # var"x"+  ==>  x
         end
     elseif is_operator(leading_kind)
-        # Operators and keywords are generally turned into identifiers if used
-        # as atoms.
         if check_identifiers && is_syntactic_operator(leading_kind)
+            # +=   ==>  (error +=)
+            # .+=  ==>  (error .+=)
             bump(ps, error="invalid identifier")
         else
+            # +     ==>  +
+            # ~     ==>  ~
+            # Quoted syntactic operators allowed
+            # :+=   ==>  (quote +=)
             bump(ps)
         end
     elseif is_keyword(leading_kind)
@@ -2873,7 +2920,9 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             # :(end)  ==>  (quote (error end))
             bump(ps, error="invalid identifier")
         else
+            # Remap keywords to identifiers.
             # :end  ==>  (quote end)
+            # :<:   ==> (quote <:)
             bump(ps, remap_kind=K"Identifier")
         end
     elseif leading_kind == K"(" # parens or tuple
@@ -2889,10 +2938,15 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     elseif is_string_delim(leading_kind)
         parse_string(ps)
     elseif leading_kind == K"@" # macro call
+        # Macro names can be keywords
+        # @end x  ==> (macrocall @end x)
+        # @. x y  ==> (macrocall @__dot__ x y)
         bump(ps, TRIVIA_FLAG)
         parse_macro_name(ps)
         parse_call_chain(ps, mark, true)
     elseif leading_kind in KSet`\` \`\`\``
+        # `cmd`       ==>  (macrocall core_@cmd "cmd")
+        # ```cmd```   ==>  (macrocall core_@cmd "cmd"-s)
         bump_invisible(ps, K"core_@cmd")
         parse_raw_string(ps)
         emit(ps, mark, K"macrocall")
@@ -2930,7 +2984,7 @@ function parse_docstring(ps::ParseState, down=parse_eq)
     mark = position(ps)
     atdoc_mark = bump_invisible(ps, K"TOMBSTONE")
     down(ps)
-    if peek_behind(ps) in KSet`String string`
+    if peek_behind(ps).kind in KSet`String string`
         is_doc = true
         k = peek(ps)
         if is_closing_token(ps, k)

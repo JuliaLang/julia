@@ -62,7 +62,7 @@ Additionally, green trees are usually designed so that
 * Nodes are homogenously typed at the language level so they can be efficiently
   stored and accessed, with the node type held as a "syntax kind" enumeration.
 
-## Syntax Kinds and sum types
+## Syntax kinds and sum types
 
 We generally track the type of syntax nodes with a syntax "kind", stored
 explicitly in each node an integer tag. This effectively makes the node type a
@@ -481,25 +481,27 @@ Some resources:
 
 # Differences from the flisp parser
 
-## Make parsing decisions earlier
+Practically the flisp parser is not quite a classic [recursive descent
+parser](https://en.wikipedia.org/wiki/Recursive_descent_parser), because it
+often looks back and modifies the output tree it has already produced. We've
+tried to eliminate this pattern it favor of lookahead where possible because
 
-The flisp-based parser has many places where it parses an expression and then
-optionally rearranges the resulting AST, modifying heads of expressions etc.
-
-This parser tries hard to avoid that pattern becase
 * It works poorly when the parser is emitting a stream of node spans rather
   than eagerly creating a tree data structure.
-* It's confusing to re-make parsing decisions
+* It's confusing to reason about this kind of code
 
-Often the information required to avoid postprocessing the parse tree is
-available early with a bit of restructuring and we make use of this wherever
-possible.
+However, on occasion it seems to solve genuine ambiguities where Julia code
+can't be parsed top-down with finite lookahead. Eg for the `kw` vs `=`
+ambiguity within parentheses. In these cases we put up with using the
+functions `look_behind` and `reset_node!()`.
 
-## Function names
+## Code structure
 
 Large structural changes were generally avoided while porting. In particular,
 nearly all function names for parsing productions are the same with `-`
 replaced by `_` and predicates prefixed by `is_`.
+
+Some notable differences:
 
 * `parse-arglist` and a parts of `parse-paren-` have been combined into a
   general function `parse_brackets`. This function deals with all the odd
@@ -508,7 +510,6 @@ replaced by `_` and predicates prefixed by `is_`.
   - Determining whether `;` are block syntax separators or keyword parameters
   - Determining whether to emit `parameter` sections based on context
   - Emitting key-value pairs either as `kw` or `=` depending on context
-
 * The way that `parse-resword` is entered has been rearranged to avoid parsing
   reserved words with `parse-atom` inside `parse-unary-prefix`. Instead, we
   detect reserved words and enter `parse_resword` earlier.
@@ -576,8 +577,10 @@ parsing `key=val` pairs inside parentheses.
   (a,b; c,d; e,f)
   ```
 * Long-form anonymous functions have argument lists which are parsed
-  as tuples rather than argument lists. This leads to more inconsistency in the
-  use of `kw` for keywords.
+  as tuples (or blocks!) rather than argument lists and this mess appears to be
+  papered over as part of lowering. For example, in `function (a;b) end` the
+  `(a;b)` is parsed as a block! This leads to more inconsistency in the use of
+  `kw` for keywords.
 
 
 ### Flattened generators
