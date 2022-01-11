@@ -119,9 +119,6 @@ function fetch()
     raw_results = ccall(:jl_fetch_alloc_profile, RawAllocResults, ())
     decoded_results = decode(raw_results)
 
-    @show(length(decoded_results.allocs))
-    @show(_g_expected_sampled_allocs[])
-
     missed_allocs = _g_expected_sampled_allocs[] - length(decoded_results.allocs)
     missed_percentage = round(Int, missed_allocs / _g_expected_sampled_allocs[] * 100)
     @warn("The allocation profiler is not fully implemented, and missed $(missed_percentage)% " *
