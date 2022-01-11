@@ -1586,7 +1586,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 tbaa_decorate(tbaa_const, cast<Instruction>(len));
             MDBuilder MDB(jl_LLVMContext);
             auto rng = MDB.createRange(
-                V_size0, ConstantInt::get(T_size, INTPTR_MAX / sizeof(void*) - 1));
+                Constant::getNullValue(T_size), ConstantInt::get(T_size, INTPTR_MAX / sizeof(void*) - 1));
             cast<LoadInst>(len)->setMetadata(LLVMContext::MD_range, rng);
         }
         JL_GC_POP();
@@ -1609,7 +1609,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         // This could otherwise be in a dead branch
         if (svecv.typ == (jl_value_t*)jl_simplevector_type)
             tbaa_decorate(tbaa_const, load);
-        Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, V_rnull), T_int8);
+        Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, Constant::getNullValue(T_prjlvalue)), T_int8);
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, res, retboxed, rt, unionall, static_rt);
     }
@@ -1664,7 +1664,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, slot_addr, Align(sizeof(void*)));
                 load->setAtomic(AtomicOrdering::Unordered);
                 tbaa_decorate(tbaa_ptrarraybuf, load);
-                Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, V_rnull), T_int32);
+                Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, Constant::getNullValue(T_prjlvalue)), T_int32);
                 JL_GC_POP();
                 return mark_or_box_ccall_result(ctx, res, retboxed, rt, unionall, static_rt);
             }

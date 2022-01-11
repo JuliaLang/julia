@@ -384,7 +384,7 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
 {
     if (p == NULL)
-        return V_null;
+        return Constant::getNullValue(T_pjlvalue);
     if (!imaging_mode)
         return literal_static_pointer_val(p);
     Value *pgv = literal_pointer_val_slot(ctx, p);
@@ -398,7 +398,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
 {
     // emit a pointer to any jl_value_t which will be valid across reloading code
     if (p == NULL)
-        return V_null;
+        return Constant::getNullValue(T_pjlvalue);
     if (!imaging_mode)
         return literal_static_pointer_val(p);
     // bindings are prefixed with jl_bnd#
@@ -838,7 +838,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
     if (p.TIndex) {
         Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(T_int8, 0x7f));
         bool allunboxed = is_uniontype_allunboxed(p.typ);
-        Value *datatype_or_p = imaging_mode ? Constant::getNullValue(T_ppjlvalue) : V_rnull;
+        Value *datatype_or_p = imaging_mode ? Constant::getNullValue(T_ppjlvalue) : Constant::getNullValue(T_prjlvalue);
         unsigned counter = 0;
         for_each_uniontype_small(
             [&](unsigned idx, jl_datatype_t *jt) {
@@ -982,7 +982,7 @@ static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
 static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *dt)
 {
     Value *immut = ctx.builder.CreateNot(emit_datatype_mutabl(ctx, dt));
-    Value *nofields = ctx.builder.CreateICmpEQ(emit_datatype_nfields(ctx, dt), V_size0);
+    Value *nofields = ctx.builder.CreateICmpEQ(emit_datatype_nfields(ctx, dt), Constant::getNullValue(T_size));
     Value *sized = ctx.builder.CreateICmpSGT(emit_datatype_size(ctx, dt), ConstantInt::get(T_int32, 0));
     return ctx.builder.CreateAnd(immut, ctx.builder.CreateAnd(nofields, sized));
 }
@@ -1704,7 +1704,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     cmp = mark_julia_type(ctx, Compare, true, cmp.typ);
             }
             else {
-                Compare = V_rnull; // TODO: does this need to be an invalid bit pattern?
+                Compare = Constant::getNullValue(T_prjlvalue); // TODO: does this need to be an invalid bit pattern?
                 needloop = true;
             }
         }
@@ -2434,7 +2434,7 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *
             ctx.builder.CreateAdd(dim, ConstantInt::get(dim->getType(), o)),
             tbaa, T_size);
     MDBuilder MDB(jl_LLVMContext);
-    auto rng = MDB.createRange(V_size0, ConstantInt::get(T_size, arraytype_maxsize(tinfo.typ)));
+    auto rng = MDB.createRange(Constant::getNullValue(T_size), ConstantInt::get(T_size, arraytype_maxsize(tinfo.typ)));
     load->setMetadata(LLVMContext::MD_range, rng);
     return load;
 }
@@ -2470,7 +2470,7 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     LoadInst *len = ctx.builder.CreateAlignedLoad(T_size, addr, Align(sizeof(size_t)));
     len->setOrdering(AtomicOrdering::NotAtomic);
     MDBuilder MDB(jl_LLVMContext);
-    auto rng = MDB.createRange(V_size0, ConstantInt::get(T_size, arraytype_maxsize(tinfo.typ)));
+    auto rng = MDB.createRange(Constant::getNullValue(T_size), ConstantInt::get(T_size, arraytype_maxsize(tinfo.typ)));
     len->setMetadata(LLVMContext::MD_range, rng);
     return tbaa_decorate(tbaa, len);
 }
@@ -2590,7 +2590,7 @@ static Value *emit_array_nd_index(
         const jl_cgval_t *argv, size_t nidxs, jl_value_t *inbounds)
 {
     Value *a = boxed(ctx, ainfo);
-    Value *i = V_size0;
+    Value *i = Constant::getNullValue(T_size);
     Value *stride = ConstantInt::get(T_size, 1);
 #if CHECK_BOUNDS==1
     bool bc = bounds_check_enabled(ctx, inbounds);
@@ -2966,7 +2966,7 @@ static AllocaInst *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, 
 
 /*
  * Box unboxed values in a union. Optionally, skip certain unboxed values,
- * returning `V_null` in one of the skipped cases. If `skip` is not empty,
+ * returning `Constant::getNullValue(T_pjlvalue)` in one of the skipped cases. If `skip` is not empty,
  * skip[0] (corresponding to unknown boxed) must always be set. In that
  * case, the calling code must separately deal with the case where
  * `vinfo` is already an unknown boxed union (union tag 0x80).
@@ -3025,7 +3025,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     ctx.builder.SetInsertPoint(defaultBB);
     if (skip.size() > 0) {
         assert(skip[0]);
-        box_merge->addIncoming(V_rnull, defaultBB);
+        box_merge->addIncoming(Constant::getNullValue(T_prjlvalue), defaultBB);
         ctx.builder.CreateBr(postBB);
     }
     else if (!vinfo.Vboxed) {
@@ -3106,7 +3106,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
                     // TODO: this Select is very bad for performance, but is necessary to work around LLVM bugs with the undef option that we want to use:
                     //   select copy dest -> dest to simulate an undef value / conditional copy
                     // src_ptr = ctx.builder.CreateSelect(skip, dest, src_ptr);
-                    nbytes = ctx.builder.CreateSelect(skip, V_size0, nbytes);
+                    nbytes = ctx.builder.CreateSelect(skip, Constant::getNullValue(T_size), nbytes);
                 }
                 emit_memcpy(ctx, dest, tbaa_dst, src_ptr, src.tbaa, nbytes, alignment, isVolatile);
             }
