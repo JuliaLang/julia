@@ -1393,11 +1393,9 @@ function cfg_simplify!(ir::IRCode)
     return finish(compact)
 end
 
+# Inspect calls to arrayfreeze to determine if mutating_arrayfreeze can be safely used instead
 function memory_opt!(ir::IRCode, estate)
     estate = estate::EscapeAnalysis.EscapeState
-    maybecopies = nothing # calls to maybecopy
-
-    # mark statements that possibly can be optimized
     for idx in 1:length(ir.stmts)
         stmt = ir.stmts[idx][:inst]
         isexpr(stmt, :call) || continue
@@ -1411,11 +1409,6 @@ function memory_opt!(ir::IRCode, estate)
                 has_no_escape(estate[ary]) || continue
                 stmt.args[1] = GlobalRef(Core, :mutating_arrayfreeze)
             end
-        elseif is_known_call(stmt, Core.maybecopy, ir)
-            length(stmt.args) ≥ 2 || continue
-            ary = stmt.args[2]
-            has_no_escape(estate[ary]) || continue # XXX is this correct, or has_only_throw_escape(x, pc) where pc is location of throw that created the maybecopy?
-            stmt.args[1] = GlobalRef(Main.Base, :copy)
         end
     end
 
