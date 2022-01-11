@@ -44,12 +44,13 @@ end
     @test (@static if false 1 elseif false 2 else 3 end) === 3
     @test (@static if false 1 elseif false 2 elseif true && false 3 else 4 end) === 4
     @test (@static if false 1 elseif false 2 elseif true && false 3 end) === nothing
+    @test_throws ArgumentError("invalid @static macro") @macroexpand @static 1
 end
 
 if Sys.iswindows()
     @testset "path variables use correct path delimiters on windows" begin
         for path in (Base.SYSCONFDIR, Base.DATAROOTDIR, Base.DOCDIR,
-                     Base.LIBDIR, Base.PRIVATE_LIBDIR, Base.INCLUDEDIR)
+                     Base.LIBDIR, Base.PRIVATE_LIBDIR, Base.INCLUDEDIR, Base.LIBEXECDIR)
             @test !occursin("/", path)
             @test !occursin("\\\\", path)
         end

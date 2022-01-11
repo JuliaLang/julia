@@ -133,7 +133,7 @@ end
 end
 
 @testset "rounding difficult values" begin
-    for x = 2^53-10:2^53+10
+    for x = Int64(2)^53-10:Int64(2)^53+10
         y = Float64(x)
         i = trunc(Int64,y)
         @test Int64(trunc(y)) == i

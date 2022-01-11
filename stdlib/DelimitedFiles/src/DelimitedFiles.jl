@@ -38,14 +38,14 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", Int64)
-4×2 Array{Int64,2}:
+4×2 Matrix{Int64}:
  1  5
  2  6
  3  7
  4  8
 
 julia> readdlm("delim_file.txt", Float64)
-4×2 Array{Float64,2}:
+4×2 Matrix{Float64}:
  1.0  5.0
  2.0  6.0
  3.0  7.0
@@ -74,7 +74,7 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", ',', Float64)
-4×2 Array{Float64,2}:
+4×2 Matrix{Float64}:
  1.0  1.1
  2.0  2.2
  3.0  3.3
@@ -106,7 +106,7 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt")
-4×2 Array{Any,2}:
+4×2 Matrix{Any}:
  1  "a"
  2  "b"
  3  "c"
@@ -137,13 +137,11 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", ',')
-4×2 Array{Float64,2}:
+4×2 Matrix{Float64}:
  1.0  1.1
  2.0  2.2
  3.0  3.3
  4.0  4.4
-
-julia> rm("delim_file.txt")
 
 julia> z = ["a"; "b"; "c"; "d"];
 
@@ -152,7 +150,7 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", ',')
-4×2 Array{Any,2}:
+4×2 Matrix{Any}:
  1  "a"
  2  "b"
  3  "c"
@@ -192,8 +190,9 @@ Specifying `skipstart` will ignore the corresponding number of initial lines fro
 If `skipblanks` is `true`, blank lines in the input will be ignored.
 
 If `use_mmap` is `true`, the file specified by `source` is memory mapped for potential
-speedups. Default is `true` except on Windows. On Windows, you may want to specify `true` if
-the file is large, and is only read once and not written to.
+speedups if the file is large. Default is `false`. On a Windows filesystem, `use_mmap` should not be set
+to `true` unless the file is only read once and is also not written to.
+Some edge cases exist where an OS is Unix-like but the filesystem is Windows-like.
 
 If `quotes` is `true`, columns enclosed within double-quote (\") characters are allowed to
 contain new lines and column delimiters. Double-quote characters within a quoted field must
@@ -215,28 +214,30 @@ julia> open("delim_file.txt", "w") do io
        end
 
 julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
-4×2 Array{Int64,2}:
+4×2 Matrix{Int64}:
  1  5
  2  6
  3  7
  4  8
+
+julia> rm("delim_file.txt")
 ```
 """
 readdlm(input, dlm::AbstractChar, T::Type, eol::AbstractChar; opts...) =
     readdlm_auto(input, dlm, T, eol, false; opts...)
 
 readdlm_auto(input::Vector{UInt8}, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool; opts...) =
-    readdlm_string(String(input), dlm, T, eol, auto, val_opts(opts))
+    readdlm_string(String(copyto!(Base.StringVector(length(input)), input)), dlm, T, eol, auto, val_opts(opts))
 readdlm_auto(input::IO, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool; opts...) =
     readdlm_string(read(input, String), dlm, T, eol, auto, val_opts(opts))
 function readdlm_auto(input::AbstractString, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool; opts...)
     isfile(input) || throw(ArgumentError("Cannot open \'$input\': not a file"))
     optsd = val_opts(opts)
-    use_mmap = get(optsd, :use_mmap, Sys.iswindows() ? false : true)
+    use_mmap = get(optsd, :use_mmap, false)
     fsz = filesize(input)
     if use_mmap && fsz > 0 && fsz < typemax(Int)
         a = open(input, "r") do f
-            Mmap.mmap(f, Vector{UInt8}, (Int(fsz),))
+            mmap(f, Vector{UInt8}, (Int(fsz),))
         end
         # TODO: It would be nicer to use String(a) without making a copy,
         # but because the mmap'ed array is not NUL-terminated this causes
@@ -455,7 +456,7 @@ function readdlm_string(sbuff::String, dlm::AbstractChar, T::Type, eol::Abstract
             dims = dlm_parse(sbuff, eol, dlm, '"', comment_char, ign_empty, quotes, comments, skipstart, skipblanks, offset_handler)
             break
         catch ex
-            if isa(ex, TypeError) && (ex.func == :store_cell)
+            if isa(ex, TypeError) && (ex.func === :store_cell)
                 T = ex.expected
             else
                 rethrow()
@@ -510,7 +511,7 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
         end
         return result(dh)
     catch ex
-        isa(ex, TypeError) && (ex.func == :store_cell) && (return dlm_fill(ex.expected, offarr, dims, has_header, sbuff, auto, eol))
+        isa(ex, TypeError) && (ex.func === :store_cell) && (return dlm_fill(ex.expected, offarr, dims, has_header, sbuff, auto, eol))
         error("at row $row, column $col : $ex")
     end
 end
@@ -712,7 +713,7 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
             end
         end
     catch ex
-        if isa(ex, TypeError) && (ex.func == :store_cell)
+        if isa(ex, TypeError) && (ex.func === :store_cell)
             rethrow()
         else
             error("at row $(nrows+1), column $col : $ex)")
@@ -814,7 +815,7 @@ julia> open("delim_file.txt", "w") do io
        end
 
 julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
-4×2 Array{Int64,2}:
+4×2 Matrix{Int64}:
  1  5
  2  6
  3  7

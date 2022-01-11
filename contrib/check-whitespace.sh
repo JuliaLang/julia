@@ -35,3 +35,5 @@ if git --no-pager grep --color -n --full-name -e ' $' -- $file_patterns; then
     echo "and then a forced push of the correct branch"
     exit 1
 fi
+
+echo "Whitespace check found no issues"

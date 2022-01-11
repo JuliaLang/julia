@@ -1,12 +1,33 @@
-# Documentation
+# [Documentation](@id man-documentation)
+
+## Accessing Documentation
+
+Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
+by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
+
+```julia
+?cos
+?@time
+?r""
+```
+
+will show documentation for the relevant function, macro or string macro respectively. Most Julia
+environments provide a way to access documentation directly:
+- [VS Code](https://www.julia-vscode.org/) shows documentation when you hover over a function name.
+  You can also use the Julia panel in the sidebar to search for documentation.
+- In [Pluto](https://github.com/fonsp/Pluto.jl), open the "Live Docs" panel on the bottom right.
+- In [Juno](https://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
+under the cursor.
+
+## Writing Documentation
 
 Julia enables package developers and users to document functions, types and other objects easily
-via a built-in documentation system since Julia 0.4.
+via a built-in documentation system.
 
-The basic syntax is simple: any string appearing at the top-level right before an object
-(function, macro, type or instance) will be interpreted as documenting it (these are called *docstrings*).
-Note that no blank lines or comments may intervene between a docstring and the documented object.
-Here is a basic example:
+The basic syntax is simple: any string appearing just before an object
+(function, macro, type or instance) will be interpreted as documenting it (these are called
+*docstrings*). Note that no blank lines or comments may intervene between a docstring and
+the documented object. Here is a basic example:
 
 ```julia
 "Tell whether there are too foo items in the array."
@@ -21,7 +42,7 @@ other string macros and pass them to the `@doc` macro just as well.
 !!! note
     Markdown support is implemented in the `Markdown` standard library
     and for a full list of supported syntax see the
-    [documentation](@ref Markdown).
+    [documentation](@ref markdown_stdlib).
 
 Here is a more complex example, still using Markdown:
 
@@ -29,8 +50,9 @@ Here is a more complex example, still using Markdown:
 """
     bar(x[, y])
 
-Compute the Bar index between `x` and `y`. If `y` is missing, compute
-the Bar index between all pairs of columns of `x`.
+Compute the Bar index between `x` and `y`.
+
+If `y` is unspecified, compute the Bar index between all pairs of columns of `x`.
 
 # Examples
 ```julia-repl
@@ -90,10 +112,10 @@ As in the example above, we recommend following some simple conventions when wri
 5. Provide hints to related functions.
 
    Sometimes there are functions of related functionality. To increase discoverability please provide
-   a short list of these in a `See also:` paragraph.
+   a short list of these in a `See also` paragraph.
 
    ```
-   See also: [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)
+   See also [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref).
    ```
 6. Include any code examples in an `# Examples` section.
 
@@ -127,8 +149,7 @@ As in the example above, we recommend following some simple conventions when wri
        Calling `rand` and other RNG-related functions should be avoided in doctests since they will not
        produce consistent outputs during different Julia sessions. If you would like to show some random
        number generation related functionality, one option is to explicitly construct and seed your own
-       [`MersenneTwister`](@ref) (or other pseudorandom number generator) and pass it to the functions you are
-       doctesting.
+       RNG object (see [`Random`](@ref Random-Numbers)) and pass it to the functions you are doctesting.
 
        Operating system word size ([`Int32`](@ref) or [`Int64`](@ref)) as well as path separator differences
        (`/` or `\`) will also affect the reproducibility of some doctests.
@@ -187,30 +208,20 @@ As in the example above, we recommend following some simple conventions when wri
    f(x, y) = ...
    ```
 
-   This makes it more clear where docstrings start and end.
+   This makes it clearer where docstrings start and end.
 9. Respect the line length limit used in the surrounding code.
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
-   It is advised to add line breaks after 92 characters.
+   It is recommended that lines are at most 92 characters wide.
 6. Provide information allowing custom types to implement the function in an
-   `# Implementation` section. These implementation details intended for developers
-   rather than users, explaining e.g. which functions should be overridden and which functions
-   automatically use appropriate fallbacks, are better kept separate from the main description of
-   the function's behavior.
-
-## Accessing Documentation
-
-Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
-by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
-
-```julia
-?cos
-?@time
-?r""
-```
-
-will bring up docs for the relevant function, macro or string macro respectively. In [Juno](http://junolab.org)
-using `Ctrl-J, Ctrl-D` will bring up documentation for the object under the cursor.
+   `# Implementation` section. These implementation details are intended for developers
+   rather than users, explaining e.g. which functions should be overridden and which
+   functions automatically use appropriate fallbacks. Such details are best kept separate
+   from the main description of the function's behavior.
+5. For long docstrings, consider splitting the documentation with an
+   `# Extended help` header. The typical help-mode will show only the
+   material above the header; you can access the full help by adding a '?'
+   at the beginning of the expression (i.e., "??foo" rather than "?foo").
 
 ## Functions & Methods
 
@@ -260,9 +271,7 @@ with the `catdoc` function, which can of course be overridden for custom types.
 ## Advanced Usage
 
 The `@doc` macro associates its first argument with its second in a per-module dictionary called
-`META`. By default, documentation is expected to be written in Markdown, and the `doc""` string
-macro simply creates an object representing the Markdown content. In the future it is likely to
-do more advanced things such as allowing for relative image or link paths.
+`META`.
 
 To make it easier to write documentation, the parser treats the macro name `@doc` specially:
 if a call to `@doc` has one argument, but another expression appears after a single line
@@ -276,7 +285,7 @@ Therefore the following syntax is parsed as a 2-argument call to `@doc`:
 f(x) = x
 ```
 
-This makes it easy to use an arbitrary object (here a `raw` string) as a docstring.
+This makes it possible to use expressions other than normal string literals (such as the `raw""` string macro) as a docstring.
 
 When used for retrieving documentation, the `@doc` macro (or equally, the `doc` function) will
 search all `META` dictionaries for metadata relevant to the given object and return it. The returned
@@ -314,6 +323,23 @@ end
 will add documentation to `f(x)` when `condition()` is `true`. Note that even if `f(x)` goes
 out of scope at the end of the block, its documentation will remain.
 
+It is possible to make use of metaprogramming to assist in the creation of documentation.
+When using string-interpolation within the docstring you will need to use an extra `$` as
+shown with `$($name)`:
+
+```julia
+for func in (:day, :dayofmonth)
+    name = string(func)
+    @eval begin
+        @doc """
+            $($name)(dt::TimeType) -> Int64
+
+        The day of month of a `Date` or `DateTime` as an `Int64`.
+        """ $func(dt::Dates.TimeType)
+    end
+end
+```
+
 ### Dynamic documentation
 
 Sometimes the appropriate documentation for an instance of a type depends on the field values of that
@@ -322,26 +348,40 @@ for your custom type that returns the documentation on a per-instance basis. For
 
 ```julia
 struct MyType
-    value::String
+    value::Int
 end
 
 Docs.getdoc(t::MyType) = "Documentation for MyType with value $(t.value)"
 
-x = MyType("x")
-y = MyType("y")
+x = MyType(1)
+y = MyType(2)
 ```
 
-`?x` will display "Documentation for MyType with value x" while `?y` will display
-"Documentation for MyType with value y".
+`?x` will display "Documentation for MyType with value 1" while `?y` will display
+"Documentation for MyType with value 2".
 
 ## Syntax Guide
 
-A comprehensive overview of all documentable Julia syntax.
+This guide provides a comprehensive overview of how to attach documentation to all Julia syntax
+constructs for which providing documentation is possible.
 
 In the following examples `"..."` is used to illustrate an arbitrary docstring.
 
-`doc""` should only be used when the docstring contains `$` or `\` characters that should not
-be parsed by Julia such as LaTeX syntax or Julia source code examples containing interpolation.
+### `$` and `\` characters
+
+The `$` and `\` characters are still parsed as string interpolation or start of an escape sequence
+in docstrings too. The `raw""` string macro together with the `@doc` macro can be used to avoid
+having to escape them. This is handy when the docstrings include LaTeX or Julia source code examples
+containing interpolation:
+
+````julia
+@doc raw"""
+```math
+\LaTeX
+```
+"""
+function f end
+````
 
 ### Functions and Methods
 
@@ -440,7 +480,7 @@ M
 end
 ```
 
-Adds docstring `"..."` to the `Module``M`. Adding the docstring above the `Module` is the preferred
+Adds docstring `"..."` to the `Module` `M`. Adding the docstring above the `Module` is the preferred
 syntax, however both are equivalent.
 
 ```julia
@@ -461,7 +501,7 @@ end
 
 Documenting a `baremodule` by placing a docstring above the expression automatically imports
 `@doc` into the module. These imports must be done manually when the module expression is not
-documented. Empty `baremodule`s cannot be documented.
+documented.
 
 ### Global Variables
 
@@ -510,8 +550,8 @@ the referenced value itself.
 sym
 ```
 
-Adds docstring `"..."` to the value associated with `sym`. Users should prefer documenting `sym`
-at its definition.
+Adds docstring `"..."` to the value associated with `sym`. However, it is preferred that
+`sym` is documented where it is defined.
 
 ### Multiple Objects
 
@@ -541,9 +581,9 @@ two functions are related, such as non-mutating and mutating versions `f` and `f
 @m expression
 ```
 
-Adds docstring `"..."` to expression generated by expanding `@m expression`. This allows for expressions
-decorated with `@inline`, `@noinline`, `@generated`, or any other macro to be documented in the
-same way as undecorated expressions.
+Adds docstring `"..."` to the expression generated by expanding `@m expression`. This allows
+for expressions decorated with `@inline`, `@noinline`, `@generated`, or any other macro to
+be documented in the same way as undecorated expressions.
 
 Macro authors should take note that only macros that generate a single expression will automatically
 support docstrings. If a macro returns a block containing multiple subexpressions then the subexpression

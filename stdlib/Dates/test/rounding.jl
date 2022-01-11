@@ -26,11 +26,15 @@ end
     @test floor(dt, Dates.Year) == Dates.Date(2016)
     @test floor(dt, Dates.Year(5)) == Dates.Date(2015)
     @test floor(dt, Dates.Year(10)) == Dates.Date(2010)
+    @test floor(dt, Dates.Quarter) == Dates.Date(2016, 1)
+    @test floor(dt, Dates.Quarter(6)) == Dates.Date(2016, 1)
     @test floor(dt, Dates.Month) == Dates.Date(2016, 2)
     @test floor(dt, Dates.Month(6)) == Dates.Date(2016, 1)
     @test floor(dt, Dates.Week) == Dates.toprev(dt, Dates.Monday)
     @test ceil(dt, Dates.Year) == Dates.Date(2017)
     @test ceil(dt, Dates.Year(5)) == Dates.Date(2020)
+    @test ceil(dt, Dates.Quarter) == Dates.Date(2016, 4)
+    @test ceil(dt, Dates.Quarter(6)) == Dates.Date(2017, 7)
     @test ceil(dt, Dates.Month) == Dates.Date(2016, 3)
     @test ceil(dt, Dates.Month(6)) == Dates.Date(2016, 7)
     @test ceil(dt, Dates.Week) == Dates.tonext(dt, Dates.Monday)
@@ -184,6 +188,18 @@ end
     @test round(x, Dates.Microsecond) == Dates.Microsecond(2001000)
     @test round(x, Dates.Nanosecond) == x
 end
+
+@testset "Rouding DateTime to Date" begin
+    now_ = DateTime(2020, 9, 1, 13)
+    for p in (Year, Month, Day)
+        for r in (RoundUp, RoundDown)
+            @test round(Date, now_, p, r) == round(Date(now_), p, r)
+        end
+        @test round(Date, now_, p) == round(Date, now_, p, RoundNearestTiesUp)
+        @test floor(Date, now_, p) == round(Date, now_, p, RoundDown)
+        @test ceil(Date, now_, p)  == round(Date, now_, p, RoundUp)
+    end
+end
 @testset "Rounding for periods that should not need rounding" begin
     for x in [Dates.Week(3), Dates.Day(14), Dates.Second(604800)]
         local x
@@ -225,4 +241,3 @@ end
 end
 
 end
-

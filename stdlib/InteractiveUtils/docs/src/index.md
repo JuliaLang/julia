@@ -1,8 +1,6 @@
-# Interactive Utilities
+# [Interactive Utilities](@id man-interactive-utils)
 
-```@meta
-DocTestSetup = :(using InteractiveUtils)
-```
+This module is intended for interactive work. It is loaded automaticaly in [interactive mode](@ref command-line-options).
 
 ```@docs
 InteractiveUtils.apropos
@@ -10,9 +8,11 @@ InteractiveUtils.varinfo
 InteractiveUtils.versioninfo
 InteractiveUtils.methodswith
 InteractiveUtils.subtypes
+InteractiveUtils.supertypes
 InteractiveUtils.edit(::AbstractString, ::Integer)
 InteractiveUtils.edit(::Any)
 InteractiveUtils.@edit
+InteractiveUtils.define_editor
 InteractiveUtils.less(::AbstractString)
 InteractiveUtils.less(::Any)
 InteractiveUtils.@less
@@ -26,9 +26,6 @@ InteractiveUtils.code_llvm
 InteractiveUtils.@code_llvm
 InteractiveUtils.code_native
 InteractiveUtils.@code_native
+InteractiveUtils.@time_imports
 InteractiveUtils.clipboard
-```
-
-```@meta
-DocTestSetup = nothing
 ```

@@ -1,0 +1,101 @@
+From 84eff6b2defb7f2d847d5bac165d6a44472b9ddf Mon Sep 17 00:00:00 2001
+From: Keno Fischer <keno@juliacomputing.com>
+Date: Mon, 1 Mar 2021 16:38:19 -0500
+Subject: [PATCH 2/4] [AArch64] Fix emitting an AdrpAddLdr LOH when there's a
+ potential clobber of the def of the adrp before the ldr.
+
+Apparently this pass used to have liveness analysis but it was removed for scompile time reasons. This workaround prevents the LOH from being emitted unless the ADD and LDR are adjacent.
+
+Fixes https://github.com/JuliaLang/julia/issues/39820
+
+Reviewed By: loladiro, qcolombet
+
+Differential Revision: https://reviews.llvm.org/D97571
+---
+ llvm/lib/Target/AArch64/AArch64CollectLOH.cpp | 26 +++++++++++++++-
+ .../AArch64/loh-adrp-add-ldr-clobber.mir      | 30 +++++++++++++++++++
+ 2 files changed, 55 insertions(+), 1 deletion(-)
+ create mode 100644 llvm/test/CodeGen/AArch64/loh-adrp-add-ldr-clobber.mir
+
+diff --git a/llvm/lib/Target/AArch64/AArch64CollectLOH.cpp b/llvm/lib/Target/AArch64/AArch64CollectLOH.cpp
+index efdb1131abc9..ac243347b24d 100644
+--- a/llvm/lib/Target/AArch64/AArch64CollectLOH.cpp
++++ b/llvm/lib/Target/AArch64/AArch64CollectLOH.cpp
+@@ -419,13 +419,37 @@ static void handleADRP(const MachineInstr &MI, AArch64FunctionInfo &AFI,
+         ++NumADRPToLDR;
+       }
+       break;
+-    case MCLOH_AdrpAddLdr:
++    case MCLOH_AdrpAddLdr: {
++      // There is a possibility that the linker may try to rewrite:
++      // adrp x0, @sym@PAGE
++      // add x1, x0, @sym@PAGEOFF
++      // [x0 = some other def]
++      // ldr x2, [x1]
++      //    ...into...
++      // adrp x0, @sym
++      // nop
++      // [x0 = some other def]
++      // ldr x2, [x0]
++      // ...if the offset to the symbol won't fit within a literal load.
++      // This causes the load to use the result of the adrp, which in this
++      // case has already been clobbered.
++      // FIXME: Implement proper liveness tracking for all registers. For now,
++      // don't emit the LOH if there are any instructions between the add and
++      // the ldr.
++      MachineInstr *AddMI = const_cast<MachineInstr *>(Info.MI1);
++      const MachineInstr *LdrMI = Info.MI0;
++      auto AddIt = MachineBasicBlock::iterator(AddMI);
++      auto EndIt = AddMI->getParent()->end();
++      if (AddMI->getIterator() == EndIt || LdrMI != &*next_nodbg(AddIt, EndIt))
++        break;
++
+       LLVM_DEBUG(dbgs() << "Adding MCLOH_AdrpAddLdr:\n"
+                         << '\t' << MI << '\t' << *Info.MI1 << '\t'
+                         << *Info.MI0);
+       AFI.addLOHDirective(MCLOH_AdrpAddLdr, {&MI, Info.MI1, Info.MI0});
+       ++NumADDToLDR;
+       break;
++    }
+     case MCLOH_AdrpAddStr:
+       if (Info.MI1 != nullptr) {
+         LLVM_DEBUG(dbgs() << "Adding MCLOH_AdrpAddStr:\n"
+diff --git a/llvm/test/CodeGen/AArch64/loh-adrp-add-ldr-clobber.mir b/llvm/test/CodeGen/AArch64/loh-adrp-add-ldr-clobber.mir
+new file mode 100644
+index 000000000000..e1e893c6383a
+--- /dev/null
++++ b/llvm/test/CodeGen/AArch64/loh-adrp-add-ldr-clobber.mir
+@@ -0,0 +1,30 @@
++# RUN: llc -o /dev/null %s -mtriple=aarch64-apple-ios -run-pass=aarch64-collect-loh -debug-only=aarch64-collect-loh 2>&1 | FileCheck %s
++--- |
++  @sym2 = local_unnamed_addr global [10000000 x i32] zeroinitializer, align 8
++  @sym = local_unnamed_addr global i32 zeroinitializer, align 8
++
++  define i32 @main() {
++    ret i32 0
++  }
++
++...
++---
++name:            main
++alignment:       4
++tracksRegLiveness: true
++liveins:
++  - { reg: '$x22', virtual-reg: '' }
++  - { reg: '$x21', virtual-reg: '' }
++body:             |
++  bb.0:
++    liveins: $x21, $x22
++    ; Check we don't emit an loh here because there's a clobbering def of x8 before the ldr.
++    ; CHECK-LABEL: main
++    ; CHECK-NOT: MCLOH_AdrpAddLdr
++    renamable $x8 = ADRP target-flags(aarch64-page) @sym
++    renamable $x9 = ADDXri killed renamable $x8, target-flags(aarch64-pageoff, aarch64-nc) @sym, 0
++    renamable $x8 = ADDXri killed renamable $x22, 1, 0
++    $x9 = LDRXui $x9, 0
++    RET undef $lr
++
++...
+-- 
+2.25.1
+

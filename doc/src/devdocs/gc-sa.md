@@ -1,5 +1,15 @@
 # Static analyzer annotations for GC correctness in C code
 
+## Running the analysis
+
+The analyzer plugin that drives the anlysis ships with julia. Its
+source code can be found in `src/clangsa`. Running it requires
+the clang dependency to be build. Set the `BUILD_LLVM_CLANG` variable
+in your Make.user in order to build an appropriate version of clang.
+You may also want to use the prebuilt binaries using the
+`USE_BINARYBUILDER_LLVM` options. Afterwards, running the analysis
+over the source tree is as simple as running `make -C src analyzegc`.
+
 ## General Overview
 
 Since Julia's GC is precise, it needs to maintain correct rooting
@@ -38,7 +48,7 @@ code base to make things work.
 ## GC Invariants
 
 There is two simple invariants correctness:
-- All GC_PUSH calls need to be followed by an appropriate GC_POP (in practice we enforce this
+- All `GC_PUSH` calls need to be followed by an appropriate `GC_POP` (in practice we enforce this
   at the function level)
 - If a value was previously not rooted at any safepoint, it may no longer be referenced
   afterwards

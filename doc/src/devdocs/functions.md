@@ -13,7 +13,7 @@ share the same `Complex` type name object.
 All objects in Julia are potentially callable, because every object has a type, which in turn
 has a `TypeName`.
 
-## Function calls
+## [Function calls](@id Function-calls)
 
 Given the call `f(x,y)`, the following steps are performed: first, the method table to use is
 accessed as `typeof(f).name.mt`. Second, an argument tuple type is formed, `Tuple{typeof(f), typeof(x), typeof(y)}`.
@@ -210,7 +210,7 @@ This function further unpacks each *element* of `other`, expecting each one to c
 Naturally, a more efficient implementation is available if all splatted arguments are named tuples.
 Notice that the original `circle` function is passed through, to handle closures.
 
-## Compiler efficiency issues
+## [Compiler efficiency issues](@id compiler-efficiency-issues)
 
 Generating a new type for every function has potentially serious consequences for compiler resource
 use when combined with Julia's "specialize on all arguments by default" design. Indeed, the initial

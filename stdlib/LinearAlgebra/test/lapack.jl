@@ -407,10 +407,10 @@ end
     @testset for elty in (Float32, Float64)
         d = rand(elty,10)
         e = rand(elty,9)
-        @test_throws DimensionMismatch LAPACK.stev!('U',d,rand(elty,10))
+        @test_throws DimensionMismatch LAPACK.stev!('U',d,rand(elty,11))
         @test_throws DimensionMismatch LAPACK.stebz!('A','B',zero(elty),zero(elty),0,0,-1.,d,rand(elty,10))
-        @test_throws DimensionMismatch LAPACK.stegr!('N','A',d,rand(elty,10),zero(elty),zero(elty),0,0)
-        @test_throws DimensionMismatch LAPACK.stein!(d,zeros(elty,10),zeros(elty,10),zeros(BlasInt,10),zeros(BlasInt,10))
+        @test_throws DimensionMismatch LAPACK.stegr!('N','A',d,rand(elty,11),zero(elty),zero(elty),0,0)
+        @test_throws DimensionMismatch LAPACK.stein!(d,zeros(elty,11),zeros(elty,10),zeros(BlasInt,10),zeros(BlasInt,10))
         @test_throws DimensionMismatch LAPACK.stein!(d,e,zeros(elty,11),zeros(BlasInt,10),zeros(BlasInt,10))
     end
 end
@@ -422,6 +422,45 @@ end
         B = copy(A)
         @test inv(A) ≈ LAPACK.trtri!('U','N',B)
         @test_throws DimensionMismatch LAPACK.trtrs!('U','N','N',B,zeros(elty,11,10))
+    end
+end
+
+@testset "larfg & larf" begin
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        ## larfg
+        Random.seed!(0)
+        x  = rand(elty, 5)
+        v  = copy(x)
+        τ = LinearAlgebra.LAPACK.larfg!(v)
+        H = (I - τ*v*v')
+        # for complex input, LAPACK wants a conjugate transpose of H (check clarfg docs)
+        y = elty <: Complex ? H'*x : H*x
+        # we have rotated a vector
+        @test norm(y) ≈ norm(x)
+        # an annihilated almost all the first column
+        @test norm(y[2:end], Inf) < 10*eps(real(one(elty)))
+
+        ## larf
+        C = rand(elty, 5, 5)
+        C_norm = norm(C, 2)
+        v = C[1:end, 1]
+        τ = LinearAlgebra.LAPACK.larfg!(v)
+        LinearAlgebra.LAPACK.larf!('L', v, conj(τ), C)
+        # we have applied a unitary transformation
+        @test norm(C, 2) ≈ C_norm
+        # an annihilated almost all the first column
+        @test norm(C[2:end, 1], Inf) < 10*eps(real(one(elty)))
+
+        # apply left and right
+        C1 = rand(elty, 5, 5)
+        C2 = rand(elty, 5, 5)
+        C = C2*C1
+
+        v = C1[1:end, 1]
+        τ = LinearAlgebra.LAPACK.larfg!(v)
+        LinearAlgebra.LAPACK.larf!('L', v,      τ, C1)
+        LinearAlgebra.LAPACK.larf!('R', v, conj(τ), C2)
+        @test C ≈ C2*C1
     end
 end
 
@@ -629,7 +668,7 @@ end
 
 @testset "Julia vs LAPACK" begin
     # Test our own linear algebra functionality against LAPACK
-    @testset for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         for nn in (5,10,15)
             if elty <: Real
                 A = convert(Matrix{elty}, randn(10,nn))
@@ -662,5 +701,14 @@ end
 let A = [NaN NaN; NaN NaN]
     @test_throws ArgumentError eigen(A)
 end
+
+# # https://github.com/JuliaLang/julia/pull/39845
+@test LinearAlgebra.LAPACK.liblapack == "libblastrampoline"
+
+# Issue #42762 https://github.com/JuliaLang/julia/issues/42762
+# Tests geqrf! and gerqf! with null column dimensions
+a = zeros(2,0), zeros(0)
+@test LinearAlgebra.LAPACK.geqrf!(a...) === a
+@test LinearAlgebra.LAPACK.gerqf!(a...) === a
 
 end # module TestLAPACK

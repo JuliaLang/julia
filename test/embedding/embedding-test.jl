@@ -9,15 +9,18 @@ if Sys.iswindows()
 end
 
 @test length(ARGS) == 1
+
 @testset "embedding example" begin
     out = Pipe()
     err = Pipe()
-    p = run(pipeline(Cmd(ARGS), stdin=devnull, stdout=out, stderr=err), wait=false)
+    embedded_cmd_path = abspath(ARGS[1])
+    p = cd(@__DIR__) do
+        run(pipeline(Cmd([embedded_cmd_path]), stdin=devnull, stdout=out, stderr=err), wait=false)
+    end
     close(out.in)
     close(err.in)
     out_task = @async readlines(out)
-    err = read(err, String)
-    @test err == "MethodError: no method matching this_function_has_no_methods()\n"
+    @test readline(err) == "MethodError: no method matching this_function_has_no_methods()"
     @test success(p)
     lines = fetch(out_task)
     @test length(lines) == 10
@@ -25,4 +28,5 @@ end
     @test lines[8] == "called bar"
     @test lines[9] == "calling new bar"
     @test lines[10] == "      From worker 2:\tTaking over the world..."
+    @test readline(err) == "exception caught from C"
 end

@@ -1,0 +1,53 @@
+From 4d30f46738d417c305c0e748a49020d4513ac4ee Mon Sep 17 00:00:00 2001
+From: Keno Fischer <keno@juliacomputing.com>
+Date: Fri, 7 Aug 2020 16:38:15 -0400
+Subject: [PATCH] [X86] Don't produce bad x86andp nodes for i1 vectors
+
+In D85499, I attempted to fix this same issue by canonicalizing
+andnp for i1 vectors, but since there was some opposition to such
+a change, this commit just fixes the bug by using two different
+forms depending on which kind of vector type is in use. We can
+then always decide to switch the canonical forms later.
+
+Description of the original bug:
+We have a DAG combine that tries to fold (vselect cond, 0000..., X) -> (andnp cond, x).
+However, it does so by attempting to create an i64 vector with the number
+of elements obtained by truncating division by 64 from the bitwidth. This is
+bad for mask vectors like v8i1, since that division is just zero. Besides,
+we don't want i64 vectors anyway. For i1 vectors, switch the pattern
+to (andnp (not cond), x), which is the canonical form for `kandn`
+on mask registers.
+
+Fixes https://github.com/JuliaLang/julia/issues/36955.
+
+Differential Revision: https://reviews.llvm.org/D85553
+---
+ llvm/lib/Target/X86/X86ISelLowering.cpp | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git llvm/lib/Target/X86/X86ISelLowering.cpp llvm/lib/Target/X86/X86ISelLowering.cpp
+index c8720d9ae3a..17eaa49c83f 100644
+--- llvm/lib/Target/X86/X86ISelLowering.cpp
++++ llvm/lib/Target/X86/X86ISelLowering.cpp
+@@ -37630,10 +37630,14 @@ combineVSelectWithAllOnesOrZeros(SDNode *N, SelectionDAG &DAG,
+ 
+   // vselect Cond, 000..., X -> andn Cond, X
+   if (TValIsAllZeros) {
+-    MVT AndNVT = MVT::getVectorVT(MVT::i64, CondVT.getSizeInBits() / 64);
+-    SDValue CastCond = DAG.getBitcast(AndNVT, Cond);
+-    SDValue CastRHS = DAG.getBitcast(AndNVT, RHS);
+-    SDValue AndN = DAG.getNode(X86ISD::ANDNP, DL, AndNVT, CastCond, CastRHS);
++    SDValue CastRHS = DAG.getBitcast(CondVT, RHS);
++    SDValue AndN;
++    // The canonical form differs for i1 vectors - x86andnp is not used
++    if (CondVT.getScalarType() == MVT::i1)
++      AndN = DAG.getNode(ISD::AND, DL, CondVT, DAG.getNOT(DL, Cond, CondVT),
++                         CastRHS);
++    else
++      AndN = DAG.getNode(X86ISD::ANDNP, DL, CondVT, Cond, CastRHS);
+     return DAG.getBitcast(VT, AndN);
+   }
+ 
+-- 
+2.28.0
+

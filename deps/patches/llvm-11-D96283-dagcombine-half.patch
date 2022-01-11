@@ -1,0 +1,175 @@
+From a5222aa0858a42660629c410a5b669dee16a4359 Mon Sep 17 00:00:00 2001
+From: Nemanja Ivanovic <nemanja.i.ibm@gmail.com>
+Date: Tue, 9 Feb 2021 06:33:48 -0600
+Subject: [PATCH] [DAGCombine] Do not remove masking argument to FP16_TO_FP for
+ some targets
+
+As of commit 284f2bffc9bc5, the DAG Combiner gets rid of the masking of the
+input to this node if the mask only keeps the bottom 16 bits. This is because
+the underlying library function does not use the high order bits. However, on
+PowerPC's ELFv2 ABI, it is the caller that is responsible for clearing the bits
+from the register. Therefore, the library implementation of __gnu_h2f_ieee will
+return an incorrect result if the bits aren't cleared.
+
+This combine is desired for ARM (and possibly other targets) so this patch adds
+a query to Target Lowering to check if this zeroing needs to be kept.
+
+Fixes: https://bugs.llvm.org/show_bug.cgi?id=49092
+
+Differential revision: https://reviews.llvm.org/D96283
+---
+ llvm/include/llvm/CodeGen/TargetLowering.h    |  4 ++
+ llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp |  2 +-
+ llvm/lib/Target/PowerPC/PPCISelLowering.h     |  3 ++
+ .../PowerPC/handle-f16-storage-type.ll        |  4 ++
+ llvm/test/CodeGen/PowerPC/pr48519.ll          |  2 +
+ llvm/test/CodeGen/PowerPC/pr49092.ll          | 39 +++++++++++++++++++
+ 6 files changed, 53 insertions(+), 1 deletion(-)
+ create mode 100644 llvm/test/CodeGen/PowerPC/pr49092.ll
+
+diff --git llvm/include/llvm/CodeGen/TargetLowering.h llvm/include/llvm/CodeGen/TargetLowering.h
+index a8abd2973587..6c1cb1c54d05 100644
+--- llvm/include/llvm/CodeGen/TargetLowering.h
++++ llvm/include/llvm/CodeGen/TargetLowering.h
+@@ -2789,6 +2789,10 @@ public:
+     return false;
+   }
+ 
++  /// Does this target require the clearing of high-order bits in a register
++  /// passed to the fp16 to fp conversion library function.
++  virtual bool shouldKeepZExtForFP16Conv() const { return false; }
++
+   //===--------------------------------------------------------------------===//
+   // Runtime Library hooks
+   //
+diff --git llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
+index a17ac6fe06a2..762f58427649 100644
+--- llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
++++ llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
+@@ -21182,7 +21182,7 @@ SDValue DAGCombiner::visitFP16_TO_FP(SDNode *N) {
+   SDValue N0 = N->getOperand(0);
+ 
+   // fold fp16_to_fp(op & 0xffff) -> fp16_to_fp(op)
+-  if (N0->getOpcode() == ISD::AND) {
++  if (!TLI.shouldKeepZExtForFP16Conv() && N0->getOpcode() == ISD::AND) {
+     ConstantSDNode *AndConst = getAsNonOpaqueConstant(N0.getOperand(1));
+     if (AndConst && AndConst->getAPIntValue() == 0xffff) {
+       return DAG.getNode(ISD::FP16_TO_FP, SDLoc(N), N->getValueType(0),
+diff --git llvm/lib/Target/PowerPC/PPCISelLowering.h llvm/lib/Target/PowerPC/PPCISelLowering.h
+index f1f3cb9e31d9..61e97e6b82d9 100644
+--- llvm/lib/Target/PowerPC/PPCISelLowering.h
++++ llvm/lib/Target/PowerPC/PPCISelLowering.h
+@@ -987,6 +987,9 @@ namespace llvm {
+     shouldExpandBuildVectorWithShuffles(EVT VT,
+                                         unsigned DefinedValues) const override;
+ 
++    // Keep the zero-extensions for arguments to libcalls.
++    bool shouldKeepZExtForFP16Conv() const override { return true; }
++
+     /// createFastISel - This method returns a target-specific FastISel object,
+     /// or null if the target does not support "fast" instruction selection.
+     FastISel *createFastISel(FunctionLoweringInfo &FuncInfo,
+diff --git llvm/test/CodeGen/PowerPC/handle-f16-storage-type.ll llvm/test/CodeGen/PowerPC/handle-f16-storage-type.ll
+index 9977b6b33560..ab19afa2beb5 100644
+--- llvm/test/CodeGen/PowerPC/handle-f16-storage-type.ll
++++ llvm/test/CodeGen/PowerPC/handle-f16-storage-type.ll
+@@ -1156,6 +1156,7 @@ define float @test_sitofp_fadd_i32(i32 %a, half* %b) #0 {
+ ; P8-NEXT:    xscvsxdsp f1, f0
+ ; P8-NEXT:    bl __gnu_f2h_ieee
+ ; P8-NEXT:    nop
++; P8-NEXT:    clrldi r3, r3, 48
+ ; P8-NEXT:    bl __gnu_h2f_ieee
+ ; P8-NEXT:    nop
+ ; P8-NEXT:    xsaddsp f1, f31, f1
+@@ -1175,6 +1176,7 @@ define float @test_sitofp_fadd_i32(i32 %a, half* %b) #0 {
+ ; CHECK-NEXT:    xscvhpdp f0, f0
+ ; CHECK-NEXT:    xscvdphp f1, f1
+ ; CHECK-NEXT:    mffprwz r3, f1
++; CHECK-NEXT:    clrlwi r3, r3, 16
+ ; CHECK-NEXT:    mtfprwz f1, r3
+ ; CHECK-NEXT:    xscvhpdp f1, f1
+ ; CHECK-NEXT:    xsaddsp f1, f0, f1
+@@ -1225,6 +1227,7 @@ define half @PR40273(half) #0 {
+ ; P8-NEXT:    stdu r1, -32(r1)
+ ; P8-NEXT:    bl __gnu_f2h_ieee
+ ; P8-NEXT:    nop
++; P8-NEXT:    clrldi r3, r3, 48
+ ; P8-NEXT:    bl __gnu_h2f_ieee
+ ; P8-NEXT:    nop
+ ; P8-NEXT:    xxlxor f0, f0, f0
+@@ -1245,6 +1248,7 @@ define half @PR40273(half) #0 {
+ ; CHECK-NEXT:    xscvdphp f0, f1
+ ; CHECK-NEXT:    xxlxor f1, f1, f1
+ ; CHECK-NEXT:    mffprwz r3, f0
++; CHECK-NEXT:    clrlwi r3, r3, 16
+ ; CHECK-NEXT:    mtfprwz f0, r3
+ ; CHECK-NEXT:    xscvhpdp f0, f0
+ ; CHECK-NEXT:    fcmpu cr0, f0, f1
+diff --git llvm/test/CodeGen/PowerPC/pr48519.ll llvm/test/CodeGen/PowerPC/pr48519.ll
+index 50970cb185d8..035cc49b93e6 100644
+--- llvm/test/CodeGen/PowerPC/pr48519.ll
++++ llvm/test/CodeGen/PowerPC/pr48519.ll
+@@ -22,6 +22,7 @@ define void @julia__typed_vcat_20() #0 {
+ ; CHECK-NEXT:    xscvsxdsp f1, f0
+ ; CHECK-NEXT:    bl __gnu_f2h_ieee
+ ; CHECK-NEXT:    nop
++; CHECK-NEXT:    clrldi r3, r3, 48
+ ; CHECK-NEXT:    bl __gnu_h2f_ieee
+ ; CHECK-NEXT:    nop
+ ; CHECK-NEXT:    addi r30, r30, -1
+@@ -46,6 +47,7 @@ define void @julia__typed_vcat_20() #0 {
+ ; CHECK-P9-NEXT:    xscvsxdsp f0, f0
+ ; CHECK-P9-NEXT:    xscvdphp f0, f0
+ ; CHECK-P9-NEXT:    mffprwz r3, f0
++; CHECK-P9-NEXT:    clrlwi r3, r3, 16
+ ; CHECK-P9-NEXT:    mtfprwz f0, r3
+ ; CHECK-P9-NEXT:    li r3, 0
+ ; CHECK-P9-NEXT:    xscvhpdp f0, f0
+diff --git llvm/test/CodeGen/PowerPC/pr49092.ll llvm/test/CodeGen/PowerPC/pr49092.ll
+new file mode 100644
+index 000000000000..2fce58418515
+--- /dev/null
++++ llvm/test/CodeGen/PowerPC/pr49092.ll
+@@ -0,0 +1,39 @@
++; NOTE: Assertions have been autogenerated by utils/update_llc_test_checks.py
++; RUN: llc -mcpu=pwr8 -ppc-asm-full-reg-names -ppc-vsr-nums-as-vr \
++; RUN:   -mtriple=powerpc64le-unknown-unknown < %s | FileCheck %s
++; RUN: llc -mcpu=pwr9 -ppc-asm-full-reg-names -ppc-vsr-nums-as-vr \
++; RUN:   -mtriple=powerpc64le-unknown-unknown < %s | FileCheck %s \
++; RUN:   -check-prefix=CHECK-P9
++
++define dso_local half @test2(i64 %a, i64 %b) local_unnamed_addr #0 {
++; CHECK-LABEL: test2:
++; CHECK:       # %bb.0: # %entry
++; CHECK-NEXT:    mflr r0
++; CHECK-NEXT:    std r0, 16(r1)
++; CHECK-NEXT:    stdu r1, -32(r1)
++; CHECK-NEXT:    add r3, r4, r3
++; CHECK-NEXT:    addi r3, r3, 11
++; CHECK-NEXT:    clrlwi r3, r3, 16
++; CHECK-NEXT:    bl __gnu_h2f_ieee
++; CHECK-NEXT:    nop
++; CHECK-NEXT:    addi r1, r1, 32
++; CHECK-NEXT:    ld r0, 16(r1)
++; CHECK-NEXT:    mtlr r0
++; CHECK-NEXT:    blr
++;
++; CHECK-P9-LABEL: test2:
++; CHECK-P9:       # %bb.0: # %entry
++; CHECK-P9-NEXT:    add r3, r4, r3
++; CHECK-P9-NEXT:    addi r3, r3, 11
++; CHECK-P9-NEXT:    clrlwi r3, r3, 16
++; CHECK-P9-NEXT:    mtfprwz f0, r3
++; CHECK-P9-NEXT:    xscvhpdp f1, f0
++; CHECK-P9-NEXT:    blr
++entry:
++  %add = add i64 %b, %a
++  %0 = trunc i64 %add to i16
++  %conv = add i16 %0, 11
++  %call = bitcast i16 %conv to half
++  ret half %call
++}
++attributes #0 = { nounwind }
+-- 
+2.30.0
+

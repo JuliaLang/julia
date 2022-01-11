@@ -1,0 +1,13 @@
+diff --git a/lib/CodeGen/StackColoring.cpp b/lib/CodeGen/StackColoring.cpp
+index 9d4fdc6b624..14b52e0ca33 100644
+--- a/lib/CodeGen/StackColoring.cpp
++++ b/lib/CodeGen/StackColoring.cpp
+@@ -913,6 +913,8 @@ void StackColoring::remapInstructions(DenseMap<int, int> &SlotRemap) {
+     assert(To && From && "Invalid allocation object");
+     Allocas[From] = To;
+
++    const_cast<AllocaInst*>(To)->moveBefore(const_cast<Instruction*>(&*To->getParent()->getFirstInsertionPt()));
++
+     // AA might be used later for instruction scheduling, and we need it to be
+     // able to deduce the correct aliasing releationships between pointers
+     // derived from the alloca being remapped and the target of that remapping.

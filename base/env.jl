@@ -32,7 +32,7 @@ if Sys.iswindows()
     function _unsetenv(svar::AbstractString)
         var = cwstring(svar)
         ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,C_NULL)
-        windowserror(:setenv, ret == 0)
+        windowserror(:setenv, ret == 0 && Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND)
     end
 else # !windows
     _getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)
@@ -77,7 +77,7 @@ variable may result in an uppercase `ENV` key.)
 const ENV = EnvDict()
 
 getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
-get(::EnvDict, k::AbstractString, def) = access_env(k->def, k)
+get(::EnvDict, k::AbstractString, def) = access_env(Returns(def), k)
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
 in(k::AbstractString, ::KeySet{String, EnvDict}) = _hasenv(k)
 pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
@@ -87,7 +87,7 @@ setindex!(::EnvDict, v, k::AbstractString) = _setenv(k,string(v))
 push!(::EnvDict, kv::Pair{<:AbstractString}) = setindex!(ENV, kv.second, kv.first)
 
 if Sys.iswindows()
-    GESW() = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
+    GESW() = (pos = ccall(:GetEnvironmentStringsW, stdcall, Ptr{UInt16}, ()); (pos, pos))
     function winuppercase(s::AbstractString)
         isempty(s) && return s
         LOCALE_INVARIANT = 0x0000007f
@@ -99,32 +99,43 @@ if Sys.iswindows()
         return transcode(String, ws)
     end
     function iterate(hash::EnvDict, block::Tuple{Ptr{UInt16},Ptr{UInt16}} = GESW())
-        if unsafe_load(block[1]) == 0
-            ccall(:FreeEnvironmentStringsW, stdcall, Int32, (Ptr{UInt16},), block[2])
-            return nothing
+        while true
+            if unsafe_load(block[1]) == 0
+                ccall(:FreeEnvironmentStringsW, stdcall, Int32, (Ptr{UInt16},), block[2])
+                return nothing
+            end
+            pos = block[1]
+            blk = block[2]
+            len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
+            buf = Vector{UInt16}(undef, len)
+            GC.@preserve buf unsafe_copyto!(pointer(buf), pos, len)
+            env = transcode(String, buf)
+            pos += (len + 1) * 2
+            if !isempty(env)
+                m = findnext('=', env, nextind(env, firstindex(env)))
+            else
+                m = nothing
+            end
+            if m === nothing
+                @warn "malformed environment entry: $env"
+                continue
+            end
+            return (Pair{String,String}(winuppercase(env[1:prevind(env, m)]), env[nextind(env, m):end]), (pos, blk))
         end
-        pos = block[1]
-        blk = block[2]
-        len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
-        buf = Vector{UInt16}(undef, len)
-        GC.@preserve buf unsafe_copyto!(pointer(buf), pos, len)
-        env = transcode(String, buf)
-        m = match(r"^(=?[^=]+)=(.*)$"s, env)
-        if m === nothing
-            error("malformed environment entry: $env")
-        end
-        return (Pair{String,String}(winuppercase(m.captures[1]), m.captures[2]), (pos+(len+1)*2, blk))
     end
 else # !windows
     function iterate(::EnvDict, i=0)
-        env = ccall(:jl_environ, Any, (Int32,), i)
-        env === nothing && return nothing
-        env = env::String
-        m = match(r"^(.*?)=(.*)$"s, env)
-        if m === nothing
-            error("malformed environment entry: $env")
+        while true
+            env = ccall(:jl_environ, Any, (Int32,), i)
+            env === nothing && return nothing
+            env = env::String
+            m = findfirst('=', env)
+            if m === nothing
+                @warn "malformed environment entry: $env"
+                nothing
+            end
+            return (Pair{String,String}(env[1:prevind(env, m)], env[nextind(env, m):end]), i+1)
         end
-        return (Pair{String,String}(m.captures[1], m.captures[2]), i+1)
     end
 end # os-test
 

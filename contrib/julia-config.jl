@@ -11,8 +11,6 @@ const options = [
     "--framework"
 ];
 
-threadingOn() = ccall(:jl_threading_enabled, Cint, ()) != 0
-
 function shell_escape(str)
     str = replace(str, "'" => "'\''")
     return "'$str'"
@@ -86,9 +84,6 @@ function cflags(doframework)
     else
         include = shell_escape(includeDir())
         print(flags, " -I", include)
-    end
-    if threadingOn()
-        print(flags, " -DJULIA_ENABLE_THREADING=1")
     end
     if Sys.isunix()
         print(flags, " -fPIC")
