@@ -314,6 +314,49 @@ Random.seed!(100)
             end
         end
 
+        # spr!
+        if elty in (Float32, Float64)
+            @testset "spr! $elty" begin
+                α = rand(elty)
+                M = rand(elty, n, n)
+                AL = Symmetric(M, :L)
+                AU = Symmetric(M, :U)
+                x = rand(elty, n)
+
+                function pack(A, uplo)
+                    AP = elty[]
+                    for j in 1:n
+                        for i in (uplo==:L ? (j:n) : (1:j))
+                            push!(AP, A[i,j])
+                        end
+                    end
+                    return AP
+                end
+
+                ALP_result_julia_lower = pack(α*x*x' + AL, :L)
+                ALP_result_blas_lower = pack(AL, :L)
+                BLAS.spr!('L', α, x, ALP_result_blas_lower)
+                @test ALP_result_julia_lower ≈ ALP_result_blas_lower
+                ALP_result_blas_lower = append!(pack(AL, :L), ones(elty, 10))
+                BLAS.spr!('L', α, x, ALP_result_blas_lower)
+                @test ALP_result_julia_lower ≈ ALP_result_blas_lower[1:end-10]
+                ALP_result_blas_lower = reshape(pack(AL, :L), 1, length(ALP_result_julia_lower), 1)
+                BLAS.spr!('L', α, x, ALP_result_blas_lower)
+                @test ALP_result_julia_lower ≈ vec(ALP_result_blas_lower)
+
+                AUP_result_julia_upper = pack(α*x*x' + AU, :U)
+                AUP_result_blas_upper = pack(AU, :U)
+                BLAS.spr!('U', α, x, AUP_result_blas_upper)
+                @test AUP_result_julia_upper ≈ AUP_result_blas_upper
+                AUP_result_blas_upper = append!(pack(AU, :U), ones(elty, 10))
+                BLAS.spr!('U', α, x, AUP_result_blas_upper)
+                @test AUP_result_julia_upper ≈ AUP_result_blas_upper[1:end-10]
+                AUP_result_blas_upper = reshape(pack(AU, :U), 1, length(AUP_result_julia_upper), 1)
+                BLAS.spr!('U', α, x, AUP_result_blas_upper)
+                @test AUP_result_julia_upper ≈ vec(AUP_result_blas_upper)
+            end
+        end
+
         #trsm
         A = triu(rand(elty,n,n))
         B = rand(elty,(n,n))

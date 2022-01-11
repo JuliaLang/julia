@@ -26,6 +26,16 @@ function showerror(io::IO, ce::CapturedException)
 end
 
 """
+    capture_exception(ex, bt) -> Exception
+
+Returns an exception, possibly incorporating information from a backtrace `bt`. Defaults to returning [`CapturedException(ex, bt)`](@ref).
+
+Used in [`asyncmap`](@ref) and [`asyncmap!`](@ref) to capture exceptions thrown during
+the user-supplied function call.
+"""
+capture_exception(ex, bt) = CapturedException(ex, bt)
+
+"""
     CompositeException
 
 Wrap a `Vector` of exceptions thrown by a [`Task`](@ref) (e.g. generated from a remote worker over a channel
@@ -40,6 +50,7 @@ struct CompositeException <: Exception
 end
 length(c::CompositeException) = length(c.exceptions)
 push!(c::CompositeException, ex) = push!(c.exceptions, ex)
+pushfirst!(c::CompositeException, ex) = pushfirst!(c.exceptions, ex)
 isempty(c::CompositeException) = isempty(c.exceptions)
 iterate(c::CompositeException, state...) = iterate(c.exceptions, state...)
 eltype(::Type{CompositeException}) = Any
@@ -306,6 +317,18 @@ function _wait2(t::Task, waiter::Task)
         if !istaskdone(t)
             push!(t.donenotify.waitq, waiter)
             unlock(t.donenotify)
+            # since _wait2 is similar to schedule, we should observe the sticky
+            # bit, even if we aren't calling `schedule` due to this early-return
+            if waiter.sticky && Threads.threadid(waiter) == 0
+                # Issue #41324
+                # t.sticky && tid == 0 is a task that needs to be co-scheduled with
+                # the parent task. If the parent (current_task) is not sticky we must
+                # set it to be sticky.
+                # XXX: Ideally we would be able to unset this
+                current_task().sticky = true
+                tid = Threads.threadid()
+                ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
+            end
             return nothing
         else
             unlock(t.donenotify)
@@ -341,6 +364,29 @@ end
 
 ## lexically-scoped waiting for multiple items
 
+struct ScheduledAfterSyncException <: Exception
+    values::Vector{Any}
+end
+
+function showerror(io::IO, ex::ScheduledAfterSyncException)
+    print(io, "ScheduledAfterSyncException: ")
+    if isempty(ex.values)
+        print(io, "(no values)")
+        return
+    end
+    show(io, ex.values[1])
+    if length(ex.values) == 1
+        print(io, " is")
+    elseif length(ex.values) == 2
+        print(io, " and one more ")
+        print(io, nameof(typeof(ex.values[2])))
+        print(io, " are")
+    else
+        print(io, " and ", length(ex.values) - 1, " more objects are")
+    end
+    print(io, " registered after the end of a `@sync` block")
+end
+
 function sync_end(c::Channel{Any})
     local c_ex
     while isready(c)
@@ -365,6 +411,25 @@ function sync_end(c::Channel{Any})
         end
     end
     close(c)
+
+    # Capture all waitable objects scheduled after the end of `@sync` and
+    # include them in the exception. This way, the user can check what was
+    # scheduled by examining at the exception object.
+    local racy
+    for r in c
+        if !@isdefined(racy)
+            racy = []
+        end
+        push!(racy, r)
+    end
+    if @isdefined(racy)
+        if !@isdefined(c_ex)
+            c_ex = CompositeException()
+        end
+        # Since this is a clear programming error, show this exception first:
+        pushfirst!(c_ex, ScheduledAfterSyncException(racy))
+    end
+
     if @isdefined(c_ex)
         throw(c_ex)
     end
@@ -434,13 +499,13 @@ function errormonitor(t::Task)
             try # try to display the failure atomically
                 errio = IOContext(PipeBuffer(), errs::IO)
                 emphasize(errio, "Unhandled Task ")
-                display_error(errio, current_exceptions(t))
+                display_error(errio, scrub_repl_backtrace(current_exceptions(t)))
                 write(errs, errio)
             catch
                 try # try to display the secondary error atomically
                     errio = IOContext(PipeBuffer(), errs::IO)
                     print(errio, "\nSYSTEM: caught exception while trying to print a failed Task notice: ")
-                    display_error(errio, current_exceptions())
+                    display_error(errio, scrub_repl_backtrace(current_exceptions()))
                     write(errs, errio)
                     flush(errs)
                     # and then the actual error, as best we can
@@ -455,6 +520,7 @@ function errormonitor(t::Task)
         end
         nothing
     end
+    t2.sticky = false
     _wait2(t, t2)
     return t
 end
@@ -628,7 +694,7 @@ function enq_work(t::Task)
             # XXX: Ideally we would be able to unset this
             current_task().sticky = true
             tid = Threads.threadid()
-            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
         end
         push!(Workqueues[tid], t)
     else
@@ -636,7 +702,7 @@ function enq_work(t::Task)
             # if multiq is full, give to a random thread (TODO fix)
             if tid == 0
                 tid = mod(time_ns() % Int, Threads.nthreads()) + 1
-                ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
             end
             push!(Workqueues[tid], t)
         else
@@ -658,6 +724,10 @@ is otherwise idle, unless the task performs a blocking operation such as [`wait`
 If a second argument `val` is provided, it will be passed to the task (via the return value of
 [`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
 the woken task.
+
+!!! warning
+    It is incorrect to use `schedule` on an arbitrary `Task` that has already been started.
+    See [the API reference](@ref low-level-schedule-wait) for more information.
 
 # Examples
 ```jldoctest

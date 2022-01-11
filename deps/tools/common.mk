@@ -4,14 +4,12 @@
 # it will make its way into the LLVM build flags, and LLVM is picky about RPATH (though
 # apparently not on FreeBSD). Ref PR #22352
 
-CONFIGURE_COMMON := --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) --bindir=$(abspath $(build_depsbindir)) $(CUSTOM_LD_LIBRARY_PATH)
+CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) --bindir=$(abspath $(build_depsbindir)) $(CUSTOM_LD_LIBRARY_PATH)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
-ifneq ($(USEMSVC), 1)
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -Wl,--stack,8388608"
-endif
 else
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN)"
 endif

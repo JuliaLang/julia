@@ -92,7 +92,11 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/NativeFormatting.h>
 #include <llvm/Support/SourceMgr.h>
+#if JL_LLVM_VERSION >= 140000
+#include <llvm/MC/TargetRegistry.h>
+#else
 #include <llvm/Support/TargetRegistry.h>
+#endif
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -229,17 +233,21 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
             // if so, drop all existing calls to it from the top of the context
             // AND check if instead the context was previously printed that way
             // but now has removed the recursive frames
-            StringRef method = StringRef(context.at(nctx - 1).FunctionName).rtrim(';');
+            StringRef method = StringRef(context.at(nctx - 1).FunctionName).rtrim(';'); // last matching frame
             if ((nctx < nframes && StringRef(DI.at(nframes - nctx - 1).FunctionName).rtrim(';') == method) ||
                 (nctx < context.size() && StringRef(context.at(nctx).FunctionName).rtrim(';') == method)) {
                 update_line_only = true;
-                while (nctx > 0 && StringRef(context.at(nctx - 1).FunctionName).rtrim(';') == method) {
+                // transform nctx to exclude the combined frames
+                while (nctx > 0 && StringRef(context.at(nctx - 1).FunctionName).rtrim(';') == method)
                     nctx -= 1;
-                }
             }
         }
-        else if (context.size() > 0) {
-            update_line_only = true;
+        if (!update_line_only && nctx < context.size() && nctx < nframes) {
+            // look at the first non-matching element to see if we are only changing the line number
+            const DILineInfo &CtxLine = context.at(nctx);
+            const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
+            if (StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';'))
+                update_line_only = true;
         }
     }
     else if (nctx < context.size() && nctx < nframes) {
@@ -480,7 +488,7 @@ void jl_strip_llvm_addrspaces(Module *m)
 // print an llvm IR acquired from jl_get_llvmf
 // warning: this takes ownership of, and destroys, f->getParent()
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo)
+jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo)
 {
     std::string code;
     raw_string_ostream stream(code);
@@ -490,7 +498,7 @@ jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_modul
         if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
             jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
 
-        JL_LOCK(&codegen_lock); // Might GC
+        JL_LOCK(&jl_codegen_lock); // Might GC
         LineNumberAnnotatedWriter AAW{"; ", false, debuginfo};
         if (!llvmf->getParent()) {
             // print the function declaration as-is
@@ -514,7 +522,7 @@ jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_modul
             }
             delete m;
         }
-        JL_UNLOCK(&codegen_lock); // Might GC
+        JL_UNLOCK(&jl_codegen_lock); // Might GC
     }
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
@@ -563,7 +571,7 @@ static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
 
 // print a native disassembly for the function starting at fptr
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
+jl_value_t *jl_dump_fptr_asm_impl(uint64_t fptr, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
 {
     assert(fptr != 0);
     std::string code;
@@ -856,13 +864,21 @@ static void jl_dump_asm_internal(
     std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple.str()));
     assert(MRI && "Unable to create target register info!");
 
+    std::unique_ptr<llvm::MCSubtargetInfo> STI(
+      TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features));
+    assert(STI && "Unable to create subtarget info!");
+
+#if JL_LLVM_VERSION >= 130000
+    MCContext Ctx(TheTriple, MAI.get(), MRI.get(), STI.get(), &SrcMgr);
+    std::unique_ptr<MCObjectFileInfo> MOFI(
+      TheTarget->createMCObjectFileInfo(Ctx, /*PIC=*/false, /*LargeCodeModel=*/ false));
+    Ctx.setObjectFileInfo(MOFI.get());
+#else
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
     MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, Ctx);
+#endif
 
-    // Set up Subtarget and Disassembler
-    std::unique_ptr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features));
     std::unique_ptr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
     if (!DisAsm) {
         rstream << "ERROR: no disassembler for target " << TheTriple.str();
@@ -900,7 +916,11 @@ static void jl_dump_asm_internal(
                                          IP.release(),
                                          std::move(CE), std::move(MAB),
                                          /*ShowInst*/ false));
+#if JL_LLVM_VERSION >= 140000
+    Streamer->initSections(true, *STI);
+#else
     Streamer->InitSections(true);
+#endif
 
     // Make the MemoryObject wrapper
     ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);
@@ -1169,7 +1189,7 @@ public:
 
 // get a native assembly for llvm::Function
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_function_asm(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
+jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
 {
     // precise printing via IR assembler
     SmallVector<char, 4096> ObjBufferSV;
@@ -1235,7 +1255,7 @@ jl_value_t *jl_dump_function_asm(void *F, char raw_mc, const char* asm_variant, 
 }
 
 extern "C" JL_DLLEXPORT
-LLVMDisasmContextRef jl_LLVMCreateDisasm(
+LLVMDisasmContextRef jl_LLVMCreateDisasm_impl(
         const char *TripleName, void *DisInfo, int TagType,
         LLVMOpInfoCallback GetOpInfo, LLVMSymbolLookupCallback SymbolLookUp)
 {
@@ -1243,7 +1263,7 @@ LLVMDisasmContextRef jl_LLVMCreateDisasm(
 }
 
 extern "C" JL_DLLEXPORT
-JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(
+JL_DLLEXPORT size_t jl_LLVMDisasmInstruction_impl(
         LLVMDisasmContextRef DC, uint8_t *Bytes, uint64_t BytesSize,
         uint64_t PC, char *OutString, size_t OutStringSize)
 {

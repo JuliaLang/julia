@@ -499,7 +499,7 @@ function which(program_name::String)
         # If we have been given just a program name (not a relative or absolute
         # path) then we should search `PATH` for it here:
         pathsep = iswindows() ? ';' : ':'
-        path_dirs = abspath.(split(get(ENV, "PATH", ""), pathsep))
+        path_dirs = map(abspath, eachsplit(get(ENV, "PATH", ""), pathsep))
 
         # On windows we always check the current directory as well
         if iswindows()

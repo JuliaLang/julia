@@ -1363,7 +1363,15 @@ end
     end
     return C
 end
-
+@inline function kron!(C::SparseMatrixCSC, A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}, B::AbstractSparseMatrixCSC)
+    return kron!(C, copy(A), B)
+end
+@inline function kron!(C::SparseMatrixCSC, A::AbstractSparseMatrixCSC, B::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC})
+    return kron!(C, A, copy(B))
+end
+@inline function kron!(C::SparseMatrixCSC, A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}, B::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC})
+    return kron!(C, copy(A), copy(B))
+end
 @inline function kron!(z::SparseVector, x::SparseVector, y::SparseVector)
     nnzx = nnz(x); nnzy = nnz(y);
     nzind = nonzeroinds(z)
@@ -1391,6 +1399,11 @@ function kron(A::AbstractSparseMatrixCSC{T1,S1}, B::AbstractSparseMatrixCSC{T2,S
     sizehint!(C, nnz(A)*nnz(B))
     return @inbounds kron!(C, A, B)
 end
+kron(A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}, B::AbstractSparseMatrixCSC) = kron(copy(A), B)
+kron(A::AbstractSparseMatrixCSC, B::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}) = kron(A, copy(B))
+function kron(A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}, B::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC})
+    return kron(copy(A), copy(B))
+end
 
 # sparse vector ⊗ sparse vector
 function kron(x::SparseVector{T1,S1}, y::SparseVector{T2,S2}) where {T1,S1,T2,S2}
@@ -1407,21 +1420,29 @@ Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::AbstractSparseMatrixCSC, x
 Base.@propagate_inbounds kron!(C::SparseMatrixCSC, x::SparseVector, A::AbstractSparseMatrixCSC) = kron!(C, SparseMatrixCSC(x), A)
 
 kron(A::AbstractSparseMatrixCSC, x::SparseVector) = kron(A, SparseMatrixCSC(x))
+kron(A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}, x::SparseVector) =
+    kron(copy(A), x)
 kron(x::SparseVector, A::AbstractSparseMatrixCSC) = kron(SparseMatrixCSC(x), A)
+kron(x::SparseVector, A::AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}) =
+    kron(x, copy(A))
 
 # sparse vec/mat ⊗ vec/mat and vice versa
 Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Union{SparseVector,AbstractSparseMatrixCSC}, B::VecOrMat) = kron!(C, A, sparse(B))
 Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::VecOrMat, B::Union{SparseVector,AbstractSparseMatrixCSC}) = kron!(C, sparse(A), B)
 
-kron(A::Union{SparseVector,AbstractSparseMatrixCSC}, B::VecOrMat) = kron(A, sparse(B))
-kron(A::VecOrMat, B::Union{SparseVector,AbstractSparseMatrixCSC}) = kron(sparse(A), B)
+kron(A::Union{SparseVector,AbstractSparseMatrixCSC,AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}}, B::VecOrMat) =
+    kron(A, sparse(B))
+kron(A::VecOrMat, B::Union{SparseVector,AbstractSparseMatrixCSC,AdjOrTrans{<:Any,<:AbstractSparseMatrixCSC}}) =
+    kron(sparse(A), B)
 
 # sparse vec/mat ⊗ Diagonal and vice versa
 Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Diagonal{T}, B::Union{SparseVector{S}, AbstractSparseMatrixCSC{S}}) where {T<:Number, S<:Number} = kron!(C, sparse(A), B)
 Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}}, B::Diagonal{S}) where {T<:Number, S<:Number} = kron!(C, A, sparse(B))
 
-kron(A::Diagonal{T}, B::Union{SparseVector{S}, AbstractSparseMatrixCSC{S}}) where {T<:Number, S<:Number} = kron(sparse(A), B)
-kron(A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}}, B::Diagonal{S}) where {T<:Number, S<:Number} = kron(A, sparse(B))
+kron(A::Diagonal{T}, B::Union{SparseVector{S}, AbstractSparseMatrixCSC{S}, AdjOrTrans{S,<:AbstractSparseMatrixCSC}}) where {T<:Number, S<:Number} =
+    kron(sparse(A), B)
+kron(A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}, AdjOrTrans{S,<:AbstractSparseMatrixCSC}}, B::Diagonal{S}) where {T<:Number, S<:Number} =
+    kron(A, sparse(B))
 
 # sparse outer product
 kron!(C::SparseMatrixCSC, A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = broadcast!(*, C, A, B)

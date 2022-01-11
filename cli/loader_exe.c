@@ -1,4 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // This defines a bare-bones loader that opens `libjulia` and immediately invokes its `load_repl()` function.
 #include "loader.h"
 
@@ -35,8 +36,8 @@ int main(int argc, char * argv[])
 {
 #endif
 
-#ifdef _COMPILER_ASAN_ENABLED_
-    // ASAN does not support RTLD_DEEPBIND
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
+    // ASAN/TSAN do not support RTLD_DEEPBIND
     // https://github.com/google/sanitizers/issues/611
     putenv("LBT_USE_RTLD_DEEPBIND=0");
 #endif

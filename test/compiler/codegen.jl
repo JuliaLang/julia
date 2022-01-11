@@ -4,6 +4,7 @@
 
 using Random
 using InteractiveUtils
+using Libdl
 
 const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
@@ -50,40 +51,57 @@ end
 
 # This function tests if functions are output when compiled if jl_dump_compiles is enabled.
 # Have to go through pains with recursive function (eval probably not required) to make sure
-# that inlining won't happen.
+# that inlining won't happen. (Tests SnoopCompile.jl's @snoopc.)
 function test_jl_dump_compiles()
-    tfile = tempname()
-    io = open(tfile, "w")
-    @eval(test_jl_dump_compiles_internal(x) = x)
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
-    @eval test_jl_dump_compiles_internal(1)
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
-    close(io)
-    tstats = stat(tfile)
-    tempty = tstats.size == 0
-    rm(tfile)
-    @test tempty == false
+    mktemp() do tfile, io
+        @eval(test_jl_dump_compiles_internal(x) = x)
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
+        @eval test_jl_dump_compiles_internal(1)
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
+        close(io)
+        tstats = stat(tfile)
+        tempty = tstats.size == 0
+        @test tempty == false
+    end
 end
 
 # This function tests if a toplevel thunk is output if jl_dump_compiles is enabled.
-# The eval statement creates the toplevel thunk.
+# The eval statement creates the toplevel thunk. (Tests SnoopCompile.jl's @snoopc.)
 function test_jl_dump_compiles_toplevel_thunks()
-    tfile = tempname()
-    io = open(tfile, "w")
-    # Make sure to cause compilation of the eval function
-    # before calling it below.
-    Core.eval(Main, Any[:(nothing)][1])
-    GC.enable(false)  # avoid finalizers to be compiled
-    topthunk = Meta.lower(Main, :(for i in 1:10; end))
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
-    Core.eval(Main, topthunk)
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
-    close(io)
-    GC.enable(true)
-    tstats = stat(tfile)
-    tempty = tstats.size == 0
-    rm(tfile)
-    @test tempty == true
+    mktemp() do tfile, io
+        # Make sure to cause compilation of the eval function
+        # before calling it below.
+        Core.eval(Main, Any[:(nothing)][1])
+        GC.enable(false)  # avoid finalizers to be compiled
+        topthunk = Meta.lower(Main, :(for i in 1:10; end))
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
+        Core.eval(Main, topthunk)
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
+        close(io)
+        GC.enable(true)
+        tstats = stat(tfile)
+        tempty = tstats.size == 0
+        @test tempty == true
+    end
+end
+
+# This function tests if LLVM optimization info is dumped when enabled (Tests
+# SnoopCompile.jl's @snoopl.)
+function test_jl_dump_llvm_opt()
+    mktemp() do func_file, func_io
+        mktemp() do llvm_file, llvm_io
+            @eval(test_jl_dump_compiles_internal(x) = x)
+            ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), func_io.handle)
+            ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), llvm_io.handle)
+            @eval test_jl_dump_compiles_internal(1)
+            ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), C_NULL)
+            ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), C_NULL)
+            close(func_io)
+            close(llvm_io)
+            @test stat(func_file).size !== 0
+            @test stat(llvm_file).size !== 0
+        end
+    end
 end
 
 if opt_level > 0
@@ -107,6 +125,7 @@ if opt_level > 0
 
     test_jl_dump_compiles()
     test_jl_dump_compiles_toplevel_thunks()
+    test_jl_dump_llvm_opt()
 end
 
 # Make sure we will not elide the allocation
@@ -594,6 +613,23 @@ f41438(y) = y[].x
 @test f41438(Ref{A41438}(A41438(C_NULL))) === C_NULL
 @test f41438(Ref{B41438}(B41438(C_NULL))) === C_NULL
 
+const S41438 = Pair{Any, Ptr{T}} where T
+g41438() = Array{S41438,1}(undef,1)[1].first
+get_llvm(g41438, ()); # cause allocation of layout
+@test S41438.body.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438.body)
+@test S41438{Int}.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438{Int})
+
+
+# issue #43303
+struct A43303{T}
+    x::Pair{Ptr{T},Ptr{T}}
+end
+@test A43303.body.layout != C_NULL
+@test isbitstype(A43303{Int})
+@test A43303.body.types[1].layout != C_NULL
+
 # issue #41157
 f41157(a, b) = a[1] = b[1]
 @test_throws BoundsError f41157(Tuple{Int}[], Tuple{Union{}}[])
@@ -629,3 +665,47 @@ t41096 = Term41096{:t}(Modulate41096(:t, false))
 U41096 = Term41096{:U}(Modulate41096(:U, false))
 
 @test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)
+
+# test that we can start julia with libjulia-codegen removed; PR #41936
+mktempdir() do pfx
+    cp(dirname(Sys.BINDIR), pfx; force=true)
+    libpath = relpath(dirname(dlpath("libjulia-codegen")), dirname(Sys.BINDIR))
+    libs_deleted = 0
+    for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+        rm(joinpath(pfx, libpath, f); force=true, recursive=true)
+        libs_deleted += 1
+    end
+    @test libs_deleted > 0
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'print("no codegen!\n")'`) == "no codegen!"
+end
+
+# issue #42645
+mutable struct A42645{T}
+    x::Bool
+    function A42645(a::Vector{T}) where T
+        r = new{T}()
+        r.x = false
+        return r
+    end
+end
+mutable struct B42645{T}
+  y::A42645{T}
+end
+x42645 = 1
+function f42645()
+  res = B42645(A42645([x42645]))
+  res.y = A42645([x42645])
+  res.y.x = true
+  res
+end
+@test ((f42645()::B42645).y::A42645{Int}).x
+
+# issue #43123
+@noinline cmp43123(a::Some, b::Some) = something(a) === something(b)
+@noinline cmp43123(a, b) = a[] === b[]
+@test cmp43123(Some{Function}(+), Some{Union{typeof(+), typeof(-)}}(+))
+@test !cmp43123(Some{Function}(+), Some{Union{typeof(+), typeof(-)}}(-))
+@test cmp43123(Ref{Function}(+), Ref{Union{typeof(+), typeof(-)}}(+))
+@test !cmp43123(Ref{Function}(+), Ref{Union{typeof(+), typeof(-)}}(-))
+@test cmp43123(Function[+], Union{typeof(+), typeof(-)}[+])
+@test !cmp43123(Function[+], Union{typeof(+), typeof(-)}[-])

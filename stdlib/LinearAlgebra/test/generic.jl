@@ -70,6 +70,11 @@ n = 5 # should be odd
         else
             @test logabsdet(A)[2] ≈ sign(det(A))
         end
+        # logabsdet for Number"
+        x = A[1, 1] # getting a number of type elty
+        X = fill(x, 1, 1)
+        @test logabsdet(x)[1] ≈ logabsdet(X)[1]
+        @test logabsdet(x)[2] ≈ logabsdet(X)[2]
     end
 end
 
@@ -254,6 +259,18 @@ end
     @test x ≈ c*x3 + s*y3
     @test y ≈ conj(s)*x3 - c*y3
     @test_throws DimensionMismatch reflect!([x; x], y, c, s)
+end
+
+@testset "LinearAlgebra.reflectorApply!" begin
+    for T in (Float64, ComplexF64)
+        x = rand(T, 6)
+        τ = rand(T)
+        A = rand(T, 6)
+        B = LinearAlgebra.reflectorApply!(x, τ, copy(A))
+        C = LinearAlgebra.reflectorApply!(x, τ, reshape(copy(A), (length(A), 1)))
+        @test B[1] ≈ C[1] ≈ A[1] - conj(τ)*(A[1] + dot(x[2:end], A[2:end]))
+        @test B[2:end] ≈ C[2:end] ≈ A[2:end] - conj(τ)*(A[1] + dot(x[2:end], A[2:end]))*x[2:end]
+    end
 end
 
 @testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin

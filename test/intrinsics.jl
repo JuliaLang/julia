@@ -164,8 +164,17 @@ end
     @test_intrinsic Core.Intrinsics.fptoui UInt Float16(3.3) UInt(3)
 end
 
-@test Core.Intrinsics.atomic_fence(:sequentially_consistent) === nothing
+using Base.Experimental: @force_compile
+@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(:u)) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(Symbol("u", "x"))) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") Core.Intrinsics.atomic_fence(Symbol("u", "x")) === nothing
+for order in (:not_atomic, :monotonic, :acquire, :release, :acquire_release, :sequentially_consistent)
+    @test Core.Intrinsics.atomic_fence(order) === nothing
+    @test (order -> Core.Intrinsics.atomic_fence(order))(order) === nothing
+    @test Base.invokelatest(@eval () -> Core.Intrinsics.atomic_fence($(QuoteNode(order)))) === nothing
+end
 @test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) == nothing
+@test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) == nothing
 
 primitive type Int256 <: Signed 256 end
 Int256(i::Int) = Core.Intrinsics.sext_int(Int256, i)
@@ -191,8 +200,8 @@ for TT in (Int8, Int16, Int32, Int64, Int128, Int256, Int512, Complex{Int32}, Co
                 @test_throws ErrorException("atomic_pointerref: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent)
                 @test_throws ErrorException("atomic_pointerset: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointerset(p, T(1), :sequentially_consistent)
                 @test_throws ErrorException("atomic_pointerswap: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointerswap(p, T(100), :sequentially_consistent)
-                @test_throws ErrorException("atomic_pointerref: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointermodify(p, add, T(1), :sequentially_consistent)
-                @test_throws ErrorException("atomic_pointerref: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointermodify(p, swap, S(1), :sequentially_consistent)
+                @test_throws ErrorException("atomic_pointermodify: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointermodify(p, add, T(1), :sequentially_consistent)
+                @test_throws ErrorException("atomic_pointermodify: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointermodify(p, swap, S(1), :sequentially_consistent)
                 @test_throws ErrorException("atomic_pointerreplace: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointerreplace(p, T(100), T(2), :sequentially_consistent, :sequentially_consistent)
                 @test_throws ErrorException("atomic_pointerreplace: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointerreplace(p, S(100), T(2), :sequentially_consistent, :sequentially_consistent)
                 @test Core.Intrinsics.pointerref(p, 1, 1) === T(10) === r[]

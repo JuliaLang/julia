@@ -306,7 +306,7 @@ Pass *createPropagateJuliaAddrspaces() {
     return new PropagateJuliaAddrspaces();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddPropagateJuliaAddrspaces(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddPropagateJuliaAddrspaces_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createPropagateJuliaAddrspaces());
 }

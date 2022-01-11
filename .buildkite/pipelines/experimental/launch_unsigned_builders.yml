@@ -1,6 +1,6 @@
 steps:
   - label: ":buildkite: Launch unsigned pipelines"
     commands: |
-      buildkite-agent pipeline upload .buildkite/pipelines/experimental/misc/sanitizers.yml
+      true
     agents:
       queue: julia

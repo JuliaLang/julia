@@ -324,10 +324,16 @@ end
     end
 end
 
-@testset "issue #21092" begin
+@testset "Underscores in big_str" begin
     @test big"1_0_0_0" == BigInt(1000)
     @test_throws ArgumentError big"1_0_0_0_"
     @test_throws ArgumentError big"_1_0_0_0"
+
+    @test big"1_0.2_5" == BigFloat(10.25)
+    @test_throws ArgumentError big"_1_0.2_5"
+    @test_throws ArgumentError big"1_0.2_5_"
+    @test_throws ArgumentError big"1_0_.2_5"
+    @test_throws ArgumentError big"1_0._2_5"
 end
 
 # issue #26779

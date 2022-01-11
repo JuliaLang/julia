@@ -101,12 +101,12 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
     return false;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
     if (jl_datatype_size(dt) > 64 && isHFA(dt, &ty0, &hva) > 8) {
-        ab.addAttribute(Attribute::ByVal);
+        ab.addByValAttr(Ty);
         return true;
     }
     return false;

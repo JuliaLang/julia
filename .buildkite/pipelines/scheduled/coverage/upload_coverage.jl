@@ -91,7 +91,7 @@ function print_coverage_summary(
         cov_pct = floor(Int, cov_lines/tot_lines * 100)
     end
     @info "$(description): $(cov_pct)% ($(cov_lines)/$(tot_lines))"
-    return nothing
+    return (; cov_pct)
 end
 
 function buildkite_env(name::String)
@@ -198,7 +198,7 @@ end;
 sort!(fcs; by = fc -> fc.filename);
 
 print_coverage_summary.(fcs);
-print_coverage_summary(fcs, "Total")
+const total_cov_pct = print_coverage_summary(fcs, "Total").cov_pct
 
 let
     git_info = coveralls_buildkite_query_git_info()
@@ -216,4 +216,13 @@ let
 
     # In order to upload to Codecov, you need to have the `CODECOV_TOKEN` environment variable defined.
     Coverage.Codecov.submit_generic(fcs, kwargs)
+end
+
+if total_cov_pct < 50
+    msg = string(
+        "The total coverage is less than 50%. This should never happen, ",
+        "so it means that something has probably gone wrong with the code coverage job.",
+    )
+    @error msg total_cov_pct
+    throw(ErrorException(msg))
 end

@@ -2,10 +2,6 @@
 
 // --- the ccall, cglobal, and llvm intrinsics ---
 
-#ifdef _OS_WINDOWS_
-extern const char jl_crtdll_basename[];
-#endif
-
 // somewhat unusual variable, in that aotcompile wants to get the address of this for a sanity check
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 {
@@ -28,8 +24,12 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f
         symMap = &emission_context.symMapExe;
     }
     else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_INTERNAL_DL_LIBNAME) {
+        libptrgv = prepare_global_in(M, jldlli_var);
+        symMap = &emission_context.symMapDlli;
+    }
+    else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_DL_LIBNAME) {
         libptrgv = prepare_global_in(M, jldll_var);
-        symMap = &emission_context.symMapDl;
+        symMap = &emission_context.symMapDll;
     }
     else
 #endif
@@ -223,8 +223,7 @@ static GlobalVariable *emit_plt_thunk(
     // NoReturn function can trigger LLVM verifier error when declared as
     // MustTail since other passes might replace the `ret` with
     // `unreachable` (LLVM should probably accept `unreachable`).
-    if (attrs.hasAttribute(AttributeList::FunctionIndex,
-                           Attribute::NoReturn)) {
+    if (hasFnAttr(attrs, Attribute::NoReturn)) {
         irbuilder.CreateUnreachable();
     }
     else {
@@ -272,7 +271,7 @@ static Value *emit_plt(
                 functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, runtime_lib);
     }
     GlobalVariable *got = prepare_global_in(jl_Module, sharedgot);
-    LoadInst *got_val = ctx.builder.CreateAlignedLoad(got, Align(sizeof(void*)));
+    LoadInst *got_val = ctx.builder.CreateAlignedLoad(got->getType()->getElementType(), got, Align(sizeof(void*)));
     // See comment in `runtime_sym_lookup` above. This in principle needs a
     // consume ordering too. This is even less likely to cause issues though
     // since the only thing we do to this loaded pointer is to call it
@@ -288,7 +287,7 @@ class AbiLayout {
 public:
     virtual ~AbiLayout() {}
     virtual bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) = 0;
-    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx) = 0;
+    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx, Type* llvm_t) = 0;
     virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret, LLVMContext &ctx) const = 0;
 };
 
@@ -404,7 +403,7 @@ static Value *llvm_type_rewrite(
         to = emit_bitcast(ctx, from, target_type->getPointerTo());
     }
     ctx.builder.CreateAlignedStore(v, from, Align(align));
-    return ctx.builder.CreateAlignedLoad(to, Align(align));
+    return ctx.builder.CreateAlignedLoad(target_type, to, Align(align));
 }
 
 // --- argument passing and scratch space utilities ---
@@ -422,8 +421,7 @@ static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty)
                 ConstantInt::get(T_size, sizeof(jl_svec_t) / sizeof(jl_value_t*)))
     };
     auto call = ctx.builder.CreateCall(prepare_call(jlapplytype_func), makeArrayRef(args));
-    call->addAttribute(AttributeList::ReturnIndex,
-                       Attribute::getWithAlignment(jl_LLVMContext, Align(16)));
+    addRetAttr(call, Attribute::getWithAlignment(jl_LLVMContext, Align(16)));
     return call;
 }
 
@@ -527,7 +525,7 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
 
     jl_value_t *ptr = static_eval(ctx, arg);
     if (ptr == NULL) {
-        if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == call_sym && jl_expr_nargs(arg) == 3 &&
+        if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_call_sym && jl_expr_nargs(arg) == 3 &&
             jl_is_globalref(jl_exprarg(arg,0)) && jl_globalref_mod(jl_exprarg(arg,0)) == jl_core_module &&
             jl_globalref_name(jl_exprarg(arg,0)) == jl_symbol("tuple")) {
             // attempt to interpret a non-constant 2-tuple expression as (func_name, lib_name()), where
@@ -570,10 +568,22 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
             // will look in process symbol table
+            if (!llvmcall) {
+                void *symaddr;
+                std::string iname("i");
+                iname += f_name;
+                if (jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0)) {
 #ifdef _OS_WINDOWS_
-            if (!llvmcall)
-                f_lib = jl_dlfind_win32(f_name);
+                    f_lib = JL_LIBJULIA_INTERNAL_DL_LIBNAME;
 #endif
+                    f_name = jl_symbol_name(jl_symbol(iname.c_str()));
+                }
+#ifdef _OS_WINDOWS_
+                else {
+                    f_lib = jl_dlfind_win32(f_name);
+                }
+#endif
+            }
         }
         else if (jl_is_cpointer_type(jl_typeof(ptr))) {
             fptr = *(void(**)(void))jl_data_ptr(ptr);
@@ -879,6 +889,10 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // copy module properties that should always match
     Mod->setTargetTriple(jl_Module->getTargetTriple());
     Mod->setDataLayout(jl_Module->getDataLayout());
+#if JL_LLVM_VERSION >= 130000
+    Mod->setStackProtectorGuard(jl_Module->getStackProtectorGuard());
+    Mod->setOverrideStackAlignment(jl_Module->getOverrideStackAlignment());
+#endif
 
     // verify the definition
     Function *def = Mod->getFunction(ir_name);
@@ -1015,11 +1029,7 @@ std::string generate_func_sig(const char *fname)
         else if (abi->use_sret((jl_datatype_t*)rt, jl_LLVMContext)) {
             AttrBuilder retattrs = AttrBuilder();
 #if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
-#if JL_LLVM_VERSION < 120000
-            retattrs.addAttribute(Attribute::StructRet);
-#else
             retattrs.addStructRetAttr(lrt);
-#endif
 #endif
             retattrs.addAttribute(Attribute::NoAlias);
             paramattrs.push_back(std::move(retattrs));
@@ -1074,7 +1084,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         // Whether or not LLVM wants us to emit a pointer to the data
-        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, jl_LLVMContext);
+        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, jl_LLVMContext, t);
 
         if (jl_is_cpointer_type(tti)) {
             pat = t;
@@ -1113,16 +1123,13 @@ std::string generate_func_sig(const char *fname)
         const auto &as = paramattrs.at(i);
         if (!as.hasAttributes())
             continue;
-        attributes = attributes.addAttributes(jl_LLVMContext, i + 1, as);
+        attributes = addAttributesAtIndex(attributes, jl_LLVMContext, i + 1, as);
     }
     // If return value is boxed it must be non-null.
     if (retboxed)
-        attributes = attributes.addAttribute(jl_LLVMContext, AttributeList::ReturnIndex,
-                                             Attribute::NonNull);
+        attributes = addRetAttribute(attributes, jl_LLVMContext, Attribute::NonNull);
     if (rt == jl_bottom_type) {
-        attributes = attributes.addAttribute(jl_LLVMContext,
-                                             AttributeList::FunctionIndex,
-                                             Attribute::NoReturn);
+        attributes = addFnAttribute(attributes, jl_LLVMContext, Attribute::NoReturn);
     }
     return "";
 }
@@ -1264,13 +1271,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         return args[6 + i];
     };
 
-    auto _is_libjulia_func = [&] (uintptr_t ptr, const char *name) {
+    auto _is_libjulia_func = [&] (uintptr_t ptr, StringRef name) {
         if ((uintptr_t)fptr == ptr)
             return true;
         if (f_lib) {
 #ifdef _OS_WINDOWS_
             if ((f_lib == JL_EXE_LIBNAME) || // preventing invalid pointer access
                 (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
+                (f_lib == JL_LIBJULIA_DL_LIBNAME) ||
                 (!strcmp(f_lib, jl_crtdll_basename))) {
                 // libjulia-like
             }
@@ -1280,9 +1288,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             return false;
 #endif
         }
-        return f_name && !strcmp(f_name, name);
+        return f_name && f_name == name;
     };
-#define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
+#define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), StringRef(XSTR(name)))
 
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);
@@ -1474,8 +1482,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         Value *ptask_i16 = emit_bitcast(ctx, get_current_task(ctx), T_pint16);
         const int tid_offset = offsetof(jl_task_t, tid);
-        Value *ptid = ctx.builder.CreateInBoundsGEP(ptask_i16, ConstantInt::get(T_size, tid_offset / sizeof(int16_t)));
-        LoadInst *tid = ctx.builder.CreateAlignedLoad(ptid, Align(sizeof(int16_t)));
+        Value *ptid = ctx.builder.CreateInBoundsGEP(T_int16, ptask_i16, ConstantInt::get(T_size, tid_offset / sizeof(int16_t)));
+        LoadInst *tid = ctx.builder.CreateAlignedLoad(T_int16, ptid, Align(sizeof(int16_t)));
         tbaa_decorate(tbaa_gcframe, tid);
         return mark_or_box_ccall_result(ctx, tid, retboxed, rt, unionall, static_rt);
     }
@@ -1487,8 +1495,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         Value *ptls_i32 = emit_bitcast(ctx, get_current_ptls(ctx), T_pint32);
         const int finh_offset = offsetof(jl_tls_states_t, finalizers_inhibited);
-        Value *pfinh = ctx.builder.CreateInBoundsGEP(ptls_i32, ConstantInt::get(T_size, finh_offset / 4));
-        LoadInst *finh = ctx.builder.CreateAlignedLoad(pfinh, Align(sizeof(int32_t)));
+        Value *pfinh = ctx.builder.CreateInBoundsGEP(T_int32, ptls_i32, ConstantInt::get(T_size, finh_offset / 4));
+        LoadInst *finh = ctx.builder.CreateAlignedLoad(T_int32, pfinh, Align(sizeof(int32_t)));
         Value *newval;
         if (is_libjulia_func(jl_gc_disable_finalizers_internal)) {
             newval = ctx.builder.CreateAdd(finh, ConstantInt::get(T_int32, 1));
@@ -1514,7 +1522,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         Value *ptls_pv = emit_bitcast(ctx, get_current_ptls(ctx), T_ppjlvalue);
         const int nt_offset = offsetof(jl_tls_states_t, next_task);
-        Value *pnt = ctx.builder.CreateInBoundsGEP(ptls_pv, ConstantInt::get(T_size, nt_offset / sizeof(void*)));
+        Value *pnt = ctx.builder.CreateInBoundsGEP(T_pjlvalue, ptls_pv, ConstantInt::get(T_size, nt_offset / sizeof(void*)));
         ctx.builder.CreateStore(emit_pointer_from_objref(ctx, boxed(ctx, argv[0])), pnt);
         return ghostValue(jl_nothing_type);
     }
@@ -1524,7 +1532,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
         Value *pdefer_sig = emit_defer_signal(ctx);
-        Value *defer_sig = ctx.builder.CreateLoad(pdefer_sig);
+        Value *defer_sig = ctx.builder.CreateLoad(T_sigatomic, pdefer_sig);
         defer_sig = ctx.builder.CreateAdd(defer_sig, ConstantInt::get(T_sigatomic, 1));
         ctx.builder.CreateStore(defer_sig, pdefer_sig);
         emit_signal_fence(ctx);
@@ -1536,7 +1544,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
         Value *pdefer_sig = emit_defer_signal(ctx);
-        Value *defer_sig = ctx.builder.CreateLoad(pdefer_sig);
+        Value *defer_sig = ctx.builder.CreateLoad(T_sigatomic, pdefer_sig);
         emit_signal_fence(ctx);
         error_unless(ctx,
                 ctx.builder.CreateICmpNE(defer_sig, ConstantInt::get(T_sigatomic, 0)),
@@ -1553,6 +1561,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 checkBB, contBB);
         ctx.builder.SetInsertPoint(checkBB);
         ctx.builder.CreateLoad(
+                T_size,
                 ctx.builder.CreateConstInBoundsGEP1_32(T_size, get_current_signal_page(ctx), -1),
                 true);
         ctx.builder.CreateBr(contBB);
@@ -1577,7 +1586,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 tbaa_decorate(tbaa_const, cast<Instruction>(len));
             MDBuilder MDB(jl_LLVMContext);
             auto rng = MDB.createRange(
-                V_size0, ConstantInt::get(T_size, INTPTR_MAX / sizeof(void*) - 1));
+                Constant::getNullValue(T_size), ConstantInt::get(T_size, INTPTR_MAX / sizeof(void*) - 1));
             cast<LoadInst>(len)->setMetadata(LLVMContext::MD_range, rng);
         }
         JL_GC_POP();
@@ -1600,7 +1609,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         // This could otherwise be in a dead branch
         if (svecv.typ == (jl_value_t*)jl_simplevector_type)
             tbaa_decorate(tbaa_const, load);
-        Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, V_rnull), T_int8);
+        Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, Constant::getNullValue(T_prjlvalue)), T_int8);
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, res, retboxed, rt, unionall, static_rt);
     }
@@ -1655,7 +1664,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, slot_addr, Align(sizeof(void*)));
                 load->setAtomic(AtomicOrdering::Unordered);
                 tbaa_decorate(tbaa_ptrarraybuf, load);
-                Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, V_rnull), T_int32);
+                Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, Constant::getNullValue(T_prjlvalue)), T_int32);
                 JL_GC_POP();
                 return mark_or_box_ccall_result(ctx, res, retboxed, rt, unionall, static_rt);
             }
@@ -1705,6 +1714,42 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         return rt == (jl_value_t*)jl_nothing_type ? ghostValue(jl_nothing_type) :
             mark_or_box_ccall_result(ctx, destp, retboxed, rt, unionall, static_rt);
     }
+    else if (is_libjulia_func(memset) && (rt == (jl_value_t*)jl_nothing_type || jl_is_cpointer_type(rt))) {
+        const jl_cgval_t &dst = argv[0];
+        const jl_cgval_t &val = argv[1];
+        const jl_cgval_t &n = argv[2];
+        Value *destp = emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type);
+        Value *val32 = emit_unbox(ctx, T_int32, val, (jl_value_t*)jl_uint32_type);
+        Value *val8 = ctx.builder.CreateTrunc(val32, T_int8, "memset_val");
+        ctx.builder.CreateMemSet(
+            emit_inttoptr(ctx, destp, T_pint8),
+            val8,
+            emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
+            MaybeAlign(1)
+        );
+        JL_GC_POP();
+        return rt == (jl_value_t*)jl_nothing_type ? ghostValue(jl_nothing_type) :
+            mark_or_box_ccall_result(ctx, destp, retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(memmove) && (rt == (jl_value_t*)jl_nothing_type || jl_is_cpointer_type(rt))) {
+        const jl_cgval_t &dst = argv[0];
+        const jl_cgval_t &src = argv[1];
+        const jl_cgval_t &n = argv[2];
+        Value *destp = emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type);
+
+        ctx.builder.CreateMemMove(
+                emit_inttoptr(ctx, destp, T_pint8),
+                MaybeAlign(0),
+                emit_inttoptr(ctx,
+                    emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type),
+                    T_pint8),
+                MaybeAlign(0),
+                emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
+                false);
+        JL_GC_POP();
+        return rt == (jl_value_t*)jl_nothing_type ? ghostValue(jl_nothing_type) :
+            mark_or_box_ccall_result(ctx, destp, retboxed, rt, unionall, static_rt);
+    }
     else if (is_libjulia_func(jl_object_id) && nccallargs == 1 &&
             rt == (jl_value_t*)jl_ulong_type) {
         jl_cgval_t val = argv[0];
@@ -1712,8 +1757,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             JL_GC_POP();
             const int hash_offset = offsetof(jl_sym_t, hash);
             Value *ph1 = emit_bitcast(ctx, decay_derived(ctx, boxed(ctx, val)), T_psize);
-            Value *ph2 = ctx.builder.CreateInBoundsGEP(ph1, ConstantInt::get(T_size, hash_offset / sizeof(size_t)));
-            LoadInst *hashval = ctx.builder.CreateAlignedLoad(ph2, Align(sizeof(size_t)));
+            Value *ph2 = ctx.builder.CreateInBoundsGEP(T_size, ph1, ConstantInt::get(T_size, hash_offset / sizeof(size_t)));
+            LoadInst *hashval = ctx.builder.CreateAlignedLoad(T_size, ph2, Align(sizeof(size_t)));
             tbaa_decorate(tbaa_const, hashval);
             return mark_or_box_ccall_result(ctx, hashval, retboxed, rt, unionall, static_rt);
         }
@@ -1938,7 +1983,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             // something alloca'd above is SSA
             if (static_rt)
                 return mark_julia_slot(result, rt, NULL, tbaa_stack);
-            result = ctx.builder.CreateLoad(result);
+            result = ctx.builder.CreateLoad(cast<PointerType>(result->getType())->getElementType(), result);
         }
     }
     else {

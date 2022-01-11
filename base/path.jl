@@ -356,20 +356,24 @@ joinpath
 """
     normpath(path::AbstractString) -> String
 
-Normalize a path, removing "." and ".." entries.
+Normalize a path, removing "." and ".." entries and changing "/" to the canonical path separator
+for the system.
 
 # Examples
 ```jldoctest
 julia> normpath("/home/myuser/../example.jl")
 "/home/example.jl"
+
+julia> normpath("Documents/Julia") == joinpath("Documents", "Julia")
+true
 ```
 """
 function normpath(path::String)
     isabs = isabspath(path)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
-    parts = split(path, path_separator_re)
-    filter!(x->!isempty(x) && x!=".", parts)
+    parts = split(path, path_separator_re; keepempty=false)
+    filter!(!=("."), parts)
     while true
         clean = true
         for j = 1:length(parts)-1

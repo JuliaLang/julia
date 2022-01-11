@@ -4,6 +4,7 @@
 
 import Base: sort, findall, copy!
 import LinearAlgebra: promote_to_array_type, promote_to_arrays_
+using LinearAlgebra: _SpecialArrays, _DenseConcatGroup
 
 ### The SparseVector
 
@@ -1062,30 +1063,16 @@ vcat(X::Union{Vector,SparseVector}...) = vcat(map(sparse, X)...)
 
 ### Concatenation of un/annotated sparse/special/dense vectors/matrices
 
-# TODO: These methods and definitions should be moved to a more appropriate location,
-# particularly some future equivalent of base/linalg/special.jl dedicated to interactions
-# between a broader set of matrix types.
-
-# TODO: A definition similar to the third exists in base/linalg/bidiag.jl. These definitions
-# should be consolidated in a more appropriate location, e.g. base/linalg/special.jl.
 const _SparseArrays = Union{SparseVector, AbstractSparseMatrixCSC, Adjoint{<:Any,<:SparseVector}, Transpose{<:Any,<:SparseVector}}
-const _SpecialArrays = Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
 const _SparseConcatArrays = Union{_SpecialArrays, _SparseArrays}
 
 const _Symmetric_SparseConcatArrays{T,A<:_SparseConcatArrays} = Symmetric{T,A}
 const _Hermitian_SparseConcatArrays{T,A<:_SparseConcatArrays} = Hermitian{T,A}
 const _Triangular_SparseConcatArrays{T,A<:_SparseConcatArrays} = LinearAlgebra.AbstractTriangular{T,A}
 const _Annotated_SparseConcatArrays = Union{_Triangular_SparseConcatArrays, _Symmetric_SparseConcatArrays, _Hermitian_SparseConcatArrays}
-
-const _Symmetric_DenseArrays{T,A<:Matrix} = Symmetric{T,A}
-const _Hermitian_DenseArrays{T,A<:Matrix} = Hermitian{T,A}
-const _Triangular_DenseArrays{T,A<:Matrix} = LinearAlgebra.AbstractTriangular{T,A}
-const _Annotated_DenseArrays = Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
-const _Annotated_Typed_DenseArrays{T} = Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
-
-const _SparseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
-const _DenseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _Annotated_DenseArrays}
-const _TypedDenseConcatGroup{T} = Union{Vector{T}, Adjoint{T,Vector{T}}, Transpose{T,Vector{T}}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
+# It's important that _SparseConcatGroup is a larger union than _DenseConcatGroup to make
+# sparse cat-methods less specific and to kick in only if there is some sparse array present
+const _SparseConcatGroup = Union{_DenseConcatGroup, _SparseConcatArrays, _Annotated_SparseConcatArrays}
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
 _makesparse(x::Number) = x
@@ -1123,22 +1110,56 @@ _hvcat_rows(::Tuple{}, X::_SparseConcatGroup...) = ()
 
 # make sure UniformScaling objects are converted to sparse matrices for concatenation
 promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}) = SparseMatrixCSC
-promote_to_array_type(A::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = Matrix
 promote_to_arrays_(n::Int, ::Type{SparseMatrixCSC}, J::UniformScaling) = sparse(J, n, n)
 
-# Concatenations strictly involving un/annotated dense matrices/vectors should yield dense arrays
-Base._cat(dims, xs::_DenseConcatGroup...) = Base.cat_t(promote_eltype(xs...), xs...; dims=dims)
-vcat(A::Vector...) = Base.typed_vcat(promote_eltype(A...), A...)
-vcat(A::_DenseConcatGroup...) = Base.typed_vcat(promote_eltype(A...), A...)
-hcat(A::Vector...) = Base.typed_hcat(promote_eltype(A...), A...)
-hcat(A::_DenseConcatGroup...) = Base.typed_hcat(promote_eltype(A...), A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(promote_eltype(xs...), rows, xs...)
-# For performance, specially handle the case where the matrices/vectors have homogeneous eltype
-Base._cat(dims, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.cat_t(T, xs...; dims=dims)
-vcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_vcat(T, A...)
-hcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hcat(T, A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hvcat(T, rows, xs...)
+"""
+    sparse_hcat(A...)
 
+Concatenate along dimension 2. Return a SparseMatrixCSC object.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8. It mimicks previous concatenation behavior, where
+    the concatenation with specialized "sparse" matrix types from LinearAlgebra.jl
+    automatically yielded sparse output even in the absence of any SparseArray argument.
+"""
+sparse_hcat(Xin::Union{AbstractVecOrMat,Number}...) = cat(map(_makesparse, Xin)..., dims=Val(2))
+function sparse_hcat(X::Union{AbstractVecOrMat,UniformScaling,Number}...)
+    LinearAlgebra._hcat(X...; array_type = SparseMatrixCSC)
+end
+
+"""
+    sparse_vcat(A...)
+
+Concatenate along dimension 1. Return a SparseMatrixCSC object.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8. It mimicks previous concatenation behavior, where
+    the concatenation with specialized "sparse" matrix types from LinearAlgebra.jl
+    automatically yielded sparse output even in the absence of any SparseArray argument.
+"""
+sparse_vcat(Xin::Union{AbstractVecOrMat,Number}...) = cat(map(_makesparse, Xin)..., dims=Val(1))
+function sparse_vcat(X::Union{AbstractVecOrMat,UniformScaling,Number}...)
+    LinearAlgebra._vcat(X...; array_type = SparseMatrixCSC)
+end
+
+"""
+    sparse_hvcat(rows::Tuple{Vararg{Int}}, values...)
+
+Sparse horizontal and vertical concatenation in one call. This function is called
+for block matrix syntax. The first argument specifies the number of
+arguments to concatenate in each block row.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8. It mimicks previous concatenation behavior, where
+    the concatenation with specialized "sparse" matrix types from LinearAlgebra.jl
+    automatically yielded sparse output even in the absence of any SparseArray argument.
+"""
+function sparse_hvcat(rows::Tuple{Vararg{Int}}, Xin::Union{AbstractVecOrMat,Number}...)
+    hvcat(rows, map(_makesparse, Xin)...)
+end
+function sparse_hvcat(rows::Tuple{Vararg{Int}}, X::Union{AbstractVecOrMat,UniformScaling,Number}...)
+    LinearAlgebra._hvcat(rows, X...; array_type = SparseMatrixCSC)
+end
 
 ### math functions
 
@@ -1372,7 +1393,7 @@ end
 
 ### Reduction
 
-function _sum(f, x::AbstractSparseVector)
+function sum(f, x::AbstractSparseVector)
     n = length(x)
     n > 0 || return sum(f, nonzeros(x)) # return zero() of proper type
     m = nnz(x)
@@ -1381,11 +1402,9 @@ function _sum(f, x::AbstractSparseVector)
      Base.add_sum((n - m) * f(zero(eltype(x))), sum(f, nonzeros(x))))
 end
 
-sum(f::Union{Function, Type}, x::AbstractSparseVector) = _sum(f, x) # resolve ambiguity
-sum(f, x::AbstractSparseVector) = _sum(f, x)
 sum(x::AbstractSparseVector) = sum(nonzeros(x))
 
-function _maximum(f, x::AbstractSparseVector)
+function maximum(f, x::AbstractSparseVector)
     n = length(x)
     if n == 0
         if f === abs || f === abs2
@@ -1400,11 +1419,9 @@ function _maximum(f, x::AbstractSparseVector)
      max(f(zero(eltype(x))), maximum(f, nonzeros(x))))
 end
 
-maximum(f::Union{Function, Type}, x::AbstractSparseVector) = _maximum(f, x) # resolve ambiguity
-maximum(f, x::AbstractSparseVector) = _maximum(f, x)
 maximum(x::AbstractSparseVector) = maximum(identity, x)
 
-function _minimum(f, x::AbstractSparseVector)
+function minimum(f, x::AbstractSparseVector)
     n = length(x)
     n > 0 || throw(ArgumentError("minimum over an empty array is not allowed."))
     m = nnz(x)
@@ -1413,9 +1430,28 @@ function _minimum(f, x::AbstractSparseVector)
      min(f(zero(eltype(x))), minimum(f, nonzeros(x))))
 end
 
-minimum(f::Union{Function, Type}, x::AbstractSparseVector) = _minimum(f, x) # resolve ambiguity
-minimum(f, x::AbstractSparseVector) = _minimum(f, x)
 minimum(x::AbstractSparseVector) = minimum(identity, x)
+
+for (fun, comp, word) in ((:findmin, :(<), "minimum"), (:findmax, :(>), "maximum"))
+    @eval function $fun(f, x::AbstractSparseVector{T}) where {T}
+        n = length(x)
+        n > 0 || throw(ArgumentError($word * " over empty array is not allowed"))
+        nzvals = nonzeros(x)
+        m = length(nzvals)
+        m == 0 && return zero(T), firstindex(x)
+        val, index = $fun(f, nzvals)
+        m == n && return val, index
+        nzinds = nonzeroinds(x)
+        zeroval = f(zero(T))
+        $comp(val, zeroval) && return val, nzinds[index]
+        # we need to find the first zero, which could be stored or implicit
+        # we try to avoid findfirst(iszero, x)
+        sindex = findfirst(iszero, nzvals) # first stored zero, if any
+        zindex = findfirst(i -> i < nzinds[i], eachindex(nzinds)) # first non-stored zero
+        index = isnothing(sindex) ? zindex : min(sindex, zindex)
+        return zeroval, index
+    end
+end
 
 norm(x::SparseVectorUnion, p::Real=2) = norm(nonzeros(x), p)
 
@@ -2085,18 +2121,6 @@ function fill!(A::Union{SparseVector, AbstractSparseMatrixCSC}, x)
     return A
 end
 
-
-
-# in-place swaps (dense) blocks start:split and split+1:fin in col
-function _swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer)
-    split == fin && return
-    reverse!(col, start, split)
-    reverse!(col, split + 1, fin)
-    reverse!(col, start, fin)
-    return
-end
-
-
 # in-place shifts a sparse subvector by r. Used also by sparsematrix.jl
 function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
     split = fin
@@ -2110,16 +2134,14 @@ function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer
         end
     end
     # ...but rowval should be sorted within columns
-    _swap!(R, start, fin, split)
-    _swap!(V, start, fin, split)
+    circshift!(@view(R[start:fin]), split-start+1)
+    circshift!(@view(V[start:fin]), split-start+1)
 end
-
 
 function circshift!(O::SparseVector, X::SparseVector, (r,)::Base.DimsInteger{1})
     copy!(O, X)
     subvector_shifter!(nonzeroinds(O), nonzeros(O), 1, length(nonzeroinds(O)), length(O), mod(r, length(X)))
     return O
 end
-
 
 circshift!(O::SparseVector, X::SparseVector, r::Real,) = circshift!(O, X, (Integer(r),))

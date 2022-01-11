@@ -334,9 +334,9 @@ end
 
 eof(io::GenericIOBuffer) = (io.ptr-1 == io.size)
 
-function shutdown(io::GenericIOBuffer)
+function closewrite(io::GenericIOBuffer)
     io.writable = false
-    # OR throw(_UVError("shutdown", UV_ENOTSOCK))
+    # OR throw(_UVError("closewrite", UV_ENOTSOCK))
     nothing
 end
 

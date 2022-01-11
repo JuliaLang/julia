@@ -22,6 +22,7 @@ using Dates
         @test isa(Set(sin(x) for x = 1:3), Set{Float64})
         @test isa(Set(f17741(x) for x = 1:3), Set{Int})
         @test isa(Set(f17741(x) for x = -1:1), Set{Integer})
+        @test isa(Set(f17741(x) for x = 1:0), Set{Integer})
     end
     let s1 = Set(["foo", "bar"]), s2 = Set(s1)
         @test s1 == s2
@@ -138,6 +139,10 @@ end
     @test !in(200,s)
 end
 
+@testset "copy(::KeySet) (issue #41537)" begin
+    @test union(keys(Dict(1=>2, 3=>4))) == copy(keys(Dict(1=>2, 3=>4))) == Set([1,3])
+end
+
 @testset "copy!" begin
     for S = (Set, BitSet)
         s = S([1, 2])
@@ -220,6 +225,16 @@ end
     s2 = Set([nothing])
     union!(s2, [nothing])
     @test s2 == Set([nothing])
+
+    @testset "promotion" begin
+        ints = [1:5, [1, 2], Set([1, 2])]
+        floats = [2:0.1:3, [2.0, 3.5], Set([2.0, 3.5])]
+
+        for a in ints, b in floats
+            @test eltype(union(a, b)) == Float64
+            @test eltype(union(b, a)) == Float64
+        end
+    end
 end
 
 @testset "intersect" begin
@@ -227,6 +242,9 @@ end
         s = S([1,2]) ∩ S([3,4])
         @test s == S()
         s = intersect(S([5,6,7,8]), S([7,8,9]))
+        slong = S(collect(3:63))
+        # test #36339 length/order short-cut
+        @test intersect(S([5,6,7,8]), slong) == intersect(slong, S([5,6,7,8]))
         @test s == S([7,8])
         @test intersect(S([2,3,1]), S([4,2,3]), S([5,4,3,2])) == S([2,3])
         let s1 = S([1,2,3])
@@ -238,7 +256,9 @@ end
         end
     end
     @test intersect(Set([1]), BitSet()) isa Set{Int}
-    @test intersect(BitSet([1]), Set()) isa BitSet
+    @test intersect(BitSet([1]), Set()) isa Set{Any}
+    @test intersect(BitSet([1]), Set([1])) isa BitSet
+    @test intersect(BitSet([1]), Set([1]), Set([1])) isa BitSet
     @test intersect([1], BitSet()) isa Vector{Int}
     # intersect must uniquify
     @test intersect([1, 2, 1]) == intersect!([1, 2, 1]) == [1, 2]
@@ -249,7 +269,22 @@ end
     y = () ∩ (42,)
     @test isempty(x)
     @test isempty(y)
-    @test eltype(x) == eltype(y) == Union{}
+
+    # Discussed in PR#41769
+    @testset "promotion" begin
+        ints = [1:5, [1, 2], Set([1, 2])]
+        floats = [2:0.1:3, [2.0, 3.5], Set([2.0, 3.5])]
+
+        for a in ints, b in floats
+            @test eltype(intersect(a, b)) == Float64
+            @test eltype(intersect(b, a)) == Float64
+            @test eltype(intersect(a, a, b)) == Float64
+        end
+    end
+
+    # 3-argument version is correctly covered
+    @test intersect(Set([1,2]), Set([2]), Set([1,2,3])) == Set([2])
+    @test intersect(Set([1,2]), Set([2]), Set([1.,2,3])) == Set([2.])
 end
 
 @testset "setdiff" begin
@@ -762,6 +797,7 @@ end
     b = [2]
     c = [3]
     d = [4]
+    e = [5]
     A = Base.IdSet{Vector{Int}}([a, b, c, d])
     @test !isempty(A)
     B = copy(A)
@@ -774,6 +810,14 @@ end
     a_ = pop!(A, a)
     @test a_ === a
     @test !isempty(A)
+    e_ = pop!(A, a, e)
+    @test e_ === e
+    @test !isempty(A)
     A = empty!(A)
     @test isempty(A)
+end
+
+@testset "⊊, ⊋" begin
+    @test !((1, 2) ⊊ (1, 2, 2))
+    @test !((1, 2, 2) ⊋ (1, 2))
 end

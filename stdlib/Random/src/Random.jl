@@ -13,6 +13,7 @@ include("DSFMT.jl")
 using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
+import SHA
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
@@ -351,7 +352,7 @@ julia> rand(Float64, (2, 3))
     The complexity of `rand(rng, s::Union{AbstractDict,AbstractSet})`
     is linear in the length of `s`, unless an optimized method with
     constant complexity is available, which is the case for `Dict`,
-    `Set` and `BitSet`. For more than a few calls, use `rand(rng,
+    `Set` and dense `BitSet`s. For more than a few calls, use `rand(rng,
     collect(s))` instead, or either `rand(rng, Dict(s))` or `rand(rng,
     Set(s))` as appropriate.
 """
