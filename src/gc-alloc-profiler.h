@@ -15,15 +15,15 @@ extern "C" {
 // ---------------------------------------------------------------------
 
 // Forward-declaration to avoid depenency in header file.
-struct RawAlloc;  // Defined in gc-alloc-profiler.cpp
+struct jl_raw_alloc_t;  // Defined in gc-alloc-profiler.cpp
 
-struct RawAllocResults {
-    struct RawAlloc *allocs;
+typedef struct {
+    struct jl_raw_alloc_t *allocs;
     size_t num_allocs;
-};
+} jl_raw_alloc_results_t;
 
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate);
-JL_DLLEXPORT struct RawAllocResults jl_fetch_alloc_profile(void);
+JL_DLLEXPORT jl_raw_alloc_results_t jl_fetch_alloc_profile(void);
 JL_DLLEXPORT void jl_stop_alloc_profile(void);
 JL_DLLEXPORT void jl_free_alloc_profile(void);
 

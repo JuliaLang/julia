@@ -11,42 +11,42 @@
 using std::string;
 using std::vector;
 
-struct RawBacktrace {
+struct jl_raw_backtrace_t {
     jl_bt_element_t *data;
     size_t size;
 };
 
-struct RawAlloc {
+struct jl_raw_alloc_t {
     jl_datatype_t *type_address;
-    RawBacktrace backtrace;
+    jl_raw_backtrace_t backtrace;
     size_t size;
 };
 
 // == These structs define the global singleton profile buffer that will be used by
 // callbacks to store profile results. ==
-struct PerThreadAllocProfile {
-    vector<RawAlloc> allocs;
+struct jl_per_thread_alloc_profile_t {
+    vector<jl_raw_alloc_t> allocs;
 };
 
-struct AllocProfile {
+struct jl_alloc_profile_t {
     double sample_rate;
 
-    vector<PerThreadAllocProfile> per_thread_profiles;
+    vector<jl_per_thread_alloc_profile_t> per_thread_profiles;
 };
 
-struct CombinedResults {
-    vector<RawAlloc> combined_allocs;
+struct jl_combined_results {
+    vector<jl_raw_alloc_t> combined_allocs;
 };
 
 // == Global variables manipulated by callbacks ==
 
-AllocProfile g_alloc_profile;
+jl_alloc_profile_t g_alloc_profile;
 int g_alloc_profile_enabled = false;
-CombinedResults g_combined_results; // Will live forever.
+jl_combined_results g_combined_results; // Will live forever.
 
 // === stack stuff ===
 
-RawBacktrace get_raw_backtrace() {
+jl_raw_backtrace_t get_raw_backtrace() {
     // A single large buffer to record backtraces onto
     static jl_bt_element_t static_bt_data[JL_MAX_BT_SIZE];
 
@@ -57,7 +57,7 @@ RawBacktrace get_raw_backtrace() {
     jl_bt_element_t *bt_data = (jl_bt_element_t*) malloc(bt_bytes);
     memcpy(bt_data, static_bt_data, bt_bytes);
 
-    return RawBacktrace{
+    return jl_raw_backtrace_t{
         bt_data,
         bt_size
     };
@@ -70,14 +70,14 @@ extern "C" {  // Needed since these functions doesn't take any arguments.
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate) {
     // We only need to do this once, the first time this is called.
     while (g_alloc_profile.per_thread_profiles.size() < jl_n_threads) {
-        g_alloc_profile.per_thread_profiles.push_back(PerThreadAllocProfile{});
+        g_alloc_profile.per_thread_profiles.push_back(jl_per_thread_alloc_profile_t{});
     }
 
     g_alloc_profile.sample_rate = sample_rate;
     g_alloc_profile_enabled = true;
 }
 
-JL_DLLEXPORT struct RawAllocResults jl_fetch_alloc_profile() {
+JL_DLLEXPORT jl_raw_alloc_results_t jl_fetch_alloc_profile() {
     // combine allocs
     // TODO: interleave to preserve ordering
     for (auto& profile : g_alloc_profile.per_thread_profiles) {
@@ -88,7 +88,7 @@ JL_DLLEXPORT struct RawAllocResults jl_fetch_alloc_profile() {
         profile.allocs.clear();
     }
 
-    return RawAllocResults{
+    return jl_raw_alloc_results_t{
         g_combined_results.combined_allocs.data(),
         g_combined_results.combined_allocs.size(),
     };
@@ -129,7 +129,7 @@ void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size) JL_NOTSAFEPOIN
     }
 
     auto type = (jl_datatype_t*)jl_typeof(val);
-    profile.allocs.emplace_back(RawAlloc{
+    profile.allocs.emplace_back(jl_raw_alloc_t{
         type,
         get_raw_backtrace(),
         size

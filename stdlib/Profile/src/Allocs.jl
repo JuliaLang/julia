@@ -8,20 +8,20 @@ using Base: InterpreterIP
 # The C jl_bt_element_t object contains either an IP pointer (size_t) or a void*.
 const BTElement = Csize_t;
 
-# matches RawBacktrace on the C side
+# matches jl_raw_backtrace_t on the C side
 struct RawBacktrace
     data::Ptr{BTElement} # in C: *jl_bt_element_t
     size::Csize_t
 end
 
-# matches RawAlloc on the C side
+# matches jl_raw_alloc_t on the C side
 struct RawAlloc
     type::Ptr{Type}
     backtrace::RawBacktrace
     size::Csize_t
 end
 
-# matches RawAllocResults on the C side
+# matches jl_raw_alloc_results_t on the C side
 struct RawAllocResults
     allocs::Ptr{RawAlloc}
     num_allocs::Csize_t
@@ -115,7 +115,7 @@ struct AllocResults
     allocs::Vector{Alloc}
 end
 
-# Without this, the Alloc's stacktrace prints for lines and lines and lines..
+# Without this, the Alloc's stacktrace prints for lines and lines and lines...
 function Base.show(io::IO, a::Alloc)
     stacktrace_sample = length(a.stacktrace) >= 1 ? "$(a.stacktrace[1]), ..." : ""
     print(io, "$Alloc($(a.type), $StackFrame[$stacktrace_sample], $(a.size))")
