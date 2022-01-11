@@ -39,7 +39,7 @@ A sample rate of 1.0 will record everything; 0.0 will record nothing.
 julia> Profile.Allocs.@profile sample_rate=0.01 peakflops()
 1.03733270279065e11
 
-julia> results = Profile.Allocs.fetch();
+julia> results = Profile.Allocs.fetch()
 
 julia> last(sort(results.allocs, by=x->x.size))
 Profile.Allocs.Alloc(Vector{Any}, Base.StackTraces.StackFrame[_new_array_ at array.c:127, ...], 5576)
@@ -54,10 +54,9 @@ end
 
 # globals used for tracking how many allocs we're missing
 # vs the alloc counters used by @time
-const g_gc_num = Ref{Base.GC_Num}()
-const g_total_allocs = Ref{Int}(0)
-const g_sample_rate = Ref{Real}(0)
-const g_estimated_total_allocs = Ref{Int}(0)
+const g_gc_num_before = Ref{Base.GC_Num}()
+const g_sample_rate = Ref{Real}()
+const g_expected_sampled_allocs = Ref{Float64}(0)
 
 function _prof_expr(expr, opts)
     quote
@@ -78,7 +77,7 @@ function start(; sample_rate::Real)
     ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), Float64(sample_rate))
     
     g_sample_rate[] = sample_rate
-    g_gc_num[] = Base.gc_num()
+    g_gc_num_before[] = Base.gc_num()
 end
 
 """
@@ -89,17 +88,14 @@ Stop recording allocations.
 function stop()
     ccall(:jl_stop_alloc_profile, Cvoid, ())
 
+    # increment a counter of how many allocs we would expect
+    # the memory profiler to see, based on how many allocs
+    # actually happened.
     gc_num_after = Base.gc_num()
-    gc_diff = Base.GC_Diff(gc_num_after, g_gc_num[])
+    gc_diff = Base.GC_Diff(gc_num_after, g_gc_num_before[])
     alloc_count = Base.gc_alloc_count(gc_diff)
-    g_total_allocs[] = g_total_allocs[] + alloc_count
-
-    # TODO: ugh, fetch has side effects
-    raw_results = ccall(:jl_fetch_alloc_profile, RawAllocResults, ())
-    num_sampled = raw_results.num_allocs
-    estimated_total = round(Int, Float64(num_sampled) / g_sample_rate[])
-
-    g_estimated_total_allocs[] = g_estimated_total_allocs[] + estimated_total
+    expected_samples = alloc_count * g_sample_rate[]
+    g_expected_sampled_allocs[] += expected_samples
 end
 
 """
@@ -110,8 +106,7 @@ Clear all previously profiled allocation information from memory.
 function clear()
     ccall(:jl_free_alloc_profile, Cvoid, ())
 
-    g_estimated_total_allocs[] = 0
-    g_total_allocs[] = 0
+    g_expected_sampled_allocs[] = 0
 end
 
 """
@@ -124,14 +119,15 @@ function fetch()
     raw_results = ccall(:jl_fetch_alloc_profile, RawAllocResults, ())
     decoded_results = decode(raw_results)
 
-    println("total: $(g_total_allocs[])")
-    println("estimated total: $(g_estimated_total_allocs[])")
+    @show(length(decoded_results.allocs))
+    @show(g_expected_sampled_allocs[])
 
-    missed_allocs = g_total_allocs[] - g_estimated_total_allocs[]
-    missed_percentage = round(Int, Float64(missed_allocs) / Float64(g_total_allocs[]) * 100)
-
-    @warn("This allocation profiler missed $(missed_percentage)% of allocs in the last run. " *
-    "For more info see https://github.com/JuliaLang/julia/issues/43688")
+    missed_allocs = g_expected_sampled_allocs[] - length(decoded_results.allocs)
+    missed_percentage = round(Int, missed_allocs / g_expected_sampled_allocs[] * 100)
+    @warn("The allocation profiler is not fully implemented, and missed $(missed_percentage)% " *
+            "($(round(Int, missed_allocs)) / $(round(Int, g_expected_sampled_allocs[]))) " *
+            "of allocs in the last run. " *
+            "For more info see https://github.com/JuliaLang/julia/issues/43688")
     return decoded_results
 end
 
