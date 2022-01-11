@@ -372,7 +372,6 @@ end
         for i = I
             @test insorted(i,rg) === insorted(i,rgv)
             @test insorted(i,rg_r) === insorted(i,rgv_r,rev=true)
->>>>>>> 7a4b43f9baac4ccd9dcbf6bb23c571de88ddc8a8
         end
     end
 
