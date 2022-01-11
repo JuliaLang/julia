@@ -7574,7 +7574,7 @@ jl_compile_result_t jl_emit_codeinst(
                 jl_options.debug_level > 1) {
                 // update the stored code
                 if (codeinst->inferred != (jl_value_t*)src) {
-                    if (jl_is_method(def))
+                    if (jl_is_method(def) && !jl_options.incremental)    // defer compression until serialization
                         src = (jl_code_info_t*)jl_compress_ir(def, src);
                     codeinst->inferred = (jl_value_t*)src;
                     jl_gc_wb(codeinst, src);

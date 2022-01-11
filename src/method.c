@@ -715,8 +715,12 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     jl_gc_wb(m, m->slot_syms);
     if (gen_only)
         m->source = NULL;
-    else
-        m->source = (jl_value_t*)jl_compress_ir(m, src);
+    else {
+        if (jl_options.incremental)    // defer compression until serialization
+            m->source = (jl_value_t*)src;
+        else
+            m->source = (jl_value_t*)jl_compress_ir(m, src);
+    }
     jl_gc_wb(m, m->source);
     JL_GC_POP();
 }

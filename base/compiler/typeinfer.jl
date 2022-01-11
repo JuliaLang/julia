@@ -327,7 +327,7 @@ already_inferred_quick_test(interp::AbstractInterpreter, mi::MethodInstance) =
 function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
     def = linfo.def
     toplevel = !isa(def, Method)
-    if toplevel
+    if toplevel || JLOptions().incremental != Int8(0)  # defer compression until serialization
         return ci
     end
     if may_discard_trees(interp)

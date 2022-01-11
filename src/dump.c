@@ -484,6 +484,30 @@ static int jl_serialize_generic(jl_serializer_state *s, jl_value_t *v) JL_GC_DIS
     return 0;
 }
 
+static void uncompress_code(jl_method_instance_t *mi)
+{
+    jl_method_t *m = mi->def.method;
+    assert(jl_is_method(m));
+    jl_code_instance_t *codeinst = mi->cache;
+    while (codeinst) {
+        if (codeinst->inferred && jl_is_array(codeinst->inferred))
+            codeinst->inferred = (jl_value_t*)jl_uncompress_ir(m, codeinst, (jl_array_t*)codeinst->inferred);
+        codeinst = codeinst->next;
+    }
+}
+
+static void compress_code(jl_method_instance_t *mi)
+{
+    jl_method_t *m = mi->def.method;
+    assert(jl_is_method(m));
+    jl_code_instance_t *codeinst = mi->cache;
+    while (codeinst) {
+        if (codeinst->inferred && jl_is_code_info(codeinst->inferred))
+            codeinst->inferred = (jl_value_t*)jl_compress_ir(m, (jl_code_info_t*)codeinst->inferred);
+        codeinst = codeinst->next;
+    }
+}
+
 static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_t *codeinst, int skip_partial_opaque) JL_GC_DISABLED
 {
     if (jl_serialize_generic(s, (jl_value_t*)codeinst)) {
@@ -662,7 +686,29 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         int serialization_mode = 0;
         if (m->is_for_opaque_closure || module_in_worklist(m->module))
             serialization_mode |= METHOD_INTERNAL;
-        if (!(serialization_mode & METHOD_INTERNAL)) {
+        if (serialization_mode & METHOD_INTERNAL) {
+            // defer compression until serialization
+            // Compression must occur before roots are serialized.
+            // However, because jl_compress_ir is externally callable, first check
+            // whether we need to decompress. This enables root-reordering transformations.
+            if (m->source && jl_is_array(m->source))
+                m->source = (jl_value_t*)jl_uncompress_ir(m, NULL, (jl_array_t*)m->source);
+            size_t l = jl_svec_len(m->specializations);
+            for (i = 0; i < l; i++) {
+                jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(m->specializations, i);
+                if ((jl_value_t*)mi != jl_nothing)
+                    uncompress_code(mi);
+            }
+            // Perform root-reordering transformations here
+            // Compress
+            if (m->source && jl_is_code_info(m->source))
+                m->source = (jl_value_t*)jl_compress_ir(m, (jl_code_info_t*)m->source);
+            for (i = 0; i < l; i++) {
+                jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(m->specializations, i);
+                if ((jl_value_t*)mi != jl_nothing)
+                    compress_code(mi);
+            }
+        } else {
             // flag this in the backref table as special
             uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, v);
             assert(*bp != (uintptr_t)HT_NOTFOUND);
