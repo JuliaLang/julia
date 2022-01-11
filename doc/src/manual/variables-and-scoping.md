@@ -105,9 +105,11 @@ Each top-level expression has an invisible scope block around it. If a top-level
 julia> x = 1
        begin
            local x = 0
-           @show x # x = 0
+           @show x
        end
-       @show x # x = 1
+       @show x;
+x = 0
+x = 1
 ```
 
 Note that the interactive prompt (aka REPL) is in the global scope of the module `Main`.
