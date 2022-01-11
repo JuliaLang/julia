@@ -515,7 +515,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
     }
     else {
         Value *box = emit_allocobj(ctx, nb, boxed(ctx, bt_value));
-        init_bits_value(ctx, box, vx, tbaa_immut);
+        init_bits_value(ctx, box, vx, ctx.tbaa_cache.tbaa_immut);
         return mark_julia_type(ctx, box, true, bt);
     }
 }
@@ -598,7 +598,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     if (ety == (jl_value_t*)jl_any_type) {
         Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
         LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, ctx.builder.CreateInBoundsGEP(T_prjlvalue, thePtr, im1), Align(align_nb));
-        tbaa_decorate(tbaa_data, load);
+        tbaa_decorate(ctx.tbaa_cache.tbaa_data, load);
         return mark_julia_type(ctx, load, true, ety);
     }
     else if (!jl_isbits(ety)) {
@@ -610,7 +610,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
         thePtr = ctx.builder.CreateInBoundsGEP(T_int8, emit_bitcast(ctx, thePtr, T_pint8), im1);
-        MDNode *tbaa = best_tbaa(ety);
+        MDNode *tbaa = best_tbaa(ctx.tbaa_cache, ety);
         emit_memcpy(ctx, strct, tbaa, thePtr, nullptr, size, 1);
         return mark_julia_type(ctx, strct, true, ety);
     }
@@ -620,7 +620,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-            return typed_load(ctx, thePtr, im1, ety, tbaa_data, nullptr, isboxed, AtomicOrdering::NotAtomic, true, align_nb);
+            return typed_load(ctx, thePtr, im1, ety, ctx.tbaa_cache.tbaa_data, nullptr, isboxed, AtomicOrdering::NotAtomic, true, align_nb);
         }
         else {
             return ghostValue(ety);
@@ -671,7 +671,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         Instruction *store = ctx.builder.CreateAlignedStore(
           ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), T_size),
             ctx.builder.CreateInBoundsGEP(T_size, thePtr, im1), Align(align_nb));
-        tbaa_decorate(tbaa_data, store);
+        tbaa_decorate(ctx.tbaa_cache.tbaa_data, store);
     }
     else if (!jl_isbits(ety)) {
         thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
@@ -686,7 +686,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-            typed_store(ctx, thePtr, im1, x, jl_cgval_t(), ety, tbaa_data, nullptr, nullptr, isboxed,
+            typed_store(ctx, thePtr, im1, x, jl_cgval_t(), ety, ctx.tbaa_cache.tbaa_data, nullptr, nullptr, isboxed,
                         AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, false, true, false, false, false, false, nullptr, "");
         }
     }
@@ -729,7 +729,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     if (ety == (jl_value_t*)jl_any_type) {
         Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
         LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, thePtr, Align(sizeof(jl_value_t*)));
-        tbaa_decorate(tbaa_data, load);
+        tbaa_decorate(ctx.tbaa_cache.tbaa_data, load);
         load->setOrdering(llvm_order);
         return mark_julia_type(ctx, load, true, ety);
     }
@@ -753,7 +753,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
         Type *loadT = Type::getIntNTy(ctx.builder.getContext(), nb * 8);
         thePtr = emit_bitcast(ctx, thePtr, loadT->getPointerTo());
-        MDNode *tbaa = best_tbaa(ety);
+        MDNode *tbaa = best_tbaa(ctx.tbaa_cache, ety);
         LoadInst *load = ctx.builder.CreateAlignedLoad(loadT, thePtr, Align(nb));
         tbaa_decorate(tbaa, load);
         load->setOrdering(llvm_order);
@@ -768,7 +768,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-            return typed_load(ctx, thePtr, nullptr, ety, tbaa_data, nullptr, isboxed, llvm_order, true, nb);
+            return typed_load(ctx, thePtr, nullptr, ety, ctx.tbaa_cache.tbaa_data, nullptr, isboxed, llvm_order, true, nb);
         }
         else {
             if (order > jl_memory_order_monotonic)
@@ -819,7 +819,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
         // n.b.: the expected value (y) must be rooted, but not the others
         Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
         bool isboxed = true;
-        jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, tbaa_data, nullptr, nullptr, isboxed,
+        jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, ctx.tbaa_cache.tbaa_data, nullptr, nullptr, isboxed,
                     llvm_order, llvm_failorder, sizeof(jl_value_t*), false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, modifyop, "atomic_pointermodify");
         if (issetfield)
             ret = e;
@@ -853,7 +853,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
         Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-        jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, tbaa_data, nullptr, nullptr, isboxed,
+        jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, ctx.tbaa_cache.tbaa_data, nullptr, nullptr, isboxed,
                     llvm_order, llvm_failorder, nb, false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, modifyop, "atomic_pointermodify");
         if (issetfield)
             ret = e;
@@ -973,7 +973,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 y_vboxed = boxed(ctx, y);
             if (!x_ptr && !y_ptr) { // both ghost
                 ifelse_result = NULL;
-                ifelse_tbaa = tbaa_stack;
+                ifelse_tbaa = ctx.tbaa_cache.tbaa_stack;
             }
             else if (!x_ptr) {
                 ifelse_result = y_ptr;
@@ -993,7 +993,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 if (ifelse_tbaa == NULL) {
                     // LLVM won't return a TBAA result for the root, but mark_julia_struct requires it: make it now
                     auto *OffsetNode = ConstantAsMetadata::get(ConstantInt::get(T_int64, 0));
-                    Metadata *Ops[] = {tbaa_root, tbaa_root, OffsetNode};
+                    Metadata *Ops[] = {ctx.tbaa_cache.tbaa_root, ctx.tbaa_cache.tbaa_root, OffsetNode};
                     ifelse_tbaa = MDNode::get(ctx.builder.getContext(), Ops);
                 }
             }

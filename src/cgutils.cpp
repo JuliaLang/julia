@@ -388,7 +388,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
     if (!imaging_mode)
         return literal_static_pointer_val(p);
     Value *pgv = literal_pointer_val_slot(ctx, p);
-    return tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(
+    return tbaa_decorate(ctx.tbaa_cache.tbaa_const, maybe_mark_load_dereferenceable(
             ctx.builder.CreateAlignedLoad(T_pjlvalue, pgv, Align(sizeof(void*))),
             false, jl_typeof(p)));
 }
@@ -403,7 +403,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
         return literal_static_pointer_val(p);
     // bindings are prefixed with jl_bnd#
     Value *pgv = julia_pgv(ctx, "jl_bnd#", p->name, p->owner, p);
-    return tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(
+    return tbaa_decorate(ctx.tbaa_cache.tbaa_const, maybe_mark_load_dereferenceable(
             ctx.builder.CreateAlignedLoad(T_pjlvalue, pgv, Align(sizeof(void*))),
             false, sizeof(jl_binding_t), alignof(jl_binding_t)));
 }
@@ -443,7 +443,7 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
     Value *bv;
     if (imaging_mode)
         bv = emit_bitcast(ctx,
-                tbaa_decorate(tbaa_const,
+                tbaa_decorate(ctx.tbaa_cache.tbaa_const,
                               ctx.builder.CreateAlignedLoad(T_pjlvalue, julia_pgv(ctx, "*", b->name, b->owner, b), Align(sizeof(void*)))),
                 T_pprjlvalue);
     else
@@ -857,7 +857,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
         auto emit_unboxty = [&] () -> Value* {
             if (imaging_mode)
                 return track_pjlvalue(
-                    ctx, tbaa_decorate(tbaa_const, ctx.builder.CreateAlignedLoad(T_pjlvalue, datatype_or_p, Align(sizeof(void*)))));
+                    ctx, tbaa_decorate(ctx.tbaa_cache.tbaa_const, ctx.builder.CreateAlignedLoad(T_pjlvalue, datatype_or_p, Align(sizeof(void*)))));
             return datatype_or_p;
         };
         Value *res;
@@ -899,21 +899,21 @@ static Value *emit_datatype_types(jl_codectx_t &ctx, Value *dt)
 {
     Value *Ptr = emit_bitcast(ctx, decay_derived(ctx, dt), T_ppjlvalue);
     Value *Idx = ConstantInt::get(T_size, offsetof(jl_datatype_t, types) / sizeof(void*));
-    return tbaa_decorate(tbaa_const, ctx.builder.CreateAlignedLoad(
+    return tbaa_decorate(ctx.tbaa_cache.tbaa_const, ctx.builder.CreateAlignedLoad(
                 T_pjlvalue, ctx.builder.CreateInBoundsGEP(T_pjlvalue, Ptr, Idx), Align(sizeof(void*))));
 }
 
 static Value *emit_datatype_nfields(jl_codectx_t &ctx, Value *dt)
 {
     Value *type_svec = emit_bitcast(ctx, emit_datatype_types(ctx, dt), T_psize);
-    return tbaa_decorate(tbaa_const, ctx.builder.CreateAlignedLoad(T_size, type_svec, Align(sizeof(void*))));
+    return tbaa_decorate(ctx.tbaa_cache.tbaa_const, ctx.builder.CreateAlignedLoad(T_size, type_svec, Align(sizeof(void*))));
 }
 
 static Value *emit_datatype_size(jl_codectx_t &ctx, Value *dt)
 {
     Value *Ptr = emit_bitcast(ctx, decay_derived(ctx, dt), T_pint32);
     Value *Idx = ConstantInt::get(T_size, offsetof(jl_datatype_t, size) / sizeof(int));
-    return tbaa_decorate(tbaa_const, ctx.builder.CreateAlignedLoad(T_int32, ctx.builder.CreateInBoundsGEP(T_int32, Ptr, Idx), Align(sizeof(int32_t))));
+    return tbaa_decorate(ctx.tbaa_cache.tbaa_const, ctx.builder.CreateAlignedLoad(T_int32, ctx.builder.CreateInBoundsGEP(T_int32, Ptr, Idx), Align(sizeof(int32_t))));
 }
 
 /* this is valid code, it's simply unused
@@ -970,10 +970,10 @@ static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
 {
     Value *Ptr = emit_bitcast(ctx, decay_derived(ctx, dt), T_ppint8);
     Value *Idx = ConstantInt::get(T_size, offsetof(jl_datatype_t, name));
-    Value *Nam = tbaa_decorate(tbaa_const,
+    Value *Nam = tbaa_decorate(ctx.tbaa_cache.tbaa_const,
             ctx.builder.CreateAlignedLoad(T_pint8, ctx.builder.CreateInBoundsGEP(T_pint8, Ptr, Idx), Align(sizeof(int8_t*))));
     Value *Idx2 = ConstantInt::get(T_size, offsetof(jl_typename_t, n_uninitialized) + sizeof(((jl_typename_t*)nullptr)->n_uninitialized));
-    Value *mutabl = tbaa_decorate(tbaa_const,
+    Value *mutabl = tbaa_decorate(ctx.tbaa_cache.tbaa_const,
             ctx.builder.CreateAlignedLoad(T_int8, ctx.builder.CreateInBoundsGEP(T_int8, Nam, Idx2), Align(1)));
     mutabl = ctx.builder.CreateLShr(mutabl, 1);
     return ctx.builder.CreateTrunc(mutabl, T_int1);
@@ -990,7 +990,7 @@ static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *dt)
 static Value *emit_datatype_name(jl_codectx_t &ctx, Value *dt)
 {
     Value *vptr = emit_nthptr_addr(ctx, dt, (ssize_t)(offsetof(jl_datatype_t, name) / sizeof(char*)));
-    return tbaa_decorate(tbaa_const, ctx.builder.CreateAlignedLoad(T_prjlvalue, vptr, Align(sizeof(void*))));
+    return tbaa_decorate(ctx.tbaa_cache.tbaa_const, ctx.builder.CreateAlignedLoad(T_prjlvalue, vptr, Align(sizeof(void*))));
 }
 
 // --- generating various error checks ---
@@ -1333,7 +1333,7 @@ static Value *emit_isconcrete(jl_codectx_t &ctx, Value *typ)
 {
     Value *isconcrete;
     isconcrete = ctx.builder.CreateConstInBoundsGEP1_32(T_int8, emit_bitcast(ctx, decay_derived(ctx, typ), T_pint8), offsetof(jl_datatype_t, hash) + sizeof(((jl_datatype_t*)nullptr)->hash));
-    isconcrete = tbaa_decorate(tbaa_const, ctx.builder.CreateAlignedLoad(T_int8, isconcrete, Align(1)));
+    isconcrete = tbaa_decorate(ctx.tbaa_cache.tbaa_const, ctx.builder.CreateAlignedLoad(T_int8, isconcrete, Align(1)));
     isconcrete = ctx.builder.CreateLShr(isconcrete, 1);
     isconcrete = ctx.builder.CreateTrunc(isconcrete, T_int1);
     return isconcrete;
@@ -1500,7 +1500,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         data = ctx.builder.CreateInBoundsGEP(elty, data, idx_0based);
     Value *instr;
     // TODO: can only lazy load if we can create a gc root for ptr for the lifetime of elt
-    //if (elty->isAggregateType() && tbaa == tbaa_immut && !alignment) { // can lazy load on demand, no copy needed
+    //if (elty->isAggregateType() && tbaa == ctx.tbaa_cache.tbaa_immut && !alignment) { // can lazy load on demand, no copy needed
     //    elt = data;
     //}
     //else {
@@ -1746,7 +1746,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     null_pointer_check(ctx, first_ptr, nullptr);
             }
             if (intcast)
-                oldval = mark_julia_slot(intcast, jltype, NULL, tbaa_stack);
+                oldval = mark_julia_slot(intcast, jltype, NULL, ctx.tbaa_cache.tbaa_stack);
             else
                 oldval = mark_julia_type(ctx, realCompare, isboxed, jltype);
             rhs = newval(oldval);
@@ -1816,7 +1816,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     realinstr = ctx.builder.CreateTrunc(realinstr, realelty);
                 if (intcast) {
                     ctx.builder.CreateStore(realinstr, ctx.builder.CreateBitCast(intcast, realinstr->getType()->getPointerTo()));
-                    oldval = mark_julia_slot(intcast, jltype, NULL, tbaa_stack);
+                    oldval = mark_julia_slot(intcast, jltype, NULL, ctx.tbaa_cache.tbaa_stack);
                     if (maybe_null_if_boxed)
                         realinstr = ctx.builder.CreateLoad(intcast->getAllocatedType(), intcast);
                 }
@@ -1968,9 +1968,9 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
         }
     }
     // the memcpy intrinsic does not allow to specify different alias tags
-    // for the load part (x.tbaa) and the store part (tbaa_stack).
+    // for the load part (x.tbaa) and the store part (ctx.tbaa_cache.tbaa_stack).
     // since the tbaa lattice has to be a tree we have unfortunately
-    // x.tbaa ∪ tbaa_stack = tbaa_root if x.tbaa != tbaa_stack
+    // x.tbaa ∪ ctx.tbaa_cache.tbaa_stack = tbaa_root if x.tbaa != ctx.tbaa_cache.tbaa_stack
     ctx.builder.CreateMemCpy(dst, MaybeAlign(align), src, MaybeAlign(0), sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
 }
 
@@ -2199,8 +2199,8 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     bool maybe_null = idx >= nfields - (unsigned)jt->name->n_uninitialized;
     size_t byte_offset = jl_field_offset(jt, idx);
     auto tbaa = strct.tbaa;
-    if (tbaa == tbaa_datatype && byte_offset != offsetof(jl_datatype_t, types))
-        tbaa = tbaa_const;
+    if (tbaa == ctx.tbaa_cache.tbaa_datatype && byte_offset != offsetof(jl_datatype_t, types))
+        tbaa = ctx.tbaa_cache.tbaa_const;
     if (strct.ispointer()) {
         Value *staddr = maybe_decay_tracked(ctx, data_pointer(ctx, strct));
         bool isboxed;
@@ -2251,7 +2251,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             else {
                 ptindex = emit_struct_gep(ctx, cast<StructType>(lt), staddr, byte_offset + fsz);
             }
-            return emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, !jl_field_isconst(jt, idx), union_max, tbaa_unionselbyte);
+            return emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, !jl_field_isconst(jt, idx), union_max, ctx.tbaa_cache.tbaa_unionselbyte);
         }
         assert(jl_is_concrete_type(jfty));
         if (jl_field_isconst(jt, idx) && !(maybe_null && (jfty == (jl_value_t*)jl_bool_type ||
@@ -2314,7 +2314,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             }
             Value *tindex0 = ctx.builder.CreateExtractValue(obj, makeArrayRef(ptindex));
             Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), tindex0);
-            return mark_julia_slot(lv, jfty, tindex, tbaa_stack);
+            return mark_julia_slot(lv, jfty, tindex, ctx.tbaa_cache.tbaa_stack);
         }
         else {
             unsigned st_idx;
@@ -2408,7 +2408,7 @@ static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo);
 static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *dim)
 {
     size_t ndim;
-    MDNode *tbaa = tbaa_arraysize;
+    MDNode *tbaa = ctx.tbaa_cache.tbaa_arraysize;
     if (arraytype_constdim(tinfo.typ, &ndim)) {
         if (ndim == 0)
             return ConstantInt::get(T_size, 1);
@@ -2424,7 +2424,7 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *
                 auto n = cast<ConstantInt>(dim)->getZExtValue() - 1;
                 return ConstantInt::get(T_size, jl_array_dim(tinfo.constant, n));
             }
-            tbaa = tbaa_const;
+            tbaa = ctx.tbaa_cache.tbaa_const;
         }
     }
     Value *t = boxed(ctx, tinfo);
@@ -2453,14 +2453,14 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
     size_t ndim;
     jl_value_t *ty = tinfo.typ;
-    MDNode *tbaa = tbaa_arraylen;
+    MDNode *tbaa = ctx.tbaa_cache.tbaa_arraylen;
     if (arraytype_constdim(ty, &ndim)) {
         if (ndim == 0)
             return ConstantInt::get(T_size, 1);
         if (ndim != 1) {
             if (tinfo.constant)
                 return ConstantInt::get(T_size, jl_array_len(tinfo.constant));
-            tbaa = tbaa_const;
+            tbaa = ctx.tbaa_cache.tbaa_const;
         }
     }
     Value *t = boxed(ctx, tinfo);
@@ -2504,7 +2504,7 @@ static Value *emit_arrayptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo,
     LoadInst *LI = ctx.builder.CreateAlignedLoad(LoadT, addr, Align(sizeof(char *)));
     LI->setOrdering(AtomicOrdering::NotAtomic);
     LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), None));
-    tbaa_decorate(arraytype_constshape(tinfo.typ) ? tbaa_const : tbaa_arrayptr, LI);
+    tbaa_decorate(arraytype_constshape(tinfo.typ) ? ctx.tbaa_cache.tbaa_const : ctx.tbaa_cache.tbaa_arrayptr, LI);
     return LI;
 }
 
@@ -2539,7 +2539,7 @@ static Value *emit_arrayflags(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
             jl_array_llvmt,
             emit_bitcast(ctx, decay_derived(ctx, t), jl_parray_llvmt),
             arrayflag_field);
-    return tbaa_decorate(tbaa_arrayflags, ctx.builder.CreateAlignedLoad(T_int16, addr, Align(sizeof(int16_t))));
+    return tbaa_decorate(ctx.tbaa_cache.tbaa_arrayflags, ctx.builder.CreateAlignedLoad(T_int16, addr, Align(sizeof(int16_t))));
 }
 
 static Value *emit_arrayndims(jl_codectx_t &ctx, const jl_cgval_t &ary)
@@ -2558,7 +2558,7 @@ static Value *emit_arrayelsize(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     Value *addr = ctx.builder.CreateStructGEP(jl_array_llvmt,
             emit_bitcast(ctx, decay_derived(ctx, t), jl_parray_llvmt),
             elsize_field);
-    return tbaa_decorate(tbaa_const, ctx.builder.CreateAlignedLoad(T_int16, addr, Align(sizeof(int16_t))));
+    return tbaa_decorate(ctx.tbaa_cache.tbaa_const, ctx.builder.CreateAlignedLoad(T_int16, addr, Align(sizeof(int16_t))));
 }
 
 static Value *emit_arrayoffset(jl_codectx_t &ctx, const jl_cgval_t &tinfo, int nd)
@@ -2572,7 +2572,7 @@ static Value *emit_arrayoffset(jl_codectx_t &ctx, const jl_cgval_t &tinfo, int n
             jl_array_llvmt,
             emit_bitcast(ctx, decay_derived(ctx, t), jl_parray_llvmt),
             offset_field);
-    return tbaa_decorate(tbaa_arrayoffset, ctx.builder.CreateAlignedLoad(T_int32, addr, Align(sizeof(int32_t))));
+    return tbaa_decorate(ctx.tbaa_cache.tbaa_arrayoffset, ctx.builder.CreateAlignedLoad(T_int32, addr, Align(sizeof(int32_t))));
 }
 
 // Returns the size of the array represented by `tinfo` for the given dimension `dim` if
@@ -2801,7 +2801,7 @@ static Value *load_i8box(jl_codectx_t &ctx, Value *v, jl_datatype_t *ty)
     GlobalVariable *gv = prepare_global_in(jl_Module, jvar);
     Value *idx[] = {ConstantInt::get(T_int32, 0), ctx.builder.CreateZExt(v, T_int32)};
     auto slot = ctx.builder.CreateInBoundsGEP(gv->getType()->getElementType(), gv, idx);
-    return tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(
+    return tbaa_decorate(ctx.tbaa_cache.tbaa_const, maybe_mark_load_dereferenceable(
             ctx.builder.CreateAlignedLoad(T_pjlvalue, slot, Align(sizeof(void*))), false,
             (jl_value_t*)ty));
 }
@@ -3012,7 +3012,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
                     box = _boxed_special(ctx, vinfo_r, t);
                     if (!box) {
                         box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
-                        init_bits_cgval(ctx, box, vinfo_r, jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut);
+                        init_bits_cgval(ctx, box, vinfo_r, jl_is_mutable(jt) ? ctx.tbaa_cache.tbaa_mutab : ctx.tbaa_cache.tbaa_immut);
                     }
                 }
                 tempBB = ctx.builder.GetInsertBlock(); // could have changed
@@ -3076,7 +3076,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
         box = _boxed_special(ctx, vinfo, t);
         if (!box) {
             box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
-            init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut);
+            init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa_cache.tbaa_mutab : ctx.tbaa_cache.tbaa_immut);
         }
     }
     return box;
@@ -3299,7 +3299,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         }
         jl_cgval_t oldval = rhs;
         if (!issetfield)
-            oldval = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, strct.tbaa, true, union_max, tbaa_unionselbyte);
+            oldval = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, strct.tbaa, true, union_max, ctx.tbaa_cache.tbaa_unionselbyte);
         Value *Success = NULL;
         BasicBlock *DoneBB = NULL;
         if (isreplacefield || ismodifyfield) {
@@ -3324,7 +3324,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
                 if (needlock)
                     emit_lockstate_value(ctx, strct, true);
                 cmp = oldval;
-                oldval = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, strct.tbaa, true, union_max, tbaa_unionselbyte);
+                oldval = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, strct.tbaa, true, union_max, ctx.tbaa_cache.tbaa_unionselbyte);
             }
             BasicBlock *XchgBB = BasicBlock::Create(ctx.builder.getContext(), "xchg", ctx.f);
             DoneBB = BasicBlock::Create(ctx.builder.getContext(), "done_xchg", ctx.f);
@@ -3334,7 +3334,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         }
         Value *tindex = compute_tindex_unboxed(ctx, rhs_union, jfty);
         tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
-        tbaa_decorate(tbaa_unionselbyte, ctx.builder.CreateAlignedStore(tindex, ptindex, Align(1)));
+        tbaa_decorate(ctx.tbaa_cache.tbaa_unionselbyte, ctx.builder.CreateAlignedStore(tindex, ptindex, Align(1)));
         // copy data
         if (!rhs.isghost) {
             emit_unionmove(ctx, addr, strct.tbaa, rhs, nullptr);
@@ -3405,7 +3405,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             else {
                 strct = emit_static_alloca(ctx, lt);
                 if (tracked.count)
-                    undef_derived_strct(ctx.builder, strct, sty, tbaa_stack);
+                    undef_derived_strct(ctx.builder, strct, sty, ctx.tbaa_cache.tbaa_stack);
             }
 
             for (unsigned i = 0; i < na; i++) {
@@ -3430,7 +3430,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (jl_field_isptr(sty, i)) {
                     fval = boxed(ctx, fval_info);
                     if (!init_as_value)
-                        cast<StoreInst>(tbaa_decorate(tbaa_stack,
+                        cast<StoreInst>(tbaa_decorate(ctx.tbaa_cache.tbaa_stack,
                                     ctx.builder.CreateAlignedStore(fval, dest, Align(jl_field_align(sty, i)))))
                                 ->setOrdering(AtomicOrdering::Unordered);
                 }
@@ -3455,12 +3455,12 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                             assert(lt->getStructElementType(llvm_idx) == ET);
                             AllocaInst *lv = emit_static_alloca(ctx, ET);
                             lv->setOperand(0, ConstantInt::get(T_int32, (fsz + al - 1) / al));
-                            emit_unionmove(ctx, lv, tbaa_stack, fval_info, nullptr);
+                            emit_unionmove(ctx, lv, ctx.tbaa_cache.tbaa_stack, fval_info, nullptr);
                             // emit all of the align-sized words
                             unsigned i = 0;
                             for (; i < fsz / al; i++) {
                                 Value *fldp = ctx.builder.CreateConstInBoundsGEP1_32(ET, lv, i);
-                                Value *fldv = tbaa_decorate(tbaa_stack, ctx.builder.CreateAlignedLoad(ET, fldp, Align(al)));
+                                Value *fldv = tbaa_decorate(ctx.tbaa_cache.tbaa_stack, ctx.builder.CreateAlignedLoad(ET, fldp, Align(al)));
                                 strct = ctx.builder.CreateInsertValue(strct, fldv, makeArrayRef(llvm_idx + i));
                             }
                             // emit remaining bytes up to tindex
@@ -3469,7 +3469,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                                 staddr = ctx.builder.CreateBitCast(staddr, T_pint8);
                                 for (; i < ptindex - llvm_idx; i++) {
                                     Value *fldp = ctx.builder.CreateConstInBoundsGEP1_32(T_int8, staddr, i);
-                                    Value *fldv = tbaa_decorate(tbaa_stack, ctx.builder.CreateAlignedLoad(T_int8, fldp, Align(1)));
+                                    Value *fldv = tbaa_decorate(ctx.tbaa_cache.tbaa_stack, ctx.builder.CreateAlignedLoad(T_int8, fldp, Align(1)));
                                     strct = ctx.builder.CreateInsertValue(strct, fldv, makeArrayRef(llvm_idx + i));
                                 }
                             }
@@ -3481,13 +3481,13 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     }
                     else {
                         Value *ptindex = emit_struct_gep(ctx, lt, strct, offs + fsz);
-                        tbaa_decorate(tbaa_unionselbyte, ctx.builder.CreateAlignedStore(tindex, ptindex, Align(1)));
+                        tbaa_decorate(ctx.tbaa_cache.tbaa_unionselbyte, ctx.builder.CreateAlignedStore(tindex, ptindex, Align(1)));
                         if (!rhs_union.isghost)
-                            emit_unionmove(ctx, dest, tbaa_stack, fval_info, nullptr);
+                            emit_unionmove(ctx, dest, ctx.tbaa_cache.tbaa_stack, fval_info, nullptr);
                     }
                 }
                 else {
-                    fval = emit_unbox(ctx, fty, fval_info, jtype, dest, tbaa_stack);
+                    fval = emit_unbox(ctx, fty, fval_info, jtype, dest, ctx.tbaa_cache.tbaa_stack);
                 }
                 if (init_as_value) {
                     assert(fval);
@@ -3509,7 +3509,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     if (init_as_value)
                         strct = ctx.builder.CreateInsertValue(strct, ConstantInt::get(T_int8, 0), makeArrayRef(llvm_idx));
                     else
-                        tbaa_decorate(tbaa_unionselbyte, ctx.builder.CreateAlignedStore(
+                        tbaa_decorate(ctx.tbaa_cache.tbaa_unionselbyte, ctx.builder.CreateAlignedStore(
                                 ConstantInt::get(T_int8, 0),
                                 ctx.builder.CreateConstInBoundsGEP2_32(lt, strct, 0, llvm_idx),
                                 Align(1)));
@@ -3520,7 +3520,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             else if (init_as_value)
                 return mark_julia_type(ctx, strct, false, ty);
             else
-                return mark_julia_slot(strct, ty, NULL, tbaa_stack);
+                return mark_julia_slot(strct, ty, NULL, ctx.tbaa_cache.tbaa_stack);
         }
         Value *strct = emit_allocobj(ctx, jl_datatype_size(sty),
                                      literal_pointer_val(ctx, (jl_value_t*)ty));
@@ -3529,7 +3529,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         undef_derived_strct(ctx.builder, strct, sty, strctinfo.tbaa);
         for (size_t i = nargs; i < nf; i++) {
             if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
-                tbaa_decorate(tbaa_unionselbyte, ctx.builder.CreateAlignedStore(
+                tbaa_decorate(ctx.tbaa_cache.tbaa_unionselbyte, ctx.builder.CreateAlignedStore(
                         ConstantInt::get(T_int8, 0),
                         ctx.builder.CreateInBoundsGEP(T_int8, emit_bitcast(ctx, strct, T_pint8),
                                 ConstantInt::get(T_size, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1)),

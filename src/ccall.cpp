@@ -939,7 +939,7 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
     // XXX: need to handle parameterized zero-byte types (singleton)
     const DataLayout &DL = jl_data_layout;
     unsigned nb = DL.getTypeStoreSize(result->getType());
-    MDNode *tbaa = jl_is_mutable(rt) ? tbaa_mutab : tbaa_immut;
+    MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa_cache.tbaa_mutab : ctx.tbaa_cache.tbaa_immut;
     Value *strct = emit_allocobj(ctx, nb, runtime_dt);
     init_bits_value(ctx, strct, result, tbaa);
     return strct;
@@ -1484,7 +1484,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         const int tid_offset = offsetof(jl_task_t, tid);
         Value *ptid = ctx.builder.CreateInBoundsGEP(T_int16, ptask_i16, ConstantInt::get(T_size, tid_offset / sizeof(int16_t)));
         LoadInst *tid = ctx.builder.CreateAlignedLoad(T_int16, ptid, Align(sizeof(int16_t)));
-        tbaa_decorate(tbaa_gcframe, tid);
+        tbaa_decorate(ctx.tbaa_cache.tbaa_gcframe, tid);
         return mark_or_box_ccall_result(ctx, tid, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_gc_disable_finalizers_internal)
@@ -1583,7 +1583,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             // Only mark with TBAA if we are sure about the type.
             // This could otherwise be in a dead branch
             if (svecv.typ == (jl_value_t*)jl_simplevector_type)
-                tbaa_decorate(tbaa_const, cast<Instruction>(len));
+                tbaa_decorate(ctx.tbaa_cache.tbaa_const, cast<Instruction>(len));
             MDBuilder MDB(ctx.builder.getContext());
             auto rng = MDB.createRange(
                 Constant::getNullValue(T_size), ConstantInt::get(T_size, INTPTR_MAX / sizeof(void*) - 1));
@@ -1608,7 +1608,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         // Only mark with TBAA if we are sure about the type.
         // This could otherwise be in a dead branch
         if (svecv.typ == (jl_value_t*)jl_simplevector_type)
-            tbaa_decorate(tbaa_const, load);
+            tbaa_decorate(ctx.tbaa_cache.tbaa_const, load);
         Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, Constant::getNullValue(T_prjlvalue)), T_int8);
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, res, retboxed, rt, unionall, static_rt);
@@ -1629,7 +1629,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         // Only mark with TBAA if we are sure about the type.
         // This could otherwise be in a dead branch
         if (svecv.typ == (jl_value_t*)jl_simplevector_type)
-            tbaa_decorate(tbaa_const, load);
+            tbaa_decorate(ctx.tbaa_cache.tbaa_const, load);
         null_pointer_check(ctx, load);
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, load, retboxed, rt, unionall, static_rt);
@@ -1663,7 +1663,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 Value *slot_addr = ctx.builder.CreateInBoundsGEP(T_prjlvalue, arrayptr, idx);
                 LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, slot_addr, Align(sizeof(void*)));
                 load->setAtomic(AtomicOrdering::Unordered);
-                tbaa_decorate(tbaa_ptrarraybuf, load);
+                tbaa_decorate(ctx.tbaa_cache.tbaa_ptrarraybuf, load);
                 Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, Constant::getNullValue(T_prjlvalue)), T_int32);
                 JL_GC_POP();
                 return mark_or_box_ccall_result(ctx, res, retboxed, rt, unionall, static_rt);
@@ -1759,7 +1759,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             Value *ph1 = emit_bitcast(ctx, decay_derived(ctx, boxed(ctx, val)), T_psize);
             Value *ph2 = ctx.builder.CreateInBoundsGEP(T_size, ph1, ConstantInt::get(T_size, hash_offset / sizeof(size_t)));
             LoadInst *hashval = ctx.builder.CreateAlignedLoad(T_size, ph2, Align(sizeof(size_t)));
-            tbaa_decorate(tbaa_const, hashval);
+            tbaa_decorate(ctx.tbaa_cache.tbaa_const, hashval);
             return mark_or_box_ccall_result(ctx, hashval, retboxed, rt, unionall, static_rt);
         }
         else if (!val.isboxed) {
@@ -1982,7 +1982,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         if (!jlretboxed) {
             // something alloca'd above is SSA
             if (static_rt)
-                return mark_julia_slot(result, rt, NULL, tbaa_stack);
+                return mark_julia_slot(result, rt, NULL, ctx.tbaa_cache.tbaa_stack);
             result = ctx.builder.CreateLoad(cast<PointerType>(result->getType())->getElementType(), result);
         }
     }
@@ -2001,7 +2001,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 size_t rtsz = jl_datatype_size(rt);
                 assert(rtsz > 0);
                 Value *strct = emit_allocobj(ctx, rtsz, runtime_bt);
-                MDNode *tbaa = jl_is_mutable(rt) ? tbaa_mutab : tbaa_immut;
+                MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa_cache.tbaa_mutab : ctx.tbaa_cache.tbaa_immut;
                 int boxalign = julia_alignment(rt);
                 // copy the data from the return value to the new struct
                 const DataLayout &DL = jl_data_layout;
