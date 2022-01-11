@@ -133,7 +133,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
         else {
             jl_datatype_t *vecty = (jl_datatype_t*)jl_field_type(ty0, 0);
             assert(jl_is_datatype(vecty) && vecty->name == jl_vecelement_typename);
-            Type *ety = bitstype_to_llvm(jl_tparam0(vecty));
+            Type *ety = bitstype_to_llvm(jl_tparam0(vecty), ctx);
             Type *vty = FixedVectorType::get(ety, jl_datatype_nfields(ty0));
             return ArrayType::get(vty, hfa);
         }
