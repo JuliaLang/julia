@@ -823,6 +823,10 @@ precompile_test_harness("Issue #25971") do load_path
     chmod(sourcefile, 0o600)
     cachefile = Base.compilecache(Base.PkgId("Foo25971"))
     @test filemode(sourcefile) == filemode(cachefile)
+    chmod(sourcefile, 0o444)
+    cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+    # Check writable
+    @test touch(cachefile) == cachefile
 end
 
 precompile_test_harness("Issue #38312") do load_path
@@ -870,4 +874,48 @@ precompile_test_harness("Renamed Imports") do load_path
           """)
     Base.compilecache(Base.PkgId("RenameImports"))
     @test (@eval (using RenameImports; RenameImports.test())) isa Module
+end
+
+# issue #41872 (example from #38983)
+precompile_test_harness("No external edges") do load_path
+    write(joinpath(load_path, "NoExternalEdges.jl"),
+          """
+          module NoExternalEdges
+          bar(x::Int) = hcat(rand())
+          @inline bar() = hcat(rand())
+          bar(x::Float64) = bar()
+          foo1() = bar(1)
+          foo2() = bar(1.0)
+          foo3() = bar()
+          foo4() = hcat(rand())
+          precompile(foo1, ())
+          precompile(foo2, ())
+          precompile(foo3, ())
+          precompile(foo4, ())
+          end
+          """)
+    Base.compilecache(Base.PkgId("NoExternalEdges"))
+    @eval begin
+        using NoExternalEdges
+        @test only(methods(NoExternalEdges.foo1)).specializations[1].cache.max_world != 0
+        @test only(methods(NoExternalEdges.foo2)).specializations[1].cache.max_world != 0
+        @test only(methods(NoExternalEdges.foo3)).specializations[1].cache.max_world != 0
+        @test only(methods(NoExternalEdges.foo4)).specializations[1].cache.max_world != 0
+    end
+end
+
+@testset "issue 38149" begin
+    M = Module()
+    @eval M begin
+        @nospecialize
+        f(x, y) = x + y
+        f(x::Int, y) = 2x + y
+    end
+    precompile(M.f, (Int, Any))
+    precompile(M.f, (AbstractFloat, Any))
+    mis = map(methods(M.f)) do m
+        m.specializations[1]
+    end
+    @test any(mi -> mi.specTypes.parameters[2] === Any, mis)
+    @test all(mi -> isa(mi.cache, Core.CodeInstance), mis)
 end

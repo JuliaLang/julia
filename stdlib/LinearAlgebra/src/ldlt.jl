@@ -77,6 +77,9 @@ function getproperty(F::LDLt, d::Symbol)
     end
 end
 
+adjoint(F::LDLt{<:Real,<:SymTridiagonal}) = F
+adjoint(F::LDLt) = LDLt(copy(adjoint(F.data)))
+
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LDLt)
     summary(io, F); println(io)
     println(io, "L factor:")

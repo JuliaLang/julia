@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @propagate_inbounds, @_inline_meta
+using Base: @propagate_inbounds
 import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
@@ -210,6 +210,9 @@ similar(A::AdjOrTrans) = similar(A.parent, eltype(A), axes(A))
 similar(A::AdjOrTrans, ::Type{T}) where {T} = similar(A.parent, T, axes(A))
 similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent, T, dims)
 
+# AbstractMatrix{T} constructor for adjtrans vector: preserve wrapped type
+AbstractMatrix{T}(A::AdjOrTransAbsVec) where {T} = wrapperop(A)(AbstractVector{T}(A.parent))
+
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec{<:Number}) = parent(v)
@@ -224,7 +227,7 @@ _adjoint_hcat(avs::Union{Number,AdjointAbsVec}...) = adjoint(vcat(map(adjoint, a
 _transpose_hcat(tvs::Union{Number,TransposeAbsVec}...) = transpose(vcat(map(transpose, tvs)...))
 typed_hcat(::Type{T}, avs::Union{Number,AdjointAbsVec}...) where {T} = adjoint(typed_vcat(T, map(adjoint, avs)...))
 typed_hcat(::Type{T}, tvs::Union{Number,TransposeAbsVec}...) where {T} = transpose(typed_vcat(T, map(transpose, tvs)...))
-# otherwise-redundant definitions necessary to prevent hitting the concat methods in sparse/sparsevector.jl
+# otherwise-redundant definitions necessary to prevent hitting the concat methods in LinearAlgebra/special.jl
 hcat(avs::Adjoint{<:Any,<:Vector}...) = _adjoint_hcat(avs...)
 hcat(tvs::Transpose{<:Any,<:Vector}...) = _transpose_hcat(tvs...)
 hcat(avs::Adjoint{T,Vector{T}}...) where {T} = _adjoint_hcat(avs...)

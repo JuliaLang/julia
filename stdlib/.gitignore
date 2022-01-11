@@ -13,5 +13,9 @@
 /Tar
 /NetworkOptions-*
 /NetworkOptions
+/SuiteSparse-*
+/SuiteSparse
+/SHA-*
+/SHA
 /*_jll/StdlibArtifacts.toml
 /*/Manifest.toml

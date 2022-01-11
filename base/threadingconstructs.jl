@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-export threadid, nthreads, @threads
+export threadid, nthreads, @threads, @spawn
 
 """
     Threads.threadid()
@@ -29,7 +29,7 @@ function threading_run(func)
     for i = 1:n
         t = Task(func)
         t.sticky = true
-        ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, i-1)
+        ccall(:jl_set_task_tid, Cint, (Any, Cint), t, i-1)
         tasks[i] = t
         schedule(t)
     end

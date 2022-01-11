@@ -37,7 +37,7 @@ private:
     Function *queueRootFunc;
     Function *poolAllocFunc;
     Function *bigAllocFunc;
-    CallInst *ptlsStates;
+    Instruction *pgcstack;
 
     bool doInitialization(Module &M) override;
     bool doFinalization(Module &M) override;
@@ -60,13 +60,11 @@ private:
 
     // Lowers a `julia.queue_gc_root` intrinsic.
     Value *lowerQueueGCRoot(CallInst *target, Function &F);
-
-    Instruction *getPgcstack(Instruction *ptlsStates);
 };
 
 Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 1);
+    assert(target->arg_size() == 1);
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(0))->getLimitedValue(INT_MAX);
 
     // Create the GC frame.
@@ -98,7 +96,7 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
 
 void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 2);
+    assert(target->arg_size() == 2);
     auto gcframe = target->getArgOperand(0);
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(1))->getLimitedValue(INT_MAX);
 
@@ -111,9 +109,8 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
                         T_size->getPointerTo()),
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    Value *pgcstack = builder.Insert(getPgcstack(ptlsStates));
     inst = builder.CreateAlignedStore(
-            builder.CreateAlignedLoad(pgcstack, Align(sizeof(void*))),
+            builder.CreateAlignedLoad(T_ppjlvalue, pgcstack, Align(sizeof(void*))),
             builder.CreatePointerCast(
                     builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1),
                     PointerType::get(T_ppjlvalue, 0)),
@@ -127,19 +124,18 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
 
 void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 1);
+    assert(target->arg_size() == 1);
     auto gcframe = target->getArgOperand(0);
 
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(target);
     Instruction *gcpop =
         cast<Instruction>(builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1));
-    Instruction *inst = builder.CreateAlignedLoad(gcpop, Align(sizeof(void*)));
+    Instruction *inst = builder.CreateAlignedLoad(T_prjlvalue, gcpop, Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
         inst,
-        builder.CreateBitCast(
-            builder.Insert(getPgcstack(ptlsStates)),
+        builder.CreateBitCast(pgcstack,
             PointerType::get(T_prjlvalue, 0)),
         Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -147,7 +143,7 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
 
 Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 2);
+    assert(target->arg_size() == 2);
     auto gcframe = target->getArgOperand(0);
     auto index = target->getArgOperand(1);
 
@@ -166,24 +162,14 @@ Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
 
 Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 1);
+    assert(target->arg_size() == 1);
     target->setCalledFunction(queueRootFunc);
     return target;
 }
 
-Instruction *FinalLowerGC::getPgcstack(Instruction *ptlsStates)
-{
-    Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
-    return GetElementPtrInst::CreateInBounds(
-        T_ppjlvalue,
-        ptlsStates,
-        ArrayRef<Value*>(offset),
-        "jl_pgcstack");
-}
-
 Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 2);
+    assert(target->arg_size() == 2);
     auto sz = (size_t)cast<ConstantInt>(target->getArgOperand(1))->getZExtValue();
     // This is strongly architecture and OS dependent
     int osize;
@@ -232,16 +218,17 @@ bool FinalLowerGC::doInitialization(Module &M) {
 
 bool FinalLowerGC::doFinalization(Module &M)
 {
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
+    queueRootFunc = poolAllocFunc = bigAllocFunc = nullptr;
     auto used = M.getGlobalVariable("llvm.compiler.used");
     if (!used)
         return false;
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
     SmallPtrSet<Constant*, 16> InitAsSet(
         functionList,
         functionList + sizeof(functionList) / sizeof(void*));
     bool changed = false;
     SmallVector<Constant*, 16> init;
-    ConstantArray *CA = dyn_cast<ConstantArray>(used->getInitializer());
+    ConstantArray *CA = cast<ConstantArray>(used->getInitializer());
     for (auto &Op : CA->operands()) {
         Constant *C = cast_or_null<Constant>(Op);
         if (InitAsSet.count(C->stripPointerCasts())) {
@@ -282,13 +269,13 @@ bool FinalLowerGC::runOnFunction(Function &F)
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!ptls_getter)
-        return true;
+    if (!pgcstack_getter)
+        return false;
 
-    // Look for a call to 'julia.ptls_states'.
-    ptlsStates = getPtls(F);
-    if (!ptlsStates)
-        return true;
+    // Look for a call to 'julia.get_pgcstack'.
+    pgcstack = getPGCstack(F);
+    if (!pgcstack)
+        return false;
 
     // Acquire intrinsic functions.
     auto newGCFrameFunc = getOrNull(jl_intrinsics::newGCFrame);
@@ -346,7 +333,7 @@ Pass *createFinalLowerGCPass()
     return new FinalLowerGC();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createFinalLowerGCPass());
 }

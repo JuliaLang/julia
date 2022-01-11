@@ -1,7 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// Except for parts of this file which were copied from LLVM, under the UIUC license (marked below).
-
 #include "llvm-version.h"
 #include "platform.h"
 
@@ -12,10 +10,17 @@
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
+#if JL_LLVM_VERSION >= 130000
+#include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
+#endif
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
+#if JL_LLVM_VERSION >= 140000
+#include <llvm/MC/TargetRegistry.h>
+#else
 #include <llvm/Support/TargetRegistry.h>
+#endif
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -36,13 +41,13 @@ void jl_init_jit(void) { }
 // Snooping on which functions are being compiled, and how long it takes
 JL_STREAM *dump_compiles_stream = NULL;
 extern "C" JL_DLLEXPORT
-void jl_dump_compiles(void *s)
+void jl_dump_compiles_impl(void *s)
 {
     dump_compiles_stream = (JL_STREAM*)s;
 }
 JL_STREAM *dump_llvm_opt_stream = NULL;
 extern "C" JL_DLLEXPORT
-void jl_dump_llvm_opt(void *s)
+void jl_dump_llvm_opt_impl(void *s)
 {
     dump_llvm_opt_stream = (JL_STREAM*)s;
 }
@@ -75,21 +80,6 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
     }
 }
 
-extern "C" JL_DLLEXPORT
-uint64_t jl_cumulative_compile_time_ns_before()
-{
-    int tid = jl_threadid();
-    jl_measure_compile_time[tid] = 1;
-    return jl_cumulative_compile_time[tid];
-}
-extern "C" JL_DLLEXPORT
-uint64_t jl_cumulative_compile_time_ns_after()
-{
-    int tid = jl_threadid();
-    jl_measure_compile_time[tid] = 0;
-    return jl_cumulative_compile_time[tid];
-}
-
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module),
@@ -99,10 +89,6 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_code_info_t *src,
         size_t world)
 {
-    // TODO: Merge with jl_dump_compiles?
-    static ios_t f_precompile;
-    static JL_STREAM* s_precompile = NULL;
-
     // caller must hold codegen_lock
     // and have disabled finalizers
     uint64_t start_time = 0;
@@ -162,10 +148,10 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_callptr_t addr;
         bool isspecsig = false;
         if (decls.functionObject == "jl_fptr_args") {
-            addr = &jl_fptr_args;
+            addr = jl_fptr_args_addr;
         }
         else if (decls.functionObject == "jl_fptr_sparam") {
-            addr = &jl_fptr_sparam;
+            addr = jl_fptr_sparam_addr;
         }
         else {
             addr = (jl_callptr_t)getAddressForFunction(decls.functionObject);
@@ -175,14 +161,14 @@ static jl_callptr_t _jl_compile_codeinst(
             // once set, don't change invoke-ptr, as that leads to race conditions
             // with the (not) simultaneous updates to invoke and specptr
             if (!decls.specFunctionObject.empty()) {
-                this_code->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
+                jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
                 this_code->isspecsig = isspecsig;
             }
             jl_atomic_store_release(&this_code->invoke, addr);
         }
-        else if (this_code->invoke == jl_fptr_const_return && !decls.specFunctionObject.empty()) {
-            // hack to export this pointer value to jl_dump_method_asm
-            this_code->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
+        else if (this_code->invoke == jl_fptr_const_return_addr && !decls.specFunctionObject.empty()) {
+            // hack to export this pointer value to jl_dump_method_disasm
+            jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
         }
         if (this_code== codeinst)
             fptr = addr;
@@ -196,26 +182,6 @@ static jl_callptr_t _jl_compile_codeinst(
     // then dump the method-instance specialization type to the stream
     jl_method_instance_t *mi = codeinst->def;
     if (jl_is_method(mi->def.method)) {
-        if (jl_options.trace_compile != NULL) {
-            if (s_precompile == NULL) {
-                const char* t = jl_options.trace_compile;
-                if (!strncmp(t, "stderr", 6))
-                    s_precompile = JL_STDERR;
-                else {
-                    if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
-                        jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
-                    s_precompile = (JL_STREAM*) &f_precompile;
-                }
-            }
-            if (!jl_has_free_typevars(mi->specTypes)) {
-                jl_printf(s_precompile, "precompile(");
-                jl_static_show(s_precompile, mi->specTypes);
-                jl_printf(s_precompile, ")\n");
-
-                if (s_precompile != JL_STDERR)
-                    ios_flush(&f_precompile);
-            }
-        }
         if (dump_compiles_stream != NULL) {
             jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", end_time - start_time);
             jl_static_show(dump_compiles_stream, mi->specTypes);
@@ -228,13 +194,13 @@ static jl_callptr_t _jl_compile_codeinst(
 const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
 // compile a C-callable alias
-extern "C"
-int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+extern "C" JL_DLLEXPORT
+int jl_compile_extern_c_impl(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
-    JL_LOCK(&codegen_lock);
+    JL_LOCK(&jl_codegen_lock);
     uint64_t compiler_start_time = 0;
-    int tid = jl_threadid();
-    if (jl_measure_compile_time[tid])
+    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     jl_codegen_params_t params;
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
@@ -258,17 +224,15 @@ int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt
         if (success && llvmmod == NULL)
             jl_add_to_ee(std::unique_ptr<Module>(into));
     }
-    if (codegen_lock.count == 1 && jl_measure_compile_time[tid])
-        jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
-    JL_UNLOCK(&codegen_lock);
+    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    JL_UNLOCK(&jl_codegen_lock);
     return success;
 }
 
-bool jl_type_mappable_to_c(jl_value_t *ty);
-
 // declare a C-callable entry point; called during code loading from the toplevel
 extern "C" JL_DLLEXPORT
-void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
+void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
 {
     // validate arguments. try to do as many checks as possible here to avoid
     // throwing errors later during codegen.
@@ -283,21 +247,21 @@ void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
     // compute / validate return type
     if (!jl_is_concrete_type(declrt) || jl_is_kind(declrt))
         jl_error("@ccallable: return type must be concrete and correspond to a C type");
-    JL_LOCK(&codegen_lock);
+    JL_LOCK(&jl_codegen_lock);
     if (!jl_type_mappable_to_c(declrt))
         jl_error("@ccallable: return type doesn't correspond to a C type");
-    JL_UNLOCK(&codegen_lock);
+    JL_UNLOCK(&jl_codegen_lock);
 
     // validate method signature
     size_t i, nargs = jl_nparams(sigt);
     for (i = 1; i < nargs; i++) {
         jl_value_t *ati = jl_tparam(sigt, i);
-        if (!jl_is_concrete_type(ati) || jl_is_kind(ati))
+        if (!jl_is_concrete_type(ati) || jl_is_kind(ati) || !jl_type_mappable_to_c(ati))
             jl_error("@ccallable: argument types must be concrete");
     }
 
     // save a record of this so that the alias is generated when we write an object file
-    jl_method_t *meth = (jl_method_t*)jl_methtable_lookup(ft->name->mt, (jl_value_t*)sigt, jl_world_counter);
+    jl_method_t *meth = (jl_method_t*)jl_methtable_lookup(ft->name->mt, (jl_value_t*)sigt, jl_atomic_load_acquire(&jl_world_counter));
     if (!jl_is_method(meth))
         jl_error("@ccallable: could not find requested method");
     JL_GC_PUSH1(&meth);
@@ -312,13 +276,13 @@ void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
 }
 
 // this compiles li and emits fptr
-extern "C"
-jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
+extern "C" JL_DLLEXPORT
+jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
-    JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
     uint64_t compiler_start_time = 0;
-    int tid = jl_threadid();
-    if (jl_measure_compile_time[tid])
+    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     // if we don't have any decls already, try to generate it now
     jl_code_info_t *src = NULL;
@@ -334,10 +298,12 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
     }
     if (src == NULL && jl_is_method(mi->def.method) &&
              jl_symbol_name(mi->def.method->name)[0] != '@') {
-        // If the caller didn't provide the source,
-        // see if it is inferred, or try to infer it for ourself.
-        // (but don't bother with typeinf on macros or toplevel thunks)
-        src = jl_type_infer(mi, world, 0);
+        if (mi->def.method->source != jl_nothing) {
+            // If the caller didn't provide the source and IR is available,
+            // see if it is inferred, or try to infer it for ourself.
+            // (but don't bother with typeinf on macros or toplevel thunks)
+            src = jl_type_infer(mi, world, 0);
+        }
     }
     jl_code_instance_t *compiled = jl_method_compiled(mi, world);
     if (compiled) {
@@ -356,23 +322,23 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
     else {
         codeinst = NULL;
     }
-    if (codegen_lock.count == 1 && jl_measure_compile_time[tid])
-        jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
-    JL_UNLOCK(&codegen_lock);
+    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    JL_UNLOCK(&jl_codegen_lock);
     JL_GC_POP();
     return codeinst;
 }
 
-extern "C"
-void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
+extern "C" JL_DLLEXPORT
+void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
 {
     if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
         return;
     }
-    JL_LOCK(&codegen_lock);
+    JL_LOCK(&jl_codegen_lock);
     uint64_t compiler_start_time = 0;
-    int tid = jl_threadid();
-    if (jl_measure_compile_time[tid])
+    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     if (unspec->invoke == NULL) {
         jl_code_info_t *src = NULL;
@@ -396,38 +362,38 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
         _jl_compile_codeinst(unspec, src, unspec->min_world);
         if (unspec->invoke == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
-            jl_atomic_store_release(&unspec->invoke, &jl_fptr_interpret_call);
+            jl_atomic_store_release(&unspec->invoke, jl_fptr_interpret_call_addr);
         }
         JL_GC_POP();
     }
-    if (codegen_lock.count == 1 && jl_measure_compile_time[tid])
-        jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
-    JL_UNLOCK(&codegen_lock); // Might GC
+    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    JL_UNLOCK(&jl_codegen_lock); // Might GC
 }
 
 
 // get a native disassembly for a compiled method
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
-        int raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo)
+jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
+        char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
     // printing via disassembly
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
     if (codeinst) {
-        uintptr_t fptr = (uintptr_t)codeinst->invoke;
+        uintptr_t fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
         if (getwrapper)
-            return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo);
-        uintptr_t specfptr = (uintptr_t)codeinst->specptr.fptr;
-        if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
+            return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
+        uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
+        if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
-            JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+            JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
             uint64_t compiler_start_time = 0;
-            int tid = jl_threadid();
-            if (jl_measure_compile_time[tid])
+            uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+            if (measure_compile_time_enabled)
                 compiler_start_time = jl_hrtime();
-            specfptr = (uintptr_t)codeinst->specptr.fptr;
+            specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
             if (specfptr == 0) {
                 jl_code_info_t *src = jl_type_infer(mi, world, 0);
                 JL_GC_PUSH1(&src);
@@ -440,28 +406,29 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
                     if (src && (jl_value_t*)src != jl_nothing)
                         src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
                 }
-                fptr = (uintptr_t)codeinst->invoke;
-                specfptr = (uintptr_t)codeinst->specptr.fptr;
+                fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
+                specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
-                    if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
+                    if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
                         fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world);
-                        specfptr = (uintptr_t)codeinst->specptr.fptr;
+                        specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }
                 JL_GC_POP();
             }
-            if (jl_measure_compile_time[tid])
-                jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
-            JL_UNLOCK(&codegen_lock);
+            if (measure_compile_time_enabled)
+                jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+            JL_UNLOCK(&jl_codegen_lock);
         }
         if (specfptr != 0)
-            return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo);
+            return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
     }
 
     // whatever, that didn't work - use the assembler output instead
-    if (raw_mc) // eh, give up, this flag doesn't really work anyways normally
-        return (jl_value_t*)jl_pchar_to_array("", 0);
-    return jl_dump_llvm_asm(jl_get_llvmf_defn(mi, world, getwrapper, true, jl_default_cgparams), asm_variant, debuginfo);
+    void *F = jl_get_llvmf_defn(mi, world, getwrapper, true, jl_default_cgparams);
+    if (!F)
+        return jl_an_empty_string;
+    return jl_dump_function_asm(F, raw_mc, asm_variant, debuginfo, binary);
 }
 
 // A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
@@ -518,22 +485,12 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                          const RuntimeDyld::LoadedObjectInfo &L,
                                          RTDyldMemoryManager *memmgr);
 
-#if JL_LLVM_VERSION >= 120000
 template <typename ObjT, typename LoadResult>
 void JuliaOJIT::registerObject(const ObjT &Obj, const LoadResult &LO)
 {
     const ObjT* Object = &Obj;
     ORCNotifyObjectEmitted(JuliaListener.get(), *Object, *LO, MemMgr.get());
 }
-#else
-template <typename ObjT, typename LoadResult>
-void JuliaOJIT::registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO)
-{
-    const ObjT* Object = &Obj;
-    NotifyFinalizer(H, *Object, *LO);
-    ORCNotifyObjectEmitted(JuliaListener.get(), *Object, *LO, MemMgr.get());
-}
-#endif
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 {
@@ -550,7 +507,7 @@ static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw
 {
     addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, optlevel);
-    addMachinePasses(&PM, &TM);
+    addMachinePasses(&PM, &TM, optlevel);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
 }
@@ -625,7 +582,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
         raw_string_ostream OS(Buf);
         logAllUnhandledErrors(Obj.takeError(), OS, "");
         OS.flush();
-        llvm::report_fatal_error("FATAL: Unable to compile LLVM Module: '" + Buf + "'\n"
+        llvm::report_fatal_error(llvm::Twine("FATAL: Unable to compile LLVM Module: '") + Buf + "'\n"
                                  "The module's content was printed above. Please file a bug report");
     }
 
@@ -657,7 +614,11 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
     MemMgr(createRTDyldMemoryManager()),
     JuliaListener(CreateJuliaJITEventListener()),
     TSCtx(std::unique_ptr<LLVMContext>(LLVMCtx)),
+#if JL_LLVM_VERSION >= 130000
+    ES(cantFail(orc::SelfExecutorProcessControl::Create())),
+#else
     ES(),
+#endif
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ObjectLayer(
@@ -669,21 +630,12 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
         ),
     CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT>(this))
 {
-#if JL_LLVM_VERSION >= 120000
     ObjectLayer.setNotifyLoaded(
         [this](orc::MaterializationResponsibility &MR,
                const object::ObjectFile &Object,
                const RuntimeDyld::LoadedObjectInfo &LOS) {
             registerObject(Object, &LOS);
         });
-#else
-    ObjectLayer.setNotifyLoaded(
-        [this](RTDyldObjHandleT H,
-               const object::ObjectFile &Object,
-               const RuntimeDyld::LoadedObjectInfo &LOS) {
-            registerObject(H, Object, &LOS);
-        });
-#endif
     for (int i = 0; i < 4; i++) {
         TMs[i] = TM.getTarget().createTargetMachine(TM.getTargetTriple().getTriple(), TM.getTargetCPU(),
                 TM.getTargetFeatureString(), TM.Options, Reloc::Static, TM.getCodeModel(),
@@ -699,7 +651,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
     // tells DynamicLibrary to load the program, not a library.
     std::string ErrorStr;
     if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &ErrorStr))
-        report_fatal_error("FATAL: unable to dlopen self\n" + ErrorStr);
+        report_fatal_error(llvm::Twine("FATAL: unable to dlopen self\n") + ErrorStr);
 
     GlobalJD.addGenerator(
       cantFail(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
@@ -767,27 +719,14 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
         }
     }
 #endif
-#if JL_LLVM_VERSION >= 120000
     // TODO: what is the performance characteristics of this?
     cantFail(CompileLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
-#else
-    auto key = ES.allocateVModule();
-    // TODO: what is the performance characteristics of this?
-    cantFail(CompileLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx), key));
-#endif
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
         cantFail(ES.lookup({&JD}, Name));
 
 }
-
-#if JL_LLVM_VERSION < 120000
-void JuliaOJIT::removeModule(ModuleHandleT H)
-{
-    //(void)CompileLayer.remove(H);
-}
-#endif
 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
@@ -827,18 +766,19 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 static int globalUniqueGeneratedNames;
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
-    auto &fname = ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
-    if (fname.empty()) {
+    std::string *fname = &ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
+    if (fname->empty()) {
         std::string string_fname;
         raw_string_ostream stream_fname(string_fname);
         // try to pick an appropriate name that describes it
-        if (Addr == (uintptr_t)codeinst->invoke) {
+        jl_callptr_t invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+        if (Addr == (uintptr_t)invoke) {
             stream_fname << "jsysw_";
         }
-        else if (codeinst->invoke == &jl_fptr_args) {
+        else if (invoke == jl_fptr_args_addr) {
             stream_fname << "jsys1_";
         }
-        else if (codeinst->invoke == &jl_fptr_sparam) {
+        else if (invoke == jl_fptr_sparam_addr) {
             stream_fname << "jsys3_";
         }
         else {
@@ -846,10 +786,10 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
         stream_fname << unadorned_name << "_" << globalUniqueGeneratedNames++;
-        fname = strdup(stream_fname.str().c_str());
-        addGlobalMapping(fname, Addr);
+        *fname = std::move(stream_fname.str()); // store to ReverseLocalSymbolTable
+        addGlobalMapping(*fname, Addr);
     }
-    return fname;
+    return *fname;
 }
 
 
@@ -857,22 +797,8 @@ void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
 {
     if (!L)
         return;
-#if JL_LLVM_VERSION >= 120000
     this->ObjectLayer.registerJITEventListener(*L);
-#else
-    EventListeners.push_back(L);
-#endif
 }
-
-#if JL_LLVM_VERSION < 120000
-void JuliaOJIT::NotifyFinalizer(RTDyldObjHandleT Key,
-                                const object::ObjectFile &Obj,
-                                const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo)
-{
-    for (auto &Listener : EventListeners)
-        Listener->notifyObjectLoaded(Key, Obj, LoadedObjectInfo);
-}
-#endif
 
 const DataLayout& JuliaOJIT::getDataLayout() const
 {
@@ -1053,7 +979,7 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
             ConstantAggregateZero::get(atype), "__catchjmp") };
     gvs[0]->setSection(".text");
     gvs[1]->setSection(".text");
-    appendToUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
+    appendToCompilerUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
 #endif
     jl_jit_share_data(*m);
     assert(jl_ExecutionEngine);
@@ -1142,7 +1068,7 @@ void add_named_global(StringRef name, void *addr)
 }
 
 extern "C" JL_DLLEXPORT
-size_t jl_jit_total_bytes(void)
+size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
 }

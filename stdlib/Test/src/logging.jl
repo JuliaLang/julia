@@ -1,8 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Logging
-import Logging: Info,
-    shouldlog, handle_message, min_enabled_level, catch_exceptions
+using Logging: Logging, AbstractLogger, LogLevel, Info, with_logger
 import Base: occursin
 
 #-------------------------------------------------------------------------------
@@ -28,24 +26,36 @@ mutable struct TestLogger <: AbstractLogger
     min_level::LogLevel
     catch_exceptions::Bool
     shouldlog_args
+    message_limits::Dict{Any,Int}
 end
 
-TestLogger(; min_level=Info, catch_exceptions=false) = TestLogger(LogRecord[], min_level, catch_exceptions, nothing)
-min_enabled_level(logger::TestLogger) = logger.min_level
+TestLogger(; min_level=Info, catch_exceptions=false) =
+    TestLogger(LogRecord[], min_level, catch_exceptions, nothing, Dict{Any, Int}())
+Logging.min_enabled_level(logger::TestLogger) = logger.min_level
 
-function shouldlog(logger::TestLogger, level, _module, group, id)
-    logger.shouldlog_args = (level, _module, group, id)
-    true
+function Logging.shouldlog(logger::TestLogger, level, _module, group, id)
+    if get(logger.message_limits, id, 1) > 0
+        logger.shouldlog_args = (level, _module, group, id)
+        true
+    else
+        false
+    end
 end
 
-function handle_message(logger::TestLogger, level, msg, _module,
-                        group, id, file, line; kwargs...)
+function Logging.handle_message(logger::TestLogger, level, msg, _module,
+                                group, id, file, line; kwargs...)
     @nospecialize
+    maxlog = get(kwargs, :maxlog, nothing)
+    if maxlog isa Core.BuiltinInts
+        remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
+        logger.message_limits[id] = remaining - 1
+        remaining > 0 || return
+    end
     push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, kwargs))
 end
 
 # Catch exceptions for the test logger only if specified
-catch_exceptions(logger::TestLogger) = logger.catch_exceptions
+Logging.catch_exceptions(logger::TestLogger) = logger.catch_exceptions
 
 function collect_test_logs(f; kwargs...)
     logger = TestLogger(; kwargs...)
@@ -135,11 +145,13 @@ We can test the info message using
 If we also wanted to test the debug messages, these need to be enabled with the
 `min_level` keyword:
 
+    using Logging
     @test_logs (:info,"Doing foo with n=2") (:debug,"Iteration 1") (:debug,"Iteration 2") min_level=Logging.Debug foo(2)
 
 If you want to test that some particular messages are generated while ignoring the rest,
 you can set the keyword `match_mode=:any`:
 
+    using Logging
     @test_logs (:info,) (:debug,"Iteration 42") min_level=Logging.Debug match_mode=:any foo(100)
 
 The macro may be chained with `@test` to also test the returned value:
@@ -178,13 +190,13 @@ macro test_logs(exs...)
                     $(esc(expression))
                 end
                 if didmatch
-                    testres = Pass(:test, nothing, nothing, value)
+                    testres = Pass(:test, $orig_expr, nothing, value, $sourceloc)
                 else
                     testres = LogTestFailure($orig_expr, $sourceloc,
                                              $(QuoteNode(exs[1:end-1])), logs)
                 end
             catch e
-                testres = Error(:test_error, $orig_expr, e, Base.catch_stack(), $sourceloc)
+                testres = Error(:test_error, $orig_expr, e, Base.current_exceptions(), $sourceloc)
             end
             Test.record(Test.get_testset(), testres)
             value

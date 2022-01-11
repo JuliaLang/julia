@@ -19,6 +19,7 @@ export quot,
        @dump
 
 using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
+import Base: isexpr
 
 """
     Meta.quot(ex)::Expr
@@ -73,9 +74,7 @@ julia> Meta.isexpr(ex, :call, 2)
 true
 ```
 """
-isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
 isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
-isexpr(@nospecialize(ex), head::Symbol, n::Int) = isa(ex, Expr) && ex.head === head && length(ex.args) == n
 isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
 
 """
@@ -371,7 +370,10 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
     if isa(x, Expr)
         head = x.head
         if head === :static_parameter
-            return QuoteNode(static_param_values[x.args[1]])
+            if isassigned(static_param_values, x.args[1])
+                return QuoteNode(static_param_values[x.args[1]])
+            end
+            return x
         elseif head === :cfunction
             @assert !isa(type_signature, UnionAll) || !isempty(spvals)
             if !isa(x.args[2], QuoteNode) # very common no-op
@@ -414,7 +416,31 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
             x.args[2] += statement_offset
         elseif head === :enter
             x.args[1] += statement_offset
-        elseif !is_meta_expr_head(head)
+        elseif head === :isdefined
+            arg = x.args[1]
+            # inlining a QuoteNode or literal into `Expr(:isdefined, x)` is invalid, replace with true
+            if isa(arg, Core.SlotNumber)
+                id = arg.id
+                if 1 <= id <= length(slot_replacements)
+                    replacement = slot_replacements[id]
+                    if isa(replacement, Union{Core.SlotNumber, GlobalRef, Symbol})
+                        return Expr(:isdefined, replacement)
+                    else
+                        @assert !isa(replacement, Expr)
+                        return true
+                    end
+                end
+                return Expr(:isdefined, Core.SlotNumber(id + slot_offset))
+            elseif isexpr(arg, :static_parameter)
+                if isassigned(static_param_values, arg.args[1])
+                    return true
+                end
+                return x
+            else
+                @assert isa(arg, Union{GlobalRef, Symbol})
+                return x
+            end
+        elseif !Core.Compiler.is_meta_expr_head(head)
             partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
                               slot_offset, statement_offset, boundscheck)
         end
@@ -423,7 +449,5 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
 end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
-
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
 
 end # module

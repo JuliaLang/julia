@@ -2307,6 +2307,23 @@ end
         @test_throws BoundsError getindex(x, 1, 0)
     end
 end
+@testset "get(x::Number, ...)" begin
+    for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
+        @test get(x, 1, 99) == x
+        @test get(x, (), 99) == x
+        @test get(x, (1,), 99) == x
+        @test get(x, 2, 99) == 99
+        @test get(x, 0, pi) == pi
+        @test get(x, (1,2), pi) == pi
+        c = Ref(0)
+        @test get(() -> c[]+=1, x, 1) == x
+        @test get(() -> c[]+=1, x, ()) == x
+        @test get(() -> c[]+=1, x, (1,1,1)) == x
+        @test get(() -> c[]+=1, x, 2) == 1
+        @test get(() -> c[]+=1, x, -1) == 2
+        @test get(() -> c[]+=1, x, (3,2,1)) == 3
+    end
+end
 @testset "copysign and flipsign" begin
     # copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
     # flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, x)
@@ -2506,6 +2523,17 @@ end
     @test rem(T(-1.5), T(2), RoundNearest) == 0.5
     @test rem(T(-1.5), T(2), RoundDown)    == 0.5
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
+    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp]
+        @test isnan(rem(T(1), T(0), mode))
+        @test isnan(rem(T(Inf), T(2), mode))
+        @test isnan(rem(T(1), T(NaN), mode))
+        # FIXME: The broken case erroneously returns -Inf
+        @test rem(T(4), floatmin(T) * 2, mode) == 0 broken=(T == BigFloat && mode == RoundUp)
+    end
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundToZero),  -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearest), -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundDown),    0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),      0.0)
 end
 
 @testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
@@ -2519,6 +2547,41 @@ end
         @test rem(T(n), T(-5), RoundNearest) == rem(T(n)//T(1), T(-5)//T(1), RoundNearest)
         @test rem(T(-n), T(-5), RoundNearest) == rem(T(-n)//T(1), T(-5)//T(1), RoundNearest)
     end
+end
+
+@testset "divrem rounded" begin
+    #rounded Floats
+    for T in (Float16, Float32, Float64, BigFloat)
+        @test divrem(T(1.5), T(2), RoundToZero)[2]  == 1.5
+        @test divrem(T(1.5), T(2), RoundNearest)[2] == -0.5
+        @test divrem(T(1.5), T(2), RoundDown)[2]    == 1.5
+        @test divrem(T(1.5), T(2), RoundUp)[2]      == -0.5
+        @test divrem(T(-1.5), T(2), RoundToZero)[2]  == -1.5
+        @test divrem(T(-1.5), T(2), RoundNearest)[2] == 0.5
+        @test divrem(T(-1.5), T(2), RoundDown)[2]    == 0.5
+        @test divrem(T(-1.5), T(2), RoundUp)[2]      == -1.5
+    end
+    #rounded Integers
+    for (a, b) in (
+            (3, 2),
+            (5, 3),
+            (-3, 2),
+            (5, 2),
+            (-5, 2),
+            (-5, 3),
+            (5, -3))
+        for sign in (+1, -1)
+            (a, b) = (a*sign, b*sign)
+            @test divrem(a, b, RoundNearest) == (div(a, b, RoundNearest),rem(a, b, RoundNearest))
+        end
+    end
+
+    a = 122322388883338838388383888823233122323
+    b = 343443
+    c = 122322388883338838388383888823233122333
+    @test divrem(a, b) == (div(a,b), rem(a,b))
+    @test divrem(a, c) == (div(a,c), rem(a,c))
+    @test divrem(a,-(a-20), RoundDown) == (div(a,-(a-20), RoundDown), rem(a,-(a-20), RoundDown))
 end
 
 @testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
@@ -2624,6 +2687,10 @@ end
     @test !isone(triu(fill(1, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
     @test isone(Matrix(1I, 5, 5))
+    @test !isone(view(rand(5,5), [1,3,4], :))
+    Dv = view(Diagonal([1,1, 1]), [1,2], 1:2)
+    @test isone(Dv)
+    @test (@allocated isone(Dv)) == 0
     @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end
 

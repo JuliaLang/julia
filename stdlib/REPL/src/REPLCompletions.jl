@@ -144,7 +144,7 @@ function complete_symbol(sym::String, ffunc, context_module::Module=Main)
             if isa(b, Module)
                 mod = b
                 lookup_module = true
-            elseif Base.isstructtype(typeof(b))
+            else
                 lookup_module = false
                 t = typeof(b)
             end
@@ -387,14 +387,24 @@ get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (getfield(fn, sym.val
 get_value(sym::GlobalRef, fn) = get_value(sym.name, sym.mod)
 get_value(sym, fn) = (sym, true)
 
-# Return the value of a getfield call expression
-function get_value_getfield(ex::Expr, fn)
-    # Example :((top(getfield))(Base,:max))
-    val, found = get_value_getfield(ex.args[2],fn) #Look up Base in Main and returns the module
-    (found && length(ex.args) >= 3) || return (nothing, false)
-    return get_value_getfield(ex.args[3], val) #Look up max in Base and returns the function if found.
+# Return the type of a getfield call expression
+function get_type_getfield(ex::Expr, fn::Module)
+    length(ex.args) == 3 || return Any, false # should never happen, but just for safety
+    obj, x = ex.args[2:3]
+    objt, found = get_type(obj, fn)
+    objt isa DataType || return Any, false
+    found || return Any, false
+    if x isa QuoteNode
+        fld = x.value
+    elseif isexpr(x, :quote) || isexpr(x, :inert)
+        fld = x.args[1]
+    else
+        fld = nothing # we don't know how to get the value of variable `x` here
+    end
+    fld isa Symbol || return Any, false
+    hasfield(objt, fld) || return Any, false
+    return fieldtype(objt, fld), true
 end
-get_value_getfield(sym, fn) = get_value(sym, fn)
 
 # Determines the return type with Base.return_types of a function call using the type information of the arguments.
 function get_type_call(expr::Expr)
@@ -424,7 +434,7 @@ function get_type_call(expr::Expr)
     return (return_type, true)
 end
 
-# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
+# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (SubString{String}, true)
 function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
     found && return Core.Typeof(val), found
@@ -432,10 +442,8 @@ function try_get_type(sym::Expr, fn::Module)
         # getfield call is special cased as the evaluation of getfield provides good type information,
         # is inexpensive and it is also performed in the complete_symbol function.
         a1 = sym.args[1]
-        if isa(a1,GlobalRef) && isconst(a1.mod,a1.name) && isdefined(a1.mod,a1.name) &&
-            eval(a1) === Core.getfield
-            val, found = get_value_getfield(sym, Main)
-            return found ? Core.Typeof(val) : Any, found
+        if a1 === :getfield || a1 === GlobalRef(Core, :getfield)
+            return get_type_getfield(sym, fn)
         end
         return get_type_call(sym)
     elseif sym.head === :thunk
@@ -458,11 +466,22 @@ function get_type(sym::Expr, fn::Module)
     val, found = try_get_type(sym, fn)
     found && return val, found
     # https://github.com/JuliaLang/julia/issues/27184
-    if isexpr(sym, :macrocall)
+    newsym = if isexpr(sym, :macrocall)
         _, found = get_type(first(sym.args), fn)
         found || return Any, false
+        try
+            Meta.lower(fn, sym)
+        catch e
+            e isa LoadError && return Any, false
+            # If e is not a LoadError then Meta.lower crashed in an unexpected way.
+            # Since this is not a specific to the user code but an internal error,
+            # rethrow the error to allow reporting it.
+            rethrow()
+        end
+    else
+        Meta.lower(fn, sym)
     end
-    return try_get_type(Meta.lower(fn, sym), fn)
+    return try_get_type(newsym, fn)
 end
 
 function get_type(sym, fn::Module)
@@ -470,17 +489,68 @@ function get_type(sym, fn::Module)
     return found ? Core.Typeof(val) : Any, found
 end
 
+function get_type(T, found::Bool, default_any::Bool)
+    return found ? T :
+           default_any ? Any : throw(ArgumentError("argument not found"))
+end
+
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr, context_module::Module=Main)
     func, found = get_value(ex_org.args[1], context_module)::Tuple{Any,Bool}
     !found && return Completion[]
 
-    funargs = ex_org.args[2:end]
-    # handle broadcasting, but only handle number of arguments instead of
-    # argument types
+    args_ex, kwargs_ex = complete_methods_args(ex_org.args[2:end], ex_org, context_module, true, true)
+
+    out = Completion[]
+    complete_methods!(out, func, args_ex, kwargs_ex)
+    return out
+end
+
+function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool, shift::Bool)
+    out = Completion[]
+    args_ex, kwargs_ex = try
+        complete_methods_args(ex_org.args[2:end], ex_org, context_module, false, false)
+    catch
+        return out
+    end
+
+    for name in names(callee_module; all=true)
+        if !Base.isdeprecated(callee_module, name) && isdefined(callee_module, name)
+            func = getfield(callee_module, name)
+            if !isa(func, Module)
+                complete_methods!(out, func, args_ex, kwargs_ex, moreargs)
+            elseif callee_module === Main::Module && isa(func, Module)
+                callee_module2 = func
+                for name in names(callee_module2)
+                    if isdefined(callee_module2, name)
+                        func = getfield(callee_module, name)
+                        if !isa(func, Module)
+                            complete_methods!(out, func, args_ex, kwargs_ex, moreargs)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if !shift
+        # Filter out methods where all arguments are `Any`
+        filter!(out) do c
+            isa(c, REPLCompletions.MethodCompletion) || return true
+            sig = Base.unwrap_unionall(c.method.sig)::DataType
+            return !all(T -> T === Any || T === Vararg{Any}, sig.parameters[2:end])
+        end
+    end
+
+    return out
+end
+
+function complete_methods_args(funargs::Vector{Any}, ex_org::Expr, context_module::Module, default_any::Bool, allow_broadcasting::Bool)
     args_ex = Any[]
     kwargs_ex = Pair{Symbol,Any}[]
-    if ex_org.head === :. && ex_org.args[2] isa Expr
+    if allow_broadcasting && ex_org.head === :. && ex_org.args[2] isa Expr
+        # handle broadcasting, but only handle number of arguments instead of
+        # argument types
         for _ in (ex_org.args[2]::Expr).args
             push!(args_ex, Any)
         end
@@ -489,18 +559,20 @@ function complete_methods(ex_org::Expr, context_module::Module=Main)
             if isexpr(ex, :parameters)
                 for x in ex.args
                     n, v = isexpr(x, :kw) ? (x.args...,) : (x, x)
-                    push!(kwargs_ex, n => first(get_type(v, context_module)))
+                    push!(kwargs_ex, n => get_type(get_type(v, context_module)..., default_any))
                 end
             elseif isexpr(ex, :kw)
                 n, v = (ex.args...,)
-                push!(kwargs_ex, n => first(get_type(v, context_module)))
+                push!(kwargs_ex, n => get_type(get_type(v, context_module)..., default_any))
             else
-                push!(args_ex, first(get_type(ex, context_module)))
+                push!(args_ex, get_type(get_type(ex, context_module)..., default_any))
             end
         end
     end
+    return args_ex, kwargs_ex
+end
 
-    out = Completion[]
+function complete_methods!(out::Vector{Completion}, @nospecialize(func), args_ex::Vector{Any}, kwargs_ex::Vector{Pair{Symbol,Any}}, moreargs::Bool=true)
     ml = methods(func)
     # Input types and number of arguments
     if isempty(kwargs_ex)
@@ -517,6 +589,9 @@ function complete_methods(ex_org::Expr, context_module::Module=Main)
         ml = methods(kwfunc)
         func = kwfunc
     end
+    if !moreargs
+        na = typemax(Int)
+    end
 
     for (method::Method, orig_method) in zip(ml, orig_ml)
         ms = method.sig
@@ -526,7 +601,6 @@ function complete_methods(ex_org::Expr, context_module::Module=Main)
             push!(out, MethodCompletion(func, t_in, method, orig_method))
         end
     end
-    return out
 end
 
 include("latex_symbols.jl")
@@ -556,6 +630,21 @@ function afterusing(string::String, startpos::Int)
     fr = reverseind(str, last(r))
     return occursin(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
 end
+
+function close_path_completion(str, startpos, r, paths, pos)
+    length(paths) == 1 || return false  # Only close if there's a single choice...
+    _path = str[startpos:prevind(str, first(r))] * (paths[1]::PathCompletion).path
+    path = expanduser(replace(_path, r"\\ " => " "))
+    # ...except if it's a directory...
+    try
+        isdir(path)
+    catch e
+        e isa Base.IOError || rethrow() # `path` cannot be determined to be a file
+    end && return false
+    # ...and except if there's already a " at the cursor.
+    return lastindex(str) <= pos || str[nextind(str, pos)] != '"'
+end
+
 
 function bslash_completions(string::String, pos::Int)
     slashpos = something(findprev(isequal('\\'), string, pos), 0)
@@ -639,10 +728,40 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
     return Completion[PackageCompletion(name) for name in loading_candidates]
 end
 
-function completions(string::String, pos::Int, context_module::Module=Main)
+function completions(string::String, pos::Int, context_module::Module=Main, shift::Bool=true)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
+
+    # ?(x, y)TAB lists methods you can call with these objects
+    # ?(x, y TAB lists methods that take these objects as the first two arguments
+    # MyModule.?(x, y)TAB restricts the search to names in MyModule
+    rexm = match(r"(\w+\.|)\?\((.*)$", partial)
+    if rexm !== nothing
+        # Get the module scope
+        if isempty(rexm.captures[1])
+            callee_module = context_module
+        else
+            modname = Symbol(rexm.captures[1][1:end-1])
+            if isdefined(context_module, modname)
+                callee_module = getfield(context_module, modname)
+                if !isa(callee_module, Module)
+                    callee_module = context_module
+                end
+            else
+                callee_module = context_module
+            end
+        end
+        moreargs = !endswith(rexm.captures[2], ')')
+        callstr = "_(" * rexm.captures[2]
+        if moreargs
+            callstr *= ')'
+        end
+        ex_org = Meta.parse(callstr, raise=false, depwarn=false)
+        if isa(ex_org, Expr)
+            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
+        end
+    end
 
     # if completing a key in a Dict
     identifier, partial_key, loc = dict_identifier_key(partial, inc_tag, context_module)
@@ -663,13 +782,8 @@ function completions(string::String, pos::Int, context_module::Module=Main)
 
         paths, r, success = complete_path(replace(string[r], r"\\ " => " "), pos)
 
-        if inc_tag === :string &&
-           length(paths) == 1 &&  # Only close if there's a single choice,
-           !isdir(expanduser(replace(string[startpos:prevind(string, first(r))] * paths[1].path,
-                                     r"\\ " => " "))) &&  # except if it's a directory
-           (lastindex(string) <= pos ||
-            string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
-            paths[1] = PathCompletion(paths[1].path * "\"")
+        if inc_tag === :string && close_path_completion(string, startpos, r, paths, pos)
+            paths[1] = PathCompletion((paths[1]::PathCompletion).path * "\"")
         end
 
         #Latex symbols can be completed for strings
@@ -815,6 +929,26 @@ function shell_completions(string, pos)
         return ret, range, true
     end
     return Completion[], 0:-1, false
+end
+
+function UndefVarError_hint(io::IO, ex::UndefVarError)
+    var = ex.var
+    if var === :or
+        print(io, "\nsuggestion: Use `||` for short-circuiting boolean OR.")
+    elseif var === :and
+        print(io, "\nsuggestion: Use `&&` for short-circuiting boolean AND.")
+    elseif var === :help
+        println(io)
+        # Show friendly help message when user types help or help() and help is undefined
+        show(io, MIME("text/plain"), Base.Docs.parsedoc(Base.Docs.keywords[:help]))
+    elseif var === :quit
+        print(io, "\nsuggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.")
+    end
+end
+
+function __init__()
+    Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
+    nothing
 end
 
 end # module

@@ -50,17 +50,19 @@ julia> issparse(Array(sv))
 false
 ```
 """
-issparse(A::AbstractArray) = false
+function issparse(A::AbstractArray)
+    # Handle wrapper arrays: sparse if it is wrapping a sparse array.
+    # This gets compiled away during specialization.
+    p = parent(A)
+    if p === A
+        # have reached top of wrapping without finding a sparse array, assume it is not.
+        return false
+    else
+        return issparse(p)
+    end
+end
+issparse(A::DenseArray) = false
 issparse(S::AbstractSparseArray) = true
-issparse(S::LinearAlgebra.Adjoint{<:Any,<:AbstractSparseArray}) = true
-issparse(S::LinearAlgebra.Transpose{<:Any,<:AbstractSparseArray}) = true
-
-issparse(S::LinearAlgebra.Symmetric{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinearAlgebra.Hermitian{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinearAlgebra.LowerTriangular{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinearAlgebra.UnitLowerTriangular{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinearAlgebra.UpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinearAlgebra.UnitUpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
 
 indtype(S::AbstractSparseArray{<:Any,Ti}) where {Ti} = Ti
 

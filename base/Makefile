@@ -99,7 +99,7 @@ endif
 $(BUILDDIR)/version_git.jl.phony: $(SRCDIR)/version_git.sh
 ifneq ($(NO_GIT), 1)
 	sh $< $(SRCDIR) > $@
-	@# This to avoid touching git_version.jl when it is not modified,
+	@# This to avoid touching version_git.jl when it is not modified,
 	@# so that the system image does not need to be rebuilt.
 	@if ! cmp -s $@ version_git.jl; then \
 	    $(call PRINT_PERL,) \
@@ -164,7 +164,7 @@ endif
 
 define symlink_system_library
 libname_$2 := $$(notdir $(call versioned_libname,$2,$3))
-libpath_$2 := $$(shell $$(call spawn,$$(build_depsbindir)/libwhich) -p $$(libname_$2) 2>/dev/null)
+libpath_$2 := $$(shell $$(call spawn,$$(LIBWHICH)) -p $$(libname_$2) 2>/dev/null)
 symlink_$2: $$(build_private_libdir)/$$(libname_$2)
 $$(build_private_libdir)/$$(libname_$2):
 	@if [ -e "$$(libpath_$2)" ]; then \
@@ -184,6 +184,19 @@ ifneq ($$(USE_SYSTEM_$1),0)
 SYMLINK_SYSTEM_LIBRARIES += symlink_$2
 endif
 endef
+
+# libexec executables
+symlink_p7zip: $(build_bindir)/7z$(EXE)
+
+ifneq ($(USE_SYSTEM_P7ZIP),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_p7zip
+7Z_PATH := $(shell which 7z$(EXE))
+endif
+
+$(build_bindir)/7z$(EXE):
+	[ -e "$(7Z_PATH)" ] && \
+	([ ! -e "$@" ] || rm "$@") && \
+	ln -svf "$(7Z_PATH)" "$@"
 
 # the following excludes: libuv.a, libutf8proc.a
 
@@ -205,6 +218,7 @@ $(eval $(call symlink_system_library,CSL,libatomic,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libgomp,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,PCRE,libpcre2-8))
 $(eval $(call symlink_system_library,DSFMT,libdSFMT))
+$(eval $(call symlink_system_library,LIBBLASTRAMPOLINE,libblastrampoline))
 $(eval $(call symlink_system_library,BLAS,$(LIBBLASNAME)))
 ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
 $(eval $(call symlink_system_library,LAPACK,$(LIBLAPACKNAME)))
@@ -218,14 +232,14 @@ $(eval $(call symlink_system_library,LIBSSH2,libssh2))
 $(eval $(call symlink_system_library,NGHTTP2,libnghttp2))
 $(eval $(call symlink_system_library,CURL,libcurl))
 $(eval $(call symlink_system_library,LIBGIT2,libgit2))
-$(eval $(call symlink_system_library,SUITESPARSE,libamd))
-$(eval $(call symlink_system_library,SUITESPARSE,libcamd))
-$(eval $(call symlink_system_library,SUITESPARSE,libccolamd))
-$(eval $(call symlink_system_library,SUITESPARSE,libcholmod))
-$(eval $(call symlink_system_library,SUITESPARSE,libcolamd))
-$(eval $(call symlink_system_library,SUITESPARSE,libumfpack))
-$(eval $(call symlink_system_library,SUITESPARSE,libspqr))
-$(eval $(call symlink_system_library,SUITESPARSE,libsuitesparseconfig))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libamd))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libcamd))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libccolamd))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libcholmod))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libcolamd))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libumfpack))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libspqr))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libsuitesparseconfig))
 # EXCLUDED LIBRARIES (installed/used, but not vendored for use with dlopen):
 # libunwind
 endif # WINNT

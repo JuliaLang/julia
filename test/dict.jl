@@ -1070,6 +1070,26 @@ end
     check_merge([Dict(3=>4), Dict(:a=>5)], Dict(:a => 5, 3 => 4))
 end
 
+@testset "AbstractDict mergewith!" begin
+# we use IdDict to test the mergewith! implementation for AbstractDict
+    d1 = IdDict(1 => 1, 2 => 2)
+    d2 = IdDict(2 => 3, 3 => 4)
+    d3 = IdDict{Int, Float64}(1 => 5, 3 => 6)
+    d = copy(d1)
+    @inferred mergewith!(-, d, d2)
+    @test d == IdDict(1 => 1, 2 => -1, 3 => 4)
+    d = copy(d1)
+    @inferred mergewith!(-, d, d3)
+    @test d == IdDict(1 => -4, 2 => 2, 3 => 6)
+    d = copy(d1)
+    @inferred mergewith!(+, d, d2, d3)
+    @test d == IdDict(1 => 6, 2 => 5, 3 => 10)
+    @inferred mergewith(+, d1, d2, d3)
+    d = mergewith(+, d1, d2, d3)
+    @test d isa Dict{Int, Float64}
+    @test d == Dict(1 => 6, 2 => 5, 3 => 10)
+end
+
 @testset "misc error/io" begin
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test_throws ErrorException 'a' in d

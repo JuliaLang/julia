@@ -95,9 +95,10 @@ end
 @enum WorkerState W_CREATED W_CONNECTED W_TERMINATING W_TERMINATED
 mutable struct Worker
     id::Int
-    del_msgs::Array{Any,1}
+    msg_lock::Threads.ReentrantLock # Lock for del_msgs, add_msgs, and gcflag
+    del_msgs::Array{Any,1} # XXX: Could del_msgs and add_msgs be Channels?
     add_msgs::Array{Any,1}
-    gcflag::Bool
+    @atomic gcflag::Bool
     state::WorkerState
     c_state::Condition      # wait for state changes
     ct_time::Float64        # creation time
@@ -133,7 +134,7 @@ mutable struct Worker
         if haskey(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
-        w=new(id, [], [], false, W_CREATED, Condition(), time(), conn_func)
+        w=new(id, Threads.ReentrantLock(), [], [], false, W_CREATED, Condition(), time(), conn_func)
         w.initialized = Event()
         register_worker(w)
         w
@@ -351,7 +352,7 @@ end
 function parse_connection_info(str)
     m = match(r"^julia_worker:(\d+)#(.*)", str)
     if m !== nothing
-        (m.captures[2], parse(UInt16, m.captures[1]))
+        (String(m.captures[2]), parse(UInt16, m.captures[1]))
     else
         ("", UInt16(0))
     end
@@ -471,6 +472,10 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
     # The `launch` method should add an object of type WorkerConfig for every
     # worker launched. It provides information required on how to connect
     # to it.
+
+    # FIXME: launched should be a Channel, launch_ntfy should be a Threads.Condition
+    # but both are part of the public interface. This means we currently can't use
+    # `Threads.@spawn` in the code below.
     launched = WorkerConfig[]
     launch_ntfy = Condition()
 
@@ -851,7 +856,7 @@ julia> nprocs()
 3
 
 julia> workers()
-5-element Array{Int64,1}:
+2-element Array{Int64,1}:
  2
  3
 ```

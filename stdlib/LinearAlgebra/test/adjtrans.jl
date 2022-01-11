@@ -2,7 +2,9 @@
 
 module TestAdjointTranspose
 
-using Test, LinearAlgebra, SparseArrays
+using Test, LinearAlgebra
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
 @testset "Adjoint and Transpose inner constructor basics" begin
     intvec, intmat = [1, 2], [1 2; 3 4]
@@ -239,6 +241,25 @@ end
     @test convert(Transpose{Float64,Matrix{Float64}}, Transpose(intmat))::Transpose{Float64,Matrix{Float64}} == Transpose(intmat)
 end
 
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Adjoint and Transpose convert methods to AbstractArray" begin
+    # tests corresponding to #34995
+    intvec, intmat = [1, 2], [1 2 3; 4 5 6]
+    statvec = ImmutableArray(intvec)
+    statmat = ImmutableArray(intmat)
+
+    @test convert(AbstractArray{Float64}, Adjoint(statvec))::Adjoint{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Adjoint(statvec)
+    @test convert(AbstractArray{Float64}, Adjoint(statmat))::Array{Float64,2} == Adjoint(statmat)
+    @test convert(AbstractArray{Float64}, Transpose(statvec))::Transpose{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Transpose(statvec)
+    @test convert(AbstractArray{Float64}, Transpose(statmat))::Array{Float64,2} == Transpose(statmat)
+    @test convert(AbstractMatrix{Float64}, Adjoint(statvec))::Adjoint{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Adjoint(statvec)
+    @test convert(AbstractMatrix{Float64}, Adjoint(statmat))::Array{Float64,2} == Adjoint(statmat)
+    @test convert(AbstractMatrix{Float64}, Transpose(statvec))::Transpose{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Transpose(statvec)
+    @test convert(AbstractMatrix{Float64}, Transpose(statmat))::Array{Float64,2} == Transpose(statmat)
+end
+
 @testset "Adjoint and Transpose similar methods" begin
     intvec, intmat = [1, 2], [1 2 3; 4 5 6]
     # similar with no additional specifications, vector (rewrapping) semantics
@@ -333,14 +354,6 @@ end
     @test broadcast(+, Transpose(vec), 1, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec .+ 1
     @test broadcast(+, Adjoint(vec), 1im, Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == avec + avec .+ 1im
     @test broadcast(+, Transpose(vec), 1im, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec .+ 1im
-    # ascertain inference friendliness, ref. https://github.com/JuliaLang/julia/pull/25083#issuecomment-353031641
-    sparsevec = SparseVector([1.0, 2.0, 3.0])
-    @test map(-, Adjoint(sparsevec), Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test map(-, Transpose(sparsevec), Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
-    @test broadcast(-, Adjoint(sparsevec), Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test broadcast(-, Transpose(sparsevec), Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
-    @test broadcast(+, Adjoint(sparsevec), 1.0, Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test broadcast(+, Transpose(sparsevec), 1.0, Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
 end
 
 @testset "Adjoint/Transpose-wrapped vector multiplication" begin
@@ -527,7 +540,6 @@ end
     @test pointer(Transpose(D)) === pointer(D)
 end
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 

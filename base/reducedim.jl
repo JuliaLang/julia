@@ -139,7 +139,7 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
 
         if isempty(A1)
             # If the slice is empty just return non-view version as the initial array
-            return copy(A1)
+            return map(f, A1)
         else
             # otherwise use the min/max of the first slice as initial value
             v0 = mapreduce(f, $f2, A1)
@@ -148,9 +148,9 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
             Tr = v0 isa T ? T : typeof(v0)
 
             # but NaNs and missing need to be avoided as initial values
-            if (v0 == v0) === false
+            if v0 isa Number && isnan(v0)
                 # v0 is NaN
-                v0 = $initval
+                v0 = oftype(v0, $initval)
             elseif isunordered(v0)
                 # v0 is missing or a third-party unordered value
                 Tnm = nonmissingtype(Tr)
@@ -193,7 +193,7 @@ end
 
 has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = false
 has_fast_linear_indexing(a::Array) = true
-has_fast_linear_indexing(::Number) = true  # for Broadcasted
+has_fast_linear_indexing(::Union{Number,Ref,AbstractChar}) = true  # 0d objects, for Broadcasted
 has_fast_linear_indexing(bc::Broadcast.Broadcasted) =
     all(has_fast_linear_indexing, bc.args)
 
@@ -999,7 +999,7 @@ julia> findmin(A, dims=1)
 ([1.0 2.0], CartesianIndex{2}[CartesianIndex(1, 1) CartesianIndex(1, 2)])
 
 julia> findmin(A, dims=2)
-([1.0; 3.0], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1)])
+([1.0; 3.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1);;])
 ```
 """
 findmin(A::AbstractArray; dims=:) = _findmin(A, dims)
@@ -1046,7 +1046,7 @@ julia> findmax(A, dims=1)
 ([3.0 4.0], CartesianIndex{2}[CartesianIndex(2, 1) CartesianIndex(2, 2)])
 
 julia> findmax(A, dims=2)
-([2.0; 4.0], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2)])
+([2.0; 4.0;;], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2);;])
 ```
 """
 findmax(A::AbstractArray; dims=:) = _findmax(A, dims)

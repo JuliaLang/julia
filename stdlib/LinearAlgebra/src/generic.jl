@@ -8,7 +8,8 @@
 # inside this function.
 function *ₛ end
 Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
-    iszero(beta::Number) ? false : broadcasted(*, out, beta)
+    iszero(beta::Number) ? false :
+    isone(beta::Number) ? broadcasted(identity, out) : broadcasted(*, out, beta)
 
 """
     MulAddMul(alpha, beta)
@@ -448,45 +449,11 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 # Dot products and norms
 
 # special cases of norm; note that they don't need to handle isempty(x)
-function generic_normMinusInf(x)
-    (v, s) = iterate(x)::Tuple
-    minabs = norm(v)
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        vnorm = norm(v)
-        minabs = ifelse(isnan(minabs) | (minabs < vnorm), minabs, vnorm)
-    end
-    return float(minabs)
-end
+generic_normMinusInf(x) = float(mapreduce(norm, min, x))
 
-function generic_normInf(x)
-    (v, s) = iterate(x)::Tuple
-    maxabs = norm(v)
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        vnorm = norm(v)
-        maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
-    end
-    return float(maxabs)
-end
+generic_normInf(x) = float(mapreduce(norm, max, x))
 
-function generic_norm1(x)
-    (v, s) = iterate(x)::Tuple
-    av = float(norm(v))
-    T = typeof(av)
-    sum::promote_type(Float64, T) = av
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        sum += norm(v)
-    end
-    return convert(T, sum)
-end
+generic_norm1(x) = mapreduce(float ∘ norm, +, x)
 
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
@@ -1141,7 +1108,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
         end
         return lu(A) \ B
     end
-    return qr(A,Val(true)) \ B
+    return qr(A, ColumnNorm()) \ B
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
@@ -1292,15 +1259,17 @@ false
 """
 function istriu(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
+    return _istriu(A, k)
+end
+istriu(x::Number) = true
+
+@inline function _istriu(A::AbstractMatrix, k)
     m, n = size(A)
     for j in 1:min(n, m + k - 1)
-        for i in max(1, j - k + 1):m
-            iszero(A[i, j]) || return false
-        end
+        all(iszero, view(A, max(1, j - k + 1):m, j)) || return false
     end
     return true
 end
-istriu(x::Number) = true
 
 """
     istril(A::AbstractMatrix, k::Integer = 0) -> Bool
@@ -1334,15 +1303,17 @@ false
 """
 function istril(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
+    return _istril(A, k)
+end
+istril(x::Number) = true
+
+@inline function _istril(A::AbstractMatrix, k)
     m, n = size(A)
     for j in max(1, k + 2):n
-        for i in 1:min(j - k - 1, m)
-            iszero(A[i, j]) || return false
-        end
+        all(iszero, view(A, 1:min(j - k - 1, m), j)) || return false
     end
     return true
 end
-istril(x::Number) = true
 
 """
     isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool
@@ -1511,9 +1482,9 @@ end
 end
 
 # apply reflector from left
-@inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractMatrix)
+@inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
     require_one_based_indexing(x)
-    m, n = size(A)
+    m, n = size(A, 1), size(A, 2)
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
@@ -1554,6 +1525,9 @@ function det(A::AbstractMatrix{T}) where T
 end
 det(x::Number) = x
 
+# Resolve Issue #40128
+det(A::AbstractMatrix{BigInt}) = det_bareiss(A)
+
 """
     logabsdet(M)
 
@@ -1587,6 +1561,8 @@ julia> logabsdet(B)
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
 
+logabsdet(a::Number) = log(abs(a)), sign(a)
+
 """
     logdet(M)
 
@@ -1615,6 +1591,55 @@ end
 logdet(A) = log(det(A))
 
 const NumberArray{T<:Number} = AbstractArray{T}
+
+exactdiv(a, b) = a/b
+exactdiv(a::Integer, b::Integer) = div(a, b)
+
+"""
+    det_bareiss!(M)
+
+Calculates the determinant of a matrix using the
+[Bareiss Algorithm](https://en.wikipedia.org/wiki/Bareiss_algorithm) using
+inplace operations.
+
+# Examples
+```jldoctest
+julia> M = [1 0; 2 2]
+2×2 Matrix{Int64}:
+ 1  0
+ 2  2
+
+julia> LinearAlgebra.det_bareiss!(M)
+2
+```
+"""
+function det_bareiss!(M)
+    n = checksquare(M)
+    sign, prev = Int8(1), one(eltype(M))
+    for i in 1:n-1
+        if iszero(M[i,i]) # swap with another col to make nonzero
+            swapto = findfirst(!iszero, @view M[i,i+1:end])
+            isnothing(swapto) && return zero(prev)
+            sign = -sign
+            Base.swapcols!(M, i, i + swapto)
+        end
+        for k in i+1:n, j in i+1:n
+            M[j,k] = exactdiv(M[j,k]*M[i,i] - M[j,i]*M[i,k], prev)
+        end
+        prev = M[i,i]
+    end
+    return sign * M[end,end]
+end
+"""
+    LinearAlgebra.det_bareiss(M)
+
+Calculates the determinant of a matrix using the
+[Bareiss Algorithm](https://en.wikipedia.org/wiki/Bareiss_algorithm).
+Also refer to [`det_bareiss!`](@ref).
+"""
+det_bareiss(M) = det_bareiss!(copy(M))
+
+
 
 """
     promote_leaf_eltypes(itr)
@@ -1668,7 +1693,7 @@ function normalize!(a::AbstractArray, p::Real=2)
     __normalize!(a, nrm)
 end
 
-@inline function __normalize!(a::AbstractArray, nrm::AbstractFloat)
+@inline function __normalize!(a::AbstractArray, nrm::Real)
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 

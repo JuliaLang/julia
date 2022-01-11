@@ -31,6 +31,29 @@ let ex = quote
         macro foobar()
             :()
         end
+        macro barfoo(ex)
+            ex
+        end
+        macro error_expanding()
+            error("cannot expand @error_expanding")
+            :()
+        end
+        macro error_lowering_conditional(a)
+            if isa(a, Number)
+                return a
+            end
+            throw(AssertionError("Not a Number"))
+            :()
+        end
+        macro error_throwing()
+            return quote
+                error("@error_throwing throws an error")
+            end
+        end
+
+        primitive type NonStruct 8 end
+        Base.propertynames(::NonStruct) = (:a, :b, :c)
+        x = reinterpret(NonStruct, 0x00)
 
         # Support non-Dict AbstractDicts, #19441
         mutable struct CustomDict{K, V} <: AbstractDict{K, V}
@@ -64,6 +87,8 @@ let ex = quote
         test6()=[a, a]
         test7() = rand(Bool) ? 1 : 1.0
         test8() = Any[1][1]
+        test9(x::Char) = pass
+        test9(x::Char, i::Int) = pass
         kwtest(; x=1, y=2, w...) = pass
         kwtest2(a; x=1, y=2, w...) = pass
 
@@ -97,10 +122,12 @@ function map_completion_text(completions)
     return map(completion_text, c), r, res
 end
 
-test_complete(s) = map_completion_text(@inferred(completions(s,lastindex(s))))
-test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s,lastindex(s))))
-test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s,lastindex(s)))[2])
-test_complete_context(s) =  map_completion_text(@inferred(completions(s,lastindex(s),Main.CompletionFoo)))
+test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
+test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
+test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
+test_complete_context(s, m) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
+test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
+test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
 module M32377 end
 test_complete_32377(s) = map_completion_text(completions(s,lastindex(s), M32377))
@@ -297,7 +324,7 @@ end
 
 # test latex symbol completion in getindex expressions (#24705)
 let s = "tuple[\\alpha"
-    c, r, res = test_complete_context(s)
+    c, r, res = test_complete_foo(s)
     @test c[1] == "α"
     @test r == 7:12
     @test length(c) == 1
@@ -514,6 +541,61 @@ for s in ("CompletionFoo.kwtest2(1; x=1,",
     @test length(c) == 1
     @test occursin("a; x, y, w...", c[1])
 end
+
+#################################################################
+
+# method completion with `?` (arbitrary method with given argument types)
+let s = "CompletionFoo.?([1,2,3], 2.0)"
+    c, r, res = test_complete(s)
+    @test !res
+    @test  any(str->occursin("test(x::AbstractArray{T}, y) where T<:Real", str), c)
+    @test  any(str->occursin("test(args...)", str), c)
+    @test !any(str->occursin("test3(x::AbstractArray{Int", str), c)
+    @test !any(str->occursin("test4", str), c)
+end
+
+let s = "CompletionFoo.?('c')"
+    c, r, res = test_complete(s)
+    @test !res
+    @test  any(str->occursin("test9(x::Char)", str), c)
+    @test !any(str->occursin("test9(x::Char, i::Int", str), c)
+end
+
+let s = "CompletionFoo.?('c'"
+    c, r, res = test_complete(s)
+    @test !res
+    @test  any(str->occursin("test9(x::Char)", str), c)
+    @test  any(str->occursin("test9(x::Char, i::Int", str), c)
+end
+
+let s = "CompletionFoo.?(false, \"a\", 3, "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("test(args...)", c[1])
+end
+
+let s = "CompletionFoo.?(false, \"a\", 3, "
+    c, r, res = test_complete_noshift(s)
+    @test !res
+    @test isempty(c)
+end
+
+let s = "CompletionFoo.?()"
+    c, r, res = test_complete(s)
+    @test !res
+    @test any(str->occursin("foo()", str), c)
+    @test any(str->occursin("kwtest(;", str), c)
+    @test any(str->occursin("test(args...)", str), c)
+end
+
+let s = "CompletionFoo.?()"
+    c, r, res = test_complete_noshift(s)
+    @test !res
+    @test isempty(c)
+end
+
+#################################################################
 
 # Test of inference based getfield completion
 let s = "(1+2im)."
@@ -778,6 +860,45 @@ let s, c, r
 end
 end
 
+#test that it does not crash on files for which `stat` errors
+let current_dir, forbidden
+    # Issue #36855
+    if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+        mktempdir() do path
+            selfsymlink = joinpath(path, "selfsymlink")
+            symlink(selfsymlink, selfsymlink)
+            @test try
+                stat(selfsymlink) # should crash with a IOError
+                false
+            catch e
+                e isa Base.IOError && occursin("ELOOP", e.msg)
+            end
+            c, r = test_complete("\"$(joinpath(path, "selfsym"))")
+            @test c == ["selfsymlink"]
+        end
+    end
+
+    # Issue #32797
+    forbidden = Sys.iswindows() ? "C:\\S" : "/root/x"
+    test_complete(forbidden); @test true # simply check that it did not crash
+
+     # Issue #19310
+    if Sys.iswindows()
+        current_dir = pwd()
+        cd("C:")
+        test_complete("C"); @test true
+        test_complete("C:"); @test true
+        test_complete("C:\\"); @test true
+        if isdir("D:")
+            cd("D:")
+            test_complete("C"); @test true
+            test_complete("C:"); @test true
+            test_complete("C:\\"); @test true
+        end
+        cd(current_dir)
+    end
+end
+
 #test that it can auto complete with spaces in file/path
 mktempdir() do path
     space_folder = randstring() * " α"
@@ -987,13 +1108,13 @@ end
 
 # No CompletionFoo.CompletionFoo
 let s = ""
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test !("CompletionFoo" in c)
 end
 
 # Can see `rand()` after `using Random`
 let s = "r"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "rand" in c
     @test r == 1:1
     @test s[r] == "r"
@@ -1001,7 +1122,7 @@ end
 
 # Can see `Test.AbstractTestSet` after `import Test`
 let s = "Test.A"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "AbstractTestSet" in c
     @test r == 6:6
     @test s[r] == "A"
@@ -1009,21 +1130,21 @@ end
 
 # Can complete relative import
 let s = "import ..M"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test_broken "Main" in c
     @test r == 10:10
     @test s[r] == "M"
 end
 
 let s = ""
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "bar" in c
     @test r === 1:0
     @test s[r] == ""
 end
 
 let s = "f"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "foo" in c
     @test r == 1:1
     @test s[r] == "f"
@@ -1031,7 +1152,7 @@ let s = "f"
 end
 
 let s = "@f"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "@foobar" in c
     @test r == 1:2
     @test s[r] == "@f"
@@ -1039,48 +1160,48 @@ let s = "@f"
 end
 
 let s = "type_test.x"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "xx" in c
     @test r == 11:11
     @test s[r] == "x"
 end
 
 let s = "bar.no_val_available"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test length(c)==0
 end
 
 let s = "type_test.xx.y"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "yy" in c
     @test r == 14:14
     @test s[r] == "y"
 end
 
 let s = ":(function foo(::Int) end).args[1].args[2]."
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test c == Any[]
 end
 
 let s = "log(log.(x),"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test !isempty(c)
 end
 
 let s = "Base.return_types(getin"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "getindex" in c
     @test r == 19:23
     @test s[r] == "getin"
 end
 
 let s = "using Test, Random"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test !("RandomDevice" in c)
 end
 
 let s = "test(1,1, "
-    c, r, res = test_complete_context(s)
+    c, r, res = test_complete_foo(s)
     @test !res
     @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
     @test length(c) == 3
@@ -1089,7 +1210,7 @@ let s = "test(1,1, "
 end
 
 let s = "test.(1,1, "
-    c, r, res = test_complete_context(s)
+    c, r, res = test_complete_foo(s)
     @test !res
     @test length(c) == 4
     @test r == 1:4
@@ -1097,7 +1218,7 @@ let s = "test.(1,1, "
 end
 
 let s = "prevind(\"θ\",1,"
-    c, r, res = test_complete_context(s)
+    c, r, res = test_complete_foo(s)
     @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
     @test r == 1:7
     @test s[r] == "prevind"
@@ -1105,13 +1226,18 @@ end
 
 # Issue #32840
 let s = "typeof(+)."
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test length(c) == length(fieldnames(DataType))
 end
 
 let s = "test_dict[\"ab"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test c == Any["\"abc\"", "\"abcd\""]
+end
+
+let s = "CompletionFoo.x."
+    c, r = test_complete(s)
+    @test "a" in c
 end
 
 # https://github.com/JuliaLang/julia/issues/27184
@@ -1119,4 +1245,65 @@ let
     (test_complete("@noexist."); @test true)
     (test_complete("Main.@noexist."); @test true)
     (test_complete("@Main.noexist."); @test true)
+end
+
+let # Check that completion does not crash on (possibly invalid) macro calls
+    (test_complete("@show."); @test true)
+    (test_complete("@macroexpand."); @test true)
+    (test_complete("@.."); @test true)
+    (test_complete("CompletionFoo.@foobar."); @test true)
+    (test_complete("CompletionFoo.@foobar()."); @test true)
+    (test_complete("CompletionFoo.@foobar(4)."); @test true)
+    (test_complete("CompletionFoo.@barfoo."); @test true)
+    (test_complete("CompletionFoo.@barfoo()."); @test true)
+    (test_complete("CompletionFoo.@barfoo(6)."); @test true)
+    (test_complete("CompletionFoo.@error_expanding."); @test true)
+    (test_complete("CompletionFoo.@error_expanding()."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional()."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional(3)."); @test true)
+    (test_complete("CompletionFoo.@error_lowering_conditional('a')."); @test true)
+    (test_complete("CompletionFoo.@error_throwing."); @test true)
+    (test_complete("CompletionFoo.@error_throwing()."); @test true)
+end
+
+@testset "https://github.com/JuliaLang/julia/issues/40247" begin
+    # getfield type completion can work for complicated expression
+
+    let
+        m = Module()
+        @eval m begin
+            struct Rs
+                rs::Vector{Regex}
+            end
+            var = nothing
+            function foo()
+                global var = 1
+                return Rs([r"foo"])
+            end
+        end
+
+        c, r = test_complete_context("foo().rs[1].", m)
+        @test m.var ≠ 1 # getfield type completion should never execute `foo()`
+        @test length(c) == fieldcount(Regex)
+    end
+
+    let
+        m = Module()
+        @eval m begin
+            struct R
+                r::Regex
+            end
+            var = nothing
+            function foo()
+                global var = 1
+                return R(r"foo")
+            end
+        end
+
+        c, r = test_complete_context("foo().r.", m)
+        # the current implementation of `REPL.REPLCompletions.completions(::String, ::Int, ::Module)`
+        # cuts off "foo().r." to `.r.`, and the getfield type completion doesn't work for this simpler case
+        @test_broken length(c) == fieldcount(Regex)
+    end
 end
