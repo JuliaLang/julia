@@ -1890,6 +1890,15 @@ end
     end
 end
 
+@testset "#43766: `display` trailing newline" begin
+    buf = PipeBuffer()
+    td = TextDisplay(buf)
+    display(td, 1)
+    @test read(td.io, String) == "1\n"
+    show(td.io, 1)
+    @test read(td.io, String) == "1"
+end
+
 function _methodsstr(f)
     buf = IOBuffer()
     show(buf, methods(f))
