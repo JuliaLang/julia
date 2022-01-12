@@ -1692,6 +1692,10 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         xty = widenconst(argtypes[2])
         return isconcrete && isprimitivetype(ty) && isprimitivetype(xty)
     end
+    if f === Intrinsics.have_fma
+        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1])
+        return isconcrete && isprimitivetype(ty)
+    end
     # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
     # primitive types of the same type.
     isshift = f === shl_int || f === lshr_int || f === ashr_int
