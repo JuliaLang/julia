@@ -499,9 +499,10 @@ end
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         if Base.issingletontype(T) # singleton types
             @boundscheck checkbounds(a, i1, tailinds...)
-            return T.instance # setindex! is a noop here
+            # setindex! is a noop except for the index check
+        else
+            setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
         end
-        return setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
     else
         @boundscheck checkbounds(a, i1, tailinds...)
         ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
@@ -564,9 +565,10 @@ end
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         if Base.issingletontype(T) # singleton types
             @boundscheck checkbounds(a, i1, tailinds...)
-            return T.instance # setindex! is a noop here
+            # setindex! is a noop except for the index check
+        else
+            setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
         end
-        return setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
     end
     @boundscheck checkbounds(a, i1, tailinds...)
     t = Ref{T}(v)

@@ -66,18 +66,19 @@ for (_A, Ar, _B) in ((A, Ars, B), (As, Arss, Bs))
         @test Arsc == [1 -1; 2 -2]
         reinterpret(NTuple{3, Int64}, Bc)[2] = (4,5,6)
         @test Bc == Complex{Int64}[5+6im, 7+4im, 5+6im]
-        reinterpret(NTuple{3, Int64}, Bc)[1] = (1,2,3)
+        B2 = reinterpret(NTuple{3, Int64}, Bc)
+        @test setindex!(B2, (1,2,3), 1) == B2
         @test Bc == Complex{Int64}[1+2im, 3+4im, 5+6im]
         Bc = copy(_B)
         Brrs = reinterpret(reshape, Int64, Bc)
-        Brrs[2, 3] = -5
+        @test setindex!(Brrs, -5, 2, 3) == Brrs
         @test Bc == Complex{Int64}[5+6im, 7+8im, 9-5im]
         Brrs[last(eachindex(Brrs))] = 22
         @test Bc == Complex{Int64}[5+6im, 7+8im, 9+22im]
 
         A1 = reinterpret(Float64, _A)
         A2 = reinterpret(ComplexF64, _A)
-        A1[1] = 1.0
+        @test setindex!(A1, 1.0, 1) == A1
         @test real(A2[1]) == 1.0
         A1 = reinterpret(reshape, Float64, _A)
         A1[1] = 2.5
@@ -88,7 +89,7 @@ for (_A, Ar, _B) in ((A, Ars, B), (As, Arss, Bs))
         @test real(A2rs[1]) == 1.0
         A1rs = reinterpret(reshape, Float64, Ar)
         A2rs = reinterpret(reshape, ComplexF64, Ar)
-        A1rs[1, 1] = 2.5
+        @test setindex!(A1rs, 2.5, 1, 1) == A1rs
         @test real(A2rs[1]) == 2.5
     end
 end
@@ -427,7 +428,8 @@ end
     x = reinterpret(Tuple{}, t)
     @test x == reinterpret(reshape, Tuple{}, t)
     @test x[3,5] === ()
-    @test (x[1,1] = (); true)
+    x1 = fill((), 3, 5)
+    @test setindex!(x, (), 1, 1) == x1
     @test_throws BoundsError x[17]
     @test_throws BoundsError x[4,2]
     @test_throws BoundsError x[1,2,3]
@@ -438,7 +440,8 @@ end
     @test_throws BoundsError x[19]
     @test_throws BoundsError x[2,6] = SomeSingleton(0xa)
     @test x[2,3] === SomeSingleton(:x)
-    @test (x[3,5] = SomeSingleton(:); true)
-    @test x == fill(SomeSingleton(nothing), (3, 5))
+    x2 = fill(SomeSingleton(0.7), 3, 5)
+    @test x == x2
+    @test setindex!(x, SomeSingleton(:), 3, 5) == x2
     @test_throws MethodError x[2,4] = nothing
 end
