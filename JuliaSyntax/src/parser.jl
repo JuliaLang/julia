@@ -23,7 +23,7 @@ struct ParseState
 end
 
 # Normal context
-function ParseState(stream::ParseStream; julia_version=VERSION)
+function ParseState(stream::ParseStream, julia_version::VersionNumber)
     ParseState(stream, julia_version, true, false, false, false, false, true)
 end
 
@@ -3092,8 +3092,8 @@ Parse a sequence of top level statements.
 `input` may be a `ParseStream` or other input source which will be passed to
 the `ParseStream` constructor. The `ParseStream` is returned.
 """
-function parse_all(stream::ParseStream)
-    parse_all(ParseState(stream))
+function parse_all(stream::ParseStream; julia_version=VERSION)
+    parse_all(ParseState(stream, julia_version))
     return stream
 end
 

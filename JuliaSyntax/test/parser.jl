@@ -1,6 +1,6 @@
 function test_parse(production, code; v=v"1.6")
     stream = ParseStream(code)
-    production(JuliaSyntax.ParseState(stream; julia_version=v))
+    production(JuliaSyntax.ParseState(stream, v))
     t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"Nothing")
     source = SourceFile(code)
     s = SyntaxNode(source, t)
@@ -12,9 +12,9 @@ function test_parse(production, code; v=v"1.6")
 end
 
 # Version of test_parse for interactive exploration
-function itest_parse(production, code, julia_version::VersionNumber=v"1.6")
+function itest_parse(production, code; julia_version::VersionNumber=v"1.6")
     stream = ParseStream(code)
-    production(JuliaSyntax.ParseState(stream; julia_version=julia_version))
+    production(JuliaSyntax.ParseState(stream, julia_version))
     t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
 
     println(stdout, "# Code:\n$code\n")

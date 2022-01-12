@@ -25,9 +25,9 @@ function core_parser_hook(code, filename, offset, options)
 
         stream = ParseStream(code)
         if options === :atom
-            parse_atom(ParseState(stream))
+            parse_atom(ParseState(stream, VERSION))
         elseif options === :statement
-            parse_stmts(ParseState(stream))
+            parse_stmts(ParseState(stream, VERSION))
         elseif options === :all
             parse_all(stream)
         end

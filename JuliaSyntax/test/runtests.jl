@@ -7,7 +7,7 @@ using JuliaSyntax: SourceFile
 
 using JuliaSyntax: GreenNode, SyntaxNode,
     flags, EMPTY_FLAGS, TRIVIA_FLAG, INFIX_FLAG,
-    children, child, setchild!, SyntaxHead
+    children, child, setchild!, SyntaxHead, parse_all
 
 using JuliaSyntax: Kind, @K_str, is_literal, is_keyword, is_operator
 using JuliaSyntax: highlight
@@ -17,25 +17,25 @@ using JuliaSyntax: ParseStream,
     emit, emit_diagnostic
 using JuliaSyntax: ParseState
 
-function test_parse_file(root_path, path)
-    fullpath = joinpath(root_path, path)
-    if endswith(path, ".jl") && isfile(fullpath)
-        @testset "Parse $path" begin
-            code = read(fullpath, String)
-            @test JuliaSyntax.remove_linenums!(JuliaSyntax.parse_all(Expr, code)) == 
-                  JuliaSyntax.remove_linenums!(JuliaSyntax.flisp_parse_all(code))
-        end
-    end
+function parsers_agree_on_file(path)
+    code = read(path, String)
+    JuliaSyntax.remove_linenums!(JuliaSyntax.parse_all(Expr, code)) == 
+    JuliaSyntax.remove_linenums!(JuliaSyntax.flisp_parse_all(code))
 end
-test_parse_file(path) = test_parse_file(dirname(path), basename(path))
 
-function parse_all_in_path(basedir)
+function find_source_in_path(basedir)
     src_list = String[]
     for (root, dirs, files) in walkdir(basedir)
         append!(src_list, (joinpath(root, f) for f in files if endswith(f, ".jl")))
     end
-    for f in src_list
-        test_parse_file(basedir, relpath(f, basedir))
+    src_list
+end
+
+function test_parse_all_in_path(basedir)
+    for f in find_source_in_path(basedir)
+        @testset "Parse $(relpath(f, basedir))" begin
+            @test parsers_agree_on_file(f)
+        end
     end
 end
 

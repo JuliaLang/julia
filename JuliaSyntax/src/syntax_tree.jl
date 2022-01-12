@@ -232,6 +232,16 @@ children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : 
 
 span(node::SyntaxNode) = span(node.raw)
 
+"""
+    sourcetext(node)
+
+Get the full source text of a node.
+"""
+function sourcetext(node::SyntaxNode)
+    val_range = (node.position-1) .+ (1:span(node))
+    view(node.source, val_range)
+end
+
 function interpolate_literal(node::SyntaxNode, val)
     @assert kind(node) == K"$"
     SyntaxNode(node.source, node.raw, node.position, node.parent, true, val)
@@ -384,14 +394,13 @@ function _to_expr(node::SyntaxNode)
             # Ignore the values of large integers and convert them back to
             # symbolic/textural form for compatibility with the Expr
             # representation of these.
-            val_range = (node.position-1) .+ (1:node.raw.span)
-            val_str = replace(view(node.source, val_range), '_'=>"")
+            str = replace(sourcetext(node), '_'=>"")
             headsym = :macrocall
             k = kind(node)
             macname = node.val isa Int128  ? Symbol("@int128_str")  :
                       node.val isa UInt128 ? Symbol("@uint128_str") :
                       Symbol("@big_str")
-            return Expr(:macrocall, GlobalRef(Core, macname), nothing, val_str)
+            return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
         else
             return node.val
         end
@@ -497,21 +506,20 @@ Base.Expr(node::SyntaxNode) = _to_expr(node)
 
 #-------------------------------------------------------------------------------
 
-function parse_all(::Type{SyntaxNode}, code::AbstractString; filename="none")
-    source_file = SourceFile(code, filename=filename)
-
-    stream = ParseStream(code)
+function parse_all(::Type{SyntaxNode}, source::SourceFile)
+    stream = ParseStream(source.code)
     parse_all(stream)
-
     if !isempty(stream.diagnostics)
         buf = IOBuffer()
-        show_diagnostics(IOContext(buf, stdout), stream, code)
+        show_diagnostics(IOContext(buf, stdout), stream, source.code)
         @error Text(String(take!(buf)))
     end
-
     green_tree = build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
+    SyntaxNode(source, green_tree)
+end
 
-    SyntaxNode(source_file, green_tree)
+function parse_all(::Type{SyntaxNode}, code::AbstractString; filename="none")
+    parse_all(SyntaxNode, SourceFile(code, filename=filename))
 end
 
 
@@ -521,18 +529,7 @@ end
 Parse the given code and convert to a standard Expr
 """
 function parse_all(::Type{Expr}, code::AbstractString; filename="none")
-    tree = parse_all(SyntaxNode, code; filename=filename)
-
-    # convert to Julia expr
-    ex = Expr(tree)
-
-    # TODO: Don't remove line nums; try to get them consistent with Base.
-    flisp_ex = remove_linenums!(flisp_parse_all(code))
-    if remove_linenums!(deepcopy(ex)) != flisp_ex && !(!isempty(flisp_ex.args) &&
-                           Meta.isexpr(flisp_ex.args[end], :error))
-        @error "Mismatch with Meta.parse()" ex flisp_ex
-    end
-    ex
+    Expr(parse_all(SyntaxNode, code; filename=filename))
 end
 
 function remove_linenums!(ex)
@@ -543,10 +540,10 @@ function remove_linenums!(ex)
     ex
 end
 
-function flisp_parse_all(code)
+function flisp_parse_all(code; filename="none")
     if VERSION >= v"1.6"
-        Meta.parseall(code)
+        Meta.parseall(code, filename=filename)
     else
-        Base.parse_input_line(code)
+        Base.parse_input_line(code, filename=filename)
     end
 end
