@@ -880,7 +880,6 @@ end
             copy!(LOAD_PATH, [joinpath(dir, "inner_env", "Project.toml"), joinpath(dir, "outer_env", "Project.toml")])
 
             function test_this_prefs(this_prefs)
-                @show this_prefs
                 @test this_prefs["pref1"] == "outer-project"
                 @test this_prefs["pref2"] == "outer-jlp"
                 @test this_prefs["pref3"] == "inner-project"
