@@ -42,12 +42,6 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
         BasicBlock *header = L->getHeader();
         const llvm::DataLayout &DL = header->getModule()->getDataLayout();
         initFunctions(*header->getModule());
-        // Also require `gc_preserve_begin_func` whereas
-        // `gc_preserve_end_func` is optional since the input to
-        // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
-        // We also hoist write barriers here, so we don't exit if write_barrier_func exists
-        if (!gc_preserve_begin_func && !write_barrier_func && !alloc_obj_func)
-            return false;
         auto LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
         auto DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
 
@@ -153,6 +147,57 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                     if (valid) {
                         call->moveBefore(preheader->getTerminator());
                         changed = true;
+                    }
+                } else {
+                    jl_alloc::AllocIdInfo alloc_info;
+                    if (jl_alloc::getArrayAllocInfo(alloc_info, call)) {
+                        jl_alloc::AllocUseInfo use_info;
+                        jl_alloc::AllocUseInfo array_use_info;
+                        jl_alloc::CheckInst::Stack check_stack;
+                        jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
+                        jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()));
+                        if (use_info.escaped || use_info.addrescaped) {
+                            continue;
+                        }
+                        jl_alloc::EscapeAnalysisRequiredArgs arr_required{array_use_info, check_stack, *this, DL};
+                        bool array_refstore = false;
+                        bool array_escaped = false;
+                        for (auto &field : use_info.memops) {
+                            for (auto &memop : field.second.accesses) {
+                                if (memop.offset == offsetof(jl_array_t, data)) {
+                                    jl_alloc::runEscapeAnalysis(memop.inst, arr_required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()));
+                                    if (array_use_info.escaped || array_use_info.addrescaped) {
+                                        array_escaped = true;
+                                        break;
+                                    }
+                                    if (array_use_info.refstore) {
+                                        array_refstore = true;
+                                    }
+                                }
+                            }
+                            if (array_escaped) {
+                                break;
+                            }
+                        }
+                        if (array_escaped) {
+                            continue;
+                        }
+                        bool valid = true;
+                        for (std::size_t i = 0; i < call->getNumArgOperands(); i++) {
+                            if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
+                                valid = false;
+                                break;
+                            }
+                        }
+                        if (use_info.refstore || array_refstore) {
+                            // We need to add write barriers to any stores
+                            // that may start crossing generations
+                            continue;
+                        }
+                        if (valid) {
+                            call->moveBefore(preheader->getTerminator());
+                            changed = true;
+                        }
                     }
                 }
             }
