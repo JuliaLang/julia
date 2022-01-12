@@ -213,13 +213,13 @@ module IteratorsMD
 
     ```jldoctest
     julia> cartesian = CartesianIndices((1:3, 1:2))
-    CartesianIndex(1, 1):CartesianIndex(3, 2)
+    CartesianIndices((1:3, 1:2))
 
     julia> cartesian[4]
     CartesianIndex(1, 2)
 
     julia> cartesian = CartesianIndices((1:2:5, 1:2))
-    CartesianIndex(1, 1):CartesianIndex(2, 1):CartesianIndex(5, 2)
+    CartesianIndices((1:2:5, 1:2))
 
     julia> cartesian[2, 2]
     CartesianIndex(3, 2)
@@ -234,13 +234,13 @@ module IteratorsMD
 
     ```jldoctest
     julia> CIs = CartesianIndices((2:3, 5:6))
-    CartesianIndex(2, 5):CartesianIndex(3, 6)
+    CartesianIndices((2:3, 5:6))
 
     julia> CI = CartesianIndex(3, 4)
     CartesianIndex(3, 4)
 
     julia> CIs .+ CI
-    CartesianIndex(5, 9):CartesianIndex(6, 10)
+    CartesianIndices((5:6, 9:10))
     ```
 
     For cartesian to linear index conversion, see [`LinearIndices`](@ref).
@@ -267,14 +267,9 @@ module IteratorsMD
     _convert2ind(sz::OrdinalRange) = first(sz):step(sz):last(sz)
 
     function show(io::IO, iter::CartesianIndices)
-        show(io, first(iter))
-        print(io, ":")
-        st = step(iter)
-        if any(!=(1), Tuple(st))
-            show(io, st)
-            print(io, ":")
-        end
-        show(io, last(iter))
+        print(io, "CartesianIndices(")
+        show(io, iter.indices)
+        print(io, ")")
     end
     show(io::IO, ::MIME"text/plain", iter::CartesianIndices) = show(io, iter)
 
@@ -296,10 +291,10 @@ module IteratorsMD
     julia> J = CartesianIndex(3,3);
 
     julia> I:J
-    CartesianIndex(2, 1):CartesianIndex(3, 3)
+    CartesianIndices((2:3, 1:3))
 
     julia> I:CartesianIndex(1, 2):J
-    CartesianIndex(2, 1):CartesianIndex(1, 2):CartesianIndex(3, 3)
+    CartesianIndices((2:1:3, 1:2:3))
     ```
     """
     (:)(I::CartesianIndex{N}, J::CartesianIndex{N}) where N =

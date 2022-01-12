@@ -133,7 +133,7 @@ end
             @test_throws BoundsError CartesianIndices(i)[1:2]
             io = IOBuffer()
             show(io, CartesianIndices(i))
-            @test String(take!(io)) == "CartesianIndex():CartesianIndex()"
+            @test String(take!(io)) == "CartesianIndices(())"
         end
     end
 
@@ -163,7 +163,7 @@ end
         @test last(li)  == li[3] == 3
         io = IOBuffer()
         show(io, ci)
-        @test String(take!(io)) == "CartesianIndex(2,):CartesianIndex(4,)"
+        @test String(take!(io)) == "CartesianIndices((2:4,))"
     end
 
     @testset "2-dimensional" begin
@@ -191,7 +191,7 @@ end
         @test_throws BoundsError linear[4:13]
         io = IOBuffer()
         show(io, cartesian)
-        @test String(take!(io)) == "CartesianIndex(1, 1):CartesianIndex(4, 3)"
+        @test String(take!(io)) == "CartesianIndices((Base.OneTo(4), Base.OneTo(3)))"
     end
 
     @testset "3-dimensional" begin
