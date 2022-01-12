@@ -106,5 +106,14 @@ end
     @test length(Allocs.fetch().allocs) > 10
 
     Allocs.clear()
+end
 
+@testset "alloc profiler catches strings" begin
+    Allocs.@profile sample_rate=1 "$(rand())"
+
+    prof = Allocs.fetch()
+    Allocs.clear()
+
+    @test length(prof.allocs) >= 1
+    @test length([a for a in prof.allocs if a.type == String]) >= 1
 end
