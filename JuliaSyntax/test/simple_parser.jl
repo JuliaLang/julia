@@ -1,5 +1,7 @@
-# Example parser for a very basic language of expressions, calls and function
-# definitions.
+# Example parser for a very basic Julia-like language of expressions, calls and
+# function definitions.
+
+using JuliaSyntax: @K_str, is_literal, is_keyword, is_operator
 
 function parse_toplevel(st)
     mark = position(st)

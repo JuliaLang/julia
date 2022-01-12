@@ -3,6 +3,11 @@
 # Here we test the ParseStream interface, by taking input code and checking
 # that the correct sequence of emit() and bump() produces a valid parse tree.
 
+using JuliaSyntax: ParseStream,
+    peek, peek_token,
+    bump, bump_trivia, bump_invisible,
+    emit, emit_diagnostic
+
 code = """
 for i = 1:10
     xx[i] + 2
@@ -13,8 +18,8 @@ end
 
 st = ParseStream(code)
 
-# Here we manually issue parse events in the order a Julia parser would issue
-# them (if such a parser existed... which it doesn't yet!)
+# Here we manually issue parse events in the order the Julia parser would issue
+# them
 @testset "ParseStream" begin
     p1 = position(st)
         @test peek(st) == K"for"
