@@ -75,7 +75,7 @@ A sample rate of 1.0 will record everything; 0.0 will record nothing.
 """
 function start(; sample_rate::Real)
     ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), Float64(sample_rate))
-    
+
     _g_sample_rate[] = sample_rate
     _g_gc_num_before[] = Base.gc_num()
 end
@@ -120,12 +120,15 @@ function fetch()
     raw_results = ccall(:jl_fetch_alloc_profile, RawResults, ())
     decoded_results = decode(raw_results)
 
-    missed_allocs = _g_expected_sampled_allocs[] - length(decoded_results.allocs)
-    missed_percentage = round(Int, missed_allocs / _g_expected_sampled_allocs[] * 100)
-    @warn("The allocation profiler is not fully implemented, and missed $(missed_percentage)% " *
-            "($(round(Int, missed_allocs)) / $(round(Int, _g_expected_sampled_allocs[]))) " *
-            "of allocs in the last run. " *
-            "For more info see https://github.com/JuliaLang/julia/issues/43688")
+    # avoid divide-by-0 errors
+    if _g_expected_sampled_allocs[] > 0
+        missed_allocs = _g_expected_sampled_allocs[] - length(decoded_results.allocs)
+        missed_percentage = round(Int, missed_allocs / _g_expected_sampled_allocs[] * 100)
+        @warn("The allocation profiler is not fully implemented, and missed $(missed_percentage)% " *
+                "($(round(Int, missed_allocs)) / $(round(Int, _g_expected_sampled_allocs[]))) " *
+                "of allocs in the last run. " *
+                "For more info see https://github.com/JuliaLang/julia/issues/43688")
+    end
     return decoded_results
 end
 
