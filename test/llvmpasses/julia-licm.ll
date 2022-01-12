@@ -2,18 +2,22 @@
 
 @tag = external addrspace(10) global {}, align 16
 
+; COM: This isn't an actual intrinsic, but it suffices for the test
+declare {} addrspace(10)* @julia.alloc_array_1d({} addrspace(10)*, i64)
+
 declare void @julia.write_barrier({}*, ...)
 
 declare {}*** @julia.get_pgcstack()
 
-define nonnull {} addrspace(10)* @julia_allocation_hoist(i64 signext %0) #0 {
+define nonnull {} addrspace(10)* @julia_allocation_hoist(i64 signext %n) #0 {
 top:
-  %1 = call {}*** @julia.get_pgcstack()
-  %2 = icmp sgt i64 %0, 0
-  br i1 %2, label %L4, label %L3
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %gt0 = icmp sgt i64 %n, 0
+  br i1 %gt0, label %L4, label %L3
 
 L3.loopexit:                                      ; preds = %L22
-  %.lcssa = phi {} addrspace(10)* [ %3, %L22 ]
+  %.lcssa = phi {} addrspace(10)* [ %alloc_obj, %L22 ]
+  %.lcssa_array = phi {} addrspace(10)* [ %alloc_arr, %L22 ]
   br label %L3
 
 L3:                                               ; preds = %L3.loopexit, %top
@@ -21,21 +25,25 @@ L3:                                               ; preds = %L3.loopexit, %top
   ret {} addrspace(10)* %merge
 
 L4:                                               ; preds = %top
-  %current_task112 = getelementptr inbounds {}**, {}*** %1, i64 -12
+  %current_task112 = getelementptr inbounds {}**, {}*** %pgcstack, i64 -12
   %current_task1 = bitcast {}*** %current_task112 to {}**
-  ; CHECK: %3 = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task1, i64 8, {} addrspace(10)* @tag)
+  ; CHECK: %alloc_obj = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task1, i64 8, {} addrspace(10)* @tag)
+  ; CHECK-NEXT: %alloc_arr = call noalias nonnull {} addrspace(10)* @julia.alloc_array_1d({} addrspace(10)* @tag, i64 1), !julia.array
   ; CHECK-NEXT: br label %L22
   br label %L22
 
 L22:                                              ; preds = %L4, %L22
-  %value_phi5 = phi i64 [ 1, %L4 ], [ %5, %L22 ]
-  ; CHECK: %value_phi5 = phi i64 [ 1, %L4 ], [ %5, %L22 ]
-  ; CHECK-NEXT %4 = bitcast {} addrspace(10)* %3 to i64 addrspace(10)*
-  %3 = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task1, i64 8, {} addrspace(10)* @tag) #2
-  %4 = bitcast {} addrspace(10)* %3 to i64 addrspace(10)*
-  store i64 %value_phi5, i64 addrspace(10)* %4, align 8, !tbaa !2
-  %.not = icmp eq i64 %value_phi5, %0
-  %5 = add i64 %value_phi5, 1
+  %value_phi5 = phi i64 [ 1, %L4 ], [ %indvar, %L22 ]
+  ; CHECK: %value_phi5 = phi i64 [ 1, %L4 ], [ %indvar, %L22 ]
+  ; CHECK-NEXT: %bitcast_obj = bitcast {} addrspace(10)* %alloc_obj to i64 addrspace(10)*
+  %alloc_obj = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task1, i64 8, {} addrspace(10)* @tag) #2
+  %bitcast_obj = bitcast {} addrspace(10)* %alloc_obj to i64 addrspace(10)*
+  store i64 %value_phi5, i64 addrspace(10)* %bitcast_obj, align 8, !tbaa !2
+  ; CHECK: store i64 %value_phi5, i64 addrspace(10)* %bitcast_obj, align 8
+  ; CHECK-NEXT: %.not = icmp eq i64 %value_phi5, %n
+  %alloc_arr = call noalias nonnull {} addrspace(10)* @julia.alloc_array_1d({} addrspace(10)* @tag, i64 1), !julia.array !8
+  %.not = icmp eq i64 %value_phi5, %n
+  %indvar = add i64 %value_phi5, 1
   br i1 %.not, label %L3.loopexit, label %L22
 }
 
@@ -73,3 +81,4 @@ attributes #4 = { inaccessiblemem_or_argmemonly }
 !5 = !{!"jtbaa_data", !6, i64 0}
 !6 = !{!"jtbaa", !7, i64 0}
 !7 = !{!"jtbaa"}
+!8 = !{!"allocation"}
