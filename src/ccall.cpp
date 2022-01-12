@@ -390,7 +390,7 @@ static Value *llvm_type_rewrite(
     // sizes.
     Value *from;
     Value *to;
-    const DataLayout &DL = jl_data_layout;
+    const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
     unsigned align = std::max(DL.getPrefTypeAlignment(target_type), DL.getPrefTypeAlignment(from_type));
     if (DL.getTypeAllocSize(target_type) >= DL.getTypeAllocSize(from_type)) {
         to = emit_static_alloca(ctx, target_type);
@@ -937,7 +937,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_dt, jl_value_t *rt)
 {
     // XXX: need to handle parameterized zero-byte types (singleton)
-    const DataLayout &DL = jl_data_layout;
+    const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
     unsigned nb = DL.getTypeStoreSize(result->getType());
     MDNode *tbaa = jl_is_mutable(rt) ? tbaa_mutab : tbaa_immut;
     Value *strct = emit_allocobj(ctx, nb, runtime_dt);
@@ -2004,7 +2004,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 MDNode *tbaa = jl_is_mutable(rt) ? tbaa_mutab : tbaa_immut;
                 int boxalign = julia_alignment(rt);
                 // copy the data from the return value to the new struct
-                const DataLayout &DL = jl_data_layout;
+                const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
                 auto resultTy = result->getType();
                 if (DL.getTypeStoreSize(resultTy) > rtsz) {
                     // ARM and AArch64 can use a LLVM type larger than the julia type.

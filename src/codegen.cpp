@@ -3817,7 +3817,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
                 ctx.builder.CreateAlignedStore(unbox, ssaslot, ssaslot->getAlign());
             }
             else {
-                const DataLayout &DL = jl_data_layout;
+                const DataLayout &DL = jl_Module->getDataLayout();
                 uint64_t sz = DL.getTypeStoreSize(T);
                 emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz, ssaslot->getAlign().value());
             }
