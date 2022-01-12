@@ -152,6 +152,13 @@ auto getFloatPtrTy(LLVMContext &ctxt) {
 auto getDoublePtrTy(LLVMContext &ctxt) {
     return Type::getDoublePtrTy(ctxt);
 }
+auto getSizePtrTy(LLVMContext &ctxt) {
+    if (sizeof(size_t) > sizeof(uint32_t)) {
+        return getInt64PtrTy(ctxt);
+    } else {
+        return getInt32PtrTy(ctxt);
+    }
+}
 
 typedef Instruction TerminatorInst;
 
@@ -227,8 +234,6 @@ static FunctionType *jl_func_sig_sparams;
 static Type *T_pvoidfunc;
 
 static IntegerType *T_sigatomic;
-
-static Type *T_psize;
 
 static Type *T_ppint8;
 static Type *T_pppint8;
@@ -563,7 +568,7 @@ static const auto jlundefvarerror_func = new JuliaFunction{
 static const auto jlboundserrorv_func = new JuliaFunction{
     XSTR(jl_bounds_error_ints),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(T_jlvalue, AddressSpace::CalleeRooted), T_psize, getSizeTy(C)}, false); },
+            {PointerType::get(T_jlvalue, AddressSpace::CalleeRooted), getSizePtrTy(C), getSizeTy(C)}, false); },
     get_attrs_noreturn,
 };
 static const auto jlboundserror_func = new JuliaFunction{
@@ -3198,7 +3203,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 return true;
             }
             // String and SimpleVector's length fields have the same layout
-            auto ptr = emit_bitcast(ctx, boxed(ctx, obj), T_psize);
+            auto ptr = emit_bitcast(ctx, boxed(ctx, obj), getSizePtrTy(ctx.builder.getContext()));
             Value *len = tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), ptr, Align(sizeof(size_t))));
             MDBuilder MDB(ctx.builder.getContext());
             if (sty == jl_simplevector_type) {
@@ -4904,7 +4909,7 @@ static void emit_last_age_field(jl_codectx_t &ctx)
     assert(ctx.builder.GetInsertBlock() == ctx.pgcstack->getParent());
     ctx.world_age_field = ctx.builder.CreateInBoundsGEP(
             getSizeTy(ctx.builder.getContext()),
-            ctx.builder.CreateBitCast(ptls, T_psize),
+            ctx.builder.CreateBitCast(ptls, getSizePtrTy(ctx.builder.getContext())),
             ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_task_t, world_age) / sizeof(size_t)),
             "world_age");
 }
@@ -4915,7 +4920,7 @@ static Value *get_current_signal_page(jl_codectx_t &ctx)
     // return ctx.builder.CreateCall(prepare_call(reuse_signal_page_func));
     auto ptls = get_current_ptls(ctx);
     int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void *);
-    return emit_nthptr_recast(ctx, ptls, nthfield, ctx.tbaa().tbaa_const, T_psize);
+    return emit_nthptr_recast(ctx, ptls, nthfield, ctx.tbaa().tbaa_const, getSizePtrTy(ctx.builder.getContext()));
 }
 
 static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_codegen_params_t &params)
@@ -5206,7 +5211,7 @@ static Function* gen_cfun_wrapper(
                 getSizeTy(ctx.builder.getContext()),
                 ctx.builder.CreateConstInBoundsGEP1_32(
                     getSizeTy(ctx.builder.getContext()),
-                    emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)codeinst), T_psize),
+                    emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)codeinst), getSizePtrTy(ctx.builder.getContext())),
                     offsetof(jl_code_instance_t, max_world) / sizeof(size_t)),
                 Align(sizeof(size_t)));
         // XXX: age is always OK if we don't have a TLS. This is a hack required due to `@threadcall` abuse.
@@ -5746,7 +5751,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             assert(jl_datatype_size(output_type) == sizeof(void*) * 4);
             Value *strct = emit_allocobj(ctx, jl_datatype_size(output_type),
                                          literal_pointer_val(ctx, (jl_value_t*)output_type));
-            Value *derived_strct = emit_bitcast(ctx, decay_derived(ctx, strct), T_psize);
+            Value *derived_strct = emit_bitcast(ctx, decay_derived(ctx, strct), getSizePtrTy(ctx.builder.getContext()));
             MDNode *tbaa = best_tbaa(ctx.tbaa(), output_type);
             tbaa_decorate(tbaa, ctx.builder.CreateStore(F, derived_strct));
             tbaa_decorate(tbaa, ctx.builder.CreateStore(
