@@ -25,6 +25,5 @@ end
 include("parse_packages.jl")
 
 # Prototypes
-#include("syntax_trees.jl")
 #include("syntax_interpolation.jl")
 #include("simple_parser.jl")
