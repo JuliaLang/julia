@@ -301,7 +301,11 @@ function exec_options(opts)
             exit_on_sigint(true)
         end
         try
-            include(Main, PROGRAM_FILE)
+            if PROGRAM_FILE == "-"
+                include_string(Main, read(stdin, String), "stdin")
+            else
+                include(Main, PROGRAM_FILE)
+            end
         catch
             invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
             if !is_interactive::Bool
