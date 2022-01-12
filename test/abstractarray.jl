@@ -131,6 +131,9 @@ end
             @test CartesianIndices(i)[1] == CartesianIndex()
             @test_throws BoundsError CartesianIndices(i)[2]
             @test_throws BoundsError CartesianIndices(i)[1:2]
+            io = IOBuffer()
+            show(io, CartesianIndices(i))
+            @test String(take!(io)) == "CartesianIndex():CartesianIndex()"
         end
     end
 
@@ -160,7 +163,7 @@ end
         @test last(li)  == li[3] == 3
         io = IOBuffer()
         show(io, ci)
-        @test String(take!(io)) == "CartesianIndex{1}[CartesianIndex(2,), CartesianIndex(3,), CartesianIndex(4,)]"
+        @test String(take!(io)) == "CartesianIndex(2,):CartesianIndex(4,)"
     end
 
     @testset "2-dimensional" begin
@@ -186,6 +189,9 @@ end
         @test linear[2:3] === 2:3
         @test linear[3:-1:1] === 3:-1:1
         @test_throws BoundsError linear[4:13]
+        io = IOBuffer()
+        show(io, cartesian)
+        @test String(take!(io)) == "CartesianIndex(1, 1):CartesianIndex(4, 3)"
     end
 
     @testset "3-dimensional" begin
