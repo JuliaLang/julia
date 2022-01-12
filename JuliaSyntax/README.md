@@ -376,7 +376,8 @@ f(a,
   very good at heuristics.  Also, we've got huge piles of traininig data — just
   choose some high quality, tastefully hand-formatted libraries.
 
-* Similarly, can we learn fast and reasonably accurate recovery heuristics?
+* Similarly, can we learn fast and reasonably accurate recovery heuristics for
+  when the parser encounters broken syntax rather than hand-coding these?
 
 # Resources
 
@@ -541,10 +542,11 @@ Here's some behaviors which seem to be bugs:
 * In try-catch-finally, the `finally` clause is allowed before the `catch`, but
   always executes afterward. (Presumably was this a mistake? It seems pretty awful!)
 * When parsing `"[x \n\n ]"` the flisp parser gets confused, but `"[x \n ]"` is
-  parsed as `Expr(:vect)`
+  correctly parsed as `Expr(:vect)`
 * `f(x for x in in xs)` is accepted, and parsed very strangely.
 * Octal escape sequences saturate rather than being reported as errors. Eg,
-  `"\777"` results in `"\xff"`.
+  `"\777"` results in `"\xff"`.  This is inconsistent with
+  `Base.parse(::Type{Int}, ...)`
 
 ## Parsing / AST oddities and warts
 
@@ -585,9 +587,9 @@ parsing `key=val` pairs inside parentheses.
 
 ### Flattened generators
 
-Flattened generators are hard because the Julia AST doesn't respect a key
-rule we normally expect: that the children of an AST node are a contiguous
-range in the source text. This is because the `for`s in
+Flattened generators are uniquely problematic because the Julia AST doesn't
+respect a key rule we normally expect: that the children of an AST node are a
+*contiguous* range in the source text. This is because the `for`s in
 `[xy for x in xs for y in ys]` are parsed in the normal order of a for loop as
 
 ```
@@ -609,8 +611,8 @@ and the standard Julia AST is like this:
 
 however, note that if this tree were flattened, the order of tokens would be
 `(xy) (y in ys) (x in xs)` which is *not* the source order.  So in this case
-our tree needs to deviate from the Julia AST. The natural representation seems
-to be to flatten the generators:
+our green tree must deviate from the Julia AST. The natural representation
+seems to be to flatten the generators:
 
 ```
 (flatten
@@ -642,7 +644,8 @@ xy
   Presumably because of the need to add a line number node in the flisp parser
   `if a xx elseif b yy end   ==>  (if a (block xx) (elseif (block b) (block yy)))`
 
-* `import . .A` is allowed, and parsed the same as `import ..A`
+* Spaces are alloweed between import dots — `import . .A` is allowed, and
+  parsed the same as `import ..A`
 
 * `import A..` produces `(import (. A .))` which is arguably nonsensical, as `.`
   can't be a normal identifier.

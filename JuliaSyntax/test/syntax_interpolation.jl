@@ -1,3 +1,13 @@
+# Shortcuts for defining raw syntax nodes
+
+# Trivia nodes
+T(k, s) = GreenNode(SyntaxHead(k, flags(trivia=true)), s, )
+# Non-trivia nodes
+N(k, s) = GreenNode(SyntaxHead(k, flags()), s)
+N(k, args::GreenNode...) = GreenNode(SyntaxHead(k, flags()), args...)
+# Non-trivia, infix form
+NI(k, args::GreenNode...) = GreenNode(SyntaxHead(k, flags(infix=true)), args...)
+
 # # Macros and expression interpolation
 
 # The following shows that SyntaxNode works nicely for simple macros based on
