@@ -402,7 +402,8 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
-    if (isa(result, Const) || isconstType(result))
+    wresult = isa(result, InterConditional) ? widenconditional(result) : result
+    if (isa(wresult, Const) || isconstType(wresult))
         proven_pure = false
         # must be proven pure to use constant calling convention;
         # otherwise we might skip throwing errors (issue #20704)
@@ -436,14 +437,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
             src.pure = true
-            if isa(result, Const)
-                val = result.val
+            if isa(wresult, Const)
+                val = wresult.val
                 if is_inlineable_constant(val)
                     analyzed = ConstAPI(val)
                 end
             else
-                @assert isconstType(result)
-                analyzed = ConstAPI(result.parameters[1])
+                @assert isconstType(wresult)
+                analyzed = ConstAPI(wresult.parameters[1])
             end
             force_noinline || (src.inlineable = true)
         end
