@@ -143,7 +143,10 @@ tests = [
     JuliaSyntax.parse_term => [
         "a * b * c"  => "(call-i a * b c)"
         # parse_unary
-        "-2*x"  =>  "(call-i -2 * x)"
+        "-2*x"   =>  "(call-i -2 * x)"
+        ":T"     =>  "(quote T)"
+        "in::T"  =>  "(:: in T)"
+        "isa::T" =>  "(:: isa T)"
     ],
     JuliaSyntax.parse_juxtapose => [
         "2x"         => "(call-i 2 * x)"
@@ -174,6 +177,7 @@ tests = [
         # Prefix function calls for operators which are both binary and unary
         "+(a,b)"  =>  "(call + a b)"
         "+(a=1,)"  =>  "(call + (kw a 1))"
+        "+(a...)"  =>  "(call + (... a))"
         "+(a;b,c)"  =>  "(call + a (parameters b c))"
         # Whitespace not allowed before prefix function call bracket
         "+ (a,b)"  =>  "(call + (error) a b)"
@@ -215,6 +219,7 @@ tests = [
         "\$\$a"  => "(\$ (\$ a))"
     ],
     JuliaSyntax.parse_call => [
+        # Mostly parse_call_chain
         "f(x)"    =>  "(call f x)"
         "\$f(x)"  =>  "(call (\$ f) x)"
         "f(a,b)"  => "(call f a b)"
@@ -234,6 +239,9 @@ tests = [
         "@foo (x,y)"   =>  "(macrocall @foo (tuple x y))"
         "A.@foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
         "@A.foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
+        "[@foo \"x\"]"   =>  "(vect (macrocall @foo \"x\"))"
+        "[f (x)]"     =>  "(hcat f x)"
+        "[f \"x\"]"   =>  "(hcat f \"x\")"
         # Special @doc parsing rules
         "@doc x\ny"    =>  "(macrocall @doc x y)"
         "A.@doc x\ny"  =>  "(macrocall (. A (quote @doc)) x y)"
@@ -278,6 +286,8 @@ tests = [
         # String macros
         "x\"str\""   => """(macrocall @x_str "str")"""
         "x`str`"     => """(macrocall @x_cmd "str")"""
+        "x\"\""      => """(macrocall @x_str "")"""
+        "x``"        => """(macrocall @x_cmd "")"""
         # Macro sufficies can include keywords and numbers
         "x\"s\"y"    => """(macrocall @x_str "s" "y")"""
         "x\"s\"end"  => """(macrocall @x_str "s" "end")"""
@@ -312,12 +322,14 @@ tests = [
         "let\na\nb\nend"   =>  "(let (block) (block a b))"
         # abstract type
         "abstract type A end"            =>  "(abstract A)"
+        "abstract type A ; end"          =>  "(abstract A)"
         "abstract type \n\n A \n\n end"  =>  "(abstract A)"
         "abstract type A <: B end"       =>  "(abstract (<: A B))"
         "abstract type A <: B{T,S} end"  =>  "(abstract (<: A (curly B T S)))"
         "abstract type A < B end"        =>  "(abstract (call-i A < B))"
         # primitive type
         "primitive type A 32 end"   =>  "(primitive A 32)"
+        "primitive type A 32 ; end" =>  "(primitive A 32)"
         "primitive type A \$N end"  =>  "(primitive A (\$ N))"
         "primitive type A <: B \n 8 \n end"  =>  "(primitive (<: A B) 8)"
         # struct
@@ -416,6 +428,7 @@ tests = [
             "(try (block x) e (block y) false (block z))"
         ((v=v"1.8",), "try \n x \n catch e \n y \n else z finally \n w end") =>
             "(try (block x) e (block y) (block z) (block w))"
+        "try x catch end"       =>  "(try (block x) false (block) false false)"
         "try x catch ; y end"   =>  "(try (block x) false (block y) false false)"
         "try x catch \n y end"  =>  "(try (block x) false (block y) false false)"
         "try x catch e y end"   =>  "(try (block x) e (block y) false false)"
@@ -470,10 +483,6 @@ tests = [
         "(i,j) in iter"  =>  "(= (tuple i j) iter)"
     ],
     JuliaSyntax.parse_paren => [
-        # Parentheses used for grouping
-        "(a * b)"     =>  "(call-i a * b)"
-        "(a=1)"       =>  "(= a 1)"
-        "(x)"         =>  "x"
         # Tuple syntax with commas
         "()"          =>  "(tuple)"
         "(x,)"        =>  "(tuple x)"
@@ -483,6 +492,8 @@ tests = [
         "(;)"         =>  "(tuple (parameters))"
         "(; a=1)"     =>  "(tuple (parameters (kw a 1)))"
         # Extra credit: nested parameters and frankentuples
+        "(x...; y)"       => "(tuple (... x) (parameters y))"
+        "(x...;)"         => "(tuple (... x) (parameters))"
         "(; a=1; b=2)"    => "(tuple (parameters (kw a 1) (parameters (kw b 2))))"
         "(a; b; c,d)"     => "(tuple a (parameters b (parameters c d)))"
         "(a=1, b=2; c=3)" => "(tuple (= a 1) (= b 2) (parameters (kw c 3)))"
@@ -491,6 +502,11 @@ tests = [
         "(a=1;)"      =>  "(block (= a 1))"
         "(a;b;;c)"    =>  "(block a b c)"
         "(a=1; b=2)"  =>  "(block (= a 1) (= b 2))"
+        # Parentheses used for grouping
+        "(a * b)"     =>  "(call-i a * b)"
+        "(a=1)"       =>  "(= a 1)"
+        "(x)"         =>  "x"
+        "(a...)"      =>  "(... a)"
         # Generators
         "(x for x in xs)"  =>  "(generator x (= x xs))"
     ],
@@ -513,6 +529,7 @@ tests = [
         "~"  =>  "~"
         # Quoted syntactic operators allowed
         ":+="  =>  "(quote +=)"
+        ":.="  =>  "(quote .=)"
         # Special symbols quoted
         ":end" => "(quote end)"
         ":(end)" => "(quote (error (end)))"
@@ -545,6 +562,7 @@ tests = [
         # __dot__ macro
         "@. x y" => "(macrocall @__dot__ x y)"
         # cmd strings
+        "``"         =>  "(macrocall :(Core.var\"@cmd\") \"\")"
         "`cmd`"      =>  "(macrocall :(Core.var\"@cmd\") \"cmd\")"
         "```cmd```"  =>  "(macrocall :(Core.var\"@cmd\") \"cmd\")"
         # Errors
@@ -580,6 +598,7 @@ tests = [
         "\"hi\$(\"\"\"ho\"\"\")\""  =>  "(string \"hi\" (string-s \"ho\"))"
         ((v=v"1.5",), "\"hi\$(\"ho\")\"") =>  "(string \"hi\" \"ho\")"
         "\"a \$foo b\""  =>  "(string \"a \" foo \" b\")"
+        "\"\$outer\""    =>  "(string outer)"
         "\"\""  =>  "\"\""
         "\"\$x\$y\$z\""  =>  "(string x y z)"
         "\"\$(x)\""  =>  "(string x)"

@@ -147,6 +147,12 @@ function bump_closing_token(ps, closing_kind)
     end
 end
 
+function bump_semicolon_trivia(ps)
+    while peek(ps) in KSet`; NewlineWs`
+        bump(ps, TRIVIA_FLAG)
+    end
+end
+
 # Read tokens until we find an expected closing token.
 # Bump the big pile of resulting tokens as a single nontrivia error token
 function recover(is_closer::Function, ps, flags=EMPTY_FLAGS; mark = position(ps), error="unexpected tokens")
@@ -184,6 +190,10 @@ end
 # Parsing-specific predicates on tokens/kinds
 #
 # All these take either a raw kind or a token.
+
+function is_plain_equals(t)
+    kind(t) == K"=" && !is_decorated(t)
+end
 
 function is_closing_token(ps::ParseState, k)
     k = kind(k)
@@ -266,12 +276,17 @@ function is_both_unary_and_binary(k)
     k in KSet`+ - ⋆ ± ∓`     # dotop allowed
 end
 
+function is_word_operator(k)
+    kind(k) in KSet`in isa where`
+end
+
 # operators handled by parse_unary at the start of an expression
 function is_initial_operator(k)
     k = kind(k)
     # TODO(jb): `?` should probably not be listed here except for the syntax hack in osutils.jl
     is_operator(k)             &&
-    !(k in KSet`: ' .' ?`)       &&
+    !is_word_operator(k)       &&
+    !(k in KSet`: ' .' ?`)     &&
     !is_syntactic_unary_op(k)  &&
     !is_syntactic_operator(k)
 end
@@ -475,7 +490,7 @@ function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
         # a += b  ==>  (+= a b)
         bump(ps, TRIVIA_FLAG)
         parse_assignment(ps, down, equals_is_kw)
-        plain_eq = (k == K"=" && !is_dotted(t))
+        plain_eq = is_plain_equals(t)
         equals_pos = emit(ps, mark, plain_eq && equals_is_kw ? K"kw" : k,
                           is_dotted(t) ? DOTOP_FLAG : EMPTY_FLAGS)
         return plain_eq ? equals_pos : NO_POSITION
@@ -502,7 +517,7 @@ function parse_comma(ps::ParseState, do_emit=true)
         end
         bump(ps, TRIVIA_FLAG)
         n_commas += 1
-        if peek_token(ps) == K"="
+        if is_plain_equals(peek_token(ps))
             # Allow trailing comma before `=`
             # x, = xs  ==>  (tuple x)
             continue
@@ -940,6 +955,9 @@ function parse_unary(ps::ParseState)
     bump_trivia(ps)
     k = peek(ps)
     if !is_initial_operator(k)
+        # :T      ==>  (quote T)
+        # in::T   ==>  (:: in T)
+        # isa::T  ==>  (:: isa T)
         parse_factor(ps)
         return
     end
@@ -1006,13 +1024,11 @@ function parse_unary_call(ps::ParseState)
     elseif k2 == K"("
         # Cases like +(a;b) are ambiguous: are they prefix calls to + with b as
         # a keyword argument, or is `a;b` a block?  We resolve this with a
-        # simple heuristic: if there were any commas, it was a function call.
-        #
+        # simple heuristic: if there were any commas (or an initial splat), it
+        # was a function call.
         #
         # (The flisp parser only considers commas before `;` and thus gets this
         # last case wrong)
-        #
-
         bump(ps, op_tok_flags)
 
         # Setup possible whitespace error between operator and (
@@ -1025,8 +1041,8 @@ function parse_unary_call(ps::ParseState)
         bump(ps, TRIVIA_FLAG) # (
         is_call = false
         is_block = false
-        parse_brackets(ps, K")") do had_commas,  num_semis, num_subexprs
-            is_call = had_commas
+        parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
+            is_call = had_commas || had_splat
             is_block = !is_call && num_semis > 0
             bump_closing_token(ps, K")")
             return (needs_parameters=is_call,
@@ -1047,6 +1063,7 @@ function parse_unary_call(ps::ParseState)
             # Prefix function calls for operators which are both binary and unary
             # +(a,b)    ==>  (call + a b)
             # +(a=1,)   ==>  (call + (kw a 1))
+            # +(a...)   ==>  (call + (... a))
             # +(a;b,c)  ==>  (call + a (parameters b c))
             # Prefix calls have higher precedence than ^
             # +(a,b)^2  ==>  (call-i (call + a b) ^ 2)
@@ -1247,17 +1264,13 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
         this_iter_valid_modref = false
         t = peek_token(ps)
         k = kind(t)
-        if (ps.space_sensitive && t.had_whitespace &&
-                k in KSet`( [ { \ ' Char " """ \` \`\`\``)
-            # [f (x)]  ==>  (hcat f x)
-            break
-        end
         if is_macrocall && (t.had_whitespace || is_closing_token(ps, k))
             # Macro calls with space-separated arguments
-            # @foo a b      ==> (macrocall @foo a b)
+            # @foo a b    ==> (macrocall @foo a b)
             # @foo (x)    ==> (macrocall @foo x)
             # @foo (x,y)  ==> (macrocall @foo (tuple x y))
             # a().@x y    ==> (macrocall (error (. (call a) (quote x))) y)
+            # [@foo "x"]  ==> (vect (macrocall @foo "x"))
             finish_macroname(ps, mark, is_valid_modref, macro_name_position)
             with_space_sensitive(ps) do ps
                 # Space separated macro arguments
@@ -1285,6 +1298,11 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 end
                 emit(ps, mark, K"macrocall")
             end
+            break
+        elseif (ps.space_sensitive && t.had_whitespace &&
+                k in KSet`( [ { \ Char " """ \` \`\`\``)
+            # [f (x)]  ==>  (hcat f x)
+            # [f "x"]  ==>  (hcat f "x")
             break
         elseif k == K"("
             if is_macrocall
@@ -1462,8 +1480,10 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
         elseif k in KSet` " """ \` \`\`\` ` &&
                 !t.had_whitespace && is_valid_modref
             # Custom string and command literals
-            # x"str" ==> (macrocall x_str "str")
-            # x`str` ==> (macrocall x_cmd "str")
+            # x"str" ==> (macrocall @x_str "str")
+            # x`str` ==> (macrocall @x_cmd "str")
+            # x""    ==> (macrocall @x_str "")
+            # x``    ==> (macrocall @x_cmd "")
 
             # Use a special token kind for string and cmd macro names so the
             # names can be expanded later as necessary.
@@ -1474,10 +1494,10 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             k = kind(t)
             if !t.had_whitespace && (k == K"Identifier" || is_keyword(k) || is_number(k))
                 # Macro sufficies can include keywords and numbers
-                # x"s"y ==> (macrocall x_str "s" "y")
-                # x"s"end ==> (macrocall x_str "s" "end")
-                # x"s"2 ==> (macrocall x_str "s" 2)
-                # x"s"10.0 ==> (macrocall x_str "s" 10.0)
+                # x"s"y    ==> (macrocall @x_str "s" "y")
+                # x"s"end  ==> (macrocall @x_str "s" "end")
+                # x"s"2    ==> (macrocall @x_str "s" 2)
+                # x"s"10.0 ==> (macrocall @x_str "s" 10.0)
                 suffix_kind = (k == K"Identifier" || is_keyword(k)) ? K"String" : k
                 bump(ps, remap_kind=suffix_kind)
             end
@@ -1589,6 +1609,7 @@ function parse_resword(ps::ParseState)
     elseif word == K"abstract"
         # Abstract type definitions
         # abstract type A end             ==>  (abstract A)
+        # abstract type A ; end             ==>  (abstract A)
         # abstract type \n\n A \n\n end   ==>  (abstract A)
         # abstract type A <: B end        ==>  (abstract (<: A B))
         # abstract type A <: B{T,S} end   ==>  (abstract (<: A (curly B T S)))
@@ -1598,6 +1619,7 @@ function parse_resword(ps::ParseState)
         @assert peek(ps) == K"type"
         bump(ps, TRIVIA_FLAG)
         parse_subtype_spec(ps)
+        bump_semicolon_trivia(ps)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"abstract")
     elseif word in KSet`struct mutable`
@@ -1618,6 +1640,7 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"struct")
     elseif word == K"primitive"
         # primitive type A 32 end             ==> (primitive A 32)
+        # primitive type A 32 ; end           ==> (primitive A 32)
         # primitive type A $N end             ==> (primitive A ($ N))
         # primitive type A <: B \n 8 \n end   ==> (primitive (<: A B) 8)
         bump(ps, TRIVIA_FLAG)
@@ -1625,6 +1648,7 @@ function parse_resword(ps::ParseState)
         bump(ps, TRIVIA_FLAG)
         with_space_sensitive(parse_subtype_spec, ps)
         with_space_sensitive(parse_cond, ps)
+        bump_semicolon_trivia(ps)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"primitive")
     elseif word == K"try"
@@ -1837,7 +1861,7 @@ function parse_function(ps::ParseState)
             #
             # The flisp parser disambiguates this case quite differently,
             # producing less consistent syntax for anonymous functions.
-            parse_brackets(ps, K")") do _, _, _
+            parse_brackets(ps, K")") do _, _, _, _
                 bump_closing_token(ps, K")")
                 is_anon_func = peek(ps) != K"("
                 return (needs_parameters     = is_anon_func,
@@ -1990,10 +2014,10 @@ function parse_catch(ps::ParseState)
     bump(ps, TRIVIA_FLAG)
     k = peek(ps)
     if k in KSet`NewlineWs ;` || is_closing_token(ps, k)
+        # try x catch end      ==>  (try (block x) false (block) false false)
         # try x catch ; y end  ==>  (try (block x) false (block y) false false)
-        # try x catch \n y end  ==>  (try (block x) false (block y) false false)
+        # try x catch \n y end ==>  (try (block x) false (block y) false false)
         bump_invisible(ps, K"false")
-        bump(ps, TRIVIA_FLAG)
     else
         # try x catch e y end  ==>  (try (block x) e (block y) false false)
         parse_identifier_or_interpolate(ps)
@@ -2284,7 +2308,7 @@ end
 function parse_call_arglist(ps::ParseState, closer, is_macrocall)
     ps = ParseState(ps, for_generator=true)
 
-    parse_brackets(ps, closer) do _, _, _
+    parse_brackets(ps, closer) do _, _, _, _
         bump_closing_token(ps, closer)
         return (needs_parameters=true,
                 eq_is_kw_before_semi=!is_macrocall,
@@ -2303,7 +2327,7 @@ function parse_vect(ps::ParseState, closer)
     # [x,y ; z]     ==>  (vect x y (parameters z))
     # [x=1, y=2]    ==>  (vect (= x 1) (= y 2))
     # [x=1, ; y=2]  ==>  (vect (= x 1) (parameters (= y 2)))
-    parse_brackets(ps, closer) do _, _, _
+    parse_brackets(ps, closer) do _, _, _, _
         bump_closing_token(ps, closer)
         return (needs_parameters=true,
                 eq_is_kw_before_semi=false,
@@ -2602,12 +2626,8 @@ function parse_paren(ps::ParseState, check_identifiers=true)
         initial_semi = peek(ps) == K";"
         is_tuple = false
         is_block = false
-        parse_brackets(ps, K")") do had_commas, num_semis, num_subexprs
-            # Parentheses used for grouping
-            # (a * b)     ==>  (call-i * a b)
-            # (a=1)       ==>  (= a 1)
-            # (x)         ==>  x
-            is_tuple = had_commas ||
+        parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
+            is_tuple = had_commas || (had_splat && num_semis >= 1) ||
                        (initial_semi && (num_semis == 1 || num_subexprs > 0))
             is_block = num_semis > 0
             bump_closing_token(ps, K")")
@@ -2626,6 +2646,8 @@ function parse_paren(ps::ParseState, check_identifiers=true)
             # (; a=1)     ==>  (tuple (parameters (kw a 1)))
             #
             # Extra credit: nested parameters and frankentuples
+            # (x...;)         ==> (tuple (... x) (parameters))
+            # (x...; y)       ==> (tuple (... x) (parameters y))
             # (; a=1; b=2)    ==> (tuple (parameters (kw a 1) (parameters (kw b 2))))
             # (a; b; c,d)     ==> (tuple a (parameters b (parameters c d)))
             # (a=1, b=2; c=3) ==> (tuple (= a 1) (= b 2) (parameters (kw c 3)))
@@ -2637,6 +2659,12 @@ function parse_paren(ps::ParseState, check_identifiers=true)
             # (a;b;;c)    ==>  (block a b c)
             # (a=1; b=2)  ==>  (block (= a 1) (= b 2))
             emit(ps, mark, K"block")
+        else
+            # Parentheses used for grouping
+            # (a * b)     ==>  (call-i * a b)
+            # (a=1)       ==>  (= a 1)
+            # (x)         ==>  x
+            # (a...)      ==>  (... a)
         end
     end
 end
@@ -2680,6 +2708,7 @@ function parse_brackets(after_parse::Function,
     num_subexprs = 0
     num_semis = 0
     had_commas = false
+    had_splat = false
     while true
         bump_trivia(ps)
         k = peek(ps)
@@ -2696,9 +2725,12 @@ function parse_brackets(after_parse::Function,
             bump(ps, TRIVIA_FLAG)
             bump_trivia(ps)
         else
-            num_subexprs += 1
             mark = position(ps)
             eq_pos = parse_eq_star(ps)
+            num_subexprs += 1
+            if num_subexprs == 1
+                had_splat = peek_behind(ps).kind == K"..."
+            end
             if eq_pos != NO_POSITION
                 push!(eq_positions, eq_pos)
             end
@@ -2727,7 +2759,7 @@ function parse_brackets(after_parse::Function,
             end
         end
     end
-    actions = after_parse(had_commas, num_semis, num_subexprs)
+    actions = after_parse(had_commas, had_splat, num_semis, num_subexprs)
     if num_semis == 0
         last_eq_before_semi = length(eq_positions)
     end
@@ -2781,9 +2813,10 @@ function parse_string(ps::ParseState)
                         emit(ps, m, K"string", prev.flags)
                     end
                 end
-            elseif is_identifier(k)
+            elseif is_identifier(k) || is_keyword(k)
                 # "a $foo b"  ==> (string "a " foo " b")
-                bump(ps)
+                # "$outer"    ==> (string outer)
+                parse_atom(ps)
             else
                 bump_invisible(ps, K"error",
                     error="Identifier or parenthesized expression expected after \$ in string")
@@ -2827,7 +2860,7 @@ function parse_raw_string(ps::ParseState)
         bump(ps, flags)
     else
         outk = delim_k in KSet`" """`     ? K"String"    :
-               delim_k == KSet`\` \`\`\`` ? K"CmdString" :
+               delim_k in KSet`\` \`\`\`` ? K"CmdString" :
                internal_error("unexpected delimiter ", delim_k)
         bump_invisible(ps, outk, flags)
     end
@@ -2887,7 +2920,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             parse_atom(ParseState(ps, end_symbol=false), false)
         end
         emit(ps, mark, K"quote")
-    elseif leading_kind == K"="
+    elseif leading_kind == K"=" && is_plain_equals(peek_token(ps))
         bump(ps, TRIVIA_FLAG, error="unexpected `=`")
     elseif leading_kind == K"Identifier"
         bump(ps)
@@ -2913,6 +2946,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             # ~     ==>  ~
             # Quoted syntactic operators allowed
             # :+=   ==>  (quote +=)
+            # :.=   ==>  (quote .=)
             bump(ps)
         end
     elseif is_keyword(leading_kind)
@@ -2935,8 +2969,6 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         bump(ps, TRIVIA_FLAG)
         ckind, cflags = parse_cat(ps, K"}", ps.end_symbol)
         emit_braces(ps, mark, ckind, cflags)
-    elseif is_string_delim(leading_kind)
-        parse_string(ps)
     elseif leading_kind == K"@" # macro call
         # Macro names can be keywords
         # @end x  ==> (macrocall @end x)
@@ -2944,7 +2976,10 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         bump(ps, TRIVIA_FLAG)
         parse_macro_name(ps)
         parse_call_chain(ps, mark, true)
+    elseif is_string_delim(leading_kind)
+        parse_string(ps)
     elseif leading_kind in KSet`\` \`\`\``
+        # ``          ==>  (macrocall core_@cmd "")
         # `cmd`       ==>  (macrocall core_@cmd "cmd")
         # ```cmd```   ==>  (macrocall core_@cmd "cmd"-s)
         bump_invisible(ps, K"core_@cmd")
