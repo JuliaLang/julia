@@ -464,9 +464,8 @@ static bool type_is_permalloc(jl_value_t *typ)
         typ == (jl_value_t*)jl_uint8_type;
 }
 
-static unsigned convert_struct_offset(Type *lty, unsigned byte_offset)
+static unsigned convert_struct_offset(const llvm::DataLayout &DL, Type *lty, unsigned byte_offset)
 {
-    const DataLayout &DL = jl_data_layout;
     const StructLayout *SL = DL.getStructLayout(cast<StructType>(lty));
     unsigned idx = SL->getElementContainingOffset(byte_offset);
     assert(SL->getElementOffset(idx) == byte_offset);
@@ -475,7 +474,7 @@ static unsigned convert_struct_offset(Type *lty, unsigned byte_offset)
 
 static unsigned convert_struct_offset(jl_codectx_t &ctx, Type *lty, unsigned byte_offset)
 {
-    return convert_struct_offset(lty, byte_offset);
+    return convert_struct_offset(ctx.builder.GetInsertBlock()->getModule()->getDataLayout(), lty, byte_offset);
 }
 
 static Value *emit_struct_gep(jl_codectx_t &ctx, Type *lty, Value *base, unsigned byte_offset)
@@ -1478,7 +1477,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         return ghostValue(jltype, ctx.tbaa());
     AllocaInst *intcast = NULL;
     if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
-        const DataLayout &DL = jl_data_layout;
+        const DataLayout &DL = jl_Module->getDataLayout();
         unsigned nb = DL.getTypeSizeInBits(elty);
         intcast = ctx.builder.CreateAlloca(elty);
         elty = Type::getIntNTy(ctx.builder.getContext(), nb);
@@ -1590,7 +1589,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     }
     AllocaInst *intcast = nullptr;
     if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
-        const DataLayout &DL = jl_data_layout;
+        const DataLayout &DL = jl_Module->getDataLayout();
         unsigned nb = DL.getTypeSizeInBits(elty);
         if (!issetfield)
             intcast = ctx.builder.CreateAlloca(elty);
@@ -1935,7 +1934,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
     if (sz <= 64) {
         // The size limit is arbitrary but since we mainly care about floating points and
         // machine size vectors this should be enough.
-        const DataLayout &DL = jl_data_layout;
+        const DataLayout &DL = jl_Module->getDataLayout();
         auto srcty = cast<PointerType>(src->getType());
         auto srcel = srcty->getElementType();
         auto dstty = cast<PointerType>(dst->getType());
@@ -2700,7 +2699,7 @@ static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t& v,
     }
 }
 
-static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
+static jl_value_t *static_constant_instance(const llvm::DataLayout &DL, Constant *constant, jl_value_t *jt)
 {
     assert(constant != NULL && jl_is_concrete_type(jt));
     jl_datatype_t *jst = (jl_datatype_t*)jt;
@@ -2729,7 +2728,7 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
     if (ConstantExpr *ce = dyn_cast<ConstantExpr>(constant)) {
         unsigned OpCode = ce->getOpcode();
         if (OpCode == Instruction::BitCast || OpCode == Instruction::PtrToInt || OpCode == Instruction::IntToPtr) {
-            return static_constant_instance(ce->getOperand(0), jt);
+            return static_constant_instance(DL, ce->getOperand(0), jt);
         }
         return NULL;
     }
@@ -2766,9 +2765,9 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
         }
         unsigned llvm_idx = i;
         if (i > 0 && isa<StructType>(constant->getType()))
-            llvm_idx = convert_struct_offset(constant->getType(), jl_field_offset(jst, i));
+            llvm_idx = convert_struct_offset(DL, constant->getType(), jl_field_offset(jst, i));
         Constant *fld = constant->getAggregateElement(llvm_idx);
-        flds[i] = static_constant_instance(fld, ft);
+        flds[i] = static_constant_instance(DL, fld, ft);
         if (flds[i] == NULL) {
             JL_GC_POP();
             return NULL; // must have been unreachable
@@ -2818,7 +2817,7 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
 
     if (ctx.linfo && jl_is_method(ctx.linfo->def.method) && !vinfo.ispointer()) { // don't bother codegen pre-boxing for toplevel
         if (Constant *c = dyn_cast<Constant>(vinfo.V)) {
-            jl_value_t *s = static_constant_instance(c, jt);
+            jl_value_t *s = static_constant_instance(jl_Module->getDataLayout(), c, jt);
             if (s) {
                 jl_add_method_root(ctx, s);
                 return track_pjlvalue(ctx, literal_pointer_val(ctx, s));

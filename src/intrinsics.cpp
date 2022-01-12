@@ -196,7 +196,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         if (type_is_ghost(lft))
             continue;
         assert(!jl_field_isptr(bt, i));
-        unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(lt, offs) : i;
+        unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(jl_Module->getDataLayout(), lt, offs) : i;
         while (fields.size() < llvm_idx)
             fields.push_back(
                 UndefValue::get(GetElementPtrInst::getTypeAtIndex(lt, fields.size())));
@@ -284,7 +284,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
         return unboxed;
     bool frompointer = ty->isPointerTy();
     bool topointer = to->isPointerTy();
-    const DataLayout &DL = jl_data_layout;
+    const DataLayout &DL = jl_Module->getDataLayout();
     if (ty == T_int1 && to == T_int8) {
         // bools may be stored internally as int8
         unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
@@ -303,7 +303,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     }
     else if (!ty->isIntOrPtrTy() && !ty->isFloatingPointTy()) {
 #ifndef JL_NDEBUG
-        const DataLayout &DL = jl_data_layout;
+        const DataLayout &DL = jl_Module->getDataLayout();
 #endif
         assert(DL.getTypeSizeInBits(ty) == DL.getTypeSizeInBits(to));
         AllocaInst *cast = ctx.builder.CreateAlloca(ty);
@@ -393,7 +393,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
             // appropriate coercion manually.
             AllocaInst *AI = cast<AllocaInst>(p);
             Type *AllocType = AI->getAllocatedType();
-            const DataLayout &DL = jl_data_layout;
+            const DataLayout &DL = jl_Module->getDataLayout();
             if (!AI->isArrayAllocation() &&
                     (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
                     (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
