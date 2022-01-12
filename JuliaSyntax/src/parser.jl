@@ -2191,7 +2191,11 @@ function parse_import_path(ps::ParseState)
     # import ....A  ==> (import (. . . . . A))
     # Dots with spaces are allowed (a misfeature?)
     # import . .A    ==> (import (. . . A))
+    first_dot = true
     while true
+        m = position(ps)
+        bump_trivia(ps)
+        m2 = position(ps)
         k = peek(ps)
         if k == K"."
             bump(ps)
@@ -2202,6 +2206,10 @@ function parse_import_path(ps::ParseState)
         else
             break
         end
+        if !first_dot && m != m2
+            emit_diagnostic(ps, m, m2, warning="space between dots in import path")
+        end
+        first_dot = false
     end
     # import @x     ==>  (import (. @x))
     # import $A     ==>  (import (. ($ A)))
