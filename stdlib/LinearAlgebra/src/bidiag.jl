@@ -71,7 +71,7 @@ end
 
 #To allow Bidiagonal's where the "dv" is Vector{T} and "ev" Vector{S},
 #where T and S can be promoted
-function LinearAlgebra.Bidiagonal(dv::Vector{T}, ev::Vector{S}, uplo::Symbol) where {T,S}
+function Bidiagonal(dv::Vector{T}, ev::Vector{S}, uplo::Symbol) where {T,S}
     TS = promote_type(T,S)
     return Bidiagonal{TS,Vector{TS}}(dv, ev, uplo)
 end
@@ -254,6 +254,7 @@ end
 adjoint(B::Bidiagonal) = Adjoint(B)
 transpose(B::Bidiagonal) = Transpose(B)
 adjoint(B::Bidiagonal{<:Real}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
+adjoint(B::Bidiagonal{<:Number}) = Bidiagonal(conj.(B.dv), conj.(B.ev), B.uplo == 'U' ? :L : :U)
 transpose(B::Bidiagonal{<:Number}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
 function Base.copy(aB::Adjoint{<:Any,<:Bidiagonal})
     B = aB.parent
@@ -799,23 +800,60 @@ ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(copy(A), b)
 function \(A::Bidiagonal{<:Number}, B::AbstractVecOrMat{<:Number})
     TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-    ldiv!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
+    ldiv!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
 end
 \(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(A, copy(B))
-function \(tA::Transpose{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
-    A = tA.parent
-    TA, TB = eltype(A), eltype(B)
-    TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-    ldiv!(transpose(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
-end
 \(tA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(tA, copy(B))
-function \(adjA::Adjoint{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
-    A = adjA.parent
+\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(adjA, copy(B))
+
+function rdiv!(A::AbstractMatrix, B::Bidiagonal)
+    m, n = size(A)
+    if size(B, 1) != n
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+    end
+    if B.uplo == 'L'
+        diagB = B.dv[n]
+        for i = 1:m
+            A[i,n] /= diagB
+        end
+        for j = n-1:-1:1
+            diagB = B.dv[j]
+            offdiagB = B.ev[j]
+            for i = 1:m
+                A[i,j] = (A[i,j] - A[i,j+1]*offdiagB)/diagB
+            end
+        end
+    else
+        diagB = B.dv[1]
+        for i = 1:m
+            A[i,1] /= diagB
+        end
+        for j = 2:n
+            diagB = B.dv[j]
+            offdiagB = B.ev[j-1]
+            for i = 1:m
+                A[i,j] = (A[i,j] - A[i,j-1]*offdiagB)/diagB
+            end
+        end
+    end
+    A
+end
+rdiv!(A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = rdiv!(A, copy(B))
+rdiv!(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = rdiv!(A, copy(B))
+
+function /(A::AbstractMatrix{<:Number}, B::Bidiagonal{<:Number})
     TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-    ldiv!(adjoint(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
+    rdiv!(copy_similar(A, TAB), convert(AbstractArray{TAB}, B))
 end
-\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(adjA, copy(B))
+/(A::AbstractMatrix, B::Bidiagonal) = rdiv!(copy_similar(A), B)
+/(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = A / copy(B)
+/(A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = A / copy(B)
+# disambiguation
+/(A::AdjOrTransAbsVec{<:Number}, B::Bidiagonal{<:Number}) = wrapperop(A)(wrapperop(A)(B) \ parent(A))
+/(A::AdjOrTransAbsVec, B::Bidiagonal) = wrapperop(A)(wrapperop(A)(B) \ parent(A))
+/(A::AdjOrTransAbsVec, B::Transpose{<:Any,<:Bidiagonal}) = wrapperop(A)(parent(B) \ parent(A))
+/(A::AdjOrTransAbsVec, B::Adjoint{<:Any,<:Bidiagonal}) = wrapperop(A)(parent(B) \ parent(A))
 
 factorize(A::Bidiagonal) = A
 

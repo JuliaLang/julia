@@ -262,6 +262,13 @@ Random.seed!(1)
                 x = transpose(T) \ b
                 tx = transpose(Tfull) \ b
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = copy(transpose(b)) / T
+                tx = copy(transpose(b)) / Tfull
+                @test_throws DimensionMismatch rdiv!(Matrix{elty}(undef, 1, n+1), T)
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = copy(transpose(b)) / transpose(T)
+                tx = copy(transpose(b)) / transpose(Tfull)
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 @testset "Generic Mat-vec ops" begin
                     @test T*b ≈ Tfull*b
                     @test T'*b ≈ Tfull'*b
@@ -275,6 +282,22 @@ Random.seed!(1)
             zA  = Bidiagonal(zdv, zev, :U)
             zb  = Vector{elty}(undef, 0)
             @test ldiv!(zA, zb) === zb
+            @testset "linear solves with abstract matrices" begin
+                diag = b[:,1]
+                D = Diagonal(diag)
+                x = T \ D
+                tx = Tfull \ D
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = D / T
+                tx = D / Tfull
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = transpose(T) \ D
+                tx = transpose(Tfull) \ D
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = D / transpose(T)
+                tx = D / transpose(Tfull)
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+            end
         end
 
         if elty <: BlasReal
