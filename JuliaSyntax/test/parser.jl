@@ -385,7 +385,10 @@ tests = [
         "local x"     =>  "(local x)"
         "global x,y"  =>  "(global x y)"
         "const x,y = 1,2"      =>  "(const (= (tuple x y) (tuple 1 2)))"
-        "const x"     => "(const (error x (error)))"
+        "const x"     => "(const (error x))"
+        ((v=v"1.8",), "const x")    => "(const x)"
+        ((v=v"1.8",), "const x::T") => "(const (:: x T))"
+        ((v=v"1.8",), "const x,y")  => "(const (tuple x y))"
     ],
     JuliaSyntax.parse_function => [
         "macro while(ex) end"  =>  "(macro (call (error while) ex) (block))"

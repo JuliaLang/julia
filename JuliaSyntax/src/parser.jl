@@ -1795,7 +1795,8 @@ function parse_const_local_global(ps)
             bump(ps, TRIVIA_FLAG)
         end
     end
-    # Like parse_eq/parse_assignment, but specialized in case we need error recovery
+    # Like parse_eq/parse_assignment, but specialized so that we can omit the
+    # tuple when there's commas but no assignment.
     beforevar_mark = position(ps)
     n_commas = parse_comma(ps, false)
     t = peek_token(ps)
@@ -1808,13 +1809,22 @@ function parse_const_local_global(ps)
         parse_comma(ps)
         emit(ps, beforevar_mark, K"=")
     elseif has_const
-        # const x  ==> (const (error x))
-        # Recovery heuristic
-        recover(ps, mark=beforevar_mark,
-                error="Expected assignment after `const`") do ps, k
-            k == K"NewlineWs" || (k != K"," && is_closing_token(ps, k))
+        if ps.julia_version >= v"1.8.0-DEV.1148" 
+            # Const fields https://github.com/JuliaLang/julia/pull/43305
+            # const x     ==>  (const x)
+            # const x::T  ==>  (const (:: x T))
+            if n_commas >= 1
+                # Maybe nonsensical? But this is what the flisp parser does.
+                # const x,y  ==>  (const (tuple x y))
+                emit(ps, beforevar_mark, K"tuple")
+            end
+        else
+            # const x  ==> (const (error x))
+            emit(ps, beforevar_mark, K"error",
+                 error="Expected assignment after `const`")
         end
     else
+        #v1.8: const x ==>  (const x)
         # global x    ==>  (global x)
         # local x     ==>  (local x)
         # global x,y  ==>  (global x y)
@@ -1823,6 +1833,7 @@ function parse_const_local_global(ps)
         emit(ps, scope_mark, scope_k)
     end
     if has_const
+        # TODO: Normalize `global const` during Expr conversion rather than here?
         emit(ps, mark, K"const")
     end
 end
