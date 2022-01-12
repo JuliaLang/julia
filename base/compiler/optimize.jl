@@ -237,7 +237,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
             end
             return true
         elseif head === :foreigncall
-            return foreigncall_effect_free(stmt, rt, src)
+            return foreigncall_effect_free(stmt, src)
         elseif head === :new_opaque_closure
             length(args) < 5 && return false
             typ = argextype(args[1], src)
@@ -262,7 +262,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
     return true
 end
 
-function foreigncall_effect_free(stmt::Expr, @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
+function foreigncall_effect_free(stmt::Expr, src::Union{IRCode,IncrementalCompact})
     args = stmt.args
     name = args[1]
     isa(name, QuoteNode) && (name = name.value)
@@ -293,9 +293,7 @@ end
 
 function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,IncrementalCompact})
     length(args) ≥ ndims+6 || return false
-    atype = widenconst(argextype(args[6], src))
-    isType(atype) || return false
-    atype = atype.parameters[1]
+    atype = instanceof_tfunc(argextype(args[6], src))[1]
     dims = Csize_t[]
     for i in 1:ndims
         dim = argextype(args[i+6], src)
@@ -309,9 +307,7 @@ end
 
 function new_array_no_throw(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
     length(args) ≥ 7 || return false
-    atype = widenconst(argextype(args[6], src))
-    isType(atype) || return false
-    atype = atype.parameters[1]
+    atype = instanceof_tfunc(argextype(args[6], src))[1]
     dims = argextype(args[7], src)
     isa(dims, Const) || return dims === Tuple{}
     dimsval = dims.val

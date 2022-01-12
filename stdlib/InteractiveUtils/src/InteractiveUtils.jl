@@ -138,10 +138,18 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
-    env_strs = [String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"JULIA", k)];
-                (verbose ?
-                 String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"PATH|FLAG|^TERM$|HOME", k)] :
-                 [])]
+    function is_nonverbose_env(k::String)
+        return occursin(r"^JULIA_|^DYLD_|^LD_", k)
+    end
+    function is_verbose_env(k::String)
+        return occursin(r"PATH|FLAG|^TERM$|HOME", k) && !is_nonverbose_env(k)
+    end
+    env_strs = String[
+        String["  $(k) = $(v)" for (k,v) in ENV if is_nonverbose_env(uppercase(k))];
+        (verbose ?
+         String["  $(k) = $(v)" for (k,v) in ENV if is_verbose_env(uppercase(k))] :
+         String[]);
+    ]
     if !isempty(env_strs)
         println(io, "Environment:")
         for str in env_strs

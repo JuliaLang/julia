@@ -88,8 +88,8 @@ static Value *runtime_sym_lookup(
     //   }
     //   return (*llvmgv)
     BasicBlock *enter_bb = irbuilder.GetInsertBlock();
-    BasicBlock *dlsym_lookup = BasicBlock::Create(jl_LLVMContext, "dlsym");
-    BasicBlock *ccall_bb = BasicBlock::Create(jl_LLVMContext, "ccall");
+    BasicBlock *dlsym_lookup = BasicBlock::Create(irbuilder.getContext(), "dlsym");
+    BasicBlock *ccall_bb = BasicBlock::Create(irbuilder.getContext(), "ccall");
     Constant *initnul = ConstantPointerNull::get((PointerType*)T_pvoidfunc);
     LoadInst *llvmf_orig = irbuilder.CreateAlignedLoad(T_pvoidfunc, llvmgv, Align(sizeof(void*)));
     // This in principle needs a consume ordering so that load from
@@ -205,7 +205,7 @@ static GlobalVariable *emit_plt_thunk(
                                              GlobalVariable::ExternalLinkage,
                                              ConstantExpr::getBitCast(plt, T_pvoidfunc),
                                              fname);
-    BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", plt);
+    BasicBlock *b0 = BasicBlock::Create(M->getContext(), "top", plt);
     IRBuilder<> irbuilder(b0);
     Value *ptr = runtime_sym_lookup(emission_context, irbuilder, NULL, funcptype, f_lib, NULL, f_name, plt, libptrgv,
                                     llvmgv, runtime_lib);
@@ -271,7 +271,7 @@ static Value *emit_plt(
                 functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, runtime_lib);
     }
     GlobalVariable *got = prepare_global_in(jl_Module, sharedgot);
-    LoadInst *got_val = ctx.builder.CreateAlignedLoad(got->getType()->getElementType(), got, Align(sizeof(void*)));
+    LoadInst *got_val = ctx.builder.CreateAlignedLoad(got->getValueType(), got, Align(sizeof(void*)));
     // See comment in `runtime_sym_lookup` above. This in principle needs a
     // consume ordering too. This is even less likely to cause issues though
     // since the only thing we do to this loaded pointer is to call it
@@ -421,7 +421,7 @@ static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty)
                 ConstantInt::get(T_size, sizeof(jl_svec_t) / sizeof(jl_value_t*)))
     };
     auto call = ctx.builder.CreateCall(prepare_call(jlapplytype_func), makeArrayRef(args));
-    addRetAttr(call, Attribute::getWithAlignment(jl_LLVMContext, Align(16)));
+    addRetAttr(call, Attribute::getWithAlignment(ctx.builder.getContext(), Align(16)));
     return call;
 }
 
@@ -460,8 +460,8 @@ static void typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_val
                 Value *istype = ctx.builder.CreateICmpNE(
                         ctx.builder.CreateCall(prepare_call(jlisa_func), { vx, boxed(ctx, jlto_runtime) }),
                         ConstantInt::get(T_int32, 0));
-                BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx.f);
-                BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "pass", ctx.f);
+                BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "fail", ctx.f);
+                BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass", ctx.f);
                 ctx.builder.CreateCondBr(istype, passBB, failBB);
 
                 ctx.builder.SetInsertPoint(failBB);
@@ -825,7 +825,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         << jl_string_data(ir) << "\n}";
 
         SMDiagnostic Err = SMDiagnostic();
-        Mod = parseAssemblyString(ir_stream.str(), Err, jl_LLVMContext);
+        Mod = parseAssemblyString(ir_stream.str(), Err, ctx.builder.getContext());
         if (!Mod) {
             std::string message = "Failed to parse LLVM assembly: \n";
             raw_string_ostream stream(message);
@@ -842,7 +842,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
         if (jl_is_string(ir)) {
             SMDiagnostic Err = SMDiagnostic();
-            Mod = parseAssemblyString(jl_string_data(ir), Err, jl_LLVMContext);
+            Mod = parseAssemblyString(jl_string_data(ir), Err, ctx.builder.getContext());
             if (!Mod) {
                 std::string message = "Failed to parse LLVM assembly: \n";
                 raw_string_ostream stream(message);
@@ -856,7 +856,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                 StringRef((char *)jl_array_data(ir), jl_array_len(ir)), "llvmcall",
                 /*RequiresNullTerminator*/ false);
             Expected<std::unique_ptr<Module>> ModuleOrErr =
-                parseBitcodeFile(*Buf, jl_LLVMContext);
+                parseBitcodeFile(*Buf, ctx.builder.getContext());
             if (Error Err = ModuleOrErr.takeError()) {
                 std::string Message;
                 handleAllErrors(std::move(Err),
@@ -1019,14 +1019,14 @@ std::string generate_func_sig(const char *fname)
 
     if (type_is_ghost(lrt)) {
         prt = lrt = T_void;
-        abi->use_sret(jl_nothing_type, jl_LLVMContext);
+        abi->use_sret(jl_nothing_type, lrt->getContext());
     }
     else {
         if (!jl_is_datatype(rt) || ((jl_datatype_t*)rt)->layout == NULL || jl_is_layout_opaque(((jl_datatype_t*)rt)->layout) || jl_is_cpointer_type(rt) || retboxed) {
             prt = lrt; // passed as pointer
-            abi->use_sret(jl_voidpointer_type, jl_LLVMContext);
+            abi->use_sret(jl_voidpointer_type, lrt->getContext());
         }
-        else if (abi->use_sret((jl_datatype_t*)rt, jl_LLVMContext)) {
+        else if (abi->use_sret((jl_datatype_t*)rt, lrt->getContext())) {
             AttrBuilder retattrs = AttrBuilder();
 #if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
             retattrs.addStructRetAttr(lrt);
@@ -1038,7 +1038,7 @@ std::string generate_func_sig(const char *fname)
             prt = lrt;
         }
         else {
-            prt = abi->preferred_llvm_type((jl_datatype_t*)rt, true, jl_LLVMContext);
+            prt = abi->preferred_llvm_type((jl_datatype_t*)rt, true, lrt->getContext());
             if (prt == NULL)
                 prt = lrt;
         }
@@ -1084,7 +1084,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         // Whether or not LLVM wants us to emit a pointer to the data
-        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, jl_LLVMContext, t);
+        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, lrt->getContext(), t);
 
         if (jl_is_cpointer_type(tti)) {
             pat = t;
@@ -1093,7 +1093,7 @@ std::string generate_func_sig(const char *fname)
             pat = PointerType::get(t, AddressSpace::Derived);
         }
         else {
-            pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false, jl_LLVMContext);
+            pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false, lrt->getContext());
             if (pat == NULL)
                 pat = t;
         }
@@ -1116,20 +1116,20 @@ std::string generate_func_sig(const char *fname)
         fargt.push_back(t);
         fargt_isboxed.push_back(isboxed);
         fargt_sig.push_back(pat);
-        paramattrs.push_back(AttributeSet::get(jl_LLVMContext, ab));
+        paramattrs.push_back(AttributeSet::get(lrt->getContext(), ab));
     }
 
     for (size_t i = 0; i < nccallargs + sret; ++i) {
         const auto &as = paramattrs.at(i);
         if (!as.hasAttributes())
             continue;
-        attributes = addAttributesAtIndex(attributes, jl_LLVMContext, i + 1, as);
+        attributes = addAttributesAtIndex(attributes, lrt->getContext(), i + 1, as);
     }
     // If return value is boxed it must be non-null.
     if (retboxed)
-        attributes = addRetAttribute(attributes, jl_LLVMContext, Attribute::NonNull);
+        attributes = addRetAttribute(attributes, lrt->getContext(), Attribute::NonNull);
     if (rt == jl_bottom_type) {
-        attributes = addFnAttribute(attributes, jl_LLVMContext, Attribute::NoReturn);
+        attributes = addFnAttribute(attributes, lrt->getContext(), Attribute::NoReturn);
     }
     return "";
 }
@@ -1553,9 +1553,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 defer_sig,
                 ConstantInt::get(T_sigatomic, 1));
         ctx.builder.CreateStore(defer_sig, pdefer_sig);
-        BasicBlock *checkBB = BasicBlock::Create(jl_LLVMContext, "check",
+        BasicBlock *checkBB = BasicBlock::Create(ctx.builder.getContext(), "check",
                                                  ctx.f);
-        BasicBlock *contBB = BasicBlock::Create(jl_LLVMContext, "cont");
+        BasicBlock *contBB = BasicBlock::Create(ctx.builder.getContext(), "cont");
         ctx.builder.CreateCondBr(
                 ctx.builder.CreateICmpEQ(defer_sig, ConstantInt::get(T_sigatomic, 0)),
                 checkBB, contBB);
@@ -1584,9 +1584,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             // This could otherwise be in a dead branch
             if (svecv.typ == (jl_value_t*)jl_simplevector_type)
                 tbaa_decorate(tbaa_const, cast<Instruction>(len));
-            MDBuilder MDB(jl_LLVMContext);
+            MDBuilder MDB(ctx.builder.getContext());
             auto rng = MDB.createRange(
-                V_size0, ConstantInt::get(T_size, INTPTR_MAX / sizeof(void*) - 1));
+                Constant::getNullValue(T_size), ConstantInt::get(T_size, INTPTR_MAX / sizeof(void*) - 1));
             cast<LoadInst>(len)->setMetadata(LLVMContext::MD_range, rng);
         }
         JL_GC_POP();
@@ -1609,7 +1609,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         // This could otherwise be in a dead branch
         if (svecv.typ == (jl_value_t*)jl_simplevector_type)
             tbaa_decorate(tbaa_const, load);
-        Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, V_rnull), T_int8);
+        Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, Constant::getNullValue(T_prjlvalue)), T_int8);
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, res, retboxed, rt, unionall, static_rt);
     }
@@ -1664,7 +1664,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, slot_addr, Align(sizeof(void*)));
                 load->setAtomic(AtomicOrdering::Unordered);
                 tbaa_decorate(tbaa_ptrarraybuf, load);
-                Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, V_rnull), T_int32);
+                Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, Constant::getNullValue(T_prjlvalue)), T_int32);
                 JL_GC_POP();
                 return mark_or_box_ccall_result(ctx, res, retboxed, rt, unionall, static_rt);
             }

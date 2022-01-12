@@ -128,7 +128,7 @@ static Type *INTT(Type *t)
         return T_int16;
     unsigned nb = t->getPrimitiveSizeInBits();
     assert(t != T_void && nb > 0);
-    return IntegerType::get(jl_LLVMContext, nb);
+    return IntegerType::get(t->getContext(), nb);
 }
 
 static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
@@ -160,12 +160,12 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
 
     if (lt->isFloatTy()) {
         uint32_t data32 = *(const uint32_t*)ptr;
-        return ConstantFP::get(jl_LLVMContext,
+        return ConstantFP::get(ctx.builder.getContext(),
                 APFloat(lt->getFltSemantics(), APInt(32, data32)));
     }
     if (lt->isDoubleTy()) {
         uint64_t data64 = *(const uint64_t*)ptr;
-        return ConstantFP::get(jl_LLVMContext,
+        return ConstantFP::get(ctx.builder.getContext(),
                 APFloat(lt->getFltSemantics(), APInt(64, data64)));
     }
     if (lt->isFloatingPointTy() || lt->isIntegerTy() || lt->isPointerTy()) {
@@ -175,11 +175,11 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         assert(sys::IsLittleEndianHost);
         memcpy(bits, ptr, nb);
         if (lt->isFloatingPointTy()) {
-            return ConstantFP::get(jl_LLVMContext,
+            return ConstantFP::get(ctx.builder.getContext(),
                     APFloat(lt->getFltSemantics(), val));
         }
         if (lt->isPointerTy()) {
-            Type *Ty = IntegerType::get(jl_LLVMContext, 8 * nb);
+            Type *Ty = IntegerType::get(ctx.builder.getContext(), 8 * nb);
             Constant *addr = ConstantInt::get(Ty, val);
             return ConstantExpr::getIntToPtr(addr, lt);
         }
@@ -209,7 +209,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
             uint8_t sel = ((const uint8_t*)ptr)[offs + fsz - 1];
             jl_value_t *active_ty = jl_nth_union_component(ft, sel);
             size_t active_sz = jl_datatype_size(active_ty);
-            Type *AlignmentType = IntegerType::get(jl_LLVMContext, 8 * al);
+            Type *AlignmentType = IntegerType::get(ctx.builder.getContext(), 8 * al);
             unsigned NumATy = (fsz - 1) / al;
             unsigned remainder = (fsz - 1) % al;
             while (NumATy--) {
@@ -364,7 +364,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     if (jt == (jl_value_t*)jl_bool_type || to == T_int1) {
         Instruction *unbox_load = tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(T_int8, maybe_bitcast(ctx, p, T_pint8)));
         if (jt == (jl_value_t*)jl_bool_type)
-            unbox_load->setMetadata(LLVMContext::MD_range, MDNode::get(jl_LLVMContext, {
+            unbox_load->setMetadata(LLVMContext::MD_range, MDNode::get(ctx.builder.getContext(), {
                 ConstantAsMetadata::get(ConstantInt::get(T_int8, 0)),
                 ConstantAsMetadata::get(ConstantInt::get(T_int8, 2)) }));
         Value *unboxed;
@@ -751,7 +751,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         Value *strct = emit_allocobj(ctx, size,
                                      literal_pointer_val(ctx, ety));
         Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
-        Type *loadT = Type::getIntNTy(jl_LLVMContext, nb * 8);
+        Type *loadT = Type::getIntNTy(ctx.builder.getContext(), nb * 8);
         thePtr = emit_bitcast(ctx, thePtr, loadT->getPointerTo());
         MDNode *tbaa = best_tbaa(ety);
         LoadInst *load = ctx.builder.CreateAlignedLoad(loadT, thePtr, Align(nb));
@@ -867,9 +867,9 @@ static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den)
     raise_exception_unless(ctx,
             ctx.builder.CreateICmpNE(den, ConstantInt::get(t, 0)),
             literal_pointer_val(ctx, jl_diverror_exception));
-    BasicBlock *m1BB = BasicBlock::Create(jl_LLVMContext, "minus1", ctx.f);
-    BasicBlock *okBB = BasicBlock::Create(jl_LLVMContext, "oksrem", ctx.f);
-    BasicBlock *cont = BasicBlock::Create(jl_LLVMContext, "after_srem", ctx.f);
+    BasicBlock *m1BB = BasicBlock::Create(ctx.builder.getContext(), "minus1", ctx.f);
+    BasicBlock *okBB = BasicBlock::Create(ctx.builder.getContext(), "oksrem", ctx.f);
+    BasicBlock *cont = BasicBlock::Create(ctx.builder.getContext(), "after_srem", ctx.f);
     PHINode *ret = PHINode::Create(t, 2);
     ctx.builder.CreateCondBr(ctx.builder.CreateICmpEQ(den ,ConstantInt::get(t, -1, true)),
                          m1BB, okBB);
@@ -994,7 +994,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                     // LLVM won't return a TBAA result for the root, but mark_julia_struct requires it: make it now
                     auto *OffsetNode = ConstantAsMetadata::get(ConstantInt::get(T_int64, 0));
                     Metadata *Ops[] = {tbaa_root, tbaa_root, OffsetNode};
-                    ifelse_tbaa = MDNode::get(jl_LLVMContext, Ops);
+                    ifelse_tbaa = MDNode::get(ctx.builder.getContext(), Ops);
                 }
             }
             Value *tindex;
@@ -1009,8 +1009,8 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             }
             else {
                 PHINode *ret = PHINode::Create(T_int8, 2);
-                BasicBlock *post = BasicBlock::Create(jl_LLVMContext, "post", ctx.f);
-                BasicBlock *compute = BasicBlock::Create(jl_LLVMContext, "compute_tindex", ctx.f);
+                BasicBlock *post = BasicBlock::Create(ctx.builder.getContext(), "post", ctx.f);
+                BasicBlock *compute = BasicBlock::Create(ctx.builder.getContext(), "compute_tindex", ctx.f);
                 // compute tindex if we select the previously-boxed value
                 if (x_tindex) {
                     assert(y.isboxed && y.V);

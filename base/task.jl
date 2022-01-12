@@ -327,7 +327,7 @@ function _wait2(t::Task, waiter::Task)
                 # XXX: Ideally we would be able to unset this
                 current_task().sticky = true
                 tid = Threads.threadid()
-                ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
+                ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
             end
             return nothing
         else
@@ -694,7 +694,7 @@ function enq_work(t::Task)
             # XXX: Ideally we would be able to unset this
             current_task().sticky = true
             tid = Threads.threadid()
-            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
         end
         push!(Workqueues[tid], t)
     else
@@ -702,7 +702,7 @@ function enq_work(t::Task)
             # if multiq is full, give to a random thread (TODO fix)
             if tid == 0
                 tid = mod(time_ns() % Int, Threads.nthreads()) + 1
-                ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
             end
             push!(Workqueues[tid], t)
         else
