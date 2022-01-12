@@ -299,8 +299,6 @@ struct jl_tbaacache_t {
     }
 };
 
-static Attribute Thunk;
-
 // Basic DITypes
 static DICompositeType *jl_value_dillvmt;
 static DIDerivedType *jl_pvalue_dillvmt;
@@ -418,7 +416,7 @@ static FunctionType *get_func_sig(LLVMContext &C) { return jl_func_sig; }
 static AttributeList get_func_attrs(LLVMContext &C)
 {
     return AttributeList::get(C,
-            AttributeSet::get(C, makeArrayRef({Thunk})),
+            AttributeSet::get(C, makeArrayRef({Attribute::get(C, "thunk")})),
             Attributes(C, {Attribute::NonNull}),
             None);
 }
@@ -3489,7 +3487,7 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty
     auto theFptr = cast<Function>(
         jl_Module->getOrInsertFunction(specFunctionObject, jl_func_sig).getCallee());
     addRetAttr(theFptr, Attribute::NonNull);
-    theFptr->addFnAttr(Thunk);
+    theFptr->addFnAttr(Attribute::get(ctx.builder.getContext(), "thunk"));
     Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, JLCALL_F_CC);
     return update_julia_type(ctx, mark_julia_type(ctx, ret, true, jlretty), inferred_retty);
 }
@@ -4915,7 +4913,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
             GlobalVariable::InternalLinkage,
             name, M);
     jl_init_function(f);
-    f->addFnAttr(Thunk);
+    f->addFnAttr(Attribute::get(M->getContext(), "thunk"));
     //f->setAlwaysInline();
     ctx.f = f; // for jl_Module
     BasicBlock *b0 = BasicBlock::Create(ctx.builder.getContext(), "top", f);
@@ -5384,7 +5382,7 @@ static Function* gen_cfun_wrapper(
                 assert(theFptr->getFunctionType() == jl_func_sig);
             }
             addRetAttr(theFptr, Attribute::NonNull);
-            theFptr->addFnAttr(Thunk);
+            theFptr->addFnAttr(Attribute::get(ctx.builder.getContext(), "thunk"));
         }
         BasicBlock *b_generic, *b_jlcall, *b_after;
         Value *ret_jlcall;
@@ -5808,7 +5806,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
 {
     Function *w = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, funcName, M);
     addRetAttr(w, Attribute::NonNull);
-    w->addFnAttr(Thunk);
+    w->addFnAttr(Attribute::get(M->getContext(), "thunk"));
     jl_init_function(w);
     Function::arg_iterator AI = w->arg_begin();
     Value *funcArg = &*AI++;
@@ -6298,7 +6296,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                              declarations.specFunctionObject, M);
         jl_init_function(f);
         addRetAttr(f, Attribute::NonNull);
-        f->addFnAttr(Thunk);
+        f->addFnAttr(Attribute::get(ctx.builder.getContext(), "thunk"));
         // TODO: (if needsparams) add attributes: dereferenceable<sizeof(void*) * length(sp)>, readonly, nocapture
         // TODO: add attributes: dereferenceable<sizeof(ft)>, readonly, nocapture - e.g. maybe_mark_argument_dereferenceable(Arg, argType);
         // TODO: add attributes: dereferenceable<sizeof(void*) * nreq>, readonly, nocapture
@@ -7801,11 +7799,6 @@ static JuliaVariable *julia_const_gv(jl_value_t *val)
     return nullptr;
 }
 
-static void init_julia_llvm_meta(void)
-{
-    Thunk = Attribute::get(jl_LLVMContext, "thunk");
-}
-
 static void init_julia_llvm_env(Module *m)
 {
     // every variable or function mapped in this function must be
@@ -8149,7 +8142,6 @@ extern "C" void jl_init_llvm(void)
         jl_TargetMachine->setFastISel(true);
     #endif
 
-    init_julia_llvm_meta();
     jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine, &jl_LLVMContext);
 
     // Mark our address spaces as non-integral
