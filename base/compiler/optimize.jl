@@ -629,7 +629,8 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
 end
 
 # whether `f` is effect free if nothrow
-intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref || is_pure_intrinsic_infer(f)
+intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref ||
+    f === Intrinsics.have_fma || is_pure_intrinsic_infer(f)
 
 ## Computing the cost of a function body
 
