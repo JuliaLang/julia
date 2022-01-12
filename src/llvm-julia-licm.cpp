@@ -170,7 +170,7 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                                         array_escaped = true;
                                         break;
                                     }
-                                    if (array_use_info.refstore) {
+                                    if (array_use_info.refstore || array_use_info.hasunknownmem) {
                                         array_refstore = true;
                                     }
                                 }
@@ -189,7 +189,7 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                                 break;
                             }
                         }
-                        if (use_info.refstore || array_refstore) {
+                        if (use_info.refstore || use_info.hasunknownmem || array_refstore) {
                             // We need to add write barriers to any stores
                             // that may start crossing generations
                             continue;
