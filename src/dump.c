@@ -484,11 +484,8 @@ static int jl_serialize_generic(jl_serializer_state *s, jl_value_t *v) JL_GC_DIS
     return 0;
 }
 
-static void uncompress_code(jl_method_instance_t *mi)
+static void uncompress_code(jl_method_t *m, jl_code_instance_t *codeinst)
 {
-    jl_method_t *m = mi->def.method;
-    assert(jl_is_method(m));
-    jl_code_instance_t *codeinst = mi->cache;
     while (codeinst) {
         if (codeinst->inferred && jl_is_array(codeinst->inferred))
             codeinst->inferred = (jl_value_t*)jl_uncompress_ir(m, codeinst, (jl_array_t*)codeinst->inferred);
@@ -496,11 +493,8 @@ static void uncompress_code(jl_method_instance_t *mi)
     }
 }
 
-static void compress_code(jl_method_instance_t *mi)
+static void compress_code(jl_method_t *m, jl_code_instance_t *codeinst)
 {
-    jl_method_t *m = mi->def.method;
-    assert(jl_is_method(m));
-    jl_code_instance_t *codeinst = mi->cache;
     while (codeinst) {
         if (codeinst->inferred && jl_is_code_info(codeinst->inferred))
             codeinst->inferred = (jl_value_t*)jl_compress_ir(m, (jl_code_info_t*)codeinst->inferred);
@@ -697,7 +691,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             for (i = 0; i < l; i++) {
                 jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(m->specializations, i);
                 if ((jl_value_t*)mi != jl_nothing)
-                    uncompress_code(mi);
+                    uncompress_code(m, mi->cache);
             }
             // Perform root-reordering transformations here
             // Compress
@@ -706,7 +700,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             for (i = 0; i < l; i++) {
                 jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(m->specializations, i);
                 if ((jl_value_t*)mi != jl_nothing)
-                    compress_code(mi);
+                    compress_code(m, mi->cache);
             }
         } else {
             // flag this in the backref table as special
