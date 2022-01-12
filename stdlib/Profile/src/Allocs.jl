@@ -107,6 +107,7 @@ function clear()
     ccall(:jl_free_alloc_profile, Cvoid, ())
 
     _g_expected_sampled_allocs[] = 0
+    return nothing
 end
 
 """
