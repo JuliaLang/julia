@@ -268,9 +268,11 @@ module IteratorsMD
 
     function show(io::IO, iter::CartesianIndices)
         print(io, "CartesianIndices(")
-        show(io, iter.indices)
+        show(io, map(_xform_index, iter.indices))
         print(io, ")")
     end
+    _xform_index(i) = i
+    _xform_index(i::OneTo) = i.stop
     show(io::IO, ::MIME"text/plain", iter::CartesianIndices) = show(io, iter)
 
     """

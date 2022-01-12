@@ -191,7 +191,7 @@ end
         @test_throws BoundsError linear[4:13]
         io = IOBuffer()
         show(io, cartesian)
-        @test String(take!(io)) == "CartesianIndices((Base.OneTo(4), Base.OneTo(3)))"
+        @test String(take!(io)) == "CartesianIndices((4, 3))"
     end
 
     @testset "3-dimensional" begin
