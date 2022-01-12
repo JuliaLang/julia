@@ -1386,8 +1386,10 @@ end
         # Runtime version
         @test sqrt(x) === y
         # Interpreter compile-time version
+        @test Base.invokelatest((@eval ()->sqrt(Base.inferencebarrier($x)))) == y
+        # Inference const-prop version
         @test Base.invokelatest((@eval ()->sqrt($x))) == y
         # LLVM constant folding version
-        @test Base.invokelatest((@eval ()->(@force_compile; sqrt($x)))) == y
+        @test Base.invokelatest((@eval ()->(@force_compile; sqrt(Base.inferencebarrier($x))))) == y
     end
 end
