@@ -278,6 +278,18 @@ module IteratorsMD
     _convert2ind(sz::AbstractUnitRange) = first(sz):last(sz)
     _convert2ind(sz::OrdinalRange) = first(sz):step(sz):last(sz)
 
+    function show(io::IO, iter::CartesianIndices)
+        show(io, first(iter))
+        print(io, ":")
+        st = step(iter)
+        if any(!=(1), Tuple(st))
+            show(io, st)
+            print(io, ":")
+        end
+        show(io, last(iter))
+    end
+    show(io::IO, ::MIME"text/plain", iter::CartesianIndices) = show(io, iter)
+
     """
         (:)(start::CartesianIndex, [step::CartesianIndex], stop::CartesianIndex)
 
