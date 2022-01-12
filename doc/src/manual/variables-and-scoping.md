@@ -99,9 +99,9 @@ julia> module E
 ERROR: cannot assign variables in other modules
 ```
 
-If a top-level expression contains a variable declaration with keyword `local`, 
-then that variable is not accessible outside that expression. 
-The variable inside the expression does not affect variables of the same name.
+If a top-level expression contains a variable declaration with keyword `local`,
+then that variable is not accessible outside that expression.
+The variable inside the expression does not affect global variables of the same name.
 An example is to declare `local x` in a `begin` or `if` block at the top-level:
 
 ```jldoctest
