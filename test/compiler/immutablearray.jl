@@ -1,5 +1,31 @@
 using Test
 import Core: ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
+import Core.Compiler: arrayfreeze_tfunc, mutating_arrayfreeze_tfunc, arraythaw_tfunc
+
+const ImmutableVector{T} = ImmutableArray{T,1}
+@testset "ImmutableArray tfuncs" begin
+    @test arrayfreeze_tfunc(Vector{Int}) === ImmutableVector{Int}
+    @test arrayfreeze_tfunc(Vector) === ImmutableVector
+    @test arrayfreeze_tfunc(Array) === ImmutableArray
+    @test arrayfreeze_tfunc(Any) === ImmutableArray
+    @test arrayfreeze_tfunc(ImmutableVector{Int}) === Union{}
+    @test arrayfreeze_tfunc(ImmutableVector) === Union{}
+    @test arrayfreeze_tfunc(ImmutableArray) === Union{}
+    @test mutating_arrayfreeze_tfunc(Vector{Int}) === ImmutableVector{Int}
+    @test mutating_arrayfreeze_tfunc(Vector) === ImmutableVector
+    @test mutating_arrayfreeze_tfunc(Array) === ImmutableArray
+    @test mutating_arrayfreeze_tfunc(Any) === ImmutableArray
+    @test mutating_arrayfreeze_tfunc(ImmutableVector{Int}) === Union{}
+    @test mutating_arrayfreeze_tfunc(ImmutableVector) === Union{}
+    @test mutating_arrayfreeze_tfunc(ImmutableArray) === Union{}
+    @test arraythaw_tfunc(ImmutableVector{Int}) === Vector{Int}
+    @test arraythaw_tfunc(ImmutableVector) === Vector
+    @test arraythaw_tfunc(ImmutableArray) === Array
+    @test arraythaw_tfunc(Any) === Array
+    @test arraythaw_tfunc(Vector{Int}) === Union{}
+    @test arraythaw_tfunc(Vector) === Union{}
+    @test arraythaw_tfunc(Array) === Union{}
+end
 
 # mutating_arrayfreeze optimization
 # =================================
@@ -8,7 +34,6 @@ import Core.Compiler: argextype, singleton_type
 const EMPTY_SPTYPES = Any[]
 
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
-get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 
 # check if `x` is a statement with a given `head`
 isnew(@nospecialize x) = Meta.isexpr(x, :new)
@@ -222,6 +247,42 @@ let # ignore ThrownEscape if it never happens when `arrayfreeze` is called (inte
         optimizable(ImmutableArray)
         @test_broken allocated == @allocated optimizable(ImmutableArray)
     end
+end
+
+let # nested case
+    function optimizable(gen, n)
+        a = [collect(1:m) for m in 1:n]
+        for i = 1:n
+            a[i][1] = i
+        end
+        return gen(a)
+    end
+    let src = code_typed1(optimizable, (Type{ImmutableArray},Int))
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable(identity, 100)
+        allocated = @allocated optimizable(identity, 100)
+        optimizable(ImmutableArray, 100)
+        @test allocated == @allocated optimizable(ImmutableArray, 100)
+    end
+end
+
+# demonstrate alias analysis
+broadcast_identity(a) = broadcast(identity, a)
+function optimizable_aa(gen, n) # can't be a closure somehow
+    return collect(1:n) |>
+           Ref |> Ref |> Ref |>
+           broadcast_identity |> broadcast_identity |> broadcast_identity |>
+           gen
+end
+let src = code_typed1(optimizable_aa, (Type{ImmutableArray},Int))
+    @test count(is_array_alloc, src.code) == 1
+    @test_broken count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+    @test_broken count(iscall((src, arrayfreeze)), src.code) == 0
+    optimizable_aa(identity, 100)
+    allocated = @allocated optimizable_aa(identity, 100)
+    optimizable_aa(ImmutableArray, 100)
+    @test_broken allocated == @allocated optimizable_aa(ImmutableArray, 100)
 end
 
 const g = Ref{Any}()

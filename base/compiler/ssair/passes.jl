@@ -1411,6 +1411,5 @@ function memory_opt!(ir::IRCode, estate)
             end
         end
     end
-
     return ir
 end
