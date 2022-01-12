@@ -1,17 +1,9 @@
-# Shortcuts for defining raw syntax nodes
-
-# Trivia nodes
-T(k, s) = GreenNode(SyntaxHead(k, flags(trivia=true)), s, )
-# Non-trivia nodes
-N(k, s) = GreenNode(SyntaxHead(k, flags()), s)
-N(k, args::GreenNode...) = GreenNode(SyntaxHead(k, flags()), args...)
-# Non-trivia, infix form
-NI(k, args::GreenNode...) = GreenNode(SyntaxHead(k, flags(infix=true)), args...)
-
 # # Macros and expression interpolation
 
-# The following shows that SyntaxNode works nicely for simple macros based on
-# interpolating expressions into one another. In particular it shows how
+using JuliaSyntax: SourceFile, SyntaxNode, parse_all, child, setchild!
+
+# The following shows that SyntaxNode works nicely for simple macros which
+# just interpolate expressions into one another. In particular it shows how
 # precise source information from multiple files can coexist within the same
 # syntax tree.
 
@@ -26,60 +18,29 @@ macro show2(ex)
     end
 end
 
-# Now, how would this be implemented if we were to do it with SyntaxNode?
-# We don't have a parser which is capable of producing our tree structures yet,
-# so we need to hand construct all our trees.
+# Now, let's implement the same expression interpolation but using SyntaxNode
+# (and with a normal Julia function which we need to use, absent any deeper
+# integration with the Julia runtime)
 function at_show2(ex::SyntaxNode)
-    code = String(read(@__FILE__))
     name = sprint(show, MIME"text/x.sexpression"(), ex)
-    # The following quote block is not used directly, but the text for it is
-    # re-read from `code`.
-    quote_begin = (@__LINE__) + 1
     quote
-        value = $ex
+        value = $(esc(ex))
         println($name, " = ", value)
         value
     end
-    raw = N(K"block",
-            T(K"quote", 5),
-            T(K"NewlineWs", 9),
-            N(K"=",
-              N(K"Identifier", 5),
-              T(K"Whitespace", 1),
-              T(K"=", 1),
-              T(K"Whitespace", 1),
-              N(K"$",
-                T(K"$", 1),
-                N(K"Identifier", 2)),
-              T(K"NewlineWs", 9)),
-            N(K"call",
-              N(K"Identifier", 7),
-              T(K"(", 1),
-              N(K"$",
-                T(K"$", 1),
-                N(K"Identifier", 4)),
-              T(K",", 1),
-              T(K"Whitespace", 1),
-              N(K"String", 5),
-              T(K",", 1),
-              T(K"Whitespace", 1),
-              N(K"Identifier", 5),
-              T(K")", 1)),
-            T(K"NewlineWs", 9),
-            N(K"Identifier", 5),
-            T(K"NewlineWs", 5),
-            T(K"end", 3))
-    source = SourceFile(code, filename=@__FILE__)
-    block = SyntaxNode(source, raw, source.line_starts[quote_begin]+4)
-    # Now that we have the block, we need to interpolate into it.
-
+    # The following emulates the expression interpolation lowering which is
+    # usually done by the compiler.
+    # 1. Extract the expression literal as `block`
+    tree = parse_all(SyntaxNode, SourceFile(String(read(@__FILE__)), filename=@__FILE__))
+    block = child(tree, 3, 2, 2, 1)
+    # 2. Interpolate local variables into the block at positions of $'s
     # Interpolating a SyntaxNode `ex` is simple:
     setchild!(block, (1, 2), ex)
     # The interpolation of a Julia *value* should inherit the source location
-    # of the $ interpolation expression. This is different to the
-    # interpolation of a SyntaxNode, which should just be inserted as-is.
+    # of the $ interpolation expression. This is different to when substituting
+    # in a SyntaxNode which should just be inserted as-is.
     setchild!(block, (2, 2),
-              JuliaSyntax.interpolate_literal(block.val[2].val[2], name))
+              JuliaSyntax.interpolate_literal(child(block, 2, 2), name))
     block
 end
 
@@ -87,16 +48,9 @@ end
 
 # Let's have some simple expression to pass to at_show2. This will be
 # attributed to a different file foo.jl
-code2 = "foo + 42"
-source2 = SourceFile(code2, filename="foo.jl")
-s2 = SyntaxNode(source2, NI(K"call",
-                            N(K"Identifier", 3),
-                            T(K"Whitespace", 1),
-                            N(K"+", 1),
-                            T(K"Whitespace", 1),
-                            N(K"Integer", 2)))
+s2 = child(parse_all(SyntaxNode, SourceFile("foo +\n42", filename="foo.jl")), 1)
 
 # Calling at_show2, we see that the precise source information is preserved for
 # both the surrounding expression and the interpolated fragments.
 println("\nInterpolation example")
-show(stdout, MIME"text/plain"(), at_show2(s2))
+s3 = at_show2(s2)
