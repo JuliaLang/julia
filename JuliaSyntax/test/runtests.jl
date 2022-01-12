@@ -27,6 +27,17 @@ function test_parse_file(root_path, path)
         end
     end
 end
+test_parse_file(path) = test_parse_file(dirname(path), basename(path))
+
+function parse_all_in_path(basedir)
+    src_list = String[]
+    for (root, dirs, files) in walkdir(basedir)
+        append!(src_list, (joinpath(root, f) for f in files if endswith(f, ".jl")))
+    end
+    for f in src_list
+        test_parse_file(basedir, relpath(f, basedir))
+    end
+end
 
 # Shortcuts for defining raw syntax nodes
 
@@ -39,13 +50,20 @@ N(k, args::GreenNode...) = GreenNode(SyntaxHead(k, flags()), args...)
 NI(k, args::GreenNode...) = GreenNode(SyntaxHead(k, flags(infix=true)), args...)
 
 module TokenizeTests
-    include("../Tokenize/test/runtests.jl")
+    using Test
+    @testset "Tokenize" begin
+        include("../Tokenize/test/runtests.jl")
+    end
 end
 
 include("parse_stream.jl")
 include("parser.jl")
-include("value_parsing.jl")
-include("self_parse.jl")
+
+@testset "Parsing values from strings" begin
+    include("value_parsing.jl")
+end
+
+include("parse_packages.jl")
 
 # Prototypes
 #include("syntax_trees.jl")

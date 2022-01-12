@@ -123,7 +123,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         # Leaf node
         k = kind(raw)
         val_range = position:position + span(raw) - 1
-        val_str = source[val_range]
+        val_str = view(source, val_range)
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
         val = if k in KSet`Integer Float BinInt OctInt HexInt`
@@ -187,7 +187,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
                 if !is_trivia(rawchild) || is_error(rawchild)
                     if kind(rawchild) == K"String"
                         val_range = pos:pos + span(rawchild) - 1
-                        push!(strs, source[val_range])
+                        push!(strs, view(source, val_range))
                         n = SyntaxNode(source, rawchild, pos, nothing, true, nothing)
                         push!(cs, n)
                         push!(str_nodes, n)
@@ -380,7 +380,21 @@ end
 
 function _to_expr(node::SyntaxNode)
     if !haschildren(node)
-        return node.val
+        if node.val isa Union{Int128,UInt128,BigInt}
+            # Ignore the values of large integers and convert them back to
+            # symbolic/textural form for compatibility with the Expr
+            # representation of these.
+            val_range = (node.position-1) .+ (1:node.raw.span)
+            val_str = replace(view(node.source, val_range), '_'=>"")
+            headsym = :macrocall
+            k = kind(node)
+            macname = node.val isa Int128  ? Symbol("@int128_str")  :
+                      node.val isa UInt128 ? Symbol("@uint128_str") :
+                      Symbol("@big_str")
+            return Expr(:macrocall, GlobalRef(Core, macname), nothing, val_str)
+        else
+            return node.val
+        end
     end
     args = Vector{Any}(undef, length(children(node)))
     args = map!(_to_expr, args, children(node))
@@ -390,11 +404,10 @@ function _to_expr(node::SyntaxNode)
     if is_infix(node.raw)
         args[2], args[1] = args[1], args[2]
     end
-    loc = source_location(LineNumberNode, node.source, node.position)
-
     headstr = untokenize(head(node), include_flag_suff=false)
     headsym = !isnothing(headstr) ? Symbol(headstr) :
         error("Can't untokenize head of kind $(kind(node))")
+    loc = source_location(LineNumberNode, node.source, node.position)
     # Convert elements
     if headsym == :macrocall
         insert!(args, 2, loc)
