@@ -203,7 +203,7 @@ module IteratorsMD
     CartesianIndex(2, 2, 2)
 
     julia> CartesianIndices(fill(1, (2,3)))
-    CartesianIndices((Base.OneTo(2), Base.OneTo(3)))
+    CartesianIndices((2, 3))
     ```
 
     ## Conversion between linear and cartesian indices
