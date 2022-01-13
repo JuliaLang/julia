@@ -18,6 +18,7 @@
     XX(jl_array_type) \
     XX(jl_array_typename) \
     XX(jl_array_uint8_type) \
+    XX(jl_array_uint64_type) \
     XX(jl_atomicerror_type) \
     XX(jl_base_module) \
     XX(jl_bool_type) \
@@ -84,6 +85,7 @@
     XX(jl_pinode_type) \
     XX(jl_pointer_type) \
     XX(jl_pointer_typename) \
+    XX(jl_precompile_toplevel_module) \
     XX(jl_quotenode_type) \
     XX(jl_readonlymemory_exception) \
     XX(jl_ref_type) \
