@@ -445,7 +445,7 @@ void jl_dump_native_impl(void *native_code,
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
-    Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
+    Triple TheTriple = Triple(jl_ExecutionEngine->getTargetTriple());
     // make sure to emit the native object format, even if FORCE_ELF was set in codegen
 #if defined(_OS_WINDOWS_)
     TheTriple.setObjectFormat(Triple::COFF);
@@ -454,11 +454,11 @@ void jl_dump_native_impl(void *native_code,
     TheTriple.setOS(llvm::Triple::MacOSX);
 #endif
     std::unique_ptr<TargetMachine> TM(
-        jl_TargetMachine->getTarget().createTargetMachine(
+        jl_ExecutionEngine->getTargetMachine().getTarget().createTargetMachine(
             TheTriple.getTriple(),
-            jl_TargetMachine->getTargetCPU(),
-            jl_TargetMachine->getTargetFeatureString(),
-            jl_TargetMachine->Options,
+            jl_ExecutionEngine->getTargetMachine().getTargetCPU(),
+            jl_ExecutionEngine->getTargetMachine().getTargetFeatureString(),
+            jl_ExecutionEngine->getTargetMachine().Options,
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
             Reloc::PIC_,
 #else
@@ -508,7 +508,7 @@ void jl_dump_native_impl(void *native_code,
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 
     // Reset the target triple to make sure it matches the new target machine
-    data->M->setTargetTriple(TM->getTargetTriple().str());
+    data->M->setTargetTriple(jl_ExecutionEngine->getTargetTriple().str());
     DataLayout DL = TM->createDataLayout();
     DL.reset(DL.getStringRepresentation() + "-ni:10:11:12:13");
     data->M->setDataLayout(DL);
@@ -850,9 +850,9 @@ public:
         (void)jl_init_llvm();
         PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
         TPMAdapter Adapter(TPM);
-        addTargetPasses(&Adapter, jl_TargetMachine);
+        addTargetPasses(&Adapter, &jl_ExecutionEngine->getTargetMachine());
         addOptimizationPasses(&Adapter, OptLevel);
-        addMachinePasses(&Adapter, jl_TargetMachine, OptLevel);
+        addMachinePasses(&Adapter, &jl_ExecutionEngine->getTargetMachine(), OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
@@ -979,9 +979,9 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, LLVMContextRef ctxt, size
     static legacy::PassManager *PM;
     if (!PM) {
         PM = new legacy::PassManager();
-        addTargetPasses(PM, jl_TargetMachine);
+        addTargetPasses(PM, &jl_ExecutionEngine->getTargetMachine());
         addOptimizationPasses(PM, jl_options.opt_level);
-        addMachinePasses(PM, jl_TargetMachine, jl_options.opt_level);
+        addMachinePasses(PM, &jl_ExecutionEngine->getTargetMachine(), jl_options.opt_level);
     }
 
     // get the source code for this function

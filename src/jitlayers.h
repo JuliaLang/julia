@@ -48,7 +48,6 @@ using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
 
-extern TargetMachine *jl_TargetMachine;
 extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
@@ -218,7 +217,7 @@ private:
 
 public:
 
-    JuliaOJIT(TargetMachine &TM, LLVMContext *Ctx);
+    JuliaOJIT(LLVMContext *Ctx);
 
     void enableJITDebuggingSupport();
 #ifndef JL_USE_JITLINK
@@ -235,15 +234,16 @@ public:
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
     orc::ThreadSafeContext &getContext();
-    const DataLayout& getDataLayout() const;
+    DataLayout& getDataLayout();
+    TargetMachine &getTargetMachine();
     const Triple& getTargetTriple() const;
     size_t getTotalBytes() const;
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
 
-    TargetMachine &TM;
-    const DataLayout DL;
+    std::unique_ptr<TargetMachine> TM;
+    DataLayout DL;
     // Should be big enough that in the common case, The
     // object fits in its entirety
     legacy::PassManager PM0;  // per-optlevel pass managers

@@ -25,12 +25,13 @@
 #include <llvm/Support/Debug.h>
 
 #include "julia.h"
+#include "jitlayers.h"
 
 #define DEBUG_TYPE "cpufeatures"
 
 using namespace llvm;
 
-extern TargetMachine *jl_TargetMachine;
+extern JuliaOJIT *jl_ExecutionEngine;
 
 // whether this platform unconditionally (i.e. without needing multiversioning) supports FMA
 Optional<bool> always_have_fma(Function &intr) {
@@ -55,7 +56,7 @@ bool have_fma(Function &intr, Function &caller) {
 
     Attribute FSAttr = caller.getFnAttribute("target-features");
     StringRef FS =
-        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_TargetMachine->getTargetFeatureString();
+        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetMachine().getTargetFeatureString();
 
     SmallVector<StringRef, 6> Features;
     FS.split(Features, ',');
