@@ -258,8 +258,8 @@ transpose(B::Bidiagonal{<:Number}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L :
 permutedims(B::Bidiagonal) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? 'L' : 'U')
 function permutedims(B::Bidiagonal, perm)
     Base.checkdims_perm(B, B, perm)
-    all(perm .== (1, 2)) && return B
-    all(perm .== (2, 1)) && return permutedims(B)
+    NTuple{2}(perm) == (1, 2) && return B
+    NTuple{2}(perm) == (2, 1) && return permutedims(B)
 end
 function Base.copy(aB::Adjoint{<:Any,<:Bidiagonal})
     B = aB.parent
