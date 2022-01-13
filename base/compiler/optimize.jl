@@ -1,5 +1,45 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#############
+# constants #
+#############
+
+# The slot has uses that are not statically dominated by any assignment
+# This is implied by `SLOT_USEDUNDEF`.
+# If this is not set, all the uses are (statically) dominated by the defs.
+# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
+const SLOT_STATICUNDEF  = 1 # slot might be used before it is defined (structurally)
+const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
+const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
+# const SLOT_CALLED      = 64
+
+# NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
+
+const IR_FLAG_NULL        = 0x00
+# This statement is marked as @inbounds by user.
+# Ff replaced by inlining, any contained boundschecks may be removed.
+const IR_FLAG_INBOUNDS    = 0x01 << 0
+# This statement is marked as @inline by user
+const IR_FLAG_INLINE      = 0x01 << 1
+# This statement is marked as @noinline by user
+const IR_FLAG_NOINLINE    = 0x01 << 2
+const IR_FLAG_THROW_BLOCK = 0x01 << 3
+# This statement may be removed if its result is unused. In particular it must
+# thus be both pure and effect free.
+const IR_FLAG_EFFECT_FREE = 0x01 << 4
+
+# known to be always effect-free (in particular nothrow)
+const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
+
+# known to be effect-free if the are nothrow
+const _PURE_OR_ERROR_BUILTINS = [
+    fieldtype, apply_type, isa, UnionAll,
+    getfield, arrayref, const_arrayref, arraysize, isdefined, Core.sizeof,
+    Core.kwfunc, Core.ifelse, Core._typevar, (<:)
+]
+
+const TOP_TUPLE = GlobalRef(Core, :tuple)
+
 #####################
 # OptimizationState #
 #####################
@@ -52,7 +92,10 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
     return nothing
 end
 
+function argextype end # imported by EscapeAnalysis
 include("compiler/ssair/driver.jl")
+using .EscapeAnalysis
+import .EscapeAnalysis: EscapeState
 
 mutable struct OptimizationState
     linfo::MethodInstance
@@ -120,46 +163,6 @@ function ir_to_codeinf!(opt::OptimizationState)
     validate_code_in_debug_mode(linfo, src, "optimized")
     return src
 end
-
-#############
-# constants #
-#############
-
-# The slot has uses that are not statically dominated by any assignment
-# This is implied by `SLOT_USEDUNDEF`.
-# If this is not set, all the uses are (statically) dominated by the defs.
-# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
-const SLOT_STATICUNDEF  = 1 # slot might be used before it is defined (structurally)
-const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
-const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
-# const SLOT_CALLED      = 64
-
-# NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
-
-const IR_FLAG_NULL        = 0x00
-# This statement is marked as @inbounds by user.
-# Ff replaced by inlining, any contained boundschecks may be removed.
-const IR_FLAG_INBOUNDS    = 0x01 << 0
-# This statement is marked as @inline by user
-const IR_FLAG_INLINE      = 0x01 << 1
-# This statement is marked as @noinline by user
-const IR_FLAG_NOINLINE    = 0x01 << 2
-const IR_FLAG_THROW_BLOCK = 0x01 << 3
-# This statement may be removed if its result is unused. In particular it must
-# thus be both pure and effect free.
-const IR_FLAG_EFFECT_FREE = 0x01 << 4
-
-# known to be always effect-free (in particular nothrow)
-const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
-
-# known to be effect-free if the are nothrow
-const _PURE_OR_ERROR_BUILTINS = [
-    fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, const_arrayref, arraysize, isdefined, Core.sizeof,
-    Core.kwfunc, Core.ifelse, Core._typevar, (<:)
-]
-
-const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 #########
 # logic #
@@ -517,7 +520,8 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
     @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @timeit "compact 2" ir = compact!(ir)
-    @timeit "SROA"      ir = sroa_pass!(ir)
+    nargs = let def = sv.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
+    @timeit "SROA"      ir = sroa_pass!(ir, nargs)
     @timeit "ADCE"      ir = adce_pass!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)

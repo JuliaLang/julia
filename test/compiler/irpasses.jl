@@ -518,7 +518,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
     @test Core.Compiler.verify_ir(ir) === nothing
-    ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
+    ir = @test_nowarn Core.Compiler.sroa_pass!(ir, 0)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
