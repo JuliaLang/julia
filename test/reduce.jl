@@ -705,3 +705,8 @@ end
         @test mapreduce(+, +, oa, oa) == 2len
     end
 end
+
+@testset "minimum/maximum stability" begin
+    @test @inferred(minimum(Float64, 1:3)) == 1.0
+    @test @inferred(maximum(Float64, 1:3)) == 3.0
+end

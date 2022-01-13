@@ -1299,68 +1299,60 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
 end
 
 # simd optimization for min/max related reduction
-# general fallback
-_fast(op, x, y) = op(x, y)
-_fast(op) = (x, y) -> _fast(op, x, y)
+"""
+    _fast(min, x, y)
+    _fast(max, x, y)
 
-# The following are used in optimized `mapreduce_impl` for IEEEFloat.
-# They compare `0.0/-0.0` correctly.
+A help function to accelerate `minimum`/`maximum` for `IEEEFloat`.
+It's equivalent to `min(x, y)`/`max(x, y)` only when `(x, y)` contains no `NaN`.
+Make sure the inputs have been checked before usage.
+
+!!! note
+    Only for internal usage. Might be changed/deprecated in future.
+"""
 _fast(::typeof(min), x::T, y::T) where {T<:IEEEFloat} = ifelse(signbit(x-y), x, y)
 _fast(::typeof(max), x::T, y::T) where {T<:IEEEFloat} = ifelse(signbit(y-x), x, y)
+_fast(op) = (x, y) -> _fast(op, x, y)
 
-# Some help function for better vectorization
 # NaN check
-_anynan(x, y) = isnan(x) | isnan(y)
-_anynan(x::NTuple{N}) where {N} = reduce(|, map(_anynan, x[1:N>>1], x[1+N>>1:N]))
-# split then reduce for inputs whose length > 4
-_half_reduce(op, x::NTuple{N}) where {N} = _half_reduce(op, map(op, x[1:N>>1], x[1+N>>1:N]))
-_half_reduce(op, x::NTuple{4}) = reduce(op, x)
+_anynan(x::NTuple{16}) = foldl(|, ntuple(i->isnan(x[i])|isnan(x[i+8]), 8))
 
 # The optimized fallback for `IEEEFloat`'s min/max reduction. (LLVM handles `Integer` well)
-function mapreduce_impl(f, op::Union{typeof(max),typeof(min)},
-                        A::AbstractArrayOrBroadcasted, first::Int, last::Int)
-    T = @default_eltype A
+function mapreduce_impl(f::F, op::Union{typeof(max),typeof(min)},
+                        A::AbstractArrayOrBroadcasted, first::Int, last::Int) where {F}
+    T = A isa AbstractArray ? eltype(A) : (@default_eltype A)
     Eltype = _return_type(f, Tuple{T})
-    # Call general fallback for non-IEEEFloat inputs
+    # Call general fallback for non-IEEEFloat cases.
     (isconcretetype(Eltype) && Eltype <: IEEEFloat) ||
         return mapreduce_impl(f, op, A, first, last, pairwise_blocksize(f, op))
-    @inline elf(i::Int) = @inbounds f(A[i])
-    @noinline firstnan(temp::Tuple) = temp[findfirst(isnan, temp)], last
-    function simd_kernel(::Val{N}, ini) where {N}
-        # Reused kernel for better vectorizable reduction.
-        # - `N` is the unroll size.
-        # - `ini` is the initial value of reduction, i.e. `elf(first)`
-        # It returns the reduced result (`v`), and the last processed index (`i`).
-        isnan(ini) && return ini, last    # 1. Ensure that `ini` is not a NaN.
-        vs = ntuple(Returns(ini), Val(N)) # 2. Repeat `ini` for initialization .
-        Δi = ntuple(identity, Val(N))
-        local i = first
-        while i <= last - N
-            temp = map(elf, i .+ Δi)      # 3. Pick some unprocessed elements.
-            _anynan(temp) &&              # 4. NaN check for `temp`. (We know `vs` contains no `NaN`)
-                return firstnan(temp)     # 5a). If `NaN` exists, return the first one directly.
-            vs = map(_fast(op), vs, temp) # 5b). Since there's no `NaN`, `_fast(op)` is safe.
-            i += N
-        end
-        _half_reduce(_fast(op), vs), i    # 6. reduce `vs` (We know `vs` contains no `NaN`)
-    end
-    ini = elf(first)
+    @inline elf(i::Int) = @inbounds f(A[i])::Eltype # Force inference if `T`` is a abstract type
+    @inline elfn(i::Int, Val) = ntuple(Δi -> elf(i + Δi), Val)
+    @noinline firstnan(temp) = temp[findfirst(isnan, temp)]
+    v, i = elf(first), first
     rest = last - first
-    # Pick an unroll-size based on input length.
-    v, i = if rest < 8
-        ini, first
-    elseif rest < 64
-        @inline simd_kernel(Val(4), ini)
-    elseif rest < 128
-        simd_kernel(Val(8), ini)
-    else
-        simd_kernel(Val(16), ini)
+    if rest > 8
+        ini1 = ntuple(Returns(v), Val(8))          # 1. Simd Initialization.
+        if rest & 15 > 8                           # 1a). If the unvectorized length > 8,
+            ini2 = elfn(i, Val(8))                 #      use more elements to initialize.
+            i += 8
+        else                                       # 1b). Otherwise, just repeat the first
+            ini2 = ini1                            #      element to initialize.
+        end
+        vs = (ini1..., ini2...)
+        _anynan(vs) && return firstnan(vs)         # 2. Ensure there's no NaN in initial values.
+        while i <= last - 16
+            temp = elfn(i, Val(16))                # 3. Pick some unprocessed elements.
+            _anynan(temp) && return firstnan(temp) # 4. Ensure `temp` is free of NaN.
+            vs = map(_fast(op), vs, temp)          # 5. `_fast(op)` is safe for non-NaN inputs.
+            i += 16
+        end
+        vs′ = map(_fast(op), vs[1:8], vs[9:16])    # 6. Reduce `vs` to half length pairwisely.
+        v = foldl(_fast(op), vs′)                  # 7. Reduce `vs′`.
     end
     # Reduce the rest elements.
-    # Note: If `f.(A)` contains mutipule `NaN`s, `simd_kernel` always returns the first one
-    # in its processing region (first:i). But `min`/`max` treats `NaN` > `copysign(NaN, -1)`.
+    # Note: If `f.(A)` contains mutipule NaNs, The above code always returns the first
+    # in its processing region. But `min`/`max` treats `NaN > copysign(NaN, -1)`.
     # So the following might break such behavior.
-    # TODO: make `min`/`max` propagtes the first `NaN`. (like `minmax`)
     while i < last
         v = op(v, elf(i+=1))
     end
