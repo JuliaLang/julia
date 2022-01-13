@@ -682,7 +682,7 @@ function _hypot(x, y)
 
     # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
     if isinf(ax) || isinf(ay)
-        return typeof(axu)(Inf)
+        return oftype(axu, Inf)
     end
 
     # Order the operands
@@ -745,7 +745,7 @@ _hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(
 function _hypot(x...)
     maxabs = maximum(abs, x)
     if isnan(maxabs) && any(isinf, x)
-        return typeof(maxabs)(Inf)
+        return oftype(maxabs, Inf)
     elseif (iszero(maxabs) || isinf(maxabs))
         return maxabs
     else
