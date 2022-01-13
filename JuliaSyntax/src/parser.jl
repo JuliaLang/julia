@@ -24,7 +24,11 @@ end
 
 # Normal context
 function ParseState(stream::ParseStream, julia_version::VersionNumber)
-    ParseState(stream, julia_version, true, false, false, false, false, true)
+    # To avoid keeping track of the exact Julia development version where new
+    # features were added, treat prereleases or dev versons as the release
+    # version by stripping the prerelease.
+    ver = VersionNumber(julia_version.major, julia_version.minor, julia_version.patch)
+    ParseState(stream, ver, true, false, false, false, false, true)
 end
 
 function ParseState(ps::ParseState; range_colon_enabled=nothing,
@@ -150,6 +154,15 @@ end
 function bump_semicolon_trivia(ps)
     while peek(ps) in KSet`; NewlineWs`
         bump(ps, TRIVIA_FLAG)
+    end
+end
+
+# Emit an error if the version is less than `min_ver`
+function min_supported_version(min_ver, ps, mark, message)
+    # NB: the prerelease version will be removed from ps.julia_version before this point.
+    if ps.julia_version < min_ver
+        msg = "$message is not supported in Julia version $(ps.julia_version) < $(min_ver)"
+        emit(ps, mark, K"error", error=msg)
     end
 end
 
@@ -1348,6 +1361,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                    ckind == K"ncat"          ? K"typed_ncat"           :
                    internal_error("unrecognized kind in parse_cat", ckind)
             emit(ps, mark, outk, cflags)
+            check_ncat_compat(ps, mark, ckind)
             if is_macrocall
                 emit(ps, mark, K"macrocall")
                 break
@@ -1467,11 +1481,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # @S{a,b} ==> (macrocall S (braces a b))
                 emit(ps, m, K"braces")
                 emit(ps, mark, K"macrocall")
-                # Extension
-                #if ps.julia_version < v"1.5"
-                #    emit(ps, mark, K"error",
-                #         error="", min_version=v"1.5")
-                #end
+                min_supported_version(v"1.6", ps, mark, "macro call without space before `{}`")
                 break
             else
                 # S{a,b} ==> (curly S a b)
@@ -1809,20 +1819,17 @@ function parse_const_local_global(ps)
         parse_comma(ps)
         emit(ps, beforevar_mark, K"=")
     elseif has_const
-        if ps.julia_version >= v"1.8.0-DEV.1148" 
-            # Const fields https://github.com/JuliaLang/julia/pull/43305
-            # const x     ==>  (const x)
-            # const x::T  ==>  (const (:: x T))
-            if n_commas >= 1
-                # Maybe nonsensical? But this is what the flisp parser does.
-                # const x,y  ==>  (const (tuple x y))
-                emit(ps, beforevar_mark, K"tuple")
-            end
-        else
-            # const x  ==> (const (error x))
-            emit(ps, beforevar_mark, K"error",
-                 error="Expected assignment after `const`")
+        # Const fields https://github.com/JuliaLang/julia/pull/43305
+        # const x     ==>  (const x)
+        # const x::T  ==>  (const (:: x T))
+        if n_commas >= 1
+            # Maybe nonsensical? But this is what the flisp parser does.
+            # const x,y  ==>  (const (tuple x y))
+            emit(ps, beforevar_mark, K"tuple")
         end
+        #v1.7: const x  ==> (const (error x))
+        min_supported_version(v"1.8", ps, beforevar_mark,
+                              "`const` struct field without assignment")
     else
         #v1.8: const x ==>  (const x)
         # global x    ==>  (global x)
@@ -1989,11 +1996,8 @@ function parse_try(ps)
             #v1.8: try else end ==> (try (block) false false (error (block)) false)
             emit(ps, else_mark, K"error", error="Expected `catch` before `else`")
         end
-        if ps.julia_version < v"1.8"
-            #v1.7: try catch ; else end ==> (try (block) false (block) (error (block)) false)
-            emit(ps, else_mark, K"error",
-                 error="`else` in `try` requires at least Julia 1.8")
-        end
+        #v1.7: try catch ; else end ==> (try (block) false (block) (error (block)) false)
+        min_supported_version(v"1.8", ps, else_mark, "`else` after `try`")
     else
         bump_invisible(ps, K"false")
     end
@@ -2163,16 +2167,14 @@ function parse_import(ps::ParseState, word, has_import_prefix)
         bump(ps, TRIVIA_FLAG)
         parse_atsym(ps)
         emit(ps, mark, K"as")
-        if ps.julia_version < v"1.6"
-            #v1.5: import A as B     ==>  (import (error (as (. A) B)))
-            emit(ps, mark, K"error",
-                 error="`import` with renaming using `as` requires at least Julia 1.6")
-        elseif word == K"using" && !has_import_prefix
+        if word == K"using" && !has_import_prefix
             # using A as B     ==>  (using (error (as (. A) B)))
             # using A, B as C  ==>  (using (. A) (error (as (. B) C)))
             emit(ps, mark, K"error",
                  error="`using` with `as` renaming requires a `:` and context module")
         end
+        #v1.5: import A as B     ==>  (import (error (as (. A) B)))
+        min_supported_version(v"1.6", ps, mark, "`import ... as`")
         return true
     else
         return false
@@ -2423,19 +2425,19 @@ end
 # [x y ; z]     ==>  (vcat (row x y) z)
 #
 # Double semicolon with spaces allowed (only) for line continuation
-# [x y ;;\n z w]  ==>  (hcat x y z w)
-# [x y ;; z w]    ==>  (hcat x y (error) z w)
+#v1.7: [x y ;;\n z w]  ==>  (hcat x y z w)
+#v1.7: [x y ;; z w]    ==>  (hcat x y (error) z w)
 #
 # Single elements in rows
-# [x ; y ;; z ]  ==>  (ncat-2 (nrow-1 x y) z)
-# [x  y ;;; z ]  ==>  (ncat-3 (row x y) z)
+#v1.7: [x ; y ;; z ]  ==>  (ncat-2 (nrow-1 x y) z)
+#v1.7: [x  y ;;; z ]  ==>  (ncat-3 (row x y) z)
 #
 # Higher dimensional ncat
 # Row major
-# [x y ; z w ;;; a b ; c d]  ==>
+#v1.7: [x y ; z w ;;; a b ; c d]  ==>
 #     (ncat-3 (nrow-1 (row x y) (row z w)) (nrow-1 (row a b) (row c d)))
 # Column major
-# [x ; y ;; z ; w ;;; a ; b ;; c ; d]  ==>
+#v1.7: [x ; y ;; z ; w ;;; a ; b ;; c ; d]  ==>
 #     (ncat-3 (nrow-2 (nrow-1 x y) (nrow-1 z w)) (nrow-2 (nrow-1 a b) (nrow-1 c d)))
 #
 # flisp: parse-array
@@ -2444,7 +2446,7 @@ function parse_array(ps::ParseState, mark, closer, end_is_symbol)
 
     # Outer array parsing loop - parse chain of separators with descending
     # precedence such as
-    # [a ; b ;; c ;;; d ;;;; e] ==> (ncat-4 (ncat-3 (ncat-2 (ncat-1 a b) c) d) e)
+    #v1.7: [a ; b ;; c ;;; d ;;;; e] ==> (ncat-4 (ncat-3 (ncat-2 (ncat-1 a b) c) d) e)
     #
     # Ascending and equal precedence is handled by parse_array_inner.
     #
@@ -2604,6 +2606,13 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
         # [x y]  ==>  (hcat x y)
         # and other forms; See parse_array.
         parse_array(ps, mark, closer, end_is_symbol)
+    end
+end
+
+function check_ncat_compat(ps, mark, k)
+    # https://github.com/JuliaLang/julia/pull/33697
+    if k == K"ncat"
+        min_supported_version(v"1.7", ps, mark, "multidimensional array syntax")
     end
 end
 
@@ -2822,6 +2831,7 @@ function parse_string(ps::ParseState)
                 m = position(ps)
                 parse_atom(ps)
                 if ps.julia_version >= v"1.6"
+                    # https://github.com/JuliaLang/julia/pull/38692
                     prev = peek_behind(ps)
                     if prev.kind == K"String"
                         # Wrap interpolated literal strings in (string) so we can
@@ -2984,6 +2994,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         bump(ps, TRIVIA_FLAG)
         ckind, cflags = parse_cat(ps, K"]", ps.end_symbol)
         emit(ps, mark, ckind, cflags)
+        check_ncat_compat(ps, mark, ckind)
     elseif leading_kind == K"{" # cat expression
         bump(ps, TRIVIA_FLAG)
         ckind, cflags = parse_cat(ps, K"}", ps.end_symbol)
@@ -3026,6 +3037,7 @@ function emit_braces(ps, mark, ckind, cflags)
         # {x ;;; y}  ==>  (bracescat (nrow-3 x y))
         emit(ps, mark, K"nrow", cflags)
     end
+    check_ncat_compat(ps, mark, ckind)
     outk = ckind in KSet`vect comprehension` ? K"braces" : K"bracescat"
     emit(ps, mark, outk)
 end
