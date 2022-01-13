@@ -527,7 +527,7 @@ tests = [
         ":(::)"  =>  "(quote ::)"
         # braces
         "{x y}"      =>  "(bracescat (row x y))"
-        "{x ;;; y}"  =>  "(bracescat (nrow-3 x y))"
+        ((v=v"1.7",), "{x ;;; y}") =>  "(bracescat (nrow-3 x y))"
         # Macro names can be keywords
         "@end x" => "(macrocall @end x)"
         # __dot__ macro
@@ -553,14 +553,14 @@ tests = [
         "[x y ;;\n z w]"  =>  "(hcat x y z w)"
         # "[x y ;; z w]"  =>  "(hcat x y (error) z w)" # FIXME
         # Single elements in rows
-        "[x ; y ;; z ]"  =>  "(ncat-2 (nrow-1 x y) z)"
-        "[x  y ;;; z ]"  =>  "(ncat-3 (row x y) z)"
+        ((v=v"1.7",), "[x ; y ;; z ]")  =>  "(ncat-2 (nrow-1 x y) z)"
+        ((v=v"1.7",), "[x  y ;;; z ]")  =>  "(ncat-3 (row x y) z)"
         # Higher dimensional ncat
         # Row major
-        "[x y ; z w ;;; a b ; c d]"  =>
+        ((v=v"1.7",), "[x y ; z w ;;; a b ; c d]")  =>
             "(ncat-3 (nrow-1 (row x y) (row z w)) (nrow-1 (row a b) (row c d)))"
         # Column major
-        "[x ; y ;; z ; w ;;; a ; b ;; c ; d]"  =>
+        ((v=v"1.7",), "[x ; y ;; z ; w ;;; a ; b ;; c ; d]")  =>
             "(ncat-3 (nrow-2 (nrow-1 x y) (nrow-1 z w)) (nrow-2 (nrow-1 a b) (nrow-1 c d)))"
     ],
     JuliaSyntax.parse_string => [
