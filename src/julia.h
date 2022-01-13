@@ -410,6 +410,7 @@ typedef struct _jl_code_instance_t {
             uint8_t terminates:2;
         } purity_flags;
     };
+    jl_value_t *argescapes; // escape information of call arguments
 
     // compilation state cache
     uint8_t isspecsig; // if specptr is a specialized function signature for specTypes->rettype
