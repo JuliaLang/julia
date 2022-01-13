@@ -1877,11 +1877,10 @@ end
 
 @testset "#14684: `display` should print associative types in full" begin
     d = Dict(1 => 2, 3 => 45)
-    buf = IOBuffer()
-    td = TextDisplay(buf)
+    td = TextDisplay(PipeBuffer())
 
     display(td, d)
-    result = String(take!(td.io))
+    result = read(td.io, String)
     @test occursin(summary(d), result)
 
     # Is every pair in the string?
@@ -1891,8 +1890,7 @@ end
 end
 
 @testset "#43766: `display` trailing newline" begin
-    buf = PipeBuffer()
-    td = TextDisplay(buf)
+    td = TextDisplay(PipeBuffer())
     display(td, 1)
     @test read(td.io, String) == "1\n"
     show(td.io, 1)
