@@ -300,7 +300,7 @@ xdisplayable(D::AbstractDisplay, @nospecialize args...) = applicable(display, D,
     display(mime, x)
     display(d::AbstractDisplay, mime, x)
 
-AbstractDisplay `x` using the topmost applicable display in the display stack, typically using the
+Display `x` using the topmost applicable display in the display stack, typically using the
 richest supported multimedia output for `x`, with plain-text [`stdout`](@ref) output as a fallback.
 The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
 a [`MethodError`](@ref) if `d` cannot display objects of this type.
