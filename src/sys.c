@@ -595,30 +595,6 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-static int num_threads_bound(void) JL_NOTSAFEPOINT
-{
-#ifdef _OS_DARWIN_
-    return INT_MAX;
-#else
-    int masksize = uv_cpumask_size();
-    uv_thread_t tid = uv_thread_self();
-    char *cpumask = (char *)calloc(masksize, sizeof(char));
-    int err = uv_thread_getaffinity(&tid, cpumask, masksize);
-    if (err) {
-        free(cpumask);
-        jl_safe_printf("WARNING: failed to get thread affinity (%s %d)\n", uv_err_name(err),
-                       err);
-        return INT_MAX;
-    }
-    int n = 0;
-    for (size_t i = 0; i < masksize; i++) {
-        n += cpumask[i];
-    }
-    free(cpumask);
-    return n;
-#endif
-}
-
 // Apple's M1 processor is a big.LITTLE style processor, with 4x "performance"
 // cores, and 4x "efficiency" cores.  Because Julia expects to be able to run
 // things like heavy linear algebra workloads on all cores, it's best for us
@@ -630,7 +606,6 @@ static int num_threads_bound(void) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 {
-    int upper_bound = num_threads_bound();
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;
     int32_t count;
@@ -654,28 +629,51 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
         }
     }
 #endif
-    return upper_bound < count ? upper_bound : count;
+    return count;
 #elif defined(_SC_NPROCESSORS_ONLN)
     long count = sysconf(_SC_NPROCESSORS_ONLN);
     if (count < 1)
         return 1;
-    return upper_bound < count ? upper_bound : count;
+    return count;
 #elif defined(_OS_WINDOWS_)
     //Try to get WIN7 API method
     GAPC gapc;
     if (jl_dlsym(jl_kernel32_handle, "GetActiveProcessorCount", (void **)&gapc, 0)) {
-        DWORD count = gapc(ALL_PROCESSOR_GROUPS);
-        return upper_bound < count ? upper_bound : count;
+        return gapc(ALL_PROCESSOR_GROUPS);
     }
     else { //fall back on GetSystemInfo
         SYSTEM_INFO info;
         GetSystemInfo(&info);
-        DWORD count = info.dwNumberOfProcessors;
-        return upper_bound < count ? upper_bound : count;
+        return info.dwNumberOfProcessors;
     }
 #else
 #warning "cpu core detection not defined for this platform"
     return 1;
+#endif
+}
+
+int jl_effective_threads(void) JL_NOTSAFEPOINT
+{
+    int cpu = jl_cpu_threads();
+#ifdef _OS_DARWIN_
+    return cpu;
+#else
+    int masksize = uv_cpumask_size();
+    uv_thread_t tid = uv_thread_self();
+    char *cpumask = (char *)calloc(masksize, sizeof(char));
+    int err = uv_thread_getaffinity(&tid, cpumask, masksize);
+    if (err) {
+        free(cpumask);
+        jl_safe_printf("WARNING: failed to get thread affinity (%s %d)\n", uv_err_name(err),
+                       err);
+        return cpu;
+    }
+    int n = 0;
+    for (size_t i = 0; i < masksize; i++) {
+        n += cpumask[i];
+    }
+    free(cpumask);
+    return n;
 #endif
 }
 

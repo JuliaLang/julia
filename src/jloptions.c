@@ -441,7 +441,7 @@ restart_switch:
         case 'p': // procs
             errno = 0;
             if (!strcmp(optarg,"auto")) {
-                jl_options.nprocs = jl_cpu_threads();
+                jl_options.nprocs = jl_effective_threads();
             }
             else {
                 long nprocs = strtol(optarg, &endptr, 10);
