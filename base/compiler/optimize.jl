@@ -155,7 +155,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 # known to be effect-free if the are nothrow
 const _PURE_OR_ERROR_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, const_arrayref, arraysize, isdefined, Core.sizeof,
+    getfield, arrayref, const_arrayref, atomic_arrayref, arraysize, isdefined, Core.sizeof,
     Core.kwfunc, Core.ifelse, Core._typevar, (<:)
 ]
 
@@ -670,6 +670,9 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 return 0
             elseif (f === Core.arrayref || f === Core.const_arrayref || f === Core.arrayset) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes)
+                return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+            elseif (f === Core.atomic_arrayref || f === Core.atomic_arrayset) && length(ex.args) >= 4
+                atyp = argextype(ex.args[4], src, sptypes)
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1

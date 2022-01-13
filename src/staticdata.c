@@ -26,7 +26,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    151
+#define NUM_TAGS    153
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -189,7 +189,9 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_fieldtype);
         INSERT_TAG(jl_builtin_arrayref);
         INSERT_TAG(jl_builtin_const_arrayref);
+        INSERT_TAG(jl_builtin_atomic_arrayref);
         INSERT_TAG(jl_builtin_arrayset);
+        INSERT_TAG(jl_builtin_atomic_arrayset);
         INSERT_TAG(jl_builtin_arraysize);
         INSERT_TAG(jl_builtin_apply_type);
         INSERT_TAG(jl_builtin_applicable);
@@ -246,7 +248,8 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call, &jl_f_invoke_kwsorter,
     &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield,
     &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields,
-    &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
+    &jl_f_arrayref, &jl_f_atomic_arrayref, &jl_f_const_arrayref, &jl_f_arrayset,
+    &jl_f_atomic_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
     &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_opaque_closure_call,

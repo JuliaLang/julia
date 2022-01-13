@@ -1505,8 +1505,12 @@ JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len);
 JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
 JL_DLLEXPORT jl_array_t *jl_alloc_vec_any(size_t n);
 JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
+JL_DLLEXPORT jl_value_t *jl_atomic_arrayref(jl_array_t *a, size_t i, enum jl_memory_order);  // 0-indexed
 JL_DLLEXPORT jl_value_t *jl_ptrarrayref(jl_array_t *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;  // 0-indexed
 JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i);  // 0-indexed
+JL_DLLEXPORT void jl_atomic_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT,
+                                     jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED,
+                                     size_t i, enum jl_memory_order); // 0-indexed
 JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);

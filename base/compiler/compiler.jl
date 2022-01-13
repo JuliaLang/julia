@@ -14,6 +14,8 @@ const setproperty! = Core.setfield!
 const swapproperty! = Core.swapfield!
 const modifyproperty! = Core.modifyfield!
 const replaceproperty! = Core.replacefield!
+const atomic_arrayref = Core.atomic_arrayref
+const atomic_arrayset = Core.atomic_arrayset
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 

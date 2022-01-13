@@ -2784,20 +2784,37 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if ((f == jl_builtin_arrayref || f == jl_builtin_const_arrayref) && nargs >= 3) {
-        const jl_cgval_t &ary = argv[2];
+    else if (((f == jl_builtin_arrayref || f == jl_builtin_const_arrayref) && nargs >= 3) ||
+             (f == jl_builtin_atomic_arrayref && nargs >= 4)) {
+        const bool isatomic = f == jl_builtin_atomic_arrayref;
+        const jl_cgval_t &ary = argv[2 + isatomic];
+        const size_t idxpos = 3 + isatomic;
+        const size_t nidxs = nargs + 1 - idxpos;
         bool indices_ok = true;
-        for (size_t i = 3; i <= nargs; i++) {
+        for (size_t i = idxpos; i <= nargs; i++) {
             if (argv[i].typ != (jl_value_t*)jl_long_type) {
                 indices_ok = false;
                 break;
+            }
+        }
+        enum jl_memory_order order = jl_memory_order_notatomic;
+        if (isatomic) {
+            const jl_cgval_t &ord = argv[1];
+            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, "atomic_arrayref");
+            if (!ord.constant)
+                return false;
+            order = jl_get_atomic_order((jl_sym_t*)ord.constant, false, true);
+            if (order == jl_memory_order_invalid) {
+                emit_atomic_error(ctx, "invalid atomic ordering");
+                *ret = jl_cgval_t(); // unreachable
+                return true;
             }
         }
         jl_value_t *aty_dt = jl_unwrap_unionall(ary.typ);
         if (jl_is_array_type(aty_dt) && indices_ok) {
             jl_value_t *ety = jl_tparam0(aty_dt);
             jl_value_t *ndp = jl_tparam1(aty_dt);
-            if (!jl_has_free_typevars(ety) && (jl_is_long(ndp) || nargs == 3)) {
+            if (!jl_has_free_typevars(ety) && (jl_is_long(ndp) || nidxs == 1)) {
                 jl_value_t *ary_ex = jl_exprarg(ex, 2);
                 size_t elsz = 0, al = 0;
                 int union_max = jl_islayout_inline(ety, &elsz, &al);
@@ -2805,14 +2822,33 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 if (isboxed)
                     ety = (jl_value_t*)jl_any_type;
                 ssize_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : -1;
-                jl_value_t *boundscheck = argv[1].constant;
-                emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "arrayref");
-                Value *idx = emit_array_nd_index(ctx, ary, ary_ex, nd, &argv[3], nargs - 2, boundscheck);
+                const jl_cgval_t &boundscheck = argv[1 + isatomic];
+                emit_typecheck(ctx, boundscheck, (jl_value_t *)jl_bool_type, "arrayref");
+                Value *idx = emit_array_nd_index(ctx, ary, ary_ex, nd, &argv[idxpos],
+                                                 nidxs, boundscheck.constant);
                 if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
+                    if (isatomic) {
+                        if (!(order == jl_memory_order_notatomic ||
+                              order == jl_memory_order_unordered ||
+                              order == jl_memory_order_monotonic)) {
+                            assert(order != jl_memory_order_invalid); // handled above
+                            emit_atomic_error(
+                                ctx,
+                                ("invalid atomic ordering: singleton type element cannot be"
+                                 " loaded with memory ordering stronger than monotonic"));
+                            *ret = jl_cgval_t(); // unreachable
+                            return true;
+                        }
+                    }
                     assert(((jl_datatype_t*)ety)->instance != NULL);
                     *ret = ghostValue(ety, ctx.tbaa());
                 }
                 else if (!isboxed && jl_is_uniontype(ety)) {
+                    if (isatomic) {
+                        emit_atomic_error(ctx, "union eltype cannot be atomically loaded");
+                        *ret = jl_cgval_t(); // unreachable
+                        return true;
+                    }
                     Value *data = emit_arrayptr(ctx, ary, ary_ex);
                     Value *offset = emit_arrayoffset(ctx, ary, nd);
                     Value *ptindex;
@@ -2844,28 +2880,45 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
                             aliasscope,
                             isboxed,
-                            AtomicOrdering::NotAtomic);
+                            get_llvm_atomic_order(order));
                 }
                 return true;
             }
         }
     }
 
-    else if (f == jl_builtin_arrayset && nargs >= 4) {
-        const jl_cgval_t &ary = argv[2];
-        jl_cgval_t val = argv[3];
+    else if ((f == jl_builtin_arrayset && nargs >= 4) ||
+             (f == jl_builtin_atomic_arrayset && nargs >= 5)) {
+        const bool isatomic = f == jl_builtin_atomic_arrayset;
+        const jl_cgval_t &ary = argv[2 + isatomic];
+        jl_cgval_t val = argv[3 + isatomic];
+        const size_t idxpos = 4 + isatomic;
+        const size_t nidxs = nargs + 1 - idxpos;
         bool indices_ok = true;
-        for (size_t i = 4; i <= nargs; i++) {
+        for (size_t i = 4 + isatomic; i <= nargs; i++) {
             if (argv[i].typ != (jl_value_t*)jl_long_type) {
                 indices_ok = false;
                 break;
+            }
+        }
+        enum jl_memory_order order = jl_memory_order_notatomic;
+        if (isatomic) {
+            const jl_cgval_t &ord = argv[1];
+            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, "atomic_arrayset");
+            if (!ord.constant)
+                return false;
+            order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
+            if (order == jl_memory_order_invalid) {
+                emit_atomic_error(ctx, "invalid atomic ordering");
+                *ret = jl_cgval_t(); // unreachable
+                return true;
             }
         }
         jl_value_t *aty_dt = jl_unwrap_unionall(ary.typ);
         if (jl_is_array_type(aty_dt) && indices_ok) {
             jl_value_t *ety = jl_tparam0(aty_dt);
             jl_value_t *ndp = jl_tparam1(aty_dt);
-            if (!jl_has_free_typevars(ety) && (jl_is_long(ndp) || nargs == 4)) {
+            if (!jl_has_free_typevars(ety) && (jl_is_long(ndp) || nidxs == 1)) {
                 if (!jl_subtype(val.typ, ety)) {
                     emit_typecheck(ctx, val, ety, "arrayset");
                     val = update_julia_type(ctx, val, ety);
@@ -2875,13 +2928,32 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 bool isboxed = (union_max == 0);
                 if (isboxed)
                     ety = (jl_value_t*)jl_any_type;
-                jl_value_t *ary_ex = jl_exprarg(ex, 2);
+                jl_value_t *ary_ex = jl_exprarg(ex, 2 + isatomic);
                 ssize_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : -1;
-                jl_value_t *boundscheck = argv[1].constant;
-                emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "arrayset");
-                Value *idx = emit_array_nd_index(ctx, ary, ary_ex, nd, &argv[4], nargs - 3, boundscheck);
+                const jl_cgval_t &boundscheck = argv[1 + isatomic];
+                emit_typecheck(ctx, boundscheck, (jl_value_t *)jl_bool_type, "arrayset");
+                Value *idx = emit_array_nd_index(ctx, ary, ary_ex, nd, &argv[idxpos], nidxs,
+                                                 boundscheck.constant);
                 if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
+                    if (isatomic) {
+                        if (!(order == jl_memory_order_notatomic ||
+                              order == jl_memory_order_unordered ||
+                              order == jl_memory_order_monotonic)) {
+                            assert(order != jl_memory_order_invalid); // handled above
+                            emit_atomic_error(
+                                ctx,
+                                ("invalid atomic ordering: singleton type element cannot be"
+                                 " stored with memory ordering stronger than monotonic"));
+                            *ret = jl_cgval_t(); // unreachable
+                            return true;
+                        }
+                    }
                     // no-op
+                }
+                else if (isatomic && !isboxed && jl_is_uniontype(ety)) {
+                    emit_atomic_error(ctx, "union eltype canno be atomically stored");
+                    *ret = jl_cgval_t(); // unreachable
+                    return true;
                 }
                 else {
                     PHINode *data_owner = NULL; // owner object against which the write barrier must check
@@ -2918,6 +2990,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         data_owner->addIncoming(own_ptr, ownedBB);
                     }
                     if (!isboxed && jl_is_uniontype(ety)) {
+                        assert(!isatomic); // handled above
                         Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
                         Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), AT->getPointerTo());
                         Value *offset = emit_arrayoffset(ctx, ary, nd);
@@ -2948,6 +3021,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         }
                     }
                     else {
+                        AtomicOrdering ord = order == jl_memory_order_notatomic ?
+                                                 isboxed ? AtomicOrdering::Unordered : // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                                                           AtomicOrdering::NotAtomic :
+                                                 get_llvm_atomic_order(order);
                         typed_store(ctx,
                                     emit_arrayptr(ctx, ary, ary_ex, isboxed),
                                     idx, val, jl_cgval_t(), ety,
@@ -2955,8 +3032,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                     ctx.aliasscope,
                                     data_owner,
                                     isboxed,
-                                    isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                                    isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                                    ord,
+                                    ord,
                                     0,
                                     false,
                                     true,
@@ -8023,8 +8100,10 @@ extern "C" void jl_init_llvm(void)
           { jl_f__expr_addr,              new JuliaFunction{XSTR(jl_f__expr), get_func_sig, get_func_attrs} },
           { jl_f__typevar_addr,           new JuliaFunction{XSTR(jl_f__typevar), get_func_sig, get_func_attrs} },
           { jl_f_arrayref_addr,           new JuliaFunction{XSTR(jl_f_arrayref), get_func_sig, get_func_attrs} },
+          { jl_f_atomic_arrayref_addr,    new JuliaFunction{XSTR(jl_f_atomic_arrayref), get_func_sig, get_func_attrs} },
           { jl_f_const_arrayref_addr,     new JuliaFunction{XSTR(jl_f_const_arrayref), get_func_sig, get_func_attrs} },
           { jl_f_arrayset_addr,           new JuliaFunction{XSTR(jl_f_arrayset), get_func_sig, get_func_attrs} },
+          { jl_f_atomic_arrayset_addr,    new JuliaFunction{XSTR(jl_f_atomic_arrayset), get_func_sig, get_func_attrs} },
           { jl_f_arraysize_addr,          new JuliaFunction{XSTR(jl_f_arraysize), get_func_sig, get_func_attrs} },
           { jl_f_apply_type_addr,         new JuliaFunction{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
         };

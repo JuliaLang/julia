@@ -1534,12 +1534,30 @@ end
 add_tfunc(arrayref, 3, INT_INF, arrayref_tfunc, 20)
 add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
 
+function atomic_arrayref_tfunc(order, args...)
+    @nospecialize
+    if !isvarargtype(order)
+        hasintersect(widenconst(order), Symbol) || return Bottom
+    end
+    return arrayref_tfunc(args...)
+end
+add_tfunc(atomic_arrayref, 4, INT_INF, atomic_arrayref_tfunc, 20)
+
 function arrayset_tfunc(@nospecialize(boundscheck), @nospecialize(ary), @nospecialize(item),
     @nospecialize idxs...)
     hasintersect(widenconst(item), _arrayref_tfunc(boundscheck, ary, idxs)) || return Bottom
     return ary
 end
 add_tfunc(arrayset, 4, INT_INF, arrayset_tfunc, 20)
+
+function atomic_arrayset_tfunc(order, args...)
+    @nospecialize
+    if !isvarargtype(order)
+        hasintersect(widenconst(order), Symbol) || return Bottom
+    end
+    return arrayset_tfunc(args...)
+end
+add_tfunc(atomic_arrayset, 5, INT_INF, atomic_arrayset_tfunc, 20)
 
 function array_builtin_common_errorcheck(@nospecialize(boundscheck), @nospecialize(ary),
     @nospecialize idxs::Tuple)
@@ -1602,10 +1620,9 @@ function array_type_undefable(@nospecialize(arytype))
     end
 end
 
-function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
+function array_builtin_common_nothrow(
+    @nospecialize(boundscheck), @nospecialize(arytype), argtypes::Vector{Any}, first_idx_idx::Int)
     length(argtypes) >= 4 || return false
-    boundscheck = argtypes[1]
-    arytype = argtypes[2]
     array_builtin_common_typecheck(boundscheck, arytype, argtypes, first_idx_idx) || return false
     # If we could potentially throw undef ref errors, bail out now.
     arytype = widenconst(arytype)
@@ -1645,11 +1662,17 @@ end
 # Query whether the given builtin is guaranteed not to throw given the argtypes
 function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
     if f === arrayset
-        array_builtin_common_nothrow(argtypes, 4) || return true
+        array_builtin_common_nothrow(argtypes[1], argtypes[2], argtypes, 4) || return true
         # Additionally check element type compatibility
         return arrayset_typecheck(argtypes[2], argtypes[3])
+    elseif f === atomic_arrayset
+        array_builtin_common_nothrow(argtypes[2], argtypes[3], argtypes, 5) || return true
+        # Additionally check element type compatibility
+        return arrayset_typecheck(argtypes[3], argtypes[4])
     elseif f === arrayref || f === const_arrayref
-        return array_builtin_common_nothrow(argtypes, 3)
+        return array_builtin_common_nothrow(argtypes[1], argtypes[2], argtypes, 3)
+    elseif f === atomic_arrayref
+        return array_builtin_common_nothrow(argtypes[2], argtypes[3], argtypes, 4)
     elseif f === arraysize
         return arraysize_nothrow(argtypes)
     elseif f === Core._expr

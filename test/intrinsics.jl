@@ -5,6 +5,8 @@
 # For curmod_*
 include("testenv.jl")
 
+using InteractiveUtils: code_llvm
+
 # bits types
 @test isa((() -> Core.Intrinsics.bitcast(Ptr{Int8}, 0))(), Ptr{Int8})
 @test isa(convert(Char, 65), Char)
@@ -285,3 +287,96 @@ Base.show(io::IO, a::IntWrap) = print(io, "IntWrap(", a.x, ")")
         @test r2 isa IntWrap && r2.x === 103 === r[].x && r2 !== r[]
     end
 end)()
+
+
+# It's called "ad-hoc" AtomicArray because we need integration with `@atomic*`
+# macros to make it "`Base`-ready."
+struct AdhocAtomicArray{T,N,Order} <: AbstractArray{T,N}
+    data::Array{T,N}
+    order::Val{Order}
+end
+
+AdhocAtomicArray(data) = AdhocAtomicArray(data, Val(:sequentially_consistent))
+
+Base.size(A::AdhocAtomicArray) = size(A.data)
+Base.IndexStyle(::Type{<:AdhocAtomicArray}) = IndexLinear()
+
+valueof(::Val{x}) where {x} = x
+
+@eval @inline Base.getindex(A::AdhocAtomicArray, i::Int) =
+    Core.atomic_arrayref(valueof(A.order), $(Expr(:boundscheck)), A.data, i)
+@eval @inline Base.getindex(A::AdhocAtomicArray{<:Any,N}, I::Vararg{Int,N}) where {N} =
+    Core.atomic_arrayref(valueof(A.order), $(Expr(:boundscheck)), A.data, I...)
+
+@eval @inline function Base.setindex!(A::AdhocAtomicArray, x, i::Int)
+    v = convert(eltype(A), x)
+    Core.atomic_arrayset(valueof(A.order), $(Expr(:boundscheck)), A.data, v, i)
+end
+@eval @inline function Base.setindex!(
+    A::AdhocAtomicArray{<:Any,N},
+    x,
+    I::Vararg{Int,N},
+) where {N}
+    v = convert(eltype(A), x)
+    Core.atomic_arrayset(valueof(A.order), $(Expr(:boundscheck)), A.data, v, I...)
+end
+
+@testset "atomic array ops" begin
+    @testset "intrinsics" begin
+        A = [10 * i + j for i in 1:9, j in 1:9]
+        order = Base.inferencebarrier(:sequentially_consistent)
+
+        f(A) = Core.atomic_arrayref(:sequentially_consistent, true, A, 42)
+        @test f(A) == Core.atomic_arrayref(order, true, A, 42) == 65
+
+        g(A) = Core.atomic_arrayref(:sequentially_consistent, true, A, 4, 2)
+        @test g(A) == Core.atomic_arrayref(order, true, A, 4, 2) == 42
+
+        A[42] = 0
+        Core.atomic_arrayset(order, true, A, 123456789, 42)
+        @test A[42] == 123456789
+        A[42] = 0
+        f!(A) = Core.atomic_arrayset(:sequentially_consistent, true, A, 123456789, 42)
+        f!(A)
+        @test A[42] == 123456789
+
+        A[4, 2] = 0
+        Core.atomic_arrayset(order, true, A, 123456789, 4, 2)
+        @test A[4, 2] == 123456789
+        A[4, 2] = 0
+        g!(A) = Core.atomic_arrayset(:sequentially_consistent, true, A, 123456789, 4, 2)
+        g!(A)
+        @test A[4, 2] == 123456789
+    end
+    @testset "codegen" begin
+        args = (AdhocAtomicArray(Int[]), 1)
+        ir = sprint(code_llvm, getindex, typeof(args))
+        @test occursin("seq_cst", ir)
+
+        args = (AdhocAtomicArray(Int[], Val(:monotonic)), 1)
+        ir = sprint(code_llvm, getindex, typeof(args))
+        @test occursin("monotonic", ir)
+    end
+    @testset "vector" begin
+        A = AdhocAtomicArray(zeros(Int, 5))
+        for i in eachindex(A)
+            A[i] = i
+        end
+        @test collect(A) == 1:length(A)
+    end
+    @testset "matrix" begin
+        A = AdhocAtomicArray(zeros(Int, 2, 3))
+        @testset "linear indexing" begin
+            for i in eachindex(A)
+                A[i] = i
+            end
+            @test vec(collect(A)) == 1:length(A)
+        end
+        @testset "cartesian indexing" begin
+            for j in axes(A, 2), i in axes(A, 1)
+                A[i, j] = 10 * i + j
+            end
+            @test collect(A) == [10 * i + j for i in axes(A, 1), j in axes(A, 2)]
+        end
+    end
+end

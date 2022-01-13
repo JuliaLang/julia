@@ -546,17 +546,28 @@ JL_DLLEXPORT jl_value_t *jl_ptrarrayref(jl_array_t *a JL_PROPAGATES_ROOT, size_t
 {
     assert(i < jl_array_len(a));
     assert(a->flags.ptrarray);
-    jl_value_t *elt = jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)a->data) + i);
-    if (elt == NULL)
-        jl_throw(jl_undefref_exception);
-    return elt;
+    return jl_atomic_arrayref(a, i, jl_memory_order_notatomic);
 }
 
 
 JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
-    if (a->flags.ptrarray)
-        return jl_ptrarrayref(a, i);
+    return jl_atomic_arrayref(a, i, jl_memory_order_notatomic);
+}
+
+JL_DLLEXPORT jl_value_t *jl_atomic_arrayref(jl_array_t *a, size_t i,
+                                            enum jl_memory_order order)
+{
+    if (order == jl_memory_order_invalid)
+        jl_atomic_error("invalid memory order");
+    if (a->flags.ptrarray) {
+        _Atomic(jl_value_t *) *ptr = ((_Atomic(jl_value_t *) *)a->data) + i;
+        jl_value_t *elt = order == jl_memory_order_notatomic ? jl_atomic_load_relaxed(ptr) :
+                                                               jl_atomic_load(ptr);
+        if (__unlikely(elt == NULL))
+            jl_throw(jl_undefref_exception);
+        return elt;
+    }
     assert(i < jl_array_len(a));
     jl_value_t *eltype = (jl_value_t*)jl_tparam0(jl_typeof(a));
     if (jl_is_uniontype(eltype)) {
@@ -566,7 +577,10 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
         if (jl_is_datatype_singleton((jl_datatype_t*)eltype))
             return ((jl_datatype_t*)eltype)->instance;
     }
-    jl_value_t *r = undefref_check((jl_datatype_t*)eltype, jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]));
+    jl_value_t *r = order == jl_memory_order_notatomic ?
+                        jl_new_bits(eltype, &((char *)a->data)[i * a->elsize]) :
+                        jl_atomic_new_bits(eltype, &((char *)a->data)[i * a->elsize]);
+    undefref_check((jl_datatype_t*)eltype, r);
     if (__unlikely(r == NULL))
         jl_throw(jl_undefref_exception);
     return r;
@@ -588,8 +602,17 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
 
 JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i)
 {
+    jl_atomic_arrayset(a, rhs, i, jl_memory_order_notatomic);
+}
+
+JL_DLLEXPORT void jl_atomic_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT,
+                                     jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED,
+                                     size_t i, enum jl_memory_order order)
+{
     assert(i < jl_array_len(a));
     jl_value_t *eltype = jl_tparam0(jl_typeof(a));
+    if (order == jl_memory_order_invalid)
+        jl_atomic_error("invalid memory order");
     if (eltype != (jl_value_t*)jl_any_type) {
         JL_GC_PUSH1(&rhs);
         if (!jl_isa(rhs, eltype))
@@ -599,6 +622,8 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs
     if (!a->flags.ptrarray) {
         int hasptr;
         if (jl_is_uniontype(eltype)) {
+            if (order != jl_memory_order_notatomic)
+                jl_atomic_error("union eltype cannot be atomically stored");
             uint8_t *psel = &((uint8_t*)jl_array_typetagdata(a))[i];
             unsigned nth = 0;
             if (!jl_find_union_component(eltype, jl_typeof(rhs), &nth))
@@ -611,10 +636,22 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs
         else {
             hasptr = a->flags.hasptr;
         }
-        arrayassign_safe(hasptr, jl_array_owner(a), &((char*)a->data)[i * a->elsize], rhs, a->elsize);
+        if (order == jl_memory_order_notatomic)
+            arrayassign_safe(hasptr, jl_array_owner(a), &((char*)a->data)[i * a->elsize], rhs, a->elsize);
+        else
+        {
+            if ((a->elsize & (a->elsize - 1)) != 0 || a->elsize > MAX_POINTERATOMIC_SIZE)
+                jl_error("atomic_arrayset: invalid pointer for atomic operation");
+            jl_atomic_store_bits(&((char*)a->data)[i * a->elsize], rhs, a->elsize);
+            if (hasptr)
+                jl_gc_multi_wb(jl_array_owner(a), rhs);
+        }
     }
     else {
-        jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)a->data) + i, rhs);
+        if (order == jl_memory_order_notatomic)
+            jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)a->data) + i, rhs);
+        else
+            jl_atomic_store(((_Atomic(jl_value_t*)*)a->data) + i, rhs);
         jl_gc_wb(jl_array_owner(a), rhs);
     }
 }

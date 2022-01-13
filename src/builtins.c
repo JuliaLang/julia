@@ -1386,6 +1386,17 @@ JL_CALLABLE(jl_f_const_arrayref)
     return jl_f_arrayref(F, args, nargs);
 }
 
+JL_CALLABLE(jl_f_atomic_arrayref)
+{
+    JL_NARGSV(atomic_arrayref, 4);
+    JL_TYPECHK(atomic_arrayref, symbol, args[0]);
+    JL_TYPECHK(atomic_arrayref, bool, args[1]);
+    JL_TYPECHK(atomic_arrayref, array, args[2]);
+    jl_array_t *a = (jl_array_t*)args[2];
+    size_t i = array_nd_index(a, &args[3], nargs - 3, "atomic_arrayref");
+    return jl_atomic_arrayref(a, i, jl_get_atomic_order((jl_sym_t*)args[0], 0, 1));
+}
+
 JL_CALLABLE(jl_f_arrayset)
 {
     JL_NARGSV(arrayset, 4);
@@ -1395,6 +1406,18 @@ JL_CALLABLE(jl_f_arrayset)
     size_t i = array_nd_index(a, &args[3], nargs - 3, "arrayset");
     jl_arrayset(a, args[2], i);
     return args[1];
+}
+
+JL_CALLABLE(jl_f_atomic_arrayset)
+{
+    JL_NARGSV(atomic_arrayset, 5);
+    JL_TYPECHK(atomic_arrayset, symbol, args[0]);
+    JL_TYPECHK(atomic_arrayset, bool, args[1]);
+    JL_TYPECHK(atomic_arrayset, array, args[2]);
+    jl_array_t *a = (jl_array_t*)args[2];
+    size_t i = array_nd_index(a, &args[4], nargs - 4, "atomic_arrayset");
+    jl_atomic_arrayset(a, args[3], i, jl_get_atomic_order((jl_sym_t*)args[0], 0, 1));
+    return args[2];
 }
 
 // type definition ------------------------------------------------------------
@@ -1806,7 +1829,9 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // array primitives
     jl_builtin_arrayref = add_builtin_func("arrayref", jl_f_arrayref);
     jl_builtin_const_arrayref = add_builtin_func("const_arrayref", jl_f_arrayref);
+    jl_builtin_atomic_arrayref = add_builtin_func("atomic_arrayref", jl_f_atomic_arrayref);
     jl_builtin_arrayset = add_builtin_func("arrayset", jl_f_arrayset);
+    jl_builtin_atomic_arrayset = add_builtin_func("atomic_arrayset", jl_f_atomic_arrayset);
     jl_builtin_arraysize = add_builtin_func("arraysize", jl_f_arraysize);
 
     // method table utils

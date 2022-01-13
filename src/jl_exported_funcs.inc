@@ -39,7 +39,9 @@
     XX(jl_array_ptr_copy) \
     XX(jl_array_rank) \
     XX(jl_arrayref) \
+    XX(jl_atomic_arrayref) \
     XX(jl_arrayset) \
+    XX(jl_atomic_arrayset) \
     XX(jl_array_size) \
     XX(jl_array_sizehint) \
     XX(jl_array_to_string) \
