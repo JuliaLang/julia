@@ -1288,7 +1288,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
                 return false
             end
         elseif (isa(ai, Const) && isa(ai.val, Type)) || isconstType(ai)
-            ai = isa(ai, Const) ? ai.val : ai.parameters[1]
+            ai = isa(ai, Const) ? ai.val : (ai::DataType).parameters[1]
             if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
                 return false
             end
