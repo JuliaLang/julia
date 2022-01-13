@@ -18,7 +18,10 @@ If `interp` is an `AbstractInterpreter`, it is expected to provide at least the 
 abstract type AbstractInterpreter end
 
 struct ArgInfo
+    # The actual function arguments appearing in the expression. Used to
+    # compute additional path-dependent information if needed. Optional.
     fargs::Union{Nothing,Vector{Any}}
+    # The lattice element for each argument type.
     argtypes::Vector{Any}
 end
 
