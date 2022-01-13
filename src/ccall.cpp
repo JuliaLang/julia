@@ -44,9 +44,9 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f
         runtime_lib = true;
         auto &libgv = emission_context.libMapGV[f_lib];
         if (libgv.first == NULL) {
-            libptrgv = new GlobalVariable(*M, T_pint8, false,
+            libptrgv = new GlobalVariable(*M, getInt8PtrTy(M->getContext()), false,
                                           GlobalVariable::ExternalLinkage,
-                                          Constant::getNullValue(T_pint8), name);
+                                          Constant::getNullValue(getInt8PtrTy(M->getContext())), name);
             libgv.first = libptrgv;
         }
         else {
@@ -122,7 +122,7 @@ static Value *runtime_sym_lookup(
         }
         else {
             // f_lib is actually one of the special sentinel values
-            libname = ConstantExpr::getIntToPtr(ConstantInt::get(getSizeTy(irbuilder.getContext()), (uintptr_t)f_lib), T_pint8);
+            libname = ConstantExpr::getIntToPtr(ConstantInt::get(getSizeTy(irbuilder.getContext()), (uintptr_t)f_lib), getInt8PtrTy(irbuilder.getContext()));
         }
         llvmf = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
                     { libname, nameval, libptrgv });
@@ -654,10 +654,10 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     }
     else {
         if (sym.lib_expr) {
-            res = runtime_sym_lookup(ctx, cast<PointerType>(T_pint8), NULL, sym.lib_expr, sym.f_name, ctx.f);
+            res = runtime_sym_lookup(ctx, cast<PointerType>(getInt8PtrTy(ctx.builder.getContext())), NULL, sym.lib_expr, sym.f_name, ctx.f);
         }
         else if (imaging_mode) {
-            res = runtime_sym_lookup(ctx, cast<PointerType>(T_pint8), sym.f_lib, NULL, sym.f_name, ctx.f);
+            res = runtime_sym_lookup(ctx, cast<PointerType>(getInt8PtrTy(ctx.builder.getContext())), sym.f_lib, NULL, sym.f_name, ctx.f);
             res = ctx.builder.CreatePtrToInt(res, lrt);
         }
         else {
@@ -667,7 +667,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
             if (!libsym || !jl_dlsym(libsym, sym.f_name, &symaddr, 0)) {
                 // Error mode, either the library or the symbol couldn't be find during compiletime.
                 // Fallback to a runtime symbol lookup.
-                res = runtime_sym_lookup(ctx, cast<PointerType>(T_pint8), sym.f_lib, NULL, sym.f_name, ctx.f);
+                res = runtime_sym_lookup(ctx, cast<PointerType>(getInt8PtrTy(ctx.builder.getContext())), sym.f_lib, NULL, sym.f_name, ctx.f);
                 res = ctx.builder.CreatePtrToInt(res, lrt);
             } else {
                 // since we aren't saving this code, there's no sense in
@@ -1051,7 +1051,7 @@ std::string generate_func_sig(const char *fname)
         bool isboxed;
         if (jl_is_abstract_ref_type(tti)) {
             tti = (jl_value_t*)jl_voidpointer_type;
-            t = T_pint8;
+            t = getInt8PtrTy(lrt->getContext());
             isboxed = false;
         }
         else if (llvmcall && jl_is_llvmpointer_type(tti)) {
@@ -1480,7 +1480,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == getInt16Ty(ctx.builder.getContext()));
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        Value *ptask_i16 = emit_bitcast(ctx, get_current_task(ctx), T_pint16);
+        Value *ptask_i16 = emit_bitcast(ctx, get_current_task(ctx), getInt16PtrTy(ctx.builder.getContext()));
         const int tid_offset = offsetof(jl_task_t, tid);
         Value *ptid = ctx.builder.CreateInBoundsGEP(getInt16Ty(ctx.builder.getContext()), ptask_i16, ConstantInt::get(getSizeTy(ctx.builder.getContext()), tid_offset / sizeof(int16_t)));
         LoadInst *tid = ctx.builder.CreateAlignedLoad(getInt16Ty(ctx.builder.getContext()), ptid, Align(sizeof(int16_t)));
@@ -1493,7 +1493,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 #endif
              ) {
         JL_GC_POP();
-        Value *ptls_i32 = emit_bitcast(ctx, get_current_ptls(ctx), T_pint32);
+        Value *ptls_i32 = emit_bitcast(ctx, get_current_ptls(ctx), getInt32PtrTy(ctx.builder.getContext()));
         const int finh_offset = offsetof(jl_tls_states_t, finalizers_inhibited);
         Value *pfinh = ctx.builder.CreateInBoundsGEP(getInt32Ty(ctx.builder.getContext()), ptls_i32, ConstantInt::get(getSizeTy(ctx.builder.getContext()), finh_offset / 4));
         LoadInst *finh = ctx.builder.CreateAlignedLoad(getInt32Ty(ctx.builder.getContext()), pfinh, Align(sizeof(int32_t)));
@@ -1578,7 +1578,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             len = ConstantInt::get(getSizeTy(ctx.builder.getContext()), jl_svec_len(svecv.constant));
         }
         else {
-            auto ptr = emit_bitcast(ctx, boxed(ctx, svecv), T_psize);
+            auto ptr = emit_bitcast(ctx, boxed(ctx, svecv), getSizePtrTy(ctx.builder.getContext()));
             len = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), ptr, Align(sizeof(size_t)));
             // Only mark with TBAA if we are sure about the type.
             // This could otherwise be in a dead branch
@@ -1702,11 +1702,11 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         Value *destp = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), dst, (jl_value_t*)jl_voidpointer_type);
 
         ctx.builder.CreateMemCpy(
-                emit_inttoptr(ctx, destp, T_pint8),
+                emit_inttoptr(ctx, destp, getInt8PtrTy(ctx.builder.getContext())),
                 MaybeAlign(1),
                 emit_inttoptr(ctx,
                     emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), src, (jl_value_t*)jl_voidpointer_type),
-                    T_pint8),
+                    getInt8PtrTy(ctx.builder.getContext())),
                 MaybeAlign(0),
                 emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), n, (jl_value_t*)jl_ulong_type),
                 false);
@@ -1722,7 +1722,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         Value *val32 = emit_unbox(ctx, getInt32Ty(ctx.builder.getContext()), val, (jl_value_t*)jl_uint32_type);
         Value *val8 = ctx.builder.CreateTrunc(val32, getInt8Ty(ctx.builder.getContext()), "memset_val");
         ctx.builder.CreateMemSet(
-            emit_inttoptr(ctx, destp, T_pint8),
+            emit_inttoptr(ctx, destp, getInt8PtrTy(ctx.builder.getContext())),
             val8,
             emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), n, (jl_value_t*)jl_ulong_type),
             MaybeAlign(1)
@@ -1738,11 +1738,11 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         Value *destp = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), dst, (jl_value_t*)jl_voidpointer_type);
 
         ctx.builder.CreateMemMove(
-                emit_inttoptr(ctx, destp, T_pint8),
+                emit_inttoptr(ctx, destp, getInt8PtrTy(ctx.builder.getContext())),
                 MaybeAlign(0),
                 emit_inttoptr(ctx,
                     emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), src, (jl_value_t*)jl_voidpointer_type),
-                    T_pint8),
+                    getInt8PtrTy(ctx.builder.getContext())),
                 MaybeAlign(0),
                 emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), n, (jl_value_t*)jl_ulong_type),
                 false);
@@ -1756,7 +1756,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if (val.typ == (jl_value_t*)jl_symbol_type) {
             JL_GC_POP();
             const int hash_offset = offsetof(jl_sym_t, hash);
-            Value *ph1 = emit_bitcast(ctx, decay_derived(ctx, boxed(ctx, val)), T_psize);
+            Value *ph1 = emit_bitcast(ctx, decay_derived(ctx, boxed(ctx, val)), getSizePtrTy(ctx.builder.getContext()));
             Value *ph2 = ctx.builder.CreateInBoundsGEP(getSizeTy(ctx.builder.getContext()), ph1, ConstantInt::get(getSizeTy(ctx.builder.getContext()), hash_offset / sizeof(size_t)));
             LoadInst *hashval = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), ph2, Align(sizeof(size_t)));
             tbaa_decorate(ctx.tbaa().tbaa_const, hashval);
