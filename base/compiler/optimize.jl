@@ -521,7 +521,7 @@ function run_passes(ci::CodeInfo, sv::OptimizationState)
         isa(def, Method) ? Int(def.nargs) : 0
     end
     estate = analyze_escapes(ir, nargs)
-    setindex!(GLOBAL_ESCAPE_CACHE, estate.escapes[1:estate.nargs], sv.linfo)
+    cache_escapes!(sv.linfo, estate, ir)
     @timeit "memory opt" ir = memory_opt!(ir, estate)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))

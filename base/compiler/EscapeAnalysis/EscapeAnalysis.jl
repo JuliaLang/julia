@@ -2,12 +2,12 @@ baremodule EscapeAnalysis
 
 export
     analyze_escapes,
-    GLOBAL_ESCAPE_CACHE,
-    has_not_analyzed,
+    cache_escapes!,
     has_no_escape,
     has_return_escape,
     has_thrown_escape,
     has_all_escape,
+    is_load_forwardable,
     is_sroa_eligible,
     can_elide_finalizer
 
@@ -22,17 +22,17 @@ import ._TOP_MOD: ==, getindex, setindex!
 import Core:
     MethodInstance, Const, Argument, SSAValue, PiNode, PhiNode, UpsilonNode, PhiCNode,
     ReturnNode, GotoNode, GotoIfNot, SimpleVector, sizeof, ifelse, arrayset, arrayref,
-    arraysize
+    arraysize, ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
 import ._TOP_MOD:     # Base definitions
     @__MODULE__, @eval, @assert, @nospecialize, @inbounds, @inline, @noinline, @label, @goto,
     !, !==, !=, ≠, +, -, ≤, <, ≥, >, &, |, include, error, missing, copy,
-    Vector, BitSet, IdDict, IdSet, ∪, ⊆, ∩, :, length, get, first, last, in, isempty,
-    isassigned, push!, empty!, max, min, Csize_t
+    Vector, BitSet, IdDict, IdSet, UnitRange, ∪, ⊆, ∩, :, ∈, ∉, in, length, get, first, last,
+    isempty, isassigned, pop!, push!, empty!, max, min, Csize_t
 import Core.Compiler: # Core.Compiler specific definitions
     isbitstype, isexpr, is_meta_expr_head, println,
     IRCode, IR_FLAG_EFFECT_FREE, widenconst, argextype, singleton_type, fieldcount_noerror,
     try_compute_field, try_compute_fieldidx, hasintersect, ⊑ as ⊑ₜ, intrinsic_nothrow,
-    array_builtin_common_typecheck, arrayset_typecheck, setfield!_nothrow
+    array_builtin_common_typecheck, arrayset_typecheck, setfield!_nothrow, compute_trycatch
 
 if _TOP_MOD !== Core.Compiler
     include(@__MODULE__, "disjoint_set.jl")
@@ -45,20 +45,19 @@ const FieldEscape = BitSet
 const FieldEscapes = Vector{BitSet}
 # for x in ArrayEscapes:
 # - x::Int: `irval(x, estate)` imposes escapes on the array elements
-# - x::SSAValue: SSA statement (x.id) can potentially escape array elements via BoundsError
+# - x::SSAValue: array elements can potentially escape via BoundsError at this SSA statement
 const ArrayEscapes = IdSet{Union{Int,SSAValue}}
 
 """
     x::EscapeLattice
 
 A lattice for escape information, which holds the following properties:
-- `x.Analyzed::Bool`: not formally part of the lattice, indicates `x` has not been analyzed at all
-- `x.ReturnEscape::Bool`: indicates `x` may escape to the caller via return,
-  where `x.ReturnEscape && 0 ∈ x.EscapeSites` has the special meaning that it's visible to
-  the caller simply because it's passed as call argument
-- `x.ThrownEscape::Bool`: indicates `x` may escape to somewhere through an exception
-- `x.EscapeSites::BitSet`: records SSA statements where `x` can escape via any of
-  `ReturnEscape` or `ThrownEscape`
+- `x.Analyzed::Bool`: not formally part of the lattice, only indicates `x` has not been analyzed or not
+- `x.ReturnEscape::BitSet`: records SSA statements where `x` can escape to the caller via return
+  where `0 ∈ x.ReturnEscape` has the special meaning that it's visible to the caller
+  simply because it's passed as call argument
+- `x.ThrownEscape::BitSet`: records SSA statements where `x` can be thrown as exception:
+  this information will be used by `escape_exception!` to propagate potential escapes via exception
 - `x.AliasEscapes::Union{FieldEscapes,ArrayEscapes,Bool}`: maintains all possible values
   that may escape objects that can be referenced from `x`:
   * `x.AliasEscapes === false` indicates the fields/elements of `x` isn't analyzed yet
@@ -77,7 +76,7 @@ A lattice for escape information, which holds the following properties:
   * `n` : through argument N
 
 There are utility constructors to create common `EscapeLattice`s, e.g.,
-- `NoEscape()`: the bottom element of this lattice, meaning it won't escape to anywhere
+- `NoEscape()`: the bottom(-like) element of this lattice, meaning it won't escape to anywhere
 - `AllEscape()`: the topmost element of this lattice, meaning it will escape to everywhere
 
 `analyze_escapes` will transition these elements from the bottom to the top,
@@ -90,17 +89,15 @@ An abstract state will be initialized with the bottom(-like) elements:
 """
 struct EscapeLattice
     Analyzed::Bool
-    ReturnEscape::Bool
-    ThrownEscape::Bool
-    EscapeSites::BitSet
+    ReturnEscape::BitSet
+    ThrownEscape::BitSet
     AliasEscapes #::Union{FieldEscapes,ArrayEscapes,Bool}
     # TODO: ArgEscape::Int
 
     function EscapeLattice(
         Analyzed::Bool,
-        ReturnEscape::Bool,
-        ThrownEscape::Bool,
-        EscapeSites::BitSet,
+        ReturnEscape::BitSet,
+        ThrownEscape::BitSet,
         AliasEscapes#=::Union{FieldEscapes,ArrayEscapes,Bool}=#,
         )
         @nospecialize AliasEscapes
@@ -108,7 +105,6 @@ struct EscapeLattice
             Analyzed,
             ReturnEscape,
             ThrownEscape,
-            EscapeSites,
             AliasEscapes,
             )
     end
@@ -118,63 +114,75 @@ struct EscapeLattice
         # in order to avoid allocating non-concrete `NamedTuple`s
         AliasEscapes#=::Union{FieldEscapes,ArrayEscapes,Bool}=# = x.AliasEscapes;
         Analyzed::Bool = x.Analyzed,
-        ReturnEscape::Bool = x.ReturnEscape,
-        ThrownEscape::Bool = x.ThrownEscape,
-        EscapeSites::BitSet = x.EscapeSites,
+        ReturnEscape::BitSet = x.ReturnEscape,
+        ThrownEscape::BitSet = x.ThrownEscape,
         )
         @nospecialize AliasEscapes
         return new(
             Analyzed,
             ReturnEscape,
             ThrownEscape,
-            EscapeSites,
             AliasEscapes,
             )
     end
 end
 
 # precomputed default values in order to eliminate computations at each callsite
-const BOT_ESCAPE_SITES = BitSet()
-const ARGUMENT_ESCAPE_SITES = BitSet(0)
-const TOP_ESCAPE_SITES = BitSet(0:100_000)
+const BOT_RETURN_ESCAPE = BitSet()
+const ARG_RETURN_ESCAPE = BitSet(0)
+const TOP_RETURN_ESCAPE = BitSet(0:100_000)
+
+const BOT_THROWN_ESCAPE = BitSet()
+const TOP_THROWN_ESCAPE = BitSet(0:100_000)
 
 const BOT_ALIAS_ESCAPES = false
 const TOP_ALIAS_ESCAPES = true
 
 # the constructors
-NotAnalyzed() = EscapeLattice(false, false, false, BOT_ESCAPE_SITES, BOT_ALIAS_ESCAPES) # not formally part of the lattice
-NoEscape() = EscapeLattice(true, false, false, BOT_ESCAPE_SITES, BOT_ALIAS_ESCAPES)
-ReturnEscape(pc::Int) = EscapeLattice(true, true, false, BitSet(pc), BOT_ALIAS_ESCAPES)
-ThrownEscape(pc::Int) = EscapeLattice(true, false, true, BitSet(pc), BOT_ALIAS_ESCAPES)
-ArgumentReturnEscape() = EscapeLattice(true, true, false, ARGUMENT_ESCAPE_SITES, TOP_ALIAS_ESCAPES) # TODO allow interprocedural field analysis?
-AllEscape() = EscapeLattice(true, true, true, TOP_ESCAPE_SITES, TOP_ALIAS_ESCAPES)
+NotAnalyzed() = EscapeLattice(false, BOT_RETURN_ESCAPE, BOT_THROWN_ESCAPE, BOT_ALIAS_ESCAPES) # not formally part of the lattice
+NoEscape() = EscapeLattice(true, BOT_RETURN_ESCAPE, BOT_THROWN_ESCAPE, BOT_ALIAS_ESCAPES)
+ReturnEscape(pc::Int) = EscapeLattice(true, BitSet(pc), BOT_THROWN_ESCAPE, BOT_ALIAS_ESCAPES)
+ArgumentReturnEscape() = EscapeLattice(true, ARG_RETURN_ESCAPE, BOT_THROWN_ESCAPE, TOP_ALIAS_ESCAPES) # TODO allow interprocedural field analysis?
+AllReturnEscape() = EscapeLattice(true, TOP_RETURN_ESCAPE, BOT_THROWN_ESCAPE, BOT_ALIAS_ESCAPES)
+ThrownEscape(pc::Int) = EscapeLattice(true, BOT_RETURN_ESCAPE, BitSet(pc), BOT_ALIAS_ESCAPES)
+ThrownEscape(pcs::BitSet) = EscapeLattice(true, BOT_RETURN_ESCAPE, pcs, BOT_ALIAS_ESCAPES)
+AllEscape() = EscapeLattice(true, TOP_RETURN_ESCAPE, TOP_THROWN_ESCAPE, TOP_ALIAS_ESCAPES)
+
+const ⊥, ⊤ = NotAnalyzed(), AllEscape()
 
 # Convenience names for some ⊑ queries
-has_not_analyzed(x::EscapeLattice) = x == NotAnalyzed()
 has_no_escape(x::EscapeLattice) = ignore_aliasescapes(x) ⊑ NoEscape()
-has_return_escape(x::EscapeLattice) = x.ReturnEscape
-has_return_escape(x::EscapeLattice, pc::Int) = has_return_escape(x) && pc in x.EscapeSites
-has_thrown_escape(x::EscapeLattice) = x.ThrownEscape
-has_thrown_escape(x::EscapeLattice, pc::Int) = has_thrown_escape(x) && pc in x.EscapeSites
-has_all_escape(x::EscapeLattice) = AllEscape() ⊑ x
+has_return_escape(x::EscapeLattice) = !isempty(x.ReturnEscape)
+has_return_escape(x::EscapeLattice, pc::Int) = pc in x.ReturnEscape
+has_thrown_escape(x::EscapeLattice) = !isempty(x.ThrownEscape)
+has_thrown_escape(x::EscapeLattice, pc::Int) = pc in x.ThrownEscape
+has_all_escape(x::EscapeLattice) = ⊤ ⊑ x
 
+# utility lattice constructors
+ignore_thrownescapes(x::EscapeLattice) = EscapeLattice(x; ThrownEscape=BOT_THROWN_ESCAPE)
 ignore_aliasescapes(x::EscapeLattice) = EscapeLattice(x, BOT_ALIAS_ESCAPES)
-has_aliasescapes(x::EscapeLattice) = !isa(x.AliasEscapes, Bool)
 
-# TODO is_sroa_eligible: consider throwness?
+"""
+    is_load_forwardable(x::EscapeLattice) -> Bool
+
+Queries if `x` is elibigle for store-to-load forwarding optimization.
+"""
+function is_load_forwardable(x::EscapeLattice)
+    if x.AliasEscapes === false || # allows this query to work for immutables since we don't impose escape on them
+       isa(x.AliasEscapes, FieldEscapes)
+        # NOTE technically we also need to check `!has_thrown_escape(x)` here as well,
+        # but we can also do equivalent check during forwarding
+        return true
+    end
+    return false
+end
 
 """
     is_sroa_eligible(x::EscapeLattice) -> Bool
 
 Queries allocation eliminability by SROA.
 """
-function is_sroa_eligible(x::EscapeLattice)
-    if x.AliasEscapes === false || # allows this query to work for immutables since we don't impose escape on them
-       isa(x.AliasEscapes, FieldEscapes)
-        return !has_return_escape(x) # TODO technically we also need to check !has_thrown_escape(x) as well
-    end
-    return false
-end
+is_sroa_eligible(x::EscapeLattice) = is_load_forwardable(x) && !has_return_escape(x)
 
 """
     can_elide_finalizer(x::EscapeLattice, pc::Int) -> Bool
@@ -190,6 +198,24 @@ can_elide_finalizer(x::EscapeLattice, pc::Int) =
 # we need to make sure this `==` operator corresponds to lattice equality rather than object equality,
 # otherwise `propagate_changes` can't detect the convergence
 x::EscapeLattice == y::EscapeLattice = begin
+    # fast pass: better to avoid top comparison
+    x === y && return true
+    xr, yr = x.ReturnEscape, y.ReturnEscape
+    if xr === TOP_RETURN_ESCAPE
+        yr === TOP_RETURN_ESCAPE || return false
+    elseif yr === TOP_RETURN_ESCAPE
+        return false # x.ReturnEscape === TOP_RETURN_ESCAPE
+    else
+        xr == yr || return false
+    end
+    xt, yt = x.ThrownEscape, y.ThrownEscape
+    if xt === TOP_THROWN_ESCAPE
+        yt === TOP_THROWN_ESCAPE || return false
+    elseif yt === TOP_THROWN_ESCAPE
+        return false # x.ThrownEscape === TOP_THROWN_ESCAPE
+    else
+        xt == yt || return false
+    end
     xf, yf = x.AliasEscapes, y.AliasEscapes
     if isa(xf, Bool)
         xf === yf || return false
@@ -201,11 +227,7 @@ x::EscapeLattice == y::EscapeLattice = begin
         isa(yf, ArrayEscapes) || return false
         xf == yf || return false
     end
-    return x.Analyzed === y.Analyzed &&
-           x.ReturnEscape === y.ReturnEscape &&
-           x.ThrownEscape === y.ThrownEscape &&
-           x.EscapeSites == y.EscapeSites &&
-           true
+    return x.Analyzed === y.Analyzed
 end
 
 """
@@ -214,6 +236,28 @@ end
 The non-strict partial order over `EscapeLattice`.
 """
 x::EscapeLattice ⊑ y::EscapeLattice = begin
+    # fast pass: better to avoid top comparison
+    if y === ⊤
+        return true
+    elseif x === ⊤
+        return false # return y === ⊤
+    elseif x === ⊥
+        return true
+    elseif y === ⊥
+        return false # return x === ⊥
+    end
+    xr, yr = x.ReturnEscape, y.ReturnEscape
+    if xr === TOP_RETURN_ESCAPE
+        yr !== TOP_RETURN_ESCAPE && return false
+    elseif yr !== TOP_RETURN_ESCAPE
+        xr ⊆ yr || return false
+    end
+    xt, yt = x.ThrownEscape, y.ThrownEscape
+    if xt === TOP_THROWN_ESCAPE
+        yt !== TOP_THROWN_ESCAPE && return false
+    elseif yt !== TOP_THROWN_ESCAPE
+        xt ⊆ yt || return false
+    end
     xf, yf = x.AliasEscapes, y.AliasEscapes
     if isa(xf, Bool)
         xf && yf !== true && return false
@@ -235,14 +279,7 @@ x::EscapeLattice ⊑ y::EscapeLattice = begin
             yf === true || return false
         end
     end
-    if x.Analyzed ≤ y.Analyzed &&
-       x.ReturnEscape ≤ y.ReturnEscape &&
-       x.ThrownEscape ≤ y.ThrownEscape &&
-       x.EscapeSites ⊆ y.EscapeSites &&
-       true
-        return true
-    end
-    return false
+    return x.Analyzed ≤ y.Analyzed
 end
 
 """
@@ -267,6 +304,34 @@ x::EscapeLattice ⋤ y::EscapeLattice = !(y ⊑ x)
 Computes the join of `x` and `y` in the partial order defined by `EscapeLattice`.
 """
 x::EscapeLattice ⊔ y::EscapeLattice = begin
+    # fast pass: better to avoid top join
+    if x === ⊤ || y === ⊤
+        return ⊤
+    elseif x === ⊥
+        return y
+    elseif y === ⊥
+        return x
+    end
+    xr, yr = x.ReturnEscape, y.ReturnEscape
+    if xr === TOP_RETURN_ESCAPE || yr === TOP_RETURN_ESCAPE
+        ReturnEscape = TOP_RETURN_ESCAPE
+    elseif xr === BOT_RETURN_ESCAPE
+        ReturnEscape = yr
+    elseif yr === BOT_RETURN_ESCAPE
+        ReturnEscape = xr
+    else
+        ReturnEscape = xr ∪ yr
+    end
+    xt, yt = x.ThrownEscape, y.ThrownEscape
+    if xt === TOP_THROWN_ESCAPE || yt === TOP_THROWN_ESCAPE
+        ThrownEscape = TOP_THROWN_ESCAPE
+    elseif xt === BOT_THROWN_ESCAPE
+        ThrownEscape = yt
+    elseif yt === BOT_THROWN_ESCAPE
+        ThrownEscape = xt
+    else
+        ThrownEscape = xt ∪ yt
+    end
     xf, yf = x.AliasEscapes, y.AliasEscapes
     if xf === true || yf === true
         AliasEscapes = true
@@ -297,38 +362,11 @@ x::EscapeLattice ⊔ y::EscapeLattice = begin
             AliasEscapes = true # handle conflicting case conservatively
         end
     end
-    # try to avoid new allocations as minor optimizations
-    xe, ye = x.EscapeSites, y.EscapeSites
-    if xe === TOP_ESCAPE_SITES || ye === TOP_ESCAPE_SITES
-        EscapeSites = TOP_ESCAPE_SITES
-    elseif xe === BOT_ESCAPE_SITES
-        EscapeSites = ye
-    elseif ye === BOT_ESCAPE_SITES
-        EscapeSites = xe
-    else
-        EscapeSites = xe ∪ ye
-    end
     return EscapeLattice(
         x.Analyzed | y.Analyzed,
-        x.ReturnEscape | y.ReturnEscape,
-        x.ThrownEscape | y.ThrownEscape,
-        EscapeSites,
+        ReturnEscape,
+        ThrownEscape,
         AliasEscapes,
-        )
-end
-
-"""
-    x::EscapeLattice ⊓ y::EscapeLattice -> EscapeLattice
-
-Computes the meet of `x` and `y` in the partial order defined by `EscapeLattice`.
-"""
-x::EscapeLattice ⊓ y::EscapeLattice = begin
-    return EscapeLattice(
-        x.Analyzed & y.Analyzed,
-        x.ReturnEscape & y.ReturnEscape,
-        x.ThrownEscape & y.ThrownEscape,
-        x.EscapeSites ∩ y.EscapeSites,
-        x.AliasEscapes, # FIXME
         )
 end
 
@@ -340,11 +378,8 @@ const AliasSet = IntDisjointSet{Int}
 """
     estate::EscapeState
 
-Extended lattice that maps arguments and SSA values to escape information represented as `EscapeLattice`:
-- `estate.arguments::Vector{EscapeLattice}`: escape information about "arguments";
-  note that "argument" can include both call arguments and slots appearing in analysis frame
-- `ssavalues::Vector{EscapeLattice}`: escape information about each SSA value
-- `aliaset::IntDisjointSet{Int}`: a disjoint set that maintains aliased arguments and SSA values
+Extended lattice that maps arguments and SSA values to escape information represented as `EscapeLattice`.
+Escape information imposed on SSA IR element `x` can be retrieved by `estate[x]`.
 """
 struct EscapeState
     escapes::Vector{EscapeLattice}
@@ -353,7 +388,7 @@ struct EscapeState
 end
 function EscapeState(nargs::Int, nstmts::Int)
     escapes = EscapeLattice[
-        1 ≤ i ≤ nargs ? ArgumentReturnEscape() : NotAnalyzed() for i in 1:(nargs+nstmts)]
+        1 ≤ i ≤ nargs ? ArgumentReturnEscape() : ⊥ for i in 1:(nargs+nstmts)]
     aliaset = AliasSet(nargs+nstmts)
     return EscapeState(escapes, aliaset, nargs)
 end
@@ -425,18 +460,65 @@ function getaliases(xidx::Int, estate::EscapeState)
     end
 end
 
+"""
+    EscapeLatticeCache(x::EscapeLattice) -> x′::EscapeLatticeCache
+
+The data structure for caching `x::EscapeLattice` for interprocedural propagation,
+which is slightly more efficient than the original `x` object.
+"""
+struct EscapeLatticeCache
+    AllEscape::Bool
+    ReturnEscape::Bool
+    ThrownEscape::Bool
+    function EscapeLatticeCache(x::EscapeLattice)
+        x === ⊤ && return new(true, true, true)
+        ReturnEscape = x.ReturnEscape === ARG_RETURN_ESCAPE ? false : true
+        ThrownEscape = isempty(x.ThrownEscape)              ? false : true
+        return new(false, ReturnEscape, ThrownEscape)
+    end
+end
+
+"""
+    cache_escapes!(linfo::MethodInstance, estate::EscapeState, _::IRCode)
+
+Transforms escape information of `estate` for interprocedural propagation,
+and caches it in a global cache that can then be looked up later when
+`linfo` callsite is seen again.
+"""
+function cache_escapes! end
+
+# when working outside of Core.Compiler, cache as much as information for later inspection and debugging
 if _TOP_MOD !== Core.Compiler
     struct EscapeCache
-        state::EscapeState
-        ir::IRCode # we preserve `IRCode` as well just for debugging purpose
+        cache::Vector{EscapeLatticeCache}
+        state::EscapeState # preserved just for debugging purpose
+        ir::IRCode         # preserved just for debugging purpose
     end
     const GLOBAL_ESCAPE_CACHE = IdDict{MethodInstance,EscapeCache}()
-    argescapes_from_cache(cache::EscapeCache) =
-        cache.state.escapes[1:cache.state.nargs]
+    function cache_escapes!(linfo::MethodInstance, estate::EscapeState, cacheir::IRCode)
+        cache = EscapeCache(to_interprocedural(estate), estate, cacheir)
+        GLOBAL_ESCAPE_CACHE[linfo] = cache
+        return cache
+    end
+    argescapes_from_cache(cache::EscapeCache) = cache.cache
 else
-    const GLOBAL_ESCAPE_CACHE = IdDict{MethodInstance,Vector{EscapeLattice}}()
-    argescapes_from_cache(cache::Vector{EscapeLattice}) = cache
+    const GLOBAL_ESCAPE_CACHE = IdDict{MethodInstance,Vector{EscapeLatticeCache}}()
+    function cache_escapes!(linfo::MethodInstance, estate::EscapeState, _::IRCode)
+        cache = to_interprocedural(estate)
+        GLOBAL_ESCAPE_CACHE[linfo] = cache
+        return cache
+    end
+    argescapes_from_cache(cache::Vector{EscapeLatticeCache}) = cache
 end
+
+function to_interprocedural(estate::EscapeState)
+    cache = Vector{EscapeLatticeCache}(undef, estate.nargs)
+    for i = 1:estate.nargs
+        cache[i] = EscapeLatticeCache(estate.escapes[i])
+    end
+    return cache
+end
+
 __clear_escape_cache!() = empty!(GLOBAL_ESCAPE_CACHE)
 
 const EscapeChange = Pair{Int,EscapeLattice}
@@ -450,7 +532,7 @@ struct AnalysisState
 end
 
 """
-    analyze_escapes(ir::IRCode, nargs::Int) -> EscapeState
+    analyze_escapes(ir::IRCode, nargs::Int) -> estate::EscapeState
 
 Analyzes escape information in `ir`.
 `nargs` is the number of actual arguments of the analyzed call.
@@ -462,6 +544,7 @@ function analyze_escapes(ir::IRCode, nargs::Int)
     # only manage a single state, some flow-sensitivity is encoded as `EscapeLattice` properties
     estate = EscapeState(nargs, nstmts)
     changes = Changes() # stashes changes that happen at current statement
+    tryregions = compute_tryregions(ir)
     astate = AnalysisState(ir, estate, changes)
 
     local debug_itr_counter = 0
@@ -483,7 +566,7 @@ function analyze_escapes(ir::IRCode, nargs::Int)
                 elseif head === :(=)
                     lhs, rhs = stmt.args
                     if isa(lhs, GlobalRef) # global store
-                        add_escape_change!(astate, rhs, AllEscape())
+                        add_escape_change!(astate, rhs, ⊤)
                     else
                         invalid_escape_assignment!(ir, pc)
                     end
@@ -494,35 +577,21 @@ function analyze_escapes(ir::IRCode, nargs::Int)
                 elseif is_meta_expr_head(head)
                     # meta expressions doesn't account for any usages
                     continue
-                elseif head === :static_parameter
-                    # :static_parameter refers any of static parameters, but since they exist
-                    # statically, we're really not interested in their escapes
+                elseif head === :enter || head === :leave || head === :the_exception || head === :pop_exception
+                    # ignore these expressions since escapes via exceptions are handled by `escape_exception!`
+                    # `escape_exception!` conservatively propagates `AllEscape` anyway,
+                    # and so escape information imposed on `:the_exception` isn't computed
                     continue
-                elseif head === :copyast
-                    # copyast simply copies a surface syntax AST, and should never use any of arguments or SSA values
-                    continue
-                elseif head === :undefcheck
-                    # undefcheck is temporarily inserted by compiler
-                    # it will be processd be later pass so it won't change any of escape states
-                    continue
-                elseif head === :the_exception
-                    # we don't propagate escape information on exceptions via this expression, but rather
-                    # use a dedicated lattice property `ThrownEscape`
-                    continue
-                elseif head === :isdefined
-                    # just returns `Bool`, nothing accounts for any usages
-                    continue
-                elseif head === :enter || head === :leave || head === :pop_exception
-                    # these exception frame managements doesn't account for any usages
-                    # we can just ignore escape information from
-                    continue
-                elseif head === :gc_preserve_begin || head === :gc_preserve_end
-                    # `GC.@preserve` may "use" arbitrary values, but we can just ignore the escape information
-                    # imposed on `GC.@preserve` expressions since they're supposed to never be used elsewhere
+                elseif head === :static_parameter ||  # this exists statically, not interested in its escape
+                       head === :copyast ||           # XXX can this account for some escapes?
+                       head === :undefcheck ||        # XXX can this account for some escapes?
+                       head === :isdefined ||         # just returns `Bool`, nothing accounts for any escapes
+                       head === :gc_preserve_begin || # `GC.@preserve` expressions themselves won't be used anywhere
+                       head === :gc_preserve_end      # `GC.@preserve` expressions themselves won't be used anywhere
                     continue
                 else
                     for x in stmt.args
-                        add_escape_change!(astate, x, AllEscape())
+                        add_escape_change!(astate, x, ⊤)
                     end
                 end
             elseif isa(stmt, ReturnNode)
@@ -538,7 +607,7 @@ function analyze_escapes(ir::IRCode, nargs::Int)
             elseif isa(stmt, UpsilonNode)
                 escape_val!(astate, pc, stmt)
             elseif isa(stmt, GlobalRef) # global load
-                add_escape_change!(astate, SSAValue(pc), AllEscape())
+                add_escape_change!(astate, SSAValue(pc), ⊤)
             elseif isa(stmt, SSAValue) # after SROA, we may see SSA value as statement
                 escape_ssa!(astate, pc, stmt)
             else
@@ -552,6 +621,8 @@ function analyze_escapes(ir::IRCode, nargs::Int)
 
             empty!(changes)
         end
+
+        tryregions !== nothing && escape_exception!(astate, tryregions)
 
         debug_itr_counter += 1
 
@@ -609,6 +680,7 @@ function propagate_alias_change!(estate::EscapeState, change::AliasChange)
 end
 
 function add_escape_change!(astate::AnalysisState, @nospecialize(x), info::EscapeLattice)
+    info === ⊥ && return # performance optimization
     xidx = iridx(x, astate.estate)
     if xidx !== nothing
         if !isbitstype(widenconst(argextype(x, astate.ir)))
@@ -662,13 +734,92 @@ escape_ssa!(astate::AnalysisState, pc::Int, ssa::SSAValue) =
 #     add_escape_change!(astate, lhs, vinfo)
 # end
 
+# linear scan to find regions in which potential throws will be caught
+function compute_tryregions(ir::IRCode)
+    tryregions = nothing
+    for idx in 1:length(ir.stmts)
+        stmt = ir.stmts[idx][:inst]
+        if isexpr(stmt, :enter)
+            tryregions === nothing && (tryregions = UnitRange{Int}[])
+            leave_block = stmt.args[1]::Int
+            leave_pc = first(ir.cfg.blocks[leave_block].stmts)
+            push!(tryregions, idx:leave_pc)
+        end
+    end
+    return tryregions
+end
+
+"""
+    escape_exception!(astate::AnalysisState, tryregions::Vector{UnitRange{Int}})
+
+Propagates escapes via exceptions that can happen in `tryregions`.
+
+Naively it seems enough to propagate escape information imposed on `:the_exception` object,
+but actually there are several other ways to access to the exception object such as
+`Base.current_exceptions` and manual catch of `rethrow`n object.
+For example, escape analysis needs to account for potential escape of the allocated object
+via `rethrow_escape!()` call in the example below:
+```julia
+const Gx = Ref{Any}()
+@noinline function rethrow_escape!()
+    try
+        rethrow()
+    catch err
+        Gx[] = err
+    end
+end
+unsafeget(x) = isassigned(x) ? x[] : throw(x)
+
+code_escapes() do
+    r = Ref{String}()
+    try
+        t = unsafeget(r)
+    catch err
+        t = typeof(err)  # `err` (which `r` may alias to) doesn't escape here
+        rethrow_escape!() # `r` can escape here
+    end
+    return t
+end
+```
+
+As indicated by the above example, it requires a global analysis in addition to a base escape
+analysis to reason about all possible escapes via existing exception interfaces correctly.
+For now we conservatively always propagate `AllEscape` to all potentially thrown objects,
+since such an additional analysis might not be worthwhile to do given that exception handlings
+and error paths usually don't need to be very performance sensitive, and optimizations of
+error paths might be very ineffective anyway since they are sometimes "unoptimized"
+intentionally for latency reasons.
+"""
+function escape_exception!(astate::AnalysisState, tryregions::Vector{UnitRange{Int}})
+    estate = astate.estate
+    # NOTE if `:the_exception` is the only way to access the exception, we can do:
+    # exc = SSAValue(pc)
+    # excinfo = estate[exc]
+    excinfo = ⊤
+    escapes = estate.escapes
+    for i in 1:length(escapes)
+        x = escapes[i]
+        xt = x.ThrownEscape
+        xt === TOP_THROWN_ESCAPE && @goto propagate_exception_escape # fast pass
+        for pc in x.ThrownEscape
+            for region in tryregions
+                pc in region && @goto propagate_exception_escape # early break because of AllEscape
+            end
+        end
+        continue
+        @label propagate_exception_escape
+        xval = irval(i, estate)
+        add_escape_change!(astate, xval, excinfo)
+    end
+end
+
 function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     linfo = first(args)::MethodInstance
     cache = get(GLOBAL_ESCAPE_CACHE, linfo, nothing)
     if cache === nothing
         for i in 2:length(args)
             x = args[i]
-            add_escape_change!(astate, x, AllEscape())
+            add_escape_change!(astate, x, ⊤)
         end
     else
         argescapes = argescapes_from_cache(cache)
@@ -683,44 +834,41 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
                 argi = nargs
             end
             arginfo = argescapes[argi]
-            isempty(arginfo.ReturnEscape) && invalid_escape_invoke!(astate, linfo, linfo_estate)
             info = from_interprocedural(arginfo, retinfo, pc)
             add_escape_change!(astate, arg, info)
         end
     end
 end
 
-# reinterpret the escape information imposed on the callee argument (`arginfo`) in the
-# context of the caller frame using the escape information imposed on the return value (`retinfo`)
-function from_interprocedural(arginfo::EscapeLattice, retinfo::EscapeLattice, pc::Int)
-    @assert arginfo.ReturnEscape
-    if arginfo.ThrownEscape
-        EscapeSites = BitSet(pc)
-    else
-        EscapeSites = BOT_ESCAPE_SITES
-    end
+"""
+    from_interprocedural(arginfo::EscapeLatticeCache, retinfo::EscapeLattice, pc::Int) -> x::EscapeLattice
+
+Reinterprets the escape information imposed on the call argument which is cached as `arginfo`
+in the context of the caller frame, where `retinfo` is the escape information imposed on
+the return value and `pc` is the SSA statement number of the return value.
+"""
+function from_interprocedural(arginfo::EscapeLatticeCache, retinfo::EscapeLattice, pc::Int)
+    arginfo.AllEscape && return ⊤
+
+    ThrownEscape = arginfo.ThrownEscape ? BitSet(pc) : BOT_THROWN_ESCAPE
+
     newarginfo = EscapeLattice(
-        #=Analyzed=#true, #=ReturnEscape=#false, arginfo.ThrownEscape, EscapeSites,
-        # FIXME implement interprocedural effect-analysis
+        #=Analyzed=#true, #=ReturnEscape=#BOT_RETURN_ESCAPE, ThrownEscape,
+        # FIXME implement interprocedural memory effect-analysis
         # currently, this essentially disables the entire field analysis
         # it might be okay from the SROA point of view, since we can't remove the allocation
         # as far as it's passed to a callee anyway, but still we may want some field analysis
-        # in order to stack allocate it
+        # for e.g. stack allocation or some other IPO optimizations
         TOP_ALIAS_ESCAPES)
-    if arginfo.EscapeSites === ARGUMENT_ESCAPE_SITES
+
+    if !arginfo.ReturnEscape
         # if this is simply passed as the call argument, we can discard the `ReturnEscape`
         # information and just propagate the other escape information
         return newarginfo
-    else
-        # if this can be returned, we have to merge its escape information with
-        # that of the current statement
-        return newarginfo ⊔ retinfo
     end
-end
 
-@noinline function invalid_escape_invoke!(astate::AnalysisState, linfo::MethodInstance, linfo_estate::EscapeState)
-    @eval Main (astate = $astate; linfo = $linfo; linfo_estate = $linfo_estate)
-    error("invalid escape lattice element returned from inter-procedural context: inspect `Main.astate`, `Main.linfo` and `Main.linfo_estate`")
+    # if this argument can be "returned", we have to merge its escape information with that imposed on the return value
+    return newarginfo ⊔ retinfo
 end
 
 @noinline function invalid_escape_assignment!(ir::IRCode, pc::Int)
@@ -731,9 +879,6 @@ end
 function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
     obj = SSAValue(pc)
     objinfo = astate.estate[obj]
-    if objinfo == NotAnalyzed()
-        objinfo = NoEscape()
-    end
     AliasEscapes = objinfo.AliasEscapes
     nargs = length(args)
     if isa(AliasEscapes, Bool)
@@ -836,7 +981,7 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
     ft = argextype(first(args), ir, ir.sptypes, ir.argtypes)
     f = singleton_type(ft)
     if isa(f, Core.IntrinsicFunction)
-        # COMBAK we may break soundness and need to account for some aliasing here, e.g. `pointerref`
+        # XXX somehow `:call` expression can creep in here, ideally we should be able to do:
         # argtypes = Any[argextype(args[i], astate.ir) for i = 2:length(args)]
         argtypes = Any[]
         for i = 2:length(args)
@@ -844,14 +989,14 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
             push!(argtypes, isexpr(arg, :call) ? Any : argextype(arg, ir))
         end
         intrinsic_nothrow(f, argtypes) || add_thrown_escapes!(astate, pc, args, 2)
-        return
+        return # TODO accounts for pointer operations
     end
     result = escape_builtin!(f, astate, pc, args)
     if result === missing
         # if this call hasn't been handled by any of pre-defined handlers,
         # we escape this call conservatively
         for i in 2:length(args)
-            add_escape_change!(astate, args[i], AllEscape())
+            add_escape_change!(astate, args[i], ⊤)
         end
         return
     elseif result === true
@@ -920,7 +1065,7 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
     obj = args[2]
     typ = widenconst(argextype(obj, ir))
     if hasintersect(typ, Module) # global load
-        add_escape_change!(astate, SSAValue(pc), AllEscape())
+        add_escape_change!(astate, SSAValue(pc), ⊤)
     end
     if isa(obj, SSAValue) || isa(obj, Argument)
         objinfo = estate[obj]
@@ -944,9 +1089,6 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
         # imposed on the return value of this `getfield` call to the object itself
         # as the most conservative propagation
         ssainfo = estate[SSAValue(pc)]
-        if ssainfo == NotAnalyzed()
-            ssainfo = NoEscape()
-        end
         add_escape_change!(astate, obj, ssainfo)
     elseif isa(AliasEscapes, FieldEscapes)
         nfields = fieldcount_noerror(typ)
@@ -1001,7 +1143,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
         objinfo = estate[obj]
     else
         # unanalyzable object (e.g. obj::GlobalRef): escape field value conservatively
-        add_escape_change!(astate, val, AllEscape())
+        add_escape_change!(astate, val, ⊤)
         @goto add_thrown_escapes
     end
     AliasEscapes = objinfo.AliasEscapes
@@ -1066,9 +1208,6 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     end
     # also propagate escape information imposed on the return value of this `setfield!`
     ssainfo = estate[SSAValue(pc)]
-    if ssainfo == NotAnalyzed()
-        ssainfo = NoEscape()
-    end
     add_escape_change!(astate, val, ssainfo)
     # compute the throwness of this setfield! call here since builtin_nothrow doesn't account for that
     @label add_thrown_escapes
@@ -1084,22 +1223,22 @@ const Arrayish = Union{Array,Core.ImmutableArray}
 
 function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 4 || return false
-    # check potential escapes from this arrayref call
-    # NOTE here we essentially only need to account for TypeError, assuming that
-    # UndefRefError or BoundsError don't capture any of the arguments here
+    # check potential thrown escapes from this arrayref call
     argtypes = Any[argextype(args[i], astate.ir) for i in 2:length(args)]
     boundcheckt = argtypes[1]
     aryt = argtypes[2]
     if !array_builtin_common_typecheck(Arrayish, boundcheckt, aryt, argtypes, 3)
         add_thrown_escapes!(astate, pc, args, 2)
     end
+    ary = args[3]
+    inbounds = isa(boundcheckt, Const) && !boundcheckt.val::Bool
+    inbounds || add_escape_change!(astate, ary, ThrownEscape(pc))
     # we don't track precise index information about this array and thus don't know what values
     # can be referenced here: directly propagate the escape information imposed on the return
     # value of this `arrayref` call to the array itself as the most conservative propagation
     # but also with updated index information
     # TODO enable index analysis when constant values are available?
     estate = astate.estate
-    ary = args[3]
     if isa(ary, SSAValue) || isa(ary, Argument)
         aryinfo = estate[ary]
     else
@@ -1115,25 +1254,13 @@ function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, arg
         end
         @label conservative_propagation
         ssainfo = estate[ret]
-        if ssainfo == NotAnalyzed()
-            ssainfo = NoEscape()
-        end
         add_escape_change!(astate, ary, ssainfo)
-        if isa(boundcheckt, Const)
-            if boundcheckt.val::Bool
-                add_escape_change!(astate, ary, ThrownEscape(pc))
-            end
-        end
     elseif isa(AliasEscapes, ArrayEscapes)
         # record the return value of this `arrayref` call as a possibility that imposes escape
         AliasEscapes = copy(AliasEscapes)
         @label record_element_escape
         push!(AliasEscapes, iridx(ret, estate))
-        if isa(boundcheckt, Const) # record possible BoundsError at this arrayref
-            if boundcheckt.val::Bool
-                push!(AliasEscapes, SSAValue(pc))
-            end
-        end
+        inbounds || push!(AliasEscapes, SSAValue(pc)) # record possible BoundsError at this arrayref
         add_escape_change!(astate, ary, EscapeLattice(aryinfo, AliasEscapes))
     else
         # this object has been used as struct, but it is used as array here (thus should throw)
@@ -1158,18 +1285,20 @@ function escape_builtin!(::typeof(arrayset), astate::AnalysisState, pc::Int, arg
          arrayset_typecheck(aryt, valt))
         add_thrown_escapes!(astate, pc, args, 2)
     end
+    ary = args[3]
+    val = args[4]
+    inbounds = isa(boundcheckt, Const) && !boundcheckt.val::Bool
+    inbounds || add_escape_change!(astate, ary, ThrownEscape(pc))
     # we don't track precise index information about this array and won't record what value
     # is being assigned here: directly propagate the escape information of this array to
     # the value being assigned as the most conservative propagation
     # TODO enable index analysis when constant values are available?
     estate = astate.estate
-    ary = args[3]
-    val = args[4]
     if isa(ary, SSAValue) || isa(ary, Argument)
         aryinfo = estate[ary]
     else
         # unanalyzable object (e.g. obj::GlobalRef): escape field value conservatively
-        add_escape_change!(astate, val, AllEscape())
+        add_escape_change!(astate, val, ⊤)
         return true
     end
     AliasEscapes = aryinfo.AliasEscapes
@@ -1187,7 +1316,7 @@ function escape_builtin!(::typeof(arrayset), astate::AnalysisState, pc::Int, arg
                 add_escape_change!(astate, val, estate[x])
                 add_alias_change!(astate, val, x)
             else
-                add_escape_change!(astate, val, ThrownEscape(xidx.id))
+                add_escape_change!(astate, val, ThrownEscape((xidx::SSAValue).id))
             end
         end
         @label add_ary_escape
@@ -1201,9 +1330,6 @@ function escape_builtin!(::typeof(arrayset), astate::AnalysisState, pc::Int, arg
     end
     # also propagate escape information imposed on the return value of this `arrayset`
     ssainfo = estate[SSAValue(pc)]
-    if ssainfo == NotAnalyzed()
-        ssainfo = NoEscape()
-    end
     add_escape_change!(astate, ary, ssainfo)
     return true
 end
@@ -1256,33 +1382,8 @@ function escape_array_resize!(boundserror::Bool, ninds::Int,
         indt ⊑ₜ Integer || return add_thrown_escapes!(astate, pc, args)
     end
     if boundserror
-        if isa(ary, SSAValue) || isa(ary, Argument)
-            estate = astate.estate
-            aryinfo = estate[ary]
-            AliasEscapes = aryinfo.AliasEscapes
-            if isa(AliasEscapes, Bool)
-                if !AliasEscapes
-                    # the elements of this array haven't been analyzed yet: set ArrayEscapes now
-                    AliasEscapes = ArrayEscapes()
-                    @goto record_element_escape
-                end
-                @label conservative_propagation
-                # array resizing can potentially throw `BoundsError`, impose it now
-                add_escape_change!(astate, ary, ThrownEscape(pc))
-            elseif isa(AliasEscapes, ArrayEscapes)
-                AliasEscapes = copy(AliasEscapes)
-                @label record_element_escape
-                # array resizing can potentially throw `BoundsError`, record it now
-                push!(AliasEscapes, SSAValue(pc))
-                add_escape_change!(astate, ary, EscapeLattice(aryinfo, AliasEscapes))
-            else
-                # this object has been used as struct, but it is used as array here (thus should throw)
-                # update ary's element information and just handle this case conservatively
-                @assert isa(AliasEscapes, FieldEscapes)
-                aryinfo = escape_unanalyzable_obj!(astate, ary, aryinfo)
-                @goto conservative_propagation
-            end
-        end
+        # this array resizing can potentially throw `BoundsError`, impose it now
+        add_escape_change!(astate, ary, ThrownEscape(pc))
     end
 end
 
@@ -1337,13 +1438,13 @@ end
 #     return true
 # end
 
-escape_builtin!(::typeof(Core.arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-    escape_immutable_array!(Array, astate, pc, args)
-escape_builtin!(::typeof(Core.mutating_arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-    escape_immutable_array!(Array, astate, pc, args)
-escape_builtin!(::typeof(Core.arraythaw), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-    escape_immutable_array!(Core.ImmutableArray, astate, pc, args)
-function escape_immutable_array!(@nospecialize(arytype), astate::AnalysisState, pc::Int, args::Vector{Any})
+escape_builtin!(::typeof(arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
+    is_safe_immutable_array_op(Array, astate, pc, args)
+escape_builtin!(::typeof(mutating_arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
+    is_safe_immutable_array_op(Array, astate, pc, args)
+escape_builtin!(::typeof(arraythaw), astate::AnalysisState, pc::Int, args::Vector{Any}) =
+    is_safe_immutable_array_op(ImmutableArray, astate, pc, args)
+function is_safe_immutable_array_op(@nospecialize(arytype), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 2 || return false
     argextype(args[2], astate.ir) ⊑ₜ arytype || return false
     return true
@@ -1351,7 +1452,7 @@ end
 
 # NOTE define fancy package utilities when developing EA as an external package
 if _TOP_MOD !== Core.Compiler
-    include(@__MODULE__, "utils.jl")
+    include(@__MODULE__, "EAUtils.jl")
 end
 
 end # baremodule EscapeAnalysis

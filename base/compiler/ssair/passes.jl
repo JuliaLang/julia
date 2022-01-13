@@ -1405,8 +1405,10 @@ function memory_opt!(ir::IRCode, estate)
             length(stmt.args) ≥ 2 || continue
             ary = stmt.args[2]
             if isa(ary, SSAValue)
-                # if array doesn't escape, we can just change the tag and avoid allocation
-                has_no_escape(estate[ary]) || continue
+                # we can change this arrayfreeze call (which incurs allocation) to mutating_arrayfreeze
+                # so that it just changes the type tag of the array and avoids the allocation
+                # as far as the array doesn't escape at this point (meaning we can ignore ThrownEscape here)
+                has_return_escape(estate[ary]) && continue
                 stmt.args[1] = GlobalRef(Core, :mutating_arrayfreeze)
             end
         end
