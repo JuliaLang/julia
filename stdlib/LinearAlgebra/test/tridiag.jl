@@ -266,7 +266,7 @@ end
                 @test func(func(A)) == A
             end
         end
-        @testset "permutedims(::[Sym]Tridiagonal)"
+        @testset "permutedims(::[Sym]Tridiagonal)" begin
             @test permutedims(permutedims(A)) === A
             @test permutedims(A) == transpose.(transpose(A))
             @test permutedims(A, [1, 2]) === A

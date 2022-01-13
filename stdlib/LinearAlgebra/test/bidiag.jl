@@ -135,7 +135,7 @@ Random.seed!(1)
             @test func(func(T)) == T
         end
 
-        @testset "permutedims(::Bidiagonal)"
+        @testset "permutedims(::Bidiagonal)" begin
             @test permutedims(permutedims(T)) === T
             @test permutedims(T) == transpose.(transpose(T))
             @test permutedims(T, [1, 2]) === T
