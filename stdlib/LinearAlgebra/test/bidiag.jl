@@ -135,6 +135,8 @@ Random.seed!(1)
             @test func(func(T)) == T
         end
 
+        @test permutedims(permutedims(T)) === T
+
         @testset "triu and tril" begin
             zerosdv = zeros(elty, length(dv))
             zerosev = zeros(elty, length(ev))

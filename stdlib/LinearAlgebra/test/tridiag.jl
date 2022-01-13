@@ -265,6 +265,7 @@ end
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
             end
+            @test permutedims(permutedims(A)) === A
         end
         if elty != Int
             @testset "Simple unary functions" begin
