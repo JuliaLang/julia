@@ -799,8 +799,8 @@ ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(copy(A), b)
 ### Generic promotion methods and fallbacks
 function \(A::Bidiagonal{<:Number}, B::AbstractVecOrMat{<:Number})
     TA, TB = eltype(A), eltype(B)
-    TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-    ldiv!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
+    TAB = typeof((oneunit(TA))\oneunit(TB))
+    ldiv!(A, copy_similar(B, TAB))
 end
 \(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(A, copy(B))
 \(tA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(tA, copy(B))
@@ -843,17 +843,21 @@ rdiv!(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = rdiv!(A, copy(B))
 
 function /(A::AbstractMatrix{<:Number}, B::Bidiagonal{<:Number})
     TA, TB = eltype(A), eltype(B)
-    TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-    rdiv!(copy_similar(A, TAB), convert(AbstractArray{TAB}, B))
+    TAB = typeof((oneunit(TA))/oneunit(TB))
+    rdiv!(copy_similar(A, TAB), B)
 end
-/(A::AbstractMatrix, B::Bidiagonal) = rdiv!(copy_similar(A), B)
+/(A::AbstractMatrix, B::Bidiagonal) = rdiv!(copy(A), B)
 /(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = A / copy(B)
 /(A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = A / copy(B)
 # disambiguation
-/(A::AdjOrTransAbsVec{<:Number}, B::Bidiagonal{<:Number}) = wrapperop(A)(wrapperop(A)(B) \ parent(A))
-/(A::AdjOrTransAbsVec, B::Bidiagonal) = wrapperop(A)(wrapperop(A)(B) \ parent(A))
-/(A::AdjOrTransAbsVec, B::Transpose{<:Any,<:Bidiagonal}) = wrapperop(A)(parent(B) \ parent(A))
-/(A::AdjOrTransAbsVec, B::Adjoint{<:Any,<:Bidiagonal}) = wrapperop(A)(parent(B) \ parent(A))
+/(A::AdjointAbsVec{<:Number}, B::Bidiagonal{<:Number}) = adjoint(adjoint(B) \ parent(A))
+/(A::TransposeAbsVec{<:Number}, B::Bidiagonal{<:Number}) = transpose(transpose(B) \ parent(A))
+/(A::AdjointAbsVec, B::Bidiagonal) = adjoint(adjoint(B) \ parent(A))
+/(A::TransposeAbsVec, B::Bidiagonal) = transpose(transpose(B) \ parent(A))
+/(A::AdjointAbsVec, B::Transpose{<:Any,<:Bidiagonal}) = adjoint(adjoint(B) \ parent(A))
+/(A::TransposeAbsVec, B::Transpose{<:Any,<:Bidiagonal}) = transpose(transpose(B) \ parent(A))
+/(A::AdjointAbsVec, B::Adjoint{<:Any,<:Bidiagonal}) = adjoint(adjoint(B) \ parent(A))
+/(A::TransposeAbsVec, B::Adjoint{<:Any,<:Bidiagonal}) = transpose(transpose(B) \ parent(A))
 
 factorize(A::Bidiagonal) = A
 
