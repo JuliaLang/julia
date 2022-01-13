@@ -195,8 +195,10 @@ private:
     struct ArrayTypeData {
         constexpr static auto MAX_SIZE = std::numeric_limits<ssize_t>::max();
 
-        jl_value_t *type;
+        jl_value_t *atype;
+        jl_value_t *eltype;
         size_t numels;
+        size_t elsz;
         size_t total_size;
         size_t align;
         bool throws_invalid_dims;
@@ -205,25 +207,32 @@ private:
         bool dynamic_size;
         bool isunboxed;
         bool isunion;
+        bool hasptr;
+        bool zeroinit;
 
         void reset() {
-            type = nullptr;
-            numels = total_size = 0;
+            atype = eltype = nullptr;
+            numels = elsz = total_size = align = 0;
             throws_invalid_dims = throws_invalid_size = false;
             dynamic_type = dynamic_size = false;
             isunboxed = isunion = false;
+            hasptr = zeroinit = false;
         }
 
         void dump() {
             jl_safe_printf("Array Size Info:\n");
             jl_safe_printf("numels: %zd\n", numels);
+            jl_safe_printf("elsz: %zd\n", elsz);
             jl_safe_printf("total_size: %zd\n", total_size);
+            jl_safe_printf("align: %zd\n", align);
             jl_safe_printf("throws_invalid_dims: %d\n", throws_invalid_dims);
             jl_safe_printf("throws_invalid_size: %d\n", throws_invalid_size);
             jl_safe_printf("dynamic_type: %d\n", dynamic_type);
             jl_safe_printf("dynamic_size: %d\n", dynamic_size);
             jl_safe_printf("isunboxed: %d\n", isunboxed);
             jl_safe_printf("isunion: %d\n", isunion);
+            jl_safe_printf("hasptr: %d\n", hasptr);
+            jl_safe_printf("zeroinit: %d\n", zeroinit);
         }
     };
 
@@ -1291,21 +1300,21 @@ void Optimizer::checkArraySize(CallInst *orig, jl_alloc::AllocIdInfo &info) {
     if (auto ce = dyn_cast<ConstantExpr>(info.type->stripPointerCasts())) {
         if (ce->getOpcode() == Instruction::IntToPtr) {
             if (auto ci = dyn_cast<ConstantInt>(ce->getOperand(0))) {
-                array_type_data.type = reinterpret_cast<jl_value_t*>(ci->getZExtValue());
+                array_type_data.atype = reinterpret_cast<jl_value_t*>(ci->getZExtValue());
                 if (!array_type_data.dynamic_size) {
-                    jl_value_t *eltype = jl_tparam0(array_type_data.type);
-                    size_t elsz = 0;
+                    array_type_data.eltype = jl_tparam0(array_type_data.atype);
+                    array_type_data.elsz = 0;
                     array_type_data.align = 0;
-                    array_type_data.isunboxed = jl_islayout_inline(eltype, &elsz, &array_type_data.align);
+                    array_type_data.isunboxed = jl_islayout_inline(array_type_data.eltype, &array_type_data.elsz, &array_type_data.align);
                     if (array_type_data.isunboxed) {
-                        elsz = LLT_ALIGN(elsz, array_type_data.align);
-                        array_type_data.align = std::min(elsz, alignof(std::max_align_t));
+                        array_type_data.elsz = LLT_ALIGN(array_type_data.elsz, array_type_data.align);
+                        array_type_data.align = std::min(array_type_data.elsz, alignof(std::max_align_t));
                     } else {
-                        elsz = sizeof(void*);
-                        array_type_data.align = elsz;
+                        array_type_data.elsz = sizeof(void*);
+                        array_type_data.align = array_type_data.elsz;
                     }
-                    array_type_data.isunion = jl_is_uniontype(eltype);
-                    array_type_data.total_size = elsz * array_type_data.numels;
+                    array_type_data.isunion = jl_is_uniontype(array_type_data.eltype);
+                    array_type_data.total_size = array_type_data.elsz * array_type_data.numels;
                     array_type_data.throws_invalid_size = array_type_data.total_size > ArrayTypeData::MAX_SIZE;
                     if (array_type_data.throws_invalid_size) {
                         return;
@@ -1313,10 +1322,12 @@ void Optimizer::checkArraySize(CallInst *orig, jl_alloc::AllocIdInfo &info) {
                     if (array_type_data.isunboxed) {
                         if (array_type_data.isunion) {
                             array_type_data.total_size += array_type_data.numels;
-                        } else if (elsz == 1) {
+                        } else if (array_type_data.elsz == 1) {
                             array_type_data.total_size++;
                         }
                     }
+                    array_type_data.hasptr = array_type_data.isunboxed && (jl_is_datatype(array_type_data.eltype) && ((jl_datatype_t*)array_type_data.eltype)->layout->npointers > 0);
+                    array_type_data.zeroinit = !array_type_data.isunboxed || array_type_data.hasptr || array_type_data.isunion || (jl_is_datatype(array_type_data.eltype) && ((jl_datatype_t*)array_type_data.eltype)->zeroinit);
                     return;
                 }
             }
@@ -1347,6 +1358,9 @@ void Optimizer::moveArrayToStack(CallInst *orig_inst, llvm::Value *tag) {
     auto array = array_builder.CreateAlloca(pass.T_int8, ConstantInt::get(pass.T_size, array_type_data.total_size));
     array->takeName(orig_inst);
     array->setAlignment(Align(array_type_data.align));
+    if (array_type_data.zeroinit) {
+        array_builder.CreateMemSet(array, ConstantInt::get(pass.T_int8, 0), array_type_data.total_size, Align(array_type_data.align));
+    }
     load->replaceAllUsesWith(array_builder.CreatePointerCast(array, load->getType()));
     removeAlloc(orig_inst, tag, true);
 }
