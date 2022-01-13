@@ -35,9 +35,14 @@ using Base.Checked: checked_length
         @test r ==  range(; stop=Float64(stop))
     end
 
-    for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
+    for T = (Int8, UInt32, Float64, Char)
         @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
+        @test typeof(range(start=T(5), length=Int8(3))) === typeof(range(stop=T(5), length=Int8(3)))
     end
+    let T = Rational{Int16}
+        @test typeof(range(start=T(5), length=Int16(3))) === typeof(range(stop=T(5), length=Int16(3)))
+    end
+
 
     @test first(10:3) === 10
     @test last(10:3) === 9
