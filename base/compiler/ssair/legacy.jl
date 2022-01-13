@@ -23,9 +23,7 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Int32[block_for_inst(cfg, Int(edge)) for edge in stmt.edges], stmt.values)
         elseif isa(stmt, Expr) && stmt.head === :enter
-            stmt.args[1] = block_for_inst(cfg, stmt.args[1])
-            code[i] = stmt
-        else
+            stmt.args[1] = block_for_inst(cfg, stmt.args[1]::Int)
             code[i] = stmt
         end
     end

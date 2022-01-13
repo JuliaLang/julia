@@ -9,6 +9,90 @@ const Bottom = Union{}
 # For curmod_*
 include("testenv.jl")
 
+## tests that `const` field declarations
+
+# sanity tests that our built-in types are marked correctly for const fields
+for (T, c) in (
+        (Core.CodeInfo, []),
+        (Core.CodeInstance, [:def]),
+        (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
+        (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals]=#]),
+        (Core.MethodTable, [:module]),
+        (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
+        (Core.TypeMapLevel, []),
+        (Core.TypeName, [:name, :module, :names, :atomicfields, :constfields, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
+        (DataType, [:name, :super, :parameters, :instance, :hash]),
+    )
+    @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
+end
+
+@test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
+    setfield!(Int, :name, Int.name))
+@test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
+    (Base.Experimental.@force_compile; setfield!(Int, :name, Int.name)))
+
+@test_throws(ErrorException("invalid field attribute const for immutable struct"),
+    @eval struct ABCDconst
+        const abcd
+    end)
+mutable struct ABCDconst
+    const a
+    const b::Int
+    c
+    const d::Union{Int,Nothing}
+end
+@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+    mutable struct ABCDconst
+        const a
+        const b::Int
+        c
+        d::Union{Int,Nothing}
+    end)
+@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+    mutable struct ABCDconst
+        a
+        b::Int
+        c
+        d::Union{Int,Nothing}
+    end)
+let abcd = ABCDconst(1, 2, 3, 4)
+    @test (1, 2, 3, 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+    @test_throws(ErrorException("setfield!: const field .a of type ABCDconst cannot be changed"),
+        abcd.a = 0)
+    @test_throws(ErrorException("replacefield!: const field .a of type ABCDconst cannot be changed"),
+        replacefield!(abcd, :a, 1, 0))
+    @test_throws(ErrorException("modifyfield!: const field .a of type ABCDconst cannot be changed"),
+        modifyfield!(abcd, :a, +, 1))
+    @test_throws(ErrorException("swapfield!: const field .a of type ABCDconst cannot be changed"),
+        swapfield!(abcd, :a, 0))
+    @test_throws(ErrorException("setfield!: const field .b of type ABCDconst cannot be changed"),
+        abcd.b = 0)
+    abcd.c = "not constant"
+    @test_throws(ErrorException("setfield!: const field .d of type ABCDconst cannot be changed"),
+        abcd.d = nothing)
+    @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+end
+# repeat with the compiler
+let abcd = ABCDconst(1, 2, 3, 4)
+    Base.Experimental.@force_compile
+    @test (1, 2, 3, 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+    @test_throws(ErrorException("setfield!: const field .a of type ABCDconst cannot be changed"),
+        abcd.a = 0)
+    @test_throws(ErrorException("replacefield!: const field .a of type ABCDconst cannot be changed"),
+        replacefield!(abcd, :a, 1, 0))
+    @test_throws(ErrorException("modifyfield!: const field .a of type ABCDconst cannot be changed"),
+        modifyfield!(abcd, :a, +, 1))
+    @test_throws(ErrorException("swapfield!: const field .a of type ABCDconst cannot be changed"),
+        swapfield!(abcd, :a, 0))
+    @test_throws(ErrorException("setfield!: const field .b of type ABCDconst cannot be changed"),
+        abcd.b = 0)
+    abcd.c = "not constant"
+    @test_throws(ErrorException("setfield!: const field .d of type ABCDconst cannot be changed"),
+        abcd.d = nothing)
+    @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+end
+
+
 f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws MethodError f47(Vector{Vector}())
 @test f47(Vector{Vector{Int}}()) == 0

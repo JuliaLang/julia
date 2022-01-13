@@ -111,7 +111,8 @@ mktempdir(temp_parent_dir) do dir
 
         new_env = copy(ENV)
         new_env["_RR_TRACE_DIR"] = joinpath(dir, "rr_traces")
-        new_env["RR_LOG"]="all:debug"
+        new_env["RR_LOG"]          = "all:debug"
+        new_env["RR_UNDER_RR_LOG"] = "all:debug"
         new_env["RR_LOG_BUFFER"]="100000"
         new_env["JULIA_RR"] = capture_script_path
         t_start = time()

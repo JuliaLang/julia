@@ -583,6 +583,11 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                                 jl_set_module_infer(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
                             }
                         }
+                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_max_methods_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                jl_set_module_max_methods(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
+                            }
+                        }
                     }
                 }
                 else {

@@ -2,7 +2,7 @@
 
 module TestTridiagonal
 
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
@@ -221,8 +221,8 @@ end
             @test B == A
             @test isa(similar(A), mat_type{elty})
             @test isa(similar(A, Int), mat_type{Int})
-            @test isa(similar(A, (3, 2)), SparseMatrixCSC)
-            @test isa(similar(A, Int, (3, 2)), SparseMatrixCSC{Int})
+            @test isa(similar(A, (3, 2)), Matrix)
+            @test isa(similar(A, Int, (3, 2)), Matrix{Int})
             @test size(A, 3) == 1
             @test size(A, 1) == n
             @test size(A) == (n, n)
@@ -400,8 +400,8 @@ end
                     @testset "similar" begin
                         @test isa(similar(Ts), SymTridiagonal{elty})
                         @test isa(similar(Ts, Int), SymTridiagonal{Int})
-                        @test isa(similar(Ts, (3, 2)), SparseMatrixCSC)
-                        @test isa(similar(Ts, Int, (3, 2)), SparseMatrixCSC{Int})
+                        @test isa(similar(Ts, (3, 2)), Matrix)
+                        @test isa(similar(Ts, Int, (3, 2)), Matrix{Int})
                     end
 
                     @test first(logabsdet(Tldlt)) ≈ first(logabsdet(Fs))
@@ -474,13 +474,6 @@ end
     x = ones(1)
     @test T*x == ones(1)
     @test SymTridiagonal(ones(0), ones(0)) * ones(0, 2) == ones(0, 2)
-end
-
-@testset "issue #29644" begin
-    F = lu(Tridiagonal(sparse(1.0I, 3, 3)))
-    @test F.L == Matrix(I, 3, 3)
-    @test startswith(sprint(show, MIME("text/plain"), F),
-          "$(LinearAlgebra.LU){Float64, $(LinearAlgebra.Tridiagonal){Float64, SparseArrays.SparseVector")
 end
 
 @testset "Issue 29630" begin

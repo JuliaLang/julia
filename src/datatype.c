@@ -79,6 +79,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->mt = NULL;
     tn->partial = NULL;
     tn->atomicfields = NULL;
+    tn->constfields = NULL;
     return tn;
 }
 
@@ -595,7 +596,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
 
     t->name = NULL;
     if (jl_is_typename(name)) {
-        // This code-path is used by the Serialization module to by-pass normal expectations
+        // This code-path is used by the Serialization module to bypass normal expectations
         tn = (jl_typename_t*)name;
         tn->abstract = abstract;
         tn->mutabl = mutabl;
@@ -622,6 +623,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     tn->n_uninitialized = jl_svec_len(fnames) - ninitialized;
 
     uint32_t *volatile atomicfields = NULL;
+    uint32_t *volatile constfields = NULL;
     int i;
     JL_TRY {
         for (i = 0; i + 1 < jl_svec_len(fattrs); i += 2) {
@@ -643,17 +645,28 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
                 }
                 atomicfields[fldn / 32] |= 1 << (fldn % 32);
             }
+            else if (attr == jl_const_sym) {
+                if (!mutabl)
+                    jl_errorf("invalid field attribute const for immutable struct");
+                if (constfields == NULL) {
+                    size_t nb = (jl_svec_len(fnames) + 31) / 32 * sizeof(uint32_t);
+                    constfields = (uint32_t*)malloc_s(nb);
+                    memset(constfields, 0, nb);
+                }
+                constfields[fldn / 32] |= 1 << (fldn % 32);
+            }
             else {
                 jl_errorf("invalid field attribute %s", jl_symbol_name(attr));
             }
         }
     }
     JL_CATCH {
-        if (atomicfields)
-            free(atomicfields);
+        free(atomicfields);
+        free(constfields);
         jl_rethrow();
     }
     tn->atomicfields = atomicfields;
+    tn->constfields = constfields;
 
     if (t->name->wrapper == NULL) {
         t->name->wrapper = (jl_value_t*)t;

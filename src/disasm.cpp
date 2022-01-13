@@ -92,7 +92,11 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/NativeFormatting.h>
 #include <llvm/Support/SourceMgr.h>
+#if JL_LLVM_VERSION >= 140000
+#include <llvm/MC/TargetRegistry.h>
+#else
 #include <llvm/Support/TargetRegistry.h>
+#endif
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -912,7 +916,11 @@ static void jl_dump_asm_internal(
                                          IP.release(),
                                          std::move(CE), std::move(MAB),
                                          /*ShowInst*/ false));
+#if JL_LLVM_VERSION >= 140000
+    Streamer->initSections(true, *STI);
+#else
     Streamer->InitSections(true);
+#endif
 
     // Make the MemoryObject wrapper
     ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);

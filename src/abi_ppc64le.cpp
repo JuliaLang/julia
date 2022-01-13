@@ -106,11 +106,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
     if (jl_datatype_size(dt) > 64 && isHFA(dt, &ty0, &hva) > 8) {
-#if JL_LLVM_VERSION < 120000
-        ab.addAttribute(Attribute::ByVal);
-#else
         ab.addByValAttr(Ty);
-#endif
         return true;
     }
     return false;
@@ -129,15 +125,15 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
     int hfa = isHFA(dt, &ty0, &hva);
     if (hfa <= 8) {
         if (ty0 == jl_float32_type) {
-            return ArrayType::get(T_float32, hfa);
+            return ArrayType::get(llvm::Type::getFloatTy(ctx), hfa);
         }
         else if (ty0 == jl_float64_type) {
-            return ArrayType::get(T_float64, hfa);
+            return ArrayType::get(llvm::Type::getDoubleTy(ctx), hfa);
         }
         else {
             jl_datatype_t *vecty = (jl_datatype_t*)jl_field_type(ty0, 0);
             assert(jl_is_datatype(vecty) && vecty->name == jl_vecelement_typename);
-            Type *ety = bitstype_to_llvm(jl_tparam0(vecty));
+            Type *ety = bitstype_to_llvm(jl_tparam0(vecty), ctx);
             Type *vty = FixedVectorType::get(ety, jl_datatype_nfields(ty0));
             return ArrayType::get(vty, hfa);
         }

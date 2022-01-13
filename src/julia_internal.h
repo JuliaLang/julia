@@ -804,7 +804,7 @@ typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k);
 
-#if !defined(__clang_gcanalyzer__)
+#if !defined(__clang_gcanalyzer__) && !defined(_OS_DARWIN_)
 static inline void jl_set_gc_and_wait(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -1442,6 +1442,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_all_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_compile_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_force_compile_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_infer_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_max_methods_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_atomic_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_not_atomic_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_unordered_sym;

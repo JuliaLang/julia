@@ -590,6 +590,18 @@ end
     end
 end
 
+@testset "TCPSocket RawFD constructor" begin
+    if Sys.islinux()
+        let fd = ccall(:socket, Int32, (Int32, Int32, Int32),
+                       2, # AF_INET
+                       1, # SOCK_STREAM
+                       0)
+            s = Sockets.TCPSocket(RawFD(fd))
+            close(s)
+        end
+    end
+end
+
 @testset "TCPServer constructor" begin
     s = Sockets.TCPServer(; delay=false)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1

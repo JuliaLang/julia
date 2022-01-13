@@ -60,6 +60,12 @@ end
 @test Base.in_sysimage(Base.PkgId(Base.UUID("cf7118a7-6976-5b1a-9a39-7adc72f591a4"), "UUIDs"))
 @test Base.in_sysimage(Base.PkgId(Base.UUID("3a7fdc7e-7467-41b4-9f64-ea033d046d5b"), "NotAPackage")) == false
 
+## Unit tests for safe file operations ##
+
+@test Base.isaccessiblefile("/root/path/doesn't/exist") == false
+@test Base.isaccessiblepath("/root/path/doesn't/exist") == false
+@test Base.isaccessibledir("/root/path/doesn't/exist") == false
+
 # Issue #5789 and PR #13542:
 mktempdir() do dir
     cd(dir) do
@@ -799,6 +805,108 @@ end
                                         check for typos in package module name") (@eval using BadCase)
         finally
             copy!(LOAD_PATH, old_loadpath)
+        end
+    end
+end
+
+@testset "Preferences loading" begin
+    mktempdir() do dir
+        this_uuid = uuid4()
+        that_uuid = uuid4()
+
+        # First, create outer environment with exported preferences
+        mkpath(joinpath(dir, "outer_env"))
+        open(joinpath(dir, "outer_env", "Project.toml"), write=true) do io
+            write(io, """
+            [deps]
+            This = "$(this_uuid)"
+            That = "$(that_uuid)"
+
+            [preferences.This]
+            pref1 = "outer-project"
+            pref2 = "outer-project"
+            pref3 = "outer-project"
+            pref4 = "outer-project"
+            pref5 = "outer-project"
+            pref6 = "outer-project"
+
+            [preferences.That]
+            pref1 = "outer-project"
+            """)
+        end
+
+        # Override some of those preferences above here:
+        open(joinpath(dir, "outer_env", "JuliaLocalPreferences.toml"), write=true) do io
+            write(io, """
+            [This]
+            pref2 = "outer-jlp"
+            """)
+        end
+
+        # Ensure that a `JuliaLocalPreferences.toml` disables `LocalPreferences.toml`
+        # We test that both overriding `pref2` and trying to clear `pref5` are ignored
+        open(joinpath(dir, "outer_env", "LocalPreferences.toml"), write=true) do io
+            write(io, """
+            [This]
+            pref2 = "outer-lp"
+            __clear__ = ["pref5"]
+            """)
+        end
+
+        # Next, set up an inner environment that will override some of the preferences
+        # set by the outer environment, even clearing `pref6`.
+        mkpath(joinpath(dir, "inner_env"))
+        open(joinpath(dir, "inner_env", "Project.toml"), write=true) do io
+            write(io, """
+            name = "Root"
+            uuid = "$(uuid4())"
+
+            [extras]
+            This = "$(this_uuid)"
+
+            [preferences.This]
+            pref3 = "inner-project"
+            pref4 = "inner-project"
+            __clear__ = ["pref6"]
+            """)
+        end
+
+        # And have an override here as well, this time only LocalPreferences.toml
+        open(joinpath(dir, "inner_env", "LocalPreferences.toml"), write=true) do io
+            write(io, """
+            [This]
+            pref4 = "inner-lp"
+            """)
+        end
+
+        # Finally, we load preferences with a stacked environment, and ensure that
+        # we get the appropriate outputs:
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [joinpath(dir, "inner_env", "Project.toml"), joinpath(dir, "outer_env", "Project.toml")])
+
+            function test_this_prefs(this_prefs)
+                @test this_prefs["pref1"] == "outer-project"
+                @test this_prefs["pref2"] == "outer-jlp"
+                @test this_prefs["pref3"] == "inner-project"
+                @test this_prefs["pref4"] == "inner-lp"
+                @test this_prefs["pref5"] == "outer-project"
+                @test !haskey(this_prefs, "pref6")
+            end
+
+            # Test directly loading the UUID we're interested in
+            test_this_prefs(Base.get_preferences(this_uuid))
+
+            # Also test loading _all_ preferences
+            all_prefs = Base.get_preferences()
+            @test haskey(all_prefs, "This")
+            @test haskey(all_prefs, "That")
+            @test all_prefs["That"]["pref1"] == "outer-project"
+
+            # Ensure that the sub-tree of `This` still satisfies our tests
+            test_this_prefs(all_prefs["This"])
+        finally
+            copy!(LOAD_PATH, old_load_path)
         end
     end
 end

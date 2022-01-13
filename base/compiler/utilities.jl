@@ -100,9 +100,8 @@ end
 # MethodInstance/CodeInfo #
 ###########################
 
-function invoke_api(li::CodeInstance)
-    return ccall(:jl_invoke_api, Cint, (Any,), li)
-end
+invoke_api(li::CodeInstance) = ccall(:jl_invoke_api, Cint, (Any,), li)
+use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
 function get_staged(mi::MethodInstance)
     may_invoke_generator(mi) || return nothing

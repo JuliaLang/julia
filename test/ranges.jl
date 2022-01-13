@@ -382,6 +382,14 @@ end
         @test reverse(reverse(typemin(Int):typemax(Int))) == typemin(Int):typemax(Int)
         @test reverse(reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
     end
+    @testset "reverse `[Step|Unit]Range{$T}`" for T in (Int8, UInt8, Int, UInt, Int128, UInt128)
+        @test reverse(T(1):T(10)) == T(10):-1:T(1)
+        @test reverse(typemin(T):typemax(T)) == typemax(T):-1:typemin(T)
+        @test reverse(typemin(T):2:typemax(T)) == typemax(T)-T(1):-2:typemin(T)
+        @test reverse(reverse(T(1):T(10))) == T(1):T(10)
+        @test reverse(reverse(typemin(T):typemax(T))) == typemin(T):typemax(T)
+        @test reverse(reverse(typemin(T):2:typemax(T))) == typemin(T):2:typemax(T)
+    end
     @testset "intersect" begin
         @test intersect(1:5, 2:3) === 2:3
         @test intersect(-3:5, 2:8) === 2:5
@@ -717,9 +725,9 @@ end
     @test broadcast(-, T(1):2:6, 1) === T(0):2:4
     @test broadcast(-, T(1):2:6, 0.3) === range(T(1)-0.3, step=2, length=T(3)) == T(1)-0.3:2:5-0.3
     is_unsigned = T <: Unsigned
-    is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
-    @test broadcast(-, T(1):3) == -T(1):-T(1):-T(3)
-    @test broadcast(-, 2, T(1):3) == T(1):-T(1):-T(1)
+    @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2) === (is_unsigned ? T(0) : T(3))
+    @test broadcast(-, T(1):3) == -T(1):-1:-T(3)
+    @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1)
 end
 @testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
     @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
@@ -1517,8 +1525,10 @@ isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
 using .Main.Furlongs
 
 @testset "dimensional correctness" begin
-    @test length(Vector(Furlong(2):Furlong(10))) == 9
-    @test length(range(Furlong(2), length=9)) == checked_length(range(Furlong(2), length=9)) == 9
+    @test_throws TypeError Furlong(2):Furlong(10)
+    @test_throws TypeError range(Furlong(2), length=9)
+    @test length(Vector(Furlong(2):Furlong(1):Furlong(10))) == 9
+    @test length(range(Furlong(2), step=Furlong(1), length=9)) == checked_length(range(Furlong(2), step=Furlong(1), length=9)) == 9
     @test @inferred(length(StepRange(Furlong(2), Furlong(1), Furlong(1)))) == 0
     @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2), step=Furlong(1), length=9)) == Furlong.(2:10)
     @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
@@ -2257,3 +2267,19 @@ let r = Ptr{Cvoid}(20):-UInt(2):Ptr{Cvoid}(10)
     @test step(r) === -UInt(2)
     @test last(r) === Ptr{Cvoid}(10)
 end
+
+# test behavior of wrap-around and promotion of empty ranges (#35711)
+@test length(range(0, length=UInt(0))) === UInt(0)
+@test isempty(range(0, length=UInt(0)))
+@test length(range(typemax(Int), length=UInt(0))) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0)))
+@test length(range(0, length=UInt(0), step=UInt(2))) == UInt(0)
+@test isempty(range(0, length=UInt(0), step=UInt(2)))
+@test length(range(typemax(Int), length=UInt(0), step=UInt(2))) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0), step=UInt(2)))
+@test length(range(typemax(Int), length=UInt(0), step=2)) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0), step=2))
+@test length(range(typemax(Int), length=0, step=UInt(2))) === 0
+@test isempty(range(typemax(Int), length=0, step=UInt(2)))
+
+@test length(range(1, length=typemax(Int128))) === typemax(Int128)

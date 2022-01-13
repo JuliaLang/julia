@@ -891,17 +891,17 @@
 
 (define (struct-def-expr- name params bounds super fields0 mut)
   (receive
-   (fields defs) (separate (lambda (x) (or (symbol? x) (eventually-decl? x)))
-                           fields0)
+   (fields defs) (separate eventually-decl? fields0)
    (let* ((attrs ())
           (fields (let ((n 0))
                     (map (lambda (x)
                            (set! n (+ n 1))
-                           (if (and (pair? x) (not (decl? x)))
-                               (begin
-                                 (set! attrs (cons (quotify (car x)) (cons n attrs)))
-                                 (cadr x))
-                               x))
+                           (let loop ((x x))
+                             (if (and (pair? x) (not (decl? x)))
+                                 (begin
+                                   (set! attrs (cons (quotify (car x)) (cons n attrs)))
+                                   (loop (cadr x)))
+                                 x)))
                          fields)))
           (attrs (reverse attrs))
           (defs        (filter (lambda (x) (not (or (effect-free? x) (eq? (car x) 'string)))) defs))
@@ -1295,9 +1295,9 @@
       (if (null? f)
           '()
           (let ((x (car f)))
-            (cond ((or (symdecl? x) (linenum? x))
+            (cond ((or (eventually-decl? x) (linenum? x))
                    (loop (cdr f)))
-                  ((and (assignment? x) (symdecl? (cadr x)))
+                  ((and (assignment? x) (eventually-decl? (cadr x)))
                    (error (string "\"" (deparse x) "\" inside type definition is reserved")))
                   (else '())))))
     (expand-forms
@@ -1385,7 +1385,7 @@
            (expand-forms (expand-decls (car arg) (cdr arg) #t)))
           ((= |::|)
            (expand-forms (expand-decls 'const (cdr e) #f)))
-          (else e)))))
+          (else (error "expected assignment after \"const\""))))))
 
 (define (expand-atomic-decl e)
   (error "unimplemented or unsupported atomic declaration"))
@@ -1708,9 +1708,9 @@
                        ,@(if outer `((require-existing-local ,lhs)) '())
                        (if (call (top not_int) (call (core ===) ,next (null)))
                            (_do_while
-			    (block ,body
-				   (= ,next (call (top iterate) ,coll ,state)))
-			    (call (top not_int) (call (core ===) ,next (null))))))))))))
+                            (block ,body
+                                   (= ,next (call (top iterate) ,coll ,state)))
+                            (call (top not_int) (call (core ===) ,next (null))))))))))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs flat outervars)

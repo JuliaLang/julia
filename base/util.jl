@@ -18,6 +18,7 @@ const text_colors = Dict{Union{Symbol,Int},String}(
     :light_blue    => "\033[94m",
     :light_magenta => "\033[95m",
     :light_cyan    => "\033[96m",
+    :light_white   => "\033[97m",
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",
@@ -126,9 +127,9 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 !!! compat "Julia 1.7"
     Keywords except `color` and `bold` were added in Julia 1.7.
 """
-printstyled(io::IO, msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+@constprop :none printstyled(io::IO, msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
     with_output_color(print, color, io, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
-printstyled(msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+@constprop :none printstyled(msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
@@ -293,6 +294,16 @@ is encountered or EOF (^D) character is entered on a blank line. If a `default` 
 then the user can enter just a newline character to select the `default`.
 
 See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
+
+# Example
+
+```julia-repl
+julia> your_name = Base.prompt("Enter your name");
+Enter your name: Logan
+
+julia> your_name
+"Logan"
+```
 """
 function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
     msg = !isempty(default) ? "$message [$default]: " : "$message: "
@@ -571,6 +582,8 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     ENV2["JULIA_DEPOT_PATH"] = mktempdir(; cleanup = true)
+    delete!(ENV2, "JULIA_LOAD_PATH")
+    delete!(ENV2, "JULIA_PROJECT")
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))

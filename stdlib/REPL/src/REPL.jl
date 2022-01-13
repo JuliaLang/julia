@@ -194,7 +194,9 @@ function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
         end
     end
     for arg in ast.args
-        arg isa Expr && modules_to_be_loaded(arg, mods)
+        if isexpr(arg, (:block, :if, :using, :import))
+            modules_to_be_loaded(arg, mods)
+        end
     end
     filter!(mod -> !in(String(mod), ["Base", "Main", "Core"]), mods) # Exclude special non-package modules
     return unique(mods)
@@ -492,15 +494,7 @@ beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 function complete_line(c::REPLCompletionProvider, s::PromptState)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = completions(full, lastindex(partial))
-    if !c.modifiers.shift
-        # Filter out methods where all arguments are `Any`
-        filter!(ret) do c
-            isa(c, REPLCompletions.MethodCompletion) || return true
-            sig = Base.unwrap_unionall(c.method.sig)::DataType
-            return !all(T -> T === Any || T === Vararg{Any}, sig.parameters[2:end])
-        end
-    end
+    ret, range, should_complete = completions(full, lastindex(partial), Main, c.modifiers.shift)
     c.modifiers = LineEdit.Modifiers()
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
@@ -1208,7 +1202,12 @@ function setup_interface(
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "REPL[")
                 @goto writeback
             end
-            InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+            try
+                InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+            catch ex
+                ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
+                @info "edit failed" _exception=ex
+            end
             LineEdit.refresh_line(s)
             return
             @label writeback

@@ -17,21 +17,19 @@ const S_ISUID = 0o4000  # set UID bit
 const S_ISGID = 0o2000  # set GID bit
 const S_ENFMT = S_ISGID # file locking enforcement
 const S_ISVTX = 0o1000  # sticky bit
-const S_IRWXU = 0o0700  # mask for owner permissions
-const S_IRUSR = 0o0400  # read by owner
 
-const S_IRUSR = 0o400
-const S_IWUSR = 0o200
-const S_IXUSR = 0o100
-const S_IRWXU = 0o700
-const S_IRGRP = 0o040
-const S_IWGRP = 0o020
-const S_IXGRP = 0o010
-const S_IRWXG = 0o070
-const S_IROTH = 0o004
-const S_IWOTH = 0o002
-const S_IXOTH = 0o001
-const S_IRWXO = 0o007
+const S_IRUSR = 0o0400  # read by owner
+const S_IWUSR = 0o0200  # write by owner
+const S_IXUSR = 0o0100  # execute by owner
+const S_IRWXU = 0o0700  # mask for owner permissions
+const S_IRGRP = 0o0040  # read by group
+const S_IWGRP = 0o0020  # write by group
+const S_IXGRP = 0o0010  # execute by group
+const S_IRWXG = 0o0070  # mask for group permissions
+const S_IROTH = 0o0004  # read by other
+const S_IWOTH = 0o0002  # write by other
+const S_IXOTH = 0o0001  # execute by other
+const S_IRWXO = 0o0007  # mask for other permissions
 
 export File,
        StatStruct,
@@ -45,10 +43,6 @@ export File,
        JL_O_CREAT,
        JL_O_EXCL,
        JL_O_TRUNC,
-       JL_O_TEMPORARY,
-       JL_O_SHORT_LIVED,
-       JL_O_SEQUENTIAL,
-       JL_O_RANDOM,
        JL_O_NOCTTY,
        S_IRUSR, S_IWUSR, S_IXUSR, S_IRWXU,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
