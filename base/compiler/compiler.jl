@@ -98,6 +98,8 @@ ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
 # core docsystem
 include("docs/core.jl")
+import Core.Compiler.CoreDocs
+Core.atdoc!(CoreDocs.docm)
 
 # sorting
 function sort end
