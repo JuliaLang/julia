@@ -265,7 +265,12 @@ end
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
             end
+        end
+        @testset "permutedims(::[Sym]Tridiagonal)"
             @test permutedims(permutedims(A)) === A
+            @test permutedims(A) == transpose.(transpose(A))
+            @test permutedims(A, [1, 2]) === A
+            @test permutedims(A, (2, 1)) == permutedims(A)
         end
         if elty != Int
             @testset "Simple unary functions" begin

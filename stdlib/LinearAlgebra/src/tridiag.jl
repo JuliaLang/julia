@@ -163,6 +163,11 @@ transpose(S::SymTridiagonal) = S
 adjoint(S::SymTridiagonal{<:Real}) = S
 adjoint(S::SymTridiagonal) = Adjoint(S)
 permutedims(S::SymTridiagonal) = S
+function permutedims(S::SymTridiagonal, perm)
+    Base.checkdims_perm(S, S, perm)
+    all(perm .= (1, 2)) && return S
+    all(perm .= (2, 1)) && return permutedims(S)
+end
 Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
 
 ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(_evview(S))
@@ -599,6 +604,11 @@ transpose(S::Tridiagonal) = Transpose(S)
 adjoint(S::Tridiagonal{<:Real}) = Tridiagonal(S.du, S.d, S.dl)
 transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
 permutedims(T::Tridiagonal) = Tridiagonal(T.du, T.d, T.dl)
+function permutedims(T::Tridiagonal, perm)
+    Base.checkdims_perm(T, T, perm)
+    all(perm .= (1, 2)) && return T
+    all(perm .= (2, 1)) && return permutedims(T)
+end
 Base.copy(aS::Adjoint{<:Any,<:Tridiagonal}) = (S = aS.parent; Tridiagonal(map(x -> copy.(adjoint.(x)), (S.du, S.d, S.dl))...))
 Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(x -> copy.(transpose.(x)), (S.du, S.d, S.dl))...))
 
