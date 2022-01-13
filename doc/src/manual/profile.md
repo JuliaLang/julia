@@ -353,6 +353,11 @@ argument can be passed to speed it up by making it skip some allocations.
 Passing `sample_rate=1.0` will make it record everything (which is slow);
 `sample_rate=0.1` will record only 10% of the allocations (faster), etc.
 
+NOTE: the current implementation of the Allocations Profiler _does not
+capture all allocations._ You can read more about the missing allocations
+and the plan to improve this, here: https://github.com/JuliaLang/julia/issues/43688.
+Calling `Profile.Allocs.fetch()` will print a log line reporting the percentage
+of missed allocations, so you can understand the accuracy of your profile.
 ## External Profiling
 
 Currently Julia supports `Intel VTune`, `OProfile` and `perf` as external profiling tools.
