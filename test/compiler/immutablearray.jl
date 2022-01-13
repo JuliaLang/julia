@@ -131,7 +131,7 @@ let # arrayset
         @test allocated == @allocated optimizable1(ImmutableArray)
     end
 
-    function optimizable2(gen)
+    function unoptimizable(gen)
         a = Matrix{Float64}(undef, 5, 2)
         for i = 1:5
             for j = 1:2
@@ -140,14 +140,14 @@ let # arrayset
         end
         return gen(a)
     end
-    let src = code_typed1(optimizable2, (Type{ImmutableArray},))
+    let src = code_typed1(unoptimizable, (Type{ImmutableArray},))
         @test count(is_array_alloc, src.code) == 1
         @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
         @test count(iscall((src, arrayfreeze)), src.code) == 0
-        optimizable2(identity)
-        allocated = @allocated optimizable2(identity)
-        optimizable2(ImmutableArray)
-        @test allocated == @allocated optimizable2(ImmutableArray)
+        unoptimizable(identity)
+        allocated = @allocated unoptimizable(identity)
+        unoptimizable(ImmutableArray)
+        @test allocated == @allocated unoptimizable(ImmutableArray)
     end
 end
 
@@ -219,12 +219,12 @@ let # ignore ThrownEscape if it never happens when `arrayfreeze` is called
     end
     let src = code_typed1(optimizable, (Type{ImmutableArray},Int,))
         @test count(is_array_alloc, src.code) == 1
-        @test_broken count(iscall((src, mutating_arrayfreeze)), src.code) == 1
-        @test_broken count(iscall((src, arrayfreeze)), src.code) == 0
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
         optimizable(identity, 42)
         allocated = @allocated optimizable(identity, 42)
         optimizable(ImmutableArray, 42)
-        @test_broken allocated == @allocated optimizable(ImmutableArray, 42)
+        @test allocated == @allocated optimizable(ImmutableArray, 42)
     end
 end
 @noinline function ipo_getindex′(a, n)
@@ -240,12 +240,12 @@ let # ignore ThrownEscape if it never happens when `arrayfreeze` is called (inte
     let src = code_typed1(optimizable, (Type{ImmutableArray},))
         @test count(is_array_alloc, src.code) == 1
         @test count(isinvoke(:ipo_getindex′), src.code) == 1
-        @test_broken count(iscall((src, mutating_arrayfreeze)), src.code) == 1
-        @test_broken count(iscall((src, arrayfreeze)), src.code) == 0
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 0
         optimizable(identity)
         allocated = @allocated optimizable(identity)
         optimizable(ImmutableArray)
-        @test_broken allocated == @allocated optimizable(ImmutableArray)
+        @test allocated == @allocated optimizable(ImmutableArray)
     end
 end
 
@@ -277,53 +277,31 @@ function optimizable_aa(gen, n) # can't be a closure somehow
 end
 let src = code_typed1(optimizable_aa, (Type{ImmutableArray},Int))
     @test count(is_array_alloc, src.code) == 1
-    @test_broken count(iscall((src, mutating_arrayfreeze)), src.code) == 1
-    @test_broken count(iscall((src, arrayfreeze)), src.code) == 0
+    @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+    @test count(iscall((src, arrayfreeze)), src.code) == 0
     optimizable_aa(identity, 100)
     allocated = @allocated optimizable_aa(identity, 100)
     optimizable_aa(ImmutableArray, 100)
-    @test_broken allocated == @allocated optimizable_aa(ImmutableArray, 100)
+    @test allocated == @allocated optimizable_aa(ImmutableArray, 100)
 end
 
-const g = Ref{Any}()
-let # BoundsError (assumes BoundsError doesn't capture arrays)
-    function optimizable1(gen)
+let # should be possible if we change BoundsError semantics (so that it doesn't capture the indexed array)
+    function optimizable(gen)
         a = [1,2,3]
         try
             getindex(a, 4)
         catch
-            return gen(a)
         end
+        return gen(a)
     end
-    let src = code_typed1(optimizable1, (Type{ImmutableArray},))
+    let src = code_typed1(optimizable, (Type{ImmutableArray},))
         @test count(is_array_alloc, src.code) == 1
-        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
-        @test count(iscall((src, arrayfreeze)), src.code) == 0
-        optimizable1(identity)
-        allocated = @allocated optimizable1(identity)
-        optimizable1(ImmutableArray)
-        @test allocated == @allocated optimizable1(ImmutableArray)
-    end
-
-    function optimizable2(gen)
-        a = [1,2,3]
-        try
-            getindex(a, 4)
-        catch e
-            g[] = e.a # XXX these tests pass, but this optimization is actually incorrect until BoundsError doesn't escape its objects
-            return gen(a)
-        end
-    end
-    let src = code_typed1(optimizable2, (Type{ImmutableArray},))
-        @test count(is_array_alloc, src.code) == 1
-        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 1
-        @test count(iscall((src, arrayfreeze)), src.code) == 0
-        optimizable2(identity)
-        allocated = @allocated optimizable2(identity)
-        optimizable2(ImmutableArray)
-        local ia
-        @test allocated == @allocated ia = optimizable2(ImmutableArray)
-        @test_broken g[] !== ia
+        @test_broken count(iscall((src, mutating_arrayfreeze)), src.code) == 1
+        @test_broken count(iscall((src, arrayfreeze)), src.code) == 0
+        optimizable(identity)
+        allocated = @allocated optimizable(identity)
+        optimizable(ImmutableArray)
+        @test_broken allocated == @allocated optimizable(ImmutableArray)
     end
 end
 
@@ -341,11 +319,8 @@ let # return escape
         @test count(is_array_alloc, src.code) == 1
         @test count(iscall((src, mutating_arrayfreeze)), src.code) == 0
         @test count(iscall((src, arrayfreeze)), src.code) == 1
-        unoptimizable(identity)
-        allocated = @allocated unoptimizable(identity)
         unoptimizable(ImmutableArray)
-        local a, b
-        @test allocated < @allocated a, b = unoptimizable(ImmutableArray)
+        a, b = unoptimizable(ImmutableArray)
         @test a !== b
         @test !(a isa ImmutableArray)
     end
@@ -376,10 +351,8 @@ let # global escape
         @test count(iscall((src, mutating_arrayfreeze)), src.code) == 0
         @test count(iscall((src, arrayfreeze)), src.code) == 1
         unoptimizable(identity)
-        allocated = @allocated unoptimizable(identity)
         unoptimizable(ImmutableArray)
-        local a
-        @test allocated < @allocated a = unoptimizable(ImmutableArray)
+        a = unoptimizable(ImmutableArray)
         @test global_array !== a
         @test !(global_array isa ImmutableArray)
     end
@@ -396,10 +369,8 @@ let # global escape
         @test count(iscall((src, mutating_arrayfreeze)), src.code) == 0
         @test count(iscall((src, arrayfreeze)), src.code) == 1
         unoptimizable(identity)
-        allocated = @allocated unoptimizable(identity)
         unoptimizable(ImmutableArray)
-        local a
-        @test allocated < @allocated a = unoptimizable(ImmutableArray)
+        a = unoptimizable(ImmutableArray)
         @test Rx[] !== a
         @test !(Rx[] isa ImmutableArray)
     end
@@ -426,6 +397,28 @@ let # escapes via exception
         @test allocated < @allocated a = unoptimizable(ImmutableArray)
         @test global_array !== a
         @test !(global_array isa ImmutableArray)
+    end
+end
+
+const g = Ref{Any}()
+let # escapes via BoundsError
+    function unoptimizable(gen)
+        a = [1,2,3]
+        try
+            getindex(a, 4)
+        catch e
+            g[] = e.a
+        end
+        return gen(a)
+    end
+    let src = code_typed1(unoptimizable, (Type{ImmutableArray},))
+        @test count(is_array_alloc, src.code) == 1
+        @test count(iscall((src, arrayfreeze)), src.code) == 1
+        @test count(iscall((src, mutating_arrayfreeze)), src.code) == 0
+        unoptimizable(identity)
+        unoptimizable(ImmutableArray)
+        ia = unoptimizable(ImmutableArray)
+        @test g[] !== ia
     end
 end
 
