@@ -135,6 +135,13 @@ Random.seed!(1)
             @test func(func(T)) == T
         end
 
+        @testset "permutedims(::Bidiagonal)" begin
+            @test permutedims(permutedims(T)) === T
+            @test permutedims(T) == transpose.(transpose(T))
+            @test permutedims(T, [1, 2]) === T
+            @test permutedims(T, (2, 1)) == permutedims(T)
+        end
+
         @testset "triu and tril" begin
             zerosdv = zeros(elty, length(dv))
             zerosev = zeros(elty, length(ev))
