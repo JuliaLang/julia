@@ -1103,6 +1103,9 @@ else
   LIBUV_INC := $(build_includedir)
 endif
 
+HWLOC := $(build_libdir)/libhwloc.a
+HWLOC_INC := $(build_includedir)
+
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC := -lutf8proc
   UTF8PROC_INC := $(LOCALBASE)/include
