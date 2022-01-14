@@ -880,3 +880,7 @@ end
         @test count(iscall((src,UnionAll)), src.code) == 0
     end
 end
+
+# have_fma elimination inside ^
+f_pow() = ^(2.0, -1.0)
+@test fully_eliminated(f_pow, Tuple{})
