@@ -80,8 +80,6 @@ bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
     MemOp memop(inst, opno);
     memop.offset = offset;
     uint64_t size = DL.getTypeStoreSize(elty);
-    if (size >= UINT32_MAX - offset)
-        return false;
     memop.size = size;
     memop.isaggr = isa<StructType>(elty) || isa<ArrayType>(elty) || isa<VectorType>(elty);
     memop.isobjref = hasObjref(elty);
@@ -105,6 +103,8 @@ bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
         field.second.hasaggr = true;
     }
     field.second.accesses.push_back(memop);
+    if (size >= UINT32_MAX - offset)
+        return false;
     return true;
 }
 
