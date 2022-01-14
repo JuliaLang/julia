@@ -294,6 +294,7 @@ typedef struct _jl_method_t {
     // Identify roots by module-of-origin. We only track the module for roots added during incremental compilation.
     // May be NULL if no external roots have been added, otherwise it's a Vector{UInt64}
     jl_array_t *root_blocks;   // RLE (build_id, offset) pairs (even/odd indexing)
+    int32_t nroots_sysimg;     // # of roots stored in the system image
     jl_svec_t *ccallable; // svec(rettype, sig) if a ccallable entry point is requested for this
 
     // cache of specializations of this method for invoke(), i.e.
@@ -381,6 +382,7 @@ typedef struct _jl_code_instance_t {
         _Atomic(jl_fptr_sparam_t) fptr3;
         // 4 interpreter
     } specptr; // private data for `jlcall entry point
+    uint8_t relocatability;  // nonzero if all roots are built into sysimg or tagged by module key
 } jl_code_instance_t;
 
 // all values are callable as Functions

@@ -7682,8 +7682,11 @@ jl_compile_result_t jl_emit_codeinst(
                 jl_options.debug_level > 1) {
                 // update the stored code
                 if (codeinst->inferred != (jl_value_t*)src) {
-                    if (jl_is_method(def))
+                    if (jl_is_method(def)) {
                         src = (jl_code_info_t*)jl_compress_ir(def, src);
+                        assert(jl_typeis(src, jl_array_uint8_type));
+                        codeinst->relocatability = ((uint8_t*)jl_array_data(src))[jl_array_len(src)-1];
+                    }
                     codeinst->inferred = (jl_value_t*)src;
                     jl_gc_wb(codeinst, src);
                 }
