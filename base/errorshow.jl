@@ -32,9 +32,25 @@ showerror(io::IO, ex) = show(io, ex)
 show_index(io::IO, x::Any) = show(io, x)
 show_index(io::IO, x::Slice) = show_index(io, x.indices)
 show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
-show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
+function show_index(io::IO, x::OneTo)
+    if x.stop == 1
+        return print(io, '1')
+    end
+    print(io, "1:", x.stop)
+end
 show_index(io::IO, x::Colon) = print(io, ':')
-
+function show_index(io::IO, x::Tuple)
+    if length(x) == 1
+        return show_index(io, only(x))
+    end
+    print(io, '[')
+    show_index(io, first(x))
+    for el in x[2:end]
+        print(io, ", ")
+        show_index(io, el)
+    end
+    print(io, ']')
+end
 
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
@@ -55,8 +71,22 @@ function showerror(io::IO, ex::BoundsError)
             end
             print(io, ']')
         end
+        print(io, ".\nLegal indices are ")
+        show_legal_indices(io, ex.a)
     end
     Experimental.show_error_hints(io, ex)
+end
+
+"""
+    show_legal_indices(io, x)
+
+Describe legal ways to index `x` in human-readable form. This should be a continuation of
+the sentence "Legal indices are ...". Will be shown to the user upon `BoundsError`.
+"""
+show_legal_indices(io::IO, x::Any) = print(io, "unknown.");
+function show_legal_indices(io::IO, x::AbstractArray{<:Any})
+    show_index(io, axes(x))
+    print(io, '.')
 end
 
 function showerror(io::IO, ex::TypeError)

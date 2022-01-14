@@ -242,6 +242,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `axes(A)`                                    | `map(OneTo, size(A))`                  | Return a tuple of `AbstractUnitRange{<:Integer}` of valid indices                    |
 | `similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
 | `similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
+| `show_legal_indices(io, A)` | `Base.show_index(io, axes(A)); print(io, '.');` | Human readable continuation of the sentence "Legal indices are ...", for the `BoundsError` message |
 
 If a type is defined as a subtype of `AbstractArray`, it inherits a very large set of rich behaviors
 including iteration and multidimensional indexing built on top of single-element access.  See

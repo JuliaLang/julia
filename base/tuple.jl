@@ -544,6 +544,10 @@ function in(x::Symbol, itr::Tuple{Vararg{Symbol}})
     return sym_in(x, itr)
 end
 
+function show_legal_indices(io::IO, x::Tuple)
+    show_index(io, axes(x))
+    print(io, '.')
+end
 
 """
     empty(x::Tuple)
