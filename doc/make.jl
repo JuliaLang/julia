@@ -295,49 +295,20 @@ else
     )
 end
 
-
 # [JuliaLang/julia#35495] Override latex writeheader to use our custom preamble.
-#   Changes:
-#   + Show only "part&chapter" in TOC: `\settocdepth`
-#   + Use compact line spacing in TOC: `\cftbeforepartskip`, `\cftbeforechapterskip`
-#   + Increase the spacing between chapter numbers and chapter names:
-#       `\cftchapternumwidth`
 function Documenter.Writers.LaTeXWriter.writeheader(io::IO, doc::Documenter.Documents.Document)
     custom = joinpath(doc.user.root, doc.user.source, "assets", "custom.sty")
     isfile(custom) ? cp(custom, "custom.sty"; force = true) : touch("custom.sty")
+    custom = joinpath(doc.user.root, doc.user.source, "assets", "preamble.tex")
+    isfile(custom) ? cp(custom, "preamble.tex"; force = true) : touch("preamble.tex")
     preamble =
         """
-        \\documentclass[oneside]{memoir}
-        \\usepackage{./documenter}
-        \\usepackage{./custom}
+        \\newcommand{\\DocMainTitle}{$(doc.user.sitename)}
+        \\newcommand{\\DocVersion}{$(get(ENV, "TRAVIS_TAG", ""))}
+        \\newcommand{\\DocAuthors}{$(doc.user.authors)}
 
-        %% Title Page
-        \\title{
-            {\\HUGE $(doc.user.sitename)}\\\\
-            {\\Large $(get(ENV, "TRAVIS_TAG", ""))}
-        }
-        \\author{$(doc.user.authors)}
-
-        %% TOC settings
-        \\settocdepth{chapter}  % only show "chapter" in TOC
-        % -- TOC spacing
-        %   ref: https://tex.stackexchange.com/questions/60317/toc-spacing-in-memoir
-        \\makeatletter
-        % {part} to {chaper}
-        \\setlength{\\cftbeforepartskip}{1.5em \\@plus \\p@}
-        % {chaper} to {chaper}
-        \\setlength{\\cftbeforechapterskip}{0.0em \\@plus \\p@}
-        % Chapter num to chapter title spacing
-        \\setlength{\\cftchapternumwidth}{2.5em}
-        \\makeatother
-
-        %% Main document begin
-        \\begin{document}
-        \\frontmatter
-        \\maketitle
-        \\clearpage
-        \\tableofcontents
-        \\mainmatter
+        % ---- Insert custom preamble
+        \\input{preamble.tex}
         """
     _println(io, preamble)
 end
