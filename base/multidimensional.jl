@@ -203,9 +203,7 @@ module IteratorsMD
     CartesianIndex(2, 2, 2)
 
     julia> CartesianIndices(fill(1, (2,3)))
-    2×3 CartesianIndices{2, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}}:
-     CartesianIndex(1, 1)  CartesianIndex(1, 2)  CartesianIndex(1, 3)
-     CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
+    CartesianIndices((2, 3))
     ```
 
     ## Conversion between linear and cartesian indices
@@ -215,19 +213,13 @@ module IteratorsMD
 
     ```jldoctest
     julia> cartesian = CartesianIndices((1:3, 1:2))
-    3×2 CartesianIndices{2, Tuple{UnitRange{Int64}, UnitRange{Int64}}}:
-     CartesianIndex(1, 1)  CartesianIndex(1, 2)
-     CartesianIndex(2, 1)  CartesianIndex(2, 2)
-     CartesianIndex(3, 1)  CartesianIndex(3, 2)
+    CartesianIndices((1:3, 1:2))
 
     julia> cartesian[4]
     CartesianIndex(1, 2)
 
     julia> cartesian = CartesianIndices((1:2:5, 1:2))
-    3×2 CartesianIndices{2, Tuple{StepRange{Int64, Int64}, UnitRange{Int64}}}:
-     CartesianIndex(1, 1)  CartesianIndex(1, 2)
-     CartesianIndex(3, 1)  CartesianIndex(3, 2)
-     CartesianIndex(5, 1)  CartesianIndex(5, 2)
+    CartesianIndices((1:2:5, 1:2))
 
     julia> cartesian[2, 2]
     CartesianIndex(3, 2)
@@ -242,17 +234,13 @@ module IteratorsMD
 
     ```jldoctest
     julia> CIs = CartesianIndices((2:3, 5:6))
-    2×2 CartesianIndices{2, Tuple{UnitRange{Int64}, UnitRange{Int64}}}:
-     CartesianIndex(2, 5)  CartesianIndex(2, 6)
-     CartesianIndex(3, 5)  CartesianIndex(3, 6)
+    CartesianIndices((2:3, 5:6))
 
     julia> CI = CartesianIndex(3, 4)
     CartesianIndex(3, 4)
 
     julia> CIs .+ CI
-    2×2 CartesianIndices{2, Tuple{UnitRange{Int64}, UnitRange{Int64}}}:
-     CartesianIndex(5, 9)  CartesianIndex(5, 10)
-     CartesianIndex(6, 9)  CartesianIndex(6, 10)
+    CartesianIndices((5:6, 9:10))
     ```
 
     For cartesian to linear index conversion, see [`LinearIndices`](@ref).
@@ -278,6 +266,15 @@ module IteratorsMD
     _convert2ind(sz::AbstractUnitRange) = first(sz):last(sz)
     _convert2ind(sz::OrdinalRange) = first(sz):step(sz):last(sz)
 
+    function show(io::IO, iter::CartesianIndices)
+        print(io, "CartesianIndices(")
+        show(io, map(_xform_index, iter.indices))
+        print(io, ")")
+    end
+    _xform_index(i) = i
+    _xform_index(i::OneTo) = i.stop
+    show(io::IO, ::MIME"text/plain", iter::CartesianIndices) = show(io, iter)
+
     """
         (:)(start::CartesianIndex, [step::CartesianIndex], stop::CartesianIndex)
 
@@ -296,14 +293,10 @@ module IteratorsMD
     julia> J = CartesianIndex(3,3);
 
     julia> I:J
-    2×3 CartesianIndices{2, Tuple{UnitRange{Int64}, UnitRange{Int64}}}:
-     CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
-     CartesianIndex(3, 1)  CartesianIndex(3, 2)  CartesianIndex(3, 3)
+    CartesianIndices((2:3, 1:3))
 
     julia> I:CartesianIndex(1, 2):J
-    2×2 CartesianIndices{2, Tuple{StepRange{Int64, Int64}, StepRange{Int64, Int64}}}:
-     CartesianIndex(2, 1)  CartesianIndex(2, 3)
-     CartesianIndex(3, 1)  CartesianIndex(3, 3)
+    CartesianIndices((2:1:3, 1:2:3))
     ```
     """
     (:)(I::CartesianIndex{N}, J::CartesianIndex{N}) where N =

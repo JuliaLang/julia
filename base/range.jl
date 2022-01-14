@@ -167,7 +167,14 @@ range_length(len::Integer) = OneTo(len)
 range_stop(stop) = range_start_stop(oftype(stop, 1), stop)
 range_stop(stop::Integer) = range_length(stop)
 
-range_step_stop_length(step, stop, length) = reverse(range_start_step_length(stop, -step, length))
+function range_step_stop_length(step, a, len::Integer)
+    start = a - step * (len - oneunit(len))
+    if start isa Signed
+        # overflow in recomputing length from stop is okay
+        return StepRange{typeof(start),typeof(step)}(start, step, convert(typeof(start), a))
+    end
+    return StepRangeLen{typeof(start),typeof(start),typeof(step)}(start, step, len)
+end
 
 # Stop and length as the only argument
 function range_stop_length(a, len::Integer)
@@ -177,7 +184,7 @@ function range_stop_length(a, len::Integer)
         # overflow in recomputing length from stop is okay
         return UnitRange(start, oftype(start, a))
     end
-    return range_step_stop_length(oftype(a - a, 1), a, len)
+    return StepRangeLen{typeof(start),typeof(start),typeof(step)}(start, step, len)
 end
 
 # Start and length as the only argument
@@ -188,7 +195,7 @@ function range_start_length(a, len::Integer)
         # overflow in recomputing length from stop is okay
         return UnitRange(oftype(stop, a), stop)
     end
-    return range_start_step_length(a, oftype(a - a, 1), len)
+    return StepRangeLen{typeof(stop),typeof(a),typeof(step)}(a, step, len)
 end
 
 range_start_stop(start, stop) = start:stop
