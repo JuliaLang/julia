@@ -590,10 +590,9 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
         nothing
     catch
         buf = PipeBuffer()
-        interactiveutils_uuid = Base.UUID("b77e0a4c-d291-57a0-90e8-8db25a27a240")
-        interactiveutils_id = Base.PkgId(interactiveutils_uuid, "InteractiveUtils")
-        interactiveutils_module = Base.require(interactiveutils_id)
-        interactiveutils_module.versioninfo(buf)
+        original_load_path = copy(Base.LOAD_PATH); empty!(Base.LOAD_PATH); pushfirst!(Base.LOAD_PATH, "@stdlib")
+        Base.require(Base, :InteractiveUtils).versioninfo(buf)
+        empty!(Base.LOAD_PATH); append!(Base.LOAD_PATH, original_load_path)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end
