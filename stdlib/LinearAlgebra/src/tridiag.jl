@@ -462,7 +462,11 @@ end
     @boundscheck checkbounds(A, i, j)
     if i == j
         @inbounds A.dv[i] = x
-    else
+    elseif (i == j - 1)
+        @inbounds A.ev[i] = x
+    elseif (j == i - 1)
+        @inbounds A.ev[j] = x
+    elseif !iszero(x)
         throw(ArgumentError("cannot set off-diagonal entry ($i, $j)"))
     end
     return x
