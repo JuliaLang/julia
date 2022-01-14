@@ -34,3 +34,18 @@ jobs:
             ${{ runner.os }}-
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
+#  docs:
+#    name: Documentation
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v2
+#      - uses: julia-actions/setup-julia@latest
+#        with:
+#          version: '1.6'
+#      - run: julia --project=docs -e '
+#          using Pkg;
+#          Pkg.develop(PackageSpec(; path=pwd()));
+#          Pkg.instantiate();'
+#      - run: julia --project=docs docs/make.jl
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
