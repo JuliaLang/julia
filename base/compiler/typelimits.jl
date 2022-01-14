@@ -417,7 +417,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                 ai = getfield_tfunc(typea, Const(i))
                 bi = getfield_tfunc(typeb, Const(i))
                 ity = tmerge(ai, bi)
-                if ai === Union{} || bi == Union{}
+                if ai === Union{} || bi === Union{}
                     ity = widenconst(ity)
                 end
                 fields[i] = ity
