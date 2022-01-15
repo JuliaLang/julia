@@ -1302,7 +1302,7 @@ print(        io::IO, ex::ExprNode)    = (show_unquoted(IOContext(io, :unquote_f
 show(         io::IO, ex::ExprNode)    = show_unquoted_quote_expr(IOContext(io, :unquote_fallback => true), ex, 0, -1, 0)
 show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 0)
 show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 0)
-show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
+show_unquoted(io::IO, ex, indent::Int, ::Int) = print(io, replace(repr(ex; context=io), "\n" => "\n" * " "^indent))
 show_unquoted(io::IO, ex, indent::Int, prec::Int, ::Int) = show_unquoted(io, ex, indent, prec)
 
 ## AST printing constants ##

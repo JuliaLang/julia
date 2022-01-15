@@ -70,7 +70,8 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         show_unquoted(io, SlotNumber(stmt.id), indent, show_type ? prec_decl : 0)
     # everything else in the IR, defer to the generic AST printer
     else
-        show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
+        s = sprint(show_unquoted, stmt, indent, show_type ? prec_decl : 0; context=io)
+        print(io, replace(s, "\n" => "\n" * " "^8))
     end
     nothing
 end
