@@ -66,18 +66,19 @@ for (_A, Ar, _B) in ((A, Ars, B), (As, Arss, Bs))
         @test Arsc == [1 -1; 2 -2]
         reinterpret(NTuple{3, Int64}, Bc)[2] = (4,5,6)
         @test Bc == Complex{Int64}[5+6im, 7+4im, 5+6im]
-        reinterpret(NTuple{3, Int64}, Bc)[1] = (1,2,3)
+        B2 = reinterpret(NTuple{3, Int64}, Bc)
+        @test setindex!(B2, (1,2,3), 1) == B2
         @test Bc == Complex{Int64}[1+2im, 3+4im, 5+6im]
         Bc = copy(_B)
         Brrs = reinterpret(reshape, Int64, Bc)
-        Brrs[2, 3] = -5
+        @test setindex!(Brrs, -5, 2, 3) == Brrs
         @test Bc == Complex{Int64}[5+6im, 7+8im, 9-5im]
         Brrs[last(eachindex(Brrs))] = 22
         @test Bc == Complex{Int64}[5+6im, 7+8im, 9+22im]
 
         A1 = reinterpret(Float64, _A)
         A2 = reinterpret(ComplexF64, _A)
-        A1[1] = 1.0
+        @test setindex!(A1, 1.0, 1) == A1
         @test real(A2[1]) == 1.0
         A1 = reinterpret(reshape, Float64, _A)
         A1[1] = 2.5
@@ -88,7 +89,7 @@ for (_A, Ar, _B) in ((A, Ars, B), (As, Arss, Bs))
         @test real(A2rs[1]) == 1.0
         A1rs = reinterpret(reshape, Float64, Ar)
         A2rs = reinterpret(reshape, ComplexF64, Ar)
-        A1rs[1, 1] = 2.5
+        @test setindex!(A1rs, 2.5, 1, 1) == A1rs
         @test real(A2rs[1]) == 2.5
     end
 end
@@ -375,4 +376,72 @@ end
     @test typeof(Base.unaliascopy(a)) === typeof(a)
     a = reinterpret(reshape, NTuple{4,Float64}, rand(Float64, 4, 4))
     @test typeof(Base.unaliascopy(a)) === typeof(a)
+end
+
+
+@testset "singleton types" begin
+    mutable struct NotASingleton end # not a singleton because it is mutable
+    struct SomeSingleton
+        # A singleton type that does not have the internal constructor SomeSingleton()
+        SomeSingleton(x) = new()
+    end
+
+    @test_throws ErrorException reinterpret(Int, nothing)
+    @test_throws ErrorException reinterpret(Missing, 3)
+    @test_throws ErrorException reinterpret(Missing, NotASingleton())
+    @test_throws ErrorException reinterpret(NotASingleton, ())
+
+    @test_throws ArgumentError reinterpret(NotASingleton, fill(nothing, ()))
+    @test_throws ArgumentError reinterpret(reshape, NotASingleton, fill(missing, 3))
+    @test_throws ArgumentError reinterpret(Tuple{}, fill(NotASingleton(), 2))
+    @test_throws ArgumentError reinterpret(reshape, Nothing, fill(NotASingleton(), ()))
+
+    t = fill(nothing, 3, 5)
+    @test reinterpret(SomeSingleton, t) == reinterpret(reshape, SomeSingleton, t)
+    @test reinterpret(SomeSingleton, t) == [SomeSingleton(i*j) for i in 1:3, j in 1:5]
+    @test reinterpret(Int, t) == fill(17, 0, 5)
+    @test_throws ArgumentError reinterpret(reshape, Float64, t)
+    @test_throws ArgumentError reinterpret(Nothing, 1:6)
+    @test_throws ArgumentError reinterpret(reshape, Missing, [0.0])
+
+    # reintepret of empty array with reshape
+    @test reinterpret(reshape, Nothing, fill(missing, (0,0,0))) == fill(nothing, (0,0,0))
+    @test_throws ArgumentError reinterpret(reshape, Nothing, fill(3.2, (0,0)))
+    @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, 0))
+
+    # reinterpret of 0-dimensional array
+    z = reinterpret(Tuple{}, fill(missing, ()))
+    @test z == fill((), ())
+    @test z == reinterpret(reshape, Tuple{}, fill(nothing, ()))
+    @test_throws BoundsError z[2]
+    @test_throws BoundsError z[3] = ()
+    @test_throws ArgumentError reinterpret(UInt8, fill(nothing, ()))
+    @test_throws ArgumentError reinterpret(Missing, fill(1f0, ()))
+    @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, ()))
+    @test_throws ArgumentError reinterpret(reshape, Nothing, fill(17, ()))
+
+
+    @test @inferred(ndims(reinterpret(reshape, SomeSingleton, t))) == 2
+    @test @inferred(axes(reinterpret(reshape, Tuple{}, t))) == (Base.OneTo(3),Base.OneTo(5))
+    @test @inferred(size(reinterpret(reshape, Missing, t))) == (3,5)
+
+    x = reinterpret(Tuple{}, t)
+    @test x == reinterpret(reshape, Tuple{}, t)
+    @test x[3,5] === ()
+    x1 = fill((), 3, 5)
+    @test setindex!(x, (), 1, 1) == x1
+    @test_throws BoundsError x[17]
+    @test_throws BoundsError x[4,2]
+    @test_throws BoundsError x[1,2,3]
+    @test_throws BoundsError x[18] = ()
+    @test_throws MethodError x[1,3] = missing
+    @test x == fill((), (3, 5))
+    x = reinterpret(reshape, SomeSingleton, t)
+    @test_throws BoundsError x[19]
+    @test_throws BoundsError x[2,6] = SomeSingleton(0xa)
+    @test x[2,3] === SomeSingleton(:x)
+    x2 = fill(SomeSingleton(0.7), 3, 5)
+    @test x == x2
+    @test setindex!(x, SomeSingleton(:), 3, 5) == x2
+    @test_throws MethodError x[2,4] = nothing
 end
