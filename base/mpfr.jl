@@ -706,6 +706,17 @@ function min(x::BigFloat, y::BigFloat)
     return z
 end
 
+# We don't want allocations during `extrema`.
+# TODO: avoid allocations in `min/max`
+function Base._extrema_rf(x::NTuple{2,BigFloat}, y::NTuple{2,BigFloat})
+    (x1, x2), (y1, y2) = x, y
+    isnan(x1) && return x
+    isnan(y1) && return y
+    z1 = x1 < y1 || signbit(x1) > signbit(y1) ? x1 : y1
+    z2 = x2 < y2 || signbit(x2) > signbit(y2) ? y2 : x2
+    z1, z2
+end
+
 function modf(x::BigFloat)
     zint = BigFloat()
     zfloat = BigFloat()

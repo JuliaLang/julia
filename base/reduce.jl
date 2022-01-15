@@ -842,17 +842,25 @@ julia> extrema(sin, Real[]; init = (1.0, -1.0))  # good, since -1 ≤ sin(::Real
 (1.0, -1.0)
 ```
 """
-extrema(f, itr; kw...) = mapreduce(_DupY(f), _extrema_rf, itr; kw...)
+extrema(f, itr; kw...) = mapreduce(ExtremaMap(f), _extrema_rf, itr; kw...)
 
 # Not using closure since `extrema(type, itr)` is a very likely use-case and it's better
 # to avoid type-instability (#23618).
-struct _DupY{F} <: Function
+struct ExtremaMap{F} <: Function
     f::F
 end
-_DupY(f::Type{T}) where {T} = _DupY{Type{T}}(f)
-@inline (f::_DupY)(x) = (y = f.f(x); (y, y))
+ExtremaMap(::Type{T}) where {T} = ExtremaMap{Type{T}}(T)
+@inline (f::ExtremaMap)(x) = (y = f.f(x); (y, y))
 
 @inline _extrema_rf((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
+# optimization for AbstractFloat
+function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:AbstractFloat}
+    (x1, x2), (y1, y2) = x, y
+    anynan = isnan(x1)|isnan(y1)
+    z1 = ifelse(anynan, x1-y1, ifelse(signbit(x1-y1), x1, y1))
+    z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
+    z1, z2
+end
 
 ## findmax, findmin, argmax & argmin
 

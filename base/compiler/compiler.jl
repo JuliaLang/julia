@@ -55,24 +55,6 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 
-# required for bootstrap
-extrema(itr) = extrema(identity, itr)
-function extrema(f, itr)
-    y = iterate(itr)
-    y === nothing && throw(ArgumentError("collection must be non-empty"))
-    (v, s) = y
-    vmin = vmax = f(v)
-    while true
-        y = iterate(itr, s)
-        y === nothing && break
-        (x, s) = y
-        fx = f(x)
-        vmax = max(fx, vmax)
-        vmin = min(fx, vmin)
-    end
-    return (vmin, vmax)
-end
-
 # checked arithmetic
 const checked_add = +
 const checked_sub = -
@@ -148,6 +130,19 @@ include("compiler/stmtinfo.jl")
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities
+
+# required for bootstrap
+# TODO: find why this is needed and remove it.
+function extrema(x::Array)
+    isempty(x) && throw(ArgumentError("collection must be non-empty"))
+    vmin = vmax = x[1]
+    for i in 2:length(x)
+        xi = x[i]
+        vmax = max(vmax, xi)
+        vmin = min(vmin, xi)
+    end
+    return vmin, vmax
+end
 
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
