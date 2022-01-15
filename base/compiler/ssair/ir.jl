@@ -1007,7 +1007,13 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::GotoIfNot
         result[result_idx][:inst] = stmt
         cond = stmt.cond
-        if isa(cond, Bool) && compact.fold_constant_branches
+        if compact.fold_constant_branches
+            if !isa(cond, Bool)
+                condT = widenconditional(argextype(cond, compact))
+                isa(condT, Const) || @goto bail
+                cond = condT.val
+                isa(cond, Bool) || @goto bail
+            end
             if cond
                 result[result_idx][:inst] = nothing
                 kill_edge!(compact, active_bb, active_bb, stmt.dest)
@@ -1018,6 +1024,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 result_idx += 1
             end
         else
+            @label bail
             result[result_idx][:inst] = GotoIfNot(cond, compact.bb_rename_succ[stmt.dest])
             result_idx += 1
         end

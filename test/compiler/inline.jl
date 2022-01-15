@@ -884,3 +884,10 @@ end
 # have_fma elimination inside ^
 f_pow() = ^(2.0, -1.0)
 @test fully_eliminated(f_pow, Tuple{})
+
+# bug where Conditional wasn't being properly marked as ConstAPI
+let
+    @noinline fcond(a, b) = a === b
+    ftest(a) = (fcond(a, nothing); a)
+    @test fully_eliminated(ftest, Tuple{Bool})
+end
