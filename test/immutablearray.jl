@@ -1,5 +1,5 @@
 using Test
-import Core: ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
+import Core: arrayfreeze, mutating_arrayfreeze, arraythaw
 
 @testset "basic ImmutableArray functionality" begin
     eltypes = (Float16, Float32, Float64, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128)
@@ -23,8 +23,8 @@ import Core: ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
         @test axes(a) == axes(b)
         @test strides(a) == strides(b)
         @test keys(a) == keys(b)
-        @test_broken IndexStyle(a) == IndexStyle(b) # ImmutableArray is IndexCartesian whereas Array is IndexLinear - worth looking into
-        @test_broken eachindex(a) == eachindex(b)
+        @test IndexStyle(a) == IndexStyle(b) # ImmutableArray is IndexCartesian whereas Array is IndexLinear - worth looking into
+        @test eachindex(a) == eachindex(b)
     end
 end
 
