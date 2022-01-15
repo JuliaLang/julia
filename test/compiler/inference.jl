@@ -3998,11 +3998,13 @@ end
     @test ⊑(a, c)
     @test ⊑(b, c)
 
-    function f()
-        g = init
-        while true
-            g = Base.ImmutableDict(g, 1=>2)
-        end
+    @test @eval Module() begin
+        const ginit = Base.ImmutableDict{Any,Any}()
+        Base.return_types() do
+            g = ginit
+            while true
+                g = Base.ImmutableDict(g, 1=>2)
+            end
+        end |> only === Union{}
     end
-    @test Base.return_types(f, ()) |> only === Union{}
 end
