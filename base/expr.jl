@@ -582,7 +582,7 @@ macro generated(f)
                                    # https://github.com/JuliaLang/julia/issues/25678
                                    Expr(:block,
                                         :(local tmp = $body),
-                                        :(if tmp isa Core.CodeInfo; return tmp; else tmp; end)),
+                                        :(if tmp isa $(GlobalRef(Core, :CodeInfo)); return tmp; else tmp; end)),
                                    Expr(:block,
                                         Expr(:meta, :generated_only),
                                         Expr(:return, nothing))))))
