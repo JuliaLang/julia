@@ -403,11 +403,3 @@ function print_with_info(preprint, postprint, io::IO, ir::IRCode)
 end
 
 end # module EAUtils
-
-if EA_AS_PKG
-    using .EAUtils: code_escapes, @code_escapes
-    export code_escapes, @code_escapes
-else
-    using .EAUtils: code_escapes
-    export code_escapes
-end

@@ -27,7 +27,7 @@ import ._TOP_MOD:     # Base definitions
     @__MODULE__, @eval, @assert, @nospecialize, @inbounds, @inline, @noinline, @label, @goto,
     !, !==, !=, ≠, +, -, ≤, <, ≥, >, &, |, include, error, missing, copy,
     Vector, BitSet, IdDict, IdSet, UnitRange, ∪, ⊆, ∩, :, ∈, ∉, in, length, get, first, last,
-    isempty, isassigned, pop!, push!, empty!, max, min, Csize_t
+    isempty, isassigned, pop!, push!, pushfirst!, empty!, max, min, Csize_t
 import Core.Compiler: # Core.Compiler specific definitions
     isbitstype, isexpr, is_meta_expr_head, println,
     IRCode, IR_FLAG_EFFECT_FREE, widenconst, argextype, singleton_type, fieldcount_noerror,
@@ -43,10 +43,7 @@ end
 # XXX better to be IdSet{Int}?
 const FieldEscape = BitSet
 const FieldEscapes = Vector{BitSet}
-# for x in ArrayEscapes:
-# - x::Int: `irval(x, estate)` imposes escapes on the array elements
-# - x::SSAValue: array elements can potentially escape via BoundsError at this SSA statement
-const ArrayEscapes = IdSet{Union{Int,SSAValue}}
+const ArrayEscapes = IdSet{Int}
 
 """
     x::EscapeLattice
@@ -59,16 +56,13 @@ A lattice for escape information, which holds the following properties:
 - `x.ThrownEscape::BitSet`: records SSA statements where `x` can be thrown as exception:
   this information will be used by `escape_exception!` to propagate potential escapes via exception
 - `x.AliasEscapes::Union{FieldEscapes,ArrayEscapes,Bool}`: maintains all possible values
-  that may escape objects that can be referenced from `x`:
+  that can be aliased to fields or array elements of `x`:
   * `x.AliasEscapes === false` indicates the fields/elements of `x` isn't analyzed yet
   * `x.AliasEscapes === true` indicates the fields/elements of `x` can't be analyzed,
     e.g. the type of `x` is not known or is not concrete and thus its fields/elements
     can't be known precisely
-  * `x.AliasEscapes::FieldEscapes` records all the possible values that can escape fields of `x`,
-    which allows EA to propagate propagate escape information imposed on a field
-    of `x` to its values (by analyzing `Expr(:new, ...)` and `setfield!(x, ...)`).
-  * `x.AliasEscapes::ArrayEscapes` records all the possible values that can escape elements of `x`,
-    or all SSA staements that can potentially escape elements of `x` via `BoundsError`.
+  * `x.AliasEscapes::FieldEscapes` records all the possible values that can be aliased fields of object `x`,
+  * `x.AliasEscapes::ArrayEscapes` records all the possible values that be aliased to elements of array `x`
 - `x.ArgEscape::Int` (not implemented yet): indicates it will escape to the caller through
   `setfield!` on argument(s)
   * `-1` : no escape
@@ -531,6 +525,15 @@ struct AnalysisState
     changes::Changes
 end
 
+function getinst(ir::IRCode, idx::Int)
+    nstmts = length(ir.stmts)
+    if idx ≤ nstmts
+        return ir.stmts[idx]
+    else
+        return ir.new_nodes.stmts[idx - nstmts]
+    end
+end
+
 """
     analyze_escapes(ir::IRCode, nargs::Int) -> estate::EscapeState
 
@@ -539,7 +542,7 @@ Analyzes escape information in `ir`.
 """
 function analyze_escapes(ir::IRCode, nargs::Int)
     stmts = ir.stmts
-    nstmts = length(stmts)
+    nstmts = length(stmts) + length(ir.new_nodes.stmts)
 
     # only manage a single state, some flow-sensitivity is encoded as `EscapeLattice` properties
     estate = EscapeState(nargs, nstmts)
@@ -552,7 +555,7 @@ function analyze_escapes(ir::IRCode, nargs::Int)
         local anyupdate = false
 
         for pc in nstmts:-1:1
-            stmt = stmts[pc][:inst]
+            stmt = getinst(ir, pc)[:inst]
 
             # collect escape information
             if isa(stmt, Expr)
@@ -568,7 +571,7 @@ function analyze_escapes(ir::IRCode, nargs::Int)
                     if isa(lhs, GlobalRef) # global store
                         add_escape_change!(astate, rhs, ⊤)
                     else
-                        invalid_escape_assignment!(ir, pc)
+                        unexpected_assignment!(ir, pc)
                     end
                 elseif head === :foreigncall
                     escape_foreigncall!(astate, pc, stmt.args)
@@ -601,17 +604,18 @@ function analyze_escapes(ir::IRCode, nargs::Int)
             elseif isa(stmt, PhiNode)
                 escape_edges!(astate, pc, stmt.values)
             elseif isa(stmt, PiNode)
-                escape_val!(astate, pc, stmt)
+                escape_val_ifdefined!(astate, pc, stmt)
             elseif isa(stmt, PhiCNode)
                 escape_edges!(astate, pc, stmt.values)
             elseif isa(stmt, UpsilonNode)
-                escape_val!(astate, pc, stmt)
+                escape_val_ifdefined!(astate, pc, stmt)
             elseif isa(stmt, GlobalRef) # global load
                 add_escape_change!(astate, SSAValue(pc), ⊤)
-            elseif isa(stmt, SSAValue) # after SROA, we may see SSA value as statement
-                escape_ssa!(astate, pc, stmt)
-            else
-                @assert stmt isa GotoNode || stmt isa GotoIfNot || stmt === nothing # TODO remove me
+            elseif isa(stmt, SSAValue)
+                escape_val!(astate, pc, stmt)
+            elseif isa(stmt, Argument)
+                escape_val!(astate, pc, stmt)
+            else # otherwise `stmt` can be GotoNode, GotoIfNot, and inlined values etc.
                 continue
             end
 
@@ -680,46 +684,53 @@ function propagate_alias_change!(estate::EscapeState, change::AliasChange)
 end
 
 function add_escape_change!(astate::AnalysisState, @nospecialize(x), info::EscapeLattice)
-    info === ⊥ && return # performance optimization
+    info === ⊥ && return nothing # performance optimization
     xidx = iridx(x, astate.estate)
     if xidx !== nothing
         if !isbitstype(widenconst(argextype(x, astate.ir)))
             push!(astate.changes, EscapeChange(xidx, info))
         end
     end
+    return nothing
 end
 
 function add_alias_change!(astate::AnalysisState, @nospecialize(x), @nospecialize(y))
-    xidx = iridx(x, astate.estate)
-    yidx = iridx(y, astate.estate)
-    if xidx !== nothing && yidx !== nothing
-        push!(astate.changes, AliasChange(xidx, yidx))
+    if isa(x, GlobalRef)
+        return add_escape_change!(astate, y, ⊤)
+    elseif isa(y, GlobalRef)
+        return add_escape_change!(astate, x, ⊤)
     end
+    estate = astate.estate
+    xidx = iridx(x, estate)
+    yidx = iridx(y, estate)
+    if xidx !== nothing && yidx !== nothing
+        pushfirst!(astate.changes, AliasChange(xidx, yidx)) # propagate `AliasChange` first for faster convergence
+        xinfo = estate.escapes[xidx]
+        yinfo = estate.escapes[yidx]
+        xyinfo = xinfo ⊔ yinfo
+        add_escape_change!(astate, x, xyinfo)
+        add_escape_change!(astate, y, xyinfo)
+    end
+    return nothing
 end
 
 function escape_edges!(astate::AnalysisState, pc::Int, edges::Vector{Any})
-    info = astate.estate[SSAValue(pc)]
+    ret = SSAValue(pc)
     for i in 1:length(edges)
         if isassigned(edges, i)
             v = edges[i]
-            add_escape_change!(astate, v, info)
-            add_alias_change!(astate, SSAValue(pc), v)
+            add_alias_change!(astate, ret, v)
         end
     end
 end
 
-escape_val!(astate::AnalysisState, pc::Int, x) =
-    isdefined(x, :val) && _escape_val!(astate, pc, x.val)
+escape_val_ifdefined!(astate::AnalysisState, pc::Int, x) =
+    isdefined(x, :val) && escape_val!(astate, pc, x.val)
 
-function _escape_val!(astate::AnalysisState, pc::Int, @nospecialize(val))
+function escape_val!(astate::AnalysisState, pc::Int, @nospecialize(val))
     ret = SSAValue(pc)
-    info = astate.estate[ret]
-    add_escape_change!(astate, val, info)
     add_alias_change!(astate, ret, val)
 end
-
-escape_ssa!(astate::AnalysisState, pc::Int, ssa::SSAValue) =
-    _escape_val!(astate, pc, ssa)
 
 # NOTE if we don't maintain the alias set that is separated from the lattice state, we can do
 # soemthing like below: it essentially incorporates forward escape propagation in our default
@@ -745,6 +756,10 @@ function compute_tryregions(ir::IRCode)
             leave_pc = first(ir.cfg.blocks[leave_block].stmts)
             push!(tryregions, idx:leave_pc)
         end
+    end
+    for idx in 1:length(ir.new_nodes.stmts)
+        stmt = ir.new_nodes.stmts[idx][:inst]
+        @assert !isexpr(stmt, :enter) "try/catch inside new_nodes unsupported"
     end
     return tryregions
 end
@@ -859,7 +874,7 @@ function from_interprocedural(arginfo::EscapeLatticeCache, retinfo::EscapeLattic
         # it might be okay from the SROA point of view, since we can't remove the allocation
         # as far as it's passed to a callee anyway, but still we may want some field analysis
         # for e.g. stack allocation or some other IPO optimizations
-        TOP_ALIAS_ESCAPES)
+        #=AliasEscapes=#TOP_ALIAS_ESCAPES)
 
     if !arginfo.ReturnEscape
         # if this is simply passed as the call argument, we can discard the `ReturnEscape`
@@ -871,7 +886,7 @@ function from_interprocedural(arginfo::EscapeLatticeCache, retinfo::EscapeLattic
     return newarginfo ⊔ retinfo
 end
 
-@noinline function invalid_escape_assignment!(ir::IRCode, pc::Int)
+@noinline function unexpected_assignment!(ir::IRCode, pc::Int)
     @eval Main (ir = $ir; pc = $pc)
     error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
 end
@@ -905,7 +920,7 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
         objinfo = escape_unanalyzable_obj!(astate, obj, objinfo)
         @goto conservative_propagation
     end
-    if !(astate.ir.stmts.flag[pc] & IR_FLAG_EFFECT_FREE ≠ 0)
+    if !(getinst(astate.ir, pc)[:flag] & IR_FLAG_EFFECT_FREE ≠ 0)
         add_thrown_escapes!(astate, pc, args)
     end
 end
@@ -914,7 +929,6 @@ function escape_field!(astate::AnalysisState, @nospecialize(v), xf::FieldEscape)
     estate = astate.estate
     for xidx in xf
         x = irval(xidx, estate)::SSAValue # TODO remove me once we implement ArgEscape
-        add_escape_change!(astate, v, estate[x])
         add_alias_change!(astate, v, x)
     end
 end
@@ -962,11 +976,12 @@ function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
         # end
     end
     # NOTE array allocations might have been proven as nothrow (https://github.com/JuliaLang/julia/pull/43565)
-    if !(astate.ir.stmts[pc][:flag] & IR_FLAG_EFFECT_FREE ≠ 0)
-        add_escape_change!(astate, name, ThrownEscape(pc))
-        for i in 6:5+foreigncall_nargs
-            add_escape_change!(astate, args[i], ThrownEscape(pc))
-        end
+    info = astate.ir.stmts[pc][:flag] & IR_FLAG_EFFECT_FREE ≠ 0 ?
+           EscapeLattice(NoEscape(), #=AliasEscapes=#true) :
+           EscapeLattice(ThrownEscape(pc), #=AliasEscapes=#true)
+    add_escape_change!(astate, name, info)
+    for i in 6:5+foreigncall_nargs
+        add_escape_change!(astate, args[i], info)
     end
 end
 
@@ -1005,7 +1020,7 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
     # we escape statements with the `ThrownEscape` property using the effect-freeness
     # computed by `stmt_effect_free` invoked within inlining
     # TODO throwness ≠ "effect-free-ness"
-    if !(astate.ir.stmts.flag[pc] & IR_FLAG_EFFECT_FREE ≠ 0)
+    if !(getinst(astate.ir, pc)[:flag] & IR_FLAG_EFFECT_FREE ≠ 0)
         add_thrown_escapes!(astate, pc, args, 2)
     end
 end
@@ -1025,20 +1040,15 @@ function escape_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args:
     length(args) == 4 || return false
     f, cond, th, el = args
     ret = SSAValue(pc)
-    info = astate.estate[ret]
     condt = argextype(cond, astate.ir)
     if isa(condt, Const) && (cond = condt.val; isa(cond, Bool))
         if cond
-            add_escape_change!(astate, th, info)
             add_alias_change!(astate, th, ret)
         else
-            add_escape_change!(astate, el, info)
             add_alias_change!(astate, el, ret)
         end
     else
-        add_escape_change!(astate, th, info)
         add_alias_change!(astate, th, ret)
-        add_escape_change!(astate, el, info)
         add_alias_change!(astate, el, ret)
     end
     return false
@@ -1048,8 +1058,6 @@ function escape_builtin!(::typeof(typeassert), astate::AnalysisState, pc::Int, a
     length(args) == 3 || return false
     f, obj, typ = args
     ret = SSAValue(pc)
-    info = astate.estate[ret]
-    add_escape_change!(astate, obj, info)
     add_alias_change!(astate, ret, obj)
     return false
 end
@@ -1260,7 +1268,6 @@ function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, arg
         AliasEscapes = copy(AliasEscapes)
         @label record_element_escape
         push!(AliasEscapes, iridx(ret, estate))
-        inbounds || push!(AliasEscapes, SSAValue(pc)) # record possible BoundsError at this arrayref
         add_escape_change!(astate, ary, EscapeLattice(aryinfo, AliasEscapes))
     else
         # this object has been used as struct, but it is used as array here (thus should throw)
@@ -1310,15 +1317,7 @@ function escape_builtin!(::typeof(arrayset), astate::AnalysisState, pc::Int, arg
         @label conservative_propagation
         add_escape_change!(astate, val, aryinfo)
     elseif isa(AliasEscapes, ArrayEscapes)
-        for xidx in AliasEscapes
-            if isa(xidx, Int)
-                x = irval(xidx, estate)::SSAValue # TODO remove me once we implement ArgEscape
-                add_escape_change!(astate, val, estate[x])
-                add_alias_change!(astate, val, x)
-            else
-                add_escape_change!(astate, val, ThrownEscape((xidx::SSAValue).id))
-            end
-        end
+        escape_elements!(astate, val, AliasEscapes)
         @label add_ary_escape
         add_escape_change!(astate, val, ignore_aliasescapes(aryinfo))
     else
@@ -1332,6 +1331,14 @@ function escape_builtin!(::typeof(arrayset), astate::AnalysisState, pc::Int, arg
     ssainfo = estate[SSAValue(pc)]
     add_escape_change!(astate, ary, ssainfo)
     return true
+end
+
+function escape_elements!(astate::AnalysisState, @nospecialize(v), xa::ArrayEscapes)
+    estate = astate.estate
+    for xidx in xa
+        x = irval(xidx, estate)::SSAValue # TODO remove me once we implement ArgEscape
+        add_alias_change!(astate, v, x)
+    end
 end
 
 function escape_builtin!(::typeof(arraysize), astate::AnalysisState, pc::Int, args::Vector{Any})
@@ -1439,12 +1446,12 @@ end
 # end
 
 escape_builtin!(::typeof(arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-    is_safe_immutable_array_op(Array, astate, pc, args)
+    is_safe_immutable_array_op(Array, astate, args)
 escape_builtin!(::typeof(mutating_arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-    is_safe_immutable_array_op(Array, astate, pc, args)
+    is_safe_immutable_array_op(Array, astate, args)
 escape_builtin!(::typeof(arraythaw), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-    is_safe_immutable_array_op(ImmutableArray, astate, pc, args)
-function is_safe_immutable_array_op(@nospecialize(arytype), astate::AnalysisState, pc::Int, args::Vector{Any})
+    is_safe_immutable_array_op(ImmutableArray, astate, args)
+function is_safe_immutable_array_op(@nospecialize(arytype), astate::AnalysisState, args::Vector{Any})
     length(args) == 2 || return false
     argextype(args[2], astate.ir) ⊑ₜ arytype || return false
     return true
@@ -1453,6 +1460,8 @@ end
 # NOTE define fancy package utilities when developing EA as an external package
 if _TOP_MOD !== Core.Compiler
     include(@__MODULE__, "EAUtils.jl")
+    using .EAUtils: code_escapes, @code_escapes
+    export code_escapes, @code_escapes
 end
 
 end # baremodule EscapeAnalysis
