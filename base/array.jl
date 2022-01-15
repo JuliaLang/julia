@@ -119,12 +119,19 @@ Union type of [`DenseVector{T}`](@ref) and [`DenseMatrix{T}`](@ref).
 const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 """
-    ImmutableArray
+    ImmutableArray{T,N} <: AbstractArray{T,N}
 
 Dynamically allocated, immutable array.
 
 """
 const ImmutableArray = Core.ImmutableArray
+
+"""
+    ImmutableVector{T} <: AbstractVector{T}
+
+Dynamically allocated, immutable vector.
+"""
+const ImmutableVector{T} = ImmutableArray{T,1}
 
 """
     IMArray{T,N}

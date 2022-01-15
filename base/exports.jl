@@ -22,6 +22,7 @@ export
     AbstractVector,
     AbstractVecOrMat,
     Array,
+    ImmutableArray,
     AbstractMatch,
     AbstractPattern,
     AbstractDict,
@@ -95,6 +96,7 @@ export
     Val,
     VecOrMat,
     Vector,
+    ImmutableVector,
     VersionNumber,
     WeakKeyDict,
 

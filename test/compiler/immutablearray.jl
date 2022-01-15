@@ -1,8 +1,7 @@
 using Test
-import Core: ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
+import Core: arrayfreeze, mutating_arrayfreeze, arraythaw
 import Core.Compiler: arrayfreeze_tfunc, mutating_arrayfreeze_tfunc, arraythaw_tfunc
 
-const ImmutableVector{T} = ImmutableArray{T,1}
 @testset "ImmutableArray tfuncs" begin
     @test arrayfreeze_tfunc(Vector{Int}) === ImmutableVector{Int}
     @test arrayfreeze_tfunc(Vector) === ImmutableVector
