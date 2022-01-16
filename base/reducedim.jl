@@ -181,22 +181,23 @@ function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray
     v0 = reverse(mapreduce(f, op, A1)) # turn minmax to maxmin
 
     T = _realtype(f.f, promote_union(eltype(A)))
-    Tr = v0[1] isa T && v0[2] isa T ? NTuple{2,T} : typeof(v0)
+    Tmin = v0[1] isa T ? T : typeof(v0[1])
+    Tmax = v0[2] isa T ? T : typeof(v0[2])
 
     # but NaNs and missing need to be avoided as initial values
     if v0[1] isa Number && isnan(v0[1])
         v0 = oftype(v0[1], Inf), oftype(v0[2], -Inf)
     elseif isunordered(v0[1])
         # v0 is missing or a third-party unordered value
-        T1, T2 = Tr.parameters
         # TODO: Some types, like BigInt, don't support typemin/typemax.
         # So a Matrix{Union{BigInt, Missing}} can still error here.
-        v0 = typemax(nonmissingtype(T1)), typemin(nonmissingtype(T2))
+        v0 = typemax(nonmissingtype(Tmin)), typemin(nonmissingtype(Tmax))
     end
     # v0 may have changed type.
-    Tr = v0[1] isa T && v0[2] isa T ? NTuple{2,T} : typeof(v0)
+    Tmin = v0[1] isa T ? T : typeof(v0[1])
+    Tmax = v0[2] isa T ? T : typeof(v0[2])
 
-    return reducedim_initarray(A, region, v0, Tr)
+    return reducedim_initarray(A, region, v0, Tuple{Tmin,Tmax})
 end
 
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
