@@ -232,6 +232,21 @@ typedef struct _jl_line_info_node_t {
     intptr_t inlined_at;
 } jl_line_info_node_t;
 
+typedef union {
+    struct {
+        uint8_t ipo_consistent  : 1;
+        uint8_t ipo_effect_free : 1;
+        uint8_t ipo_nothrow     : 1;
+        uint8_t ipo_terminates  : 1;
+        // Weaker form of `terminates` that asserts
+        // that any control flow syntactically in the method
+        // is guaranteed to terminate, but does not make
+        // assertions about any called functions.
+        uint8_t ipo_terminates_locally : 1;
+    } overrides;
+    uint8_t bits;
+} _jl_purity_overrides_t;
+
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     // ssavalue-indexed arrays of properties:
@@ -265,6 +280,7 @@ typedef struct _jl_code_info_t {
     uint8_t pure;
     // uint8 settings
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
+    _jl_purity_overrides_t purity;
 } jl_code_info_t;
 
 // This type describes a single method definition, and stores data
@@ -319,6 +335,10 @@ typedef struct _jl_method_t {
     // uint8 settings
     uint8_t constprop;     // 0x00 = use heuristic; 0x01 = aggressive; 0x02 = none
 
+    // Override the conclusions of inter-procedural effect analysis,
+    // forcing the conclusion to always true.
+    _jl_purity_overrides_t purity;
+
 // hidden fields:
     // lock for modifications to the method
     jl_mutex_t writelock;
@@ -370,6 +390,26 @@ typedef struct _jl_code_instance_t {
     jl_value_t *inferred; // inferred jl_code_info_t, or jl_nothing, or null
     //TODO: jl_array_t *edges; // stored information about edges from this object
     //TODO: uint8_t absolute_max; // whether true max world is unknown
+
+    // purity results
+    union {
+        uint8_t ipo_purity_bits;
+        struct {
+            uint8_t ipo_consistent:2;
+            uint8_t ipo_effect_free:2;
+            uint8_t ipo_nothrow:2;
+            uint8_t ipo_terminates:2;
+        } ipo_purity_flags;
+    };
+    union {
+        uint8_t purity_bits;
+        struct {
+            uint8_t consistent:2;
+            uint8_t effect_free:2;
+            uint8_t nothrow:2;
+            uint8_t terminates:2;
+        } purity_flags;
+    };
 
     // compilation state cache
     uint8_t isspecsig; // if specptr is a specialized function signature for specTypes->rettype

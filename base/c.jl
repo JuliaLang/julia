@@ -676,6 +676,7 @@ function ccall_macro_lower(convention, func, rettype, types, args, nreq)
                esc(etypes),
                nreq,
                QuoteNode(convention),
+               nothing,
                realargs..., gcroots...)
     push!(lowering, exp)
 

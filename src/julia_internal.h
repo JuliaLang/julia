@@ -1433,6 +1433,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_propagate_inbounds_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_specialize_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_aggressive_constprop_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_no_constprop_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_purity_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_nospecialize_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_macrocall_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_colon_sym;

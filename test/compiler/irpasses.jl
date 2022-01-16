@@ -764,7 +764,7 @@ let
     @assert some_ccall !== nothing
     stmt = src.code[some_ccall]
     nccallargs = length(stmt.args[3]::Core.SimpleVector)
-    preserves = stmt.args[6+nccallargs:end]
+    preserves = stmt.args[7+nccallargs:end]
     @test length(refs) == 2
     @test length(preserves) == 2
     @test all(alloc -> alloc in preserves, refs)
