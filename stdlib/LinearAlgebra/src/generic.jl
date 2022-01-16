@@ -1114,11 +1114,12 @@ end
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
 
 """
-    /(B, X)
+    A / B
 
-For input matrices/vectors `B` and `X` where the number of columns of `B` and `X` should be same, 
-the resultant matrice `A` such that `A*X ≈ B`. The size of the resultant matrice depends on the row size
-of `B` and row size of `X`.
+Matrix right-division: `A / B` is equivalent to `(A' \ B')'` where [`\`](@ref) is the left-division operator.
+For square matrices, the result `X` is such that `A == X*B`.
+
+See also: [`rdiv!`](@ref).
 
 # Examples
 ```jldoctest
