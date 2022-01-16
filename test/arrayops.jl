@@ -2912,7 +2912,7 @@ end
     err = BoundsError(x, (10, :))
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, :].\nLegal indices are [1:3, 1:3]."
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, :].\nLegal indices are [1:2, 1:2]."
 
     err = BoundsError(x, "bad index")
     showerror(b, err)
