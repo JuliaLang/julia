@@ -20,6 +20,7 @@ New language features
   them after construction, providing for greater clarity and optimization
   ability of these objects ([#43305]).
 * Empty n-dimensional arrays can now be created using multiple semicolons inside square brackets, i.e. `[;;;]` creates a 0×0×0 `Array`. ([#41618])
+* Type annotations can now be added to global variables to make accessing the variable type stable. ([#43671])
 
 Language changes
 ----------------
@@ -35,6 +36,10 @@ Language changes
   to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
 * `Base.ifelse` is now defined as a generic function rather than a builtin one, allowing packages to
   extend its definition ([#37343]).
+* Every assignment to a global variable now first goes through a call to `convert(Any, x)` (or `convert(T, x)`
+  respectively if a type `T` has already been declared for the global). This means great care should be taken
+  to ensure the invariant `convert(Any, x) === x` always holds, as this change could otherwise lead to
+  unexpected behavior. ([#43671])
 
 Compiler/Runtime improvements
 -----------------------------
