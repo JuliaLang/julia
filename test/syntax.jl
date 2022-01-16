@@ -2954,6 +2954,21 @@ end
     @test f() == (2, 3)
 end
 
+# issue 25678: module of name `Core`
+# https://github.com/JuliaLang/julia/pull/40778/files#r784416018
+@test @eval Module() begin
+    Core = 1
+    @generated f() = 1
+    f() == 1
+end
+
+# issue 25678: argument of name `tmp`
+# https://github.com/JuliaLang/julia/pull/43823#discussion_r785365312
+@test @eval Module() begin
+    @generated f(tmp) = tmp
+    f(1) === Int
+end
+
 # issue 42220
 macro m42220()
     return quote
