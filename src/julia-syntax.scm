@@ -3407,7 +3407,7 @@ f(x) = yt(x)
                         (if (local-in? var lam)
                             rhs1
                             (let* ((ref (binding-to-globalref var))
-                                   (ty `(call (core _get_binding_type) ,(cadr ref) (inert ,(caddr ref)))))
+                                   (ty `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref)))))
                               (if (get globals ref #t) ;; no type declaration for constants
                                   (convert-for-type-decl rhs1 ty)
                                   rhs1)))
@@ -3431,7 +3431,7 @@ f(x) = yt(x)
                        rhs0
                        (make-ssavalue)))
              (ref   (binding-to-globalref var))
-             (ty   `(call (core _get_binding_type) ,(cadr ref) (inert ,(caddr ref))))
+             (ty   `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref))))
              (rhs  (if (get globals ref #t) ;; no type declaration for constants
                        (convert-for-type-decl rhs1 ty)
                        rhs1))
@@ -4064,7 +4064,7 @@ f(x) = yt(x)
                             (put! globals ref #t)
                             `(toplevel-butfirst
                                (null)
-                               (call (core _set_binding_type!) ,(cadr ref) (inert ,(caddr ref)) ,(caddr e))))
+                               (call (core set_binding_type!) ,(cadr ref) (inert ,(caddr ref)) ,(caddr e))))
                           `(call (core typeassert) ,@(cdr e))))
                     fname lam namemap defined toplevel interp opaq globals))))
           ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars

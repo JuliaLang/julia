@@ -1805,7 +1805,7 @@ function abstract_eval_global(M::Module, s::Symbol)
     if isdefined(M,s) && isconst(M,s)
         return Const(getfield(M,s))
     end
-    return Core._get_binding_type(M, s)
+    return Core.get_binding_type(M, s)
 end
 
 function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)

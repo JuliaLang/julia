@@ -700,13 +700,6 @@ JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
     return b && b->constp;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var) {
-    jl_binding_t *b = jl_get_binding(m, var);
-    if (b == NULL || b->ty == NULL)
-        return (jl_value_t*)jl_any_type;
-    return b->ty;
-}
-
 // set the deprecated flag for a binding:
 //   0=not deprecated, 1=renamed, 2=moved to another package
 JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)

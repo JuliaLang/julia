@@ -1655,22 +1655,22 @@ JL_CALLABLE(jl_f__equiv_typedef)
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
 }
 
-JL_CALLABLE(jl_f__get_binding_type)
+JL_CALLABLE(jl_f_get_binding_type)
 {
-    JL_NARGS(_get_binding_type, 2, 2);
-    JL_TYPECHK(_get_binding_type, module, args[0]);
-    JL_TYPECHK(_get_binding_type, symbol, args[1]);
+    JL_NARGS(get_binding_type, 2, 2);
+    JL_TYPECHK(get_binding_type, module, args[0]);
+    JL_TYPECHK(get_binding_type, symbol, args[1]);
     jl_value_t* ty = jl_binding_type((jl_module_t*)args[0], (jl_sym_t*)args[1]);
     return ty;
 }
 
-JL_CALLABLE(jl_f__set_binding_type)
+JL_CALLABLE(jl_f_set_binding_type)
 {
-    JL_NARGS(_set_binding_type!, 3, 3);
-    JL_TYPECHK(_set_binding_type!, module, args[0]);
-    JL_TYPECHK(_set_binding_type!, symbol, args[1]);
+    JL_NARGS(set_binding_type!, 3, 3);
+    JL_TYPECHK(set_binding_type!, module, args[0]);
+    JL_TYPECHK(set_binding_type!, symbol, args[1]);
     jl_value_t *ty = args[2];
-    JL_TYPECHK(_set_binding_type!, type, ty);
+    JL_TYPECHK(set_binding_type!, type, ty);
     jl_binding_t *b = jl_get_binding_wr((jl_module_t*)args[0], (jl_sym_t*)args[1], 1);
     if (b->constp && ty != (jl_value_t*)jl_any_type) {
         jl_errorf("cannot set type for constant %s", jl_symbol_name(b->name));
@@ -1873,8 +1873,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_setsuper!", jl_f__setsuper);
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
-    add_builtin_func("_get_binding_type", jl_f__get_binding_type);
-    add_builtin_func("_set_binding_type!", jl_f__set_binding_type);
+    add_builtin_func("get_binding_type", jl_f_get_binding_type);
+    add_builtin_func("set_binding_type!", jl_f_set_binding_type);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
