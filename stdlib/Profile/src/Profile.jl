@@ -358,22 +358,21 @@ function getdict!(dict::LineInfoDict, data::Vector{UInt})
         @sync for ips_part in Iterators.partition(unique_ips, div(n_unique_ips, Threads.nthreads(), RoundUp))
             Threads.@spawn begin
                 for ip in ips_part
-                    put!(ch, UInt64(ip) => _lookup_corrected(ip))
+                    put!(ch, UInt64(ip) => lookup(convert(Ptr{Cvoid}, ip)))
                 end
             end
         end
     end
-    foreach(v -> dict[first(v)] = last(v), chnl)
+    for (ip, st) in chnl
+        # Do this correction sequentially because Base.update_stackframes_callback[]
+        # isn't guaranteed to be race-free.
+        # To correct line numbers for moving code, put it in the form expected by
+        # Base.update_stackframes_callback[]
+        stn = map(x->(x, 1), st)
+        try Base.invokelatest(Base.update_stackframes_callback[], stn) catch end
+        dict[ip] = map(first, stn)
+    end
     return dict
-end
-
-function _lookup_corrected(ip::UInt)
-    st = lookup(convert(Ptr{Cvoid}, ip))
-    # To correct line numbers for moving code, put it in the form expected by
-    # Base.update_stackframes_callback[]
-    stn = map(x->(x, 1), st)
-    try Base.invokelatest(Base.update_stackframes_callback[], stn) catch end
-    return map(first, stn)
 end
 
 """
