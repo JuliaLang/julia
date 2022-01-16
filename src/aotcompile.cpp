@@ -256,7 +256,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // all reachable & inferrrable functions. The `policy` flag switches between the default
 // mode `0`, the extern mode `1`, and imaging mode `2`.
 extern "C" JL_DLLEXPORT
-void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy)
+void *jl_create_native_impl(jl_array_t *methods, void *ctxt, const jl_cgparams_t *cgparams, int _policy)
 {
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
@@ -276,7 +276,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
     CompilationPolicy policy = (CompilationPolicy) _policy;
     if (policy == CompilationPolicy::ImagingMode)
         imaging_mode = 1;
-    std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
+    std::unique_ptr<Module> clone(jl_create_llvm_module("text", (LLVMContext*)ctxt));
 
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
@@ -294,7 +294,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
             jl_value_t *item = jl_array_ptr_ref(methods, i);
             if (jl_is_simplevector(item)) {
                 if (worlds == 1)
-                    jl_compile_extern_c(clone.get(), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                    jl_compile_extern_c(clone.get(), &clone->getContext(), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
                 continue;
             }
             mi = (jl_method_instance_t*)item;

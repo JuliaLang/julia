@@ -52,7 +52,7 @@ JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT int jl_compile_extern_c_fallback(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+JL_DLLEXPORT int jl_compile_extern_c_fallback(void *llvmmod, void *llvmctxt, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     return 0;
 }
@@ -74,7 +74,7 @@ JL_DLLEXPORT void jl_unlock_profile_fallback(void)
 {
 }
 
-JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy) UNAVAILABLE
+JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, void *llvmctxt, const jl_cgparams_t *cgparams, int _policy) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
 {

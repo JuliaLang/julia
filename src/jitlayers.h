@@ -55,7 +55,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lowe
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
-Module *jl_create_llvm_module(StringRef name);
+Module *jl_create_llvm_module(StringRef name, LLVMContext *ctxt);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
 
 typedef struct _jl_llvm_functions_t {
@@ -110,7 +110,7 @@ typedef struct _jl_codegen_params_t {
     Module *_shared_module = NULL;
     Module *shared_module(LLVMContext &context) {
         if (!_shared_module)
-            _shared_module = jl_create_llvm_module("globals");
+            _shared_module = jl_create_llvm_module("globals", &context);
         return _shared_module;
     }
     // inputs
@@ -212,6 +212,7 @@ public:
     uint64_t getGlobalValueAddress(StringRef Name);
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
+    orc::ThreadSafeContext &getContext();
     const DataLayout& getDataLayout() const;
     const Triple& getTargetTriple() const;
     size_t getTotalBytes() const;

@@ -211,7 +211,6 @@ extern void _chkstk(void);
 bool imaging_mode = false;
 
 // shared llvm state
-static LLVMContext &jl_LLVMContext = *(new LLVMContext());
 TargetMachine *jl_TargetMachine;
 static DataLayout &jl_data_layout = *(new DataLayout(""));
 #define jl_Module ctx.f->getParent()
@@ -1939,9 +1938,9 @@ Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cg
     return M;
 }
 
-Module *jl_create_llvm_module(StringRef name)
+Module *jl_create_llvm_module(StringRef name, LLVMContext *context)
 {
-    return _jl_create_llvm_module(name, jl_LLVMContext, &jl_default_cgparams);
+    return _jl_create_llvm_module(name, context ? *context : *jl_ExecutionEngine->getContext().getContext(), &jl_default_cgparams);
 }
 
 static void jl_init_function(Function *F)
@@ -7755,7 +7754,7 @@ jl_compile_result_t jl_emit_code(
         compare_cgparams(params.params, &jl_default_cgparams)) &&
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
-        std::tie(m, decls) = emit_function(li, src, jlrettype, params, jl_LLVMContext);
+        std::tie(m, decls) = emit_function(li, src, jlrettype, params, *jl_ExecutionEngine->getContext().getContext());
         if (dump_emitted_mi_name_stream != NULL) {
             jl_printf(dump_emitted_mi_name_stream, "%s\t", decls.specFunctionObject.c_str());
             // NOTE: We print the Type Tuple without surrounding quotes, because the quotes
@@ -8293,7 +8292,7 @@ extern "C" void jl_init_llvm(void)
         jl_TargetMachine->setFastISel(true);
     #endif
 
-    jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine, &jl_LLVMContext);
+    jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine, new LLVMContext());
 
     // Mark our address spaces as non-integral
     jl_data_layout = jl_ExecutionEngine->getDataLayout();
@@ -8365,7 +8364,7 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
     jl_init_jit();
     init_jit_functions();
 
-    Module *m = _jl_create_llvm_module("julia", jl_LLVMContext, &jl_default_cgparams);
+    Module *m = _jl_create_llvm_module("julia", *jl_ExecutionEngine->getContext().getContext(), &jl_default_cgparams);
     init_julia_llvm_env(m);
 
     jl_init_intrinsic_functions_codegen();

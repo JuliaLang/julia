@@ -204,7 +204,7 @@ const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t
 
 // compile a C-callable alias
 extern "C" JL_DLLEXPORT
-int jl_compile_extern_c_impl(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+int jl_compile_extern_c_impl(void *llvmmod, void *llvmctxt, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     JL_LOCK(&jl_codegen_lock);
     uint64_t compiler_start_time = 0;
@@ -217,7 +217,7 @@ int jl_compile_extern_c_impl(void *llvmmod, void *p, void *sysimg, jl_value_t *d
         pparams = &params;
     Module *into = (Module*)llvmmod;
     if (into == NULL)
-        into = jl_create_llvm_module("cextern");
+        into = jl_create_llvm_module("cextern", (LLVMContext *)llvmctxt);
     const char *name = jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams, into->getContext());
     bool success = true;
     if (!sysimg) {
@@ -279,7 +279,7 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
     JL_GC_POP();
 
     // create the alias in the current runtime environment
-    int success = jl_compile_extern_c(NULL, NULL, NULL, declrt, (jl_value_t*)sigt);
+    int success = jl_compile_extern_c(NULL, NULL, NULL, NULL, declrt, (jl_value_t*)sigt);
     if (!success)
         jl_error("@ccallable was already defined for this method name");
 }
@@ -1043,6 +1043,10 @@ void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
     this->ObjectLayer.registerJITEventListener(*L);
 }
 #endif
+
+orc::ThreadSafeContext &JuliaOJIT::getContext() {
+    return TSCtx;
+}
 
 const DataLayout& JuliaOJIT::getDataLayout() const
 {
