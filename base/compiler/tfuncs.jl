@@ -460,7 +460,25 @@ end
 add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
-add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
+
+function arraysize_tfunc(@nospecialize(ary), @nospecialize(dim))
+    hasintersect(widenconst(ary), Array) || return Bottom
+    hasintersect(widenconst(dim), Int) || return Bottom
+    return Int
+end
+add_tfunc(arraysize, 2, 2, arraysize_tfunc, 4)
+
+function arraysize_nothrow(argtypes::Vector{Any})
+    length(argtypes) == 2 || return false
+    ary = argtypes[1]
+    dim = argtypes[2]
+    ary ⊑ Array || return false
+    if isa(dim, Const)
+        dimval = dim.val
+        return isa(dimval, Int) && dimval > 0
+    end
+    return false
+end
 
 function pointer_eltype(@nospecialize(ptr))
     a = widenconst(ptr)
@@ -713,11 +731,12 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
             sv = s00.val
         end
         if isa(name, Const)
-            if !isa(name.val, Symbol)
+            nval = name.val
+            if !isa(nval, Symbol)
                 isa(sv, Module) && return false
-                isa(name.val, Int) || return false
+                isa(nval, Int) || return false
             end
-            return isdefined(sv, name.val)
+            return isdefined(sv, nval)
         end
         if !boundscheck && !isa(sv, Module)
             # If bounds checking is disabled and all fields are assigned,
@@ -756,24 +775,38 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
     return false
 end
 
-getfield_tfunc(s00, name, boundscheck_or_order) = (@nospecialize; getfield_tfunc(s00, name))
-getfield_tfunc(s00, name, order, boundscheck) = (@nospecialize; getfield_tfunc(s00, name))
-function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
-    s = unwrap_unionall(s00)
-    if isa(s, Union)
-        return tmerge(getfield_tfunc(rewrap_unionall(s.a, s00), name),
-                      getfield_tfunc(rewrap_unionall(s.b, s00), name))
-    elseif isa(s, Conditional)
+function getfield_tfunc(s00, name, boundscheck_or_order)
+    @nospecialize
+    t = isvarargtype(boundscheck_or_order) ? unwrapva(boundscheck_or_order) :
+        widenconst(boundscheck_or_order)
+    hasintersect(t, Symbol) || hasintersect(t, Bool) || return Bottom
+    return getfield_tfunc(s00, name)
+end
+function getfield_tfunc(s00, name, order, boundscheck)
+    @nospecialize
+    hasintersect(widenconst(order), Symbol) || return Bottom
+    if isvarargtype(boundscheck)
+        t = unwrapva(boundscheck)
+        hasintersect(t, Symbol) || hasintersect(t, Bool) || return Bottom
+    else
+        hasintersect(widenconst(boundscheck), Bool) || return Bottom
+    end
+    return getfield_tfunc(s00, name)
+end
+getfield_tfunc(@nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(s00, name, false)
+function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool)
+    if isa(s00, Conditional)
         return Bottom # Bool has no fields
-    elseif isa(s, Const) || isconstType(s)
-        if !isa(s, Const)
-            sv = s.parameters[1]
+    elseif isa(s00, Const) || isconstType(s00)
+        if !isa(s00, Const)
+            sv = s00.parameters[1]
         else
-            sv = s.val
+            sv = s00.val
         end
         if isa(name, Const)
             nv = name.val
             if isa(sv, Module)
+                setfield && return Bottom
                 if isa(nv, Symbol)
                     return abstract_eval_global(sv, nv)
                 end
@@ -808,18 +841,21 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 return unwrapva(s00.fields[nv])
             end
         end
+    else
+        s = unwrap_unionall(s00)
     end
-    if isType(s) || !isa(s, DataType) || isabstracttype(s)
-        return Any
+    if isa(s, Union)
+        return tmerge(_getfield_tfunc(rewrap_unionall(s.a, s00), name, setfield),
+                      _getfield_tfunc(rewrap_unionall(s.b, s00), name, setfield))
     end
-    s = s::DataType
+    isa(s, DataType) || return Any
+    isabstracttype(s) && return Any
     if s <: Tuple && !(Int <: widenconst(name))
         return Bottom
     end
     if s <: Module
-        if !(Symbol <: widenconst(name))
-            return Bottom
-        end
+        setfield && return Bottom
+        hasintersect(widenconst(name), Symbol) || return Bottom
         return Any
     end
     if s.name === _NAMEDTUPLE_NAME && !isconcretetype(s)
@@ -837,12 +873,13 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         if !(_ts <: Tuple)
             return Any
         end
-        return getfield_tfunc(_ts, name)
+        return _getfield_tfunc(_ts, name, setfield)
     end
     ftypes = datatype_fieldtypes(s)
+    nf = length(ftypes)
     # If no value has this type, then this statement should be unreachable.
     # Bail quickly now.
-    if !has_concrete_subtype(s) || isempty(ftypes)
+    if !has_concrete_subtype(s) || nf == 0
         return Bottom
     end
     if isa(name, Conditional)
@@ -853,12 +890,14 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         if !(Int <: name || Symbol <: name)
             return Bottom
         end
-        if length(ftypes) == 1
+        if nf == 1
             return rewrap_unionall(unwrapva(ftypes[1]), s00)
         end
         # union together types of all fields
         t = Bottom
-        for _ft in ftypes
+        for i in 1:nf
+            _ft = ftypes[i]
+            setfield && isconst(s, i) && continue
             t = tmerge(t, rewrap_unionall(unwrapva(_ft), s00))
             t === Any && break
         end
@@ -871,11 +910,12 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     if !isa(fld, Int)
         return Bottom
     end
-    nf = length(ftypes)
     if s <: Tuple && fld >= nf && isvarargtype(ftypes[nf])
         return rewrap_unionall(unwrapva(ftypes[nf]), s00)
     end
     if fld < 1 || fld > nf
+        return Bottom
+    elseif setfield && isconst(s, fld)
         return Bottom
     end
     R = ftypes[fld]
@@ -885,8 +925,66 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     return rewrap_unionall(R, s00)
 end
 
-setfield!_tfunc(o, f, v, order) = (@nospecialize; v)
-setfield!_tfunc(o, f, v) = (@nospecialize; v)
+function setfield!_tfunc(o, f, v, order)
+    @nospecialize
+    if !isvarargtype(order)
+        hasintersect(widenconst(order), Symbol) || return Bottom
+    end
+    return setfield!_tfunc(o, f, v)
+end
+function setfield!_tfunc(o, f, v)
+    @nospecialize
+    mutability_errorcheck(o) || return Bottom
+    ft = _getfield_tfunc(o, f, true)
+    ft === Bottom && return Bottom
+    hasintersect(widenconst(v), widenconst(ft)) || return Bottom
+    return v
+end
+function mutability_errorcheck(@nospecialize obj)
+    objt0 = widenconst(obj)
+    objt = unwrap_unionall(objt0)
+    if isa(objt, Union)
+        return mutability_errorcheck(rewrap_unionall(objt.a, objt0)) ||
+               mutability_errorcheck(rewrap_unionall(objt.b, objt0))
+    elseif isa(objt, DataType)
+        # Can't say anything about abstract types
+        isabstracttype(objt) && return true
+        return ismutabletype(objt)
+    end
+    return true
+end
+
+function setfield!_nothrow(argtypes::Vector{Any})
+    if length(argtypes) == 4
+        order = argtypes[4]
+        order === Const(:not_atomic) || return false # currently setfield!_nothrow is assuming not atomic
+    else
+        length(argtypes) == 3 || return false
+    end
+    return setfield!_nothrow(argtypes[1], argtypes[2], argtypes[3])
+end
+function setfield!_nothrow(s00, name, v)
+    @nospecialize
+    s0 = widenconst(s00)
+    s = unwrap_unionall(s0)
+    if isa(s, Union)
+        return setfield!_nothrow(rewrap_unionall(s.a, s00), name, v) &&
+               setfield!_nothrow(rewrap_unionall(s.b, s00), name, v)
+    elseif isa(s, DataType)
+        # Can't say anything about abstract types
+        isabstracttype(s) && return false
+        ismutabletype(s) || return false
+        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering == :not_atomic
+        isa(name, Const) || return false
+        field = try_compute_fieldidx(s, name.val)
+        field === nothing && return false
+        # `try_compute_fieldidx` already check for field index bound.
+        isconst(s, field) && return false
+        v_expected = fieldtype(s0, field)
+        return v ⊑ v_expected
+    end
+    return false
+end
 
 swapfield!_tfunc(o, f, v, order) = (@nospecialize; getfield_tfunc(o, f))
 swapfield!_tfunc(o, f, v) = (@nospecialize; getfield_tfunc(o, f))
@@ -1425,8 +1523,38 @@ function tuple_tfunc(argtypes::Vector{Any})
     return anyinfo ? PartialStruct(typ, argtypes) : typ
 end
 
-function arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(a), @nospecialize i...)
-    a = widenconst(a)
+arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(ary), @nospecialize idxs...) =
+    _arrayref_tfunc(boundscheck, ary, idxs)
+function _arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(ary),
+    @nospecialize idxs::Tuple)
+    isempty(idxs) && return Bottom
+    array_builtin_common_errorcheck(boundscheck, ary, idxs) || return Bottom
+    return array_elmtype(ary)
+end
+add_tfunc(arrayref, 3, INT_INF, arrayref_tfunc, 20)
+add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
+
+function arrayset_tfunc(@nospecialize(boundscheck), @nospecialize(ary), @nospecialize(item),
+    @nospecialize idxs...)
+    hasintersect(widenconst(item), _arrayref_tfunc(boundscheck, ary, idxs)) || return Bottom
+    return ary
+end
+add_tfunc(arrayset, 4, INT_INF, arrayset_tfunc, 20)
+
+function array_builtin_common_errorcheck(@nospecialize(boundscheck), @nospecialize(ary),
+    @nospecialize idxs::Tuple)
+    hasintersect(widenconst(boundscheck), Bool) || return false
+    hasintersect(widenconst(ary), Array) || return false
+    for i = 1:length(idxs)
+        idx = getfield(idxs, i)
+        idx = isvarargtype(idx) ? unwrapva(idx) : widenconst(idx)
+        hasintersect(idx, Int) || return false
+    end
+    return true
+end
+
+function array_elmtype(@nospecialize ary)
+    a = widenconst(ary)
     if !has_free_typevars(a) && a <: Array
         a0 = a
         if isa(a, UnionAll)
@@ -1440,13 +1568,6 @@ function arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(a), @nospecial
     end
     return Any
 end
-add_tfunc(arrayref, 3, INT_INF, arrayref_tfunc, 20)
-add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
-function arrayset_tfunc(@nospecialize(boundscheck), @nospecialize(a), @nospecialize(v), @nospecialize i...)
-    # TODO: we could check that the type-intersect of arrayref_tfunc and v is non-empty or always throws
-    return a
-end
-add_tfunc(arrayset, 4, INT_INF, arrayset_tfunc, 20)
 
 function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
         @nospecialize(lb), @nospecialize(ub), @nospecialize(source), env::Vector{Any},
@@ -1483,16 +1604,16 @@ end
 
 function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
     length(argtypes) >= 4 || return false
-    boundcheck = argtypes[1]
+    boundscheck = argtypes[1]
     arytype = argtypes[2]
-    array_builtin_common_typecheck(boundcheck, arytype, argtypes, first_idx_idx) || return false
+    array_builtin_common_typecheck(boundscheck, arytype, argtypes, first_idx_idx) || return false
     # If we could potentially throw undef ref errors, bail out now.
     arytype = widenconst(arytype)
     array_type_undefable(arytype) && return false
     # If we have @inbounds (first argument is false), we're allowed to assume
     # we don't throw bounds errors.
-    if isa(boundcheck, Const)
-        !(boundcheck.val::Bool) && return true
+    if isa(boundscheck, Const)
+        !(boundscheck.val::Bool) && return true
     end
     # Else we can't really say anything here
     # TODO: In the future we may be able to track the shapes of arrays though
@@ -1501,9 +1622,9 @@ function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
 end
 
 function array_builtin_common_typecheck(
-    @nospecialize(boundcheck), @nospecialize(arytype),
+    @nospecialize(boundscheck), @nospecialize(arytype),
     argtypes::Vector{Any}, first_idx_idx::Int)
-    (boundcheck ⊑ Bool && arytype ⊑ Array) || return false
+    (boundscheck ⊑ Bool && arytype ⊑ Array) || return false
     for i = first_idx_idx:length(argtypes)
         argtypes[i] ⊑ Int || return false
     end
@@ -1529,6 +1650,8 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
         return array_builtin_common_nothrow(argtypes, 3)
+    elseif f === arraysize
+        return arraysize_nothrow(argtypes)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
@@ -1691,6 +1814,10 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         ty, isexact, isconcrete = instanceof_tfunc(argtypes[1])
         xty = widenconst(argtypes[2])
         return isconcrete && isprimitivetype(ty) && isprimitivetype(xty)
+    end
+    if f === Intrinsics.have_fma
+        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1])
+        return isconcrete && isprimitivetype(ty)
     end
     # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
     # primitive types of the same type.

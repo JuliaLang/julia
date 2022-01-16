@@ -14,6 +14,11 @@
 # Set to zero to turn off extra precompile (e.g. for the REPL)
 JULIA_PRECOMPILE ?= 1
 
+# Set FORCE_ASSERTIONS to 1 to enable assertions in the C and C++ portions
+# of the Julia code base. You may also want to set LLVM_ASSERTIONS to 1,
+# which will enable assertions in LLVM.
+# An "assert build" of Julia is a build that has both FORCE_ASSERTIONS=1
+# and LLVM_ASSERTIONS=1.
 FORCE_ASSERTIONS ?= 0
 
 # OPENBLAS build options
@@ -330,6 +335,7 @@ INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 
 # LLVM Options
 LLVMROOT := $(build_prefix)
+# Set LLVM_ASSERTIONS to 1 to enable assertions in LLVM.
 LLVM_ASSERTIONS := 0
 LLVM_DEBUG := 0
 # set to 1 to get clang and compiler-rt

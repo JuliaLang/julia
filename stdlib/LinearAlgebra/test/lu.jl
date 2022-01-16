@@ -402,20 +402,28 @@ end
     end
 end
 
-@testset "lu(A) has a fallback for abstract matrices (#40831)" begin
-    # check that lu works for some structured arrays
-    A0 = rand(5, 5)
-    @test lu(Diagonal(A0)) isa LU
-    @test Matrix(lu(Diagonal(A0))) ≈ Diagonal(A0)
-    @test lu(Bidiagonal(A0, :U)) isa LU
-    @test Matrix(lu(Bidiagonal(A0, :U))) ≈ Bidiagonal(A0, :U)
-
-    # lu(A) copies A and then invokes lu!, make sure that the most efficient
-    # implementation of lu! continues to be used
-    A1 = Tridiagonal(rand(2), rand(3), rand(2))
-    @test lu(A1) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
-    @test lu(A1, RowMaximum()) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
-    @test lu(A1, RowMaximum(); check = false) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+@testset "lu on *diagonal matrices" begin
+    dl = rand(3)
+    d = rand(4)
+    Bl = Bidiagonal(d, dl, :L)
+    Bu = Bidiagonal(d, dl, :U)
+    Tri = Tridiagonal(dl, d, dl)
+    Sym = SymTridiagonal(d, dl)
+    D = Diagonal(d)
+    b = ones(4)
+    B = rand(4,4)
+    for A in (Bl, Bu, Tri, Sym, D), pivot in (NoPivot(), RowMaximum())
+        @test A\b ≈ lu(A, pivot)\b
+        @test B/A ≈ B/lu(A, pivot)
+        @test B/A ≈ B/Matrix(A)
+        @test Matrix(lu(A, pivot)) ≈ A
+        @test @inferred(lu(A)) isa LU
+        if A isa Union{Bidiagonal, Diagonal, Tridiagonal, SymTridiagonal}
+            @test lu(A) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+            @test lu(A, pivot) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+            @test lu(A, pivot; check = false) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+        end
+    end
 end
 
 end # module TestLU

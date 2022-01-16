@@ -277,6 +277,42 @@ end
     end
 end
 
+@testset "foreach" begin
+    longtuple = ntuple(identity, 20)
+
+    @testset "1 argument" begin
+        foo(x) = push!(a, x)
+
+        a = []
+        foreach(foo, ())
+        @test a == []
+
+        a = []
+        foreach(foo, (1,))
+        @test a == [1]
+
+        a = []
+        foreach(foo, longtuple)
+        @test a == [longtuple...]
+    end
+
+    @testset "n arguments" begin
+        foo(x, y) = push!(a, (x, y))
+
+        a = []
+        foreach(foo, (), ())
+        @test a == []
+
+        a = []
+        foreach(foo, (1,), (2,))
+        @test a == [(1, 2)]
+
+        a = []
+        foreach(foo, longtuple, longtuple)
+        @test a == [(x, x) for x in longtuple]
+    end
+end
+
 @testset "mapfoldl" begin
     @test (((1=>2)=>3)=>4) == foldl(=>, (1,2,3,4)) ==
           mapfoldl(identity, =>, (1,2,3,4)) == mapfoldl(abs, =>, (-1,-2,-3,-4))

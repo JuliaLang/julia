@@ -758,3 +758,18 @@ let # effect-freeness computation for array allocation
         nothing
     end
 end
+
+# allow branch folding to look at type information
+let ci = code_typed1(optimize=false) do
+        cond = 1 + 1 == 2
+        if !cond
+            gcd(24, 36)
+        else
+            gcd(64, 128)
+        end
+    end
+    ir = Core.Compiler.inflate_ir(ci)
+    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 1
+    ir = Core.Compiler.compact!(ir, true)
+    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 0
+end

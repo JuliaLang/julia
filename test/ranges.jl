@@ -35,9 +35,14 @@ using Base.Checked: checked_length
         @test r ==  range(; stop=Float64(stop))
     end
 
-    for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
+    for T = (Int8, UInt32, Float64, Char)
         @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
+        @test typeof(range(start=T(5), length=Int8(3))) === typeof(range(stop=T(5), length=Int8(3)))
     end
+    let T = Rational{Int16}
+        @test typeof(range(start=T(5), length=Int16(3))) === typeof(range(stop=T(5), length=Int16(3)))
+    end
+
 
     @test first(10:3) === 10
     @test last(10:3) === 9
@@ -1525,8 +1530,10 @@ isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
 using .Main.Furlongs
 
 @testset "dimensional correctness" begin
-    @test length(Vector(Furlong(2):Furlong(10))) == 9
-    @test length(range(Furlong(2), length=9)) == checked_length(range(Furlong(2), length=9)) == 9
+    @test_throws TypeError Furlong(2):Furlong(10)
+    @test_throws TypeError range(Furlong(2), length=9)
+    @test length(Vector(Furlong(2):Furlong(1):Furlong(10))) == 9
+    @test length(range(Furlong(2), step=Furlong(1), length=9)) == checked_length(range(Furlong(2), step=Furlong(1), length=9)) == 9
     @test @inferred(length(StepRange(Furlong(2), Furlong(1), Furlong(1)))) == 0
     @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2), step=Furlong(1), length=9)) == Furlong.(2:10)
     @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
@@ -2265,3 +2272,19 @@ let r = Ptr{Cvoid}(20):-UInt(2):Ptr{Cvoid}(10)
     @test step(r) === -UInt(2)
     @test last(r) === Ptr{Cvoid}(10)
 end
+
+# test behavior of wrap-around and promotion of empty ranges (#35711)
+@test length(range(0, length=UInt(0))) === UInt(0)
+@test isempty(range(0, length=UInt(0)))
+@test length(range(typemax(Int), length=UInt(0))) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0)))
+@test length(range(0, length=UInt(0), step=UInt(2))) == UInt(0)
+@test isempty(range(0, length=UInt(0), step=UInt(2)))
+@test length(range(typemax(Int), length=UInt(0), step=UInt(2))) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0), step=UInt(2)))
+@test length(range(typemax(Int), length=UInt(0), step=2)) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0), step=2))
+@test length(range(typemax(Int), length=0, step=UInt(2))) === 0
+@test isempty(range(typemax(Int), length=0, step=UInt(2)))
+
+@test length(range(1, length=typemax(Int128))) === typemax(Int128)

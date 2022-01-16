@@ -19,6 +19,7 @@ New language features
 * Mutable struct fields may now be annotated as `const` to prevent changing
   them after construction, providing for greater clarity and optimization
   ability of these objects ([#43305]).
+* Empty n-dimensional arrays can now be created using multiple semicolons inside square brackets, i.e. `[;;;]` creates a 0×0×0 `Array`. ([#41618])
 
 Language changes
 ----------------
@@ -59,6 +60,7 @@ Command-line option changes
 * New option `--strip-ir` to remove the compiler's IR (intermediate representation) of source
   code when building a system image. The resulting image will only work if `--compile=all` is
   used, or if all needed code is precompiled ([#42925]).
+* When the program file is `-` the code to be executed is read from standard in ([#43191]).
 
 Multi-threading changes
 -----------------------
@@ -72,6 +74,7 @@ New library functions
 ---------------------
 
 * `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `setcpuaffinity(cmd, cpus)` can be used to set CPU affinity of sub-processes. ([#42469])
 * `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 
 New library features
@@ -151,6 +154,10 @@ Standard library changes
   the exception information.
 
 #### SparseArrays
+
+* The code for SparseArrays has been moved from the Julia repo to the external
+  repo at https://github.com/JuliaLang/SparseArrays.jl. This is only a code
+  movement and does not impact any usage ([#43813]).
 
 * New sparse concatenation functions `sparse_hcat`, `sparse_vcat`, and `sparse_hvcat` return
   `SparseMatrixCSC` output independent from the types of the input arguments. They make

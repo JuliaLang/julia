@@ -155,7 +155,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 # known to be effect-free if the are nothrow
 const _PURE_OR_ERROR_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
+    getfield, arrayref, const_arrayref, arraysize, isdefined, Core.sizeof,
     Core.kwfunc, Core.ifelse, Core._typevar, (<:)
 ]
 
@@ -237,7 +237,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
             end
             return true
         elseif head === :foreigncall
-            return foreigncall_effect_free(stmt, rt, src)
+            return foreigncall_effect_free(stmt, src)
         elseif head === :new_opaque_closure
             length(args) < 5 && return false
             typ = argextype(args[1], src)
@@ -262,7 +262,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
     return true
 end
 
-function foreigncall_effect_free(stmt::Expr, @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
+function foreigncall_effect_free(stmt::Expr, src::Union{IRCode,IncrementalCompact})
     args = stmt.args
     name = args[1]
     isa(name, QuoteNode) && (name = name.value)
@@ -293,9 +293,7 @@ end
 
 function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,IncrementalCompact})
     length(args) ≥ ndims+6 || return false
-    atype = widenconst(argextype(args[6], src))
-    isType(atype) || return false
-    atype = atype.parameters[1]
+    atype = instanceof_tfunc(argextype(args[6], src))[1]
     dims = Csize_t[]
     for i in 1:ndims
         dim = argextype(args[i+6], src)
@@ -309,9 +307,7 @@ end
 
 function new_array_no_throw(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
     length(args) ≥ 7 || return false
-    atype = widenconst(argextype(args[6], src))
-    isType(atype) || return false
-    atype = atype.parameters[1]
+    atype = instanceof_tfunc(argextype(args[6], src))[1]
     dims = argextype(args[7], src)
     isa(dims, Const) || return dims === Tuple{}
     dimsval = dims.val
@@ -406,13 +402,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
-    if (isa(result, Const) || isconstType(result))
+    wresult = isa(result, InterConditional) ? widenconditional(result) : result
+    if (isa(wresult, Const) || isconstType(wresult))
         proven_pure = false
         # must be proven pure to use constant calling convention;
         # otherwise we might skip throwing errors (issue #20704)
         # TODO: Improve this analysis; if a function is marked @pure we should really
         # only care about certain errors (e.g. method errors and type errors).
-        if length(ir.stmts) < 10
+        if length(ir.stmts) < 15
             proven_pure = true
             for i in 1:length(ir.stmts)
                 node = ir.stmts[i]
@@ -440,14 +437,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
             src.pure = true
-            if isa(result, Const)
-                val = result.val
+            if isa(wresult, Const)
+                val = wresult.val
                 if is_inlineable_constant(val)
                     analyzed = ConstAPI(val)
                 end
             else
-                @assert isconstType(result)
-                analyzed = ConstAPI(result.parameters[1])
+                @assert isconstType(wresult)
+                analyzed = ConstAPI(wresult.parameters[1])
             end
             force_noinline || (src.inlineable = true)
         end
@@ -628,7 +625,8 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
 end
 
 # whether `f` is effect free if nothrow
-intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref || is_pure_intrinsic_infer(f)
+intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref ||
+    f === Intrinsics.have_fma || is_pure_intrinsic_infer(f)
 
 ## Computing the cost of a function body
 

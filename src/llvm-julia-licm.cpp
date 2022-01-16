@@ -119,7 +119,7 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                 }
                 else if (callee == write_barrier_func) {
                     bool valid = true;
-                    for (std::size_t i = 0; i < call->getNumArgOperands(); i++) {
+                    for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
                             valid = false;
                             break;
@@ -139,7 +139,7 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                         continue;
                     }
                     bool valid = true;
-                    for (std::size_t i = 0; i < call->getNumArgOperands(); i++) {
+                    for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
                             valid = false;
                             break;
