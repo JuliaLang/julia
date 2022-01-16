@@ -86,6 +86,27 @@ struct InputAreaState
     curs_row::Int64
 end
 
+# Data to store the current completion state of a prompt.
+mutable struct CompletionState
+    # candidates of completion
+    completions
+    # partial string for completion
+    partial
+    # position to splice completion to the buffer
+    position
+    # selected completion candidate. 1-based index of the `completions` field;
+    # nothing is selected if the value is zero, which is the initial state)
+    selected
+end
+
+hasselected(state::CompletionState) = state.selected != 0
+selected(state::CompletionState) = state.completions[state.selected]
+
+function select_next!(state::CompletionState)
+    state.selected = mod1(state.selected + 1, length(state.completions))
+    return state
+end
+
 mutable struct PromptState <: ModeState
     terminal::AbstractTerminal
     p::Prompt
@@ -104,10 +125,10 @@ mutable struct PromptState <: ModeState
     last_newline::Float64 # register when last newline was entered
     # this option is to speed up output
     refresh_wait::Union{Timer,Nothing}
-
-    # TODO
-    current_completion
+    completion_state::Union{CompletionState,Nothing}
 end
+
+stop_completion!(s::PromptState) = (s.completion_state = nothing)
 
 struct Modifiers
     shift::Bool
@@ -316,51 +337,6 @@ function common_prefix(completions::Vector{String})
     end
 end
 
-function show_completions(s::PromptState, completions::Vector{String}, partial, repeats)
-    n = input_string_newlines_aftercursor(s)
-    if n > 0
-        # skip `n` lines of the input after the cursor
-        print(terminal(s), "\x1b[$(n)B")
-    end
-    #print(terminal(s), "\x1b[0G", "\x1b[0J")  # erase
-    println(terminal(s))
-    colwidth = maximum(textwidth, completions) + 2
-    ncols = max(width(terminal(s)) ÷ colwidth, 1)
-    nrows = (length(completions) - 1) ÷ ncols + 1
-    if repeats == 0
-        select = 0  # no selection
-    else
-        select = (repeats - 1) % length(completions) + 1
-    end
-    for r in 1:nrows
-        for c in 1:ncols
-            i = (c - 1) * nrows + r
-            i > lastindex(completions) && break
-            x = completions[i]
-            prefix, rest = partial, x[lastindex(partial)+1:end]
-            # highlight prefix
-            text = string(
-                "\x1b[1m\x1b[4m", prefix, "\x1b[22m\x1b[24m",
-                rest,
-                ' '^(colwidth - textwidth(x) - 2)
-            )
-            if i == select
-                # highlight selected element
-                text = string("\x1b[48;5;240m", text, "\x1b[0m")
-            end
-            print(terminal(s), text, "  ")
-        end
-        if r != nrows
-            println(terminal(s))
-        end
-    end
-
-    # unwind the cursor positioon
-    print(terminal(s), "\x1b[$(n + nrows)A", "\x1b0G")
-
-    return select
-end
-
 # Prompt Completions
 function complete_line(s::MIState)
     set_action!(s, :complete_line)
@@ -376,13 +352,16 @@ function complete_line(s::PromptState, repeats::Int)
     if repeats == 0
         completions, partial, should_complete = complete_line(s.p.complete, s)::Tuple{Vector{String},String,Bool}
     else
-        completions, partial, should_complete, pos = s.current_completion  # TODO
+        completions = s.completion_state.completions
+        partial = s.completion_state.partial
+        should_complete = true
     end
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
         # a list of possible completions but not complete, e.g. foo(\t
-        show_completions(s, completions, partial, repeats)
+        skip = input_string_newlines_aftercursor(s)
+        show_completions(terminal(s), completions, partial, 0, skip)
     elseif length(completions) == 1
         # Replace word by completion
         prev_pos = position(s)
@@ -399,16 +378,61 @@ function complete_line(s::PromptState, repeats::Int)
             partial = p
         end
         if repeats == 0
+            # start completion; nothing is selected yet
             pos = position(s) - sizeof(partial)
-            s.current_completion = (completions, partial, should_complete, pos)
+            s.completion_state = CompletionState(completions, partial, pos, 0)
+        else
+            select_next!(s.completion_state)
         end
-        select = show_completions(s, completions, partial, repeats)
-        if select > 0
-            selected = completions[select]
-            edit_splice!(s, pos => position(s), selected)
+        show_completions(s)
+        if hasselected(s.completion_state)
+            edit_splice!(s, s.completion_state.position => position(s), selected(s.completion_state))
         end
     end
     return true
+end
+
+function show_completions(s::PromptState)
+    skip = input_string_newlines_aftercursor(s)
+    show_completions(terminal(s), s.completion_state.completions, s.completion_state.partial, s.completion_state.selected, skip)
+end
+
+function show_completions(terminal, completions, partial, selected, skip)
+    if skip > 0
+        # skip `skip`` lines of the input after the cursor
+        print(terminal, "\x1b[$(skip)B")
+    end
+    println(terminal)
+
+    # list all completion candidates
+    colwidth = maximum(textwidth, completions) + 2
+    ncols = max(width(terminal) ÷ colwidth, 1)
+    nrows = (length(completions) - 1) ÷ ncols + 1
+    for r in 1:nrows
+        for c in 1:ncols
+            i = (c - 1) * nrows + r
+            i > lastindex(completions) && break
+            x = completions[i]
+            rest = x[lastindex(partial)+1:end]
+            # highlight prefix (partial)
+            text = string(
+                "\x1b[1m\x1b[4m", partial, "\x1b[22m\x1b[24m",
+                rest,
+                ' '^(colwidth - textwidth(x) - 2)
+            )
+            if i == selected
+                # highlight selected candidate
+                text = string("\x1b[48;5;240m", text, "\x1b[0m")
+            end
+            print(terminal, text, "  ")
+        end
+        if r != nrows
+            println(terminal)
+        end
+    end
+
+    # unwind the cursor positioon
+    print(terminal, "\x1b[$(skip + nrows)A", "\x1b0G")
 end
 
 function clear_input_area(terminal::AbstractTerminal, s::PromptState)
