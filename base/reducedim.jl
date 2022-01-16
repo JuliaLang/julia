@@ -164,6 +164,41 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
         end
     end
 end
+
+function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray, region)
+    # First compute the reduce indices. This will throw an ArgumentError
+    # if any region is invalid
+    ri = reduced_indices(A, region)
+
+    # Next, throw if reduction is over a region with length zero
+    any(i -> isempty(axes(A, i)), region) && _empty_reduce_error()
+
+    # Make a view of the first slice of the region
+    A1 = view(A, ri...)
+
+    isempty(A1) && return map(f, A1)
+    # use the max/min of the first slice as initial value for non-empty cases
+    v0 = reverse(mapreduce(f, op, A1)) # turn minmax to maxmin
+
+    T = _realtype(f.f, promote_union(eltype(A)))
+    Tr = v0[1] isa T && v0[2] isa T ? NTuple{2,T} : typeof(v0)
+
+    # but NaNs and missing need to be avoided as initial values
+    if v0[1] isa Number && isnan(v0[1])
+        v0 = oftype(v0[1], Inf), oftype(v0[2], -Inf)
+    elseif isunordered(v0[1])
+        # v0 is missing or a third-party unordered value
+        T1, T2 = Tr.parameters
+        # TODO: Some types, like BigInt, don't support typemin/typemax.
+        # So a Matrix{Union{BigInt, Missing}} can still error here.
+        v0 = typemax(nonmissingtype(T1)), typemin(nonmissingtype(T2))
+    end
+    # v0 may have changed type.
+    Tr = v0[1] isa T && v0[2] isa T ? NTuple{2,T} : typeof(v0)
+
+    return reducedim_initarray(A, region, v0, Tr)
+end
+
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))), _realtype(f, T))
 
