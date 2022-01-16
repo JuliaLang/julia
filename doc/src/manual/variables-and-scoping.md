@@ -816,13 +816,9 @@ julia> x::Float64 = 2.718
 julia> f() = x
 f (generic function with 1 method)
 
-julia> @code_warntype f()
-MethodInstance for f()
-  from f() in Main at REPL[9]:1
-Arguments
-  #self#::Core.Const(f)
-Body::Float64
-1 ─     return Main.x
+julia> Base.return_types(f)
+1-element Vector{Any}:
+ Float64
 ```
 
 For any assignment to a global, Julia will first try to convert it to the appropriate type using
@@ -840,19 +836,14 @@ julia> y
 julia> y = 3.14
 ERROR: InexactError: Int64(3.14)
 Stacktrace:
- [1] Int64
-   @ ./float.jl:782 [inlined]
- [2] convert(#unused#::Type{Int64}, x::Float64)
-   @ Base ./number.jl:7
- [3] top-level scope
-   @ REPL[3]:1
+[...]
 ```
 
 The type does not need to be concrete, but annotations with abstract types typically have little
 performance benefit.
 
 As for constants, the type of a global is not typically meant to be redefined. In interactive usage,
-changing the annotation to a narrower type (the new type is a [subtype](@ref `<:`) of the previous
+changing the annotation to a narrower type (the new type is a [subtype](@ref Core.:<:) of the previous
 type) is allowed, but can result in unexpected behavior in code that has already been compiled:
 
 ```jldoctest
