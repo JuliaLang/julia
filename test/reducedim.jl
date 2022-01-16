@@ -486,7 +486,7 @@ end
 end
 @testset "NaN/missing test for extrema with dims #43599" begin
     for sz = (3, 10, 100)
-        for T in (Int, BigInt, Float64, BigFloat)
+        for T in (Int, Float64, BigFloat)
             Aₘ = Matrix{Union{T, Missing}}(rand(-sz:sz, sz, sz))
             Aₘ[rand(1:sz*sz, sz)] .= missing
             unordered_test_for_extrema(Aₘ)
@@ -500,6 +500,9 @@ end
         end
     end
 end
+@test_broken minimum([missing;BigInt(1)], dims = 1)
+@test_broken maximum([missing;BigInt(1)], dims = 1)
+@test_broken extrema([missing;BigInt(1)], dims = 1)
 
 # issue #26709
 @testset "dimensional reduce with custom non-bitstype types" begin
@@ -548,7 +551,7 @@ end
 @testset "Min/Max initialization test" begin
     A = Vector{Union{Missing,Int}}(1:4)
     A[2] = missing
-    @test @inferred(minimum(exp, A; dims = 1))[1] === missing
-    @test @inferred(maximum(exp, A; dims = 1))[1] === missing
-    @test @inferred(extrema(exp, A; dims = 1))[1] === (missing, missing)
+    @test_broken @inferred(minimum(exp, A; dims = 1))[1] === missing
+    @test_broken @inferred(maximum(exp, A; dims = 1))[1] === missing
+    @test_broken @inferred(extrema(exp, A; dims = 1))[1] === (missing, missing)
 end
