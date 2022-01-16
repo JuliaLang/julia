@@ -788,4 +788,19 @@ function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=def
     nothing
 end
 
+tristate_letter(t::TriState) = t === ALWAYS_TRUE ? '+' : t === ALWAYS_FALSE ? '!' : '?'
+tristate_color(t::TriState) = t === ALWAYS_TRUE ? :green : t === ALWAYS_FALSE ? :red : :orange
+
+function Base.show(io::IO, e::Core.Compiler.Effects)
+    print(io, "(")
+    printstyled(io, string(tristate_letter(e.consistent), 'c'); color=tristate_color(e.consistent))
+    print(io, ',')
+    printstyled(io, string(tristate_letter(e.effect_free), 'e'); color=tristate_color(e.effect_free))
+    print(io, ',')
+    printstyled(io, string(tristate_letter(e.nothrow), 'n'); color=tristate_color(e.nothrow))
+    print(io, ',')
+    printstyled(io, string(tristate_letter(e.terminates), 't'); color=tristate_color(e.terminates))
+    print(io, ')')
+end
+
 @specialize

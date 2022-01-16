@@ -1695,6 +1695,7 @@ end
                :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring, Cint, Cint))))),
                0,
                :(:ccall),
+               nothing,
                :arg1, :arg2, :arg3, :arg1root, :arg2root, :arg3root))
         end)
 
@@ -1711,7 +1712,7 @@ end
         end
         local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
         local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
-        $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), :arg1, :arg1root))
+        $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), nothing, :arg1, :arg1root))
     end)
 
 end

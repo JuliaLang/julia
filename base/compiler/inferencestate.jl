@@ -59,6 +59,9 @@ mutable struct InferenceState
     inferred::Bool
     dont_work_on_me::Bool
 
+    # Inferred purity flags
+    ipo_effects::Effects
+
     # The place to look up methods while working on this function.
     # In particular, we cache method lookup results for the same function to
     # fast path repeated queries.
@@ -126,6 +129,7 @@ mutable struct InferenceState
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
             cache === :global, false, false,
+            Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE),
             CachedMethodTable(method_table(interp)),
             interp)
         result.result = frame
@@ -133,6 +137,7 @@ mutable struct InferenceState
         return frame
     end
 end
+Effects(state::InferenceState) = state.ipo_effects
 
 function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # The goal initially is to record the frame like this for the state at exit:

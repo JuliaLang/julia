@@ -71,7 +71,9 @@ function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}})
     ccall(:jl_cstr_to_string, Ref{String}, (Ptr{UInt8},), p)
 end
 
-_string_n(n::Integer) = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), n)
+# This is @assume_effects :effect_free :nothrow :terminates_globally @ccall jl_alloc_string(n::Csize_t)::Ref{String},
+# but the macro is not available at this time in bootstrap, so we write it manually.
+@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String}, Expr(:call, Expr(:core, :svec), :Csize_t), 1, QuoteNode(:ccall), 0xe, :(convert(Csize_t, n))))
 
 """
     String(s::AbstractString)

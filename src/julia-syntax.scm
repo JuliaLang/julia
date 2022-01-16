@@ -1058,6 +1058,7 @@
             (foreigncall ,name ,RT (call (core svec) ,@(reverse! T))
                          ,(if isseq (- (length atypes) 1) 0) ; 0 or number of arguments before ... in definition
                          ',cconv
+                         (null)
                          ,.(reverse! C)
                          ,@GC)) ; GC root ordering is arbitrary
           (let* ((a     (car A))
@@ -4290,13 +4291,13 @@ f(x) = yt(x)
                    (not (tuple-call? fptr))))
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
-                            ;; NOTE: 2nd to 5th arguments of ccall must be left in place
+                            ;; NOTE: 2nd to 6th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
                             (append (if (atom-or-not-tuple-call? (cadr e))
                                         (compile-args (list (cadr e)) break-labels)
                                         (list (cadr e)))
-                                    (list-head (cddr e) 4)
-                                    (compile-args (list-tail e 6) break-labels)))
+                                    (list-head (cddr e) 5)
+                                    (compile-args (list-tail e 7) break-labels)))
                            ;; NOTE: arguments of cfunction must be left in place
                            ;;       except for argument 2 (fptr)
                            ((eq? (car e) 'cfunction)

@@ -907,3 +907,35 @@ end
 @test fully_eliminated((String,)) do x
     Base.@invoke conditional_escape!(false::Any, x::Any)
 end
+
+# have_fma elimination inside ^
+f_pow() = ^(2.0, -1.0)
+@test fully_eliminated(f_pow, Tuple{})
+
+# unused total, noinline function
+@noinline function f_total_noinline(x)
+    return x + 1.0
+end
+@noinline function f_voltatile_escape(ptr)
+    unsafe_store!(ptr, 0)
+end
+function f_call_total_noinline_unused(x)
+    f_total_noinline(x)
+    return x
+end
+function f_call_volatile_escape(ptr)
+    f_voltatile_escape(ptr)
+    return ptr
+end
+
+@test fully_eliminated(f_call_total_noinline_unused, Tuple{Float64})
+@test !fully_eliminated(f_call_volatile_escape, Tuple{Ptr{Int}})
+
+let b = Expr(:block, (:(y += sin($x)) for x in randn(1000))...)
+    @eval function f_sin_perf()
+        y = 0.0
+        $b
+        y
+    end
+end
+@test fully_eliminated(f_sin_perf, Tuple{})

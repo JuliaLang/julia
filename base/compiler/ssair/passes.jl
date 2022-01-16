@@ -701,7 +701,7 @@ function sroa_pass!(ir::IRCode)
             nccallargs = length(stmt.args[3]::SimpleVector)
             preserved = Int[]
             new_preserves = Any[]
-            for pidx in (6+nccallargs):length(stmt.args)
+            for pidx in (7+nccallargs):length(stmt.args)
                 preserved_arg = stmt.args[pidx]
                 isa(preserved_arg, SSAValue) || continue
                 let intermediaries = SPCSet()
@@ -993,10 +993,10 @@ end
 function form_new_preserves(origex::Expr, intermediates::Vector{Int}, new_preserves::Vector{Any})
     newex = Expr(:foreigncall)
     nccallargs = length(origex.args[3]::SimpleVector)
-    for i in 1:(6+nccallargs-1)
+    for i in 1:(7+nccallargs-1)
         push!(newex.args, origex.args[i])
     end
-    for i in (6+nccallargs):length(origex.args)
+    for i in (7+nccallargs):length(origex.args)
         x = origex.args[i]
         # don't need to preserve intermediaries
         if isa(x, SSAValue) && x.id in intermediates

@@ -149,16 +149,6 @@ const IR_FLAG_THROW_BLOCK = 0x01 << 3
 # thus be both pure and effect free.
 const IR_FLAG_EFFECT_FREE = 0x01 << 4
 
-# known to be always effect-free (in particular nothrow)
-const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
-
-# known to be effect-free if the are nothrow
-const _PURE_OR_ERROR_BUILTINS = [
-    fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, const_arrayref, arraysize, isdefined, Core.sizeof,
-    Core.kwfunc, Core.ifelse, Core._typevar, (<:)
-]
-
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 #########
@@ -292,11 +282,11 @@ function alloc_array_ndims(name::Symbol)
 end
 
 function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ ndims+6 || return false
-    atype = instanceof_tfunc(argextype(args[6], src))[1]
+    length(args) ≥ ndims+7 || return false
+    atype = instanceof_tfunc(argextype(args[7], src))[1]
     dims = Csize_t[]
     for i in 1:ndims
-        dim = argextype(args[i+6], src)
+        dim = argextype(args[i+7], src)
         isa(dim, Const) || return false
         dimval = dim.val
         isa(dimval, Int) || return false
@@ -306,9 +296,9 @@ function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,I
 end
 
 function new_array_no_throw(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ 7 || return false
-    atype = instanceof_tfunc(argextype(args[6], src))[1]
-    dims = argextype(args[7], src)
+    length(args) ≥ 8 || return false
+    atype = instanceof_tfunc(argextype(args[7], src))[1]
+    dims = argextype(args[8], src)
     isa(dims, Const) || return dims === Tuple{}
     dimsval = dims.val
     isa(dimsval, Tuple{Vararg{Int}}) || return false
@@ -614,21 +604,6 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes) # consumes `ir`
     return ir
 end
-
-# whether `f` is pure for inference
-function is_pure_intrinsic_infer(f::IntrinsicFunction)
-    return !(f === Intrinsics.pointerref || # this one is volatile
-             f === Intrinsics.pointerset || # this one is never effect-free
-             f === Intrinsics.llvmcall ||   # this one is never effect-free
-             f === Intrinsics.arraylen ||   # this one is volatile
-             f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-             f === Intrinsics.have_fma ||  # this one depends on the runtime environment
-             f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
-end
-
-# whether `f` is effect free if nothrow
-intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref ||
-    f === Intrinsics.have_fma || is_pure_intrinsic_infer(f)
 
 ## Computing the cost of a function body
 

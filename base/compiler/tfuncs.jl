@@ -1699,6 +1699,72 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
     return false
 end
 
+# known to be always effect-free (in particular nothrow)
+const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
+
+# known to be effect-free if the are nothrow
+const _PURE_OR_ERROR_BUILTINS = [
+    fieldtype, apply_type, isa, UnionAll,
+    getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
+    Core.kwfunc, Core.ifelse, Core._typevar, (<:),
+    typeassert, throw
+]
+
+const _IDEMPOTENT_BUILTINS = Any[
+    tuple, # tuple is immutable, thus tuples of egal arguments are egal
+    ===,
+    typeof,
+    nfields,
+    fieldtype,
+    apply_type,
+    isa,
+    UnionAll,
+    isdefined,
+    Core.sizeof,
+    Core.kwfunc,
+    Core.ifelse,
+    Core._typevar,
+    (<:),
+    typeassert,
+    throw
+]
+
+const _SPECIAL_BUILTINS = Any[
+    Core._apply_iterate
+]
+
+function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
+    if isa(f, IntrinsicFunction)
+        return intrinsic_effects(f, argtypes)
+    end
+
+    @assert !contains_is(_SPECIAL_BUILTINS, f)
+
+    if (f === Core.getfield || f === Core.isdefined) && length(argtypes) >= 2
+        # consistent if the argtype is immutable
+        if isvarargtype(argtypes[2])
+            return Effects(TRISTATE_UNKNOWN, ALWAYS_TRUE, TRISTATE_UNKNOWN, ALWAYS_TRUE)
+        end
+        s = widenconst(argtypes[2])
+        if isType(s) || !isa(s, DataType) || isabstracttype(s)
+            return Effects(TRISTATE_UNKNOWN, ALWAYS_TRUE, TRISTATE_UNKNOWN, ALWAYS_TRUE)
+        end
+        s = s::DataType
+        ipo_consistent = !ismutabletype(s)
+    else
+        ipo_consistent = contains_is(_IDEMPOTENT_BUILTINS, f)
+    end
+    effect_free = contains_is(_PURE_OR_ERROR_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
+    nothrow = isvarargtype(argtypes[end]) ? false :
+        builtin_nothrow(f, argtypes[2:end], rt)
+
+    return Effects(
+        ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
+        effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
+        nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        ALWAYS_TRUE)
+end
+
 function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecialize(rt))
     rt === Bottom && return false
     contains_is(_PURE_BUILTINS, f) && return true
@@ -1839,6 +1905,46 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         end
     end
     return true
+end
+
+# whether `f` is pure for inference
+function is_pure_intrinsic_infer(f::IntrinsicFunction)
+    return !(f === Intrinsics.pointerref || # this one is volatile
+             f === Intrinsics.pointerset || # this one is never effect-free
+             f === Intrinsics.llvmcall ||   # this one is never effect-free
+             f === Intrinsics.arraylen ||   # this one is volatile
+             f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
+             f === Intrinsics.have_fma ||  # this one depends on the runtime environment
+             f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
+end
+
+# whether `f` is effect free if nothrow
+intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref ||
+    f === Intrinsics.have_fma || is_pure_intrinsic_infer(f)
+
+function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
+    if f === Intrinsics.llvmcall
+        # llvmcall can do arbitrary things
+        return Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN,
+            TRISTATE_UNKNOWN, TRISTATE_UNKNOWN)
+    end
+
+    ipo_consistent = !(f === Intrinsics.pointerref || # this one is volatile
+        f === Intrinsics.arraylen || # this one is volatile
+        f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
+        f === Intrinsics.have_fma ||  # this one depends on the runtime environment
+        f === Intrinsics.cglobal) # cglobal lookup answer changes at runtime
+
+    effect_free = !(f === Intrinsics.pointerset)
+
+    nothrow = isvarargtype(argtypes[end]) ? false :
+        intrinsic_nothrow(f, argtypes[2:end])
+
+    return Effects(
+        ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
+        effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
+        nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        ALWAYS_TRUE)
 end
 
 # TODO: this function is a very buggy and poor model of the return_type function

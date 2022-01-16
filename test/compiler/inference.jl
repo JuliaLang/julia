@@ -3419,10 +3419,10 @@ end
     # Recursive function
     @eval module _Recursive f(n::Integer) = n == 0 ? 0 : f(n-1) + 1 end
     timing = time_inference() do
-        @eval _Recursive.f(5)
+        @eval _Recursive.f(Base.inferencebarrier(5))
     end
-    @test depth(timing) == 3  # root -> f -> +
-    @test length(flatten_times(timing)) == 3  # root, f, +
+    @test 2 <= depth(timing) <= 3  # root -> f (-> +)
+    @test 2 <= length(flatten_times(timing)) <= 3  # root, f, +
 
     # Functions inferred with multiple constants
     @eval module C
