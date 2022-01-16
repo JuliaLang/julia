@@ -843,8 +843,8 @@ The type does not need to be concrete, but annotations with abstract types typic
 performance benefit.
 
 As for constants, the type of a global is not typically meant to be redefined. In interactive usage,
-changing the annotation to a narrower type (the new type is a [subtype](@ref Core.:<:) of the previous
-type) is allowed, but can result in unexpected behavior in code that has already been compiled:
+changing the annotation to a narrower type (the new type is a subtype of the previous type) is
+allowed, but can result in unexpected behavior in code that has already been compiled:
 
 ```jldoctest
 julia> global a::Integer
