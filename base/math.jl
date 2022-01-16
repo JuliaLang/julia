@@ -1208,7 +1208,8 @@ function rem2pi(x::Integer, r::RoundingMode)
     rem2pi(fx, r)
 end
 function rem2pi(x::Real, r::RoundingMode)
-    fx = Float64(x)
+    fx = float(x)
+    x === fx && throw(MethodError(rem2pi, (x, r)))
     rem2pi(fx, r)
 end
 
