@@ -104,6 +104,9 @@ mutable struct PromptState <: ModeState
     last_newline::Float64 # register when last newline was entered
     # this option is to speed up output
     refresh_wait::Union{Timer,Nothing}
+
+    # TODO
+    current_completion
 end
 
 struct Modifiers
@@ -313,29 +316,49 @@ function common_prefix(completions::Vector{String})
     end
 end
 
-# Show available completions
-function show_completions(s::PromptState, completions::Vector{String})
-    colmax = maximum(map(length, completions))
-    num_cols = max(div(width(terminal(s)), colmax+2), 1)
-    entries_per_col, r = divrem(length(completions), num_cols)
-    entries_per_col += r != 0
-    # skip any lines of input after the cursor
-    cmove_down(terminal(s), input_string_newlines_aftercursor(s))
+function show_completions(s::PromptState, completions::Vector{String}, partial, repeats)
+    n = input_string_newlines_aftercursor(s)
+    if n > 0
+        # skip `n` lines of the input after the cursor
+        print(terminal(s), "\x1b[$(n)B")
+    end
+    #print(terminal(s), "\x1b[0G", "\x1b[0J")  # erase
     println(terminal(s))
-    for row = 1:entries_per_col
-        for col = 0:num_cols
-            idx = row + col*entries_per_col
-            if idx <= length(completions)
-                cmove_col(terminal(s), (colmax+2)*col+1)
-                print(terminal(s), completions[idx])
+    colwidth = maximum(textwidth, completions) + 2
+    ncols = max(width(terminal(s)) ÷ colwidth, 1)
+    nrows = (length(completions) - 1) ÷ ncols + 1
+    if repeats == 0
+        select = 0  # no selection
+    else
+        select = (repeats - 1) % length(completions) + 1
+    end
+    for r in 1:nrows
+        for c in 1:ncols
+            i = (c - 1) * nrows + r
+            i > lastindex(completions) && break
+            x = completions[i]
+            prefix, rest = partial, x[lastindex(partial)+1:end]
+            # highlight prefix
+            text = string(
+                "\x1b[1m\x1b[4m", prefix, "\x1b[22m\x1b[24m",
+                rest,
+                ' '^(colwidth - textwidth(x) - 2)
+            )
+            if i == select
+                # highlight selected element
+                text = string("\x1b[48;5;240m", text, "\x1b[0m")
             end
+            print(terminal(s), text, "  ")
         end
-        println(terminal(s))
+        if r != nrows
+            println(terminal(s))
+        end
     end
-    # make space for the prompt
-    for i = 1:input_string_newlines(s)
-        println(terminal(s))
-    end
+
+    # unwind the cursor positioon
+    print(terminal(s), "\x1b[$(n + nrows)A", "\x1b0G")
+
+    return select
 end
 
 # Prompt Completions
@@ -350,12 +373,16 @@ function complete_line(s::MIState)
 end
 
 function complete_line(s::PromptState, repeats::Int)
-    completions, partial, should_complete = complete_line(s.p.complete, s)::Tuple{Vector{String},String,Bool}
+    if repeats == 0
+        completions, partial, should_complete = complete_line(s.p.complete, s)::Tuple{Vector{String},String,Bool}
+    else
+        completions, partial, should_complete, pos = s.current_completion  # TODO
+    end
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
         # a list of possible completions but not complete, e.g. foo(\t
-        show_completions(s, completions)
+        show_completions(s, completions, partial, repeats)
     elseif length(completions) == 1
         # Replace word by completion
         prev_pos = position(s)
@@ -369,8 +396,16 @@ function complete_line(s::PromptState, repeats::Int)
             prev_pos = position(s)
             push_undo(s)
             edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, p)
-        elseif repeats > 0
-            show_completions(s, completions)
+            partial = p
+        end
+        if repeats == 0
+            pos = position(s) - sizeof(partial)
+            s.current_completion = (completions, partial, should_complete, pos)
+        end
+        select = show_completions(s, completions, partial, repeats)
+        if select > 0
+            selected = completions[select]
+            edit_splice!(s, pos => position(s), selected)
         end
     end
     return true
@@ -2227,6 +2262,7 @@ AnyDict(
     "\e[Z" => (s::MIState,o...)->shift_tab_completion(s),
     # Enter
     '\r' => (s::MIState,o...)->begin
+        print(terminal(s), "\x1b[0J")
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
             commit_line(s)
             return :done
@@ -2236,7 +2272,10 @@ AnyDict(
     end,
     '\n' => KeyAlias('\r'),
     # Backspace/^H
-    '\b' => (s::MIState,o...) -> is_region_active(s) ? edit_kill_region(s) : edit_backspace(s),
+    '\b' => (s::MIState,o...) -> begin
+        print(terminal(s), "\x1b[0J")
+        is_region_active(s) ? edit_kill_region(s) : edit_backspace(s)
+    end,
     127 => KeyAlias('\b'),
     # Meta Backspace
     "\e\b" => (s::MIState,o...)->edit_delete_prev_word(s),
@@ -2284,7 +2323,7 @@ AnyDict(
     "^_" => (s::MIState,o...)->edit_undo!(s),
     "\e_" => (s::MIState,o...)->edit_redo!(s),
     # Simply insert it into the buffer by default
-    "*" => (s::MIState,data,c::StringLike)->(edit_insert(s, c)),
+    "*" => (s::MIState,data,c::StringLike)->(print(terminal(s), "\x1b[0J"); edit_insert(s, c)),
     "^U" => (s::MIState,o...)->edit_kill_line_backwards(s),
     "^K" => (s::MIState,o...)->edit_kill_line_forwards(s),
     "^Y" => (s::MIState,o...)->edit_yank(s),
@@ -2488,7 +2527,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), :off, IOBuffer[], 1, InputAreaState(1, 1),
-                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing)
+                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing, nothing)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, IdDict{Any,Any}())
