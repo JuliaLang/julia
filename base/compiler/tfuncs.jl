@@ -795,17 +795,13 @@ function getfield_tfunc(s00, name, order, boundscheck)
 end
 getfield_tfunc(@nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(s00, name, false)
 function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool)
-    s = unwrap_unionall(s00)
-    if isa(s, Union)
-        return tmerge(getfield_tfunc(rewrap_unionall(s.a, s00), name),
-                      getfield_tfunc(rewrap_unionall(s.b, s00), name))
-    elseif isa(s, Conditional)
+    if isa(s00, Conditional)
         return Bottom # Bool has no fields
-    elseif isa(s, Const) || isconstType(s)
-        if !isa(s, Const)
-            sv = s.parameters[1]
+    elseif isa(s00, Const) || isconstType(s00)
+        if !isa(s00, Const)
+            sv = s00.parameters[1]
         else
-            sv = s.val
+            sv = s00.val
         end
         if isa(name, Const)
             nv = name.val
@@ -845,11 +841,15 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
                 return unwrapva(s00.fields[nv])
             end
         end
+    else
+        s = unwrap_unionall(s00)
     end
-    if isType(s) || !isa(s, DataType) || isabstracttype(s)
-        return Any
+    if isa(s, Union)
+        return tmerge(_getfield_tfunc(rewrap_unionall(s.a, s00), name, setfield),
+                      _getfield_tfunc(rewrap_unionall(s.b, s00), name, setfield))
     end
-    s = s::DataType
+    isa(s, DataType) || return Any
+    isabstracttype(s) && return Any
     if s <: Tuple && !(Int <: widenconst(name))
         return Bottom
     end
@@ -873,7 +873,7 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
         if !(_ts <: Tuple)
             return Any
         end
-        return getfield_tfunc(_ts, name)
+        return _getfield_tfunc(_ts, name, setfield)
     end
     ftypes = datatype_fieldtypes(s)
     nf = length(ftypes)
@@ -1817,6 +1817,10 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         ty, isexact, isconcrete = instanceof_tfunc(argtypes[1])
         xty = widenconst(argtypes[2])
         return isconcrete && isprimitivetype(ty) && isprimitivetype(xty)
+    end
+    if f === Intrinsics.have_fma
+        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1])
+        return isconcrete && isprimitivetype(ty)
     end
     # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
     # primitive types of the same type.

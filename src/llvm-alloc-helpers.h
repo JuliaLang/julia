@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #ifndef LLVM_ALLOC_HELPERS_H
 #define LLVM_ALLOC_HELPERS_H
 #include <llvm-c/Types.h>
@@ -25,8 +27,8 @@ namespace jl_alloc {
 
     struct MemOp {
         llvm::Instruction *inst;
+        uint64_t offset = 0;
         unsigned opno;
-        uint32_t offset = 0;
         uint32_t size = 0;
         bool isobjref:1;
         bool isaggr:1;

@@ -469,6 +469,8 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             if (getValueAddrSpace(NewV) == 0)
                 break;
             CurrentV = NewV;
+        } else if (auto *Freeze = dyn_cast<FreezeInst>(CurrentV)) {
+            CurrentV = Freeze->getOperand(0); // Can be formed by optimizations, treat as a no-op
         } else if (auto *GEP = dyn_cast<GetElementPtrInst>(CurrentV)) {
             CurrentV = GEP->getOperand(0);
             // GEP can make vectors from a single base pointer

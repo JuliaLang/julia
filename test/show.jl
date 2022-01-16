@@ -1877,17 +1877,24 @@ end
 
 @testset "#14684: `display` should print associative types in full" begin
     d = Dict(1 => 2, 3 => 45)
-    buf = IOBuffer()
-    td = TextDisplay(buf)
+    td = TextDisplay(PipeBuffer())
 
     display(td, d)
-    result = String(take!(td.io))
+    result = read(td.io, String)
     @test occursin(summary(d), result)
 
     # Is every pair in the string?
     for el in d
         @test occursin(string(el), result)
     end
+end
+
+@testset "#43766: `display` trailing newline" begin
+    td = TextDisplay(PipeBuffer())
+    display(td, 1)
+    @test read(td.io, String) == "1\n"
+    show(td.io, 1)
+    @test read(td.io, String) == "1"
 end
 
 function _methodsstr(f)
@@ -2354,4 +2361,12 @@ end
     @test_repr "T[1;;; 2]"
     @test_repr "T[1;;; 2 3;;; 4]"
     @test_repr "T[1;;; 2;;;; 3;;; 4]"
+end
+
+@testset "Cmd" begin
+    @test sprint(show, `true`) == "`true`"
+    @test sprint(show, setenv(`true`, "A" => "B")) == """setenv(`true`,["A=B"])"""
+    @test sprint(show, setcpuaffinity(`true`, [1, 2])) == "setcpuaffinity(`true`, [1, 2])"
+    @test sprint(show, setenv(setcpuaffinity(`true`, [1, 2]), "A" => "B")) ==
+          """setenv(setcpuaffinity(`true`, [1, 2]),["A=B"])"""
 end

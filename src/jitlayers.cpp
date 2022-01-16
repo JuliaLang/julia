@@ -191,7 +191,7 @@ static jl_callptr_t _jl_compile_codeinst(
     return fptr;
 }
 
-const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
+const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params, LLVMContext &ctxt);
 
 // compile a C-callable alias
 extern "C" JL_DLLEXPORT
@@ -209,7 +209,7 @@ int jl_compile_extern_c_impl(void *llvmmod, void *p, void *sysimg, jl_value_t *d
     Module *into = (Module*)llvmmod;
     if (into == NULL)
         into = jl_create_llvm_module("cextern");
-    const char *name = jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams);
+    const char *name = jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams, into->getContext());
     bool success = true;
     if (!sysimg) {
         if (jl_ExecutionEngine->getGlobalValueAddress(name)) {

@@ -672,11 +672,11 @@ mktempdir() do pfx
     libpath = relpath(dirname(dlpath("libjulia-codegen")), dirname(Sys.BINDIR))
     libs_deleted = 0
     for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
-        rm(f; force=true, recursive=true)
+        rm(joinpath(pfx, libpath, f); force=true, recursive=true)
         libs_deleted += 1
     end
     @test libs_deleted > 0
-    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'println("no codegen!")'`) == "no codegen!"
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'print("no codegen!\n")'`) == "no codegen!"
 end
 
 # issue #42645

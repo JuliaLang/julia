@@ -26,6 +26,16 @@ function showerror(io::IO, ce::CapturedException)
 end
 
 """
+    capture_exception(ex, bt) -> Exception
+
+Returns an exception, possibly incorporating information from a backtrace `bt`. Defaults to returning [`CapturedException(ex, bt)`](@ref).
+
+Used in [`asyncmap`](@ref) and [`asyncmap!`](@ref) to capture exceptions thrown during
+the user-supplied function call.
+"""
+capture_exception(ex, bt) = CapturedException(ex, bt)
+
+"""
     CompositeException
 
 Wrap a `Vector` of exceptions thrown by a [`Task`](@ref) (e.g. generated from a remote worker over a channel
@@ -317,7 +327,7 @@ function _wait2(t::Task, waiter::Task)
                 # XXX: Ideally we would be able to unset this
                 current_task().sticky = true
                 tid = Threads.threadid()
-                ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
+                ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
             end
             return nothing
         else
@@ -684,7 +694,7 @@ function enq_work(t::Task)
             # XXX: Ideally we would be able to unset this
             current_task().sticky = true
             tid = Threads.threadid()
-            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
         end
         push!(Workqueues[tid], t)
     else
@@ -692,7 +702,7 @@ function enq_work(t::Task)
             # if multiq is full, give to a random thread (TODO fix)
             if tid == 0
                 tid = mod(time_ns() % Int, Threads.nthreads()) + 1
-                ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
             end
             push!(Workqueues[tid], t)
         else
