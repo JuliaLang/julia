@@ -142,7 +142,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                         @error "Evaluation succeeded, but an error occurred while displaying the value" typeof(value)
                         rethrow()
                     end
-                    println()
                 end
             end
             break

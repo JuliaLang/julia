@@ -402,13 +402,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
-    if (isa(result, Const) || isconstType(result))
+    wresult = isa(result, InterConditional) ? widenconditional(result) : result
+    if (isa(wresult, Const) || isconstType(wresult))
         proven_pure = false
         # must be proven pure to use constant calling convention;
         # otherwise we might skip throwing errors (issue #20704)
         # TODO: Improve this analysis; if a function is marked @pure we should really
         # only care about certain errors (e.g. method errors and type errors).
-        if length(ir.stmts) < 10
+        if length(ir.stmts) < 15
             proven_pure = true
             for i in 1:length(ir.stmts)
                 node = ir.stmts[i]
@@ -436,14 +437,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
             src.pure = true
-            if isa(result, Const)
-                val = result.val
+            if isa(wresult, Const)
+                val = wresult.val
                 if is_inlineable_constant(val)
                     analyzed = ConstAPI(val)
                 end
             else
-                @assert isconstType(result)
-                analyzed = ConstAPI(result.parameters[1])
+                @assert isconstType(wresult)
+                analyzed = ConstAPI(wresult.parameters[1])
             end
             force_noinline || (src.inlineable = true)
         end
@@ -624,7 +625,8 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
 end
 
 # whether `f` is effect free if nothrow
-intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref || is_pure_intrinsic_infer(f)
+intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref ||
+    f === Intrinsics.have_fma || is_pure_intrinsic_infer(f)
 
 ## Computing the cost of a function body
 

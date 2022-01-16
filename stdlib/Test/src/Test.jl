@@ -94,9 +94,6 @@ end
 
 function Base.show(io::IO, t::Pass)
     printstyled(io, "Test Passed"; bold = true, color=:green)
-    if !(t.orig_expr === nothing)
-        print(io, "\n  Expression: ", t.orig_expr)
-    end
     if t.test_type === :test_throws
         # The correct type of exception was thrown
         if t.message_only
@@ -104,10 +101,6 @@ function Base.show(io::IO, t::Pass)
         else
             print(io, "\n      Thrown: ", typeof(t.value))
         end
-    elseif t.test_type === :test && t.data !== nothing
-        # The test was an expression, so display the term-by-term
-        # evaluated version as well
-        print(io, "\n   Evaluated: ", t.data)
     end
 end
 
@@ -389,12 +382,9 @@ If executed outside a `@testset`, throw an exception instead of returning `Fail`
 ```jldoctest
 julia> @test true
 Test Passed
-  Expression: true
 
 julia> @test [1, 2] + [2, 1] == [3, 3]
 Test Passed
-  Expression: [1, 2] + [2, 1] == [3, 3]
-   Evaluated: [3, 3] == [3, 3]
 ```
 
 The `@test f(args...) key=val...` form is equivalent to writing
@@ -404,8 +394,6 @@ is a call using infix syntax such as approximate comparisons:
 ```jldoctest
 julia> @test π ≈ 3.14 atol=0.01
 Test Passed
-  Expression: ≈(π, 3.14, atol = 0.01)
-   Evaluated: ≈(π, 3.14; atol = 0.01)
 ```
 
 This is equivalent to the uglier test `@test ≈(π, 3.14, atol=0.01)`.
@@ -434,8 +422,6 @@ Test Broken
 
 julia> @test 2 + 2 ≈ 5 atol=1 broken=false
 Test Passed
-  Expression: ≈(2 + 2, 5, atol = 1)
-   Evaluated: ≈(4, 5; atol = 1)
 
 julia> @test 2 + 2 == 5 skip=true
 Test Broken
@@ -443,8 +429,6 @@ Test Broken
 
 julia> @test 2 + 2 == 4 skip=false
 Test Passed
-  Expression: 2 + 2 == 4
-   Evaluated: 4 == 4
 ```
 
 !!! compat "Julia 1.7"
@@ -699,17 +683,14 @@ Note that `@test_throws` does not support a trailing keyword form.
 ```jldoctest
 julia> @test_throws BoundsError [1, 2, 3][4]
 Test Passed
-  Expression: ([1, 2, 3])[4]
       Thrown: BoundsError
 
 julia> @test_throws DimensionMismatch [1, 2, 3] + [1, 2]
 Test Passed
-  Expression: [1, 2, 3] + [1, 2]
       Thrown: DimensionMismatch
 
 julia> @test_throws "Try sqrt(Complex" sqrt(-1)
 Test Passed
-  Expression: sqrt(-1)
      Message: "DomainError with -1.0:\\nsqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
 ```
 
