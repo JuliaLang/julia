@@ -65,7 +65,7 @@ function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
 end
 
 function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
-    ex = ir[SSAValue(def)]
+    ex = ir[SSAValue(def)][:inst]
     if isexpr(ex, :new)
         return ex.args[1+fidx]
     else
@@ -838,7 +838,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         nuses_total = used_ssas[idx] + nuses - length(intermediaries)
         nleaves == nuses_total || continue
         # Find the type for this allocation
-        defexpr = ir[SSAValue(idx)]
+        defexpr = ir[SSAValue(idx)][:inst]
         isexpr(defexpr, :new) || continue
         newidx = idx
         typ = ir.stmts[newidx][:type]
@@ -853,7 +853,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
         all_forwarded = true
         for use in defuse.uses
-            stmt = ir[SSAValue(use)] # == `getfield` call
+            stmt = ir[SSAValue(use)][:inst] # == `getfield` call
             # We may have discovered above that this use is dead
             # after the getfield elim of immutables. In that case,
             # it would have been deleted. That's fine, just ignore
@@ -867,7 +867,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             push!(fielddefuse[field].uses, use)
         end
         for def in defuse.defs
-            stmt = ir[SSAValue(def)]::Expr # == `setfield!` call
+            stmt = ir[SSAValue(def)][:inst]::Expr # == `setfield!` call
             field = try_compute_fieldidx_stmt(ir, stmt, typ)
             field === nothing && @goto skip
             isconst(typ, field) && @goto skip # we discovered an attempt to mutate a const field, which must error
@@ -918,7 +918,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 end
                 # Now go through all uses and rewrite them
                 for stmt in du.uses
-                    ir[SSAValue(stmt)] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
+                    ir[SSAValue(stmt)][:inst] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
                 end
                 if !isbitstype(ftyp)
                     if preserve_uses !== nothing
@@ -928,7 +928,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     end
                 end
                 for b in phiblocks
-                    n = ir[phinodes[b]]::PhiNode
+                    n = ir[phinodes[b]][:inst]::PhiNode
                     for p in ir.cfg.blocks[b].preds
                         push!(n.edges, p)
                         push!(n.values, compute_value_for_block(ir, domtree,
@@ -938,7 +938,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             end
             for stmt in du.defs
                 stmt == newidx && continue
-                ir[SSAValue(stmt)] = nothing
+                ir[SSAValue(stmt)][:inst] = nothing
             end
         end
         preserve_uses === nothing && continue
@@ -950,7 +950,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         end
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
-            ir[SSAValue(use)] = form_new_preserves(ir[SSAValue(use)]::Expr, intermediaries, new_preserves)
+            ir[SSAValue(use)][:inst] = form_new_preserves(ir[SSAValue(use)][:inst]::Expr, intermediaries, new_preserves)
         end
 
         @label skip
@@ -1219,7 +1219,7 @@ function type_lift_pass!(ir::IRCode)
                         end
                     end
                     if which !== SSAValue(0)
-                        phi = ir[which]
+                        phi = ir[which][:inst]
                         if isa(phi, PhiNode)
                             phi.values[use] = new_phi
                         else
