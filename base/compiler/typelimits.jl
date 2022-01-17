@@ -309,163 +309,186 @@ function issimpleenoughtype(@nospecialize t)
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
 
-# TODO (lattice overhaul) tmerge(typea::LatticeElement, typeb::LatticeElement)
-function tmerge(@nospecialize(typea), @nospecialize(typeb))
-    typea = unwraptype(typea)
-    typeb = unwraptype(typeb)
-    typ = _tmerge(typea, typeb)
-    return LatticeElement(typ) # rewrap
-end
+"""
+    a::LatticeElement ⊔ b::LatticeElement -> x::LatticeElement
 
-# pick a wider type that contains both typea and typeb,
-# with some limits on how "large" it can get,
-# but without losing too much precision in common cases
-# and also trying to be mostly associative and commutative
-function _tmerge(@nospecialize(typea), @nospecialize(typeb))
-    typea === Bottom && return typeb
-    typeb === Bottom && return typea
-    suba = typea ⊑ typeb
-    suba && issimpleenoughtype(typeb) && return typeb
-    subb = typeb ⊑ typea
-    suba && subb && return typea
-    subb && issimpleenoughtype(typea) && return typea
+A widening operator of the type inference lattice.
+Since the type inference lattice has infinite height, `x` overapproximates the join of `a`
+and `b` in order to ensure the convergence of inference, i.e., it picks a wider type that
+contains both `a` and `b`, with some limits on how "large" it can get, but without losing
+too much precision in common cases.
+`⊔` also tries to be mostly asociative and commutative.
+Note that this operation is often denoted as `∇` in the literature of abstract interpretation.
+"""
+a::LatticeElement ⊔ b::LatticeElement = begin
+    a === ⊥ && return b
+    b === ⊥ && return a
 
-    # type-lattice for LimitedAccuracy wrapper
-    # the merge create a slightly narrower type than needed, but we can't
+    # # COMBAK (lattice overhaul) moved to typemerge
+    # still should enable a similar fast pass here as well?
+    # asub = a ⊑ b
+    # asub && issimpleenoughtype(b) && return b
+    # bsub = b ⊑ a
+    # asub && bsub && return a
+    # bsub && issimpleenoughtype(a) && return a
+
+    # merge Const and PartialStruct properties
+    mconstant = __NULL_CONSTANT__
+    aconstant = a.constant
+    if aconstant !== __NULL_CONSTANT__
+        bconstant = b.constant
+        if aconstant === bconstant
+            mconstant = aconstant
+        elseif bconstant !== __NULL_CONSTANT__
+            aty = widenconst(a)
+            bty = widenconst(b)
+            if aty === bty
+                a_nfields = nfields_tfunc(a)
+                b_nfields = nfields_tfunc(b)
+                if isConst(a_nfields) && isConst(b_nfields)
+                    type_nfields = constant(a_nfields)::Int
+                    if type_nfields == constant(b_nfields)::Int
+                        if type_nfields ≠ 0
+                            fields = Vector{LatticeElement}(undef, type_nfields)
+                            anyconst = false
+                            for i = 1:type_nfields
+                                ai = getfield_tfunc(a, Const(i))
+                                bi = getfield_tfunc(b, Const(i))
+                                ity = ai ⊔ bi
+                                if ai === ⊥ || bi === ⊥
+                                    ity = NativeType(widenconst(ity))
+                                end
+                                fields[i] = ity
+                                anyconst |= has_nontrivial_const_info(ity)
+                            end
+                            if anyconst
+                                mconstant = fields
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    # merge special properties
+    # TODO implement specialmerge for `PartialTypeVar`?
+    aspecial = a.special
+    bspecial = b.special
+    if isa(aspecial, ConditionalInfo)
+        if isa(bspecial, ConditionalInfo)
+            mspecial = specialmerge(a, b, aspecial, bspecial)
+        else
+            mspecial = specialmerge(a, b, aspecial, Special(bspecial))
+        end
+    elseif isa(bspecial, ConditionalInfo)
+        mspecial = specialmerge(a, b, Special(aspecial), bspecial)
+    elseif isa(aspecial, PartialOpaque) && isa(bspecial, PartialOpaque)
+        mspecial = specialmerge(a, b, aspecial, bspecial)
+    elseif aspecial === nothing || bspecial === nothing
+        mspecial = nothing
+    else
+        mspecial = specialmerge(a, b, aspecial, bspecial) # customization
+    end
+
+    # merge LimitedAccuracy properties
+    # the merge create a slightly narrower property than needed, but we can't
     # represent the precise intersection of causes and don't attempt to
     # enumerate some of these cases where we could
-    if isLimitedAccuracy(typea) && isLimitedAccuracy(typeb)
-        if causes(typea) ⊆ causes(typeb)
-            newcauses = causes(typeb)
-        elseif causes(typeb) ⊆ causes(typea)
-            newcauses = causes(typea)
+    acauses = a.causes
+    bcauses = b.causes
+    if acauses !== nothing
+        acauses = acauses::IdSet{InferenceState}
+        if bcauses !== nothing
+            mcauses = union!(copy(acauses), bcauses::IdSet{InferenceState})
         else
-            newcauses = union!(copy(causes(typea)), causes(typeb))
+            mcauses = acauses
         end
-        return LimitedAccuracy(tmerge(_ignorelimited(typea), _ignorelimited(typeb)), newcauses)
-    elseif isLimitedAccuracy(typea)
-        return LimitedAccuracy(tmerge(_ignorelimited(typea), typeb), causes(typea))
-    elseif isLimitedAccuracy(typeb)
-        return LimitedAccuracy(tmerge(typea, _ignorelimited(typeb)), causes(typeb))
+    elseif bcauses !== nothing
+        mcauses = bcauses::IdSet{InferenceState}
+    else
+        mcauses = nothing
     end
-    # type-lattice for MaybeUndef wrapper
-    if isMaybeUndef(typea) || isMaybeUndef(typeb)
-        return MaybeUndef(tmerge(ignoremaybeundef(typea), ignoremaybeundef(typeb)))
-    end
-    # type-lattice for Conditional wrapper
-    if isConditional(typea) && !isConditional(typeb) && isConst(typeb)
-        cnd = conditional(typea)
-        if constant(typeb) === true
-            typeb = Conditional(cnd.slot_id, ⊤, ⊥)
-        elseif constant(typeb) === false
-            typeb = Conditional(cnd.slot_id, ⊥, ⊤)
-        end
-    end
-    if isConditional(typeb) && !isConditional(typea) && isConst(typea)
-        cnd = conditional(typeb)
-        if constant(typea) === true
-            typea = Conditional(cnd.slot_id, ⊤, ⊥)
-        elseif constant(typea) === false
-            typea = Conditional(cnd.slot_id, ⊥, ⊤)
-        end
-    end
-    if isConditional(typea) && isConditional(typeb)
-        cnda, cndb = conditional(typea), conditional(typeb)
-        if is_same_conditionals(cnda, cndb)
-            vtype = tmerge(cnda.vtype, cndb.vtype)
-            elsetype = tmerge(cnda.elsetype, cndb.elsetype)
-            if vtype !== elsetype
-                return Conditional(cnda.slot_id, vtype, elsetype)
-            end
-        end
-        val = maybe_extract_const_bool(typea)
-        if val isa Bool && val === maybe_extract_const_bool(typeb)
-            return Const(val)
-        end
-        return Bool
-    end
-    # type-lattice for InterConditional wrapper, InterConditional will never be merged with Conditional
-    if isInterConditional(typea) && !isInterConditional(typeb) && isConst(typeb)
-        cnd = interconditional(typea)
-        if constant(typeb) === true
-            typeb = InterConditional(cnd.slot_id, ⊤, ⊥)
-        elseif constant(typeb) === false
-            typeb = InterConditional(cnd.slot_id, ⊥, ⊤)
+
+    # merge MaybeUndef properties
+    mmaybeundef = a.maybeundef | b.maybeundef
+
+    # finally join the types
+    mtyp = typemerge(widenconst(a), widenconst(b))
+
+    return LatticeElement(mtyp, mconstant, mspecial;
+        causes = mcauses, maybeundef = mmaybeundef)
+end
+
+struct Special
+    val
+    Special(@nospecialize val) = new(val)
+end
+
+@inline function specialmerge(_::LatticeElement, _::LatticeElement,
+    acond::ConditionalInfo, bcond::ConditionalInfo)
+    ainter = acond.inter
+    binter = bcond.inter
+    @assert ainter === binter "invalid ConditionalInfo merge"
+    if is_same_conditionals(acond, bcond)
+        vtype = acond.vtype ⊔ bcond.vtype
+        elsetype = acond.elsetype ⊔ bcond.elsetype
+        if !is_lattice_equal(vtype, elsetype)
+            return ConditionalInfo(acond.slot_id, vtype, elsetype, ainter)
         end
     end
-    if isInterConditional(typeb) && !isInterConditional(typea) && isConst(typea)
-        cnd = interconditional(typeb)
-        if constant(typea) === true
-            typea = InterConditional(cnd.slot_id, ⊤, ⊥)
-        elseif constant(typea) === false
-            typea = InterConditional(cnd.slot_id, ⊥, ⊤)
+    return nothing
+end
+
+@inline function specialmerge(a::LatticeElement, b::LatticeElement,
+    acond::ConditionalInfo, bspecial::Special)
+    bval = bspecial.val
+    bval === nothing || return nothing # conflict of special property
+    bconstant = b.constant
+    if bconstant === true
+        return specialmerge(a, b, acond, ConditionalInfo(acond.slot_id, ⊤, ⊥, acond.inter))
+    elseif bconstant === false
+        return specialmerge(a, b, acond, ConditionalInfo(acond.slot_id, ⊥, ⊤, acond.inter))
+    end
+    return nothing
+end
+
+@inline specialmerge(a::LatticeElement, b::LatticeElement,
+    aspecial::Special, bcond::ConditionalInfo) = specialmerge(b, a, bcond, aspecial)
+
+@inline function specialmerge(_::LatticeElement, _::LatticeElement,
+    a::PartialOpaque, b::PartialOpaque)
+    atyp = a.typ
+    btyp = b.typ
+    if atyp === btyp
+        if (a.source === b.source &&
+            a.isva === b.isva &&
+            a.parent === b.parent)
+            env = a.env::LatticeElement ⊔ b.env::LatticeElement
+            return PartialOpaque(atyp, env, a.isva, a.parent, a.source)
         end
     end
-    if isInterConditional(typea) && isInterConditional(typeb)
-        cnda, cndb = interconditional(typea), interconditional(typeb)
-        if is_same_conditionals(cnda, cndb)
-            vtype = tmerge(cnda.vtype, cndb.vtype)
-            elsetype = tmerge(cnda.elsetype, cndb.elsetype)
-            if vtype !== elsetype
-                return InterConditional(cnda.slot_id, vtype, elsetype)
-            end
-        end
-        val = maybe_extract_const_bool(typea)
-        if val isa Bool && val === maybe_extract_const_bool(typeb)
-            return Const(val)
-        end
-        return Bool
-    end
-    # type-lattice for Const and PartialStruct wrappers
-    if ((isPartialStruct(typea) || isConst(typea)) &&
-        (isPartialStruct(typeb) || isConst(typeb)))
-        aty = widenconst(typea)
-        bty = widenconst(typeb)
-        if aty === bty
-            typea_nfields = nfields_tfunc(typea)
-            typeb_nfields = nfields_tfunc(typeb)
-            isConst(typea_nfields) || return aty
-            isConst(typeb_nfields) || return aty
-            type_nfields = constant(typea_nfields)::Int
-            type_nfields === constant(typeb_nfields)::Int || return aty
-            type_nfields == 0 && return aty
-            fields = Vector{LatticeElement}(undef, type_nfields)
-            anyconst = false
-            for i = 1:type_nfields
-                ai = getfield_tfunc(typea, Const(i))
-                bi = getfield_tfunc(typeb, Const(i))
-                ity = tmerge(ai, bi)
-                if ai === Union{} || bi === Union{}
-                    ity = widenconst(ity)
-                end
-                fields[i] = ity
-                anyconst |= has_nontrivial_const_info(ity)
-            end
-            return anyconst ? PartialStruct(aty, fields) : aty
-        end
-    end
-    if isPartialOpaque(typea) && isPartialOpaque(typeb) && widenconst(typea) === widenconst(typeb)
-        typea, typeb = partialopaque(typea), partialopaque(typeb)
-        if !(typea.source === typeb.source &&
-             typea.isva === typeb.isva &&
-             typea.parent === typeb.parent)
-            return typea.typ
-        end
-        return mkPartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
-            typea.isva, typea.parent, typea.source)
-    end
-    # no special type-inference lattice, join the types
-    typea, typeb = widenconst(typea), widenconst(typeb)
-    if !isa(typea, Type) || !isa(typeb, Type)
-        # XXX: this should never happen
-        return Any
-    end
+    return nothing
+end
+
+@noinline specialmerge(_::LatticeElement, _::LatticeElement,
+    @nospecialize(::Any), @nospecialize(::Any)) = nothing
+
+@inline function typemerge(@nospecialize(typea::Type), @nospecialize(typeb::Type))
+    typea === Bottom && return typeb
+    typeb === Bottom && return typea
+    asub = typea <: typeb
+    asub && issimpleenoughtype(typeb) && return typeb
+    bsub = typeb <: typea
+    asub && bsub && return typea
+    bsub && issimpleenoughtype(typea) && return typea
+
     typea == typeb && return typea
     # it's always ok to form a Union of two concrete types
     if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
         return Union{typea, typeb}
     end
-    # collect the list of types from past tmerge calls returning Union
+    # collect the list of types from past typemerge calls returning Union
     # and then reduce over that list
     types = Any[]
     _uniontypes(typea, types)
@@ -485,7 +508,7 @@ function _tmerge(@nospecialize(typea), @nospecialize(typeb))
         return u
     end
     # see if any of the union elements have the same TypeName
-    # in which case, simplify this tmerge by replacing it with
+    # in which case, simplify this typemerge by replacing it with
     # the widest possible version of itself (the wrapper)
     for i in 1:length(types)
         ti = types[i]

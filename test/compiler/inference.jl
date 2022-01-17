@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: LatticeElement, NativeType, Bottom, Const, ⊑, tmerge
+import Core.Compiler: LatticeElement, NativeType, Bottom, Const, ⊑
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
-using Random, Core.IR
+using Test, Random, Core.IR
 using InteractiveUtils: code_llvm
 
 function PartialStruct(@nospecialize(typ), fields::Vector{Any})
@@ -44,6 +44,7 @@ function latticeop(f)
         end
     end
 end
+const ⊔ = latticeop(Core.Compiler.:⊔)
 const is_lattice_equal = latticeop(Core.Compiler.is_lattice_equal)
 
 # HACK
@@ -155,7 +156,7 @@ end
 @test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 3
 
 # PR 22120
-function tmerge_test(a, b, r, commutative=true)
+function tuplemerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
     if commutative
         @test r == Core.Compiler.tuplemerge(b, a)
@@ -163,49 +164,68 @@ function tmerge_test(a, b, r, commutative=true)
         @test_broken r == Core.Compiler.tuplemerge(b, a)
     end
 end
-tmerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
-tmerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
-tmerge_test(Tuple{Vararg{Int}}, Tuple{String}, Tuple)
-tmerge_test(Tuple{Int}, Tuple{Int, Int},
+tuplemerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
+tuplemerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
+tuplemerge_test(Tuple{Vararg{Int}}, Tuple{String}, Tuple)
+tuplemerge_test(Tuple{Int}, Tuple{Int, Int},
     Tuple{Vararg{Int}})
-tmerge_test(Tuple{Integer}, Tuple{Int, Int},
+tuplemerge_test(Tuple{Integer}, Tuple{Int, Int},
     Tuple{Vararg{Integer}})
-tmerge_test(Tuple{}, Tuple{Int, Int},
+tuplemerge_test(Tuple{}, Tuple{Int, Int},
     Tuple{Vararg{Int}})
-tmerge_test(Tuple{}, Tuple{Complex},
+tuplemerge_test(Tuple{}, Tuple{Complex},
     Tuple{Vararg{Complex}})
-tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF64},
+tuplemerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF64},
     Tuple{Vararg{Complex}})
-tmerge_test(Tuple{Vararg{ComplexF32}}, Tuple{Vararg{ComplexF64}},
+tuplemerge_test(Tuple{Vararg{ComplexF32}}, Tuple{Vararg{ComplexF64}},
     Tuple{Vararg{Complex}})
-tmerge_test(Tuple{}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{ComplexF32, ComplexF32, ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{ComplexF32, ComplexF32, ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{}, Tuple{Union{ComplexF64, ComplexF32}, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{}, Tuple{Union{ComplexF64, ComplexF32}, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
-tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}}, false)
-tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
+tuplemerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}})
-@test tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+
+# test merges of native types
+@test Tuple{} ⊔ Union{Nothing, Tuple{ComplexF32, ComplexF32}} ==
     Union{Nothing, Tuple{}, Tuple{ComplexF32, ComplexF32}}
-@test tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF32}}) ==
+@test Tuple{} ⊔ Union{Nothing, Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF32}} ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
-@test tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+@test Union{Nothing, Tuple{ComplexF32}} ⊔ Union{Nothing, Tuple{ComplexF32, ComplexF32}} ==
     Union{Nothing, Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF32}}
-@test tmerge(Union{Nothing, Tuple{}, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+@test Union{Nothing, Tuple{}, Tuple{ComplexF32}} ⊔ Union{Nothing, Tuple{ComplexF32, ComplexF32}} ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
-@test tmerge(Vector{Int}, tmerge(Vector{String}, Vector{Bool})) ==
+@test Vector{Int} ⊔ (Vector{String} ⊔ Vector{Bool}) ==
     Union{Vector{Bool}, Vector{Int}, Vector{String}}
-@test tmerge(Vector{Int}, tmerge(Vector{String}, Union{Vector{Bool}, Vector{Symbol}})) == Vector
-@test tmerge(Base.BitIntegerType, Bottom) == Base.BitIntegerType
-@test tmerge(Bottom, Base.BitIntegerType) == Base.BitIntegerType
-@test is_lattice_equal(tmerge(InterConditional(1, Int, Bottom), InterConditional(1, String, Bottom)), InterConditional(1, Union{Int,String}, Bottom))
-@test tmerge(InterConditional(1, Int, Bottom), InterConditional(2, String, Bottom)) === Const(true)
-@test tmerge(InterConditional(1, Int, Bottom), Const(false)) ⊑ InterConditional(1, Int, Any)
+@test Vector{Int} ⊔ (Vector{String} ⊔ Union{Vector{Bool}, Vector{Symbol}}) == Vector
+@test Base.BitIntegerType ⊔ Bottom == Base.BitIntegerType
+@test Bottom ⊔ Base.BitIntegerType == Base.BitIntegerType
+
+let a = Conditional(1, Int, Bottom), b = Conditional(1, String, Bottom)
+    t = a ⊔ b
+    @test is_lattice_equal(t, Conditional(1, Union{Int,String}, Bottom))
+end
+@test Conditional(1, Int, Bottom) ⊔ Conditional(2, String, Bottom) === Const(true)
+@test Conditional(1, Int, Bottom) ⊔ Const(true) ⊑ Const(true)
+@test Conditional(1, Int, Bottom) ⊔ Const(false) ⊑ Conditional(1, Int, Any)
+@test Conditional(1, Bottom, Int) ⊔ Const(true) ⊑ Conditional(1, Any, Int)
+@test Conditional(1, Bottom, Int) ⊔ Const(false) ⊑ Const(false)
+
+let a = InterConditional(1, Int, Bottom), b = InterConditional(1, String, Bottom)
+    t = a ⊔ b
+    @test is_lattice_equal(t, InterConditional(1, Union{Int,String}, Bottom))
+end
+@test InterConditional(1, Int, Bottom) ⊔ InterConditional(2, String, Bottom) === Const(true)
+@test InterConditional(1, Int, Bottom) ⊔ Const(true) ⊑ Const(true)
+@test InterConditional(1, Int, Bottom) ⊔ Const(false) ⊑ InterConditional(1, Int, Any)
+@test InterConditional(1, Bottom, Int) ⊔ Const(true) ⊑ InterConditional(1, Any, Int)
+@test InterConditional(1, Bottom, Int) ⊔ Const(false) ⊑ Const(false)
 
 struct SomethingBits
     x::Base.BitIntegerType
@@ -2930,7 +2950,7 @@ end
 @test @inferred(foo30783(2)) == Val(1)
 
 # PartialStruct tmerge
-using Core.Compiler: tmerge, Const, ⊑
+using Core.Compiler: Const, ⊑
 struct FooPartial
     a::Int
     b::Int
@@ -2943,7 +2963,7 @@ let PT1 = PartialStruct(FooPartial, Any[Const(1), Const(2), Int]),
     @test PT1 ⊑ PT2
     @test !(PT1 ⊑ PT3) && !(PT2 ⊑ PT1)
     let (==) = (a, b)->(a ⊑ b && b ⊑ a)
-        @test tmerge(PT1, PT3) == PT2
+        @test PT1 ⊔ PT3 == PT2
     end
 end
 
@@ -4054,8 +4074,8 @@ end
 @testset "issue #43784" begin
     init = Base.ImmutableDict{Any,Any}()
     a = Const(init)
-    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, Any])
-    c = Core.Compiler.tmerge(a, b)
+    b = PartialStruct(typeof(init), Any[Const(init), Any, Any])
+    c = a ⊔ b
     @test ⊑(a, c)
     @test ⊑(b, c)
 

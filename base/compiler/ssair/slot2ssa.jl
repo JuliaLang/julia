@@ -592,7 +592,7 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
         while isDelayedTyp(typ)
             typ = types(ir)[getDelayedTyp(typ).phi::NewSSAValue]
         end
-        new_typ = tmerge(new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
+        new_typ = new_typ ⊔ (was_maybe_undef ? MaybeUndef(typ) : typ)
     end
     return new_typ
 end
@@ -735,7 +735,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             if isDelayedTyp(typ)
                 push!(type_refine_phi, ssaval.id)
             end
-            new_typ = isDelayedTyp(typ) ? ⊥ : tmerge(old_entry[:type], typ)
+            new_typ = isDelayedTyp(typ) ? ⊥ : (old_entry[:type] ⊔ typ)
             old_entry[:type] = new_typ
             old_entry[:inst] = node
             incoming_vals[slot] = ssaval
@@ -869,7 +869,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 while isDelayedTyp(typ)
                     typ = types(ir)[getDelayedTyp(typ).phi::NewSSAValue]
                 end
-                new_typ = tmerge(new_typ, typ)
+                new_typ = new_typ ⊔ typ
             end
             node[:type] = new_typ
         end

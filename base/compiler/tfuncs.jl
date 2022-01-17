@@ -233,7 +233,7 @@ function ifelse_tfunc(cnd::LatticeElement, x::LatticeElement, y::LatticeElement)
     elseif !(Bool ⊑ cnd)
         return ⊥
     end
-    return tmerge(x, y)
+    return x ⊔ y
 end
 add_tfunc(Core.ifelse, 3, 3, ifelse_tfunc, 1)
 
@@ -318,8 +318,7 @@ function isdefined_tfunc(arg1::LatticeElement, sym::LatticeElement)
             end
         end
     elseif isa(a1, Union)
-        return tmerge(isdefined_tfunc(NativeType(a1.a), sym),
-                      isdefined_tfunc(NativeType(a1.b), sym))
+        return isdefined_tfunc(NativeType(a1.a), sym) ⊔ isdefined_tfunc(NativeType(a1.b), sym)
     end
     return LBool
 end
@@ -391,8 +390,7 @@ function _sizeof_tfunc(@nospecialize x#=::Type=#)
     isconstType(x) && return _const_sizeof(x.parameters[1])
     xu = unwrap_unionall(x)
     if isa(xu, Union)
-        return tmerge(_sizeof_tfunc(rewrap_unionall(xu.a, x)),
-                      _sizeof_tfunc(rewrap_unionall(xu.b, x)))
+        return _sizeof_tfunc(rewrap_unionall(xu.a, x)) ⊔ _sizeof_tfunc(rewrap_unionall(xu.b, x))
     end
     # Core.sizeof operates on either a type or a value. First check which
     # case we're in.
@@ -433,7 +431,7 @@ function _nfields_tfunc(@nospecialize(x#=::Type=#))
         na === LInt && return na
         nb = _nfields_tfunc(x.b)
         nb === LInt && return nb
-        return tmerge(na, nb)
+        return na ⊔ nb
     end
     return LInt
 end
@@ -874,8 +872,8 @@ end
 function __getfield_tfunc(@nospecialize(s0#=::Type=#), name::LatticeElement, setfield::Bool)
     s = unwrap_unionall(s0)
     if isa(s, Union)
-        return tmerge(__getfield_tfunc(rewrap_unionall(s.a, s0), name, setfield),
-                      __getfield_tfunc(rewrap_unionall(s.b, s0), name, setfield))
+        return __getfield_tfunc(rewrap_unionall(s.a, s0), name, setfield) ⊔
+               __getfield_tfunc(rewrap_unionall(s.b, s0), name, setfield)
     end
     isa(s, DataType) || return ⊤
     isabstracttype(s) && return ⊤
@@ -924,7 +922,7 @@ function __getfield_tfunc(@nospecialize(s0#=::Type=#), name::LatticeElement, set
         for i in 1:nf
             _ft = ftypes[i]
             setfield && isconst(s, i) && continue
-            t = tmerge(t, NativeType(rewrap_unionall(unwrapva(_ft), s0)))
+            t = t ⊔ NativeType(rewrap_unionall(unwrapva(_ft), s0))
             t === ⊤ && break
         end
         return t
@@ -1150,8 +1148,8 @@ function fieldtype_tfunc(s0::LatticeElement, name::LatticeElement)
 
     su = unwrap_unionall(s)
     if isa(su, Union)
-        return tmerge(fieldtype_tfunc(NativeType(rewrap_unionall(su.a, s)), name),
-                      fieldtype_tfunc(NativeType(rewrap_unionall(su.b, s)), name))
+        return fieldtype_tfunc(NativeType(rewrap_unionall(su.a, s)), name) ⊔
+               fieldtype_tfunc(NativeType(rewrap_unionall(su.b, s)), name)
     end
 
     s, exact = instanceof_tfunc(s0)
@@ -1221,7 +1219,7 @@ function _fieldtype_tfunc(@nospecialize(s#=::Type=#), exact::Bool, name::Lattice
             else
                 ft1 = Const(ft1)
             end
-            t = tmerge(t, ft1)
+            t = t ⊔ ft1
             t === ⊤ && break
         end
         return t

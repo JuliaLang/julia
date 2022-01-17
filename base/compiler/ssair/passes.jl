@@ -271,7 +271,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                             # path, with a different type constraint. We may have
                             # to redo some work here with the wider typeconstraint
                             push!(worklist_defs, new_def)
-                            push!(worklist_constraints, unwraptype(tmerge(new_constraint, visited_constraints[new_def])))
+                            push!(worklist_constraints, typemerge(new_constraint, visited_constraints[new_def]))
                         end
                         continue
                     end
@@ -467,8 +467,6 @@ function walk_to_def(compact::IncrementalCompact, @nospecialize(leaf))
     end
     return Pair{Any, Any}(def, leaf)
 end
-
-make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
 
 """
     lift_comparison!(cmp, compact::IncrementalCompact, idx::Int, stmt::Expr)

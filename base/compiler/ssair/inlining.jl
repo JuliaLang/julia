@@ -1042,9 +1042,9 @@ function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), sta
         ub, exact = instanceof_tfunc(ubt)
         exact || return
         # Narrow opaque closure type
-        newT = widenconst(tmerge(lb, info.unspec.rt) ⊓ ub)
+        newT = typeintersect(typemerge(lb, widenconst(info.unspec.rt)), ub)
         if newT !== ub
-            # N.B.: Narrowing the ub requires a backdge on the mi whose type
+            # N.B.: Narrowing the ub requires a backedge on the mi whose type
             # information we're using, since a change in that function may
             # invalidate ub result.
             stmt.args[4] = newT

@@ -180,13 +180,6 @@ end
 
 hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
 
-function tvar_extent(@nospecialize t)
-    while t isa TypeVar
-        t = t.ub
-    end
-    return t
-end
-
 # N.B.: typename maps type equivalence classes to a single value
 function typename_static(t::LatticeElement)
     isConditional(t) && return Const(Bool.name)
@@ -208,23 +201,13 @@ end
 _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
 
-# assume `isVararg(init)`
-function tuple_tail_elem(init::LatticeElement, ct::Vector{LatticeElement})
-    ct′ = Any[]
-    for i = 1:length(ct)
-        cti = ct[i]
-        push!(ct′, isVararg(cti) ? vararg(cti) : widenconst(cti))
-    end
-    return NativeType(tuple_tail_elem(unwrapva(vararg(init)), ct′))
-end
-
 function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
     t = init
     for x in ct
         # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
-        t = tmerge(t, unwraptv(unwrapva(x)))
+        t = typemerge(t, unwraptv(unwrapva(x)))
     end
-    return Vararg{widenconst(t)}
+    return Vararg{t}
 end
 
 # Gives a cost function over the effort to switch a tuple-union representation
@@ -296,7 +279,7 @@ function _switchtupleunion(t::Argtypes, i::Int, tunion::Vector{Argtypes})
     return tunion
 end
 
-# unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
+# unioncomplexity estimates the number of calls to `⊔` to obtain the given type by
 # counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
 unioncomplexity(@nospecialize x) = _unioncomplexity(x)::Int
 function _unioncomplexity(@nospecialize x)

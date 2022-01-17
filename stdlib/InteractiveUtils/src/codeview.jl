@@ -120,7 +120,7 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt
                 end
                 print(io, "  ", slotnames[i])
                 if isa(slottypes, Core.Compiler.Argtypes)
-                    warntype_type_printer(io, Core.Compiler.unwraptype(slottypes[i]), true)
+                    warntype_type_printer(io, slottypes[i], true)
                 end
                 println(io)
             end

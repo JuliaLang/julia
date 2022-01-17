@@ -5,7 +5,6 @@
 #####################
 
 const __NULL_CONSTANT__ = :__NULL_CONSTANT__
-const __NULL_CONSTANT_ID__ = objectid(__NULL_CONSTANT__)
 
 """
     x::LatticeElement
@@ -155,11 +154,12 @@ end
 
 NativeType(@nospecialize typ) = typ === Any ? ⊤ : typ === Bottom ? ⊥ : LatticeElement(typ)
 isNativeType(@nospecialize typ) = true
-isNativeType(typ::LatticeElement) = !(hasConstant(typ) || hasSpecial(typ) || hasCauses(typ) || typ.maybeundef !== false)
-hasConstant(typ::LatticeElement) = (val = typ.constant;
-    !isa(val, Symbol) || objectid(val) !== __NULL_CONSTANT_ID__)
-hasSpecial(typ::LatticeElement) = typ.special !== nothing
-hasCauses(typ::LatticeElement) = typ.causes !== nothing
+isNativeType(typ::LatticeElement) = (
+    typ.constant === __NULL_CONSTANT__ &&
+    typ.special === nothing &&
+    typ.causes === nothing &&
+    typ.maybeundef === false &&
+    true)
 
 # NOTE once we pack all extended lattice types into `LatticeElement`, we don't need this `unwraptype`:
 # - `unwraptype`: unwrap `NativeType` to native Julia type
@@ -172,7 +172,7 @@ function Const(@nospecialize constant)
     return LatticeElement(typ, constant)
 end
 isConst(@nospecialize typ) = false
-isConst(typ::LatticeElement) = hasConstant(typ) && !_isPartialStruct(typ)
+isConst(typ::LatticeElement) = typ.constant !== __NULL_CONSTANT__ && !_isPartialStruct(typ)
 constant(x::LatticeElement) = x.constant
 
 const PartialFields = Vector{LatticeElement}
@@ -186,7 +186,7 @@ function PartialStruct(@nospecialize(typ), fields::PartialFields)
 end
 istupletype(@nospecialize typ) = isa(typ, DataType) && typ.name.name === :Tuple
 isPartialStruct(@nospecialize typ) = false
-isPartialStruct(typ::LatticeElement) = hasConstant(typ) && _isPartialStruct(typ)
+isPartialStruct(typ::LatticeElement) = typ.constant !== __NULL_CONSTANT__ && _isPartialStruct(typ)
 _isPartialStruct(typ::LatticeElement) = isa(typ.constant, PartialFields) && !(typ.typ <: PartialFields)
 partialfields(x::LatticeElement) = x.constant::PartialFields
 
@@ -203,9 +203,9 @@ struct ConditionalInfo
     end
 end
 function _Conditional(slot_id::Int, vtype::LatticeElement, elsetype::LatticeElement, inter::Bool)
-    if vtype == ⊥
+    if vtype === ⊥
         constant = false
-    elseif elsetype == ⊥
+    elseif elsetype === ⊥
         constant = true
     else
         constant = __NULL_CONSTANT__
@@ -250,7 +250,7 @@ isPartialTypeVar(@nospecialize typ) = false
 isPartialTypeVar(typ::LatticeElement) = isa(typ.special, PartialTypeVarInfo)
 @inline partialtypevar(typ::LatticeElement) = typ.special::PartialTypeVarInfo
 
-function mkPartialOpaque(@nospecialize(typ), @nospecialize(env), isva::Bool, parent::MethodInstance, source::Method)
+function mkPartialOpaque(@nospecialize(typ), env::LatticeElement, isva::Bool, parent::MethodInstance, source::Method)
     return LatticeElement(typ, __NULL_CONSTANT__, PartialOpaque(typ, env, isva, parent, source))
 end
 isPartialOpaque(@nospecialize typ) = false
@@ -269,16 +269,15 @@ function LimitedAccuracy(x::LatticeElement, causes#=::IdSet{InferenceState}=#)
     return LatticeElement(x; causes)
 end
 isLimitedAccuracy(@nospecialize typ) = false
-isLimitedAccuracy(typ::LatticeElement) = hasCauses(typ)
+isLimitedAccuracy(typ::LatticeElement) = typ.causes !== nothing
 ignorelimited(typ::LatticeElement) = isLimitedAccuracy(typ) ? _ignorelimited(typ) : typ
 _ignorelimited(typ::LatticeElement) = LatticeElement(typ; causes = nothing)
 @inline causes(typ::LatticeElement) = typ.causes::IdSet{InferenceState}
 
-MaybeUndef(x::LatticeElement) = LatticeElement(x; maybeundef = true)
 isMaybeUndef(@nospecialize typ) = false
 isMaybeUndef(typ::LatticeElement) = typ.maybeundef
-ignoremaybeundef(@nospecialize typ) = typ
-ignoremaybeundef(typ::LatticeElement) = LatticeElement(typ; maybeundef = false)
+MaybeUndef(x::LatticeElement) = isMaybeUndef(x) ? x : LatticeElement(x; maybeundef = true)
+ignoremaybeundef(typ::LatticeElement) = isMaybeUndef(typ) ? LatticeElement(typ; maybeundef = false) : typ
 
 const ⊤, ⊥ = LatticeElement(Any), LatticeElement(Bottom)
 const LBool, LInt, LNothing = NativeType(Bool), NativeType(Int), NativeType(Nothing)
@@ -474,20 +473,20 @@ The non-strict partial order over the type inference lattice.
 end
 
 """
-    a ⊏ b -> Bool
+    a::LatticeElement ⊏ b::LatticeElement -> Bool
 
 The strict partial order over the type inference lattice.
 This is defined as the irreflexive kernel of `⊑`.
 """
-@nospecialize(a) ⊏ @nospecialize(b) = a ⊑ b && !⊑(b, a)
+a::LatticeElement ⊏ b::LatticeElement = a ⊑ b && !⊑(b, a)
 
 """
-    a ⋤ b -> Bool
+    a::LatticeElement ⋤ b::LatticeElement -> Bool
 
 This order could be used as a slightly more efficient version of the strict order `⊏`,
 where we can safely assume `a ⊑ b` holds.
 """
-@nospecialize(a) ⋤ @nospecialize(b) = !⊑(b, a)
+a::LatticeElement ⋤ b::LatticeElement = !⊑(b, a)
 
 a::LatticeElement ⊑ₜ @nospecialize(b#=::Type=#) = widenconst(a) <: b
 a::LatticeElement ⊏ₜ @nospecialize(b#=::Type=#) = widenconst(a) <: b && !(b <: widenconst(a))
@@ -545,10 +544,9 @@ function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
     sb === NOT_FOUND && return sa
     issubstate(sa, sb) && return sb
     issubstate(sb, sa) && return sa
-    return VarState(tmerge(sa.typ, sb.typ), sa.undef | sb.undef)
+    return VarState(sa.typ ⊔ sb.typ, sa.undef | sb.undef)
 end
 
-@inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
 @inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n::VarState, o::VarState)))
 
 function stupdate!(state::Nothing, changes::StateUpdate)

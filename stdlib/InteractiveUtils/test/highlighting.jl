@@ -21,7 +21,7 @@ myzeros(::Type{T}, ::Type{S}, ::Type{R}, dims::Tuple{Vararg{Integer, N}}, dims2:
     while readline(io) != "Locals"
         eof(io) && throw(EOFError())
     end
-    @test occursin(r"^  x.*::Int", readline(io))
+    @test occursin(r"^  x.*::Const", readline(io))
     @test occursin(r"^Body.*::Int", readline(io))
     code = read(io, String)
     @test endswith(code, "\n\n")

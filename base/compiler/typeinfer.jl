@@ -300,8 +300,8 @@ function CodeInstance(result::InferenceResult, @nospecialize(inferred_result),
             rettype_const = partialopaque(result_type)
             const_flags = 0x2
         # TODO (lattice overhaul) update me once we type `result.result::LatticeElement`
-        elseif isconstType(result_type)
-            rettype_const = result_type.parameters[1]
+        elseif isconstType(widenconst(result_type))
+            rettype_const = (widenconst(result_type)::DataType).parameters[1]
             const_flags = 0x2
         elseif isPartialStruct(result_type)
             rettype_const = partialfields(result_type)
@@ -582,16 +582,16 @@ function record_slot_assign!(sv::InferenceState)
             lhs = expr.args[1]
             rhs = expr.args[2]
             if isa(lhs, SlotNumber)
-                vt = widenconst(ssavaluetypes[i]::LatticeElement)
-                if vt !== Bottom
+                vt = ssavaluetypes[i]::LatticeElement
+                if vt !== ⊥
                     id = slot_id(lhs)
                     otherTy = slottypes[id]
                     if otherTy === ⊥
-                        slottypes[id] = LatticeElement(vt)
+                        slottypes[id] = vt
                     elseif otherTy === ⊤
                         slottypes[id] = ⊤
                     else
-                        slottypes[id] = tmerge(otherTy, vt)
+                        slottypes[id] = otherTy ⊔ vt
                     end
                 end
             end
@@ -973,19 +973,18 @@ end
 _return_type(@nospecialize(f), @nospecialize(t), world) = _return_type(NativeInterpreter(world), f, t)
 
 function _return_type(interp::AbstractInterpreter, @nospecialize(f), @nospecialize(t))
-    rt = Union{}
     if isa(f, Builtin)
         argtypes = LatticeElement[NativeType(ty) for ty in t.parameters]
-        rt = builtin_tfunction(interp, f, argtypes, nothing)
-        rt = widenconst(rt)
+        return widenconst(builtin_tfunction(interp, f, argtypes, nothing))
     else
+        rt = Bottom
         for match in _methods(f, t, -1, get_world_counter(interp))::Vector
             match = match::MethodMatch
             ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
             ty === nothing && return Any
-            rt = unwraptype(tmerge(rt, ty))
-            rt === Any && break
+            rt = typemerge(rt, ty)
+            rt === Any && return Any
         end
+        return rt
     end
-    return rt
 end

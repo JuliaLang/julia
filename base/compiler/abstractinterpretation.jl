@@ -94,7 +94,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 if const_result !== nothing
                     any_const_result = true
                 end
-                this_rt = tmerge(this_rt, rt)
+                this_rt = this_rt ⊔ rt
                 if bail_out_call(interp, this_rt, sv)
                     break
                 end
@@ -139,7 +139,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         this_rt = widenconditional(this_rt)
         @assert !isConditional(this_conditional) "invalid lattice element returned from inter-procedural context"
         seen += 1
-        rettype = tmerge(rettype, this_rt)
+        rettype = rettype ⊔ this_rt
         if this_conditional !== ⊥ && is_lattice_bool(rettype) && fargs !== nothing
             if conditionals === nothing
                 conditionals = LatticeElement[⊥ for _ in 1:length(argtypes)],
@@ -147,8 +147,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             end
             for i = 1:length(argtypes)
                 cnd = conditional_argtype(this_conditional, sig, argtypes, i)
-                conditionals[1][i] = tmerge(conditionals[1][i], cnd.vtype)
-                conditionals[2][i] = tmerge(conditionals[2][i], cnd.elsetype)
+                conditionals[1][i] = conditionals[1][i] ⊔ cnd.vtype
+                conditionals[2][i] = conditionals[2][i] ⊔ cnd.elsetype
             end
         end
         if bail_out_call(interp, rettype, sv)
@@ -290,7 +290,7 @@ In such cases `maybecondinfo` should be either of:
 - `maybecondinfo::Tuple{Vector{Any},Vector{Any}}`: precomputed argument type refinement information
 - method call signature tuple type
 When we deal with multiple `MethodMatch`es, it's better to precompute `maybecondinfo` by
-`tmerge`ing argument signature type of each method call.
+`⊔`-joining argument signature type of each method call.
 """
 function from_interprocedural!(rt::LatticeElement, sv::InferenceState, arginfo::ArgInfo, @nospecialize(maybecondinfo))
     rt = collect_limitations!(rt, sv)
@@ -916,7 +916,7 @@ function precise_container_type(interp::AbstractInterpreter, itft::LatticeElemen
             tps = (t::DataType).parameters
             _all(valid_as_lattice, tps) || continue
             for j in 1:ltp
-                result[j] = tmerge(result[j], rewrap_unionall(tps[j], tti0))
+                result[j] = result[j] ⊔ NativeType(rewrap_unionall(tps[j], tti0))
             end
         end
         return result, nothing
@@ -1019,9 +1019,9 @@ function abstract_iteration(interp::AbstractInterpreter, itft::LatticeElement, i
             end
             break
         end
-        valtype0 = tmerge(valtype0, nounion.parameters[1])
+        valtype0 = valtype0 ⊔ NativeType(nounion.parameters[1])
         valtype = widenconst(valtype0)
-        statetype0 = tmerge(statetype0, nounion.parameters[2])
+        statetype0 = statetype0 ⊔ NativeType(nounion.parameters[2])
         statetype = widenconst(statetype0)
         stateordonet = abstract_call_known(interp, iteratef, ArgInfo(nothing, LatticeElement[Const(iteratef), itertype, statetype0]), sv).rt
         stateordonet_widened = widenconst(stateordonet)
@@ -1067,14 +1067,14 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Argtypes, sv::Inf
                 cti = cti_info[1]::Argtypes
                 info = cti_info[2]::MaybeAbstractIterationInfo
                 # We can't represent a repeating sequence of the same types,
-                # so tmerge everything together to get one type that represents
+                # so ⊔-join everything together to get one type that represents
                 # everything.
                 argt = cti[end]
                 if isVararg(argt)
                     argt = NativeType(unwrapva(vararg(argt)))
                 end
                 for i in 1:(length(cti)-1)
-                    argt = tmerge(argt, cti[i])
+                    argt = argt ⊔ cti[i]
                 end
                 cti = LatticeElement[NativeType(Vararg{widenconst(argt)})]
             end
@@ -1083,12 +1083,13 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Argtypes, sv::Inf
             end
             for j = 1:length(ctypes)
                 ct = ctypes[j]::Vector{LatticeElement}
-                if isVararg(ct[end])
+                ctend = ct[end]
+                if isVararg(ctend)
                     # This is vararg, we're not gonna be able to do any inling,
                     # drop the info
                     info = nothing
-                    tail = tuple_tail_elem(ct[end], cti)
-                    push!(ctypes´, push!(ct[1:(end - 1)], tail))
+                    tail = tuple_tail_elem(unwrapva(vararg(ctend)), anymap(vawidenconst, cti))
+                    push!(ctypes´, push!(ct[1:(end - 1)], NativeType(tail)))
                 else
                     push!(ctypes´, append!(ct[:], cti))
                 end
@@ -1106,15 +1107,17 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Argtypes, sv::Inf
         lct = length(ct)
         # truncate argument list at the first Vararg
         for i = 1:lct-1
-            if isVararg(ct[i])
-                ct[i] = tuple_tail_elem(ct[i], ct[(i+1):lct])
+            cti = ct[i]
+            if isVararg(cti)
+                tail = tuple_tail_elem(vararg(cti), Any[vawidenconst(ct[j]) for j = (i+1):lct]) # TODO (lattice overhaul) we want to unwrapva(vararg(cti)) ?
+                ct[i] = NativeType(tail)
                 resize!(ct, i)
                 break
             end
         end
         call = abstract_call(interp, ArgInfo(nothing, ct), sv, max_methods)
         push!(retinfos, ApplyCallInfo(call.info, arginfo))
-        res = tmerge(res, call.rt)
+        res = res ⊔ call.rt
         if bail_out_apply(interp, res, sv)
             if i != length(ctypes)
                 # No point carrying forward the info, we're not gonna inline it anyway
@@ -1127,6 +1130,8 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Argtypes, sv::Inf
     # For now, only propagate info if we don't also union-split the iteration
     return CallMeta(res, retinfo)
 end
+
+vawidenconst(t::LatticeElement) = isVararg(t) ? vararg(t) : widenconst(t)
 
 function is_method_pure(method::Method, @nospecialize(sig), sparams::SimpleVector)
     if isdefined(method, :generator)
@@ -1201,7 +1206,7 @@ function abstract_call_builtin(
                 if isa(b, SlotNumber) && cnd.slot_id == slot_id(b)
                     ty = (cnd.elsetype ⊑ ty ? cnd.elsetype : (ty ⊓ widenconst(cnd.elsetype)))
                 end
-                return tmerge(tx, ty)
+                return tx ⊔ ty
             end
         end
     end
@@ -1288,13 +1293,13 @@ function abstract_call_builtin(
                     cnd = isdefined_tfunc(ty, fld)
                     if isConst(cnd)
                         if constant(cnd)::Bool
-                            vtype = tmerge(vtype, ty)
+                            vtype = vtype ⊔ ty
                         else
-                            elsetype = tmerge(elsetype, ty)
+                            elsetype = elsetype ⊔ ty
                         end
                     else
-                        vtype = tmerge(vtype, ty)
-                        elsetype = tmerge(elsetype, ty)
+                        vtype = vtype ⊔ ty
+                        elsetype = elsetype ⊔ ty
                     end
                 end
                 return Conditional(a.id, vtype, elsetype)
@@ -1653,7 +1658,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         if isa(e, PhiNode)
             rt = ⊥
             for val in e.values
-                rt = tmerge(rt, abstract_eval_special_value(interp, val, vtypes, sv))
+                rt = rt ⊔ abstract_eval_special_value(interp, val, vtypes, sv)
             end
             return rt
         end
@@ -1691,7 +1696,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 end
                 if !anyrefine
                     anyrefine = has_nontrivial_const_info(at) || # constant information
-                                at ⋤ ft                          # just a type-level information, but more precise than the declared type
+                                at ⋤ₜ ft                         # just a type-level information, but more precise than the declared type
                 end
                 ats[i-1] = at
             end
@@ -1830,7 +1835,7 @@ end
 function widenreturn(rt::LatticeElement, bestguess::LatticeElement, nslots::Int, slottypes::Argtypes, changes::VarTable)
     if !(bestguess ⊑ Bool) || unwraptype(bestguess) === Bool
         # give up inter-procedural constraint back-propagation
-        # when tmerge would widen the result anyways (as an optimization)
+        # when ⊔ would widen the result anyways (as an optimization)
         rt = widenconditional(rt)
     else
         if isConditional(rt)
@@ -1988,7 +1993,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 bestguess = frame.bestguess
                 rt = abstract_eval_value(interp, stmt.val, changes, frame)
                 rt = widenreturn(rt, bestguess, nslots, slottypes, changes)
-                # narrow representation of bestguess slightly to prepare for tmerge with rt
+                # narrow representation of bestguess slightly to prepare for ⊔ with rt
                 if isInterConditional(rt) && isConst(bestguess)
                     let cnd = interconditional(rt)
                         slot_id = cnd.slot_id
@@ -2008,9 +2013,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 if !isempty(frame.limitations)
                     rt = LimitedAccuracy(rt, copy(frame.limitations))
                 end
-                if tchanged(rt, bestguess)
+                if bestguess ⋤ rt
                     # new (wider) return type for frame
-                    bestguess = tmerge(bestguess, rt)
+                    bestguess = bestguess ⊔ rt
                     # TODO: if isInterConditional(bestguess) && !interesting(bestguess); bestguess = widenconditional(bestguess); end
                     frame.bestguess = bestguess
                     for (caller, caller_pc) in frame.cycle_backedges
