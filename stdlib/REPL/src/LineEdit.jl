@@ -86,36 +86,48 @@ struct InputAreaState
     curs_row::Int64
 end
 
-# Data to store the current completion state of a prompt.
+# Stores the state of running completion
 mutable struct CompletionState
-    # candidates of completion
-    completions
     # partial string for completion
-    partial
-    # position to splice completion to the buffer
-    position
-    # selected completion candidate. 1-based index of the `completions` field;
-    # nothing is selected if the value is zero, which is the initial state)
-    selected
-    # the dimensions of the completion table
-    nrows
-    ncols
-end
+    partial::String
+    # position to splice partial to the buffer
+    position::Int
 
-CompletionState(completions, partial, position) = CompletionState(completions, partial, position, 0, 0, 0)
+    # candidates of completion
+    completions::Vector{String}
+    # selected completion candidate (index of the `completions` field);
+    # the value is zero if none is selected
+    selected::Int
+
+    # dimensions of the completion table
+    nrows::Int
+    ncols::Int
+
+    CompletionState(partial, position, completions) =
+        new(partial, position, completions, 0, 0, 0)
+end
 
 hasselected(state::CompletionState) = state.selected != 0
 selected(state::CompletionState) = state.completions[state.selected]
+
 dimensions(state::CompletionState) = (state.nrows, state.ncols)
+
+function set_dimensions!(state::CompletionState, (nrows, ncols)::Tuple{Int,Int})
+    state.nrows = nrows
+    state.ncols = ncols
+    return state
+end
 
 function select_next!(state::CompletionState)
     state.selected = mod1(state.selected + 1, length(state.completions))
     return state
 end
+
 function select_previous!(state::CompletionState)
     state.selected = mod1(state.selected - 1, length(state.completions))
     return state
 end
+
 function select_right!(state::CompletionState)
     if !hasselected(state)
         state.selected = firstindex(state.completions)
@@ -144,6 +156,7 @@ function select_right!(state::CompletionState)
     end
     return state
 end
+
 function select_left!(state::CompletionState)
     if !hasselected(state)
         state.selected = lastindex(state.completions)
@@ -163,7 +176,6 @@ function select_left!(state::CompletionState)
         else
             col -= 1
         end
-        #@show row, col, nrows, ncols
         state.selected = col * nrows + row + 1
     end
     return state
@@ -187,12 +199,15 @@ mutable struct PromptState <: ModeState
     last_newline::Float64 # register when last newline was entered
     # this option is to speed up output
     refresh_wait::Union{Timer,Nothing}
+    # current completion state; nothing if no completion is running
     completion_state::Union{CompletionState,Nothing}
 end
 
+# check if completion is running
 iscompleting(s::ModeState) = false  # not completing by default
 iscompleting(s::PromptState) = s.completion_state !== nothing
 
+# stop the current completion
 stop_completion!(s::ModeState) = nothing
 stop_completion!(s::PromptState) = (s.completion_state = nothing)
 
@@ -427,18 +442,18 @@ function complete_line(s::PromptState, repeats::Int)
         push_undo(s)
         edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1])
     else
-        p = common_prefix(completions)
-        if !isempty(p) && p != partial
+        prefix = common_prefix(completions)
+        if !isempty(prefix) && prefix != partial
             # All possible completions share the same prefix, so we might as
             # well complete that
             prev_pos = position(s)
             push_undo(s)
-            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, p)
-            partial = p
+            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, prefix)
+            partial = prefix  # extend partial
         end
         # start completion mode; nothing is selected yet
         pos = position(s) - sizeof(partial)
-        s.completion_state = CompletionState(completions, partial, pos)
+        s.completion_state = CompletionState(partial, pos, completions)
         refresh_completions(s)
     end
     return true
@@ -453,37 +468,38 @@ function refresh_completions(s::PromptState)
 end
 
 function show_completions(s::PromptState)
+    # skip input lines after the cursor if needed
     term = terminal(s)
     skip = input_string_newlines_aftercursor(s)
     if skip > 0
-        # skip `skip`` lines of the input after the cursor
         print(term, "\x1b[$(skip)B")
     end
     println(term)
 
-    # list all completion candidates
+    # list all completion candidates as a table
     completions = s.completion_state.completions
     partial = s.completion_state.partial
     selected = s.completion_state.selected
-    colwidth = maximum(textwidth, completions) + 2  # content + margin
-    nrows, ncols = calc_dimensions(width(term), colwidth, length(completions))
+    margin = 2
+    colwidth = maximum(textwidth, completions)
+    nrows, ncols = calc_dimensions(width(term), colwidth + margin, length(completions))
     for r in 1:nrows
         for c in 1:ncols
             i = (c - 1) * nrows + r
             i > lastindex(completions) && break
-            x = completions[i]
-            rest = x[nextind(x, lastindex(partial)):end]
+            completion = completions[i]
+            rest = chopprefix(completion, partial)
             # highlight prefix (partial)
             text = string(
                 "\x1b[1m\x1b[4m", partial, "\x1b[22m\x1b[24m",
                 rest,
-                ' '^(colwidth - textwidth(x) - 2)
+                ' '^(colwidth - textwidth(completion))
             )
             if i == selected
                 # highlight selected candidate
                 text = string("\x1b[48;5;240m", text, "\x1b[0m")
             end
-            print(term, text, "  ")
+            print(term, text, ' '^margin)
         end
         if r != nrows
             println(term)
@@ -491,8 +507,7 @@ function show_completions(s::PromptState)
     end
 
     # update nrows and ncols (these may change if the terminal is resized)
-    s.completion_state.nrows = nrows
-    s.completion_state.ncols = ncols
+    set_dimensions!(s.completion_state, (nrows, ncols))
 
     # unwind the cursor position
     print(term, "\x1b[$(skip + nrows)A", "\x1b[0G")
