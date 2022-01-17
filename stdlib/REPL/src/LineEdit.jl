@@ -415,13 +415,7 @@ function complete_line(s::MIState)
 end
 
 function complete_line(s::PromptState, repeats::Int)
-    if s.completion_state === nothing
-        completions, partial, should_complete = complete_line(s.p.complete, s)::Tuple{Vector{String},String,Bool}
-    else
-        completions = s.completion_state.completions
-        partial = s.completion_state.partial
-        should_complete = true
-    end
+    completions, partial, should_complete = complete_line(s.p.complete, s)::Tuple{Vector{String},String,Bool}
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
@@ -442,13 +436,9 @@ function complete_line(s::PromptState, repeats::Int)
             edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, p)
             partial = p
         end
-        if repeats == 0
-            # start completion; nothing is selected yet
-            pos = position(s) - sizeof(partial)
-            s.completion_state = CompletionState(completions, partial, pos)
-        else
-            select_next!(s.completion_state)
-        end
+        # start completion mode; nothing is selected yet
+        pos = position(s) - sizeof(partial)
+        s.completion_state = CompletionState(completions, partial, pos)
         refresh_completions(s)
     end
     return true
@@ -2362,9 +2352,23 @@ end
 const default_keymap =
 AnyDict(
     # Tab
-    '\t' => (s::MIState,o...)->edit_tab(s, true),
+    '\t' => (s::MIState,o...)->begin
+        if iscompleting(state(s))
+            select_next!(state(s).completion_state)
+            refresh_completions(state(s))
+        else
+            edit_tab(s, true)
+        end
+    end,
     # Shift-tab
-    "\e[Z" => (s::MIState,o...)->shift_tab_completion(s),
+    "\e[Z" => (s::MIState,o...)->begin
+        if iscompleting(state(s))
+            select_previous!(state(s).completion_state)
+            refresh_completions(state(s))
+        else
+            shift_tab_completion(s)
+        end
+    end,
     # Enter
     '\r' => (s::MIState,o...)->begin
         stop_completion!(state(s))
