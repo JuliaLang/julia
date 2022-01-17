@@ -784,9 +784,9 @@ end
 
 function get_nthreads(options = ``; cpus)
     cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
-    cmd = `$cmd  -e "print(Threads.nthreads())"`
-    cmd = setcpuaffinity(cmd, cpus)
+    cmd = `$cmd -e "print(Threads.nthreads())"`
     cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "0", "JULIA_NUM_THREADS" => "auto")
+    cmd = setcpuaffinity(cmd, cpus)
     return parse(Int, read(cmd, String))
 end
 
@@ -795,13 +795,13 @@ end
         @test get_nthreads(cpus = [1]) == 1
         @test get_nthreads(cpus = [2]) == 1
         @test get_nthreads(cpus = [1, 2]) == 2
-        @test get_nthreads(`-t1`, cpus = [1]) ==
-              get_nthreads(`-t1`, cpus = [2]) ==
-              get_nthreads(`-t1`, cpus = [1, 2]) ==
-              1
+        @test get_nthreads(`-t1`, cpus = [1]) == 1
+        @test get_nthreads(`-t1`, cpus = [2]) == 1
+        @test get_nthreads(`-t1`, cpus = [1, 2]) == 1
 
         if Sys.CPU_THREADS ≥ 3
-            @test get_nthreads(cpus = [1, 3]) == get_nthreads(cpus = [2, 3]) == 2
+            @test get_nthreads(cpus = [1, 3]) == 2
+            @test get_nthreads(cpus = [2, 3]) == 2
         end
     end
 end
