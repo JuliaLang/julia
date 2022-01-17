@@ -67,29 +67,29 @@ for (_A, Ar, _B) in ((A, Ars, B), (As, Arss, Bs))
         reinterpret(NTuple{3, Int64}, Bc)[2] = (4,5,6)
         @test Bc == Complex{Int64}[5+6im, 7+4im, 5+6im]
         B2 = reinterpret(NTuple{3, Int64}, Bc)
-        @test setindex!(B2, (1,2,3), 1) == B2
+        @test setindex!(B2, (1,2,3), 1) === B2
         @test Bc == Complex{Int64}[1+2im, 3+4im, 5+6im]
         Bc = copy(_B)
         Brrs = reinterpret(reshape, Int64, Bc)
-        @test setindex!(Brrs, -5, 2, 3) == Brrs
+        @test setindex!(Brrs, -5, 2, 3) === Brrs
         @test Bc == Complex{Int64}[5+6im, 7+8im, 9-5im]
         Brrs[last(eachindex(Brrs))] = 22
         @test Bc == Complex{Int64}[5+6im, 7+8im, 9+22im]
 
         A1 = reinterpret(Float64, _A)
         A2 = reinterpret(ComplexF64, _A)
-        @test setindex!(A1, 1.0, 1) == A1
+        @test setindex!(A1, 1.0, 1) === A1
         @test real(A2[1]) == 1.0
         A1 = reinterpret(reshape, Float64, _A)
-        A1[1] = 2.5
+        @test setindex!(A1, 2.5, 1) === A1
         @test reinterpret(Float64, _A[1]) == 2.5
         A1rs = reinterpret(Float64, Ar)
         A2rs = reinterpret(ComplexF64, Ar)
-        A1rs[1, 1] = 1.0
+        @test setindex!(A1rs, 1.0, 1, 1) === A1rs
         @test real(A2rs[1]) == 1.0
         A1rs = reinterpret(reshape, Float64, Ar)
         A2rs = reinterpret(reshape, ComplexF64, Ar)
-        @test setindex!(A1rs, 2.5, 1, 1) == A1rs
+        @test setindex!(A1rs, 2.5, 1, 1) === A1rs
         @test real(A2rs[1]) == 2.5
     end
 end
@@ -107,14 +107,14 @@ A3r[CartesianIndex(1,2)] = 300+400im
 @test A3[2,1,2] == 400
 
 # same-size reinterpret where one of the types is non-primitive
-let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]
-    @test reinterpret(Float32, a)[1] == reinterpret(Float32, 0x04030201)
-    reinterpret(Float32, a)[1] = 2.0
+let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)], ra = reinterpret(Float32, a)
+    @test ra[1] == reinterpret(Float32, 0x04030201)
+    @test setindex!(ra, 2.0) === ra
     @test reinterpret(Float32, a)[1] == 2.0
 end
-let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]
-    @test reinterpret(reshape, Float32, a)[1] == reinterpret(Float32, 0x04030201)
-    reinterpret(reshape, Float32, a)[1] = 2.0
+let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)], ra = reinterpret(reshape, Float32, a)
+    @test ra[1] == reinterpret(Float32, 0x04030201)
+    @test setindex!(ra, 2.0) === ra
     @test reinterpret(reshape, Float32, a)[1] == 2.0
 end
 
@@ -198,7 +198,7 @@ let a = fill(1.0, 5, 3)
         @test_throws BoundsError r[badinds...] = -2
     end
     for goodinds in (1, 15, (1,1), (5,3))
-        r[goodinds...] = -2
+        @test setindex!(r, -2, goodinds...) === r
         @test r[goodinds...] == -2
     end
     r = reinterpret(Int32, a)
@@ -211,7 +211,7 @@ let a = fill(1.0, 5, 3)
         @test_throws BoundsError r[badinds...] = -3
     end
     for goodinds in (1, 30, (1,1), (10,3))
-        r[goodinds...] = -3
+        @test setindex!(r, -3, goodinds...) === r
         @test r[goodinds...] == -3
     end
     r = reinterpret(Int64, view(a, 1:2:5, :))
@@ -224,7 +224,7 @@ let a = fill(1.0, 5, 3)
         @test_throws BoundsError r[badinds...] = -4
     end
     for goodinds in (1, 9, (1,1), (3,3))
-        r[goodinds...] = -4
+        @test setindex!(r, -4, goodinds...) === r
         @test r[goodinds...] == -4
     end
     r = reinterpret(Int32, view(a, 1:2:5, :))
@@ -237,7 +237,7 @@ let a = fill(1.0, 5, 3)
         @test_throws BoundsError r[badinds...] = -5
     end
     for goodinds in (1, 18, (1,1), (6,3))
-        r[goodinds...] = -5
+        @test setindex!(r, -5, goodinds...) === r
         @test r[goodinds...] == -5
     end
 
@@ -318,14 +318,25 @@ end
 
 # Test 0-dimensional Arrays
 A = zeros(UInt32)
-B = reinterpret(Int32,A)
-Brs = reinterpret(reshape,Int32,A)
-@test size(B) == size(Brs) == ()
-@test axes(B) == axes(Brs) == ()
-B[] = Int32(5)
+B = reinterpret(Int32, A)
+Brs = reinterpret(reshape,Int32, A)
+C = reinterpret(Tuple{UInt32}, A) # non-primitive type
+Crs = reinterpret(reshape, Tuple{UInt32}, A)  # non-primitive type
+@test size(B) == size(Brs) == size(C) == size(Crs) == ()
+@test axes(B) == axes(Brs) == axes(C) == axes(Crs) == ()
+@test setindex!(B, Int32(5)) === B
 @test B[] === Int32(5)
 @test Brs[] === Int32(5)
+@test C[] === (UInt32(5),)
+@test Crs[] === (UInt32(5),)
 @test A[] === UInt32(5)
+@test setindex!(Brs, Int32(12)) === Brs
+@test A[] === UInt32(12)
+@test setindex!(C, (UInt32(7),)) === C
+@test A[] === UInt32(7)
+@test setindex!(Crs, (UInt32(3),)) === Crs
+@test A[] === UInt32(3)
+
 
 a = [(1.0,2.0)]
 af = @inferred(reinterpret(reshape, Float64, a))
@@ -413,13 +424,15 @@ end
     z = reinterpret(Tuple{}, fill(missing, ()))
     @test z == fill((), ())
     @test z == reinterpret(reshape, Tuple{}, fill(nothing, ()))
+    @test z[] == ()
+    @test setindex!(z, ()) === z
     @test_throws BoundsError z[2]
     @test_throws BoundsError z[3] = ()
     @test_throws ArgumentError reinterpret(UInt8, fill(nothing, ()))
     @test_throws ArgumentError reinterpret(Missing, fill(1f0, ()))
     @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, ()))
     @test_throws ArgumentError reinterpret(reshape, Nothing, fill(17, ()))
-
+    @test_throws MethodError z[] = nothing
 
     @test @inferred(ndims(reinterpret(reshape, SomeSingleton, t))) == 2
     @test @inferred(axes(reinterpret(reshape, Tuple{}, t))) == (Base.OneTo(3),Base.OneTo(5))
