@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # highlighting settings
-highlighting = Dict{Symbol, Bool}(
+const highlighting = Dict{Symbol, Bool}(
     :warntype => true,
     :llvm => true,
     :native => true,
 )
 
-llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
+const llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
     :default     => (false, :normal), # e.g. comma, equal sign, unknown token
     :comment     => (false, :light_black),
     :label       => (false, :light_red),
