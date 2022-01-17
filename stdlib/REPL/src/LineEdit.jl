@@ -476,7 +476,7 @@ function show_completions(s::PromptState)
     partial = s.completion_state.partial
     selected = s.completion_state.selected
     colwidth = maximum(textwidth, completions) + 2  # content + margin
-    nrows, ncols = calc_layout(width(term), colwidth, length(completions))
+    nrows, ncols = calc_dimensions(width(term), colwidth, length(completions))
     for r in 1:nrows
         for c in 1:ncols
             i = (c - 1) * nrows + r
@@ -509,7 +509,7 @@ function show_completions(s::PromptState)
 end
 
 # calculate the number of rows and columns
-function calc_layout(tablewidth, colwidth, len)
+function calc_dimensions(tablewidth, colwidth, len)
     n_max_cols = max(tablewidth ÷ colwidth, 1)
     nrows = (len - 1) ÷ n_max_cols + 1
     ncols = (len - 1) ÷ nrows + 1
