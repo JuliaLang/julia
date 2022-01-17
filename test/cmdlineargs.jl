@@ -785,14 +785,11 @@ end
 function get_nthreads(options = ``; cpus = nothing)
     cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
     cmd = `$cmd -e "print(Threads.nthreads())"`
-    cmd = `$cmd -e "println(); using InteractiveUtils; versioninfo()"`
     cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "0", "JULIA_NUM_THREADS" => "auto")
     if cpus !== nothing
         cmd = setcpuaffinity(cmd, cpus)
     end
-    out = read(cmd, String)
-    @info "`get_nthreads`" options cpus Text(out)
-    return parse(Int, split(out)[1])
+    return parse(Int, read(cmd, String))
 end
 
 @testset "nthreads determined based on CPU affinity" begin
