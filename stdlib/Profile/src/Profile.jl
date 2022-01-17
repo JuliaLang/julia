@@ -349,18 +349,15 @@ function getdict(data::Vector{UInt})
 end
 
 function getdict!(dict::LineInfoDict, data::Vector{UInt})
-    # we don't want metadata here as we're just looking up ips
-    unique_data_itr = Iterators.unique(has_meta(data) ? strip_meta(data) : data)
-    foreach(ip -> dict[UInt64(ip)] = StackFrame[], unique_data_itr)
-    @sync for ip in unique_data_itr
-        Threads.@spawn begin
-            st = lookup(convert(Ptr{Cvoid}, ip))
-            # To correct line numbers for moving code, put it in the form expected by
-            # Base.update_stackframes_callback[]
-            stn = map(x->(x, 1), st)
-            try Base.invokelatest(Base.update_stackframes_callback[], stn) catch end
-            dict[UInt64(ip)] = map(first, stn)
-        end
+    for ip in data
+        # Lookup is expensive, so do it only once per ip.
+        haskey(dict, UInt64(ip)) && continue
+        st = lookup(convert(Ptr{Cvoid}, ip))
+        # To correct line numbers for moving code, put it in the form expected by
+        # Base.update_stackframes_callback[]
+        stn = map(x->(x, 1), st)
+        try Base.invokelatest(Base.update_stackframes_callback[], stn) catch end
+        dict[UInt64(ip)] = map(first, stn)
     end
     return dict
 end

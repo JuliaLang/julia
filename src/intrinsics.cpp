@@ -460,7 +460,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
             }
             else {
                 emit_error(ctx, "bitcast: expected primitive type value for second argument");
-                return jl_cgval_t();
+                return jl_cgval_t(ctx.builder.getContext());
             }
         }
         if (!jl_is_datatype(v.typ) || jl_datatype_size(v.typ) != nb) {
@@ -472,7 +472,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
             }
             else {
                 emit_error(ctx, "bitcast: argument size does not match size of target type");
-                return jl_cgval_t();
+                return jl_cgval_t(ctx.builder.getContext());
             }
         }
     }
@@ -589,7 +589,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         return emit_runtime_pointerref(ctx, argv);
     if (!is_valid_intrinsic_elptr(ety)) {
         emit_error(ctx, "pointerref: invalid pointer type");
-        return jl_cgval_t();
+        return jl_cgval_t(ctx.builder.getContext());
     }
 
     Value *idx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), i, (jl_value_t*)jl_long_type);
@@ -623,7 +623,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
             return typed_load(ctx, thePtr, im1, ety, ctx.tbaa().tbaa_data, nullptr, isboxed, AtomicOrdering::NotAtomic, true, align_nb);
         }
         else {
-            return ghostValue(ety, ctx.tbaa());
+            return ghostValue(ctx, ety);
         }
     }
 }
@@ -657,7 +657,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         return emit_runtime_pointerset(ctx, argv);
     if (!is_valid_intrinsic_elptr(ety)) {
         emit_error(ctx, "pointerset: invalid pointer type");
-        return jl_cgval_t();
+        return jl_cgval_t(ctx.builder.getContext());
     }
     emit_typecheck(ctx, x, ety, "pointerset");
 
@@ -686,7 +686,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-            typed_store(ctx, thePtr, im1, x, jl_cgval_t(), ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
+            typed_store(ctx, thePtr, im1, x, jl_cgval_t(ctx.builder.getContext()), ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
                         AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, false, true, false, false, false, false, nullptr, "");
         }
     }
@@ -700,11 +700,11 @@ static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, jl_cgval_t *argv)
         enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, true);
         if (order == jl_memory_order_invalid) {
             emit_atomic_error(ctx, "invalid atomic ordering");
-            return jl_cgval_t(); // unreachable
+            return jl_cgval_t(ctx.builder.getContext()); // unreachable
         }
         if (order > jl_memory_order_monotonic)
             ctx.builder.CreateFence(get_llvm_atomic_order(order));
-        return ghostValue(jl_nothing_type, ctx.tbaa());
+        return ghostValue(ctx, jl_nothing_type);
     }
     return emit_runtime_call(ctx, atomic_fence, argv, 1);
 }
@@ -722,7 +722,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
     if (order == jl_memory_order_invalid) {
         emit_atomic_error(ctx, "invalid atomic ordering");
-        return jl_cgval_t(); // unreachable
+        return jl_cgval_t(ctx.builder.getContext()); // unreachable
     }
     AtomicOrdering llvm_order = get_llvm_atomic_order(order);
 
@@ -736,13 +736,13 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
 
     if (!is_valid_intrinsic_elptr(ety)) {
         emit_error(ctx, "atomic_pointerref: invalid pointer type");
-        return jl_cgval_t();
+        return jl_cgval_t(ctx.builder.getContext());
     }
 
     size_t nb = jl_datatype_size(ety);
     if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE) {
         emit_error(ctx, "atomic_pointerref: invalid pointer for atomic operation");
-        return jl_cgval_t();
+        return jl_cgval_t(ctx.builder.getContext());
     }
 
     if (!jl_isbits(ety)) {
@@ -773,7 +773,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         else {
             if (order > jl_memory_order_monotonic)
                 ctx.builder.CreateFence(llvm_order);
-            return ghostValue(ety, ctx.tbaa());
+            return ghostValue(ctx, ety);
         }
     }
 }
@@ -788,7 +788,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
     bool isreplacefield = f == atomic_pointerreplace;
     bool isswapfield = f == atomic_pointerswap;
     bool ismodifyfield = f == atomic_pointermodify;
-    const jl_cgval_t undefval;
+    const jl_cgval_t undefval(ctx.builder.getContext());
     const jl_cgval_t &e = argv[0];
     const jl_cgval_t &x = isreplacefield || ismodifyfield ? argv[2] : argv[1];
     const jl_cgval_t &y = isreplacefield || ismodifyfield ? argv[1] : undefval;
@@ -809,7 +809,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
     enum jl_memory_order failorder = isreplacefield ? jl_get_atomic_order((jl_sym_t*)failord.constant, true, false) : order;
     if (order == jl_memory_order_invalid || failorder == jl_memory_order_invalid || failorder > order) {
         emit_atomic_error(ctx, "invalid atomic ordering");
-        return jl_cgval_t(); // unreachable
+        return jl_cgval_t(ctx.builder.getContext()); // unreachable
     }
     AtomicOrdering llvm_order = get_llvm_atomic_order(order);
     AtomicOrdering llvm_failorder = get_llvm_atomic_order(failorder);
@@ -830,7 +830,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
         std::string msg(StringRef(jl_intrinsic_name((int)f)));
         msg += ": invalid pointer type";
         emit_error(ctx, msg);
-        return jl_cgval_t();
+        return jl_cgval_t(ctx.builder.getContext());
     }
     if (!ismodifyfield)
         emit_typecheck(ctx, x, ety, std::string(jl_intrinsic_name((int)f)));
@@ -840,7 +840,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
         std::string msg(StringRef(jl_intrinsic_name((int)f)));
         msg += ": invalid pointer for atomic operation";
         emit_error(ctx, msg);
-        return jl_cgval_t();
+        return jl_cgval_t(ctx.builder.getContext());
     }
 
     if (!jl_isbits(ety)) {
@@ -921,7 +921,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     jl_value_t *t2 = y.typ;
     // handle cases where the condition is irrelevant based on type info
     if (t1 == jl_bottom_type && t2 == jl_bottom_type)
-        return jl_cgval_t(); // undefined
+        return jl_cgval_t(ctx.builder.getContext()); // undefined
     if (t1 == jl_bottom_type)
         return y;
     if (t2 == jl_bottom_type)
