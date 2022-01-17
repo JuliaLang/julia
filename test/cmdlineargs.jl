@@ -782,16 +782,19 @@ end
     end
 end
 
-function get_nthreads(options = ``; cpus)
+function get_nthreads(options = ``; cpus = nothing)
     cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
     cmd = `$cmd -e "print(Threads.nthreads())"`
     cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "0", "JULIA_NUM_THREADS" => "auto")
-    cmd = setcpuaffinity(cmd, cpus)
+    if cpus !== nothing
+        cmd = setcpuaffinity(cmd, cpus)
+    end
     return parse(Int, read(cmd, String))
 end
 
 @testset "nthreads determined based on CPU affinity" begin
     if !Sys.isapple() && Sys.CPU_THREADS ≥ 2
+        @test get_nthreads() ≥ 2
         @test get_nthreads(cpus = [1]) == 1
         @test get_nthreads(cpus = [2]) == 1
         @test get_nthreads(cpus = [1, 2]) == 2
