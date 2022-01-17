@@ -85,6 +85,10 @@ controlled with boolean keyword arguments:
 
 - `verbose`: print all additional information
 
+!!! warning "Warning"
+    The output of this function may contain sensitive information. Before sharing the output,
+    please review the output and remove any data that should not be shared publicly.
+
 See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
@@ -139,15 +143,36 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
     function is_nonverbose_env(k::String)
-        return occursin(r"^JULIA_|^DYLD_|^LD_", k)
+        return occursin(r"^JULIA_|^DYLD_|^LD_"i, k)
     end
     function is_verbose_env(k::String)
-        return occursin(r"PATH|FLAG|^TERM$|HOME", k) && !is_nonverbose_env(k)
+        regex = r"""
+            FLAG|HOME|PATH|^TERM$|
+            ^SSH_DIR$|^SSH_KEY_NAME$|^SSH_KEY_PATH$|^SSH_KNOWN_HOSTS_FILES$|^SSH_PUB_KEY_PATH$|
+            ^SSL_CERT_DIR$|^SSL_CERT_FILE$
+        """ix
+        return occursin(regex, k) && !is_nonverbose_env(k)
+    end
+
+    function should_be_redacted(k::String)
+        return occursin(r"AUTH|KEY|PASS|PRIV|SECRET|TOKEN"i, k)
+    end
+    function format_for_printing(k::String, v::String)
+        if should_be_redacted(k)
+            if isempty(v)
+                v_redacted = ""
+            else
+                v_redacted = "***"
+            end
+            return "  $(k) = $(v_redacted)"
+        else
+            return "  $(k) = $(v)"
+        end
     end
     env_strs = String[
-        String["  $(k) = $(v)" for (k,v) in ENV if is_nonverbose_env(uppercase(k))];
+        String[format_for_printing(k, v) for (k,v) in ENV if is_nonverbose_env(uppercase(k))];
         (verbose ?
-         String["  $(k) = $(v)" for (k,v) in ENV if is_verbose_env(uppercase(k))] :
+         String[format_for_printing(k, v) for (k,v) in ENV if is_verbose_env(uppercase(k))] :
          String[]);
     ]
     if !isempty(env_strs)
