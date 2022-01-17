@@ -2,7 +2,7 @@
 
 # test core language features
 
-using Random, SparseArrays, InteractiveUtils
+using Random, InteractiveUtils
 
 const Bottom = Union{}
 

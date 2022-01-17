@@ -6,8 +6,6 @@ using .Main.OffsetArrays
 
 isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl")
 
-using SparseArrays
-
 using Random, LinearAlgebra
 using Dates
 

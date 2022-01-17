@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra, SparseArrays
+using LinearAlgebra
 
 # For curmod_*
 include("testenv.jl")
@@ -728,28 +728,6 @@ let filename = tempname()
 
     @test occursin("WARNING: hello", ret)
     rm(filename)
-end
-
-# issue #12960
-mutable struct T12960 end
-import Base.zero
-Base.zero(::Type{T12960}) = T12960()
-Base.zero(x::T12960) = T12960()
-let
-    A = sparse(1.0I, 3, 3)
-    B = similar(A, T12960)
-    @test repr(B) == "sparse([1, 2, 3], [1, 2, 3], $T12960[#undef, #undef, #undef], 3, 3)"
-    @test occursin(
-        "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
-        repr(MIME("text/plain"), B),
-    )
-
-    B[1,2] = T12960()
-    @test repr(B)  == "sparse([1, 1, 2, 3], [1, 2, 2, 3], $T12960[#undef, $T12960(), #undef, #undef], 3, 3)"
-    @test occursin(
-        "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
-        repr(MIME("text/plain"), B),
-    )
 end
 
 # issue #13127
