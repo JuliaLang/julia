@@ -97,13 +97,75 @@ mutable struct CompletionState
     # selected completion candidate. 1-based index of the `completions` field;
     # nothing is selected if the value is zero, which is the initial state)
     selected
+    # the dimensions of the completion table
+    nrows
+    ncols
 end
+
+CompletionState(completions, partial, position) = CompletionState(completions, partial, position, 0, 0, 0)
 
 hasselected(state::CompletionState) = state.selected != 0
 selected(state::CompletionState) = state.completions[state.selected]
+dimensions(state::CompletionState) = (state.nrows, state.ncols)
 
 function select_next!(state::CompletionState)
     state.selected = mod1(state.selected + 1, length(state.completions))
+    return state
+end
+function select_previous!(state::CompletionState)
+    state.selected = mod1(state.selected - 1, length(state.completions))
+    return state
+end
+function select_right!(state::CompletionState)
+    if !hasselected(state)
+        state.selected = firstindex(state.completions)
+    else
+        nrows, ncols = dimensions(state)
+        col, row = divrem(state.selected - 1, nrows)
+        if col == ncols - 1  # rightmost column
+            col = 0
+            if row == nrows - 1
+                row = 0
+            else
+                row += 1
+            end
+        else
+            col += 1
+            if col * nrows + row + 1 > lastindex(state.completions)
+                col = 0
+                if row == nrows - 1
+                    row = 0
+                else
+                    row += 1
+                end
+            end
+        end
+        state.selected = col * nrows + row + 1
+    end
+    return state
+end
+function select_left!(state::CompletionState)
+    if !hasselected(state)
+        state.selected = lastindex(state.completions)
+    else
+        nrows, ncols = dimensions(state)
+        col, row = divrem(state.selected - 1, nrows)
+        if col == 0  # leftmost column
+            col = ncols - 1
+            if row == 0
+                row = nrows - 1
+            else
+                row -= 1
+            end
+            if col * nrows + row + 1 > lastindex(state.completions)
+                col -= 1
+            end
+        else
+            col -= 1
+        end
+        #@show row, col, nrows, ncols
+        state.selected = col * nrows + row + 1
+    end
     return state
 end
 
@@ -128,6 +190,10 @@ mutable struct PromptState <: ModeState
     completion_state::Union{CompletionState,Nothing}
 end
 
+iscompleting(s::ModeState) = false  # not completing by default
+iscompleting(s::PromptState) = s.completion_state !== nothing
+
+stop_completion!(s::ModeState) = nothing
 stop_completion!(s::PromptState) = (s.completion_state = nothing)
 
 struct Modifiers
@@ -349,7 +415,7 @@ function complete_line(s::MIState)
 end
 
 function complete_line(s::PromptState, repeats::Int)
-    if repeats == 0
+    if s.completion_state === nothing
         completions, partial, should_complete = complete_line(s.p.complete, s)::Tuple{Vector{String},String,Bool}
     else
         completions = s.completion_state.completions
@@ -360,8 +426,7 @@ function complete_line(s::PromptState, repeats::Int)
     if !should_complete
         # should_complete is false for cases where we only want to show
         # a list of possible completions but not complete, e.g. foo(\t
-        skip = input_string_newlines_aftercursor(s)
-        show_completions(terminal(s), completions, partial, 0, skip)
+        @assert false  # TODO
     elseif length(completions) == 1
         # Replace word by completion
         prev_pos = position(s)
@@ -380,40 +445,44 @@ function complete_line(s::PromptState, repeats::Int)
         if repeats == 0
             # start completion; nothing is selected yet
             pos = position(s) - sizeof(partial)
-            s.completion_state = CompletionState(completions, partial, pos, 0)
+            s.completion_state = CompletionState(completions, partial, pos)
         else
             select_next!(s.completion_state)
         end
-        show_completions(s)
-        if hasselected(s.completion_state)
-            edit_splice!(s, s.completion_state.position => position(s), selected(s.completion_state))
-        end
+        refresh_completions(s)
     end
     return true
 end
 
-function show_completions(s::PromptState)
-    skip = input_string_newlines_aftercursor(s)
-    show_completions(terminal(s), s.completion_state.completions, s.completion_state.partial, s.completion_state.selected, skip)
+function refresh_completions(s::PromptState)
+    show_completions(s)
+    if hasselected(s.completion_state)
+        edit_splice!(s, s.completion_state.position => position(s), selected(s.completion_state))
+        refresh_line(s)
+    end
 end
 
-function show_completions(terminal, completions, partial, selected, skip)
+function show_completions(s::PromptState)
+    term = terminal(s)
+    skip = input_string_newlines_aftercursor(s)
     if skip > 0
         # skip `skip`` lines of the input after the cursor
-        print(terminal, "\x1b[$(skip)B")
+        print(term, "\x1b[$(skip)B")
     end
-    println(terminal)
+    println(term)
 
     # list all completion candidates
-    colwidth = maximum(textwidth, completions) + 2
-    ncols = max(width(terminal) ÷ colwidth, 1)
-    nrows = (length(completions) - 1) ÷ ncols + 1
+    completions = s.completion_state.completions
+    partial = s.completion_state.partial
+    selected = s.completion_state.selected
+    colwidth = maximum(textwidth, completions) + 2  # content + margin
+    nrows, ncols = calc_layout(width(term), colwidth, length(completions))
     for r in 1:nrows
         for c in 1:ncols
             i = (c - 1) * nrows + r
             i > lastindex(completions) && break
             x = completions[i]
-            rest = x[lastindex(partial)+1:end]
+            rest = x[nextind(x, lastindex(partial)):end]
             # highlight prefix (partial)
             text = string(
                 "\x1b[1m\x1b[4m", partial, "\x1b[22m\x1b[24m",
@@ -424,15 +493,27 @@ function show_completions(terminal, completions, partial, selected, skip)
                 # highlight selected candidate
                 text = string("\x1b[48;5;240m", text, "\x1b[0m")
             end
-            print(terminal, text, "  ")
+            print(term, text, "  ")
         end
         if r != nrows
-            println(terminal)
+            println(term)
         end
     end
 
-    # unwind the cursor positioon
-    print(terminal, "\x1b[$(skip + nrows)A", "\x1b0G")
+    # update nrows and ncols (these may change if the terminal is resized)
+    s.completion_state.nrows = nrows
+    s.completion_state.ncols = ncols
+
+    # unwind the cursor position
+    print(term, "\x1b[$(skip + nrows)A", "\x1b[0G")
+end
+
+# calculate the number of rows and columns
+function calc_layout(tablewidth, colwidth, len)
+    n_max_cols = max(tablewidth ÷ colwidth, 1)
+    nrows = (len - 1) ÷ n_max_cols + 1
+    ncols = (len - 1) ÷ nrows + 1
+    return nrows, ncols
 end
 
 function clear_input_area(terminal::AbstractTerminal, s::PromptState)
@@ -2286,6 +2367,7 @@ AnyDict(
     "\e[Z" => (s::MIState,o...)->shift_tab_completion(s),
     # Enter
     '\r' => (s::MIState,o...)->begin
+        stop_completion!(state(s))
         print(terminal(s), "\x1b[0J")
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
             commit_line(s)
@@ -2297,6 +2379,7 @@ AnyDict(
     '\n' => KeyAlias('\r'),
     # Backspace/^H
     '\b' => (s::MIState,o...) -> begin
+        stop_completion!(state(s))
         print(terminal(s), "\x1b[0J")
         is_region_active(s) ? edit_kill_region(s) : edit_backspace(s)
     end,
@@ -2318,8 +2401,22 @@ AnyDict(
     "^X^X" => (s::MIState,o...)->edit_exchange_point_and_mark(s),
     "^B" => (s::MIState,o...)->edit_move_left(s),
     "^F" => (s::MIState,o...)->edit_move_right(s),
-    "^P" => (s::MIState,o...)->edit_move_up(s),
-    "^N" => (s::MIState,o...)->edit_move_down(s),
+    "^P" => (s::MIState,o...)->begin
+        if iscompleting(state(s))
+            select_previous!(state(s).completion_state)
+            refresh_completions(state(s))
+        else
+            edit_move_up(s)
+        end
+    end,
+    "^N" => (s::MIState,o...)->begin
+        if iscompleting(state(s))
+            select_next!(state(s).completion_state)
+            refresh_completions(state(s))
+        else
+            edit_move_down(s)
+        end
+    end,
     # Meta-Up
     "\e[1;3A" => (s::MIState,o...) -> edit_transpose_lines_up!(s),
     # Meta-Down
@@ -2347,7 +2444,11 @@ AnyDict(
     "^_" => (s::MIState,o...)->edit_undo!(s),
     "\e_" => (s::MIState,o...)->edit_redo!(s),
     # Simply insert it into the buffer by default
-    "*" => (s::MIState,data,c::StringLike)->(print(terminal(s), "\x1b[0J"); edit_insert(s, c)),
+    "*" => (s::MIState,data,c::StringLike)->begin
+        stop_completion!(state(s))
+        print(terminal(s), "\x1b[0J")
+        edit_insert(s, c)
+    end,
     "^U" => (s::MIState,o...)->edit_kill_line_backwards(s),
     "^K" => (s::MIState,o...)->edit_kill_line_forwards(s),
     "^Y" => (s::MIState,o...)->edit_yank(s),
@@ -2377,9 +2478,23 @@ AnyDict(
     end,
     "^Z" => (s::MIState,o...)->(return :suspend),
     # Right Arrow
-    "\e[C" => (s::MIState,o...)->edit_move_right(s),
+    "\e[C" => (s::MIState,o...)->begin
+        if iscompleting(state(s))
+            select_right!(state(s).completion_state)
+            refresh_completions(state(s))
+        else
+            edit_move_right(s)
+        end
+    end,
     # Left Arrow
-    "\e[D" => (s::MIState,o...)->edit_move_left(s),
+    "\e[D" => (s::MIState,o...)->begin
+        if iscompleting(state(s))
+            select_left!(state(s).completion_state)
+            refresh_completions(state(s))
+        else
+            edit_move_left(s)
+        end
+    end,
     # Up Arrow
     "\e[A" => (s::MIState,o...)->edit_move_up(s),
     # Down Arrow
@@ -2456,12 +2571,40 @@ function setup_prefix_keymap(hp::HistoryProvider, parent_prompt::Prompt)
     p = PrefixHistoryPrompt(hp, parent_prompt)
     p.keymap_dict = keymap([prefix_history_keymap])
     pkeymap = AnyDict(
-        "^P" => (s::MIState,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
-        "^N" => (s::MIState,o...)->(edit_move_down(s) || enter_prefix_search(s, p, false)),
+        "^P" => (s::MIState,o...)->begin
+            if iscompleting(state(s))
+                select_previous!(state(s).completion_state)
+                refresh_completions(state(s))
+            else
+                edit_move_up(s) || enter_prefix_search(s, p, true)
+            end
+        end,
+        "^N" => (s::MIState,o...)->begin
+            if iscompleting(state(s))
+                select_next!(state(s).completion_state)
+                refresh_completions(state(s))
+            else
+                edit_move_down(s) || enter_prefix_search(s, p, false)
+            end
+        end,
         # Up Arrow
-        "\e[A" => (s::MIState,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
+        "\e[A" => (s::MIState,o...)->begin
+            if iscompleting(state(s))
+                select_previous!(state(s).completion_state)
+                refresh_completions(state(s))
+            else
+                edit_move_up(s) || enter_prefix_search(s, p, true)
+            end
+        end,
         # Down Arrow
-        "\e[B" => (s::MIState,o...)->(edit_move_down(s) || enter_prefix_search(s, p, false)),
+        "\e[B" => (s::MIState,o...)->begin
+            if iscompleting(state(s))
+                select_next!(state(s).completion_state)
+                refresh_completions(state(s))
+            else
+                edit_move_down(s) || enter_prefix_search(s, p, false)
+            end
+        end,
     )
     return (p, pkeymap)
 end
