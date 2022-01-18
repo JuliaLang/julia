@@ -357,8 +357,8 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order)
 {
-    JL_TYPECHK(atomic_pointerref, pointer, p);
-    JL_TYPECHK(atomic_pointerref, symbol, order)
+    JL_TYPECHK(atomic_pointermodify, pointer, p);
+    JL_TYPECHK(atomic_pointermodify, symbol, order)
     (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 1);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
