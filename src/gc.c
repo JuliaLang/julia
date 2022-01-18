@@ -1201,6 +1201,9 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc_outer(jl_ptls_t ptls, int pool_offset,
                                           int osize)
 {
     jl_value_t *val = jl_gc_pool_alloc(ptls, pool_offset, osize);
+    // zero out the type tag so it's not garbage
+    jl_set_typeof(val, 0);
+
     maybe_record_alloc_to_profile(val, osize);
     return val;
 }
