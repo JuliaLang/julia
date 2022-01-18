@@ -1441,6 +1441,41 @@ _edit_indent(buf::IOBuffer, b::Int, num::Int) =
                edit_splice!(buf, b => (b - num))
 
 
+# Completion operations
+function complete_prev(s::MIState)
+    iscompleting(state(s)) || return false
+    select_previous!(state(s).completion_state)
+    refresh_completions(state(s))
+    return true
+end
+
+function complete_next(s::MIState)
+    iscompleting(state(s)) || return false
+    select_next!(state(s).completion_state)
+    refresh_completions(state(s))
+    return true
+end
+
+function complete_right(s::MIState)
+    iscompleting(state(s)) || return false
+    select_right!(state(s).completion_state)
+    refresh_completions(state(s))
+    return true
+end
+
+function complete_left(s::MIState)
+    iscompleting(state(s)) || return false
+    select_left!(state(s).completion_state)
+    refresh_completions(state(s))
+    return true
+end
+
+function stop_completion(s::MIState)
+    stop_completion!(state(s))
+    print(terminal(s), "\x1b[0J")
+end
+
+
 history_prev(::EmptyHistoryProvider) = ("", false)
 history_next(::EmptyHistoryProvider) = ("", false)
 history_first(::EmptyHistoryProvider) = ("", false)
@@ -2367,27 +2402,12 @@ end
 const default_keymap =
 AnyDict(
     # Tab
-    '\t' => (s::MIState,o...)->begin
-        if iscompleting(state(s))
-            select_next!(state(s).completion_state)
-            refresh_completions(state(s))
-        else
-            edit_tab(s, true)
-        end
-    end,
+    '\t' => (s::MIState,o...)->complete_next(s) || edit_tab(s, true),
     # Shift-tab
-    "\e[Z" => (s::MIState,o...)->begin
-        if iscompleting(state(s))
-            select_previous!(state(s).completion_state)
-            refresh_completions(state(s))
-        else
-            shift_tab_completion(s)
-        end
-    end,
+    "\e[Z" => (s::MIState,o...)->complete_prev(s) || shift_tab_completion(s),
     # Enter
     '\r' => (s::MIState,o...)->begin
-        stop_completion!(state(s))
-        print(terminal(s), "\x1b[0J")
+        stop_completion(s)
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
             commit_line(s)
             return :done
@@ -2398,8 +2418,7 @@ AnyDict(
     '\n' => KeyAlias('\r'),
     # Backspace/^H
     '\b' => (s::MIState,o...) -> begin
-        stop_completion!(state(s))
-        print(terminal(s), "\x1b[0J")
+        stop_completion(s)
         is_region_active(s) ? edit_kill_region(s) : edit_backspace(s)
     end,
     127 => KeyAlias('\b'),
@@ -2408,6 +2427,7 @@ AnyDict(
     "\e\x7f" => "\e\b",
     # ^D
     "^D" => (s::MIState,o...)->begin
+        stop_completion(s)
         if buffer(s).size > 0
             edit_delete(s)
         else
@@ -2418,24 +2438,10 @@ AnyDict(
     "\0" => (s::MIState,o...)->setmark(s),
     "^G" => (s::MIState,o...)->(deactivate_region(s); refresh_line(s)),
     "^X^X" => (s::MIState,o...)->edit_exchange_point_and_mark(s),
-    "^B" => (s::MIState,o...)->edit_move_left(s),
-    "^F" => (s::MIState,o...)->edit_move_right(s),
-    "^P" => (s::MIState,o...)->begin
-        if iscompleting(state(s))
-            select_previous!(state(s).completion_state)
-            refresh_completions(state(s))
-        else
-            edit_move_up(s)
-        end
-    end,
-    "^N" => (s::MIState,o...)->begin
-        if iscompleting(state(s))
-            select_next!(state(s).completion_state)
-            refresh_completions(state(s))
-        else
-            edit_move_down(s)
-        end
-    end,
+    "^B" => (s::MIState,o...)->(stop_completion(s); edit_move_left(s)),
+    "^F" => (s::MIState,o...)->(stop_completion(s); edit_move_right(s)),
+    "^P" => (s::MIState,o...)->complete_prev(s) || edit_move_up(s),
+    "^N" => (s::MIState,o...)->complete_next(s) || edit_move_down(s),
     # Meta-Up
     "\e[1;3A" => (s::MIState,o...) -> edit_transpose_lines_up!(s),
     # Meta-Down
@@ -2463,13 +2469,9 @@ AnyDict(
     "^_" => (s::MIState,o...)->edit_undo!(s),
     "\e_" => (s::MIState,o...)->edit_redo!(s),
     # Simply insert it into the buffer by default
-    "*" => (s::MIState,data,c::StringLike)->begin
-        stop_completion!(state(s))
-        print(terminal(s), "\x1b[0J")
-        edit_insert(s, c)
-    end,
-    "^U" => (s::MIState,o...)->edit_kill_line_backwards(s),
-    "^K" => (s::MIState,o...)->edit_kill_line_forwards(s),
+    "*" => (s::MIState,data,c::StringLike)->(stop_completion(s); edit_insert(s, c)),
+    "^U" => (s::MIState,o...)->(stop_completion(s); edit_kill_line_backwards(s)),
+    "^K" => (s::MIState,o...)->(stop_completion(s); edit_kill_line_forwards(s)),
     "^Y" => (s::MIState,o...)->edit_yank(s),
     "\ey" => (s::MIState,o...)->edit_yank_pop(s),
     "\ew" => (s::MIState,o...)->edit_copy_region(s),
@@ -2497,23 +2499,9 @@ AnyDict(
     end,
     "^Z" => (s::MIState,o...)->(return :suspend),
     # Right Arrow
-    "\e[C" => (s::MIState,o...)->begin
-        if iscompleting(state(s))
-            select_right!(state(s).completion_state)
-            refresh_completions(state(s))
-        else
-            edit_move_right(s)
-        end
-    end,
+    "\e[C" => (s::MIState,o...)->complete_right(s) || edit_move_right(s),
     # Left Arrow
-    "\e[D" => (s::MIState,o...)->begin
-        if iscompleting(state(s))
-            select_left!(state(s).completion_state)
-            refresh_completions(state(s))
-        else
-            edit_move_left(s)
-        end
-    end,
+    "\e[D" => (s::MIState,o...)->complete_left(s) || edit_move_left(s),
     # Up Arrow
     "\e[A" => (s::MIState,o...)->edit_move_up(s),
     # Down Arrow
@@ -2590,40 +2578,12 @@ function setup_prefix_keymap(hp::HistoryProvider, parent_prompt::Prompt)
     p = PrefixHistoryPrompt(hp, parent_prompt)
     p.keymap_dict = keymap([prefix_history_keymap])
     pkeymap = AnyDict(
-        "^P" => (s::MIState,o...)->begin
-            if iscompleting(state(s))
-                select_previous!(state(s).completion_state)
-                refresh_completions(state(s))
-            else
-                edit_move_up(s) || enter_prefix_search(s, p, true)
-            end
-        end,
-        "^N" => (s::MIState,o...)->begin
-            if iscompleting(state(s))
-                select_next!(state(s).completion_state)
-                refresh_completions(state(s))
-            else
-                edit_move_down(s) || enter_prefix_search(s, p, false)
-            end
-        end,
+        "^P" => (s::MIState,o...)->complete_prev(s) || edit_move_up(s) || enter_prefix_search(s, p, true),
+        "^N" => (s::MIState,o...)->complete_next(s) || edit_move_down(s) || enter_prefix_search(s, p, false),
         # Up Arrow
-        "\e[A" => (s::MIState,o...)->begin
-            if iscompleting(state(s))
-                select_previous!(state(s).completion_state)
-                refresh_completions(state(s))
-            else
-                edit_move_up(s) || enter_prefix_search(s, p, true)
-            end
-        end,
+        "\e[A" => (s::MIState,o...)->complete_prev(s) || edit_move_up(s) || enter_prefix_search(s, p, true),
         # Down Arrow
-        "\e[B" => (s::MIState,o...)->begin
-            if iscompleting(state(s))
-                select_next!(state(s).completion_state)
-                refresh_completions(state(s))
-            else
-                edit_move_down(s) || enter_prefix_search(s, p, false)
-            end
-        end,
+        "\e[B" => (s::MIState,o...)->complete_next(s) || edit_move_down(s) || enter_prefix_search(s, p, false),
     )
     return (p, pkeymap)
 end
