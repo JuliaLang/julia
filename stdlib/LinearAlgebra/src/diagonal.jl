@@ -672,14 +672,20 @@ end
 #Singular system
 svdvals(D::Diagonal{<:Number}) = sort!(abs.(D.diag), rev = true)
 svdvals(D::Diagonal) = [svdvals(v) for v in D.diag]
-function svd(D::Diagonal{T}) where T<:Number
-    S   = abs.(D.diag)
-    piv = sortperm(S, rev = true)
-    U   = Diagonal(D.diag ./ S)
-    Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
-    V   = Diagonal(fill!(similar(D.diag), one(T)))
-    Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
-    return SVD(Up, S[piv], copy(Vp'))
+function svd(D::Diagonal{T}) where {T<:Number}
+    d = D.diag
+    s = abs.(d)
+    piv = sortperm(s, rev = true)
+    S = s[piv]
+    Td  = typeof(oneunit(T)/oneunit(T))
+    U = zeros(Td, size(D))
+    Vt = copy(U)
+    for i in 1:length(d)
+        j = piv[i]
+        U[j,i] = d[j] >= zero(T) ? one(Td) : -one(Td)
+        Vt[i,j] = one(Td)
+    end
+    return SVD(U, S, Vt)
 end
 
 # disambiguation methods: * and / of Diagonal and Adj/Trans AbsVec
