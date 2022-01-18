@@ -1115,7 +1115,7 @@ end
 """
     A / B
 
-Matrix right-division: `A / B` is equivalent to `(A' \ B')'` where [`\`](@ref) is the left-division operator.
+Matrix right-division: `A / B` is equivalent to `(B' \ A')'` where [`\`](@ref) is the left-division operator.
 For square matrices, the result `X` is such that `A == X*B`.
 
 See also: [`rdiv!`](@ref).
