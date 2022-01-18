@@ -365,7 +365,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         v = jl_gc_big_alloc(ptls, allocsz);
     }
     jl_set_typeof(v, ty);
-    maybe_record_alloc_to_profile(v, sz);
+    maybe_record_alloc_to_profile(v, sz, (jl_datatype_t*)ty);
     return v;
 }
 
