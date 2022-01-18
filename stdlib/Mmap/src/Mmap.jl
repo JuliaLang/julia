@@ -309,7 +309,7 @@ function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
         end
     end
     _dims = isone(N) ? (0,) : map(Int, dims)
-    return BitArray{N}(chunks, n, _dims)
+    return Base.bitarray_internal(Val{N}(), chunks, n, _dims)
 end
 
 mmap(file::AbstractString, ::Type{T}, dims::NTuple{N,Integer}, offset::Integer=Int64(0);grow::Bool=true, shared::Bool=true) where {T<:BitArray,N} =

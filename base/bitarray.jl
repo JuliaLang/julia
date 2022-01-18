@@ -25,6 +25,9 @@ mutable struct BitArray{N} <: AbstractArray{Bool, N}
     const chunks::Vector{UInt64}
     len::Int
     const dims::NTuple{N,Int}
+
+    # Unexported inner constructor of BitArray
+    global bitarray_internal(::Val{N}, chunks, len, dims) where {N} = new{N}(chunks, len, dims)
 end
 
 function BitArray{N}(::UndefInitializer, dims::Vararg{Int,N}) where N
@@ -39,7 +42,8 @@ function BitArray{N}(::UndefInitializer, dims::Vararg{Int,N}) where N
     chunks = Vector{UInt64}(undef, nc)
     nc > 0 && (chunks[end] = UInt64(0))
     _dims = isone(N) ? (0,) : dims
-    return BitArray{N}(chunks, n, _dims)
+
+    return bitarray_internal(Val{N}(), chunks, n, _dims)
 end
 
 
@@ -485,7 +489,7 @@ function _bitreshape(B::BitArray, dims::NTuple{N,Int}) where N
     dimsprod == length(B) ||
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
     new_dims = isone(N) ? (0,) : dims
-    BitArray{N}(B.chunks, dimsprod, new_dims)
+    bitarray_internal(Val{N}(), B.chunks, dimsprod, new_dims)
 end
 
 ## Constructors ##
