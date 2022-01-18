@@ -108,6 +108,54 @@ end
     Allocs.clear()
 end
 
+function capture_stderr(f::Function)
+    new = Base.redirect_stderr()
+    try
+        f()
+    finally
+        Base.redirect_stderr(stderr)
+        flush(new)
+        close(new)
+        return read(new, String)
+    end
+end
+
+@testset "alloc profiler warning message" begin
+    @testset "no allocs" begin
+        Profile.Allocs.clear()
+        Profile.Allocs.fetch()
+    end
+    io = IOBuffer()
+    @testset "catches all allocations" begin
+        foo() = []
+        precompile(foo, ())
+        Profile.Allocs.clear()
+        Profile.Allocs.@profile sample_rate=1 foo()
+        # Fake that we expected exactly 1 alloc, since we should have recorded >= 1
+        Profile.Allocs._g_expected_sampled_allocs[] = 1
+        Base.redirect_stderr(io) do
+            @assert length(Profile.Allocs.fetch().allocs) >= 1
+        end
+        warning = String(take!(io))
+        @test occursin("may have missed some of the allocs", warning)
+        @test occursin("https://github.com/JuliaLang/julia/issues/43688", warning)
+    end
+    @testset "misses some allocations" begin
+        foo() = []
+        precompile(foo, ())
+        Profile.Allocs.clear()
+        Profile.Allocs.@profile sample_rate=1 foo()
+        # Fake some allocs that we missed, to force the print statement
+        Profile.Allocs._g_expected_sampled_allocs[] += 10
+        Base.redirect_stderr(io) do
+            @assert 1 <= length(Profile.Allocs.fetch().allocs) < 10
+        end
+        warning = String(take!(io))
+        @test occursin(r"missed approximately [0-9]+%", warning)
+        @test occursin("https://github.com/JuliaLang/julia/issues/43688", warning)
+    end
+end
+
 @testset "alloc profiler catches strings" begin
     Allocs.@profile sample_rate=1 "$(rand())"
 
