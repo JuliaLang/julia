@@ -24,7 +24,7 @@ end
     # @test Threads.nthreads() > 1
 
     function do_work()
-        ch = Channel{Vector{Int}}(Inf)
+        ch = Channel{Vector{Float64}}(Inf)
         @sync for i in 1:NUM_TASKS
             Threads.@spawn begin
                 # generate garbage
@@ -35,6 +35,7 @@ end
     end
 
     # call once to make sure it's compiled
+    precompile(do_work, ())
     do_work()
 
     res = Allocs.@profile sample_rate=1 begin
@@ -42,16 +43,18 @@ end
     end
     profile = Allocs.fetch()
 
-    # expecting at least 3 allocations per task:
+    # expecting at least 2 allocations per task:
     # 1. the task
     # 2. the vector
-    # 3. the buffer inside the vector
-    @test length(profile.allocs) >= 3*NUM_TASKS
-    println(length(profile.allocs))
+    @test length(profile.allocs) >= 2*NUM_TASKS
     first_alloc = profile.allocs[1]
     @test first_alloc.size > 0
     @test length(first_alloc.stacktrace) > 0
     @test length(string(first_alloc.type)) > 0
+
+    @testset for type in (Task, Vector{Float64},)
+        @test length(filter(a->a.type <: type, profile.allocs)) >= NUM_TASKS
+    end
 
     # TODO: it would be nice to assert that these tasks
     # were actually scheduled onto multiple threads,
