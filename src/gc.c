@@ -3552,7 +3552,8 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     SetLastError(last_error);
 #endif
     errno = last_errno;
-    maybe_record_alloc_to_profile(b, sz);
+    // jl_gc_managed_malloc is currently always used for allocating array buffers.
+    maybe_record_alloc_to_profile(b, sz, jl_buff_tag);
     return b;
 }
 
