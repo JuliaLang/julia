@@ -689,20 +689,20 @@ let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
     @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
 end
 
-isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
-using .Main.ImmutableArrays
+isdefined(Main, :SimpleImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SimpleImmutableArrays.jl"))
+using .Main.SimpleImmutableArrays
 
 @testset "AbstractArray constructor should preserve underlying storage type" begin
     # tests corresponding to #34995
     local m = 4
     local T, S = Float32, Float64
-    immutablemat = ImmutableArray(randn(T,m,m))
+    immutablemat = SimpleImmutableArray(randn(T,m,m))
     for TriType in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         trimat = TriType(immutablemat)
-        @test convert(AbstractArray{S}, trimat).data isa ImmutableArray{S}
-        @test convert(AbstractMatrix{S}, trimat).data isa ImmutableArray{S}
-        @test AbstractArray{S}(trimat).data isa ImmutableArray{S}
-        @test AbstractMatrix{S}(trimat).data isa ImmutableArray{S}
+        @test convert(AbstractArray{S}, trimat).data isa SimpleImmutableArray{S}
+        @test convert(AbstractMatrix{S}, trimat).data isa SimpleImmutableArray{S}
+        @test AbstractArray{S}(trimat).data isa SimpleImmutableArray{S}
+        @test AbstractMatrix{S}(trimat).data isa SimpleImmutableArray{S}
         @test convert(AbstractArray{S}, trimat) == trimat
         @test convert(AbstractMatrix{S}, trimat) == trimat
     end
