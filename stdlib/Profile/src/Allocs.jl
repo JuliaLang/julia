@@ -128,11 +128,11 @@ function fetch()
             @warn("The allocation profiler is not fully implemented, and missed approximately" *
             " $(missed_percentage)% (estimated $(round(Int, missed_allocs)) / $(round(Int,
             _g_expected_sampled_allocs[]))) " *
-                    "of allocs in the last run. " *
+                    "of sampled allocs in the last run. " *
                     "For more info see https://github.com/JuliaLang/julia/issues/43688")
         else
             @warn("The allocation profiler is not fully implemented, and may have missed" *
-            " some of the allocs in the last run. " *
+            " some of the allocs. " *
                     "For more info see https://github.com/JuliaLang/julia/issues/43688")
         end
     end
