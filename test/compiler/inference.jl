@@ -3137,11 +3137,12 @@ _use_unstable_kw_2() = _unstable_kw(x = 2, y = rand())
 @test Base.return_types(_use_unstable_kw_1) == Any[String]
 @test Base.return_types(_use_unstable_kw_2) == Any[String]
 @eval struct StructWithSplatNew
-    x::Int
+    x::String
     StructWithSplatNew(t) = $(Expr(:splatnew, :StructWithSplatNew, :t))
 end
 _construct_structwithsplatnew() = StructWithSplatNew(("",))
 @test Base.return_types(_construct_structwithsplatnew) == Any[StructWithSplatNew]
+@test isa(_construct_structwithsplatnew(), StructWithSplatNew)
 
 # case where a call cycle can be broken by constant propagation
 struct NotQRSparse

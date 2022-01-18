@@ -364,16 +364,16 @@ macro aliasscope(body)
     end)
 end
 
-struct Const{T<:Array}
+struct ConstAliasScope{T<:Array}
     a::T
 end
 
-@eval Base.getindex(A::Const, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+@eval Base.getindex(A::ConstAliasScope, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
+@eval Base.getindex(A::ConstAliasScope, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 function foo31018!(a, b)
     @aliasscope for i in eachindex(a, b)
-        a[i] = Const(b)[i]
+        a[i] = ConstAliasScope(b)[i]
     end
 end
 io = IOBuffer()
@@ -588,7 +588,9 @@ struct A40855
     b::Union{Nothing, Int}
 end
 g() = string(A40855(X40855, 1))
-@test g() == "$(@__MODULE__).A40855($(@__MODULE__).X40855, 1)"
+let mod_prefix = (@__MODULE__) == Core.Main ? "" : "$(@__MODULE__)."
+    @test g() == "$(mod_prefix)A40855($(mod_prefix)X40855, 1)"
+end
 
 # issue #40612
 f40612(a, b) = a|b === a|b
