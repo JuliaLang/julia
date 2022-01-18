@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random, LinearAlgebra, SparseArrays
+using Random, LinearAlgebra
 
 A = rand(5,4,3)
 @testset "Bounds checking" begin
@@ -832,24 +832,6 @@ A = TSlowNIndexes(rand(2,2))
     @test @inferred(axes(rand(3,2), 3)) == 1:1
 end
 
-@testset "#17088" begin
-    n = 10
-    M = rand(n, n)
-    @testset "vector of vectors" begin
-        v = [[M]; [M]] # using vcat
-        @test size(v) == (2,)
-        @test !issparse(v)
-    end
-    @testset "matrix of vectors" begin
-        m1 = [[M] [M]] # using hcat
-        m2 = [[M] [M];] # using hvcat
-        @test m1 == m2
-        @test size(m1) == (1,2)
-        @test !issparse(m1)
-        @test !issparse(m2)
-    end
-end
-
 @testset "isinteger and isreal" begin
     @test all(isinteger, Diagonal(rand(1:5,5)))
     @test isreal(Diagonal(rand(5)))
@@ -1022,7 +1004,6 @@ end
         s = Vector([1, 2])
         for a = ([1], UInt[1], [3, 4, 5], UInt[3, 4, 5])
             @test s === copy!(s, Vector(a)) == Vector(a)
-            @test s === copy!(s, SparseVector(a)) == Vector(a)
         end
         # issue #35649
         s = [1, 2, 3, 4]
