@@ -141,7 +141,7 @@
            ((typed_hcat)  (string (deparse (cadr e))
                                   (deparse (cons 'hcat (cddr e)))))
            ((ncat)        (string #\[ (deparse-arglist (cddr e) (string (deparse-semicolons (cadr e)) " "))
-                                      (if (= (length (cddr e)) 1)
+                                      (if (<= (length (cddr e)) 1)
                                           (deparse-semicolons (cadr e))
                                           "") #\]))
            ((typed_ncat)  (string (deparse (cadr e))

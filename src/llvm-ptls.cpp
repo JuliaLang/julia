@@ -273,7 +273,7 @@ bool LowerPTLS::runOnModule(Module &_M)
 #endif
     T_pgcstack_getter = FT_pgcstack_getter->getPointerTo();
     T_pppjlvalue = cast<PointerType>(FT_pgcstack_getter->getReturnType());
-    T_ppjlvalue = cast<PointerType>(T_pppjlvalue->getElementType());
+    T_ppjlvalue = JuliaType::get_ppjlvalue_ty(*ctx);
     if (imaging_mode) {
         pgcstack_func_slot = create_aliased_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
         pgcstack_key_slot = create_aliased_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)

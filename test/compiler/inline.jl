@@ -667,7 +667,7 @@ begin
     end
     @noinline a::Point +ₚ b::Point = Point(a.x + b.x, a.y + b.y)
 
-    function compute(n)
+    function compute_idem_n(n)
         a = Point(1.5, 2.5)
         b = Point(2.25, 4.75)
         for i in 0:(n-1)
@@ -675,11 +675,11 @@ begin
         end
         return a.x, a.y
     end
-    let src = code_typed1(compute, (Int,))
+    let src = code_typed1(compute_idem_n, (Int,))
         @test count(isinvoke(:+ₚ), src.code) == 0 # successful inlining
     end
 
-    function compute(n)
+    function compute_idem_n(n)
         a = Point(1.5, 2.5)
         b = Point(2.25, 4.75)
         for i in 0:(n-1)
@@ -687,13 +687,13 @@ begin
         end
         return a.x, a.y
     end
-    let src = code_typed1(compute, (Int,))
+    let src = code_typed1(compute_idem_n, (Int,))
         @test count(isinvoke(:+ₚ), src.code) == 2 # no inlining
     end
 
-    compute(42) # this execution should discard the cache of `+ₚ` since it's declared as `@noinline`
+    compute_idem_n(42) # this execution should discard the cache of `+ₚ` since it's declared as `@noinline`
 
-    function compute(n)
+    function compute_idem_n(n)
         a = Point(1.5, 2.5)
         b = Point(2.25, 4.75)
         for i in 0:(n-1)
@@ -701,7 +701,7 @@ begin
         end
         return a.x, a.y
     end
-    let src = code_typed1(compute, (Int,))
+    let src = code_typed1(compute_idem_n, (Int,))
         @test count(isinvoke(:+ₚ), src.code) == 0 # no inlining !?
     end
 end
@@ -879,4 +879,15 @@ end
         end |> only |> first
         @test count(iscall((src,UnionAll)), src.code) == 0
     end
+end
+
+# have_fma elimination inside ^
+f_pow() = ^(2.0, -1.0)
+@test fully_eliminated(f_pow, Tuple{})
+
+# bug where Conditional wasn't being properly marked as ConstAPI
+let
+    @noinline fcond(a, b) = a === b
+    ftest(a) = (fcond(a, nothing); a)
+    @test fully_eliminated(ftest, Tuple{Bool})
 end

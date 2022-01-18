@@ -200,13 +200,16 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     libjulia_internal = load_library(special_library_names[0], lib_dir, 1);
     void *libjulia_codegen = load_library(special_library_names[1], lib_dir, 0);
     const char * const * codegen_func_names;
+    const char *codegen_liberr;
     if (libjulia_codegen == NULL) {
         // if codegen is not available, use fallback implementation in libjulia-internal
         libjulia_codegen = libjulia_internal;
         codegen_func_names = jl_codegen_fallback_func_names;
+        codegen_liberr = " from libjulia-internal\n";
     }
     else {
         codegen_func_names = jl_codegen_exported_func_names;
+        codegen_liberr = " from libjulia-codegen\n";
     }
 
     // Once we have libjulia-internal loaded, re-export its symbols:
@@ -225,7 +228,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     for (unsigned int symbol_idx=0; codegen_func_names[symbol_idx] != NULL; ++symbol_idx) {
         void *addr = lookup_symbol(libjulia_codegen, codegen_func_names[symbol_idx]);
         if (addr == NULL) {
-            jl_loader_print_stderr3("ERROR: Unable to load ", codegen_func_names[symbol_idx], " from libjulia-codegen\n");
+            jl_loader_print_stderr3("ERROR: Unable to load ", codegen_func_names[symbol_idx], codegen_liberr);
             exit(1);
         }
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;

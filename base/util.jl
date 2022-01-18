@@ -18,6 +18,7 @@ const text_colors = Dict{Union{Symbol,Int},String}(
     :light_blue    => "\033[94m",
     :light_magenta => "\033[95m",
     :light_cyan    => "\033[96m",
+    :light_white   => "\033[97m",
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",

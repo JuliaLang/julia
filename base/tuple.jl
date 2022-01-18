@@ -570,3 +570,6 @@ end
 Returns an empty tuple, `()`.
 """
 empty(@nospecialize x::Tuple) = ()
+
+foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
+foreach(f, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itrs...), init=nothing)

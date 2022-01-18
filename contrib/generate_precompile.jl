@@ -421,6 +421,7 @@ generate_precompile_statements()
 
 # As a last step in system image generation,
 # remove some references to build time environment for a more reproducible build.
+Base.Filesystem.temp_cleanup_purge(force=true)
 @eval Base PROGRAM_FILE = ""
 @eval Sys begin
     BINDIR = ""

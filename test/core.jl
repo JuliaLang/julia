@@ -2,7 +2,7 @@
 
 # test core language features
 
-using Random, SparseArrays, InteractiveUtils
+using Random, InteractiveUtils
 
 const Bottom = Union{}
 
@@ -3602,9 +3602,10 @@ end
 @test_throws TypeError Union{Int, 1}
 
 @test_throws ErrorException Vararg{Any,-2}
-@test_throws ErrorException Vararg{Int, N} where N<:T where T
-@test_throws ErrorException Vararg{Int, N} where N<:Integer
-@test_throws ErrorException Vararg{Int, N} where N>:Integer
+# Disabled due to #39698, see src/jltypes.c
+#@test_throws ErrorException Vararg{Int, N} where N<:T where T
+#@test_throws ErrorException Vararg{Int, N} where N<:Integer
+#@test_throws ErrorException Vararg{Int, N} where N>:Integer
 
 mutable struct FooNTuple{N}
     z::Tuple{Integer, Vararg{Int, N}}
@@ -3658,7 +3659,7 @@ f12092(x::Int, y::Int...) = 2
 # NOTE: should have > MAX_TUPLETYPE_LEN arguments
 f12063(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) where {T} = 1
 f12063(args...) = 2
-g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, spzeros(0,0), Int[])
+g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, zeros(0,0), Int[])
 @test g12063() == 1
 
 # issue #11587

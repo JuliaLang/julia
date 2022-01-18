@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra, SparseArrays
+using LinearAlgebra
 
 # For curmod_*
 include("testenv.jl")
@@ -728,28 +728,6 @@ let filename = tempname()
 
     @test occursin("WARNING: hello", ret)
     rm(filename)
-end
-
-# issue #12960
-mutable struct T12960 end
-import Base.zero
-Base.zero(::Type{T12960}) = T12960()
-Base.zero(x::T12960) = T12960()
-let
-    A = sparse(1.0I, 3, 3)
-    B = similar(A, T12960)
-    @test repr(B) == "sparse([1, 2, 3], [1, 2, 3], $T12960[#undef, #undef, #undef], 3, 3)"
-    @test occursin(
-        "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
-        repr(MIME("text/plain"), B),
-    )
-
-    B[1,2] = T12960()
-    @test repr(B)  == "sparse([1, 1, 2, 3], [1, 2, 2, 3], $T12960[#undef, $T12960(), #undef, #undef], 3, 3)"
-    @test occursin(
-        "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
-        repr(MIME("text/plain"), B),
-    )
 end
 
 # issue #13127
@@ -1877,17 +1855,24 @@ end
 
 @testset "#14684: `display` should print associative types in full" begin
     d = Dict(1 => 2, 3 => 45)
-    buf = IOBuffer()
-    td = TextDisplay(buf)
+    td = TextDisplay(PipeBuffer())
 
     display(td, d)
-    result = String(take!(td.io))
+    result = read(td.io, String)
     @test occursin(summary(d), result)
 
     # Is every pair in the string?
     for el in d
         @test occursin(string(el), result)
     end
+end
+
+@testset "#43766: `display` trailing newline" begin
+    td = TextDisplay(PipeBuffer())
+    display(td, 1)
+    @test read(td.io, String) == "1\n"
+    show(td.io, 1)
+    @test read(td.io, String) == "1"
 end
 
 function _methodsstr(f)
@@ -2354,4 +2339,12 @@ end
     @test_repr "T[1;;; 2]"
     @test_repr "T[1;;; 2 3;;; 4]"
     @test_repr "T[1;;; 2;;;; 3;;; 4]"
+end
+
+@testset "Cmd" begin
+    @test sprint(show, `true`) == "`true`"
+    @test sprint(show, setenv(`true`, "A" => "B")) == """setenv(`true`,["A=B"])"""
+    @test sprint(show, setcpuaffinity(`true`, [1, 2])) == "setcpuaffinity(`true`, [1, 2])"
+    @test sprint(show, setenv(setcpuaffinity(`true`, [1, 2]), "A" => "B")) ==
+          """setenv(setcpuaffinity(`true`, [1, 2]),["A=B"])"""
 end

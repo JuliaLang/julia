@@ -284,7 +284,7 @@ struct Point
     y::Float64
 end
 #=@inline=# add(a::Point, b::Point) = Point(a.x + b.x, a.y + b.y)
-function compute()
+function compute_points()
     a = Point(1.5, 2.5)
     b = Point(2.25, 4.75)
     for i in 0:(100000000-1)
@@ -292,7 +292,7 @@ function compute()
     end
     a.x, a.y
 end
-let src = code_typed1(compute)
+let src = code_typed1(compute_points)
     @test !any(isnew, src.code)
 end
 
@@ -757,4 +757,19 @@ let # effect-freeness computation for array allocation
         IdDict{Any,Any}()
         nothing
     end
+end
+
+# allow branch folding to look at type information
+let ci = code_typed1(optimize=false) do
+        cond = 1 + 1 == 2
+        if !cond
+            gcd(24, 36)
+        else
+            gcd(64, 128)
+        end
+    end
+    ir = Core.Compiler.inflate_ir(ci)
+    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 1
+    ir = Core.Compiler.compact!(ir, true)
+    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 0
 end
