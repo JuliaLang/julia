@@ -124,10 +124,15 @@ function fetch()
     if _g_expected_sampled_allocs[] > 0
         missed_allocs = _g_expected_sampled_allocs[] - length(decoded_results.allocs)
         missed_percentage = round(Int, missed_allocs / _g_expected_sampled_allocs[] * 100)
-        @warn("The allocation profiler is not fully implemented, and missed $(missed_percentage)% " *
+        if missed_percentage > 0
+            @warn(
+                "The allocation profiler is not fully implemented, and missed " *
+                "$(missed_percentage)% " *
                 "($(round(Int, missed_allocs)) / $(round(Int, _g_expected_sampled_allocs[]))) " *
                 "of allocs in the last run. " *
-                "For more info see https://github.com/JuliaLang/julia/issues/43688")
+                "For more info see https://github.com/JuliaLang/julia/issues/43688"
+            )
+        end
     end
     return decoded_results
 end
