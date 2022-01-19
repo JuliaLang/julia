@@ -9,6 +9,8 @@ Base.sizeof(::AbstractString)
 Base.:*(::Union{AbstractChar, AbstractString}, ::Union{AbstractChar, AbstractString}...)
 Base.:^(::Union{AbstractString, AbstractChar}, ::Integer)
 Base.string
+Base.parse
+Base.tryparse
 Base.repeat(::AbstractString, ::Integer)
 Base.repeat(::AbstractChar, ::Integer)
 Base.repr(::Any)
