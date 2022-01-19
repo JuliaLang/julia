@@ -5,6 +5,10 @@ module TestDiagonal
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, BlasComplex
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
 n=12 #Size of matrix problem to test
 Random.seed!(1)
 
@@ -411,6 +415,16 @@ Random.seed!(1)
         @test svd(D).V == V
     end
 
+    @testset "svd with Diagonal{Furlong}" begin
+        Du = Furlong.(D)
+        @test Du isa Diagonal{<:Furlong{1}}
+        U, s, V = svd(Du)
+        @test map(x -> x.val, U*Diagonal(s)*V') ≈ D
+        @test svdvals(Du) == s
+        @test U isa AbstractMatrix{<:Furlong{0}}
+        @test V isa AbstractMatrix{<:Furlong{0}}
+        @test s isa AbstractVector{<:Furlong{1}}
+    end
 end
 
 @testset "rdiv! (#40887)" begin
