@@ -139,6 +139,9 @@ Standard library changes
   Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
   each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
   profiling data consumers, but can be included with the `include_meta` kwarg. ([#41742])
+* The new `Profile.Allocs` module allows memory allocations to be profiled. The stack trace, type, and size of each
+  allocation is recorded, and a `sample_rate` argument allows a tunable amount of allocations to be skipped,
+  reducing performance overhead. ([#42768])
 
 #### Random
 
