@@ -25,8 +25,6 @@ using .Base: sign_mask, exponent_mask, exponent_one,
             significand_bits, exponent_bits, exponent_bias,
             exponent_max, exponent_raw_max
 
-using Core.Intrinsics: sqrt_llvm
-
 using .Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f::Symbol, x)
@@ -586,6 +584,8 @@ Stacktrace:
 """
 log1p(x)
 
+sqrt_llvm(x::Float32) = ccall("llvm.sqrt.f32", llvmcall, Float32, (Float32,), x)
+sqrt_llvm(x::Float64) = ccall("llvm.sqrt.f64", llvmcall, Float64, (Float64,), x)
 @inline function sqrt(x::Union{Float32,Float64})
     x < zero(x) && throw_complex_domainerror(:sqrt, x)
     sqrt_llvm(x)

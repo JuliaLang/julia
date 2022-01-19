@@ -1233,7 +1233,6 @@ JL_DLLEXPORT jl_value_t *jl_ceil_llvm(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_floor_llvm(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_trunc_llvm(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_rint_llvm(jl_value_t *a);
-JL_DLLEXPORT jl_value_t *jl_sqrt_llvm(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_sqrt_llvm_fast(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_abs_float(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_copysign_float(jl_value_t *a, jl_value_t *b);
