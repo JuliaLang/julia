@@ -113,6 +113,7 @@ selected(menu::CompletionMenu) = menu.completions[menu.selected]
 dimensions(menu::CompletionMenu) = (menu.nrows, menu.ncols)
 
 Base.length(menu::CompletionMenu) = length(menu.completions)
+Base.firstindex(menu::CompletionMenu) = firstindex(menu.completions)
 Base.lastindex(menu::CompletionMenu) = lastindex(menu.completions)
 Base.getindex(menu::CompletionMenu, i::Integer) = menu.completions[i]
 
@@ -137,26 +138,21 @@ function select_right!(menu::CompletionMenu)
         menu.selected = firstindex(menu.completions)
     else
         nrows, ncols = dimensions(menu)
-        col, row = divrem(menu.selected - 1, nrows)
-        if col == ncols - 1  # rightmost column
+        n_items_per_page = nrows * ncols
+        npages = fld1(length(menu), n_items_per_page)
+        page, offset = divrem(menu.selected - 1, n_items_per_page)
+        col, row = divrem(offset, nrows)  # in-page col/row (0-based)
+        if col == ncols - 1
             col = 0
-            if row == nrows - 1
-                row = 0
-            else
-                row += 1
-            end
+            page = mod(page + 1, npages)
         else
             col += 1
-            if col * nrows + row + 1 > lastindex(menu.completions)
-                col = 0
-                if row == nrows - 1
-                    row = 0
-                else
-                    row += 1
-                end
-            end
         end
-        menu.selected = col * nrows + row + 1
+        right = page * n_items_per_page + col * nrows + row + 1
+        if right > lastindex(menu)
+            right = firstindex(menu)
+        end
+        menu.selected = right
     end
     return menu
 end
@@ -166,21 +162,21 @@ function select_left!(menu::CompletionMenu)
         menu.selected = lastindex(menu.completions)
     else
         nrows, ncols = dimensions(menu)
-        col, row = divrem(menu.selected - 1, nrows)
-        if col == 0  # leftmost column
+        n_items_per_page = nrows * ncols
+        npages = fld1(length(menu), n_items_per_page)
+        page, offset = divrem(menu.selected - 1, n_items_per_page)
+        col, row = divrem(offset, nrows)  # in-page col/row (0-based)
+        if col == 0
             col = ncols - 1
-            if row == 0
-                row = nrows - 1
-            else
-                row -= 1
-            end
-            if col * nrows + row + 1 > lastindex(menu.completions)
-                col -= 1
-            end
+            page = mod(page - 1, npages)
         else
             col -= 1
         end
-        menu.selected = col * nrows + row + 1
+        left = page * n_items_per_page + col * nrows + row + 1
+        if left > lastindex(menu)
+            left = lastindex(menu)
+        end
+        menu.selected = left
     end
     return menu
 end
@@ -496,11 +492,11 @@ function show_completions(s::PromptState)
 
     # list completion candidates as a table
     selected = menu.selected
-    offset = hasselected(menu) ? (selected - 1) ÷ n_items_per_page * n_items_per_page : 0
+    first = hasselected(menu) ? (selected - 1) ÷ n_items_per_page * n_items_per_page : 0
     print(term, "\x1b[0J")
     for r in 1:nrows
         for c in 1:ncols
-            i = (c - 1) * nrows + r + offset
+            i = (c - 1) * nrows + r + first
             i > lastindex(menu) && break
             completion = menu[i]
             rest = chopprefix(completion, menu.partial)
@@ -526,8 +522,8 @@ function show_completions(s::PromptState)
 
     # show status bar if needed
     if statusbar
-        lo = offset + 1
-        hi = min(offset + n_items_per_page, length(menu))
+        lo = first + 1
+        hi = min(first + n_items_per_page, length(menu))
         println(term)
         printstyled(term, "$(lo)-$(hi) out of $(length(menu))", reverse = true)
     end
