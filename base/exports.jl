@@ -385,6 +385,7 @@ export
     eachindex,
     eachrow,
     eachslice,
+    extrema!,
     extrema,
     fill!,
     fill,
@@ -944,6 +945,7 @@ export
     run,
     setenv,
     addenv,
+    setcpuaffinity,
     success,
     withenv,
 

@@ -306,9 +306,6 @@ threads in Julia:
     multiple threads where at least one thread modifies the collection
     (common examples include `push!` on arrays, or inserting
     items into a `Dict`).
-  * After a task starts running on a certain thread (e.g. via `@spawn`), it
-    will always be restarted on the same thread after blocking. In the future
-    this limitation will be removed, and tasks will migrate between threads.
   * `@threads` currently uses a static schedule, using all threads and assigning
     equal iteration counts to each. In the future the default schedule is likely
     to change to be dynamic.

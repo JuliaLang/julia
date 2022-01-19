@@ -100,9 +100,8 @@ end
 # MethodInstance/CodeInfo #
 ###########################
 
-function invoke_api(li::CodeInstance)
-    return ccall(:jl_invoke_api, Cint, (Any,), li)
-end
+invoke_api(li::CodeInstance) = ccall(:jl_invoke_api, Cint, (Any,), li)
+use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
 function get_staged(mi::MethodInstance)
     may_invoke_generator(mi) || return nothing
@@ -225,43 +224,6 @@ end
 #########
 # types #
 #########
-
-argextype(@nospecialize(x), state) = argextype(x, state.src, state.sptypes, state.slottypes)
-
-const EMPTY_SLOTTYPES = Any[]
-
-function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = EMPTY_SLOTTYPES)
-    if isa(x, Expr)
-        if x.head === :static_parameter
-            return sptypes[x.args[1]::Int]
-        elseif x.head === :boundscheck
-            return Bool
-        elseif x.head === :copyast
-            return argextype(x.args[1], src, sptypes, slottypes)
-        end
-        @assert false "argextype only works on argument-position values"
-    elseif isa(x, SlotNumber)
-        return slottypes[(x::SlotNumber).id]
-    elseif isa(x, TypedSlot)
-        return (x::TypedSlot).typ
-    elseif isa(x, SSAValue)
-        return abstract_eval_ssavalue(x::SSAValue, src)
-    elseif isa(x, Argument)
-        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] :
-            isa(src, IRCode) ? src.argtypes[x.n] :
-            slottypes[x.n]
-    elseif isa(x, QuoteNode)
-        return Const((x::QuoteNode).value)
-    elseif isa(x, GlobalRef)
-        return abstract_eval_global(x.mod, (x::GlobalRef).name)
-    elseif isa(x, PhiNode)
-        return Any
-    elseif isa(x, PiNode)
-        return x.typ
-    else
-        return Const(x)
-    end
-end
 
 function singleton_type(@nospecialize(ft))
     if isa(ft, Const)

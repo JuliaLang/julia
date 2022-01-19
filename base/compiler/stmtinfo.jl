@@ -38,6 +38,27 @@ struct UnionSplitInfo
     matches::Vector{MethodMatchInfo}
 end
 
+nmatches(info::MethodMatchInfo) = length(info.results)
+function nmatches(info::UnionSplitInfo)
+    n = 0
+    for mminfo in info.matches
+        n += nmatches(mminfo)
+    end
+    return n
+end
+
+"""
+    info::ConstCallInfo
+
+The precision of this call was improved using constant information.
+In addition to the original call information `info.call`, this info also keeps
+the inference results with constant information `info.results::Vector{Union{Nothing,InferenceResult}}`.
+"""
+struct ConstCallInfo
+    call::Union{MethodMatchInfo,UnionSplitInfo}
+    results::Vector{Union{Nothing,InferenceResult}}
+end
+
 """
     info::MethodResultPure
 
@@ -90,18 +111,6 @@ This info is illegal on any statement that is not an `_apply_iterate` call.
 """
 struct UnionSplitApplyCallInfo
     infos::Vector{ApplyCallInfo}
-end
-
-"""
-    info::ConstCallInfo
-
-The precision of this call was improved using constant information.
-In addition to the original call information `info.call`, this info also keeps
-the inference results with constant information `info.results::Vector{Union{Nothing,InferenceResult}}`.
-"""
-struct ConstCallInfo
-    call::Union{MethodMatchInfo,UnionSplitInfo}
-    results::Vector{Union{Nothing,InferenceResult}}
 end
 
 """

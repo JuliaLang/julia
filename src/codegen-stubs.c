@@ -80,6 +80,14 @@ JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
 {
 }
 
+JL_DLLEXPORT void jl_dump_emitted_mi_name_fallback(void *s)
+{
+}
+
+JL_DLLEXPORT void jl_dump_llvm_opt_fallback(void *s)
+{
+}
+
 JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm_fallback(uint64_t fptr, char raw_mc, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
 
 JL_DLLEXPORT jl_value_t *jl_dump_function_asm_fallback(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
@@ -132,3 +140,5 @@ JL_DLLEXPORT void LLVMExtraAddRemoveNIPass_fallback(void *PM) UNAVAILABLE
 JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_fallback(void *PM, bool_t Strong) UNAVAILABLE
 
 JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddCPUFeaturesPass_fallback(void *PM) UNAVAILABLE

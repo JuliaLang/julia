@@ -197,4 +197,13 @@ collection to run.
 """
 safepoint() = ccall(:jl_gc_safepoint, Cvoid, ())
 
+"""
+    GC.enable_logging(on::Bool)
+
+When turned on, print statistics about each GC to stderr.
+"""
+function enable_logging(on::Bool=true)
+    ccall(:jl_enable_gc_logging, Cvoid, (Cint,), on)
+end
+
 end # module GC

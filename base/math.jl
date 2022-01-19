@@ -639,6 +639,8 @@ The article is available online at ArXiv at the link
 
 Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
 
+See also `norm` in the [`LinearAlgebra`](@ref man-linalg) standard library.
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> a = Int64(10)^10;
@@ -660,6 +662,11 @@ julia> hypot(-5.7)
 
 julia> hypot(3, 4im, 12.0)
 13.0
+
+julia> using LinearAlgebra
+
+julia> norm([a, a, a, a]) == hypot(a, a, a, a)
+true
 ```
 """
 hypot(x::Number) = abs(float(x))
@@ -675,7 +682,7 @@ function _hypot(x, y)
 
     # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
     if isinf(ax) || isinf(ay)
-        return oftype(axu, Inf)
+        return typeof(axu)(Inf)
     end
 
     # Order the operands
@@ -738,7 +745,7 @@ _hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(
 function _hypot(x...)
     maxabs = maximum(abs, x)
     if isnan(maxabs) && any(isinf, x)
-        return oftype(maxabs, Inf)
+        return typeof(maxabs)(Inf)
     elseif (iszero(maxabs) || isinf(maxabs))
         return maxabs
     else
@@ -1310,6 +1317,12 @@ for f in (:sin, :cos, :tan, :asin, :atan, :acos,
         return ($f)(xf)
     end
     @eval $(f)(::Missing) = missing
+end
+
+for f in (:atan, :hypot, :log)
+    @eval $(f)(::Missing, ::Missing) = missing
+    @eval $(f)(::Number, ::Missing) = missing
+    @eval $(f)(::Missing, ::Number) = missing
 end
 
 exp2(x::AbstractFloat) = 2^x

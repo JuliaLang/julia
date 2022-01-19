@@ -524,6 +524,14 @@ julia> readline("my_file.txt", keep=true)
 
 julia> rm("my_file.txt")
 ```
+```julia-repl
+julia> print("Enter your name: ")
+Enter your name:
+
+julia> your_name = readline()
+Logan
+"Logan"
+```
 """
 function readline(filename::AbstractString; keep::Bool=false)
     open(filename) do f
@@ -1019,6 +1027,11 @@ closed when the `EachLine` object is garbage collected.
 
 To iterate over each line of a `String`, `eachline(IOBuffer(str))` can be used.
 
+[`Iterators.reverse`](@ref) can be used on an `EachLine` object to read the lines
+in reverse order (for files, buffers, and other I/O streams supporting [`seek`](@ref)),
+and [`first`](@ref) or [`last`](@ref) can be used to extract the initial or final
+lines, respectively.
+
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
@@ -1032,6 +1045,9 @@ JuliaLang is a GitHub organization. It has many members.
 
 julia> rm("my_file.txt");
 ```
+
+!!! compat "Julia 1.8"
+       Julia 1.8 is required to use `Iterators.reverse` or `last` with `eachline` iterators.
 """
 function eachline(stream::IO=stdin; keep::Bool=false)
     EachLine(stream, keep=keep)::EachLine
@@ -1052,6 +1068,115 @@ eltype(::Type{<:EachLine}) = String
 IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
 isdone(itr::EachLine, state...) = eof(itr.stream)
+
+# Reverse-order iteration for the EachLine iterator for seekable streams,
+# which works by reading the stream from the end in 4kiB chunks.
+function iterate(r::Iterators.Reverse{<:EachLine})
+    p0 = position(r.itr.stream)
+    seekend(r.itr.stream) # may throw if io is non-seekable
+    p = position(r.itr.stream)
+    # chunks = circular buffer of 4kiB blocks read from end of stream
+    chunks = empty!(Vector{Vector{UInt8}}(undef, 2)) # allocate space for 2 buffers (common case)
+    inewline = jnewline = 0
+    while p > p0 && inewline == 0 # read chunks until we find a newline or we read whole file
+        chunk = Vector{UInt8}(undef, min(4096, p-p0))
+        p -= length(chunk)
+        readbytes!(seek(r.itr.stream, p), chunk)
+        pushfirst!(chunks, chunk)
+        inewline = something(findlast(==(UInt8('\n')), chunk), 0)
+        if length(chunks) == 1 && inewline == length(chunks[1])
+            # found newline at end of file … keep looking
+            jnewline = inewline
+            inewline = something(findprev(==(UInt8('\n')), chunk, inewline-1), 0)
+        end
+    end
+    return iterate(r, (; p0, p, chunks, ichunk=1, inewline, jchunk=length(chunks), jnewline = jnewline == 0 && !isempty(chunks) ? length(chunks[end]) : jnewline))
+end
+function iterate(r::Iterators.Reverse{<:EachLine}, state)
+    function _stripnewline(keep, pos, data)
+        # strip \n or \r\n from data[pos] by decrementing pos
+        if !keep && pos > 0 && data[pos] == UInt8('\n')
+            pos -= 1
+            pos -= pos > 0 && data[pos] == UInt8('\r')
+        end
+        return pos
+    end
+    # state tuple: p0 = initial file position, p = current position,
+    #              chunks = circular array of chunk buffers,
+    #              current line is from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
+    p0, p, chunks, ichunk, inewline, jchunk, jnewline = state
+    if inewline == 0 # no newline found, remaining line = rest of chunks (if any)
+        isempty(chunks) && return (r.itr.ondone(); nothing)
+        buf = IOBuffer(sizehint = ichunk==jchunk ? jnewline : 4096)
+        while ichunk != jchunk
+            write(buf, chunks[ichunk])
+            ichunk = ichunk == length(chunks) ? 1 : ichunk + 1
+        end
+        chunk = chunks[jchunk]
+        write(buf, view(chunk, 1:jnewline))
+        buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
+        empty!(chunks) # will cause next iteration to terminate
+        seekend(r.itr.stream) # reposition to end of stream for isdone
+        s = String(take!(buf))
+    else
+        # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
+        if ichunk == jchunk # common case: current and previous newline in same chunk
+            chunk = chunks[ichunk]
+            s = String(view(chunk, inewline+1:_stripnewline(r.itr.keep, jnewline, chunk)))
+        else
+            buf = IOBuffer(sizehint=max(128, length(chunks[ichunk])-inewline+jnewline))
+            write(buf, view(chunks[ichunk], inewline+1:length(chunks[ichunk])))
+            i = ichunk
+            while true
+                i = i == length(chunks) ? 1 : i + 1
+                i == jchunk && break
+                write(buf, chunks[i])
+            end
+            write(buf, view(chunks[jchunk], 1:jnewline))
+            buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
+            s = String(take!(buf))
+
+            # overwrite obsolete chunks (ichunk+1:jchunk)
+            i = jchunk
+            while i != ichunk
+                chunk = chunks[i]
+                p -= length(resize!(chunk, min(4096, p-p0)))
+                readbytes!(seek(r.itr.stream, p), chunk)
+                i = i == 1 ? length(chunks) : i - 1
+            end
+        end
+
+        # find the newline previous to inewline
+        jchunk = ichunk
+        jnewline = inewline
+        while true
+            inewline = something(findprev(==(UInt8('\n')), chunks[ichunk], inewline-1), 0)
+            inewline > 0 && break
+            ichunk = ichunk == 1 ? length(chunks) : ichunk - 1
+            ichunk == jchunk && break # found nothing — may need to read more chunks
+            inewline = length(chunks[ichunk])+1 # start for next findprev
+        end
+
+        # read more chunks to look for a newline (should rarely happen)
+        if inewline == 0 && p > p0
+            ichunk = jchunk + 1
+            while true
+                chunk = Vector{UInt8}(undef, min(4096, p-p0))
+                p -= length(chunk)
+                readbytes!(seek(r.itr.stream, p), chunk)
+                insert!(chunks, ichunk, chunk)
+                inewline = something(findlast(==(UInt8('\n')), chunk), 0)
+                (p == p0 || inewline > 0) && break
+            end
+        end
+    end
+    return (s, (; p0, p, chunks, ichunk, inewline, jchunk, jnewline))
+end
+isdone(r::Iterators.Reverse{<:EachLine}, state) = isempty(state.chunks)
+isdone(r::Iterators.Reverse{<:EachLine}) = isdone(r.itr)
+
+# use reverse iteration to get end of EachLines (if possible)
+last(itr::EachLine) = first(Iterators.reverse(itr))
 
 struct ReadEachIterator{T, IOT <: IO}
     stream::IOT

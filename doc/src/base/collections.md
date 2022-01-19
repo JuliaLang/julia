@@ -102,6 +102,7 @@ Base.maximum!
 Base.minimum
 Base.minimum!
 Base.extrema
+Base.extrema!
 Base.argmax
 Base.argmin
 Base.findmax

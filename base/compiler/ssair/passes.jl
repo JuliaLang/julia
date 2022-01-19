@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+function is_known_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
+    isexpr(x, :call) || return false
+    ft = argextype(x.args[1], ir)
+    return singleton_type(ft) === func
+end
+
 """
     du::SSADefUse
 
@@ -23,23 +29,25 @@ SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
 compute_live_ins(cfg::CFG, du::SSADefUse) = compute_live_ins(cfg, du.defs, du.uses)
 
-function try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr)
-    field = stmt.args[3]
+# assume `stmt == getfield(obj, field, ...)` or `stmt == setfield!(obj, field, val, ...)`
+try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr) =
+    try_compute_field(ir, stmt.args[3])
+
+function try_compute_field(ir::Union{IncrementalCompact,IRCode}, @nospecialize(field))
     # fields are usually literals, handle them manually
     if isa(field, QuoteNode)
         field = field.value
-    elseif isa(field, Int)
-    # try to resolve other constants, e.g. global reference
+    elseif isa(field, Int) || isa(field, Symbol)
     else
-        field = isa(ir, IncrementalCompact) ? compact_exprtype(ir, field) : argextype(field, ir)
+        # try to resolve other constants, e.g. global reference
+        field = argextype(field, ir)
         if isa(field, Const)
             field = field.val
         else
             return nothing
         end
     end
-    isa(field, Union{Int, Symbol}) || return nothing
-    return field
+    return isa(field, Union{Int, Symbol}) ? field : nothing
 end
 
 function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, typ::DataType)
@@ -242,7 +250,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                 if is_old(compact, defssa) && isa(val, SSAValue)
                     val = OldSSAValue(val.id)
                 end
-                edge_typ = widenconst(compact_exprtype(compact, val))
+                edge_typ = widenconst(argextype(val, compact))
                 hasintersect(edge_typ, typeconstraint) || continue
                 push!(possible_predecessors, n)
             end
@@ -286,9 +294,9 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
     return leaves, visited_phinodes
 end
 
-function process_immutable_preserve!(new_preserves::Vector{Any}, compact::IncrementalCompact, def::Expr)
+function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compact::IncrementalCompact)
     for arg in (isexpr(def, :new) ? def.args : def.args[2:end])
-        if !isbitstype(widenconst(compact_exprtype(compact, arg)))
+        if !isbitstype(widenconst(argextype(arg, compact)))
             push!(new_preserves, arg)
         end
     end
@@ -316,57 +324,32 @@ function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
     isa(def, Expr) || return false
     length(def.args) >= 3 || return false
     is_known_call(def, getfield, compact) || return false
-    which = compact_exprtype(compact, def.args[3])
+    which = argextype(def.args[3], compact)
     isa(which, Const) || return false
     which.val === :captures || return false
-    oc = compact_exprtype(compact, def.args[2])
+    oc = argextype(def.args[2], compact)
     return oc ⊑ Core.OpaqueClosure
 end
+
+struct LiftedValue
+    x
+    LiftedValue(@nospecialize x) = new(x)
+end
+const LiftedLeaves = IdDict{Any, Union{Nothing,LiftedValue}}
 
 # try to compute lifted values that can replace `getfield(x, field)` call
 # where `x` is an immutable struct that are defined at any of `leaves`
 function lift_leaves(compact::IncrementalCompact,
                      @nospecialize(result_t), field::Int, leaves::Vector{Any})
     # For every leaf, the lifted value
-    lifted_leaves = IdDict{Any, Union{Nothing,LiftedValue}}()
+    lifted_leaves = LiftedLeaves()
     maybe_undef = false
     for leaf in leaves
-        leaf_key = leaf
+        cache_key = leaf
         if isa(leaf, AnySSAValue)
-            function lift_arg(ref::Core.Compiler.UseRef)
-                lifted = ref[]
-                if is_old(compact, leaf) && isa(lifted, SSAValue)
-                    lifted = OldSSAValue(lifted.id)
-                end
-                if isa(lifted, GlobalRef) || isa(lifted, Expr)
-                    lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted))))
-                    ref[] = lifted
-                    (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
-                end
-                lifted_leaves[leaf_key] = LiftedValue(lifted)
-                nothing
-            end
-            function walk_leaf(@nospecialize(leaf))
-                if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
-                    leaf = compact.ssa_rename[leaf.id]
-                    if isa(leaf, AnySSAValue)
-                        leaf = simple_walk(compact, leaf)
-                    end
-                    if isa(leaf, AnySSAValue)
-                        def = compact[leaf]
-                    else
-                        def = leaf
-                    end
-                elseif isa(leaf, AnySSAValue)
-                    def = compact[leaf]
-                else
-                    def = leaf
-                end
-                return Pair{Any, Any}(def, leaf)
-            end
-            (def, leaf) = walk_leaf(leaf)
-            if is_tuple_call(compact, def) && 1 <= field < length(def.args)
-                lift_arg(UseRef(def, 1 + field))
+            (def, leaf) = walk_to_def(compact, leaf)
+            if is_known_call(def, tuple, compact) && 1 ≤ field < length(def.args)
+                lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             elseif isexpr(def, :new)
                 typ = widenconst(types(compact)[leaf])
@@ -375,7 +358,7 @@ function lift_leaves(compact::IncrementalCompact,
                 end
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
                 @assert !ismutabletype(typ)
-                if length(def.args) < 1 + field
+                if length(def.args) < 1+field
                     if field > fieldcount(typ)
                         return nothing
                     end
@@ -384,7 +367,7 @@ function lift_leaves(compact::IncrementalCompact,
                         # On this branch, this will be a guaranteed UndefRefError.
                         # We use the regular undef mechanic to lift this to a boolean slot
                         maybe_undef = true
-                        lifted_leaves[leaf_key] = nothing
+                        lifted_leaves[cache_key] = nothing
                         continue
                     end
                     return nothing
@@ -398,16 +381,7 @@ function lift_leaves(compact::IncrementalCompact,
                     end
                     compact[leaf] = def
                 end
-                lifted = def.args[1+field]
-                if is_old(compact, leaf) && isa(lifted, SSAValue)
-                    lifted = OldSSAValue(lifted.id)
-                end
-                if isa(lifted, GlobalRef) || isa(lifted, Expr)
-                    lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted))))
-                    def.args[1+field] = lifted
-                    (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
-                end
-                lifted_leaves[leaf_key] = LiftedValue(lifted)
+                lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             elseif is_getfield_captures(def, compact)
                 # Walk to new_opaque_closure
@@ -415,14 +389,14 @@ function lift_leaves(compact::IncrementalCompact,
                 if isa(ocleaf, AnySSAValue)
                     ocleaf = simple_walk(compact, ocleaf)
                 end
-                ocdef, _ = walk_leaf(ocleaf)
-                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 <= field <= length(ocdef.args)-5
-                    lift_arg(UseRef(ocdef, 5 + field))
+                ocdef, _ = walk_to_def(compact, ocleaf)
+                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-5
+                    lift_arg!(compact, leaf, cache_key, ocdef, 5+field, lifted_leaves)
                     continue
                 end
                 return nothing
             else
-                typ = compact_exprtype(compact, leaf)
+                typ = argextype(leaf, compact)
                 if !isa(typ, Const)
                     # TODO: (disabled since #27126)
                     # If the leaf is an old ssa value, insert a getfield here
@@ -445,16 +419,53 @@ function lift_leaves(compact::IncrementalCompact,
             else
                 return nothing
             end
-        elseif isa(leaf, Union{Argument, Expr})
+        elseif isa(leaf, Argument) || isa(leaf, Expr)
             return nothing
         end
         ismutable(leaf) && return nothing
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
         is_inlineable_constant(val) || return nothing
-        lifted_leaves[leaf_key] = LiftedValue(quoted(val))
+        lifted_leaves[cache_key] = LiftedValue(quoted(val))
     end
     return lifted_leaves, maybe_undef
+end
+
+function lift_arg!(
+    compact::IncrementalCompact, @nospecialize(leaf), @nospecialize(cache_key),
+    stmt::Expr, argidx::Int, lifted_leaves::LiftedLeaves)
+    lifted = stmt.args[argidx]
+    if is_old(compact, leaf) && isa(lifted, SSAValue)
+        lifted = OldSSAValue(lifted.id)
+    end
+    if isa(lifted, GlobalRef) || isa(lifted, Expr)
+        lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, argextype(lifted, compact))))
+        stmt.args[argidx] = lifted
+        if isa(leaf, SSAValue) && leaf.id < compact.result_idx
+            push!(compact.late_fixup, leaf.id)
+        end
+    end
+    lifted_leaves[cache_key] = LiftedValue(lifted)
+    nothing
+end
+
+function walk_to_def(compact::IncrementalCompact, @nospecialize(leaf))
+    if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
+        leaf = compact.ssa_rename[leaf.id]
+        if isa(leaf, AnySSAValue)
+            leaf = simple_walk(compact, leaf)
+        end
+        if isa(leaf, AnySSAValue)
+            def = compact[leaf]
+        else
+            def = leaf
+        end
+    elseif isa(leaf, AnySSAValue)
+        def = compact[leaf]
+    else
+        def = leaf
+    end
+    return Pair{Any, Any}(def, leaf)
 end
 
 make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
@@ -478,8 +489,8 @@ function lift_comparison!(compact::IncrementalCompact,
     length(args) == 3 || return
 
     lhs, rhs = args[2], args[3]
-    vl = compact_exprtype(compact, lhs)
-    vr = compact_exprtype(compact, rhs)
+    vl = argextype(lhs, compact)
+    vr = argextype(rhs, compact)
     if isa(vl, Const)
         isa(vr, Const) && return
         cmp = vl
@@ -493,7 +504,7 @@ function lift_comparison!(compact::IncrementalCompact,
         return
     end
 
-    valtyp = widenconst(compact_exprtype(compact, val))
+    valtyp = widenconst(argextype(val, compact))
     isa(valtyp, Union) || return # bail out if there won't be a good chance for lifting
 
     leaves, visited_phinodes = collect_leaves(compact, val, valtyp)
@@ -502,10 +513,10 @@ function lift_comparison!(compact::IncrementalCompact,
     # Let's check if we evaluate the comparison for each one of the leaves
     lifted_leaves = nothing
     for leaf in leaves
-        r = egal_tfunc(compact_exprtype(compact, leaf), cmp)
+        r = egal_tfunc(argextype(leaf, compact), cmp)
         if isa(r, Const)
             if lifted_leaves === nothing
-                lifted_leaves = IdDict{Any, Union{Nothing,LiftedValue}}()
+                lifted_leaves = LiftedLeaves()
             end
             lifted_leaves[leaf] = LiftedValue(r.val)
         else
@@ -515,7 +526,7 @@ function lift_comparison!(compact::IncrementalCompact,
 
     lifted_val = perform_lifting!(compact,
         visited_phinodes, cmp, lifting_cache, Bool,
-        lifted_leaves::IdDict{Any, Union{Nothing,LiftedValue}}, val)::LiftedValue
+        lifted_leaves::LiftedLeaves, val)::LiftedValue
 
     compact[idx] = lifted_val.x
 end
@@ -532,15 +543,10 @@ function is_old(compact, @nospecialize(old_node_ssa))
         !already_inserted(compact, old_node_ssa)
 end
 
-struct LiftedValue
-    x
-    LiftedValue(@nospecialize x) = new(x)
-end
-
 function perform_lifting!(compact::IncrementalCompact,
     visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    @nospecialize(result_t), lifted_leaves::IdDict{Any, Union{Nothing,LiftedValue}}, @nospecialize(stmt_val))
+    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val))
     reverse_mapping = IdDict{AnySSAValue, Int}(ssa => id for (id, ssa) in enumerate(visited_phinodes))
 
     # Insert PhiNodes
@@ -648,21 +654,22 @@ function sroa_pass!(ir::IRCode)
             4 <= length(stmt.args) <= 5 || continue
             is_setfield = true
             if length(stmt.args) == 5
-                field_ordering = compact_exprtype(compact, stmt.args[5])
+                field_ordering = argextype(stmt.args[5], compact)
             end
         elseif is_known_call(stmt, getfield, compact)
             3 <= length(stmt.args) <= 5 || continue
             if length(stmt.args) == 5
-                field_ordering = compact_exprtype(compact, stmt.args[5])
+                field_ordering = argextype(stmt.args[5], compact)
             elseif length(stmt.args) == 4
-                field_ordering = compact_exprtype(compact, stmt.args[4])
+                field_ordering = argextype(stmt.args[4], compact)
                 widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
             end
         elseif isexpr(stmt, :foreigncall)
             nccallargs = length(stmt.args[3]::SimpleVector)
+            preserved = Int[]
             new_preserves = Any[]
-            old_preserves = stmt.args[(6+nccallargs):end]
-            for (pidx, preserved_arg) in enumerate(old_preserves)
+            for pidx in (6+nccallargs):length(stmt.args)
+                preserved_arg = stmt.args[pidx]
                 isa(preserved_arg, SSAValue) || continue
                 let intermediaries = SPCSet()
                     callback = function (@nospecialize(pi), @nospecialize(ssa))
@@ -673,18 +680,18 @@ function sroa_pass!(ir::IRCode)
                     isa(def, SSAValue) || continue
                     defidx = def.id
                     def = compact[defidx]
-                    if is_tuple_call(compact, def)
-                        process_immutable_preserve!(new_preserves, compact, def)
-                        old_preserves[pidx] = nothing
+                    if is_known_call(def, tuple, compact)
+                        record_immutable_preserve!(new_preserves, def, compact)
+                        push!(preserved, preserved_arg.id)
                         continue
                     elseif isexpr(def, :new)
-                        typ = widenconst(compact_exprtype(compact, SSAValue(defidx)))
+                        typ = widenconst(argextype(SSAValue(defidx), compact))
                         if isa(typ, UnionAll)
                             typ = unwrap_unionall(typ)
                         end
                         if typ isa DataType && !ismutabletype(typ)
-                            process_immutable_preserve!(new_preserves, compact, def)
-                            old_preserves[pidx] = nothing
+                            record_immutable_preserve!(new_preserves, def, compact)
+                            push!(preserved, preserved_arg.id)
                             continue
                         end
                     else
@@ -700,10 +707,7 @@ function sroa_pass!(ir::IRCode)
                 continue
             end
             if !isempty(new_preserves)
-                old_preserves = filter(ssa->ssa !== nothing, old_preserves)
-                new_expr = Expr(:foreigncall, stmt.args[1:(6+nccallargs-1)]...,
-                    old_preserves..., new_preserves...)
-                compact[idx] = new_expr
+                compact[idx] = form_new_preserves(stmt, preserved, new_preserves)
             end
             continue
         # TODO: This isn't the best place to put these
@@ -726,7 +730,7 @@ function sroa_pass!(ir::IRCode)
 
         val = stmt.args[2]
 
-        struct_typ = unwrap_unionall(widenconst(compact_exprtype(compact, val)))
+        struct_typ = unwrap_unionall(widenconst(argextype(val, compact)))
         if isa(struct_typ, Union) && struct_typ <: Tuple
             struct_typ = unswitchtupleunion(struct_typ)
         end
@@ -772,7 +776,7 @@ function sroa_pass!(ir::IRCode)
         leaves, visited_phinodes = collect_leaves(compact, val, struct_typ)
         isempty(leaves) && continue
 
-        result_t = compact_exprtype(compact, SSAValue(idx))
+        result_t = argextype(SSAValue(idx), compact)
         lifted_result = lift_leaves(compact, result_t, field, leaves)
         lifted_result === nothing && continue
         lifted_leaves, any_undef = lifted_result
@@ -818,11 +822,8 @@ function sroa_pass!(ir::IRCode)
 end
 
 function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int})
-    # Compute domtree, needed below, now that we have finished compacting the IR.
-    # This needs to be after we iterate through the IR with `IncrementalCompact`
-    # because removing dead blocks can invalidate the domtree.
-    @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
-
+    # initialization of domtree is delayed to avoid the expensive computation in many cases
+    local domtree = nothing
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
         # Check if there are any uses we did not account for. If so, the variable
@@ -844,27 +845,33 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         if isa(typ, UnionAll)
             typ = unwrap_unionall(typ)
         end
-        # Could still end up here if we tried to setfield! and immutable, which would
+        # Could still end up here if we tried to setfield! on an immutable, which would
         # error at runtime, but is not illegal to have in the IR.
         ismutabletype(typ) || continue
         typ = typ::DataType
         # Partition defuses by field
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
+        all_forwarded = true
         for use in defuse.uses
-            stmt = ir[SSAValue(use)]
+            stmt = ir[SSAValue(use)] # == `getfield` call
             # We may have discovered above that this use is dead
             # after the getfield elim of immutables. In that case,
             # it would have been deleted. That's fine, just ignore
             # the use in that case.
-            stmt === nothing && continue
+            if stmt === nothing
+                all_forwarded = false
+                continue
+            end
             field = try_compute_fieldidx_stmt(ir, stmt::Expr, typ)
             field === nothing && @goto skip
             push!(fielddefuse[field].uses, use)
         end
-        for use in defuse.defs
-            field = try_compute_fieldidx_stmt(ir, ir[SSAValue(use)]::Expr, typ)
+        for def in defuse.defs
+            stmt = ir[SSAValue(def)]::Expr # == `setfield!` call
+            field = try_compute_fieldidx_stmt(ir, stmt, typ)
             field === nothing && @goto skip
-            push!(fielddefuse[field].defs, use)
+            isconst(typ, field) && @goto skip # we discovered an attempt to mutate a const field, which must error
+            push!(fielddefuse[field].defs, def)
         end
         # Check that the defexpr has defined values for all the fields
         # we're accessing. In the future, we may want to relax this,
@@ -877,16 +884,26 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             isempty(du.uses) && continue
             push!(du.defs, newidx)
             ldu = compute_live_ins(ir.cfg, du)
-            phiblocks = isempty(ldu.live_in_bbs) ? Int[] : iterated_dominance_frontier(ir.cfg, ldu, domtree)
+            if isempty(ldu.live_in_bbs)
+                phiblocks = Int[]
+            else
+                domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
+                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, domtree)
+            end
             allblocks = sort(vcat(phiblocks, ldu.def_bbs))
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
                 for use in du.uses
+                    domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
                     has_safe_def(ir, domtree, allblocks, du, newidx, use) || @goto skip
                 end
             end
         end
-        # Everything accounted for. Go field by field and perform idf
+        # Everything accounted for. Go field by field and perform idf:
+        # Compute domtree now, needed below, now that we have finished compacting the IR.
+        # This needs to be after we iterate through the IR with `IncrementalCompact`
+        # because removing dead blocks can invalidate the domtree.
+        domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
         preserve_uses = isempty(defuse.ccall_preserve_uses) ? nothing :
             IdDict{Int, Vector{Any}}((idx=>Any[] for idx in SPCSet(defuse.ccall_preserve_uses)))
         for fidx in 1:ndefuse
@@ -925,21 +942,39 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             end
         end
         preserve_uses === nothing && continue
-        push!(intermediaries, newidx)
+        if all_forwarded
+            # this means all ccall preserves have been replaced with forwarded loads
+            # so we can potentially eliminate the allocation, otherwise we must preserve
+            # the whole allocation.
+            push!(intermediaries, newidx)
+        end
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
-            useexpr = ir[SSAValue(use)]::Expr
-            nccallargs = length(useexpr.args[3]::SimpleVector)
-            old_preserves = let intermediaries = intermediaries
-                filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
-            end
-            new_expr = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
-                old_preserves..., new_preserves...)
-            ir[SSAValue(use)] = new_expr
+            ir[SSAValue(use)] = form_new_preserves(ir[SSAValue(use)]::Expr, intermediaries, new_preserves)
         end
 
         @label skip
     end
+end
+
+function form_new_preserves(origex::Expr, intermediates::Vector{Int}, new_preserves::Vector{Any})
+    newex = Expr(:foreigncall)
+    nccallargs = length(origex.args[3]::SimpleVector)
+    for i in 1:(6+nccallargs-1)
+        push!(newex.args, origex.args[i])
+    end
+    for i in (6+nccallargs):length(origex.args)
+        x = origex.args[i]
+        # don't need to preserve intermediaries
+        if isa(x, SSAValue) && x.id in intermediates
+            continue
+        end
+        push!(newex.args, x)
+    end
+    for i in 1:length(new_preserves)
+        push!(newex.args, new_preserves[i])
+    end
+    return newex
 end
 
 """
@@ -1023,13 +1058,11 @@ function adce_pass!(ir::IRCode)
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
-        elseif isexpr(stmt, :call)
+        elseif is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
             # nullify safe `typeassert` calls
-            if is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
-                ty, isexact = instanceof_tfunc(compact_exprtype(compact, stmt.args[3]))
-                if isexact && compact_exprtype(compact, stmt.args[2]) ⊑ ty
-                    compact[idx] = nothing
-                end
+            ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact))
+            if isexact && argextype(stmt.args[2], compact) ⊑ ty
+                compact[idx] = nothing
             end
         end
     end
