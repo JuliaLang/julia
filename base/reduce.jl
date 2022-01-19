@@ -1314,8 +1314,36 @@ _fast(::typeof(min), x::T, y::T) where {T<:IEEEFloat} = ifelse(signbit(x-y), x, 
 _fast(::typeof(max), x::T, y::T) where {T<:IEEEFloat} = ifelse(signbit(y-x), x, y)
 _fast(op) = (x, y) -> _fast(op, x, y)
 
-# NaN check
-_anynan(x::NTuple{16}) = foldl(|, ntuple(i->isnan(x[i])|isnan(x[i+8]), 8))
+# Some help function for better vectorization.
+# To resolve TTFP (partially), use `Ref{NTuple{16}}` to emulate a stack-allocated Vector.
+# TODO: Use `Vector` instead once we have stack-allocated `Array`.
+function _anynan(x::Ptr{<:IEEEFloat})
+    r = false
+    for i in 1:8
+        r |= isnan(unsafe_load(x, i)) | isnan(unsafe_load(x, i+8))
+    end
+    return r
+end
+function _fast_load!(f, elm::Ptr{T}, A, i::Int, iter) where {T<:IEEEFloat}
+    @inbounds @simd for j in iter
+        unsafe_store!(elm, f(A[i+=1])::T, j)
+    end
+    return i
+end
+function _update!(op, x::Ptr{T}, y::Ptr{T}) where {T<:IEEEFloat}
+    @simd for i in 1:16
+        xi, yi = unsafe_load(x, i), unsafe_load(y, i)
+        unsafe_store!(x, op(xi, yi), i)
+    end
+end
+function _foldl(op, x::Ptr{<:IEEEFloat})
+    r = unsafe_load(x, 1)
+    for i in 2:16
+        r = op(r, unsafe_load(x, i))
+    end
+    return r
+end
+_picknan(vs::Ptr{<:IEEEFloat}) = _foldl((x, y) -> isnan(x) ? x : y, vs)
 
 # The optimized fallback for `IEEEFloat`'s min/max reduction. (LLVM handles `Integer` well)
 function mapreduce_impl(f::F, op::Union{typeof(max),typeof(min)},
@@ -1325,36 +1353,36 @@ function mapreduce_impl(f::F, op::Union{typeof(max),typeof(min)},
     # Call general fallback for non-IEEEFloat cases.
     (isconcretetype(Eltype) && Eltype <: IEEEFloat) ||
         return mapreduce_impl(f, op, A, first, last, pairwise_blocksize(f, op))
-    @inline elf(i::Int) = @inbounds f(A[i])::Eltype # Force inference if `T`` is a abstract type
-    @inline elfn(i::Int, Val) = ntuple(Δi -> elf(i + Δi), Val)
-    @noinline firstnan(temp) = temp[findfirst(isnan, temp)]
-    v, i = elf(first), first
+    @inbounds v, i = f(A[first]), first
     rest = last - first
-    if rest > 8
-        ini1 = ntuple(Returns(v), Val(8))          # 1. Simd Initialization.
-        if rest & 15 > 8                           # 1a). If the unvectorized length > 8,
-            ini2 = elfn(i, Val(8))                 #      use more elements to initialize.
-            i += 8
-        else                                       # 1b). Otherwise, just repeat the first
-            ini2 = ini1                            #      element to initialize.
+    if rest >= 8
+        vop = Ref(ntuple(Returns(v), Val(16)))        # 1. Simd Initialization.
+        GC.@preserve vop begin                        # 1a). If the unvectorized length < 8,
+            vopᵖ = unsafe_convert(Ref{Eltype}, vop)   #       use the first element to initialize.
+            if rest & 15 >= 8
+                i = _fast_load!(f, vopᵖ, A, i, 9:16)  # 1b). Otherwise load 8 more elements.
+            end
+            _anynan(vopᵖ) && return _picknan(vopᵖ)    # 1c). Ensure there's no NaN in initial values.
         end
-        vs = (ini1..., ini2...)
-        _anynan(vs) && return firstnan(vs)         # 2. Ensure there's no NaN in initial values.
-        while i <= last - 16
-            temp = elfn(i, Val(16))                # 3. Pick some unprocessed elements.
-            _anynan(temp) && return firstnan(temp) # 4. Ensure `temp` is free of NaN.
-            vs = map(_fast(op), vs, temp)          # 5. `_fast(op)` is safe for non-NaN inputs.
-            i += 16
+        elm = Ref(vop[])
+        v = GC.@preserve vop elm begin                # 2. Simd reduction
+            vopᵖ = unsafe_convert(Ref{Eltype}, vop)
+            elmᵖ = unsafe_convert(Ref{Eltype}, elm)
+            while i <= last - 16
+                i = _fast_load!(f, elmᵖ, A, i, 1:16)  # 2a). Pick 16 elements.
+                _anynan(elmᵖ) && return _picknan(elmᵖ)# 2b). Ensure they are free of NaN.
+                _update!(_fast(op), vopᵖ, elmᵖ)       # 2c). Then `_fast(op)` is safe
+            end
+            _foldl(_fast(op), vopᵖ)                   # 2d). Reduce `vop`.
         end
-        vs′ = map(_fast(op), vs[1:8], vs[9:16])    # 6. Reduce `vs` to half length pairwisely.
-        v = foldl(_fast(op), vs′)                  # 7. Reduce `vs′`.
     end
-    # Reduce the rest elements.
-    # Note: If `f.(A)` contains mutipule NaNs, The above code always returns the first
-    # in its processing region. But `min`/`max` treats `NaN > copysign(NaN, -1)`.
-    # So the following might break such behavior.
-    while i < last
-        v = op(v, elf(i+=1))
+    # 3. Reduce the rest elements.
+    # Note: If `f.(A)` contains mutipule NaNs, step 2 always returns the first one
+    # But step 3 might break this behavior, as the propagation
+    # order for multiple NaN is not specific.
+    # https://github.com/JuliaLang/julia/pull/41709#issuecomment-1017876618
+    @inbounds while i < last
+        v = op(v, f(A[i+=1]))
     end
     return v
 end
@@ -1367,37 +1395,34 @@ function mapreduce_impl(f::ExtremaMap, op::typeof(_extrema_rf),
     # Call general fallback for non-IEEEFloat cases.
     (isconcretetype(Eltype) && Eltype <: IEEEFloat) ||
         return mapreduce_impl(f, op, A, first, last, pairwise_blocksize(f, op))
-    @inline elf(i::Int) = @inbounds f.f(A[i])::Eltype # Force inference if `T`` is a abstract type
-    @inline elfn(i::Int, Val) = ntuple(Δi -> elf(i + Δi), Val)
-    @noinline firstnan(temp) = (x = temp[findfirst(isnan, temp)]; (x, x))
-    ini, i = elf(first), first
-    v = ini, ini
+    @inbounds v, i = f(A[first]), first
     rest = last - first
-    if rest > 8
-        ini1 = ntuple(Returns(ini), Val(8))          # 1. Simd Initialization.
-        if rest & 15 > 8
-            ini2 = elfn(i, Val(8))
-            i += 8
-        else
-            ini2 = ini1
+    if rest >= 8
+        vmi = Ref(ntuple(Returns(v[1]), Val(16)))    # 1. Simd Initialization.
+        GC.@preserve vmi begin
+            vmiᵖ = unsafe_convert(Ref{Eltype}, vmi)
+            if rest & 15 >= 8
+                i = _fast_load!(f.f, vmiᵖ, A, i, 9:16)
+            end
+            _anynan(vmiᵖ) && (nan = _picknan(vmiᵖ); return nan, nan)
         end
-        inis = (ini1..., ini2...)
-        _anynan(inis) && return firstnan(inis)       # 2. Ensure there's no NaN in initial values.
-        vmins = vmaxs = inis
-        while i <= last - 16
-            temp = elfn(i, Val(16))                # 3. Pick some unprocessed elements.
-            _anynan(temp) && return firstnan(temp) # 4. Ensure `temp` is free of NaN.
-            vmins = map(_fast(min), vmins, temp)   # 5. `_fast(min)` is safe for non-NaN inputs.
-            vmaxs = map(_fast(max), vmaxs, temp)   # 6. And `_fast(max)`.
-            i += 16
+        vma, elm = Ref(vmi[]), Ref(vmi[])
+        v = GC.@preserve vmi vma elm begin       # 2. Simd reduction
+            vmiᵖ = unsafe_convert(Ref{Eltype}, vmi)
+            vmaᵖ = unsafe_convert(Ref{Eltype}, vma)
+            elmᵖ = unsafe_convert(Ref{Eltype}, elm)
+            while i <= last - 16
+                i = _fast_load!(f.f, elmᵖ, A, i, 1:16)
+                _anynan(elmᵖ) && (nan = _picknan(elmᵖ); return nan, nan)
+                _update!(_fast(min), vmiᵖ, elmᵖ)
+                _update!(_fast(max), vmaᵖ, elmᵖ)
+            end
+            _foldl(_fast(min), vmiᵖ), _foldl(_fast(max), vmaᵖ)
         end
-        vmins′ = map(_fast(min), vmins[1:8], vmins[9:16])
-        vmaxs′ = map(_fast(max), vmaxs[1:8], vmaxs[9:16])
-        v = foldl(_fast(min), vmins′), foldl(_fast(max), vmaxs′)
     end
-    while i < last
-        v′ = elf(i+=1)
-        v = op(v, (v′, v′))
+    # 3. Reduce the rest elements.
+    @inbounds while i < last
+        v = op(v, f(A[i+=1]))
     end
     return v
 end
