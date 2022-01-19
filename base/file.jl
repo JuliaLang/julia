@@ -157,7 +157,10 @@ See also: [`pkgdir`](@ref).
 
 # Examples
 ```julia-repl
+julia> import LinearAlgebra
+
 julia> cd(LinearAlgebra)
+
 julia> pwd()
 "/home/JuliaUser/julia-$(string(VERSION))/share/julia/stdlib/v$(string(VERSION.major)).$(string(VERSION.minor))/LinearAlgebra"
 
