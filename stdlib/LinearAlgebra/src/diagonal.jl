@@ -682,7 +682,7 @@ function svd(D::Diagonal{T}) where {T<:Number}
     Vt = copy(U)
     for i in 1:length(d)
         j = piv[i]
-        U[j,i] = d[j] / abs(d[j])
+        U[j,i] = d[j] / S[j]
         Vt[i,j] = one(Td)
     end
     return SVD(U, S, Vt)
