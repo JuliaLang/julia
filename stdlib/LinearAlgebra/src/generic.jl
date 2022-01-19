@@ -1129,10 +1129,10 @@ julia> X = A / B
  -0.65   3.75  -1.2
   3.25  -2.75   1.0
 
-julia> A ≈ X*B
+julia> isapprox(A, X*B)
 true
 
-julia> X ≈ A*pinv(B) 
+julia> isapprox(X, A*pinv(B))
 true
 ```
 """
