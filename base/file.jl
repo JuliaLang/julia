@@ -116,6 +116,7 @@ else
         end
     end
 end
+
 """
     cd(f::Function, dir::AbstractString=homedir())
 
@@ -145,6 +146,32 @@ julia> pwd()
 ```
 """
 cd(f::Function) = cd(f, homedir())
+
+"""
+    cd(m::Module)
+    
+Set the current working directory to the root directory of the package that imported module
+`m`. Throws a `DomainError` if `m` was not imported from a package.
+
+See also: [`pkgdir`](@ref).
+
+# Examples
+```julia-repl
+julia> cd(LinearAlgebra)
+julia> pwd()
+"/home/JuliaUser/julia-$(string(VERSION))/share/julia/stdlib/v$(string(VERSION.major)).$(string(VERSION.minor))/LinearAlgebra"
+
+julia> cd(Base)
+ERROR: DomainError with Base:
+module must be imported from a package.
+[...]
+```
+"""
+function cd(m::Module)
+    dir = pkgdir(m)
+    dir === nothing && throw(DomainError(m, "module must be imported from a package."))
+    cd(dir)
+end
 
 function checkmode(mode::Integer)
     if !(0 <= mode <= 511)
