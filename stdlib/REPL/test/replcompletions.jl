@@ -572,7 +572,7 @@ let s = "CompletionFoo.?(false, \"a\", 3, "
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
-    @test occursin("test(args...)", c[1])
+    @test occursin("test(args::Any...)", c[1])
 end
 
 let s = "CompletionFoo.?(false, \"a\", 3, "
@@ -586,7 +586,7 @@ let s = "CompletionFoo.?()"
     @test !res
     @test any(str->occursin("foo()", str), c)
     @test any(str->occursin("kwtest(;", str), c)
-    @test any(str->occursin("test(args...)", str), c)
+    @test any(str->occursin("test(args::Any...)", str), c)
 end
 
 let s = "CompletionFoo.?()"
