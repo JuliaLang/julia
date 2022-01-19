@@ -86,8 +86,8 @@ struct InputAreaState
     curs_row::Int64
 end
 
-# Stores the state of running completion
-mutable struct CompletionState
+# Stores the state of a running completion menu
+mutable struct CompletionMenu
     # partial string for completion
     partial::String
     # position to splice partial to the buffer
@@ -103,37 +103,41 @@ mutable struct CompletionState
     nrows::Int
     ncols::Int
 
-    CompletionState(partial, position, completions) =
+    CompletionMenu(partial, position, completions) =
         new(partial, position, completions, 0, 0, 0)
 end
 
-hasselected(state::CompletionState) = state.selected != 0
-selected(state::CompletionState) = state.completions[state.selected]
+hasselected(menu::CompletionMenu) = menu.selected != 0
+selected(menu::CompletionMenu) = menu.completions[menu.selected]
 
-dimensions(state::CompletionState) = (state.nrows, state.ncols)
+dimensions(menu::CompletionMenu) = (menu.nrows, menu.ncols)
 
-function set_dimensions!(state::CompletionState, (nrows, ncols)::Tuple{Int,Int})
-    state.nrows = nrows
-    state.ncols = ncols
-    return state
+Base.length(menu::CompletionMenu) = length(menu.completions)
+Base.lastindex(menu::CompletionMenu) = lastindex(menu.completions)
+Base.getindex(menu::CompletionMenu, i::Integer) = menu.completions[i]
+
+function set_dimensions!(menu::CompletionMenu, (nrows, ncols)::Tuple{Int,Int})
+    menu.nrows = nrows
+    menu.ncols = ncols
+    return menu
 end
 
-function select_next!(state::CompletionState)
-    state.selected = mod1(state.selected + 1, length(state.completions))
-    return state
+function select_next!(menu::CompletionMenu)
+    menu.selected = mod1(menu.selected + 1, length(menu.completions))
+    return menu
 end
 
-function select_previous!(state::CompletionState)
-    state.selected = mod1(state.selected - 1, length(state.completions))
-    return state
+function select_previous!(menu::CompletionMenu)
+    menu.selected = mod1(menu.selected - 1, length(menu.completions))
+    return menu
 end
 
-function select_right!(state::CompletionState)
-    if !hasselected(state)
-        state.selected = firstindex(state.completions)
+function select_right!(menu::CompletionMenu)
+    if !hasselected(menu)
+        menu.selected = firstindex(menu.completions)
     else
-        nrows, ncols = dimensions(state)
-        col, row = divrem(state.selected - 1, nrows)
+        nrows, ncols = dimensions(menu)
+        col, row = divrem(menu.selected - 1, nrows)
         if col == ncols - 1  # rightmost column
             col = 0
             if row == nrows - 1
@@ -143,7 +147,7 @@ function select_right!(state::CompletionState)
             end
         else
             col += 1
-            if col * nrows + row + 1 > lastindex(state.completions)
+            if col * nrows + row + 1 > lastindex(menu.completions)
                 col = 0
                 if row == nrows - 1
                     row = 0
@@ -152,17 +156,17 @@ function select_right!(state::CompletionState)
                 end
             end
         end
-        state.selected = col * nrows + row + 1
+        menu.selected = col * nrows + row + 1
     end
-    return state
+    return menu
 end
 
-function select_left!(state::CompletionState)
-    if !hasselected(state)
-        state.selected = lastindex(state.completions)
+function select_left!(menu::CompletionMenu)
+    if !hasselected(menu)
+        menu.selected = lastindex(menu.completions)
     else
-        nrows, ncols = dimensions(state)
-        col, row = divrem(state.selected - 1, nrows)
+        nrows, ncols = dimensions(menu)
+        col, row = divrem(menu.selected - 1, nrows)
         if col == 0  # leftmost column
             col = ncols - 1
             if row == 0
@@ -170,15 +174,15 @@ function select_left!(state::CompletionState)
             else
                 row -= 1
             end
-            if col * nrows + row + 1 > lastindex(state.completions)
+            if col * nrows + row + 1 > lastindex(menu.completions)
                 col -= 1
             end
         else
             col -= 1
         end
-        state.selected = col * nrows + row + 1
+        menu.selected = col * nrows + row + 1
     end
-    return state
+    return menu
 end
 
 mutable struct PromptState <: ModeState
@@ -199,17 +203,17 @@ mutable struct PromptState <: ModeState
     last_newline::Float64 # register when last newline was entered
     # this option is to speed up output
     refresh_wait::Union{Timer,Nothing}
-    # current completion state; nothing if no completion is running
-    completion_state::Union{CompletionState,Nothing}
+    # current completion; nothing if no completion is running
+    completion_menu::Union{CompletionMenu,Nothing}
 end
 
 # check if completion is running
 iscompleting(s::ModeState) = false  # not completing by default
-iscompleting(s::PromptState) = s.completion_state !== nothing
+iscompleting(s::PromptState) = s.completion_menu !== nothing
 
 # stop the current completion
 stop_completion!(s::ModeState) = nothing
-stop_completion!(s::PromptState) = (s.completion_state = nothing)
+stop_completion!(s::PromptState) = (s.completion_menu = nothing)
 
 struct Modifiers
     shift::Bool
@@ -453,7 +457,7 @@ function complete_line(s::PromptState, repeats::Int)
         end
         # start completion mode; nothing is selected yet
         pos = position(s) - sizeof(partial)
-        s.completion_state = CompletionState(partial, pos, completions)
+        s.completion_menu = CompletionMenu(partial, pos, completions)
         refresh_completions(s)
     end
     return true
@@ -461,8 +465,8 @@ end
 
 function refresh_completions(s::PromptState)
     show_completions(s)
-    if hasselected(s.completion_state)
-        edit_splice!(s, s.completion_state.position => position(s), selected(s.completion_state))
+    if hasselected(s.completion_menu)
+        edit_splice!(s, s.completion_menu.position => position(s), selected(s.completion_menu))
         refresh_line(s)
     end
 end
@@ -476,22 +480,33 @@ function show_completions(s::PromptState)
     end
     println(term)
 
-    # list all completion candidates as a table
-    completions = s.completion_state.completions
-    partial = s.completion_state.partial
-    selected = s.completion_state.selected
+    # calculate dimensions for menu display
+    menu = s.completion_menu
+    colwidth = maximum(textwidth, menu.completions)
     margin = 2
-    colwidth = maximum(textwidth, completions)
-    nrows, ncols = calc_dimensions(width(term), colwidth + margin, length(completions))
+    nrows, ncols = calc_dimensions(width(term), colwidth + margin, length(menu))
+    available_height = height(term) - (input_string_newlines(s) + 1)
+    statusbar = false
+    if nrows > available_height
+        # completion menu won't fit in a page
+        nrows = available_height - 1
+        statusbar = true
+    end
+    n_items_per_page = nrows * ncols
+
+    # list completion candidates as a table
+    selected = menu.selected
+    offset = hasselected(menu) ? (selected - 1) ÷ n_items_per_page * n_items_per_page : 0
+    print(term, "\x1b[0J")
     for r in 1:nrows
         for c in 1:ncols
-            i = (c - 1) * nrows + r
-            i > lastindex(completions) && break
-            completion = completions[i]
-            rest = chopprefix(completion, partial)
+            i = (c - 1) * nrows + r + offset
+            i > lastindex(menu) && break
+            completion = menu[i]
+            rest = chopprefix(completion, menu.partial)
             # highlight prefix (partial)
             text = string(
-                "\x1b[1m\x1b[4m", partial, "\x1b[22m\x1b[24m",
+                "\x1b[1m\x1b[4m", menu.partial, "\x1b[22m\x1b[24m",
                 rest,
                 ' '^(colwidth - textwidth(completion))
             )
@@ -507,10 +522,18 @@ function show_completions(s::PromptState)
     end
 
     # update nrows and ncols (these may change if the terminal is resized)
-    set_dimensions!(s.completion_state, (nrows, ncols))
+    set_dimensions!(menu, (nrows, ncols))
+
+    # show status bar if needed
+    if statusbar
+        lo = offset + 1
+        hi = min(offset + n_items_per_page, length(menu))
+        println(term)
+        printstyled(term, "$(lo)-$(hi) out of $(length(menu))", reverse = true)
+    end
 
     # unwind the cursor position
-    print(term, "\x1b[$(skip + nrows)A", "\x1b[0G")
+    print(term, "\x1b[$(skip + nrows + statusbar)A", "\x1b[0G")
 end
 
 # calculate the number of rows and columns
@@ -1444,28 +1467,28 @@ _edit_indent(buf::IOBuffer, b::Int, num::Int) =
 # Completion operations
 function complete_prev(s::MIState)
     iscompleting(state(s)) || return false
-    select_previous!(state(s).completion_state)
+    select_previous!(state(s).completion_menu)
     refresh_completions(state(s))
     return true
 end
 
 function complete_next(s::MIState)
     iscompleting(state(s)) || return false
-    select_next!(state(s).completion_state)
+    select_next!(state(s).completion_menu)
     refresh_completions(state(s))
     return true
 end
 
 function complete_right(s::MIState)
     iscompleting(state(s)) || return false
-    select_right!(state(s).completion_state)
+    select_right!(state(s).completion_menu)
     refresh_completions(state(s))
     return true
 end
 
 function complete_left(s::MIState)
     iscompleting(state(s)) || return false
-    select_left!(state(s).completion_state)
+    select_left!(state(s).completion_menu)
     refresh_completions(state(s))
     return true
 end
