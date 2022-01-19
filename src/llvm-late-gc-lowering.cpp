@@ -2266,6 +2266,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 Value *SourceAggregate = IV->getAggregateOperand();
                 if (isa<UndefValue>(SourceAggregate)) {
                     IV->setOperand(IV->getAggregateOperandIndex(), ConstantAggregateZero::get(IV->getType()));
+                    ChangesMade = true;
                 }
             }
 
