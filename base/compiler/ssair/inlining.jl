@@ -1053,7 +1053,9 @@ end
 function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecialize(rt))
     if stmt_effect_free(stmt, rt, ir)
         ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
+        return true
     end
+    return false
 end
 
 # Handles all analysis and inlining of intrinsics and builtins. In particular,
@@ -1107,10 +1109,16 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
         return nothing
     end
 
-    check_effect_free!(ir, idx, stmt, rt)
+    if check_effect_free!(ir, idx, stmt, rt)
+        if sig.f === typeassert || sig.ft ⊑ typeof(typeassert)
+            # typeassert is a no-op if effect free
+            ir.stmts[idx][:inst] = stmt.args[2]
+            return nothing
+        end
+    end
 
     if sig.f !== Core.invoke && is_builtin(sig)
-        # No inlining for builtins (other invoke/apply)
+        # No inlining for builtins (other invoke/apply/typeassert)
         return nothing
     end
 
@@ -1379,15 +1387,6 @@ function early_inline_special_case(
     ir::IRCode, stmt::Expr, @nospecialize(type), sig::Signature,
     params::OptimizationParams)
     (; f, ft, argtypes) = sig
-    if (f === typeassert || ft ⊑ typeof(typeassert)) && length(argtypes) == 3
-        # typeassert(x::S, T) => x, when S<:T
-        a3 = argtypes[3]
-        if (isType(a3) && !has_free_typevars(a3) && argtypes[2] ⊑ a3.parameters[1]) ||
-            (isa(a3, Const) && isa(a3.val, Type) && argtypes[2] ⊑ a3.val)
-            val = stmt.args[2]
-            return SomeCase(val === nothing ? QuoteNode(val) : val)
-        end
-    end
 
     if params.inlining
         if isa(type, Const) # || isconstType(type)
