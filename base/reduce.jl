@@ -1358,3 +1358,46 @@ function mapreduce_impl(f::F, op::Union{typeof(max),typeof(min)},
     end
     return v
 end
+
+
+function mapreduce_impl(f::ExtremaMap, op::typeof(_extrema_rf),
+                        A::AbstractArrayOrBroadcasted, first::Int, last::Int)
+    T = A isa AbstractArray ? eltype(A) : (@default_eltype A)
+    Eltype = _return_type(f.f, Tuple{T})
+    # Call general fallback for non-IEEEFloat cases.
+    (isconcretetype(Eltype) && Eltype <: IEEEFloat) ||
+        return mapreduce_impl(f, op, A, first, last, pairwise_blocksize(f, op))
+    @inline elf(i::Int) = @inbounds f.f(A[i])::Eltype # Force inference if `T`` is a abstract type
+    @inline elfn(i::Int, Val) = ntuple(Δi -> elf(i + Δi), Val)
+    @noinline firstnan(temp) = (x = temp[findfirst(isnan, temp)]; (x, x))
+    ini, i = elf(first), first
+    v = ini, ini
+    rest = last - first
+    if rest > 8
+        ini1 = ntuple(Returns(ini), Val(8))          # 1. Simd Initialization.
+        if rest & 15 > 8
+            ini2 = elfn(i, Val(8))
+            i += 8
+        else
+            ini2 = ini1
+        end
+        inis = (ini1..., ini2...)
+        _anynan(inis) && return firstnan(inis)       # 2. Ensure there's no NaN in initial values.
+        vmins = vmaxs = inis
+        while i <= last - 16
+            temp = elfn(i, Val(16))                # 3. Pick some unprocessed elements.
+            _anynan(temp) && return firstnan(temp) # 4. Ensure `temp` is free of NaN.
+            vmins = map(_fast(min), vmins, temp)   # 5. `_fast(min)` is safe for non-NaN inputs.
+            vmaxs = map(_fast(max), vmaxs, temp)   # 6. And `_fast(max)`.
+            i += 16
+        end
+        vmins′ = map(_fast(min), vmins[1:8], vmins[9:16])
+        vmaxs′ = map(_fast(max), vmaxs[1:8], vmaxs[9:16])
+        v = foldl(_fast(min), vmins′), foldl(_fast(max), vmaxs′)
+    end
+    while i < last
+        v′ = elf(i+=1)
+        v = op(v, (v′, v′))
+    end
+    return v
+end
