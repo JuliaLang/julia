@@ -1726,5 +1726,5 @@ end
     @test pwd() == pkgdir(LinearAlgebra)
 
     @eval module M; end
-    @test_throws DomainError cd(M)
+    @test_throws ErrorException cd(M)
 end
