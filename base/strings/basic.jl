@@ -431,7 +431,7 @@ Legal indices are between 1 and 1.
 
 julia> thisind("α", -1)
 ERROR: BoundsError: attempt to access 2-codeunit String at index [-1].
-Legal indices are 1 and 1.
+Legal indices are between 1 and 1.
 [...]
 ```
 """
