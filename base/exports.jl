@@ -387,6 +387,7 @@ export
     eachindex,
     eachrow,
     eachslice,
+    extrema!,
     extrema,
     fill!,
     fill,
