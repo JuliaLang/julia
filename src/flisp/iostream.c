@@ -205,9 +205,9 @@ value_t fl_iolineno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 
 value_t fl_iosetlineno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount(fl_ctx, "input-set-lineno!", nargs, 2);
-    ios_t *s = toiostream(fl_ctx, args[0], "input-set-lineno!");
-    size_t new_lineno = tosize(fl_ctx, args[1], "input-set-lineno!");
+    argcount(fl_ctx, "io.set-lineno!", nargs, 2);
+    ios_t *s = toiostream(fl_ctx, args[0], "io.set-lineno!");
+    size_t new_lineno = tosize(fl_ctx, args[1], "io.set-lineno!");
     s->lineno = new_lineno;
     return args[1];
 }
