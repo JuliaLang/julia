@@ -113,7 +113,7 @@ in assignments](@ref destructuring-assignment) in final position, like `a, b... 
 !!! compat "Julia 1.6"
     `Base.rest` requires at least Julia 1.6.
 
-    See also: [`first`](@ref first), [`Iterators.rest`](@ref), [`Base.split_rest`](@ref).
+See also: [`first`](@ref first), [`Iterators.rest`](@ref), [`Base.split_rest`](@ref).
 
 # Examples
 ```jldoctest

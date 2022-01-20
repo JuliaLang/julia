@@ -79,7 +79,7 @@ New library functions
 * `setcpuaffinity(cmd, cpus)` can be used to set CPU affinity of sub-processes. ([#42469])
 * `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 * `Base.split_rest` for splitting the tail of a collection from an optional iteration
-  state in two, with the latter being of length `n`. ([#42902]) 
+  state in two, with the latter being of length `n`. ([#42902])
 
 New library features
 --------------------
