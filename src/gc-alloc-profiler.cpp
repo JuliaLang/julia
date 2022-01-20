@@ -46,7 +46,7 @@ jl_combined_results g_combined_results; // Will live forever.
 
 // === stack stuff ===
 
-jl_raw_backtrace_t get_raw_backtrace() {
+jl_raw_backtrace_t get_raw_backtrace() JL_NOTSAFEPOINT {
     // A single large buffer to record backtraces onto
     static jl_bt_element_t static_bt_data[JL_MAX_BT_SIZE];
 
