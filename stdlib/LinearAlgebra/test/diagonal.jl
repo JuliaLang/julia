@@ -415,15 +415,21 @@ Random.seed!(1)
         @test svd(D).V == V
     end
 
-    @testset "svd with Diagonal{Furlong}" begin
+    @testset "svd/eigen with Diagonal{Furlong}" begin
         Du = Furlong.(D)
         @test Du isa Diagonal{<:Furlong{1}}
-        U, s, V = svd(Du)
-        @test map(x -> x.val, U*Diagonal(s)*V') ≈ D
+        F = svd(Du)
+        U, s, V = F
+        @test Matrix(F) == Du
         @test svdvals(Du) == s
         @test U isa AbstractMatrix{<:Furlong{0}}
         @test V isa AbstractMatrix{<:Furlong{0}}
         @test s isa AbstractVector{<:Furlong{1}}
+        E = eigen(Du)
+        vals, vecs = E
+        @test Matrix(E) == Du
+        @test vals isa AbstactVector{<:Furlong{1}}
+        @test vecs isa AbstractMatrix{<:Furlong{0}}
     end
 end
 
