@@ -14,8 +14,8 @@ end
 @testset "Parse Base tests" begin
     test_parse_all_in_path(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test"))
 end
+=#
 
 @testset "Parse Julia stdlib" begin
     test_parse_all_in_path(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "stdlib"))
 end
-=#

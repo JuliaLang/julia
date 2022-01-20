@@ -547,6 +547,10 @@ Here's some behaviors which seem to be bugs:
 * Octal escape sequences saturate rather than being reported as errors. Eg,
   `"\777"` results in `"\xff"`.  This is inconsistent with
   `Base.parse(::Type{Int}, ...)`
+* Leading dots in import paths with operator-named modules are parsed into
+  dotted operators rather than a relative path. Ie, we have `import .⋆` parsing
+  to `(import (. .⋆))` whereas it should be `(import (. . ⋆))` for consistency
+  with the parsing of `import .A`.
 
 ## Parsing / AST oddities and warts
 

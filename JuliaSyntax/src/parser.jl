@@ -2213,11 +2213,19 @@ function parse_import_path(ps::ParseState)
         end
         first_dot = false
     end
-    # import @x     ==>  (import (. @x))
-    # import $A     ==>  (import (. ($ A)))
-    parse_atsym(ps)
+    if is_dotted(peek_token(ps))
+        # Modules with operator symbol names
+        # import .⋆  ==>  (import (. . ⋆))
+        bump_trivia(ps)
+        bump_split(ps, (1,K".",EMPTY_FLAGS), (1,peek(ps),EMPTY_FLAGS))
+    else
+        # import @x     ==>  (import (. @x))
+        # import $A     ==>  (import (. ($ A)))
+        parse_atsym(ps)
+    end
     while true
-        k = peek(ps)
+        t = peek_token(ps)
+        k = kind(t)
         if k == K"."
             # import A.B    ==>  (import (. A B))
             # import $A.@x  ==>  (import (. ($ A) @x))
@@ -2225,18 +2233,32 @@ function parse_import_path(ps::ParseState)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             parse_atsym(ps)
-        elseif k in KSet`NewlineWs ; , : EndMarker`
-            # import A; B  ==>  (import (. A))
-            break
-        elseif k == K".."
-            # Nonsensical??
-            # import A..  ==>  (import (. A .))
-            bump_split(ps, (1,K".",TRIVIA_FLAG), (1,K".",EMPTY_FLAGS))
+        elseif is_dotted(t)
+            # Resolve tokenization ambiguity: In imports, dots are part of the
+            # path, not operators
+            # import A.==   ==>  (import (. A ==))
+            # import A.⋆.f  ==>  (import (. A ⋆ f))
+            if t.had_whitespace
+                # Whitespace in import path allowed but discouraged
+                # import A .==  ==>  (import (. A ==))
+                emit_diagnostic(ps, whitespace=true,
+                                warning="space between dots in import path")
+            end
+            bump_trivia(ps)
+            bump_split(ps, (1,K".",TRIVIA_FLAG), (1,k,EMPTY_FLAGS))
+        # elseif k == K".."
+        #     # The flisp parser does this, but it's nonsense?
+        #     # import A..  !=>  (import (. A .))
+        #     bump_split(ps, (1,K".",TRIVIA_FLAG), (1,K".",EMPTY_FLAGS))
         elseif k == K"..."
             # Import the .. operator
             # import A...  ==>  (import (. A ..))
             bump_split(ps, (1,K".",TRIVIA_FLAG), (2,K"..",EMPTY_FLAGS))
+        elseif k in KSet`NewlineWs ; , : EndMarker`
+            # import A; B  ==>  (import (. A))
+            break
         else
+            # Could we emit a more comprehensible error here?
             break
         end
     end
