@@ -859,7 +859,7 @@ jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs
 JL_DLLEXPORT int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT;
 
 jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                     size_t offset, jl_value_t *options);
+                     size_t lineno, size_t offset, jl_value_t *options);
 
 //--------------------------------------------------
 // Backtraces
