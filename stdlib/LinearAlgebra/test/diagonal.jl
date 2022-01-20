@@ -424,7 +424,7 @@ Random.seed!(1)
         @test Du isa Diagonal{<:Furlong{1}}
         F = svd(Du)
         U, s, V = F
-        @test Matrix(F) == Du
+        @test map(x -> x.val, Matrix(F)) ≈ map(x -> x.val, Du)
         @test svdvals(Du) == s
         @test U isa AbstractMatrix{<:Furlong{0}}
         @test V isa AbstractMatrix{<:Furlong{0}}
