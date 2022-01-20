@@ -673,7 +673,7 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
         λ = λ[p] # make a copy, otherwise this permutes D.diag
         evecs = zeros(Td, size(D))
         @inbounds for i in eachindex(p)
-            evecs[i,p[i]] = one(Td)
+            evecs[p[i],i] = one(Td)
         end
     else
         evecs = Matrix{Td}(I, size(D))
@@ -694,8 +694,8 @@ function svd(D::Diagonal{T}) where {T<:Number}
     Vt = copy(U)
     for i in 1:length(d)
         j = piv[i]
-        U[i,j] = d[j] / S[i]
-        Vt[j,i] = one(Td)
+        U[j,i] = d[j] / S[i]
+        Vt[i,j] = one(Td)
     end
     return SVD(U, S, Vt)
 end
