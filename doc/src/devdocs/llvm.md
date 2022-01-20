@@ -42,7 +42,7 @@ The default version of LLVM is specified in `deps/Versions.make`. You can overri
 a file called `Make.user` in the top-level directory and adding a line to it such as:
 
 ```
-LLVM_VER = 12.0.1
+LLVM_VER = 13.0.0
 ```
 
 Besides the LLVM release numerals, you can also use `DEPS_GIT = llvm` in combination with
@@ -79,7 +79,7 @@ environment. In addition, it exposes the `-julia` meta-pass, which runs the
 entire Julia pass-pipeline over the IR. As an example, to generate a system
 image, one could do:
 ```
-opt -load libjulia-internal.so -julia -o opt.bc unopt.bc
+opt -enable-new-pm=0 -load libjulia-codegen.so -julia -o opt.bc unopt.bc
 llc -o sys.o opt.bc
 cc -shared -o sys.so sys.o
 ```

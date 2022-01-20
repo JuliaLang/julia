@@ -70,7 +70,7 @@ end
 # Tests for SROA
 
 import Core.Compiler: argextype, singleton_type
-const EMPTY_SPTYPES = Core.Compiler.EMPTY_SLOTTYPES
+const EMPTY_SPTYPES = Any[]
 
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
@@ -284,7 +284,7 @@ struct Point
     y::Float64
 end
 #=@inline=# add(a::Point, b::Point) = Point(a.x + b.x, a.y + b.y)
-function compute()
+function compute_points()
     a = Point(1.5, 2.5)
     b = Point(2.25, 4.75)
     for i in 0:(100000000-1)
@@ -292,7 +292,7 @@ function compute()
     end
     a.x, a.y
 end
-let src = code_typed1(compute)
+let src = code_typed1(compute_points)
     @test !any(isnew, src.code)
 end
 
@@ -627,7 +627,7 @@ let # `sroa_pass!` should work with constant globals
     end
     @test !any(src.code) do @nospecialize(stmt)
         Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) == typeof(getfield)
     end
     @test !any(src.code) do @nospecialize(stmt)
@@ -645,7 +645,7 @@ let # `sroa_pass!` should work with constant globals
     end
     @test !any(src.code) do @nospecialize(stmt)
         Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) == typeof(getfield)
     end
     @test !any(src.code) do @nospecialize(stmt)
@@ -668,7 +668,108 @@ let
     # eliminate `typeassert(x2.x, Foo)`
     @test all(src.code) do @nospecialize stmt
         Meta.isexpr(stmt, :call) || return true
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
+        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
         return Core.Compiler.widenconst(ft) !== typeof(typeassert)
     end
+end
+
+let
+    # Test for https://github.com/JuliaLang/julia/issues/43402
+    # Ensure that structs required not used outside of the ccall,
+    # still get listed in the ccall_preserves
+
+    src = @eval Module() begin
+        @inline function effectful()
+            s1 = Ref{Csize_t}()
+            s2 = Ref{Csize_t}()
+            ccall(:some_ccall, Cvoid,
+                  (Ref{Csize_t},Ref{Csize_t}),
+                  s1, s2)
+            return s1[], s2[]
+        end
+
+        code_typed() do
+            s1, s2 = effectful()
+            return s1
+        end |> only |> first
+    end
+
+    refs = map(Core.SSAValue, findall(x->x isa Expr && x.head == :new, src.code))
+    some_ccall = findfirst(x -> x isa Expr && x.head == :foreigncall && x.args[1] == :(:some_ccall), src.code)
+    @assert some_ccall !== nothing
+    stmt = src.code[some_ccall]
+    nccallargs = length(stmt.args[3]::Core.SimpleVector)
+    preserves = stmt.args[6+nccallargs:end]
+    @test length(refs) == 2
+    @test length(preserves) == 2
+    @test all(alloc -> alloc in preserves, refs)
+end
+
+# test `stmt_effect_free` and DCE
+# ===============================
+
+function fully_eliminated(f, args)
+    @nospecialize f args
+    let code = code_typed(f, args)[1][1].code
+        return length(code) == 1 && isa(code[1], ReturnNode)
+    end
+end
+function fully_eliminated(f, args, retval)
+    @nospecialize f args
+    let code = code_typed(f, args)[1][1].code
+        return length(code) == 1 && isa(code[1], ReturnNode) && code[1].val == retval
+    end
+end
+
+let # effect-freeness computation for array allocation
+
+    # should eliminate dead allocations
+    good_dims = (0, 2)
+    for dim in good_dims, N in 0:10
+        dims = ntuple(i->dim, N)
+        @eval @test fully_eliminated(()) do
+            Array{Int,$N}(undef, $(dims...))
+            nothing
+        end
+    end
+
+    # shouldn't eliminate errorneous dead allocations
+    bad_dims = [-1,           # should keep "invalid Array dimensions"
+                typemax(Int)] # should keep "invalid Array size"
+    for dim in bad_dims, N in 1:10
+        dims = ntuple(i->dim, N)
+        @eval @test !fully_eliminated(()) do
+            Array{Int,$N}(undef, $(dims...))
+            nothing
+        end
+    end
+
+    # some high-level examples
+    @test fully_eliminated(()) do
+        Int[]
+        nothing
+    end
+    @test fully_eliminated(()) do
+        Matrix{Tuple{String,String}}(undef, 4, 4)
+        nothing
+    end
+    @test fully_eliminated(()) do
+        IdDict{Any,Any}()
+        nothing
+    end
+end
+
+# allow branch folding to look at type information
+let ci = code_typed1(optimize=false) do
+        cond = 1 + 1 == 2
+        if !cond
+            gcd(24, 36)
+        else
+            gcd(64, 128)
+        end
+    end
+    ir = Core.Compiler.inflate_ir(ci)
+    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 1
+    ir = Core.Compiler.compact!(ir, true)
+    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 0
 end

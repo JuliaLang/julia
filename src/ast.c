@@ -102,6 +102,7 @@ JL_DLLEXPORT jl_sym_t *jl_all_sym;
 JL_DLLEXPORT jl_sym_t *jl_compile_sym;
 JL_DLLEXPORT jl_sym_t *jl_force_compile_sym;
 JL_DLLEXPORT jl_sym_t *jl_infer_sym;
+JL_DLLEXPORT jl_sym_t *jl_max_methods_sym;
 JL_DLLEXPORT jl_sym_t *jl_atomic_sym;
 JL_DLLEXPORT jl_sym_t *jl_not_atomic_sym;
 JL_DLLEXPORT jl_sym_t *jl_unordered_sym;
@@ -336,6 +337,7 @@ void jl_init_common_symbols(void)
     jl_compile_sym = jl_symbol("compile");
     jl_force_compile_sym = jl_symbol("force_compile");
     jl_infer_sym = jl_symbol("infer");
+    jl_max_methods_sym = jl_symbol("max_methods");
     jl_macrocall_sym = jl_symbol("macrocall");
     jl_escape_sym = jl_symbol("escape");
     jl_hygienicscope_sym = jl_symbol("hygienic-scope");

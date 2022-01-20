@@ -797,6 +797,7 @@ end
     b = [2]
     c = [3]
     d = [4]
+    e = [5]
     A = Base.IdSet{Vector{Int}}([a, b, c, d])
     @test !isempty(A)
     B = copy(A)
@@ -808,6 +809,9 @@ end
     @test !isempty(A)
     a_ = pop!(A, a)
     @test a_ === a
+    @test !isempty(A)
+    e_ = pop!(A, a, e)
+    @test e_ === e
     @test !isempty(A)
     A = empty!(A)
     @test isempty(A)

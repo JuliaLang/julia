@@ -9,6 +9,7 @@
 #include "support/hashing.h"
 #include "support/ptrhash.h"
 #include "support/strtod.h"
+#include "gc-alloc-profiler.h"
 #include <uv.h>
 #if !defined(_WIN32)
 #include <unistd.h>
@@ -364,6 +365,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         v = jl_gc_big_alloc(ptls, allocsz);
     }
     jl_set_typeof(v, ty);
+    maybe_record_alloc_to_profile(v, sz);
     return v;
 }
 
@@ -804,7 +806,7 @@ typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k);
 
-#if !defined(__clang_gcanalyzer__)
+#if !defined(__clang_gcanalyzer__) && !defined(_OS_DARWIN_)
 static inline void jl_set_gc_and_wait(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -1442,6 +1444,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_all_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_compile_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_force_compile_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_infer_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_max_methods_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_atomic_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_not_atomic_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_unordered_sym;

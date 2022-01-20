@@ -290,6 +290,9 @@ include("process.jl")
 include("ttyhascolor.jl")
 include("secretbuffer.jl")
 
+# RandomDevice support
+include("randomdevice.jl")
+
 # core math functions
 include("floatfuncs.jl")
 include("math.jl")

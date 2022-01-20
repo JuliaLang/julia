@@ -1024,7 +1024,7 @@ consider the two functions:
 ```jldoctest dotfuse
 julia> f(x) = 3x.^2 + 4x + 7x.^3;
 
-julia> fdot(x) = @. 3x^2 + 4x + 7x^3 # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3;
+julia> fdot(x) = @. 3x^2 + 4x + 7x^3; # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3
 ```
 
 Both `f` and `fdot` compute the same thing. However, `fdot`

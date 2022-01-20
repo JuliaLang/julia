@@ -23,42 +23,20 @@ else # !windows
         RandomDevice(; unlimited::Bool=true) = new(unlimited)
     end
 
+    getfile(rd::RandomDevice) = Base._get_dev_random_fd(rd.unlimited)
+
     rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
     rand(rd::RandomDevice, ::SamplerType{Bool}) = read(getfile(rd), UInt8) % Bool
 
-    mutable struct FileRef
-        @atomic file::Union{IOStream, Nothing}
-    end
-
-    const DEV_RANDOM  = FileRef(nothing)
-    const DEV_URANDOM = FileRef(nothing)
-
-    function getfile(rd::RandomDevice)
-        ref = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
-        fd = ref.file
-        if fd === nothing
-            fd = open(rd.unlimited ? "/dev/urandom" : "/dev/random")
-            old, ok = @atomicreplace ref.file nothing => fd
-            if !ok
-                close(fd)
-                fd = old::IOStream
-            end
-        end
-        return fd
-    end
-
     show(io::IO, rd::RandomDevice) =
         print(io, RandomDevice, rd.unlimited ? "()" : "(unlimited=false)")
-
 end # os-test
 
 # NOTE: this can't be put within the if-else block above
 for T in (Bool, BitInteger_types...)
     if Sys.iswindows()
         @eval function rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T})
-            Base.windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
-                (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-                  A, sizeof(A)))
+            Base.RtlGenRandom!(A)
             A
         end
     else
@@ -332,14 +310,7 @@ function make_seed()
     catch
         println(stderr,
                 "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
-        seed = reinterpret(UInt64, time())
-        seed = hash(seed, getpid() % UInt)
-        try
-            seed = hash(seed, parse(UInt64,
-                                    read(pipeline(`ifconfig`, `sha1sum`), String)[1:40],
-                                    base = 16) % UInt)
-        catch
-        end
+        Base._ad_hoc_entropy_source()
         return make_seed(seed)
     end
 end
@@ -428,10 +399,6 @@ for T in BitInteger_types
 end
 
 function __init__()
-    @static if !Sys.iswindows()
-        @atomic DEV_RANDOM.file = nothing
-        @atomic DEV_URANDOM.file = nothing
-    end
     seed!(GLOBAL_RNG)
 end
 

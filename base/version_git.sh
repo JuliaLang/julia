@@ -24,7 +24,7 @@ cd $1
 if [  "$#" = "2"  -a "$2" = "NO_GIT" ]; then
     # this comment is used in base/Makefile to distinguish boilerplate
     echo "# Default output if git is not available."
-    echo "const GIT_VERSION_INFO = GitVersionInfo(\"\" ,\"\" ,\"\" ,0 ,\"\" ,true ,0 ,0.)"
+    echo 'const GIT_VERSION_INFO = GitVersionInfo("", "", "", 0, "", true, 0, 0.0, "", "")'
     exit 0
 fi
 # Collect temporary variables
@@ -101,7 +101,7 @@ echo "    $build_number,"
 echo "    \"$date_string\","
 echo "    $tagged_commit,"
 echo "    $fork_master_distance,"
-echo "    $fork_master_timestamp.,"
+echo "    $fork_master_timestamp.0,"
 echo "    \"$build_system_commit\","
 echo "    \"$build_system_commit_short\","
 echo ")"

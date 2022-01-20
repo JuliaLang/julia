@@ -87,12 +87,8 @@ Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
 """
 Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, n))
 
-# For D<:Diagonal, similar(D[, neweltype]) should yield a Diagonal matrix.
-# On the other hand, similar(D, [neweltype,] shape...) should yield a sparse matrix.
-# The first method below effects the former, and the second the latter.
 similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
-# The method below is moved to SparseArrays for now
-# similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+similar(::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
 
 copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
@@ -114,8 +110,8 @@ end
     end
     r
 end
-diagzero(::Diagonal{T},i,j) where {T} = zero(T)
-diagzero(D::Diagonal{<:AbstractMatrix{T}},i,j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
+diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
@@ -599,8 +595,8 @@ transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
 adjoint(D::Diagonal{<:Number}) = conj(D)
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
-Base.permutedims(D::Diagonal) = D
-Base.permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
+permutedims(D::Diagonal) = D
+permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
 
 function diag(D::Diagonal{T}, k::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
@@ -715,7 +711,7 @@ function _mapreduce_prod(f, x, D::Diagonal, y)
     end
 end
 
-function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
+function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
     info = 0
     for (i, di) in enumerate(A.diag)
         if isreal(di) && real(di) > 0
@@ -729,9 +725,11 @@ function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
     end
     Cholesky(A, 'U', convert(BlasInt, info))
 end
+@deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 
-cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
-    cholesky!(cholcopy(A), Val(false); check = check)
+cholesky(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true) =
+    cholesky!(cholcopy(A), NoPivot(); check = check)
+@deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
 
 function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
     Cfactors = getfield(C, :factors)

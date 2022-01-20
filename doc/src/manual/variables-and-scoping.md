@@ -99,6 +99,22 @@ julia> module E
 ERROR: cannot assign variables in other modules
 ```
 
+If a top-level expression contains a variable declaration with keyword `local`,
+then that variable is not accessible outside that expression.
+The variable inside the expression does not affect global variables of the same name.
+An example is to declare `local x` in a `begin` or `if` block at the top-level:
+
+```jldoctest
+julia> x = 1
+       begin
+           local x = 0
+           @show x
+       end
+       @show x;
+x = 0
+x = 1
+```
+
 Note that the interactive prompt (aka REPL) is in the global scope of the module `Main`.
 
 ## Local Scope

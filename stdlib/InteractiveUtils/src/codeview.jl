@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # highlighting settings
-highlighting = Dict{Symbol, Bool}(
+const highlighting = Dict{Symbol, Bool}(
     :warntype => true,
     :llvm => true,
     :native => true,
 )
 
-llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
+const llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
     :default     => (false, :normal), # e.g. comma, equal sign, unknown token
     :comment     => (false, :light_black),
     :label       => (false, :light_red),
@@ -149,7 +149,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         throw(ArgumentError("argument is not a generic function"))
     end
     # get the MethodInstance for the method match
-    world = typemax(UInt)
+    world = Base.get_world_counter()
     match = Base._which(signature_type(f, t), world)
     linfo = Core.Compiler.specialize_method(match)
     # get the code for it
