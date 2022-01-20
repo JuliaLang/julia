@@ -20,6 +20,8 @@ New language features
   them after construction, providing for greater clarity and optimization
   ability of these objects ([#43305]).
 * Empty n-dimensional arrays can now be created using multiple semicolons inside square brackets, i.e. `[;;;]` creates a 0×0×0 `Array`. ([#41618])
+* Slurping in assignments is now also allowed in non-final position. This is
+  handled via `Base.split_rest`. ([#42902])
 
 Language changes
 ----------------
@@ -76,6 +78,8 @@ New library functions
 * `hardlink(src, dst)` can be used to create hard links. ([#41639])
 * `setcpuaffinity(cmd, cpus)` can be used to set CPU affinity of sub-processes. ([#42469])
 * `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
+* `Base.split_rest` for splitting the tail of a collection from an optional iteration
+  state in two, with the latter being of length `n`. ([#42902]) 
 
 New library features
 --------------------
