@@ -429,22 +429,26 @@ tests = [
         "using A as B"     =>  "(using (error (as (. A) B)))"
         "using A, B as C"  =>  "(using (. A) (error (as (. B) C)))"
         # parse_import_path
-        # When parsing import we must split these into single dots
+        # When parsing import we must split initial dots into nontrivial
+        # leading dots for relative paths
         "import .A"  =>  "(import (. . A))"
         "import ..A"  =>  "(import (. . . A))"
         "import ...A"  =>  "(import (. . . . A))"
         "import ....A"  =>  "(import (. . . . . A))"
         # Dots with spaces are allowed (a misfeature?)
         "import . .A"  =>  "(import (. . . A))"
+        # Modules with operator symbol names
+        "import .⋆"  =>  "(import (. . ⋆))"
         # Expressions allowed in import paths
         "import @x"  =>  "(import (. @x))"
         "import \$A"  =>  "(import (. (\$ A)))"
         "import \$A.@x"  =>  "(import (. (\$ A) @x))"
         "import A.B"  =>  "(import (. A B))"
         "import A.B.C"  =>  "(import (. A B C))"
-        "import A; B"  =>  "(import (. A))"
-        "import A.."  =>  "(import (. A .))"
+        "import A.=="  =>  "(import (. A ==))"
+        "import A.⋆.f" =>  "(import (. A ⋆ f))"
         "import A..."  =>  "(import (. A ..))"
+        "import A; B"  =>  "(import (. A))"
     ],
     JuliaSyntax.parse_iteration_spec => [
         "i = rhs"        =>  "(= i rhs)"

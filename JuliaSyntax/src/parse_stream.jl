@@ -396,18 +396,28 @@ function bump_glue(stream::ParseStream, kind, flags, num_tokens)
 end
 
 """
-Bump a token, splitting it into several pieces
+    bump_split(stream, token_spec1, [token_spec2 ...])
 
-Wow, this is a hack! It helps resolves the occasional lexing ambiguities. For
+Bump the next token, splitting it into several pieces
+
+Tokens are defined by a number of `token_spec` of shape `(nbyte, kind, flags)`.
+The number of input bytes of the last spec is taken from the remaining bytes of
+the input token, with the associated `nbyte` ignored.
+
+This is a hack which helps resolves the occasional lexing ambiguity. For
 example
-* Whether .+ should be a single token or a composite (. +)
+* Whether .+ should be a single token or the composite (. +) which is used for
+  standalone operators.
 * Whether ... is splatting (most of the time) or three . tokens in import paths
+
+TODO: Are these the only cases?  Can we replace this general utility with a
+simpler one which only splits preceding dots?
 """
 function bump_split(stream::ParseStream, split_spec...)
     tok = popfirst!(stream.lookahead)
     fbyte = first_byte(tok)
     for (i, (nbyte, k, f)) in enumerate(split_spec)
-        lbyte = i == length(split_spec) ? last_byte(tok) : fbyte + nbyte - 1
+        lbyte = (i == length(split_spec)) ? last_byte(tok) : fbyte + nbyte - 1
         push!(stream.ranges, TaggedRange(SyntaxHead(k, f), kind(tok),
                                          fbyte, lbyte,
                                          lastindex(stream.ranges) + 1))
