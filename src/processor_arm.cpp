@@ -705,6 +705,10 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 
     if(strcmp(buffer,"Apple M1") == 0)
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
+    else if(strcmp(buffer,"Apple M1 Max") == 0)
+        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
+    else if(strcmp(buffer,"Apple M1 Pro") == 0)
+        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
     else
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
 }
