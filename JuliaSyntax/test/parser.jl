@@ -332,6 +332,7 @@ tests = [
         "export \$a, \$(a*b)"  =>  "(export (\$ a) (\$ (call-i a * b)))"
         "export (x::T)"  =>  "(export (error (:: x T)))"
         "export outer"  =>  "(export outer)"
+        "export (\$f)"  =>  "(export (\$ f))"
     ],
     JuliaSyntax.parse_if_elseif => [
         "if a xx elseif b yy else zz end" => "(if a (block xx) (elseif (block b) (block yy) (block zz)))"
@@ -370,6 +371,8 @@ tests = [
         "macro f()     end"    =>  "(macro (call f) (block))"
         "macro (:)(ex) end"    =>  "(macro (call : ex) (block))"
         "macro (type)(ex) end" =>  "(macro (call type ex) (block))"
+        "macro \$f()    end"   =>  "(macro (call (\$ f)) (block))"
+        "macro (\$f)()  end"   =>  "(macro (call (\$ f)) (block))"
         "function (x) body end"=>  "(function (tuple x) (block body))"
         "function (x,y) end"   =>  "(function (tuple x y) (block))"
         "function (x=1) end"   =>  "(function (tuple (kw x 1)) (block))"

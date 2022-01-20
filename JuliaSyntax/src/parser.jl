@@ -1220,24 +1220,18 @@ function parse_unary_prefix(ps::ParseState)
     end
 end
 
-# Parse a symbol or interpolation syntax (a restricted version of
-# parse_unary_prefix)
+# Parse a symbol or interpolation syntax
 function parse_identifier_or_interpolate(ps::ParseState)
     mark = position(ps)
-    if peek(ps) == K"$"
-        bump(ps, TRIVIA_FLAG)
-        # $a   ==>  ($ a)
-        # $$a  ==>  ($ ($ a))
-        parse_unary_prefix(ps)
-        emit(ps, mark, K"$")
-    else
-        parse_atom(ps)
-        b = peek_behind(ps)
-        # export (x::T) ==> (export (error (:: x T)))
-        # export outer  ==> (export outer)
-        if !b.is_leaf || !(is_identifier(b.kind) || is_operator(b.kind))
-            emit(ps, mark, K"error", error="Expected identifier")
-        end
+    parse_unary_prefix(ps)
+    b = peek_behind(ps)
+    # export (x::T) ==> (export (error (:: x T)))
+    # export outer  ==> (export outer)
+    # export ($f)   ==> (export ($ f))
+    ok = (b.is_leaf  && (is_identifier(b.kind) || is_operator(b.kind))) ||
+         (!b.is_leaf && b.kind == K"$")
+    if !ok
+        emit(ps, mark, K"error", error="Expected identifier")
     end
 end
 
@@ -1874,6 +1868,8 @@ function parse_function(ps::ParseState)
             # macro f()     end  ==>  (macro (call f) (block))
             # macro (:)(ex) end  ==>  (macro (call : ex) (block))
             # macro (type)(ex) end  ==>  (macro (call type ex) (block))
+            # macro $f()    end  ==>  (macro (call ($ f)) (block))
+            # macro ($f)()  end  ==>  (macro (call ($ f)) (block))
         end
     else
         if peek(ps) == K"("
