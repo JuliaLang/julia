@@ -168,7 +168,7 @@ julia> first, Base.split_rest(a, 1, state)
 (1, ([3, 2], [4]))
 ```
 """
-function rest end
+function split_rest end
 function split_rest(itr, n::Int, state...)
     if IteratorSize(itr) == IsInfinite()
         throw(ArgumentError("Cannot split an infinite iterator in the middle."))

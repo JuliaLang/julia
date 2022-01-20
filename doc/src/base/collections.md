@@ -138,6 +138,7 @@ Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
 Base.rest
+Base.split_rest
 ```
 
 ## Indexable Collections
