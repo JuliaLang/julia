@@ -481,6 +481,10 @@ end
 function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
     mark = position(ps)
     down(ps)
+    parse_assignment_with_initial_ex(ps, mark, down, equals_is_kw)
+end
+
+function parse_assignment_with_initial_ex(ps::ParseState, mark, down, equals_is_kw::Bool)
     t = peek_token(ps)
     k = kind(t)
     if !is_prec_assignment(k)
@@ -1784,8 +1788,8 @@ function parse_const_local_global(ps)
     scope_k = K"Nothing"
     k = peek(ps)
     if k in KSet`global local`
-        # global x = 1  ==>  (global (= x 1))
-        # local x = 1   ==>  (local (= x 1))
+        # global x  ==>  (global x)
+        # local x   ==>  (local x)
         scope_k = k
         bump(ps, TRIVIA_FLAG)
         if peek(ps) == K"const"
@@ -1807,36 +1811,37 @@ function parse_const_local_global(ps)
             bump(ps, TRIVIA_FLAG)
         end
     end
-    # Like parse_eq/parse_assignment, but specialized so that we can omit the
+    # Like parse_assignment, but specialized so that we can omit the
     # tuple when there's commas but no assignment.
     beforevar_mark = position(ps)
     n_commas = parse_comma(ps, false)
     t = peek_token(ps)
-    if is_prec_assignment(t) && !is_decorated(t)
-        if n_commas >= 1
-            # const x,y = 1,2      ==>  (const (= (tuple x y) (tuple 1 2)))
-            emit(ps, beforevar_mark, K"tuple")
-        end
-        bump(ps, TRIVIA_FLAG)
-        parse_comma(ps)
-        emit(ps, beforevar_mark, K"=")
-    elseif has_const
-        # Const fields https://github.com/JuliaLang/julia/pull/43305
-        # const x     ==>  (const x)
-        # const x::T  ==>  (const (:: x T))
-        if n_commas >= 1
-            # Maybe nonsensical? But this is what the flisp parser does.
-            # const x,y  ==>  (const (tuple x y))
-            emit(ps, beforevar_mark, K"tuple")
-        end
-        #v1.7: const x  ==> (const (error x))
-        min_supported_version(v"1.8", ps, beforevar_mark,
-                              "`const` struct field without assignment")
+    has_assignment = is_prec_assignment(t)
+    if n_commas >= 1 && (has_assignment || has_const)
+        # const x,y = 1,2  ==>  (const (= (tuple x y) (tuple 1 2)))
+        # Maybe nonsensical? But this is what the flisp parser does.
+        #v1.8: const x,y  ==>  (const (tuple x y))
+        emit(ps, beforevar_mark, K"tuple")
+    end
+    if has_assignment
+        # const x = 1   ==>  (const (= x 1))
+        # global x ~ 1  ==>  (global (call-i x ~ 1))
+        # global x += 1 ==>  (global (+= x 1))
+        parse_assignment_with_initial_ex(ps, beforevar_mark, parse_comma, false)
     else
-        #v1.8: const x ==>  (const x)
         # global x    ==>  (global x)
         # local x     ==>  (local x)
         # global x,y  ==>  (global x y)
+    end
+    if has_const && (!has_assignment || is_dotted(t))
+        # Const fields https://github.com/JuliaLang/julia/pull/43305
+        #v1.8: const x     ==>  (const x)
+        #v1.8: const x::T  ==>  (const (:: x T))
+        # Disallowed const forms on <= 1.7
+        #v1.7: const x       ==> (const (error x))
+        #v1.7: const x .= 1  ==>  (const (error (.= x 1)))
+        min_supported_version(v"1.8", ps, beforevar_mark,
+                              "`const` struct field without assignment")
     end
     if scope_k != K"Nothing"
         emit(ps, scope_mark, scope_k)
