@@ -193,6 +193,7 @@ tests = [
         "f(a,b)"  => "(call f a b)"
         "f (a)" => "(call f (error-t) a)"
         "f(a).g(b)" => "(call (. (call f a) (quote g)) b)"
+        "\$A.@x"    =>  "(macrocall (. (\$ A) (quote @x)))"
         # do
         "f() do x, y\n body end"  =>  "(do (call f) (-> (tuple x y) (block body)))"
         "f() do\nend"         =>  "(do (call f) (-> (tuple) (block)))"
@@ -241,6 +242,7 @@ tests = [
         "A.: +"     =>  "(. A (quote (error-t) +))"
         "f.\$x"     =>  "(. f (inert (\$ x)))"
         "f.\$(x+y)" =>  "(. f (inert (\$ (call-i x + y))))"
+        "A.\$B.@x"  =>  "(macrocall (. (. A (inert (\$ B))) (quote @x)))"
         # Field/property syntax
         "f.x.y"  =>  "(. (. f (quote x)) (quote y))"
         "x .y"   =>  "(. x (error-t) (quote y))"

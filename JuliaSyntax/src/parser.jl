@@ -1269,7 +1269,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
     # source range of the @-prefixed part of a macro
     macro_atname_range = nothing
     kb = peek_behind(ps).kind
-    is_valid_modref = is_identifier(kb) || kb == K"."
+    # $A.@x  ==>  (macrocall (. ($ A) (quote @x)))
+    is_valid_modref = is_identifier(kb) || kb == K"." || kb == K"$"
     # We record the last component of chains of dot-separated identifiers so we
     # know which identifier was the macro name.
     macro_name_position = position(ps) # points to same output span as peek_behind
@@ -1425,9 +1426,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 emit(ps, m, K"$")
                 emit(ps, m, K"inert")
                 emit(ps, mark, K".")
-                # Syntax extension: We could allow interpolations like A.$B.@C
-                # to parse in the module reference path. But disallow this for
-                # now for simplicity and for compatibility with the flisp parser.
+                # A.$B.@x  ==>  (macrocall (. (. A (inert ($ B))) (quote @x)))
+                this_iter_valid_modref = true
             elseif k == K"@"
                 # A macro call after some prefix A has been consumed
                 # A.@x    ==>  (macrocall (. A (quote @x)))
