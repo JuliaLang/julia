@@ -796,6 +796,7 @@ function parse_with_chains(ps::ParseState, down, is_op, chain_ops)
         down(ps)
         if kind(t) in chain_ops && !is_decorated(t)
             # a + b + c    ==>  (call-i a + b c)
+            # a + b .+ c   ==>  (call-i (call-i a + b) .+ c)
             parse_chain(ps, down, kind(t))
         end
         # a +₁ b +₁ c  ==>  (call-i (call-i a +₁ b) +₁ c)
@@ -808,7 +809,7 @@ end
 #
 # flisp: parse-chain
 function parse_chain(ps::ParseState, down, op_kind)
-    while (t = peek_token(ps); kind(t) == op_kind)
+    while (t = peek_token(ps); kind(t) == op_kind && !is_decorated(t))
         if ps.space_sensitive && t.had_whitespace &&
             is_both_unary_and_binary(kind(t)) &&
             !peek_token(ps, 2).had_whitespace
