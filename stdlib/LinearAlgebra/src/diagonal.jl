@@ -666,7 +666,19 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
-    Eigen(sorteig!(eigvals(D), eigvecs(D), sortby)...)
+    Td = Base.promote_op(/, eltype(D), eltype(D))
+    λ = eigvals(D)
+    if !isnothing(sortby)
+        p = sortperm(λ; alg=QuickSort, by=sortby)
+        permute!(λ, p)
+        evecs = zeros(Td, size(D))
+        @inbounds for i in eachindex(p)
+            evecs[p[i],i] = one(Td)
+        end
+    else
+        evecs = Matrix{Td}(I, size(D))
+    end
+    Eigen(λ, evecs)
 end
 
 #Singular system
