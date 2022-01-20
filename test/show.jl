@@ -1999,7 +1999,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             "three"
         end
     return y
-end""", "a"^80, 1, :statement)[1]) # use parse to control the line numbers
+end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
