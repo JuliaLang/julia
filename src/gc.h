@@ -24,7 +24,6 @@
 #endif
 #endif
 #include "julia_assert.h"
-#include "gc-alloc-profiler.h"
 
 #ifdef __cplusplus
 extern "C" {
