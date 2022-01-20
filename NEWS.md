@@ -103,6 +103,7 @@ Standard library changes
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
   constructing the range. ([#40382])
 * TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
+* `extrema` now supports `init` keyword argument ([#36265], [#43604]).
 * Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
 * `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
 
@@ -142,6 +143,9 @@ Standard library changes
   Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
   each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
   profiling data consumers, but can be included with the `include_meta` kwarg. ([#41742])
+* The new `Profile.Allocs` module allows memory allocations to be profiled. The stack trace, type, and size of each
+  allocation is recorded, and a `sample_rate` argument allows a tunable amount of allocations to be skipped,
+  reducing performance overhead. ([#42768])
 
 #### Random
 

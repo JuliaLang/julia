@@ -9,6 +9,7 @@
 #include "support/hashing.h"
 #include "support/ptrhash.h"
 #include "support/strtod.h"
+#include "gc-alloc-profiler.h"
 #include <uv.h>
 #if !defined(_WIN32)
 #include <unistd.h>
@@ -364,6 +365,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         v = jl_gc_big_alloc(ptls, allocsz);
     }
     jl_set_typeof(v, ty);
+    maybe_record_alloc_to_profile(v, sz);
     return v;
 }
 

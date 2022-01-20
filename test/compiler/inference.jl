@@ -3989,3 +3989,23 @@ end |> only == Int
         end
     end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB}
 end
+
+# issue #43784
+@testset "issue #43784" begin
+    init = Base.ImmutableDict{Any,Any}()
+    a = Const(init)
+    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, Any])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c)
+    @test ⊑(b, c)
+
+    @test @eval Module() begin
+        const ginit = Base.ImmutableDict{Any,Any}()
+        Base.return_types() do
+            g = ginit
+            while true
+                g = Base.ImmutableDict(g, 1=>2)
+            end
+        end |> only === Union{}
+    end
+end

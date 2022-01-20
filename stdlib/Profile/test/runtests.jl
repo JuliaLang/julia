@@ -219,3 +219,5 @@ end
     node = root.down[stackframe(:f1, :file1, 2)]
     @test only(node.down).first == lidict[8]
 end
+
+include("allocs.jl")
