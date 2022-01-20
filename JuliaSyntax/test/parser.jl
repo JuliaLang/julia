@@ -97,6 +97,7 @@ tests = [
     JuliaSyntax.parse_expr => [
         "a - b - c"  => "(call-i (call-i a - b) - c)"
         "a + b + c"  => "(call-i a + b c)"
+        "a + b .+ c" => "(call-i (call-i a + b) .+ c)"
         # parse_with_chains:
         # The following is two elements of a hcat
         "[x +y]"     =>  "(hcat x (call + y))"
