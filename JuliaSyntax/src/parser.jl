@@ -1502,13 +1502,15 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             parse_raw_string(ps)
             t = peek_token(ps)
             k = kind(t)
-            if !t.had_whitespace && (k == K"Identifier" || is_keyword(k) || is_number(k))
+            if !t.had_whitespace && (k == K"Identifier" || is_keyword(k) || is_word_operator(k) || is_number(k))
                 # Macro sufficies can include keywords and numbers
                 # x"s"y    ==> (macrocall @x_str "s" "y")
                 # x"s"end  ==> (macrocall @x_str "s" "end")
+                # x"s"in   ==> (macrocall @x_str "s" "in")
                 # x"s"2    ==> (macrocall @x_str "s" 2)
                 # x"s"10.0 ==> (macrocall @x_str "s" 10.0)
-                suffix_kind = (k == K"Identifier" || is_keyword(k)) ? K"String" : k
+                suffix_kind = (k == K"Identifier" || is_keyword(k) ||
+                               is_word_operator(k)) ? K"String" : k
                 bump(ps, remap_kind=suffix_kind)
             end
             emit(ps, mark, K"macrocall")
@@ -2864,13 +2866,14 @@ function parse_string(ps::ParseState)
                         emit(ps, m, K"string", prev.flags)
                     end
                 end
-            elseif is_identifier(k) || is_keyword(k)
+            elseif is_identifier(k) || is_keyword(k) || is_word_operator(k)
                 # "a $foo b"  ==> (string "a " foo " b")
                 # "$outer"    ==> (string outer)
+                # "$in"       ==> (string in)
                 parse_atom(ps)
             else
                 bump_invisible(ps, K"error",
-                    error="Identifier or parenthesized expression expected after \$ in string")
+                    error="identifier or parenthesized expression expected after \$ in string")
             end
         elseif k == K"String"
             bump(ps, str_flags)

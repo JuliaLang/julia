@@ -259,6 +259,7 @@ tests = [
         # Macro sufficies can include keywords and numbers
         "x\"s\"y"    => """(macrocall @x_str "s" "y")"""
         "x\"s\"end"  => """(macrocall @x_str "s" "end")"""
+        "x\"s\"in"   => """(macrocall @x_str "s" "in")"""
         "x\"s\"2"    => """(macrocall @x_str "s" 2)"""
         "x\"s\"10.0" => """(macrocall @x_str "s" 10.0)"""
     ],
@@ -574,6 +575,7 @@ tests = [
         ((v=v"1.5",), "\"hi\$(\"ho\")\"") =>  "(string \"hi\" \"ho\")"
         "\"a \$foo b\""  =>  "(string \"a \" foo \" b\")"
         "\"\$outer\""    =>  "(string outer)"
+        "\"\$in\""       =>  "(string in)"
         "\"\""  =>  "\"\""
         "\"\$x\$y\$z\""  =>  "(string x y z)"
         "\"\$(x)\""  =>  "(string x)"
