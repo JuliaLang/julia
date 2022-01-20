@@ -670,7 +670,7 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     λ = eigvals(D)
     if !isnothing(sortby)
         p = sortperm(λ; alg=QuickSort, by=sortby)
-        permute!(λ, p)
+        λ = λ[p] # make a copy, otherwise this permutes D.diag
         evecs = zeros(Td, size(D))
         @inbounds for i in eachindex(p)
             evecs[i,p[i]] = one(Td)
