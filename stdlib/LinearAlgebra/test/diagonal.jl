@@ -428,7 +428,7 @@ Random.seed!(1)
         E = eigen(Du)
         vals, vecs = E
         @test Matrix(E) == Du
-        @test vals isa AbstactVector{<:Furlong{1}}
+        @test vals isa AbstractVector{<:Furlong{1}}
         @test vecs isa AbstractMatrix{<:Furlong{0}}
     end
 end
