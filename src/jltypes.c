@@ -2253,6 +2253,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_array_symbol_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_symbol_type, jl_box_long(1));
     jl_array_uint8_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint8_type, jl_box_long(1));
     jl_array_int32_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_int32_type, jl_box_long(1));
+    jl_array_uint64_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint64_type, jl_box_long(1));
     jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
     jl_atomic_store_relaxed(&jl_nonfunction_mt->leafcache, (jl_array_t*)jl_an_empty_vec_any);
     jl_atomic_store_relaxed(&jl_type_type_mt->leafcache, (jl_array_t*)jl_an_empty_vec_any);
@@ -2392,7 +2393,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(26,
+                        jl_perm_symsvec(27,
                             "name",
                             "module",
                             "file",
@@ -2408,6 +2409,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "unspecialized", // !const
                             "generator", // !const
                             "roots", // !const
+                            "root_blocks", // !const
                             "ccallable", // !const
                             "invokes", // !const
                             "recursion_relation", // !const
@@ -2419,7 +2421,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "pure",
                             "is_for_opaque_closure",
                             "constprop"),
-                        jl_svec(26,
+                        jl_svec(27,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -2435,6 +2437,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type, // jl_method_instance_type
                             jl_any_type,
                             jl_array_any_type,
+                            jl_array_uint64_type,
                             jl_simplevector_type,
                             jl_any_type,
                             jl_any_type,
