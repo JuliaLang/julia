@@ -636,6 +636,19 @@ for op in ops
 end
 end
 
+@testset "Normalization of Unicode symbols" begin
+    # https://github.com/JuliaLang/julia/pull/25157
+    @test tok("\u00b7").kind == T.UNICODE_DOT
+    @test tok("\u0387").kind == T.UNICODE_DOT
+    @test tok(".\u00b7").dotop
+    @test tok(".\u0387").dotop
+
+    # https://github.com/JuliaLang/julia/pull/40948
+    @test tok("−").kind == T.MINUS
+    @test tok("−=").kind == T.MINUS_EQ
+    @test tok(".−").dotop
+end
+
 @testset "perp" begin
     @test tok("1 ⟂ 2", 3).kind==T.PERP
 end

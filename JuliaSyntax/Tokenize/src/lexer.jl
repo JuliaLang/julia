@@ -417,6 +417,8 @@ function _next_token(l::Lexer, c)
         return lex_plus(l);
     elseif c == '-'
         return lex_minus(l);
+    elseif c == '−' # \minus '−' treated as hyphen '-'
+        return emit(l, accept(l, '=') ? Tokens.MINUS_EQ : Tokens.MINUS)
     elseif c == '`'
         return lex_backtick(l);
     elseif is_identifier_start_char(c)
@@ -1009,6 +1011,10 @@ function lex_dot(l::Lexer)
             l.dotop = true
             readchar(l)
             return lex_minus(l)
+        elseif pc == '−'
+            l.dotop = true
+            readchar(l)
+            return emit(l, accept(l, '=') ? Tokens.MINUS_EQ : Tokens.MINUS)
         elseif pc =='*'
             l.dotop = true
             readchar(l)
