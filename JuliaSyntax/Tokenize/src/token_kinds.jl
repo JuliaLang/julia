@@ -572,6 +572,8 @@
             DOUBLE_LINE_SLANTED_GREATER_THAN_OR_EQUAL_TO, # ⫺
             RIGHT_TACK, # ⊢
             LEFT_TACK, # ⊣
+            DOUBLE_DOWN_TACK, # ⫪
+            DOUBLE_UP_TACK, # ⫫
             PERP, # ⟂
         end_comparison,
 
@@ -890,6 +892,7 @@
 
 
 const UNICODE_OPS = Dict{Char, Kind}(
+'−' => MINUS,
 '÷' => DIVISION_SIGN,
 '¬' => NOT_SIGN,
 '√' => SQUARE_ROOT,
@@ -1290,6 +1293,8 @@ const UNICODE_OPS = Dict{Char, Kind}(
 '⫺' => DOUBLE_LINE_SLANTED_GREATER_THAN_OR_EQUAL_TO,
 '⊢' => RIGHT_TACK,
 '⊣' => LEFT_TACK,
+'⫪' => DOUBLE_DOWN_TACK,
+'⫫' => DOUBLE_UP_TACK,
 '⟂' => PERP,
 '⊕' => CIRCLED_PLUS,
 '⊖' => CIRCLED_MINUS,
@@ -1444,6 +1449,10 @@ const UNICODE_OPS = Dict{Char, Kind}(
 '⥯' => DOWNWARDS_HARPOON_WITH_BARB_LEFT_BESIDE_UPWARDS_HARPOON_WITH_BARB_RIGHT,
 '￪' => HALFWIDTH_UPWARDS_ARROW,
 '￬' => HALFWIDTH_DOWNWARDS_ARROW,
+# Lookalikes which are normalized into UNICODE_DOT
+# https://github.com/JuliaLang/julia/pull/25157
+'\u00b7' => UNICODE_DOT, # '·' Middle Dot,
+'\u0387' => UNICODE_DOT, # '·' Greek Ano Teleia,
 '⋅' => UNICODE_DOT,
 '…' => LDOTS,
 '⁝' => TRICOLON,
@@ -1484,6 +1493,7 @@ const UNICODE_OPS = Dict{Char, Kind}(
 
 const UNICODE_OPS_REVERSE = Dict{Kind,Symbol}()
 for (k, v) in UNICODE_OPS
+    k in ('\u00b7', '\u0387') && continue
     UNICODE_OPS_REVERSE[v] = Symbol(k)
 end
 
