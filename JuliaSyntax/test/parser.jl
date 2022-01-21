@@ -152,17 +152,24 @@ tests = [
         "+ (a,b)"  =>  "(call + (error) a b)"
         # Prefix calls have higher precedence than ^
         "+(a,b)^2"  =>  "(call-i (call + a b) ^ 2)"
+        "+(a,b)(x)^2"  =>  "(call-i (call (call + a b) x) ^ 2)"
         # Unary function calls with brackets as grouping, not an arglist
         "+(a;b)"  =>  "(call + (block a b))"
         "+(a=1)"  =>  "(call + (= a 1))"
         # Unary operators have lower precedence than ^
         "+(a)^2"  =>  "(call + (call-i a ^ 2))"
+        "+(a)(x,y)^2"  =>  "(call + (call-i (call a x y) ^ 2))"
         # Normal unary calls (see parse_unary)
         "+x" => "(call + x)"
     ],
-    JuliaSyntax.parse_decl => [
+    JuliaSyntax.parse_factor => [
+        "x^y"      =>  "(call-i x ^ y)"
+        "x^y^z"    =>  "(call-i x ^ (call-i y ^ z))"
+        "begin x end::T"  =>  "(:: (block x) T)"
+        # parse_decl_with_initial_ex
         "a::b"     =>  "(:: a b)"
         "a->b"     =>  "(-> a b)"
+        "a::b::c"  =>  "(:: (:: a b) c)"
         "a::b->c"  =>  "(-> (:: a b) c)"
     ],
     JuliaSyntax.parse_unary_subtype => [

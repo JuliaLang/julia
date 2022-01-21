@@ -1072,7 +1072,9 @@ function parse_unary_call(ps::ParseState)
             # +(a;b,c)  ==>  (call + a (parameters b c))
             # Prefix calls have higher precedence than ^
             # +(a,b)^2  ==>  (call-i (call + a b) ^ 2)
+            # +(a,b)(x)^2  ==>  (call-i (call (call + a b) x) ^ 2)
             emit(ps, mark, op_node_kind)
+            parse_call_chain(ps, mark)
             parse_factor_with_initial_ex(ps, mark)
         else
             # Unary function calls with brackets as grouping, not an arglist
@@ -1084,6 +1086,8 @@ function parse_unary_call(ps::ParseState)
             # +(a=1)  ==>  (call + (= a 1))
             # Unary operators have lower precedence than ^
             # +(a)^2  ==>  (call + (call-i a ^ 2))
+            # +(a)(x,y)^2  ==>  (call + (call-i (call a x y) ^ 2))
+            parse_call_chain(ps, mark_before_paren)
             parse_factor_with_initial_ex(ps, mark_before_paren)
             emit(ps, mark, op_node_kind)
         end
@@ -1099,23 +1103,20 @@ function parse_unary_call(ps::ParseState)
 end
 
 # handle ^ and .^
-# -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
-# and parse-unary from then on (to handle 2^-3)
+#
+# x^y    ==>  (call-i x ^ y)
+# x^y^z  ==>  (call-i x ^ (call-i y ^ z))
+# begin x end::T  ==>  (:: (block x) T)
 #
 # flisp: parse-factor
 function parse_factor(ps::ParseState)
-    if peek_initial_reserved_words(ps)
-        parse_resword(ps)
-    else
-        mark = position(ps)
-        parse_unary_prefix(ps)
-        parse_factor_with_initial_ex(ps, mark)
-    end
+    mark = position(ps)
+    parse_call(ps)
+    parse_factor_with_initial_ex(ps, mark)
 end
 
 # flisp: parse-factor-with-initial-ex
 function parse_factor_with_initial_ex(ps::ParseState, mark)
-    parse_call_chain(ps, mark)
     parse_decl_with_initial_ex(ps, mark)
     if is_prec_power(peek(ps))
         bump(ps)
@@ -1133,13 +1134,6 @@ end
 # a::b      ==>   (:: a b)
 # a->b      ==>   (-> a b)
 #
-# flisp: parse-decl
-function parse_decl(ps::ParseState)
-    mark = position(ps)
-    parse_call(ps)
-    parse_decl_with_initial_ex(ps, mark)
-end
-
 # flisp: parse-decl-with-initial-ex
 function parse_decl_with_initial_ex(ps::ParseState, mark)
     while peek(ps) == K"::"
