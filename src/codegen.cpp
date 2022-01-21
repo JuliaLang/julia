@@ -7549,7 +7549,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                         break;
                 }
                 if (j == jlen) // not found - add to array
-                    jl_array_ptr_1d_push(m->roots, ival);
+                    jl_add_method_root(m, jl_precompile_toplevel_module, ival);
             }
         }
         ctx.roots = NULL;
