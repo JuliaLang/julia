@@ -227,10 +227,6 @@ function is_initial_reserved_word(ps::ParseState, k)
     return is_iresword && !(k == K"begin" && ps.end_symbol)
 end
 
-function is_contextural_keyword(k)
-    kind(k) ∈ KSet`as abstract mutable outer primitive type var`
-end
-
 function is_reserved_word(k)
     k = kind(k)
     is_keyword(k) && !is_contextural_keyword(k)
@@ -282,10 +278,6 @@ function is_both_unary_and_binary(k)
     # TODO: Do we need to check dotop as well here?
     k in KSet`$ & ~`      || # dotop disallowed?
     k in KSet`+ - ⋆ ± ∓`     # dotop allowed
-end
-
-function is_word_operator(k)
-    kind(k) in KSet`in isa where`
 end
 
 # operators handled by parse_unary at the start of an expression
