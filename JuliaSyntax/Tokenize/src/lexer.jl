@@ -284,7 +284,7 @@ function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR)
     suffix = false
     if kind in (Tokens.ERROR, Tokens.STRING, Tokens.CMD)
         str = String(l.io.data[(l.token_startpos + 1):position(l)])
-    elseif (kind == Tokens.IDENTIFIER || kind == Tokens.VAR_IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE || kind == Tokens.NEWLINE_WS)
+    elseif (kind == Tokens.IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE || kind == Tokens.NEWLINE_WS)
         str = String(take!(l.charstore))
     elseif optakessuffix(kind)
         str = ""
@@ -420,7 +420,7 @@ function _next_token(l::Lexer, c)
     elseif c == '`'
         return lex_backtick(l);
     elseif is_identifier_start_char(c)
-        return lex_identifier(l, c, true)
+        return lex_identifier(l, c)
     elseif isdigit(c)
         return lex_digit(l, Tokens.INTEGER)
     elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR
@@ -460,7 +460,7 @@ function lex_string_chunk(l)
                                                state.paren_depth + 1)
             return emit(l, Tokens.LPAREN)
         elseif is_identifier_start_char(pc)
-            return lex_identifier(l, readchar(l), false)
+            return lex_identifier(l, readchar(l))
         else
             # Getting here is a syntax error - fall through to reading string
             # characters and let the parser deal with it.
@@ -914,17 +914,6 @@ function lex_quote(l::Lexer)
     end
 end
 
-# Lex var"..." identifiers.
-# The prefix `var"` has been consumed
-function lex_var(l::Lexer)
-    read_raw_string(l, '"', false)
-    if accept(l, '"')
-        return emit(l, Tokens.VAR_IDENTIFIER)
-    else
-        return emit_error(l, Tokens.EOF_VAR)
-    end
-end
-
 function string_terminates(l, delim::Char, triplestr::Bool)
     if triplestr
         c1, c2, c3 = peekchar3(l)
@@ -1116,7 +1105,7 @@ function lex_backtick(l::Lexer)
 end
 
 const MAX_KW_LENGTH = 10
-function lex_identifier(l::Lexer{IO_t,T}, c, allow_var) where {IO_t,T}
+function lex_identifier(l::Lexer{IO_t,T}, c) where {IO_t,T}
     if T == Token
         readon(l)
     end
@@ -1135,12 +1124,7 @@ function lex_identifier(l::Lexer{IO_t,T}, c, allow_var) where {IO_t,T}
     if n > MAX_KW_LENGTH
         emit(l, IDENTIFIER)
     else
-        # FIXME: var"" not allowed in strings
-        if allow_var && h == var_kw_hash && accept(l, '"')
-            return lex_var(l)
-        else
-            return emit(l, get(kw_hash, h, IDENTIFIER))
-        end
+        emit(l, get(kw_hash, h, IDENTIFIER))
     end
 end
 
@@ -1195,6 +1179,7 @@ Tokens.STRUCT,
 Tokens.TRY,
 Tokens.TYPE,
 Tokens.USING,
+Tokens.VAR,
 Tokens.WHILE,
 Tokens.IN,
 Tokens.ISA,
@@ -1204,6 +1189,5 @@ Tokens.FALSE,
 ]
 
 const kw_hash = Dict(simple_hash(lowercase(string(kw))) => kw for kw in kws)
-const var_kw_hash = simple_hash("var")
 
 end # module

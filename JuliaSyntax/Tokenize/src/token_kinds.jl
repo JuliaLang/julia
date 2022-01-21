@@ -4,7 +4,6 @@
     COMMENT, # aadsdsa, #= fdsf #=
     WHITESPACE, # '\n   \t'
     IDENTIFIER, # foo, Σxx
-    VAR_IDENTIFIER, # var"#1"
     AT_SIGN, # @
     COMMA, #,
     SEMICOLON, # ;
@@ -44,6 +43,7 @@
         TRY,
         TYPE,
         USING,
+        VAR,
         WHILE,
     end_keywords,
 
@@ -839,7 +839,6 @@
         # like CORE_DOC_MACRO_NAME)
         begin_macro_names,
             MACRO_NAME,                  # A macro name identifier
-            VAR_MACRO_NAME,              # @var"..."
             STRING_MACRO_NAME,           # macname"some_str"
             CMD_MACRO_NAME,              # macname`some_str`
             DOT_MACRO_NAME,              # The macro name of @.

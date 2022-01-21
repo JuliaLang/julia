@@ -182,13 +182,6 @@ end
     @test tok("somtext falsething", 3).kind == T.IDENTIFIER
 end
 
-@testset "tokenizing var identifiers" begin
-    t = tok("var\"#1\"")
-    @test t.kind == T.VAR_IDENTIFIER && untokenize(t) == "var\"#1\""
-    t = tok("var\"  \"")
-    @test t.kind == T.VAR_IDENTIFIER && untokenize(t) == "var\"  \""
-end
-
 @testset "tokenizing juxtaposed numbers and dotted operators/identifiers" begin
     @test (t->t.val=="1234"    && t.kind == Tokens.INTEGER )(tok("1234 .+1"))
     @test (t->t.val=="1234.0"  && t.kind == Tokens.FLOAT   )(tok("1234.0.+1"))
@@ -429,7 +422,7 @@ end
         @test ts[ 1] ~ (T.WHITESPACE , " "   )
         @test ts[ 2] ~ (T.DQUOTE     , "\""  )
         @test ts[ 3] ~ (T.EX_OR      , "\$"  )
-        @test ts[ 4] ~ (T.IDENTIFIER , "var" )
+        @test ts[ 4] ~ (T.VAR        , "var" )
         @test ts[ 5] ~ (T.DQUOTE     , "\""  )
         @test ts[ 6] ~ (T.IDENTIFIER , "x"   )
         @test ts[ 7] ~ (T.DQUOTE     , "\""  )
@@ -761,6 +754,7 @@ const all_kws = Set(["abstract",
     "while",
     "in",
     "isa",
+    "var",
     "where",
     "true",
     "false",
