@@ -2,7 +2,9 @@
 
 using Test
 using Base.Meta
-using Core: PhiNode, SSAValue, GotoNode, PiNode, QuoteNode, ReturnNode, GotoIfNot
+import Core:
+    CodeInfo, Argument, SSAValue, GotoNode, GotoIfNot, PiNode, PhiNode,
+    QuoteNode, ReturnNode
 
 include(normpath(@__DIR__, "irutils.jl"))
 
@@ -12,7 +14,7 @@ include(normpath(@__DIR__, "irutils.jl"))
 ## Test that domsort doesn't mangle single-argument phis (#29262)
 let m = Meta.@lower 1 + 1
     @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::Core.CodeInfo
+    src = m.args[1]::CodeInfo
     src.code = Any[
         # block 1
         Expr(:call, :opaque),
@@ -47,7 +49,7 @@ end
 # test that we don't stack-overflow in SNCA with large functions.
 let m = Meta.@lower 1 + 1
     @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::Core.CodeInfo
+    src = m.args[1]::CodeInfo
     code = Any[]
     N = 2^15
     for i in 1:2:N
@@ -73,30 +75,87 @@ end
 # SROA
 # ====
 
+import Core.Compiler: widenconst
+
+is_load_forwarded(src::CodeInfo) = !any(iscall((src, getfield)), src.code)
+is_scalar_replaced(src::CodeInfo) =
+    is_load_forwarded(src) && !any(iscall((src, setfield!)), src.code) && !any(isnew, src.code)
+
+function is_load_forwarded(@nospecialize(T), src::CodeInfo)
+    for i in 1:length(src.code)
+        x = src.code[i]
+        if iscall((src, getfield), x)
+            widenconst(argextype(x.args[1], src)) <: T && return false
+        end
+    end
+    return true
+end
+function is_scalar_replaced(@nospecialize(T), src::CodeInfo)
+    is_load_forwarded(T, src) || return false
+    for i in 1:length(src.code)
+        x = src.code[i]
+        if iscall((src, setfield!), x)
+            widenconst(argextype(x.args[1], src)) <: T && return false
+        elseif isnew(x)
+            widenconst(argextype(SSAValue(i), src)) <: T && return false
+        end
+    end
+    return true
+end
+
 struct ImmutableXYZ; x; y; z; end
 mutable struct MutableXYZ; x; y; z; end
+struct ImmutableOuter{T}; x::T; y::T; z::T; end
+mutable struct MutableOuter{T}; x::T; y::T; z::T; end
+struct ImmutableRef{T}; x::T; end
+Base.getindex(r::ImmutableRef) = r.x
+mutable struct SafeRef{T}; x::T; end
+Base.getindex(s::SafeRef) = getfield(s, 1)
+Base.setindex!(s::SafeRef, x) = setfield!(s, 1, x)
 
-# should optimize away very basic cases
+# simple immutability
+# -------------------
+
 let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz = ImmutableXYZ(x, y, z)
         xyz.x, xyz.y, xyz.z
     end
-    @test !any(isnew, src.code)
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=z=# Core.Argument(4)]
+    end
 end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = (x, y, z)
+        xyz[1], xyz[2], xyz[3]
+    end
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=z=# Core.Argument(4)]
+    end
+end
+
+# simple mutability
+# -----------------
+
 let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz = MutableXYZ(x, y, z)
         xyz.x, xyz.y, xyz.z
     end
-    @test !any(isnew, src.code)
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=z=# Core.Argument(4)]
+    end
 end
-
-# should handle simple mutabilities
 let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz = MutableXYZ(x, y, z)
         xyz.y = 42
         xyz.x, xyz.y, xyz.z
     end
-    @test !any(isnew, src.code)
+    @test is_scalar_replaced(src)
     @test any(src.code) do @nospecialize x
         iscall((src, tuple), x) &&
         x.args[2:end] == Any[#=x=# Core.Argument(2), 42, #=x=# Core.Argument(4)]
@@ -107,19 +166,23 @@ let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz.x, xyz.z = xyz.z, xyz.x
         xyz.x, xyz.y, xyz.z
     end
-    @test !any(isnew, src.code)
+    @test is_scalar_replaced(src)
     @test any(src.code) do @nospecialize x
         iscall((src, tuple), x) &&
         x.args[2:end] == Any[#=z=# Core.Argument(4), #=y=# Core.Argument(3), #=x=# Core.Argument(2)]
     end
 end
-# circumvent uninitialized fields as far as there is a solid `setfield!` definition
+
+# uninitialized fields
+# --------------------
+
+# safe cases
 let src = code_typed1() do
         r = Ref{Any}()
         r[] = 42
         return r[]
     end
-    @test !any(isnew, src.code)
+    @test is_scalar_replaced(src)
 end
 let src = code_typed1((Bool,)) do cond
         r = Ref{Any}()
@@ -131,7 +194,7 @@ let src = code_typed1((Bool,)) do cond
             return r[]
         end
     end
-    @test !any(isnew, src.code)
+    @test is_scalar_replaced(src)
 end
 let src = code_typed1((Bool,)) do cond
         r = Ref{Any}()
@@ -142,7 +205,7 @@ let src = code_typed1((Bool,)) do cond
         end
         return r[]
     end
-    @test !any(isnew, src.code)
+    @test is_scalar_replaced(src)
 end
 let src = code_typed1((Bool,Bool,Any,Any,Any)) do c1, c2, x, y, z
         r = Ref{Any}()
@@ -157,7 +220,16 @@ let src = code_typed1((Bool,Bool,Any,Any,Any)) do c1, c2, x, y, z
         end
         return r[]
     end
-    @test !any(isnew, src.code)
+    @test is_scalar_replaced(src)
+end
+
+# unsafe cases
+let src = code_typed1() do
+        r = Ref{Any}()
+        return r[]
+    end
+    @test count(isnew, src.code) == 1
+    @test count(iscall((src, getfield)), src.code) == 1
 end
 let src = code_typed1((Bool,)) do cond
         r = Ref{Any}()
@@ -167,7 +239,9 @@ let src = code_typed1((Bool,)) do cond
         return r[]
     end
     # N.B. `r` should be allocated since `cond` might be `false` and then it will be thrown
-    @test any(isnew, src.code)
+    @test count(isnew, src.code) == 1
+    @test count(iscall((src, setfield!)), src.code) == 1
+    @test count(iscall((src, getfield)), src.code) == 1
 end
 let src = code_typed1((Bool,Bool,Any,Any)) do c1, c2, x, y
         r = Ref{Any}()
@@ -181,12 +255,119 @@ let src = code_typed1((Bool,Bool,Any,Any)) do c1, c2, x, y
         return r[]
     end
     # N.B. `r` should be allocated since `c2` might be `false` and then it will be thrown
-    @test any(isnew, src.code)
+    @test count(isnew, src.code) == 1
+    @test count(iscall((src, setfield!)), src.code) == 2
+    @test count(iscall((src, getfield)), src.code) == 1
 end
 
-# should include a simple alias analysis
-struct ImmutableOuter{T}; x::T; y::T; z::T; end
-mutable struct MutableOuter{T}; x::T; y::T; z::T; end
+# load forwarding
+# ---------------
+# even if allocation can't be eliminated
+
+# safe cases
+for T in (ImmutableRef{Any}, Ref{Any})
+    let src = @eval code_typed1((Bool,Any,)) do c, a
+            r = $T(a)
+            if c
+                return r[]
+            else
+                return r
+            end
+        end
+        @test is_load_forwarded(src)
+        @test count(isnew, src.code) == 1
+    end
+    let src = @eval code_typed1((Bool,String,)) do c, a
+            r = $T(a)
+            if c
+                return r[]::String # adce_pass! will further eliminate this type assert call also
+            else
+                return r
+            end
+        end
+        @test is_load_forwarded(src)
+        @test count(isnew, src.code) == 1
+        @test !any(iscall((src, typeassert)), src.code)
+    end
+    let src = @eval code_typed1((Bool,Any,)) do c, a
+            r = $T(a)
+            if c
+                return r[]
+            else
+                throw(r)
+            end
+        end
+        @test is_load_forwarded(src)
+        @test count(isnew, src.code) == 1
+    end
+end
+let src = code_typed1((Bool,Any,Any)) do c, a, b
+        r = Ref{Any}(a)
+        if c
+            return r[]
+        end
+        r[] = b
+        return r
+    end
+    @test is_load_forwarded(src)
+    @test count(isnew, src.code) == 1
+    @test count(iscall((src, setfield!)), src.code) == 1
+    @test count(src.code) do @nospecialize x
+        isreturn(x) && x.val === Argument(3) # a
+    end == 1
+end
+
+# unsafe case
+let src = code_typed1((Bool,Any,Any)) do c, a, b
+        r = Ref{Any}(a)
+        r[] = b
+        @noinline some_escape!(r)
+        return r[]
+    end
+    @test !is_load_forwarded(src)
+    @test count(isnew, src.code) == 1
+    @test count(iscall((src, setfield!)), src.code) == 1
+end
+let src = code_typed1((Bool,String,Regex)) do c, a, b
+        r1 = Ref{Any}(a)
+        r2 = Ref{Any}(b)
+        return ifelse(c, r1, r2)[]
+    end
+    r = only(findall(isreturn, src.code))
+    v = (src.code[r]::Core.ReturnNode).val
+    @test v !== Argument(3) # a
+    @test v !== Argument(4) # b
+    @test_broken is_scalar_replaced(src) # ideally
+end
+let src = code_typed1((Bool,String,Regex)) do c, a, b
+        r1 = Ref{Any}(a)
+        r2 = Ref{Any}(b)
+        t = (r1, r2)
+        return t[c ? 1 : 2][]
+    end
+    r = only(findall(isreturn, src.code))
+    v = (src.code[r]::Core.ReturnNode).val
+    @test v !== Argument(3) # a
+    @test v !== Argument(4) # b
+    @test_broken is_scalar_replaced(src) # ideally
+end
+let src = code_typed1((Bool,String,Regex)) do c, a, b
+        r1 = Ref{Any}(a)
+        r2 = Ref{Any}(b)
+        a = [r1, r2]
+        return a[c ? 1 : 2][]
+    end
+    r = only(findall(isreturn, src.code))
+    v = (src.code[r]::Core.ReturnNode).val
+    @test v !== Argument(3) # a
+    @test v !== Argument(4) # b
+    @test_broken is_scalar_replaced(src) # ideally
+end
+
+# aliased load forwarding
+# -----------------------
+
+# OK: immutable(immutable(...)) case
 let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz = ImmutableXYZ(x, y, z)
         outer = ImmutableOuter(xyz, xyz, xyz)
@@ -214,22 +395,21 @@ let src = code_typed1((Any,Any,Any)) do x, y, z
     end
 end
 
-# FIXME our analysis isn't yet so powerful at this moment: may be unable to handle nested objects well
-# OK: mutable(immutable(...)) case
+# OK: immutable(mutable(...)) case
 let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz = MutableXYZ(x, y, z)
         t   = (xyz,)
         v = t[1].x
         v, v, v
     end
-    @test !any(isnew, src.code)
+    @test is_scalar_replaced(src)
 end
 let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz = MutableXYZ(x, y, z)
         outer = ImmutableOuter(xyz, xyz, xyz)
         outer.x.x, outer.y.y, outer.z.z
     end
-    @test !any(isnew, src.code)
+    @test is_scalar_replaced(src)
     @test any(src.code) do @nospecialize x
         iscall((src, tuple), x) &&
         x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=y=# Core.Argument(4)]
@@ -240,32 +420,541 @@ let # this is a simple end to end test case, which demonstrates allocation elimi
     # NOTE this test case isn't so robust and might be subject to future changes of the broadcasting implementation,
     # in that case you don't really need to stick to keeping this test case around
     simple_sroa(s) = broadcast(identity, Ref(s))
+    let src = code_typed1(simple_sroa, (String,))
+        @test is_scalar_replaced(src)
+    end
     s = Base.inferencebarrier("julia")::String
     simple_sroa(s)
     # NOTE don't hard-code `"julia"` in `@allocated` clause and make sure to execute the
     # compiled code for `simple_sroa`, otherwise everything can be folded even without SROA
     @test @allocated(simple_sroa(s)) == 0
 end
-# FIXME: immutable(mutable(...)) case
+let # some insanely nested example
+    src = code_typed1((Int,)) do x
+        (Ref(Ref(Ref(Ref(Ref(Ref(Ref(Ref(Ref(Ref((x))))))))))))[][][][][][][][][][]
+    end
+    @test is_scalar_replaced(src)
+end
+
+# OK: mutable(immutable(...)) case
 let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz = ImmutableXYZ(x, y, z)
         outer = MutableOuter(xyz, xyz, xyz)
         outer.x.x, outer.y.y, outer.z.z
     end
-    @test_broken !any(isnew, src.code)
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=z=# Core.Argument(4)]
+    end
 end
-# FIXME: mutable(mutable(...)) case
+let src = code_typed1((String,String,String)) do x, y, z
+        xyz = (x, y, z)
+        r = Ref(xyz)
+        return r[][3], r[][2], r[][1]
+    end
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=z=# Core.Argument(4), #=y=# Core.Argument(3), #=x=# Core.Argument(2)]
+    end
+end
+
+# OK: mutable(mutable(...)) case
+# new chain
 let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz = MutableXYZ(x, y, z)
         outer = MutableOuter(xyz, xyz, xyz)
         outer.x.x, outer.y.y, outer.z.z
     end
-    @test_broken !any(isnew, src.code)
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=z=# Core.Argument(4)]
+    end
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        xyz.x, xyz.y, xyz.z = z, y, x
+        outer = MutableOuter(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=z=# Core.Argument(4), #=y=# Core.Argument(3), #=x=# Core.Argument(2)]
+    end
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        xyz.x, xyz.y, xyz.z = xyz.z, xyz.y, xyz.x
+        outer = MutableOuter(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=z=# Core.Argument(4), #=y=# Core.Argument(3), #=x=# Core.Argument(2)]
+    end
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        inner = MutableOuter(xyz, xyz, xyz)
+        outer = MutableOuter(inner, inner, inner)
+        outer.x.x.x, outer.y.y.y, outer.z.z.z
+    end
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=z=# Core.Argument(4)]
+    end
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        xyz.x, xyz.y, xyz.z = z, y, x
+        inner = MutableOuter(xyz, xyz, xyz)
+        outer = MutableOuter(inner, inner, inner)
+        outer.x.x.x, outer.y.y.y, outer.z.z.z
+    end
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=z=# Core.Argument(4), #=y=# Core.Argument(3), #=x=# Core.Argument(2)]
+    end
+end
+# setfield! chain
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        outer = Ref{MutableXYZ}()
+        outer[] = xyz
+        return outer[].x, outer[].y, outer[].z
+    end
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=z=# Core.Argument(4)]
+    end
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        outer = Ref{MutableXYZ}()
+        outer[] = xyz
+        xyz.z = 42
+        return outer[].x, outer[].y, outer[].z
+    end
+    @test is_scalar_replaced(src)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), 42]
+    end
 end
 
-let # should work with constant globals
-    # immutable case
-    # --------------
+# ϕ-allocation elimination
+# ------------------------
+
+# safe cases
+let src = code_typed1((Bool,Any,Any)) do cond, x, y
+        if cond
+            ϕ = Ref{Any}(x)
+        else
+            ϕ = Ref{Any}(y)
+        end
+        ϕ[]
+    end
+    @test is_scalar_replaced(src)
+    @test count(src.code) do @nospecialize x
+        isa(x, Core.PhiNode) &&
+        #=x=# Core.Argument(3) in x.values &&
+        #=y=# Core.Argument(4) in x.values
+    end == 1
+end
+let src = code_typed1((Bool,Bool,Any,Any,Any)) do cond1, cond2, x, y, z
+        if cond1
+            ϕ = Ref{Any}(x)
+        elseif cond2
+            ϕ = Ref{Any}(y)
+        else
+            ϕ = Ref{Any}(z)
+        end
+        ϕ[]
+    end
+    @test is_scalar_replaced(src)
+    @test count(src.code) do @nospecialize x
+        isa(x, Core.PhiNode) &&
+        #=x=# Core.Argument(4) in x.values &&
+        #=y=# Core.Argument(5) in x.values &&
+        #=z=# Core.Argument(6) in x.values
+    end == 1
+end
+let src = code_typed1((Bool,Any,Any,Any)) do cond, x, y, z
+        if cond
+            ϕ = Ref{Any}(x)
+        else
+            ϕ = Ref{Any}(y)
+        end
+        ϕ[] = z
+        ϕ[]
+    end
+    @test is_scalar_replaced(src)
+    @test count(src.code) do @nospecialize x
+        isa(x, Core.ReturnNode) &&
+        #=z=# Core.Argument(5) === x.val
+    end == 1
+end
+let src = code_typed1((Bool,Any,Any,)) do cond, x, y
+        if cond
+            ϕ = Ref{Any}(x)
+            out1 = ϕ[]
+        else
+            ϕ = Ref{Any}(y)
+            out1 = ϕ[]
+        end
+        out2 = ϕ[]
+        out1, out2
+    end
+    @test is_scalar_replaced(src)
+    @test count(src.code) do @nospecialize x
+        isa(x, Core.PhiNode) &&
+        #=x=# Core.Argument(3) in x.values &&
+        #=y=# Core.Argument(4) in x.values
+    end == 2
+end
+let src = code_typed1((Bool,Any,Any,Any)) do cond, x, y, z
+        if cond
+            ϕ = Ref{Any}(x)
+        else
+            ϕ = Ref{Any}(y)
+            ϕ[] = z
+        end
+        ϕ[]
+    end
+    @test is_scalar_replaced(src)
+    @test count(src.code) do @nospecialize x
+        isa(x, Core.PhiNode) &&
+        #=x=# Core.Argument(3) in x.values &&
+        #=z=# Core.Argument(5) in x.values
+    end == 1
+end
+let src = code_typed1((Bool,Any,Any,Any)) do cond, x, y, z
+        if cond
+            ϕ = Ref{Any}(x)
+            out1 = ϕ[]
+        else
+            ϕ = Ref{Any}(y)
+            out1 = ϕ[]
+            ϕ[] = z
+        end
+        out2 = ϕ[]
+        out1, out2
+    end
+    @test is_scalar_replaced(src)
+    @test count(src.code) do @nospecialize x
+        isa(x, Core.PhiNode) &&
+        #=x=# Core.Argument(3) in x.values &&
+        #=y=# Core.Argument(4) in x.values
+    end == 1
+    @test count(src.code) do @nospecialize x
+        isa(x, Core.PhiNode) &&
+        #=x=# Core.Argument(3) in x.values &&
+        #=z=# Core.Argument(5) in x.values
+    end == 1
+end
+let src = code_typed1((Bool,Any,Any)) do cond, x, y
+        # these allocation form multiple ϕ-nodes
+        if cond
+            ϕ2 = ϕ1 = Ref{Any}(x)
+        else
+            ϕ2 = ϕ1 = Ref{Any}(y)
+        end
+        ϕ1[], ϕ2[]
+    end
+    @test is_scalar_replaced(src)
+    @test count(src.code) do @nospecialize x
+        isa(x, Core.PhiNode) &&
+        #=x=# Core.Argument(3) in x.values &&
+        #=y=# Core.Argument(4) in x.values
+    end == 2
+end
+let src = code_typed1((Bool,String,)) do cond, x
+        # these allocation form multiple ϕ-nodes
+        if cond
+            ϕ2 = ϕ1 = Ref{Any}("foo")
+        else
+            ϕ2 = ϕ1 = Ref{Any}("bar")
+        end
+        ϕ2[] = x
+        y = ϕ1[] # => x
+        return y
+    end
+    @test is_scalar_replaced(src)
+    @test count(src.code) do @nospecialize x
+        isa(x, Core.ReturnNode) &&
+        #=x=# x.val === Core.Argument(3)
+    end == 1
+end
+let src = code_typed1((Bool,Any,Any,)) do cond, x, y
+        x′ = Ref{Any}(x)
+        y′ = Ref{Any}(y)
+        if cond
+            ϕ = x′
+        else
+            ϕ = y′
+        end
+        ϕ[]
+    end
+    @test is_scalar_replaced(src)
+    @test count(src.code) do @nospecialize x
+        isa(x, Core.PhiNode) &&
+        #=x=# Core.Argument(3) in x.values &&
+        #=y=# Core.Argument(4) in x.values
+    end == 1
+end
+
+# unsafe cases
+let src = code_typed1((Bool,Any,Any)) do cond, x, y
+        if cond
+            ϕ = Ref{Any}(x)
+        else
+            ϕ = Ref{Any}(y)
+        end
+        some_escape!(ϕ)
+        ϕ[]
+    end
+    @test count(isnew, src.code) == 2
+    @test count(iscall((src, getfield)), src.code) == 1
+end
+let src = code_typed1((Bool,Any,Any)) do cond, x, y
+        if cond
+            ϕ = Ref{Any}(x)
+            some_escape!(ϕ)
+        else
+            ϕ = Ref{Any}(y)
+        end
+        ϕ[]
+    end
+    @test count(isnew, src.code) == 2
+    @test count(iscall((src, getfield)), src.code) == 1
+end
+let src = code_typed1((Bool,Any,)) do cond, x
+        if cond
+            ϕ = Ref{Any}(x)
+        else
+            ϕ = Ref{Any}()
+        end
+        ϕ[]
+    end
+    @test count(isnew, src.code) == 2
+    @test count(iscall((src, getfield)), src.code) == 1
+end
+let src = code_typed1((Bool,Any)) do c, a
+        local r
+        if c
+            r = Ref{Any}(a)
+        end
+        (r::Base.RefValue{Any})[]
+    end
+    @test count(isnew, src.code) == 1
+    @test count(iscall((src, getfield)), src.code) == 1
+end
+
+function mutable_ϕ_elim(x, xs)
+    r = Ref(x)
+    for x in xs
+        r = Ref(x)
+    end
+    return r[]
+end
+let src = code_typed1(mutable_ϕ_elim, (String, Vector{String}))
+    @test is_scalar_replaced(src)
+
+    xs = String[string(gensym()) for _ in 1:100]
+    mutable_ϕ_elim("init", xs)
+    @test @allocated(mutable_ϕ_elim("init", xs)) == 0
+end
+
+@noinline mightaliase_noinline(a, b) = Base.mightalias(a, b)
+function assert_no_alias!(a, b, c)
+    x = Ref(a)
+    y = Ref(b)
+    @assert !mightaliase_noinline(x[], y[]) # shouldn't be transformed to `mightaliase_noinline(b, b)`
+    z = c ? x : y
+    z
+end
+let src = code_typed1(assert_no_alias!, (Vector{Any}, Vector{Any}, Bool,))
+    @test count(src.code) do @nospecialize x
+        if isinvoke(:mightaliase_noinline, x)
+            if x.args[3] === Argument(2) # a
+                if x.args[4] === Argument(3) # b
+                    return true
+                end
+            end
+        end
+        return false
+    end == 1
+    a = Any[1,2,3]
+    b = Any[1,2,3]
+    @test assert_no_alias!(a, b, true)[] === a
+end
+
+# demonstrate the power of our field / alias analysis with realistic end to end examples
+# adapted from http://wiki.luajit.org/Allocation-Sinking-Optimization#implementation%5B
+abstract type AbstractPoint{T} end
+struct Point{T} <: AbstractPoint{T}
+    x::T
+    y::T
+end
+mutable struct MPoint{T} <: AbstractPoint{T}
+    x::T
+    y::T
+end
+add(a::P, b::P) where P<:AbstractPoint = P(a.x + b.x, a.y + b.y)
+function compute_point(T, n, ax, ay, bx, by)
+    a = T(ax, ay)
+    b = T(bx, by)
+    for i in 0:(n-1)
+        a = add(add(a, b), b)
+    end
+    a.x, a.y
+end
+function compute_point(n, a, b)
+    for i in 0:(n-1)
+        a = add(add(a, b), b)
+    end
+    a.x, a.y
+end
+function compute_point!(n, a, b)
+    for i in 0:(n-1)
+        a′ = add(add(a, b), b)
+        a.x = a′.x
+        a.y = a′.y
+    end
+end
+
+let # immutable case
+    src = code_typed1((Int,)) do n
+        compute_point(Point, n, 1+.5, 2+.5, 2+.25, 4+.75)
+    end
+    @test is_scalar_replaced(Point, src)
+    src = code_typed1((Int,)) do n
+        compute_point(Point, n, 1+.5im, 2+.5im, 2+.25im, 4+.75im)
+    end
+    @test is_scalar_replaced(Point, src)
+    @test is_load_forwarded(ComplexF64, src)
+    @test !is_scalar_replaced(ComplexF64, src)
+
+    # mutable case
+    src = code_typed1((Int,)) do n
+        compute_point(MPoint, n, 1+.5, 2+.5, 2+.25, 4+.75)
+    end
+    @test is_scalar_replaced(MPoint, src)
+    src = code_typed1((Int,)) do n
+        compute_point(MPoint, n, 1+.5im, 2+.5im, 2+.25im, 4+.75im)
+    end
+    @test is_scalar_replaced(MPoint, src)
+    @test is_load_forwarded(ComplexF64, src)
+    @test !is_scalar_replaced(ComplexF64, src)
+end
+compute_point(MPoint, 10, 1+.5, 2+.5, 2+.25, 4+.75)
+compute_point(MPoint, 10, 1+.5im, 2+.5im, 2+.25im, 4+.75im)
+@test @allocated(compute_point(MPoint, 10000, 1+.5, 2+.5, 2+.25, 4+.75)) == 0
+@test @allocated(compute_point(MPoint, 10000, 1+.5im, 2+.5im, 2+.25im, 4+.75im)) == 0
+
+let # immutable case
+    src = code_typed1((Int,)) do n
+        compute_point(n, Point(1+.5, 2+.5), Point(2+.25, 4+.75))
+    end
+    @test is_scalar_replaced(Point, src)
+    src = code_typed1((Int,)) do n
+        compute_point(n, Point(1+.5im, 2+.5im), Point(2+.25im, 4+.75im))
+    end
+    @test is_scalar_replaced(Point, src)
+    @test is_load_forwarded(ComplexF64, src)
+    @test !is_scalar_replaced(ComplexF64, src)
+
+    # mutable case
+    src = code_typed1((Int,)) do n
+        compute_point(n, MPoint(1+.5, 2+.5), MPoint(2+.25, 4+.75))
+    end
+    @test is_scalar_replaced(MPoint, src)
+    src = code_typed1((Int,)) do n
+        compute_point(n, MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im))
+    end
+    @test is_scalar_replaced(MPoint, src)
+    @test is_load_forwarded(ComplexF64, src)
+    @test !is_scalar_replaced(ComplexF64, src)
+end
+compute_point(10, MPoint(1+.5, 2+.5), MPoint(2+.25, 4+.75))
+compute_point(10, MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im))
+@test @allocated(compute_point(10000, MPoint(1+.5, 2+.5), MPoint(2+.25, 4+.75))) == 0
+@test @allocated(compute_point(10000, MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im))) == 0
+
+let # mutable case
+    src = code_typed1(compute_point!, (Int,MPoint{Float64},MPoint{Float64}))
+    @test is_scalar_replaced(MPoint, src)
+    src = code_typed1(compute_point!, (Int,MPoint{ComplexF64},MPoint{ComplexF64}))
+    @test is_scalar_replaced(MPoint, src)
+    @test is_load_forwarded(ComplexF64, src)
+    @test !is_scalar_replaced(ComplexF64, src)
+end
+let
+    af, bf = MPoint(1+.5, 2+.5), MPoint(2+.25, 4+.75)
+    ac, bc = MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im)
+    compute_point!(10, af, bf)
+    compute_point!(10, ac, bc)
+    @test @allocated(compute_point!(10000, af, bf)) == 0
+    @test @allocated(compute_point!(10000, ac, bc)) == 0
+end
+
+# isdefined elimination
+# ---------------------
+
+let src = code_typed1((Any,)) do a
+        r = Ref{Any}()
+        r[] = a
+        if isassigned(r)
+            return r[]
+        end
+        return nothing
+    end
+    @test is_scalar_replaced(src)
+end
+
+callit(f, args...) = f(args...)
+function isdefined_elim()
+    local arr::Vector{Any}
+    callit() do
+        arr = Any[]
+    end
+    return arr
+end
+let src = code_typed1(isdefined_elim)
+    @test is_scalar_replaced(src)
+end
+@test isdefined_elim() == Any[]
+
+# preserve elimination
+# --------------------
+
+let src = code_typed1((String,)) do s
+        ccall(:some_ccall, Cint, (Ptr{String},), Ref(s))
+    end
+    @test count(isnew, src.code) == 0
+end
+
+# if the mutable struct is directly used, we shouldn't eliminate it
+let src = code_typed1() do
+        a = MutableXYZ(-512275808,882558299,-2133022131)
+        b = Int32(42)
+        ccall(:some_ccall, Cvoid, (MutableXYZ, Int32), a, b)
+        return a.x
+    end
+    @test count(isnew, src.code) == 1
+end
+
+# constant globals
+# ----------------
+
+let # immutable case
     src = @eval Module() begin
         const REF_FLD = :x
         struct ImmutableRef{T}
@@ -282,7 +971,6 @@ let # should work with constant globals
     @test count(isnew, src.code) == 0
 
     # mutable case
-    # ------------
     src = @eval Module() begin
         const REF_FLD = :x
         code_typed() do
@@ -293,25 +981,6 @@ let # should work with constant globals
     end
     @test count(iscall((src, getfield)), src.code) == 0
     @test count(isnew, src.code) == 0
-end
-
-# should work nicely with inlining to optimize away a complicated case
-# adapted from http://wiki.luajit.org/Allocation-Sinking-Optimization#implementation%5B
-struct Point
-    x::Float64
-    y::Float64
-end
-#=@inline=# add(a::Point, b::Point) = Point(a.x + b.x, a.y + b.y)
-function compute_points()
-    a = Point(1.5, 2.5)
-    b = Point(2.25, 4.75)
-    for i in 0:(100000000-1)
-        a = add(add(a, b), b)
-    end
-    a.x, a.y
-end
-let src = code_typed1(compute_points)
-    @test !any(isnew, src.code)
 end
 
 # comparison lifting
@@ -454,7 +1123,7 @@ end
 # A SSAValue after the compaction line
 let m = Meta.@lower 1 + 1
     @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::Core.CodeInfo
+    src = m.args[1]::CodeInfo
     src.code = Any[
         # block 1
         nothing,
@@ -492,7 +1161,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
     @test Core.Compiler.verify_ir(ir) === nothing
-    ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
+    ir, = @test_nowarn Core.Compiler.linear_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
@@ -517,7 +1186,7 @@ end
 let m = Meta.@lower 1 + 1
     # Test that CFG simplify combines redundant basic blocks
     @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::Core.CodeInfo
+    src = m.args[1]::CodeInfo
     src.code = Any[
         Core.Compiler.GotoNode(2),
         Core.Compiler.GotoNode(3),
@@ -542,7 +1211,7 @@ end
 let m = Meta.@lower 1 + 1
     # Test that CFG simplify doesn't mess up when chaining past return blocks
     @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::Core.CodeInfo
+    src = m.args[1]::CodeInfo
     src.code = Any[
         Core.Compiler.GotoIfNot(Core.Compiler.Argument(2), 3),
         Core.Compiler.GotoNode(4),
@@ -572,7 +1241,7 @@ let m = Meta.@lower 1 + 1
     # Test that CFG simplify doesn't try to merge every block in a loop into
     # its predecessor
     @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::Core.CodeInfo
+    src = m.args[1]::CodeInfo
     src.code = Any[
         # Block 1
         Core.Compiler.GotoNode(2),

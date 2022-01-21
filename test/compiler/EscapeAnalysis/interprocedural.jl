@@ -7,8 +7,6 @@ include(normpath(@__DIR__, "setup.jl"))
 # callsites
 # ---------
 
-import .EA: ignore_argescape
-
 noescape(a) = nothing
 noescape(a, b) = nothing
 function global_escape!(x)

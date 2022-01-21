@@ -2,6 +2,7 @@ include(normpath(@__DIR__, "EAUtils.jl"))
 using Test, Core.Compiler.EscapeAnalysis, .EAUtils
 import Core: Argument, SSAValue, ReturnNode
 const EA = Core.Compiler.EscapeAnalysis
+import .EA: ignore_argescape
 
 isT(T) = (@nospecialize x) -> x === T
 isreturn(@nospecialize x) = isa(x, Core.ReturnNode) && isdefined(x, :val)
