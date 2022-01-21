@@ -218,11 +218,6 @@ function is_closer_or_newline(ps::ParseState, k)
     is_closing_token(ps,k) || k == K"NewlineWs"
 end
 
-# Closing token which isn't a keyword
-function is_non_keyword_closer(k)
-    kind(k) in KSet`, ) ] } ; EndMarker`
-end
-
 function is_initial_reserved_word(ps::ParseState, k)
     k = kind(k)
     is_iresword = k in KSet`begin while if for try return break continue function
@@ -233,7 +228,7 @@ function is_initial_reserved_word(ps::ParseState, k)
 end
 
 function is_contextural_keyword(k)
-    kind(k) ∈ KSet`as abstract mutable outer primitive type`
+    kind(k) ∈ KSet`as abstract mutable outer primitive type var`
 end
 
 function is_reserved_word(k)
@@ -465,7 +460,7 @@ end
 function parse_eq_star(ps::ParseState, equals_is_kw=false)
     k = peek(ps)
     k2 = peek(ps,2)
-    if (is_literal(k) || is_identifier(k)) && k2 in KSet`, ) } ]`
+    if (is_literal(k) || k == K"Identifier") && k2 in KSet`, ) } ]`
         # optimization: skip checking the whole precedence stack if we have a
         # simple token followed by a common closing token
         bump(ps)
@@ -918,7 +913,7 @@ function is_juxtapose(ps, prev_k, t)
            is_initial_reserved_word(ps, prev_k) )))  &&
     # https://github.com/JuliaLang/julia/issues/16356
     # 0xenomorph  ==>  0x0e
-    !(prev_k in KSet`BinInt HexInt OctInt` && (is_identifier(k) || is_keyword(k))) &&
+    !(prev_k in KSet`BinInt HexInt OctInt` && (k == K"Identifier" || is_keyword(k))) &&
     (!is_operator(k) || is_radical_op(k))            &&
     !is_closing_token(ps, k)                         &&
     !is_initial_reserved_word(ps, k)
@@ -1229,7 +1224,7 @@ function parse_identifier_or_interpolate(ps::ParseState)
     # export (x::T) ==> (export (error (:: x T)))
     # export outer  ==> (export outer)
     # export ($f)   ==> (export ($ f))
-    ok = (b.is_leaf  && (is_identifier(b.kind) || is_operator(b.kind))) ||
+    ok = (b.is_leaf  && (b.kind == K"Identifier" || is_operator(b.kind))) ||
          (!b.is_leaf && b.kind == K"$")
     if !ok
         emit(ps, mark, K"error", error="Expected identifier")
@@ -1269,7 +1264,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
     macro_atname_range = nothing
     kb = peek_behind(ps).kind
     # $A.@x  ==>  (macrocall (. ($ A) (quote @x)))
-    is_valid_modref = is_identifier(kb) || kb == K"." || kb == K"$"
+    is_valid_modref = kb in KSet`Identifier . $`
     # We record the last component of chains of dot-separated identifiers so we
     # know which identifier was the macro name.
     macro_name_position = position(ps) # points to same output span as peek_behind
@@ -2067,7 +2062,6 @@ end
 function macro_name_kind(k)
     return k == K"Identifier"    ? K"MacroName"    :
            k == K"."             ? K"@."           :
-           k == K"VarIdentifier" ? K"VarMacroName" :
            internal_error("unrecognized source kind for macro name ", k)
 end
 
@@ -2868,7 +2862,7 @@ function parse_string(ps::ParseState)
                         emit(ps, m, K"string", prev.flags)
                     end
                 end
-            elseif is_identifier(k) || is_keyword(k) || is_word_operator(k)
+            elseif k == K"Identifier" || is_keyword(k) || is_word_operator(k)
                 # "a $foo b"  ==> (string "a " foo " b")
                 # "$outer"    ==> (string outer)
                 # "$in"       ==> (string in)
@@ -2906,14 +2900,14 @@ function parse_string(ps::ParseState)
     end
 end
 
-function parse_raw_string(ps::ParseState)
+function parse_raw_string(ps::ParseState; remap_kind=K"Nothing")
     emark = position(ps)
     delim_k = peek(ps)
     bump(ps, TRIVIA_FLAG)
     flags = RAW_STRING_FLAG | (delim_k in KSet`""" \`\`\`` ?
                                TRIPLE_STRING_FLAG : EMPTY_FLAGS)
     if peek(ps) in KSet`String CmdString`
-        bump(ps, flags)
+        bump(ps, flags; remap_kind=remap_kind)
     else
         outk = delim_k in KSet`" """`     ? K"String"    :
                delim_k in KSet`\` \`\`\`` ? K"CmdString" :
@@ -2980,18 +2974,6 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         bump(ps, TRIVIA_FLAG, error="unexpected `=`")
     elseif leading_kind == K"Identifier"
         bump(ps)
-    elseif leading_kind == K"VarIdentifier"
-        bump(ps)
-        t = peek_token(ps)
-        if !t.had_whitespace && !(is_operator(kind(t)) || is_non_keyword_closer(t))
-            # var"x"end  ==>  (error (end))
-            # var"x"1    ==>  (error 1)
-            # var"x"y    ==>  (error y)
-            bump(ps, error="suffix not allowed after var\"...\" syntax")
-        else
-            # var"x")  ==>  x
-            # var"x"+  ==>  x
-        end
     elseif is_operator(leading_kind)
         if check_identifiers && is_syntactic_operator(leading_kind)
             # +=   ==>  (error +=)
@@ -3006,7 +2988,26 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             bump(ps)
         end
     elseif is_keyword(leading_kind)
-        if check_identifiers && is_closing_token(ps, leading_kind)
+        if leading_kind == K"var" && (t = peek_token(ps,2);
+                                      kind(t) in KSet`" """` && !t.had_whitespace)
+            # var"x"     ==> x
+            # var"""x""" ==> x
+            bump(ps, TRIVIA_FLAG)
+            parse_raw_string(ps, remap_kind=K"Identifier")
+            t = peek_token(ps)
+            k = kind(t)
+            if t.had_whitespace || is_operator(k) ||
+                    k in KSet`( ) [ ] { } , ; @ EndMarker`
+                # var"x"+  ==>  x
+                # var"x")  ==>  x
+                # var"x"(  ==>  x
+            else
+                # var"x"end  ==>  (error (end))
+                # var"x"1    ==>  (error 1)
+                # var"x"y    ==>  (error y)
+                bump(ps, error="suffix not allowed after var\"...\" syntax")
+            end
+        elseif check_identifiers && is_closing_token(ps, leading_kind)
             # :(end)  ==>  (quote (error end))
             bump(ps, error="invalid identifier")
         else

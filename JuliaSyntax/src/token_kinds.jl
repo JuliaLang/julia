@@ -7,7 +7,6 @@ Dict([
 "Comment"        =>  Ts.COMMENT
 "Whitespace"     =>  Ts.WHITESPACE
 "Identifier"     =>  Ts.IDENTIFIER
-"VarIdentifier"  =>  Ts.VAR_IDENTIFIER
 "@"              =>  Ts.AT_SIGN
 ","              =>  Ts.COMMA
 ";"              =>  Ts.SEMICOLON
@@ -46,6 +45,7 @@ Dict([
 "try"         =>  Ts.TRY
 "type"        =>  Ts.TYPE
 "using"       =>  Ts.USING
+"var"         =>  Ts.VAR
 "while"       =>  Ts.WHILE
 "END_KEYWORDS" => Ts.end_keywords
 
@@ -821,7 +821,6 @@ Dict([
 "BEGIN_MACRO_NAMES" => Ts.begin_macro_names
 "MacroName"          =>  Ts.MACRO_NAME                  # A macro name identifier
 "@."                 =>  Ts.DOT_MACRO_NAME              # The macro name of @.
-"VarMacroName"       =>  Ts.VAR_MACRO_NAME              # @var"..."
 "StringMacroName"    =>  Ts.STRING_MACRO_NAME           # macname"some_str"
 "CmdMacroName"       =>  Ts.CMD_MACRO_NAME              # macname`some_str`
 "core_@doc"          =>  Ts.CORE_DOC_MACRO_NAME         # Core.@doc
@@ -877,7 +876,7 @@ for kw in split("""
         continue do else elseif end export finally for
         function global if import let local
         macro module mutable new outer primitive quote
-        return struct try type using while
+        return struct try type using var while
 
         block call comparison curly string inert macrocall kw parameters
         toplevel tuple ref vect braces bracescat hcat

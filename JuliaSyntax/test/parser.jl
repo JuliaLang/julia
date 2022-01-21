@@ -502,11 +502,14 @@ tests = [
         ":)"   => ":"
         ": end"   => ":"
         # var syntax
+        """var"x" """  =>  "x"
+        """var""\"x""\""""  =>  "x"
+        """var"x"+"""  =>  "x"
+        """var"x")"""  =>  "x"
+        """var"x"("""  =>  "x"
         """var"x"end"""  =>  "x (error (end))"
         """var"x"1"""  =>  "x (error 1)"
         """var"x"y"""  =>  "x (error y)"
-        """var"x")"""  =>  "x"
-        """var"x"+"""  =>  "x"
         # Syntactic operators
         "+="  =>  "(error +=)"
         ".+="  =>  "(error .+=)"

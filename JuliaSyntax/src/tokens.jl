@@ -90,7 +90,7 @@ function is_syntax_kind(t)
 end
 
 function is_identifier(k)
-    kind(k) in (K"Identifier", K"VarIdentifier")
+    kind(k) == K"Identifier"
 end
 
 function is_macro_name(k)
