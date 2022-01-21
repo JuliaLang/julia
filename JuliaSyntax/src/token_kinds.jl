@@ -568,6 +568,9 @@ Dict([
 "⫺"    =>  Ts.DOUBLE_LINE_SLANTED_GREATER_THAN_OR_EQUAL_TO
 "⊢"    =>  Ts.RIGHT_TACK
 "⊣"    =>  Ts.LEFT_TACK
+# ⫪,⫫ see https://github.com/JuliaLang/julia/issues/39350
+"⫪"    =>  Ts.DOUBLE_DOWN_TACK
+"⫫"    =>  Ts.DOUBLE_UP_TACK
 "⟂"    =>  Ts.PERP
 "END_COMPARISON" => Ts.end_comparison
 
@@ -591,7 +594,7 @@ Dict([
 
 # Level 9
 "BEGIN_PLUS"  => Ts.begin_plus
-"\$"   =>  Ts.EX_OR
+"\$"  =>  Ts.EX_OR
 "+"   =>  Ts.PLUS
 "-"   =>  Ts.MINUS
 "++"  =>  Ts.PLUSPLUS

@@ -135,7 +135,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif k == K"Char"
             unescape_julia_string(val_str, false, false)[2]
         elseif k == K"Identifier"
-            Symbol(val_str)
+            Symbol(normalize_identifier(val_str))
         elseif is_keyword(k)
             # This should only happen for tokens nested inside errors
             Symbol(val_str)
@@ -148,7 +148,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif is_operator(k)
             isempty(val_range)  ?
                 Symbol(untokenize(k)) : # synthetic invisible tokens
-                Symbol(val_str)
+                Symbol(normalize_identifier(val_str))
         elseif k == K"NothingLiteral"
             nothing
         elseif k == K"error"
@@ -156,11 +156,11 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif k == K"@."
             :var"@__dot__"
         elseif k == K"MacroName"
-            Symbol("@$val_str")
+            Symbol("@$(normalize_identifier(val_str))")
         elseif k == K"StringMacroName"
-            Symbol("@$(val_str)_str")
+            Symbol("@$(normalize_identifier(val_str))_str")
         elseif k == K"CmdMacroName"
-            Symbol("@$(val_str)_cmd")
+            Symbol("@$(normalize_identifier(val_str))_cmd")
         elseif k == K"core_@doc"
             GlobalRef(Core, :var"@doc")
         elseif k == K"core_@cmd"

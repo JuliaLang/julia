@@ -2,8 +2,6 @@
 # This file contains utility functions for converting undecorated source
 # strings into Julia values.  For example, string->number, string unescaping, etc.
 
-is_indentation(c) = c == ' ' || c == '\t'
-
 """
 Convert a Julia source code string into a number.
 """
@@ -64,6 +62,10 @@ function julia_string_to_number(str::AbstractString, kind)
         return x
     end
 end
+
+
+#-------------------------------------------------------------------------------
+is_indentation(c) = c == ' ' || c == '\t'
 
 """
 Process Julia source code escape sequences for raw strings
@@ -327,5 +329,48 @@ function process_triple_strings!(strs, is_raw)
         strs[i] = unescape_julia_string(strs[i], false, is_raw, dedent, i==1)
     end
     strs
+end
+
+#-------------------------------------------------------------------------------
+# Unicode normalization. As of Julia 1.8, this is part of Base and the Unicode
+# stdlib under the name `Unicode.julia_chartransform`. See
+# https://github.com/JuliaLang/julia/pull/42561
+#
+# To allow use on older Julia versions, we reproduce that logic here.
+
+# static wrapper around user callback function
+utf8proc_custom_func(codepoint::UInt32, callback::Any) =
+    UInt32(callback(codepoint))::UInt32
+
+function utf8proc_decompose(str, options, buffer, nwords, chartransform::T) where T
+    ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ref{T}),
+                str, sizeof(str), buffer, nwords, options,
+                @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ref{T})), chartransform)
+    ret < 0 && utf8proc_error(ret)
+    return ret
+end
+
+function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform=identity)
+    nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
+    buffer = Base.StringVector(nwords*4)
+    nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)
+    nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
+    nbytes < 0 && utf8proc_error(nbytes)
+    return String(resize!(buffer, nbytes))
+end
+
+const _julia_charmap = Dict{UInt32,UInt32}(
+    0x025B => 0x03B5,
+    0x00B5 => 0x03BC,
+    0x00B7 => 0x22C5,
+    0x0387 => 0x22C5,
+    0x2212 => 0x002D,
+)
+
+julia_chartransform(codepoint::UInt32) = get(_julia_charmap, codepoint, codepoint)
+
+function normalize_identifier(str)
+    flags = Base.Unicode.UTF8PROC_STABLE | Base.Unicode.UTF8PROC_COMPOSE
+    utf8proc_map(str, flags, julia_chartransform)
 end
 
