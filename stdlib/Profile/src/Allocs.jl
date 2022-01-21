@@ -177,7 +177,7 @@ end
 function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
     Alloc(
         load_type(raw_alloc.type),
-        stacktrace_memoized(cache, load_backtrace(raw_alloc.backtrace)),
+        stacktrace_memoized(cache, raw_alloc.backtrace),
         UInt(raw_alloc.size)
     )
 end
@@ -191,10 +191,6 @@ function decode(raw_results::RawResults)::AllocResults
     return AllocResults(allocs)
 end
 
-function load_backtrace(trace::RawBacktrace)::Vector{BTElement}
-    return BTElement[unsafe_load(trace.data, i) for i in 1:trace.size]
-end
-
 function get_frames(cache::BacktraceCache, element::BTElement)
     return get!(cache, element) do
         return lookup(element)
@@ -203,14 +199,13 @@ end
 
 function stacktrace_memoized(
     cache::BacktraceCache,
-    trace::Vector{BTElement},
-    c_funcs::Bool=true
+    raw_trace::RawBacktrace
 )::StackTrace
-    [frame
-        for element in trace
-        for frame in get_frames(cache, element)
-        # optionally include frames from C functions
-        if c_funcs || !frame.from_c]
+    [
+        frame
+        for i in 1:raw_trace.size
+        for frame in get_frames(cache, unsafe_load(raw_trace.data, i))
+    ]
 end
 
 # Precompile once for the package cache.
