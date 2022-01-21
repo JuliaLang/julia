@@ -114,6 +114,10 @@ end
 iscompleting(s::ModeState) = false  # not completing by default
 iscompleting(s::PromptState) = s.completion_menu !== nothing
 
+# check if completion is selectable (i.e., providing an API to select one among candidates)
+isselectable(s::ModeState) = false
+isselectable(s::PromptState) = iscompleting(s) && isselectable(s.completion_menu)
+
 # stop the current completion
 stop_completion!(s::ModeState) = nothing
 stop_completion!(s::PromptState) = (s.completion_menu = nothing)
@@ -342,7 +346,8 @@ function complete_line(s::PromptState, repeats::Int)
     if !should_complete
         # should_complete is false for cases where we only want to show
         # a list of possible completions but not complete, e.g. foo(\t
-        @assert false  # TODO
+        s.completion_menu = BashCompletionMenu(partial, 0, completions)
+        show_completions(s)
     elseif length(completions) == 1
         # Replace word by completion
         prev_pos = position(s)
@@ -360,16 +365,25 @@ function complete_line(s::PromptState, repeats::Int)
         end
         # start completion mode; nothing is selected yet
         pos = position(s) - sizeof(partial)
-        s.completion_menu = CompletionMenu(partial, pos, completions)
-        refresh_completions(s)
+        style = Symbol(get(ENV, "JULIA_COMPLETION_STYLE", "fish"))
+        if style == :bash
+            s.completion_menu = BashCompletionMenu(partial, pos, completions)
+            if repeats > 0
+                show_completions(s)
+            end
+        else
+            s.completion_menu = FishCompletionMenu(partial, pos, completions)
+            show_completions(s)
+        end
     end
     return true
 end
 
 function refresh_completions(s::PromptState)
     show_completions(s)
-    if hasselected(s.completion_menu)
-        edit_splice!(s, s.completion_menu.position => position(s), selected(s.completion_menu))
+    menu = s.completion_menu
+    if hasselected(menu)
+        edit_splice!(s, menu.position => position(s), selected(menu))
         refresh_line(s)
     end
 end
@@ -384,11 +398,14 @@ function show_completions(s::PromptState)
     println(term)
 
     # show completion menu
+    menu = s.completion_menu
     available_height = height(term) - (input_string_newlines(s) + 1)
-    menu_height = show_completion_menu(term, s.completion_menu, available_height, width(term))
+    menu_height = show_completion_menu(term, menu, width(term), available_height)
 
     # unwind the cursor position
-    print(term, "\x1b[$(skip + menu_height)A", "\x1b[0G")
+    if menu isa FishCompletionMenu
+        print(term, "\x1b[$(skip + menu_height)A", "\x1b[0G")
+    end
 end
 
 function clear_input_area(terminal::AbstractTerminal, s::PromptState)
@@ -1313,28 +1330,28 @@ _edit_indent(buf::IOBuffer, b::Int, num::Int) =
 
 # Completion operations
 function complete_prev(s::MIState)
-    iscompleting(state(s)) || return false
+    isselectable(state(s)) || return false
     select_previous!(state(s).completion_menu)
     refresh_completions(state(s))
     return true
 end
 
 function complete_next(s::MIState)
-    iscompleting(state(s)) || return false
+    isselectable(state(s)) || return false
     select_next!(state(s).completion_menu)
     refresh_completions(state(s))
     return true
 end
 
 function complete_right(s::MIState)
-    iscompleting(state(s)) || return false
+    isselectable(state(s)) || return false
     select_right!(state(s).completion_menu)
     refresh_completions(state(s))
     return true
 end
 
 function complete_left(s::MIState)
-    iscompleting(state(s)) || return false
+    isselectable(state(s)) || return false
     select_left!(state(s).completion_menu)
     refresh_completions(state(s))
     return true

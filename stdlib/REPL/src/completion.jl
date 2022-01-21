@@ -1,10 +1,62 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Stores the state of a running completion menu
-mutable struct CompletionMenu
+abstract type CompletionMenu end
+
+# Vector-like operations
+Base.length(menu::CompletionMenu) = length(menu.completions)
+Base.firstindex(menu::CompletionMenu) = firstindex(menu.completions)
+Base.lastindex(menu::CompletionMenu) = lastindex(menu.completions)
+Base.getindex(menu::CompletionMenu, i::Integer) = menu.completions[i]
+
+struct BashCompletionMenu <: CompletionMenu
     # partial string for completion
     partial::String
-    # position to splice partial to the buffer
+    # position to splice `partial` into the buffer
+    position::Int
+
+    # candidates of completion
+    completions::Vector{String}
+
+    # dimensions of the completion table
+    colwidth::Int
+
+    function BashCompletionMenu(partial, position, completions)
+        colwidth = maximum(textwidth, completions)
+        return new(partial, position, completions, colwidth)
+    end
+end
+
+isselectable(menu::BashCompletionMenu) = false
+hasselected(menu::BashCompletionMenu) = false
+
+# `height` is not used
+function show_completion_menu(terminal::TextTerminal, menu::BashCompletionMenu, width::Integer, height::Int)
+    # calculate dimensions for menu display
+    margin = 2
+    nrows, ncols = calc_dimensions(width, menu.colwidth + margin, length(menu))
+
+    # list completion candidates as a table
+    for r in 1:nrows
+        for c in 1:ncols
+            i = (c - 1) * nrows + r
+            i > lastindex(menu) && break
+            completion = menu[i]
+            text = string(menu[i], ' '^(menu.colwidth - textwidth(completion)))
+            print(terminal, text, ' '^margin)
+        end
+        if r != nrows
+            println(terminal)
+        end
+    end
+    println(terminal)
+
+    return nrows
+end
+
+mutable struct FishCompletionMenu <: CompletionMenu
+    # partial string for completion
+    partial::String
+    # position to splice `partial` into the buffer
     position::Int
 
     # candidates of completion
@@ -14,40 +66,39 @@ mutable struct CompletionMenu
     selected::Int
 
     # dimensions of the completion table
+    colwidth::Int
     nrows::Int
     ncols::Int
 
-    CompletionMenu(partial, position, completions) =
-        new(partial, position, completions, 0, 0, 0)
+    function FishCompletionMenu(partial, position, completions)
+        colwidth = maximum(textwidth, completions)
+        return new(partial, position, completions, 0, colwidth, 0, 0)
+    end
 end
 
-Base.length(menu::CompletionMenu) = length(menu.completions)
-Base.firstindex(menu::CompletionMenu) = firstindex(menu.completions)
-Base.lastindex(menu::CompletionMenu) = lastindex(menu.completions)
-Base.getindex(menu::CompletionMenu, i::Integer) = menu.completions[i]
+isselectable(menu::FishCompletionMenu) = true
+hasselected(menu::FishCompletionMenu) = menu.selected != 0
+selected(menu::FishCompletionMenu) = menu.completions[menu.selected]
 
-hasselected(menu::CompletionMenu) = menu.selected != 0
-selected(menu::CompletionMenu) = menu.completions[menu.selected]
+dimensions(menu::FishCompletionMenu) = (menu.nrows, menu.ncols)
 
-dimensions(menu::CompletionMenu) = (menu.nrows, menu.ncols)
-
-function set_dimensions!(menu::CompletionMenu, (nrows, ncols)::Tuple{Int,Int})
+function set_dimensions!(menu::FishCompletionMenu, (nrows, ncols)::Tuple{Int,Int})
     menu.nrows = nrows
     menu.ncols = ncols
     return menu
 end
 
-function select_next!(menu::CompletionMenu)
+function select_next!(menu::FishCompletionMenu)
     menu.selected = mod1(menu.selected + 1, length(menu.completions))
     return menu
 end
 
-function select_previous!(menu::CompletionMenu)
+function select_previous!(menu::FishCompletionMenu)
     menu.selected = mod1(menu.selected - 1, length(menu.completions))
     return menu
 end
 
-function select_right!(menu::CompletionMenu)
+function select_right!(menu::FishCompletionMenu)
     if !hasselected(menu)
         menu.selected = firstindex(menu.completions)
     else
@@ -71,7 +122,7 @@ function select_right!(menu::CompletionMenu)
     return menu
 end
 
-function select_left!(menu::CompletionMenu)
+function select_left!(menu::FishCompletionMenu)
     if !hasselected(menu)
         menu.selected = lastindex(menu.completions)
     else
@@ -95,12 +146,10 @@ function select_left!(menu::CompletionMenu)
     return menu
 end
 
-# show completion menu as a table to terminal
-function show_completion_menu(terminal::TextTerminal, menu::CompletionMenu, height::Integer, width::Integer)
+function show_completion_menu(terminal::TextTerminal, menu::FishCompletionMenu, width::Integer, height::Integer)
     # calculate dimensions for menu display
-    colwidth = maximum(textwidth, menu.completions)
     margin = 2
-    nrows, ncols = calc_dimensions(width, colwidth + margin, length(menu))
+    nrows, ncols = calc_dimensions(width, menu.colwidth + margin, length(menu))
     statusbar = false
     if nrows > height
         # completion menu won't fit in a page
@@ -118,12 +167,13 @@ function show_completion_menu(terminal::TextTerminal, menu::CompletionMenu, heig
             i = (c - 1) * nrows + r + first
             i > lastindex(menu) && break
             completion = menu[i]
-            rest = chopprefix(completion, menu.partial)
+            prefix = menu.partial
+            rest = chopprefix(completion, prefix)
             # highlight prefix (partial)
             text = string(
-                "\x1b[1m\x1b[4m", menu.partial, "\x1b[22m\x1b[24m",
+                "\x1b[1m\x1b[4m", prefix, "\x1b[22m\x1b[24m",
                 rest,
-                ' '^(colwidth - textwidth(completion))
+                ' '^(menu.colwidth - textwidth(completion))
             )
             if i == selected
                 # highlight selected candidate
