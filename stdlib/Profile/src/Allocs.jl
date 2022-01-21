@@ -192,12 +192,13 @@ function decode(raw_results::RawResults)::AllocResults
 end
 
 function load_backtrace(trace::RawBacktrace)::Vector{BTElement}
-    out = Vector{BTElement}()
-    for i in 1:trace.size
-        push!(out, unsafe_load(trace.data, i))
-    end
+    return BTElement[unsafe_load(trace.data, i) for i in 1:trace.size]
+end
 
-    return out
+function get_frames(cache::BacktraceCache, element::BTElement)
+    return get!(cache, element) do
+        return lookup(element)
+    end
 end
 
 function stacktrace_memoized(
@@ -205,21 +206,11 @@ function stacktrace_memoized(
     trace::Vector{BTElement},
     c_funcs::Bool=true
 )::StackTrace
-    stack = StackTrace()
-    for ip in trace
-        frames = get(cache, ip) do
-            res = lookup(ip)
-            cache[ip] = res
-            return res
-        end
-        for frame in frames
-            # Skip frames that come from C calls.
-            if c_funcs || !frame.from_c
-                push!(stack, frame)
-            end
-        end
-    end
-    return stack
+    [frame
+        for element in trace
+        for frame in get_frames(cache, element)
+        # optionally include frames from C functions
+        if c_funcs || !frame.from_c]
 end
 
 # Precompile once for the package cache.
