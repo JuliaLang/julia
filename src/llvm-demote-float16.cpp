@@ -51,12 +51,12 @@ static bool demoteFloat16(Function &F)
     auto T_float32 = Type::getFloatTy(ctx);
 
 
-    auto feat_string = TM->getTargetFeatureString(); 
+    // auto feat_string = TM->getTargetFeatureString(); 
     //TODO: change this check to something else pending decision on 
     // https://github.com/JuliaLang/julia/pull/43085#discussion_r788197603
-    if(feat_string.find("+fp16fml") == llvm::StringRef::npos||feat_string.find("+fullfp16") == llvm::StringRef::npos){
-        return false;
-    }
+    // if(feat_string.find("+fp16fml") == llvm::StringRef::npos||feat_string.find("+fullfp16") == llvm::StringRef::npos){
+    //     return false;
+    // }
     SmallVector<Instruction *, 0> erase;
     for (auto &BB : F) {
         for (auto &I : BB) {
