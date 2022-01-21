@@ -207,9 +207,6 @@ extern void _chkstk(void);
 #endif
 }
 
-// llvm state
-extern JITEventListener *CreateJuliaJITEventListener();
-
 // for image reloading
 bool imaging_mode = false;
 
@@ -8171,7 +8168,12 @@ extern "C" void jl_init_llvm(void)
     }
     // Allocate a target...
     Optional<CodeModel::Model> codemodel =
-#ifdef _P64
+#if defined(JL_USE_JITLINK)
+        // JITLink can patch up relocations between far objects so we can use the
+        // small code model – which is good, as the large code model is unmaintained
+        // on MachO/AArch64.
+        CodeModel::Small;
+#elif defined(_P64)
         // Make sure we are using the large code model on 64bit
         // Let LLVM pick a default suitable for jitting on 32bit
         CodeModel::Large;
@@ -8212,13 +8214,15 @@ extern "C" void jl_init_llvm(void)
     }
 #endif
     if (jl_using_gdb_jitevents)
-        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createGDBRegistrationListener());
+        jl_ExecutionEngine->enableJITDebuggingSupport();
 
 #if defined(JL_USE_INTEL_JITEVENTS) || \
     defined(JL_USE_OPROFILE_JITEVENTS) || \
     defined(JL_USE_PERF_JITEVENTS)
+#ifdef JL_USE_JITLINK
+#error "JIT profiling support (JL_USE_*_JITEVENTS) not yet available on platforms that use JITLink"
+#else
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
-#endif
 
 #if defined(JL_USE_INTEL_JITEVENTS)
     if (jit_profiling && atoi(jit_profiling)) {
@@ -8251,6 +8255,8 @@ extern "C" void jl_init_llvm(void)
 #ifdef JL_USE_PERF_JITEVENTS
     if (jl_using_perf_jitevents)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
+#endif
+#endif
 #endif
 
     cl::PrintOptionValues();

@@ -234,9 +234,13 @@ code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw=false, 
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
-Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax.
-Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
-If `binary` is `true`, it also prints the binary machine code for each instruction precedented by an abbreviated address.
+
+* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
+* If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
+* If `dump_module` is `false`, do not print metadata such as rodata or directives.
+
+See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
 """
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                      dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false)

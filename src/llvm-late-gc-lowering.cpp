@@ -2269,6 +2269,18 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                         I->setMetadata(LLVMContext::MD_tbaa, MutableTBAA);
                 }
             }
+            // FCA chains created by SROA start with an undef value
+            // if the type contains an tracked pointer that can lead to a partial
+            // initialisation and LateLower might have inserted an extractvalue
+            // of an undef field. Fix this by changing it to start with an zero-init
+            if (auto *IV = dyn_cast<InsertValueInst>(*&it)) {
+                Value *SourceAggregate = IV->getAggregateOperand();
+                if (isa<UndefValue>(SourceAggregate)) {
+                    IV->setOperand(IV->getAggregateOperandIndex(), ConstantAggregateZero::get(IV->getType()));
+                    ChangesMade = true;
+                }
+            }
+
             auto *CI = dyn_cast<CallInst>(&*it);
             if (!CI) {
                 ++it;

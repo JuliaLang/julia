@@ -64,7 +64,6 @@
 #include <llvm/BinaryFormat/MachO.h>
 #include <llvm/DebugInfo/DIContext.h>
 #include <llvm/DebugInfo/DWARF/DWARFContext.h>
-#include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/AssemblyAnnotationWriter.h>
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/Function.h>
