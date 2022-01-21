@@ -1383,17 +1383,18 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
     AliasInfo = objinfo.AliasInfo
     nargs = length(args)
     if isa(AliasInfo, Bool)
-        AliasInfo && @goto conservative_propagation
-        # AliasInfo of this object hasn't been analyzed yet: set AliasInfo now
-        typ = widenconst(argextype(obj, astate.ir))
-        nfields = fieldcount_noerror(typ)
-        if nfields === nothing
-            AliasInfo = Unindexable()
-            @goto escape_unindexable_def
-        else
-            AliasInfo = IndexableFields(nfields)
-            @goto escape_indexable_def
-        end
+        @goto conservative_propagation
+        # AliasInfo && @goto conservative_propagation
+        # # AliasInfo of this object hasn't been analyzed yet: set AliasInfo now
+        # typ = widenconst(argextype(obj, astate.ir))
+        # nfields = fieldcount_noerror(typ)
+        # if nfields === nothing
+        #     AliasInfo = Unindexable()
+        #     @goto escape_unindexable_def
+        # else
+        #     AliasInfo = IndexableFields(nfields)
+        #     @goto escape_indexable_def
+        # end
     elseif isa(AliasInfo, IndexableFields)
         @label escape_indexable_def
         # fields are known precisely: propagate escape information imposed on recorded possibilities to the exact field values

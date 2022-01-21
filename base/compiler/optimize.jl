@@ -98,7 +98,7 @@ and then caches it into a global cache for later interprocedural propagation.
 cache_escapes!(caller::InferenceResult, estate::EscapeState) =
     caller.argescapes = ArgEscapeCache(estate)
 
-function get_escape_cache(mi_cache::MICache) where MICache
+function ipo_escape_cache(mi_cache::MICache) where MICache
     return function (linfo::Union{InferenceResult,MethodInstance})
         if isa(linfo, InferenceResult)
             argescapes = linfo.argescapes
@@ -110,6 +110,7 @@ function get_escape_cache(mi_cache::MICache) where MICache
         return argescapes !== nothing ? argescapes::ArgEscapeCache : nothing
     end
 end
+null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
 
 mutable struct OptimizationState
     linfo::MethodInstance
@@ -540,17 +541,24 @@ function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
     nargs = let def = sv.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
-    get_escape_cache = (@__MODULE__).get_escape_cache(sv.inlining.mi_cache)
-    if is_ipo_profitable(ir, nargs)
-        @timeit "IPO EA" begin
-            state = analyze_escapes(ir, nargs, false, get_escape_cache)
-            cache_escapes!(caller, state)
-        end
-    end
+    # if is_ipo_profitable(ir, nargs)
+    #     @timeit "IPO EA" begin
+    #         state = analyze_escapes(ir,
+    #             nargs, #=call_resolved=#false, ipo_escape_cache(sv.inlining.mi_cache))
+    #         cache_escapes!(caller, state)
+    #     end
+    # end
     @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @timeit "compact 2" ir = compact!(ir)
-    @timeit "SROA"      ir = sroa_pass!(ir)
+    @timeit "SROA" ir, memory_opt = linear_pass!(ir)
+    if memory_opt
+        @timeit "memory_opt_pass!" begin
+            @timeit "Local EA" estate = analyze_escapes(ir,
+                nargs, #=call_resolved=#true, null_escape_cache)
+            @timeit "memory_opt_pass!" ir = memory_opt_pass!(ir, estate)
+        end
+    end
     @timeit "ADCE"      ir = adce_pass!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
