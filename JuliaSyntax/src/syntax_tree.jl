@@ -489,8 +489,8 @@ function _to_expr(node::SyntaxNode)
             args[2] = Expr(:block, loc, args[2])
         end
     end
-    if headsym == :inert || (headsym == :quote &&
-                                length(args) == 1 && !(only(args) isa Expr))
+    if headsym == :inert || (headsym == :quote && length(args) == 1 &&
+                             !(a1 = only(args); a1 isa Expr || a1 isa QuoteNode))
         return QuoteNode(only(args))
     else
         return Expr(headsym, args...)
