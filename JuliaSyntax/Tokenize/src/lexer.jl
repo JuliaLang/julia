@@ -901,7 +901,9 @@ end
 # Parse a token starting with a quote.
 # A '"' has been consumed
 function lex_quote(l::Lexer)
-    raw = l.last_token == Tokens.IDENTIFIER || l.last_token == Tokens.KEYWORD
+    raw = l.last_token == Tokens.IDENTIFIER ||
+          Tokens.iscontexturalkeyword(l.last_token) ||
+          Tokens.iswordoperator(l.last_token)
     pc, dpc = dpeekchar(l)
     triplestr = pc == '"' && dpc == '"'
     push!(l.string_states, StringState(triplestr, raw, '"', 0))

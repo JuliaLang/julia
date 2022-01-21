@@ -332,6 +332,19 @@ end
     @test ts[3] ~ (T.STRING     , "\\\\\\\"" )
     @test ts[4] ~ (T.DQUOTE     , "\""       )
     @test ts[5] ~ (T.ENDMARKER  , ""         )
+
+    # Contextural keywords and operators allowed as raw string prefixes
+    ts = collect(tokenize(raw""" var"x $ \ y" """))
+    @test ts[2] ~ (T.VAR        , "var")
+    @test ts[4] ~ (T.STRING     , "x \$ \\ y")
+
+    ts = collect(tokenize(raw""" outer"x $ \ y" """))
+    @test ts[2] ~ (T.OUTER      , "outer")
+    @test ts[4] ~ (T.STRING     , "x \$ \\ y")
+
+    ts = collect(tokenize(raw""" isa"x $ \ y" """))
+    @test ts[2] ~ (T.ISA        , "isa")
+    @test ts[4] ~ (T.STRING     , "x \$ \\ y")
 end
 
 @testset "interpolation" begin
