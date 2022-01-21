@@ -728,70 +728,53 @@ end
 #Linear solvers
 #Generic solver using naive substitution
 ldiv!(A::Bidiagonal, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
-function ldiv!(c::AbstractVecOrMat, A::Bidiagonal, b::AbstractVector)
+function ldiv!(c::AbstractVecOrMat, A::Bidiagonal, b::AbstractVecOrMat)
     require_one_based_indexing(c, A, b)
     N = size(A, 2)
-    mb = length(b)
+    mb, nb = size(b, 1), size(b, 2)
     if N != mb
-        throw(DimensionMismatch("second dimension of A, $N, does not match the length of b, $mb"))
+        throw(DimensionMismatch("second dimension of A, $N, does not match first dimension of b, $mb"))
     end
     mc, nc = size(c, 1), size(c, 2)
-    if mc != mb || nc != 1
-        throw(DimensionMismatch("size of result, ($mc, $nc), does not match the length of b, $mb"))
+    if mc != mb || nc != nb
+        throw(DimensionMismatch("size of result, ($mc, $nc), does not match the size of b, ($mb, $nb)"))
     end
 
     if N == 0
         return copyto!(c, b)
     end
 
-    @inbounds begin
-        if A.uplo == 'L' #do forward substitution
-            c[1] = bj1 = A.dv[1]\b[1]
-            for j in 2:N
-                dvj = A.dv[j]
-                if iszero(dvj)
-                    throw(SingularException(j))
-                end
-                bj  = b[j]
-                bj -= A.ev[j - 1] * bj1
-                bj   = dvj\bj
-                c[j] = bj1 = bj
+    @inbounds for j in 1:nb
+        if A.uplo == 'L' #do colwise forward substitution
+            c[1,j] = bi1 = A.dv[1]\b[1,j]
+            for i in 2:N
+                dvi = A.dv[i]
+                iszero(dvi) && throw(SingularException(i))
+                bi  = b[i]
+                bi -= A.ev[i - 1] * bi1
+                bi  = dvi\bi
+                c[i,j] = bi1 = bi
             end
-        else #do backward substitution
-            c[N] = bj1 = A.dv[N]\b[N]
-            for j in (N - 1):-1:1
-                dvj = A.dv[j]
-                if iszero(dvj)
-                    throw(SingularException(j))
-                end
-                bj  = b[j]
-                bj -= A.ev[j] * bj1
-                bj   = dvj\bj
-                c[j] = bj1 = bj
+        else #do colwise backward substitution
+            c[N,j] = bi1 = A.dv[N]\b[N,j]
+            for i in (N - 1):-1:1
+                dvi = A.dv[i]
+                iszero(dvi) && throw(SingularException(i))
+                bi  = b[i]
+                bi -= A.ev[i] * bi1
+                bi  = dvi\bi
+                c[i,j] = bi1 = bi
             end
         end
     end
     return c
 end
-function ldiv!(C::AbstractMatrix, A::Bidiagonal, B::AbstractMatrix)
-    mA, nA = size(A)
-    n, m = size(B)
-    if mA != n
-        throw(DimensionMismatch("first dimension of A, $mA, does not match the first dimension of B, $n"))
-    end
-    mC, nC = size(C)
-    if mC != n || nC != m
-        throw(DimensionMismatch("size of result is ($mC, $nC), but should be ($n, $m)"))
-    end
-    for (c, b) in zip(eachcol(C), eachcol(B))
-        ldiv!(c, A, b)
-    end
-    C
-end
 ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
 ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
-ldiv!(c::AbstractVecOrMat, A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(c, copy(A), b)
-ldiv!(c::AbstractVecOrMat, A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(c, copy(A), b)
+ldiv!(c::AbstractVecOrMat, A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) =
+    (_rdiv!(transpose(c), transpose(b), transpose(A)); return c)
+ldiv!(c::AbstractVecOrMat, A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) =
+    (_rdiv!(adjoint(c), adjoint(b), adjoint(A)); return c)
 
 ### Generic promotion methods and fallbacks
 function \(A::Bidiagonal{<:Number}, B::AbstractVecOrMat{<:Number})
@@ -867,8 +850,12 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal)
     C
 end
 rdiv!(A::AbstractMatrix, B::Bidiagonal) = @inline _rdiv!(B, A, B)
-rdiv!(A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = rdiv!(A, copy(B))
-rdiv!(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = rdiv!(A, copy(B))
+rdiv!(A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
+rdiv!(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
+rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) =
+    (ldiv!(adjoint(C), adjoint(B), adjoint(A)); return C)
+rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) =
+    (ldiv!(transpose(C), transpose(B), transpose(A)); return C)
 
 function /(A::AbstractMatrix{<:Number}, B::Bidiagonal{<:Number})
     TA, TB = eltype(A), eltype(B)
