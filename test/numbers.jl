@@ -95,34 +95,44 @@ end
     @test max(1) === 1
     @test minmax(1) === (1, 1)
     @test minmax(5, 3) == (3, 5)
-    @test minmax(3., 5.) == (3., 5.)
-    @test minmax(5., 3.) == (3., 5.)
-    @test minmax(3., NaN) ≣ (NaN, NaN)
-    @test minmax(NaN, 3) ≣ (NaN, NaN)
-    @test minmax(Inf, NaN) ≣ (NaN, NaN)
-    @test minmax(NaN, Inf) ≣ (NaN, NaN)
-    @test minmax(-Inf, NaN) ≣ (NaN, NaN)
-    @test minmax(NaN, -Inf) ≣ (NaN, NaN)
-    @test minmax(NaN, NaN) ≣ (NaN, NaN)
-    @test min(-0.0,0.0) === min(0.0,-0.0)
-    @test max(-0.0,0.0) === max(0.0,-0.0)
-    @test minmax(-0.0,0.0) === minmax(0.0,-0.0)
-    @test max(-3.2, 5.1) == max(5.1, -3.2) == 5.1
-    @test min(-3.2, 5.1) == min(5.1, -3.2) == -3.2
-    @test max(-3.2, Inf) == max(Inf, -3.2) == Inf
-    @test max(-3.2, NaN) ≣ max(NaN, -3.2) ≣ NaN
-    @test min(5.1, Inf) == min(Inf, 5.1) == 5.1
-    @test min(5.1, -Inf) == min(-Inf, 5.1) == -Inf
-    @test min(5.1, NaN) ≣ min(NaN, 5.1) ≣ NaN
-    @test min(5.1, -NaN) ≣ min(-NaN, 5.1) ≣ NaN
-    @test minmax(-3.2, 5.1) == (min(-3.2, 5.1), max(-3.2, 5.1))
-    @test minmax(-3.2, Inf) == (min(-3.2, Inf), max(-3.2, Inf))
-    @test minmax(-3.2, NaN) ≣ (min(-3.2, NaN), max(-3.2, NaN))
-    @test (max(Inf,NaN), max(-Inf,NaN), max(Inf,-NaN), max(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
-    @test (max(NaN,Inf), max(NaN,-Inf), max(-NaN,Inf), max(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
-    @test (min(Inf,NaN), min(-Inf,NaN), min(Inf,-NaN), min(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
-    @test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
-    @test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
+    Top(T, op, x, y) = op(T.(x), T.(y))
+    Top(T, op) = (x, y) -> Top(T, op, x, y)
+    _compare(x, y) = x == y
+    for T in (Float16, Float32, Float64, BigFloat)
+        minmax = Top(T,Base.minmax)
+        min = Top(T,Base.min)
+        max = Top(T,Base.max)
+        (==) = Top(T,_compare)
+        (===) = Top(T,Base.isequal) # we only use === to compare -0.0/0.0, `isequal` should be equalvient
+        @test minmax(3., 5.) == (3., 5.)
+        @test minmax(5., 3.) == (3., 5.)
+        @test minmax(3., NaN) ≣ (NaN, NaN)
+        @test minmax(NaN, 3) ≣ (NaN, NaN)
+        @test minmax(Inf, NaN) ≣ (NaN, NaN)
+        @test minmax(NaN, Inf) ≣ (NaN, NaN)
+        @test minmax(-Inf, NaN) ≣ (NaN, NaN)
+        @test minmax(NaN, -Inf) ≣ (NaN, NaN)
+        @test minmax(NaN, NaN) ≣ (NaN, NaN)
+        @test min(-0.0,0.0) === min(0.0,-0.0)
+        @test max(-0.0,0.0) === max(0.0,-0.0)
+        @test minmax(-0.0,0.0) === minmax(0.0,-0.0)
+        @test max(-3.2, 5.1) == max(5.1, -3.2) == 5.1
+        @test min(-3.2, 5.1) == min(5.1, -3.2) == -3.2
+        @test max(-3.2, Inf) == max(Inf, -3.2) == Inf
+        @test max(-3.2, NaN) ≣ max(NaN, -3.2) ≣ NaN
+        @test min(5.1, Inf) == min(Inf, 5.1) == 5.1
+        @test min(5.1, -Inf) == min(-Inf, 5.1) == -Inf
+        @test min(5.1, NaN) ≣ min(NaN, 5.1) ≣ NaN
+        @test min(5.1, -NaN) ≣ min(-NaN, 5.1) ≣ NaN
+        @test minmax(-3.2, 5.1) == (min(-3.2, 5.1), max(-3.2, 5.1))
+        @test minmax(-3.2, Inf) == (min(-3.2, Inf), max(-3.2, Inf))
+        @test minmax(-3.2, NaN) ≣ (min(-3.2, NaN), max(-3.2, NaN))
+        @test (max(Inf,NaN), max(-Inf,NaN), max(Inf,-NaN), max(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
+        @test (max(NaN,Inf), max(NaN,-Inf), max(-NaN,Inf), max(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
+        @test (min(Inf,NaN), min(-Inf,NaN), min(Inf,-NaN), min(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
+        @test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
+        @test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
+    end
 end
 @testset "fma" begin
     let x = Int64(7)^7
