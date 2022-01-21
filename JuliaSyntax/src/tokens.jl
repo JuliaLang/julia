@@ -40,14 +40,12 @@ end
 kind(k::Kind) = k
 kind(raw::TzTokens.RawToken) = TzTokens.exactkind(raw)
 
-# Some renaming for consistency
-is_literal(k::Kind) = TzTokens.isliteral(k)
-is_keyword(k::Kind) = TzTokens.iskeyword(k)
-is_operator(k::Kind) = TzTokens.isoperator(k)
-
-is_literal(k)  = is_literal(kind(k))
-is_keyword(k)  = is_keyword(kind(k))
-is_operator(k) = is_operator(kind(k))
+# Some renaming for naming consistency
+is_literal(k) = TzTokens.isliteral(kind(k))
+is_keyword(k) = TzTokens.iskeyword(kind(k))
+is_contextural_keyword(k) = TzTokens.iscontexturalkeyword(kind(k))
+is_operator(k) = TzTokens.isoperator(kind(k))
+is_word_operator(k) = TzTokens.iswordoperator(kind(k))
 
 # Predicates for operator precedence
 is_prec_assignment(t)  = K"BEGIN_ASSIGNMENTS" < kind(t) < K"END_ASSIGNMENTS"
