@@ -34,7 +34,7 @@ htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
 
 // During incremental compilation, the following gets set
-JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module;           // the toplevel module currently being defined
+JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module = NULL;   // the toplevel module currently being defined
 
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
