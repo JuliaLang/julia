@@ -134,6 +134,30 @@ end
         @test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
     end
 end
+@testset "Base._extrema_rf for float" begin
+    for T in (Float16, Float32, Float64, BigFloat)
+        ordered = T[-Inf, -5, -0.0, 0.0, 3, Inf]
+        unorded = T[NaN, -NaN]
+        for i1 in 1:6, i2 in 1:6, j1 in 1:6, j2 in 1:6
+            x = ordered[i1], ordered[i2]
+            y = ordered[j1], ordered[j2]
+            z = ordered[min(i1,j1)], ordered[max(i2,j2)]
+            @test Base._extrema_rf(x, y) === z
+        end
+        for i in 1:2, j1 in 1:6, j2 in 1:6 # unordered test (only 1 NaN)
+            x = unorded[i] , unorded[i]
+            y = ordered[j1], ordered[j2]
+            @test Base._extrema_rf(x, y) === x
+            @test Base._extrema_rf(y, x) === x
+        end
+        for i in 1:2, j in 1:2 # unordered test (2 NaNs)
+            x = unorded[i], unorded[i]
+            y = unorded[j], unorded[j]
+            z = Base._extrema_rf(x, y)
+            @test z === x || z === y
+        end
+    end
+end
 @testset "fma" begin
     let x = Int64(7)^7
         @test fma(x-1, x-2, x-3) == (x-1) * (x-2) + (x-3)
