@@ -548,6 +548,11 @@ end
     @test tok("0x0_0_0.0_0p2").kind == Tokens.FLOAT
     @test tok("0x0p+2").kind == Tokens.FLOAT
     @test tok("0x0p-2").kind == Tokens.FLOAT
+
+    # Floating point with \minus rather than -
+    @test tok("1.0e−0").kind == Tokens.FLOAT
+    @test tok("1.0f−0").kind == Tokens.FLOAT
+    @test tok("0x0p−2").kind == Tokens.FLOAT
 end
 
 @testset "1e1" begin
