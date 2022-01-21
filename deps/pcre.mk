@@ -10,7 +10,7 @@ $(SRCCACHE)/pcre2-$(PCRE_VER).tar.gz: | $(SRCCACHE)
 
 $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.gz
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) jxf $(notdir $<)
+	cd $(dir $<) && $(TAR) zxf $(notdir $<)
 	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/pcre2-$(PCRE_VER)/config.sub
 	echo 1 > $@
 
