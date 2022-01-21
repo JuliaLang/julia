@@ -253,8 +253,7 @@ end
 
 adjoint(B::Bidiagonal) = Adjoint(B)
 transpose(B::Bidiagonal) = Transpose(B)
-adjoint(B::Bidiagonal{<:Real}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
-adjoint(B::Bidiagonal{<:Number}) = Bidiagonal(conj.(B.dv), conj.(B.ev), B.uplo == 'U' ? :L : :U)
+adjoint(B::Bidiagonal{<:Number}) = Bidiagonal(conj(B.dv), conj(B.ev), B.uplo == 'U' ? :L : :U)
 transpose(B::Bidiagonal{<:Number}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
 function Base.copy(aB::Adjoint{<:Any,<:Bidiagonal})
     B = aB.parent
@@ -789,8 +788,8 @@ function ldiv!(C::AbstractMatrix, A::Bidiagonal, B::AbstractMatrix)
     end
     C
 end
-ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, copy(A), b)
-ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, copy(A), b)
+ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
+ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
 ldiv!(c::AbstractVecOrMat, A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(c, copy(A), b)
 ldiv!(c::AbstractVecOrMat, A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(c, copy(A), b)
 
