@@ -558,6 +558,7 @@ tests = [
         # parse_paren
         ":(=)"  =>  "(quote =)"
         ":(::)"  =>  "(quote ::)"
+        "(function f \n end)" => "(function f)"
         # braces
         "{x y}"      =>  "(bracescat (row x y))"
         ((v=v"1.7",), "{x ;;; y}") =>  "(bracescat (nrow-3 x y))"

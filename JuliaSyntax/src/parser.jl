@@ -1913,10 +1913,11 @@ function parse_function(ps::ParseState)
     if peek(ps, skip_newlines=true) == K"end" && !is_anon_func
         # Function/macro definition with no methods
         # function f end       ==> (function f)
+        # (function f \n end)  ==> (function f)
         # function f \n\n end  ==> (function f)
         # function $f end      ==> (function ($ f))
         # macro f end          ==> (macro f)
-        bump(ps, TRIVIA_FLAG)
+        bump(ps, TRIVIA_FLAG, skip_newlines=true)
         emit(ps, mark, word)
         return
     end
