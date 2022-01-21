@@ -6,29 +6,6 @@ function is_known_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,I
     return singleton_type(ft) === func
 end
 
-"""
-    du::SSADefUse
-
-This struct keeps track of all uses of some mutable struct allocated in the current function:
-- `du.uses::Vector{Int}` are all instances of `getfield` on the struct
-- `du.defs::Vector{Int}` are all instances of `setfield!` on the struct
-The terminology refers to the uses/defs of the "slot bundle" that the mutable struct represents.
-
-In addition we keep track of all instances of a `:foreigncall` that preserves of this mutable
-struct in `du.ccall_preserve_uses`. Somewhat counterintuitively, we don't actually need to
-make sure that the struct itself is live (or even allocated) at a `ccall` site.
-If there are no other places where the struct escapes (and thus e.g. where its address is taken),
-it need not be allocated. We do however, need to make sure to preserve any elements of this struct.
-"""
-struct SSADefUse
-    uses::Vector{Int}
-    defs::Vector{Int}
-    ccall_preserve_uses::Vector{Int}
-end
-SSADefUse() = SSADefUse(Int[], Int[], Int[])
-
-compute_live_ins(cfg::CFG, du::SSADefUse) = compute_live_ins(cfg, du.defs, du.uses)
-
 # assume `stmt == getfield(obj, field, ...)` or `stmt == setfield!(obj, field, val, ...)`
 try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr) =
     try_compute_field(ir, stmt.args[3])
@@ -53,112 +30,6 @@ end
 function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, typ::DataType)
     field = try_compute_field_stmt(ir, stmt)
     return try_compute_fieldidx(typ, field)
-end
-
-function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
-    # TODO: This can be much faster by looking at current level and only
-    # searching for those blocks in a sorted order
-    while !(curblock in allblocks)
-        curblock = domtree.idoms_bb[curblock]
-    end
-    return curblock
-end
-
-function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
-    ex = ir[SSAValue(def)][:inst]
-    if isexpr(ex, :new)
-        return ex.args[1+fidx]
-    else
-        @assert isa(ex, Expr)
-        # The use is whatever the setfield was
-        return ex.args[4]
-    end
-end
-
-function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, curblock::Int)
-    curblock = find_curblock(domtree, allblocks, curblock)
-    def = 0
-    for stmt in du.defs
-        if block_for_inst(ir.cfg, stmt) == curblock
-            def = max(def, stmt)
-        end
-    end
-    def == 0 ? phinodes[curblock] : val_for_def_expr(ir, def, fidx)
-end
-
-function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use::Int)
-    def, useblock, curblock = find_def_for_use(ir, domtree, allblocks, du, use)
-    if def == 0
-        if !haskey(phinodes, curblock)
-            # If this happens, we need to search the predecessors for defs. Which
-            # one doesn't matter - if it did, we'd have had a phinode
-            return compute_value_for_block(ir, domtree, allblocks, du, phinodes, fidx, first(ir.cfg.blocks[useblock].preds))
-        end
-        # The use is the phinode
-        return phinodes[curblock]
-    else
-        return val_for_def_expr(ir, def, fidx)
-    end
-end
-
-# even when the allocation contains an uninitialized field, we try an extra effort to check
-# if this load at `idx` have any "safe" `setfield!` calls that define the field
-function has_safe_def(
-    ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse,
-    newidx::Int, idx::Int)
-    def, _, _ = find_def_for_use(ir, domtree, allblocks, du, idx)
-    # will throw since we already checked this `:new` site doesn't define this field
-    def == newidx && return false
-    # found a "safe" definition
-    def ≠ 0 && return true
-    # we may still be able to replace this load with `PhiNode`
-    # examine if all predecessors of `block` have any "safe" definition
-    block = block_for_inst(ir, idx)
-    seen = BitSet(block)
-    worklist = BitSet(ir.cfg.blocks[block].preds)
-    isempty(worklist) && return false
-    while !isempty(worklist)
-        pred = pop!(worklist)
-        # if this block has already been examined, bail out to avoid infinite cycles
-        pred in seen && return false
-        idx = last(ir.cfg.blocks[pred].stmts)
-        # NOTE `idx` isn't a load, thus we can use inclusive coondition within the `find_def_for_use`
-        def, _, _ = find_def_for_use(ir, domtree, allblocks, du, idx, true)
-        # will throw since we already checked this `:new` site doesn't define this field
-        def == newidx && return false
-        push!(seen, pred)
-        # found a "safe" definition for this predecessor
-        def ≠ 0 && continue
-        # check for the predecessors of this predecessor
-        for newpred in ir.cfg.blocks[pred].preds
-            push!(worklist, newpred)
-        end
-    end
-    return true
-end
-
-# find the first dominating def for the given use
-function find_def_for_use(
-    ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, use::Int, inclusive::Bool=false)
-    useblock = block_for_inst(ir.cfg, use)
-    curblock = find_curblock(domtree, allblocks, useblock)
-    local def = 0
-    for idx in du.defs
-        if block_for_inst(ir.cfg, idx) == curblock
-            if curblock != useblock
-                # Find the last def in this block
-                def = max(def, idx)
-            else
-                # Find the last def before our use
-                if inclusive
-                    def = max(def, idx ≤ use ? idx : 0)
-                else
-                    def = max(def, idx < use ? idx : 0)
-                end
-            end
-        end
-    end
-    return def, useblock, curblock
 end
 
 function collect_leaves(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typeconstraint))
@@ -693,26 +564,23 @@ end
 const SPCSet = IdSet{Int}
 
 """
-    sroa_pass!(ir::IRCode) -> newir::IRCode
+    linear_pass!(ir::IRCode) -> (newir::IRCode, memory_opt::Bool)
 
-`getfield` elimination pass, a.k.a. Scalar Replacements of Aggregates optimization.
+This pass consists of the following optimizations that can be performed by
+a single linear traversal over IR statements:
+- load forwarding of immutables (`getfield` elimination): immutable allocations whose
+  loads are all eliminated by this pass may be erased entirely as a result of succeeding
+  dead code elimination (this allocation elimination is called "SROA", Scalar Replacements of Aggregates)
+- lifting of builtin comparisons: see [`lift_comparison!`](@ref)
+- canonicalization of `typeassert` calls: see [`canonicalize_typeassert!`](@ref)
 
-This pass is based on a local field analysis by def-use chain walking.
-It looks for struct allocation sites ("definitions"), and `getfield` calls as well as
-`:foreigncall`s that preserve the structs ("usages"). If "definitions" have enough information,
-then this pass will replace corresponding usages with forwarded values.
-`mutable struct`s require additional cares and need to be handled separately from immutables.
-For `mutable struct`s, `setfield!` calls account for "definitions" also, and the pass should
-give up the lifting conservatively when there are any "intermediate usages" that may escape
-the mutable struct (e.g. non-inlined generic function call that takes the mutable struct as
-its argument).
-
-In a case when all usages are fully eliminated, `struct` allocation may also be erased as
-a result of succeeding dead code elimination.
+In addition to performing the optimizations above, the linear traversal also examines each
+statement and checks if there is any profitability of running [`memory_opt_pass!`](@ref) pass.
+In such cases `memory_opt` is flagged on and it indicates `ir` may be further optimized by
+running `memory_opt_pass!(ir, estate::EscapeState)`.
 """
-function sroa_pass!(ir::IRCode)
+function linear_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
-    defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
     # initialization of domtree is delayed to avoid the expensive computation in many cases
     local domtree = nothing
@@ -722,17 +590,17 @@ function sroa_pass!(ir::IRCode)
         end
         return domtree
     end
+    local memory_opt = false # whether or not to run the memory_opt_pass! pass later
     for ((_, idx), stmt) in compact
-        # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         isa(stmt, Expr) || continue
-        is_setfield = false
         field_ordering = :unspecified
-        if is_known_call(stmt, setfield!, compact)
-            4 <= length(stmt.args) <= 5 || continue
-            is_setfield = true
-            if length(stmt.args) == 5
-                field_ordering = argextype(stmt.args[5], compact)
+        if isexpr(stmt, :new)
+            typ = unwrap_unionall(widenconst(argextype(SSAValue(idx), compact)))
+            if ismutabletype(typ)
+                # mutable SROA may eliminate this eliminate this allocation, mark it now
+                memory_opt = true
             end
+            continue
         elseif is_known_call(stmt, getfield, compact)
             3 <= length(stmt.args) <= 5 || continue
             if length(stmt.args) == 5
@@ -748,40 +616,21 @@ function sroa_pass!(ir::IRCode)
             for pidx in (6+nccallargs):length(stmt.args)
                 preserved_arg = stmt.args[pidx]
                 isa(preserved_arg, SSAValue) || continue
-                let intermediaries = SPCSet()
-                    callback = function (@nospecialize(pi), @nospecialize(ssa))
-                        push!(intermediaries, ssa.id)
-                        return false
-                    end
-                    def = simple_walk(compact, preserved_arg, callback)
-                    isa(def, SSAValue) || continue
-                    defidx = def.id
-                    def = compact[defidx]
-                    if is_known_call(def, tuple, compact)
+                def = simple_walk(compact, preserved_arg)
+                isa(def, SSAValue) || continue
+                defidx = def.id
+                def = compact[defidx]
+                if is_known_call(def, tuple, compact)
+                    record_immutable_preserve!(new_preserves, def, compact)
+                    push!(preserved, preserved_arg.id)
+                elseif isexpr(def, :new)
+                    typ = unwrap_unionall(widenconst(argextype(SSAValue(defidx), compact)))
+                    if typ isa DataType
+                        ismutabletype(typ) && continue # mutable SROA is performed later
                         record_immutable_preserve!(new_preserves, def, compact)
                         push!(preserved, preserved_arg.id)
-                        continue
-                    elseif isexpr(def, :new)
-                        typ = widenconst(argextype(SSAValue(defidx), compact))
-                        if isa(typ, UnionAll)
-                            typ = unwrap_unionall(typ)
-                        end
-                        if typ isa DataType && !ismutabletype(typ)
-                            record_immutable_preserve!(new_preserves, def, compact)
-                            push!(preserved, preserved_arg.id)
-                            continue
-                        end
-                    else
-                        continue
                     end
-                    if defuses === nothing
-                        defuses = IdDict{Int, Tuple{SPCSet, SSADefUse}}()
-                    end
-                    mid, defuse = get!(defuses, defidx, (SPCSet(), SSADefUse()))
-                    push!(defuse.ccall_preserve_uses, idx)
-                    union!(mid, intermediaries)
                 end
-                continue
             end
             if !isempty(new_preserves)
                 compact[idx] = nothing
@@ -801,7 +650,7 @@ function sroa_pass!(ir::IRCode)
             continue
         end
 
-        # analyze this `getfield` / `setfield!` call
+        # analyze this `getfield` call
 
         field = try_compute_field_stmt(compact, stmt)
         field === nothing && continue
@@ -819,32 +668,7 @@ function sroa_pass!(ir::IRCode)
             continue
         end
 
-        # analyze this mutable struct here for the later pass
-        if ismutabletype(struct_typ)
-            isa(val, SSAValue) || continue
-            let intermediaries = SPCSet()
-                callback = function (@nospecialize(pi), @nospecialize(ssa))
-                    push!(intermediaries, ssa.id)
-                    return false
-                end
-                def = simple_walk(compact, val, callback)
-                # Mutable stuff here
-                isa(def, SSAValue) || continue
-                if defuses === nothing
-                    defuses = IdDict{Int, Tuple{SPCSet, SSADefUse}}()
-                end
-                mid, defuse = get!(defuses, def.id, (SPCSet(), SSADefUse()))
-                if is_setfield
-                    push!(defuse.defs, idx)
-                else
-                    push!(defuse.uses, idx)
-                end
-                union!(mid, intermediaries)
-            end
-            continue
-        elseif is_setfield
-            continue # invalid `setfield!` call, but just ignore here
-        end
+        ismutabletype(struct_typ) && continue # mutable SROA is performed later
 
         # perform SROA on immutable structs here on
 
@@ -882,153 +706,9 @@ function sroa_pass!(ir::IRCode)
     end
 
     non_dce_finish!(compact)
-    if defuses !== nothing
-        # now go through analyzed mutable structs and see which ones we can eliminate
-        # NOTE copy the use count here, because `simple_dce!` may modify it and we need it
-        # consistent with the state of the IR here (after tracking `PhiNode` arguments,
-        # but before the DCE) for our predicate within `sroa_mutables!`, but we also
-        # try an extra effort using a callback so that reference counts are updated
-        used_ssas = copy(compact.used_ssas)
-        simple_dce!(compact, (x::SSAValue) -> used_ssas[x.id] -= 1)
-        ir = complete(compact)
-        sroa_mutables!(ir, defuses, used_ssas, get_domtree)
-        return ir
-    else
-        simple_dce!(compact)
-        return complete(compact)
-    end
-end
-
-function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, get_domtree)
-    for (idx, (intermediaries, defuse)) in defuses
-        intermediaries = collect(intermediaries)
-        # Check if there are any uses we did not account for. If so, the variable
-        # escapes and we cannot eliminate the allocation. This works, because we're guaranteed
-        # not to include any intermediaries that have dead uses. As a result, missing uses will only ever
-        # show up in the nuses_total count.
-        nleaves = length(defuse.uses) + length(defuse.defs) + length(defuse.ccall_preserve_uses)
-        nuses = 0
-        for idx in intermediaries
-            nuses += used_ssas[idx]
-        end
-        nuses_total = used_ssas[idx] + nuses - length(intermediaries)
-        nleaves == nuses_total || continue
-        # Find the type for this allocation
-        defexpr = ir[SSAValue(idx)][:inst]
-        isexpr(defexpr, :new) || continue
-        newidx = idx
-        typ = ir.stmts[newidx][:type]
-        if isa(typ, UnionAll)
-            typ = unwrap_unionall(typ)
-        end
-        # Could still end up here if we tried to setfield! on an immutable, which would
-        # error at runtime, but is not illegal to have in the IR.
-        ismutabletype(typ) || continue
-        typ = typ::DataType
-        # Partition defuses by field
-        fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
-        all_forwarded = true
-        for use in defuse.uses
-            stmt = ir[SSAValue(use)][:inst] # == `getfield` call
-            # We may have discovered above that this use is dead
-            # after the getfield elim of immutables. In that case,
-            # it would have been deleted. That's fine, just ignore
-            # the use in that case.
-            if stmt === nothing
-                all_forwarded = false
-                continue
-            end
-            field = try_compute_fieldidx_stmt(ir, stmt::Expr, typ)
-            field === nothing && @goto skip
-            push!(fielddefuse[field].uses, use)
-        end
-        for def in defuse.defs
-            stmt = ir[SSAValue(def)][:inst]::Expr # == `setfield!` call
-            field = try_compute_fieldidx_stmt(ir, stmt, typ)
-            field === nothing && @goto skip
-            isconst(typ, field) && @goto skip # we discovered an attempt to mutate a const field, which must error
-            push!(fielddefuse[field].defs, def)
-        end
-        # Check that the defexpr has defined values for all the fields
-        # we're accessing. In the future, we may want to relax this,
-        # but we should come up with semantics for well defined semantics
-        # for uninitialized fields first.
-        ndefuse = length(fielddefuse)
-        blocks = Vector{Tuple{#=phiblocks=# Vector{Int}, #=allblocks=# Vector{Int}}}(undef, ndefuse)
-        for fidx in 1:ndefuse
-            du = fielddefuse[fidx]
-            isempty(du.uses) && continue
-            push!(du.defs, newidx)
-            ldu = compute_live_ins(ir.cfg, du)
-            if isempty(ldu.live_in_bbs)
-                phiblocks = Int[]
-            else
-                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get_domtree())
-            end
-            allblocks = sort(vcat(phiblocks, ldu.def_bbs))
-            blocks[fidx] = phiblocks, allblocks
-            if fidx + 1 > length(defexpr.args)
-                for use in du.uses
-                    has_safe_def(ir, get_domtree(), allblocks, du, newidx, use) || @goto skip
-                end
-            end
-        end
-        # Everything accounted for. Go field by field and perform idf:
-        # Compute domtree now, needed below, now that we have finished compacting the IR.
-        # This needs to be after we iterate through the IR with `IncrementalCompact`
-        # because removing dead blocks can invalidate the domtree.
-        domtree = get_domtree()
-        preserve_uses = isempty(defuse.ccall_preserve_uses) ? nothing :
-            IdDict{Int, Vector{Any}}((idx=>Any[] for idx in SPCSet(defuse.ccall_preserve_uses)))
-        for fidx in 1:ndefuse
-            du = fielddefuse[fidx]
-            ftyp = fieldtype(typ, fidx)
-            if !isempty(du.uses)
-                phiblocks, allblocks = blocks[fidx]
-                phinodes = IdDict{Int, SSAValue}()
-                for b in phiblocks
-                    phinodes[b] = insert_node!(ir, first(ir.cfg.blocks[b].stmts),
-                        NewInstruction(PhiNode(), ftyp))
-                end
-                # Now go through all uses and rewrite them
-                for stmt in du.uses
-                    ir[SSAValue(stmt)][:inst] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
-                end
-                if !isbitstype(ftyp)
-                    if preserve_uses !== nothing
-                        for (use, list) in preserve_uses
-                            push!(list, compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use))
-                        end
-                    end
-                end
-                for b in phiblocks
-                    n = ir[phinodes[b]][:inst]::PhiNode
-                    for p in ir.cfg.blocks[b].preds
-                        push!(n.edges, p)
-                        push!(n.values, compute_value_for_block(ir, domtree,
-                            allblocks, du, phinodes, fidx, p))
-                    end
-                end
-            end
-            for stmt in du.defs
-                stmt == newidx && continue
-                ir[SSAValue(stmt)][:inst] = nothing
-            end
-        end
-        preserve_uses === nothing && continue
-        if all_forwarded
-            # this means all ccall preserves have been replaced with forwarded loads
-            # so we can potentially eliminate the allocation, otherwise we must preserve
-            # the whole allocation.
-            push!(intermediaries, newidx)
-        end
-        # Insert the new preserves
-        for (use, new_preserves) in preserve_uses
-            ir[SSAValue(use)][:inst] = form_new_preserves(ir[SSAValue(use)][:inst]::Expr, intermediaries, new_preserves)
-        end
-
-        @label skip
-    end
+    simple_dce!(compact)
+    ir = complete(compact)
+    return ir, memory_opt, get_domtree
 end
 
 function form_new_preserves(origex::Expr, intermediates::Vector{Int}, new_preserves::Vector{Any})
@@ -1049,6 +729,480 @@ function form_new_preserves(origex::Expr, intermediates::Vector{Int}, new_preser
         push!(newex.args, new_preserves[i])
     end
     return newex
+end
+
+import .EscapeAnalysis:
+    EscapeState, EscapeInfo, IndexableFields, LivenessSet, getaliases, LocalUse, LocalDef
+
+"""
+    memory_opt_pass!(ir::IRCode, estate::EscapeState) -> newir::IRCode
+
+Performs memory optimizations using escape information analyzed by `EscapeAnalysis`.
+Specifically, this optimization pass does SROA of mutable allocations.
+
+`estate::EscapeState` is expected to be a result of `analyze_escapes(ir, ...)`.
+Since the computational cost of running `analyze_escapes` can be relatively expensive,
+it is recommended to run this pass "selectively" i.e. only when there seems to be
+a profitability for the memory optimizations.
+"""
+function memory_opt_pass!(ir::IRCode, estate::EscapeState, @specialize(get_domtree))
+    # Compute domtree now, needed below, now that we have finished compacting the IR.
+    # This needs to be after we iterate through the IR with `IncrementalCompact`
+    # because removing dead blocks can invalidate the domtree.
+    # TODO initialization of the domtree can be delayed to avoid the expensive computation
+    # in cases when there are no loads to be forwarded
+    workingset   = BitSet(1:length(ir.stmts)+length(ir.new_nodes.stmts))
+    eliminated   = BitSet()
+    revisit      = Tuple{#=related=#Vector{SSAValue}, #=Liveness=#LivenessSet}[]
+    allpreserved = true
+    newpreserves = nothing
+    while !isempty(workingset)
+        idx = pop!(workingset)
+        ssa = SSAValue(idx)
+        stmt = ir[ssa][:inst]
+        # NOTE `linear_pass!` can't eliminate immutables wrapped by mutables,
+        # but the EA-based alias analysis may be able to eliminate them also
+        isexpr(stmt, :new) || is_known_call(stmt, tuple, ir) || continue
+        einfo = estate[ssa]
+        is_load_forwardable(einfo) || continue
+        aliases = getaliases(ssa, estate)
+        if aliases === nothing
+            related = SSAValue[ssa]
+        else
+            related = SSAValue[]
+            for alias in aliases
+                @assert isa(alias, SSAValue) "invalid escape analysis"
+                push!(related, alias)
+                delete!(workingset, alias.id)
+            end
+        end
+        finfos = (einfo.AliasInfo::IndexableFields).infos
+        nflds = length(finfos)
+
+        # Partition defuses by field, and object identity
+        fdefuses = IdDict{Tuple{Int,SSAValue},FieldDefUse}()
+        for fidx = 1:nflds
+            finfo = finfos[fidx]
+            for fx in finfo
+                if isa(fx, LocalUse)
+                    use = fx.idx
+                    stmt = ir[SSAValue(use)][:inst] # use (getfield call)
+                    @assert is_known_call(stmt, getfield, ir)
+                    obj = stmt.args[2]
+                    @assert isa(obj, SSAValue)
+                    fdu = get!(()->FieldDefUse(), fdefuses, (fidx, obj))
+                    push!(fdu.uses, GetfieldLoad(use))
+                elseif isa(fx, LocalDef)
+                    def = fx.idx
+                    obj = SSAValue(def)
+                    stmt = ir[obj][:inst] # def (setfield! call, tuple call or :new expression)
+                    for rel in related
+                        if isexpr(stmt, :new) || is_known_call(stmt, tuple, ir)
+                            relstmt = ir[rel][:inst]
+                            if isexpr(relstmt, :new) || is_known_call(relstmt, tuple, ir)
+                                rel !== obj && continue
+                            end
+                        end
+                        fdu = get!(()->FieldDefUse(), fdefuses, (fidx, rel))
+                        push!(fdu.defs, def)
+                    end
+                end
+            end
+        end
+
+        Liveness = einfo.Liveness
+        for livepc in Liveness
+            livestmt = ir[SSAValue(livepc)][:inst]
+            if is_known_call(livestmt, Core.ifelse, ir) ||
+               is_known_call(livestmt, tuple, ir) ||
+               is_known_call(livestmt, arrayset, ir)
+                # TODO the succeeding domination analysis doesn't account for flow sensitivity
+                # introduced by those program constructs, just give up SROA for now
+                @goto next_itr
+            elseif is_known_call(livestmt, isdefined, ir)
+                args = livestmt.args
+                length(args) ≥ 3 || continue
+                obj = args[2]
+                isa(obj, SSAValue) || continue
+                obj in related || continue
+                fld = args[3]
+                fldval = try_compute_field(ir, fld)
+                fldval === nothing && continue
+                typ = unwrap_unionall(widenconst(argextype(obj, ir)))
+                isa(typ, DataType) || continue
+                fidx = try_compute_fieldidx(typ, fldval)
+                fidx === nothing && continue
+                fdu = get!(()->FieldDefUse(), fdefuses, (fidx, obj))
+                push!(fdu.uses, IsdefinedUse(livepc))
+            elseif isexpr(livestmt, :foreigncall)
+                # we shouldn't eliminate this use if it's used as a direct argument
+                args = livestmt.args
+                nccallargs = length(args[3]::SimpleVector)
+                for i = 6:(5+nccallargs)
+                    arg = args[i]
+                    isa(arg, SSAValue) && arg in related && @goto next_liveness
+                end
+                # this use is preserve, and may be eliminable
+                for i = (6+nccallargs):length(args)
+                    arg = args[i]
+                    if isa(arg, SSAValue) && arg in related
+                        for fidx in 1:nflds
+                            fdu = get!(()->FieldDefUse(), fdefuses, (fidx, arg))
+                            push!(fdu.uses, PreserveUse(livepc))
+                        end
+                    end
+                end
+            end
+            @label next_liveness
+        end
+
+        for ((fidx, objssa), fdu) in fdefuses
+            isempty(fdu.uses) && @goto next_field
+            # check if all uses have safe definitions first, otherwise we should bail out
+            # since then we may fail to form new ϕ-nodes
+            ldu = compute_live_ins(ir.cfg, fdu)
+            if isempty(ldu.live_in_bbs)
+                phiblocks = Int[]
+            else
+                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get_domtree())
+            end
+            obj = ir[objssa][:inst]
+            if isa(obj, PhiNode)
+                push!(phiblocks, block_for_inst(ir, objssa.id))
+            end
+            allblocks = sort!(vcat(phiblocks, ldu.def_bbs))
+            for use in fdu.uses
+                isa(use, IsdefinedUse) && continue
+                if isa(use, PreserveUse) && isempty(fdu.defs)
+                    # nothing to preserve, just ignore this use (may happen when there are unintialized fields)
+                    continue
+                end
+                if !has_safe_def(ir, get_domtree(), allblocks, fdu, getuseidx(use))
+                    allpreserved = false
+                    @goto next_field
+                end
+            end
+            phinodes = IdDict{Int, SSAValue}()
+            for b in phiblocks
+                phinodes[b] = insert_node!(ir, first(ir.cfg.blocks[b].stmts),
+                    NewInstruction(PhiNode(), Any))
+            end
+            # Now go through all uses and rewrite them
+            domtree = get_domtree()
+            for use in fdu.uses
+                if isa(use, GetfieldLoad)
+                    use = getuseidx(use)
+                    ir[SSAValue(use)][:inst] = compute_value_for_use(
+                        ir, domtree, allblocks, fdu, phinodes, fidx, use)
+                    push!(eliminated, use)
+                elseif isa(use, PreserveUse)
+                    allpreserved || continue
+                    isempty(fdu.defs) && continue # nothing to preserve (may happen when there are unintialized fields)
+                    # record this `use` as replaceable no matter if we preserve new value or not
+                    use = getuseidx(use)
+                    newval = compute_value_for_use(
+                        ir, domtree, allblocks, fdu, phinodes, fidx, use)
+                    if !isbitstype(widenconst(argextype(newval, ir)))
+                        if newpreserves === nothing
+                            newpreserves = IdDict{Int,Vector{Any}}()
+                        end
+                        newvalues = get!(()->Any[], newpreserves, use)
+                        push!(newvalues, newval)
+                    end
+                elseif isa(use, IsdefinedUse)
+                    use = getuseidx(use)
+                    if has_safe_def(ir, domtree, allblocks, fdu, use)
+                        ir[SSAValue(use)][:inst] = true
+                        push!(eliminated, use)
+                    end
+                else
+                    throw("unexpected use")
+                end
+            end
+            for b in phiblocks
+                ϕssa = phinodes[b]
+                n = ir[ϕssa][:inst]::PhiNode
+                t = Bottom
+                if isa(obj, PhiNode)
+                    for i = 1:length(obj.edges)
+                        isassigned(obj.edges, i) || continue
+                        p = obj.edges[i]
+                        push!(n.edges, p)
+                        v = compute_value_for_block(ir, domtree, allblocks,
+                            fdefuses[(fidx, obj.values[i]::SSAValue)], phinodes, fidx, Int(p))
+                        push!(n.values, v)
+                        if t !== Any
+                            t = tmerge(t, argextype(v, ir))
+                        end
+                    end
+                else
+                    for p in ir.cfg.blocks[b].preds
+                        push!(n.edges, p)
+                        v = compute_value_for_block(ir, domtree, allblocks, fdu, phinodes, fidx, p)
+                        push!(n.values, v)
+                        if t !== Any
+                            t = tmerge(t, argextype(v, ir))
+                        end
+                    end
+                end
+                ir[ϕssa][:type] = t
+            end
+            @label next_field
+        end
+        push!(revisit, (related, Liveness))
+        @label next_itr
+    end
+
+    # remove dead setfield! and :new allocs
+    deadssas = IdSet{SSAValue}()
+    if allpreserved && newpreserves !== nothing
+        preserved = keys(newpreserves)
+    else
+        preserved = EMPTY_PRESERVED_SSAS
+    end
+    mark_dead_ssas!(ir, deadssas, revisit, eliminated, preserved)
+    for ssa in deadssas
+        ir[ssa][:inst] = nothing
+    end
+    if allpreserved && newpreserves !== nothing
+        deadssas = Int[ssa.id for ssa in deadssas]
+        for (idx, newuses) in newpreserves
+            ir[SSAValue(idx)][:inst] = form_new_preserves(
+                ir[SSAValue(idx)][:inst]::Expr, deadssas, newuses)
+        end
+    end
+
+    return ir
+end
+
+const EMPTY_PRESERVED_SSAS = keys(IdDict{Int,Vector{Any}}())
+const PreservedSets = typeof(EMPTY_PRESERVED_SSAS)
+
+function is_load_forwardable(x::EscapeInfo)
+    AliasInfo = x.AliasInfo
+    return isa(AliasInfo, IndexableFields)
+end
+
+struct FieldDefUse
+    uses::Vector{Any}
+    defs::Vector{Int}
+end
+FieldDefUse() = FieldDefUse(Any[], Int[])
+struct GetfieldLoad
+    idx::Int
+end
+struct PreserveUse
+    idx::Int
+end
+struct IsdefinedUse
+    idx::Int
+end
+function getuseidx(@nospecialize use)
+    if isa(use, GetfieldLoad)
+        return use.idx
+    elseif isa(use, PreserveUse)
+        return use.idx
+    elseif isa(use, IsdefinedUse)
+        return use.idx
+    end
+    throw("getuseidx: unexpected use")
+end
+
+function compute_live_ins(cfg::CFG, fdu::FieldDefUse)
+    uses = Int[]
+    for use in fdu.uses
+        isa(use, IsdefinedUse) && continue
+        push!(uses, getuseidx(use))
+    end
+    return compute_live_ins(cfg, fdu.defs, uses)
+end
+
+# even when the allocation contains an uninitialized field, we try an extra effort to check
+# if this load at `idx` have any "safe" `setfield!` calls that define the field
+# try to find
+function has_safe_def(ir::IRCode, domtree::DomTree, allblocks::Vector{Int},
+    fdu::FieldDefUse, use::Int)
+    dfu = find_def_for_use(ir, domtree, allblocks, fdu, use)
+    dfu === nothing && return false
+    def = dfu[1]
+    def ≠ 0 && return true # found a "safe" definition
+    # we may still be able to replace this load with `PhiNode` -- examine if all predecessors of
+    # this `block` have any "safe" definition
+    block = block_for_inst(ir, use)
+    seen = BitSet(block)
+    worklist = BitSet(ir.cfg.blocks[block].preds)
+    isempty(worklist) && return false
+    while !isempty(worklist)
+        pred = pop!(worklist)
+        # if this block has already been examined, bail out to avoid infinite cycles
+        pred in seen && return false
+        use = last(ir.cfg.blocks[pred].stmts)
+        # NOTE this `use` isn't a load, and so the inclusive condition can be used
+        dfu = find_def_for_use(ir, domtree, allblocks, fdu, use, true)
+        dfu === nothing && return false
+        def = dfu[1]
+        push!(seen, pred)
+        def ≠ 0 && continue # found a "safe" definition for this predecessor
+        # if not, check for the predecessors of this predecessor
+        for newpred in ir.cfg.blocks[pred].preds
+            push!(worklist, newpred)
+        end
+    end
+    return true
+end
+
+# find the first dominating def for the given use
+function find_def_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int},
+    fdu::FieldDefUse, use::Int, inclusive::Bool=false)
+    useblock = block_for_inst(ir.cfg, use)
+    curblock = find_curblock(domtree, allblocks, useblock)
+    curblock === nothing && return nothing
+    local def = 0
+    for idx in fdu.defs
+        if block_for_inst(ir.cfg, idx) == curblock
+            if curblock != useblock
+                # Find the last def in this block
+                def = max(def, idx)
+            else
+                # Find the last def before our use
+                if inclusive
+                    def = max(def, idx ≤ use ? idx : 0)
+                else
+                    def = max(def, idx < use ? idx : 0)
+                end
+            end
+        end
+    end
+    return def, useblock, curblock
+end
+
+function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
+    # TODO: This can be much faster by looking at current level and only
+    # searching for those blocks in a sorted order
+    while !(curblock in allblocks)
+        curblock = domtree.idoms_bb[curblock]
+        curblock == 0 && return nothing
+    end
+    return curblock
+end
+
+function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int},
+    fdu::FieldDefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use::Int)
+    dfu = find_def_for_use(ir, domtree, allblocks, fdu, use)
+    @assert dfu !== nothing "has_safe_def condition unsatisfied"
+    def, useblock, curblock = dfu
+    if def == 0
+        if !haskey(phinodes, curblock)
+            # If this happens, we need to search the predecessors for defs. Which
+            # one doesn't matter - if it did, we'd have had a phinode
+            return compute_value_for_block(ir, domtree, allblocks, fdu, phinodes, fidx, first(ir.cfg.blocks[useblock].preds))
+        end
+        # The use is the phinode
+        return phinodes[curblock]
+    else
+        return val_for_def_expr(ir, def, fidx)
+    end
+end
+
+function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector{Int},
+    fdu::FieldDefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, curblock::Int)
+    curblock = find_curblock(domtree, allblocks, curblock)
+    @assert curblock !== nothing "has_safe_def condition unsatisfied"
+    def = 0
+    for stmt in fdu.defs
+        if block_for_inst(ir.cfg, stmt) == curblock
+            def = max(def, stmt)
+        end
+    end
+    return def == 0 ? phinodes[curblock] : val_for_def_expr(ir, def, fidx)
+end
+
+function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
+    ex = ir[SSAValue(def)][:inst]
+    if isexpr(ex, :new) || is_known_call(ex, tuple, ir)
+        return ex.args[1+fidx]
+    else
+        @assert is_known_call(ex, setfield!, ir) "invalid load forwarding"
+        return ex.args[4]
+    end
+end
+
+function mark_dead_ssas!(ir::IRCode, deadssas::IdSet{SSAValue},
+    revisit::Vector{Tuple{Vector{SSAValue},LivenessSet}}, eliminated::BitSet,
+    preserved::PreservedSets)
+    workingset = BitSet(1:length(revisit))
+    while !isempty(workingset)
+        revisit_idx = pop!(workingset)
+        mark_dead_ssas!(ir, deadssas, revisit, eliminated, preserved, workingset, revisit_idx)
+    end
+end
+
+function mark_dead_ssas!(ir::IRCode, deadssas::IdSet{SSAValue},
+    revisit::Vector{Tuple{Vector{SSAValue},LivenessSet}}, eliminated::BitSet,
+    preserved::PreservedSets, workingset::BitSet, revisit_idx::Int)
+    related, Liveness = revisit[revisit_idx]
+    eliminable = SSAValue[]
+    for livepc in Liveness
+        livepc in eliminated && @goto next_live
+        ssa = SSAValue(livepc)
+        stmt = ir[ssa][:inst]
+        if isexpr(stmt, :new)
+            ssa in deadssas && @goto next_live
+            for new_revisit_idx in workingset
+                if ssa in revisit[new_revisit_idx][1]
+                    delete!(workingset, new_revisit_idx)
+                    if mark_dead_ssas!(ir, deadssas,
+                            revisit, eliminated,
+                            preserved, workingset, new_revisit_idx)
+                        push!(eliminable, ssa)
+                        @goto next_live
+                    else
+                        return false
+                    end
+                end
+            end
+            return false
+        elseif is_known_call(stmt, setfield!, ir)
+            @assert length(stmt.args) ≥ 4 "invalid escape analysis"
+            obj = stmt.args[2]
+            val = stmt.args[4]
+            if isa(obj, SSAValue)
+                if obj in related
+                    push!(eliminable, ssa)
+                    @goto next_live
+                end
+                if isa(val, SSAValue) && val in related
+                    if obj in deadssas
+                        push!(eliminable, ssa)
+                        @goto next_live
+                    end
+                    for new_revisit_idx in workingset
+                        if obj in revisit[new_revisit_idx][1]
+                            delete!(workingset, new_revisit_idx)
+                            if mark_dead_ssas!(ir, deadssas,
+                                    revisit, eliminated,
+                                    preserved, workingset, new_revisit_idx)
+                                push!(eliminable, ssa)
+                                @goto next_live
+                            else
+                                return false
+                            end
+                        end
+                    end
+                end
+            end
+            return false
+        elseif isexpr(stmt, :foreigncall)
+            livepc in preserved && @goto next_live
+            return false
+        else
+            return false
+        end
+        @label next_live
+    end
+    for ssa in related; push!(deadssas, ssa); end
+    for ssa in eliminable; push!(deadssas, ssa); end
+    return true
 end
 
 """
@@ -1125,15 +1279,15 @@ In addition to a simple DCE for unused values and allocations,
 this pass also nullifies `typeassert` calls that can be proved to be no-op,
 in order to allow LLVM to emit simpler code down the road.
 
-Note that this pass is more effective after SROA optimization (i.e. `sroa_pass!`),
+Note that this pass is more effective after SROA optimization (i.e. `linear_pass!`),
 since SROA often allows this pass to:
 - eliminate allocation of object whose field references are all replaced with scalar values, and
 - nullify `typeassert` call whose first operand has been replaced with a scalar value
   (, which may have introduced new type information that inference did not understand)
 
-Also note that currently this pass _needs_ to run after `sroa_pass!`, because
+Also note that currently this pass _needs_ to run after `linear_pass!`, because
 the `typeassert` elimination depends on the transformation by `canonicalize_typeassert!` done
-within `sroa_pass!` which redirects references of `typeassert`ed value to the corresponding `PiNode`.
+within `linear_pass!` which redirects references of `typeassert`ed value to the corresponding `PiNode`.
 """
 function adce_pass!(ir::IRCode)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
