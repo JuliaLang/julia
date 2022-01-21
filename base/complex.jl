@@ -1064,6 +1064,11 @@ function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; k
             round(imag(z), ri; kwargs...))
 end
 
+_precision_complex(::Type{ComplexF64},base) = precision(Float64, base=base)
+_precision_complex(::Type{ComplexF32},base) = precision(Float32, base=base)
+_precision_complex(::Type{ComplexF16},base) = precision(Float16, base=base)
+precision(::Type{T}; base::Integer=2) where {T<:Complex}= _precision_complex(T,base)
+
 
 float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
