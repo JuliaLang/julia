@@ -136,8 +136,6 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             unescape_julia_string(val_str, false, false)[2]
         elseif k == K"Identifier"
             Symbol(val_str)
-        elseif k == K"VarIdentifier"
-            Symbol(val_str[5:end-1])
         elseif is_keyword(k)
             # This should only happen for tokens nested inside errors
             Symbol(val_str)
@@ -159,8 +157,6 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             :var"@__dot__"
         elseif k == K"MacroName"
             Symbol("@$val_str")
-        elseif k == K"VarMacroName"
-            Symbol("@$(val_str[5:end-1])")
         elseif k == K"StringMacroName"
             Symbol("@$(val_str)_str")
         elseif k == K"CmdMacroName"
