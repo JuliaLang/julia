@@ -1331,7 +1331,7 @@ _edit_indent(buf::IOBuffer, b::Int, num::Int) =
 # Completion operations
 function complete_prev(s::MIState)
     isselectable(state(s)) || return false
-    select_previous!(state(s).completion_menu)
+    select_prev!(state(s).completion_menu)
     refresh_completions(state(s))
     return true
 end

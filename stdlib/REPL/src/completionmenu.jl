@@ -93,7 +93,7 @@ function select_next!(menu::FishCompletionMenu)
     return menu
 end
 
-function select_previous!(menu::FishCompletionMenu)
+function select_prev!(menu::FishCompletionMenu)
     menu.selected = mod1(menu.selected - 1, length(menu.completions))
     return menu
 end
