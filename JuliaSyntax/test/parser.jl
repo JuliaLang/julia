@@ -38,6 +38,7 @@ tests = [
         "a, b = c, d" =>  "(= (tuple a b) (tuple c d))"
         "x, = xs"     =>  "(= (tuple x) xs)"
         "[a ~b]"      =>  "(hcat a (call ~ b))"
+        "a ~ b"       =>  "(call-i a ~ b)"
         "[a ~ b c]"   =>  "(hcat (call-i a ~ b) c)"
     ],
     JuliaSyntax.parse_cond => [
@@ -59,9 +60,11 @@ tests = [
     ],
     JuliaSyntax.parse_or => [
         "x || y || z" => "(|| x (|| y z))"
+        "x .|| y"     =>  "(.|| x y)"
     ],
     JuliaSyntax.parse_and => [
         "x && y && z" => "(&& x (&& y z))"
+        "x .&& y"     => "(.&& x y)"
     ],
     JuliaSyntax.parse_comparison => [
         # Type comparisons are syntactic
@@ -161,6 +164,11 @@ tests = [
         "+(a)(x,y)^2"  =>  "(call + (call-i (call a x y) ^ 2))"
         # Normal unary calls (see parse_unary)
         "+x" => "(call + x)"
+        "√x" => "(call √ x)"
+        "±x" => "(call ± x)"
+        # Not a unary operator
+        "/x"     => "(call (error /) x)"
+        ".<: x"  => "(call (error .<:) x)"
     ],
     JuliaSyntax.parse_factor => [
         "x^y"      =>  "(call-i x ^ y)"
