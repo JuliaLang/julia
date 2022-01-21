@@ -1206,3 +1206,9 @@ end
     @test !iseven(7+0im) && isodd(7+0im)
     @test !iseven(6+1im) && !isodd(7+1im)
 end
+
+@testset "precision" begin
+    @test precision(ComplexF64) == 53
+    @test precision(ComplexF32) == 24
+    @test precision(ComplexF16) == 11
+end
