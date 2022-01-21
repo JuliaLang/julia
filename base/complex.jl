@@ -1071,7 +1071,7 @@ precision(::Type{T}; base::Integer=2) where {T<:Complex}= _precision_complex(T,b
 
 # This really shouldn't be here but the boostrapping process doesn't allow it
 function twiceprecision(val::TwicePrecision{T}, nb::Integer) where {T<:Complex}
-        return val
+    return val
 end
 nbitslen(::Type{T}, len, offset) where {T<:Complex} =
     min(cld(precision(T), 2), nbitslen(len, offset))
