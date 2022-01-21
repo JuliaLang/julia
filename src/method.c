@@ -731,6 +731,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->sig = NULL;
     m->slot_syms = NULL;
     m->roots = NULL;
+    m->root_blocks = NULL;
     m->ccallable = NULL;
     m->module = module;
     m->external_mt = NULL;
@@ -985,6 +986,53 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     JL_GC_POP();
 
     return m;
+}
+
+// root blocks
+
+static uint64_t current_root_id(jl_array_t *root_blocks)
+{
+    if (!root_blocks)
+        return 0;
+    assert(jl_is_array(root_blocks));
+    size_t nx2 = jl_array_len(root_blocks);
+    if (nx2 == 0)
+        return 0;
+    uint64_t *blocks = (uint64_t*)jl_array_data(root_blocks);
+    return blocks[nx2-2];
+}
+
+static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
+{
+    assert(jl_is_array(root_blocks));
+    jl_array_grow_end(root_blocks, 2);
+    uint64_t *blocks = (uint64_t*)jl_array_data(root_blocks);
+    int nx2 = jl_array_len(root_blocks);
+    blocks[nx2-2] = modid;
+    blocks[nx2-1] = len;
+}
+
+JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root)
+{
+    JL_GC_PUSH2(&m, &root);
+    uint64_t modid = 0;
+    if (mod) {
+        assert(jl_is_module(mod));
+        modid = mod->build_id;
+    }
+    assert(jl_is_method(m));
+    if (!m->roots) {
+        m->roots = jl_alloc_vec_any(0);
+        jl_gc_wb(m, m->roots);
+    }
+    if (!m->root_blocks && modid != 0) {
+        m->root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
+        jl_gc_wb(m, m->root_blocks);
+    }
+    if (current_root_id(m->root_blocks) != modid)
+        add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
+    jl_array_ptr_1d_push(m->roots, root);
+    JL_GC_POP();
 }
 
 #ifdef __cplusplus

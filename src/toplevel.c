@@ -33,6 +33,9 @@ JL_DLLEXPORT const char *jl_filename = "none"; // need to update jl_critical_err
 htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
 
+// During incremental compilation, the following gets set
+JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module;           // the toplevel module currently being defined
+
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
     jl_module_t *base_module = jl_base_relative_to(m);
@@ -138,11 +141,16 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     ptrhash_put(&jl_current_modules, (void*)newm, (void*)((uintptr_t)HT_NOTFOUND + 1));
     JL_UNLOCK(&jl_modules_mutex);
 
+    jl_module_t *old_toplevel_module = jl_precompile_toplevel_module;
+
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
     if (jl_is__toplevel__mod(parent_module)) {
         newm->parent = newm;
         jl_register_root_module(newm);
+        if (jl_options.incremental) {
+            jl_precompile_toplevel_module = newm;
+        }
     }
     else {
         newm->parent = parent_module;
@@ -260,6 +268,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
             jl_module_run_initializer(m);
         }
     }
+
+    jl_precompile_toplevel_module = old_toplevel_module;
 
     JL_GC_POP();
     return (jl_value_t*)newm;

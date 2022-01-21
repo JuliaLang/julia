@@ -183,7 +183,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     @verify_error "Operand $i of PhiC node $idx must be an SSA Value."
                     error("")
                 end
-                if !isa(ir[val], UpsilonNode)
+                if !isa(ir[val][:inst], UpsilonNode)
                     @verify_error "Operand $i of PhiC node $idx must reference an Upsilon node."
                     error("")
                 end

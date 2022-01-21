@@ -33,6 +33,56 @@ function precompile_test_harness(@nospecialize(f), separate::Bool)
     nothing
 end
 
+# method root provenance
+
+rootid(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), Base.parentmodule(m))
+rootid(m::Method) = rootid(m.module)
+
+function root_provenance(m::Method, i::Int)
+    mid = rootid(m)
+    isdefined(m, :root_blocks) || return mid
+    idxs = view(m.root_blocks, 2:2:length(m.root_blocks))
+    j = searchsortedfirst(idxs, i) - 1   # RLE roots are 0-indexed
+    j == 0 && return mid
+    return m.root_blocks[2*j-1]
+end
+
+struct RLEIterator{T}   # for method roots, T = UInt64 (even on 32-bit)
+    items::Vector{Any}
+    blocks::Vector{T}
+    defaultid::T
+end
+function RLEIterator(roots, blocks, defaultid)
+    T = promote_type(eltype(blocks), typeof(defaultid))
+    return RLEIterator{T}(convert(Vector{Any}, roots), blocks, defaultid)
+end
+RLEIterator(m::Method) = RLEIterator(m.roots, m.root_blocks, rootid(m))
+Base.iterate(iter::RLEIterator) = iterate(iter, (0, 0, iter.defaultid))
+function Base.iterate(iter::RLEIterator, (i, j, cid))
+    i += 1
+    i > length(iter.items) && return nothing
+    r = iter.items[i]
+    while (j + 1 < length(iter.blocks) && i > iter.blocks[j+2])
+        cid = iter.blocks[j+1]
+        j += 2
+    end
+    return cid => r, (i, j, cid)
+end
+
+function group_roots(m::Method)
+    mid = rootid(m)
+    isdefined(m, :root_blocks) || return Dict(mid => m.roots)
+    group_roots(RLEIterator(m.roots, m.root_blocks, mid))
+end
+function group_roots(iter::RLEIterator)
+    rootsby = Dict{typeof(iter.defaultid),Vector{Any}}()
+    for (id, r) in iter
+        list = get!(valtype(rootsby), rootsby, id)
+        push!(list, r)
+    end
+    return rootsby
+end
+
 
 precompile_test_harness("basic precompile functionality") do dir2
 precompile_test_harness(false) do dir
@@ -533,6 +583,87 @@ precompile_test_harness(false) do dir
     @test Base.stale_cachefile(FooBarT2_file, joinpath(cachedir2, "FooBarT2.ji")) === true
     @test Base.require(Main, :FooBarT2) isa Module
 end
+end
+
+# method root provenance
+# setindex!(::Dict{K,V}, ::Any, ::K) adds both compression and codegen roots
+precompile_test_harness("code caching") do dir
+    Bid = rootid(Base)
+    Cache_module = :Cacheb8321416e8a3e2f1
+    write(joinpath(dir, "$Cache_module.jl"),
+          """
+          module $Cache_module
+              struct X end
+              struct X2 end
+              @noinline function f(d)
+                  @noinline
+                  d[X()] = nothing
+              end
+              @noinline fpush(dest) = push!(dest, X())
+              function callboth()
+                  f(Dict{X,Any}())
+                  fpush(X[])
+                  nothing
+              end
+              precompile(callboth, ())
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(Cache_module)))
+    @eval using $Cache_module
+    M = getfield(@__MODULE__, Cache_module)
+    Mid = rootid(M)
+    for name in (:f, :fpush, :callboth)
+        func = getfield(M, name)
+        m = only(collect(methods(func)))
+        @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
+    end
+    m = which(setindex!, (Dict{M.X,Any}, Any, M.X))
+    @test_broken M.X ∈ m.roots               # requires caching external compilation results
+    Base.invokelatest() do
+        Dict{M.X2,Any}()[M.X2()] = nothing
+    end
+    @test M.X2 ∈ m.roots
+    groups = group_roots(m)
+    @test_broken M.X ∈ groups[Mid]           # requires caching external compilation results
+    @test M.X2 ∈ groups[rootid(@__MODULE__)]
+    @test !isempty(groups[Bid])
+    # PkgA loads PkgB, and both add roots to the same method (both before and after loading B)
+    Cache_module2 = :Cachea1544c83560f0c99
+    write(joinpath(dir, "$Cache_module2.jl"),
+          """
+          module $Cache_module2
+              struct Y end
+              @noinline f(dest) = push!(dest, Y())
+              callf() = f(Y[])
+              callf()
+              using $(Cache_module)
+              struct Z end
+              @noinline g(dest) = push!(dest, Z())
+              callg() = g(Z[])
+              callg()
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(Cache_module2)))
+    @eval using $Cache_module2
+    M2 = getfield(@__MODULE__, Cache_module2)
+    M2id = rootid(M2)
+    dest = []
+    Base.invokelatest() do  # use invokelatest to see the results of loading the compile
+        M2.f(dest)
+        M.fpush(dest)
+        M2.g(dest)
+        @test dest == [M2.Y(), M.X(), M2.Z()]
+        @test M2.callf() == [M2.Y()]
+        @test M2.callg() == [M2.Z()]
+        @test M.fpush(M.X[]) == [M.X()]
+    end
+    mT = which(push!, (Vector{T} where T, Any))
+    groups = group_roots(mT)
+    # all below require caching external CodeInstances
+    @test_broken M2.Y ∈ groups[M2id]
+    @test_broken M2.Z ∈ groups[M2id]
+    @test_broken M.X ∈ groups[Mid]
+    @test_broken M.X ∉ groups[M2id]
 end
 
 # test --compiled-modules=no command line option
