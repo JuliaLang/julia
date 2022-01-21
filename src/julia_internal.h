@@ -9,6 +9,7 @@
 #include "support/hashing.h"
 #include "support/ptrhash.h"
 #include "support/strtod.h"
+#include "gc-alloc-profiler.h"
 #include <uv.h>
 #if !defined(_WIN32)
 #include <unistd.h>
@@ -364,6 +365,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         v = jl_gc_big_alloc(ptls, allocsz);
     }
     jl_set_typeof(v, ty);
+    maybe_record_alloc_to_profile(v, sz);
     return v;
 }
 
@@ -525,6 +527,8 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
                               int binding_effects);
 
+JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root);
+
 int jl_valid_type_param(jl_value_t *v);
 
 JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
@@ -645,6 +649,7 @@ jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t 
 JL_DLLEXPORT void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
 int jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isva, jl_value_t *rt_lb,

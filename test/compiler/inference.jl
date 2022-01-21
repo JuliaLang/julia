@@ -3140,11 +3140,12 @@ _use_unstable_kw_2() = _unstable_kw(x = 2, y = rand())
 @test Base.return_types(_use_unstable_kw_1) == Any[String]
 @test Base.return_types(_use_unstable_kw_2) == Any[String]
 @eval struct StructWithSplatNew
-    x::Int
+    x::String
     StructWithSplatNew(t) = $(Expr(:splatnew, :StructWithSplatNew, :t))
 end
 _construct_structwithsplatnew() = StructWithSplatNew(("",))
 @test Base.return_types(_construct_structwithsplatnew) == Any[StructWithSplatNew]
+@test isa(_construct_structwithsplatnew(), StructWithSplatNew)
 
 # case where a call cycle can be broken by constant propagation
 struct NotQRSparse
@@ -3990,4 +3991,24 @@ end |> only == Int
             return nothing # dead branch
         end
     end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB}
+end
+
+# issue #43784
+@testset "issue #43784" begin
+    init = Base.ImmutableDict{Any,Any}()
+    a = Const(init)
+    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, Any])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c)
+    @test ⊑(b, c)
+
+    @test @eval Module() begin
+        const ginit = Base.ImmutableDict{Any,Any}()
+        Base.return_types() do
+            g = ginit
+            while true
+                g = Base.ImmutableDict(g, 1=>2)
+            end
+        end |> only === Union{}
+    end
 end

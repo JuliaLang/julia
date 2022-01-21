@@ -1687,6 +1687,14 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
     elseif f === Core.ifelse
         length(argtypes) == 3 || return false
         return argtypes[1] ⊑ Bool
+    elseif f === typeassert
+        length(argtypes) == 2 || return false
+        a3 = argtypes[2]
+        if (isType(a3) && !has_free_typevars(a3) && argtypes[1] ⊑ a3.parameters[1]) ||
+            (isa(a3, Const) && isa(a3.val, Type) && argtypes[1] ⊑ a3.val)
+            return true
+        end
+        return false
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return false
         return argtypes[1] ⊑ Module && argtypes[2] ⊑ Symbol

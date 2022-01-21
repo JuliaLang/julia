@@ -2981,6 +2981,21 @@ end
 @generated g25678(x) = return :x
 @test g25678(7) === 7
 
+# issue 25678: module of name `Core`
+# https://github.com/JuliaLang/julia/pull/40778/files#r784416018
+@test @eval Module() begin
+    Core = 1
+    @generated f() = 1
+    f() == 1
+end
+
+# issue 25678: argument of name `tmp`
+# https://github.com/JuliaLang/julia/pull/43823#discussion_r785365312
+@test @eval Module() begin
+    @generated f(tmp) = tmp
+    f(1) === Int
+end
+
 # issue #19012
 @test Meta.parse("\U2200", raise=false) == Symbol("∀")
 @test Meta.parse("\U2203", raise=false) == Symbol("∃")

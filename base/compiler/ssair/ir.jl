@@ -304,17 +304,17 @@ end
 
 function getindex(x::IRCode, s::SSAValue)
     if s.id <= length(x.stmts)
-        return x.stmts[s.id][:inst]
+        return x.stmts[s.id]
     else
-        return x.new_nodes.stmts[s.id - length(x.stmts)][:inst]
+        return x.new_nodes.stmts[s.id - length(x.stmts)]
     end
 end
 
-function setindex!(x::IRCode, @nospecialize(repl), s::SSAValue)
+function setindex!(x::IRCode, repl::Instruction, s::SSAValue)
     if s.id <= length(x.stmts)
-        x.stmts[s.id][:inst] = repl
+        x.stmts[s.id] = repl
     else
-        x.new_nodes.stmts[s.id - length(x.stmts)][:inst] = repl
+        x.new_nodes.stmts[s.id - length(x.stmts)] = repl
     end
     return x
 end

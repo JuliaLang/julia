@@ -156,8 +156,8 @@ function lbt_set_num_threads(nthreads)
     return ccall((:lbt_set_num_threads, libblastrampoline), Cvoid, (Int32,), nthreads)
 end
 
-function lbt_forward(path; clear::Bool = false, verbose::Bool = false)
-    ccall((:lbt_forward, libblastrampoline), Int32, (Cstring, Int32, Int32), path, clear ? 1 : 0, verbose ? 1 : 0)
+function lbt_forward(path; clear::Bool = false, verbose::Bool = false, suffix_hint::Union{String,Nothing} = nothing)
+    ccall((:lbt_forward, libblastrampoline), Int32, (Cstring, Int32, Int32, Cstring), path, clear ? 1 : 0, verbose ? 1 : 0, something(suffix_hint, C_NULL))
 end
 
 function lbt_set_default_func(addr)

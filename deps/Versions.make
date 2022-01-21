@@ -75,7 +75,7 @@ OBJCONV_JLL_NAME := Objconv
 OBJCONV_JLL_VER  := 2.49.1+0
 
 # blastrampoline
-BLASTRAMPOLINE_VER := 3.0.4
+BLASTRAMPOLINE_VER := 4.0.0
 BLASTRAMPOLINE_JLL_NAME := libblastrampoline
 
 # OpenBLAS
@@ -83,7 +83,7 @@ OPENBLAS_VER := 0.3.17
 OPENBLAS_JLL_NAME := OpenBLAS
 
 # OpenLibm
-OPENLIBM_VER := 0.7.3
+OPENLIBM_VER := 0.8.1
 OPENLIBM_JLL_NAME := OpenLibm
 
 # Patchelf (we don't ship this or even use a JLL, we just always build it)

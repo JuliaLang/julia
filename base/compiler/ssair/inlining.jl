@@ -134,7 +134,7 @@ function cfg_inline_item!(ir::IRCode, idx::Int, spec::ResolvedInliningSpec, stat
     last_block_idx = last(state.cfg.blocks[block].stmts)
     if false # TODO: ((idx+1) == last_block_idx && isa(ir[SSAValue(last_block_idx)], GotoNode))
         need_split = false
-        post_bb_id = -ir[SSAValue(last_block_idx)].label
+        post_bb_id = -ir[SSAValue(last_block_idx)][:inst].label
     else
         post_bb_id = length(state.new_cfg_blocks) + length(inlinee_cfg.blocks) + (need_split_before ? 1 : 0)
         need_split = true #!(idx == last_block_idx)
@@ -195,7 +195,7 @@ function cfg_inline_item!(ir::IRCode, idx::Int, spec::ResolvedInliningSpec, stat
     for (old_block, new_block) in enumerate(bb_rename_range)
         if (length(state.new_cfg_blocks[new_block].succs) == 0)
             terminator_idx = last(inlinee_cfg.blocks[old_block].stmts)
-            terminator = spec.ir[SSAValue(terminator_idx)]
+            terminator = spec.ir[SSAValue(terminator_idx)][:inst]
             if isa(terminator, ReturnNode) && isdefined(terminator, :val)
                 any_edges = true
                 push!(state.new_cfg_blocks[new_block].succs, post_bb_id)
@@ -849,7 +849,7 @@ function handle_single_case!(
     ir::IRCode, idx::Int, stmt::Expr,
     @nospecialize(case), todo::Vector{Pair{Int, Any}}, isinvoke::Bool = false)
     if isa(case, ConstantCase)
-        ir[SSAValue(idx)] = case.val
+        ir[SSAValue(idx)][:inst] = case.val
     elseif isa(case, MethodInstance)
         isinvoke && rewrite_invoke_exprargs!(stmt)
         stmt.head = :invoke
@@ -1053,7 +1053,9 @@ end
 function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecialize(rt))
     if stmt_effect_free(stmt, rt, ir)
         ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
+        return true
     end
+    return false
 end
 
 # Handles all analysis and inlining of intrinsics and builtins. In particular,
@@ -1107,10 +1109,16 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
         return nothing
     end
 
-    check_effect_free!(ir, idx, stmt, rt)
+    if check_effect_free!(ir, idx, stmt, rt)
+        if sig.f === typeassert || sig.ft ⊑ typeof(typeassert)
+            # typeassert is a no-op if effect free
+            ir.stmts[idx][:inst] = stmt.args[2]
+            return nothing
+        end
+    end
 
     if sig.f !== Core.invoke && is_builtin(sig)
-        # No inlining for builtins (other invoke/apply)
+        # No inlining for builtins (other invoke/apply/typeassert)
         return nothing
     end
 
@@ -1119,7 +1127,7 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
     # Special case inliners for regular functions
     lateres = late_inline_special_case!(ir, idx, stmt, rt, sig, state.params)
     if isa(lateres, SomeCase)
-        ir[SSAValue(idx)] = lateres.val
+        ir[SSAValue(idx)][:inst] = lateres.val
         check_effect_free!(ir, idx, lateres.val, rt)
         return nothing
     elseif is_return_type(sig.f)
@@ -1287,6 +1295,16 @@ function handle_const_opaque_closure_call!(
     return nothing
 end
 
+function inline_const_if_inlineable!(inst::Instruction)
+    rt = inst[:type]
+    if rt isa Const && is_inlineable_constant(rt.val)
+        inst[:inst] = quoted(rt.val)
+        return true
+    end
+    inst[:flag] |= IR_FLAG_EFFECT_FREE
+    return false
+end
+
 function assemble_inline_todo!(ir::IRCode, state::InliningState)
     # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Pair{Int, Any}[]
@@ -1300,12 +1318,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
 
         # Check whether this call was @pure and evaluates to a constant
         if info isa MethodResultPure
-            rt = ir.stmts[idx][:type]
-            if rt isa Const && is_inlineable_constant(rt.val)
-                ir.stmts[idx][:inst] = quoted(rt.val)
-                continue
-            end
-            ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
+            inline_const_if_inlineable!(ir[SSAValue(idx)]) && continue
             info = info.info
         end
         if info === false
@@ -1361,7 +1374,7 @@ end
 
 function linear_inline_eligible(ir::IRCode)
     length(ir.cfg.blocks) == 1 || return false
-    terminator = ir[SSAValue(last(ir.cfg.blocks[1].stmts))]
+    terminator = ir[SSAValue(last(ir.cfg.blocks[1].stmts))][:inst]
     isa(terminator, ReturnNode) || return false
     isdefined(terminator, :val) || return false
     return true
@@ -1379,15 +1392,6 @@ function early_inline_special_case(
     ir::IRCode, stmt::Expr, @nospecialize(type), sig::Signature,
     params::OptimizationParams)
     (; f, ft, argtypes) = sig
-    if (f === typeassert || ft ⊑ typeof(typeassert)) && length(argtypes) == 3
-        # typeassert(x::S, T) => x, when S<:T
-        a3 = argtypes[3]
-        if (isType(a3) && !has_free_typevars(a3) && argtypes[2] ⊑ a3.parameters[1]) ||
-            (isa(a3, Const) && isa(a3.val, Type) && argtypes[2] ⊑ a3.val)
-            val = stmt.args[2]
-            return SomeCase(val === nothing ? QuoteNode(val) : val)
-        end
-    end
 
     if params.inlining
         if isa(type, Const) # || isconstType(type)

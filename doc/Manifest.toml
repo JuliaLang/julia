@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.0-DEV.1110"
+julia_version = "1.8.0-DEV.1335"
 manifest_format = "2.0"
 project_hash = "e0c77beb18dc1f6cce661ebd60658c0c1a77390f"
 
@@ -24,9 +24,9 @@ version = "0.8.6"
 
 [[deps.Documenter]]
 deps = ["ANSIColoredPrinters", "Base64", "Dates", "DocStringExtensions", "IOCapture", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Test", "Unicode"]
-git-tree-sha1 = "f425293f7e0acaf9144de6d731772de156676233"
+git-tree-sha1 = "75c6cf9d99e0efc79b724f5566726ad3ad010a01"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "0.27.10"
+version = "0.27.12"
 
 [[deps.IOCapture]]
 deps = ["Logging", "Random"]
@@ -64,9 +64,9 @@ version = "1.2.0"
 
 [[deps.Parsers]]
 deps = ["Dates"]
-git-tree-sha1 = "ae4bbcadb2906ccc085cf52ac286dc1377dceccc"
+git-tree-sha1 = "92f91ba9e5941fc781fecf5494ac1da87bdac775"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.1.2"
+version = "2.2.0"
 
 [[deps.Printf]]
 deps = ["Unicode"]

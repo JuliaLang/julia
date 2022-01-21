@@ -328,8 +328,15 @@ axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
-@inline @propagate_inbounds getindex(a::NonReshapedReinterpretArray{T,0}) where {T} = reinterpret(T, a.parent[])
-@inline @propagate_inbounds getindex(a::ReinterpretArray) = a[1]
+@inline @propagate_inbounds function getindex(a::NonReshapedReinterpretArray{T,0,S}) where {T,S}
+    if isprimitivetype(T) && isprimitivetype(S)
+        reinterpret(T, a.parent[])
+    else
+        a[firstindex(a)]
+    end
+end
+
+@inline @propagate_inbounds getindex(a::ReinterpretArray) = a[firstindex(a)]
 
 @inline @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
     check_readable(a)
@@ -462,8 +469,15 @@ end
     return t[][i1]
 end
 
-@inline @propagate_inbounds setindex!(a::NonReshapedReinterpretArray{T,0,S} where T, v) where {S} = (a.parent[] = reinterpret(S, v))
-@inline @propagate_inbounds setindex!(a::ReinterpretArray, v) = (a[1] = v)
+@inline @propagate_inbounds function setindex!(a::NonReshapedReinterpretArray{T,0,S}, v) where {T,S}
+    if isprimitivetype(S) && isprimitivetype(T)
+        a.parent[] = reinterpret(S, v)
+        return a
+    end
+    setindex!(a, v, firstindex(a))
+end
+
+@inline @propagate_inbounds setindex!(a::ReinterpretArray, v) = setindex!(a, v, firstindex(a))
 
 @inline @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
