@@ -7,6 +7,9 @@ using LinearAlgebra: BlasReal, BlasFloat
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
 
@@ -297,6 +300,39 @@ Random.seed!(1)
                 x = D / transpose(T)
                 tx = D / transpose(Tfull)
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+            end
+            @testset "Specialized multiplication/division" begin
+                function _bidiagdivmultest(T,
+                        x,
+                        typemul=T.uplo == 'U' ? UpperTriangular : Matrix,
+                        typediv=T.uplo == 'U' ? UpperTriangular : Matrix,
+                        typediv2=T.uplo == 'U' ? UpperTriangular : Matrix)
+                    TM = Matrix(T)
+                    @test (T*x)::typemul ≈  TM*x #broken=eltype(x) <: Furlong
+                    @test (x*T)::typemul ≈ x*TM #broken=eltype(x) <: Furlong
+                    @test (x\T)::typediv ≈ x\TM #broken=eltype(T) <: Furlong
+                    @test (T/x)::typediv ≈ TM/x #broken=eltype(T) <: Furlong
+                    if !isa(x, Number)
+                        @test (T\x)::typediv2 ≈ TM\x #broken=eltype(x) <: Furlong
+                        @test (x/T)::typediv2 ≈ x/TM #broken=eltype(x) <: Furlong
+                    end
+                    return nothing
+                end
+                A = randn(n,n)
+                d = randn(n)
+                dl = randn(n-1)
+                t = T
+                for t in (T, #=Furlong.(T)=#), (A, d, dl) in ((A, d, dl), #=(Furlong.(A), Furlong.(d), Furlong.(dl))=#)
+                    _bidiagdivmultest(t, 5, Bidiagonal, Bidiagonal)
+                    _bidiagdivmultest(t, 5I, Bidiagonal, Bidiagonal, t.uplo == 'U' ? UpperTriangular : LowerTriangular)
+                    _bidiagdivmultest(t, Diagonal(d), Bidiagonal, Bidiagonal, t.uplo == 'U' ? UpperTriangular : LowerTriangular)
+                    _bidiagdivmultest(t, UpperTriangular(A))
+                    _bidiagdivmultest(t, UnitUpperTriangular(A))
+                    _bidiagdivmultest(t, LowerTriangular(A), t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix)
+                    _bidiagdivmultest(t, UnitLowerTriangular(A), t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix)
+                    _bidiagdivmultest(t, Bidiagonal(d, dl, :U), Matrix, Matrix, Matrix)
+                    _bidiagdivmultest(t, Bidiagonal(d, dl, :L), Matrix, Matrix, Matrix)
+                end
             end
         end
 

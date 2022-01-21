@@ -749,24 +749,24 @@ function ldiv!(c::AbstractVecOrMat, A::Bidiagonal, b::AbstractVector)
         if A.uplo == 'L' #do forward substitution
             c[1] = bj1 = A.dv[1]\b[1]
             for j in 2:N
-                bj  = b[j]
-                bj -= A.ev[j - 1] * bj1
                 dvj = A.dv[j]
                 if iszero(dvj)
                     throw(SingularException(j))
                 end
+                bj  = b[j]
+                bj -= A.ev[j - 1] * bj1
                 bj   = dvj\bj
                 c[j] = bj1 = bj
             end
         else #do backward substitution
             c[N] = bj1 = A.dv[N]\b[N]
             for j in (N - 1):-1:1
-                bj  = b[j]
-                bj -= A.ev[j] * bj1
                 dvj = A.dv[j]
                 if iszero(dvj)
                     throw(SingularException(j))
                 end
+                bj  = b[j]
+                bj -= A.ev[j] * bj1
                 bj   = dvj\bj
                 c[j] = bj1 = bj
             end
@@ -804,6 +804,35 @@ end
 \(tA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(tA) \ B
 \(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(adjA) \ B
 
+### Triangular specializations
+function \(B::Bidiagonal{<:Number}, U::UpperOrUnitUpperTriangular{<:Number})
+    T = typeof((oneunit(eltype(B)))\oneunit(eltype(U)))
+    A = ldiv!(zeros(T, size(U)), B, U)
+    return B.uplo == 'U' ? UpperTriangular(A) : A
+end
+function \(B::Bidiagonal{<:Number}, L::LowerOrUnitLowerTriangular{<:Number})
+    T = typeof((oneunit(eltype(B)))\oneunit(eltype(L)))
+    A = ldiv!(zeros(T, size(L)), B, L)
+    return B.uplo == 'L' ? LowerTriangular(A) : A
+end
+
+# if we don't want the type split, the following two/three methods can be removed
+function \(U::UpperOrUnitUpperTriangular{<:Number}, B::Bidiagonal{<:Number})
+    T = typeof((oneunit(eltype(U)))/oneunit(eltype(B)))
+    A = ldiv!(U, copy_similar(B, T))
+    return B.uplo == 'U' ? UpperTriangular(A) : A
+end
+function \(L::LowerOrUnitLowerTriangular{<:Number}, B::Bidiagonal{<:Number})
+    T = typeof((oneunit(eltype(L)))/oneunit(eltype(B)))
+    A = ldiv!(L, copy_similar(B, T))
+    return B.uplo == 'L' ? LowerTriangular(A) : A
+end
+### Diagonal specialization
+function \(B::Bidiagonal{<:Number}, D::Diagonal{<:Number})
+    T = typeof((oneunit(eltype(B)))\oneunit(eltype(D)))
+    A = ldiv!(zeros(T, size(D)), B, D)
+    return B.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
+end
 
 function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal)
     require_one_based_indexing(C, A, B)
@@ -849,6 +878,36 @@ function /(A::AbstractMatrix{<:Number}, B::Bidiagonal{<:Number})
 end
 /(A::AbstractMatrix, B::Bidiagonal) = _rdiv!(copy(A), A, B)
 
+### Triangular specializations
+function /(U::UpperOrUnitUpperTriangular{<:Number}, B::Bidiagonal{<:Number})
+    T = typeof((oneunit(eltype(U)))/oneunit(eltype(B)))
+    A = _rdiv!(zeros(T, size(U)), U, B)
+    return B.uplo == 'U' ? UpperTriangular(A) : A
+end
+function /(L::LowerOrUnitLowerTriangular{<:Number}, B::Bidiagonal{<:Number})
+    T = typeof((oneunit(eltype(L)))/oneunit(eltype(B)))
+    A = _rdiv!(zeros(T, size(L)), L, B)
+    return B.uplo == 'L' ? LowerTriangular(A) : A
+end
+
+# if we don't want the type split, the following two/three methods can be removed
+function /(B::Bidiagonal{<:Number}, U::UpperOrUnitUpperTriangular{<:Number})
+    T = typeof((oneunit(eltype(B)))/oneunit(eltype(U)))
+    A = rdiv!(copy_similar(B, T), U)
+    return B.uplo == 'U' ? UpperTriangular(A) : A
+end
+function /(B::Bidiagonal{<:Number}, L::LowerOrUnitLowerTriangular{<:Number})
+    T = typeof((oneunit(eltype(B)))\oneunit(eltype(L)))
+    A = rdiv!(copy_similar(B, T), L)
+    return B.uplo == 'L' ? LowerTriangular(A) : A
+end
+### Diagonal specialization
+function /(D::Diagonal{<:Number}, B::Bidiagonal{<:Number})
+    T = typeof((oneunit(eltype(D)))/oneunit(eltype(B)))
+    A = _rdiv!(zeros(T, size(D)), D, B)
+    return B.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
+end
+
 /(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = A / copy(B)
 /(A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = A / copy(B)
 # disambiguation
@@ -862,6 +921,12 @@ end
 /(A::TransposeAbsVec, B::Adjoint{<:Any,<:Bidiagonal}) = transpose(transpose(B) \ parent(A))
 
 factorize(A::Bidiagonal) = A
+function inv(B::Bidiagonal{T}) where T
+    n = size(B, 1)
+    dest = zeros(typeof(oneunit(T)\one(T)), (n, n))
+    ldiv!(dest, B, Diagonal{typeof(one(T)\one(T))}(I, n))
+    return B.uplo == 'U' ? UpperTriangular(dest) : LowerTriangular(dest)
+end
 
 # Eigensystems
 eigvals(M::Bidiagonal) = M.dv
