@@ -262,13 +262,13 @@ function is_syntactic_unary_op(k)
     kind(k) in KSet`$ & ::`
 end
 
-function is_type_operator(k)
-    kind(k) in KSet`<: >:`
+function is_type_operator(t)
+    kind(t) in KSet`<: >:` && !is_dotted(t)
 end
 
-function is_unary_op(k)
-    k = kind(k)
-    k in KSet`<: >:` ||  # TODO: dotop disallowed ?
+function is_unary_op(t)
+    k = kind(t)
+    (k in KSet`<: >:` && !is_dotted(t)) ||
     k in KSet`+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓` # dotop allowed
 end
 
@@ -330,12 +330,13 @@ end
 function parse_RtoL(ps::ParseState, down, is_op, syntactic, self)
     mark = position(ps)
     down(ps)
-    k = peek(ps)
+    t = peek_token(ps)
+    k = kind(t)
     if is_op(k)
         if syntactic isa Bool ? syntactic : syntactic(k)
             bump(ps, TRIVIA_FLAG)
             self(ps)
-            emit(ps, mark, k)
+            emit(ps, mark, k, flags(t))
         else
             bump(ps)
             self(ps)
@@ -492,11 +493,11 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down, equals_is_
         return NO_POSITION
     else
         # a += b  ==>  (+= a b)
+        # a .= b  ==>  (.= a b)
         bump(ps, TRIVIA_FLAG)
         parse_assignment(ps, down, equals_is_kw)
         plain_eq = is_plain_equals(t)
-        equals_pos = emit(ps, mark, plain_eq && equals_is_kw ? K"kw" : k,
-                          is_dotted(t) ? DOTOP_FLAG : EMPTY_FLAGS)
+        equals_pos = emit(ps, mark, plain_eq && equals_is_kw ? K"kw" : k, flags(t))
         return plain_eq ? equals_pos : NO_POSITION
     end
 end
@@ -592,6 +593,7 @@ function parse_arrow(ps::ParseState)
 end
 
 # x || y || z   ==>   (|| x (|| y z))
+# x .|| y       ==>   (.|| x y)
 #
 # flisp: parse-or
 function parse_or(ps::ParseState)
@@ -599,6 +601,7 @@ function parse_or(ps::ParseState)
 end
 
 # x && y && z   ==>   (&& x (&& y z))
+# x .&& y       ==>   (.&& x y)
 #
 # flisp: parse-and
 function parse_and(ps::ParseState)
@@ -621,22 +624,23 @@ function parse_comparison(ps::ParseState, subtype_comparison=false)
     end
     n_comparisons = 0
     op_pos = NO_POSITION
-    initial_kind = peek(ps)
+    initial_tok = peek_token(ps)
     while is_prec_comparison(peek(ps))
         n_comparisons += 1
         op_pos = bump(ps)
         parse_pipe_lt(ps)
     end
     if n_comparisons == 1
-        if is_type_operator(initial_kind)
+        if is_type_operator(initial_tok)
             # Type comparisons are syntactic
             # x <: y  ==>  (<: x y)
             # x >: y  ==>  (>: x y)
             reset_node!(ps, op_pos, flags=TRIVIA_FLAG)
-            emit(ps, mark, initial_kind)
+            emit(ps, mark, kind(initial_tok))
         else
             # Normal binary comparisons
-            # x < y  ==>  (call-i x < y)
+            # x < y    ==>  (call-i x < y)
+            # x .<: y  ==>  (call-i x .<: y)
             emit(ps, mark, K"call", INFIX_FLAG)
         end
     elseif n_comparisons > 1
@@ -1002,7 +1006,7 @@ function parse_unary_call(ps::ParseState)
     mark = position(ps)
     op_t = peek_token(ps)
     op_k = kind(op_t)
-    op_node_kind = is_type_operator(op_k) ? op_k : K"call"
+    op_node_kind = is_type_operator(op_t) ? op_k : K"call"
     op_tok_flags = is_type_operator(op_t) ? TRIVIA_FLAG : EMPTY_FLAGS
     t2 = peek_token(ps, 2)
     k2 = kind(t2)
@@ -1021,7 +1025,7 @@ function parse_unary_call(ps::ParseState)
             # +)  ==>  +
             bump(ps)
         end
-    elseif k2 == K"{" || (!is_unary_op(op_k) && k2 == K"(")
+    elseif k2 == K"{" || (!is_unary_op(op_t) && k2 == K"(")
         # Call with type parameters or non-unary prefix call
         # +{T}(x::T)  ==>  (call (curly + T) (:: x T))
         # *(x)  ==>  (call * x)
@@ -1091,12 +1095,18 @@ function parse_unary_call(ps::ParseState)
             parse_factor_with_initial_ex(ps, mark_before_paren)
             emit(ps, mark, op_node_kind)
         end
-    elseif !is_unary_op(op_k)
-        emit_diagnostic(ps, error="expected a unary operator")
     else
-        # Normal unary calls
-        # +x  ==>  (call + x)
-        bump(ps, op_tok_flags)
+        if is_unary_op(op_t)
+            # Normal unary calls
+            # +x  ==>  (call + x)
+            # √x  ==>  (call √ x)
+            # ±x  ==>  (call ± x)
+            bump(ps, op_tok_flags)
+        else
+            # /x     ==>  (call (error /) x)
+            # .<: x  ==>  (call (error .<:) x)
+            bump(ps, error="not a unary operator")
+        end
         parse_unary(ps)
         emit(ps, mark, op_node_kind)
     end

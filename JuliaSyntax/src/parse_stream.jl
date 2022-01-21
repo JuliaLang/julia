@@ -16,6 +16,7 @@ function Base.show(io::IO, tok::SyntaxToken)
 end
 
 kind(tok::SyntaxToken) = tok.raw.kind
+flags(tok::SyntaxToken) = tok.raw.dotop ? DOTOP_FLAG : EMPTY_FLAGS
 first_byte(tok::SyntaxToken) = tok.raw.startbyte + 1
 last_byte(tok::SyntaxToken) = tok.raw.endbyte + 1
 span(tok::SyntaxToken) = last_byte(tok) - first_byte(tok) + 1
