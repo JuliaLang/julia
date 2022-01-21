@@ -48,6 +48,8 @@ is_operator(k) = TzTokens.isoperator(kind(k))
 is_word_operator(k) = TzTokens.iswordoperator(kind(k))
 
 # Predicates for operator precedence
+# FIXME: Review how precedence depends on dottedness, eg
+# https://github.com/JuliaLang/julia/pull/36725
 is_prec_assignment(t)  = K"BEGIN_ASSIGNMENTS" < kind(t) < K"END_ASSIGNMENTS"
 is_prec_pair(t)        = K"BEGIN_PAIRARROW"   < kind(t) < K"END_PAIRARROW"
 is_prec_conditional(t) = K"BEGIN_CONDITIONAL" < kind(t) < K"END_CONDITIONAL"

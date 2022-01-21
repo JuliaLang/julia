@@ -618,6 +618,21 @@ tests = [
     end
 end
 
+@testset "Unicode normalization in tree conversion" begin
+    # ɛµ normalizes to εμ
+    @test test_parse(JuliaSyntax.parse_eq, "\u025B\u00B5()") == "(call \u03B5\u03BC)"
+    @test test_parse(JuliaSyntax.parse_eq, "@\u025B\u00B5") == "(macrocall @\u03B5\u03BC)"
+    @test test_parse(JuliaSyntax.parse_eq, "\u025B\u00B5\"\"") == "(macrocall @\u03B5\u03BC_str \"\")"
+    @test test_parse(JuliaSyntax.parse_eq, "\u025B\u00B5``") == "(macrocall @\u03B5\u03BC_cmd \"\")"
+    # · and · normalize to ⋅
+    @test test_parse(JuliaSyntax.parse_eq, "a \u00B7 b") == "(call-i a \u22C5 b)"
+    @test test_parse(JuliaSyntax.parse_eq, "a \u0387 b") == "(call-i a \u22C5 b)"
+    # − normalizes to -
+    @test test_parse(JuliaSyntax.parse_expr, "a \u2212 b")  == "(call-i a - b)"
+    @test test_parse(JuliaSyntax.parse_eq, "a \u2212= b") == "(-= a b)"
+    @test test_parse(JuliaSyntax.parse_eq, "a .\u2212= b") == "(.-= a b)"
+end
+
 @testset "Larger code chunks" begin
     # Something ever-so-slightly nontrivial for fun -
     # the sum of the even Fibonacci numbers < 4_000_000

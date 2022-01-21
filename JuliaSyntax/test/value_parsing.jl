@@ -160,3 +160,15 @@ end
         @test process_triple_strings!(["\n y\r"], raw) == [" y\n"]
     end
 end
+
+@testset "Normalization of identifiers" begin
+    # NFC normalization
+    # https://github.com/JuliaLang/julia/issues/5434
+    # https://github.com/JuliaLang/julia/pull/19464
+    @test JuliaSyntax.normalize_identifier("\u0069\u0302") == "\u00ee"
+
+    # Special Julia normalization
+    # https://github.com/JuliaLang/julia/pull/42561
+    @test JuliaSyntax.normalize_identifier("julia\u025B\u00B5\u00B7\u0387\u2212") ==
+        "julia\u03B5\u03BC\u22C5\u22C5\u002D"
+end
