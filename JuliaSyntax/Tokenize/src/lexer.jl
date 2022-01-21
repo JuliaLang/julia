@@ -788,10 +788,10 @@ function lex_digit(l::Lexer, kind)
         kind = Tokens.FLOAT
         accept_number(l, isdigit)
         pc, ppc = dpeekchar(l)
-        if (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-')
+        if (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-' || ppc == '−')
             kind = Tokens.FLOAT
             readchar(l)
-            accept(l, "+-")
+            accept(l, "+-−")
             if accept_batch(l, isdigit)
                 pc,ppc = dpeekchar(l)
                 if pc === '.' && !dotop2(ppc, ' ')
@@ -806,10 +806,10 @@ function lex_digit(l::Lexer, kind)
             return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
         end
 
-    elseif (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-')
+    elseif (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-' || ppc == '−')
         kind = Tokens.FLOAT
         readchar(l)
-        accept(l, "+-")
+        accept(l, "+-−")
         if accept_batch(l, isdigit)
             pc,ppc = dpeekchar(l)
             if pc === '.' && !dotop2(ppc, ' ')
@@ -833,7 +833,7 @@ function lex_digit(l::Lexer, kind)
             end
             if accept(l, "pP")
                 kind = Tokens.FLOAT
-                accept(l, "+-")
+                accept(l, "+-−")
                 accept_number(l, isdigit)
             elseif isfloat
                 return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
