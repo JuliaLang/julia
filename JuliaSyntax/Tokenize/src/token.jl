@@ -28,7 +28,6 @@ _add_kws()
     NO_ERR,
     EOF_MULTICOMMENT,
     EOF_CHAR,
-    EOF_VAR,
     INVALID_NUMERIC_CONSTANT,
     INVALID_OPERATOR,
     INVALID_INTERPOLATION_TERMINATOR,
@@ -39,7 +38,6 @@ _add_kws()
 TOKEN_ERROR_DESCRIPTION = Dict{TokenError, String}(
     EOF_MULTICOMMENT => "unterminated multi-line comment #= ... =#",
     EOF_CHAR => "unterminated character literal",
-    EOF_VAR => "unterminated var\"...\" identifier",
     INVALID_NUMERIC_CONSTANT => "invalid numeric constant",
     INVALID_OPERATOR => "invalid operator",
     INVALID_INTERPOLATION_TERMINATOR => "interpolated variable ends with invalid character; use `\$(...)` instead",
@@ -100,7 +98,7 @@ endpos(t::AbstractToken) = t.endpos
 startbyte(t::AbstractToken) = t.startbyte
 endbyte(t::AbstractToken) = t.endbyte
 function untokenize(t::Token)
-    if t.kind == IDENTIFIER || t.kind == VAR_IDENTIFIER || isliteral(t.kind) || t.kind == COMMENT || t.kind == WHITESPACE || t.kind == NEWLINE_WS || t.kind == ERROR
+    if t.kind == IDENTIFIER || isliteral(t.kind) || t.kind == COMMENT || t.kind == WHITESPACE || t.kind == NEWLINE_WS || t.kind == ERROR
         return t.val
     elseif iskeyword(t.kind)
         return lowercase(string(t.kind))
