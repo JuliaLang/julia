@@ -12,7 +12,7 @@ import ..Terminals: raw!, width, height, cmove, getX,
 import Base: ensureroom, show, AnyDict, position
 using Base: something
 
-include("completion.jl")
+include("completionmenu.jl")
 
 abstract type TextInterface end                # see interface immediately below
 abstract type ModeState end                    # see interface below
