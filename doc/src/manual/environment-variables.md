@@ -342,6 +342,12 @@ should have at the terminal.
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
 
+### `JULIA_COMPLETION_STYLE`
+
+The style of tab completion. `fish` (default since Julia 1.8) provides a
+[fish](https://fishshell.com/)-like completion.  `bash` (default until Julia
+1.7) provides a [bash](https://www.gnu.org/software/bash/)-like completion.
+
 ## Debugging and profiling
 
 ### `JULIA_DEBUG`
