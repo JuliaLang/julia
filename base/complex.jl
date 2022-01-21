@@ -1069,6 +1069,12 @@ _precision_complex(::Type{ComplexF32},base) = precision(Float32, base=base)
 _precision_complex(::Type{ComplexF16},base) = precision(Float16, base=base)
 precision(::Type{T}; base::Integer=2) where {T<:Complex}= _precision_complex(T,base)
 
+# This really shouldn't be here but the boostrapping process doesn't allow it
+function twiceprecision(val::TwicePrecision{T}, nb::Integer) where {T<:Complex}
+        return val
+end
+nbitslen(::Type{T}, len, offset) where {T<:Complex} =
+    min(cld(precision(T), 2), nbitslen(len, offset))
 
 float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
