@@ -16,6 +16,7 @@ end
 
 include("test_utils.jl")
 include("parse_stream.jl")
+include("syntax_tree.jl")
 include("parser.jl")
 
 @testset "Parsing values from strings" begin
