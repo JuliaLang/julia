@@ -1081,6 +1081,6 @@ end
 end
 
 @testset "Fix method error #32792" begin
-    xx = range(-10,10; length=1000) 
+    xx = range(-10,10; length=1000)
     @test xx .- im .* xx isa AbstractRange
 end
