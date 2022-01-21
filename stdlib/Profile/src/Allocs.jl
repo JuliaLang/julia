@@ -201,11 +201,16 @@ function stacktrace_memoized(
     cache::BacktraceCache,
     raw_trace::RawBacktrace
 )::StackTrace
-    [
-        frame
-        for i in 1:raw_trace.size
+    stacktrace = StackTrace()
+    sizehint!(stacktrace, raw_trace.size * 3 ÷ 2)
+
+    for i in 1:raw_trace.size
         for frame in get_frames(cache, unsafe_load(raw_trace.data, i))
-    ]
+            push!(stacktrace, frame)
+        end
+    end
+
+    return stacktrace
 end
 
 # Precompile once for the package cache.
