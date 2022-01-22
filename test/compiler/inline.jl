@@ -960,3 +960,16 @@ let b = Expr(:block, (:(y += sin($x)) for x in randn(1000))...)
     end
 end
 @test fully_eliminated(f_sin_perf, Tuple{})
+
+# Test that we inline the constructor of something that is not const-inlineable
+const THE_REF = Ref{Int}(0)
+struct FooTheRef
+    x::Ref
+    FooTheRef() = new(THE_REF)
+end
+f_make_the_ref() = FooTheRef()
+f_make_the_ref_but_dont_return_it() = (FooTheRef(); nothing)
+let src = code_typed1(f_make_the_ref, ())
+    @test count(x->isexpr(x, :new), src.code) == 1
+end
+@test fully_eliminated(f_make_the_ref_but_dont_return_it, Tuple{})

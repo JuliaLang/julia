@@ -93,16 +93,17 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             for sig_n in splitsigs
                 result = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
                 rt, edge = result.rt, result.edge
-                tristate_merge!(sv, result.edge_effects)
                 if edge !== nothing
                     push!(edges, edge)
                 end
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
                 this_arginfo = ArgInfo(fargs, this_argtypes)
                 const_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv, false)
+                effects = result.edge_effects
                 if const_result !== nothing
-                    rt, const_result = const_result
+                    (;rt, effects, const_result) = const_result
                 end
+                tristate_merge!(sv, effects)
                 push!(const_results, const_result)
                 if const_result !== nothing
                     any_const_result = true
@@ -129,7 +130,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
 
             result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
             this_rt, edge = result.rt, result.edge
-            tristate_merge!(sv, result.edge_effects)
             if edge !== nothing
                 push!(edges, edge)
             end
@@ -138,9 +138,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
             this_arginfo = ArgInfo(fargs, this_argtypes)
             const_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv, false)
+            effects = result.edge_effects
             if const_result !== nothing
-                this_rt, const_result = const_result
+                this_rt = const_result.rt
+                (; effects, const_result) = const_result
             end
+            tristate_merge!(sv, effects)
             push!(const_results, const_result)
             if const_result !== nothing
                 any_const_result = true
@@ -648,6 +651,12 @@ function const_prop_enabled(interp::AbstractInterpreter, sv::InferenceState, mat
     return true
 end
 
+struct ConstCallResults
+    rt::Any
+    const_result::Union{InferenceResult, ConstResult}
+    effects::Effects
+end
+
 function abstract_call_method_with_const_args(interp::AbstractInterpreter, result::MethodCallResult,
                                               @nospecialize(f), arginfo::ArgInfo, match::MethodMatch,
                                               sv::InferenceState, va_override::Bool)
@@ -657,8 +666,13 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
     if f !== nothing && result.edge !== nothing && is_total_or_error(result.edge_effects) && is_all_const_arg(arginfo)
         rt = pure_eval_call_const_args(interp, f, arginfo.argtypes)
         add_backedge!(result.edge, sv)
-        rt === nothing && return Union{}, false # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
-        return rt, ConstResult(result.edge, rt.val)
+        rt === nothing && return ConstCallResults(Union{}, ConstResult(result.edge), result.edge_effects) # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
+        if is_inlineable_constant(rt.val) || call_result_unused(sv)
+            # If the constant is not inlineable, still do the const-prop, since the
+            # code that led to the creation of the Const may be inlineable in the same
+            # circumstance and may be optimizable.
+            return ConstCallResults(rt, ConstResult(result.edge, rt.val), EFFECTS_TOTAL)
+        end
     end
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, match, sv)
     mi === nothing && return nothing
@@ -694,7 +708,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
     # if constant inference hits a cycle, just bail out
     isa(result, InferenceState) && return nothing
     add_backedge!(mi, sv)
-    return Pair{Any,InferenceResult}(result, inf_result)
+    return ConstCallResults(result, inf_result, inf_result.ipo_effects)
 end
 
 # if there's a possibility we could get a better result (hopefully without doing too much work)
@@ -713,7 +727,8 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         return nothing
     end
     all_overridden = is_all_overridden(arginfo, sv)
-    if !force && !const_prop_function_heuristic(interp, f, arginfo, nargs, all_overridden, sv)
+    if !force && !const_prop_function_heuristic(interp, f, arginfo, nargs, all_overridden,
+            sv.ipo_effects.nothrow === ALWAYS_TRUE, sv)
         add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
         return nothing
     end
@@ -836,13 +851,17 @@ end
 
 function const_prop_function_heuristic(
     _::AbstractInterpreter, @nospecialize(f), (; argtypes)::ArgInfo,
-    nargs::Int, all_overridden::Bool, _::InferenceState)
+    nargs::Int, all_overridden::Bool, still_nothrow::Bool, _::InferenceState)
     if nargs > 1
         if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
             arrty = argtypes[2]
             # don't propagate constant index into indexing of non-constant array
             if arrty isa Type && arrty <: AbstractArray && !issingletontype(arrty)
-                return false
+                # For static arrays, allow the constprop if we could possibly
+                # deduce nothrow as a result.
+                if !still_nothrow || ismutabletype(arrty)
+                    return false
+                end
             elseif arrty ⊑ Array
                 return false
             end
@@ -1428,7 +1447,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     # end
     const_result = abstract_call_method_with_const_args(interp, result, singleton_type(ft′), arginfo, match, sv, false)
     if const_result !== nothing
-        rt, const_result = const_result
+        (;rt, const_result) = const_result
     end
     return CallMeta(from_interprocedural!(rt, sv, arginfo, sig), InvokeCallInfo(match, const_result))
 end
@@ -1565,7 +1584,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
         const_result = abstract_call_method_with_const_args(interp, result, nothing,
             arginfo, match, sv, closure.isva)
         if const_result !== nothing
-            rt, const_result = const_result
+            (;rt, const_result) = const_result
         end
     end
     info = OpaqueClosureCallInfo(match, const_result)
@@ -1773,7 +1792,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         end
         tristate_merge!(sv, Effects(
             !ismutabletype(t) ? ALWAYS_TRUE : ALWAYS_FALSE,
-            ALWAYS_TRUE, ALWAYS_FALSE, ALWAYS_TRUE))
+            ALWAYS_TRUE, is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE, ALWAYS_TRUE))
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         is_nothrow = false # TODO: More precision
