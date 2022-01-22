@@ -4009,3 +4009,12 @@ end
         end |> only === Union{}
     end
 end
+
+# Test that purity modeling doesn't accidentally introduce new world age issues
+f_redefine_me(x) = x+1
+f_call_redefine() = f_redefine_me(0)
+f_mk_opaque() = @Base.Experimental.opaque ()->Base.inferencebarrier(f_call_redefine)()
+const op_capture_world = f_mk_opaque()
+f_redefine_me(x) = x+2
+@test op_capture_world() == 1
+@test f_mk_opaque()() == 2

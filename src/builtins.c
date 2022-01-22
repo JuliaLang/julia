@@ -778,6 +778,32 @@ JL_CALLABLE(jl_f__call_in_world)
     return ret;
 }
 
+JL_CALLABLE(jl_f__call_in_world_nonpure)
+{
+    JL_NARGSV(_apply_in_world_nonpure, 2);
+    JL_TYPECHK(_apply_in_world, ulong, args[0]);
+    jl_task_t *ct = jl_current_task;
+    int last_in = ct->ptls->in_pure_callback;
+    jl_value_t *ret = NULL;
+    size_t last_age = ct->world_age;
+    JL_TRY {
+        ct->ptls->in_pure_callback = 1;
+        size_t world = jl_unbox_ulong(args[0]);
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        if (ct->world_age > world)
+            ct->world_age = world;
+        ret = jl_apply(&args[1], nargs - 1);
+        ct->world_age = last_age;
+        ct->ptls->in_pure_callback = last_in;
+    }
+    JL_CATCH {
+        ct->world_age = last_age;
+        ct->ptls->in_pure_callback = last_in;
+        jl_rethrow();
+    }
+    return ret;
+}
+
 // tuples ---------------------------------------------------------------------
 
 JL_CALLABLE(jl_f_tuple)
@@ -1827,6 +1853,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_apply_pure", jl_f__apply_pure);
     add_builtin_func("_call_latest", jl_f__call_latest);
     add_builtin_func("_call_in_world", jl_f__call_in_world);
+    add_builtin_func("_call_in_world_nonpure", jl_f__call_in_world_nonpure);
     add_builtin_func("_typevar", jl_f__typevar);
     add_builtin_func("_structtype", jl_f__structtype);
     add_builtin_func("_abstracttype", jl_f__abstracttype);

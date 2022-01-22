@@ -621,13 +621,14 @@ function is_all_const_arg((; fargs, argtypes)::ArgInfo)
     return true
 end
 
-function pure_eval_call_const_args(@nospecialize(f), argtypes::Vector{Any})
+function pure_eval_call_const_args(interp::AbstractInterpreter,
+        @nospecialize(f), argtypes::Vector{Any})
     args = Any[ (a = widenconditional(argtypes[i]);
         isa(a, Const) ? a.val :
         isconstType(a) ? (a::DataType).parameters[1] :
                          (a::DataType).instance) for i in 2:length(argtypes) ]
     try
-        value = Core._apply_pure(f, args)
+        value = Core._call_in_world_nonpure(get_world_counter(interp), f, args...)
         return Const(value)
     catch e
         return nothing
@@ -654,9 +655,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
         return nothing
     end
     if f !== nothing && result.edge !== nothing && is_total_or_error(result.edge_effects) && is_all_const_arg(arginfo)
-        rt = pure_eval_call_const_args(f, arginfo.argtypes) # TODO: Needs to be called in the correct world age
+        rt = pure_eval_call_const_args(interp, f, arginfo.argtypes)
         add_backedge!(result.edge, sv)
-        rt === nothing && return Union{}, false # The evaulation threw. By idempontency, we're guaranteed this would have happened at runtime
+        rt === nothing && return Union{}, false # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
         return rt, ConstResult(result.edge, rt.val)
     end
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, match, sv)
