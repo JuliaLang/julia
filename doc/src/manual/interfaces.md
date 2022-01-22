@@ -421,7 +421,7 @@ julia> function Base.getindex(A::SparseArray{T,N}, I::Vararg{Int,N}) where {T,N}
        end
 
 julia> A[4, 3]
-ERROR: BoundsError: attempt to access 3×3 SparseArray{Float64, 2} at index [0]
+ERROR: BoundsError: attempt to access 3×3 SparseArray{Float64, 2} at index [4, 3]
 Valid indices are [1:3, 1:3].
 ```
 
