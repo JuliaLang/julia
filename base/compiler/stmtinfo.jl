@@ -50,6 +50,7 @@ end
 struct ConstResult
     mi::MethodInstance
     result
+    ConstResult(mi::MethodInstance) = new(mi)
     ConstResult(mi::MethodInstance, @nospecialize val) = new(mi, val)
 end
 
