@@ -141,6 +141,9 @@ end
 
 # decoded results
 
+const BacktraceCache = Dict{BTElement,Vector{StackFrame}}
+
+# only constructed lazily
 struct Alloc
     type::Any
     stacktrace::StackTrace
@@ -148,16 +151,16 @@ struct Alloc
 end
 
 struct AllocResults
-    allocs::Vector{Alloc}
+    stack_frames::BacktraceCache
+    alloc_stack_trace::Vector{Vector{BTElement}} # TODO: keep as Vector{BTElement}
+    alloc_type::Vector{Ptr{Type}}
+    alloc_size::Vector{Int}
 end
 
 # Without this, the Alloc's stacktrace prints for lines and lines and lines...
-function Base.show(io::IO, a::Alloc)
-    stacktrace_sample = length(a.stacktrace) >= 1 ? "$(a.stacktrace[1]), ..." : ""
-    print(io, "$Alloc($(a.type), $StackFrame[$stacktrace_sample], $(a.size))")
+function Base.show(io::IO, ::AllocResults)
+    print(io, "AllocResults")
 end
-
-const BacktraceCache = Dict{BTElement,Vector{StackFrame}}
 
 # copied from julia_internal.h
 const JL_BUFF_TAG = UInt(0x4eadc000)
@@ -174,21 +177,41 @@ function load_type(ptr::Ptr{Type})
     return unsafe_pointer_to_objref(ptr)
 end
 
-function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
-    Alloc(
-        load_type(raw_alloc.type),
-        stacktrace_memoized(cache, raw_alloc.backtrace),
-        UInt(raw_alloc.size)
-    )
-end
+# function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
+#     Alloc(
+#         load_type(raw_alloc.type),
+#         stacktrace_memoized(cache, raw_alloc.backtrace),
+#         UInt(raw_alloc.size)
+#     )
+# end
 
 function decode(raw_results::RawResults)::AllocResults
     cache = BacktraceCache()
-    allocs = [
-        decode_alloc(cache, unsafe_load(raw_results.allocs, i))
-        for i in 1:raw_results.num_allocs
-    ]
-    return AllocResults(allocs)
+    alloc_type = Vector{Ptr{Type}}()
+    alloc_size = Vector{Int}()
+    alloc_stack_trace = Vector{Vector{BTElement}}()
+
+    # TODO: sizehint all of these? idk
+    sizehint!(alloc_type, raw_results.num_allocs)
+    sizehint!(alloc_size, raw_results.num_allocs)
+    sizehint!(alloc_stack_trace, raw_results.num_allocs)
+
+    for i in 1:raw_results.num_allocs
+        raw_alloc = unsafe_load(raw_results.allocs, i)
+        push!(alloc_type, raw_alloc.type) # defer the unsafe_load?
+        push!(alloc_size, raw_alloc.size)
+        bt_array = BTElement[
+            unsafe_load(raw_alloc.backtrace.data, i) for i in 1:raw_alloc.backtrace.size
+        ]
+        push!(alloc_stack_trace, bt_array)
+    end
+
+    return AllocResults(
+        cache,
+        alloc_stack_trace,
+        alloc_type,
+        alloc_size,
+    )
 end
 
 function get_frames(cache::BacktraceCache, element::BTElement)
