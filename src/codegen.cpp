@@ -1894,8 +1894,9 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default_cgparams)
+Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cgparams_t *params)
 {
+    Module *m = new Module(name, context);
     // Some linkers (*cough* OS X) don't understand DWARF v4, so we use v2 in
     // imaging mode. The structure of v4 is slightly nicer for debugging JIT
     // code.
@@ -1922,13 +1923,7 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
 #if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION >= 130000
     m->setStackProtectorGuard("global");
 #endif
-}
-
-Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cgparams_t *params)
-{
-    Module *M = new Module(name, context);
-    jl_setup_module(M, params);
-    return M;
+    return m;
 }
 
 Module *jl_create_llvm_module(StringRef name, LLVMContext &context)
