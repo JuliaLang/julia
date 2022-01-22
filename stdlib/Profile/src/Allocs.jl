@@ -214,6 +214,19 @@ function decode(raw_results::RawResults)::AllocResults
     )
 end
 
+function Base.getindex(res::AllocResults, i::Int)
+    return Alloc(
+        load_type(res.alloc_type[i]),
+        stacktrace_memoized(res.stack_frames, res.alloc_stack_trace[i]),
+        res.alloc_size[i]
+    )
+end
+
+function Base.length(res::AllocResults)
+    # length of any of the arrays will do...
+    return length(res.alloc_size)
+end
+
 function get_frames(cache::BacktraceCache, element::BTElement)
     return get!(cache, element) do
         return lookup(element)
@@ -222,17 +235,14 @@ end
 
 function stacktrace_memoized(
     cache::BacktraceCache,
-    raw_trace::RawBacktrace
+    trace::Vector{BTElement}
 )::StackTrace
     stacktrace = StackTrace()
-    sizehint!(stacktrace, raw_trace.size * 3 ÷ 2)
-
-    for i in 1:raw_trace.size
-        for frame in get_frames(cache, unsafe_load(raw_trace.data, i))
+    for bt_element in trace
+        for frame in get_frames(cache, bt_element)
             push!(stacktrace, frame)
         end
     end
-
     return stacktrace
 end
 
