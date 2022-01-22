@@ -162,12 +162,12 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     b->name = name;
     b->value = NULL;
     b->owner = NULL;
+    b->ty = NULL;
     b->globalref = NULL;
     b->constp = 0;
     b->exportp = 0;
     b->imported = 0;
     b->deprecated = 0;
-    b->ty = NULL;
     return b;
 }
 
@@ -384,9 +384,12 @@ JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var)
     if (b == HT_NOTFOUND || b->owner == NULL)
         b = using_resolve_binding(m, var, NULL, 0);
     JL_UNLOCK(&m->lock);
-    if (b == NULL || b->ty == NULL)
+    if (b == NULL)
         return (jl_value_t*)jl_any_type;
-    return b->ty;
+    jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
+    if (ty == NULL)
+        return (jl_value_t*)jl_any_type;
+    return ty;
 }
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
@@ -675,10 +678,6 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *va
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
-    if (bp->ty) {
-        jl_errorf("cannot declare %s constant; it was already declared as a typed global",
-                  jl_symbol_name(bp->name));
-    }
     if (bp->value == NULL) {
         uint8_t constp = 0;
         // if (jl_atomic_cmpswap(&bp->constp, &constp, 1)) {
@@ -807,8 +806,9 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
 
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
-    if (b->ty && !jl_isa(rhs, b->ty)) {
-        jl_errorf("Cannot assign a value of an incompatible type to the typed global %s.",
+    jl_value_t *old_ty = NULL;
+    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type) && !jl_isa(rhs, old_ty)) {
+        jl_errorf("cannot set type for global %s. It already has a value of a different type.",
                   jl_symbol_name(b->name));
     }
     if (b->constp) {

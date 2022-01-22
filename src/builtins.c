@@ -1672,25 +1672,12 @@ JL_CALLABLE(jl_f_set_binding_type)
     jl_value_t *ty = args[2];
     JL_TYPECHK(set_binding_type!, type, ty);
     jl_binding_t *b = jl_get_binding_wr((jl_module_t*)args[0], (jl_sym_t*)args[1], 1);
-    if (b->constp && ty != (jl_value_t*)jl_any_type) {
-        jl_errorf("cannot set type for constant %s", jl_symbol_name(b->name));
-    }
-    jl_value_t *val = jl_atomic_load_relaxed(&b->value);
-    if (val && !jl_isa(val, ty)) {
-        jl_errorf("cannot set type for global %s. It already has a value of a different type.",
+    jl_value_t *old_ty = NULL;
+    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty) && ty != old_ty) {
+        if (ty == (jl_value_t*)jl_any_type)
+            return jl_nothing;
+        jl_errorf("cannot set type for global %s. It already has a value or is already set to a different type.",
                   jl_symbol_name(b->name));
-    }
-    if (b->ty && ty != b->ty) {
-        if (jl_subtype(ty, b->ty)) {
-            jl_safe_printf("WARNING: redefinition of type of %s. This may fail, cause incorrect answers, or produce other errors.\n",
-                           jl_symbol_name(b->name));
-        }
-        else {
-            jl_errorf("invalid redefinition of type of %s", jl_symbol_name(b->name));
-        }
-    }
-    if (ty != (jl_value_t*)jl_any_type) {
-        b->ty = ty;
     }
     return jl_nothing;
 }
