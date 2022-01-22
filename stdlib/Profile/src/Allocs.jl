@@ -150,13 +150,20 @@ struct Alloc
     size::Int
 end
 
-struct AllocResults
-    stack_frames::BacktraceCache
+# AllocCollection is Logically an array of Allocs, stored as an array
+# of scalars for each attribute, because arrays of scalars are easier
+# on the garbage collector than arrays of structs.
+struct AllocCollection
+    stack_frame_cache::BacktraceCache
 
     # There is one item in the following arrays for each alloc.
-    alloc_stack_trace::Vector{Vector{BTElement}}
-    alloc_type::Vector{Any} # would be Vector{Type} but we also have UnknownType, etc
-    alloc_size::Vector{Int}
+    stack_trace::Vector{Vector{BTElement}}
+    type::Vector{Any} # would be Vector{Type} but we also have UnknownType, etc
+    size::Vector{Int}
+end
+
+struct AllocResults
+    allocs::AllocCollection
 end
 
 # Without this, the Alloc's stacktrace prints for lines and lines and lines...
@@ -196,10 +203,12 @@ function decode(raw_results::RawResults)::AllocResults
     end
 
     return AllocResults(
-        cache,
-        alloc_stack_trace,
-        alloc_type,
-        alloc_size,
+        AllocCollection(
+            cache,
+            alloc_stack_trace,
+            alloc_type,
+            alloc_size,
+        )
     )
 end
 
@@ -207,24 +216,24 @@ end
 
 # decode stack traces lazily for performance
 
-function Base.getindex(res::AllocResults, i::Int)
+function Base.getindex(allocs::AllocCollection, i::Int)
     return Alloc(
-        res.alloc_type[i],
-        stacktrace_memoized(res.stack_frames, res.alloc_stack_trace[i]),
-        res.alloc_size[i]
+        allocs.type[i],
+        stacktrace_memoized(allocs.stack_frame_cache, allocs.stack_trace[i]),
+        allocs.size[i]
     )
 end
 
-function Base.iterate(res::AllocResults, state=1)
-    if state > length(res)
+function Base.iterate(allocs::AllocCollection, state=1)
+    if state > length(allocs)
         return nothing
     end
-    return (res[state], state+1)
+    return (allocs[state], state+1)
 end
 
-function Base.length(res::AllocResults)
+function Base.length(allocs::AllocCollection)
     # length of any of the arrays will do...
-    return length(res.alloc_size)
+    return length(allocs.size)
 end
 
 # --- decode stack traces ---
