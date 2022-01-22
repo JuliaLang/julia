@@ -152,7 +152,7 @@ end
 
 struct AllocResults
     stack_frames::BacktraceCache
-    alloc_stack_trace::Vector{Vector{BTElement}} # TODO: keep as Vector{BTElement}
+    alloc_stack_trace::Vector{Vector{BTElement}}
     alloc_type::Vector{Ptr{Type}}
     alloc_size::Vector{Int}
 end
