@@ -210,12 +210,12 @@ better than `IdDict{Type, Vector}`
 
 See also the discussion under [Parametric Types](@ref).
 
-## Type declarations
+## Type annotations
 
-In many languages with optional type declarations, adding declarations is the principal way to
+In many languages with optional type annotations, adding declarations is the principal way to
 make code run faster. This is *not* the case in Julia. In Julia, the compiler generally knows
 the types of all function arguments, local variables, and expressions. However, there are a few
-specific instances where declarations are helpful.
+specific instances where annotations are helpful.
 
 ### Avoid fields with abstract type
 
