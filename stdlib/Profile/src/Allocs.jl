@@ -177,14 +177,6 @@ function load_type(ptr::Ptr{Type})
     return unsafe_pointer_to_objref(ptr)
 end
 
-# function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
-#     Alloc(
-#         load_type(raw_alloc.type),
-#         stacktrace_memoized(cache, raw_alloc.backtrace),
-#         UInt(raw_alloc.size)
-#     )
-# end
-
 function decode(raw_results::RawResults)::AllocResults
     cache = BacktraceCache()
     alloc_type = Vector{Ptr{Type}}()
@@ -209,6 +201,10 @@ function decode(raw_results::RawResults)::AllocResults
     )
 end
 
+# --- make AllocResults look like an array of allocs ---
+
+# decode stack traces lazily for performance
+
 function Base.getindex(res::AllocResults, i::Int)
     return Alloc(
         load_type(res.alloc_type[i]),
@@ -228,6 +224,8 @@ function Base.length(res::AllocResults)
     # length of any of the arrays will do...
     return length(res.alloc_size)
 end
+
+# --- decode stack traces ---
 
 function get_frames(cache::BacktraceCache, element::BTElement)
     return get!(cache, element) do
