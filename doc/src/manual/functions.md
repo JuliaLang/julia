@@ -106,16 +106,16 @@ the call site that at least one of the arguments (often the first one) is being 
     The behavior of a mutating function can be unexpected when a mutated argument shares memory with another argument, a situation known as aliasing (e.g. when one is a view of the other).
     Unless the function docstring explicitly indicates that aliasing produces the expected result, it is the responsibility of the caller to ensure proper behavior on such inputs.
 
-## Argument-type declarations
+## Argument-type annotations
 
-You can declare the types of function arguments by appending `::TypeName` to the argument name, as usual for [Type Declarations](@ref) in Julia.
+You can declare the types of function arguments by appending `::TypeName` to the argument name, as usual for [Type Annotations](@ref) in Julia.
 For example, the following function computes [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number) recursively:
 ```
 fib(n::Integer) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)
 ```
 and the `::Integer` specification means that it will only be callable when `n` is a subtype of the [abstract](@ref man-abstract-types) `Integer` type.
 
-Argument-type declarations **normally have no impact on performance**: regardless of what argument types (if any) are declared, Julia compiles a specialized version of the function for the actual argument types passed by the caller. For example, calling `fib(1)` will trigger the compilation of specialized version of `fib` optimized specifically for `Int` arguments, which is then re-used if `fib(7)` or `fib(15)` are called.  (There are rare exceptions when an argument-type declaration can trigger additional compiler specializations; see: [Be aware of when Julia avoids specializing](@ref).)  The most common reasons to declare argument types in Julia are, instead:
+Argument-type declarations **normally have no impact on performance**: regardless of what argument types (if any) are declared, Julia compiles a specialized version of the function for the actual argument types passed by the caller.   For example, calling `fib(1)` will trigger the compilation of specialized version of `fib` optimized specifically for `Int` arguments, which is then re-used if `fib(7)` or `fib(15)` are called.  (There are rare exceptions when an argument-type declaration can trigger additional compiler specializations; see: [Be aware of when Julia avoids specializing](@ref).)  The most common reasons to declare argument types in Julia are, instead:
 
 * **Dispatch:** As explained in [Methods](@ref), you can have different versions ("methods") of a function for different argument types, in which case the argument types are used to determine which implementation is called for which arguments. For example, you might implement a completely different algorithm `fib(x::Number) = ...` that works for any `Number` type by using [Binet's formula](https://en.wikipedia.org/wiki/Fibonacci_number#Binet%27s_formula) to extend it to non-integer values.
 * **Correctness:** Type declarations can be useful if your function only returns correct results for certain argument types. For example, if we omitted argument types and wrote `fib(n) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)`, then `fib(1.5)` would silently give us the nonsensical answer `1.0`.
@@ -204,9 +204,9 @@ Int8
 ```
 
 This function will always return an `Int8` regardless of the types of `x` and `y`.
-See [Type Declarations](@ref) for more on return types.
+See [Type Annotations](@ref) for more on return types.
 
-Return type declarations are **rarely used** in Julia: in general, you should
+Return type annotations are **rarely used** in Julia: in general, you should
 instead write "type-stable" functions in which Julia's compiler can automatically
 infer the return type. For more information, see the [Performance Tips](@ref man-performance-tips) chapter.
 
