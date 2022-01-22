@@ -175,15 +175,11 @@ namespace {
             LoadInst *pdata_ = nullptr;
             auto pdata = [&](LoadInst *data_load) {
                 if (!pdata_) {
-                    if (data_load->getParent() == data_builder.GetInsertBlock()) {
-                        pdata_ = data_load;
-                    } else {
-                        changed = true;
-                        auto ppdata = data_builder.CreatePointerCast(allocation.allocation, PointerType::get(data_load->getType(), cast<PointerType>(allocation.allocation->getType())->getAddressSpace()));
-                        data_load->setOperand(LoadInst::getPointerOperandIndex(), ppdata);
-                        data_load->moveAfter(cast<Instruction>(ppdata));
-                        pdata_ = data_load;
-                    }
+                    changed = true;
+                    auto ppdata = data_builder.CreatePointerCast(allocation.allocation, PointerType::get(data_load->getType(), cast<PointerType>(allocation.allocation->getType())->getAddressSpace()));
+                    pdata_ = data_builder.CreateAlignedLoad(data_load->getType(), ppdata, Align(sizeof(char*)), "arrayptr");
+                    pdata_->setMetadata(LLVMContext::MD_tbaa, data_load->getMetadata(LLVMContext::MD_tbaa));
+                    //We definitely know it's invariant at this point, since we never modify it
                     pdata_->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(pdata_->getContext(), None));
                 }
                 return pdata_;
@@ -192,12 +188,9 @@ namespace {
                 for (auto &memop : field.second.accesses) {
                     if (memop.offset == offsetof(jl_array_t, data)) {
                         auto data_load = cast<LoadInst>(memop.inst);
-                        auto lifted_load = pdata(data_load);
-                        if (lifted_load != data_load) {
-                            changed = true;
-                            data_load->replaceAllUsesWith(data_builder.CreatePointerCast(lifted_load, data_load->getType(), "arraydata_casted"));
-                            data_load->eraseFromParent();
-                        }
+                        data_load->replaceAllUsesWith(data_builder.CreatePointerCast(pdata(data_load), data_load->getType(), "arraydata_casted"));
+                        data_load->eraseFromParent();
+                        changed = true;
                     }
                 }
             }
