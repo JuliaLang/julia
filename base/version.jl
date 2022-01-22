@@ -17,8 +17,9 @@ alpha-numeric annotations.
 operators (`==`, `<`, `<=`, etc.), with the result following semver rules.
 
 See also [`@v_str`](@ref) to efficiently construct `VersionNumber` objects
-from semver-format strings, and [`VERSION`](@ref) for the `VersionNumber`
-of Julia itself.
+from semver-format strings, [`VERSION`](@ref) for the `VersionNumber`
+of Julia itself, and [Version Number Literals](@ref man-version-number-literals)
+in the manual.
 
 # Examples
 ```jldoctest
@@ -234,7 +235,7 @@ nextmajor(v::VersionNumber) = v < thismajor(v) ? thismajor(v) : VersionNumber(v.
 """
     VERSION
 
-A `VersionNumber` object describing which version of Julia is in use. For details see
+A [`VersionNumber`](@ref) object describing which version of Julia is in use. See also
 [Version Number Literals](@ref man-version-number-literals).
 """
 const VERSION = try
