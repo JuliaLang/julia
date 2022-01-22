@@ -800,22 +800,27 @@ namespace {
     std::unique_ptr<TargetMachine> createTargetMachine() {
 
         TargetOptions options = TargetOptions();
+#if defined(_OS_WINDOWS_)
+        // use ELF because RuntimeDyld COFF i686 support didn't exist
+        // use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
+#define FORCE_ELF
+#endif
         //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-    #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION < 130000
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION < 130000
         // tell Win32 to assume the stack is always 16-byte aligned,
         // and to ensure that it is 16-byte aligned for out-going calls,
         // to ensure compatibility with GCC codes
         // In LLVM 13 and onwards this has turned into a module option
         options.StackAlignmentOverride = 16;
-    #endif
-    #if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION < 130000
+#endif
+#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION < 130000
         // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
         options.StackProtectorGuard = StackProtectorGuards::Global;
-    #endif
+#endif
         Triple TheTriple(sys::getProcessTriple());
-    #if defined(FORCE_ELF)
+#if defined(FORCE_ELF)
         TheTriple.setObjectFormat(Triple::ELF);
-    #endif
+#endif
         uint32_t target_flags = 0;
         auto target = jl_get_llvm_target(imaging_mode, target_flags);
         auto &TheCPU = target.first;
