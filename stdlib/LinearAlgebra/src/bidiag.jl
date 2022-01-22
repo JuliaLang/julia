@@ -744,26 +744,19 @@ function ldiv!(c::AbstractVecOrMat, A::Bidiagonal, b::AbstractVecOrMat)
         return copyto!(c, b)
     end
 
+    zi = findfirst(iszero, A.dv)
+    isnothing(zi) || throw(SingularException(zi))
+
     @inbounds for j in 1:nb
         if A.uplo == 'L' #do colwise forward substitution
-            c[1,j] = bi1 = A.dv[1]\b[1,j]
+            c[1,j] = bi1 = A.dv[1] \ b[1,j]
             for i in 2:N
-                dvi = A.dv[i]
-                iszero(dvi) && throw(SingularException(i))
-                bi  = b[i]
-                bi -= A.ev[i - 1] * bi1
-                bi  = dvi\bi
-                c[i,j] = bi1 = bi
+                c[i,j] = bi1 = A.dv[i] \ (b[i,j] - A.ev[i - 1] * bi1)
             end
         else #do colwise backward substitution
-            c[N,j] = bi1 = A.dv[N]\b[N,j]
+            c[N,j] = bi1 = A.dv[N] \ b[N,j]
             for i in (N - 1):-1:1
-                dvi = A.dv[i]
-                iszero(dvi) && throw(SingularException(i))
-                bi  = b[i]
-                bi -= A.ev[i] * bi1
-                bi  = dvi\bi
-                c[i,j] = bi1 = bi
+                c[i,j] = bi1 = A.dv[i] \ (b[i,j] - A.ev[i] * bi1)
             end
         end
     end
@@ -822,6 +815,14 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
+    mc, nc = size(C)
+    if mc != m || nc != n
+        throw(DimensionMismatch("expect output to have size ($m, $n), but got ($mc, $nc)"))
+    end
+
+    zi = findfirst(iszero, B.dv)
+    isnothing(zi) || throw(SingularException(zi))
+
     if B.uplo == 'L'
         diagB = B.dv[n]
         for i in 1:m
@@ -830,7 +831,7 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal)
         for j in n-1:-1:1
             diagB = B.dv[j]
             offdiagB = B.ev[j]
-            for i = 1:m
+            for i in 1:m
                 C[i,j] = (A[i,j] - C[i,j+1]*offdiagB)/diagB
             end
         end
@@ -839,7 +840,7 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal)
         for i in 1:m
             C[i,1] = A[i,1] / diagB
         end
-        for j = 2:n
+        for j in 2:n
             diagB = B.dv[j]
             offdiagB = B.ev[j-1]
             for i = 1:m
