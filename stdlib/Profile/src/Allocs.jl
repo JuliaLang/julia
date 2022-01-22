@@ -191,11 +191,6 @@ function decode(raw_results::RawResults)::AllocResults
     alloc_size = Vector{Int}()
     alloc_stack_trace = Vector{Vector{BTElement}}()
 
-    # TODO: sizehint all of these? idk
-    sizehint!(alloc_type, raw_results.num_allocs)
-    sizehint!(alloc_size, raw_results.num_allocs)
-    sizehint!(alloc_stack_trace, raw_results.num_allocs)
-
     for i in 1:raw_results.num_allocs
         raw_alloc = unsafe_load(raw_results.allocs, i)
         push!(alloc_type, raw_alloc.type) # defer the unsafe_load?
@@ -220,6 +215,13 @@ function Base.getindex(res::AllocResults, i::Int)
         stacktrace_memoized(res.stack_frames, res.alloc_stack_trace[i]),
         res.alloc_size[i]
     )
+end
+
+function Base.iterate(res::AllocResults, state=1)
+    if state > length(res)
+        return nothing
+    end
+    return (res[state], state+1)
 end
 
 function Base.length(res::AllocResults)
