@@ -639,7 +639,7 @@ function ccall_macro_parse(expr::Expr)
 end
 
 
-function ccall_macro_lower(convention, func, rettype, types, args, nreq)
+function ccall_macro_lower(convention, effects, func, rettype, types, args, nreq)
     lowering = []
     realargs = []
     gcroots = []
@@ -676,7 +676,7 @@ function ccall_macro_lower(convention, func, rettype, types, args, nreq)
                esc(etypes),
                nreq,
                QuoteNode(convention),
-               nothing,
+               effects,
                realargs..., gcroots...)
     push!(lowering, exp)
 
@@ -732,5 +732,9 @@ The string literal could also be used directly before the function
 name, if desired `"libglib-2.0".g_uri_escape_string(...`
 """
 macro ccall(expr)
-    return ccall_macro_lower(:ccall, ccall_macro_parse(expr)...)
+    return ccall_macro_lower(:ccall, nothing, ccall_macro_parse(expr)...)
+end
+
+macro ccall_effects(effects, expr)
+    return ccall_macro_lower(:ccall, effects, ccall_macro_parse(expr)...)
 end

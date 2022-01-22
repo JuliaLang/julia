@@ -68,9 +68,9 @@ function encode_effects_override(eo::EffectsOverride)
     e = 0x00
     eo.consistent && (e |= 0x01)
     eo.effect_free && (e |= 0x02)
-    eo.nothrow && (e |= 0x02)
-    eo.terminates && (e |= 0x04)
-    eo.terminates_locally && (e |= 0x08)
+    eo.nothrow && (e |= 0x04)
+    eo.terminates && (e |= 0x08)
+    eo.terminates_locally && (e |= 0x10)
     e
 end
 
@@ -81,7 +81,6 @@ decode_effects_override(e::UInt8) =
         (e >> 2) & 0x01 != 0x00,
         (e >> 3) & 0x01 != 0x00,
         (e >> 4) & 0x01 != 0x00)
-
 
 """
     InferenceResult

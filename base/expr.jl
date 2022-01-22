@@ -520,7 +520,14 @@ macro assume_effects(args...)
         end
     end
     ex = args[end]
-    isa(ex, Expr) || ArgumentError("Bad expression `$ex` in @constprop [settings] ex")
+    isa(ex, Expr) || throw(ArgumentError("Bad expression `$ex` in @constprop [settings] ex"))
+    if ex.head === :macrocall && ex.args[1] == Symbol("@ccall")
+        ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
+        insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally
+        )))
+        return esc(ex)
+    end
     return pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally)
 end
 

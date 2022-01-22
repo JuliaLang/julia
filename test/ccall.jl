@@ -36,7 +36,7 @@ end
         Core.svec(Ptr{Ptr{Cchar}}, Cstring,
             UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
             Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat),
-            2, :(:cdecl),
+            2, :(:cdecl), nothing,
             :(Base.unsafe_convert(Ptr{Ptr{Cchar}}, strp)), :(Base.unsafe_convert(Cstring, fmt)),
             0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
             Cfloat(1.1), Cfloat(2.2), Cfloat(3.3), Cfloat(4.4), Cfloat(5.5), Cfloat(6.6), Cfloat(7.7), Cfloat(8.8), Cfloat(9.9),
@@ -1676,7 +1676,7 @@ using Base: ccall_macro_parse, ccall_macro_lower
 end
 
 @testset "ensure the base-case of @ccall works, including library name and pointer interpolation" begin
-    call = ccall_macro_lower(:ccall, ccall_macro_parse( :( libstring.func(
+    call = ccall_macro_lower(:ccall, nothing, ccall_macro_parse( :( libstring.func(
         str::Cstring,
         num1::Cint,
         num2::Cint
@@ -1700,7 +1700,7 @@ end
         end)
 
     # pointer interpolation
-    call = ccall_macro_lower(:ccall, ccall_macro_parse(:( $(Expr(:$, :fptr))("bar"::Cstring)::Cvoid ))...)
+    call = ccall_macro_lower(:ccall, nothing, ccall_macro_parse(:( $(Expr(:$, :fptr))("bar"::Cstring)::Cvoid ))...)
     @test Base.remove_linenums!(call) == Base.remove_linenums!(
     quote
         func = $(Expr(:escape, :fptr))
@@ -1851,4 +1851,10 @@ end
     @test unsafe_load(convert(Ptr{Cint}, cglobal33413_tupleliteral_notype())) == 1
     @test cglobal33413_literal() != C_NULL
     @test cglobal33413_literal_notype() != C_NULL
+end
+
+@testset "ccall_effects" begin
+    ctest_total(x) = @Base.assume_effects :total @ccall libccalltest.ctest(x::Complex{Int})::Complex{Int}
+    ctest_total_const() = Val{ctest_total(1 + 2im)}()
+    Core.Compiler.return_type(ctest_total_const, Tuple{}) == Val{2 + 0im}
 end
