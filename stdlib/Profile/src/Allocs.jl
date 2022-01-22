@@ -152,8 +152,10 @@ end
 
 struct AllocResults
     stack_frames::BacktraceCache
+
+    # There is one item in the following arrays for each alloc.
     alloc_stack_trace::Vector{Vector{BTElement}}
-    alloc_type::Vector{Ptr{Type}}
+    alloc_type::Vector{Any} # would be Vector{Type} but we also have UnknownType, etc
     alloc_size::Vector{Int}
 end
 
@@ -179,13 +181,13 @@ end
 
 function decode(raw_results::RawResults)::AllocResults
     cache = BacktraceCache()
-    alloc_type = Vector{Ptr{Type}}()
+    alloc_type = Vector{Any}()
     alloc_size = Vector{Int}()
     alloc_stack_trace = Vector{Vector{BTElement}}()
 
     for i in 1:raw_results.num_allocs
         raw_alloc = unsafe_load(raw_results.allocs, i)
-        push!(alloc_type, raw_alloc.type) # defer the unsafe_load?
+        push!(alloc_type, load_type(raw_alloc.type))
         push!(alloc_size, raw_alloc.size)
         bt_array = BTElement[
             unsafe_load(raw_alloc.backtrace.data, i) for i in 1:raw_alloc.backtrace.size
@@ -207,7 +209,7 @@ end
 
 function Base.getindex(res::AllocResults, i::Int)
     return Alloc(
-        load_type(res.alloc_type[i]),
+        res.alloc_type[i],
         stacktrace_memoized(res.stack_frames, res.alloc_stack_trace[i]),
         res.alloc_size[i]
     )
