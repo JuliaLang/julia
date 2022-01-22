@@ -55,7 +55,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lowe
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
-Module *jl_create_llvm_module(StringRef name, LLVMContext *ctxt);
+Module *jl_create_llvm_module(StringRef name, LLVMContext &ctxt);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
 
 typedef struct _jl_llvm_functions_t {
@@ -110,7 +110,7 @@ typedef struct _jl_codegen_params_t {
     Module *_shared_module = NULL;
     Module *shared_module(LLVMContext &context) {
         if (!_shared_module)
-            _shared_module = jl_create_llvm_module("globals", &context);
+            _shared_module = jl_create_llvm_module("globals", context);
         return _shared_module;
     }
     // inputs
@@ -123,12 +123,14 @@ jl_compile_result_t jl_emit_code(
         jl_method_instance_t *mi,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
-        jl_codegen_params_t &params);
+        jl_codegen_params_t &params,
+        LLVMContext &context);
 
 jl_compile_result_t jl_emit_codeinst(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
-        jl_codegen_params_t &params);
+        jl_codegen_params_t &params,
+        LLVMContext &context);
 
 enum CompilationPolicy {
     Default = 0,
@@ -139,7 +141,8 @@ enum CompilationPolicy {
 void jl_compile_workqueue(
     std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
     jl_codegen_params_t &params,
-    CompilationPolicy policy);
+    CompilationPolicy policy,
+    LLVMContext &ctxt);
 
 Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,
     jl_codegen_params_t &params);

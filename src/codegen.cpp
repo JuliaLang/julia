@@ -1938,9 +1938,9 @@ Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cg
     return M;
 }
 
-Module *jl_create_llvm_module(StringRef name, LLVMContext *context)
+Module *jl_create_llvm_module(StringRef name, LLVMContext &context)
 {
-    return _jl_create_llvm_module(name, context ? *context : *jl_ExecutionEngine->getContext().getContext(), &jl_default_cgparams);
+    return _jl_create_llvm_module(name, context, &jl_default_cgparams);
 }
 
 static void jl_init_function(Function *F)
@@ -7744,7 +7744,8 @@ jl_compile_result_t jl_emit_code(
         jl_method_instance_t *li,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
-        jl_codegen_params_t &params)
+        jl_codegen_params_t &params,
+        LLVMContext &context)
 {
     JL_TIMING(CODEGEN);
     // caller must hold codegen_lock
@@ -7754,7 +7755,7 @@ jl_compile_result_t jl_emit_code(
         compare_cgparams(params.params, &jl_default_cgparams)) &&
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
-        std::tie(m, decls) = emit_function(li, src, jlrettype, params, *jl_ExecutionEngine->getContext().getContext());
+        std::tie(m, decls) = emit_function(li, src, jlrettype, params, context);
         if (dump_emitted_mi_name_stream != NULL) {
             jl_printf(dump_emitted_mi_name_stream, "%s\t", decls.specFunctionObject.c_str());
             // NOTE: We print the Type Tuple without surrounding quotes, because the quotes
@@ -7785,7 +7786,8 @@ jl_compile_result_t jl_emit_code(
 jl_compile_result_t jl_emit_codeinst(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
-        jl_codegen_params_t &params)
+        jl_codegen_params_t &params,
+        LLVMContext &context)
 {
     JL_TIMING(CODEGEN);
     JL_GC_PUSH1(&src);
@@ -7799,7 +7801,7 @@ jl_compile_result_t jl_emit_codeinst(
             return jl_compile_result_t(); // failed
         }
     }
-    jl_compile_result_t result = jl_emit_code(codeinst->def, src, codeinst->rettype, params);
+    jl_compile_result_t result = jl_emit_code(codeinst->def, src, codeinst->rettype, params, context);
 
     const jl_llvm_functions_t &decls = std::get<1>(result);
     const std::string &specf = decls.specFunctionObject;
@@ -7861,7 +7863,7 @@ jl_compile_result_t jl_emit_codeinst(
 
 void jl_compile_workqueue(
     std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
-    jl_codegen_params_t &params, CompilationPolicy policy)
+    jl_codegen_params_t &params, CompilationPolicy policy, LLVMContext &context)
 {
     JL_TIMING(CODEGEN);
     jl_code_info_t *src = NULL;
@@ -7903,10 +7905,10 @@ void jl_compile_workqueue(
                     codeinst->inferred && codeinst->inferred == jl_nothing) {
                     src = jl_type_infer(codeinst->def, jl_atomic_load_acquire(&jl_world_counter), 0);
                     if (src)
-                        result = jl_emit_code(codeinst->def, src, src->rettype, params);
+                        result = jl_emit_code(codeinst->def, src, src->rettype, params, context);
                 }
                 else {
-                    result = jl_emit_codeinst(codeinst, NULL, params);
+                    result = jl_emit_codeinst(codeinst, NULL, params, context);
                 }
                 if (std::get<0>(result))
                     decls = &std::get<1>(result);

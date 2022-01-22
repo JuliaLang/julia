@@ -19,7 +19,7 @@ JL_DLLEXPORT void jl_extern_c_fallback(jl_function_t *f, jl_value_t *rt, jl_valu
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
         char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir_fallback(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo) UNAVAILABLE
-JL_DLLEXPORT void *jl_get_llvmf_defn_fallback(jl_method_instance_t *linfo, size_t world, char getwrapper, char optimize, const jl_cgparams_t params) UNAVAILABLE
+JL_DLLEXPORT void *jl_get_llvmf_defn_fallback(jl_method_instance_t *linfo, LLVMContextRef ctxt, size_t world, char getwrapper, char optimize, const jl_cgparams_t params) UNAVAILABLE
 
 JL_DLLEXPORT void *jl_LLVMCreateDisasm_fallback(const char *TripleName, void *DisInfo, int TagType, void *GetOpInfo, void *SymbolLookUp) UNAVAILABLE
 JL_DLLEXPORT size_t jl_LLVMDisasmInstruction_fallback(void *DC, uint8_t *Bytes, uint64_t BytesSize, uint64_t PC, char *OutString, size_t OutStringSize) UNAVAILABLE
@@ -52,7 +52,7 @@ JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT int jl_compile_extern_c_fallback(void *llvmmod, void *llvmctxt, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+JL_DLLEXPORT int jl_compile_extern_c_fallback(LLVMModuleRef llvmmod, LLVMContextRef llvmctxt, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     return 0;
 }
@@ -74,7 +74,7 @@ JL_DLLEXPORT void jl_unlock_profile_fallback(void)
 {
 }
 
-JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, void *llvmctxt, const jl_cgparams_t *cgparams, int _policy) UNAVAILABLE
+JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMContextRef llvmctxt, const jl_cgparams_t *cgparams, int _policy) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
 {
