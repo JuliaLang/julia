@@ -544,8 +544,9 @@ function in(x::Symbol, itr::Tuple{Vararg{Symbol}})
     return sym_in(x, itr)
 end
 
-function show_legal_indices(io::IO, x::Tuple)
-    show_index(io, axes(x))
+function describe_valid_indices(io::IO, a::Tuple, i=nothing)
+    print(io, "Valid indices are ")
+    show_index(io, axes(a))
     print(io, '.')
 end
 

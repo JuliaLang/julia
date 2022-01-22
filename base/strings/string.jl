@@ -24,9 +24,14 @@ function Base.showerror(io::IO, exc::StringIndexError)
         end
     end
 end
-function show_legal_indices(io::IO, s::AbstractString)
-    print(io, "between ", firstindex(s), " and ", thisind(s, ncodeunits(s)), '.')
-end
+
+describe_valid_indices(io::IO, a::AbstractString, i=nothing) = print(io,
+                                                                     "Valid indices are between ",
+                                                                     firstindex(a),
+                                                                     " and ",
+                                                                     thisind(a, ncodeunits(a)),
+                                                                     '.'
+                                                                    )
 
 const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, FastContiguousSubArray{UInt8,1,CodeUnits{UInt8,String}}, FastContiguousSubArray{UInt8,1,Vector{UInt8}}, FastContiguousSubArray{Int8,1,Vector{Int8}}}
 

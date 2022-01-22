@@ -71,23 +71,31 @@ function showerror(io::IO, ex::BoundsError)
             end
             print(io, ']')
         end
-        print(io, ".\nLegal indices are ")
-        show_legal_indices(io, ex.a)
     end
     Experimental.show_error_hints(io, ex)
 end
 
-"""
-    show_legal_indices(io, x)
-
-Describe legal ways to index `x` in human-readable form. This should be a continuation of
-the sentence "Legal indices are ...". Will be shown to the user upon `BoundsError`.
-"""
-show_legal_indices(io::IO, x::Any) = print(io, "unknown.");
-function show_legal_indices(io::IO, x::AbstractArray{<:Any})
-    show_index(io, axes(x))
-    print(io, '.')
+Experimental.register_error_hint(BoundsError) do io, ex
+    print(io,'\n')
+    if ~isdefined(ex, :a)
+        return print(io, "No description of valid indices available.")
+    end
+    if isdefined(ex, :i)
+        return describe_valid_indices(io, ex.a, ex.i)
+    end
+    describe_valid_indices(io, ex.a)
 end
+
+"""
+    describe_valid_indices(io, a, i)
+
+Describe valid ways to index `a` in human-readable form. This should typically be a full
+sentence starting "Valid indices are ". Will be shown to the user upon `BoundsError`.
+
+`i` may be ignored, but could be used to determine what information to show.
+"""
+describe_valid_indices(io::IO, a, i) = print(io, "No description of valid indices available.")
+
 
 function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
