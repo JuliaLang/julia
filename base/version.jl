@@ -22,7 +22,7 @@ of Julia itself.
 
 # Examples
 ```jldoctest
-julia> a = VersionNumber("1.2.3")
+julia> a = VersionNumber(1, 2, 3)
 v"1.2.3"
 
 julia> a >= v"1.2"
