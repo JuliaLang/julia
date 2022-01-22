@@ -8,18 +8,31 @@ const VInt = UInt32
 """
     VersionNumber
 
-Version number type which follow the specifications of
-[semantic versioning](https://semver.org/), composed of major, minor
+Version number type which follows the specifications of
+[semantic versioning (semver)](https://semver.org/), composed of major, minor
 and patch numeric values, followed by pre-release and build
-alpha-numeric annotations. See also [`@v_str`](@ref).
+alpha-numeric annotations.
+
+`VersionNumber` objects can be compared with all of the standard comparison
+operators (`==`, `<`, `<=`, etc.), with the result following semver rules.
+
+See also [`@v_str`](@ref) to efficiently construct `VersionNumber` objects
+from semver-format strings, and [`VERSION`](@ref) for the `VersionNumber`
+of Julia itself.
 
 # Examples
 ```jldoctest
-julia> VersionNumber("1.2.3")
+julia> a = VersionNumber("1.2.3")
 v"1.2.3"
 
-julia> VersionNumber("2.0.1-rc1")
+julia> a >= v"1.2"
+true
+
+julia> b = VersionNumber("2.0.1-rc1")
 v"2.0.1-rc1"
+
+julia> b >= v"2.0.1"
+false
 ```
 """
 struct VersionNumber
