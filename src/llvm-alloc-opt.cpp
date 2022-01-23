@@ -150,6 +150,7 @@ private:
 
     void moveArrayToStack(CallInst *orig_inst, llvm::Value *tag);
     void fixupArrayAddrSpaces(CallInst *orig_inst, AllocaInst *arrayshell, AllocaInst *arraydata);
+    void fixupAddrSpace(Instruction *old, Instruction *repl);
 
     Function &F;
     AllocOpt &pass;
@@ -1464,107 +1465,75 @@ void Optimizer::fixupArrayAddrSpaces(CallInst *orig_inst, AllocaInst *arrayshell
                 // Need to correct to addrspace 0
                 builder.SetInsertPoint(access.inst);
                 auto casted = builder.CreatePointerCast(arraydata, PointerType::get(cast<PointerType>(access.inst->getType())->getElementType(), 0));
-                access.inst->replaceAllUsesWith(casted);
                 if (casted != arraydata) {
                     casted->takeName(access.inst);
                     cast<Instruction>(casted)->setDebugLoc(access.inst->getDebugLoc());
                 }
+                fixupAddrSpace(access.inst, cast<Instruction>(casted));
             }
         }
     }
-    struct Frame {
-        llvm::Instruction::user_iterator user_it;
-        llvm::Instruction::user_iterator user_end;
-    };
-    SmallVector<Instruction*> to_fix;
-    SmallVector<Frame, 4> checklist;
-    auto push = [&](Instruction *parent){ checklist.push_back({parent->user_begin(), parent->user_end()}); to_fix.push_back(parent); };
-    SmallSet<unsigned, 5> fixable;
-    fixable.insert(Instruction::GetElementPtr);
-    fixable.insert(Instruction::AddrSpaceCast);
-    fixable.insert(Instruction::BitCast);
-    auto fix = [&](Instruction *inst) {
-        switch (inst->getOpcode()) {
-            case Instruction::GetElementPtr: {
-                // No need to correct this addrspace, it's the type of the element
-                // But because the type of the GEP is changing now, we need to remake
-                // the entire GEP to compensate
-                // Note that this is a messy operation due to multi-indexed geps and
-                // metadata preservation
-                auto gep = cast<GetElementPtrInst>(inst);
-                builder.SetInsertPoint(gep);
-                SmallVector<Value *, 2> indices;
-                indices.reserve(gep->getNumIndices());
-                for (auto &ind : gep->indices()) {
-                    indices.push_back(ind.get());
-                }
-                auto retyped = cast<GetElementPtrInst>(builder.CreateGEP(cast<PointerType>(gep->getPointerOperandType())->getElementType(), gep->getPointerOperand(), indices));
-                retyped->takeName(gep);
-                SmallVector<std::pair<unsigned, MDNode*>, 2> metadata;
-                gep->getAllMetadata(metadata);
-                for (auto &md : metadata) {
-                    retyped->setMetadata(md.first, md.second);
-                }
-                gep->replaceAllUsesWith(retyped);
-                gep->eraseFromParent();
-                return static_cast<Instruction *>(retyped);
-            }
-            case Instruction::AddrSpaceCast:
-            case Instruction::BitCast: {
-                if (cast<PointerType>(inst->getType())->getAddressSpace() != 0) {
-                    // We should correct this addrspace
-                    builder.SetInsertPoint(inst);
-                    auto casted = cast<Instruction>(builder.CreateBitCast(inst->getOperand(0), PointerType::get(cast<PointerType>(inst->getType())->getElementType(), 0)));
-                    casted->takeName(inst);
-                    if (casted != inst->getOperand(0)) {
-                        casted->setDebugLoc(inst->getDebugLoc());
+    fixupAddrSpace(orig_inst, arrayshell);
+}
+
+void Optimizer::fixupAddrSpace(Instruction *old, Instruction *repl) {
+    ReplaceUses::Stack worklist;
+    worklist.push_back({old, repl});
+    while (!worklist.empty()) {
+        auto &back = worklist.back();
+        if (back.orig_i->use_empty()) {
+            //We shouldn't delete the original instruction, it's used in other places
+            //But otherwise there's no need to keep around badly typed instructions
+            if (worklist.size() > 1)
+                back.orig_i->eraseFromParent();
+            worklist.pop_back();
+            continue;
+        }
+        auto &use = *back.orig_i->use_begin();
+        if (auto inst = dyn_cast<Instruction>(use.getUser())) {
+            //Note that we avoid a large amount of messy instruction recreation
+            //by simply mutating the type in place. This is dangerous to get wrong.
+            //Thus, we clone the instruction prior to type mutation.
+            switch (inst->getOpcode()) {
+                case Instruction::BitCast:
+                case Instruction::AddrSpaceCast: {
+                    if (cast<PointerType>(inst->getType())->getAddressSpace() != 0) {
+                        // We should correct this addrspace
+                        auto cloned = inst->clone();
+                        cloned->takeName(inst);
+                        cloned->mutateType(PointerType::get(cast<PointerType>(inst->getType())->getElementType(), 0));
+                        cloned->setOperand(0, back.new_i);
+                        cloned->insertBefore(inst);
+                        worklist.push_back({inst, cloned});
+                    } else {
+                        //This has already been corrected, no need to look down
+                        inst->replaceUsesOfWith(back.orig_i, back.new_i);
                     }
-                    inst->replaceAllUsesWith(casted);
-                    inst->eraseFromParent();
-                    return casted;
+                    break;
                 }
-                return inst;
-            }
-            default:
-                return static_cast<Instruction *>(nullptr);
-        }
-    };
-    push(arraydata);
-    while (!checklist.empty()) {
-        auto &back = checklist.back();
-        if (back.user_it != back.user_end) {
-            auto user = *back.user_it;
-            ++back.user_it;
-            if (auto inst = dyn_cast<Instruction>(user)) {
-                if (fixable.contains(inst->getOpcode())) {
-                    push(inst);
+                case Instruction::GetElementPtr: {
+                    if (cast<PointerType>(inst->getType())->getAddressSpace() != 0) {
+                        // The type of the GEP is changing now, we need to update it
+                        auto cloned = inst->clone();
+                        cloned->takeName(inst);
+                        cloned->mutateType(back.new_i->getType());
+                        cloned->setOperand(GetElementPtrInst::getPointerOperandIndex(), back.new_i);
+                        cloned->insertBefore(inst);
+                        worklist.push_back({inst, cloned});
+                    } else {
+                        //This has already been corrected, no need to look down
+                        inst->replaceUsesOfWith(back.orig_i, back.new_i);
+                    }
+                    break;
                 }
-            }
-        } else {
-            checklist.pop_back();
-        }
-    }
-    for (auto inst : to_fix) {
-        fix(inst);
-    }
-    to_fix.clear();
-    push(arrayshell);
-    while (!checklist.empty()) {
-        auto &back = checklist.back();
-        if (back.user_it != back.user_end) {
-            auto user = *back.user_it;
-            ++back.user_it;
-            if (auto inst = dyn_cast<Instruction>(user)) {
-                if (fixable.contains(inst->getOpcode())) {
-                    push(inst);
+                default: {
+                    inst->replaceUsesOfWith(back.orig_i, back.new_i);
+                    break;
                 }
             }
         } else {
-            checklist.pop_back();
+            use.set(back.new_i);
         }
-    }
-    for (auto inst : to_fix) {
-        fix(inst);
     }
 }
 
