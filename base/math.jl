@@ -784,7 +784,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
-    k = Int(xs >> significand_bits(T))
+    k = (xs >> significand_bits(T)) % Int
     if k == 0 # x is subnormal
         xs == 0 && return x # +-0
         m = leading_zeros(xs) - exponent_bits(T)
@@ -817,7 +817,8 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
             return flipsign(T(0.0), x)
         end
         k += significand_bits(T)
-        z = T(2.0)^-significand_bits(T)
+        # z = T(2.0) ^ (-significand_bits(T))
+        z = reinterpret(T, rem(exponent_bias(T)-significand_bits(T), uinttype(T)) << significand_bits(T))
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
