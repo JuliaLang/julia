@@ -179,7 +179,7 @@ end
 """
     eigen(A; permute::Bool=true, scale::Bool=true, sortby) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
+Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -316,7 +316,7 @@ Return the eigenvalues of `A`.
 
 For general non-symmetric matrices it is possible to specify how the matrix is balanced
 before the eigenvalue calculation. The `permute`, `scale`, and `sortby` keywords are
-the same as for [`eigen!`](@ref).
+the same as for [`eigen`](@ref).
 
 # Examples
 ```jldoctest
@@ -464,7 +464,7 @@ end
 """
     eigen(A, B) -> GeneralizedEigen
 
-Computes the generalized eigenvalue decomposition of `A` and `B`, returning a
+Compute the generalized eigenvalue decomposition of `A` and `B`, returning a
 [`GeneralizedEigen`](@ref) factorization object `F` which contains the generalized eigenvalues in
 `F.values` and the generalized eigenvectors in the columns of the matrix `F.vectors`.
 (The `k`th generalized eigenvector can be obtained from the slice `F.vectors[:, k]`.)
@@ -563,7 +563,7 @@ end
 """
     eigvals(A, B) -> values
 
-Computes the generalized eigenvalues of `A` and `B`.
+Compute the generalized eigenvalues of `A` and `B`.
 
 # Examples
 ```jldoctest
