@@ -320,7 +320,8 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
     if (!may_be_removable) {
         return;
     }
-    if (array_escape_info.refstore || array_escape_info.haspreserve) {
+    //TODO get rid of the zeroinit check once rebased on master with addMemOp fix
+    if (array_escape_info.refstore || array_escape_info.haspreserve || array_type_data.zeroinit) {
         //Avoid messing with GC-tracked pointers for now
         return;
     }
@@ -1478,7 +1479,7 @@ void Optimizer::fixupArrayAddrSpaces(CallInst *orig_inst, AllocaInst *arrayshell
     SmallVector<Instruction*> to_fix;
     SmallVector<Frame, 4> checklist;
     auto push = [&](Instruction *parent){ checklist.push_back({parent->user_begin(), parent->user_end()}); to_fix.push_back(parent); };
-    SmallSet<unsigned, 3> fixable;
+    SmallSet<unsigned, 5> fixable;
     fixable.insert(Instruction::GetElementPtr);
     fixable.insert(Instruction::AddrSpaceCast);
     fixable.insert(Instruction::BitCast);
@@ -1486,22 +1487,34 @@ void Optimizer::fixupArrayAddrSpaces(CallInst *orig_inst, AllocaInst *arrayshell
         switch (inst->getOpcode()) {
             case Instruction::GetElementPtr: {
                 // No need to correct this addrspace, it's the type of the element
-                // But users of the GEP need to be notified that the addrspace changed,
-                // So we have to clone + RAUW anyways
-                auto cloned = inst->clone();
-                cloned->insertBefore(inst);
-                cloned->takeName(inst);
-                // Forcibly update the derived type
-                inst->replaceAllUsesWith(cloned);
-                inst->eraseFromParent();
-                return cloned;
+                // But because the type of the GEP is changing now, we need to remake
+                // the entire GEP to compensate
+                // Note that this is a messy operation due to multi-indexed geps and
+                // metadata preservation
+                auto gep = cast<GetElementPtrInst>(inst);
+                builder.SetInsertPoint(gep);
+                SmallVector<Value *, 2> indices;
+                indices.reserve(gep->getNumIndices());
+                for (auto &ind : gep->indices()) {
+                    indices.push_back(ind.get());
+                }
+                auto retyped = cast<GetElementPtrInst>(builder.CreateGEP(cast<PointerType>(gep->getPointerOperandType())->getElementType(), gep->getPointerOperand(), indices));
+                retyped->takeName(gep);
+                SmallVector<std::pair<unsigned, MDNode*>, 2> metadata;
+                gep->getAllMetadata(metadata);
+                for (auto &md : metadata) {
+                    retyped->setMetadata(md.first, md.second);
+                }
+                gep->replaceAllUsesWith(retyped);
+                gep->eraseFromParent();
+                return static_cast<Instruction *>(retyped);
             }
             case Instruction::AddrSpaceCast:
             case Instruction::BitCast: {
                 if (cast<PointerType>(inst->getType())->getAddressSpace() != 0) {
                     // We should correct this addrspace
                     builder.SetInsertPoint(inst);
-                    auto casted = cast<Instruction>(builder.CreatePointerBitCastOrAddrSpaceCast(inst->getOperand(0), PointerType::get(cast<PointerType>(inst->getType())->getElementType(), 0)));
+                    auto casted = cast<Instruction>(builder.CreateBitCast(inst->getOperand(0), PointerType::get(cast<PointerType>(inst->getType())->getElementType(), 0)));
                     casted->takeName(inst);
                     if (casted != inst->getOperand(0)) {
                         casted->setDebugLoc(inst->getDebugLoc());
