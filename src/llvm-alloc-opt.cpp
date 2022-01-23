@@ -149,6 +149,7 @@ private:
     void optimizeTag(CallInst *orig_inst, llvm::Value *tag);
 
     void moveArrayToStack(CallInst *orig_inst, llvm::Value *tag);
+    void fixupArrayAddrSpaces(CallInst *orig_inst, AllocaInst *arrayshell, AllocaInst *arraydata);
 
     Function &F;
     AllocOpt &pass;
@@ -302,7 +303,8 @@ void Optimizer::optimizeArray(CallInst *orig, jl_alloc::AllocIdInfo &info) {
         return;
     }
     //Array dead by nobody loading from the data pointer
-    if (may_be_removable && !array_escape_info.addrescaped
+    if (may_be_removable && !object_escape_info.hasunknownmem
+        && !array_escape_info.addrescaped
         && !array_escape_info.hasload
         && (!array_escape_info.haspreserve || !array_escape_info.refstore)) {
         if (insertArrayLengthExceptionGuard(orig)) {
@@ -443,7 +445,7 @@ void Optimizer::checkObjectEscapes(Instruction *I)
 }
 
 void Optimizer::checkArrayEscapes() {
-    if (!object_escape_info.hasunknownmem && object_escape_info.memops.size() == 1 && object_escape_info.memops.begin()->second.accesses.size() == 1) {
+    if (object_escape_info.memops.size() == 1 && object_escape_info.memops.begin()->second.accesses.size() == 1) {
         auto &memop = *object_escape_info.memops.begin()->second.accesses.begin();
         if (memop.offset == 0 && isa<LoadInst>(memop.inst)) {
             jl_alloc::EscapeAnalysisRequiredArgs required{array_escape_info, check_stack, pass, *pass.DL};
@@ -682,6 +684,7 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
 // all the original safepoints.
 void Optimizer::moveToStack(CallInst *orig_inst, llvm::Value *tag, size_t sz, bool has_ref)
 {
+
     removed.push_back(orig_inst);
     // The allocation does not escape or get used in a phi node so none of the derived
     // SSA from it are live when we run the allocation again.
@@ -1350,19 +1353,206 @@ bool Optimizer::insertArrayLengthExceptionGuard(CallInst *orig) {
 }
 
 void Optimizer::moveArrayToStack(CallInst *orig_inst, llvm::Value *tag) {
-    assert(object_escape_info.memops.size() == 1);
-    assert(object_escape_info.memops.begin()->second.accesses.size() == 1);
-    assert(isa<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst));
-    auto load = cast<LoadInst>(object_escape_info.memops.begin()->second.accesses.begin()->inst);
+    // We take a simple approach to moving arrays to the stack
+    // 1. Create the outer jl_array_t shell struct
+    // (copied here for convenience)
+    /* JL_EXTENSION typedef struct {
+        JL_DATA_TYPE
+        void *data;
+        size_t length;
+        jl_array_flags_t flags;
+        uint16_t elsize;  // element size including alignment (dim 1 memory stride)
+        uint32_t offset;  // for 1-d only. does not need to get big.
+        size_t nrows;
+        union {
+            // 1d
+            size_t maxsize;
+            // Nd
+            size_t ncols;
+        };
+        // other dim sizes go here for ndims > 2
+
+        // followed by alignment padding and inline data, or owner pointer
+    } jl_array_t; */
+    // 2. Populate each of the fields of the struct as if it had been allocated
+    // 3. Mark any load memops on the shell with invariant group metadata because all of the fields are constant
+    // 4. RAUW on orig_inst and delete orig_inst
+
+    // Step 0: setup
+    auto ndimwords = jl_array_ndimwords(orig_inst->arg_size() - 1);
     IRBuilder<> array_builder(&*orig_inst->getFunction()->getEntryBlock().getFirstInsertionPt());
-    auto array = array_builder.CreateAlloca(pass.T_int8, ConstantInt::get(pass.T_size, array_type_data.total_size));
-    array->takeName(orig_inst);
-    array->setAlignment(Align(array_type_data.align));
+    auto tsz = sizeof(jl_array_t) + ndimwords * sizeof(size_t);
+    //Needed for flags.pooled computation below
+    if (array_type_data.total_size >= ARRAY_CACHE_ALIGN_THRESHOLD)
+        tsz = LLT_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT);
+    else if (array_type_data.isunboxed && array_type_data.elsz >= 4)
+        tsz = LLT_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT);
+    // Step 1: array shell
+    auto arrayshell = array_builder.CreateAlloca(pass.T_int8, ConstantInt::get(pass.T_size, tsz));
+    arrayshell->setAlignment(Align(alignof(jl_array_t)));
+    arrayshell->takeName(orig_inst);
+    arrayshell->setDebugLoc(orig_inst->getDebugLoc());
+
+    //Step 2: initialize shell fields
+#define initialize(field, value) \
+    do { auto field = value; \
+    auto field##ptr = array_builder.CreatePointerCast(array_builder.CreateInBoundsGEP(pass.T_int8, arrayshell, ConstantInt::get(pass.T_size, offsetof(jl_array_t, field))), PointerType::get(field->getType(), 0), arrayshell->getName() + ("." #field ".ptr")); \
+    array_builder.CreateAlignedStore(field, field##ptr, Align(alignof(decltype(jl_array_t::field)))); } while (0)
+
+    // Step 2a: array data
+    auto arraydata = array_builder.CreateAlloca(pass.T_int8, ConstantInt::get(pass.T_size, array_type_data.total_size));
+    //TODO do we want to increase our alloca alignment to cache line size if it's big enough or not?
+    arraydata->setAlignment(Align(array_type_data.align));
+    arraydata->setName(arrayshell->getName() + ".data");
     if (array_type_data.zeroinit) {
-        array_builder.CreateMemSet(array, ConstantInt::get(pass.T_int8, 0), array_type_data.total_size, Align(array_type_data.align));
+        array_builder.CreateMemSet(arraydata, Constant::getNullValue(pass.T_int8), arraydata->getArraySize(), arraydata->getAlign());
     }
-    load->replaceAllUsesWith(array_builder.CreatePointerCast(array, load->getType()));
+    initialize(data, arraydata);
+    // Step 2b: length
+    initialize(length, ConstantInt::get(pass.T_size, array_type_data.numels));
+    // Step 2c: flags
+    jl_array_flags_t flags;
+    static_assert(sizeof(jl_array_flags_t) == sizeof(uint16_t), "Expected jl_array_flags_t to be a uint16_t!");
+    flags.how = 0; // Known b/c we only stack allocate arrays <= ARRAY_INLINE_NBYTES
+    flags.pooled = tsz + array_type_data.total_size <= GC_MAX_SZCLASS; // Unsure if this is actually needed
+    flags.ndims = orig_inst->arg_size() - 1;
+    flags.ptrarray = !array_type_data.isunboxed;
+    flags.hasptr = array_type_data.hasptr;
+    flags.isshared = false;
+    flags.isaligned = true;
+    uint16_t flagsint;
+    memcpy(&flagsint, &flags, sizeof(flags)); // TBAA-safe reinterpret
+    initialize(flags, ConstantInt::get(Type::getInt16Ty(orig_inst->getContext()), flagsint));
+    // Step 2d: elsize
+    initialize(elsize, ConstantInt::get(Type::getInt16Ty(orig_inst->getContext()), array_type_data.elsz));
+    // Step 2e: offset
+    initialize(offset, Constant::getNullValue(pass.T_int32));
+    // Step 2f: nrows
+    auto dim1 = array_builder.CreateIntCast(orig_inst->getArgOperand(1), pass.T_size, false);
+    initialize(nrows, dim1);
+    // Step 2g: maxsize/ncols
+    if (orig_inst->arg_size() == 2) {
+        initialize(maxsize, dim1);
+    } else {
+        initialize(ncols, array_builder.CreateIntCast(orig_inst->getArgOperand(2), pass.T_size, false));
+    }
+    // Step 2h: dim3
+    if (orig_inst->arg_size() == 4) {
+        auto dim3 = array_builder.CreateIntCast(orig_inst->getArgOperand(3), pass.T_size, false);
+        auto dim3ptr = array_builder.CreatePointerCast(array_builder.CreateInBoundsGEP(pass.T_int8, arrayshell, ConstantInt::get(pass.T_size, sizeof(jl_array_t))), PointerType::get(dim3->getType(), 0));
+        array_builder.CreateAlignedStore(dim3, dim3ptr, Align(alignof(size_t)));
+    }
+#undef initialize
+
+    // Step 3: invariant group metadata
+    //TODO
+
+    // Step 4: RAUW and delete
+    //Fixup address spaces
+    fixupArrayAddrSpaces(orig_inst, arrayshell, arraydata);
     removeAlloc(orig_inst, tag, true);
+}
+
+// Replaces arraydata and fixes address spaces for arrayshell and arraydata to addrspace 0
+void Optimizer::fixupArrayAddrSpaces(CallInst *orig_inst, AllocaInst *arrayshell, AllocaInst *arraydata) {
+    IRBuilder<> builder(orig_inst->getContext());
+    for (auto &memop : object_escape_info.memops) {
+        for (auto &access : memop.second.accesses) {
+            if (access.offset == 0) {
+                // This is a data pointer, will have addrspace 13
+                // Need to correct to addrspace 0
+                builder.SetInsertPoint(access.inst);
+                auto casted = builder.CreatePointerCast(arraydata, PointerType::get(cast<PointerType>(access.inst->getType())->getElementType(), 0));
+                access.inst->replaceAllUsesWith(casted);
+                if (casted != arraydata) {
+                    casted->takeName(access.inst);
+                    cast<Instruction>(casted)->setDebugLoc(access.inst->getDebugLoc());
+                }
+            }
+        }
+    }
+    struct Frame {
+        llvm::Instruction::user_iterator user_it;
+        llvm::Instruction::user_iterator user_end;
+    };
+    SmallVector<Instruction*> to_fix;
+    SmallVector<Frame, 4> checklist;
+    auto push = [&](Instruction *parent){ checklist.push_back({parent->user_begin(), parent->user_end()}); to_fix.push_back(parent); };
+    SmallSet<unsigned, 3> fixable;
+    fixable.insert(Instruction::GetElementPtr);
+    fixable.insert(Instruction::AddrSpaceCast);
+    fixable.insert(Instruction::BitCast);
+    auto fix = [&](Instruction *inst) {
+        switch (inst->getOpcode()) {
+            case Instruction::GetElementPtr: {
+                // No need to correct this addrspace, it's the type of the element
+                // But users of the GEP need to be notified that the addrspace changed,
+                // So we have to clone + RAUW anyways
+                auto cloned = inst->clone();
+                cloned->insertBefore(inst);
+                cloned->takeName(inst);
+                // Forcibly update the derived type
+                inst->replaceAllUsesWith(cloned);
+                inst->eraseFromParent();
+                return cloned;
+            }
+            case Instruction::AddrSpaceCast:
+            case Instruction::BitCast: {
+                if (cast<PointerType>(inst->getType())->getAddressSpace() != 0) {
+                    // We should correct this addrspace
+                    builder.SetInsertPoint(inst);
+                    auto casted = cast<Instruction>(builder.CreatePointerBitCastOrAddrSpaceCast(inst->getOperand(0), PointerType::get(cast<PointerType>(inst->getType())->getElementType(), 0)));
+                    casted->takeName(inst);
+                    if (casted != inst->getOperand(0)) {
+                        casted->setDebugLoc(inst->getDebugLoc());
+                    }
+                    inst->replaceAllUsesWith(casted);
+                    inst->eraseFromParent();
+                    return casted;
+                }
+                return inst;
+            }
+            default:
+                return static_cast<Instruction *>(nullptr);
+        }
+    };
+    push(arraydata);
+    while (!checklist.empty()) {
+        auto &back = checklist.back();
+        if (back.user_it != back.user_end) {
+            auto user = *back.user_it;
+            ++back.user_it;
+            if (auto inst = dyn_cast<Instruction>(user)) {
+                if (fixable.contains(inst->getOpcode())) {
+                    push(inst);
+                }
+            }
+        } else {
+            checklist.pop_back();
+        }
+    }
+    for (auto inst : to_fix) {
+        fix(inst);
+    }
+    to_fix.clear();
+    push(arrayshell);
+    while (!checklist.empty()) {
+        auto &back = checklist.back();
+        if (back.user_it != back.user_end) {
+            auto user = *back.user_it;
+            ++back.user_it;
+            if (auto inst = dyn_cast<Instruction>(user)) {
+                if (fixable.contains(inst->getOpcode())) {
+                    push(inst);
+                }
+            }
+        } else {
+            checklist.pop_back();
+        }
+    }
+    for (auto inst : to_fix) {
+        fix(inst);
+    }
 }
 
 bool AllocOpt::doInitialization(Module &M)
