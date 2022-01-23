@@ -375,24 +375,31 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             return aandbfinite ? c : abhi+c
         end
         (iszero(a) || iszero(b)) && return abhi+c
-        bias = exponent(a) + exponent(b)
+        # The checks above satisfy exponent's nothrow precondition
+        bias = Math._exponent_finite_nonzero(a) + Math._exponent_finite_nonzero(b)
         c_denorm = ldexp(c, -bias)
         if isfinite(c_denorm)
             # rescale a and b to [1,2), equivalent to ldexp(a, -exponent(a))
             issubnormal(a) && (a *= 0x1p52)
             issubnormal(b) && (b *= 0x1p52)
-            a = reinterpret(Float64, (reinterpret(UInt64, a) & 0x800fffffffffffff) | 0x3ff0000000000000)
-            b = reinterpret(Float64, (reinterpret(UInt64, b) & 0x800fffffffffffff) | 0x3ff0000000000000)
+            a = reinterpret(Float64, (reinterpret(UInt64, a) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
+            b = reinterpret(Float64, (reinterpret(UInt64, b) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
             c = c_denorm
             abhi, ablo = twomul(a,b)
+            # abhi <= 4 -> isfinite(r)      (α)
             r = abhi+c
+            # s ≈ 0                         (β)
             s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
+            # α ⩓ β -> isfinite(sumhi)      (γ)
             sumhi = r+s
             # If result is subnormal, ldexp will cause double rounding because subnormals have fewer mantisa bits.
             # As such, we need to check whether round to even would lead to double rounding and manually round sumhi to avoid it.
             if issubnormal(ldexp(sumhi, bias))
                 sumlo = r-sumhi+s
-                bits_lost = -bias-exponent(sumhi)-1022
+                # finite: See γ
+                # non-zero: If sumhi == ±0., then ldexp(sumhi, bias) == ±0,
+                # so we don't take this branch.
+                bits_lost = -bias-Math._exponent_finite_nonzero(sumhi)-1022
                 sumhiInt = reinterpret(UInt64, sumhi)
                 if (bits_lost != 1) ⊻ (sumhiInt&1 == 1)
                     sumhi = nextfloat(sumhi, cmp(sumlo,0))

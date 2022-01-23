@@ -842,12 +842,27 @@ julia> exponent(16.0)
 """
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
-    @noinline throw2(x) = throw(DomainError(x, "Cannot be subnormal converted to 0."))
+    @noinline throw2(x) = throw(DomainError(x, "Cannot be ±0.0."))
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
     xs >= exponent_mask(T) && throw1(x)
     k = Int(xs >> significand_bits(T))
     if k == 0 # x is subnormal
         xs == 0 && throw2(x)
+        m = leading_zeros(xs) - exponent_bits(T)
+        k = 1 - m
+    end
+    return k - exponent_bias(T)
+end
+
+# Like exponent, but assumes the nothrow precondition. For
+# internal use only. Could be written as
+# @assume_effects :nothrow exponent()
+# but currently this form is easier on the compiler.
+function _exponent_finite_nonzero(x::T) where T<:IEEEFloat
+    # @precond :nothrow !isnan(x) && !isinf(x) && !iszero(x)
+    xs = reinterpret(Unsigned, x) & ~sign_mask(T)
+    k = rem(xs >> significand_bits(T), Int)
+    if k == 0 # x is subnormal
         m = leading_zeros(xs) - exponent_bits(T)
         k = 1 - m
     end
