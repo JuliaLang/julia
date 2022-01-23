@@ -165,7 +165,7 @@ Standard library changes
 #### SparseArrays
 
 * The code for SparseArrays has been moved from the Julia repo to the external
-  repo at https://github.com/JuliaLang/SparseArrays.jl. This is only a code
+  repo at https://github.com/JuliaSparse/SparseArrays.jl. This is only a code
   movement and does not impact any usage ([#43813]).
 
 * New sparse concatenation functions `sparse_hcat`, `sparse_vcat`, and `sparse_hvcat` return
