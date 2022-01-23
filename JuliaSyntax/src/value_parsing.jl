@@ -6,16 +6,13 @@
 Convert a Julia source code string into a number.
 """
 function julia_string_to_number(str::AbstractString, kind)
-    str = replace(str, '_'=>"")
+    str = replace(replace(str, '_'=>""), '−'=>'-')
     if kind == K"Integer"
         x = Base.tryparse(Int, str)
         if Int === Int32 && isnothing(x)
             x = Base.tryparse(Int64, str)
         end
         if isnothing(x)
-            # TODO: flisp parses BigInt and Int128 as string macros rather than
-            # literals. Is this necessary or can we get away with using values
-            # here?
             x = Base.tryparse(Int128, str)
             if isnothing(x)
                 x = Base.parse(BigInt, str)
@@ -47,17 +44,22 @@ function julia_string_to_number(str::AbstractString, kind)
                ndigits <= 128 ? Base.parse(UInt128, str) :
                Base.parse(BigInt, str)
     elseif kind == K"OctInt"
+        ndigits = length(str)-2
         x = Base.tryparse(UInt64, str)
         if isnothing(x)
             x = Base.tryparse(UInt128, str)
             if isnothing(x)
                 x = Base.parse(BigInt, str)
+            elseif ndigits > 43
+                x = BigInt(x)
             end
         else
-            x = x <= typemax(UInt8)  ? UInt8(x)  :
-                x <= typemax(UInt16) ? UInt16(x) :
-                x <= typemax(UInt32) ? UInt32(x) :
-                x
+            x = ndigits <= 3  && x <= typemax(UInt8)  ? UInt8(x)   :
+                ndigits <= 6  && x <= typemax(UInt16) ? UInt16(x)  :
+                ndigits <= 11 && x <= typemax(UInt32) ? UInt32(x)  :
+                ndigits <= 22                         ? x          :
+                ndigits <= 43                         ? UInt128(x) :
+                BigInt(x)
         end
         return x
     end
