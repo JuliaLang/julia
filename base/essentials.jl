@@ -775,6 +775,9 @@ inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
 
 Determine whether a collection is empty (has no elements).
 
+This operation is guaranteed not to consume elements even for stateful
+iterators (which should define [`Base.isdone`](@ref) to that end).
+
 # Examples
 ```jldoctest
 julia> isempty([])
