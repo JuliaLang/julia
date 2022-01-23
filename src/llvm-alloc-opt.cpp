@@ -149,7 +149,7 @@ private:
     void optimizeTag(CallInst *orig_inst, llvm::Value *tag);
 
     void moveArrayToStack(CallInst *orig_inst, llvm::Value *tag);
-    void fixupArrayAddrSpaces(CallInst *orig_inst, AllocaInst *arrayshell, AllocaInst *arraydata);
+    void fixupArrayAddrSpaces(CallInst *orig_inst, Instruction *arrayshell, Instruction *arraydata);
     void fixupAddrSpace(Instruction *old, Instruction *repl);
 
     Function &F;
@@ -1390,10 +1390,15 @@ void Optimizer::moveArrayToStack(CallInst *orig_inst, llvm::Value *tag) {
     else if (array_type_data.isunboxed && array_type_data.elsz >= 4)
         tsz = LLT_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT);
     // Step 1: array shell
-    auto arrayshell = array_builder.CreateAlloca(pass.T_int8, ConstantInt::get(pass.T_size, tsz));
-    arrayshell->setAlignment(Align(alignof(jl_array_t)));
+    auto arrayshellbacking = array_builder.CreateAlloca(pass.T_int8, ConstantInt::get(pass.T_size, sizeof(void*) + tsz));
+    arrayshellbacking->setAlignment(Align(alignof(jl_array_t)));
+    auto arrayshell = cast<Instruction>(array_builder.CreateInBoundsGEP(pass.T_int8, arrayshellbacking, ConstantInt::get(pass.T_size, sizeof(void*))));
     arrayshell->takeName(orig_inst);
     arrayshell->setDebugLoc(orig_inst->getDebugLoc());
+
+    //Step 1.5: array type tag
+    auto type_ptr = array_builder.CreatePointerCast(arrayshellbacking, PointerType::get(tag->getType(), 0));
+    array_builder.CreateAlignedStore(tag, type_ptr, Align(alignof(void*)));
 
     //Step 2: initialize shell fields
 #define initialize(field, value) \
@@ -1456,7 +1461,7 @@ void Optimizer::moveArrayToStack(CallInst *orig_inst, llvm::Value *tag) {
 }
 
 // Replaces arraydata and fixes address spaces for arrayshell and arraydata to addrspace 0
-void Optimizer::fixupArrayAddrSpaces(CallInst *orig_inst, AllocaInst *arrayshell, AllocaInst *arraydata) {
+void Optimizer::fixupArrayAddrSpaces(CallInst *orig_inst, Instruction *arrayshell, Instruction *arraydata) {
     IRBuilder<> builder(orig_inst->getContext());
     for (auto &memop : object_escape_info.memops) {
         for (auto &access : memop.second.accesses) {
