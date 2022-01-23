@@ -286,6 +286,12 @@ at a time), we woke up all of our other threads! In the future, a smarter task
 runtime might only wake up a single thread (or none at all; the spawning thread
 could execute this task!), and we should see this behavior go away.
 
+### Task Monitor with BPFnative.jl
+
+BPFnative.jl is able to attach to USDT probe points just like `bpftrace`. There
+is a demo available for monitoring the task runtime, GC, and thread sleep/wake
+transitions [here](https://github.com/jpsamaroo/BPFnative.jl/blob/master/examples/task-runtime.jl).
+
 ## Notes on using `bpftrace`
 
 An example probe in the bpftrace format looks like:
