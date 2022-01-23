@@ -1,6 +1,130 @@
-using JuliaSyntax: triplequoted_string_indentation,
-                   unescape_julia_string,
-                   process_triple_strings!
+using JuliaSyntax:
+    julia_string_to_number,
+    triplequoted_string_indentation,
+    unescape_julia_string,
+    process_triple_strings!
+
+hexint(s) = julia_string_to_number(s, K"HexInt")
+binint(s) = julia_string_to_number(s, K"BinInt")
+octint(s) = julia_string_to_number(s, K"OctInt")
+
+@testset "Number parsing" begin
+    # Integers
+    @testset "Integers" begin
+        @test julia_string_to_number("-1", K"Integer") isa Int
+        @test julia_string_to_number("1", K"Integer") isa Int
+        @test julia_string_to_number("2147483647", K"Integer") isa Int
+        @test julia_string_to_number("9223372036854775807", K"Integer") isa Int64
+        @test julia_string_to_number("9223372036854775808", K"Integer") isa Int128
+        @test julia_string_to_number("170141183460469231731687303715884105727", K"Integer") isa Int128
+        @test julia_string_to_number("170141183460469231731687303715884105728", K"Integer") isa BigInt
+    end
+
+    # Floats
+    @testset "Floats" begin
+        @test julia_string_to_number("10e-0", K"Float") === Float64(10)
+        @test julia_string_to_number("10f-0", K"Float") === Float32(10)
+        @test julia_string_to_number("0x0ap-0", K"Float") === Float64(10)
+    end
+
+    # HexInt
+    @testset "HexInt numeric limits for different types" begin
+        @test hexint("0xff")  === UInt8(0xff)
+        @test hexint("0x100") === UInt16(0x100)
+        @test hexint("0xffff") === UInt16(0xffff)
+        @test hexint("0x10000") === UInt32(0x10000)
+        @test hexint("0xffffffff") === UInt32(0xffffffff)
+        @test hexint("0x100000000") === UInt64(0x100000000)
+        @test hexint("0xffffffffffffffff") === UInt64(0xffffffffffffffff)
+        @test hexint("0x10000000000000000") === UInt128(0x10000000000000000)
+        @test hexint("0xffffffffffffffffffffffffffffffff") === UInt128(0xffffffffffffffffffffffffffffffff)
+        @test (n = hexint("0x100000000000000000000000000000000");
+               n isa BigInt && n == 0x100000000000000000000000000000000)
+    end
+    @testset "HexInt string length limits for different types" begin
+        @test hexint("0x00")  === UInt8(0)
+        @test hexint("0x000")  === UInt16(0)
+        @test hexint("0x0000")  === UInt16(0)
+        @test hexint("0x00000")  === UInt32(0)
+        @test hexint("0x00000000") === UInt32(0)
+        @test hexint("0x000000000") === UInt64(0)
+        @test hexint("0x0000000000000000") === UInt64(0)
+        @test hexint("0x00000000000000000") === UInt128(0)
+        @test hexint("0x00000000000000000000000000000000") === UInt128(0)
+        @test (n = hexint("0x000000000000000000000000000000000");
+               n isa BigInt && n == 0)
+    end
+
+    # BinInt
+    @testset "BinInt numeric limits for different types" begin
+        @test binint("0b11111111")  === UInt8(0xff)
+        @test binint("0b100000000") === UInt16(0x100)
+        @test binint("0b1111111111111111") === UInt16(0xffff)
+        @test binint("0b10000000000000000") === UInt32(0x10000)
+        @test binint("0b11111111111111111111111111111111") === UInt32(0xffffffff)
+        @test binint("0b100000000000000000000000000000000") === UInt64(0x100000000)
+        @test binint("0b1111111111111111111111111111111111111111111111111111111111111111") === UInt64(0xffffffffffffffff)
+        @test binint("0b10000000000000000000000000000000000000000000000000000000000000000") === UInt128(0x10000000000000000)
+        @test binint("0b11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111") === UInt128(0xffffffffffffffffffffffffffffffff)
+        @test (n = binint("0b100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+               n isa BigInt && n == 0x100000000000000000000000000000000)
+    end
+    @testset "BinInt string length limits for different types" begin
+        @test binint("0b00000000")  === UInt8(0)
+        @test binint("0b000000000")  === UInt16(0)
+        @test binint("0b0000000000000000")  === UInt16(0)
+        @test binint("0b00000000000000000")  === UInt32(0)
+        @test binint("0b00000000000000000000000000000000") === UInt32(0)
+        @test binint("0b000000000000000000000000000000000") === UInt64(0)
+        @test binint("0b0000000000000000000000000000000000000000000000000000000000000000") === UInt64(0)
+        @test binint("0b00000000000000000000000000000000000000000000000000000000000000000") === UInt128(0)
+        @test binint("0b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") === UInt128(0)
+        @test (n = binint("0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+               n isa BigInt && n == 0)
+    end
+
+    # OctInt
+    @testset "OctInt numeric limits for different types" begin
+        @test octint("0o377")  === UInt8(0xff)
+        @test octint("0o400") === UInt16(0x100)
+        @test octint("0o177777") === UInt16(0xffff)
+        @test octint("0o200000") === UInt32(0x10000)
+        @test octint("0o37777777777") === UInt32(0xffffffff)
+        @test octint("0o40000000000") === UInt64(0x100000000)
+        @test octint("0o1777777777777777777777") === UInt64(0xffffffffffffffff)
+        @test octint("0o2000000000000000000000") === UInt128(0x10000000000000000)
+        @test octint("0o3777777777777777777777777777777777777777777") === UInt128(0xffffffffffffffffffffffffffffffff)
+        @test (n = octint("0o4000000000000000000000000000000000000000000");
+               n isa BigInt && n == 0x100000000000000000000000000000000)
+    end
+    @testset "OctInt string length limits for different types" begin
+        @test octint("0o000")  === UInt8(0)
+        @test octint("0o0000")  === UInt16(0)
+        @test octint("0o000000")  === UInt16(0)
+        @test octint("0o0000000")  === UInt32(0)
+        @test octint("0o00000000000") === UInt32(0)
+        @test octint("0o000000000000") === UInt64(0)
+        @test octint("0o0000000000000000000000") === UInt64(0)
+        @test octint("0o00000000000000000000000") === UInt128(0)
+        @test octint("0o0000000000000000000000000000000000000000000") === UInt128(0)
+        @test (n = octint("0o00000000000000000000000000000000000000000000");
+               n isa BigInt && n == 0)
+    end
+
+    @testset "Underscore separators" begin
+        @test julia_string_to_number("10_000",      K"Integer") === 10000
+        @test julia_string_to_number("10_000.0",    K"Float")   === Float64(10000)
+        @test julia_string_to_number("0xff_ff",     K"HexInt")  === 0xffff
+        @test julia_string_to_number("0b1111_1111", K"BinInt")  === 0xff
+        @test julia_string_to_number("0o177_777",   K"OctInt")  === 0xffff
+    end
+
+    @testset "\\minus ('\\u2212' / '−') allowed in numbers" begin
+        @test julia_string_to_number("−10",        K"Integer") === -10
+        @test julia_string_to_number("−10.0",      K"Float")   === Float64(-10)
+        @test julia_string_to_number("10e\u22121", K"Float")   === Float64(1)
+    end
+end
 
 @testset "String unescaping" begin
     unesc(str) = unescape_julia_string(str, false, false)
