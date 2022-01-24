@@ -1666,15 +1666,15 @@ JL_CALLABLE(jl_f_get_binding_type)
 
 JL_CALLABLE(jl_f_set_binding_type)
 {
-    JL_NARGS(set_binding_type!, 3, 3);
+    JL_NARGS(set_binding_type!, 2, 3);
     JL_TYPECHK(set_binding_type!, module, args[0]);
     JL_TYPECHK(set_binding_type!, symbol, args[1]);
-    jl_value_t *ty = args[2];
+    jl_value_t *ty = nargs == 2 ? (jl_value_t*)jl_any_type : args[2];
     JL_TYPECHK(set_binding_type!, type, ty);
     jl_binding_t *b = jl_get_binding_wr((jl_module_t*)args[0], (jl_sym_t*)args[1], 1);
     jl_value_t *old_ty = NULL;
     if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty) && ty != old_ty) {
-        if (ty == (jl_value_t*)jl_any_type)
+        if (nargs == 2)
             return jl_nothing;
         jl_errorf("cannot set type for global %s. It already has a value or is already set to a different type.",
                   jl_symbol_name(b->name));
