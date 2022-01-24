@@ -842,24 +842,15 @@ Stacktrace:
 The type does not need to be concrete, but annotations with abstract types typically have little
 performance benefit.
 
-As for constants, the type of a global is not typically meant to be redefined. In interactive usage,
-changing the annotation to a narrower type (the new type is a subtype of the previous type) is
-allowed, but can result in unexpected behavior in code that has already been compiled:
+Once a global has either been assigned to or its type has been set, the binding type is not allowed
+to change:
 
 ```jldoctest
-julia> global a::Integer
+julia> x = 1
+1
 
-julia> g() = a
-g (generic function with 1 method)
-
-julia> Base.return_types(g)
-1-element Vector{Any}:
- Integer
-
-julia> global a::Int
-WARNING: redefinition of type of a. This may fail, cause incorrect answers, or produce other errors.
-
-julia> Base.return_types(g)
-1-element Vector{Any}:
- Integer
+julia> global x::Int
+ERROR: cannot set type for global x. It already has a value or is already set to a different type.
+Stacktrace:
+[...]
 ```
