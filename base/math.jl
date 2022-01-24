@@ -18,7 +18,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
 import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ^, exp2, muladd, rem,
-             exp10, expm1, log1p
+             exp10, expm1, log1p, @constprop
 
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
@@ -993,11 +993,17 @@ function modf(x::T) where T<:IEEEFloat
     return (rx, ix)
 end
 
-function ^(x::Float64, y::Float64)
+# @constprop aggressive to help the compiler see the switch between the integer and float
+# variants for callers with constant `y`
+@constprop :aggressive function ^(x::Float64, y::Float64)
     yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
     x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     x == 1 && return 1.0
+    return pow_body(x, y)
+end
+
+@inline function pow_body(x::Float64, y::Float64)
     !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*Inf*(!(y>0))
     logxhi,logxlo = Base.Math._log_ext(x)
@@ -1006,10 +1012,15 @@ function ^(x::Float64, y::Float64)
     hi = xyhi+xylo
     return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
-function ^(x::T, y::T) where T <: Union{Float16, Float32}
+
+@constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
     yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
     x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    return pow_body(x, y)
+end
+
+@inline function pow_body(x::T, y::T) where T <: Union{Float16, Float32}
     x == 1 && return one(T)
     !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*T(Inf)*(!(y>0))
