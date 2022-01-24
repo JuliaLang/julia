@@ -75,16 +75,25 @@ end
 # SROA
 # ====
 
-import Core.Compiler: widenconst
+import Core.Compiler: widenconst, is_array_alloc
 
-is_load_forwarded(src::CodeInfo) = !any(iscall((src, getfield)), src.code)
-is_scalar_replaced(src::CodeInfo) =
-    is_load_forwarded(src) && !any(iscall((src, setfield!)), src.code) && !any(isnew, src.code)
+is_load_forwarded(src::CodeInfo) =
+    !any(iscall((src, getfield)), src.code) && !any(iscall((src, Core.arrayref)), src.code)
+function is_scalar_replaced(src::CodeInfo)
+    is_load_forwarded(src) || return false
+    any(iscall((src, setfield!)), src.code) && return false
+    any(isnew, src.code) && return false
+    any(iscall((src, Core.arrayset)), src.code) && return false
+    any(is_array_alloc, src.code) && return false
+    return true
+end
 
 function is_load_forwarded(@nospecialize(T), src::CodeInfo)
     for i in 1:length(src.code)
         x = src.code[i]
         if iscall((src, getfield), x)
+            widenconst(argextype(x.args[1], src)) <: T && return false
+        elseif iscall((src, Core.arrayref), x)
             widenconst(argextype(x.args[1], src)) <: T && return false
         end
     end
@@ -97,6 +106,10 @@ function is_scalar_replaced(@nospecialize(T), src::CodeInfo)
         if iscall((src, setfield!), x)
             widenconst(argextype(x.args[1], src)) <: T && return false
         elseif isnew(x)
+            widenconst(argextype(SSAValue(i), src)) <: T && return false
+        elseif iscall((src, Core.arrayset), x)
+            widenconst(argextype(x.args[1], src)) <: T && return false
+        elseif is_array_alloc(x)
             widenconst(argextype(SSAValue(i), src)) <: T && return false
         end
     end
@@ -713,7 +726,7 @@ function mutable_ϕ_elim(x, xs)
     return r[]
 end
 let src = code_typed1(mutable_ϕ_elim, (String, Vector{String}))
-    @test is_scalar_replaced(src)
+    @test is_scalar_replaced(Ref{String}, src)
 
     xs = String[string(gensym()) for _ in 1:100]
     mutable_ϕ_elim("init", xs)
@@ -852,7 +865,7 @@ function isdefined_elim()
     return arr
 end
 let src = code_typed1(isdefined_elim)
-    @test is_scalar_replaced(src)
+    @test count(isnew, src.code) == 0 # eliminates closure constructs
 end
 @test isdefined_elim() == Any[]
 
@@ -905,6 +918,121 @@ let # immutable case
     end
     @test count(iscall((src, getfield)), src.code) == 0
     @test count(isnew, src.code) == 0
+end
+
+# array SROA
+# ----------
+
+let src = code_typed1((Any,)) do s
+        a = Vector{Any}(undef, 1)
+        a[1] = s
+        return a[1]
+    end
+    @test is_scalar_replaced(src)
+end
+let src = code_typed1((Any,)) do s
+        a = Any[nothing]
+        a[1] = s
+        return a[1]
+    end
+    @test is_scalar_replaced(src)
+end
+let src = code_typed1((String,String)) do s, t
+        a = Vector{Any}(undef, 2)
+        a[1] = Ref(s)
+        a[2] = Ref(t)
+        return a[1]
+    end
+    @test count(isnew, src.code) == 1
+end
+let src = code_typed1((String,)) do s
+        a = Vector{Base.RefValue{String}}(undef, 1)
+        a[1] = Ref(s)
+        return a[1][]
+    end
+    @test is_scalar_replaced(src)
+end
+let src = code_typed1((String,String)) do s, t
+        a = Vector{Base.RefValue{String}}(undef, 2)
+        a[1] = Ref(s)
+        a[2] = Ref(t)
+        return a[1][]
+    end
+    @test is_scalar_replaced(src)
+end
+let src = code_typed1((Any,)) do s
+        a = Vector{Any}[Any[nothing]]
+        a[1][1] = s
+        return a[1][1]
+    end
+    @test_broken is_scalar_replaced(src)
+end
+let src = code_typed1((Bool,Any,Any)) do c, s, t
+        a = Any[nothing]
+        if c
+            a[1] = s
+        else
+            a[1] = t
+        end
+        return a[1]
+    end
+    @test is_scalar_replaced(src)
+end
+let src = code_typed1((Bool,Any,Any,Any,Any,)) do c, s1, s2, t1, t2
+        if c
+            a = Vector{Any}(undef, 2)
+            a[1] = s1
+            a[2] = s2
+        else
+            a = Vector{Any}(undef, 2)
+            a[1] = t1
+            a[2] = t2
+        end
+        return a[1]
+    end
+    @test is_scalar_replaced(src)
+end
+let src = code_typed1((Bool,Any,Any)) do c, s, t
+        # XXX this implicitly forms tuple to getfield chains
+        # and SROA on it produces complicated control flow
+        if c
+            a = Any[s]
+        else
+            a = Any[t]
+        end
+        return a[1]
+    end
+    @test_broken is_scalar_replaced(src)
+end
+
+# arraylen / arraysize elimination
+let src = code_typed1((Any,)) do s
+        a = Vector{Any}(undef, 1)
+        a[1] = s
+        return a[1], length(a)
+    end
+    @test is_scalar_replaced(src)
+end
+let src = code_typed1((Any,)) do s
+        a = Matrix{Any}(undef, 2, 2)
+        a[1, 1] = s
+        return a[1, 1], length(a)
+    end
+    @test is_scalar_replaced(src)
+end
+let src = code_typed1((Any,)) do s
+        a = Vector{Any}(undef, 1)
+        a[1] = s
+        return a[1], size(a, 1)
+    end
+    @test is_scalar_replaced(src)
+end
+let src = code_typed1((Any,)) do s
+        a = Matrix{Any}(undef, 2, 2)
+        a[1, 1] = s
+        return a[1, 1], size(a)
+    end
+    @test is_scalar_replaced(src)
 end
 
 # comparison lifting

@@ -288,8 +288,7 @@ end
 
 function foreigncall_effect_free(stmt::Expr, src::Union{IRCode,IncrementalCompact})
     args = stmt.args
-    name = args[1]
-    isa(name, QuoteNode) && (name = name.value)
+    name = normalize(args[1])
     isa(name, Symbol) || return false
     ndims = alloc_array_ndims(name)
     if ndims !== nothing
@@ -313,6 +312,17 @@ function alloc_array_ndims(name::Symbol)
         return 0
     end
     return nothing
+end
+
+normalize(@nospecialize x) = isa(x, QuoteNode) ? x.value : x
+
+function is_array_alloc(@nospecialize stmt)
+    isa(stmt, Expr) || return false
+    if isexpr(stmt, :foreigncall)
+        name = normalize(stmt.args[1])
+        return isa(name, Symbol) && alloc_array_ndims(name) !== nothing
+    end
+    return false
 end
 
 const FOREIGNCALL_ARG_START = 6
