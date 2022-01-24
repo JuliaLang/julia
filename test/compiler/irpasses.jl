@@ -838,3 +838,22 @@ let ci = code_typed1(optimize=false) do
     ir = Core.Compiler.compact!(ir, true)
     @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 0
 end
+
+# Test that adce_pass! can drop phi node uses that can be concluded unused
+# from PiNode analysis.
+let
+    @noinline mkfloat() = rand(Float64)
+    @noinline use(a::Float64) = ccall(:jl_, Cvoid, (Any,), a)
+    dispatch(a::Float64) = use(a)
+    dispatch(a::Tuple) = nothing
+    function foo(b)
+        a = mkfloat()
+        a = b ? (a, 2.0) : a
+        dispatch(a)
+    end
+    let src = code_typed(foo, Tuple{Bool})[1][1]
+        @test !any(src.code) do stmt
+            isa(stmt, Expr) && stmt.head === :call && stmt.args[1] === Core.tuple
+        end
+    end
+end
