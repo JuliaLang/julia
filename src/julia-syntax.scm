@@ -3404,7 +3404,7 @@ f(x) = yt(x)
                         rhs0
                         (make-ssavalue)))
               (rhs  (if (equal? vt '(core Any))
-                        (if (local-in? var lam)
+                        (if (or (local-in? var lam) (underscore-symbol? var))
                             rhs1
                             (let* ((ref (binding-to-globalref var))
                                    (ty `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref)))))
