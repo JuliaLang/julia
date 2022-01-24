@@ -528,7 +528,7 @@ macro assume_effects(args...)
         )))
         return esc(ex)
     end
-    return pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally)
+    return esc(pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally))
 end
 
 
