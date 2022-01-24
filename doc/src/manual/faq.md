@@ -176,17 +176,19 @@ but gives `UndefVarError: x not defined` when you try to run it in script or oth
 file.   What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
 
 Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
-an assignment to a global in that local scope.   You have least three options:
-
-1. Put the code into a function (so that `x` is a *local* variable in a function). In general, it is good software engineering to use functions rather than global scripts (search online for "why global variables bad" to see many explanations). In Julia, global variables are also [slow](@ref man-performance-tips).
-2. Wrap the code in a [`let`](@ref) block.  (This makes `x` a local variable within the `let ... end` statement, again eliminating the need for `global`).
-3. Explicitly mark `x` as `global` inside the local scope before assigning to it, e.g. write `global x += 1`.
+an assignment to a global in that local scope.
 
 As mentioned above, Julia (version 1.5 or later) allows you to omit the `global`
 keyword for code in the REPL (and many other interactive environments), to simplify
 exploration (e.g. copy-pasting code from a function to run interactively).
 However, once you move to code in files, Julia requires a more disciplined approach
-to global variables.  More explanation can be found in the manual section [on soft scope](@ref on-soft-scope).
+to global variables.  You have least three options:
+
+1. Put the code into a function (so that `x` is a *local* variable in a function). In general, it is good software engineering to use functions rather than global scripts (search online for "why global variables bad" to see many explanations). In Julia, global variables are also [slow](@ref man-performance-tips).
+2. Wrap the code in a [`let`](@ref) block.  (This makes `x` a local variable within the `let ... end` statement, again eliminating the need for `global`).
+3. Explicitly mark `x` as `global` inside the local scope before assigning to it, e.g. write `global x += 1`.
+
+More explanation can be found in the manual section [on soft scope](@ref on-soft-scope).
 
 ## Functions
 
