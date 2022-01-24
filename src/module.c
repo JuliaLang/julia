@@ -838,10 +838,6 @@ JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b)
         jl_errorf("cannot declare %s constant; it already has a value",
                   jl_symbol_name(b->name));
     }
-    if (b->ty) {
-        jl_errorf("cannot declare %s constant; it was already declared as a typed global",
-                  jl_symbol_name(b->name));
-    }
     b->constp = 1;
 }
 

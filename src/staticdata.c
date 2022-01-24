@@ -676,7 +676,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             write_pointerfield(s, jl_atomic_load_relaxed(&b->globalref));
             write_pointerfield(s, (jl_value_t*)b->owner);
             write_pointerfield(s, jl_atomic_load_relaxed(&b->ty));
-            size_t flag_offset = offsetof(jl_binding_t, owner) + sizeof(b->owner);
+            size_t flag_offset = offsetof(jl_binding_t, ty) + sizeof(b->ty);
             ios_write(s->s, (char*)b + flag_offset, sizeof(*b) - flag_offset);
             tot += sizeof(jl_binding_t);
             count += 1;
