@@ -50,7 +50,7 @@ julia> Base.isassigned(x::SafeRef) = true;
 
 julia> get′(x) = isassigned(x) ? x[] : throw(x);
 
-julia> result = code_escapes((String,String,String)) do s1, s2, s3
+julia> result = code_escapes((String,String,String,String)) do s1, s2, s3, s4
            r1 = Ref(s1)
            r2 = Ref(s2)
            r3 = SafeRef(s3)
@@ -61,52 +61,58 @@ julia> result = code_escapes((String,String,String)) do s1, s2, s3
                global g = err # will definitely escape `r1`
            end
            s2 = get′(r2)      # still `r2` doesn't escape fully
-           s3 = get′(r3)      # still `r2` doesn't escape fully
-           return s2, s3
+           s3 = get′(r3)      # still `r3` doesn't escape fully
+           s4 = sizeof(s4)    # the argument `s4` doesn't escape here
+           return s2, s3, s4
        end
-#3(X _2::String, ↑ _3::String, ↑ _4::String) in Main at REPL[7]:2
-2  X  1 ── %1  = %new(Base.RefValue{String}, _2)::Base.RefValue{String}   │╻╷╷ Ref
-3  *′ │    %2  = %new(Base.RefValue{String}, _3)::Base.RefValue{String}   │╻╷╷ Ref
-4  ✓′ └─── %3  = %new(SafeRef{String}, _4)::SafeRef{String}               │╻╷  SafeRef
-5  ◌  2 ── %4  = \$(Expr(:enter, #8))                                      │
-   ✓′ │    %5  = ϒ (%3)::SafeRef{String}                                  │
-   *′ └─── %6  = ϒ (%2)::Base.RefValue{String}                            │
-6  ◌  3 ── %7  = Base.isdefined(%1, :x)::Bool                             │╻╷  get′
-   ◌  └───       goto #5 if not %7                                        ││
-   X  4 ──       Base.getfield(%1, :x)::String                            ││╻   getindex
-   ◌  └───       goto #6                                                  ││
-   ◌  5 ──       Main.throw(%1)::Union{}                                  ││
-   ◌  └───       unreachable                                              ││
-7  ◌  6 ──       nothing::typeof(Core.sizeof)                             │╻   sizeof
-   ◌  │          nothing::Int64                                           ││
-   ◌  └───       \$(Expr(:leave, 1))                                       │
-   ◌  7 ──       goto #10                                                 │
-   ✓′ 8 ── %17 = φᶜ (%5)::SafeRef{String}                                 │
-   *′ │    %18 = φᶜ (%6)::Base.RefValue{String}                           │
-   ◌  └───       \$(Expr(:leave, 1))                                       │
-   X  9 ── %20 = \$(Expr(:the_exception))::Any                             │
-9  ◌  │          (Main.g = %20)::Any                                      │
-   ◌  └───       \$(Expr(:pop_exception, :(%4)))::Any                      │
-11 ✓′ 10 ┄ %23 = φ (#7 => %3, #9 => %17)::SafeRef{String}                 │
-   *′ │    %24 = φ (#7 => %2, #9 => %18)::Base.RefValue{String}           │
-   ◌  │    %25 = Base.isdefined(%24, :x)::Bool                            ││╻   isassigned
-   ◌  └───       goto #12 if not %25                                      ││
-   ↑  11 ─ %27 = Base.getfield(%24, :x)::String                           │││╻   getproperty
-   ◌  └───       goto #13                                                 ││
-   ◌  12 ─       Main.throw(%24)::Union{}                                 ││
-   ◌  └───       unreachable                                              ││
-12 ↑  13 ─ %31 = Base.getfield(%23, :x)::String                           │╻╷╷ get′
-13 ↑  │    %32 = Core.tuple(%27, %31)::Tuple{String, String}              │
-   ◌  └───       return %32                                               │
+#1(X _2::String, ↑ _3::String, ↑ _4::String, ✓ _5::String) in Main at REPL[6]:2
+2  X  1 ── %1  = %new(Base.RefValue{String}, _2)::Base.RefValue{String}            │╻╷╷ Ref
+3  *′ │    %2  = %new(Base.RefValue{String}, _3)::Base.RefValue{String}            │╻╷╷ Ref
+4  ✓′ └─── %3  = %new(SafeRef{String}, _4)::SafeRef{String}                        │╻╷  SafeRef
+5  ◌  2 ── %4  = \$(Expr(:enter, #8))                                               │
+   ✓′ │    %5  = ϒ (%3)::SafeRef{String}                                           │
+   *′ │    %6  = ϒ (%2)::Base.RefValue{String}                                     │
+   ✓  └─── %7  = ϒ (_5)::String                                                    │
+6  ◌  3 ── %8  = Base.isdefined(%1, :x)::Bool                                      │╻╷  get′
+   ◌  └───       goto #5 if not %8                                                 ││
+   X  4 ──       Base.getfield(%1, :x)::String                                     ││╻   getindex
+   ◌  └───       goto #6                                                           ││
+   ◌  5 ──       Main.throw(%1)::Union{}                                           ││
+   ◌  └───       unreachable                                                       ││
+7  ◌  6 ──       nothing::typeof(Core.sizeof)                                      │╻   sizeof
+   ◌  │          nothing::Int64                                                    ││
+   ◌  └───       \$(Expr(:leave, 1))                                                │
+   ◌  7 ──       goto #10                                                          │
+   ✓′ 8 ── %18 = φᶜ (%5)::SafeRef{String}                                          │
+   *′ │    %19 = φᶜ (%6)::Base.RefValue{String}                                    │
+   ✓  │    %20 = φᶜ (%7)::String                                                   │
+   ◌  └───       \$(Expr(:leave, 1))                                                │
+   X  9 ── %22 = \$(Expr(:the_exception))::Any                                      │
+9  ◌  │          (Main.g = %22)::Any                                               │
+   ◌  └───       \$(Expr(:pop_exception, :(%4)))::Any                               │
+11 ✓′ 10 ┄ %25 = φ (#7 => %3, #9 => %18)::SafeRef{String}                          │
+   *′ │    %26 = φ (#7 => %2, #9 => %19)::Base.RefValue{String}                    │
+   ✓  │    %27 = φ (#7 => _5, #9 => %20)::String                                   │
+   ◌  │    %28 = Base.isdefined(%26, :x)::Bool                                     ││╻   isassigned
+   ◌  └───       goto #12 if not %28                                               ││
+   ↑  11 ─ %30 = Base.getfield(%26, :x)::String                                    │││╻   getproperty
+   ◌  └───       goto #13                                                          ││
+   ◌  12 ─       Main.throw(%26)::Union{}                                          ││
+   ◌  └───       unreachable                                                       ││
+12 ↑  13 ─ %34 = Base.getfield(%25, :x)::String                                    │╻╷╷ get′
+13 ◌  │    %35 = Core.sizeof::typeof(Core.sizeof)                                  │╻   sizeof
+   ◌  │    %36 = (%35)(%27)::Int64                                                 ││
+14 ↑  │    %37 = Core.tuple(%30, %34, %36)::Tuple{String, String, Int64}           │
+   ◌  └───       return %37                                                        │
 ```
 
 The symbols in the side of each call argument and SSA statements represents the following meaning:
-- `◌`: this value is not analyzed because escape information of it won't be used anyway (when the object is `isbitstype` for example)
-- `✓`: this value never escapes (`has_no_escape(result.state[x])` holds)
-- `↑`: this value can escape to the caller via return (`has_return_escape(result.state[x])` holds)
-- `X`: this value can escape to somewhere the escape analysis can't reason about like escapes to a global memory (`has_all_escape(result.state[x])` holds)
-- `*`: this value's escape state is between the `ReturnEscape` and `AllEscape` in the lattice of [`EscapeInfo`](@ref), e.g. it has unhandled `ThrownEscape`
-- `′`: this value has additional field/aliasing information in its `AliasInfo` property
+- `◌` (plain): this value is not analyzed because escape information of it won't be used anyway (when the object is `isbitstype` for example)
+- `✓` (green or cyan): this value never escapes (`has_no_escape(result.state[x])` holds), colored blue if it has arg escape also (`has_arg_escape(result.state[x])` holds)
+- `↑` (blue or yellow): this value can escape to the caller via return (`has_return_escape(result.state[x])` holds), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
+- `X` (red): this value can escape to somewhere the escape analysis can't reason about like escapes to a global memory (`has_all_escape(result.state[x])` holds)
+- `*` (bold): this value's escape state is between the `ReturnEscape` and `AllEscape` in the partial order of [`EscapeInfo`](@ref), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
+- `′`: this value has additional object field / array element information in its `AliasInfo` property
 
 For testing, escape information of each call argument and SSA value can be inspected programmatically as like:
 ```julia
@@ -292,13 +298,17 @@ function get_name_color(x::EscapeInfo, symbol::Bool = false)
     getname(x) = string(nameof(x))
     if x === EA.⊥
         name, color = (getname(EA.NotAnalyzed), "◌"), :plain
-    elseif EA.has_no_escape(x)
-        name, color = (getname(EA.NoEscape), "✓"), :green
+    elseif EA.has_no_escape(EA.ignore_argescape(x))
+        if EA.has_arg_escape(x)
+            name, color = (getname(EA.ArgEscape), "✓"), :cyan
+        else
+            name, color = (getname(EA.NoEscape), "✓"), :green
+        end
     elseif EA.has_all_escape(x)
         name, color = (getname(EA.AllEscape), "X"), :red
-    elseif EA.NoEscape() ⊏ (EA.ignore_thrownescapes ∘ EA.ignore_aliasinfo)(x) ⊑ EA.AllReturnEscape()
+    elseif EA.has_return_escape(x)
         name = (getname(EA.ReturnEscape), "↑")
-        color = EA.has_thrown_escape(x) ? :yellow : :cyan
+        color = EA.has_thrown_escape(x) ? :yellow : :blue
     else
         name = (nothing, "*")
         color = EA.has_thrown_escape(x) ? :yellow : :bold

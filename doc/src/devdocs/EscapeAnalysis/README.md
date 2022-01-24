@@ -165,11 +165,203 @@ aliased arguments and SSA statements. The alias set manages values that can be a
 each other and allows escape information imposed on any of such aliased values to be equalized
 between them.
 
-Lastly, this scheme of alias/field analysis can also be generalized to analyze array operations.
-`EscapeAnalysis` currently reasons about escapes imposed on array elements using
-an imprecise version of the field analysis described above, where `AliasInfo` doesn't
-try to track precise array index but rather simply records all possible values that can be
-aliased any elements of the array.
+### [Array Analysis](@id EA-Array-Analysis)
+
+The alias analysis for object fields described above can also be generalized to analyze array operations.
+`EscapeAnalysis` implements handlings for various primitive array operations so that it can propagate
+escapes via `arrayref`-`arrayset` use-def chain and does not escape allocated arrays too conservatively:
+```julia
+julia> code_escapes((String,)) do s
+           ary = Any[]
+           push!(ary, SafeRef(s))
+           return ary[1], length(ary)
+       end
+#21(↑ _2::String) in Main at none:2
+*′ 1 ── %1  = $(Expr(:foreigncall, :(:jl_alloc_array_1d), Vector{Any}, svec(Any, Int64), 0, :(:ccall), Vector{Any}, 0, 0))::Vector{Any}
+↑  │    %2  = %new(SafeRef{String}, _2)::SafeRef{String}
+◌  │    %3  = Core.lshr_int(1, 63)::Int64
+◌  │    %4  = Core.trunc_int(Core.UInt8, %3)::UInt8
+◌  │    %5  = Core.eq_int(%4, 0x01)::Bool
+◌  └───       goto #3 if not %5
+◌  2 ──       invoke Core.throw_inexacterror(:check_top_bit::Symbol, UInt64::Type{UInt64}, 1::Int64)::Union{}
+◌  └───       unreachable
+◌  3 ──       goto #4
+◌  4 ── %10 = Core.bitcast(Core.UInt64, 1)::UInt64
+◌  └───       goto #5
+◌  5 ──       goto #6
+◌  6 ──       goto #7
+◌  7 ──       goto #8
+◌  8 ──       $(Expr(:foreigncall, :(:jl_array_grow_end), Nothing, svec(Any, UInt64), 0, :(:ccall), :(%1), :(%10), :(%10)))::Nothing
+◌  └───       goto #9
+◌  9 ── %17 = Base.arraylen(%1)::Int64
+◌  │          Base.arrayset(true, %1, %2, %17)::Vector{Any}
+◌  └───       goto #10
+↑  10 ─ %20 = Base.arrayref(true, %1, 1)::Any
+◌  │    %21 = Base.arraylen(%1)::Int64
+↑  │    %22 = Core.tuple(%20, %21)::Tuple{Any, Int64}
+◌  └───       return %22
+```
+In the above example `EscapeAnalysis` understands that `%20` and `%2` (corresponding to the allocated object `SafeRef(s)`)
+are aliased via the `arrayset`-`arrayref` chain and imposes `ReturnEscape` on them,
+but not impose it on the allocated array `%1` (corresponding to `ary`).
+`EscapeAnalysis` still imposes `ThrownEscape` on `ary` since it also needs to account for
+potential escapes via `BoundsError`, but also note that such unhandled `ThrownEscape` can
+often be ignored when optimizing the `ary` allocation.
+
+Furthermore, in cases when array index information as well as array dimensions can be known _precisely_,
+`EscapeAnalysis` is able to even reason about "per-element" aliasing via `arrayref`-`arrayset` chain,
+as `EscapeAnalysis` does "per-field" alias analysis for objects:
+```julia
+julia> code_escapes((String,String)) do s, t
+           ary = Vector{Any}(undef, 2)
+           ary[1] = SafeRef(s)
+           ary[2] = SafeRef(t)
+           return ary[1], length(ary)
+       end
+#23(↑ _2::String, * _3::String) in Main at none:2
+*′ 1 ─ %1 = $(Expr(:foreigncall, :(:jl_alloc_array_1d), Vector{Any}, svec(Any, Int64), 0, :(:ccall), Vector{Any}, 2, 2))::Vector{Any}
+↑  │   %2 = %new(SafeRef{String}, _2)::SafeRef{String}
+◌  │        Base.arrayset(true, %1, %2, 1)::Vector{Any}
+*  │   %4 = %new(SafeRef{String}, _3)::SafeRef{String}
+◌  │        Base.arrayset(true, %1, %4, 2)::Vector{Any}
+↑  │   %6 = Base.arrayref(true, %1, 1)::Any
+◌  │   %7 = Base.arraylen(%1)::Int64
+↑  │   %8 = Core.tuple(%6, %7)::Tuple{Any, Int64}
+◌  └──      return %8
+```
+Note that `ReturnEscape` is only imposed on `%2` (corresponding to `SafeRef(s)`) but not on `%4` (corresponding to `SafeRef(t)`).
+This is because the allocated array's dimension and indices involved with all `arrayref`/`arrayset`
+operations are available as constant information and `EscapeAnalysis` can understand that
+`%6` is aliased to `%2` but never be aliased to `%4`.
+In this kind of case, the succeeding optimization passes will be able to
+replace `Base.arrayref(true, %1, 1)::Any` with `%2` (a.k.a. "load-forwarding") and
+eventually eliminate the allocation of array `%1` entirely (a.k.a. "scalar-replacement").
+
+When compared to object field analysis, where an access to object field can be analyzed trivially
+using type information derived by inference, array dimension isn't encoded as type information
+and so we need an additional analysis to derive that information. `EscapeAnalysis` at this moment
+first does an additional simple linear scan to analyze dimensions of allocated arrays before
+firing up the main analysis routine so that the succeeding escape analysis can precisely
+analyze operations on those arrays.
+
+However, such precise "per-element" alias analyis is often hard.
+Essentially, the main difficulty inherit to array is that array dimension and index are often non-constant:
+- loop often produces loop-variant, non-constant array indices
+- (specific to vectors) array resizing changes array dimension and invalidates its constant-ness
+
+Let's discuss those difficulties with concrete examples.
+
+In the following example, `EscapeAnalysis` fails the precise alias analysis since the index
+at the `Base.arrayset(false, %4, %8, %6)::Vector{Any}` is not (trivially) constant.
+Especially `Any[nothing, nothing]` forms a loop and calls that `arrayset` operation in a loop,
+where `%6` is represented as a ϕ-node value (whose value is control-flow dependent).
+As a result, `ReturnEscape` ends up imposed on both `%23` (corresponding to `SafeRef(s)`) and
+`%25` (corresponding to `SafeRef(t)`), although ideally we want it to be imposed only on `%23` but not on `%25`:
+```julia
+julia> code_escapes((String,String)) do s, t
+           ary = Any[nothing, nothing]
+           ary[1] = SafeRef(s)
+           ary[2] = SafeRef(t)
+           return ary[1], length(ary)
+       end
+#27(↑ _2::String, ↑ _3::String) in Main at none:2
+◌  1 ─ %1  = Main.nothing::Core.Const(nothing)
+◌  │   %2  = Main.nothing::Core.Const(nothing)
+◌  │   %3  = Core.tuple(%1, %2)::Core.Const((nothing, nothing))
+*′ │   %4  = $(Expr(:foreigncall, :(:jl_alloc_array_1d), Vector{Any}, svec(Any, Int64), 0, :(:ccall), Vector{Any}, 2, 2))::Vector{Any}
+◌  └──       goto #7 if not true
+◌  2 ┄ %6  = φ (#1 => 1, #6 => %16)::Int64
+◌  │   %7  = φ (#1 => 1, #6 => %17)::Int64
+↑  │   %8  = Base.getfield(%3, %6, false)::Nothing
+◌  │         Base.arrayset(false, %4, %8, %6)::Vector{Any}
+◌  │   %10 = (%7 === 2)::Bool
+◌  └──       goto #4 if not %10
+◌  3 ─       Base.nothing::Nothing
+◌  └──       goto #5
+◌  4 ─ %14 = Base.add_int(%7, 1)::Int64
+◌  └──       goto #5
+◌  5 ┄ %16 = φ (#4 => %14)::Int64
+◌  │   %17 = φ (#4 => %14)::Int64
+◌  │   %18 = φ (#3 => true, #4 => false)::Bool
+◌  │   %19 = Base.not_int(%18)::Bool
+◌  └──       goto #7 if not %19
+◌  6 ─       goto #2
+◌  7 ┄       goto #8
+↑  8 ─ %23 = %new(SafeRef{String}, _2)::SafeRef{String}
+◌  │         Base.arrayset(true, %4, %23, 1)::Vector{Any}
+↑  │   %25 = %new(SafeRef{String}, _3)::SafeRef{String}
+◌  │         Base.arrayset(true, %4, %25, 2)::Vector{Any}
+↑  │   %27 = Base.arrayref(true, %4, 1)::Any
+◌  │   %28 = Base.arraylen(%4)::Int64
+↑  │   %29 = Core.tuple(%27, %28)::Tuple{Any, Int64}
+◌  └──       return %29
+```
+
+The next example illustrates how vector resizing makes precise alias analysis hard.
+The essential difficulty is that the dimension of allocated array `%1` is first initialized as `0`,
+but it changes by the two `:jl_array_grow_end` calls afterwards.
+`EscapeAnalysis` currently simply gives up precise alias analysis whenever it encounters any
+array resizing operations and so `ReturnEscape` is imposed on both `%2` (corresponding to `SafeRef(s)`)
+and `%20` (corresponding to `SafeRef(t)`):
+```julia
+julia> code_escapes((String,String)) do s, t
+           ary = Any[]
+           push!(ary, SafeRef(s))
+           push!(ary, SafeRef(t))
+           ary[1], length(ary)
+       end
+#31(↑ _2::String, ↑ _3::String) in Main at none:2
+*′ 1 ── %1  = $(Expr(:foreigncall, :(:jl_alloc_array_1d), Vector{Any}, svec(Any, Int64), 0, :(:ccall), Vector{Any}, 0, 0))::Vector{Any}
+↑  │    %2  = %new(SafeRef{String}, _2)::SafeRef{String}
+◌  │    %3  = Core.lshr_int(1, 63)::Int64
+◌  │    %4  = Core.trunc_int(Core.UInt8, %3)::UInt8
+◌  │    %5  = Core.eq_int(%4, 0x01)::Bool
+◌  └───       goto #3 if not %5
+◌  2 ──       invoke Core.throw_inexacterror(:check_top_bit::Symbol, UInt64::Type{UInt64}, 1::Int64)::Union{}
+◌  └───       unreachable
+◌  3 ──       goto #4
+◌  4 ── %10 = Core.bitcast(Core.UInt64, 1)::UInt64
+◌  └───       goto #5
+◌  5 ──       goto #6
+◌  6 ──       goto #7
+◌  7 ──       goto #8
+◌  8 ──       $(Expr(:foreigncall, :(:jl_array_grow_end), Nothing, svec(Any, UInt64), 0, :(:ccall), :(%1), :(%10), :(%10)))::Nothing
+◌  └───       goto #9
+◌  9 ── %17 = Base.arraylen(%1)::Int64
+◌  │          Base.arrayset(true, %1, %2, %17)::Vector{Any}
+◌  └───       goto #10
+↑  10 ─ %20 = %new(SafeRef{String}, _3)::SafeRef{String}
+◌  │    %21 = Core.lshr_int(1, 63)::Int64
+◌  │    %22 = Core.trunc_int(Core.UInt8, %21)::UInt8
+◌  │    %23 = Core.eq_int(%22, 0x01)::Bool
+◌  └───       goto #12 if not %23
+◌  11 ─       invoke Core.throw_inexacterror(:check_top_bit::Symbol, UInt64::Type{UInt64}, 1::Int64)::Union{}
+◌  └───       unreachable
+◌  12 ─       goto #13
+◌  13 ─ %28 = Core.bitcast(Core.UInt64, 1)::UInt64
+◌  └───       goto #14
+◌  14 ─       goto #15
+◌  15 ─       goto #16
+◌  16 ─       goto #17
+◌  17 ─       $(Expr(:foreigncall, :(:jl_array_grow_end), Nothing, svec(Any, UInt64), 0, :(:ccall), :(%1), :(%28), :(%28)))::Nothing
+◌  └───       goto #18
+◌  18 ─ %35 = Base.arraylen(%1)::Int64
+◌  │          Base.arrayset(true, %1, %20, %35)::Vector{Any}
+◌  └───       goto #19
+↑  19 ─ %38 = Base.arrayref(true, %1, 1)::Any
+◌  │    %39 = Base.arraylen(%1)::Int64
+↑  │    %40 = Core.tuple(%38, %39)::Tuple{Any, Int64}
+◌  └───       return %40
+```
+
+In order to address these difficulties, we need inference to be aware of array dimensions
+and propagate array dimenstions in a flow-sensitive way[^ArrayDimension], as well as come
+up with nice representation of loop-variant values.
+
+`EscapeAnalysis` at this moment quickly switches to the more imprecise analysis that doesn't
+track precise index information in cases when array dimensions or indices are trivially non
+constant. The switch can naturally be implemented as a lattice join operation of
+`EscapeInfo.AliasInfo` property in the data-flow analysis framework.
 
 ### [Exception Handling](@id EA-Exception-Handling)
 
@@ -321,3 +513,5 @@ Core.Compiler.EscapeAnalysis.cache_escapes!
 [^JVM05]: _Escape Analysis in the Context of Dynamic Compilation and Deoptimization_.
           Thomas Kotzmann and Hanspeter Mössenböck, 2005, June.
           <https://dl.acm.org/doi/10.1145/1064979.1064996>.
+
+[^ArrayDimension]: Otherwise we will need yet another forward data-flow analysis on top of the escape analysis.

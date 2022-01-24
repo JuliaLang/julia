@@ -1804,6 +1804,177 @@ end
         @test !has_return_escape(result.state[Argument(2)], r)
         @test !has_thrown_escape(result.state[Argument(2)])
     end
+
+    # indexing analysis
+    # -----------------
+
+    # safe case
+    let result = code_escapes((String,String)) do s, t
+            a = Vector{Any}(undef, 2)
+            a[1] = s
+            a[2] = t
+            return a[1]
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        @test !has_return_escape(result.state[SSAValue(i)], r)
+        @test is_load_forwardable(result.state[SSAValue(i)])
+        @test has_return_escape(result.state[Argument(2)], r) # s
+        @test !has_return_escape(result.state[Argument(3)], r) # t
+    end
+    let result = code_escapes((String,String)) do s, t
+            a = Matrix{Any}(undef, 1, 2)
+            a[1, 1] = s
+            a[1, 2] = t
+            return a[1, 1]
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        @test !has_return_escape(result.state[SSAValue(i)], r)
+        @test is_load_forwardable(result.state[SSAValue(i)])
+        @test has_return_escape(result.state[Argument(2)], r) # s
+        @test !has_return_escape(result.state[Argument(3)], r) # t
+    end
+    let result = code_escapes((Bool,String,String,String)) do c, s, t, u
+            a = Vector{Any}(undef, 2)
+            if c
+                a[1] = s
+                a[2] = u
+            else
+                a[1] = t
+                a[2] = u
+            end
+            return a[1]
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        @test is_load_forwardable(result.state[SSAValue(i)])
+        @test !has_return_escape(result.state[SSAValue(i)], r)
+        @test has_return_escape(result.state[Argument(3)], r) # s
+        @test has_return_escape(result.state[Argument(4)], r) # t
+        @test !has_return_escape(result.state[Argument(5)], r) # u
+    end
+    let result = code_escapes((Bool,String,String,String)) do c, s, t, u
+            a = Any[nothing, nothing] # TODO how to deal with loop indexing?
+            if c
+                a[1] = s
+                a[2] = u
+            else
+                a[1] = t
+                a[2] = u
+            end
+            return a[1]
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        @test !has_return_escape(result.state[SSAValue(i)], r)
+        @test_broken is_load_forwardable(result.state[SSAValue(i)])
+        @test has_return_escape(result.state[Argument(3)], r) # s
+        @test has_return_escape(result.state[Argument(4)], r) # t
+        @test_broken !has_return_escape(result.state[Argument(5)], r) # u
+    end
+    let result = code_escapes((String,)) do s
+            a = Vector{Vector{Any}}(undef, 1)
+            b = Any[s]
+            a[1] = b
+            return a[1][1]
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        is = findall(isarrayalloc, result.ir.stmts.inst)
+        @assert length(is) == 2
+        ia, ib = is
+        @test !has_return_escape(result.state[SSAValue(ia)], r)
+        @test is_load_forwardable(result.state[SSAValue(ia)])
+        @test !has_return_escape(result.state[SSAValue(ib)], r)
+        @test_broken is_load_forwardable(result.state[SSAValue(ib)])
+        @test has_return_escape(result.state[Argument(2)], r) # s
+    end
+    let result = code_escapes((Bool,String,String,Regex,Regex,)) do c, s1, s2, t1, t2
+            if c
+                a = Vector{String}(undef, 2)
+                a[1] = s1
+                a[2] = s2
+            else
+                a = Vector{Regex}(undef, 2)
+                a[1] = t1
+                a[2] = t2
+            end
+            return a[1]
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        for i in findall(isarrayalloc, result.ir.stmts.inst)
+            @test !has_return_escape(result.state[SSAValue(i)], r)
+            @test is_load_forwardable(result.state[SSAValue(i)])
+        end
+        @test has_return_escape(result.state[Argument(3)], r) # s1
+        @test !has_return_escape(result.state[Argument(4)], r) # s2
+        @test has_return_escape(result.state[Argument(5)], r) # t1
+        @test !has_return_escape(result.state[Argument(6)], r) # t2
+    end
+    let result = code_escapes((String,String,Int)) do s, t, i
+            a = Any[s]
+            push!(a, t)
+            return a[2]
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        @test !has_return_escape(result.state[SSAValue(i)], r)
+        @test_broken is_load_forwardable(result.state[SSAValue(i)])
+        @test_broken !has_return_escape(result.state[Argument(2)], r) # s
+        @test has_return_escape(result.state[Argument(3)], r) # t
+    end
+    # unsafe cases
+    let result = code_escapes((String,String,Int)) do s, t, i
+            a = Vector{Any}(undef, 2)
+            a[1] = s
+            a[2] = t
+            return a[i]
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        @test !has_return_escape(result.state[SSAValue(i)], r)
+        @test !is_load_forwardable(result.state[SSAValue(i)])
+        @test has_return_escape(result.state[Argument(2)], r) # s
+        @test has_return_escape(result.state[Argument(3)], r) # t
+    end
+    let result = code_escapes((String,String,Int)) do s, t, i
+            a = Vector{Any}(undef, 2)
+            a[1] = s
+            a[i] = t
+            return a[1]
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        @test !has_return_escape(result.state[SSAValue(i)], r)
+        @test !is_load_forwardable(result.state[SSAValue(i)])
+        @test has_return_escape(result.state[Argument(2)], r) # s
+        @test has_return_escape(result.state[Argument(3)], r) # t
+    end
+    let result = code_escapes((String,String,Int,Int,Int)) do s, t, i, j, k
+            a = Vector{Any}(undef, 2)
+            a[3] = s # BoundsError
+            a[1] = t
+            return a[1]
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        @test !has_return_escape(result.state[SSAValue(i)], r)
+        @test !is_load_forwardable(result.state[SSAValue(i)])
+    end
+    let result = @eval Module() begin
+            @noinline some_resize!(a) = pushfirst!(a, nothing)
+            $code_escapes((String,String,Int)) do s, t, i
+                a = Vector{Any}(undef, 2)
+                a[1] = s
+                some_resize!(a)
+                return a[2]
+            end
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        @test_broken !has_return_escape(result.state[SSAValue(i)], r)
+        @test !is_load_forwardable(result.state[SSAValue(i)])
+    end
 end
 
 # demonstrate array primitive support with a realistic end to end example

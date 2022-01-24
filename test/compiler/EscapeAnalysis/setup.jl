@@ -63,7 +63,7 @@ function is_load_forwardable(x::EscapeAnalysis.EscapeInfo)
     AliasInfo === false && return true # allows this query to work for immutables since we don't impose escape on them
     # NOTE technically we also need to check `!has_thrown_escape(x)` here as well,
     # but we can also do equivalent check during forwarding
-    return isa(AliasInfo, EscapeAnalysis.Indexable) && !AliasInfo.array
+    return isa(AliasInfo, EscapeAnalysis.IndexableFields) || isa(AliasInfo, EscapeAnalysis.IndexableElements)
 end
 
 let setup_ex = quote

@@ -22,14 +22,15 @@ import Core:
     arraysize
 import ._TOP_MOD:     # Base definitions
     @__MODULE__, @eval, @assert, @specialize, @nospecialize, @inbounds, @inline, @noinline,
-    @label, @goto, !, !==, !=, ≠, +, -, ≤, <, ≥, >, &, |, include, error, missing, copy,
-    Vector, BitSet, IdDict, IdSet, UnitRange, ∪, ⊆, ∩, :, ∈, ∉, in, length, get, first, last,
-    isempty, isassigned, pop!, push!, pushfirst!, empty!, max, min, Csize_t
+    @label, @goto, !, !==, !=, ≠, +, -, *, ≤, <, ≥, >, &, |, include, error, missing, copy,
+    Vector, BitSet, IdDict, IdSet, UnitRange, Csize_t, ∪, ⊆, ∩, :, ∈, ∉, in, length, get,
+    first, last, haskey, keys, get!, isempty, isassigned, pop!, push!, pushfirst!, empty!,
+    delete!, max, min
 import Core.Compiler: # Core.Compiler specific definitions
     isbitstype, isexpr, is_meta_expr_head, println,
     IRCode, IR_FLAG_EFFECT_FREE, widenconst, argextype, singleton_type, fieldcount_noerror,
     try_compute_field, try_compute_fieldidx, hasintersect, ⊑ as ⊑ₜ, intrinsic_nothrow,
-    array_builtin_common_typecheck, arrayset_typecheck, setfield!_nothrow, compute_trycatch
+    array_builtin_common_typecheck, arrayset_typecheck, setfield!_nothrow, alloc_array_ndims
 
 if _TOP_MOD !== Core.Compiler
     include(@__MODULE__, "disjoint_set.jl")
@@ -38,21 +39,41 @@ else
 end
 
 const AInfo = BitSet # XXX better to be IdSet{Int}?
-struct Indexable
-    array::Bool
+struct IndexableFields
     infos::Vector{AInfo}
+end
+struct IndexableElements
+    infos::IdDict{Int,AInfo}
 end
 struct Unindexable
     array::Bool
     info::AInfo
 end
+
+merge_to_unindexable(AliasInfo::IndexableFields) = Unindexable(false, merge_to_unindexable(AliasInfo.infos))
+function merge_to_unindexable(AliasInfo::Unindexable, AliasInfos::IndexableFields)
+    @assert !AliasInfo.array "invalid merge_to_unindexable"
+    return Unindexable(false, merge_to_unindexable(AliasInfo.info, AliasInfos.infos))
+end
+merge_to_unindexable(infos::Vector{AInfo}) = merge_to_unindexable(AInfo(), infos)
 function merge_to_unindexable(info::AInfo, infos::Vector{AInfo})
     for i = 1:length(infos)
         info = info ∪ infos[i]
     end
     return info
 end
-merge_to_unindexable(infos::Vector{AInfo}) = merge_to_unindexable(AInfo(), infos)
+merge_to_unindexable(AliasInfo::IndexableElements) = Unindexable(true, merge_to_unindexable(AliasInfo.infos))
+function merge_to_unindexable(AliasInfo::Unindexable, AliasInfos::IndexableElements)
+    @assert AliasInfo.array "invalid merge_to_unindexable"
+    return Unindexable(true, merge_to_unindexable(AliasInfo.info, AliasInfos.infos))
+end
+merge_to_unindexable(infos::IdDict{Int,AInfo}) = merge_to_unindexable(AInfo(), infos)
+function merge_to_unindexable(info::AInfo, infos::IdDict{Int,AInfo})
+    for idx in keys(infos)
+        info = info ∪ infos[idx]
+    end
+    return info
+end
 
 const LivenessSet = BitSet
 
@@ -64,13 +85,14 @@ A lattice for escape information, which holds the following properties:
 - `x.ReturnEscape::Bool`: indicates `x` can escape to the caller via return
 - `x.ThrownEscape::BitSet`: records SSA statements numbers where `x` can be thrown as exception:
   this information will be used by `escape_exception!` to propagate potential escapes via exception
-- `x.AliasInfo::Union{Indexable,Unindexable,Bool}`: maintains all possible values
+- `x.AliasInfo::Union{IndexableFields,Unindexable,Bool}`: maintains all possible values
   that can be aliased to fields or array elements of `x`:
   * `x.AliasInfo === false` indicates the fields/elements of `x` isn't analyzed yet
   * `x.AliasInfo === true` indicates the fields/elements of `x` can't be analyzed,
     e.g. the type of `x` is not known or is not concrete and thus its fields/elements
     can't be known precisely
-  * `x.AliasInfo::Indexable` records all the possible values that can be aliased to fields/elements of `x` with precise index information
+  * `x.AliasInfo::IndexableFields` records all the possible values that can be aliased to fields of object `x` with precise index information
+  * `x.AliasInfo::IndexableElements` records all the possible values that can be aliased to elements of array `x` with precise index information
   * `x.AliasInfo::Unindexable` records all the possible values that can be aliased to fields/elements of `x` without precise index information
 - `x.Liveness::BitSet`: records SSA statement numbers where `x` should be live, e.g.
   to be used as a call argument, to be returned to a caller, or preserved for `:foreigncall`.
@@ -99,7 +121,7 @@ struct EscapeInfo
     Analyzed::Bool
     ReturnEscape::Bool
     ThrownEscape::LivenessSet
-    AliasInfo #::Union{Indexable,Unindexable,Bool}
+    AliasInfo #::Union{IndexableFields,IndexableElements,Unindexable,Bool}
     Liveness::LivenessSet
     # TODO: ArgEscape::Int
 
@@ -107,7 +129,7 @@ struct EscapeInfo
         Analyzed::Bool,
         ReturnEscape::Bool,
         ThrownEscape::LivenessSet,
-        AliasInfo#=::Union{Indexable,Unindexable,Bool}=#,
+        AliasInfo#=::Union{IndexableFields,IndexableElements,Unindexable,Bool}=#,
         Liveness::LivenessSet,
         )
         @nospecialize AliasInfo
@@ -123,7 +145,7 @@ struct EscapeInfo
         x::EscapeInfo,
         # non-concrete fields should be passed as default arguments
         # in order to avoid allocating non-concrete `NamedTuple`s
-        AliasInfo#=::Union{Indexable,Unindexable,Bool}=# = x.AliasInfo;
+        AliasInfo#=::Union{IndexableFields,IndexableElements,Unindexable,Bool}=# = x.AliasInfo;
         Analyzed::Bool = x.Analyzed,
         ReturnEscape::Bool = x.ReturnEscape,
         ThrownEscape::LivenessSet = x.ThrownEscape,
@@ -163,7 +185,7 @@ AllEscape() = EscapeInfo(true, true, TOP_THROWN_ESCAPE, TOP_ALIAS_INFO, TOP_LIVE
 const ⊥, ⊤ = NotAnalyzed(), AllEscape()
 
 # Convenience names for some ⊑ queries
-has_no_escape(x::EscapeInfo) = !x.ReturnEscape && isempty(x.ThrownEscape)
+has_no_escape(x::EscapeInfo) = !x.ReturnEscape && isempty(x.ThrownEscape) && 0 ∉ x.Liveness
 has_arg_escape(x::EscapeInfo) = 0 in x.Liveness
 has_return_escape(x::EscapeInfo) = x.ReturnEscape
 has_return_escape(x::EscapeInfo, pc::Int) = x.ReturnEscape && pc in x.Liveness
@@ -172,6 +194,7 @@ has_thrown_escape(x::EscapeInfo, pc::Int) = pc in x.ThrownEscape
 has_all_escape(x::EscapeInfo) = ⊤ ⊑ x
 
 # utility lattice constructors
+ignore_argescape(x::EscapeInfo) = EscapeInfo(x; Liveness=delete!(copy(x.Liveness), 0))
 ignore_thrownescapes(x::EscapeInfo) = EscapeInfo(x; ThrownEscape=BOT_THROWN_ESCAPE)
 ignore_aliasinfo(x::EscapeInfo) = EscapeInfo(x, BOT_ALIAS_INFO)
 ignore_liveness(x::EscapeInfo) = EscapeInfo(x; Liveness=BOT_LIVENESS)
@@ -194,9 +217,11 @@ x::EscapeInfo == y::EscapeInfo = begin
     xa, ya = x.AliasInfo, y.AliasInfo
     if isa(xa, Bool)
         xa === ya || return false
-    elseif isa(xa, Indexable)
-        isa(ya, Indexable) || return false
-        xa.array === ya.array || return false
+    elseif isa(xa, IndexableFields)
+        isa(ya, IndexableFields) || return false
+        xa.infos == ya.infos || return false
+    elseif isa(xa, IndexableElements)
+        isa(ya, IndexableElements) || return false
         xa.infos == ya.infos || return false
     else
         xa = xa::Unindexable
@@ -242,20 +267,39 @@ x::EscapeInfo ⊑ y::EscapeInfo = begin
     xa, ya = x.AliasInfo, y.AliasInfo
     if isa(xa, Bool)
         xa && ya !== true && return false
-    elseif isa(xa, Indexable)
-        if isa(ya, Indexable)
-            xa.array === ya.array || return false
+    elseif isa(xa, IndexableFields)
+        if isa(ya, IndexableFields)
             xinfos, yinfos = xa.infos, ya.infos
             xn, yn = length(xinfos), length(yinfos)
             xn > yn && return false
             for i in 1:xn
                 xinfos[i] ⊆ yinfos[i] || return false
             end
+        elseif isa(ya, IndexableElements)
+            return false
         elseif isa(ya, Unindexable)
-            xa.array === ya.array || return false
+            ya.array && return false
             xinfos, yinfo = xa.infos, ya.info
             for i = length(xinfos)
                 xinfos[i] ⊆ yinfo || return false
+            end
+        else
+            ya === true || return false
+        end
+    elseif isa(xa, IndexableElements)
+        if isa(ya, IndexableElements)
+            xinfos, yinfos = xa.infos, ya.infos
+            keys(xinfos) ⊆ keys(yinfos) || return false
+            for idx in keys(xinfos)
+                xinfos[idx] ⊆ yinfos[idx] || return false
+            end
+        elseif isa(ya, IndexableFields)
+            return false
+        elseif isa(ya, Unindexable)
+            ya.array || return false
+            xinfos, yinfo = xa.infos, ya.info
+            for idx in keys(xinfos)
+                xinfos[idx] ⊆ yinfo || return false
             end
         else
             ya === true || return false
@@ -326,8 +370,8 @@ x::EscapeInfo ⊔ y::EscapeInfo = begin
         AliasInfo = ya
     elseif ya === false
         AliasInfo = xa
-    elseif isa(xa, Indexable)
-        if isa(ya, Indexable) && xa.array === ya.array
+    elseif isa(xa, IndexableFields)
+        if isa(ya, IndexableFields)
             xinfos, yinfos = xa.infos, ya.infos
             xn, yn = length(xinfos), length(yinfos)
             nmax, nmin = max(xn, yn), min(xn, yn)
@@ -339,20 +383,40 @@ x::EscapeInfo ⊔ y::EscapeInfo = begin
                     infos[i] = xinfos[i] ∪ yinfos[i]
                 end
             end
-            AliasInfo = Indexable(xa.array, infos)
-        elseif isa(ya, Unindexable) && xa.array === ya.array
+            AliasInfo = IndexableFields(infos)
+        elseif isa(ya, Unindexable) && !ya.array
             xinfos, yinfo = xa.infos, ya.info
-            info = merge_to_unindexable(yinfo, xinfos)
-            AliasInfo = Unindexable(xa.array, info)
+            AliasInfo = merge_to_unindexable(ya, xa)
+        else
+            AliasInfo = true # handle conflicting case conservatively
+        end
+    elseif isa(xa, IndexableElements)
+        if isa(ya, IndexableElements)
+            xinfos, yinfos = xa.infos, ya.infos
+            infos = IdDict{Int,AInfo}()
+            for idx in keys(xinfos)
+                if !haskey(yinfos, idx)
+                    infos[idx] = xinfos[idx]
+                else
+                    infos[idx] = xinfos[idx] ∪ yinfos[idx]
+                end
+            end
+            for idx in keys(yinfos)
+                haskey(xinfos, idx) && continue # unioned already
+                infos[idx] = yinfos[idx]
+            end
+            AliasInfo = IndexableElements(infos)
+        elseif isa(ya, Unindexable) && ya.array
+            AliasInfo = merge_to_unindexable(ya, xa)
         else
             AliasInfo = true # handle conflicting case conservatively
         end
     else
         xa = xa::Unindexable
-        if isa(ya, Indexable) && xa.array === ya.array
-            xinfo, yinfos = xa.info, ya.infos
-            info = merge_to_unindexable(xinfo, yinfos)
-            AliasInfo = Unindexable(xa.array, info)
+        if isa(ya, IndexableFields) && !xa.array
+            AliasInfo = merge_to_unindexable(xa, ya)
+        elseif isa(ya, IndexableElements) && xa.array
+            AliasInfo = merge_to_unindexable(xa, ya)
         elseif isa(ya, Unindexable) && xa.array === ya.array
             xinfo, yinfo = xa.info, ya.info
             info = xinfo ∪ yinfo
@@ -554,10 +618,13 @@ struct LivenessChange <: Change
 end
 const Changes = Vector{Change}
 
+const ArrayInfo = IdDict{Int,Vector{Int}}
+
 struct AnalysisState
     ir::IRCode
     estate::EscapeState
     changes::Changes
+    arrayinfo::Union{Nothing,ArrayInfo} # TODO make this aware of aliasing of nested arrays
 end
 
 function getinst(ir::IRCode, idx::Int)
@@ -579,11 +646,10 @@ function analyze_escapes(ir::IRCode, nargs::Int)
     stmts = ir.stmts
     nstmts = length(stmts) + length(ir.new_nodes.stmts)
 
-    # only manage a single state, some flow-sensitivity is encoded as `EscapeInfo` properties
     estate = EscapeState(nargs, nstmts)
-    changes = Changes() # stashes changes that happen at current statement
-    tryregions = compute_tryregions(ir)
-    astate = AnalysisState(ir, estate, changes)
+    changes = Changes() # keeps changes that happen at current statement
+    tryregions, arrayinfo = compute_frameinfo(ir)
+    astate = AnalysisState(ir, estate, changes, arrayinfo)
 
     local debug_itr_counter = 0
     while true
@@ -825,23 +891,85 @@ end
 #     add_escape_change!(astate, lhs, vinfo)
 # end
 
-# linear scan to find regions in which potential throws will be caught
-function compute_tryregions(ir::IRCode)
-    tryregions = nothing
-    for idx in 1:length(ir.stmts)
-        stmt = ir.stmts[idx][:inst]
+# a preparatory linear scan to find:
+# - regions in which potential throws will be caught
+# - array allocations whose dimensions are known precisely (with some very simple alias analysis)
+function compute_frameinfo(ir::IRCode)
+    tryregions, arrayinfo = nothing, nothing
+    nstmts, nnewnodes = length(ir.stmts), length(ir.new_nodes.stmts)
+    for idx in 1:nstmts+nnewnodes
+        stmt = getinst(ir, idx)[:inst]
         if isexpr(stmt, :enter)
+            @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
             tryregions === nothing && (tryregions = UnitRange{Int}[])
             leave_block = stmt.args[1]::Int
             leave_pc = first(ir.cfg.blocks[leave_block].stmts)
             push!(tryregions, idx:leave_pc)
+        elseif isexpr(stmt, :foreigncall)
+            args = stmt.args
+            name = args[1]
+            nn = normalize(name)
+            isa(nn, Symbol) || @goto next_stmt
+            ndims = alloc_array_ndims(nn)
+            ndims === nothing && @goto next_stmt
+            if ndims ≠ 0
+                length(args) ≥ ndims+6 || @goto next_stmt
+                dims = Int[]
+                for i in 1:ndims
+                    dim = argextype(args[i+6], ir)
+                    isa(dim, Const) || @goto next_stmt
+                    dim = dim.val
+                    isa(dim, Int) || @goto next_stmt
+                    push!(dims, dim)
+                end
+            else
+                length(args) ≥ 7 || @goto next_stmt
+                dims = argextype(args[7], ir)
+                if isa(dims, Const)
+                    dims = dims.val
+                    isa(dims, Tuple{Vararg{Int}}) || @goto next_stmt
+                    dims = collect(Int, dims)
+                else
+                    dims === Tuple{} || @goto next_stmt
+                    dims = Int[]
+                end
+            end
+            if arrayinfo === nothing
+                arrayinfo = ArrayInfo()
+            end
+            arrayinfo[idx] = dims
+        elseif arrayinfo !== nothing
+            if isa(stmt, PhiNode)
+                values = stmt.values
+                local dims = nothing
+                for i = 1:length(values)
+                    if isassigned(values, i)
+                        val = values[i]
+                        if isa(val, SSAValue) && haskey(arrayinfo, val.id)
+                            if dims === nothing
+                                dims = arrayinfo[val.id]
+                            elseif dims ≠ arrayinfo[val.id]
+                                dims = nothing
+                                break
+                            end
+                        end
+                    end
+                end
+                if dims !== nothing
+                    arrayinfo[idx] = dims
+                end
+            elseif isa(stmt, PiNode)
+                if isdefined(stmt, :val)
+                    val = stmt.val
+                    if isa(val, SSAValue) && haskey(arrayinfo, val.id)
+                        arrayinfo[idx] = arrayinfo[val.id]
+                    end
+                end
+            end
         end
+        @label next_stmt
     end
-    for idx in 1:length(ir.new_nodes.stmts)
-        stmt = ir.new_nodes.stmts[idx][:inst]
-        @assert !isexpr(stmt, :enter) "try/catch inside new_nodes unsupported"
-    end
-    return tryregions
+    return tryregions, arrayinfo
 end
 
 """
@@ -912,10 +1040,7 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     linfo = first(args)::MethodInstance
     cache = get(GLOBAL_ESCAPE_CACHE, linfo, nothing)
     if cache === nothing
-        for i in 2:length(args)
-            x = args[i]
-            add_escape_change!(astate, x, ⊤)
-        end
+        add_fallback_changes!(astate, pc, args, 2)
     else
         argescapes = argescapes_from_cache(cache)
         ret = SSAValue(pc)
@@ -980,7 +1105,7 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
     nargs = length(args)
     if isa(AliasInfo, Bool)
         @goto conservative_propagation
-    elseif isa(AliasInfo, Indexable) && !AliasInfo.array
+    elseif isa(AliasInfo, IndexableFields)
         # fields are known precisely: propagate escape information imposed on recorded possibilities to the exact field values
         infos = AliasInfo.infos
         nf = length(infos)
@@ -1223,14 +1348,13 @@ function analyze_fields(ir::IRCode, @nospecialize(typ), @nospecialize(fld))
     if fidx === nothing
         return Unindexable(false, AInfo()), 0
     end
-    return Indexable(false, AInfo[AInfo() for _ in 1:nfields]), fidx
+    return IndexableFields(AInfo[AInfo() for _ in 1:nfields]), fidx
 end
 
-function reanalyze_fields(ir::IRCode, AliasInfo::Indexable, @nospecialize(typ), @nospecialize(fld))
-    infos = AliasInfo.infos
+function reanalyze_fields(ir::IRCode, AliasInfo::IndexableFields, @nospecialize(typ), @nospecialize(fld))
     nfields = fieldcount_noerror(typ)
     if nfields === nothing
-        return Unindexable(false, merge_to_unindexable(infos)), 0
+        return merge_to_unindexable(AliasInfo), 0
     end
     if isa(typ, DataType)
         fldval = try_compute_field(ir, fld)
@@ -1239,8 +1363,9 @@ function reanalyze_fields(ir::IRCode, AliasInfo::Indexable, @nospecialize(typ), 
         fidx = nothing
     end
     if fidx === nothing
-        return Unindexable(false, merge_to_unindexable(infos)), 0
+        return merge_to_unindexable(AliasInfo), 0
     end
+    infos = AliasInfo.infos
     ninfos = length(infos)
     if nfields > ninfos
         for _ in 1:(nfields-ninfos)
@@ -1268,12 +1393,12 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
         AliasInfo && @goto conservative_propagation
         # the fields of this object haven't been analyzed yet: analyze them now
         AliasInfo, fidx = analyze_fields(ir, typ, args[3])
-        if isa(AliasInfo, Indexable)
+        if isa(AliasInfo, IndexableFields)
             @goto record_indexable_use
         else
             @goto record_unindexable_use
         end
-    elseif isa(AliasInfo, Indexable) && !AliasInfo.array
+    elseif isa(AliasInfo, IndexableFields)
         AliasInfo, fidx = reanalyze_fields(ir, AliasInfo, typ, args[3])
         isa(AliasInfo, Unindexable) && @goto record_unindexable_use
         @label record_indexable_use
@@ -1317,12 +1442,12 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
         # the fields of this object haven't been analyzed yet: analyze them now
         typ = widenconst(argextype(obj, ir))
         AliasInfo, fidx = analyze_fields(ir, typ, args[3])
-        if isa(AliasInfo, Indexable)
+        if isa(AliasInfo, IndexableFields)
             @goto escape_indexable_def
         else
             @goto escape_unindexable_def
         end
-    elseif isa(AliasInfo, Indexable) && !AliasInfo.array
+    elseif isa(AliasInfo, IndexableFields)
         typ = widenconst(argextype(obj, ir))
         AliasInfo, fidx = reanalyze_fields(ir, AliasInfo, typ, args[3])
         isa(AliasInfo, Unindexable) && @goto escape_unindexable_def
@@ -1391,14 +1516,27 @@ function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, arg
     if isa(AliasInfo, Bool)
         AliasInfo && @goto conservative_propagation
         # the elements of this array haven't been analyzed yet: set AliasInfo now
+        idx = array_nd_index(astate, ary, args[4:end])
+        if isa(idx, Int)
+            AliasInfo = IndexableElements(IdDict{Int,AInfo}())
+            @goto record_indexable_use
+        end
         AliasInfo = Unindexable(true, AInfo())
         @goto record_unindexable_use
-    elseif isa(AliasInfo, Indexable) && AliasInfo.array
-        throw("array index analysis unsupported")
+    elseif isa(AliasInfo, IndexableElements)
+        idx = array_nd_index(astate, ary, args[4:end])
+        if !isa(idx, Int)
+            AliasInfo = merge_to_unindexable(AliasInfo)
+            @goto record_unindexable_use
+        end
+        @label record_indexable_use
+        info = get!(()->AInfo(), AliasInfo.infos, idx)
+        push!(info, pc) # record use
+        add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo)) # update with new AliasInfo
     elseif isa(AliasInfo, Unindexable) && AliasInfo.array
         @label record_unindexable_use
         push!(AliasInfo.info, pc) # record use
-        add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo))
+        add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo)) # update with new AliasInfo
     else
         # this object has been used as struct, but it is used as array here (thus should throw)
         # update ary's element information and just handle this case conservatively
@@ -1443,15 +1581,31 @@ function escape_builtin!(::typeof(arrayset), astate::AnalysisState, pc::Int, arg
     if isa(AliasInfo, Bool)
         AliasInfo && @goto conservative_propagation
         # the elements of this array haven't been analyzed yet: set AliasInfo now
+        idx = array_nd_index(astate, ary, args[5:end])
+        if isa(idx, Int)
+            AliasInfo = IndexableElements(IdDict{Int,AInfo}())
+            @goto escape_indexable_def
+        end
         AliasInfo = Unindexable(true, AInfo())
         @goto escape_unindexable_def
-    elseif isa(AliasInfo, Indexable) && AliasInfo.array
-        throw("array index analysis unsupported")
+    elseif isa(AliasInfo, IndexableElements)
+        idx = array_nd_index(astate, ary, args[5:end])
+        if !isa(idx, Int)
+            AliasInfo = merge_to_unindexable(AliasInfo)
+            @goto escape_unindexable_def
+        end
+        @label escape_indexable_def
+        info = get!(()->AInfo(), AliasInfo.infos, idx)
+        add_alias_escapes!(astate, val, info)
+        push!(info, -pc) # record def
+        add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo)) # update with new AliasInfo
+        # propagate the escape information of this array ignoring elements information
+        add_escape_change!(astate, val, ignore_aliasinfo(aryinfo))
     elseif isa(AliasInfo, Unindexable) && AliasInfo.array
         @label escape_unindexable_def
         add_alias_escapes!(astate, val, AliasInfo.info)
         push!(AliasInfo.info, -pc) # record def
-        add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo))
+        add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo)) # update with new AliasInfo
         # propagate the escape information of this array ignoring elements information
         add_escape_change!(astate, val, ignore_aliasinfo(aryinfo))
     else
@@ -1465,6 +1619,39 @@ function escape_builtin!(::typeof(arrayset), astate::AnalysisState, pc::Int, arg
     ssainfo = estate[SSAValue(pc)]
     add_escape_change!(astate, ary, ssainfo)
     return true
+end
+
+# NOTE this function models and thus should be synced with the implementation of:
+# size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs, ...)
+function array_nd_index(astate::AnalysisState, @nospecialize(ary), args::Vector{Any}, nidxs::Int = length(args))
+    isa(ary, SSAValue) || return nothing
+    aryid = ary.id
+    arrayinfo = astate.arrayinfo
+    isa(arrayinfo, ArrayInfo) || return nothing
+    haskey(arrayinfo, aryid) || return nothing
+    dims = arrayinfo[aryid]
+    local i = 0
+    local k, stride = 0, 1
+    local nd = length(dims)
+    while k < nidxs
+        arg = args[k+1]
+        argval = argextype(arg, astate.ir)
+        isa(argval, Const) || return nothing
+        argval = argval.val
+        isa(argval, Int) || return nothing
+        ii = argval - 1
+        i += ii * stride
+        d = k ≥ nd ? 1 : dims[k+1]
+        k < nidxs - 1 && ii ≥ d && return nothing # BoundsError
+        stride *= d
+        k += 1
+    end
+    while k < nd
+        stride *= dims[k+1]
+        k += 1
+    end
+    i ≥ stride && return nothing # BoundsError
+    return i
 end
 
 function escape_builtin!(::typeof(arraysize), astate::AnalysisState, pc::Int, args::Vector{Any})
@@ -1518,7 +1705,19 @@ function escape_array_resize!(boundserror::Bool, ninds::Int,
         # this array resizing can potentially throw `BoundsError`, impose it now
         add_escape_change!(astate, ary, ThrownEscape(pc))
     end
+    # give up indexing analysis whenever we see array resizing
+    # (since we track array dimensions only globally)
+    mark_unindexable!(astate, ary)
     add_liveness_changes!(astate, pc, args, 6)
+end
+
+function mark_unindexable!(astate::AnalysisState, @nospecialize(ary))
+    isa(ary, SSAValue) || return
+    aryinfo = astate.estate[ary]
+    AliasInfo = aryinfo.AliasInfo
+    isa(AliasInfo, IndexableElements) || return
+    AliasInfo = merge_to_unindexable(AliasInfo)
+    add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo))
 end
 
 is_array_copy(name::Symbol) = name === :jl_array_copy
