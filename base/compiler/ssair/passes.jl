@@ -994,7 +994,7 @@ end
 
 function is_load_forwardable(x::EscapeAnalysis.EscapeInfo)
     AliasInfo = x.AliasInfo
-    return isa(AliasInfo, EscapeAnalysis.Indexable) && !AliasInfo.array
+    return isa(AliasInfo, EscapeAnalysis.IndexableFields)
 end
 
 function form_new_preserves(origex::Expr, intermediates::Vector{Int}, new_preserves::Vector{Any})

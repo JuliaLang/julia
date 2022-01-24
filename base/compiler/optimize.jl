@@ -93,6 +93,7 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
 end
 
 function argextype end # imported by EscapeAnalysis
+function alloc_array_ndims end # imported by EscapeAnalysis
 include("compiler/ssair/driver.jl")
 using .EscapeAnalysis
 import .EscapeAnalysis: EscapeState
