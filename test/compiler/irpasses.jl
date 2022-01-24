@@ -773,3 +773,41 @@ let ci = code_typed1(optimize=false) do
     ir = Core.Compiler.compact!(ir, true)
     @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 0
 end
+
+# lift_comparison! tests
+
+# lift_comparison! turns φ(x, y)::Union{X,Y} === constant into φ(x === constant, y === constant),
+# and then into φ(Bool, Bool)
+let src = code_typed1() do
+        cond = rand(1) |> first >= 0.5
+        if !cond
+            x = 0.0
+        else
+            x = nothing
+        end
+        return x === nothing
+    end
+    phi = (src.code |> last).val::SSAValue
+    phi_vals = src.code[phi.id].values
+    @test all(v->isa(v, Bool), phi_vals)
+    @test count(v->v == false, phi_vals) == 1
+    @test count(v->v == true, phi_vals) == 1
+end
+
+# similarly, lift_comparison! should turn φ(x, y)::Union{X,Y} isa T into φ(x isa T, y isa T),
+# and do the corresponding Bool replacement
+let src = code_typed1() do
+        cond = rand(1) |> first >= 0.5
+        if !cond
+            x = 0.0
+        else
+            x = nothing
+        end
+        return isa(x, Nothing)
+    end
+    phi = (src.code |> last).val::SSAValue
+    phi_vals = src.code[phi.id].values
+    @test all(v->isa(v, Bool), phi_vals)
+    @test count(v->v == false, phi_vals) == 1
+    @test count(v->v == true, phi_vals) == 1
+end

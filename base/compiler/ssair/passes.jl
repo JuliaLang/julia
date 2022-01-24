@@ -475,8 +475,9 @@ make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(ty
 
 Replaces `φ(x, y)::Union{X,Y} === constant` by `φ(x === constant, y === constant)`,
 where `x === constant` and `y === constant` can be replaced with constant `Bool`eans.
-It helps codegen avoid generating expensive code for `===` with `Union` types.
-In particular, this is supposed to improve the performance of the iteration protocol:
+Also performs a similar operation for `φ(x, y)::Union{X,Y} isa T`.
+It helps codegen avoid generating expensive code for `===` or `isa` with `Union` types.
+In particular, handling of the `===` case is supposed to improve the performance of the iteration protocol:
 ```julia
 while x !== nothing
     x = iterate(...)::Union{Nothing,Tuple{Any,Any}}
@@ -484,7 +485,7 @@ end
 ```
 """
 function lift_comparison!(compact::IncrementalCompact,
-    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
+    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, tf)
     args = stmt.args
     length(args) == 3 || return
 
@@ -513,7 +514,7 @@ function lift_comparison!(compact::IncrementalCompact,
     # Let's check if we evaluate the comparison for each one of the leaves
     lifted_leaves = nothing
     for leaf in leaves
-        r = egal_tfunc(argextype(leaf, compact), cmp)
+        r = tf(argextype(leaf, compact), cmp)
         if isa(r, Const)
             if lifted_leaves === nothing
                 lifted_leaves = LiftedLeaves()
@@ -715,10 +716,11 @@ function sroa_pass!(ir::IRCode)
             canonicalize_typeassert!(compact, idx, stmt)
             continue
         elseif is_known_call(stmt, (===), compact)
-            lift_comparison!(compact, idx, stmt, lifting_cache)
+            lift_comparison!(compact, idx, stmt, lifting_cache, egal_tfunc)
             continue
-        # elseif is_known_call(stmt, isa, compact)
-            # TODO do a similar optimization as `lift_comparison!` for `===`
+        elseif is_known_call(stmt, isa, compact)
+            lift_comparison!(compact, idx, stmt, lifting_cache, isa_tfunc)
+            continue
         else
             continue
         end
