@@ -785,13 +785,20 @@ function \(B::Bidiagonal{<:Number}, U::UpperOrUnitUpperTriangular{<:Number})
     A = ldiv!(zeros(T, size(U)), B, U)
     return B.uplo == 'U' ? UpperTriangular(A) : A
 end
+function \(B::Bidiagonal, U::UpperOrUnitUpperTriangular)
+    A = ldiv!(copy(parent(U)), B, U)
+    return B.uplo == 'U' ? UpperTriangular(A) : A
+end
 function \(B::Bidiagonal{<:Number}, L::LowerOrUnitLowerTriangular{<:Number})
     T = typeof((oneunit(eltype(B)))\oneunit(eltype(L)))
     A = ldiv!(zeros(T, size(L)), B, L)
     return B.uplo == 'L' ? LowerTriangular(A) : A
 end
+function \(B::Bidiagonal, L::LowerOrUnitLowerTriangular)
+    A = ldiv!(copy(parent(L)), B, L)
+    return B.uplo == 'L' ? LowerTriangular(A) : A
+end
 
-# if we don't want the type split, the following two/three methods can be removed
 function \(U::UpperOrUnitUpperTriangular{<:Number}, B::Bidiagonal{<:Number})
     T = typeof((oneunit(eltype(U)))/oneunit(eltype(B)))
     A = ldiv!(U, copy_similar(B, T))
@@ -850,7 +857,7 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal)
     end
     C
 end
-rdiv!(A::AbstractMatrix, B::Bidiagonal) = @inline _rdiv!(B, A, B)
+rdiv!(A::AbstractMatrix, B::Bidiagonal) = @inline _rdiv!(A, A, B)
 rdiv!(A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
 rdiv!(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
 rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) =
@@ -871,13 +878,19 @@ function /(U::UpperOrUnitUpperTriangular{<:Number}, B::Bidiagonal{<:Number})
     A = _rdiv!(zeros(T, size(U)), U, B)
     return B.uplo == 'U' ? UpperTriangular(A) : A
 end
+function /(U::UpperOrUnitUpperTriangular, B::Bidiagonal)
+    A = _rdiv!(copy(parent(U)), U, B)
+    return B.uplo == 'U' ? UpperTriangular(A) : A
+end
 function /(L::LowerOrUnitLowerTriangular{<:Number}, B::Bidiagonal{<:Number})
     T = typeof((oneunit(eltype(L)))/oneunit(eltype(B)))
     A = _rdiv!(zeros(T, size(L)), L, B)
     return B.uplo == 'L' ? LowerTriangular(A) : A
 end
-
-# if we don't want the type split, the following two/three methods can be removed
+function /(L::LowerOrUnitLowerTriangular, B::Bidiagonal)
+    A = _rdiv!(copy(parent(L)), L, B)
+    return B.uplo == 'L' ? LowerTriangular(A) : A
+end
 function /(B::Bidiagonal{<:Number}, U::UpperOrUnitUpperTriangular{<:Number})
     T = typeof((oneunit(eltype(B)))/oneunit(eltype(U)))
     A = rdiv!(copy_similar(B, T), U)

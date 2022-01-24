@@ -547,6 +547,19 @@ end
     bb = Any[b[1:3], b[4:6], b[7:9]]
     @test vcat((Alb\bb)...) ≈ LowerTriangular(A)\b
     @test vcat((Aub\bb)...) ≈ UpperTriangular(A)\b
+    Alb = Bidiagonal([tril(A[1:3,1:3]), tril(A[4:6,4:6]), tril(A[7:9,7:9])],
+                     [triu(A[4:6,1:3]), triu(A[7:9,4:6])], 'L')
+    Aub = Bidiagonal([triu(A[1:3,1:3]), triu(A[4:6,4:6]), triu(A[7:9,7:9])],
+                     [tril(A[1:3,4:6]), tril(A[4:6,7:9])], 'U')
+    d = [randn(3,3) for _ in 1:3]
+    dl = [randn(3,3) for _ in 1:2]
+    B = [randn(3,3) for _ in 1:3, _ in 1:3]
+    for W in (UpperTriangular, LowerTriangular), t in (identity, adjoint, transpose)
+        @test Matrix(t(Alb) \ W(B)) ≈ t(Alb) \ Matrix(W(B))
+        @test Matrix(t(Aub) \ W(B)) ≈ t(Aub) \ Matrix(W(B))
+        @test Matrix(W(B) / t(Alb)) ≈ Matrix(W(B)) / t(Alb)
+        @test Matrix(W(B) / t(Aub)) ≈ Matrix(W(B)) / t(Aub)
+    end
 end
 
 @testset "sum, mapreduce" begin
