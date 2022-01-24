@@ -2001,8 +2001,11 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
     return widenconst(rt)
 end
 
-function handle_backedge!(frame::InferenceState, from, to)
+function handle_control_backedge!(frame::InferenceState, from, to)
     if from > to
+        if isa(frame.linfo.def, Method) && decode_effects_override(frame.linfo.def.purity).terminates_locally
+            return
+        end
         tristate_merge!(frame, Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, TRISTATE_UNKNOWN))
     end
 end
@@ -2045,7 +2048,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 changes[sn] = VarState(Bottom, true)
             elseif isa(stmt, GotoNode)
                 l = (stmt::GotoNode).label
-                handle_backedge!(frame, pc, l)
+                handle_control_backedge!(frame, pc, l)
                 pc´ = l
             elseif isa(stmt, GotoIfNot)
                 condx = stmt.cond
@@ -2071,7 +2074,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 # constant conditions
                 if condval === true
                 elseif condval === false
-                    handle_backedge!(frame, pc, l)
+                    handle_control_backedge!(frame, pc, l)
                     pc´ = l
                 else
                     # general case
@@ -2082,7 +2085,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     end
                     newstate_else = stupdate!(states[l], changes_else)
                     if newstate_else !== nothing
-                        handle_backedge!(frame, pc, l)
+                        handle_control_backedge!(frame, pc, l)
                         # add else branch to active IP list
                         if l < frame.pc´´
                             frame.pc´´ = l
