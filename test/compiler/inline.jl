@@ -728,6 +728,36 @@ end
     end
 end
 
+# propagate callsite inlining across kwfunc abstraction
+function someeval(@nospecialize(x); mod=Main)
+    v = Core.eval(mod, :(x = $(esc(x)))) # by default this prevents inlining
+    return v
+end
+let src = code_typed1((Any,)) do x
+        someeval(x; mod=Main)
+    end
+    @test count(iscall((src, Core._expr)), src.code) == 0
+
+    src = code_typed1((Any,)) do x
+        @inline someeval(x; mod=Main)
+    end
+    @test count(iscall((src, Core._expr)), src.code) == 2
+end
+function someisdefined(x::Symbol; mod=Main)
+    v = isdefined(mod, :x)
+    return v
+end
+let src = code_typed1((Symbol,)) do x
+        someisdefined(x; mod=Main)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 1
+
+    src = code_typed1((Symbol,)) do x
+        @noinline someisdefined(x; mod=Main)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
+end
+
 # Issue #42264 - crash on certain union splits
 let f(x) = (x...,)
     # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls

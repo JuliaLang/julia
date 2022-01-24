@@ -39,6 +39,7 @@ mutable struct InferenceState
     stmt_types::Vector{Union{Nothing, VarTable}}
     stmt_edges::Vector{Union{Nothing, Vector{Any}}}
     stmt_info::Vector{Any}
+    kwfunc_inlining::Union{Nothing,Bool}
     # return type
     bestguess #::Type
     # current active instruction pointers
@@ -119,7 +120,7 @@ mutable struct InferenceState
             sp, slottypes, mod, 0,
             IdSet{InferenceState}(), IdSet{InferenceState}(),
             src, get_world_counter(interp), valid_worlds,
-            nargs, s_types, s_edges, stmt_info,
+            nargs, s_types, s_edges, stmt_info, nothing,
             Union{}, ip, 1, n, handler_at,
             ssavalue_uses,
             Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges

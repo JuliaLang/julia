@@ -615,6 +615,8 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
         end
         frame = InferenceState(inf_result, #=cache=#:local, interp)
         frame === nothing && return nothing # this is probably a bad generated function (unsound), but just ignore it
+        caller_kwfunc_inlining = sv.kwfunc_inlining
+        caller_kwfunc_inlining !== nothing && propagate_caller_annotations!(caller_kwfunc_inlining, frame)
         frame.parent = sv
         typeinf(interp, frame) || return nothing
     end
@@ -1404,6 +1406,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             if !isvarargtype(aty)
                 ft = widenconst(aty)
                 if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
+                    flag = get_curr_ssaflag(sv)
+                    if is_stmt_inline(flag)
+                        sv.kwfunc_inlining = true
+                    elseif is_stmt_noinline(flag)
+                        sv.kwfunc_inlining = false
+                    end
                     return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
                 end
             end

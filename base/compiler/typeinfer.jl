@@ -822,6 +822,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             unlock_mi_inference(interp, mi)
             return Any, nothing
         end
+        caller_kwfunc_inlining = caller.kwfunc_inlining
+        caller_kwfunc_inlining !== nothing && propagate_caller_annotations!(caller_kwfunc_inlining, frame)
         if caller.cached || caller.parent !== nothing # don't involve uncached functions in cycle resolution
             frame.parent = caller
         end
@@ -836,6 +838,14 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     frame = frame::InferenceState
     update_valid_age!(frame, caller)
     return frame.bestguess, nothing
+end
+
+function propagate_caller_annotations!(inline::Bool, callee::InferenceState)
+    ssaflags = callee.src.ssaflags
+    for i = 1:length(ssaflags)
+        ssaflags[i] |= inline ? IR_FLAG_INLINE : IR_FLAG_NOINLINE
+        ssaflags[i] &= ~(inline ? IR_FLAG_NOINLINE : IR_FLAG_INLINE)
+    end
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
