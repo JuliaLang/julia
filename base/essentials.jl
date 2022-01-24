@@ -161,11 +161,6 @@ end
 
 function iterate end
 
-if @isdefined(convert)
-else
-    convert(::Type{Any}, @nospecialize x) = x
-end
-
 """
     convert(T, x)
 

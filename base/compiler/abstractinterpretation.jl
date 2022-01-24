@@ -1805,7 +1805,9 @@ function abstract_eval_global(M::Module, s::Symbol)
     if isdefined(M,s) && isconst(M,s)
         return Const(getfield(M,s))
     end
-    return Core.get_binding_type(M, s)
+    ty = ccall(:jl_binding_type, Ptr{Cvoid}, (Any, Any), M, s)
+    ty === C_NULL && return Any
+    return unsafe_pointer_to_objref(ty)
 end
 
 function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)

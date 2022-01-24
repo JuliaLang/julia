@@ -385,10 +385,8 @@ JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var)
         b = using_resolve_binding(m, var, NULL, 0);
     JL_UNLOCK(&m->lock);
     if (b == NULL)
-        return (jl_value_t*)jl_any_type;
+        return NULL;
     jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
-    if (ty == NULL)
-        return (jl_value_t*)jl_any_type;
     return ty;
 }
 
@@ -688,6 +686,8 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
                 return;
             }
         }
+	jl_value_t *old_ty = NULL;
+        jl_atomic_cmpswap_relaxed(&bp->ty, &old_ty, (jl_value_t*)jl_any_type);
     }
     jl_errorf("invalid redefinition of constant %s",
               jl_symbol_name(bp->name));
