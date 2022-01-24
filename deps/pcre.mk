@@ -5,16 +5,16 @@ ifneq ($(USE_BINARYBUILDER_PCRE),1)
 PCRE_CFLAGS := -O3
 PCRE_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 
-$(SRCCACHE)/pcre2-$(PCRE_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://github.com/PhilipHazel/pcre2/archive/refs/tags/pcre2-$(PCRE_VER).tar.gz
+$(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2: | $(SRCCACHE)
+	$(JLDOWNLOAD) $@ https://github.com/PhilipHazel/pcre2/releases/download/pcre2-$(PCRE_VER)/pcre2-$(PCRE_VER).tar.bz2
 
-$(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.gz
+$(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) zxf $(notdir $<)
+	cd $(dir $<) && $(TAR) jxf $(notdir $<)
 	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/pcre2-$(PCRE_VER)/config.sub
 	echo 1 > $@
 
-checksum-pcre: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.gz
+checksum-pcre: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
 $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-apple-silicon-support.patch-applied: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
@@ -28,7 +28,6 @@ $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-nomprotect.patch-applied: $(SRCCACHE)/
 $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-apple-silicon-support.patch-applied $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-nomprotect.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/autogen.sh \
 	$(dir $<)/configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir) CFLAGS="$(CFLAGS) $(PCRE_CFLAGS) -g -O0" LDFLAGS="$(LDFLAGS) $(PCRE_LDFLAGS)"
 	echo 1 > $@
 
@@ -55,10 +54,10 @@ clean-pcre:
 	-$(MAKE) -C $(BUILDDIR)/pcre2-$(PCRE_VER) clean
 
 distclean-pcre:
-	-rm -rf $(SRCCACHE)/pcre2-$(PCRE_VER).tar.gz $(SRCCACHE)/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)
+	-rm -rf $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2 $(SRCCACHE)/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)
 
 
-get-pcre: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.gz
+get-pcre: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 extract-pcre: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
 configure-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured
 compile-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
