@@ -29,7 +29,7 @@ import ._TOP_MOD:     # Base definitions
 import Core.Compiler: # Core.Compiler specific definitions
     isbitstype, isexpr, is_meta_expr_head, println,
     IRCode, IR_FLAG_EFFECT_FREE, widenconst, argextype, singleton_type, fieldcount_noerror,
-    try_compute_field, try_compute_fieldidx, hasintersect, ⊑ as ⊑ₜ, intrinsic_nothrow,
+    try_compute_field, try_compute_fieldidx, hasintersect, ⊑, intrinsic_nothrow,
     array_builtin_common_typecheck, arrayset_typecheck, setfield!_nothrow, alloc_array_ndims
 
 if _TOP_MOD !== Core.Compiler
@@ -184,14 +184,14 @@ AllEscape() = EscapeInfo(true, true, TOP_THROWN_ESCAPE, TOP_ALIAS_INFO, TOP_LIVE
 
 const ⊥, ⊤ = NotAnalyzed(), AllEscape()
 
-# Convenience names for some ⊑ queries
+# Convenience names for some ⊑ₑ queries
 has_no_escape(x::EscapeInfo) = !x.ReturnEscape && isempty(x.ThrownEscape) && 0 ∉ x.Liveness
 has_arg_escape(x::EscapeInfo) = 0 in x.Liveness
 has_return_escape(x::EscapeInfo) = x.ReturnEscape
 has_return_escape(x::EscapeInfo, pc::Int) = x.ReturnEscape && pc in x.Liveness
 has_thrown_escape(x::EscapeInfo) = !isempty(x.ThrownEscape)
 has_thrown_escape(x::EscapeInfo, pc::Int) = pc in x.ThrownEscape
-has_all_escape(x::EscapeInfo) = ⊤ ⊑ x
+has_all_escape(x::EscapeInfo) = ⊤ ⊑ₑ x
 
 # utility lattice constructors
 ignore_argescape(x::EscapeInfo) = EscapeInfo(x; Liveness=delete!(copy(x.Liveness), 0))
@@ -241,11 +241,11 @@ x::EscapeInfo == y::EscapeInfo = begin
 end
 
 """
-    x::EscapeInfo ⊑ y::EscapeInfo -> Bool
+    x::EscapeInfo ⊑ₑ y::EscapeInfo -> Bool
 
 The non-strict partial order over `EscapeInfo`.
 """
-x::EscapeInfo ⊑ y::EscapeInfo = begin
+x::EscapeInfo ⊑ₑ y::EscapeInfo = begin
     # fast pass: better to avoid top comparison
     if y === ⊤
         return true
@@ -324,27 +324,27 @@ x::EscapeInfo ⊑ y::EscapeInfo = begin
 end
 
 """
-    x::EscapeInfo ⊏ y::EscapeInfo -> Bool
+    x::EscapeInfo ⊏ₑ y::EscapeInfo -> Bool
 
 The strict partial order over `EscapeInfo`.
-This is defined as the irreflexive kernel of `⊏`.
+This is defined as the irreflexive kernel of `⊏ₑ`.
 """
-x::EscapeInfo ⊏ y::EscapeInfo = x ⊑ y && !(y ⊑ x)
+x::EscapeInfo ⊏ₑ y::EscapeInfo = x ⊑ₑ y && !(y ⊑ₑ x)
 
 """
-    x::EscapeInfo ⋤ y::EscapeInfo -> Bool
+    x::EscapeInfo ⋤ₑ y::EscapeInfo -> Bool
 
-This order could be used as a slightly more efficient version of the strict order `⊏`,
-where we can safely assume `x ⊑ y` holds.
+This order could be used as a slightly more efficient version of the strict order `⊏ₑ`,
+where we can safely assume `x ⊑ₑ y` holds.
 """
-x::EscapeInfo ⋤ y::EscapeInfo = !(y ⊑ x)
+x::EscapeInfo ⋤ₑ y::EscapeInfo = !(y ⊑ₑ x)
 
 """
-    x::EscapeInfo ⊔ y::EscapeInfo -> EscapeInfo
+    x::EscapeInfo ⊔ₑ y::EscapeInfo -> EscapeInfo
 
 Computes the join of `x` and `y` in the partial order defined by `EscapeInfo`.
 """
-x::EscapeInfo ⊔ y::EscapeInfo = begin
+x::EscapeInfo ⊔ₑ y::EscapeInfo = begin
     # fast pass: better to avoid top join
     if x === ⊤ || y === ⊤
         return ⊤
@@ -756,7 +756,7 @@ function propagate_changes!(estate::EscapeState, changes::Changes)
 end
 
 @inline propagate_escape_change!(estate::EscapeState, change::EscapeChange) =
-    propagate_escape_change!(⊔, estate, change)
+    propagate_escape_change!(⊔ₑ, estate, change)
 
 # allows this to work as lattice join as well as lattice meet
 @inline function propagate_escape_change!(@specialize(op),
@@ -811,7 +811,7 @@ end
         union!(estate.aliasset, xroot, yroot)
         xinfo = estate.escapes[xidx]
         yinfo = estate.escapes[yidx]
-        xyinfo = xinfo ⊔ yinfo
+        xyinfo = xinfo ⊔ₑ yinfo
         estate.escapes[xidx] = xyinfo
         estate.escapes[yidx] = xyinfo
         return true
@@ -1670,9 +1670,9 @@ end
 
 function arraysize_typecheck(@nospecialize(ary), @nospecialize(dim), ir::IRCode)
     aryt = argextype(ary, ir)
-    aryt ⊑ₜ Array || return false
+    aryt ⊑ Array || return false
     dimt = argextype(dim, ir)
-    dimt ⊑ₜ Int || return false
+    dimt ⊑ Int || return false
     return true
 end
 
@@ -1697,11 +1697,11 @@ function escape_array_resize!(boundserror::Bool, ninds::Int,
     length(args) ≥ 6+ninds || return add_fallback_changes!(astate, pc, args)
     ary = args[6]
     aryt = argextype(ary, astate.ir)
-    aryt ⊑ₜ Array || return add_fallback_changes!(astate, pc, args)
+    aryt ⊑ Array || return add_fallback_changes!(astate, pc, args)
     for i in 1:ninds
         ind = args[i+6]
         indt = argextype(ind, astate.ir)
-        indt ⊑ₜ Integer || return add_fallback_changes!(astate, pc, args)
+        indt ⊑ Integer || return add_fallback_changes!(astate, pc, args)
     end
     if boundserror
         # this array resizing can potentially throw `BoundsError`, impose it now
@@ -1729,7 +1729,7 @@ function escape_array_copy!(astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 6 || return add_fallback_changes!(astate, pc, args)
     ary = args[6]
     aryt = argextype(ary, astate.ir)
-    aryt ⊑ₜ Array || return add_fallback_changes!(astate, pc, args)
+    aryt ⊑ Array || return add_fallback_changes!(astate, pc, args)
     if isa(ary, SSAValue) || isa(ary, Argument)
         newary = SSAValue(pc)
         aryinfo = astate.estate[ary]
@@ -1756,9 +1756,9 @@ function array_isassigned_nothrow(args::Vector{Any}, src::IRCode)
     # end
     length(args) ≥ 7 || return false
     arytype = argextype(args[6], src)
-    arytype ⊑ₜ Array || return false
+    arytype ⊑ Array || return false
     idxtype = argextype(args[7], src)
-    idxtype ⊑ₜ Csize_t || return false
+    idxtype ⊑ Csize_t || return false
     return true
 end
 
@@ -1787,7 +1787,7 @@ escape_builtin!(::typeof(arraythaw), astate::AnalysisState, pc::Int, args::Vecto
     is_safe_immutable_array_op(ImmutableArray, astate, args)
 function is_safe_immutable_array_op(@nospecialize(arytype), astate::AnalysisState, args::Vector{Any})
     length(args) == 2 || return false
-    argextype(args[2], astate.ir) ⊑ₜ arytype || return false
+    argextype(args[2], astate.ir) ⊑ arytype || return false
     return true
 end
 
