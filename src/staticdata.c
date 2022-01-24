@@ -221,6 +221,7 @@ static arraylist_t deser_sym;
 static htable_t backref_table;
 static int backref_table_numel;
 static arraylist_t layout_table;
+static arraylist_t object_worklist;
 
 // list of (size_t pos, (void *f)(jl_value_t*)) entries
 // for the serializer to mark values in need of rework by function f
@@ -454,7 +455,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int recur
     else if (jl_typeis(v, jl_uint8_type)) {
         return;
     }
+    arraylist_push(&object_worklist, (void*)((uintptr_t)v | recursive));
+}
 
+static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recursive)
+{
     void **bp = ptrhash_bp(&backref_table, v);
     if (*bp != HT_NOTFOUND) {
         return;
@@ -529,6 +534,29 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int recur
             jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr]);
             jl_serialize_value(s, fld);
         }
+    }
+}
+
+// Do a pre-order traversal of the to-serialize worklist, in the identical order
+// to the calls to jl_serialize_value would occur in a purely recursive
+// implementation, but without potentially running out of stack.
+static void jl_serialize_reachable(jl_serializer_state *s)
+{
+    size_t i, prevlen = 0;
+    while (object_worklist.len) {
+        // reverse!(object_worklist.items, prevlen:end);
+        // prevlen is the index of the first new object
+        for (i = prevlen; i < object_worklist.len; i++) {
+            size_t j = object_worklist.len - i + prevlen - 1;
+            void *tmp = object_worklist.items[i];
+            object_worklist.items[i] = object_worklist.items[j];
+            object_worklist.items[j] = tmp;
+        }
+        prevlen = --object_worklist.len;
+        uintptr_t v = (uintptr_t)object_worklist.items[prevlen];
+        int recursive = v & 1;
+        v &= ~(uintptr_t)1; // untag v
+        jl_serialize_value__(s, (jl_value_t*)v, recursive);
     }
 }
 
@@ -1681,6 +1709,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
     htable_reset(&backref_table, 250000);
     arraylist_new(&reinit_list, 0);
     arraylist_new(&ccallable_list, 0);
+    arraylist_new(&object_worklist, 0);
     backref_table_numel = 0;
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
     ios_mem(&sysimg,     1000000);
@@ -1729,6 +1758,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
             jl_value_t *tag = *tags[i];
             jl_serialize_value(&s, tag);
         }
+        jl_serialize_reachable(&s);
         // step 1.1: check for values only found in the generated code
         arraylist_t typenames;
         arraylist_new(&typenames, 0);
@@ -1743,6 +1773,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
             jl_scan_type_cache_gv(&s, tn->cache);
             jl_scan_type_cache_gv(&s, tn->linearcache);
         }
+        jl_serialize_reachable(&s);
         // step 1.2: prune (garbage collect) some special weak references from
         // built-in type caches
         for (i = 0; i < typenames.len; i++) {
@@ -1815,6 +1846,8 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
         jl_finalize_serializer(&s, &ccallable_list);
     }
 
+    assert(object_worklist.len == 0);
+    arraylist_free(&object_worklist);
     arraylist_free(&layout_table);
     arraylist_free(&reinit_list);
     arraylist_free(&ccallable_list);
