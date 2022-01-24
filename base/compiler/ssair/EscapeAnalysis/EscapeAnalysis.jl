@@ -449,6 +449,8 @@ end
 
 const AliasSet = IntDisjointSet{Int}
 
+const ArrayInfo = IdDict{Int,Vector{Int}}
+
 """
     estate::EscapeState
 
@@ -459,12 +461,13 @@ struct EscapeState
     escapes::Vector{EscapeInfo}
     aliasset::AliasSet
     nargs::Int
+    arrayinfo::Union{Nothing,ArrayInfo} # TODO make this aware of aliasing of nested arrays
 end
-function EscapeState(nargs::Int, nstmts::Int)
+function EscapeState(nargs::Int, nstmts::Int, arrayinfo::Union{Nothing,ArrayInfo})
     escapes = EscapeInfo[
         1 ≤ i ≤ nargs ? ArgEscape() : ⊥ for i in 1:(nargs+nstmts)]
     aliaset = AliasSet(nargs+nstmts)
-    return EscapeState(escapes, aliaset, nargs)
+    return EscapeState(escapes, aliaset, nargs, arrayinfo)
 end
 function getindex(estate::EscapeState, @nospecialize(x))
     xidx = iridx(x, estate)
@@ -618,13 +621,10 @@ struct LivenessChange <: Change
 end
 const Changes = Vector{Change}
 
-const ArrayInfo = IdDict{Int,Vector{Int}}
-
 struct AnalysisState
     ir::IRCode
     estate::EscapeState
     changes::Changes
-    arrayinfo::Union{Nothing,ArrayInfo} # TODO make this aware of aliasing of nested arrays
 end
 
 function getinst(ir::IRCode, idx::Int)
@@ -646,10 +646,10 @@ function analyze_escapes(ir::IRCode, nargs::Int)
     stmts = ir.stmts
     nstmts = length(stmts) + length(ir.new_nodes.stmts)
 
-    estate = EscapeState(nargs, nstmts)
-    changes = Changes() # keeps changes that happen at current statement
     tryregions, arrayinfo = compute_frameinfo(ir)
-    astate = AnalysisState(ir, estate, changes, arrayinfo)
+    estate = EscapeState(nargs, nstmts, arrayinfo)
+    changes = Changes() # keeps changes that happen at current statement
+    astate = AnalysisState(ir, estate, changes)
 
     local debug_itr_counter = 0
     while true
@@ -1628,7 +1628,7 @@ end
 function array_nd_index(astate::AnalysisState, @nospecialize(ary), args::Vector{Any}, nidxs::Int = length(args))
     isa(ary, SSAValue) || return nothing
     aryid = ary.id
-    arrayinfo = astate.arrayinfo
+    arrayinfo = astate.estate.arrayinfo
     isa(arrayinfo, ArrayInfo) || return nothing
     haskey(arrayinfo, aryid) || return nothing
     dims = arrayinfo[aryid]
