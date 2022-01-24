@@ -1025,3 +1025,50 @@ function _return_type(interp::AbstractInterpreter, t::DataType)
     end
     return rt
 end
+
+function infer_effects(@nospecialize(f), @nospecialize(t))
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), Any[_infer_effects, f, t, world], 4)
+end
+
+_infer_effects(@nospecialize(f), @nospecialize(t), world) = _infer_effects(NativeInterpreter(world), f, t)
+
+function _infer_effects(interp::AbstractInterpreter, @nospecialize(f), @nospecialize(t))
+    if isa(f, Builtin)
+        argtypes = Any[t.parameters...]
+        rt = builtin_tfunction(interp, f, argtypes, nothing)
+        return builtin_effect(interp, f, argtypes, widenconst(rt))
+    else
+        eff = nothing
+        for match in _methods(f, t, -1, get_world_counter(interp))::Vector
+            match = match::MethodMatch
+            ans = _infer_effects(interp, match.method, match.spec_types, match.sparams)
+            eff = (eff === nothing ? ans : tristate_merge(eff::Effects, ans))::Effects
+            eff == Effects() && return eff
+        end
+        eff === nothing && return Effects()
+        return eff
+    end
+end
+
+# like `typeinf_type` but for effects
+function _infer_effects(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector)
+    if contains_is(unwrap_unionall(atype).parameters, Union{})
+        return Effects()
+    end
+    mi = specialize_method(method, atype, sparams)::MethodInstance
+    for i = 1:2 # test-and-lock-and-test
+        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
+        code = get(code_cache(interp), mi, nothing)
+        if code isa CodeInstance
+            # see if this CodeInstance already exists in the cache
+            i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
+            return ipo_effects(code)
+        end
+    end
+    result = InferenceResult(mi)
+    typeinf(interp, result, :global)
+    ccall(:jl_typeinf_end, Cvoid, ())
+    result.result isa InferenceState && return Effects()
+    return result.ipo_effects
+end

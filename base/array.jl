@@ -775,6 +775,12 @@ else
 end
 
 function collect(itr::Generator)
+    ans = _maybe_parallelize_collect(itr)
+    ans === nothing || return something(ans) # Note: `@something` not available yet here
+    return _serial_collect(itr)
+end
+
+function _serial_collect(itr::Generator)
     isz = IteratorSize(itr.iter)
     et = @default_eltype(itr)
     if isa(isz, SizeUnknown)

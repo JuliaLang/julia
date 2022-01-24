@@ -2899,7 +2899,12 @@ function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
 end
 
 # map on collections
-map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
+function map(f, A::AbstractArray)
+    iter = Generator(f, A)
+    ans = _maybe_parallelize_collect(iter)
+    ans === nothing || return something(ans)
+    return collect_similar(A, iter)
+end
 
 mapany(f, A::AbstractArray) = map!(f, Vector{Any}(undef, length(A)), A)
 mapany(f, itr) = Any[f(x) for x in itr]

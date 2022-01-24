@@ -274,6 +274,8 @@ include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
 
+include("parallelism.jl")
+
 include("env.jl")
 
 # BinaryPlatforms, used by Artifacts
