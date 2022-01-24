@@ -694,9 +694,7 @@ function analyze_escapes(ir::IRCode, nargs::Int)
                        head === :gc_preserve_end      # `GC.@preserve` expressions themselves won't be used anywhere
                     continue
                 else
-                    for x in stmt.args
-                        add_escape_change!(astate, x, ⊤)
-                    end
+                    add_conservative_changes!(astate, pc, stmt.args)
                 end
             elseif isa(stmt, ReturnNode)
                 if isdefined(stmt, :val)
@@ -1040,7 +1038,7 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     linfo = first(args)::MethodInstance
     cache = get(GLOBAL_ESCAPE_CACHE, linfo, nothing)
     if cache === nothing
-        add_fallback_changes!(astate, pc, args, 2)
+        add_conservative_changes!(astate, pc, args, 2)
     else
         argescapes = argescapes_from_cache(cache)
         ret = SSAValue(pc)
@@ -1190,15 +1188,22 @@ function add_fallback_changes!(astate::AnalysisState, pc::Int, args::Vector{Any}
     end
 end
 
+function add_conservative_changes!(astate::AnalysisState, pc::Int, args::Vector{Any},
+    first_idx::Int = 1, last_idx::Int = length(args))
+    for i in first_idx:last_idx
+        add_escape_change!(astate, args[i], ⊤)
+    end
+    add_escape_change!(astate, SSAValue(pc), ⊤) # it may return GlobalRef etc.
+    return nothing
+end
+
 # escape every argument `(args[6:length(args[3])])` and the name `args[1]`
 # TODO: we can apply a similar strategy like builtin calls to specialize some foreigncalls
 function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     nargs = length(args)
     if nargs < 6
         # invalid foreigncall, just escape everything
-        for i = 1:length(args)
-            add_escape_change!(astate, args[i], ⊤)
-        end
+        add_conservative_changes!(astate, pc, args)
         return
     end
     argtypes = args[3]::SimpleVector
@@ -1271,10 +1276,7 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
     if result === missing
         # if this call hasn't been handled by any of pre-defined handlers,
         # we escape this call conservatively
-        for i in 2:length(args)
-            add_escape_change!(astate, args[i], ⊤)
-        end
-        add_escape_change!(astate, SSAValue(pc), ⊤)
+        add_conservative_changes!(astate, pc, args)
         return
     elseif result === true
         add_liveness_changes!(astate, pc, args, 2)
