@@ -1490,8 +1490,6 @@ unquoted(ex::Expr)       = ex.args[1]
 function printstyled end
 function with_output_color end
 
-const indent_width = 4
-
 is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
 
 emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
