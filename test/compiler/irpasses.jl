@@ -855,3 +855,22 @@ let src = @eval Module() begin
     end
     @test count(iscall((src, Core.tuple)), src.code) == 0
 end
+
+# Test that cfg_simplify can converging control flow through empty blocks
+function foo_cfg_empty(b)
+    if b
+        @goto x
+    end
+    @label x
+    return 1
+end
+let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
+    ir = Core.Compiler.inflate_ir(ci)
+    @test length(ir.stmts) == 3
+    @test length(ir.cfg.blocks) == 3
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) <= 2
+    @test isa(ir.stmts[length(ir.stmts)][:inst], ReturnNode)
+end

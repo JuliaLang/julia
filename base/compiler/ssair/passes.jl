@@ -1327,10 +1327,45 @@ function type_lift_pass!(ir::IRCode)
     ir
 end
 
+function is_bb_empty(ir::IRCode, bb::BasicBlock)
+    isempty(bb.stmts) && return true
+    if length(bb.stmts) == 1
+        stmt = ir[SSAValue(first(bb.stmts))][:inst]
+        return stmt === nothing || isa(stmt, GotoNode)
+    end
+    return false
+end
+
+# TODO: This is terrible, we should change the IR for GotoIfNot to gain an else case
+function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
+    # If the block we're going to is the same as the fallthrow, it's always legal to drop
+    # the block.
+    length(bb.stmts) == 0 && return true
+    if length(bb.stmts) == 1
+        stmt = ir[SSAValue(first(bb.stmts))][:inst]
+        stmt === nothing && return true
+        ((stmt::GotoNode).label == bbidx + 1) && return true
+    end
+    # Otherwise make sure we're not the fallthrough case of any predecessor
+    for pred in bb.preds
+        if pred == bbidx - 1
+            terminator = ir[SSAValue(first(bb.stmts)-1)][:inst]
+            if isa(terminator, GotoIfNot)
+                if terminator.dest != bbidx
+                    return false
+                end
+            end
+            break
+        end
+    end
+    return true
+end
+
 function cfg_simplify!(ir::IRCode)
     bbs = ir.cfg.blocks
     merge_into = zeros(Int, length(bbs))
     merged_succ = zeros(Int, length(bbs))
+    dropped_bbs = Vector{Int}() # sorted
     function follow_merge_into(idx::Int)
         while merge_into[idx] != 0
             idx = merge_into[idx]
@@ -1355,6 +1390,27 @@ function cfg_simplify!(ir::IRCode)
                     merge_into[succ] = idx
                     merged_succ[idx] = succ
                 end
+            elseif is_bb_empty(ir, bb) && is_legal_bb_drop(ir, idx, bb)
+                # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
+                # reference our predecessors.
+                found_interference = false
+                for idx in bbs[succ].stmts
+                    stmt = ir[SSAValue(idx)][:inst]
+                    stmt === nothing && continue
+                    isa(stmt, PhiNode) || break
+                    for edge in stmt.edges
+                        for pred in bb.preds
+                            if pred == edge
+                                found_interference = true
+                                @goto done
+                            end
+                        end
+                    end
+                end
+                @label done
+                if !found_interference
+                    push!(dropped_bbs, idx)
+                end
             end
         end
     end
@@ -1370,6 +1426,10 @@ function cfg_simplify!(ir::IRCode)
         # Drop blocks with no predecessors
         if i != 1 && length(ir.cfg.blocks[i].preds) == 0
             bb_rename_succ[i] = -1
+        end
+        # Mark dropped blocks for fixup
+        if !isempty(searchsorted(dropped_bbs, i))
+            bb_rename_succ[i] = -bbs[i].succs[1]
         end
 
         bb_rename_succ[i] != 0 && continue
@@ -1387,6 +1447,30 @@ function cfg_simplify!(ir::IRCode)
                 break
             end
             curr += 1
+            if !isempty(searchsorted(dropped_bbs, curr))
+                break
+            end
+        end
+    end
+
+    # Compute map from new to old blocks
+    result_bbs = Int[findfirst(j->i==j, bb_rename_succ) for i = 1:max_bb_num-1]
+
+    # Fixup dropped BBs
+    resolved_all = false
+    while !resolved_all
+        # TODO: There are faster ways to do this
+        resolved_all = true
+        for bb in dropped_bbs
+            obb = bb_rename_succ[bb]
+            if obb < -1
+                nsucc = bb_rename_succ[-obb]
+                if nsucc == -1
+                    nsucc = -merge_into[-obb]
+                end
+                bb_rename_succ[bb] = nsucc
+                resolved_all = false
+            end
         end
     end
 
@@ -1399,12 +1483,13 @@ function cfg_simplify!(ir::IRCode)
             bb_rename_pred[i] = -1
             continue
         end
-        bbnum = follow_merge_into(i)
+        pred = i
+        while pred !== 1 && !isempty(searchsorted(dropped_bbs, pred))
+            pred = bbs[pred].preds[1]
+        end
+        bbnum = follow_merge_into(pred)
         bb_rename_pred[i] = bb_rename_succ[bbnum]
     end
-
-    # Compute map from new to old blocks
-    result_bbs = Int[findfirst(j->i==j, bb_rename_succ) for i = 1:max_bb_num-1]
 
     # Compute new block lengths
     result_bbs_lengths = zeros(Int, max_bb_num-1)
@@ -1447,6 +1532,25 @@ function cfg_simplify!(ir::IRCode)
                        compute_preds(i),
                        compute_succs(i))
             for i = 1:length(result_bbs)]
+    end
+
+    # Fixup terminators for any blocks that would have caused double edges
+    for (bbidx, (new_bb, old_bb)) in enumerate(zip(cresult_bbs, result_bbs))
+        @assert length(new_bb.succs) <= 2
+        length(new_bb.succs) <= 1 && continue
+        if new_bb.succs[1] == new_bb.succs[2]
+            terminator = ir[SSAValue(last(bbs[old_bb].stmts))]
+            @assert isa(terminator[:inst], GotoIfNot)
+            terminator[:inst] = GotoNode(terminator[:inst].dest)
+            pop!(new_bb.succs)
+            new_succ = cresult_bbs[new_bb.succs[1]]
+            for (i, nsp) in enumerate(new_succ.preds)
+                if nsp == bbidx
+                    deleteat!(new_succ.preds, i)
+                    break
+                end
+            end
+        end
     end
 
     compact = IncrementalCompact(ir, true)
