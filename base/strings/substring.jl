@@ -216,8 +216,12 @@ function string(a::Union{Char, String, SubString{String}, Symbol}...)
     for v in a
         if v isa Char
             n += ncodeunits(v)
-        else
+        elseif v isa String
             n += sizeof(v)
+        elseif v isa SubString{String}
+            n += sizeof(v)
+        else
+            n += sizeof(v::Symbol)
         end
     end
     out = _string_n(n)
