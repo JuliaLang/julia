@@ -147,6 +147,12 @@ For example, an illustration of the different scheduling strategies where `busyw
 is a non-yielding timed loop that runs for a number of seconds.
 
 ```julia-repl
+julia> function busywait(seconds)
+            tstart = Base.time()
+            while Base.time() - tstart < seconds
+            end
+        end
+
 julia> @time begin
             Threads.@spawn busywait(5)
             Threads.@threads :static for i in 1:Threads.nthreads()
