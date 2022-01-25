@@ -732,6 +732,46 @@ end
 @test _atthreads_static_schedule() == [1:nthreads();]
 @test_throws TaskFailedException @threads for i = 1:1; _atthreads_static_schedule(); end
 
+# dynamic schedule
+function _atthreads_dynamic_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :dynamic for _ = 1:nthreads()
+        Threads.atomic_add!(inc, 1)
+    end
+    return inc
+end
+inc = _atthreads_dynamic_schedule()
+@test inc[] == nthreads()
+
+# nested dynamic schedule
+function _atthreads_dynamic_dynamic_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :dynamic for _ = 1:nthreads()
+        Threads.@threads :dynamic for _ = 1:nthreads()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+
+    return inc
+end
+inc = _atthreads_dynamic_dynamic_schedule()
+@test inc[] == nthreads() * nthreads()
+
+function _atthreads_static_dynamic_schedule()
+    ids = zeros(Int, nthreads())
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :static for i = 1:nthreads()
+        ids[i] = Threads.threadid()
+        Threads.@threads :dynamic for _ = 1:nthreads()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return ids, inc
+end
+ids, inc = _atthreads_static_dynamic_schedule()
+@test ids == [1:nthreads();]
+@test inc[] == nthreads() * nthreads()
+
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
 catch ex

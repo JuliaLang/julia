@@ -22,14 +22,14 @@ See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
-function threading_run(func)
-    ccall(:jl_enter_threaded_region, Cvoid, ())
+function threading_run(func, static)
+    static && ccall(:jl_enter_threaded_region, Cvoid, ())
     n = nthreads()
     tasks = Vector{Task}(undef, n)
     for i = 1:n
         t = Task(func)
-        t.sticky = true
-        ccall(:jl_set_task_tid, Cint, (Any, Cint), t, i-1)
+        t.sticky = static
+        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, i-1)
         tasks[i] = t
         schedule(t)
     end
@@ -38,7 +38,7 @@ function threading_run(func)
             wait(tasks[i])
         end
     finally
-        ccall(:jl_exit_threaded_region, Cvoid, ())
+        static && ccall(:jl_exit_threaded_region, Cvoid, ())
     end
 end
 
@@ -86,15 +86,17 @@ function _threadsfor(iter, lbody, schedule)
             end
         end
         end
-        if threadid() != 1 || ccall(:jl_in_threaded_region, Cint, ()) != 0
+        if $(schedule === :dynamic)
+            threading_run(threadsfor_fun, false)
+        elseif threadid() != 1 || ccall(:jl_in_threaded_region, Cint, ()) != 0
             $(if schedule === :static
               :(error("`@threads :static` can only be used from thread 1 and not nested"))
               else
-              # only use threads when called from thread 1, outside @threads
+              # only use threads when called from thread 1, outside @threads :static
               :(Base.invokelatest(threadsfor_fun, true))
               end)
         else
-            threading_run(threadsfor_fun)
+            threading_run(threadsfor_fun, true)
         end
         nothing
     end
@@ -110,14 +112,47 @@ A barrier is placed at the end of the loop which waits for all tasks to finish
 execution.
 
 The `schedule` argument can be used to request a particular scheduling policy.
-The only currently supported value is `:static`, which creates one task per thread
-and divides the iterations equally among them. Specifying `:static` is an error
-if used from inside another `@threads` loop or from a thread other than 1.
+Options are:
+- `:static` is the default schedule which creates one task per thread and divides the
+            iterations equally among them, assigning each task specifically to each thread.
+            Specifying `:static` is an error if used from inside another `@threads` loop
+            or from a thread other than 1.
+- `:dynamic` is like `:static` except the tasks are assigned to threads dynamically,
+            allowing more flexible scheduling if other tasks are active on other threads.
+            Specifying `:dynamic` is allowed from inside another `@threads` loop and from
+            threads other than 1.
 
 The default schedule (used when no `schedule` argument is present) is subject to change.
 
+For example, here an illustration of the different scheduling strategies, where `busywait`
+is a non-yielding timed loop that runs for a number of seconds.
+
+```julia-repl
+julia> @time begin
+            Threads.@spawn busywait(5)
+            Threads.@threads :static for i in 1:Threads.nthreads()
+                busywait(1)
+            end
+        end
+6.003001 seconds (16.33 k allocations: 899.255 KiB, 0.25% compilation time)
+
+julia> @time begin
+            Threads.@spawn busywait(5)
+            Threads.@threads :dynamic for i in 1:Threads.nthreads()
+                busywait(1)
+            end
+        end
+2.012056 seconds (16.05 k allocations: 883.919 KiB, 0.66% compilation time)
+```
+
+The `:dynamic` example takes 2 seconds because one of the non-occupied threads is able
+to run two of the 1-second iterations to complete the for loop.
+
 !!! compat "Julia 1.5"
     The `schedule` argument is available as of Julia 1.5.
+
+!!! compat "Julia 1.8"
+    The `:dynamic` option for the `schedule` argument is available as of Julia 1.8.
 
 See also: [`@spawn`](@ref Threads.@spawn), [`nthreads()`](@ref Threads.nthreads),
 [`threadid()`](@ref Threads.threadid), `pmap` in [`Distributed`](@ref man-distributed),
@@ -133,7 +168,7 @@ macro threads(args...)
             # for now only allow quoted symbols
             sched = nothing
         end
-        if sched !== :static
+        if sched !== :static && sched !== :dynamic
             throw(ArgumentError("unsupported schedule argument in @threads"))
         end
     elseif na == 1
