@@ -1196,19 +1196,19 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     return fl;
 }
 
-// called into by LLVM-generated code
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc_outer(jl_ptls_t ptls, int pool_offset,
+// instrumented version of jl_gc_pool_alloc_inner called into by LLVM-generated code
+JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
                                           int osize)
 {
-    jl_value_t *val = jl_gc_pool_alloc(ptls, pool_offset, osize);
+    jl_value_t *val = jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
 
     maybe_record_alloc_to_profile(val, osize, jl_gc_unknown_type_tag);
     return val;
 }
 
 // Size includes the tag and the tag is not cleared!!
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
-                                          int osize)
+jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset,
+                                   int osize)
 {
     // Use the pool offset instead of the pool address as the argument
     // to workaround a llvm bug.
