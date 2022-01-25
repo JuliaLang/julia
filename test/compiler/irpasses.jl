@@ -841,17 +841,17 @@ end
 
 # Test that adce_pass! can drop phi node uses that can be concluded unused
 # from PiNode analysis.
-let
-    @noinline mkfloat() = rand(Float64)
-    @noinline use(a::Float64) = ccall(:jl_, Cvoid, (Any,), a)
-    dispatch(a::Float64) = use(a)
-    dispatch(a::Tuple) = nothing
-    function foo(b)
-        a = mkfloat()
-        a = b ? (a, 2.0) : a
-        dispatch(a)
+let src = @eval Module() begin
+        @noinline mkfloat() = rand(Float64)
+        @noinline use(a::Float64) = ccall(:jl_, Cvoid, (Any,), a)
+        dispatch(a::Float64) = use(a)
+        dispatch(a::Tuple) = nothing
+        function foo(b)
+            a = mkfloat()
+            a = b ? (a, 2.0) : a
+            dispatch(a)
+        end
+        code_typed(foo, Tuple{Bool})[1][1]
     end
-    let src = code_typed(foo, Tuple{Bool})[1][1]
-        @test count(iscall((src, Core.tuple)), src.code) == 0
-    end
+    @test count(iscall((src, Core.tuple)), src.code) == 0
 end
