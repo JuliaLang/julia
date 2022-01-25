@@ -25,7 +25,7 @@ import InteractiveUtils: gen_call_with_extracted_types_and_kwargs
 Evaluates the arguments to the function call, determines its types, and then calls
 [`code_escapes`](@ref) on the resulting expression.
 As with `@code_typed` and its family, any of `code_escapes` keyword arguments can be given
-as the optional arguments like `@code_escapes interp=myinterp myfunc(myargs...)`.
+as the optional arguments like `@code_escapes debuginfo=:source myfunc(myargs...)`.
 """
 macro code_escapes(ex0...)
     return gen_call_with_extracted_types_and_kwargs(__module__, :code_escapes, ex0)
@@ -33,8 +33,8 @@ end
 end # @static if EA_AS_PKG
 
 """
-    code_escapes(f, argtypes=Tuple{}; [world], [interp]) -> result::EscapeResult
-    code_escapes(tt::Type{<:Tuple}; [world], [interp]) -> result::EscapeResult
+    code_escapes(f, argtypes=Tuple{}; [world], [interp], [debuginfo]) -> result::EscapeResult
+    code_escapes(tt::Type{<:Tuple}; [world], [interp], [debuginfo]) -> result::EscapeResult
 
 Runs the escape analysis on optimized IR of a generic function call with the given type signature.
 Note that the escape analysis runs after inlining, but before any other optimizations.
@@ -66,44 +66,44 @@ julia> result = code_escapes((String,String,String,String)) do s1, s2, s3, s4
            return s2, s3, s4
        end
 #1(X _2::String, ↑ _3::String, ↑ _4::String, ✓ _5::String) in Main at REPL[6]:2
-2  X  1 ── %1  = %new(Base.RefValue{String}, _2)::Base.RefValue{String}            │╻╷╷ Ref
-3  *′ │    %2  = %new(Base.RefValue{String}, _3)::Base.RefValue{String}            │╻╷╷ Ref
-4  ✓′ └─── %3  = %new(SafeRef{String}, _4)::SafeRef{String}                        │╻╷  SafeRef
-5  ◌  2 ── %4  = \$(Expr(:enter, #8))                                               │
-   ✓′ │    %5  = ϒ (%3)::SafeRef{String}                                           │
-   *′ │    %6  = ϒ (%2)::Base.RefValue{String}                                     │
-   ✓  └─── %7  = ϒ (_5)::String                                                    │
-6  ◌  3 ── %8  = Base.isdefined(%1, :x)::Bool                                      │╻╷  get′
-   ◌  └───       goto #5 if not %8                                                 ││
-   X  4 ──       Base.getfield(%1, :x)::String                                     ││╻   getindex
-   ◌  └───       goto #6                                                           ││
-   ◌  5 ──       Main.throw(%1)::Union{}                                           ││
-   ◌  └───       unreachable                                                       ││
-7  ◌  6 ──       nothing::typeof(Core.sizeof)                                      │╻   sizeof
-   ◌  │          nothing::Int64                                                    ││
-   ◌  └───       \$(Expr(:leave, 1))                                                │
-   ◌  7 ──       goto #10                                                          │
-   ✓′ 8 ── %18 = φᶜ (%5)::SafeRef{String}                                          │
-   *′ │    %19 = φᶜ (%6)::Base.RefValue{String}                                    │
-   ✓  │    %20 = φᶜ (%7)::String                                                   │
-   ◌  └───       \$(Expr(:leave, 1))                                                │
-   X  9 ── %22 = \$(Expr(:the_exception))::Any                                      │
-9  ◌  │          (Main.g = %22)::Any                                               │
-   ◌  └───       \$(Expr(:pop_exception, :(%4)))::Any                               │
-11 ✓′ 10 ┄ %25 = φ (#7 => %3, #9 => %18)::SafeRef{String}                          │
-   *′ │    %26 = φ (#7 => %2, #9 => %19)::Base.RefValue{String}                    │
-   ✓  │    %27 = φ (#7 => _5, #9 => %20)::String                                   │
-   ◌  │    %28 = Base.isdefined(%26, :x)::Bool                                     ││╻   isassigned
-   ◌  └───       goto #12 if not %28                                               ││
-   ↑  11 ─ %30 = Base.getfield(%26, :x)::String                                    │││╻   getproperty
-   ◌  └───       goto #13                                                          ││
-   ◌  12 ─       Main.throw(%26)::Union{}                                          ││
-   ◌  └───       unreachable                                                       ││
-12 ↑  13 ─ %34 = Base.getfield(%25, :x)::String                                    │╻╷╷ get′
-13 ◌  │    %35 = Core.sizeof::typeof(Core.sizeof)                                  │╻   sizeof
-   ◌  │    %36 = (%35)(%27)::Int64                                                 ││
-14 ↑  │    %37 = Core.tuple(%30, %34, %36)::Tuple{String, String, Int64}           │
-   ◌  └───       return %37                                                        │
+X  1 ── %1  = %new(Base.RefValue{String}, _2)::Base.RefValue{String}
+*′ │    %2  = %new(Base.RefValue{String}, _3)::Base.RefValue{String}
+✓′ └─── %3  = %new(SafeRef{String}, _4)::SafeRef{String}
+◌  2 ── %4  = \$(Expr(:enter, #8))
+✓′ │    %5  = ϒ (%3)::SafeRef{String}
+*′ │    %6  = ϒ (%2)::Base.RefValue{String}
+✓  └─── %7  = ϒ (_5)::String
+◌  3 ── %8  = Base.isdefined(%1, :x)::Bool
+◌  └───       goto #5 if not %8
+X  4 ──       Base.getfield(%1, :x)::String
+◌  └───       goto #6
+◌  5 ──       Main.throw(%1)::Union{}
+◌  └───       unreachable
+◌  6 ──       nothing::typeof(Core.sizeof)
+◌  │          nothing::Int64
+◌  └───       \$(Expr(:leave, 1))
+◌  7 ──       goto #10
+✓′ 8 ── %18 = φᶜ (%5)::SafeRef{String}
+*′ │    %19 = φᶜ (%6)::Base.RefValue{String}
+✓  │    %20 = φᶜ (%7)::String
+◌  └───       \$(Expr(:leave, 1))
+X  9 ── %22 = \$(Expr(:the_exception))::Any
+◌  │          (Main.g = %22)::Any
+◌  └───       \$(Expr(:pop_exception, :(%4)))::Any
+✓′ 10 ┄ %25 = φ (#7 => %3, #9 => %18)::SafeRef{String}
+*′ │    %26 = φ (#7 => %2, #9 => %19)::Base.RefValue{String}
+✓  │    %27 = φ (#7 => _5, #9 => %20)::String
+◌  │    %28 = Base.isdefined(%26, :x)::Bool
+◌  └───       goto #12 if not %28
+↑  11 ─ %30 = Base.getfield(%26, :x)::String
+◌  └───       goto #13
+◌  12 ─       Main.throw(%26)::Union{}
+◌  └───       unreachable
+↑  13 ─ %34 = Base.getfield(%25, :x)::String
+◌  │    %35 = Core.sizeof::typeof(Core.sizeof)
+◌  │    %36 = (%35)(%27)::Int64
+↑  │    %37 = Core.tuple(%30, %34, %36)::Tuple{String, String, Int64}
+◌  └───       return %37
 ```
 
 The symbols in the side of each call argument and SSA statements represents the following meaning:
@@ -125,11 +125,12 @@ NoEscape′
 """
 function code_escapes(@nospecialize(args...);
                       world = get_world_counter(),
-                      interp = Core.Compiler.NativeInterpreter(world))
+                      interp = Core.Compiler.NativeInterpreter(world),
+                      debuginfo = :none)
     interp = EscapeAnalyzer(interp)
     results = code_typed(args...; optimize=true, world, interp)
     isone(length(results)) || throw(ArgumentError("`code_escapes` only supports single analysis result"))
-    return EscapeResult(interp.ir, interp.state, interp.linfo)
+    return EscapeResult(interp.ir, interp.state, interp.linfo, debuginfo===:source)
 end
 
 # AbstractInterpreter
@@ -342,10 +343,14 @@ struct EscapeResult
     ir::IRCode
     state::EscapeState
     linfo::Union{Nothing,MethodInstance}
-    EscapeResult(ir::IRCode, state::EscapeState, linfo::Union{Nothing,MethodInstance} = nothing) =
-        new(ir, state, linfo)
+    source::Bool
+    function EscapeResult(ir::IRCode, state::EscapeState,
+        linfo::Union{Nothing,MethodInstance} = nothing,
+        source::Bool=false)
+        return new(ir, state, linfo, source)
+    end
 end
-Base.show(io::IO, result::EscapeResult) = print_with_info(io, result.ir, result.state, result.linfo)
+Base.show(io::IO, result::EscapeResult) = print_with_info(io, result)
 @eval Base.iterate(res::EscapeResult, state=1) =
     return state > $(fieldcount(EscapeResult)) ? nothing : (getfield(res, state), state+1)
 
@@ -356,8 +361,7 @@ Base.show(io::IO, result::EscapeResult) = print_with_info(io, result.ir, result.
 end
 
 # adapted from https://github.com/JuliaDebug/LoweredCodeUtils.jl/blob/4612349432447e868cf9285f647108f43bd0a11c/src/codeedges.jl#L881-L897
-function print_with_info(io::IO,
-    ir::IRCode, state::EscapeState, linfo::Union{Nothing,MethodInstance})
+function print_with_info(io::IO, (; ir, state, linfo, source)::EscapeResult)
     # print escape information on SSA values
     function preprint(io::IO)
         ft = ir.argtypes[1]
@@ -389,17 +393,20 @@ function print_with_info(io::IO,
         printstyled(io, rpad(c, 2), ' '; color)
     end
 
-    print_with_info(preprint, (args...)->nothing, io, ir)
+    print_with_info(preprint, (args...)->nothing, io, ir, source)
 end
 
-function print_with_info(preprint, postprint, io::IO, ir::IRCode)
+function print_with_info(preprint, postprint, io::IO, ir::IRCode, source::Bool)
     io = IOContext(io, :displaysize=>displaysize(io))
     used = Base.IRShow.stmts_used(io, ir)
-    # line_info_preprinter = Base.IRShow.lineinfo_disabled
-    line_info_preprinter = function (io::IO, indent::String, idx::Int)
-        r = Base.IRShow.inline_linfo_printer(ir)(io, indent, idx)
-        idx ≠ 0 && preprint(io, idx)
-        return r
+    if source
+        line_info_preprinter = function (io::IO, indent::String, idx::Int)
+            r = Base.IRShow.inline_linfo_printer(ir)(io, indent, idx)
+            idx ≠ 0 && preprint(io, idx)
+            return r
+        end
+    else
+        line_info_preprinter = Base.IRShow.lineinfo_disabled
     end
     line_info_postprinter = Base.IRShow.default_expr_type_printer
     preprint(io)

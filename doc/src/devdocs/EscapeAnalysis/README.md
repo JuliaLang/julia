@@ -55,8 +55,8 @@ julia> code_escapes((String,)) do s
            return obj
        end
 #1(↑ _2::String) in Main at REPL[2]:2
-2 ↑  1 ─ %1 = %new(Base.RefValue{String}, _2)::Base.RefValue{String}                │╻╷╷ Ref
-3 ◌  └──      return %1                                                             │
+↑  1 ─ %1 = %new(Base.RefValue{String}, _2)::Base.RefValue{String}
+◌  └──      return %1
 ```
 
 The key observation here is that this backward analysis allows escape information to flow
@@ -73,13 +73,13 @@ julia> code_escapes((Bool, String, String)) do cnd, s, t
            end
            return obj
        end
-  #3(↑ _2::Bool, ↑ _3::String, ↑ _4::String) in Main at REPL[3]:2
-2 ◌  1 ─      goto #3 if not _2                                                     │
-3 ↑  2 ─ %2 = %new(Base.RefValue{String}, _3)::Base.RefValue{String}                │╻╷╷ Ref
-  ◌  └──      goto #4                                                               │
-5 ↑  3 ─ %4 = %new(Base.RefValue{String}, _4)::Base.RefValue{String}                │╻╷╷ Ref
-7 ↑  4 ┄ %5 = φ (#2 => %2, #3 => %4)::Base.RefValue{String}                         │
-  ◌  └──      return %5                                                             │
+#3(✓ _2::Bool, ↑ _3::String, ↑ _4::String) in Main at REPL[3]:2
+◌  1 ─      goto #3 if not _2
+↑  2 ─ %2 = %new(Base.RefValue{String}, _3)::Base.RefValue{String}
+◌  └──      goto #4
+↑  3 ─ %4 = %new(Base.RefValue{String}, _4)::Base.RefValue{String}
+↑  4 ┄ %5 = φ (#2 => %2, #3 => %4)::Base.RefValue{String}
+◌  └──      return %5
 ```
 
 ### [Alias Analysis](@id EA-Alias-Analysis)
@@ -107,10 +107,10 @@ julia> code_escapes((String,)) do s
            return v
        end
 #5(↑ _2::String) in Main at REPL[7]:2
-2 ✓′ 1 ─ %1 = %new(SafeRef{String}, "init")::SafeRef{String}                   │╻╷ SafeRef
-3 ◌  │        Base.setfield!(%1, :x, _2)::String                               │╻╷ setindex!
-4 ↑  │   %3 = Base.getfield(%1, :x)::String                                    │╻╷ getindex
-5 ◌  └──      return %3                                                        │
+✓′ 1 ─ %1 = %new(SafeRef{String}, "init")::SafeRef{String}
+◌  │        Base.setfield!(%1, :x, _2)::String
+↑  │   %3 = Base.getfield(%1, :x)::String
+◌  └──      return %3
 ```
 In the example above, `ReturnEscape` imposed on `%3` (corresponding to `v`) is _not_ directly
 propagated to `%1` (corresponding to `obj`) but rather that `ReturnEscape` is only propagated
@@ -139,16 +139,16 @@ julia> code_escapes((Bool, String,)) do cond, x
            y = ϕ1[]
            return y
        end
-#7(↑ _2::Bool, ↑ _3::String) in Main at REPL[8]:2
-2 ◌  1 ─      goto #3 if not _2                                                │
-3 ✓′ 2 ─ %2 = %new(SafeRef{String}, "foo")::SafeRef{String}                    │╻╷ SafeRef
-  ◌  └──      goto #4                                                          │
-5 ✓′ 3 ─ %4 = %new(SafeRef{String}, "bar")::SafeRef{String}                    │╻╷ SafeRef
-7 ✓′ 4 ┄ %5 = φ (#2 => %2, #3 => %4)::SafeRef{String}                          │
-  ✓′ │   %6 = φ (#2 => %2, #3 => %4)::SafeRef{String}                          │
-  ◌  │        Base.setfield!(%5, :x, _3)::String                               │╻  setindex!
-8 ↑  │   %8 = Base.getfield(%6, :x)::String                                    │╻╷ getindex
-9 ◌  └──      return %8                                                        │
+#7(✓ _2::Bool, ↑ _3::String) in Main at REPL[8]:2
+◌  1 ─      goto #3 if not _2
+✓′ 2 ─ %2 = %new(SafeRef{String}, "foo")::SafeRef{String}
+◌  └──      goto #4
+✓′ 3 ─ %4 = %new(SafeRef{String}, "bar")::SafeRef{String}
+✓′ 4 ┄ %5 = φ (#2 => %2, #3 => %4)::SafeRef{String}
+✓′ │   %6 = φ (#2 => %2, #3 => %4)::SafeRef{String}
+◌  │        Base.setfield!(%5, :x, _3)::String
+↑  │   %8 = Base.getfield(%6, :x)::String
+◌  └──      return %8
 ```
 `ϕ1 = %5` and `ϕ2 = %6` are aliased and thus `ReturnEscape` imposed on `%8 = Base.getfield(%6, :x)::String` (corresponding to `y = ϕ1[]`)
 needs to be propagated to `Base.setfield!(%5, :x, _3)::String` (corresponding to `ϕ2[] = x`).
@@ -176,7 +176,7 @@ julia> code_escapes((String,)) do s
            push!(ary, SafeRef(s))
            return ary[1], length(ary)
        end
-#21(↑ _2::String) in Main at none:2
+#9(↑ _2::String) in Main at REPL[9]:2
 *′ 1 ── %1  = $(Expr(:foreigncall, :(:jl_alloc_array_1d), Vector{Any}, svec(Any, Int64), 0, :(:ccall), Vector{Any}, 0, 0))::Vector{Any}
 ↑  │    %2  = %new(SafeRef{String}, _2)::SafeRef{String}
 ◌  │    %3  = Core.lshr_int(1, 63)::Int64
@@ -218,7 +218,7 @@ julia> code_escapes((String,String)) do s, t
            ary[2] = SafeRef(t)
            return ary[1], length(ary)
        end
-#23(↑ _2::String, * _3::String) in Main at none:2
+#11(↑ _2::String, * _3::String) in Main at REPL[10]:2
 *′ 1 ─ %1 = $(Expr(:foreigncall, :(:jl_alloc_array_1d), Vector{Any}, svec(Any, Int64), 0, :(:ccall), Vector{Any}, 2, 2))::Vector{Any}
 ↑  │   %2 = %new(SafeRef{String}, _2)::SafeRef{String}
 ◌  │        Base.arrayset(true, %1, %2, 1)::Vector{Any}
@@ -264,7 +264,7 @@ julia> code_escapes((String,String)) do s, t
            ary[2] = SafeRef(t)
            return ary[1], length(ary)
        end
-#27(↑ _2::String, ↑ _3::String) in Main at none:2
+#13(↑ _2::String, ↑ _3::String) in Main at REPL[11]:2
 ◌  1 ─ %1  = Main.nothing::Core.Const(nothing)
 ◌  │   %2  = Main.nothing::Core.Const(nothing)
 ◌  │   %3  = Core.tuple(%1, %2)::Core.Const((nothing, nothing))
@@ -310,7 +310,7 @@ julia> code_escapes((String,String)) do s, t
            push!(ary, SafeRef(t))
            ary[1], length(ary)
        end
-#31(↑ _2::String, ↑ _3::String) in Main at none:2
+#15(↑ _2::String, ↑ _3::String) in Main at REPL[12]:2
 *′ 1 ── %1  = $(Expr(:foreigncall, :(:jl_alloc_array_1d), Vector{Any}, svec(Any, Int64), 0, :(:ccall), Vector{Any}, 0, 0))::Vector{Any}
 ↑  │    %2  = %new(SafeRef{String}, _2)::SafeRef{String}
 ◌  │    %3  = Core.lshr_int(1, 63)::Int64
@@ -395,24 +395,24 @@ julia> code_escapes() do
            end
            return t
        end
-#9() in Main at REPL[12]:2
-2  X  1 ── %1  = %new(Base.RefValue{String})::Base.RefValue{String}            │╻╷ Ref
-4  ◌  2 ── %2  = $(Expr(:enter, #8))                                           │
-5  ◌  3 ── %3  = Base.isdefined(%1, :x)::Bool                                  │╻╷ get′
-   ◌  └───       goto #5 if not %3                                             ││
-   ↑  4 ── %5  = Base.getfield(%1, :x)::String                                 ││╻  getindex
-   ◌  └───       goto #6                                                       ││
-   ◌  5 ──       Main.throw(%1)::Union{}                                       ││
-   ◌  └───       unreachable                                                   ││
-   ◌  6 ──       $(Expr(:leave, 1))                                            │
-   ◌  7 ──       goto #10                                                      │
-   ◌  8 ──       $(Expr(:leave, 1))                                            │
-   ◌  9 ── %12 = $(Expr(:the_exception))::Any                                  │
-7  ↑  │    %13 = Main.typeof(%12)::DataType                                    │
-8  ◌  │          invoke Main.rethrow_escape!()::Any                            │
-   ◌  └───       $(Expr(:pop_exception, :(%2)))::Any                           │
-10 ↑  10 ┄ %16 = φ (#7 => %5, #9 => %13)::Union{DataType, String}              │
-   ◌  └───       return %16                                                    │
+#17() in Main at REPL[16]:2
+X  1 ── %1  = %new(Base.RefValue{String})::Base.RefValue{String}
+◌  2 ── %2  = $(Expr(:enter, #8))
+◌  3 ── %3  = Base.isdefined(%1, :x)::Bool
+◌  └───       goto #5 if not %3
+↑  4 ── %5  = Base.getfield(%1, :x)::String
+◌  └───       goto #6
+◌  5 ──       Main.throw(%1)::Union{}
+◌  └───       unreachable
+◌  6 ──       $(Expr(:leave, 1))
+◌  7 ──       goto #10
+◌  8 ──       $(Expr(:leave, 1))
+✓  9 ── %12 = $(Expr(:the_exception))::Any
+↑  │    %13 = Main.typeof(%12)::DataType
+◌  │          invoke Main.rethrow_escape!()::Any
+◌  └───       $(Expr(:pop_exception, :(%2)))::Any
+↑  10 ┄ %16 = φ (#7 => %5, #9 => %13)::Union{DataType, String}
+◌  └───       return %16
 ```
 
 It requires a global analysis in order to correctly reason about all possible escapes via
@@ -439,34 +439,34 @@ julia> result = code_escapes((String,String)) do s1, s2
            s2 = get′(r2)      # still `r2` doesn't escape fully
            return s2
        end
-#11(X _2::String, ↑ _3::String) in Main at REPL[13]:2
-2  X  1 ── %1  = %new(Base.RefValue{String}, _2)::Base.RefValue{String}   │╻╷╷ Ref
-3  *′ └─── %2  = %new(Base.RefValue{String}, _3)::Base.RefValue{String}   │╻╷╷ Ref
-5  ◌  2 ── %3  = $(Expr(:enter, #8))                                      │
-   *′ └─── %4  = ϒ (%2)::Base.RefValue{String}                            │
-6  ◌  3 ── %5  = Base.isdefined(%1, :x)::Bool                             │╻╷  get′
-   ◌  └───       goto #5 if not %5                                        ││
-   X  4 ──       Base.getfield(%1, :x)::String                            ││╻   getindex
-   ◌  └───       goto #6                                                  ││
-   ◌  5 ──       Main.throw(%1)::Union{}                                  ││
-   ◌  └───       unreachable                                              ││
-7  ◌  6 ──       nothing::typeof(Core.sizeof)                             │╻   sizeof
-   ◌  │          nothing::Int64                                           ││
-   ◌  └───       $(Expr(:leave, 1))                                       │
-   ◌  7 ──       goto #10                                                 │
-   *′ 8 ── %15 = φᶜ (%4)::Base.RefValue{String}                           │
-   ◌  └───       $(Expr(:leave, 1))                                       │
-   X  9 ── %17 = $(Expr(:the_exception))::Any                             │
-9  ◌  │          (Main.g = %17)::Any                                      │
-   ◌  └───       $(Expr(:pop_exception, :(%3)))::Any                      │
-11 *′ 10 ┄ %20 = φ (#7 => %2, #9 => %15)::Base.RefValue{String}           │
-   ◌  │    %21 = Base.isdefined(%20, :x)::Bool                            ││╻   isassigned
-   ◌  └───       goto #12 if not %21                                      ││
-   ↑  11 ─ %23 = Base.getfield(%20, :x)::String                           │││╻   getproperty
-   ◌  └───       goto #13                                                 ││
-   ◌  12 ─       Main.throw(%20)::Union{}                                 ││
-   ◌  └───       unreachable                                              ││
-12 ◌  13 ─       return %23                                               │
+#19(X _2::String, ↑ _3::String) in Main at REPL[17]:2
+X  1 ── %1  = %new(Base.RefValue{String}, _2)::Base.RefValue{String}
+*′ └─── %2  = %new(Base.RefValue{String}, _3)::Base.RefValue{String}
+◌  2 ── %3  = $(Expr(:enter, #8))
+*′ └─── %4  = ϒ (%2)::Base.RefValue{String}
+◌  3 ── %5  = Base.isdefined(%1, :x)::Bool
+◌  └───       goto #5 if not %5
+X  4 ──       Base.getfield(%1, :x)::String
+◌  └───       goto #6
+◌  5 ──       Main.throw(%1)::Union{}
+◌  └───       unreachable
+◌  6 ──       nothing::typeof(Core.sizeof)
+◌  │          nothing::Int64
+◌  └───       $(Expr(:leave, 1))
+◌  7 ──       goto #10
+*′ 8 ── %15 = φᶜ (%4)::Base.RefValue{String}
+◌  └───       $(Expr(:leave, 1))
+X  9 ── %17 = $(Expr(:the_exception))::Any
+◌  │          (Main.g = %17)::Any
+◌  └───       $(Expr(:pop_exception, :(%3)))::Any
+*′ 10 ┄ %20 = φ (#7 => %2, #9 => %15)::Base.RefValue{String}
+◌  │    %21 = Base.isdefined(%20, :x)::Bool
+◌  └───       goto #12 if not %21
+↑  11 ─ %23 = Base.getfield(%20, :x)::String
+◌  └───       goto #13
+◌  12 ─       Main.throw(%20)::Union{}
+◌  └───       unreachable
+◌  13 ─       return %23
 ```
 
 ## Analysis Usage
