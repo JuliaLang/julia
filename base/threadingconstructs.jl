@@ -113,15 +113,17 @@ execution.
 
 The `schedule` argument can be used to request a particular scheduling policy.
 Options are:
-- `:static` is the default schedule which creates one task per thread and divides the
-            iterations equally among them, assigning each task specifically to each thread.
+- `:static` which creates one task per thread and divides the iterations equally among
+            them, assigning each task specifically to each thread.
             Specifying `:static` is an error if used from inside another `@threads` loop
             or from a thread other than 1.
-- `:dynamic` is like `:static` except the tasks are assigned to threads dynamically,
+- `:dynamic` which is like `:static` except the tasks are assigned to threads dynamically,
             allowing more flexible scheduling if other tasks are active on other threads.
             Specifying `:dynamic` is allowed from inside another `@threads` loop and from
             threads other than 1.
 
+If no schedule is specified, when called from thread 1 the default is `:static`, or when
+called from other threads the loop will be executed without threading.
 The default schedule (used when no `schedule` argument is present) is subject to change.
 
 For example, here an illustration of the different scheduling strategies, where `busywait`
