@@ -13,6 +13,7 @@ provider julia {
     probe rt__run__task(jl_task_t *task);
     probe rt__pause__task(jl_task_t *task);
     probe rt__new__task(jl_task_t *parent, jl_task_t *child);
+    probe rt__finish__task(jl_task_t *task);
     probe rt__start__process__events(jl_task_t *task);
     probe rt__finish__process__events(jl_task_t *task);
     probe rt__sleep__check__wake(jl_ptls_t other, int8_t old_state);

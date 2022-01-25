@@ -229,6 +229,7 @@ static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 void JL_NORETURN jl_finish_task(jl_task_t *t)
 {
     jl_task_t *ct = jl_current_task;
+    JL_PROBE_RT_FINISH_TASK(ct);
     JL_SIGATOMIC_BEGIN();
     if (jl_atomic_load_relaxed(&t->_isexception))
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
