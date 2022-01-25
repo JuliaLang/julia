@@ -852,8 +852,6 @@ let
         dispatch(a)
     end
     let src = code_typed(foo, Tuple{Bool})[1][1]
-        @test !any(src.code) do stmt
-            isa(stmt, Expr) && stmt.head === :call && stmt.args[1] === Core.tuple
-        end
+        @test count(iscall((src, Core.tuple)), src.code) == 0
     end
 end

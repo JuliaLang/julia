@@ -1146,7 +1146,7 @@ function adce_pass!(ir::IRCode)
             if !isassigned(stmt.values, i)
                 # Should be impossible to have something used only by PiNodes that's undef
                 push!(to_drop, i)
-            elseif typeintersect(widenconst(argextype(stmt.values[i], compact)), t) === Union{}
+            elseif !hasintersect(widenconst(argextype(stmt.values[i], compact)), t)
                 push!(to_drop, i)
             end
         end
