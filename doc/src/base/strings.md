@@ -1,6 +1,7 @@
 # [Strings](@id lib-strings)
 
 ```@docs
+Core.AbstractString
 Core.AbstractChar
 Core.Char
 Base.codepoint
