@@ -516,7 +516,8 @@ tests = [
         "(x)"         =>  "x"
         "(a...)"      =>  "(... a)"
         # Generators
-        "(x for x in xs)"  =>  "(generator x (= x xs))"
+        "(x for a in as)"       =>  "(generator x (= a as))"
+        "(x \n\n for a in as)"  =>  "(generator x (= a as))"
     ],
     JuliaSyntax.parse_atom => [
         ":foo" => "(quote foo)"
@@ -551,11 +552,15 @@ tests = [
         "[x]"       =>  "(vect x)"
         "[x \n ]"   =>  "(vect x)"
         "[x \n\n ]" =>  "(vect x)"
-        # parse_comprehension / parse_generator
-        "[x for x in xs]" => "(comprehension (generator x (= x xs)))"
-        "[x \n\n for x in xs]" => "(comprehension (generator x (= x xs)))"
-        "[(x)for x in xs]" =>  "(comprehension (generator x (error) (= x xs)))"
-        "[xy for x in xs for y in ys]" => "(comprehension (flatten xy (= x xs) (= y ys)))"
+        "[x for a in as]"  =>  "(comprehension (generator x (= a as)))"
+        "[x \n\n for a in as]"  =>  "(comprehension (generator x (= a as)))"
+        # parse_generator
+        "[x for a = as for b = bs if cond1 for c = cs if cond2]"  =>  "(comprehension (flatten x (= a as) (filter (= b bs) cond1) (filter (= c cs) cond2)))"
+        "[(x)for x in xs]"  =>  "(comprehension (generator x (error) (= x xs)))"
+        "(a for x in xs if cond)"  =>  "(generator a (filter (= x xs) cond))"
+        "(xy for x in xs for y in ys)"  =>  "(flatten xy (= x xs) (= y ys))"
+        "(xy for x in xs for y in ys for z in zs)"  =>  "(flatten xy (= x xs) (= y ys) (= z zs))"
+        "(x for a in as)"  =>  "(generator x (= a as))"
         # parse_vect
         "[x, y]"        =>  "(vect x y)"
         "[x, y]"        =>  "(vect x y)"

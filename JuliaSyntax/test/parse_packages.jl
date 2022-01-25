@@ -11,11 +11,17 @@ base_path = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base")
     test_parse_all_in_path(base_path)
 end
 
-#=
+if haskey(ENV, "PARSE_BASE_TEST")
+# TODO: Turn on by default
+
 base_tests_path = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 @testset "Parse Base tests at $base_tests_path" begin
     test_parse_all_in_path(base_tests_path)
 end
+
+end
+if haskey(ENV, "PARSE_STDLIB")
+# TODO: Turn on by default
 
 @testset "Parse Julia stdlib at $(Sys.STDLIB)" begin
     for stdlib in readdir(Sys.STDLIB)
@@ -27,4 +33,5 @@ end
         end
     end
 end
-=#
+
+end

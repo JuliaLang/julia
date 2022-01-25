@@ -2479,15 +2479,16 @@ end
 #    y in ys)
 #   x in xs))
 #
-# A reasonable way to deal with this is to emit only the flatten:
+# We deal with this by only emitting the flatten:
 #
 # (flatten xy (= x xs) (= y ys))
 #
-# then reconstruct the nested generators when converting to Expr.
+# then reconstructing the nested flattens and generators when converting to Expr.
+#
+# [x for a = as for b = bs if cond1 for c = cs if cond2] ==> (comprehension (flatten x (= a as) (filter (= b bs) cond1) (filter (= c cs) cond2)))
 #
 # flisp: parse-generator
 function parse_generator(ps::ParseState, mark, flatten=false)
-    # (x for x in xs) ==>  (generator x (= x xs))
     t = peek_token(ps)
     if !t.had_whitespace
         # [(x)for x in xs]  ==>  (comprehension (generator x (error) (= x xs)))
@@ -2499,16 +2500,21 @@ function parse_generator(ps::ParseState, mark, flatten=false)
     filter_mark = position(ps)
     parse_comma_separated(ps, parse_iteration_spec)
     if peek(ps) == K"if"
+        # (a for x in xs if cond) ==> (generator a (filter (= x xs) cond))
         bump(ps, TRIVIA_FLAG)
         parse_cond(ps)
         emit(ps, filter_mark, K"filter")
     end
     t = peek_token(ps)
     if kind(t) == K"for"
-        # [xy for x in xs for y in ys]   ==>  (comprehension (flatten xy (= x xs) (= y ys)))
+        # (xy for x in xs for y in ys)  ==> (flatten xy (= x xs) (= y ys))
+        # (xy for x in xs for y in ys for z in zs)  ==> (flatten xy (= x xs) (= y ys) (= z zs))
         parse_generator(ps, mark, true)
-        emit(ps, mark, K"flatten")
+        if !flatten
+            emit(ps, mark, K"flatten")
+        end
     elseif !flatten
+        # (x for a in as)  ==>  (generator x (= a as))
         emit(ps, mark, K"generator")
     end
 end
@@ -2709,8 +2715,8 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
         # [x \n ]  ==>  (vect x)
         parse_vect(ps, closer)
     elseif k == K"for"
-        # [x for x in xs]  ==>  (comprehension (generator x (= x xs)))
-        # [x \n\n for x in xs]  ==>  (comprehension (generator x (= x xs)))
+        # [x for a in as]  ==>  (comprehension (generator x (= a as)))
+        # [x \n\n for a in as]  ==>  (comprehension (generator x (= a as)))
         parse_comprehension(ps, mark, closer)
     else
         # [x y]  ==>  (hcat x y)
@@ -2883,6 +2889,8 @@ function parse_brackets(after_parse::Function,
                 continue
             elseif k == K"for"
                 # Generator syntax
+                # (x for a in as)       ==>  (generator x (= a as))
+                # (x \n\n for a in as)  ==>  (generator x (= a as))
                 parse_generator(ps, mark)
             else
                 k_str = untokenize(k)

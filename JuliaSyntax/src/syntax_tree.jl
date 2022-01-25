@@ -377,9 +377,9 @@ function _to_expr(node::SyntaxNode, iteration_spec=false)
         # Julia's AST here from our alternative `flatten` expression.
         gen = Expr(:generator, args[1], args[end])
         for i in length(args)-1:-1:2
-            gen = Expr(:generator, gen, args[i])
+            gen = Expr(:flatten, Expr(:generator, gen, args[i]))
         end
-        args = [gen]
+        return gen
     elseif headsym in (:nrow, :ncat)
         # For lack of a better place, the dimension argument to nrow/ncat
         # is stored in the flags
