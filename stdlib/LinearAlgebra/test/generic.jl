@@ -295,6 +295,15 @@ end
     @test LinearAlgebra.axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
 end
 
+@testset "Generic scal!" begin
+    α = rand(BigFloat)
+    x = rand(BigFloat, 5)
+    y = scal(α, x)
+    @test y ≈ α * x
+    scal!(α, x)
+    @test y ≈ x
+end
+
 @testset "norm and normalize!" begin
     vr = [3.0, 4.0]
     for Tr in (Float32, Float64)

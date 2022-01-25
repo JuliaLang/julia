@@ -1437,6 +1437,13 @@ function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     y
 end
 
+function scal!(α, x::AbstractArray)
+    for IX in eachindex(x)
+        @inbounds x[IX] *= α
+    end
+    x
+end
+
 """
     rotate!(x, y, c, s)
 
