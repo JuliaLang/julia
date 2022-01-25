@@ -63,7 +63,7 @@ Base.display_error(io::IO, err::ParseError, bt) = Base.showerror(io, err, bt)
     (tree, diagnostics)        = parse(TreeType, io::IOBuffer; kws...)
     (tree, diagnostics, index) = parse(TreeType, str::AbstractString, [index::Integer]; kws...)
     # Keywords
-    parse(...; rule=:toplevel, julia_version=VERSION, ignore_trivia=true)
+    parse(...; rule=:toplevel, version=VERSION, ignore_trivia=true)
 
 Parse Julia source code from `input`, returning the output in a format
 compatible with `input`:
@@ -83,10 +83,10 @@ compatible with `input`:
 * `atom` — parse a single syntax "atom": a literal, identifier, or
   parenthesized expression.
 
-`julia_version` (default `VERSION`) may be used to set the syntax version to
+`version` (default `VERSION`) may be used to set the syntax version to
 any Julia version `>= v"1.0"`. We aim to parse all Julia syntax which has been
 added after v"1.0", emitting an error if it's not compatible with the requested
-`julia_version`.
+`version`.
 
 See also [`parseall`](@ref) for a simpler but less powerful interface.
 """
@@ -105,8 +105,8 @@ function parse(stream::ParseStream; rule::Symbol=:toplevel)
 end
 
 function parse(::Type{T}, io::Base.GenericIOBuffer;
-               rule::Symbol=:toplevel, julia_version=VERSION, kws...) where {T}
-    stream = ParseStream(io; julia_version=julia_version)
+               rule::Symbol=:toplevel, version=VERSION, kws...) where {T}
+    stream = ParseStream(io; version=version)
     parse(stream; rule=rule)
     tree = build_tree(T, stream; kws...)
     seek(io, stream.next_byte-1)
@@ -124,7 +124,7 @@ end
 """
     parseall(TreeType, input;
              rule=:toplevel,
-             julia_version=VERSION,
+             version=VERSION,
              ignore_trivia=true)
 
 Experimental convenience interface to parse `input` as Julia code, emitting an
@@ -135,11 +135,11 @@ by setting `ignore_trivia=false`.
 A `ParseError` will be thrown if any errors occurred during parsing.
 
 See [`parse`](@ref) for a more complete and powerful interface to the parser,
-as well as a description of the `julia_version` and `rule` keywords.
+as well as a description of the `version` and `rule` keywords.
 """
-function parseall(::Type{T}, input; rule=:toplevel, julia_version=VERSION,
+function parseall(::Type{T}, input; rule=:toplevel, version=VERSION,
                   ignore_trivia=true) where {T}
-    stream = ParseStream(input; julia_version=julia_version)
+    stream = ParseStream(input; version=version)
     do_skip_trivia = ignore_trivia && rule != :toplevel
     if do_skip_trivia
         bump_trivia(stream, skip_newlines=true)
