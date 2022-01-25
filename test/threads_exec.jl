@@ -738,10 +738,10 @@ function _atthreads_dynamic_schedule()
     Threads.@threads :dynamic for _ = 1:nthreads()
         Threads.atomic_add!(inc, 1)
     end
-    return inc
+    return inc[]
 end
 inc = _atthreads_dynamic_schedule()
-@test inc[] == nthreads()
+@test inc == nthreads()
 
 # nested dynamic schedule
 function _atthreads_dynamic_dynamic_schedule()
@@ -751,11 +751,10 @@ function _atthreads_dynamic_dynamic_schedule()
             Threads.atomic_add!(inc, 1)
         end
     end
-
-    return inc
+    return inc[]
 end
 inc = _atthreads_dynamic_dynamic_schedule()
-@test inc[] == nthreads() * nthreads()
+@test inc == nthreads() * nthreads()
 
 function _atthreads_static_dynamic_schedule()
     ids = zeros(Int, nthreads())
@@ -766,11 +765,11 @@ function _atthreads_static_dynamic_schedule()
             Threads.atomic_add!(inc, 1)
         end
     end
-    return ids, inc
+    return ids, inc[]
 end
 ids, inc = _atthreads_static_dynamic_schedule()
 @test ids == [1:nthreads();]
-@test inc[] == nthreads() * nthreads()
+@test inc == nthreads() * nthreads()
 
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
