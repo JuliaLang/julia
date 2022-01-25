@@ -1902,11 +1902,12 @@ end
 
 
 function has_free_typevars_tfunc(@nospecialize(t))
-    hasintersect(t, Union{DataType, Union, TypeofVararg}) || return Const(false)
     if t isa Const
         return Const(has_free_typevars(t.val))
     elseif isconstType(t)
         return Const(has_free_typevars(t.parameters[1]))
+    elseif !hasintersect(t, Union{DataType, Union, UnionAll, TypeofVararg})
+        return Const(false)
     end
     return Bool
 end
