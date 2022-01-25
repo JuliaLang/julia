@@ -1,105 +1,4 @@
 #-------------------------------------------------------------------------------
-# Syntax tree types
-
-#-------------------------------------------------------------------------------
-# Flags hold auxilary information about tokens/nonterminals which the Kind
-# doesn't capture in a nice way.
-const RawFlags = UInt32
-const EMPTY_FLAGS = RawFlags(0)
-const TRIVIA_FLAG = RawFlags(1<<0)
-# Some of the following flags are head-specific and could probably be allowed
-# to cover the same bits...
-const INFIX_FLAG  = RawFlags(1<<1)
-# Record whether syntactic operators were dotted
-const DOTOP_FLAG = RawFlags(1<<2)
-# Set when kind == K"String" was triple-delimited as with """ or ```
-const TRIPLE_STRING_FLAG = RawFlags(1<<3)
-# Set when the string is "raw" and needs minimal unescaping
-const RAW_STRING_FLAG = RawFlags(1<<4)
-# try-finally-catch
-const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<5)
-# Flags holding the dimension of an nrow or other UInt8 not held in the source
-const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
-# Todo ERROR_FLAG = 0x80000000 ?
-
-function set_numeric_flags(n::Integer)
-    f = RawFlags((n << 8) & NUMERIC_FLAGS)
-    if numeric_flags(f) != n
-        error("Numeric flags unable to hold large integer $n")
-    end
-    f
-end
-
-function numeric_flags(f::RawFlags)
-    Int((f >> 8) % UInt8)
-end
-
-# Return true if any of `test_flags` are set
-has_flags(flags::RawFlags, test_flags) = (flags & test_flags) != 0
-
-# Function for combining flags. (Do we want this?)
-function flags(; trivia::Bool=false,
-               infix::Bool=false,
-               dotop::Bool=false,
-               try_catch_after_finally::Bool=false,
-               numeric::Int=0)
-    flags = RawFlags(0)
-    trivia && (flags |= TRIVIA_FLAG)
-    infix  && (flags |= INFIX_FLAG)
-    dotop  && (flags |= DOTOP_FLAG)
-    try_catch_after_finally && (flags |= TRY_CATCH_AFTER_FINALLY_FLAG)
-    numeric != 0 && (flags |= set_numeric_flags(numeric))
-    return flags::RawFlags
-end
-
-#-------------------------------------------------------------------------------
-struct SyntaxHead
-    kind::Kind
-    flags::RawFlags
-end
-
-kind(head::SyntaxHead) = head.kind
-flags(head::SyntaxHead) = head.flags
-has_flags(head::SyntaxHead, test_flags) = has_flags(flags(head), test_flags)
-
-is_trivia(head::SyntaxHead) = has_flags(head, TRIVIA_FLAG)
-is_infix(head::SyntaxHead)  = has_flags(head, INFIX_FLAG)
-is_dotted(head::SyntaxHead) = has_flags(head, DOTOP_FLAG)
-numeric_flags(head::SyntaxHead) = numeric_flags(flags(head))
-is_error(head::SyntaxHead)  = kind(head) == K"error"
-
-function Base.summary(head::SyntaxHead)
-    _kind_str(kind(head))
-end
-
-function untokenize(head::SyntaxHead; include_flag_suff=true)
-    str = untokenize(kind(head))
-    if is_dotted(head)
-        str = "."*str
-    end
-    if include_flag_suff && flags(head) ∉ (EMPTY_FLAGS, DOTOP_FLAG)
-        str = str*"-"
-        is_trivia(head)  && (str = str*"t")
-        is_infix(head)   && (str = str*"i")
-        has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"s")
-        has_flags(head, RAW_STRING_FLAG) && (str = str*"r")
-        has_flags(head, TRY_CATCH_AFTER_FINALLY_FLAG) && (str = str*"f")
-        n = numeric_flags(head)
-        n != 0 && (str = str*string(n))
-    end
-    str
-end
-
-kind(node::GreenNode{SyntaxHead})  = head(node).kind
-flags(node::GreenNode{SyntaxHead}) = head(node).flags
-
-is_infix(node) = is_infix(head(node))
-
-# Value of an error node with no children
-struct ErrorVal
-end
-
-#-------------------------------------------------------------------------------
 # AST interface, built on top of raw tree
 
 """
@@ -114,6 +13,10 @@ mutable struct SyntaxNode
     parent::Union{Nothing,SyntaxNode}
     is_leaf::Bool
     val::Any
+end
+
+# Value of an error node with no children
+struct ErrorVal
 end
 
 Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
@@ -308,6 +211,11 @@ end
 
 #-------------------------------------------------------------------------------
 # Tree utilities
+
+kind(node)  = kind(head(node))
+flags(node) = flags(head(node))
+is_infix(node) = is_infix(head(node))
+
 """
     child(node, i1, i2, ...)
 
@@ -384,7 +292,7 @@ function is_eventually_call(ex)
                                       is_eventually_call(ex.args[1]))
 end
 
-function _to_expr(node::SyntaxNode)
+function _to_expr(node::SyntaxNode, iteration_spec=false)
     if !haschildren(node)
         if node.val isa Union{Int128,UInt128,BigInt}
             # Ignore the values of large integers and convert them back to
@@ -401,17 +309,23 @@ function _to_expr(node::SyntaxNode)
             return node.val
         end
     end
-    args = Vector{Any}(undef, length(children(node)))
-    args = map!(_to_expr, args, children(node))
+    headstr = untokenize(head(node), include_flag_suff=false)
+    headsym = !isnothing(headstr) ? Symbol(headstr) :
+        error("Can't untokenize head of kind $(kind(node))")
+    node_args = children(node)
+    args = Vector{Any}(undef, length(node_args))
+    if headsym == :for && length(node_args) == 2
+        args[1] = _to_expr(node_args[1], true)
+        args[2] = _to_expr(node_args[2], false)
+    else
+        map!(_to_expr, args, node_args)
+    end
     # Julia's standard `Expr` ASTs have children stored in a canonical
     # order which is often not always source order. We permute the children
     # here as necessary to get the canonical order.
     if is_infix(node.raw)
         args[2], args[1] = args[1], args[2]
     end
-    headstr = untokenize(head(node), include_flag_suff=false)
-    headsym = !isnothing(headstr) ? Symbol(headstr) :
-        error("Can't untokenize head of kind $(kind(node))")
     loc = source_location(LineNumberNode, node.source, node.position)
     # Convert elements
     if headsym == :macrocall
@@ -473,7 +387,7 @@ function _to_expr(node::SyntaxNode)
     elseif headsym == :typed_ncat
         insert!(args, 2, numeric_flags(flags(node)))
     elseif headsym == :(=)
-        if is_eventually_call(args[1])
+        if is_eventually_call(args[1]) && !iteration_spec
             if Meta.isexpr(args[2], :block)
                 pushfirst!(args[2].args, loc)
             else
@@ -502,44 +416,14 @@ Base.Expr(node::SyntaxNode) = _to_expr(node)
 
 #-------------------------------------------------------------------------------
 
-function parse_all(::Type{SyntaxNode}, source::SourceFile)
-    stream = ParseStream(source.code)
-    parse_all(stream)
-    if !isempty(stream.diagnostics)
-        buf = IOBuffer()
-        show_diagnostics(IOContext(buf, stdout), stream, source.code)
-        @error Text(String(take!(buf)))
-    end
-    green_tree = build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
-    SyntaxNode(source, green_tree)
+function build_tree(::Type{SyntaxNode}, stream::ParseStream; filename="none", kws...)
+    green_tree = build_tree(GreenNode, stream; kws...)
+    code = String(copy(_code_buf(stream)))
+    source = SourceFile(code, filename=filename)
+    SyntaxNode(source, green_tree, first_byte(stream))
 end
 
-function parse_all(::Type{SyntaxNode}, code::AbstractString; filename="none")
-    parse_all(SyntaxNode, SourceFile(code, filename=filename))
+function build_tree(::Type{Expr}, stream::ParseStream; kws...)
+    Expr(build_tree(SyntaxNode, stream; kws...))
 end
 
-
-"""
-    parse_all(Expr, code::AbstractString; filename="none")
-
-Parse the given code and convert to a standard Expr
-"""
-function parse_all(::Type{Expr}, code::AbstractString; filename="none")
-    Expr(parse_all(SyntaxNode, code; filename=filename))
-end
-
-function remove_linenums!(ex)
-    ex = Base.remove_linenums!(ex)
-    if Meta.isexpr(ex, :toplevel)
-        filter!(x->!(x isa LineNumberNode), ex.args)
-    end
-    ex
-end
-
-function flisp_parse_all(code; filename="none")
-    if VERSION >= v"1.6"
-        Meta.parseall(code, filename=filename)
-    else
-        Base.parse_input_line(code, filename=filename)
-    end
-end
