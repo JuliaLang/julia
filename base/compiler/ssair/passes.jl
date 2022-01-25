@@ -471,11 +471,11 @@ end
 make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
 
 """
-    lift_comparison!(compact::IncrementalCompact, idx::Int, stmt::Expr)
+    lift_comparison!(cmp, compact::IncrementalCompact, idx::Int, stmt::Expr)
 
-Replaces `φ(x, y)::Union{X,Y} === constant` by `φ(x === constant, y === constant)`,
-where `x === constant` and `y === constant` can be replaced with constant `Bool`eans.
-It helps codegen avoid generating expensive code for `===` with `Union` types.
+Replaces `cmp(φ(x, y)::Union{X,Y}, constant)` by `φ(cmp(x, constant), cmp(y, constant))`,
+where `cmp(x, constant)` and `cmp(y, constant)` can be replaced with constant `Bool`eans.
+It helps codegen avoid generating expensive code for `cmp` with `Union` types.
 In particular, this is supposed to improve the performance of the iteration protocol:
 ```julia
 while x !== nothing
@@ -483,7 +483,9 @@ while x !== nothing
 end
 ```
 """
-function lift_comparison!(compact::IncrementalCompact,
+function lift_comparison! end
+
+function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
     args = stmt.args
     length(args) == 3 || return
@@ -493,37 +495,59 @@ function lift_comparison!(compact::IncrementalCompact,
     vr = argextype(rhs, compact)
     if isa(vl, Const)
         isa(vr, Const) && return
-        cmp = vl
-        typeconstraint = widenconst(vr)
         val = rhs
+        target = lhs
     elseif isa(vr, Const)
-        cmp = vr
-        typeconstraint = widenconst(vl)
         val = lhs
+        target = rhs
     else
         return
     end
 
-    valtyp = widenconst(argextype(val, compact))
-    isa(valtyp, Union) || return # bail out if there won't be a good chance for lifting
+    lift_comparison_leaves!(egal_tfunc, compact, val, target, lifting_cache, idx)
+end
 
-    leaves, visited_phinodes = collect_leaves(compact, val, valtyp)
+function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
+    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
+    args = stmt.args
+    length(args) == 3 || return
+    lift_comparison_leaves!(isa_tfunc, compact, args[2], args[3], lifting_cache, idx)
+end
+
+function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
+    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
+    args = stmt.args
+    length(args) == 3 || return
+    lift_comparison_leaves!(isdefined_tfunc, compact, args[2], args[3], lifting_cache, idx)
+end
+
+function lift_comparison_leaves!(@specialize(tfunc),
+    compact::IncrementalCompact, @nospecialize(val), @nospecialize(target),
+    lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int)
+    typeconstraint = widenconst(argextype(val, compact))
+    if isa(val, Union{OldSSAValue, SSAValue})
+        val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
+    end
+    isa(typeconstraint, Union) || return # bail out if there won't be a good chance for lifting
+    leaves, visited_phinodes = collect_leaves(compact, val, typeconstraint)
     length(leaves) ≤ 1 && return # bail out if we don't have multiple leaves
 
-    # Let's check if we evaluate the comparison for each one of the leaves
+    # check if we can evaluate the comparison for each one of the leaves
+    cmp = argextype(target, compact)
     lifted_leaves = nothing
     for leaf in leaves
-        r = egal_tfunc(argextype(leaf, compact), cmp)
-        if isa(r, Const)
+        result = tfunc(argextype(leaf, compact), cmp)
+        if isa(result, Const)
             if lifted_leaves === nothing
                 lifted_leaves = LiftedLeaves()
             end
-            lifted_leaves[leaf] = LiftedValue(r.val)
+            lifted_leaves[leaf] = LiftedValue(result.val)
         else
-            return # TODO In some cases it might be profitable to hoist the === here
+            return # TODO In some cases it might be profitable to hoist the comparison here
         end
     end
 
+    # perform lifting
     lifted_val = perform_lifting!(compact,
         visited_phinodes, cmp, lifting_cache, Bool,
         lifted_leaves::LiftedLeaves, val)::LiftedValue
@@ -715,10 +739,14 @@ function sroa_pass!(ir::IRCode)
             canonicalize_typeassert!(compact, idx, stmt)
             continue
         elseif is_known_call(stmt, (===), compact)
-            lift_comparison!(compact, idx, stmt, lifting_cache)
+            lift_comparison!(===, compact, idx, stmt, lifting_cache)
             continue
-        # elseif is_known_call(stmt, isa, compact)
-            # TODO do a similar optimization as `lift_comparison!` for `===`
+        elseif is_known_call(stmt, isa, compact)
+            lift_comparison!(isa, compact, idx, stmt, lifting_cache)
+            continue
+        elseif is_known_call(stmt, isdefined, compact)
+            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache)
+            continue
         else
             continue
         end
