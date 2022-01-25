@@ -379,19 +379,12 @@ end
     0x0000a71b <= c <= 0x0000a71d
 end
 
-
 function optakessuffix(k)
     (Tokens.begin_ops < k < Tokens.end_ops) &&
     !(
         k == Tokens.DDDOT ||
         Tokens.begin_assignments <= k <= Tokens.end_assignments ||
         k == Tokens.CONDITIONAL ||
-        @static(if !CAN_DOT_LAZY_AND_OR
-            k == Tokens.LAZY_OR ||
-            k == Tokens.LAZY_AND
-        else
-            false
-        end) ||
         k == Tokens.ISSUBTYPE ||
         k == Tokens.ISSUPERTYPE ||
         k == Tokens.IN ||
