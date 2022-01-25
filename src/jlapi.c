@@ -110,7 +110,7 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
     JL_TRY {
         const char filename[] = "none";
         jl_value_t *ast = jl_parse_all(str, strlen(str),
-                filename, strlen(filename));
+                filename, strlen(filename), 1);
         JL_GC_PUSH1(&ast);
         r = jl_toplevel_eval_in(jl_main_module, ast);
         JL_GC_POP();

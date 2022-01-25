@@ -1174,13 +1174,39 @@ function func_for_method_checked(m::Method, @nospecialize(types), sparams::Simpl
 end
 
 """
-    code_typed(f, types; optimize=true, debuginfo=:default)
+    code_typed(f, types; kw...)
 
 Returns an array of type-inferred lowered form (IR) for the methods matching the given
-generic function and type signature. The keyword argument `optimize` controls whether
-additional optimizations, such as inlining, are also applied.
-The keyword `debuginfo` controls the amount of code metadata present in the output,
+generic function and type signature.
+
+# Keyword Arguments
+
+- `optimize=true`: controls whether additional optimizations, such as inlining, are also applied.
+- `debuginfo=:default`: controls the amount of code metadata present in the output,
 possible options are `:source` or `:none`.
+
+# Internal Keyword Arguments
+
+This section should be considered internal, and is only for who understands Julia compiler
+internals.
+
+- `world=Base.get_world_counter()`: optional, controls the world age to use when looking up methods,
+use current world age if not specified.
+- `interp=Core.Compiler.NativeInterpreter(world)`: optional, controls the interpreter to use,
+use the native interpreter Julia uses if not specified.
+
+# Example
+
+One can put the argument types in a tuple to get the corresponding `code_typed`.
+
+```julia
+julia> code_typed(+, (Float64, Float64))
+1-element Vector{Any}:
+ CodeInfo(
+1 ─ %1 = Base.add_float(x, y)::Float64
+└──      return %1
+) => Float64
+```
 """
 function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
                     optimize=true,
