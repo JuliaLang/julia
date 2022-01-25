@@ -16,3 +16,21 @@ function _printstyled(io::IO, text; color)
     end
 end
 
+function flisp_parse_all(code; filename="none")
+    if VERSION >= v"1.6"
+        Meta.parseall(code, filename=filename)
+    else
+        # This is approximate. It should work for well-formed code.
+        Base.parse_input_line(code, filename=filename)
+    end
+end
+
+# Really remove line numbers, even from Expr(:toplevel)
+function remove_linenums!(ex)
+    ex = Base.remove_linenums!(ex)
+    if Meta.isexpr(ex, :toplevel)
+        filter!(x->!(x isa LineNumberNode), ex.args)
+    end
+    ex
+end
+

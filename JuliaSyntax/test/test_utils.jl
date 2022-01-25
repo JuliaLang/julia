@@ -7,7 +7,8 @@ using JuliaSyntax:
     # Parsing
     ParseStream,
     SourceFile,
-    parse_all,
+    parse,
+    parseall,
     @K_str,
     # Nodes
     GreenNode,
@@ -39,7 +40,7 @@ end
 
 function parsers_agree_on_file(path)
     code = read(path, String)
-    JuliaSyntax.remove_linenums!(parse_all(Expr, code)) == 
+    JuliaSyntax.remove_linenums!(parseall(Expr, code)) == 
     JuliaSyntax.remove_linenums!(flisp_parse_all(code))
 end
 
@@ -119,8 +120,8 @@ Parse `code`, entering the recursive descent parser at the given function
 for debugging.
 """
 function itest_parse(production, code; julia_version::VersionNumber=v"1.6")
-    stream = ParseStream(code)
-    production(JuliaSyntax.ParseState(stream, julia_version))
+    stream = ParseStream(code; julia_version=julia_version)
+    production(JuliaSyntax.ParseState(stream))
     t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
 
     println(stdout, "# Code:\n$code\n")

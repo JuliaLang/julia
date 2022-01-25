@@ -1,32 +1,127 @@
 #-------------------------------------------------------------------------------
+# Flags hold auxilary information about tokens/nonterminals which the Kind
+# doesn't capture in a nice way.
+const RawFlags = UInt32
+const EMPTY_FLAGS = RawFlags(0)
+const TRIVIA_FLAG = RawFlags(1<<0)
+# Some of the following flags are head-specific and could probably be allowed
+# to cover the same bits...
+const INFIX_FLAG  = RawFlags(1<<1)
+# Record whether syntactic operators were dotted
+const DOTOP_FLAG = RawFlags(1<<2)
+# Set when kind == K"String" was triple-delimited as with """ or ```
+const TRIPLE_STRING_FLAG = RawFlags(1<<3)
+# Set when the string is "raw" and needs minimal unescaping
+const RAW_STRING_FLAG = RawFlags(1<<4)
+# try-finally-catch
+const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<5)
+# Flags holding the dimension of an nrow or other UInt8 not held in the source
+const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
+# Todo ERROR_FLAG = 0x80000000 ?
+
+function set_numeric_flags(n::Integer)
+    f = RawFlags((n << 8) & NUMERIC_FLAGS)
+    if numeric_flags(f) != n
+        error("Numeric flags unable to hold large integer $n")
+    end
+    f
+end
+
+function numeric_flags(f::RawFlags)
+    Int((f >> 8) % UInt8)
+end
+
+# Return true if any of `test_flags` are set
+has_flags(flags::RawFlags, test_flags) = (flags & test_flags) != 0
+
+# Function for combining flags. (Do we want this?)
+function flags(; trivia::Bool=false,
+               infix::Bool=false,
+               dotop::Bool=false,
+               try_catch_after_finally::Bool=false,
+               numeric::Int=0)
+    flags = RawFlags(0)
+    trivia && (flags |= TRIVIA_FLAG)
+    infix  && (flags |= INFIX_FLAG)
+    dotop  && (flags |= DOTOP_FLAG)
+    try_catch_after_finally && (flags |= TRY_CATCH_AFTER_FINALLY_FLAG)
+    numeric != 0 && (flags |= set_numeric_flags(numeric))
+    return flags::RawFlags
+end
+
+#-------------------------------------------------------------------------------
+struct SyntaxHead
+    kind::Kind
+    flags::RawFlags
+end
+
+kind(head::SyntaxHead) = head.kind
+flags(head::SyntaxHead) = head.flags
+has_flags(head::SyntaxHead, test_flags) = has_flags(flags(head), test_flags)
+
+is_trivia(head::SyntaxHead) = has_flags(head, TRIVIA_FLAG)
+is_infix(head::SyntaxHead)  = has_flags(head, INFIX_FLAG)
+is_dotted(head::SyntaxHead) = has_flags(head, DOTOP_FLAG)
+numeric_flags(head::SyntaxHead) = numeric_flags(flags(head))
+is_error(head::SyntaxHead)  = kind(head) == K"error"
+
+function Base.summary(head::SyntaxHead)
+    _kind_str(kind(head))
+end
+
+function untokenize(head::SyntaxHead; include_flag_suff=true)
+    str = untokenize(kind(head))
+    if is_dotted(head)
+        str = "."*str
+    end
+    if include_flag_suff && flags(head) ∉ (EMPTY_FLAGS, DOTOP_FLAG)
+        str = str*"-"
+        is_trivia(head)  && (str = str*"t")
+        is_infix(head)   && (str = str*"i")
+        has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"s")
+        has_flags(head, RAW_STRING_FLAG) && (str = str*"r")
+        has_flags(head, TRY_CATCH_AFTER_FINALLY_FLAG) && (str = str*"f")
+        n = numeric_flags(head)
+        n != 0 && (str = str*string(n))
+    end
+    str
+end
+
+#-------------------------------------------------------------------------------
 """
 `SyntaxToken` is a token covering a contiguous byte range in the input text.
-Information about leading whitespace tokens is added for use by the parser.
+Information about preceding whitespace is added for use by the parser.
 """
 struct SyntaxToken
-    raw::RawToken
+    kind::Kind
+    first_byte::Int
+    last_byte::Int
     # Flags for leading whitespace
+    is_dotted::Bool
+    is_suffixed::Bool
     had_whitespace::Bool
     had_newline::Bool
 end
 
-function Base.show(io::IO, tok::SyntaxToken)
+function SyntaxToken(raw::RawToken, had_whitespace, had_newline)
+    SyntaxToken(raw.kind, raw.startbyte + 1, raw.endbyte + 1, raw.dotop, raw.suffix,
+                had_whitespace, had_newline)
+end
+
+function Base.show(ii::IO, tok::SyntaxToken)
     range = string(lpad(first_byte(tok), 3), ":", rpad(last_byte(tok), 3))
     print(io, rpad(range, 17, " "), rpad(kind(tok), 15, " "))
 end
 
-kind(tok::SyntaxToken) = tok.raw.kind
-flags(tok::SyntaxToken) = tok.raw.dotop ? DOTOP_FLAG : EMPTY_FLAGS
-first_byte(tok::SyntaxToken) = tok.raw.startbyte + 1
-last_byte(tok::SyntaxToken) = tok.raw.endbyte + 1
+kind(tok::SyntaxToken) = tok.kind
+flags(tok::SyntaxToken) = tok.is_dotted ? DOTOP_FLAG : EMPTY_FLAGS
+first_byte(tok::SyntaxToken) = tok.first_byte
+last_byte(tok::SyntaxToken) = tok.last_byte
 span(tok::SyntaxToken) = last_byte(tok) - first_byte(tok) + 1
 
-is_dotted(tok::SyntaxToken)    = tok.raw.dotop
-is_suffixed(tok::SyntaxToken)  = tok.raw.suffix
+is_dotted(tok::SyntaxToken)    = tok.is_dotted
+is_suffixed(tok::SyntaxToken)  = tok.is_suffixed
 is_decorated(tok::SyntaxToken) = is_dotted(tok) || is_suffixed(tok)
-
-Base.:(~)(tok::SyntaxToken, k::Kind) = kind(tok) == k
-Base.:(~)(k::Kind, tok::SyntaxToken) = kind(tok) == k
 
 Base.:(==)(tok::SyntaxToken, k::Kind) = (kind(tok) == k && !is_decorated(tok))
 
@@ -54,67 +149,7 @@ first_byte(range::TaggedRange) = range.first_byte
 last_byte(range::TaggedRange)  = range.last_byte
 span(range::TaggedRange)       = last_byte(range) - first_byte(range) + 1
 
-struct Diagnostic
-    first_byte::Int
-    last_byte::Int
-    level::Symbol
-    message::String
-end
-
-first_byte(d::Diagnostic) = d.first_byte
-last_byte(d::Diagnostic)  = d.last_byte
-
-function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
-    col,prefix = diagnostic.level == :error   ? (:light_red, "Error")      :
-                 diagnostic.level == :warning ? (:light_yellow, "Warning") :
-                 diagnostic.level == :note    ? (:light_blue, "Note")      :
-                 (:normal, "Info")
-    printstyled(io, "$prefix: ", color=col)
-    print(io, diagnostic.message, ":\n")
-
-    p = first_byte(diagnostic)
-    q = last_byte(diagnostic)
-    code = source.code
-    if q < p || (p == q && code[p] == '\n')
-        # An empty or invisible range!  We expand it symmetrically to make it
-        # visible.
-        p = max(firstindex(code), prevind(code, p))
-        q = min(lastindex(code), nextind(code, q))
-    end
-
-    # p and q mark the start and end of the diagnostic range. For context,
-    # buffer these out to the surrouding lines.
-    a,b = source_line_range(source, p, context_lines_before=2, context_lines_after=1)
-    c,d = source_line_range(source, q, context_lines_before=1, context_lines_after=2)
-
-    hicol = (100,40,40)
-
-    print(io, source[a:prevind(code, p)])
-    # There's two situations, either
-    if b >= c
-        # The diagnostic range is compact and we show the whole thing
-        # a...............
-        # .....p...q......
-        # ...............b
-        _printstyled(io, source[p:q]; color=hicol)
-    else
-        # Or large and we trucate the code to show only the region around the
-        # start and end of the error.
-        # a...............
-        # .....p..........
-        # ...............b
-        # (snip)
-        # c...............
-        # .....q..........
-        # ...............d
-        _printstyled(io, source[p:b]; color=hicol)
-        println(io, "…")
-        _printstyled(io, source[c:q]; color=hicol)
-    end
-    print(io, source[nextind(code,q):d])
-    println(io)
-end
-
+#-------------------------------------------------------------------------------
 struct ParseStreamPosition
     input_byte::Int    # Index of next byte in input
     output_index::Int  # Index of last span in output
@@ -126,46 +161,50 @@ const NO_POSITION = ParseStreamPosition(0,0)
 """
 ParseStream provides an IO interface for the parser. It
 - Wraps the lexer with a lookahead buffer
-- Removes whitespace and comment tokens, shifting them into the output implicitly
-
-This is simililar in spirit to rust-analyzer's
-[TextTreeSink](https://github.com/rust-analyzer/rust-analyzer/blob/4691a0647b2c96cc475d8bbe7c31fe194d1443e7/crates/syntax/src/parsing/text_tree_sink.rs)
+- Removes insignificant whitespace and comment tokens, shifting them into the
+  output implicitly (newlines may be significant depending on `skip_newlines`)
 """
 mutable struct ParseStream
+    # Lexer, transforming the input bytes into a token stream
     lexer::Tokenize.Lexers.Lexer{IOBuffer,RawToken}
+    # Lookahead buffer for already lexed tokens
     lookahead::Vector{SyntaxToken}
+    # Parser output as an ordered sequence of ranges, parent nodes after children.
     ranges::Vector{TaggedRange}
+    # Parsing diagnostics (errors/warnings etc)
     diagnostics::Vector{Diagnostic}
     # First byte of next token
     next_byte::Int
     # Counter for number of peek()s we've done without making progress via a bump()
     peek_count::Int
+    # Vesion of Julia we're parsing this code for. May be different from VERSION!
+    julia_version_major::Int
+    julia_version_minor::Int
 end
 
-function ParseStream(code)
+function ParseStream(code::Base.GenericIOBuffer; julia_version=VERSION)
+    next_byte = position(code)+1
     lexer = Tokenize.tokenize(code, RawToken)
     ParseStream(lexer,
                 Vector{SyntaxToken}(),
                 Vector{TaggedRange}(),
                 Vector{Diagnostic}(),
-                1,
-                0)
+                next_byte,
+                0,
+                julia_version.major,
+                julia_version.minor)
+end
+
+function ParseStream(code::AbstractString; kws...)
+    ParseStream(IOBuffer(code); kws...)
 end
 
 function Base.show(io::IO, mime::MIME"text/plain", stream::ParseStream)
     println(io, "ParseStream at position $(stream.next_byte)")
 end
 
-function show_diagnostics(io::IO, stream::ParseStream, code::SourceFile)
-    for d in stream.diagnostics
-        show_diagnostic(io, d, code)
-    end
-end
-
 function show_diagnostics(io::IO, stream::ParseStream, code)
-    if !isempty(stream.diagnostics)
-        show_diagnostics(io, stream, SourceFile(code))
-    end
+    show_diagnostics(io, stream.diagnostics, code)
 end
 
 #-------------------------------------------------------------------------------
@@ -239,11 +278,14 @@ function peek_token(stream::ParseStream, n::Integer=1; skip_newlines=false)
     stream.lookahead[_lookahead_index(stream, n, skip_newlines)]
 end
 
+function _code_buf(stream)
+    # TODO: Peeking at the underlying data buffer inside the lexer is an awful
+    # hack. We should find a better way to do this kind of thing.
+    stream.lexer.io.data
+end
+
 function _peek_equal_to(stream, first_byte, len, str)
-    # Humongous but should-be-allocation-free hack: peek at the underlying data
-    # buffer. TODO: Attach the code string to the stream so we don't have to
-    # dig into the lexer?
-    buf = stream.lexer.io.data
+    buf = _code_buf(stream)
     cbuf = codeunits(str)
     for i = 1:len
         if buf[first_byte + i - 1] != cbuf[i]
@@ -321,7 +363,7 @@ function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"Nothing")
         end
         is_trivia = k ∈ (K"Whitespace", K"Comment", K"NewlineWs")
         f = is_trivia ? TRIVIA_FLAG : flags
-        tok.raw.dotop     && (f |= DOTOP_FLAG)
+        is_dotted(tok) && (f |= DOTOP_FLAG)
         outk = (is_trivia || remap_kind == K"Nothing") ? k : remap_kind
         range = TaggedRange(SyntaxHead(outk, f), k, first_byte(tok),
                             last_byte(tok), lastindex(stream.ranges)+1)
@@ -471,13 +513,8 @@ function emit(stream::ParseStream, mark::ParseStreamPosition, kind::Kind,
     return position(stream)
 end
 
-function _emit_diagnostic(stream::ParseStream, fbyte, lbyte;
-                          error=nothing, warning=nothing)
-    message = !isnothing(error)   ? error :
-              !isnothing(warning) ? warning :
-              error("No message in diagnostic")
-    level = !isnothing(error) ? :error : :warning
-    push!(stream.diagnostics, Diagnostic(fbyte, lbyte, level, message))
+function _emit_diagnostic(stream::ParseStream, fbyte, lbyte; kws...)
+    push!(stream.diagnostics, Diagnostic(fbyte, lbyte; kws...))
     return nothing
 end
 
@@ -595,7 +632,6 @@ function build_tree(::Type{NodeType}, stream::ParseStream;
     end
 end
 
-function parse_all(::Type{GreenNode}, code)
-    stream = parse_all(code)
-    build_tree(GreenNode, stream)
-end
+first_byte(stream::ParseStream) = first_byte(first(stream.ranges))
+last_byte(stream::ParseStream) = last_byte(last(stream.ranges))
+any_error(stream::ParseStream) = any_error(stream.diagnostics)

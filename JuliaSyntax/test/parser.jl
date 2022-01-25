@@ -1,6 +1,6 @@
 function test_parse(production, code; v=v"1.6")
-    stream = ParseStream(code)
-    production(JuliaSyntax.ParseState(stream, v))
+    stream = ParseStream(code, julia_version=v)
+    production(JuliaSyntax.ParseState(stream))
     t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"Nothing")
     source = SourceFile(code)
     s = SyntaxNode(source, t)
@@ -16,6 +16,11 @@ end
 # * Use only the green tree to generate the S-expressions
 #   (add flag annotations to heads)
 tests = [
+    JuliaSyntax.parse_toplevel => [
+        "a \n b"     =>  "(toplevel a b)"
+        "a;b \n c;d" =>  "(toplevel (toplevel a b) (toplevel c d))"
+        "a \n \n"    =>  "(toplevel a)"
+    ],
     JuliaSyntax.parse_block => [
         "a;b;c"   => "(block a b c)"
         "a;;;b;;" => "(block a b)"
@@ -668,6 +673,5 @@ end
         s
     end
     """
-    ex = JuliaSyntax.parse_all(Expr, code)
-    @test ex == JuliaSyntax.remove_linenums!(JuliaSyntax.flisp_parse_all(code))
+    @test parseall(Expr, code) == JuliaSyntax.remove_linenums!(JuliaSyntax.flisp_parse_all(code))
 end

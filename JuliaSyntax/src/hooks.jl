@@ -1,46 +1,25 @@
-# Error type for displaying errors in the Julia REPL
-struct ParseError <: Exception
-    code::String
-    stream::ParseStream
-end
-
-function Base.showerror(io::IO, err::ParseError, bt; backtrace=false)
-    show_diagnostics(io, err.stream, err.code)
-end
-Base.display_error(io::IO, err::ParseError, bt) = Base.showerror(io, err, bt)
-
-function Base.showerror(io::IO, err::ParseError)
-    show_diagnostics(io, err.stream, err.code)
-end
-
 # Adaptor for the API/ABI expected by the Julia runtime code.
 function core_parser_hook(code, filename, offset, options)
     try
-        if code isa Core.SimpleVector # May be passed in from C entry points
+        # TODO: Check that we do all this input wrangling without copying the
+        # code buffer
+        if code isa Core.SimpleVector
+            # The C entry points will pass us this form.
             (ptr,len) = code
             code = String(unsafe_wrap(Array, ptr, len))
         end
+        io = IOBuffer(code)
+        seek(io, offset)
 
-        code = code[offset+1:end]  # FIXME!!
+        stream = ParseStream(io)
+        rule = options == :all ? :toplevel : options
+        JuliaSyntax.parse(stream; rule=rule)
 
-        stream = ParseStream(code)
-        if options === :atom
-            parse_atom(ParseState(stream, VERSION))
-        elseif options === :statement
-            parse_stmts(ParseState(stream, VERSION))
-        elseif options === :all
-            parse_all(stream)
-        end
+        ex = any_error(stream) ?
+            Expr(:error, ParseError(SourceFile(code), stream.diagnostics)) :
+            build_tree(Expr, stream)
 
-        if !isempty(stream.diagnostics)
-            ex = Expr(:error, ParseError(code, stream))
-        else
-            green_tree = build_tree(GreenNode, stream)
-            src = SourceFile(code; filename=filename)
-            tree = SyntaxNode(src, green_tree)
-            ex = Expr(tree)
-        end
-        pos = offset + stream.next_byte-1
+        pos = last_byte(stream) - 1
 
         # Rewrap result in an svec for use by the C code
         return Core.svec(ex, pos)

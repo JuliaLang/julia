@@ -1,10 +1,24 @@
 
-@testset "Parse tree conversion" begin
+@testset "Expr conversion" begin
     @testset "Quote nodes" begin
-        @test Expr(child(parse_all(SyntaxNode, ":(a)"), 1)) == QuoteNode(:a)
-        @test Expr(child(parse_all(SyntaxNode, ":(:a)"), 1)) ==
-            Expr(:quote, QuoteNode(:a))
-        @test Expr(child(parse_all(SyntaxNode, ":(1+2)"), 1)) ==
-            Expr(:quote, Expr(:call, :+, 1, 2))
+        @test parseall(Expr, ":(a)", rule=:atom) == QuoteNode(:a)
+        @test parseall(Expr, ":(:a)", rule=:atom) == Expr(:quote, QuoteNode(:a))
+        @test parseall(Expr, ":(1+2)", rule=:atom) == Expr(:quote, Expr(:call, :+, 1, 2))
+    end
+
+    @testset "Short form function line numbers" begin
+        # A block is added to hold the line number node
+        @test parseall(Expr, "f() = xs", rule=:statement) ==
+            Expr(:(=),
+                 Expr(:call, :f),
+                 Expr(:block,
+                      LineNumberNode(1, :none),
+                      :xs))
+        # flisp parser quirk: In a for loop the block is not added, despite
+        # this defining a short-form function.
+        @test parseall(Expr, "for f() = xs\nend", rule=:statement) ==
+            Expr(:for,
+                 Expr(:(=), Expr(:call, :f), :xs),
+                 Expr(:block))
     end
 end

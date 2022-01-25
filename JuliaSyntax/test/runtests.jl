@@ -5,7 +5,7 @@ using JuliaSyntax: SourceFile
 
 using JuliaSyntax: GreenNode, SyntaxNode,
     flags, EMPTY_FLAGS, TRIVIA_FLAG, INFIX_FLAG,
-    children, child, setchild!, SyntaxHead, parse_all
+    children, child, setchild!, SyntaxHead
 
 module TokenizeTests
     using Test
@@ -16,8 +16,8 @@ end
 
 include("test_utils.jl")
 include("parse_stream.jl")
-include("syntax_tree.jl")
 include("parser.jl")
+include("syntax_tree.jl")
 
 @testset "Parsing values from strings" begin
     include("value_parsing.jl")

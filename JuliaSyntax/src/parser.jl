@@ -1,12 +1,13 @@
 """
-ParseState carries parser context as we recursively descend into the parse
-tree. For example, normally `x -y` means `(x) - (y)`, but when parsing matrix
-literals we're in `space_sensitive` mode, and `[x -y]` means [(x) (-y)].
+    ParseState(stream::ParseStream)
+
+ParseState is an internal data structure wrapping `ParseStream` to carry parser
+context as we recursively descend into the parse tree. For example, normally
+`x -y` means `(x) - (y)`, but when parsing matrix literals we're in
+`space_sensitive` mode, and `[x -y]` means [(x) (-y)].
 """
 struct ParseState
     stream::ParseStream
-    # Vesion of Julia we're parsing this code for. May be different from VERSION!
-    julia_version::VersionNumber
 
     # Disable range colon for parsing ternary conditional operator
     range_colon_enabled::Bool
@@ -23,19 +24,15 @@ struct ParseState
 end
 
 # Normal context
-function ParseState(stream::ParseStream, julia_version::VersionNumber)
-    # To avoid keeping track of the exact Julia development version where new
-    # features were added, treat prereleases or dev versons as the release
-    # version by stripping the prerelease.
-    ver = VersionNumber(julia_version.major, julia_version.minor, julia_version.patch)
-    ParseState(stream, ver, true, false, false, false, false, true)
+function ParseState(stream::ParseStream)
+    ParseState(stream, true, false, false, false, false, true)
 end
 
 function ParseState(ps::ParseState; range_colon_enabled=nothing,
                     space_sensitive=nothing, for_generator=nothing,
                     end_symbol=nothing, whitespace_newline=nothing,
                     where_enabled=nothing)
-    ParseState(ps.stream, ps.julia_version,
+    ParseState(ps.stream,
         range_colon_enabled === nothing ? ps.range_colon_enabled : range_colon_enabled,
         space_sensitive === nothing ? ps.space_sensitive : space_sensitive,
         for_generator === nothing ? ps.for_generator : for_generator,
@@ -151,21 +148,6 @@ function bump_closing_token(ps, closing_kind)
     end
 end
 
-function bump_semicolon_trivia(ps)
-    while peek(ps) in KSet`; NewlineWs`
-        bump(ps, TRIVIA_FLAG)
-    end
-end
-
-# Emit an error if the version is less than `min_ver`
-function min_supported_version(min_ver, ps, mark, message)
-    # NB: the prerelease version will be removed from ps.julia_version before this point.
-    if ps.julia_version < min_ver
-        msg = "$message is not supported in Julia version $(ps.julia_version) < $(min_ver)"
-        emit(ps, mark, K"error", error=msg)
-    end
-end
-
 # Read tokens until we find an expected closing token.
 # Bump the big pile of resulting tokens as a single nontrivia error token
 function recover(is_closer::Function, ps, flags=EMPTY_FLAGS; mark = position(ps), error="unexpected tokens")
@@ -183,6 +165,31 @@ function recover(is_closer::Function, ps, flags=EMPTY_FLAGS; mark = position(ps)
     emit(ps, mark, K"error", flags, error=error)
 end
 
+@noinline function min_supported_version_err(ps, mark, message, min_ver)
+    major = ps.stream.julia_version_major
+    minor = ps.stream.julia_version_minor
+    msg = "$message is not supported in Julia version $major.$minor < $(min_ver)"
+    emit(ps, mark, K"error", error=msg)
+end
+
+function version_lessthan(ps, ver)
+    # To avoid keeping track of the exact Julia development version where new
+    # features were added or comparing prerelease strings, we treat prereleases
+    # or dev versons as the release version using only major and minor version
+    # numbers. This means we're inexact for old dev versions but that seems
+    # like an acceptable tradeoff.
+    major = ps.stream.julia_version_major
+    minor = ps.stream.julia_version_minor
+    major < ver.major || (major == ver.major && minor < ver.minor)
+end
+
+# Emit an error if the version is less than `min_ver`
+function min_supported_version(min_ver, ps, mark, message)
+    if version_lessthan(ps, min_ver)
+        min_supported_version_err(ps, mark, message, min_ver)
+    end
+end
+
 # flisp: disallow-space
 function bump_disallowed_space(ps)
     if peek_token(ps).had_whitespace
@@ -191,10 +198,27 @@ function bump_disallowed_space(ps)
     end
 end
 
-function TODO(str)
-    error("TODO: $str")
+function bump_semicolon_trivia(ps)
+    while peek(ps) in KSet`; NewlineWs`
+        bump(ps, TRIVIA_FLAG)
+    end
 end
 
+# Like @assert, but always enabled and calls internal_error()
+macro check(ex, msgs...)
+    msg = isempty(msgs) ? ex : msgs[1]
+    if isa(msg, AbstractString)
+        msg = msg
+    elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
+        msg = :(string($(esc(msg))))
+    else
+        msg = string(msg)
+    end
+    return :($(esc(ex)) ? nothing : internal_error($msg))
+end
+
+# Parser internal error, used as an assertion failure for cases we expect can't
+# happen.
 @noinline function internal_error(strs...)
     error("Internal error: ", strs...)
 end
@@ -307,7 +331,10 @@ end
 #
 # This is to make both codebases mutually understandable and make porting
 # changes simple.
-
+#
+# The `parse_*` functions are listed here roughly in order of increasing
+# precedence (lowest to highest binding power). A few helper functions are
+# interspersed.
 
 # parse left-to-right binary operator
 # produces structures like (+ (+ (+ 2 3) 4) 5)
@@ -384,7 +411,30 @@ function parse_Nary(ps::ParseState, down, delimiters, closing_tokens)
     return n_delims != 0
 end
 
-# the principal non-terminals follow, in increasing precedence order
+# Parse a sequence of top level statements separated by newlines, all wrapped
+# in a toplevel node.
+#
+#   a \n b ==>  (toplevel a b)
+#
+# Note that parse_stmts can also emit toplevel nodes for semicolon-separated
+# statements, so it's possible for these to be nested one level deep.
+#
+#   a;b \n c;d  ==>  (toplevel (toplevel a b) (toplevel c d))
+function parse_toplevel(ps::ParseState)
+    mark = position(ps)
+    while true
+        if peek(ps, skip_newlines=true) == K"EndMarker"
+            # Allow end of input if there is nothing left but whitespace
+            # a \n \n ==> (toplevel a)
+            bump(ps, skip_newlines=true)
+            break
+        else
+            parse_stmts(ps)
+        end
+    end
+    emit(ps, mark, K"toplevel")
+    nothing
+end
 
 # Parse a newline or semicolon-delimited list of expressions. 
 # Repeated delimiters are allowed but ignored
@@ -424,10 +474,47 @@ function parse_stmts(ps::ParseState)
     end
     if junk_mark != position(ps)
         emit(ps, junk_mark, K"error",
-             error="Extra tokens after end of expression")
+             error="extra tokens after end of expression")
     end
     if do_emit
         emit(ps, mark, K"toplevel")
+    end
+end
+
+# Parse docstrings attached by a space or single newline
+# "doc" foo  ==>  (macrocall core_@doc "doc" foo)
+#
+# flisp: parse-docstring
+function parse_docstring(ps::ParseState, down=parse_eq)
+    mark = position(ps)
+    atdoc_mark = bump_invisible(ps, K"TOMBSTONE")
+    down(ps)
+    if peek_behind(ps).kind in KSet`String string`
+        is_doc = true
+        k = peek(ps)
+        if is_closing_token(ps, k)
+            # "notdoc" ] ==> "notdoc"
+            is_doc = false
+        elseif k == K"NewlineWs"
+            k2 = peek(ps, 2)
+            if is_closing_token(ps, k2) || k2 == K"NewlineWs"
+                # "notdoc" \n]      ==> "notdoc"
+                # "notdoc" \n\n foo ==> "notdoc"
+                is_doc = false
+            else
+                # Allow a single newline
+                # "doc" \n foo ==> (macrocall core_@doc "doc" foo)
+                bump(ps, TRIVIA_FLAG) # NewlineWs
+            end
+        else
+            # "doc" foo    ==> (macrocall core_@doc "doc" foo)
+            # "doc $x" foo ==> (macrocall core_@doc (string "doc " x) foo)
+        end
+        if is_doc
+            reset_node!(ps, atdoc_mark, kind=K"core_@doc")
+            down(ps)
+            emit(ps, mark, K"macrocall")
+        end
     end
 end
 
@@ -845,9 +932,8 @@ function parse_unary_subtype(ps::ParseState)
             mark = position(ps)
             bump(ps, TRIVIA_FLAG)
             parse_where(ps, parse_juxtapose)
-            if peek_behind(ps).kind == K"tuple"
-                TODO("Can this even happen?")
-            end
+            # Flisp parser handled this, but I don't know how it can happen...
+            @check peek_behind(ps).kind != K"tuple"
             emit(ps, mark, k)
         end
     else
@@ -1350,7 +1436,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                    ckind == K"vcat"          ? K"typed_vcat"           :
                    ckind == K"comprehension" ? K"typed_comprehension"  :
                    ckind == K"ncat"          ? K"typed_ncat"           :
-                   internal_error("unrecognized kind in parse_cat", ckind)
+                   internal_error("unrecognized kind in parse_cat ", ckind)
             emit(ps, mark, outk, cflags)
             check_ncat_compat(ps, mark, ckind)
             if is_macrocall
@@ -1618,7 +1704,7 @@ function parse_resword(ps::ParseState)
         # Oddities allowed by parser
         # abstract type A < B end         ==>  (abstract (call-i A < B))
         bump(ps, TRIVIA_FLAG)
-        @assert peek(ps) == K"type"
+        @check peek(ps) == K"type"
         bump(ps, TRIVIA_FLAG)
         parse_subtype_spec(ps)
         bump_semicolon_trivia(ps)
@@ -1634,7 +1720,7 @@ function parse_resword(ps::ParseState)
             # struct A end  ==>  (struct false A (block))
             bump_invisible(ps, K"false")
         end
-        @assert peek(ps) == K"struct"
+        @check peek(ps) == K"struct"
         bump(ps, TRIVIA_FLAG)
         parse_subtype_spec(ps)
         parse_block(ps)
@@ -1646,7 +1732,7 @@ function parse_resword(ps::ParseState)
         # primitive type A $N end             ==> (primitive A ($ N))
         # primitive type A <: B \n 8 \n end   ==> (primitive (<: A B) 8)
         bump(ps, TRIVIA_FLAG)
-        @assert peek(ps) == K"type"
+        @check peek(ps) == K"type"
         bump(ps, TRIVIA_FLAG)
         with_space_sensitive(parse_subtype_spec, ps)
         with_space_sensitive(parse_cond, ps)
@@ -1842,7 +1928,7 @@ end
 function parse_function(ps::ParseState)
     mark = position(ps)
     word = peek(ps)
-    @assert word in KSet`macro function`
+    @check word in KSet`macro function`
     is_function = word == K"function"
     is_anon_func::Bool = false
     bump(ps, TRIVIA_FLAG)
@@ -2105,7 +2191,7 @@ end
 function parse_imports(ps::ParseState)
     mark = position(ps)
     word = peek(ps)
-    @assert word in KSet`import using`
+    @check word in KSet`import using`
     bump(ps, TRIVIA_FLAG)
     emark = position(ps)
     initial_as = parse_import(ps, word, false)
@@ -2401,7 +2487,7 @@ function parse_generator(ps::ParseState, mark, flatten=false)
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="Expected space before `for` in generator")
     end
-    @assert kind(t) == K"for"
+    @check kind(t) == K"for"
     bump(ps, TRIVIA_FLAG)
     filter_mark = position(ps)
     parse_comma_separated(ps, parse_iteration_spec)
@@ -2643,7 +2729,7 @@ function parse_paren(ps::ParseState, check_identifiers=true)
                     where_enabled=true,
                     whitespace_newline=true)
     mark = position(ps)
-    @assert peek(ps) == K"("
+    @check peek(ps) == K"("
     bump(ps, TRIVIA_FLAG) # K"("
     after_paren_mark = position(ps)
     k = peek(ps)
@@ -2847,7 +2933,7 @@ function parse_string(ps::ParseState)
                 # "a $(x + y) b"  ==> (string "a " (call-i x + y) " b")
                 m = position(ps)
                 parse_atom(ps)
-                if ps.julia_version >= v"1.6"
+                if !version_lessthan(ps, v"1.6")
                     # https://github.com/JuliaLang/julia/pull/38692
                     prev = peek_behind(ps)
                     if prev.kind == K"String"
@@ -2917,6 +3003,19 @@ function parse_raw_string(ps::ParseState; remap_kind=K"Nothing")
         # Recovery
         bump_invisible(ps, K"error", error="Unterminated string literal")
     end
+end
+
+function emit_braces(ps, mark, ckind, cflags)
+    if ckind == K"hcat"
+        # {x y}  ==>  (bracescat (row x y))
+        emit(ps, mark, K"row", cflags)
+    elseif ckind == K"ncat"
+        # {x ;;; y}  ==>  (bracescat (nrow-3 x y))
+        emit(ps, mark, K"nrow", cflags)
+    end
+    check_ncat_compat(ps, mark, ckind)
+    outk = ckind in KSet`vect comprehension` ? K"braces" : K"bracescat"
+    emit(ps, mark, outk)
 end
 
 # parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
@@ -3052,98 +3151,5 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     else
         bump(ps, error="invalid syntax atom")
     end
-end
-
-function emit_braces(ps, mark, ckind, cflags)
-    if ckind == K"hcat"
-        # {x y}  ==>  (bracescat (row x y))
-        emit(ps, mark, K"row", cflags)
-    elseif ckind == K"ncat"
-        # {x ;;; y}  ==>  (bracescat (nrow-3 x y))
-        emit(ps, mark, K"nrow", cflags)
-    end
-    check_ncat_compat(ps, mark, ckind)
-    outk = ckind in KSet`vect comprehension` ? K"braces" : K"bracescat"
-    emit(ps, mark, outk)
-end
-
-# Parse docstrings attached by a space or single newline
-# "doc" foo  ==>  (macrocall core_@doc "doc" foo)
-#
-# flisp: parse-docstring
-function parse_docstring(ps::ParseState, down=parse_eq)
-    mark = position(ps)
-    atdoc_mark = bump_invisible(ps, K"TOMBSTONE")
-    down(ps)
-    if peek_behind(ps).kind in KSet`String string`
-        is_doc = true
-        k = peek(ps)
-        if is_closing_token(ps, k)
-            # "notdoc" ] ==> "notdoc"
-            is_doc = false
-        elseif k == K"NewlineWs"
-            k2 = peek(ps, 2)
-            if is_closing_token(ps, k2) || k2 == K"NewlineWs"
-                # "notdoc" \n]      ==> "notdoc"
-                # "notdoc" \n\n foo ==> "notdoc"
-                is_doc = false
-            else
-                # Allow a single newline
-                # "doc" \n foo ==> (macrocall core_@doc "doc" foo)
-                bump(ps, TRIVIA_FLAG) # NewlineWs
-            end
-        else
-            # "doc" foo    ==> (macrocall core_@doc "doc" foo)
-            # "doc $x" foo ==> (macrocall core_@doc (string "doc " x) foo)
-        end
-        if is_doc
-            reset_node!(ps, atdoc_mark, kind=K"core_@doc")
-            down(ps)
-            emit(ps, mark, K"macrocall")
-        end
-    end
-end
-
-
-#-------------------------------------------------------------------------------
-# Parser entry points
-
-function parse_all(ps::ParseState)
-    mark = position(ps)
-    while true
-        if peek(ps, skip_newlines=true) == K"EndMarker"
-            # As a special case, allow early end of input if there is
-            # nothing left but whitespace
-            # ===
-            # # a
-            #
-            # #= b =#  # c
-            # ==> (toplevel)
-            bump(ps, skip_newlines=true)
-            break
-        else
-            parse_stmts(ps)
-        end
-    end
-    emit(ps, mark, K"toplevel")
-    nothing
-end
-
-"""
-    parse_all(input)
-
-Parse a sequence of top level statements.
-
-`input` may be a `ParseStream` or other input source which will be passed to
-the `ParseStream` constructor. The `ParseStream` is returned.
-"""
-function parse_all(stream::ParseStream; julia_version=VERSION)
-    parse_all(ParseState(stream, julia_version))
-    return stream
-end
-
-function parse_all(code, args...)
-    stream = ParseStream(code)
-    return parse_all(stream, args...)
 end
 
