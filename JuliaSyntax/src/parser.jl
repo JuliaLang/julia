@@ -166,26 +166,14 @@ function recover(is_closer::Function, ps, flags=EMPTY_FLAGS; mark = position(ps)
 end
 
 @noinline function min_supported_version_err(ps, mark, message, min_ver)
-    major = ps.stream.julia_version_major
-    minor = ps.stream.julia_version_minor
-    msg = "$message is not supported in Julia version $major.$minor < $(min_ver)"
+    major, minor = ps.stream.version
+    msg = "$message not supported in Julia version $major.$minor < $(min_ver.major).$(min_ver.minor)"
     emit(ps, mark, K"error", error=msg)
-end
-
-function version_lessthan(ps, ver)
-    # To avoid keeping track of the exact Julia development version where new
-    # features were added or comparing prerelease strings, we treat prereleases
-    # or dev versons as the release version using only major and minor version
-    # numbers. This means we're inexact for old dev versions but that seems
-    # like an acceptable tradeoff.
-    major = ps.stream.julia_version_major
-    minor = ps.stream.julia_version_minor
-    major < ver.major || (major == ver.major && minor < ver.minor)
 end
 
 # Emit an error if the version is less than `min_ver`
 function min_supported_version(min_ver, ps, mark, message)
-    if version_lessthan(ps, min_ver)
+    if ps.stream.version < (min_ver.major, min_ver.minor)
         min_supported_version_err(ps, mark, message, min_ver)
     end
 end
@@ -679,20 +667,39 @@ function parse_arrow(ps::ParseState)
     parse_RtoL(ps, parse_or, is_prec_arrow, ==(K"-->"), parse_arrow)
 end
 
+# Like parse_RtoL, but specialized for the version test of dotted operators.
+function parse_lazy_cond(ps::ParseState, down, is_op, self)
+    mark = position(ps)
+    down(ps)
+    t = peek_token(ps)
+    k = kind(t)
+    if is_op(k)
+        bump(ps, TRIVIA_FLAG)
+        self(ps)
+        emit(ps, mark, k, flags(t))
+        if is_dotted(t)
+            min_supported_version(v"1.7", ps, mark, "dotted operators `.||` and `.&&`")
+        end
+    end
+end
+
+
 # x || y || z   ==>   (|| x (|| y z))
-# x .|| y       ==>   (.|| x y)
+#v1.6: x .|| y  ==>   (error (.|| x y))
+#v1.7: x .|| y  ==>   (.|| x y)
 #
 # flisp: parse-or
 function parse_or(ps::ParseState)
-    parse_RtoL(ps, parse_and, is_prec_lazy_or, true, parse_or)
+    parse_lazy_cond(ps, parse_and, is_prec_lazy_or, parse_or)
 end
 
 # x && y && z   ==>   (&& x (&& y z))
-# x .&& y       ==>   (.&& x y)
+#v1.6: x .&& y  ==>   (error (.&& x y))
+#v1.7: x .&& y  ==>   (.&& x y)
 #
 # flisp: parse-and
 function parse_and(ps::ParseState)
-    parse_RtoL(ps, parse_comparison, is_prec_lazy_and, true, parse_and)
+    parse_lazy_cond(ps, parse_comparison, is_prec_lazy_and, parse_and)
 end
 
 # Parse binary comparisons and comparison chains
@@ -2933,7 +2940,7 @@ function parse_string(ps::ParseState)
                 # "a $(x + y) b"  ==> (string "a " (call-i x + y) " b")
                 m = position(ps)
                 parse_atom(ps)
-                if !version_lessthan(ps, v"1.6")
+                if ps.stream.version >= (1,6)
                     # https://github.com/JuliaLang/julia/pull/38692
                     prev = peek_behind(ps)
                     if prev.kind == K"String"

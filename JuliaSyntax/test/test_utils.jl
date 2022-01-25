@@ -113,14 +113,14 @@ end
 
 #-------------------------------------------------------------------------------
 """
-    itest_parse(production, code; julia_version::VersionNumber=v"1.6")
+    itest_parse(production, code; version::VersionNumber=v"1.6")
 
 Parse `code`, entering the recursive descent parser at the given function
 `production`. This function shows the various tree representations on stdout
 for debugging.
 """
-function itest_parse(production, code; julia_version::VersionNumber=v"1.6")
-    stream = ParseStream(code; julia_version=julia_version)
+function itest_parse(production, code; version::VersionNumber=v"1.6")
+    stream = ParseStream(code; version=version)
     production(JuliaSyntax.ParseState(stream))
     t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
 

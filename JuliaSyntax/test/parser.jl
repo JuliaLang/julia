@@ -1,5 +1,5 @@
 function test_parse(production, code; v=v"1.6")
-    stream = ParseStream(code, julia_version=v)
+    stream = ParseStream(code, version=v)
     production(JuliaSyntax.ParseState(stream))
     t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"Nothing")
     source = SourceFile(code)
@@ -65,11 +65,13 @@ tests = [
     ],
     JuliaSyntax.parse_or => [
         "x || y || z" => "(|| x (|| y z))"
-        "x .|| y"     =>  "(.|| x y)"
+        ((v=v"1.6",), "x .|| y") => "(error (.|| x y))"
+        ((v=v"1.7",), "x .|| y") => "(.|| x y)"
     ],
     JuliaSyntax.parse_and => [
         "x && y && z" => "(&& x (&& y z))"
-        "x .&& y"     => "(.&& x y)"
+        ((v=v"1.6",), "x .&& y") => "(error (.&& x y))"
+        ((v=v"1.7",), "x .&& y") => "(.&& x y)"
     ],
     JuliaSyntax.parse_comparison => [
         # Type comparisons are syntactic

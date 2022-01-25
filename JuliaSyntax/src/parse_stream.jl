@@ -177,22 +177,27 @@ mutable struct ParseStream
     next_byte::Int
     # Counter for number of peek()s we've done without making progress via a bump()
     peek_count::Int
-    # Vesion of Julia we're parsing this code for. May be different from VERSION!
-    julia_version_major::Int
-    julia_version_minor::Int
+    # (major,minor) version of Julia we're parsing this code for.
+    # May be different from VERSION!
+    version::Tuple{Int,Int}
 end
 
-function ParseStream(code::Base.GenericIOBuffer; julia_version=VERSION)
-    next_byte = position(code)+1
-    lexer = Tokenize.tokenize(code, RawToken)
+function ParseStream(io::Base.GenericIOBuffer; version=VERSION)
+    next_byte = position(io)+1
+    lexer = Tokenize.Lexers.Lexer(io, RawToken)
+    # To avoid keeping track of the exact Julia development version where new
+    # features were added or comparing prerelease strings, we treat prereleases
+    # or dev versons as the release version using only major and minor version
+    # numbers. This means we're inexact for old dev versions but that seems
+    # like an acceptable tradeoff.
+    ver = (version.major, version.minor)
     ParseStream(lexer,
                 Vector{SyntaxToken}(),
                 Vector{TaggedRange}(),
                 Vector{Diagnostic}(),
                 next_byte,
                 0,
-                julia_version.major,
-                julia_version.minor)
+                ver)
 end
 
 function ParseStream(code::AbstractString; kws...)
