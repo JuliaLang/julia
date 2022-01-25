@@ -124,14 +124,14 @@ As such, synchronizations across iterations may invoke deadlock.
 For example, the above conditions imply that:
 
 - The lock taken in an iteration must be released within the same iteration.
-- Avoid communication between iterations using, e.g., Channels.
-- Write only to locations not shared across iterations (unless lock or atomic operation is used).
+- Avoid communication between iterations using, e.g., `Channel`s.
+- Write only to locations not shared across iterations (unless a lock or atomic operation is used).
 
 Furthermore, even though `lock` and atomic operations can be useful sometimes, it is often better
 to avoid them for performance.
 
 Schedule options are:
-- `:static` which creates one task per thread and divides the iterations equally among
+- `:static` creates one task per thread and divides the iterations equally among
             them, assigning each task specifically to each thread.
             Specifying `:static` is an error if used from inside another `@threads` loop
             or from a thread other than 1.
