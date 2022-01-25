@@ -707,6 +707,10 @@ end
 let f = x -> g -> g(x)
     @test fieldtype(typeof(f(Int)), 1) === Type{Int}
 end
+let T = Rational{Core.TypeVar(:T)}
+    f() = T
+    @test fieldtype(typeof(f), 1) === DataType
+end
 
 # ? syntax
 @test (true ? 1 : false ? 2 : 3) == 1
