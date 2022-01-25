@@ -228,6 +228,8 @@ end
 function singleton_type(@nospecialize(ft))
     if isa(ft, Const)
         return ft.val
+    elseif isa(ft, Kwfunc)
+        return ft.kwsorter
     elseif isconstType(ft)
         return ft.parameters[1]
     elseif ft isa DataType && isdefined(ft, :instance)
