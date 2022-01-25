@@ -704,11 +704,15 @@ end
 @test foo21900 == 10
 @test bar21900 == 11
 
-let f = x -> g -> g(x)
+let f = g -> x -> g(x)
+    @test f(Int)(1.0) === 1
+    @test @inferred(f(Int)) isa Function
     @test fieldtype(typeof(f(Int)), 1) === Type{Int}
 end
 let T = Rational{Core.TypeVar(:T)}
     f() = T
+    @test f() === T
+    @test Base.return_types(f) == Any[DataType]
     @test fieldtype(typeof(f), 1) === DataType
 end
 
