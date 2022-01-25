@@ -166,13 +166,8 @@ end
     @test tok("1 in 2",  3).kind == T.IN
     @test tok("1 in[1]", 3).kind == T.IN
 
-    if VERSION >= v"0.6.0-dev.1471"
-        @test tok("1 isa 2",  3).kind == T.ISA
-        @test tok("1 isa[2]", 3).kind == T.ISA
-    else
-        @test tok("1 isa 2",  3).kind == T.IDENTIFIER
-        @test tok("1 isa[2]", 3).kind == T.IDENTIFIER
-    end
+    @test tok("1 isa 2",  3).kind == T.ISA
+    @test tok("1 isa[2]", 3).kind == T.ISA
 end
 
 @testset "tokenizing true/false literals" begin
@@ -629,6 +624,9 @@ for op in ops
     for (arity, container) in strs
         for str in container
             expr = Meta.parse(str, raise = false)
+            if VERSION < v"1.7" && str == "a .&& b"
+                expr = Expr(Symbol(".&&"), :a, :b)
+            end
             if expr isa Expr && (expr.head != :error && expr.head != :incomplete)
                 tokens = collect(tokenize(str))
                 exop = expr.head == :call ? expr.args[1] : expr.head
