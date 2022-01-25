@@ -51,7 +51,7 @@ endef
 # note that `"src"` is a special triplet value.
 # if $(3) is "assert", we set BINARYBUILDER_LLVM_ASSERTS=1
 define checksum_dep
-checksum-$(1)-$(2)-$(3):
+checksum-$(1)-$(2)-$(3): clean-$(1)
 	-+$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/deps" $(call make_flags,$(1),$(2),$(3)) checksum-$(1)
 .PHONY: checksum-$(1)-$(2)-$(3)
 
@@ -113,6 +113,9 @@ pack-checksum-llvm pack-checksum-unwind: | pack-checksum-llvmunwind
 pack-checksum-llvmunwind: | pack-checksum-llvm.*unwind
 	cd "$(JULIAHOME)/deps/checksums" && mv 'llvm.*unwind' llvmunwind
 
+clean-%: FORCE
+	-rm "$(JULIAHOME)/deps/checksums"/'$*'
+
 # define how to pack parallel checksums into a single file format
 pack-checksum-%: FORCE
 	@echo making "$(JULIAHOME)/deps/checksums/"'$*'
@@ -125,7 +128,7 @@ pack-checksum-%: FORCE
 				done; \
 				rmdir "$$each"; \
 			fi; \
-		done > '$*'
+		done >> '$*'
 	@cd "$(JULIAHOME)/deps/checksums" && \
 		sort '$*' > '$*.tmp' && \
 		mv '$*.tmp' '$*'

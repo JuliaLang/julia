@@ -84,27 +84,33 @@ end
 
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
-        bt = stacktrace(bt)
+        bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
 end
+scrub_repl_backtrace(stack::ExceptionStack) =
+    ExceptionStack(Any[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
 
-function display_error(io::IO, er, bt)
-    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = scrub_repl_backtrace(bt)
-    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
-    println(io)
-end
+istrivialerror(stack::ExceptionStack) =
+    length(stack) == 1 && length(stack[1].backtrace) ≤ 1
+    # frame 1 = top level; assumes already went through scrub_repl_backtrace
+
 function display_error(io::IO, stack::ExceptionStack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
-    show_exception_stack(IOContext(io, :limit => true), bt)
+    show_exception_stack(IOContext(io, :limit => true), stack)
     println(io)
 end
 display_error(stack::ExceptionStack) = display_error(stderr, stack)
+
+# these forms are depended on by packages outside Julia
+function display_error(io::IO, er, bt)
+    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
+    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
+    println(io)
+end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
@@ -117,6 +123,8 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 print(color_normal)
             end
             if lasterr !== nothing
+                lasterr = scrub_repl_backtrace(lasterr)
+                istrivialerror(lasterr) || ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
@@ -134,7 +142,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                         @error "Evaluation succeeded, but an error occurred while displaying the value" typeof(value)
                         rethrow()
                     end
-                    println()
                 end
             end
             break
@@ -143,7 +150,8 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 @error "SYSTEM: display_error(errio, lasterr) caused an error"
             end
             errcount += 1
-            lasterr = current_exceptions()
+            lasterr = scrub_repl_backtrace(current_exceptions())
+            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
@@ -260,7 +268,7 @@ function exec_options(opts)
         try
             load_julia_startup()
         catch
-            invokelatest(display_error, current_exceptions())
+            invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
             !(repl || is_interactive::Bool) && exit(1)
         end
     end
@@ -292,9 +300,13 @@ function exec_options(opts)
             exit_on_sigint(true)
         end
         try
-            include(Main, PROGRAM_FILE)
+            if PROGRAM_FILE == "-"
+                include_string(Main, read(stdin, String), "stdin")
+            else
+                include(Main, PROGRAM_FILE)
+            end
         catch
-            invokelatest(display_error, current_exceptions())
+            invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
             if !is_interactive::Bool
                 exit(1)
             end
@@ -496,7 +508,7 @@ function _start()
     try
         exec_options(JLOptions())
     catch
-        invokelatest(display_error, current_exceptions())
+        invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
         exit(1)
     end
     if is_interactive && get(stdout, :color, false)

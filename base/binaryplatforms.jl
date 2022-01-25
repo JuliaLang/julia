@@ -3,7 +3,7 @@
 module BinaryPlatforms
 
 export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
-       os_version, libc, compiler_abi, libgfortran_version, libstdcxx_version,
+       os_version, libc, libgfortran_version, libstdcxx_version,
        cxxstring_abi, parse_dl_name_version, detect_libgfortran_version,
        detect_libstdcxx_version, detect_cxxstring_abi, call_abi, wordsize, triplet,
        select_platform, platforms_match, platform_name
@@ -894,7 +894,7 @@ function detect_cxxstring_abi()
     end
 
     function open_libllvm(f::Function)
-        for lib_name in ("libLLVM", "LLVM", "libLLVMSupport")
+        for lib_name in ("libLLVM-13jl", "libLLVM", "LLVM", "libLLVMSupport")
             hdl = Libdl.dlopen_e(lib_name)
             if hdl != C_NULL
                 try

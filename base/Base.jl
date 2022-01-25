@@ -126,6 +126,9 @@ include("refpointer.jl")
 include("checked.jl")
 using .Checked
 
+# Lazy strings
+include("strings/lazy.jl")
+
 # array structures
 include("indices.jl")
 include("array.jl")
@@ -203,6 +206,7 @@ include("dict.jl")
 include("abstractset.jl")
 include("set.jl")
 
+# Strings
 include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
@@ -215,8 +219,6 @@ let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
         if Base.DARWIN_FRAMEWORK
             push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-        else
-            push!(DL_LOAD_PATH, "@loader_path/julia")
         end
         push!(DL_LOAD_PATH, "@loader_path")
     end
@@ -294,6 +296,9 @@ include("cmd.jl")
 include("process.jl")
 include("ttyhascolor.jl")
 include("secretbuffer.jl")
+
+# RandomDevice support
+include("randomdevice.jl")
 
 # core math functions
 include("floatfuncs.jl")

@@ -87,6 +87,10 @@ signed(::Type{T}) where {T<:Signed} = T
 (+)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
 (*)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
 
+negate(x) = -x
+negate(x::Unsigned) = -convert(Signed, x)
+#widenegate(x) = -convert(widen(signed(typeof(x))), x)
+
 inv(x::Integer) = float(one(x)) / float(x)
 (/)(x::T, y::T) where {T<:Integer} = float(x) / float(y)
 # skip promotion for system integer types
@@ -689,25 +693,30 @@ julia> big"7891.5"
 ```
 """
 macro big_str(s)
+    message = "invalid number format $s for BigInt or BigFloat"
+    throw_error =  :(throw(ArgumentError($message)))
     if '_' in s
         # remove _ in s[2:end-1]
         bf = IOBuffer(maxsize=lastindex(s))
-        print(bf, s[1])
+        c = s[1]
+        print(bf, c)
+        is_prev_underscore = (c == '_')
+        is_prev_dot = (c == '.')
         for c in SubString(s, 2, lastindex(s)-1)
             c != '_' && print(bf, c)
+            c == '_' && is_prev_dot && return throw_error
+            c == '.' && is_prev_underscore && return throw_error
+            is_prev_underscore = (c == '_')
+            is_prev_dot = (c == '.')
         end
         print(bf, s[end])
-        seekstart(bf)
-        n = tryparse(BigInt, String(take!(bf)))
-        n === nothing || return n
-    else
-        n = tryparse(BigInt, s)
-        n === nothing || return n
-        n = tryparse(BigFloat, s)
-        n === nothing || return n
+        s = String(take!(bf))
     end
-    message = "invalid number format $s for BigInt or BigFloat"
-    return :(throw(ArgumentError($message)))
+    n = tryparse(BigInt, s)
+    n === nothing || return n
+    n = tryparse(BigFloat, s)
+    n === nothing || return n
+    return throw_error
 end
 
 ## integer promotions ##

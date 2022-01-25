@@ -141,7 +141,7 @@
            ((typed_hcat)  (string (deparse (cadr e))
                                   (deparse (cons 'hcat (cddr e)))))
            ((ncat)        (string #\[ (deparse-arglist (cddr e) (string (deparse-semicolons (cadr e)) " "))
-                                      (if (= (length (cddr e)) 1)
+                                      (if (<= (length (cddr e)) 1)
                                           (deparse-semicolons (cadr e))
                                           "") #\]))
            ((typed_ncat)  (string (deparse (cadr e))
@@ -208,6 +208,13 @@
                                     (string " " (caddr e)))
                                 "\n"
                                 (indented-block (cdr (cadddr e)) ilvl))
+                        "")
+                    (if (length> e 5)
+                        (let ((els (cadddddr e)))
+                          (if (and (pair? els) (eq? (car els) 'block))
+                              (string (string.rep "    " ilvl) "else\n"
+                                      (indented-block (cdr els) ilvl))
+                              ""))
                         "")
                     (if (length> e 4)
                         (let ((fin (caddddr e)))
@@ -371,7 +378,7 @@
   (or (symbol? e) (decl? e)))
 
 (define (eventually-decl? e)
-  (or (decl? e) (and (pair? e) (eq? (car e) 'atomic) (symdecl? (cadr e)))))
+  (or (symbol? e) (and (pair? e) (memq (car e) '(|::| atomic const)) (eventually-decl? (cadr e)))))
 
 (define (make-decl n t) `(|::| ,n ,t))
 

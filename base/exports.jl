@@ -57,6 +57,7 @@ export
     IOStream,
     LinRange,
     Irrational,
+    LazyString,
     Matrix,
     MergeSort,
     Missing,
@@ -385,6 +386,7 @@ export
     eachindex,
     eachrow,
     eachslice,
+    extrema!,
     extrema,
     fill!,
     fill,
@@ -573,6 +575,8 @@ export
     bytes2hex,
     chomp,
     chop,
+    chopprefix,
+    chopsuffix,
     codepoint,
     codeunit,
     codeunits,
@@ -893,6 +897,7 @@ export
     chown,
     cp,
     ctime,
+    diskstat,
     download,
     filemode,
     filesize,
@@ -941,6 +946,7 @@ export
     run,
     setenv,
     addenv,
+    setcpuaffinity,
     success,
     withenv,
 
@@ -981,6 +987,7 @@ export
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
+    @lazy_str, # lazy string
 
     # documentation
     @text_str,
@@ -992,6 +999,7 @@ export
 
     # profiling
     @time,
+    @showtime,
     @timed,
     @timev,
     @elapsed,

@@ -52,6 +52,7 @@ function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
+    disassociate_julia_struct(proc.handle)
     ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
     proc.handle = C_NULL
     lock(proc.exitnotify)
@@ -65,15 +66,26 @@ end
 
 # called when the libuv handle is destroyed
 function _uv_hook_close(proc::Process)
-    proc.handle = C_NULL
+    Libc.free(@atomicswap :not_atomic proc.handle = C_NULL)
     nothing
 end
 
 const SpawnIOs = Vector{Any} # convenience name for readability
 
+function as_cpumask(cpus::Vector{UInt16})
+    n = max(Int(maximum(cpus)), Int(ccall(:uv_cpumask_size, Cint, ())))
+    cpumask = zeros(Bool, n)
+    for i in cpus
+        cpumask[i] = true
+    end
+    return cpumask
+end
+
 # handle marshalling of `Cmd` arguments from Julia to C
 @noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs)
     loop = eventloop()
+    cpumask = cmd.cpus
+    cpumask === nothing || (cpumask = as_cpumask(cmd.cpus))
     GC.@preserve stdio begin
         iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
             let h = rawhandle(io)
@@ -89,12 +101,14 @@ const SpawnIOs = Vector{Any} # convenience name for readability
         err = ccall(:jl_spawn, Int32,
                   (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                    Ptr{Tuple{Cint, UInt}}, Int,
-                   UInt32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
+                   UInt32, Ptr{Cstring}, Cstring, Ptr{Bool}, Csize_t, Ptr{Cvoid}),
             file, exec, loop, handle,
             iohandles, length(iohandles),
             flags,
             env === nothing ? C_NULL : env,
             isempty(dir) ? C_NULL : dir,
+            cpumask === nothing ? C_NULL : cpumask,
+            cpumask === nothing ? 0 : length(cpumask),
             @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
     end
     if err != 0
@@ -574,10 +588,10 @@ Get the child process ID, if it still exists.
     This function requires at least Julia 1.1.
 """
 function Libc.getpid(p::Process)
-    # TODO: due to threading, this method is no longer synchronized with the user application
+    # TODO: due to threading, this method is only weakly synchronized with the user application
     iolock_begin()
     ppid = Int32(0)
-    if p.handle != C_NULL
+    if p.handle != C_NULL # e.g. process_running
         ppid = ccall(:jl_uv_process_pid, Int32, (Ptr{Cvoid},), p.handle)
     end
     iolock_end()

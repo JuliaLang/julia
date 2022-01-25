@@ -168,6 +168,8 @@ Like [`reduce`](@ref), but with guaranteed left associativity. If provided, the 
 argument `init` will be used exactly once. In general, it will be necessary to provide
 `init` to work with empty collections.
 
+See also [`mapfoldl`](@ref), [`foldr`](@ref), [`accumulate`](@ref).
+
 # Examples
 ```jldoctest
 julia> foldl(=>, 1:4)
@@ -175,6 +177,9 @@ julia> foldl(=>, 1:4)
 
 julia> foldl(=>, 1:4; init=0)
 (((0 => 1) => 2) => 3) => 4
+
+julia> accumulate(=>, (1,2,3,4))
+(1, 1 => 2, (1 => 2) => 3, ((1 => 2) => 3) => 4)
 ```
 """
 foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
@@ -599,7 +604,7 @@ julia> prod(1:5; init = 1.0)
 """
 prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
 
-## maximum & minimum
+## maximum, minimum, & extrema
 _fast(::typeof(min),x,y) = min(x,y)
 _fast(::typeof(max),x,y) = max(x,y)
 function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
@@ -629,11 +634,6 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     start = first + 1
     simdstop  = start + chunk_len - 4
     while simdstop <= last - 3
-        # short circuit in case of NaN or missing
-        (v1 == v1) === true || return v1
-        (v2 == v2) === true || return v2
-        (v3 == v3) === true || return v3
-        (v4 == v4) === true || return v4
         @inbounds for i in start:4:simdstop
             v1 = _fast(op, v1, f(A[i+0]))
             v2 = _fast(op, v2, f(A[i+1]))
@@ -779,6 +779,76 @@ Inf
 ```
 """
 minimum(a; kw...) = mapreduce(identity, min, a; kw...)
+
+"""
+    extrema(itr; [init]) -> (mn, mx)
+
+Compute both the minimum `mn` and maximum `mx` element in a single pass, and return them
+as a 2-tuple.
+
+The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
+first and second elements are neutral elements for `min` and `max` respectively
+(i.e. which are greater/less than or equal to any other element). As a consequence, when
+`itr` is empty the returned `(mn, mx)` tuple will satisfy `mn ≥ mx`. When `init` is
+specified it may be used even for non-empty `itr`.
+
+!!! compat "Julia 1.8"
+    Keyword argument `init` requires Julia 1.8 or later.
+
+# Examples
+```jldoctest
+julia> extrema(2:10)
+(2, 10)
+
+julia> extrema([9,pi,4.5])
+(3.141592653589793, 9.0)
+
+julia> extrema([]; init = (Inf, -Inf))
+(Inf, -Inf)
+```
+"""
+extrema(itr; kw...) = extrema(identity, itr; kw...)
+
+"""
+    extrema(f, itr; [init]) -> (mn, mx)
+
+Compute both the minimum `mn` and maximum `mx` of `f` applied to each element in `itr` and
+return them as a 2-tuple. Only one pass is made over `itr`.
+
+The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
+first and second elements are neutral elements for `min` and `max` respectively
+(i.e. which are greater/less than or equal to any other element). It is used for non-empty
+collections. Note: it implies that, for empty `itr`, the returned value `(mn, mx)` satisfies
+`mn ≥ mx` even though for non-empty `itr` it  satisfies `mn ≤ mx`.  This is a "paradoxical"
+but yet expected result.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+
+!!! compat "Julia 1.8"
+    Keyword argument `init` requires Julia 1.8 or later.
+
+# Examples
+```jldoctest
+julia> extrema(sin, 0:π)
+(0.0, 0.9092974268256817)
+
+julia> extrema(sin, Real[]; init = (1.0, -1.0))  # good, since -1 ≤ sin(::Real) ≤ 1
+(1.0, -1.0)
+```
+"""
+extrema(f, itr; kw...) = mapreduce(ExtremaMap(f), _extrema_rf, itr; kw...)
+
+# Not using closure since `extrema(type, itr)` is a very likely use-case and it's better
+# to avoid type-instability (#23618).
+struct ExtremaMap{F} <: Function
+    f::F
+end
+ExtremaMap(::Type{T}) where {T} = ExtremaMap{Type{T}}(T)
+@inline (f::ExtremaMap)(x) = (y = f.f(x); (y, y))
+
+# TODO: optimize for inputs <: AbstractFloat
+@inline _extrema_rf((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
 
 ## findmax, findmin, argmax & argmin
 
@@ -1216,10 +1286,12 @@ count(itr; init=0) = count(identity, itr; init)
 
 count(f, itr; init=0) = _simple_count(f, itr, init)
 
-function _simple_count(pred, itr, init::T) where {T}
+_simple_count(pred, itr, init) = _simple_count_helper(Generator(pred, itr), init)
+
+function _simple_count_helper(g, init::T) where {T}
     n::T = init
-    for x in itr
-        n += pred(x)::Bool
+    for x in g
+        n += x::Bool
     end
     return n
 end

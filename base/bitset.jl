@@ -11,7 +11,7 @@ const NO_OFFSET = Int === Int64 ? -one(Int) << 60 : -one(Int) << 29
 #   a small optimization in the in(x, ::BitSet) method
 
 mutable struct BitSet <: AbstractSet{Int}
-    bits::Vector{UInt64}
+    const bits::Vector{UInt64}
     # 1st stored Int equals 64*offset
     offset::Int
 

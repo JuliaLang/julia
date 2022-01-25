@@ -14,11 +14,7 @@
 #include <dlfcn.h>
 #endif
 
-#ifndef _COMPILER_MICROSOFT_
 #include "valgrind.h"
-#else
-#define RUNNING_ON_VALGRIND 0
-#endif
 #include "julia_assert.h"
 
 #ifdef __cplusplus
@@ -52,7 +48,7 @@ static int literal_val_id(jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
                 return i;
         }
     }
-    jl_array_ptr_1d_push(rs, v);
+    jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
     return jl_array_len(rs) - 1;
 }
 

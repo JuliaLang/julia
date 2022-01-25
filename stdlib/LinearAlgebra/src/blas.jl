@@ -6,8 +6,8 @@ Interface to BLAS subroutines.
 module BLAS
 
 import ..axpy!, ..axpby!
-import Base: copyto!, USE_BLAS64
-using Base: require_one_based_indexing
+import Base: copyto!
+using Base: require_one_based_indexing, USE_BLAS64
 
 export
 # Level 1
@@ -33,6 +33,7 @@ export
     sbmv!,
     sbmv,
     spmv!,
+    spr!,
     symv!,
     symv,
     trsv!,
@@ -74,7 +75,7 @@ const libblas = libblastrampoline
 const liblapack = libblastrampoline
 
 import LinearAlgebra
-import LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1, axpy!
+using LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1
 
 include("lbt.jl")
 
@@ -148,7 +149,7 @@ function check()
     config = get_config()
 
     # Ensure that one of our loaded libraries satisfies our interface requirement
-    interface = Base.USE_BLAS64 ? :ilp64 : :lp64
+    interface = USE_BLAS64 ? :ilp64 : :lp64
     if !any(lib.interface == interface for lib in config.loaded_libs)
         interfacestr = uppercase(string(interface))
         @error("No loaded BLAS libraries were built with $(interfacestr) support")
@@ -157,6 +158,13 @@ function check()
     end
 end
 
+"Check that upper/lower (for special matrices) is correctly specified"
+function chkuplo(uplo::AbstractChar)
+    if !(uplo == 'U' || uplo == 'L')
+        throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
+    end
+    uplo
+end
 
 # Level 1
 ## copy
@@ -375,7 +383,7 @@ for (elty, f) in ((Float32, :dot), (Float64, :dot),
             xstride = stride(x,1)
             ystride = stride(y,1)
             x_delta = xstride < 0 ? n : 1
-            GC.@preserve x $f(n,pointer(x,x_delta),xstride,y,ystride)
+            GC.@preserve x $f(n, pointer(x, x_delta), xstride, y, ystride)
         end
 
         function $f(x::DenseArray{$elty}, y::StridedVector{$elty})
@@ -383,7 +391,7 @@ for (elty, f) in ((Float32, :dot), (Float64, :dot),
             xstride = stride(x,1)
             ystride = stride(y,1)
             y_delta = ystride < 0 ? n : 1
-            GC.@preserve y $f(n,x,xstride,pointer(y,y_delta),ystride)
+            GC.@preserve y $f(n, x, xstride, pointer(y, y_delta), ystride)
         end
 
         function $f(x::StridedVector{$elty}, y::StridedVector{$elty})
@@ -392,7 +400,7 @@ for (elty, f) in ((Float32, :dot), (Float64, :dot),
             ystride = stride(y,1)
             x_delta = xstride < 0 ? n : 1
             y_delta = ystride < 0 ? n : 1
-            GC.@preserve x y $f(n,pointer(x,x_delta),xstride,pointer(y,y_delta),ystride)
+            GC.@preserve x y $f(n, pointer(x, x_delta), xstride, pointer(y, y_delta), ystride)
         end
     end
 end
@@ -401,7 +409,7 @@ function dot(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T}
     require_one_based_indexing(DX, DY)
     n = length(DX)
     if n != length(DY)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
+        throw(DimensionMismatch(lazy"dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
     return dot(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
@@ -409,7 +417,7 @@ function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
     require_one_based_indexing(DX, DY)
     n = length(DX)
     if n != length(DY)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
+        throw(DimensionMismatch(lazy"dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
     return dotc(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
@@ -417,7 +425,7 @@ function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
     require_one_based_indexing(DX, DY)
     n = length(DX)
     if n != length(DY)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
+        throw(DimensionMismatch(lazy"dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
     return dotu(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
@@ -536,7 +544,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
 end
 function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where T<:BlasFloat
     if length(x) != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
     return axpy!(length(x), convert(T,alpha), x, stride(x, 1), y, stride(y, 1))
 end
@@ -547,10 +555,10 @@ function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange
         throw(DimensionMismatch("ranges of differing lengths"))
     end
     if minimum(rx) < 1 || maximum(rx) > length(x)
-        throw(ArgumentError("range out of bounds for x, of length $(length(x))"))
+        throw(ArgumentError(lazy"range out of bounds for x, of length $(length(x))"))
     end
     if minimum(ry) < 1 || maximum(ry) > length(y)
-        throw(ArgumentError("range out of bounds for y, of length $(length(y))"))
+        throw(ArgumentError(lazy"range out of bounds for y, of length $(length(y))"))
     end
     GC.@preserve x y axpy!(
         length(rx),
@@ -607,7 +615,7 @@ end
 function axpby!(alpha::Number, x::Union{DenseArray{T},AbstractVector{T}}, beta::Number, y::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasFloat
     require_one_based_indexing(x, y)
     if length(x) != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
     return axpby!(length(x), convert(T, alpha), x, stride(x, 1), convert(T, beta), y, stride(y, 1))
 end
@@ -657,11 +665,11 @@ for (fname, elty) in ((:dgemv_,:Float64),
             require_one_based_indexing(A, X, Y)
             m,n = size(A,1),size(A,2)
             if trans == 'N' && (length(X) != n || length(Y) != m)
-                throw(DimensionMismatch("A has dimensions $(size(A)), X has length $(length(X)) and Y has length $(length(Y))"))
+                throw(DimensionMismatch(lazy"A has dimensions $(size(A)), X has length $(length(X)) and Y has length $(length(Y))"))
             elseif trans == 'C' && (length(X) != m || length(Y) != n)
-                throw(DimensionMismatch("the adjoint of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
+                throw(DimensionMismatch(lazy"the adjoint of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             elseif trans == 'T' && (length(X) != m || length(Y) != n)
-                throw(DimensionMismatch("the transpose of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
+                throw(DimensionMismatch(lazy"the transpose of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             end
             chkstride1(A)
             lda = stride(A,2)
@@ -798,16 +806,17 @@ for (fname, elty, lib) in ((:dsymv_,:Float64,libblastrampoline),
         function symv!(uplo::AbstractChar, alpha::Union{($elty), Bool},
                        A::AbstractMatrix{$elty}, x::AbstractVector{$elty},
                        beta::Union{($elty), Bool}, y::AbstractVector{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
-                throw(DimensionMismatch("matrix A is $m by $n but must be square"))
+                throw(DimensionMismatch(lazy"matrix A is $m by $n but must be square"))
             end
             if n != length(x)
-                throw(DimensionMismatch("A has size $(size(A)), and x has length $(length(x))"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), and x has length $(length(x))"))
             end
             if m != length(y)
-                throw(DimensionMismatch("A has size $(size(A)), and y has length $(length(y))"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), and y has length $(length(y))"))
             end
             chkstride1(A)
             ccall((@blasfunc($fname), $lib), Cvoid,
@@ -859,16 +868,17 @@ for (fname, elty) in ((:zhemv_,:ComplexF64),
                       (:chemv_,:ComplexF32))
     @eval begin
         function hemv!(uplo::AbstractChar, α::Union{$elty, Bool}, A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, β::Union{$elty, Bool}, y::AbstractVector{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
-                throw(DimensionMismatch("matrix A is $m by $n but must be square"))
+                throw(DimensionMismatch(lazy"matrix A is $m by $n but must be square"))
             end
             if n != length(x)
-                throw(DimensionMismatch("A has size $(size(A)), and x has length $(length(x))"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), and x has length $(length(x))"))
             end
             if m != length(y)
-                throw(DimensionMismatch("A has size $(size(A)), and y has length $(length(y))"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), and y has length $(length(y))"))
             end
             chkstride1(A)
             lda = max(1, stride(A, 2))
@@ -960,6 +970,7 @@ end
 function hpmv!(uplo::AbstractChar,
                α::Number, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
                β::Number, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasComplex}
+    chkuplo(uplo)
     require_one_based_indexing(AP, x, y)
     N = length(x)
     if N != length(y)
@@ -968,6 +979,7 @@ function hpmv!(uplo::AbstractChar,
     if 2*length(AP) < N*(N + 1)
         throw(DimensionMismatch("Packed Hermitian matrix A has size smaller than length(x) =  $(N)."))
     end
+    chkstride1(AP)
     return hpmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
 end
 
@@ -1007,6 +1019,7 @@ for (fname, elty) in ((:dsbmv_,:Float64),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function sbmv!(uplo::AbstractChar, k::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, x, y)
             chkstride1(A)
             ccall((@blasfunc($fname), libblastrampoline), Cvoid,
@@ -1110,6 +1123,7 @@ end
 function spmv!(uplo::AbstractChar,
                α::Real, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
                β::Real, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasReal}
+    chkuplo(uplo)
     require_one_based_indexing(AP, x, y)
     N = length(x)
     if N != length(y)
@@ -1118,6 +1132,7 @@ function spmv!(uplo::AbstractChar,
     if 2*length(AP) < N*(N + 1)
         throw(DimensionMismatch("Packed symmetric matrix A has size smaller than length(x) = $(N)."))
     end
+    chkstride1(AP)
     return spmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
 end
 
@@ -1145,6 +1160,73 @@ Return the updated `y`.
 """
 spmv!
 
+### spr!, (SP) symmetric packed matrix-vector operation defined as A := alpha*x*x' + A
+for (fname, elty) in ((:dspr_, :Float64),
+                      (:sspr_, :Float32))
+    @eval begin
+        function spr!(uplo::AbstractChar,
+                      n::Integer,
+                      α::$elty,
+                      x::Union{Ptr{$elty}, AbstractArray{$elty}},
+                      incx::Integer,
+                      AP::Union{Ptr{$elty}, AbstractArray{$elty}})
+
+            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+                  (Ref{UInt8},     # uplo,
+                   Ref{BlasInt},   # n,
+                   Ref{$elty},     # α,
+                   Ptr{$elty},     # x,
+                   Ref{BlasInt},   # incx,
+                   Ptr{$elty},     # AP,
+                   Clong),         # length of uplo
+                  uplo,
+                  n,
+                  α,
+                  x,
+                  incx,
+                  AP,
+                  1)
+            return AP
+        end
+    end
+end
+
+function spr!(uplo::AbstractChar,
+              α::Real, x::Union{DenseArray{T}, AbstractVector{T}},
+              AP::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasReal}
+    chkuplo(uplo)
+    require_one_based_indexing(AP, x)
+    N = length(x)
+    if 2*length(AP) < N*(N + 1)
+        throw(DimensionMismatch("Packed symmetric matrix A has size smaller than length(x) = $(N)."))
+    end
+    chkstride1(AP)
+    return spr!(uplo, N, convert(T, α), x, stride(x, 1), AP)
+end
+
+"""
+    spr!(uplo, α, x, AP)
+
+Update matrix `A` as `α*A*x*x'`, where `A` is a symmetric matrix provided
+in packed format `AP` and `x` is a vector.
+
+With `uplo = 'U'`, the array AP must contain the upper triangular part of the
+symmetric matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[1, 2]` and `A[2, 2]`
+respectively, and so on.
+
+With `uplo = 'L'`, the array AP must contain the lower triangular part of the
+symmetric matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[2, 1]` and `A[3, 1]`
+respectively, and so on.
+
+The scalar input `α` must be real.
+
+The array inputs `x` and `AP` must all be of `Float32` or `Float64` type.
+Return the updated `AP`.
+"""
+spr!
+
 ### hbmv, (HB) Hermitian banded matrix-vector multiplication
 for (fname, elty) in ((:zhbmv_,:ComplexF64),
                       (:chbmv_,:ComplexF32))
@@ -1157,6 +1239,7 @@ for (fname, elty) in ((:zhbmv_,:ComplexF64),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function hbmv!(uplo::AbstractChar, k::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, x, y)
             chkstride1(A)
             ccall((@blasfunc($fname), libblastrampoline), Cvoid,
@@ -1213,10 +1296,11 @@ for (fname, elty) in ((:dtrmv_,:Float64),
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION A(LDA,*),X(*)
         function trmv!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if n != length(x)
-                throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
+                throw(DimensionMismatch(lazy"A has size ($n,$n), x has length $(length(x))"))
             end
             chkstride1(A)
             ccall((@blasfunc($fname), libblastrampoline), Cvoid,
@@ -1268,10 +1352,11 @@ for (fname, elty) in ((:dtrsv_,:Float64),
                 #       .. Array Arguments ..
                 #       DOUBLE PRECISION A(LDA,*),X(*)
         function trsv!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if n != length(x)
-                throw(DimensionMismatch("size of A is $n != length(x) = $(length(x))"))
+                throw(DimensionMismatch(lazy"size of A is $n != length(x) = $(length(x))"))
             end
             chkstride1(A)
             ccall((@blasfunc($fname), libblastrampoline), Cvoid,
@@ -1306,7 +1391,7 @@ for (fname, elty) in ((:dger_,:Float64),
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != length(x) || n != length(y)
-                throw(DimensionMismatch("A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
+                throw(DimensionMismatch(lazy"A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
             end
             ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
@@ -1336,10 +1421,11 @@ for (fname, elty, lib) in ((:dsyr_,:Float64,libblastrampoline),
                            (:csyr_,:ComplexF32,libblastrampoline))
     @eval begin
         function syr!(uplo::AbstractChar, α::$elty, x::AbstractVector{$elty}, A::AbstractMatrix{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if length(x) != n
-                throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
+                throw(DimensionMismatch(lazy"A has size ($n,$n), x has length $(length(x))"))
             end
             ccall((@blasfunc($fname), $lib), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
@@ -1366,10 +1452,11 @@ for (fname, elty, relty) in ((:zher_,:ComplexF64, :Float64),
                              (:cher_,:ComplexF32, :Float32))
     @eval begin
         function her!(uplo::AbstractChar, α::$relty, x::AbstractVector{$elty}, A::AbstractMatrix{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if length(x) != n
-                throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
+                throw(DimensionMismatch(lazy"A has size ($n,$n), x has length $(length(x))"))
             end
             ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$relty}, Ptr{$elty},
@@ -1419,7 +1506,7 @@ for (gemm, elty) in
             kb = size(B, transB == 'N' ? 1 : 2)
             n = size(B, transB == 'N' ? 2 : 1)
             if ka != kb || m != size(C,1) || n != size(C,2)
-                throw(DimensionMismatch("A has size ($m,$ka), B has size ($kb,$n), C has size $(size(C))"))
+                throw(DimensionMismatch(lazy"A has size ($m,$ka), B has size ($kb,$n), C has size $(size(C))"))
             end
             chkstride1(A)
             chkstride1(B)
@@ -1475,14 +1562,15 @@ for (mfname, elty) in ((:dsymm_,:Float64),
         function symm!(side::AbstractChar, uplo::AbstractChar, alpha::Union{($elty), Bool},
                        A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty},
                        beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
             if j != (side == 'L' ? m : n)
-                throw(DimensionMismatch("A has size $(size(A)), C has size ($m,$n)"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), C has size ($m,$n)"))
             end
             if size(B,2) != n
-                throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
+                throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
             end
             chkstride1(A)
             chkstride1(B)
@@ -1548,14 +1636,15 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
         function hemm!(side::AbstractChar, uplo::AbstractChar, alpha::Union{($elty), Bool},
                        A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty},
                        beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
             if j != (side == 'L' ? m : n)
-                throw(DimensionMismatch("A has size $(size(A)), C has size ($m,$n)"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), C has size ($m,$n)"))
             end
             if size(B,2) != n
-                throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
+                throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
             end
             chkstride1(A)
             chkstride1(B)
@@ -1631,31 +1720,32 @@ for (fname, elty) in ((:dsyrk_,:Float64),
                       (:ssyrk_,:Float32),
                       (:zsyrk_,:ComplexF64),
                       (:csyrk_,:ComplexF32))
-   @eval begin
-       # SUBROUTINE DSYRK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
-       # *     .. Scalar Arguments ..
-       #       REAL ALPHA,BETA
-       #       INTEGER K,LDA,LDC,N
-       #       CHARACTER TRANS,UPLO
-       # *     .. Array Arguments ..
-       #       REAL A(LDA,*),C(LDC,*)
-       function syrk!(uplo::AbstractChar, trans::AbstractChar,
+    @eval begin
+        # SUBROUTINE DSYRK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
+        # *     .. Scalar Arguments ..
+        #       REAL ALPHA,BETA
+        #       INTEGER K,LDA,LDC,N
+        #       CHARACTER TRANS,UPLO
+        # *     .. Array Arguments ..
+        #       REAL A(LDA,*),C(LDC,*)
+        function syrk!(uplo::AbstractChar, trans::AbstractChar,
                       alpha::Union{($elty), Bool}, A::AbstractVecOrMat{$elty},
                       beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
-           require_one_based_indexing(A, C)
-           n = checksquare(C)
-           nn = size(A, trans == 'N' ? 1 : 2)
-           if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
-           k  = size(A, trans == 'N' ? 2 : 1)
-           chkstride1(A)
-           chkstride1(C)
-           ccall((@blasfunc($fname), libblastrampoline), Cvoid,
-                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
-                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
-                  Ptr{$elty}, Ref{BlasInt}, Clong, Clong),
-                 uplo, trans, n, k,
-                 alpha, A, max(1,stride(A,2)), beta,
-                 C, max(1,stride(C,2)), 1, 1)
+            chkuplo(uplo)
+            require_one_based_indexing(A, C)
+            n = checksquare(C)
+            nn = size(A, trans == 'N' ? 1 : 2)
+            if nn != n throw(DimensionMismatch(lazy"C has size ($n,$n), corresponding dimension of A is $nn")) end
+            k  = size(A, trans == 'N' ? 2 : 1)
+            chkstride1(A)
+            chkstride1(C)
+            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+                  (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
+                   Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
+                   Ptr{$elty}, Ref{BlasInt}, Clong, Clong),
+                  uplo, trans, n, k,
+                  alpha, A, max(1,stride(A,2)), beta,
+                  C, max(1,stride(C,2)), 1, 1)
             C
         end
     end
@@ -1686,42 +1776,43 @@ function herk end
 
 for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
                              (:cherk_, :ComplexF32, :Float32))
-   @eval begin
-       # SUBROUTINE CHERK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
-       # *     .. Scalar Arguments ..
-       #       REAL ALPHA,BETA
-       #       INTEGER K,LDA,LDC,N
-       #       CHARACTER TRANS,UPLO
-       # *     ..
-       # *     .. Array Arguments ..
-       #       COMPLEX A(LDA,*),C(LDC,*)
-       function herk!(uplo::AbstractChar, trans::AbstractChar,
-                      α::Union{$relty, Bool}, A::AbstractVecOrMat{$elty},
-                      β::Union{$relty, Bool}, C::AbstractMatrix{$elty})
-           require_one_based_indexing(A, C)
-           n = checksquare(C)
-           nn = size(A, trans == 'N' ? 1 : 2)
-           if nn != n
-               throw(DimensionMismatch("the matrix to update has dimension $n but the implied dimension of the update is $(size(A, trans == 'N' ? 1 : 2))"))
-           end
-           chkstride1(A)
-           chkstride1(C)
-           k  = size(A, trans == 'N' ? 2 : 1)
-           ccall((@blasfunc($fname), libblastrampoline), Cvoid,
-                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
-                  Ref{$relty}, Ptr{$elty}, Ref{BlasInt}, Ref{$relty},
-                  Ptr{$elty}, Ref{BlasInt}, Clong, Clong),
-                 uplo, trans, n, k,
-                 α, A, max(1,stride(A,2)), β,
-                 C, max(1,stride(C,2)), 1, 1)
-           C
-       end
-       function herk(uplo::AbstractChar, trans::AbstractChar, α::$relty, A::AbstractVecOrMat{$elty})
-           n = size(A, trans == 'N' ? 1 : 2)
-           herk!(uplo, trans, α, A, zero($relty), similar(A, (n,n)))
-       end
-       herk(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat{$elty}) = herk(uplo, trans, one($relty), A)
-   end
+    @eval begin
+        # SUBROUTINE CHERK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
+        # *     .. Scalar Arguments ..
+        #       REAL ALPHA,BETA
+        #       INTEGER K,LDA,LDC,N
+        #       CHARACTER TRANS,UPLO
+        # *     ..
+        # *     .. Array Arguments ..
+        #       COMPLEX A(LDA,*),C(LDC,*)
+        function herk!(uplo::AbstractChar, trans::AbstractChar,
+                        α::Union{$relty, Bool}, A::AbstractVecOrMat{$elty},
+                        β::Union{$relty, Bool}, C::AbstractMatrix{$elty})
+            chkuplo(uplo)
+            require_one_based_indexing(A, C)
+            n = checksquare(C)
+            nn = size(A, trans == 'N' ? 1 : 2)
+            if nn != n
+                throw(DimensionMismatch(lazy"the matrix to update has dimension $n but the implied dimension of the update is $(size(A, trans == 'N' ? 1 : 2))"))
+            end
+            chkstride1(A)
+            chkstride1(C)
+            k  = size(A, trans == 'N' ? 2 : 1)
+            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
+                    Ref{$relty}, Ptr{$elty}, Ref{BlasInt}, Ref{$relty},
+                    Ptr{$elty}, Ref{BlasInt}, Clong, Clong),
+                    uplo, trans, n, k,
+                    α, A, max(1,stride(A,2)), β,
+                    C, max(1,stride(C,2)), 1, 1)
+            C
+        end
+        function herk(uplo::AbstractChar, trans::AbstractChar, α::$relty, A::AbstractVecOrMat{$elty})
+            n = size(A, trans == 'N' ? 1 : 2)
+            herk!(uplo, trans, α, A, zero($relty), similar(A, (n,n)))
+        end
+        herk(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat{$elty}) = herk(uplo, trans, one($relty), A)
+    end
 end
 
 ## syr2k
@@ -1730,22 +1821,23 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
                       (:zsyr2k_,:ComplexF64),
                       (:csyr2k_,:ComplexF32))
     @eval begin
-             #       SUBROUTINE DSYR2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
-             #
-             #       .. Scalar Arguments ..
-             #       REAL PRECISION ALPHA,BETA
-             #       INTEGER K,LDA,LDB,LDC,N
-             #       CHARACTER TRANS,UPLO
-             #       ..
-             #       .. Array Arguments ..
-             #       REAL PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
+            #       SUBROUTINE DSYR2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
+            #
+            #       .. Scalar Arguments ..
+            #       REAL PRECISION ALPHA,BETA
+            #       INTEGER K,LDA,LDB,LDC,N
+            #       CHARACTER TRANS,UPLO
+            #       ..
+            #       .. Array Arguments ..
+            #       REAL PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
         function syr2k!(uplo::AbstractChar, trans::AbstractChar,
                         alpha::($elty), A::AbstractVecOrMat{$elty}, B::AbstractVecOrMat{$elty},
                         beta::($elty), C::AbstractMatrix{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, B, C)
             n = checksquare(C)
             nn = size(A, trans == 'N' ? 1 : 2)
-            if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
+            if nn != n throw(DimensionMismatch(lazy"C has size ($n,$n), corresponding dimension of A is $nn")) end
             k  = size(A, trans == 'N' ? 2 : 1)
             chkstride1(A)
             chkstride1(B)
@@ -1795,43 +1887,45 @@ or `transpose(A)*B + transpose(B)*A`, according to [`trans`](@ref stdlib-blas-tr
 syr2k(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat, B::AbstractVecOrMat) = syr2k(uplo, trans, one(eltype(A)), A, B)
 
 for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:ComplexF32,:Float32))
-   @eval begin
-       # SUBROUTINE CHER2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
-       #
-       #       .. Scalar Arguments ..
-       #       COMPLEX ALPHA
-       #       REAL BETA
-       #       INTEGER K,LDA,LDB,LDC,N
-       #       CHARACTER TRANS,UPLO
-       #       ..
-       #       .. Array Arguments ..
-       #       COMPLEX A(LDA,*),B(LDB,*),C(LDC,*)
-       function her2k!(uplo::AbstractChar, trans::AbstractChar, alpha::($elty1),
-                       A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1},
-                       beta::($elty2), C::AbstractMatrix{$elty1})
-           require_one_based_indexing(A, B, C)
-           n = checksquare(C)
-           nn = size(A, trans == 'N' ? 1 : 2)
-           if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
-           chkstride1(A)
-           chkstride1(B)
-           chkstride1(C)
-           k  = size(A, trans == 'N' ? 2 : 1)
-           ccall((@blasfunc($fname), libblastrampoline), Cvoid,
-                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
-                  Ref{$elty1}, Ptr{$elty1}, Ref{BlasInt}, Ptr{$elty1}, Ref{BlasInt},
-                  Ref{$elty2},  Ptr{$elty1}, Ref{BlasInt}, Clong, Clong),
-                 uplo, trans, n, k,
-                 alpha, A, max(1,stride(A,2)), B, max(1,stride(B,2)),
-                 beta, C, max(1,stride(C,2)), 1, 1)
-           C
-       end
-       function her2k(uplo::AbstractChar, trans::AbstractChar, alpha::($elty1), A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1})
-           n = size(A, trans == 'N' ? 1 : 2)
-           her2k!(uplo, trans, alpha, A, B, zero($elty2), similar(A, $elty1, (n,n)))
-       end
-       her2k(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1}) = her2k(uplo, trans, one($elty1), A, B)
-   end
+    @eval begin
+        # SUBROUTINE CHER2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
+        #
+        #       .. Scalar Arguments ..
+        #       COMPLEX ALPHA
+        #       REAL BETA
+        #       INTEGER K,LDA,LDB,LDC,N
+        #       CHARACTER TRANS,UPLO
+        #       ..
+        #       .. Array Arguments ..
+        #       COMPLEX A(LDA,*),B(LDB,*),C(LDC,*)
+        function her2k!(uplo::AbstractChar, trans::AbstractChar, alpha::($elty1),
+                        A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1},
+                        beta::($elty2), C::AbstractMatrix{$elty1})
+            chkuplo(uplo)
+            require_one_based_indexing(A, B, C)
+            n = checksquare(C)
+            nn = size(A, trans == 'N' ? 1 : 2)
+            if nn != n throw(DimensionMismatch(lazy"C has size ($n,$n), corresponding dimension of A is $nn")) end
+            chkstride1(A)
+            chkstride1(B)
+            chkstride1(C)
+            k  = size(A, trans == 'N' ? 2 : 1)
+            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
+                    Ref{$elty1}, Ptr{$elty1}, Ref{BlasInt}, Ptr{$elty1}, Ref{BlasInt},
+                    Ref{$elty2},  Ptr{$elty1}, Ref{BlasInt}, Clong, Clong),
+                    uplo, trans, n, k,
+                    alpha, A, max(1,stride(A,2)), B, max(1,stride(B,2)),
+                    beta, C, max(1,stride(C,2)), 1, 1)
+            C
+        end
+        function her2k(uplo::AbstractChar, trans::AbstractChar, alpha::($elty1), A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1})
+            n = size(A, trans == 'N' ? 1 : 2)
+            her2k!(uplo, trans, alpha, A, B, zero($elty2), similar(A, $elty1, (n,n)))
+        end
+        her2k(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1}) =
+            her2k(uplo, trans, one($elty1), A, B)
+    end
 end
 
 """
@@ -1923,11 +2017,12 @@ for (mmname, smname, elty) in
         #       DOUBLE PRECISION A(LDA,*),B(LDB,*)
         function trmm!(side::AbstractChar, uplo::AbstractChar, transa::AbstractChar, diag::AbstractChar, alpha::Number,
                        A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, B)
             m, n = size(B)
             nA = checksquare(A)
             if nA != (side == 'L' ? m : n)
-                throw(DimensionMismatch("size of A, $(size(A)), doesn't match $side size of B with dims, $(size(B))"))
+                throw(DimensionMismatch(lazy"size of A, $(size(A)), doesn't match $side size of B with dims, $(size(B))"))
             end
             chkstride1(A)
             chkstride1(B)
@@ -1953,23 +2048,24 @@ for (mmname, smname, elty) in
         #       DOUBLE PRECISION A(LDA,*),B(LDB,*)
         function trsm!(side::AbstractChar, uplo::AbstractChar, transa::AbstractChar, diag::AbstractChar,
                        alpha::$elty, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            chkuplo(uplo)
             require_one_based_indexing(A, B)
             m, n = size(B)
             k = checksquare(A)
             if k != (side == 'L' ? m : n)
-                throw(DimensionMismatch("size of A is ($k,$k), size of B is ($m,$n), side is $side, and transa='$transa'"))
+                throw(DimensionMismatch(lazy"size of A is ($k,$k), size of B is ($m,$n), side is $side, and transa='$transa'"))
             end
             chkstride1(A)
             chkstride1(B)
             ccall((@blasfunc($smname), libblastrampoline), Cvoid,
-                (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{UInt8},
-                 Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
-                 Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Clong, Clong, Clong, Clong),
-                 side, uplo, transa, diag,
-                 m, n, alpha, A,
-                 max(1,stride(A,2)), B, max(1,stride(B,2)),
-                 1, 1, 1, 1)
+                   (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{UInt8},
+                    Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
+                    Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                    Clong, Clong, Clong, Clong),
+                   side, uplo, transa, diag,
+                   m, n, alpha, A,
+                   max(1,stride(A,2)), B, max(1,stride(B,2)),
+                   1, 1, 1, 1)
             B
         end
         function trsm(side::AbstractChar, uplo::AbstractChar, transa::AbstractChar, diag::AbstractChar, alpha::$elty, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
@@ -1983,13 +2079,13 @@ end # module
 function copyto!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
                  src::Array{T}, rsrc::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
     if minimum(rdest) < 1 || maximum(rdest) > length(dest)
-        throw(ArgumentError("range out of bounds for dest, of length $(length(dest))"))
+        throw(ArgumentError(lazy"range out of bounds for dest, of length $(length(dest))"))
     end
     if minimum(rsrc) < 1 || maximum(rsrc) > length(src)
-        throw(ArgumentError("range out of bounds for src, of length $(length(src))"))
+        throw(ArgumentError(lazy"range out of bounds for src, of length $(length(src))"))
     end
     if length(rdest) != length(rsrc)
-        throw(DimensionMismatch("ranges must be of the same length"))
+        throw(DimensionMismatch(lazy"ranges must be of the same length"))
     end
     GC.@preserve src dest BLAS.blascopy!(
         length(rsrc),

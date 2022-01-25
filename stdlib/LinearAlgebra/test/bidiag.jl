@@ -2,7 +2,7 @@
 
 module TestBidiagonal
 
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasReal, BlasFloat
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
@@ -98,8 +98,8 @@ Random.seed!(1)
         @test similar(ubd).uplo == ubd.uplo
         @test isa(similar(ubd, Int), Bidiagonal{Int})
         @test similar(ubd, Int).uplo == ubd.uplo
-        @test isa(similar(ubd, (3, 2)), SparseMatrixCSC)
-        @test isa(similar(ubd, Int, (3, 2)), SparseMatrixCSC{Int})
+        @test isa(similar(ubd, (3, 2)), Matrix)
+        @test isa(similar(ubd, Int, (3, 2)), Matrix{Int})
 
         # setindex! when off diagonal is zero bug
         Bu = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'U')
@@ -133,6 +133,13 @@ Random.seed!(1)
 
         @testset for func in (conj, transpose, adjoint)
             @test func(func(T)) == T
+        end
+
+        @testset "permutedims(::Bidiagonal)" begin
+            @test permutedims(permutedims(T)) === T
+            @test permutedims(T) == transpose.(transpose(T))
+            @test permutedims(T, [1, 2]) === T
+            @test permutedims(T, (2, 1)) == permutedims(T)
         end
 
         @testset "triu and tril" begin
@@ -432,9 +439,7 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         exotic_arrays = Any[Tridiagonal(randn(3), randn(4), randn(3)),
         Bidiagonal(randn(3), randn(2), rand([:U,:L])),
         SymTridiagonal(randn(3), randn(2)),
-        sparse(randn(3,4)),
         Diagonal(randn(5)),
-        sparse(rand(3)),
         # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
         # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
         ]
@@ -677,6 +682,30 @@ using .Main.ImmutableArrays
     @test convert(AbstractMatrix{Float64}, Bu)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bu
     @test convert(AbstractArray{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
     @test convert(AbstractMatrix{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
+end
+
+@testset "block-bidiagonal matrix indexing" begin
+    dv = [ones(4,3), ones(2,2).*2, ones(2,3).*3, ones(4,4).*4]
+    evu = [ones(4,2), ones(2,3).*2, ones(2,4).*3]
+    evl = [ones(2,3), ones(2,2).*2, ones(4,3).*3]
+    BU = Bidiagonal(dv, evu, :U)
+    BL = Bidiagonal(dv, evl, :L)
+    # check that all the matrices along a column have the same number of columns,
+    # and the matrices along a row have the same number of rows
+    for j in axes(BU, 2), i in 2:size(BU, 1)
+        @test size(BU[i,j], 2) == size(BU[1,j], 2)
+        @test size(BU[i,j], 1) == size(BU[i,1], 1)
+        if j < i || j > i + 1
+            @test iszero(BU[i,j])
+        end
+    end
+    for j in axes(BL, 2), i in 2:size(BL, 1)
+        @test size(BL[i,j], 2) == size(BL[1,j], 2)
+        @test size(BL[i,j], 1) == size(BL[i,1], 1)
+        if j < i-1 || j > i
+            @test iszero(BL[i,j])
+        end
+    end
 end
 
 end # module TestBidiagonal

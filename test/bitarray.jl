@@ -1748,3 +1748,23 @@ end
         @test test_equivalence(n)
     end
 end
+
+@testset "fill! for BitArray with contiguous view (#42795)" begin
+    # change values in range `rangein`, `rangeout` should stay unchanged
+    for (rangein, rangeout) in ((1:5, 6:10), (5:10, 1:4))
+        bitvector = trues(10)
+        bitarray  = trues(10, 10)
+        viewvector = view(bitvector, rangein)
+        viewarray  = view(bitarray, rangein, rangein)
+        @test which(fill!, (typeof(viewvector), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, Any}
+        @test which(fill!, (typeof(viewarray), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, Any}
+        fill!(viewvector, false)
+        fill!(viewarray, false)
+        @test all(bitvector[rangein] .== false)
+        @test all(bitvector[rangeout] .== true)
+        @test all(bitarray[rangein, rangein] .== false)
+        @test all(bitarray[rangeout, rangeout] .== true)
+        @test all(bitarray[rangeout, rangein] .== true)
+        @test all(bitarray[rangein, rangeout] .== true)
+    end
+end

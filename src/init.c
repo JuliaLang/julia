@@ -34,11 +34,7 @@
 extern "C" {
 #endif
 
-#ifdef _MSC_VER
-JL_DLLEXPORT char *dirname(char *);
-#else
 #include <libgen.h>
-#endif
 
 #ifdef _OS_WINDOWS_
 extern int needsSymRefreshModuleList;
@@ -171,8 +167,7 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     switch(handle->type) {
     case UV_PROCESS:
         // cause Julia to forget about the Process object
-        if (handle->data)
-            jl_uv_call_close_callback((jl_value_t*)handle->data);
+        handle->data = NULL;
         // and make libuv think it is already dead
         ((uv_process_t*)handle)->pid = 0;
         // fall-through
@@ -629,6 +624,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     libsupport_init();
     htable_new(&jl_current_modules, 0);
     JL_MUTEX_INIT(&jl_modules_mutex);
+    jl_precompile_toplevel_module = NULL;
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv

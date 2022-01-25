@@ -377,7 +377,7 @@ if OS_HANDLE != RawFD
 end
 
 function isopen(x::Union{LibuvStream, LibuvServer})
-    if x.status == StatusUninit || x.status == StatusInit
+    if x.status == StatusUninit || x.status == StatusInit || x.handle === C_NULL
         throw(ArgumentError("$x is not initialized"))
     end
     return x.status != StatusClosed
@@ -496,34 +496,39 @@ end
 
 function close(stream::Union{LibuvStream, LibuvServer})
     iolock_begin()
-    should_wait = false
     if stream.status == StatusInit
+        preserve_handle(stream)
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
         stream.status = StatusClosing
     elseif isopen(stream)
-        should_wait = uv_handle_data(stream) != C_NULL
         if stream.status != StatusClosing
+            preserve_handle(stream)
             ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
             stream.status = StatusClosing
         end
     end
     iolock_end()
-    should_wait && wait_close(stream)
+    wait_close(stream)
     nothing
 end
 
 function uvfinalize(uv::Union{LibuvStream, LibuvServer})
-    uv.handle == C_NULL && return
     iolock_begin()
     if uv.handle != C_NULL
         disassociate_julia_struct(uv.handle) # not going to call the usual close hooks
-        if uv.status != StatusUninit
-            close(uv)
-        else
+        if uv.status == StatusUninit
+            Libc.free(uv.handle)
+        elseif uv.status == StatusInit
+            ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), uv.handle)
+        elseif isopen(uv)
+            if uv.status != StatusClosing
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), uv.handle)
+            end
+        elseif uv.status == StatusClosed
             Libc.free(uv.handle)
         end
-        uv.status = StatusClosed
         uv.handle = C_NULL
+        uv.status = StatusClosed
     end
     iolock_end()
     nothing
@@ -552,7 +557,7 @@ julia> withenv("LINES" => 30, "COLUMNS" => 100) do
 
 To get your TTY size,
 
-```julia
+```julia-repl
 julia> displaysize(stdout)
 (34, 147)
 ```
@@ -667,6 +672,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                         notify(stream.cond)
                     else
                         # underlying stream is no longer useful: begin finalization
+                        preserve_handle(stream)
                         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                         stream.status = StatusClosing
                     end
@@ -674,6 +680,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
             else
                 stream.readerror = _UVError("read", nread)
                 # This is a fatal connection error
+                preserve_handle(stream)
                 ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                 stream.status = StatusClosing
             end
@@ -711,9 +718,9 @@ function reseteof(x::TTY)
 end
 
 function _uv_hook_close(uv::Union{LibuvStream, LibuvServer})
+    unpreserve_handle(uv)
     lock(uv.cond)
     try
-        uv.handle = C_NULL
         uv.status = StatusClosed
         # notify any listeners that exist on this libuv stream type
         notify(uv.cond)
@@ -1328,7 +1335,7 @@ Possible values for each stream are:
 * `io` an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
 
 # Examples
-```julia
+```julia-repl
 julia> redirect_stdio(stdout="stdout.txt", stderr="stderr.txt") do
            print("hello stdout")
            print(stderr, "hello stderr")
@@ -1344,14 +1351,14 @@ julia> read("stderr.txt", String)
 # Edge cases
 
 It is possible to pass the same argument to `stdout` and `stderr`:
-```julia
+```julia-repl
 julia> redirect_stdio(stdout="log.txt", stderr="log.txt", stdin=devnull) do
     ...
 end
 ```
 
 However it is not supported to pass two distinct descriptors of the same file.
-```julia
+```julia-repl
 julia> io1 = open("same/path", "w")
 
 julia> io2 = open("same/path", "w")
@@ -1359,7 +1366,7 @@ julia> io2 = open("same/path", "w")
 julia> redirect_stdio(f, stdout=io1, stderr=io2) # not suppored
 ```
 Also the `stdin` argument may not be the same descriptor as `stdout` or `stderr`.
-```julia
+```julia-repl
 julia> io = open(...)
 
 julia> redirect_stdio(f, stdout=io, stdin=io) # not supported

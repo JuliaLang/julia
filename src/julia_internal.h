@@ -5,6 +5,11 @@
 
 #include "options.h"
 #include "julia_locks.h"
+#include "support/utils.h"
+#include "support/hashing.h"
+#include "support/ptrhash.h"
+#include "support/strtod.h"
+#include "gc-alloc-profiler.h"
 #include <uv.h>
 #if !defined(_WIN32)
 #include <unistd.h>
@@ -160,11 +165,7 @@ static inline uint64_t cycleclock(void)
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time;
 
-#ifdef _COMPILER_MICROSOFT_
-#  define jl_return_address() ((uintptr_t)_ReturnAddress())
-#else
-#  define jl_return_address() ((uintptr_t)__builtin_return_address(0))
-#endif
+#define jl_return_address() ((uintptr_t)__builtin_return_address(0))
 
 STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 {
@@ -364,6 +365,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         v = jl_gc_big_alloc(ptls, allocsz);
     }
     jl_set_typeof(v, ty);
+    maybe_record_alloc_to_profile(v, sz);
     return v;
 }
 
@@ -525,6 +527,8 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
                               int binding_effects);
 
+JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root);
+
 int jl_valid_type_param(jl_value_t *v);
 
 JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
@@ -549,7 +553,6 @@ JL_DLLEXPORT jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b);
 
 extern uv_loop_t *jl_io_loop;
 void jl_uv_flush(uv_stream_t *stream);
-void jl_uv_call_close_callback(jl_value_t *val);
 
 typedef struct jl_typeenv_t {
     jl_tvar_t *var;
@@ -645,6 +648,7 @@ jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t 
 JL_DLLEXPORT void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
 int jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isva, jl_value_t *rt_lb,
@@ -804,7 +808,7 @@ typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k);
 
-#if !defined(__clang_gcanalyzer__)
+#if !defined(__clang_gcanalyzer__) && !defined(_OS_DARWIN_)
 static inline void jl_set_gc_and_wait(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -857,7 +861,7 @@ jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs
 JL_DLLEXPORT int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT;
 
 jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                     size_t offset, jl_value_t *options);
+                     size_t lineno, size_t offset, jl_value_t *options);
 
 //--------------------------------------------------
 // Backtraces
@@ -1017,7 +1021,7 @@ size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t 
 size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
-void jl_critical_error(int sig, bt_context_t *context);
+void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct);
 JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
@@ -1240,6 +1244,7 @@ JL_DLLEXPORT jl_value_t *jl_copysign_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
 
 JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
+JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *a);
 JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
@@ -1439,7 +1444,9 @@ extern JL_DLLEXPORT jl_sym_t *jl_atom_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_statement_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_all_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_compile_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_force_compile_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_infer_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_max_methods_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_atomic_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_not_atomic_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_unordered_sym;

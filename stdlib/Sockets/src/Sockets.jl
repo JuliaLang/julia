@@ -97,7 +97,7 @@ end
 function TCPSocket(fd::OS_HANDLE)
     tcp = TCPSocket()
     iolock_begin()
-    err = ccall(:uv_tcp_open, Int32, (Ptr{Cvoid}, OS_HANDLE), pipe.handle, fd)
+    err = ccall(:uv_tcp_open, Int32, (Ptr{Cvoid}, OS_HANDLE), tcp.handle, fd)
     uv_error("tcp_open", err)
     tcp.status = StatusOpen
     iolock_end()
@@ -200,7 +200,6 @@ end
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
 
 function _uv_hook_close(sock::UDPSocket)
-    sock.handle = C_NULL
     lock(sock.cond)
     try
         sock.status = StatusClosed
@@ -481,6 +480,7 @@ function uv_connectcb(conn::Ptr{Cvoid}, status::Cint)
         else
             sock.readerror = _UVError("connect", status) # TODO: perhaps we should not reuse readerror for this
             if !(sock.status == StatusClosed || sock.status == StatusClosing)
+                preserve_handle(sock)
                 ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), hand)
                 sock.status = StatusClosing
             end

@@ -10,11 +10,13 @@ Create a async condition that wakes up tasks waiting for it
 when notified from C by a call to `uv_async_send`.
 Waiting tasks are woken with an error when the object is closed (by [`close`](@ref)).
 Use [`isopen`](@ref) to check whether it is still active.
+
+This provides an implicit acquire & release memory ordering between the sending and waiting threads.
 """
 mutable struct AsyncCondition
-    handle::Ptr{Cvoid}
+    @atomic handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
-    isopen::Bool
+    @atomic isopen::Bool
     @atomic set::Bool
 
     function AsyncCondition()
@@ -60,22 +62,26 @@ end
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object).
 
-Waiting tasks are woken after an initial delay of `delay` seconds, and then repeating with the given
-`interval` in seconds. If `interval` is equal to `0`, the timer is only triggered once. When
-the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use [`isopen`](@ref)
-to check whether a timer is still active.
+Waiting tasks are woken after an initial delay of at least `delay` seconds, and then repeating after
+at least `interval` seconds again elapse. If `interval` is equal to `0`, the timer is only triggered
+once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
+[`isopen`](@ref) to check whether a timer is still active.
+
+Note: `interval` is subject to accumulating time skew. If you need precise events at a particular
+absolute time, create a new timer at each expiration with the difference to the next time computed.
 """
 mutable struct Timer
-    handle::Ptr{Cvoid}
+    @atomic handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
-    isopen::Bool
+    @atomic isopen::Bool
     @atomic set::Bool
 
     function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
         interval ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $interval seconds"))
-        timeout = UInt64(round(timeout * 1000)) + 1
-        interval = UInt64(ceil(interval * 1000))
+        # libuv has a tendency to timeout 1 ms early, so we need +1 on the timeout (in milliseconds), unless it is zero
+        timeoutms = ceil(UInt64, timeout * 1000) + !iszero(timeout)
+        intervalms = ceil(UInt64, interval * 1000)
         loop = eventloop()
 
         this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false)
@@ -87,7 +93,7 @@ mutable struct Timer
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), loop)
         err = ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
             this, @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},)),
-            timeout, interval)
+            timeoutms, intervalms)
         @assert err == 0
         iolock_end()
         return this
@@ -99,7 +105,10 @@ unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
 function _trywait(t::Union{Timer, AsyncCondition})
     set = t.set
-    if !set
+    if set
+        # full barrier now for AsyncCondition
+        t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release)
+    else
         t.handle == C_NULL && return false
         iolock_begin()
         set = t.set
@@ -134,12 +143,13 @@ function wait(t::Union{Timer, AsyncCondition})
 end
 
 
-isopen(t::Union{Timer, AsyncCondition}) = t.isopen
+isopen(t::Union{Timer, AsyncCondition}) = t.isopen && t.handle != C_NULL
 
 function close(t::Union{Timer, AsyncCondition})
     iolock_begin()
-    if t.handle != C_NULL && isopen(t)
-        t.isopen = false
+    if isopen(t)
+        @atomic :monotonic t.isopen = false
+        preserve_handle(t)
         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
     end
     iolock_end()
@@ -150,13 +160,11 @@ function uvfinalize(t::Union{Timer, AsyncCondition})
     iolock_begin()
     lock(t.cond)
     try
-        if t.handle != C_NULL
+        if isopen(t)
             disassociate_julia_struct(t.handle) # not going to call the usual close hooks
-            if t.isopen
-                t.isopen = false
-                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
-            end
-            t.handle = C_NULL
+            @atomic :monotonic t.isopen = false
+            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
+            @atomic :monotonic t.handle = C_NULL
             notify(t.cond, false)
         end
     finally
@@ -169,8 +177,9 @@ end
 function _uv_hook_close(t::Union{Timer, AsyncCondition})
     lock(t.cond)
     try
-        t.isopen = false
-        t.handle = C_NULL
+        @atomic :monotonic t.isopen = false
+        unpreserve_handle(t)
+        @atomic :monotonic t.handle = C_NULL
         notify(t.cond, t.set)
     finally
         unlock(t.cond)
@@ -180,9 +189,9 @@ end
 
 function uv_asynccb(handle::Ptr{Cvoid})
     async = @handle_as handle AsyncCondition
-    lock(async.cond)
+    lock(async.cond) # acquire barrier
     try
-        @atomic :monotonic async.set = true
+        @atomic :release async.set = true
         notify(async.cond, true)
     finally
         unlock(async.cond)
@@ -222,18 +231,18 @@ end
 """
     Timer(callback::Function, delay; interval = 0)
 
-Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) and
-calls the function `callback`.
+Create a timer that runs the function `callback` at each timer expiration.
 
-Waiting tasks are woken and the function `callback` is called after an initial delay of `delay` seconds,
-and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the timer
-is only triggered once. The function `callback` is called with a single argument, the timer itself.
-When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use [`isopen`](@ref)
-to check whether a timer is still active.
+Waiting tasks are woken and the function `callback` is called after an initial delay of `delay`
+seconds, and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the
+callback is only run once. The function `callback` is called with a single argument, the timer
+itself. Stop a timer by calling `close`. The `cb` may still be run one final time, if the timer has
+already expired.
 
 # Examples
 
-Here the first number is printed after a delay of two seconds, then the following numbers are printed quickly.
+Here the first number is printed after a delay of two seconds, then the following numbers are
+printed quickly.
 
 ```julia-repl
 julia> begin

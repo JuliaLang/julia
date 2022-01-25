@@ -99,6 +99,22 @@ julia> module E
 ERROR: cannot assign variables in other modules
 ```
 
+If a top-level expression contains a variable declaration with keyword `local`,
+then that variable is not accessible outside that expression.
+The variable inside the expression does not affect global variables of the same name.
+An example is to declare `local x` in a `begin` or `if` block at the top-level:
+
+```jldoctest
+julia> x = 1
+       begin
+           local x = 0
+           @show x
+       end
+       @show x;
+x = 0
+x = 1
+```
+
 Note that the interactive prompt (aka REPL) is in the global scope of the module `Main`.
 
 ## Local Scope
@@ -526,11 +542,20 @@ file, if it behaves differently than it did in the REPL, then you will get a war
 ### Let Blocks
 
 `let` statements create a new *hard scope* block (see above) and introduce new variable
-bindings each time they run. Whereas assignments might reassign a new value to an existing value location,
-`let` always creates a new location.
-This difference is usually not important, and is only detectable in the case of variables that
-outlive their scope via closures. The `let` syntax accepts a comma-separated series of assignments
-and variable names:
+bindings each time they run. The variable need not be immediately assigned:
+```jldoctest
+julia> var1 = let x
+           for i in 1:5
+               (i == 4) && (x = i; break)
+           end
+           x
+       end
+4
+```
+Whereas assignments might reassign a new value to an existing value location, `let` always creates a
+new location. This difference is usually not important, and is only detectable in the case of
+variables that outlive their scope via closures. The `let` syntax accepts a comma-separated series of
+assignments and variable names:
 
 ```jldoctest
 julia> x, y, z = -1, -1, -1;

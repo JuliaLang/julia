@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra, SparseArrays
+using LinearAlgebra
 
 # For curmod_*
 include("testenv.jl")
@@ -239,6 +239,15 @@ end
 @test repr(:(-(;x))) == ":(-(; x))"
 @test repr(:(+(1, 2;x))) == ":(+(1, 2; x))"
 @test repr(:(1:2...)) == ":(1:2...)"
+
+@test repr(:(1 := 2)) == ":(1 := 2)"
+@test repr(:(1 ≔ 2)) == ":(1 ≔ 2)"
+@test repr(:(1 ⩴ 2)) == ":(1 ⩴ 2)"
+@test repr(:(1 ≕ 2)) == ":(1 ≕ 2)"
+
+@test repr(:(∓ 1)) == ":(∓1)"
+@test repr(:(± 1)) == ":(±1)"
+
 for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:ref, :f, Expr(:(=), :x, 1)),
            Expr(:vect, 1, 2, Expr(:kw, :x, 1)),
@@ -258,6 +267,7 @@ end
 @test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
 @test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
 @test repr(Expr(:import, Expr(:(.), ))) == ":(\$(Expr(:import, :(\$(Expr(:.))))))"
+
 
 @test repr(Expr(:using, Expr(:(.), :A))) == ":(using A)"
 @test repr(Expr(:using, Expr(:(.), :A),
@@ -718,28 +728,6 @@ let filename = tempname()
 
     @test occursin("WARNING: hello", ret)
     rm(filename)
-end
-
-# issue #12960
-mutable struct T12960 end
-import Base.zero
-Base.zero(::Type{T12960}) = T12960()
-Base.zero(x::T12960) = T12960()
-let
-    A = sparse(1.0I, 3, 3)
-    B = similar(A, T12960)
-    @test repr(B) == "sparse([1, 2, 3], [1, 2, 3], $T12960[#undef, #undef, #undef], 3, 3)"
-    @test occursin(
-        "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
-        repr(MIME("text/plain"), B),
-    )
-
-    B[1,2] = T12960()
-    @test repr(B)  == "sparse([1, 1, 2, 3], [1, 2, 2, 3], $T12960[#undef, $T12960(), #undef, #undef], 3, 3)"
-    @test occursin(
-        "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
-        repr(MIME("text/plain"), B),
-    )
 end
 
 # issue #13127
@@ -1347,6 +1335,20 @@ test_repr("(:).a")
 @test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4, Float64}"
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32, Float32, Float32}"
 
+@testset "issue #42931" begin
+    @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
+    @test repr(NTuple{3, :A}) == "Tuple{:A, :A, :A}"
+    @test repr(NTuple{2, :A}) == "Tuple{:A, :A}"
+    @test repr(NTuple{1, :A}) == "Tuple{:A}"
+    @test repr(NTuple{0, :A}) == "Tuple{}"
+
+    @test repr(Tuple{:A, :A, :A, :B}) == "Tuple{:A, :A, :A, :B}"
+    @test repr(Tuple{:A, :A, :A, :A}) == "NTuple{4, :A}"
+    @test repr(Tuple{:A, :A, :A}) == "Tuple{:A, :A, :A}"
+    @test repr(Tuple{:A}) == "Tuple{:A}"
+    @test repr(Tuple{}) == "Tuple{}"
+end
+
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
 @test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
@@ -1843,21 +1845,34 @@ end
     # issue #34343
     @test showstr([[1], Int[]]) == "[[1], $Int[]]"
     @test showstr([Dict(1=>1), Dict{Int,Int}()]) == "[Dict(1 => 1), Dict{$Int, $Int}()]"
+
+    # issue #42719, NamedTuple with @var_str
+    @test replstr((; var"a b"=1)) == """(var"a b" = 1,)"""
+    @test replstr((; var"#var#"=1)) == """(var"#var#" = 1,)"""
+    @test replstr((; var"a"=1, b=2)) == "(a = 1, b = 2)"
+    @test replstr((; a=1, b=2)) == "(a = 1, b = 2)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
     d = Dict(1 => 2, 3 => 45)
-    buf = IOBuffer()
-    td = TextDisplay(buf)
+    td = TextDisplay(PipeBuffer())
 
     display(td, d)
-    result = String(take!(td.io))
+    result = read(td.io, String)
     @test occursin(summary(d), result)
 
     # Is every pair in the string?
     for el in d
         @test occursin(string(el), result)
     end
+end
+
+@testset "#43766: `display` trailing newline" begin
+    td = TextDisplay(PipeBuffer())
+    display(td, 1)
+    @test read(td.io, String) == "1\n"
+    show(td.io, 1)
+    @test read(td.io, String) == "1"
 end
 
 function _methodsstr(f)
@@ -1984,7 +1999,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             "three"
         end
     return y
-end""", "a"^80, 1, :statement)[1]) # use parse to control the line numbers
+end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
@@ -2324,4 +2339,12 @@ end
     @test_repr "T[1;;; 2]"
     @test_repr "T[1;;; 2 3;;; 4]"
     @test_repr "T[1;;; 2;;;; 3;;; 4]"
+end
+
+@testset "Cmd" begin
+    @test sprint(show, `true`) == "`true`"
+    @test sprint(show, setenv(`true`, "A" => "B")) == """setenv(`true`,["A=B"])"""
+    @test sprint(show, setcpuaffinity(`true`, [1, 2])) == "setcpuaffinity(`true`, [1, 2])"
+    @test sprint(show, setenv(setcpuaffinity(`true`, [1, 2]), "A" => "B")) ==
+          """setenv(setcpuaffinity(`true`, [1, 2]),["A=B"])"""
 end

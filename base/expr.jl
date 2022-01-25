@@ -385,13 +385,6 @@ macro propagate_inbounds(ex)
 end
 
 """
-    @compile
-
-Force compilation of the block or function (Julia's built-in interpreter is blocked from executing it).
-"""
-macro compile() Expr(:meta, :compile) end
-
-"""
     @polly
 
 Tells the compiler to apply the polyhedral optimizer Polly to a function.
@@ -581,6 +574,7 @@ macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]
         lno = body.args[1]
+        tmp = gensym("tmp")
         return Expr(:escape,
                     Expr(f.head, f.args[1],
                          Expr(:block,
@@ -588,8 +582,8 @@ macro generated(f)
                               Expr(:if, Expr(:generated),
                                    # https://github.com/JuliaLang/julia/issues/25678
                                    Expr(:block,
-                                        :(local tmp = $body),
-                                        :(if tmp isa Core.CodeInfo; return tmp; else tmp; end)),
+                                        :(local $tmp = $body),
+                                        :(if $tmp isa $(GlobalRef(Core, :CodeInfo)); return $tmp; else $tmp; end)),
                                    Expr(:block,
                                         Expr(:meta, :generated_only),
                                         Expr(:return, nothing))))))
@@ -607,7 +601,7 @@ Mark `var` or `ex` as being performed atomically, if `ex` is a supported express
 
     @atomic a.b.x = new
     @atomic a.b.x += addend
-    @atomic :acquire_release a.b.x = new
+    @atomic :release a.b.x = new
     @atomic :acquire_release a.b.x += addend
 
 Perform the store operation expressed on the right atomically and return the

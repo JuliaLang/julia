@@ -749,14 +749,25 @@ end
     serialize(stream::IO, value)
 
 Write an arbitrary value to a stream in an opaque format, such that it can be read back by
-[`deserialize`](@ref). The read-back value will be as identical as possible to the original.
-In general, this process will not work if the reading and writing are done by different
-versions of Julia, or an instance of Julia with a different system image. `Ptr` values are
-serialized as all-zero bit patterns (`NULL`).
+[`deserialize`](@ref). The read-back value will be as identical as possible to the original,
+but note that `Ptr` values are serialized as all-zero bit patterns (`NULL`).
 
 An 8-byte identifying header is written to the stream first. To avoid writing the header,
 construct a `Serializer` and use it as the first argument to `serialize` instead.
 See also [`Serialization.writeheader`](@ref).
+
+The data format can change in minor (1.x) Julia releases, but files written by prior 1.x
+versions will remain readable. The main exception to this is when the definition of a
+type in an external package changes. If that occurs, it may be necessary to specify
+an explicit compatible version of the affected package in your environment.
+Renaming functions, even private functions, inside packages can also put existing files
+out of sync. Anonymous functions require special care: because their names are automatically
+generated, minor code changes can cause them to be renamed.
+Serializing anonymous functions should be avoided in files intended for long-term storage.
+
+In some cases, the word size (32- or 64-bit) of the reading and writing machines must match.
+In rarer cases the OS or architecture must also match, for example when using packages
+that contain platform-dependent code.
 """
 function serialize(s::IO, x)
     ss = Serializer(s)
@@ -781,8 +792,8 @@ serialize(filename::AbstractString, x) = open(io->serialize(io, x), filename, "w
 
 Read a value written by [`serialize`](@ref). `deserialize` assumes the binary data read from
 `stream` is correct and has been serialized by a compatible implementation of [`serialize`](@ref).
-It has been designed with simplicity and performance as a goal and does not validate
-the data read. Malformed data can result in process termination. The caller has to ensure
+`deserialize` is designed for simplicity and performance, and so does not validate
+the data read. Malformed data can result in process termination. The caller must ensure
 the integrity and correctness of data read from `stream`.
 """
 deserialize(s::IO) = deserialize(Serializer(s))
@@ -1262,10 +1273,11 @@ function deserialize_typename(s::AbstractSerializer, number)
     else
         # reuse the same name for the type, if possible, for nicer debugging
         tn_name = isdefined(__deserialized_types__, name) ? gensym() : name
-        tn = ccall(:jl_new_typename_in, Ref{Core.TypeName}, (Any, Any, Cint, Cint),
+        tn = ccall(:jl_new_typename_in, Any, (Any, Any, Cint, Cint),
                    tn_name, __deserialized_types__, false, false)
         makenew = true
     end
+    tn = tn::Core.TypeName
     remember_object(s, tn, number)
     deserialize_cycle(s, tn)
 
@@ -1280,19 +1292,22 @@ function deserialize_typename(s::AbstractSerializer, number)
     ninitialized = deserialize(s)::Int32
 
     if makenew
-        Core.setfield!(tn, :names, names)
         # TODO: there's an unhanded cycle in the dependency graph at this point:
         # while deserializing super and/or types, we may have encountered
         # tn.wrapper and throw UndefRefException before we get to this point
         ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
                     tn, tn.module, super, parameters, names, types, attrs,
                     abstr, mutabl, ninitialized)
-        tn.wrapper = ndt.name.wrapper
+        @assert tn == ndt.name
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
-        if has_instance && !isdefined(ty, :instance)
-            # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
-            Core.setfield!(ty, :instance, ccall(:jl_new_struct, Any, (Any, Any...), ty))
+        if has_instance
+            ty = ty::DataType
+            if !isdefined(ty, :instance)
+                singleton = ccall(:jl_new_struct, Any, (Any, Any...), ty)
+                # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
+                ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), ty, Base.fieldindex(DataType, :instance)-1, singleton)
+            end
         end
     end
 
@@ -1302,15 +1317,16 @@ function deserialize_typename(s::AbstractSerializer, number)
         defs = deserialize(s)
         maxa = deserialize(s)::Int
         if makenew
-            tn.mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
+            mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
             if !isempty(parameters)
-                tn.mt.offs = 0
+                mt.offs = 0
             end
-            tn.mt.name = mtname
-            tn.mt.max_args = maxa
+            mt.name = mtname
+            mt.max_args = maxa
+            ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
             for def in defs
                 if isdefined(def, :sig)
-                    ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), tn.mt, def, C_NULL)
+                    ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, def, C_NULL)
                 end
             end
         end
@@ -1322,9 +1338,10 @@ function deserialize_typename(s::AbstractSerializer, number)
             end
         end
     elseif makenew
-        tn.mt = Symbol.name.mt
+        mt = Symbol.name.mt
+        ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
     end
-    return tn::Core.TypeName
+    return tn
 end
 
 function deserialize_datatype(s::AbstractSerializer, full::Bool)
@@ -1510,5 +1527,31 @@ function deserialize(s::AbstractSerializer, ::Type{Base.StackTraces.StackFrame})
     pointer = read(s.io, UInt64)
     return Base.StackTraces.StackFrame(func, file, line, nothing, from_c, inlined, pointer)
 end
+
+function serialize(s::AbstractSerializer, lock::Base.AbstractLock)
+    # assert_havelock(lock)
+    serialize_cycle_header(s, lock)
+    nothing
+end
+
+function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.AbstractLock
+    lock = T()
+    deserialize_cycle(s, lock)
+    return lock
+end
+
+function serialize(s::AbstractSerializer, cond::Base.GenericCondition)
+    serialize_cycle_header(s, cond) && return
+    serialize(s, cond.lock)
+    nothing
+end
+
+function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.GenericCondition
+    lock = deserialize(s)
+    cond = T(lock)
+    deserialize_cycle(s, cond)
+    return cond
+end
+
 
 end

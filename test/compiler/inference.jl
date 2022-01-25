@@ -46,8 +46,42 @@ end
 
 # obtain Vararg with 2 undefined fields
 let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
-    @test Core.Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Any
+    @test Core.Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Tuple
 end
+
+# issue #42835
+@test !Core.Compiler.type_more_complex(Int, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Int, Type{Int}, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Int}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Type{Int}, Core.svec(Type{Int}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Int, Core.svec(Type{Int}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Int}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Int}}}, Type{Type{Int}}, Core.svec(Type{Type{Int}}), 1, 1, 1)
+
+@test  Core.Compiler.type_more_complex(ComplexF32, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(ComplexF32, Any, Core.svec(Type{ComplexF32}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(ComplexF32, Type{ComplexF32}, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{ComplexF32}, Any, Core.svec(Type{Type{ComplexF32}}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{ComplexF32}, Type{Type{ComplexF32}}, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{ComplexF32}, ComplexF32, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{ComplexF32}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{ComplexF32}}, Type{ComplexF32}, Core.svec(Type{ComplexF32}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{ComplexF32}}, ComplexF32, Core.svec(ComplexF32), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{ComplexF32}}}, Type{Type{ComplexF32}}, Core.svec(Type{ComplexF32}), 1, 1, 1)
+
+# n.b. Type{Type{Union{}} === Type{Core.TypeofBottom}
+@test !Core.Compiler.type_more_complex(Type{Union{}}, Any, Core.svec(), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Type{Union{}}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Any, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Union{}}}}, Type{Type{Union{}}}, Core.svec(Type{Type{Union{}}}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Type{Type{Type{Union{}}}}}, Type{Type{Type{Union{}}}}, Core.svec(Type{Type{Type{Union{}}}}), 1, 1, 1)
+
+@test !Core.Compiler.type_more_complex(Type{1}, Type{2}, Core.svec(), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+@test !Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
+@test_broken Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+
 
 let # 40336
     t = Type{Type{Int}}
@@ -1119,6 +1153,11 @@ end
     @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:y)) === Const(true)
     @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:z)) === Const(false)
 end
+struct UnionIsdefinedA; x; end
+struct UnionIsdefinedB; x; end
+@test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
+@test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
+@test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Bool
 
 @noinline map3_22347(f, t::Tuple{}) = ()
 @noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)
@@ -1193,7 +1232,7 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
         throw(ArgumentError("argument is not a generic function"))
     end
     # get the MethodInstance for the method match
-    match = Base._which(Base.signature_type(f, t), typemax(UInt))
+    match = Base._which(Base.signature_type(f, t), Base.get_world_counter())
     precompile(match.spec_types)
     return Core.Compiler.specialize_method(match)
 end
@@ -1495,6 +1534,34 @@ using Core.Compiler: typeof_tfunc
 f_typeof_tfunc(x) = typeof(x)
 @test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Type{Int}, Type{Complex{T}} where T<:Real}]
 
+# arrayref / arrayset / arraysize
+import Core.Compiler: Const, arrayref_tfunc, arrayset_tfunc, arraysize_tfunc
+@test arrayref_tfunc(Const(true), Vector{Int}, Int) === Int
+@test arrayref_tfunc(Const(true), Vector{<:Integer}, Int) === Integer
+@test arrayref_tfunc(Const(true), Vector, Int) === Any
+@test arrayref_tfunc(Const(true), Vector{Int}, Int, Vararg{Int}) === Int
+@test arrayref_tfunc(Const(true), Vector{Int}, Vararg{Int}) === Int
+@test arrayref_tfunc(Const(true), Vector{Int}) === Union{}
+@test arrayref_tfunc(Const(true), String, Int) === Union{}
+@test arrayref_tfunc(Const(true), Vector{Int}, Float64) === Union{}
+@test arrayref_tfunc(Int, Vector{Int}, Int) === Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Int, Int) === Vector{Int}
+let ua = Vector{<:Integer}
+    @test arrayset_tfunc(Const(true), ua, Int, Int) === ua
+end
+@test arrayset_tfunc(Const(true), Vector, Int, Int) === Vector
+@test arrayset_tfunc(Const(true), Any, Int, Int) === Any
+@test arrayset_tfunc(Const(true), Vector{String}, String, Int, Vararg{Int}) === Vector{String}
+@test arrayset_tfunc(Const(true), Vector{String}, String, Vararg{Int}) === Vector{String}
+@test arrayset_tfunc(Const(true), Vector{String}, String) === Union{}
+@test arrayset_tfunc(Const(true), String, Char, Int) === Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Int, Float64) === Union{}
+@test arrayset_tfunc(Int, Vector{Int}, Int, Int) === Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Float64, Int) === Union{}
+@test arraysize_tfunc(Vector, Int) === Int
+@test arraysize_tfunc(Vector, Float64) === Union{}
+@test arraysize_tfunc(String, Int) === Union{}
+
 function f23024(::Type{T}, ::Int) where T
     1 + 1
 end
@@ -1569,7 +1636,7 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test Core.Compiler.getfield_tfunc(Core.TypeName, Const(:flags)) == UInt8
 
 # getfield on abstract named tuples. issue #32698
-import Core.Compiler.getfield_tfunc
+import Core.Compiler: getfield_tfunc, Const
 @test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
                      Const(:y)) == Union{Missing, Float64}
 @test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
@@ -1582,6 +1649,130 @@ import Core.Compiler.getfield_tfunc
                      Int) == Union{Missing, Float64, Int}
 @test getfield_tfunc(NamedTuple{<:Any, T} where {T <: Tuple{Int, Union{Float64, Missing}}},
                      Const(:x)) == Union{Missing, Float64, Int}
+
+mutable struct ARef{T}
+    @atomic x::T
+end
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Bool) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Bool) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Vararg{Symbol}) === Int # `Vararg{Symbol}` might be empty
+@test getfield_tfunc(ARef{Int},Const(:x),Vararg{Symbol}) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,Any) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,Vararg{Any}) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Vararg{Any}) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Int) === Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Bool,Symbol) === Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Symbol) === Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Bool,Bool) === Union{}
+
+import Core.Compiler: setfield!_tfunc, setfield!_nothrow, Const
+mutable struct XY{X,Y}
+    x::X
+    y::Y
+end
+mutable struct ABCDconst
+    const a
+    const b::Int
+    c
+    const d::Union{Int,Nothing}
+end
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Int, Int) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:x), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:x), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(1), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(1), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Int, Int) === Int
+@test setfield!_tfunc(XY{Any,Any}, Const(1), Int) === Int
+@test setfield!_tfunc(XY{Any,Any}, Const(2), Float64) === Float64
+@test setfield!_tfunc(XY{Int,Float64}, Const(1), Int) === Int
+@test setfield!_tfunc(XY{Int,Float64}, Const(2), Float64) === Float64
+@test setfield!_tfunc(ABCDconst, Const(:c), Any) === Any
+@test setfield!_tfunc(ABCDconst, Const(3), Any) === Any
+@test setfield!_tfunc(ABCDconst, Symbol, Any) === Any
+@test setfield!_tfunc(ABCDconst, Int, Any) === Any
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(:x), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(1), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(1), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Symbol, Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Symbol, Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Int, Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Int, Int) === Int
+@test setfield!_tfunc(Any, Symbol, Int) === Int
+@test setfield!_tfunc(Any, Int, Int) === Int
+@test setfield!_tfunc(Any, Any, Int) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Float64) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Float64, Symbol) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Float64) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Float64, Symbol) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Int, Float64) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:y), Int) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:y), Int, Bool) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(2), Int) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(2), Int, Bool) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, String, Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Const(:value), Int) === Union{}
+@test setfield!_tfunc(Some, Const(:value), Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Const(1), Int) === Union{}
+@test setfield!_tfunc(Some, Const(1), Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Symbol, Int) === Union{}
+@test setfield!_tfunc(Some, Symbol, Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Int, Int) === Union{}
+@test setfield!_tfunc(Some, Int, Int) === Union{}
+@test setfield!_tfunc(Const(@__MODULE__), Const(:v), Int) === Union{}
+@test setfield!_tfunc(Const(@__MODULE__), Int, Int) === Union{}
+@test setfield!_tfunc(Module, Const(:v), Int) === Union{}
+@test setfield!_tfunc(Union{Module,Base.RefValue{Any}}, Const(:v), Int) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(:a), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(:b), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(:d), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(1), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(2), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(4), Any) === Union{}
+@test setfield!_nothrow(Base.RefValue{Int}, Const(:x), Int)
+@test setfield!_nothrow(Base.RefValue{Int}, Const(1), Int)
+@test setfield!_nothrow(Base.RefValue{Any}, Const(:x), Int)
+@test setfield!_nothrow(Base.RefValue{Any}, Const(1), Int)
+@test setfield!_nothrow(XY{Any,Any}, Const(:x), Int)
+@test setfield!_nothrow(XY{Any,Any}, Const(:x), Any)
+@test setfield!_nothrow(XY{Int,Float64}, Const(:x), Int)
+@test setfield!_nothrow(ABCDconst, Const(:c), Any)
+@test setfield!_nothrow(ABCDconst, Const(3), Any)
+@test !setfield!_nothrow(XY{Int,Float64}, Symbol, Any)
+@test !setfield!_nothrow(XY{Int,Float64}, Int, Any)
+@test !setfield!_nothrow(Base.RefValue{Int}, Const(:x), Any)
+@test !setfield!_nothrow(Base.RefValue{Int}, Const(1), Any)
+@test !setfield!_nothrow(Any[Base.RefValue{Any}, Const(:x), Int, Symbol])
+@test !setfield!_nothrow(Base.RefValue{Any}, Symbol, Int)
+@test !setfield!_nothrow(Base.RefValue{Any}, Int, Int)
+@test !setfield!_nothrow(XY{Int,Float64}, Const(:y), Int)
+@test !setfield!_nothrow(XY{Int,Float64}, Symbol, Int)
+@test !setfield!_nothrow(XY{Int,Float64}, Int, Int)
+@test !setfield!_nothrow(ABCDconst, Const(:a), Any)
+@test !setfield!_nothrow(ABCDconst, Const(:b), Any)
+@test !setfield!_nothrow(ABCDconst, Const(:d), Any)
+@test !setfield!_nothrow(ABCDconst, Symbol, Any)
+@test !setfield!_nothrow(ABCDconst, Const(1), Any)
+@test !setfield!_nothrow(ABCDconst, Const(2), Any)
+@test !setfield!_nothrow(ABCDconst, Const(4), Any)
+@test !setfield!_nothrow(ABCDconst, Int, Any)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Const(:x), Int)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Const(1), Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Const(1), Int)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Symbol, Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Symbol, Int)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Int, Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Int, Int)
+@test !setfield!_nothrow(Any, Symbol, Int)
+@test !setfield!_nothrow(Any, Int, Int)
+@test !setfield!_nothrow(Any, Any, Int)
 
 struct Foo_22708
     x::Ptr{Foo_22708}
@@ -1802,6 +1993,16 @@ end
         0
     end == Any[Int]
 
+    # slot as SSA
+    isaT(x, T) = isa(x, T)
+    @test Base.return_types((Any,Int)) do a, b
+        c = a
+        if isaT(c, typeof(b))
+            return c # c::Int
+        end
+        return 0
+    end |> only === Int
+
     # with Base functions
     @test Base.return_types((Any,)) do a
         Base.Fix2(isa, Int)(a) && return a # a::Int
@@ -1897,6 +2098,35 @@ end
             return nothing
         end
     end == Any[Union{Bool,Nothing}]
+end
+
+@testset "`from_interprocedural!`: translate inter-procedural information" begin
+    # TODO come up with a test case to check the functionality of `collect_limitations!`
+    # one heavy test case would be to use https://github.com/aviatesk/JET.jl and
+    # check `julia /path/to/JET/jet /path/to/JET/src/JET.jl` doesn't result in errors
+    # because of nested `LimitedAccuracy`es
+
+    # `InterConditional` handling: `abstract_invoke`
+    ispositive(a) = isa(a, Int) && a > 0
+    @test Base.return_types((Any,)) do a
+        if Base.@invoke ispositive(a::Any)
+            return a
+        end
+        return 0
+    end |> only == Int
+    # the `fargs = nothing` edge case
+    @test Base.return_types((Any,)) do a
+        Core.Compiler.return_type(invoke, Tuple{typeof(ispositive), Type{Tuple{Any}}, Any})
+    end |> only == Type{Bool}
+
+    # `InterConditional` handling: `abstract_call_opaque_closure`
+    @test Base.return_types((Any,)) do a
+        f = Base.Experimental.@opaque a -> isa(a, Int) && a > 0
+        if f(a)
+            return a
+        end
+        return 0
+    end |> only === Int
 end
 
 function f25579(g)
@@ -1999,6 +2229,67 @@ function _g_ifelse_isa_()
     ifelse(isa(x, Nothing), 1, x)
 end
 @test Base.return_types(_g_ifelse_isa_, ()) == [Int]
+
+@testset "Conditional forwarding" begin
+    # forward `Conditional` if it conveys a constraint on any other argument
+    ifelselike(cnd, x, y) = cnd ? x : y
+
+    @test Base.return_types((Any,Int,)) do x, y
+        ifelselike(isa(x, Int), x, y)
+    end |> only == Int
+
+    # should work nicely with union-split
+    @test Base.return_types((Union{Int,Nothing},)) do x
+        ifelselike(isa(x, Int), x, 0)
+    end |> only == Int
+
+    @test Base.return_types((Any,Int)) do x, y
+        ifelselike(!isa(x, Int), y, x)
+    end |> only == Int
+
+    @test Base.return_types((Any,Int)) do x, y
+        a = ifelselike(x === 0, x, 0) # ::Const(0)
+        if a == 0
+            return y
+        else
+            return nothing # dead branch
+        end
+    end |> only == Int
+
+    # pick up the first if there are multiple constrained arguments
+    @test Base.return_types((Any,)) do x
+        ifelselike(isa(x, Int), x, x)
+    end |> only == Any
+
+    # just propagate multiple constraints
+    ifelselike2(cnd1, cnd2, x, y, z) = cnd1 ? x : cnd2 ? y : z
+    @test Base.return_types((Any,Any)) do x, y
+        ifelselike2(isa(x, Int), isa(y, Int), x, y, 0)
+    end |> only == Int
+
+    # work with `invoke`
+    @test Base.return_types((Any,Any)) do x, y
+        Base.@invoke ifelselike(isa(x, Int), x, y::Int)
+    end |> only == Int
+
+    # don't be confused with vararg method
+    vacond(cnd, va...) = cnd ? va : 0
+    @test Base.return_types((Any,)) do x
+        # at runtime we will see `va::Tuple{Tuple{Int,Int}, Tuple{Int,Int}}`
+        vacond(isa(x, Tuple{Int,Int}), x, x)
+    end |> only == Union{Int,Tuple{Any,Any}}
+
+    # demonstrate extra constraint propagation for Base.ifelse
+    @test Base.return_types((Any,Int,)) do x, y
+        ifelse(isa(x, Int), x, y)
+    end |> only == Int
+
+    # slot as SSA
+    @test Base.return_types((Any,Vector{Any})) do x, y
+        z = x
+        ifelselike(isa(z, Int), z, length(y))
+    end |> only === Int
+end
 
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
@@ -2846,11 +3137,12 @@ _use_unstable_kw_2() = _unstable_kw(x = 2, y = rand())
 @test Base.return_types(_use_unstable_kw_1) == Any[String]
 @test Base.return_types(_use_unstable_kw_2) == Any[String]
 @eval struct StructWithSplatNew
-    x::Int
+    x::String
     StructWithSplatNew(t) = $(Expr(:splatnew, :StructWithSplatNew, :t))
 end
 _construct_structwithsplatnew() = StructWithSplatNew(("",))
 @test Base.return_types(_construct_structwithsplatnew) == Any[StructWithSplatNew]
+@test isa(_construct_structwithsplatnew(), StructWithSplatNew)
 
 # case where a call cycle can be broken by constant propagation
 struct NotQRSparse
@@ -3025,7 +3317,7 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Vararg}) == Bool
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Vararg}) == Bool
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Vararg{Symbol}}) == Symbol
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Vararg{Symbol}}) == Union{}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Vararg{Symbol}}) == Symbol
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Vararg{Integer}}) == Integer
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Vararg}) == Integer
@@ -3422,8 +3714,7 @@ let
     ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
     sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
         Core.Compiler.NativeInterpreter())
-    ir = Core.Compiler.convert_to_ircode(ci, Core.Compiler.copy_exprargs(ci.code),
-        false, sv)
+    ir = Core.Compiler.convert_to_ircode(ci, sv)
     ir = Core.Compiler.slot2reg(ir, ci, sv)
     ir = Core.Compiler.compact!(ir)
     Core.Compiler.replace_code_newstyle!(ci, ir, 4)
@@ -3582,4 +3873,139 @@ let
     @test argtypes[9] == Union{Nothing,Bound} where Bound<:Integer
     @test argtypes[10] == Any
     @test argtypes[11] == Tuple{Integer,Integer}
+end
+
+# make sure not to call `widenconst` on `TypeofVararg` objects
+@testset "unhandled Vararg" begin
+    struct UnhandledVarargCond
+        val::Bool
+    end
+    function Base.:+(a::UnhandledVarargCond, xs...)
+        if a.val
+            return nothing
+        else
+            s = 0
+            for x in xs
+                s += x
+            end
+            return s
+        end
+    end
+    @test Base.return_types((Vector{Int},)) do xs
+        +(UnhandledVarargCond(false), xs...)
+    end |> only === Int
+
+    @test (Base.return_types((Vector{Any},)) do xs
+        Core.kwfunc(xs...)
+    end; true)
+
+    @test Base.return_types((Vector{Vector{Int}},)) do xs
+        Tuple(xs...)
+    end |> only === Tuple{Vararg{Int}}
+end
+
+# issue #42646
+@test only(Base.return_types(getindex, (Array{undef}, Int))) >: Union{} # check that it does not throw
+
+# form PartialStruct for extra type information propagation
+struct FieldTypeRefinement{S,T}
+    s::S
+    t::T
+end
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Any,Int}(s, s)
+    o.s
+end |> only == Int
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Int,Any}(s, s)
+    o.t
+end |> only == Int
+@test Base.return_types((Int,)) do s
+    o = FieldTypeRefinement{Any,Any}(s, s)
+    o.s, o.t
+end |> only == Tuple{Int,Int}
+@test Base.return_types((Int,)) do a
+    s1 = Some{Any}(a)
+    s2 = Some{Any}(s1)
+    s2.value.value
+end |> only == Int
+
+# issue #42986
+@testset "narrow down `Union` using `isdefined` checks" begin
+    # basic functionality
+    @test Base.return_types((Union{Nothing,Core.CodeInstance},)) do x
+        if isdefined(x, :inferred)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Core.CodeInstance
+
+    @test Base.return_types((Union{Nothing,Core.CodeInstance},)) do x
+        if isdefined(x, :not_exist)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Union{}
+
+    # even when isdefined is malformed, we can filter out types with no fields
+    @test Base.return_types((Union{Nothing, Core.CodeInstance},)) do x
+        if isdefined(x, 5)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Core.CodeInstance
+
+    struct UnionNarrowingByIsdefinedA; x; end
+    struct UnionNarrowingByIsdefinedB; x; end
+    struct UnionNarrowingByIsdefinedC; x; end
+
+    # > 2 types in the union
+    @test  Base.return_types((Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB, UnionNarrowingByIsdefinedC},)) do x
+        if isdefined(x, :x)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB, UnionNarrowingByIsdefinedC}
+
+    # > 2 types in the union and some aren't defined
+    @test  Base.return_types((Union{UnionNarrowingByIsdefinedA, Core.CodeInstance, UnionNarrowingByIsdefinedC},)) do x
+        if isdefined(x, :x)
+            return x
+        else
+            throw("invalid")
+        end
+    end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedC}
+
+    # should respect `Const` information still
+    @test Base.return_types((Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB},)) do x
+        if isdefined(x, :x)
+            return x
+        else
+            return nothing # dead branch
+        end
+    end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB}
+end
+
+# issue #43784
+@testset "issue #43784" begin
+    init = Base.ImmutableDict{Any,Any}()
+    a = Const(init)
+    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, Any])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c)
+    @test ⊑(b, c)
+
+    @test @eval Module() begin
+        const ginit = Base.ImmutableDict{Any,Any}()
+        Base.return_types() do
+            g = ginit
+            while true
+                g = Base.ImmutableDict(g, 1=>2)
+            end
+        end |> only === Union{}
+    end
 end

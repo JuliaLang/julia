@@ -11,9 +11,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#ifndef _MSC_VER
 #include <strings.h>
-#endif
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_threads.h"
@@ -26,6 +24,7 @@
 #endif
 #endif
 #include "julia_assert.h"
+#include "gc-alloc-profiler.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -376,13 +375,7 @@ unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
 #else
 STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 {
-#if defined(_COMPILER_MICROSOFT_)
-    unsigned long j;
-    _BitScanForward(&j, bitvec);
-    return j;
-#else
     return __builtin_ffs(bitvec) - 1;
-#endif
 }
 #endif
 
@@ -703,6 +696,9 @@ void gc_stats_big_obj(void);
 void gc_count_pool(void);
 
 size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
+
+JL_DLLEXPORT void jl_enable_gc_logging(int enable);
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

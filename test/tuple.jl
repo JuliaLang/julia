@@ -277,6 +277,42 @@ end
     end
 end
 
+@testset "foreach" begin
+    longtuple = ntuple(identity, 20)
+
+    @testset "1 argument" begin
+        foo(x) = push!(a, x)
+
+        a = []
+        foreach(foo, ())
+        @test a == []
+
+        a = []
+        foreach(foo, (1,))
+        @test a == [1]
+
+        a = []
+        foreach(foo, longtuple)
+        @test a == [longtuple...]
+    end
+
+    @testset "n arguments" begin
+        foo(x, y) = push!(a, (x, y))
+
+        a = []
+        foreach(foo, (), ())
+        @test a == []
+
+        a = []
+        foreach(foo, (1,), (2,))
+        @test a == [(1, 2)]
+
+        a = []
+        foreach(foo, longtuple, longtuple)
+        @test a == [(x, x) for x in longtuple]
+    end
+end
+
 @testset "mapfoldl" begin
     @test (((1=>2)=>3)=>4) == foldl(=>, (1,2,3,4)) ==
           mapfoldl(identity, =>, (1,2,3,4)) == mapfoldl(abs, =>, (-1,-2,-3,-4))
@@ -671,3 +707,12 @@ end
 
 # https://github.com/JuliaLang/julia/issues/40814
 @test Base.return_types(NTuple{3,Int}, (Vector{Int},)) == Any[NTuple{3,Int}]
+
+# issue #42457
+f42457(a::NTuple{3,Int}, b::Tuple)::Bool = Base.isequal(a, Base.inferencebarrier(b)::Tuple)
+@test f42457((1, 1, 1), (1, 1, 1))
+@test !isempty(methods(Base._isequal, (NTuple{3, Int}, Tuple)))
+g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
+@test only(Base.return_types(g42457, (NTuple{3, Int}, Tuple))) === Union{Float64, Int}
+@test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple))) === Union{Float64, Int}
+@test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple{4}))) === Float64

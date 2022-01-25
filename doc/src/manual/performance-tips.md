@@ -13,10 +13,9 @@ The functions should take arguments, instead of operating directly on global var
 
 ## Avoid global variables
 
-A global variable might have its value, and therefore its type, change at any point. This makes
-it difficult for the compiler to optimize code using global variables. Variables should be local,
-or passed as arguments to functions, whenever possible.
-
+A global variable might have its value, and therefore possibly its type, changed at any point. This makes
+it difficult for the compiler to optimize code using global variables. This also applies to type-valued variables,
+i.e. type aliases on the global level. Variables should be local, or passed as arguments to functions, whenever possible.
 
 We find that global names are frequently constants, and declaring them as such greatly improves
 performance:
@@ -1025,7 +1024,7 @@ consider the two functions:
 ```jldoctest dotfuse
 julia> f(x) = 3x.^2 + 4x + 7x.^3;
 
-julia> fdot(x) = @. 3x^2 + 4x + 7x^3 # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3;
+julia> fdot(x) = @. 3x^2 + 4x + 7x^3; # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3
 ```
 
 Both `f` and `fdot` compute the same thing. However, `fdot`

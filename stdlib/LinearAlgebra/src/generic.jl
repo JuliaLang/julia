@@ -449,45 +449,11 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 # Dot products and norms
 
 # special cases of norm; note that they don't need to handle isempty(x)
-function generic_normMinusInf(x)
-    (v, s) = iterate(x)::Tuple
-    minabs = norm(v)
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        vnorm = norm(v)
-        minabs = ifelse(isnan(minabs) | (minabs < vnorm), minabs, vnorm)
-    end
-    return float(minabs)
-end
+generic_normMinusInf(x) = float(mapreduce(norm, min, x))
 
-function generic_normInf(x)
-    (v, s) = iterate(x)::Tuple
-    maxabs = norm(v)
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        vnorm = norm(v)
-        maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
-    end
-    return float(maxabs)
-end
+generic_normInf(x) = float(mapreduce(norm, max, x))
 
-function generic_norm1(x)
-    (v, s) = iterate(x)::Tuple
-    av = float(norm(v))
-    T = typeof(av)
-    sum::promote_type(Float64, T) = av
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        sum += norm(v)
-    end
-    return convert(T, sum)
-end
+generic_norm1(x) = mapreduce(float ∘ norm, +, x)
 
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
@@ -1146,6 +1112,30 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
+"""
+    A / B
+
+Matrix right-division: `A / B` is equivalent to `(B' \\ A')'` where [`\\`](@ref) is the left-division operator.
+For square matrices, the result `X` is such that `A == X*B`.
+
+See also: [`rdiv!`](@ref).
+
+# Examples
+```jldoctest
+julia> A = Float64[1 4 5; 3 9 2]; B = Float64[1 4 2; 3 4 2; 8 7 1];
+
+julia> X = A / B
+2×3 Matrix{Float64}:
+ -0.65   3.75  -1.2
+  3.25  -2.75   1.0
+
+julia> isapprox(A, X*B)
+true
+
+julia> isapprox(X, A*pinv(B))
+true
+```
+"""
 function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
     size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
     return copy(adjoint(adjoint(B) \ adjoint(A)))
@@ -1516,9 +1506,9 @@ end
 end
 
 # apply reflector from left
-@inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractMatrix)
+@inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
     require_one_based_indexing(x)
-    m, n = size(A)
+    m, n = size(A, 1), size(A, 2)
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
@@ -1594,6 +1584,8 @@ julia> logabsdet(B)
 ```
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
+
+logabsdet(a::Number) = log(abs(a)), sign(a)
 
 """
     logdet(M)

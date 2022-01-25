@@ -1803,6 +1803,11 @@ ccall_with_undefined_lib() = ccall((:time, xx_nOt_DeFiNeD_xx), Cint, (Ptr{Cvoid}
     @test b16 == b
 end
 
+@testset "transcode String to String" begin
+    a = "Julia strings and things"
+    @test transcode(String, a) === a
+end
+
 # issue 33413
 @testset "cglobal lowering" begin
     # crash in cglobal33413_ptrinline[_notype]() specifically requires the library pointer be

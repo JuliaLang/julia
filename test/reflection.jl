@@ -952,3 +952,16 @@ end
     @test only(code_typed(mod.foo, (); world=world1)).second == Int
     @test only(code_typed(mod.foo, (); world=world2)).second == Float64
 end
+
+@testset "default_tt" begin
+    m = Module()
+    @eval m f1() = return
+    @test Base.default_tt(m.f1) == Tuple{}
+    @eval m f2(a) = return
+    @test Base.default_tt(m.f2) == Tuple{Any}
+    @eval m f3(a::Integer) = return
+    @test Base.default_tt(m.f3) == Tuple{Integer}
+    @eval m f4() = return
+    @eval m f4(a) = return
+    @test Base.default_tt(m.f4) == Tuple
+end

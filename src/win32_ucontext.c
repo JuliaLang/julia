@@ -26,11 +26,9 @@ JL_DLLEXPORT EXCEPTION_DISPOSITION NTAPI __julia_personality(
 
     EXCEPTION_DISPOSITION rval;
     switch (jl_exception_handler(&ExceptionInfo)) {
-#ifndef _MSC_VER
         case EXCEPTION_EXECUTE_HANDLER:
             rval = ExceptionExecuteHandler;
             break;
-#endif
         case EXCEPTION_CONTINUE_EXECUTION:
             rval = ExceptionContinueExecution;
             break;
@@ -73,7 +71,7 @@ void jl_makecontext(win32_ucontext_t *ucp, void (*func)(void))
     jmpbuf->Rip = (unsigned long long)func;
     jmpbuf->Rsp = (unsigned long long)stack_top;
     jmpbuf->Rbp = 0;
-    jmpbuf->Frame = 0; // SEH frame
+    jmpbuf->Frame = ~(uint64_t)0; // SEH frame
 #elif defined(_CPU_X86_)
     jmpbuf->Eip = (unsigned long)func;
     jmpbuf->Esp = (unsigned long)stack_top;

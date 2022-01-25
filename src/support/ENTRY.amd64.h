@@ -51,7 +51,6 @@ EXT(CNAME):
 #define EXT_(csym)          csym
 #define EXT(csym)           EXT_(csym)
 
-#ifndef _MSC_VER
 .intel_syntax noprefix
 .text
 _START_ENTRY
@@ -67,9 +66,5 @@ _START_ENTRY
 .seh_proc EXT(CNAME)
 EXT(CNAME):
 .seh_endprologue
-#else
-.code
-CNAME proc
-#endif
 
 #endif

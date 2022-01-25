@@ -297,11 +297,17 @@ on the author's laptop).
 
 ## Memory allocation analysis
 
-One of the most common techniques to improve performance is to reduce memory allocation. The
-total amount of allocation can be measured with [`@time`](@ref) and [`@allocated`](@ref), and
+One of the most common techniques to improve performance is to reduce memory allocation. Julia
+provides several tools measure this:
+
+### `@time`
+
+The total amount of allocation can be measured with [`@time`](@ref) and [`@allocated`](@ref), and
 specific lines triggering allocation can often be inferred from profiling via the cost of garbage
 collection that these lines incur. However, sometimes it is more efficient to directly measure
 the amount of memory allocated by each line of code.
+
+### Line-by-Line Allocation Tracking
 
 To measure allocation line-by-line, start Julia with the `--track-allocation=<setting>` command-line
 option, for which you can choose `none` (the default, do not measure allocation), `user` (measure
@@ -320,6 +326,40 @@ memory allocation). The recommended procedure is to force compilation by executi
 you want to analyze, then call [`Profile.clear_malloc_data()`](@ref) to reset all allocation counters.
  Finally, execute the desired commands and quit Julia to trigger the generation of the `.mem`
 files.
+
+### GC Logging
+
+While [`@time`](@ref) logs high-level stats about memory usage and garbage collection over the course
+of evaluating an expression, it can be useful to log each garbage collection event, to get an
+intuitive sense of how often the garbage collector is running, how long it's running each time,
+and how much garbage it collects each time. This can be enabled with
+[`GC.enable_logging(true)`](@ref), which causes Julia to log to stderr every time
+a garbage collection happens.
+
+### Allocation Profiler
+
+The allocation profiler records the stack trace, type, and size of each
+allocation while it is running. It can be invoked with
+[`Profile.Allocs.@profile`](@ref).
+
+This information about the allocations is returned as an array of `Alloc`
+objects, wrapped in an `AllocResults` object. The best way to visualize
+these is currently with the [PProf.jl](https://github.com/JuliaPerf/PProf.jl)
+library, which can visualize the call stacks which are making the most
+allocations.
+
+The allocation profiler does have significant overhead, so a `sample_rate`
+argument can be passed to speed it up by making it skip some allocations.
+Passing `sample_rate=1.0` will make it record everything (which is slow);
+`sample_rate=0.1` will record only 10% of the allocations (faster), etc.
+
+!!! note
+
+    The current implementation of the Allocations Profiler _does not
+    capture all allocations._ You can read more about the missing allocations
+    and the plan to improve this, here: https://github.com/JuliaLang/julia/issues/43688.
+    Calling `Profile.Allocs.fetch()` will print a log line reporting the percentage
+    of missed allocations, so you can understand the accuracy of your profile.
 
 ## External Profiling
 
@@ -347,7 +387,7 @@ $ perf report --call-graph -G -i /tmp/perf-jit.data
 ```
 
 There are many more interesting things that you can measure about your program, to get a comprehensive list
-please read the [Linux perf examples page](http://www.brendangregg.com/perf.html).
+please read the [Linux perf examples page](https://www.brendangregg.com/perf.html).
 
 Remember that perf saves for each execution a `perf.data` file that, even for small programs, can get
 quite large. Also the perf LLVM module saves temporarily debug objects in `~/.debug/jit`, remember

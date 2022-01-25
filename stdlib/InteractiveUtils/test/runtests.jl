@@ -649,3 +649,24 @@ end
         end
     end
 end
+
+let # `default_tt` should work with any function with one method
+    @test (code_warntype(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_warntype(devnull, function (a::Int)
+        sin(a)
+    end); true)
+    @test (code_llvm(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_llvm(devnull, function (a::Int)
+        sin(a)
+    end); true)
+    @test (code_native(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_native(devnull, function (a::Int)
+        sin(a)
+    end); true)
+end

@@ -51,6 +51,8 @@ typedef struct {
     int8_t warn_scope;
     int8_t image_codegen;
     int8_t rr_detach;
+    int8_t strip_metadata;
+    int8_t strip_ir;
 } jl_options_t;
 
 #endif
