@@ -524,6 +524,10 @@ end
 module M1 var"#foo#"() = 2 end
 @test occursin("M1.var\"#foo#\"", sprint(show, M1.var"#foo#", context = :module=>@__MODULE__))
 
+# PR #43932
+module var"#43932#" end
+@test endswith(sprint(show, var"#43932#"), ".var\"#43932#\"")
+
 # issue #12477
 @test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
 
