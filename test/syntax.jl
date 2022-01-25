@@ -2420,9 +2420,9 @@ end
 @test_throws ParseError("extra token \"2\" after end of expression") Meta.parse("1#==# 2")
 
 @test size([1#==#2#==#3]) == size([1 2 3])
-@test size([1#==#2#==#3]) == size([1    2   3]) # tabs
-@test size([1#==#2#==#3]) == size([1    2 3]) # tabs and spaces
-@test size([1#==#2#==#3]) == size([1 2  3]) # tabs and spaces
+@test size([1#==#2#==#3]) == size([1	2	3]) # tabs
+@test size([1#==#2#==#3]) == size([1	2 3]) # tabs and spaces
+@test size([1#==#2#==#3]) == size([1 2	3]) # tabs and spaces
 @test [zeros(Int,2,2)#==#[1;2]
        [3#==#4]#==#5]          == [zeros(Int,2,2) [1; 2]
                                    [3 4]          5     ] == [0 0 1
@@ -3088,19 +3088,19 @@ end
 
 @test_throws ParseError Meta.parse("""
 function checkUserAccess(u::User)
-    if u.accessLevel != "user\u202e \u2066# users are not allowed\u2069\u2066"
-        return true
-    end
-    return false
+	if u.accessLevel != "user\u202e \u2066# users are not allowed\u2069\u2066"
+		return true
+	end
+	return false
 end
 """)
 
 @test_throws ParseError Meta.parse("""
 function checkUserAccess(u::User)
-    #=\u202e \u2066if (u.isAdmin)\u2069 \u2066 begin admins only =#
-        return true
-    #= end admin only \u202e \u2066end\u2069 \u2066=#
-    return false
+	#=\u202e \u2066if (u.isAdmin)\u2069 \u2066 begin admins only =#
+		return true
+	#= end admin only \u202e \u2066end\u2069 \u2066=#
+	return false
 end
 """)
 
