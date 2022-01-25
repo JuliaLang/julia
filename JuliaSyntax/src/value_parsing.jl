@@ -101,22 +101,22 @@ function unescape_raw_string(io::IO, str::AbstractString, is_cmd::Bool, dedent::
         end
         # Process \ escape sequences
         j = i
-        while str[j] == '\\' && j <= lastidx
+        while j <= lastidx && str[j] == '\\'
             j += 1
         end
-        ndelim = j - i
-        if j <= lastidx && str[j] == delim
-            # Escaping a delimiter
-            ndelim = div(ndelim,2)
+        nbackslash = j - i
+        if (j <= lastidx && str[j] == delim) || j > lastidx
+            # Backslashes before a delimiter must also be escaped
+            nbackslash = div(nbackslash,2)
         end
-        for k = 1:ndelim
+        for k = 1:nbackslash
             write(io, '\\')
         end
         i = j
         if i <= lastidx
             write(io, str[i])
+            i = nextind(str, i)
         end
-        i = nextind(str, i)
     end
 end
 
