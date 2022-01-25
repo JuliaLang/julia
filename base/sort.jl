@@ -1146,10 +1146,10 @@ isnan(o::Perm, i::Integer) = isnan(o.order,o.data[i])
 
 ismissing(o::DirectOrdering, x::Floats) = false
 ismissing(o::DirectOrdering, x::Missing) = true
-ismissing(o::Perm, i::Int) = ismissing(o.order,o.data[i])
+ismissing(o::Perm, i::Integer) = ismissing(o.order,o.data[i])
 
 allowsmissing(::AbstractVector{T}, ::DirectOrdering) where {T} = T >: Missing
-allowsmissing(::AbstractVector{Int},
+allowsmissing(::AbstractVector{<:Integer},
               ::Perm{<:DirectOrdering,<:AbstractVector{T}}) where {T} =
     T >: Missing
 
