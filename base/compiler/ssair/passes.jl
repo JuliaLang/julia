@@ -1131,7 +1131,10 @@ function adce_pass!(ir::IRCode)
         count_uses(compact.result[phi][:inst]::PhiNode, phi_uses)
     end
     # Narrow any union phi nodes that have unused branches
-    for (phi, t) in zip(unionphis, unionphi_types)
+    @assert length(unionphis) == length(unionphi_types)
+    for i = 1:length(unionphis)
+        phi = unionphis[i]
+        t = unionphi_types[i]
         if phi_uses[phi] != 0
             continue
         end
