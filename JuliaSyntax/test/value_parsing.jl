@@ -184,6 +184,10 @@ end
     @test unescape_julia_string("x\\\\\\`x",  false, true) == "x\\\\\\`x"
     # '\\ ' ==> '\\ '
     @test unescape_julia_string("\\\\ ",      false, true) == "\\\\ "
+    # '\\' ==> '\'
+    @test unescape_julia_string("\\\\",       false, true) == "\\"
+    # '\\\\' ==> '\\'
+    @test unescape_julia_string("\\\\\\\\",       false, true) == "\\\\"
 
     # ` delimited
     # x\"x ==> x\"x
