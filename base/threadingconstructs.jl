@@ -112,21 +112,38 @@ A barrier is placed at the end of the loop which waits for all tasks to finish
 execution.
 
 The `schedule` argument can be used to request a particular scheduling policy.
-Options are:
+
+Except for `:static` scheduling, how the iterations are assigned to tasks, and how the tasks
+are assigned to the worker threads are undefined. The exact assignments can be different
+for each execution. The scheduling option should be considered as a hint. The loop body
+code (including any code transitively called from it) must not assume the task and worker
+thread in which they are executed. The loop body code for each iteration must be able to
+make forward progress and be free from data races independent of the state of other iterations.
+As such, synchronizations across iterations may invoke deadlock.
+
+For example, the above conditions imply that:
+
+- The lock taken in an iteration must be released within the same iteration.
+- Avoid communication between iterations using, e.g., Channels.
+- Write only to locations not shared across iterations (unless lock or atomic operation is used).
+
+Furthermore, even though `lock` and atomic operations can be useful sometimes, it is often better
+to avoid them for performance.
+
+Schedule options are:
 - `:static` which creates one task per thread and divides the iterations equally among
             them, assigning each task specifically to each thread.
             Specifying `:static` is an error if used from inside another `@threads` loop
             or from a thread other than 1.
-- `:dynamic` which is like `:static` except the tasks are assigned to threads dynamically,
-            allowing more flexible scheduling if other tasks are active on other threads.
-            Specifying `:dynamic` is allowed from inside another `@threads` loop and from
-            threads other than 1.
+- `:dynamic` tries to schedule iterations dynamically to available worker threads,
+            assuming that the workload for each iteration is uniform.
 
 If no schedule is specified, when called from thread 1 the default is `:static`, or when
 called from other threads the loop will be executed without threading.
+
 The default schedule (used when no `schedule` argument is present) is subject to change.
 
-For example, here an illustration of the different scheduling strategies, where `busywait`
+For example, an illustration of the different scheduling strategies where `busywait`
 is a non-yielding timed loop that runs for a number of seconds.
 
 ```julia-repl
