@@ -1696,7 +1696,7 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         end
         return false
     elseif f === has_free_typvars
-        return length(argtypes) == 2
+        return length(argtypes) == 1
     end
     return false
 end
@@ -1900,11 +1900,10 @@ function typename_static(@nospecialize(t))
     return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
 end
 
-
 function has_free_typevars_tfunc(@nospecialize(t))
     if t isa Const
         return Const(has_free_typevars(t.val))
-    elseif isconstType(t)
+    elseif isType(t)
         return Const(has_free_typevars(t.parameters[1]))
     elseif !hasintersect(t, Union{DataType, Union, UnionAll, TypeofVararg})
         return Const(false)
