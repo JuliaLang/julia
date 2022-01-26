@@ -214,6 +214,8 @@ end
 function string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
     for v in a
+        # 4 types is too many for automatic Union-splitting, so we split manually
+        # and allow one specializable call site per concrete type
         if v isa Char
             n += ncodeunits(v)
         elseif v isa String
