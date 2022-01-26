@@ -62,6 +62,11 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
     for (src, rettype) in code_typed(f, t; optimize, kwargs...)
+        if !(src isa Core.CodeInfo)
+            println(io, src)
+            println(io, "  failed to infer")
+            continue
+        end
         lambda_io::IOContext = io
         p = src.parent
         nargs::Int = 0

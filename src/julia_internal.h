@@ -607,7 +607,7 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st);
-void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), void *env);
+int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), void *env);
 void jl_init_main_module(void);
 JL_DLLEXPORT int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT;
 jl_array_t *jl_get_loaded_modules(void);
