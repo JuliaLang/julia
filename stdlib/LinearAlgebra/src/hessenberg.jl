@@ -122,69 +122,68 @@ end
 
 function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
     T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     rmul!(HH, U)
     UpperHessenberg(HH)
 end
 function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
     T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     lmul!(U, HH)
     UpperHessenberg(HH)
 end
 
 function /(H::UpperHessenberg, U::UpperTriangular)
     T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     rdiv!(HH, U)
     UpperHessenberg(HH)
 end
 function /(H::UpperHessenberg, U::UnitUpperTriangular)
     T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     rdiv!(HH, U)
     UpperHessenberg(HH)
 end
 
 function \(U::UpperTriangular, H::UpperHessenberg)
     T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     ldiv!(U, HH)
     UpperHessenberg(HH)
 end
 function \(U::UnitUpperTriangular, H::UpperHessenberg)
     T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     ldiv!(U, HH)
     UpperHessenberg(HH)
 end
 
 function *(H::UpperHessenberg, B::Bidiagonal)
     TS = promote_op(matprod, eltype(H), eltype(B))
-    if B.uplo == 'U'
-        A_mul_B_td!(UpperHessenberg(zeros(TS, size(H)...)), H, B)
-    else
-        A_mul_B_td!(zeros(TS, size(H)...), H, B)
-    end
+    A = A_mul_B_td!(zeros(TS, size(H)), H, B)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 function *(B::Bidiagonal, H::UpperHessenberg)
     TS = promote_op(matprod, eltype(B), eltype(H))
-    if B.uplo == 'U'
-        A_mul_B_td!(UpperHessenberg(zeros(TS, size(B)...)), B, H)
-    else
-        A_mul_B_td!(zeros(TS, size(B)...), B, H)
-    end
+    A = A_mul_B_td!(zeros(TS, size(H)), B, H)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
-function /(H::UpperHessenberg, B::Bidiagonal)
-    A = Base.@invoke /(H::AbstractMatrix, B::Bidiagonal)
-    B.uplo == 'U' ? UpperHessenberg(A) : A
+/(H::UpperHessenberg, B::Bidiagonal) = _rdiv(H, B)
+/(H::UpperHessenberg{<:Number}, B::Bidiagonal{<:Number}) = _rdiv(H, B)
+function _rdiv(H::UpperHessenberg, B::Bidiagonal)
+    T = typeof(oneunit(eltype(H))/oneunit(eltype(B)))
+    A = _rdiv!(zeros(T, size(H)), H, B)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
+end
+
+\(B::Bidiagonal{<:Number}, H::UpperHessenberg{<:Number}) = _ldiv(B, H)
+\(B::Bidiagonal, H::UpperHessenberg) = _ldiv(B, H)
+function _ldiv(B::Bidiagonal, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(B))\oneunit(eltype(H)))
+    A = ldiv!(zeros(T, size(H)), B, H)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
 # Solving (H+µI)x = b: we can do this in O(m²) time and O(m) memory
