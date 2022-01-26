@@ -140,7 +140,8 @@ end
 sorteig!(λ::AbstractVector, sortby::Union{Function,Nothing}=eigsortby) = sortby === nothing ? λ : sort!(λ, by=sortby)
 
 """
-    eigen!(A, [B]; permute, scale, sortby)
+    eigen!(A; permute, scale, sortby)
+    eigen!(A, B; sortby)
 
 Same as [`eigen`](@ref), but saves space by overwriting the input `A` (and
 `B`), instead of creating a copy.
@@ -462,7 +463,7 @@ function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function
 end
 
 """
-    eigen(A, B) -> GeneralizedEigen
+    eigen(A, B; sortby) -> GeneralizedEigen
 
 Compute the generalized eigenvalue decomposition of `A` and `B`, returning a
 [`GeneralizedEigen`](@ref) factorization object `F` which contains the generalized eigenvalues in
@@ -471,8 +472,9 @@ Compute the generalized eigenvalue decomposition of `A` and `B`, returning a
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
-Any keyword arguments passed to `eigen` are passed through to the lower-level
-[`eigen!`](@ref) function.
+By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
+A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
+`sortby=nothing` to leave the eigenvalues in an arbitrary order.
 
 # Examples
 ```jldoctest
