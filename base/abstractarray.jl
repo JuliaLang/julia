@@ -2363,6 +2363,10 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
             end
         elseif currentdims[d1] > outdims[d1] # exceeded dimension
             throw(ArgumentError("argument $i has too many elements along axis $d1"))
+        else
+            for d ∈ (d2, 3:N...)
+                currentdims[d] += cat_size(as[i], d)
+            end
         end
     end
 
