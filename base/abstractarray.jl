@@ -2329,15 +2329,17 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
 
     # validate shapes for lowest level of concatenation
     d = findfirst(>(1), dims)
-    nblocks = length(as) ÷ dims[d]
-    for b ∈ 1:nblocks
-        offset = ((b - 1) * dims[d])
-        startelementi = offset + 1
-        for i ∈ offset .+ (2:dims[d])
-            for dd ∈ 1:N
-                dd == d && continue
-                if size(as[startelementi], dd) != size(as[i], dd)
-                    throw(ArgumentError("incompatible shape in element $i"))
+    if d !== nothing # all dims are 1
+        nblocks = length(as) ÷ dims[d]
+        for b ∈ 1:nblocks
+            offset = ((b - 1) * dims[d])
+            startelementi = offset + 1
+            for i ∈ offset .+ (2:dims[d])
+                for dd ∈ 1:N
+                    dd == d && continue
+                    if size(as[startelementi], dd) != size(as[i], dd)
+                        throw(ArgumentError("incompatible shape in element $i"))
+                    end
                 end
             end
         end
