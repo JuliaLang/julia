@@ -3384,6 +3384,26 @@ f(x) = yt(x)
       `(call (core getfield) ,fname ,(get opaq var))
       `(call (core getfield) ,fname (inert ,var))))
 
+(define (convert-global-assignment var rhs0 globals)
+  (let* ((rhs1 (if (or (simple-atom? rhs0)
+                       (equal? rhs0 '(the_exception)))
+                   rhs0
+                   (make-ssavalue)))
+         (ref   (binding-to-globalref var))
+         (ty   `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref))))
+         (rhs  (if (get globals ref #t) ;; no type declaration for constants
+                   (let ((ex (convert-for-type-decl rhs1 ty)))
+                     (if (has? globals ref)
+                         ex
+                         `(block (set-binding-type ,ref) ,ex)))
+                   rhs1))
+         (ex   `(= ,var ,rhs)))
+    (if (eq? rhs1 rhs0)
+        `(block ,ex ,rhs0)
+        `(block (= ,rhs1 ,rhs0)
+                ,ex
+                ,rhs1))))
+
 ;; convert assignment to a closed variable to a setfield! call.
 ;; while we're at it, generate `convert` calls for variables with
 ;; declared types.
@@ -3399,56 +3419,32 @@ f(x) = yt(x)
                      '(core Any)))
             (closed (and cv (vinfo:asgn cv) (vinfo:capt cv)))
             (capt   (and vi (vinfo:asgn vi) (vinfo:capt vi))))
-       (let* ((rhs1 (if (or (simple-atom? rhs0)
-                            (equal? rhs0 '(the_exception)))
-                        rhs0
-                        (make-ssavalue)))
-              (rhs  (if (equal? vt '(core Any))
-                        (if (or (local-in? var lam) (underscore-symbol? var))
+       (if (and (not closed) (not capt) (equal? vt '(core Any)))
+           (if (or (local-in? var lam) (underscore-symbol? var))
+               `(= ,var ,rhs0)
+               (convert-global-assignment var rhs0 globals))
+           (let* ((rhs1 (if (or (simple-atom? rhs0)
+                                (equal? rhs0 '(the_exception)))
+                            rhs0
+                            (make-ssavalue)))
+                  (rhs  (if (equal? vt '(core Any))
                             rhs1
-                            (let* ((ref (binding-to-globalref var))
-                                   (ty `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref)))))
-                              (if (get globals ref #t) ;; no type declaration for constants
-                                  (let ((ex (convert-for-type-decl rhs1 ty)))
-                                    (if (has? globals ref)
-                                        ex
-                                        `(block (set-binding-type ,(cadr ref) (inert ,(caddr ref)))
-                                                ,ex)))
-                                  rhs1)))
-                        (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f #f interp opaq globals))))
-              (ex (cond (closed `(call (core setfield!)
-                                       ,(if interp
-                                            `($ ,var)
-                                            (capt-var-access var fname opaq))
-                                       (inert contents)
-                                       ,rhs))
-                        (capt `(call (core setfield!) ,var (inert contents) ,rhs))
-                        (else `(= ,var ,rhs)))))
-        (if (eq? rhs1 rhs0)
-            `(block ,ex ,rhs0)
-            `(block (= ,rhs1 ,rhs0)
-                    ,ex
-                    ,rhs1)))))
+                            (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f #f interp opaq))))
+                  (ex (cond (closed `(call (core setfield!)
+                                           ,(if interp
+                                                `($ ,var)
+                                                (capt-var-access var fname opaq))
+                                           (inert contents)
+                                           ,rhs))
+                            (capt `(call (core setfield!) ,var (inert contents) ,rhs))
+                            (else `(= ,var ,rhs)))))
+             (if (eq? rhs1 rhs0)
+                 `(block ,ex ,rhs0)
+                 `(block (= ,rhs1 ,rhs0)
+                         ,ex
+                         ,rhs1))))))
      ((or (outerref? var) (globalref? var))
-      (let* ((rhs1 (if (or (simple-atom? rhs0)
-                           (equal? rhs0 '(the_exception)))
-                       rhs0
-                       (make-ssavalue)))
-             (ref   (binding-to-globalref var))
-             (ty   `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref))))
-             (rhs  (if (get globals ref #t) ;; no type declaration for constants
-                       (let ((ex (convert-for-type-decl rhs1 ty)))
-                         (if (has? globals ref)
-                             ex
-                             `(block (set-binding-type ,(cadr ref) (inert ,(caddr ref)))
-                                     ,ex)))
-                       rhs1))
-             (ex   `(= ,var ,rhs)))
-        (if (eq? rhs1 rhs0)
-            `(block ,ex ,rhs0)
-            `(block (= ,rhs1 ,rhs0)
-                    ,ex
-                    ,rhs1))))
+      (convert-global-assignment var rhs0 globals))
      ((ssavalue? var)
       `(= ,var ,rhs0))
      (else
@@ -3481,6 +3477,7 @@ f(x) = yt(x)
 ;; collect all toplevel-butfirst expressions inside `e`, and return
 ;; (ex . stmts), where `ex` is the expression to evaluated and
 ;; `stmts` is a list of statements to move to the top level.
+;; also expand set-binding-type expressions and handle them similarly
 (define (lift-toplevel e)
   (let ((top '())
         (type-decls '()))
@@ -3493,16 +3490,27 @@ f(x) = yt(x)
                (set! top (cons (cddr e) top))
                (cadr e))
               ((set-binding-type)
-               (set! type-decls (cons `(call (core set_binding_type!) ,@(cdr e)) type-decls))
+               ;; set-binding-type expressions w/o the type specified need to be removed
+               ;; if there are other type declarations for the same binding
+               (set! type-decls
+                     (cons (cdr e)
+                           (filter (lambda (decl)
+                                     (not (and (equal? (car decl) (cadr e)) (length= decl 1))))
+                                   type-decls)))
                '(null))
               (else e)))))
-    (let ((e2 (lift- e)))
-      (let ((stmts (append (apply append (reverse top)) type-decls)))
+    (let* ((e2    (lift- e))
+           (decls (foldl (lambda (x decls) ;; x = ((globalref mod sym)[ type])
+                           (cons `(call (core set_binding_type!) ,(cadar x) (inert ,(caddar x))
+                                        ,@(cdr x))
+                                 decls))
+                         '() type-decls))
+           (stmts (apply append (reverse (cons decls top)))))
         ;; move all type definitions first
         (receive (structs others)
                  (separate (lambda (x) (and (pair? x) (eq? (car x) 'thunk)))
                            stmts)
-                 (cons e2 (append structs others)))))))
+                 (cons e2 (append structs others))))))
 
 (define (first-non-meta blk)
   (let loop ((xs (cdr blk)))
@@ -4072,7 +4080,7 @@ f(x) = yt(x)
                       (if ref
                           (begin
                             (put! globals ref #t)
-                            `(set-binding-type ,(cadr ref) (inert ,(caddr ref)) ,(caddr e)))
+                            `(set-binding-type ,ref ,(caddr e)))
                           `(call (core typeassert) ,@(cdr e))))
                     fname lam namemap defined toplevel interp opaq globals))))
           ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars

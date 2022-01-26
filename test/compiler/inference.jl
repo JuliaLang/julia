@@ -2574,9 +2574,6 @@ let i
             @test code28279[i].cond == oldcode28279[i].cond
             @test code28279[i].dest == (oldcode28279[i].dest + offset)
             global offset += 1
-        elseif Meta.isexpr(oldcode28279[i], :(=)) && oldcode28279[i].args[2] isa SSAValue
-            @test code28279[i].args[1] == oldcode28279[i].args[1]
-            @test code28279[i].args[2].id == (oldcode28279[i].args[2].id + offset - 1)
         else
             @test code28279[i] == oldcode28279[i]
         end
