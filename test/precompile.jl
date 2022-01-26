@@ -767,6 +767,27 @@ precompile_test_harness("package_callbacks") do dir
     finally
         pop!(Base.package_callbacks)
     end
+    L = ReentrantLock()
+    E = Base.Event()
+    t = errormonitor(@async lock(L) do
+                     wait(E)
+                     Base.root_module_key(Base)
+                     end)
+    Test4_module = :Teste4095a84
+    write(joinpath(dir, "$(Test4_module).jl"),
+          """
+          module $(Test4_module)
+          end
+          """)
+    Base.compilecache(Base.PkgId("$(Test4_module)"))
+    push!(Base.package_callbacks, _->(notify(E); lock(L) do; end))
+    # should not hang here
+    try
+        @eval using $(Symbol(Test4_module))
+        wait(t)
+    finally
+        pop!(Base.package_callbacks)
+    end
 end
 
 # Issue #19960
