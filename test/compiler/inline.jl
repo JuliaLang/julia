@@ -1069,3 +1069,16 @@ end
 @test fully_eliminated() do
     issue41694(2)
 end
+
+# Make sure `isivdepsafe` for Broadcast is fully_eliminated after `instantiate`
+bc = Base.broadcasted(+,randn(1),randn(1))
+bc = Base.broadcasted(sin,bc)
+bc = Base.broadcasted(exp,bc)
+bc = Base.broadcasted(^,bc,randn(1))
+bc = Base.broadcasted(-,bc,randn(1))
+@test !fully_eliminated(Broadcast.isivdepsafe, Base.typesof(bc))
+bc = Broadcast.instantiate(bc)
+@test fully_eliminated(Broadcast.isivdepsafe, Base.typesof(bc))
+bc = Broadcast.preprocess(nothing, bc)
+@test fully_eliminated(Broadcast.isivdepsafe, Base.typesof(bc))
+@test Broadcast.isivdepsafe(bc)

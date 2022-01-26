@@ -944,6 +944,24 @@ preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
 @inline preprocess_args(dest, args::Tuple{Any}) = (preprocess(dest, args[1]),)
 @inline preprocess_args(dest, args::Tuple{}) = ()
 
+isivdepsafe(dest::AbstractArray, bc::Broadcasted) = isivdepsafe(bc) && isivdepsafe(dest)
+# Make sure bc[I] is effect_free
+function isivdepsafe(bc::Broadcasted)
+    eff = Core.Compiler.infer_effects(_broadcast_getindex, Tuple{typeof(bc),eltype(eachindex(bc))})
+    eff.effect_free === Core.Compiler.ALWAYS_TRUE
+end
+# Make sure `dest` is not self-aliased
+isivdepsafe(x::AbstractArray) = false
+isivdepsafe(x::DenseArray) = true
+isivdepsafe(x::Union{Base.ReshapedArray,Base.ReinterpretArray}) = isivdepsafe(parent(x))
+isivdepsafe(x::Base.SubArray) = isivdepsafe(parent(x)) && all(_allunique, x.indices)
+# Pure type-based check could avoid binary bloat.
+_allunique(x) = false # allunique(x)
+_allunique(::Number) = true
+_allunique(::AbstractArray{<:Any,0}) = true
+_allunique(::AbstractUnitRange) = true
+_allunique(::StepRange) = true # step(::StepRange) should not be zero
+
 # Specialize this method if all you want to do is specialize on typeof(dest)
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
@@ -955,10 +973,16 @@ preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
         end
     end
     bc′ = preprocess(dest, bc)
-    # Performance may vary depending on whether `@inbounds` is placed outside the
-    # for loop or not. (cf. https://github.com/JuliaLang/julia/issues/38086)
-    @inbounds @simd for I in eachindex(bc′)
-        dest[I] = bc′[I]
+    if isivdepsafe(dest, bc′)
+        @inbounds @simd ivdep for I in eachindex(bc′)
+            dest[I] = bc′[I]
+        end
+    else
+        # Performance may vary depending on whether `@inbounds` is placed outside the
+        # for loop or not. (cf. https://github.com/JuliaLang/julia/issues/38086)
+        @inbounds @simd for I in eachindex(bc′)
+            dest[I] = bc′[I]
+        end
     end
     return dest
 end
