@@ -2327,6 +2327,22 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
 
     outdims = zeros(Int, N)
 
+    # validate shapes for lowest level of concatenation
+    d = findfirst(>(1), dims)
+    nblocks = length(as) ÷ dims[d]
+    for b ∈ 1:nblocks
+        offset = ((b - 1) * dims[d])
+        startelementi = offset + 1
+        for i ∈ offset .+ (2:dims[d])
+            for dd ∈ 1:N
+                dd == d && continue
+                if size(as[startelementi], dd) != size(as[i], dd)
+                    throw(ArgumentError("incompatible shape in element $i"))
+                end
+            end
+        end
+    end
+
     # discover number of rows or columns
     for i ∈ 1:dims[d1]
         outdims[d1] += cat_size(as[i], d1)
@@ -2363,10 +2379,6 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
             end
         elseif currentdims[d1] > outdims[d1] # exceeded dimension
             throw(ArgumentError("argument $i has too many elements along axis $d1"))
-        else
-            for d ∈ (d2, 3:N...)
-                currentdims[d] += cat_size(as[i], d)
-            end
         end
     end
 
