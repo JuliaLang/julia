@@ -655,10 +655,9 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 int jl_effective_threads(void) JL_NOTSAFEPOINT
 {
     int cpu = jl_cpu_threads();
-#ifdef _OS_DARWIN_
-    return cpu;
-#else
     int masksize = uv_cpumask_size();
+    if (masksize < 0)
+        return cpu;
     uv_thread_t tid = uv_thread_self();
     char *cpumask = (char *)calloc(masksize, sizeof(char));
     int err = uv_thread_getaffinity(&tid, cpumask, masksize);
@@ -673,8 +672,7 @@ int jl_effective_threads(void) JL_NOTSAFEPOINT
         n += cpumask[i];
     }
     free(cpumask);
-    return n;
-#endif
+    return n < cpu ? n : cpu;
 }
 
 
