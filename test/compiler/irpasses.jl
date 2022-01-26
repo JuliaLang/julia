@@ -7,9 +7,15 @@ using Core: PhiNode, SSAValue, GotoNode, PiNode, QuoteNode, ReturnNode, GotoIfNo
 # utilities
 # =========
 
-import Core.Compiler: argextype, singleton_type
+import Core.Compiler: singleton_type, Argtypes
 
-argextype(@nospecialize args...) = argextype(args..., Any[])
+argextype(@nospecialize args...) = Core.Compiler.argextype(args..., Argtypes())
+function argextype(@nospecialize(v), src::Core.CodeInfo)
+    if isa(v, SSAValue)
+        return src.ssavaluetypes[v.id]
+    end
+    return Core.Compiler.argextype(v, src, Argtypes())
+end
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 
@@ -516,7 +522,9 @@ let m = Meta.@lower 1 + 1
     nstmts = length(src.code)
     src.codelocs = fill(Int32(1), nstmts)
     src.ssaflags = fill(Int32(0), nstmts)
-    ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
+    ir = Core.Compiler.inflate_ir(src,
+        Argtypes(),
+        Core.Compiler.LatticeElement[Core.Compiler.NativeType(Any), Core.Compiler.NativeType(Any)])
     @test Core.Compiler.verify_ir(ir) === nothing
     ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing

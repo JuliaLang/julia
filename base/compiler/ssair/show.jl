@@ -529,12 +529,14 @@ end
 
 function _type(code::IRCode, idx::Int)
     stmts = code.stmts
-    return isassigned(stmts.type, idx) ? stmts[idx][:type] : UNDEF
+    # hide `NativeType` for IR printing
+    return isassigned(stmts.type, idx) ? unwraptype(stmts[idx][:type]) : UNDEF
 end
 function _type(code::CodeInfo, idx::Int)
     types = code.ssavaluetypes
-    types isa Vector{Any} || return nothing
-    return isassigned(types, idx) ? types[idx] : UNDEF
+    types isa SSAValueTypes || return nothing
+    # hide `NativeType` for IR printing
+    return isassigned(types, idx) ? unwraptype(types[idx]) : UNDEF
 end
 
 function statement_indices_to_labels(stmt, cfg::CFG)

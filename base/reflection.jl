@@ -183,7 +183,7 @@ julia> fieldnames(typeof(1+im))
 ```
 """
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
-                           (_fieldnames(t)...,))::Tuple{Vararg{Symbol}}
+                           (_fieldnames(t)...,))#::Tuple{Vararg{Symbol}} # FIXME this annotation causes segfault somehow ...
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(::Core.TypeofBottom) =
     throw(ArgumentError("The empty type does not have field names since it does not have instances."))
@@ -1337,11 +1337,14 @@ function print_statement_costs(io::IO, @nospecialize(tt#=::Type=#);
     for match in matches::Vector
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
-        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
+        mi = Core.Compiler.specialize_method(meth, match.spec_types, match.sparams)::MethodInstance
+        (code, ty) = Core.Compiler.typeinf_code(interp, mi, true)
         code === nothing && error("inference not successful") # inference disabled?
         empty!(cst)
         resize!(cst, length(code.code))
-        maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
+        sptypes = Core.Compiler.sptypes_from_meth_instance(mi)
+        code.ssavaluetypes = Core.Compiler.SSAValueTypes([Core.Compiler.NativeType(typ) for typ in code.ssavaluetypes])
+        maxcost = Core.Compiler.statement_costs!(cst, code.code, code, sptypes, false, params)
         nd = ndigits(maxcost)
         println(io, meth)
         irshow_config = IRShow.IRShowConfig() do io, linestart, idx

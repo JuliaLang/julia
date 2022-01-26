@@ -153,7 +153,7 @@ end
 
 struct NewInstruction
     stmt::Any
-    type::Any
+    type::LatticeElement
     info::Any
     # If nothing, copy the line from previous statement
     # in the insertion location
@@ -165,13 +165,18 @@ struct NewInstruction
     # The IR_FLAG_EFFECT_FREE flag has already been computed (or forced).
     # Don't bother redoing so on insertion.
     effect_free_computed::Bool
-    NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info),
-            line::Union{Int32, Nothing}, flag::UInt8, effect_free_computed::Bool) =
-        new(stmt, type, info, line, flag, effect_free_computed)
+
+    function NewInstruction(@nospecialize(stmt), type::LatticeElement, @nospecialize(info),
+            line::Union{Int32, Nothing}, flag::UInt8, effect_free_computed::Bool)
+        if isa(type, Type)
+            type = NativeType(type)
+        end
+        return new(stmt, type, info, line, flag, effect_free_computed)
+    end
 end
-NewInstruction(@nospecialize(stmt), @nospecialize(type)) =
+NewInstruction(@nospecialize(stmt), type::LatticeElement) =
     NewInstruction(stmt, type, nothing)
-NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Nothing, Int32}) =
+NewInstruction(@nospecialize(stmt), type::LatticeElement, line::Union{Nothing, Int32}) =
     NewInstruction(stmt, type, nothing, line, IR_FLAG_NULL, false)
 
 effect_free(inst::NewInstruction) =
@@ -182,14 +187,14 @@ non_effect_free(inst::NewInstruction) =
 
 struct InstructionStream
     inst::Vector{Any}
-    type::Vector{Any}
+    type::Vector{LatticeElement}
     info::Vector{Any}
     line::Vector{Int32}
     flag::Vector{UInt8}
 end
 function InstructionStream(len::Int)
     insts = Array{Any}(undef, len)
-    types = Array{Any}(undef, len)
+    types = Array{LatticeElement}(undef, len)
     info = Array{Any}(undef, len)
     fill!(info, nothing)
     lines = fill(Int32(0), len)
@@ -277,14 +282,14 @@ copy(nns::NewNodeStream) = NewNodeStream(copy(nns.stmts), copy(nns.info))
 
 struct IRCode
     stmts::InstructionStream
-    argtypes::Vector{Any}
-    sptypes::Vector{Any}
+    argtypes::Argtypes
+    sptypes::Argtypes
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::NewNodeStream
     meta::Vector{Any}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any}, sptypes::Vector{Any})
+    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Argtypes, meta::Vector{Any}, sptypes::Argtypes)
         return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
@@ -1009,9 +1014,9 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         cond = stmt.cond
         if compact.fold_constant_branches
             if !isa(cond, Bool)
-                condT = widenconditional(argextype(cond, compact))
-                isa(condT, Const) || @goto bail
-                cond = condT.val
+                condT = argextype(cond, compact)
+                isConst(condT) || @goto bail
+                cond = constant(condT)
                 isa(cond, Bool) || @goto bail
             end
             if cond
@@ -1156,9 +1161,9 @@ function finish_current_bb!(compact::IncrementalCompact, active_bb, old_result_i
             length(compact.result) < old_result_idx && resize!(compact, old_result_idx)
             node = compact.result[old_result_idx]
             if unreachable
-                node[:inst], node[:type], node[:line] = ReturnNode(), Union{}, 0
+                node[:inst], node[:type], node[:line] = ReturnNode(), ⊥, 0
             else
-                node[:inst], node[:type], node[:line] = nothing, Nothing, 0
+                node[:inst], node[:type], node[:line] = nothing, LNothing, 0
             end
             compact.result_idx = old_result_idx + 1
         elseif compact.cfg_transforms_enabled && compact.result_idx - 1 == first(bb.stmts)
@@ -1323,7 +1328,7 @@ function maybe_erase_unused!(
     callback = null_dce_callback)
     stmt = compact.result[idx][:inst]
     stmt === nothing && return false
-    if argextype(SSAValue(idx), compact) === Bottom
+    if argextype(SSAValue(idx), compact) === ⊥
         effect_free = false
     else
         effect_free = compact.result[idx][:flag] & IR_FLAG_EFFECT_FREE != 0

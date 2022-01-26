@@ -119,7 +119,7 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt
                     println(io, "Locals")
                 end
                 print(io, "  ", slotnames[i])
-                if isa(slottypes, Vector{Any})
+                if isa(slottypes, Core.Compiler.Argtypes)
                     warntype_type_printer(io, slottypes[i], true)
                 end
                 println(io)

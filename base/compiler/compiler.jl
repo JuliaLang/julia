@@ -105,6 +105,17 @@ include("ordering.jl")
 using .Order
 include("sort.jl")
 using .Sort
+# required by sort/sort! functions
+function extrema(x::Array)
+    isempty(x) && throw(ArgumentError("collection must be non-empty"))
+    vmin = vmax = x[1]
+    for i in 2:length(x)
+        xi = x[i]
+        vmax = max(vmax, xi)
+        vmin = min(vmin, xi)
+    end
+    return vmin, vmax
+end
 
 # We don't include some.jl, but this definition is still useful.
 something(x::Nothing, y...) = something(y...)
@@ -113,6 +124,12 @@ something(x::Any, y...) = x
 ############
 # compiler #
 ############
+
+include("compiler/typelattice.jl")
+
+const Argtypes = Vector{LatticeElement}
+const EMPTY_SLOTTYPES = Argtypes()
+anymap(f::Function, a::Argtypes) = Any[ f(a[i]) for i in 1:length(a) ]
 
 include("compiler/cicache.jl")
 include("compiler/types.jl")
@@ -125,26 +142,12 @@ include("compiler/inferencestate.jl")
 
 include("compiler/typeutils.jl")
 include("compiler/typelimits.jl")
-include("compiler/typelattice.jl")
 include("compiler/tfuncs.jl")
 include("compiler/stmtinfo.jl")
 
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities
-
-# required for bootstrap
-# TODO: find why this is needed and remove it.
-function extrema(x::Array)
-    isempty(x) && throw(ArgumentError("collection must be non-empty"))
-    vmin = vmax = x[1]
-    for i in 2:length(x)
-        xi = x[i]
-        vmax = max(vmax, xi)
-        vmin = min(vmin, xi)
-    end
-    return vmin, vmax
-end
 
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)

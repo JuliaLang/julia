@@ -421,10 +421,7 @@ eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecial
                           min_world::UInt, max_world::UInt) =
                 ccall(:jl_new_codeinst, Ref{CodeInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
                     mi, rettype, inferred_const, inferred, const_flags, min_world, max_world)))
-eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))))
-eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))))
 eval(Core, :(PartialOpaque(@nospecialize(typ), @nospecialize(env), isva::Bool, parent::MethodInstance, source::Method) = $(Expr(:new, :PartialOpaque, :typ, :env, :isva, :parent, :source))))
-eval(Core, :(InterConditional(slot::Int, @nospecialize(vtype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :vtype, :elsetype))))
 eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
     $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
 
@@ -495,13 +492,11 @@ Symbol(s::Symbol) = s
 module IR
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
 
 import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
 
 end
 

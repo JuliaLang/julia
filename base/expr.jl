@@ -76,7 +76,7 @@ function copy(c::CodeInfo)
     cnew.ssaflags  = copy(cnew.ssaflags)
     cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges::Vector)
     ssavaluetypes  = cnew.ssavaluetypes
-    ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
+    ssavaluetypes isa Vector && (cnew.ssavaluetypes = copy(ssavaluetypes))
     return cnew
 end
 

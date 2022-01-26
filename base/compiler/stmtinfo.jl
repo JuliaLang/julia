@@ -9,8 +9,9 @@ A simple struct that captures both the return type (`call.rt`)
 and any additional information (`call.info`) for a given generic call.
 """
 struct CallMeta
-    rt::Any
+    rt::LatticeElement
     info::Any
+    CallMeta(rt::LatticeElement, @nospecialize(info)) = new(rt, info)
 end
 
 """

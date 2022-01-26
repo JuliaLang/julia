@@ -19,21 +19,24 @@ function hasuniquerep(@nospecialize t)
     isa(t, TypeVar) && return false # TypeVars are identified by address, not equality
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
-    if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
+    if isa(t, DataType) && t.name !== Tuple.name # invariant DataTypes
         return _all(hasuniquerep, t.parameters)
     end
     return false
 end
 
-function has_nontrivial_const_info(@nospecialize t)
-    isa(t, PartialStruct) && return true
-    isa(t, PartialOpaque) && return true
-    isa(t, Const) || return false
-    val = t.val
+function has_nontrivial_const_info(t::LatticeElement)
+    isPartialStruct(t) && return true
+    isPartialOpaque(t) && return true
+    isConst(t) || return false
+    val = constant(t)
     return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
 end
 
-has_const_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
+function has_const_info(x::LatticeElement)
+    x = unwraptype(x)
+    return (!isa(x, Type) && !isVararg(x)) || isType(x)
+end
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
@@ -41,7 +44,7 @@ has_const_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
 isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]) || b <: a)
 
-argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)...}
+argtypes_to_type(argtypes::Argtypes) = Tuple{anymap(a::LatticeElement -> isVararg(a) ? vararg(a) : widenconst(a), argtypes)...}
 
 function isknownlength(t::DataType)
     isvatuple(t) || return true
@@ -177,15 +180,23 @@ end
 
 hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
 
-_typename(@nospecialize a) = Union{}
-_typename(a::TypeVar) = Core.TypeName
+# N.B.: typename maps type equivalence classes to a single value
+function typename_static(t::LatticeElement)
+    isConditional(t) && return Const(Bool.name)
+    isConst(t) && return _typename(constant(t))
+    t = unwrap_unionall(widenconst(t))
+    return isType(t) ? _typename(t.parameters[1]) : NativeType(Core.TypeName)
+end
+
+_typename(@nospecialize a) = ⊥
+_typename(a::TypeVar) = NativeType(Core.TypeName)
 function _typename(a::Union)
     ta = _typename(a.a)
     tb = _typename(a.b)
     ta === tb && return ta # same type-name
-    (ta === Union{} || tb === Union{}) && return Union{} # threw an error
-    (ta isa Const && tb isa Const) && return Union{} # will throw an error (different type-names)
-    return Core.TypeName # uncertain result
+    (ta === ⊥ || tb === ⊥) && return ⊥ # threw an error
+    (isConst(ta) && isConst(tb)) && return ⊥ # will throw an error (different type-names)
+    return NativeType(Core.TypeName) # uncertain result
 end
 _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
@@ -194,9 +205,9 @@ function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
     t = init
     for x in ct
         # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
-        t = tmerge(t, unwraptv(unwrapva(x)))
+        t = typemerge(t, unwraptv(unwrapva(x)))
     end
-    return Vararg{widenconst(t)}
+    return Vararg{t}
 end
 
 # Gives a cost function over the effort to switch a tuple-union representation
@@ -205,10 +216,11 @@ end
 # or outside of the Tuple/Union nesting, though somewhat more expensive to be
 # outside than inside because the representation is larger (because and it
 # informs the callee whether any splitting is possible).
-function unionsplitcost(argtypes::Union{SimpleVector,Vector{Any}})
+function unionsplitcost(argtypes::Union{SimpleVector,Argtypes})
     nu = 1
     max = 2
     for ti in argtypes
+        ti = unwraptype(ti)
         if isa(ti, Union)
             nti = unionlen(ti)
             if nti > max
@@ -228,21 +240,14 @@ function switchtupleunion(@nospecialize(ty))
     tparams = (unwrap_unionall(ty)::DataType).parameters
     return _switchtupleunion(Any[tparams...], length(tparams), [], ty)
 end
-
-switchtupleunion(argtypes::Vector{Any}) = _switchtupleunion(argtypes, length(argtypes), [], nothing)
-
 function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospecialize(origt))
     if i == 0
-        if origt === nothing
-            push!(tunion, copy(t))
-        else
-            tpl = rewrap_unionall(Tuple{t...}, origt)
-            push!(tunion, tpl)
-        end
+        tpl = rewrap_unionall(Tuple{t...}, origt)
+        push!(tunion, tpl)
     else
         ti = t[i]
         if isa(ti, Union)
-            for ty in uniontypes(ti::Union)
+            for ty in uniontypes(ti)
                 t[i] = ty
                 _switchtupleunion(t, i - 1, tunion, origt)
             end
@@ -254,7 +259,27 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
     return tunion
 end
 
-# unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
+switchtupleunion(argtypes::Argtypes) = _switchtupleunion(argtypes, length(argtypes), Argtypes[])
+function _switchtupleunion(t::Argtypes, i::Int, tunion::Vector{Argtypes})
+    if i == 0
+        push!(tunion, copy(t))
+    else
+        ti = t[i]
+        tyi = unwraptype(ti)
+        if isa(tyi, Union)
+            for ty in uniontypes(tyi)
+                t[i] = NativeType(ty)
+                _switchtupleunion(t, i - 1, tunion)
+            end
+            t[i] = ti
+        else
+            _switchtupleunion(t, i - 1, tunion)
+        end
+    end
+    return tunion
+end
+
+# unioncomplexity estimates the number of calls to `⊔` to obtain the given type by
 # counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
 unioncomplexity(@nospecialize x) = _unioncomplexity(x)::Int
 function _unioncomplexity(@nospecialize x)

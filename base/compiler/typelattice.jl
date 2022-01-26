@@ -4,92 +4,307 @@
 # structs/constants #
 #####################
 
-# N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
-# inside the global code cache.
-#
-# # The type of a value might be constant
-# struct Const
-#     val
-# end
-#
-# struct PartialStruct
-#     typ
-#     fields::Vector{Any} # elements are other type lattice members
-# end
-import Core: Const, PartialStruct
+const __NULL_CONSTANT__ = :__NULL_CONSTANT__
 
-# The type of this value might be Bool.
-# However, to enable a limited amount of back-propagation,
-# we also keep some information about how this Bool value was created.
-# In particular, if you branch on this value, then may assume that in
-# the true branch, the type of `var` will be limited by `vtype` and in
-# the false branch, it will be limited by `elsetype`. Example:
-# ```
-# cond = isa(x::Union{Int, Float}, Int)::Conditional(x, Int, Float)
-# if cond
-#    # May assume x is `Int` now
-# else
-#    # May assume x is `Float` now
-# end
-# ```
-struct Conditional
-    var::SlotNumber
-    vtype
-    elsetype
-    function Conditional(
-                var,
-                @nospecialize(vtype),
-                @nospecialize(nottype))
-        return new(var, vtype, nottype)
+"""
+    x::LatticeElement
+
+The lattice for Julia's native type inference implementation.
+`LatticeElement` has following lattice properties and these attributes are combined to create
+a partial lattice whose height is infinite.
+
+---
+- `x.constant ::Any (constant value) or ::PartialFields (partial constant information)` \\
+  When `isConst(x)`, it means `x` is constant-folded and `x.constant` holds actual constant value.
+  Note that it is valid if `x` has other lattice properties even when it is constant-folded.
+  For example, `x` may have "interesting" `x.conditional` property when `isConst(x)`.
+
+  See also:
+  - constructor: `Const(val)`
+  - property query: `isConst(x)`
+  - value retrieval: `constant(x)`
+
+  If `isPartialStruct(x)`, `x.constant` keeps field information about a partially constant-folded `struct`.
+  When fields of a `struct` are fully known we just constant-fold it, but even when some of
+  the fields can not be folded, inference will try to keep partial constant information of
+  folded fields in `x.constant::PartialFields`.
+  Note that this property assumes the following invariants:
+  - `immutabletype(x.typ)`: since inference does not reason about memory-effects of object fields
+  - `x.typ` is concrete or `Tuple` type: the lattice assumes `Const ⊑ PartialStruct ⊑ concrete type ⊑ abstract type`
+
+  See also:
+  - constructor: `PartialStruct(typ, fields::PartialFields)`
+  - property query: `isPartialStruct(x)`
+  - value retrieval: `partialfields(x)`
+
+---
+- `x.conditional :: ConditionalInfo` \\
+  The lattice property that comes along with `Bool`.
+  It keeps some information about how this `Bool` value was created in order to enable a
+  limited amount of type constraint back-propagation.
+  In particular, if we branch on an object that has this property `cnd::ConditionalInfo`,
+  then we may assume that in the "then" branch, the type of `SlotNumber(cnd.slot_id)` will be
+  limited by `cnd.vtype` and in the "else" branch, it will be limited by `cnd.elsetype`.
+  By default, this property is initialized as `__NULL_CONDITIONAL__`, which does not convey
+  any useful information (and thus should never be used).
+  Example:
+  ```
+  cond = isa(x::Union{Int, String}, Int) # ::Conditional(:(x), Int, String)
+  if cond
+      ... # x::Int
+  else
+      ... # x::String
+  end
+  ```
+
+  The boolean flag `x.conditional.inter` indicates it conveys inter-procedural constraints
+  imposed on call arguments.
+  This flag is raised to catch logic errors: `inter` should be `true` while processing a call,
+  then should be `false` elsewhere else.
+  Thus `ConditionalInfo`s with different `inter` flags should not appear in the same context
+  -- their usages are disjoint -- though we define the lattice for both cases (but separately).
+
+  See also:
+  - constructor: `Conditional(slot_id::Int, vtype, elsetype, inter::Bool)`
+  - property query: `isConditional(x)` / `isInterConditional(x)` / `isAnyConditional(x)`
+  - property retrieval: `conditional(x)` / `interconditional(x)`
+  - property widening: `widenconditional(x)`
+
+---
+- `x.special :: Union{PartialTypeVarInfo, PartialOpaque}` \\
+  `x.special::PartialTypeVarInfo` tracks an identity of `TypeVar` so that `x` can produce
+  better inference for `UnionAll` construction.
+  `x.special::PartialOpaque` holds opaque closure information.
+  By default `x.special` is initialized with `nothing` (no information).
+
+  See also:
+  - constructor: `PartialTypeVar(::TypeVar, lb_certain::Bool, ub_certain::Bool)` / `mkPartialOpaque`
+  - property query: `isPartialTypeVar(x)` / `isPartialOpaque`
+  - property retrieval: `partialtypevar(x)` / `partialopaque(x)`
+
+---
+- `x.causes :: IdSet{InferenceState}` \\
+  If not empty, it indicates the `x` has been approximated due to the "causes".
+  This attribute is only used in abstract interpretation, and not in optimization.
+  N.B. in the lattice, `x` is epsilon smaller than `ignorelimited(x)` (except `⊥`)
+
+  See also:
+  - constructor: `LimitedAccuracy(::LatticeElement, ::IdSet{InferenceState})`
+  - property query: `isLimitedAccuracy(x)`
+  - property widening: `ignorelimited(x)`
+  - property retrieval: `causes(x)`
+
+---
+- `x.maybeundef :: Bool` \\
+  Indicates that this variable may be undefined at this point.
+  This attribute is only used in optimization, and not in abstract interpretation.
+  N.B. in the lattice, `x` is epsilon bigger than `ignoremaybeundef(x)`.
+
+  See also:
+  - constructor: `MaybeUndef(::LatticeElement)`
+  - property query: `isMaybeUndef(x)`
+  - property widening: `ignoremaybeundef(x)`
+
+---
+"""
+struct LatticeElement
+    typ # ::Type
+
+    constant # ::Any (constant value) or ::PartialFields
+
+    # some special information for this lattice element
+    special # ::Union{ConditionalInfo, PartialTypeVarInfo, PartialOpaque, Core.TypeofVararg} or nothing
+
+    # abstract interpretation specific attributes
+    causes # ::IdSet{InferenceState} or nothing
+
+    # optimization specific specific attributes
+    maybeundef::Bool
+
+    function LatticeElement(typ,
+        constant = __NULL_CONSTANT__, special = nothing;
+        causes#=::IdSet{InferenceState}=# = nothing, maybeundef::Bool = false)
+        @nospecialize typ constant special
+        if isvarargtype(typ)
+            @assert special === nothing
+            special = typ
+            typ = Any # COMBAK (lattice overhaul) what `typ` should this have ?
+        end
+        @assert isa(typ, Type)
+        return new(typ,
+                   constant,
+                   special,
+                   causes,
+                   maybeundef,
+                   )
+    end
+    function LatticeElement(x::LatticeElement,
+        constant = x.constant, special = x.special;
+        causes#=::IdSet{InferenceState}=# = x.causes::Union{Nothing,IdSet{InferenceState}},
+        maybeundef::Bool = x.maybeundef)
+        @nospecialize constant special
+        return new(x.typ,
+                   constant,
+                   special,
+                   causes,
+                   maybeundef,
+                   )
     end
 end
 
-# # Similar to `Conditional`, but conveys inter-procedural constraints imposed on call arguments.
-# # This is separate from `Conditional` to catch logic errors: the lattice element name is InterConditional
-# # while processing a call, then Conditional everywhere else. Thus InterConditional does not appear in
-# # CompilerTypes—these type's usages are disjoint—though we define the lattice for InterConditional.
-# struct InterConditional
-#     slot::Int
-#     vtype
-#     elsetype
-# end
-import Core: InterConditional
-const AnyConditional = Union{Conditional,InterConditional}
+NativeType(@nospecialize typ) = typ === Any ? ⊤ : typ === Bottom ? ⊥ : LatticeElement(typ)
+isNativeType(@nospecialize typ) = true
+isNativeType(typ::LatticeElement) = (
+    typ.constant === __NULL_CONSTANT__ &&
+    typ.special === nothing &&
+    typ.causes === nothing &&
+    typ.maybeundef === false &&
+    true)
 
-struct PartialTypeVar
+# NOTE once we pack all extended lattice types into `LatticeElement`, we don't need this `unwraptype`:
+# - `unwraptype`: unwrap `NativeType` to native Julia type
+# - `widenconst`: unwrap any extended type lattice to native Julia type
+unwraptype(@nospecialize typ) = typ
+unwraptype(typ::LatticeElement) = isNativeType(typ) ? typ.typ::Type : typ
+
+function Const(@nospecialize constant)
+    typ = isa(constant, Type) ? Type{constant} : typeof(constant)
+    return LatticeElement(typ, constant)
+end
+isConst(@nospecialize typ) = false
+isConst(typ::LatticeElement) = typ.constant !== __NULL_CONSTANT__ && !_isPartialStruct(typ)
+constant(x::LatticeElement) = x.constant
+
+const PartialFields = Vector{LatticeElement}
+function PartialStruct(@nospecialize(typ), fields::PartialFields)
+    @assert (isconcretetype(typ) || istupletype(typ)) && !ismutabletype(typ) "invalid PartialStruct typ"
+    @assert !isempty(fields) "invalid PartialStruct fields"
+    for i = 1:length(fields)
+        @assert !isConditional(fields[i]) "invalid PartialStruct field"
+    end
+    return LatticeElement(typ, fields)
+end
+istupletype(@nospecialize typ) = isa(typ, DataType) && typ.name.name === :Tuple
+isPartialStruct(@nospecialize typ) = false
+isPartialStruct(typ::LatticeElement) = typ.constant !== __NULL_CONSTANT__ && _isPartialStruct(typ)
+_isPartialStruct(typ::LatticeElement) = isa(typ.constant, PartialFields) && !(typ.typ <: PartialFields)
+partialfields(x::LatticeElement) = x.constant::PartialFields
+
+struct ConditionalInfo
+    slot_id::Int
+    vtype::LatticeElement
+    elsetype::LatticeElement
+    inter::Bool
+    function ConditionalInfo(
+        slot_id::Int, vtype::LatticeElement, elsetype::LatticeElement, inter::Bool)
+        @assert !isAnyConditional(vtype) "nested Conditional vtype"
+        @assert !isAnyConditional(elsetype) "nested Conditional elsetype"
+        return new(slot_id, vtype, elsetype, inter)
+    end
+end
+function _Conditional(slot_id::Int, vtype::LatticeElement, elsetype::LatticeElement, inter::Bool)
+    if vtype === ⊥
+        constant = false
+    elseif elsetype === ⊥
+        constant = true
+    else
+        constant = __NULL_CONSTANT__
+    end
+    conditional = ConditionalInfo(slot_id, vtype, elsetype, inter)
+    return LatticeElement(Bool, constant, conditional)
+end
+Conditional(slot_id::Int, vtype::LatticeElement, elsetype::LatticeElement) =
+    _Conditional(slot_id, vtype, elsetype, false)
+InterConditional(slot_id::Int, vtype::LatticeElement, elsetype::LatticeElement) =
+    _Conditional(slot_id, vtype, elsetype, true)
+isConditional(@nospecialize typ) = false
+isConditional(typ::LatticeElement) = (special = typ.special; isa(special, ConditionalInfo) && !special.inter)
+isInterConditional(@nospecialize typ) = false
+isInterConditional(typ::LatticeElement) = (special = typ.special; isa(special, ConditionalInfo) && special.inter)
+isAnyConditional(@nospecialize typ) = false
+isAnyConditional(typ::LatticeElement) = (special = typ.special; isa(special, ConditionalInfo))
+@inline function conditional(typ::LatticeElement)
+    conditional = typ.special::ConditionalInfo
+    @assert !conditional.inter
+    return conditional
+end
+@inline function interconditional(typ::LatticeElement)
+    conditional = typ.special::ConditionalInfo
+    @assert conditional.inter
+    return conditional
+end
+widenconditional(typ::LatticeElement) = isAnyConditional(typ) ? LatticeElement(typ, typ.constant, nothing) : typ
+
+struct PartialTypeVarInfo
     tv::TypeVar
-    # N.B.: Currently unused, but would allow turning something back
-    # into Const, if the bounds are pulled out of this TypeVar
-    lb_certain::Bool
-    ub_certain::Bool
-    PartialTypeVar(tv::TypeVar, lb_certain::Bool, ub_certain::Bool) = new(tv, lb_certain, ub_certain)
+    PartialTypeVarInfo(tv::TypeVar) = new(tv)
+end
+function PartialTypeVar(
+    tv::TypeVar,
+    # N.B.: Currently unused, but could be used to form something like `Constant`
+    # if the bounds are pulled out of this `TypeVar`
+    lb_certain::Bool, ub_certain::Bool)
+    return LatticeElement(TypeVar, __NULL_CONSTANT__, PartialTypeVarInfo(tv))
+end
+isPartialTypeVar(@nospecialize typ) = false
+isPartialTypeVar(typ::LatticeElement) = isa(typ.special, PartialTypeVarInfo)
+@inline partialtypevar(typ::LatticeElement) = typ.special::PartialTypeVarInfo
+
+function mkPartialOpaque(@nospecialize(typ), env::LatticeElement, isva::Bool, parent::MethodInstance, source::Method)
+    return LatticeElement(typ, __NULL_CONSTANT__, PartialOpaque(typ, env, isva, parent, source))
+end
+isPartialOpaque(@nospecialize typ) = false
+isPartialOpaque(typ::LatticeElement) = isa(typ.special, PartialOpaque)
+@inline partialopaque(typ::LatticeElement) = typ.special::PartialOpaque
+
+isVararg(@nospecialize typ) = false
+isVararg(typ::LatticeElement) = isa(typ.special, TypeofVararg)
+@inline vararg(typ::LatticeElement) = typ.special::TypeofVararg
+unwrapva_𝑳(x::LatticeElement) = isVararg(x) ? NativeType(unwrapva(vararg(x))) : x
+
+function LimitedAccuracy(x::LatticeElement, causes#=::IdSet{InferenceState}=#)
+    causes = causes::IdSet{InferenceState}
+    @assert !isLimitedAccuracy(x) "nested LimitedAccuracy"
+    @assert !isempty(causes) "malformed LimitedAccuracy"
+    return LatticeElement(x; causes)
+end
+isLimitedAccuracy(@nospecialize typ) = false
+isLimitedAccuracy(typ::LatticeElement) = typ.causes !== nothing
+ignorelimited(typ::LatticeElement) = isLimitedAccuracy(typ) ? _ignorelimited(typ) : typ
+_ignorelimited(typ::LatticeElement) = LatticeElement(typ; causes = nothing)
+@inline causes(typ::LatticeElement) = typ.causes::IdSet{InferenceState}
+
+isMaybeUndef(@nospecialize typ) = false
+isMaybeUndef(typ::LatticeElement) = typ.maybeundef
+MaybeUndef(x::LatticeElement) = isMaybeUndef(x) ? x : LatticeElement(x; maybeundef = true)
+ignoremaybeundef(typ::LatticeElement) = isMaybeUndef(typ) ? LatticeElement(typ; maybeundef = false) : typ
+
+const ⊤, ⊥ = LatticeElement(Any), LatticeElement(Bottom)
+const LBool, LInt, LNothing = NativeType(Bool), NativeType(Int), NativeType(Nothing)
+
+# The type of a variable load is either a value or an UndefVarError
+# (only used in abstractinterpret, doesn't appear in optimize)
+struct VarState
+    typ::LatticeElement
+    undef::Bool
+    VarState(typ::LatticeElement, undef::Bool) = new(typ, undef)
 end
 
-# Wraps a type and represents that the value may also be undef at this point.
-# (only used in optimize, not abstractinterpret)
-# N.B. in the lattice, this is epsilon bigger than `typ` (even Any)
-struct MaybeUndef
-    typ
-    MaybeUndef(@nospecialize(typ)) = new(typ)
-end
+"""
+    const VarTable = Vector{VarState}
+
+The extended lattice that maps local variables to inferred type represented as `LatticeElement`.
+Each index corresponds to the `id` of `SlotNumber` which identifies each local variable.
+Note that `InferenceState` will maintain multiple `VarTable`s at each SSA statement
+to enable flow-sensitive analysis.
+"""
+const VarTable = Vector{VarState}
 
 struct StateUpdate
     var::SlotNumber
     vtype::VarState
     state::VarTable
     conditional::Bool
-end
-
-# Represent that the type estimate has been approximated, due to "causes"
-# (only used in abstract interpretion, doesn't appear in optimization)
-# N.B. in the lattice, this is epsilon smaller than `typ` (except Union{})
-struct LimitedAccuracy
-    typ
-    causes::IdSet{InferenceState}
-    function LimitedAccuracy(@nospecialize(typ), causes::IdSet{InferenceState})
-        @assert !isa(typ, LimitedAccuracy) "malformed LimitedAccuracy"
-        return new(typ, causes)
-    end
 end
 
 """
@@ -105,10 +320,14 @@ struct NotFound end
 
 const NOT_FOUND = NotFound()
 
-const CompilerTypes = Union{MaybeUndef, Const, Conditional, NotFound, PartialStruct}
-==(x::CompilerTypes, y::CompilerTypes) = x === y
-==(x::Type, y::CompilerTypes) = false
-==(x::CompilerTypes, y::Type) = false
+# the types of `(src::CodeInfo).ssavaluetypes` after `InferenceState` construction and until `ir_to_codeinf!(src)` is called
+const SSAValueTypes = Vector{Any}
+const SSAValueType  = Union{NotFound,LatticeElement} # element
+
+# allow comparison with unwrapped types
+# TODO (lattice overhaul) remove me, this is just for prototyping
+x::Type == y::LatticeElement = x === unwraptype(y)
+x::LatticeElement == y::Type = unwraptype(x) === y
 
 #################
 # lattice logic #
@@ -116,7 +335,9 @@ const CompilerTypes = Union{MaybeUndef, Const, Conditional, NotFound, PartialStr
 
 # `Conditional` and `InterConditional` are valid in opposite contexts
 # (i.e. local inference and inter-procedural call), as such they will never be compared
-function issubconditional(a::C, b::C) where {C<:AnyConditional}
+function issubconditional(a::LatticeElement, b::LatticeElement)
+    a, b = a.special, b.special
+    @assert a.inter === b.inter "invalid conditional lattice element comparison"
     if is_same_conditionals(a, b)
         if a.vtype ⊑ b.vtype
             if a.elsetype ⊑ b.elsetype
@@ -127,16 +348,24 @@ function issubconditional(a::C, b::C) where {C<:AnyConditional}
     return false
 end
 
-is_same_conditionals(a::Conditional,      b::Conditional)      = slot_id(a.var) === slot_id(b.var)
-is_same_conditionals(a::InterConditional, b::InterConditional) = a.slot === b.slot
+is_same_conditionals(a::ConditionalInfo, b::ConditionalInfo) = a.slot_id == b.slot_id
 
-is_lattice_bool(@nospecialize(typ)) = typ !== Bottom && typ ⊑ Bool
+function is_lattice_bool(typ::LatticeElement)
+    ty = widenconst(typ)
+    return ty !== Bottom && ty <: Bool
+end
 
-maybe_extract_const_bool(c::Const) = (val = c.val; isa(val, Bool)) ? val : nothing
-function maybe_extract_const_bool(c::AnyConditional)
-    (c.vtype === Bottom && !(c.elsetype === Bottom)) && return false
-    (c.elsetype === Bottom && !(c.vtype === Bottom)) && return true
-    nothing
+function maybe_extract_const_bool(x::LatticeElement)
+    if isConst(x)
+        val = constant(x)
+        return isa(val, Bool) ? val : nothing
+    end
+    if isAnyConditional(x)
+        cnd = x.special::ConditionalInfo
+        (cnd.vtype === ⊥ && !(cnd.elsetype === ⊥)) && return false
+        (cnd.elsetype === ⊥ && !(cnd.vtype === ⊥)) && return true
+    end
+    return nothing
 end
 maybe_extract_const_bool(@nospecialize c) = nothing
 
@@ -146,89 +375,95 @@ maybe_extract_const_bool(@nospecialize c) = nothing
 The non-strict partial order over the type inference lattice.
 """
 @nospecialize(a) ⊑ @nospecialize(b) = begin
-    if isa(b, LimitedAccuracy)
-        if !isa(a, LimitedAccuracy)
+    if isLimitedAccuracy(b)
+        if !isLimitedAccuracy(a)
             return false
         end
-        if b.causes ⊈ a.causes
+        if causes(b) ⊈ causes(a)
             return false
         end
-        b = b.typ
+        b = _ignorelimited(b)
     end
-    isa(a, LimitedAccuracy) && (a = a.typ)
-    if isa(a, MaybeUndef) && !isa(b, MaybeUndef)
+    if isLimitedAccuracy(a)
+        a = _ignorelimited(a)
+    end
+    if isMaybeUndef(a) && !isMaybeUndef(b)
         return false
     end
-    isa(a, MaybeUndef) && (a = a.typ)
-    isa(b, MaybeUndef) && (b = b.typ)
+    a = unwraptype(a)
+    b = unwraptype(b)
     b === Any && return true
     a === Any && return false
     a === Union{} && return true
     b === Union{} && return false
     @assert !isa(a, TypeVar) "invalid lattice item"
     @assert !isa(b, TypeVar) "invalid lattice item"
-    if isa(a, AnyConditional)
-        if isa(b, AnyConditional)
+    if isAnyConditional(a)
+        if isAnyConditional(b)
             return issubconditional(a, b)
-        elseif isa(b, Const) && isa(b.val, Bool)
-            return maybe_extract_const_bool(a) === b.val
+        elseif isConst(b) && isa(constant(b), Bool)
+            return maybe_extract_const_bool(a) === constant(b)
         end
         a = Bool
-    elseif isa(b, AnyConditional)
+    elseif isAnyConditional(b)
         return false
     end
-    if isa(a, PartialStruct)
-        if isa(b, PartialStruct)
-            if !(length(a.fields) == length(b.fields) && a.typ <: b.typ)
+    if isPartialStruct(a)
+        if isPartialStruct(b)
+            afields, bfields = partialfields(a), partialfields(b)
+            if !(length(afields) == length(bfields) && a.typ <: b.typ)
                 return false
             end
-            for i in 1:length(b.fields)
+            for i in 1:length(bfields)
                 # XXX: let's handle varargs later
-                ⊑(a.fields[i], b.fields[i]) || return false
+                ⊑(afields[i], bfields[i]) || return false
             end
             return true
         end
         return isa(b, Type) && a.typ <: b
-    elseif isa(b, PartialStruct)
-        if isa(a, Const)
-            nfields(a.val) == length(b.fields) || return false
+    elseif isPartialStruct(b)
+        if isConst(a)
+            aval = constant(a)
+            bfields = partialfields(b)
+            nfields(aval) == length(bfields) || return false
             widenconst(b).name === widenconst(a).name || return false
             # We can skip the subtype check if b is a Tuple, since in that
             # case, the ⊑ of the elements is sufficient.
             if b.typ.name !== Tuple.name && !(widenconst(a) <: widenconst(b))
                 return false
             end
-            for i in 1:nfields(a.val)
+            for i in 1:nfields(aval)
                 # XXX: let's handle varargs later
-                isdefined(a.val, i) || return false
-                ⊑(Const(getfield(a.val, i)), b.fields[i]) || return false
+                isdefined(aval, i) || return false
+                ⊑(Const(getfield(aval, i)), bfields[i]) || return false
             end
             return true
         end
         return false
     end
-    if isa(a, PartialOpaque)
-        if isa(b, PartialOpaque)
+    if isPartialOpaque(a)
+        if isPartialOpaque(b)
+            a, b = partialopaque(a), partialopaque(b)
             (a.parent === b.parent && a.source === b.source) || return false
-            return (widenconst(a) <: widenconst(b)) &&
-                ⊑(a.env, b.env)
+            return (a.typ <: b.typ) && ⊑(a.env, b.env)
         end
         return widenconst(a) ⊑ b
     end
-    if isa(a, Const)
-        if isa(b, Const)
-            return a.val === b.val
+    if isConst(a)
+        aval = constant(a)
+        if isConst(b)
+            return aval === constant(b)
         end
         # TODO: `b` could potentially be a `PartialTypeVar` here, in which case we might be
         # able to return `true` in more cases; in the meantime, just returning this is the
         # most conservative option.
-        return isa(b, Type) && isa(a.val, b)
-    elseif isa(b, Const)
+        return isa(b, Type) && isa(aval, b)
+    elseif isConst(b)
         if isa(a, DataType) && isdefined(a, :instance)
-            return a.instance === b.val
+            return a.instance === constant(b)
         end
         return false
-    elseif isa(a, PartialTypeVar) && b === TypeVar
+    elseif isPartialTypeVar(a) && b === TypeVar
         return true
     elseif isa(a, Type) && isa(b, Type)
         return a <: b
@@ -238,50 +473,59 @@ The non-strict partial order over the type inference lattice.
 end
 
 """
-    a ⊏ b -> Bool
+    a::LatticeElement ⊏ b::LatticeElement -> Bool
 
 The strict partial order over the type inference lattice.
 This is defined as the irreflexive kernel of `⊑`.
 """
-@nospecialize(a) ⊏ @nospecialize(b) = a ⊑ b && !⊑(b, a)
+a::LatticeElement ⊏ b::LatticeElement = a ⊑ b && !⊑(b, a)
 
 """
-    a ⋤ b -> Bool
+    a::LatticeElement ⋤ b::LatticeElement -> Bool
 
 This order could be used as a slightly more efficient version of the strict order `⊏`,
 where we can safely assume `a ⊑ b` holds.
 """
-@nospecialize(a) ⋤ @nospecialize(b) = !⊑(b, a)
+a::LatticeElement ⋤ b::LatticeElement = !⊑(b, a)
+
+a::LatticeElement ⊑ₜ @nospecialize(b#=::Type=#) = widenconst(a) <: b
+a::LatticeElement ⊏ₜ @nospecialize(b#=::Type=#) = widenconst(a) <: b && !(b <: widenconst(a))
+a::LatticeElement ⋤ₜ @nospecialize(b#=::Type=#) = !(b <: widenconst(a))
 
 # Check if two lattice elements are partial order equivalent. This is basically
 # `a ⊑ b && b ⊑ a` but with extra performance optimizations.
-function is_lattice_equal(@nospecialize(a), @nospecialize(b))
+function is_lattice_equal(a::LatticeElement, b::LatticeElement)
     a === b && return true
-    if isa(a, PartialStruct)
-        isa(b, PartialStruct) || return false
-        length(a.fields) == length(b.fields) || return false
+    if isPartialStruct(a)
+        isPartialStruct(b) || return false
         widenconst(a) == widenconst(b) || return false
-        for i in 1:length(a.fields)
-            is_lattice_equal(a.fields[i], b.fields[i]) || return false
+        afields, bfields = partialfields(a), partialfields(b)
+        length(afields) == length(bfields) || return false
+        for i in 1:length(afields)
+            is_lattice_equal(afields[i], bfields[i]) || return false
         end
         return true
     end
-    isa(b, PartialStruct) && return false
-    if a isa Const
+    isPartialStruct(b) && return false
+    if isConst(a)
+        isConst(b) && return constant(a) === constant(b)
+        b = widenconst(b)
         if issingletontype(b)
-            return a.val === b.instance
+            return constant(a) === b.instance
         end
         return false
     end
-    if b isa Const
+    if isConst(b)
+        a = widenconst(a)
         if issingletontype(a)
-            return a.instance === b.val
+            return a.instance === constant(b)
         end
         return false
     end
-    if isa(a, PartialOpaque)
-        isa(b, PartialOpaque) || return false
-        widenconst(a) == widenconst(b) || return false
+    if isPartialOpaque(a)
+        isPartialOpaque(b) || return false
+        a, b = partialopaque(a), partialopaque(b)
+        a.typ === b.typ || return false
         a.source === b.source || return false
         a.parent === b.parent || return false
         return is_lattice_equal(a.env, b.env)
@@ -289,16 +533,8 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
     return a ⊑ b && b ⊑ a
 end
 
-widenconst(c::AnyConditional) = Bool
-widenconst((; val)::Const) = isa(val, Type) ? Type{val} : typeof(val)
-widenconst(m::MaybeUndef) = widenconst(m.typ)
-widenconst(c::PartialTypeVar) = TypeVar
-widenconst(t::PartialStruct) = t.typ
-widenconst(t::PartialOpaque) = t.typ
+widenconst(x::LatticeElement) = (@assert !isVararg(x) "unhandled Vararg"; x.typ::Type)
 widenconst(t::Type) = t
-widenconst(t::TypeVar) = error("unhandled TypeVar")
-widenconst(t::TypeofVararg) = error("unhandled Vararg")
-widenconst(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 
@@ -308,29 +544,10 @@ function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
     sb === NOT_FOUND && return sa
     issubstate(sa, sb) && return sb
     issubstate(sb, sa) && return sa
-    return VarState(tmerge(sa.typ, sb.typ), sa.undef | sb.undef)
+    return VarState(sa.typ ⊔ sb.typ, sa.undef | sb.undef)
 end
 
-@inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
 @inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n::VarState, o::VarState)))
-
-widenconditional(@nospecialize typ) = typ
-function widenconditional(typ::AnyConditional)
-    if typ.vtype === Union{}
-        return Const(false)
-    elseif typ.elsetype === Union{}
-        return Const(true)
-    else
-        return Bool
-    end
-end
-widenconditional(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
-
-widenwrappedconditional(@nospecialize(typ))   = widenconditional(typ)
-widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional(typ.typ), typ.causes)
-
-ignorelimited(@nospecialize typ) = typ
-ignorelimited(typ::LimitedAccuracy) = typ.typ
 
 function stupdate!(state::Nothing, changes::StateUpdate)
     newst = copy(changes.state)
@@ -342,10 +559,9 @@ function stupdate!(state::Nothing, changes::StateUpdate)
         for i = 1:length(newst)
             newtype = newst[i]
             if isa(newtype, VarState)
-                newtypetyp = ignorelimited(newtype.typ)
-                if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                    newtypetyp = widenwrappedconditional(newtype.typ)
-                    newst[i] = VarState(newtypetyp, newtype.undef)
+                newtypetyp = newtype.typ
+                if isConditional(newtypetyp) && conditional(newtypetyp).slot_id == changeid
+                    newst[i] = VarState(widenconditional(newtypetyp), newtype.undef)
                 end
             end
         end
@@ -366,10 +582,9 @@ function stupdate!(state::VarTable, changes::StateUpdate)
         # remove any Conditional for this slot from the vtable
         # (unless this change is came from the conditional)
         if !changes.conditional && isa(newtype, VarState)
-            newtypetyp = ignorelimited(newtype.typ)
-            if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                newtypetyp = widenwrappedconditional(newtype.typ)
-                newtype = VarState(newtypetyp, newtype.undef)
+            newtypetyp = newtype.typ
+            if isConditional(newtypetyp) && conditional(newtypetyp).slot_id == changeid
+                newtype = VarState(widenconditional(newtypetyp), newtype.undef)
             end
         end
         if schanged(newtype, oldtype)
@@ -405,13 +620,9 @@ function stupdate1!(state::VarTable, change::StateUpdate)
         for i = 1:length(state)
             oldtype = state[i]
             if isa(oldtype, VarState)
-                oldtypetyp = ignorelimited(oldtype.typ)
-                if isa(oldtypetyp, Conditional) && slot_id(oldtypetyp.var) == changeid
-                    oldtypetyp = widenconditional(oldtypetyp)
-                    if oldtype.typ isa LimitedAccuracy
-                        oldtypetyp = LimitedAccuracy(oldtypetyp, (oldtype.typ::LimitedAccuracy).causes)
-                    end
-                    state[i] = VarState(oldtypetyp, oldtype.undef)
+                oldtypetyp = oldtype.typ
+                if isConditional(oldtypetyp) && conditional(oldtypetyp).slot_id == changeid
+                    state[i] = VarState(widenconditional(oldtypetyp), oldtype.undef)
                 end
             end
         end

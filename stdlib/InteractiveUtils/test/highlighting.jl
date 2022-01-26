@@ -17,11 +17,11 @@ myzeros(::Type{T}, ::Type{S}, ::Type{R}, dims::Tuple{Vararg{Integer, N}}, dims2:
     @test occursin(r"^  M = .*4", readline(io))
     @test occursin(r"^  N::.*Int", readline(io))
     @test occursin(r"^Arguments$", readline(io))
-    @test occursin(r"^  #self#.*::Core.Const", readline(io))
+    @test occursin(r"^  #self#.*::Const", readline(io))
     while readline(io) != "Locals"
         eof(io) && throw(EOFError())
     end
-    @test occursin(r"^  x.*::Int", readline(io))
+    @test occursin(r"^  x.*::Const", readline(io))
     @test occursin(r"^Body.*::Int", readline(io))
     code = read(io, String)
     @test endswith(code, "\n\n")
