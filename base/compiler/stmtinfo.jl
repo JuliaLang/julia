@@ -175,4 +175,15 @@ struct ReturnTypeCallInfo
     info::Any
 end
 
+"""
+    info::InferEffectsCallInfo
+
+Represents a resolved call of `Core.Compiler.infer_effects`.
+`info.call` wraps the info corresponding to the call that `Core.Compiler.infer_effects` call
+was supposed to analyze.
+"""
+struct InferEffectsCallInfo
+    info::Any
+end
+
 @specialize

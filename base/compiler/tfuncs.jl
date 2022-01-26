@@ -2021,6 +2021,33 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     return CallMeta(Type, false)
 end
 
+function infer_effects_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+    if length(argtypes) == 3
+        tt = argtypes[3]
+        if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
+            aft = argtypes[2]
+            if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
+                   (isconcretetype(aft) && !(aft <: Builtin))
+                af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
+                if isa(af_argtype, DataType) && af_argtype <: Tuple
+                    argtypes_vec = Any[aft, af_argtype.parameters...]
+                    if contains_is(argtypes_vec, Union{})
+                        return CallMeta(Const(Effects()), false)
+                    end
+                    effsback = sv.ipo_effects
+                    sv.ipo_effects = EFFECTS_TOTAL
+                    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
+                    info = verbose_stmt_info(interp) ? InferEffectsCallInfo(call.info) : false
+                    effs = sv.ipo_effects
+                    sv.ipo_effects = effsback
+                    return CallMeta(Const(effs), info)
+                end
+            end
+        end
+    end
+    return CallMeta(Const(Effects()), false)
+end
+
 # N.B.: typename maps type equivalence classes to a single value
 function typename_static(@nospecialize(t))
     t isa Const && return _typename(t.val)

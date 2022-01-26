@@ -41,6 +41,8 @@ include("options.jl")
 # core operations & types
 function return_type end # promotion.jl expects this to exist
 is_return_type(@Core.nospecialize(f)) = f === return_type
+function infer_effects end
+is_infer_effects(@Core.nospecialize(f)) = f === infer_effects
 include("promotion.jl")
 include("tuple.jl")
 include("pair.jl")

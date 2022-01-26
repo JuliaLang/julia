@@ -1025,3 +1025,64 @@ function _return_type(interp::AbstractInterpreter, t::DataType)
     end
     return rt
 end
+
+function infer_effects(@nospecialize(f), t::DataType) # this method has a special tfunc
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    args = Any[_infer_effects, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
+end
+
+function infer_effects(@nospecialize(f), t::DataType, world::UInt)
+    return infer_effects(Tuple{Core.Typeof(f), t.parameters...}, world)
+end
+
+function infer_effects(t::DataType)
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    return infer_effects(t, world)
+end
+
+function infer_effects(t::DataType, world::UInt)
+    args = Any[_infer_effects, NativeInterpreter(world), t]
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
+end
+
+function _infer_effects(interp::AbstractInterpreter, t::DataType)
+    f = singleton_type(t.parameters[1])
+    if isa(f, Builtin)
+        args = Any[t.parameters...]
+        popfirst!(args)
+        rt = builtin_tfunction(interp, f, args, nothing)
+        return builtin_effects(f, argtypes, widenconst(rt))
+    else
+        eff = nothing
+        for match in _methods_by_ftype(t, -1, get_world_counter(interp))::Vector
+            match = match::MethodMatch
+            eff′ = effectsinf_type(interp, match.method, match.spec_types, match.sparams)
+            eff = (eff === nothing ? eff′ : tristate_merge(eff::Effects, eff′))
+            eff === Effects() && break
+        end
+        return eff === nothing ? Effects() : (eff::Effects)
+    end
+end
+
+# like `typeinf_type` but for effects
+function effectsinf_type(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector)
+    if contains_is(unwrap_unionall(atype).parameters, Union{})
+        return Effects()
+    end
+    mi = specialize_method(method, atype, sparams)::MethodInstance
+    for i = 1:2 # test-and-lock-and-test
+        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
+        code = get(code_cache(interp), mi, nothing)
+        if code isa CodeInstance
+            # see if this CodeInstance already exists in the cache
+            i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
+            return ipo_effects(code)::Effects
+        end
+    end
+    result = InferenceResult(mi)
+    typeinf(interp, result, :global)
+    ccall(:jl_typeinf_end, Cvoid, ())
+    result.result isa InferenceState && return Effects()
+    return result.ipo_effects
+end
