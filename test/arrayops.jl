@@ -1516,6 +1516,11 @@ end
     @test_throws BoundsError deleteat!([], [2])
     @test deleteat!([], []) == []
     @test deleteat!([], Bool[]) == []
+    let a = Vector{Any}(undef, 2)
+        a[1] = 1
+        @test isassigned(deleteat!(copy(a), [2]), 1)
+        @test !isassigned(deleteat!(copy(a), [1]), 1)
+    end
 end
 
 @testset "comprehensions" begin
