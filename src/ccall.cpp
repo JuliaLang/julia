@@ -1026,7 +1026,7 @@ std::string generate_func_sig(const char *fname)
         abi->use_sret(jl_nothing_type, lrt->getContext());
     }
     else {
-        if (!jl_is_datatype(rt) || ((jl_datatype_t*)rt)->layout == NULL || jl_is_layout_opaque(((jl_datatype_t*)rt)->layout) || jl_is_cpointer_type(rt) || retboxed) {
+        if (retboxed || jl_is_cpointer_type(rt) || lrt->isPointerTy()) {
             prt = lrt; // passed as pointer
             abi->use_sret(jl_voidpointer_type, lrt->getContext());
         }
@@ -1077,8 +1077,8 @@ std::string generate_func_sig(const char *fname)
             }
 
             t = _julia_struct_to_llvm(ctx, lrt->getContext(), tti, &isboxed, llvmcall);
-            if (t == NULL || t == getVoidTy(lrt->getContext())) {
-                return make_errmsg(fname, i + 1, " doesn't correspond to a C type");
+            if (t == getVoidTy(lrt->getContext())) {
+                return make_errmsg(fname, i + 1, " type doesn't correspond to a C type");
             }
         }
 
@@ -1215,14 +1215,21 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, simplevector, at);
 
-    if (jl_is_array_type(rt)) {
-        // `Array` used as return type just returns a julia object reference
-        rt = (jl_value_t*)jl_any_type;
+    if (rt == (jl_value_t*)jl_any_type || jl_is_array_type(rt) ||
+            (jl_is_datatype(rt) && ((jl_datatype_t*)rt)->layout != NULL &&
+             jl_is_layout_opaque(((jl_datatype_t*)rt)->layout))) {
+        // n.b. `Array` used as return type just returns a julia object reference
+        lrt = JuliaType::get_prjlvalue_ty(ctxt);
+        retboxed = true;
     }
-
-    lrt = _julia_struct_to_llvm(ctx, ctxt, rt, &retboxed, llvmcall);
-    if (lrt == NULL)
-        return "return type doesn't correspond to a C type";
+    else {
+        // jl_type_mappable_to_c should have already ensured that these are valid
+        assert(jl_is_structtype(rt) || jl_is_primitivetype(rt) || rt == (jl_value_t*)jl_bottom_type);
+        lrt = _julia_struct_to_llvm(ctx, ctxt, rt, &retboxed, llvmcall);
+        assert(!retboxed);
+        if (CountTrackedPointers(lrt).count != 0)
+            return "return type struct fields cannot contain a reference";
+    }
 
     // is return type fully statically known?
     if (unionall_env == NULL) {
