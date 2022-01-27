@@ -415,15 +415,6 @@ similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
 
-"""
-    maybecopy(x)
-
-`maybecopy` provides access to `x` while ensuring it does not escape.
-To do so, the optimizer decides whether to create a copy of `x` or not based on the implementation
-That is, `maybecopy` will either be a call to [`copy`](@ref) or just a reference to x.
-"""
-const maybecopy = Core.maybecopy
-
 # T[x...] constructs Array{T,1}
 """
     getindex(type[, elements...])
