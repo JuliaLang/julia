@@ -1033,6 +1033,18 @@ static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
     blocks[nx2-1] = len;
 }
 
+static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
+{
+    if (!m->roots) {
+        m->roots = jl_alloc_vec_any(0);
+        jl_gc_wb(m, m->roots);
+    }
+    if (!m->root_blocks && modid != 0) {
+        m->root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
+        jl_gc_wb(m, m->root_blocks);
+    }
+}
+
 JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root)
 {
     JL_GC_PUSH2(&m, &root);
@@ -1042,17 +1054,21 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
         modid = mod->build_id;
     }
     assert(jl_is_method(m));
-    if (!m->roots) {
-        m->roots = jl_alloc_vec_any(0);
-        jl_gc_wb(m, m->roots);
-    }
-    if (!m->root_blocks && modid != 0) {
-        m->root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
-        jl_gc_wb(m, m->root_blocks);
-    }
+    prepare_method_for_roots(m, modid);
     if (current_root_id(m->root_blocks) != modid)
         add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
     jl_array_ptr_1d_push(m->roots, root);
+    JL_GC_POP();
+}
+
+void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
+{
+    JL_GC_PUSH2(&m, &roots);
+    assert(jl_is_method(m));
+    assert(jl_is_array(roots));
+    prepare_method_for_roots(m, modid);
+    add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
+    jl_array_ptr_1d_append(m->roots, roots);
     JL_GC_POP();
 }
 
@@ -1082,6 +1098,23 @@ jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index)
     rle_reference rr = {key, index};
     size_t i = rle_reference_to_index(&rr, (uint64_t*)jl_array_data(m->root_blocks), jl_array_len(m->root_blocks), 0);
     return jl_array_ptr_ref(m->roots, i);
+}
+
+int nroots_with_key(jl_method_t *m, uint64_t key)
+{
+    size_t nroots = 0;
+    if (m->roots)
+        nroots = jl_array_len(m->roots);
+    if (!m->root_blocks)
+        return key == 0 ? nroots : 0;
+    uint64_t *rletable = (uint64_t*)jl_array_data(m->root_blocks);
+    size_t j, nblocks2 = jl_array_len(m->root_blocks);
+    int nwithkey = 0;
+    for (j = 0; j < nblocks2; j+=2) {
+        if (rletable[j] == key)
+            nwithkey += (j+3 < nblocks2 ? rletable[j+3] : nroots) - rletable[j+1];
+    }
+    return nwithkey;
 }
 
 #ifdef __cplusplus
