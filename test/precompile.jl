@@ -626,14 +626,14 @@ precompile_test_harness("code caching") do dir
         @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
     end
     m = which(setindex!, (Dict{M.X,Any}, Any, M.X))
-    @test_broken M.X ∈ m.roots               # requires caching external compilation results
+    @test M.X ∈ m.roots               # requires caching external compilation results
     Base.invokelatest() do
         Dict{M.X2,Any}()[M.X2()] = nothing
     end
     @test M.X2 ∈ m.roots
     groups = group_roots(m)
-    @test_broken M.X ∈ groups[Mid]           # requires caching external compilation results
-    @test M.X2 ∈ groups[rootid(@__MODULE__)]
+    @test M.X ∈ groups[Mid]           # requires caching external compilation results
+    @test M.X2 ∈ groups[0]            # activate module is not known
     @test !isempty(groups[Bid])
     minternal = which(M.getelsize, (Vector,))
     mi = minternal.specializations[1]
@@ -678,10 +678,10 @@ precompile_test_harness("code caching") do dir
     mT = which(push!, (Vector{T} where T, Any))
     groups = group_roots(mT)
     # all below require caching external CodeInstances
-    @test_broken M2.Y ∈ groups[M2id]
-    @test_broken M2.Z ∈ groups[M2id]
-    @test_broken M.X ∈ groups[Mid]
-    @test_broken M.X ∉ groups[M2id]
+    @test M2.Y ∈ groups[M2id]
+    @test M2.Z ∈ groups[M2id]
+    @test M.X ∈ groups[Mid]
+    @test M.X ∉ groups[M2id]
 end
 
 # test --compiled-modules=no command line option

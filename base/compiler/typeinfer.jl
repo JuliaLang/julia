@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Tracking of newly-inferred MethodInstances during precompilation
+const track_newly_inferred = RefValue{Bool}(false)
+const newly_inferred = MethodInstance[]
+
 # build (and start inferring) the inference frame for the top-level MethodInstance
 function typeinf(interp::AbstractInterpreter, result::InferenceResult, cache::Symbol)
     frame = InferenceState(result, cache, interp)
@@ -386,6 +390,12 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
         inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src)
         relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
         code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds, relocatability)
+        if track_newly_inferred[]
+            m = linfo.def
+            if isa(m, Method)
+                m.module != Core && push!(newly_inferred, linfo)
+            end
+        end
     end
     unlock_mi_inference(interp, linfo)
     nothing
