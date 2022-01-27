@@ -1678,9 +1678,9 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     return 1;
 }
 
-static void strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
+static int strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
 {
-    jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
+    return jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
 }
 
 static void jl_strip_all_codeinfos(void)

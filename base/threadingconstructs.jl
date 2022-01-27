@@ -87,11 +87,11 @@ function _threadsfor(iter, lbody, schedule)
         end
         if $(schedule === :dynamic)
             threading_run(threadsfor_fun, false)
-        elseif threadid() != 1 || ccall(:jl_in_threaded_region, Cint, ()) != 0
+        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0
             $(if schedule === :static
-              :(error("`@threads :static` can only be used from thread 1 and not nested"))
+              :(error("`@threads :static` cannot be used concurrently or nested"))
               else
-              # only use threads when called from thread 1, outside @threads :static
+              # only use threads when called from outside @threads
               :(Base.invokelatest(threadsfor_fun; onethread = true))
               end)
         else

@@ -51,6 +51,7 @@ Compiler/Runtime improvements
   calls ([#43239]).
 * Abstract callsite can now be inlined or statically resolved as far as the callsite has a single
   matching method ([#43113]).
+* Builtin function are now a bit more like generic functions, and can be enumerated with `methods` ([#43865]).
 
 Command-line option changes
 ---------------------------

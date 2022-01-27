@@ -1028,8 +1028,12 @@ end
 end
 
 # compensated power by squaring
-function ^(x::Float64, n::Integer)
+@constprop :aggressive @inline function ^(x::Float64, n::Integer)
     n == 0 && return one(x)
+    return pow_body(x, n)
+end
+
+@noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
     xnlo = ynlo = 0.0
     if n < 0
@@ -1054,6 +1058,7 @@ function ^(x::Float64, n::Integer)
     !isfinite(x) && return x*y
     return muladd(x, y, muladd(y, xnlo, x*ynlo))
 end
+
 function ^(x::Float32, n::Integer)
     n < 0 && return inv(x)^(-n)
     n == 3 && return x*x*x #keep compatibility with literal_pow
