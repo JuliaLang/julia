@@ -295,7 +295,9 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
 end
 
 function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compact::IncrementalCompact)
-    for arg in (isexpr(def, :new) ? def.args : def.args[2:end])
+    args = isexpr(def, :new) ? def.args : def.args[2:end]
+    for i = 1:length(args)
+        arg = args[i]
         if !isbitstype(widenconst(argextype(arg, compact)))
             push!(new_preserves, arg)
         end
@@ -344,7 +346,8 @@ function lift_leaves(compact::IncrementalCompact,
     # For every leaf, the lifted value
     lifted_leaves = LiftedLeaves()
     maybe_undef = false
-    for leaf in leaves
+    for i = 1:length(leaves)
+        leaf = leaves[i]
         cache_key = leaf
         if isa(leaf, AnySSAValue)
             (def, leaf) = walk_to_def(compact, leaf)
@@ -489,40 +492,43 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
     args = stmt.args
     length(args) == 3 || return
-
     lhs, rhs = args[2], args[3]
     vl = argextype(lhs, compact)
     vr = argextype(rhs, compact)
     if isa(vl, Const)
         isa(vr, Const) && return
         val = rhs
-        target = lhs
+        cmp = vl
     elseif isa(vr, Const)
         val = lhs
-        target = rhs
+        cmp = vr
     else
         return
     end
-
-    lift_comparison_leaves!(egal_tfunc, compact, val, target, lifting_cache, idx)
+    lift_comparison_leaves!(egal_tfunc, compact, val, cmp, lifting_cache, idx)
 end
 
 function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
     args = stmt.args
     length(args) == 3 || return
-    lift_comparison_leaves!(isa_tfunc, compact, args[2], args[3], lifting_cache, idx)
+    cmp = argextype(args[3], compact)
+    val = args[2]
+    lift_comparison_leaves!(isa_tfunc, compact, val, cmp, lifting_cache, idx)
 end
 
 function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
     args = stmt.args
     length(args) == 3 || return
-    lift_comparison_leaves!(isdefined_tfunc, compact, args[2], args[3], lifting_cache, idx)
+    cmp = argextype(args[3], compact)
+    isa(cmp, Const) || return # `isdefined_tfunc` won't return Const
+    val = args[2]
+    lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx)
 end
 
 function lift_comparison_leaves!(@specialize(tfunc),
-    compact::IncrementalCompact, @nospecialize(val), @nospecialize(target),
+    compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int)
     typeconstraint = widenconst(argextype(val, compact))
     if isa(val, Union{OldSSAValue, SSAValue})
@@ -533,9 +539,9 @@ function lift_comparison_leaves!(@specialize(tfunc),
     length(leaves) ≤ 1 && return # bail out if we don't have multiple leaves
 
     # check if we can evaluate the comparison for each one of the leaves
-    cmp = argextype(target, compact)
     lifted_leaves = nothing
-    for leaf in leaves
+    for i = 1:length(leaves)
+        leaf = leaves[i]
         result = tfunc(argextype(leaf, compact), cmp)
         if isa(result, Const)
             if lifted_leaves === nothing
@@ -576,15 +582,18 @@ function perform_lifting!(compact::IncrementalCompact,
     # Insert PhiNodes
     lifted_phis = LiftedPhi[]
     for item in visited_phinodes
-        # FIXME this cache retrieval is obviously broken
-        if (item, cache_key) in keys(lifting_cache)
-            ssa = lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)]
+        # FIXME this cache is broken somehow
+        # ckey = Pair{AnySSAValue, Any}(item, cache_key)
+        # cached = ckey in keys(lifting_cache)
+        cached = false
+        if cached
+            ssa = lifting_cache[ckey]
             push!(lifted_phis, LiftedPhi(ssa, compact[ssa]::PhiNode, false))
             continue
         end
         n = PhiNode()
         ssa = insert_node!(compact, item, effect_free(NewInstruction(n, result_t)))
-        lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)] = ssa
+        # lifting_cache[ckey] = ssa
         push!(lifted_phis, LiftedPhi(ssa, n, true))
     end
 
@@ -734,20 +743,16 @@ function sroa_pass!(ir::IRCode)
                 compact[idx] = form_new_preserves(stmt, preserved, new_preserves)
             end
             continue
-        # TODO: This isn't the best place to put these
-        elseif is_known_call(stmt, typeassert, compact)
-            canonicalize_typeassert!(compact, idx, stmt)
-            continue
-        elseif is_known_call(stmt, (===), compact)
-            lift_comparison!(===, compact, idx, stmt, lifting_cache)
-            continue
-        elseif is_known_call(stmt, isa, compact)
-            lift_comparison!(isa, compact, idx, stmt, lifting_cache)
-            continue
-        elseif is_known_call(stmt, isdefined, compact)
-            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache)
-            continue
-        else
+        else # TODO: This isn't the best place to put these
+            if is_known_call(stmt, typeassert, compact)
+                canonicalize_typeassert!(compact, idx, stmt)
+            elseif is_known_call(stmt, (===), compact)
+                lift_comparison!(===, compact, idx, stmt, lifting_cache)
+            elseif is_known_call(stmt, isa, compact)
+                lift_comparison!(isa, compact, idx, stmt, lifting_cache)
+            elseif is_known_call(stmt, isdefined, compact)
+                lift_comparison!(isdefined, compact, idx, stmt, lifting_cache)
+            end
             continue
         end
 
@@ -1087,22 +1092,22 @@ within `sroa_pass!` which redirects references of `typeassert`ed value to the co
 function adce_pass!(ir::IRCode)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
-    unionphis = Int[] # sorted
-    unionphi_types = Any[]
+    unionphis = Pair{Int,Any}[] # sorted
     compact = IncrementalCompact(ir)
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
             if isa(compact.result[idx][:type], Union)
-                push!(unionphis, idx)
-                push!(unionphi_types, Union{})
+                push!(unionphis, Pair{Int,Any}(idx, Union{}))
             end
         elseif isa(stmt, PiNode)
             val = stmt.val
             if isa(val, SSAValue) && is_union_phi(compact, val.id)
-                r = searchsorted(unionphis, val.id)
+                r = searchsorted(unionphis, val.id; by = first)
                 if !isempty(r)
-                    unionphi_types[first(r)] = Union{unionphi_types[first(r)], widenconst(stmt.typ)}
+                    unionphi = unionphis[first(r)]
+                    t = Union{unionphi[2], widenconst(stmt.typ)}
+                    unionphis[first(r)] = Pair{Int,Any}(unionphi[1], t)
                 end
             end
         else
@@ -1117,10 +1122,9 @@ function adce_pass!(ir::IRCode)
             for ur in userefs(stmt)
                 use = ur[]
                 if isa(use, SSAValue) && is_union_phi(compact, use.id)
-                    r = searchsorted(unionphis, use.id)
+                    r = searchsorted(unionphis, use.id; by = first)
                     if !isempty(r)
                         deleteat!(unionphis, first(r))
-                        deleteat!(unionphi_types, first(r))
                     end
                 end
             end
@@ -1131,10 +1135,10 @@ function adce_pass!(ir::IRCode)
         count_uses(compact.result[phi][:inst]::PhiNode, phi_uses)
     end
     # Narrow any union phi nodes that have unused branches
-    @assert length(unionphis) == length(unionphi_types)
     for i = 1:length(unionphis)
-        phi = unionphis[i]
-        t = unionphi_types[i]
+        unionphi = unionphis[i]
+        phi = unionphi[1]
+        t = unionphi[2]
         if phi_uses[phi] != 0
             continue
         end
