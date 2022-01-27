@@ -674,7 +674,7 @@ its argument).
 In a case when all usages are fully eliminated, `struct` allocation may also be erased as
 a result of succeeding dead code elimination.
 """
-function sroa_pass!(ir::IRCode, nargs::Int)
+function sroa_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
@@ -846,7 +846,7 @@ function sroa_pass!(ir::IRCode, nargs::Int)
         used_ssas = copy(compact.used_ssas)
         simple_dce!(compact, (x::SSAValue) -> used_ssas[x.id] -= 1)
         ir = complete(compact)
-        sroa_mutables!(ir, defuses, used_ssas, nargs)
+        sroa_mutables!(ir, defuses, used_ssas)
         return ir
     else
         simple_dce!(compact)
@@ -854,10 +854,9 @@ function sroa_pass!(ir::IRCode, nargs::Int)
     end
 end
 
-function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, nargs::Int)
+function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int})
     # initialization of domtree is delayed to avoid the expensive computation in many cases
     local domtree = nothing
-    estate = analyze_escapes(ir, nargs)
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
         # Check if there are any uses we did not account for. If so, the variable
@@ -933,7 +932,6 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 end
             end
         end
-        is_load_forwardable(estate[SSAValue(idx)]) || println("[EA] bad EA: ", ir.argtypes[1:nargs], " at ", idx)
         # Everything accounted for. Go field by field and perform idf:
         # Compute domtree now, needed below, now that we have finished compacting the IR.
         # This needs to be after we iterate through the IR with `IncrementalCompact`
@@ -990,11 +988,6 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
 
         @label skip
     end
-end
-
-function is_load_forwardable(x::EscapeAnalysis.EscapeInfo)
-    AliasInfo = x.AliasInfo
-    return isa(AliasInfo, EscapeAnalysis.IndexableFields)
 end
 
 function form_new_preserves(origex::Expr, intermediates::Vector{Int}, new_preserves::Vector{Any})
