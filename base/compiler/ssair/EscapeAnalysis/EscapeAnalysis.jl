@@ -84,7 +84,10 @@ A lattice for escape information, which holds the following properties:
 - `x.Analyzed::Bool`: not formally part of the lattice, only indicates `x` has not been analyzed or not
 - `x.ReturnEscape::Bool`: indicates `x` can escape to the caller via return
 - `x.ThrownEscape::BitSet`: records SSA statements numbers where `x` can be thrown as exception:
-  this information will be used by `escape_exception!` to propagate potential escapes via exception
+  * `isempty(x.ThrownEscape)`: `x` will never be thrown in this call frame (the bottom)
+  * `pc ∈ x.ThrownEscape`: `x` may be thrown at the SSA statement at `pc`
+  * `-1 ∈ x.ThrownEscape`: `x` may be thrown at arbitrary points of this call frame (the top)
+  This information will be used by `escape_exception!` to propagate potential escapes via exception.
 - `x.AliasInfo::Union{IndexableFields,Unindexable,Bool}`: maintains all possible values
   that can be aliased to fields or array elements of `x`:
   * `x.AliasInfo === false` indicates the fields/elements of `x` isn't analyzed yet
@@ -95,9 +98,12 @@ A lattice for escape information, which holds the following properties:
   * `x.AliasInfo::IndexableElements` records all the possible values that can be aliased to elements of array `x` with precise index information
   * `x.AliasInfo::Unindexable` records all the possible values that can be aliased to fields/elements of `x` without precise index information
 - `x.Liveness::BitSet`: records SSA statement numbers where `x` should be live, e.g.
-  to be used as a call argument, to be returned to a caller, or preserved for `:foreigncall`.
-  `0 ∈ x.Liveness` has the special meaning that it's a call argument of the currently analyzed
-  call frame (and thus it's visible from the caller immediately).
+  to be used as a call argument, to be returned to a caller, or preserved for `:foreigncall`:
+  * `isempty(x.Liveness)`: `x` is never be used in this call frame (the bottom)
+  * `0 ∈ x.Liveness` also has the special meaning that it's a call argument of the currently
+    analyzed call frame (and thus it's visible from the caller immediately).
+  * `pc ∈ x.Liveness`: `x` may be used at the SSA statement at `pc`
+  * `-1 ∈ x.Liveness`: `x` may be used at arbitrary points of this call frame (the top)
 - `x.ArgEscape::Int` (not implemented yet): indicates it will escape to the caller through
   `setfield!` on argument(s)
   * `-1` : no escape
@@ -163,24 +169,26 @@ struct EscapeInfo
 end
 
 # precomputed default values in order to eliminate computations at each callsite
-const BOT_THROWN_ESCAPE = LivenessSet()
-const TOP_THROWN_ESCAPE = LivenessSet(1:100_000)
 
-const BOT_ALIAS_INFO = false
-const TOP_ALIAS_INFO = true
+const BOT_THROWN_ESCAPE = LivenessSet()
+# NOTE the lattice operations should try to avoid actual set computations on this top value,
+# and e.g. LivenessSet(0:1000000) should also work without incurring excessive computations
+const TOP_THROWN_ESCAPE = LivenessSet(-1)
 
 const BOT_LIVENESS = LivenessSet()
-const TOP_LIVENESS = LivenessSet(0:100_000)
+# NOTE the lattice operations should try to avoid actual set computations on this top value,
+# and e.g. LivenessSet(0:1000000) should also work without incurring excessive computations
+const TOP_LIVENESS = LivenessSet(-1:0)
 const ARG_LIVENESS = LivenessSet(0)
 
 # the constructors
-NotAnalyzed() = EscapeInfo(false, false, BOT_THROWN_ESCAPE, BOT_ALIAS_INFO, BOT_LIVENESS) # not formally part of the lattice
-NoEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, BOT_ALIAS_INFO, BOT_LIVENESS)
-ArgEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, TOP_ALIAS_INFO, ARG_LIVENESS) # TODO allow interprocedural alias analysis?
-ReturnEscape(pc::Int) = EscapeInfo(true, true, BOT_THROWN_ESCAPE, BOT_ALIAS_INFO, LivenessSet(pc))
-AllReturnEscape() = EscapeInfo(true, true, BOT_THROWN_ESCAPE, BOT_ALIAS_INFO, TOP_LIVENESS)
-ThrownEscape(pc::Int) = EscapeInfo(true, false, LivenessSet(pc), BOT_ALIAS_INFO, BOT_LIVENESS)
-AllEscape() = EscapeInfo(true, true, TOP_THROWN_ESCAPE, TOP_ALIAS_INFO, TOP_LIVENESS)
+NotAnalyzed() = EscapeInfo(false, false, BOT_THROWN_ESCAPE, false, BOT_LIVENESS) # not formally part of the lattice
+NoEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, false, BOT_LIVENESS)
+ArgEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, true, ARG_LIVENESS) # TODO allow interprocedural alias analysis?
+ReturnEscape(pc::Int) = EscapeInfo(true, true, BOT_THROWN_ESCAPE, false, LivenessSet(pc))
+AllReturnEscape() = EscapeInfo(true, true, BOT_THROWN_ESCAPE, false, TOP_LIVENESS)
+ThrownEscape(pc::Int) = EscapeInfo(true, false, LivenessSet(pc), false, BOT_LIVENESS)
+AllEscape() = EscapeInfo(true, true, TOP_THROWN_ESCAPE, true, TOP_LIVENESS)
 
 const ⊥, ⊤ = NotAnalyzed(), AllEscape()
 
@@ -188,15 +196,15 @@ const ⊥, ⊤ = NotAnalyzed(), AllEscape()
 has_no_escape(x::EscapeInfo) = !x.ReturnEscape && isempty(x.ThrownEscape) && 0 ∉ x.Liveness
 has_arg_escape(x::EscapeInfo) = 0 in x.Liveness
 has_return_escape(x::EscapeInfo) = x.ReturnEscape
-has_return_escape(x::EscapeInfo, pc::Int) = x.ReturnEscape && pc in x.Liveness
+has_return_escape(x::EscapeInfo, pc::Int) = x.ReturnEscape && (-1 ∈ x.Liveness || pc in x.Liveness)
 has_thrown_escape(x::EscapeInfo) = !isempty(x.ThrownEscape)
-has_thrown_escape(x::EscapeInfo, pc::Int) = pc in x.ThrownEscape
+has_thrown_escape(x::EscapeInfo, pc::Int) = -1 ∈ x.ThrownEscape  || pc in x.ThrownEscape
 has_all_escape(x::EscapeInfo) = ⊤ ⊑ₑ x
 
 # utility lattice constructors
 ignore_argescape(x::EscapeInfo) = EscapeInfo(x; Liveness=delete!(copy(x.Liveness), 0))
 ignore_thrownescapes(x::EscapeInfo) = EscapeInfo(x; ThrownEscape=BOT_THROWN_ESCAPE)
-ignore_aliasinfo(x::EscapeInfo) = EscapeInfo(x, BOT_ALIAS_INFO)
+ignore_aliasinfo(x::EscapeInfo) = EscapeInfo(x, false)
 ignore_liveness(x::EscapeInfo) = EscapeInfo(x; Liveness=BOT_LIVENESS)
 
 # we need to make sure this `==` operator corresponds to lattice equality rather than object equality,
@@ -1025,7 +1033,7 @@ function escape_exception!(astate::AnalysisState, tryregions::Vector{UnitRange{I
         x = escapes[i]
         xt = x.ThrownEscape
         xt === TOP_THROWN_ESCAPE && @goto propagate_exception_escape # fast pass
-        for pc in x.ThrownEscape
+        for pc in xt
             for region in tryregions
                 pc in region && @goto propagate_exception_escape # early break because of AllEscape
             end
@@ -1093,7 +1101,7 @@ function from_interprocedural(arginfo::ArgEscapeInfo, retinfo::EscapeInfo, pc::I
         # it might be okay from the SROA point of view, since we can't remove the allocation
         # as far as it's passed to a callee anyway, but still we may want some field analysis
         # for e.g. stack allocation or some other IPO optimizations
-        #=AliasInfo=#TOP_ALIAS_INFO, #=Liveness=#LivenessSet(pc))
+        #=AliasInfo=#true, #=Liveness=#LivenessSet(pc))
 end
 
 @noinline function unexpected_assignment!(ir::IRCode, pc::Int)
@@ -1164,7 +1172,7 @@ function add_alias_escapes!(astate::AnalysisState, @nospecialize(v), ainfo::AInf
 end
 
 function escape_unanalyzable_obj!(astate::AnalysisState, @nospecialize(obj), objinfo::EscapeInfo)
-    objinfo = EscapeInfo(objinfo, TOP_ALIAS_INFO)
+    objinfo = EscapeInfo(objinfo, true)
     add_escape_change!(astate, obj, objinfo)
     return objinfo
 end
