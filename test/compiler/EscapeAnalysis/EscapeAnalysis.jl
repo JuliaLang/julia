@@ -1175,6 +1175,44 @@ end
         end
         @test has_all_escape(result.state[Argument(2)]) # x
     end
+    # circular reference
+    let result = code_escapes() do
+            x = Ref{Any}()
+            x[] = x
+            return x[]
+        end
+        i = only(findall(isnew, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        @test has_return_escape(result.state[SSAValue(i)], r)
+    end
+    let result = @eval Module() begin
+            const Rx = Ref{Any}()
+            Rx[] = Rx
+            $code_escapes() do
+                r = Rx[]::Base.RefValue{Any}
+                return r[]
+            end
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        for i in findall(iscall((result.ir, getfield)), result.ir.stmts.inst)
+            @test has_return_escape(result.state[SSAValue(i)], r)
+        end
+    end
+    let result = @eval Module() begin
+            @noinline function genr()
+                r = Ref{Any}()
+                r[] = r
+                return r
+            end
+            $code_escapes() do
+                x = genr()
+                return x[]
+            end
+        end
+        i = only(findall(isinvoke(:genr), result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        @test has_return_escape(result.state[SSAValue(i)], r)
+    end
 
     # dynamic semantics
     # -----------------
@@ -1974,6 +2012,45 @@ end
         i = only(findall(isarrayalloc, result.ir.stmts.inst))
         @test_broken !has_return_escape(result.state[SSAValue(i)], r)
         @test !is_load_forwardable(result.state[SSAValue(i)])
+    end
+
+    # circular reference
+    let result = code_escapes() do
+            xs = Vector{Any}(undef, 1)
+            xs[1] = xs
+            return xs[1]
+        end
+        i = only(findall(isarrayalloc, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        @test has_return_escape(result.state[SSAValue(i)], r)
+    end
+    let result = @eval Module() begin
+            const Ax = Vector{Any}(undef, 1)
+            Ax[1] = Ax
+            $code_escapes() do
+                xs = Ax[1]::Vector{Any}
+                return xs[1]
+            end
+        end
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        for i in findall(iscall((result.ir, Core.arrayref)), result.ir.stmts.inst)
+            @test has_return_escape(result.state[SSAValue(i)], r)
+        end
+    end
+    let result = @eval Module() begin
+            @noinline function genxs()
+                xs = Vector{Any}(undef, 1)
+                xs[1] = xs
+                return xs
+            end
+            $code_escapes() do
+                xs = genxs()
+                return xs[1]
+            end
+        end
+        i = only(findall(isinvoke(:genxs), result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        @test has_return_escape(result.state[SSAValue(i)], r)
     end
 end
 

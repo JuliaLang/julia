@@ -763,6 +763,7 @@ end
     estate::EscapeState, change::EscapeChange)
     (; xidx, xinfo) = change
     anychanged = _propagate_escape_change!(op, estate, xidx, xinfo)
+    # COMBAK is there a more efficient method of escape information equalization on aliasset?
     aliases = getaliases(xidx, estate)
     if aliases !== nothing
         for aidx in aliases
@@ -809,11 +810,6 @@ end
     yroot = find_root!(estate.aliasset, yidx)
     if xroot ≠ yroot
         union!(estate.aliasset, xroot, yroot)
-        xinfo = estate.escapes[xidx]
-        yinfo = estate.escapes[yidx]
-        xyinfo = xinfo ⊔ₑ yinfo
-        estate.escapes[xidx] = xyinfo
-        estate.escapes[yidx] = xyinfo
         return true
     end
     return false
@@ -851,6 +847,10 @@ function add_alias_change!(astate::AnalysisState, @nospecialize(x), @nospecializ
     yidx = iridx(y, estate)
     if xidx !== nothing && yidx !== nothing && !isaliased(xidx, yidx, astate.estate)
         pushfirst!(astate.changes, AliasChange(xidx, yidx))
+        # add new escape change here so that it's shared among the expanded `aliasset` in `propagate_escape_change!`
+        xinfo = estate.escapes[xidx]
+        yinfo = estate.escapes[yidx]
+        add_escape_change!(astate, x, xinfo ⊔ₑ yinfo)
     end
     return nothing
 end
@@ -937,6 +937,8 @@ function compute_frameinfo(ir::IRCode)
             end
             arrayinfo[idx] = dims
         elseif arrayinfo !== nothing
+            # TODO this super limited alias analysis is able to handle only very simple cases
+            # this should be replaced with a proper forward dimension analysis
             if isa(stmt, PhiNode)
                 values = stmt.values
                 local dims = nothing
@@ -946,12 +948,13 @@ function compute_frameinfo(ir::IRCode)
                         if isa(val, SSAValue) && haskey(arrayinfo, val.id)
                             if dims === nothing
                                 dims = arrayinfo[val.id]
-                            elseif dims ≠ arrayinfo[val.id]
-                                dims = nothing
-                                break
+                                continue
+                            elseif dims == arrayinfo[val.id]
+                                continue
                             end
                         end
                     end
+                    @goto next_stmt
                 end
                 if dims !== nothing
                     arrayinfo[idx] = dims
@@ -1066,6 +1069,8 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
                 add_escape_change!(astate, arg, info)
             end
         end
+        # we should disable the alias analysis on this newly introduced object
+        add_escape_change!(astate, ret, EscapeInfo(retinfo, true))
     end
 end
 
@@ -1107,28 +1112,30 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
         # fields are known precisely: propagate escape information imposed on recorded possibilities to the exact field values
         infos = AliasInfo.infos
         nf = length(infos)
-        objinfo = ignore_aliasinfo(objinfo)
+        objinfo′ = ignore_aliasinfo(objinfo)
         for i in 2:nargs
             i-1 > nf && break # may happen when e.g. ϕ-node merges values with different types
             arg = args[i]
             add_alias_escapes!(astate, arg, infos[i-1])
             push!(infos[i-1], -pc) # record def
             # propagate the escape information of this object ignoring field information
-            add_escape_change!(astate, arg, objinfo)
+            add_escape_change!(astate, arg, objinfo′)
             add_liveness_change!(astate, arg, pc)
         end
+        add_escape_change!(astate, obj, EscapeInfo(objinfo, AliasInfo)) # update with new AliasInfo
     elseif isa(AliasInfo, Unindexable) && !AliasInfo.array
         # fields are known partially: propagate escape information imposed on recorded possibilities to all fields values
         info = AliasInfo.info
-        objinfo = ignore_aliasinfo(objinfo)
+        objinfo′ = ignore_aliasinfo(objinfo)
         for i in 2:nargs
             arg = args[i]
             add_alias_escapes!(astate, arg, info)
             push!(info, -pc) # record def
             # propagate the escape information of this object ignoring field information
-            add_escape_change!(astate, arg, objinfo)
+            add_escape_change!(astate, arg, objinfo′)
             add_liveness_change!(astate, arg, pc)
         end
+        add_escape_change!(astate, obj, EscapeInfo(objinfo, AliasInfo)) # update with new AliasInfo
     else
         # this object has been used as array, but it is allocated as struct here (i.e. should throw)
         # update obj's field information and just handle this case conservatively
@@ -1405,23 +1412,19 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
         isa(AliasInfo, Unindexable) && @goto record_unindexable_use
         @label record_indexable_use
         push!(AliasInfo.infos[fidx], pc) # record use
-        objinfo = EscapeInfo(objinfo, AliasInfo)
-        add_escape_change!(astate, obj, objinfo)
+        add_escape_change!(astate, obj, EscapeInfo(objinfo, AliasInfo)) # update with new AliasInfo
     elseif isa(AliasInfo, Unindexable) && !AliasInfo.array
         @label record_unindexable_use
         push!(AliasInfo.info, pc) # record use
-        objinfo = EscapeInfo(objinfo, AliasInfo)
-        add_escape_change!(astate, obj, objinfo)
+        add_escape_change!(astate, obj, EscapeInfo(objinfo, AliasInfo)) # update with new AliasInfo
     else
         # this object has been used as array, but it is used as struct here (i.e. should throw)
         # update obj's field information and just handle this case conservatively
         objinfo = escape_unanalyzable_obj!(astate, obj, objinfo)
         @label conservative_propagation
-        # the field couldn't be analyzed precisely: propagate the escape information
-        # imposed on the return value of this `getfield` call to the object itself
-        # as the most conservative propagation
-        ssainfo = estate[SSAValue(pc)]
-        add_escape_change!(astate, obj, ssainfo)
+        # at the extreme case, a field of `obj` may point to `obj` itself
+        # so add the alias change here as the most conservative propagation
+        add_alias_change!(astate, obj, SSAValue(pc))
     end
     return false
 end
@@ -1457,7 +1460,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
         add_alias_escapes!(astate, val, AliasInfo.infos[fidx])
         push!(AliasInfo.infos[fidx], -pc) # record def
         objinfo = EscapeInfo(objinfo, AliasInfo)
-        add_escape_change!(astate, obj, objinfo)
+        add_escape_change!(astate, obj, objinfo) # update with new AliasInfo
         # propagate the escape information of this object ignoring field information
         add_escape_change!(astate, val, ignore_aliasinfo(objinfo))
     elseif isa(AliasInfo, Unindexable) && !AliasInfo.array
@@ -1466,7 +1469,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
         add_alias_escapes!(astate, val, AliasInfo.info)
         push!(AliasInfo.info, -pc) # record def
         objinfo = EscapeInfo(objinfo, AliasInfo)
-        add_escape_change!(astate, obj, objinfo)
+        add_escape_change!(astate, obj, objinfo) # update with new AliasInfo
         # propagate the escape information of this object ignoring field information
         add_escape_change!(astate, val, ignore_aliasinfo(objinfo))
     else
@@ -1544,8 +1547,9 @@ function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, arg
         # update ary's element information and just handle this case conservatively
         aryinfo = escape_unanalyzable_obj!(astate, ary, aryinfo)
         @label conservative_propagation
-        ssainfo = estate[SSAValue(pc)]
-        add_escape_change!(astate, ary, ssainfo)
+        # at the extreme case, an element of `ary` may point to `ary` itself
+        # so add the alias change here as the most conservative propagation
+        add_alias_change!(astate, ary, SSAValue(pc))
     end
     return true
 end
