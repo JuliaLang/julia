@@ -29,7 +29,7 @@ const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, Fas
 
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
 
-@doc """
+"""
     String <: AbstractString
 
 The generic, default string type in Julia, used by e.g. string literals.
