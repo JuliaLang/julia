@@ -22,12 +22,12 @@ See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
-function threading_run(func, static)
+function threading_run(fun, static)
     static && ccall(:jl_enter_threaded_region, Cvoid, ())
     n = nthreads()
     tasks = Vector{Task}(undef, n)
     for i = 1:n
-        t = Task(func)
+        t = Task(() -> fun(i)) # pass in tid
         t.sticky = static
         static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, i-1)
         tasks[i] = t
@@ -48,7 +48,7 @@ function _threadsfor(iter, lbody, schedule)
     quote
         local threadsfor_fun
         let range = $(esc(range))
-        function threadsfor_fun(onethread=false)
+        function threadsfor_fun(tid=1; onethread=false)
             r = range # Load into local variable
             lenr = length(r)
             # divide loop iterations among threads
@@ -56,7 +56,6 @@ function _threadsfor(iter, lbody, schedule)
                 tid = 1
                 len, rem = lenr, 0
             else
-                tid = threadid()
                 len, rem = divrem(lenr, nthreads())
             end
             # not enough iterations for all the threads?
@@ -93,7 +92,7 @@ function _threadsfor(iter, lbody, schedule)
               :(error("`@threads :static` can only be used from thread 1 and not nested"))
               else
               # only use threads when called from thread 1, outside @threads :static
-              :(Base.invokelatest(threadsfor_fun, true))
+              :(Base.invokelatest(threadsfor_fun; onethread = true))
               end)
         else
             threading_run(threadsfor_fun, true)
