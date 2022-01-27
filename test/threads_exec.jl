@@ -722,26 +722,31 @@ let a = zeros(nthreads())
 end
 
 # static schedule
-function _atthreads_static_schedule()
-    ids = zeros(Int, nthreads())
-    Threads.@threads :static for i = 1:nthreads()
+function _atthreads_static_schedule(n)
+    ids = zeros(Int, n)
+    Threads.@threads :static for i = 1:n
         ids[i] = Threads.threadid()
     end
     return ids
 end
-@test _atthreads_static_schedule() == [1:nthreads();]
-@test_throws TaskFailedException @threads for i = 1:1; _atthreads_static_schedule(); end
+@test _atthreads_static_schedule(nthreads()) == [1:nthreads();]
+@test _atthreads_static_schedule(1) == [1;]
+@test_throws TaskFailedException @threads for i = 1:1; _atthreads_static_schedule(nthreads()); end
 
 # dynamic schedule
-function _atthreads_dynamic_schedule()
+function _atthreads_dynamic_schedule(n)
     inc = Threads.Atomic{Int}(0)
-    Threads.@threads :dynamic for _ = 1:nthreads()
+    flags = falses(n)
+    Threads.@threads :dynamic for i = 1:n
         Threads.atomic_add!(inc, 1)
+        flags[i] = true
     end
-    return inc[]
+    return inc[], flags
 end
-inc = _atthreads_dynamic_schedule()
-@test inc == nthreads()
+@test _atthreads_dynamic_schedule(nthreads()) == (nthreads(), trues(nthreads()))
+@test _atthreads_dynamic_schedule(1) == (1, trues(1))
+@test _atthreads_dynamic_schedule(10) == (10, trues(10))
+@test _atthreads_dynamic_schedule(nthreads() * 2) == (nthreads() * 2, trues(nthreads() * 2))
 
 # nested dynamic schedule
 function _atthreads_dynamic_dynamic_schedule()
@@ -753,8 +758,7 @@ function _atthreads_dynamic_dynamic_schedule()
     end
     return inc[]
 end
-inc = _atthreads_dynamic_dynamic_schedule()
-@test inc == nthreads() * nthreads()
+@test _atthreads_dynamic_dynamic_schedule() == nthreads() * nthreads()
 
 function _atthreads_static_dynamic_schedule()
     ids = zeros(Int, nthreads())
@@ -767,9 +771,16 @@ function _atthreads_static_dynamic_schedule()
     end
     return ids, inc[]
 end
-ids, inc = _atthreads_static_dynamic_schedule()
-@test ids == [1:nthreads();]
-@test inc == nthreads() * nthreads()
+@test _atthreads_static_dynamic_schedule() == ([1:nthreads();], nthreads() * nthreads())
+
+# errors inside @threads :dynamic
+function _atthreads_dynamic_with_error(a)
+    Threads.@threads :dynamic for i in eachindex(a)
+        error("failed")
+    end
+    a
+end
+@test_throws TaskFailedException _atthreads_dynamic_with_error(zeros(nthreads()))
 
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
