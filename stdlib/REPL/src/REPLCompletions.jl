@@ -41,7 +41,9 @@ struct FieldCompletion <: Completion
 end
 
 struct MethodCompletion <: Completion
+    tt # may be used by an external consumer to infer return type, etc.
     method::Method
+    MethodCompletion(@nospecialize(tt), method::Method) = new(tt, method)
 end
 
 struct BslashCompletion <: Completion
@@ -617,7 +619,7 @@ function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_e
     m isa Vector || return
     for match in m
         # TODO: if kwargs_ex, filter out methods without kwargs?
-        push!(out, MethodCompletion(match.method))
+        push!(out, MethodCompletion(match.spec_types, match.method))
     end
 end
 
