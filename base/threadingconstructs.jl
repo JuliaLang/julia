@@ -92,7 +92,7 @@ function _threadsfor(iter, lbody, schedule)
               :(error("`@threads :static` cannot be used concurrently or nested"))
               else
               # only use threads when called from outside @threads
-              :(Base.invokelatest(threadsfor_fun; onethread = true))
+              :(threadsfor_fun(onethread = true))
               end)
         else
             threading_run(threadsfor_fun, true)

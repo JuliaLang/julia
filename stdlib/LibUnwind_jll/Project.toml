@@ -1,6 +1,6 @@
 name = "LibUnwind_jll"
 uuid = "745a5e78-f969-53e9-954f-d19f2f74f4e3"
-version = "1.3.2+0"
+version = "1.5.0+0"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
