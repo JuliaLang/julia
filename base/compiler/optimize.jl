@@ -150,7 +150,7 @@ const IR_FLAG_THROW_BLOCK = 0x01 << 3
 const IR_FLAG_EFFECT_FREE = 0x01 << 4
 
 # known to be always effect-free (in particular nothrow)
-const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields, has_free_typevars]
+const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 
 # known to be effect-free if the are nothrow
 const _PURE_OR_ERROR_BUILTINS = [

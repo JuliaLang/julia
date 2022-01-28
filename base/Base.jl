@@ -59,7 +59,7 @@ replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatom
 
 
 # for closures
-_typeof_captured_variable(t) = Core.has_free_typevars(t) ? typeof(t) : Core.Typeof(t)
+_typeof_captured_variable(t) = Core.Compiler.has_free_typevars(t) ? typeof(t) : Core.Typeof(t)
 
 include("coreio.jl")
 

@@ -1655,12 +1655,6 @@ JL_CALLABLE(jl_f__equiv_typedef)
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
 }
 
-JL_CALLABLE(jl_f_has_free_typevars)
-{
-    JL_NARGS(has_free_typevars, 1, 1);
-    return jl_has_free_typevars(args[0]) ? jl_true : jl_false;
-}
-
 // IntrinsicFunctions ---------------------------------------------------------
 
 static void (*runtime_fp[num_intrinsics])(void);
@@ -1840,7 +1834,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_setsuper!", jl_f__setsuper);
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
-    add_builtin_func("has_free_typevars", jl_f_has_free_typevars);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
