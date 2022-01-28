@@ -578,11 +578,11 @@ In general, the Julia C API is not fully thread-safe. When embedding Julia in a 
 the following restrictions:
 
 * `jl_init()` may only be called once in the application life-time. The same applies to `jl_atexit_hook()`, and it may only be called after `jl_init()`. 
-* `jl_...()` API functions may only be called from the thread in which `jl_init()` was called, *or from threads started by the Julia runtime*. So calling Julia API functions from user-started threads is not supported, and may lead to undefined behaviour and crashes.
+* `jl_...()` API functions may only be called from the thread in which `jl_init()` was called, *or from threads started by the Julia runtime*. Calling Julia API functions from user-started threads is not supported, and may lead to undefined behaviour and crashes.
 
 The second condition above implies that you can not safely call `jl_...()` functions from threads that were not started by Julia (the thread calling `jl_init()` being the exception). For example, the following is not supported and will most likely segfault:
 
-```
+```c
 void *func(void*)
 {       
     // Wrong, jl_eval_string() called from thread that was not started by Julia
@@ -604,9 +604,9 @@ int main()
 }
 ```
 
-However, the following *is* supported:
+Instead, performing all Julia calls from the same user-created thread will work:
 
-```
+```c
 void *func(void*)
 {       
     // Okay, all jl_...() calls from the same thread, 
@@ -628,13 +628,13 @@ int main()
 
 An example of calling the Julia C API from a thread started by Julia itself:
 
-```
+```c
 #include <julia/julia.h>
 JULIA_DEFINE_FAST_TLS
 
 double c_func(int i)
 {
-    printf("[C, thread %08x] i = %d\n", pthread_self(), i);
+    printf("[C %08x] i = %d\n", pthread_self(), i);
     
     // Call the Julia sqrt() function to compute the square root of i, and return it
     jl_function_t *sqrt = jl_get_function(jl_base_module, "sqrt");
@@ -653,29 +653,29 @@ int main()
 
     // Call func() multiple times, using multiple threads to do so
     jl_eval_string("println(Threads.nthreads())");
-    jl_eval_string("Threads.@threads for i in 1:5 println(\"[Julia, $(Threads.threadid())] i = $(i), res = $(func(i))\") end");
-    
+    jl_eval_string("use(i) = println(\"[J $(Threads.threadid())] i = $(i) -> $(func(i))\")");
+    jl_eval_string("Threads.@threads for i in 1:5 use(i) end");
+
     jl_atexit_hook(0);    
 }
 ```
 
 If we run this code with 2 Julia threads we get the following output (note: the output will vary per run and system):
 
-```
-$ gcc -pthread -o thread_example `julia /usr/share/julia/julia-config.jl --cflags --ldflags --ldlibs` thread_example.c
+```sh
 $ JULIA_NUM_THREADS=2 ./thread_example
 2
-[C, thread 43099c00] i = 1
-[C, thread 2a9f8640] i = 4
-[Julia, 2] i = 4, res = 2.0
-[C, thread 2a9f8640] i = 5
-[Julia, 1] i = 1, res = 1.0
-[C, thread 43099c00] i = 2
-[Julia, 2] i = 5, res = 2.23606797749979
-[Julia, 1] i = 2, res = 1.4142135623730951
-[C, thread 43099c00] i = 3
-[Julia, 1] i = 3, res = 1.7320508075688772
+[C 3bfd9c00] i = 1
+[C 23938640] i = 4
+[J 1] i = 1 -> 1.0
+[C 3bfd9c00] i = 2
+[J 1] i = 2 -> 1.4142135623730951
+[C 3bfd9c00] i = 3
+[J 2] i = 4 -> 2.0
+[C 23938640] i = 5
+[J 1] i = 3 -> 1.7320508075688772
+[J 2] i = 5 -> 2.23606797749979
 ```
 
-As can be seen, Julia thread 1 is corresponds to pthread thread 43099c00, and Julia thread 2 corresponds to 2a9f8640, showing that indeed multiple threads are used at the C level, and that we can safely call Julia C API routines from those threads.
+As can be seen, Julia thread 1 corresponds to pthread ID 3bfd9c00, and Julia thread 2 corresponds to ID 23938640, showing that indeed multiple threads are used at the C level, and that we can safely call Julia C API routines from those threads.
 
