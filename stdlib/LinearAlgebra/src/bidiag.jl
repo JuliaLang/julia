@@ -865,9 +865,9 @@ end
 rdiv!(A::AbstractMatrix, B::Bidiagonal) = @inline _rdiv!(A, A, B)
 rdiv!(A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
 rdiv!(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
-rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) =
+_rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) =
     (ldiv!(adjoint(C), adjoint(B), adjoint(A)); return C)
-rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) =
+_rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) =
     (ldiv!(transpose(C), transpose(B), transpose(A)); return C)
 
 function /(A::AbstractMatrix{<:Number}, B::Bidiagonal{<:Number})
