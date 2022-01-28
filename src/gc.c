@@ -585,7 +585,7 @@ static int64_t last_gc_total_bytes = 0;
 static size_t default_collect_interval = 64 * 1024 * 1024;
 static size_t max_collect_interval = 1250000000UL;
 #else
-static size_t default_collect_interval = 8 * 1024 * 1024;
+static size_t default_collect_interval = 32 * 1024 * 1024;
 static size_t max_collect_interval =  500000000UL;
 #endif
 
@@ -3137,12 +3137,12 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             last_long_collect_interval = gc_num.interval;
         }
         else {
-            // reset interval to default, or at least half of live_bytes
+            // reset interval to half of live_bytes or at most max_collect_interval
             int64_t half = live_bytes/2;
             if (default_collect_interval < half && half <= max_collect_interval)
                 gc_num.interval = half;
             else
-                gc_num.interval = default_collect_interval;
+                gc_num.interval = max_collect_interval;
         }
     }
     if (gc_sweep_always_full) {
