@@ -9,7 +9,7 @@ $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: | $(build_prefix)/manifest
 endif
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://github.com/libunwind/libunwind/releases/download/v$(UNWIND_VER)/libunwind-$(UNWIND_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://github.com/libunwind/libunwind/releases/download/v$(UNWIND_VER_SHORT)/libunwind-$(UNWIND_VER).tar.gz
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted: $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
