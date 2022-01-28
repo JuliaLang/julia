@@ -736,17 +736,17 @@ end
 # dynamic schedule
 function _atthreads_dynamic_schedule(n)
     inc = Threads.Atomic{Int}(0)
-    flags = falses(n)
+    flags = zeros(Int, n)
     Threads.@threads :dynamic for i = 1:n
         Threads.atomic_add!(inc, 1)
-        flags[i] = true
+        flags[i] = 1
     end
     return inc[], flags
 end
-@test _atthreads_dynamic_schedule(nthreads()) == (nthreads(), trues(nthreads()))
-@test _atthreads_dynamic_schedule(1) == (1, trues(1))
-@test _atthreads_dynamic_schedule(10) == (10, trues(10))
-@test _atthreads_dynamic_schedule(nthreads() * 2) == (nthreads() * 2, trues(nthreads() * 2))
+@test _atthreads_dynamic_schedule(nthreads()) == (nthreads(), ones(nthreads()))
+@test _atthreads_dynamic_schedule(1) == (1, ones(1))
+@test _atthreads_dynamic_schedule(10) == (10, ones(10))
+@test _atthreads_dynamic_schedule(nthreads() * 2) == (nthreads() * 2, ones(nthreads() * 2))
 
 # nested dynamic schedule
 function _atthreads_dynamic_dynamic_schedule()
