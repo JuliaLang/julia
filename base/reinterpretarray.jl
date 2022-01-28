@@ -19,6 +19,10 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         @noinline
         throw(ArgumentError("cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a $msg size"))
     end
+    function throwsingleton(S::Type, T::Type, kind)
+        @noinline
+        throw(ArgumentError("cannot reinterpret $kind `$(S)` array to `$(T)` which is a singleton type"))
+    end
 
     global reinterpret
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
@@ -39,7 +43,11 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         if N != 0 && sizeof(S) != sizeof(T)
             ax1 = axes(a)[1]
             dim = length(ax1)
-            rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
+            if Base.issingletontype(T)
+                dim == 0 || throwsingleton(S, T, "a non-empty")
+            else
+                rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
+            end
             first(ax1) == 1 || throwaxes1(S, T, ax1)
         end
         readable = array_subpadding(T, S)
@@ -58,14 +66,20 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
             @noinline
             throw(ArgumentError("`reinterpret(reshape, $T, a)` where `eltype(a)` is $(eltype(a)) requires that `axes(a, 1)` (got $(axes(a, 1))) be equal to 1:$(sizeof(T) ÷ sizeof(eltype(a))) (from the ratio of element sizes)"))
         end
+        function throwfromsingleton(S, T)
+            @noinline
+            throw(ArgumentError("`reinterpret(reshape, $T, a)` where `eltype(a)` is $S requires that $T be a singleton type, since $S is one"))
+        end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
         if sizeof(S) == sizeof(T)
             N = ndims(a)
         elseif sizeof(S) > sizeof(T)
+            Base.issingletontype(T) && throwsingleton(S, T, "with reshape a")
             rem(sizeof(S), sizeof(T)) == 0 || throwintmult(S, T)
             N = ndims(a) + 1
         else
+            Base.issingletontype(S) && throwfromsingleton(S, T)
             rem(sizeof(T), sizeof(S)) == 0 || throwintmult(S, T)
             N = ndims(a) - 1
             N > -1 || throwsize0(S, T, "larger")
@@ -286,7 +300,7 @@ unaliascopy(a::ReshapedReinterpretArray{T}) where {T} = reinterpret(reshape, T, 
 
 function size(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
-    size1 = div(psize[1]*sizeof(S), sizeof(T))
+    size1 = Base.issingletontype(T) ? psize[1] : div(psize[1]*sizeof(S), sizeof(T))
     tuple(size1, tail(psize)...)
 end
 function size(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
@@ -300,7 +314,7 @@ size(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 function axes(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
     f, l = first(paxs[1]), length(paxs[1])
-    size1 = div(l*sizeof(S), sizeof(T))
+    size1 = Base.issingletontype(T) ? l : div(l*sizeof(S), sizeof(T))
     tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
 end
 function axes(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
@@ -314,8 +328,15 @@ axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
-@inline @propagate_inbounds getindex(a::NonReshapedReinterpretArray{T,0}) where {T} = reinterpret(T, a.parent[])
-@inline @propagate_inbounds getindex(a::ReinterpretArray) = a[1]
+@inline @propagate_inbounds function getindex(a::NonReshapedReinterpretArray{T,0,S}) where {T,S}
+    if isprimitivetype(T) && isprimitivetype(S)
+        reinterpret(T, a.parent[])
+    else
+        a[firstindex(a)]
+    end
+end
+
+@inline @propagate_inbounds getindex(a::ReinterpretArray) = a[firstindex(a)]
 
 @inline @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
     check_readable(a)
@@ -351,6 +372,10 @@ end
 @inline @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
+        if Base.issingletontype(T) # singleton types
+            @boundscheck checkbounds(a, i1, tailinds...)
+            return T.instance
+        end
         return reinterpret(T, a.parent[i1, tailinds...])
     else
         @boundscheck checkbounds(a, i1, tailinds...)
@@ -395,6 +420,10 @@ end
 @inline @propagate_inbounds function _getindex_ra(a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
+        if Base.issingletontype(T) # singleton types
+            @boundscheck checkbounds(a, i1, tailinds...)
+            return T.instance
+        end
         return reinterpret(T, a.parent[i1, tailinds...])
     end
     @boundscheck checkbounds(a, i1, tailinds...)
@@ -440,8 +469,15 @@ end
     return t[][i1]
 end
 
-@inline @propagate_inbounds setindex!(a::NonReshapedReinterpretArray{T,0,S} where T, v) where {S} = (a.parent[] = reinterpret(S, v))
-@inline @propagate_inbounds setindex!(a::ReinterpretArray, v) = (a[1] = v)
+@inline @propagate_inbounds function setindex!(a::NonReshapedReinterpretArray{T,0,S}, v) where {T,S}
+    if isprimitivetype(S) && isprimitivetype(T)
+        a.parent[] = reinterpret(S, v)
+        return a
+    end
+    setindex!(a, v, firstindex(a))
+end
+
+@inline @propagate_inbounds setindex!(a::ReinterpretArray, v) = setindex!(a, v, firstindex(a))
 
 @inline @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
@@ -475,7 +511,12 @@ end
     v = convert(T, v)::T
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        return setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
+        if Base.issingletontype(T) # singleton types
+            @boundscheck checkbounds(a, i1, tailinds...)
+            # setindex! is a noop except for the index check
+        else
+            setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
+        end
     else
         @boundscheck checkbounds(a, i1, tailinds...)
         ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
@@ -536,7 +577,12 @@ end
     v = convert(T, v)::T
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        return setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
+        if Base.issingletontype(T) # singleton types
+            @boundscheck checkbounds(a, i1, tailinds...)
+            # setindex! is a noop except for the index check
+        else
+            setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
+        end
     end
     @boundscheck checkbounds(a, i1, tailinds...)
     t = Ref{T}(v)

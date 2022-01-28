@@ -63,11 +63,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
     if (win64_reg_size(size))
         return false;
     if (nargs <= 4) {
-#if JL_LLVM_VERSION < 120000
-        ab.addAttribute(Attribute::ByVal);
-#else
         ab.addByValAttr(Ty);
-#endif
     }
     return true;
 }

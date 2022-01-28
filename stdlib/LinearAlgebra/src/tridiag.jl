@@ -148,12 +148,8 @@ function size(A::SymTridiagonal, d::Integer)
     end
 end
 
-# For S<:SymTridiagonal, similar(S[, neweltype]) should yield a SymTridiagonal matrix.
-# On the other hand, similar(S, [neweltype,] shape...) should yield a sparse matrix.
-# The first method below effects the former, and the second the latter.
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
-# The method below is moved to SparseArrays for now
-# similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
 
 copyto!(dest::SymTridiagonal, src::SymTridiagonal) =
     (copyto!(dest.dv, src.dv); copyto!(dest.ev, _evview(src)); dest)
@@ -166,6 +162,11 @@ end
 transpose(S::SymTridiagonal) = S
 adjoint(S::SymTridiagonal{<:Real}) = S
 adjoint(S::SymTridiagonal) = Adjoint(S)
+permutedims(S::SymTridiagonal) = S
+function permutedims(S::SymTridiagonal, perm)
+    Base.checkdims_perm(S, S, perm)
+    NTuple{2}(perm) == (2, 1) ? permutedims(S) : S
+end
 Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
 
 ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(_evview(S))
@@ -584,12 +585,8 @@ end
 Matrix(M::Tridiagonal{T}) where {T} = Matrix{T}(M)
 Array(M::Tridiagonal) = Matrix(M)
 
-# For M<:Tridiagonal, similar(M[, neweltype]) should yield a Tridiagonal matrix.
-# On the other hand, similar(M, [neweltype,] shape...) should yield a sparse matrix.
-# The first method below effects the former, and the second the latter.
 similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), similar(M.d, T), similar(M.du, T))
-# The method below is moved to SparseArrays for now
-# similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
 
 # Operations on Tridiagonal matrices
 copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
@@ -605,6 +602,11 @@ adjoint(S::Tridiagonal) = Adjoint(S)
 transpose(S::Tridiagonal) = Transpose(S)
 adjoint(S::Tridiagonal{<:Real}) = Tridiagonal(S.du, S.d, S.dl)
 transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
+permutedims(T::Tridiagonal) = Tridiagonal(T.du, T.d, T.dl)
+function permutedims(T::Tridiagonal, perm)
+    Base.checkdims_perm(T, T, perm)
+    NTuple{2}(perm) == (2, 1) ? permutedims(T) : T
+end
 Base.copy(aS::Adjoint{<:Any,<:Tridiagonal}) = (S = aS.parent; Tridiagonal(map(x -> copy.(adjoint.(x)), (S.du, S.d, S.dl))...))
 Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(x -> copy.(transpose.(x)), (S.du, S.d, S.dl))...))
 
@@ -734,6 +736,7 @@ end
 
 +(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl+B.dl, A.d+B.d, A.du+B.du)
 -(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du-B.du)
+-(A::Tridiagonal) = Tridiagonal(-A.dl, -A.d, -A.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
 *(B::Number, A::Tridiagonal) = Tridiagonal(B*A.dl, B*A.d, B*A.du)
 /(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)

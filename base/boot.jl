@@ -444,7 +444,6 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
-
 ## primitive Array constructors
 struct UndefInitializer end
 const undef = UndefInitializer()
@@ -792,7 +791,7 @@ Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 
 # Binding for the julia parser, called as
 #
-#    Core._parse(text, filename, offset, options)
+#    Core._parse(text, filename, lineno, offset, options)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
 # it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},

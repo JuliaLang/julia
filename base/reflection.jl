@@ -248,10 +248,33 @@ parentmodule(t::UnionAll) = parentmodule(unwrap_unionall(t))
 """
     isconst(m::Module, s::Symbol) -> Bool
 
-Determine whether a global is declared `const` in a given `Module`.
+Determine whether a global is declared `const` in a given module `m`.
 """
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
+
+"""
+    isconst(t::DataType, s::Union{Int,Symbol}) -> Bool
+
+Determine whether a field `s` is declared `const` in a given type `t`.
+"""
+function isconst(@nospecialize(t::Type), s::Symbol)
+    t = unwrap_unionall(t)
+    isa(t, DataType) || return false
+    return isconst(t, fieldindex(t, s, false))
+end
+function isconst(@nospecialize(t::Type), s::Int)
+    t = unwrap_unionall(t)
+    # TODO: what to do for `Union`?
+    isa(t, DataType) || return false # uncertain
+    ismutabletype(t) || return true # immutable structs are always const
+    1 <= s <= length(t.name.names) || return true # OOB reads are "const" since they always throw
+    constfields = t.name.constfields
+    constfields === C_NULL && return false
+    s -= 1
+    return unsafe_load(Ptr{UInt32}(constfields), 1 + s÷32) & (1 << (s%32)) != 0
+end
+
 
 """
     @locals()
@@ -328,22 +351,24 @@ function datatype_alignment(dt::DataType)
     return Int(alignment)
 end
 
-function uniontype_layout(T::Type)
+function uniontype_layout(@nospecialize T::Type)
     sz = RefValue{Csize_t}(0)
     algn = RefValue{Csize_t}(0)
     isinline = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, algn) != 0
-    (isinline, sz[], algn[])
+    (isinline, Int(sz[]), Int(algn[]))
 end
 
+LLT_ALIGN(x, sz) = (x + sz - 1) & -sz
+
 # amount of total space taken by T when stored in a container
-function aligned_sizeof(T::Type)
+function aligned_sizeof(@nospecialize T::Type)
     @_pure_meta
     if isbitsunion(T)
         _, sz, al = uniontype_layout(T)
-        return (sz + al - 1) & -al
+        return LLT_ALIGN(sz, al)
     elseif allocatedinline(T)
         al = datatype_alignment(T)
-        return (Core.sizeof(T) + al - 1) & -al
+        return LLT_ALIGN(Core.sizeof(T), al)
     else
         return Core.sizeof(Ptr{Cvoid})
     end
@@ -901,19 +926,8 @@ end
 function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt)
     return _methods_by_ftype(t, mt, lim, world, false, RefValue{UInt}(typemin(UInt)), RefValue{UInt}(typemax(UInt)), Ptr{Int32}(C_NULL))
 end
-function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt, ambig::Bool, min::Array{UInt,1}, max::Array{UInt,1}, has_ambig::Array{Int32,1})
-    return ccall(:jl_matching_methods, Any, (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
-end
 function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt, ambig::Bool, min::Ref{UInt}, max::Ref{UInt}, has_ambig::Ref{Int32})
     return ccall(:jl_matching_methods, Any, (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
-end
-
-function _method_by_ftype(args...)
-    matches = _methods_by_ftype(args...)
-    if length(matches) != 1
-        error("no unique matching method found for the specified argument types")
-    end
-    return matches[1]
 end
 
 # high-level, more convenient method lookup functions
@@ -951,11 +965,8 @@ See also: [`which`](@ref) and `@which`.
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
     t = to_tuple_type(t)
-    world = typemax(UInt)
+    world = get_world_counter()
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
     for m in _methods(f, t, -1, world)::Vector
@@ -966,15 +977,12 @@ function methods(@nospecialize(f), @nospecialize(t),
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 
-methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
-
 function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
-    world = typemax(UInt)
+    world = get_world_counter()
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
-    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))
-    isa(ms, Bool) && return ms
+    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector
     return MethodList(Method[(m::Core.MethodMatch).method for m in ms], typeof(f).name.mt)
 end
 
@@ -1044,7 +1052,7 @@ _uncompressed_ir(ci::Core.CodeInstance, s::Array{UInt8,1}) = ccall(:jl_uncompres
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
 
-function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
+function method_instances(@nospecialize(f), @nospecialize(t), world::UInt=get_world_counter())
     tt = signature_type(f, t)
     results = Core.MethodInstance[]
     for match in _methods_by_ftype(tt, -1, world)::Vector
@@ -1152,24 +1160,47 @@ function func_for_method_checked(m::Method, @nospecialize(types), sparams::Simpl
 end
 
 """
-    code_typed(f, types; optimize=true, debuginfo=:default)
+    code_typed(f, types; kw...)
 
 Returns an array of type-inferred lowered form (IR) for the methods matching the given
-generic function and type signature. The keyword argument `optimize` controls whether
-additional optimizations, such as inlining, are also applied.
-The keyword `debuginfo` controls the amount of code metadata present in the output,
+generic function and type signature.
+
+# Keyword Arguments
+
+- `optimize=true`: controls whether additional optimizations, such as inlining, are also applied.
+- `debuginfo=:default`: controls the amount of code metadata present in the output,
 possible options are `:source` or `:none`.
+
+# Internal Keyword Arguments
+
+This section should be considered internal, and is only for who understands Julia compiler
+internals.
+
+- `world=Base.get_world_counter()`: optional, controls the world age to use when looking up methods,
+use current world age if not specified.
+- `interp=Core.Compiler.NativeInterpreter(world)`: optional, controls the interpreter to use,
+use the native interpreter Julia uses if not specified.
+
+# Example
+
+One can put the argument types in a tuple to get the corresponding `code_typed`.
+
+```julia
+julia> code_typed(+, (Float64, Float64))
+1-element Vector{Any}:
+ CodeInfo(
+1 ─ %1 = Base.add_float(x, y)::Float64
+└──      return %1
+) => Float64
+```
 """
 function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
                     optimize=true,
                     debuginfo::Symbol=:default,
                     world = get_world_counter(),
                     interp = Core.Compiler.NativeInterpreter(world))
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
     if isa(f, Core.OpaqueClosure)
-        return code_typed_opaque_closure(f, types; optimize, debuginfo, interp)
+        return code_typed_opaque_closure(f; optimize, debuginfo, interp)
     end
     ft = Core.Typeof(f)
     if isa(types, Type)
@@ -1214,18 +1245,18 @@ function code_typed_by_type(@nospecialize(tt#=::Type=#);
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     tt = to_tuple_type(tt)
-    matches = _methods_by_ftype(tt, -1, world)
-    if matches === false
-        error("signature does not correspond to a generic function")
-    end
+    matches = _methods_by_ftype(tt, -1, world)::Vector
     asts = []
-    for match in matches::Vector
+    for match in matches
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
         (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, optimize)
-        code === nothing && error("inference not successful") # inference disabled?
-        debuginfo === :none && remove_linenums!(code)
-        push!(asts, code => ty)
+        if code === nothing
+            push!(asts, meth => Any)
+        else
+            debuginfo === :none && remove_linenums!(code)
+            push!(asts, code => ty)
+        end
     end
     return asts
 end
@@ -1235,10 +1266,11 @@ function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure);
         debuginfo::Symbol=:default,
         interp = Core.Compiler.NativeInterpreter(closure.world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    if isa(closure.source, Method)
-        code = _uncompressed_ir(closure.source, closure.source.source)
+    m = closure.source
+    if isa(m, Method)
+        code = _uncompressed_ir(m, m.source)
         debuginfo === :none && remove_linenums!(code)
-        return Any[Pair{CodeInfo,Any}(code, code.rettype)]
+        return Any[(code => code.rettype)]
     else
         error("encountered invalid Core.OpaqueClosure object")
     end
@@ -1246,9 +1278,6 @@ end
 
 function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), interp=Core.Compiler.NativeInterpreter())
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
     types = to_tuple_type(types)
     rt = []
     world = get_world_counter()
@@ -1256,8 +1285,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), inte
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
         ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
-        ty === nothing && error("inference not successful") # inference disabled?
-        push!(rt, ty)
+        push!(rt, something(ty, Any))
     end
     return rt
 end
@@ -1269,9 +1297,6 @@ Print type-inferred and optimized code for `f` given argument types `types`,
 prepending each line with its cost as estimated by the compiler's inlining engine.
 """
 function print_statement_costs(io::IO, @nospecialize(f), @nospecialize(t); kwargs...)
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
     tt = signature_type(f, t)
     print_statement_costs(io, tt; kwargs...)
 end
@@ -1279,27 +1304,27 @@ end
 function print_statement_costs(io::IO, @nospecialize(tt#=::Type=#);
                                world = get_world_counter(),
                                interp = Core.Compiler.NativeInterpreter(world))
-    matches = _methods_by_ftype(tt, -1, world)
-    if matches === false
-        error("signature does not correspond to a generic function")
-    end
+    matches = _methods_by_ftype(tt, -1, world)::Vector
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
-    for match in matches::Vector
+    for match in matches
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
-        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
-        code === nothing && error("inference not successful") # inference disabled?
-        empty!(cst)
-        resize!(cst, length(code.code))
-        maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
-        nd = ndigits(maxcost)
         println(io, meth)
-        irshow_config = IRShow.IRShowConfig() do io, linestart, idx
-            print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
-            return ""
+        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
+        if code === nothing
+            println(io, "  inference not successful")
+        else
+            empty!(cst)
+            resize!(cst, length(code.code))
+            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
+            nd = ndigits(maxcost)
+            irshow_config = IRShow.IRShowConfig() do io, linestart, idx
+                print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
+                return ""
+            end
+            IRShow.show_ir(io, code, irshow_config)
         end
-        IRShow.show_ir(io, code, irshow_config)
         println(io)
     end
 end
@@ -1328,9 +1353,6 @@ If `types` is an abstract type, then the method that would be called by `invoke`
 See also: [`parentmodule`](@ref), and `@which` and `@edit` in [`InteractiveUtils`](@ref man-interactive-utils).
 """
 function which(@nospecialize(f), @nospecialize(t))
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
     t = to_tuple_type(t)
     tt = signature_type(f, t)
     return which(tt)
@@ -1403,7 +1425,7 @@ function parentmodule(@nospecialize(f), @nospecialize(types))
 end
 
 """
-    hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=typemax(UInt)) -> Bool
+    hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=get_world_counter()) -> Bool
 
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
@@ -1438,13 +1460,13 @@ julia> hasmethod(g, Tuple{}, (:a, :b, :c, :d))  # g accepts arbitrary kwargs
 true
 ```
 """
-function hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
+function hasmethod(@nospecialize(f), @nospecialize(t); world::UInt=get_world_counter())
     t = to_tuple_type(t)
     t = signature_type(f, t)
     return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
 end
 
-function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world=typemax(UInt))
+function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
     # TODO: this appears to be doing the wrong queries
     hasmethod(f, t, world=world) || return false
     isempty(kwnames) && return true
@@ -1475,7 +1497,7 @@ function bodyfunction(basemethod::Method)
     #   %1 = mkw(kwvalues..., #self#, args...)
     #        return %1
     # where `mkw` is the name of the "active" keyword body-function.
-    ast = Base.uncompressed_ast(basemethod)
+    ast = uncompressed_ast(basemethod)
     f = nothing
     if isa(ast, Core.CodeInfo) && length(ast.code) >= 2
         callexpr = ast.code[end-1]
@@ -1544,10 +1566,11 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         if !ambiguous_bottom
             has_bottom_parameter(ti) && return false
         end
-        min = UInt[typemin(UInt)]
-        max = UInt[typemax(UInt)]
-        has_ambig = Int32[0]
-        ms = _methods_by_ftype(ti, nothing, -1, typemax(UInt), true, min, max, has_ambig)::Vector
+        world = get_world_counter()
+        min = Ref{UInt}(typemin(UInt))
+        max = Ref{UInt}(typemax(UInt))
+        has_ambig = Ref{Int32}(0)
+        ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
             filter!(ms) do m::Core.MethodMatch

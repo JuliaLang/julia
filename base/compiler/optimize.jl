@@ -155,7 +155,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 # known to be effect-free if the are nothrow
 const _PURE_OR_ERROR_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
+    getfield, arrayref, const_arrayref, arraysize, isdefined, Core.sizeof,
     Core.kwfunc, Core.ifelse, Core._typevar, (<:)
 ]
 
@@ -236,6 +236,8 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
                 eT ⊑ fT || return false
             end
             return true
+        elseif head === :foreigncall
+            return foreigncall_effect_free(stmt, src)
         elseif head === :new_opaque_closure
             length(args) < 5 && return false
             typ = argextype(args[1], src)
@@ -258,6 +260,72 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
         end
     end
     return true
+end
+
+function foreigncall_effect_free(stmt::Expr, src::Union{IRCode,IncrementalCompact})
+    args = stmt.args
+    name = args[1]
+    isa(name, QuoteNode) && (name = name.value)
+    isa(name, Symbol) || return false
+    ndims = alloc_array_ndims(name)
+    if ndims !== nothing
+        if ndims == 0
+            return new_array_no_throw(args, src)
+        else
+            return alloc_array_no_throw(args, ndims, src)
+        end
+    end
+    return false
+end
+
+function alloc_array_ndims(name::Symbol)
+    if name === :jl_alloc_array_1d
+        return 1
+    elseif name === :jl_alloc_array_2d
+        return 2
+    elseif name === :jl_alloc_array_3d
+        return 3
+    elseif name === :jl_new_array
+        return 0
+    end
+    return nothing
+end
+
+function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,IncrementalCompact})
+    length(args) ≥ ndims+6 || return false
+    atype = instanceof_tfunc(argextype(args[6], src))[1]
+    dims = Csize_t[]
+    for i in 1:ndims
+        dim = argextype(args[i+6], src)
+        isa(dim, Const) || return false
+        dimval = dim.val
+        isa(dimval, Int) || return false
+        push!(dims, reinterpret(Csize_t, dimval))
+    end
+    return _new_array_no_throw(atype, ndims, dims)
+end
+
+function new_array_no_throw(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
+    length(args) ≥ 7 || return false
+    atype = instanceof_tfunc(argextype(args[6], src))[1]
+    dims = argextype(args[7], src)
+    isa(dims, Const) || return dims === Tuple{}
+    dimsval = dims.val
+    isa(dimsval, Tuple{Vararg{Int}}) || return false
+    ndims = nfields(dimsval)
+    isa(ndims, Int) || return false
+    dims = Csize_t[reinterpret(Csize_t, dimval) for dimval in dimsval]
+    return _new_array_no_throw(atype, ndims, dims)
+end
+
+function _new_array_no_throw(@nospecialize(atype), ndims::Int, dims::Vector{Csize_t})
+    isa(atype, DataType) || return false
+    eltype = atype.parameters[1]
+    iskindtype(typeof(eltype)) || return false
+    elsz = aligned_sizeof(eltype)
+    return ccall(:jl_array_validate_dims, Cint,
+        (Ptr{Csize_t}, Ptr{Csize_t}, UInt32, Ptr{Csize_t}, Csize_t),
+        #=nel=#RefValue{Csize_t}(), #=tot=#RefValue{Csize_t}(), ndims, dims, elsz) == 0
 end
 
 """
@@ -334,13 +402,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
-    if (isa(result, Const) || isconstType(result))
+    wresult = isa(result, InterConditional) ? widenconditional(result) : result
+    if (isa(wresult, Const) || isconstType(wresult))
         proven_pure = false
         # must be proven pure to use constant calling convention;
         # otherwise we might skip throwing errors (issue #20704)
         # TODO: Improve this analysis; if a function is marked @pure we should really
         # only care about certain errors (e.g. method errors and type errors).
-        if length(ir.stmts) < 10
+        if length(ir.stmts) < 15
             proven_pure = true
             for i in 1:length(ir.stmts)
                 node = ir.stmts[i]
@@ -368,14 +437,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
             src.pure = true
-            if isa(result, Const)
-                val = result.val
+            if isa(wresult, Const)
+                val = wresult.val
                 if is_inlineable_constant(val)
                     analyzed = ConstAPI(val)
                 end
             else
-                @assert isconstType(result)
-                analyzed = ConstAPI(result.parameters[1])
+                @assert isconstType(wresult)
+                analyzed = ConstAPI(wresult.parameters[1])
             end
             force_noinline || (src.inlineable = true)
         end
@@ -549,14 +618,14 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.arraylen ||   # this one is volatile
-             f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.have_fma ||  # this one depends on the runtime environment
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
 
 # whether `f` is effect free if nothrow
-intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref || is_pure_intrinsic_infer(f)
+intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref ||
+    f === Intrinsics.have_fma || is_pure_intrinsic_infer(f)
 
 ## Computing the cost of a function body
 

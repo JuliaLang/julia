@@ -99,6 +99,22 @@ julia> module E
 ERROR: cannot assign variables in other modules
 ```
 
+If a top-level expression contains a variable declaration with keyword `local`,
+then that variable is not accessible outside that expression.
+The variable inside the expression does not affect global variables of the same name.
+An example is to declare `local x` in a `begin` or `if` block at the top-level:
+
+```jldoctest
+julia> x = 1
+       begin
+           local x = 0
+           @show x
+       end
+       @show x;
+x = 0
+x = 1
+```
+
 Note that the interactive prompt (aka REPL) is in the global scope of the module `Main`.
 
 ## Local Scope
@@ -423,7 +439,7 @@ evaluated first. One might imagine that the `s` on the first line of the loop co
 the `s` on the second line of the loop is local, but that's not possible since the two lines are in
 the same scope block and each variable can only mean one thing in a given scope.
 
-#### On Soft Scope
+#### [On Soft Scope](@id on-soft-scope)
 
 We have now covered all the local scope rules, but before wrapping up this section, perhaps a few
 words should be said about why the ambiguous soft scope case is handled differently in interactive

@@ -1110,11 +1110,11 @@ end
 function print_fullname(io::IO, m::Module)
     mp = parentmodule(m)
     if m === Main || m === Base || m === Core || mp === m
-        print(io, nameof(m))
+        show_sym(io, nameof(m))
     else
         print_fullname(io, mp)
         print(io, '.')
-        print(io, nameof(m))
+        show_sym(io, nameof(m))
     end
 end
 
@@ -1489,8 +1489,6 @@ unquoted(ex::Expr)       = ex.args[1]
 
 function printstyled end
 function with_output_color end
-
-const indent_width = 4
 
 is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
 

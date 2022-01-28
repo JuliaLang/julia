@@ -172,7 +172,7 @@ hashindex(key, sz) = (((hash(key)::UInt % Int) & (sz-1)) + 1)::Int
 @propagate_inbounds isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
 @propagate_inbounds isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
 
-function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
+@constprop :none function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     olds = h.slots
     oldk = h.keys
     oldv = h.vals
