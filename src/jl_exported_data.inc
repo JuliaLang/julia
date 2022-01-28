@@ -18,6 +18,7 @@
     XX(jl_array_type) \
     XX(jl_array_typename) \
     XX(jl_array_uint8_type) \
+    XX(jl_array_uint64_type) \
     XX(jl_atomicerror_type) \
     XX(jl_base_module) \
     XX(jl_bool_type) \

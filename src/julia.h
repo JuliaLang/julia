@@ -291,6 +291,9 @@ typedef struct _jl_method_t {
     _Atomic(struct _jl_method_instance_t*) unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
+    // Identify roots by module-of-origin. We only track the module for roots added during incremental compilation.
+    // May be NULL if no external roots have been added, otherwise it's a Vector{UInt64}
+    jl_array_t *root_blocks;   // RLE (build_id, offset) pairs (even/odd indexing)
     jl_svec_t *ccallable; // svec(rettype, sig) if a ccallable entry point is requested for this
 
     // cache of specializations of this method for invoke(), i.e.
@@ -304,11 +307,11 @@ typedef struct _jl_method_t {
     // the default recusion relation.
     jl_value_t *recursion_relation;
 
-    int32_t nargs;
-    int32_t called;        // bit flags: whether each of the first 8 arguments is called
-    int32_t nospecialize;  // bit flags: which arguments should not be specialized
-    int32_t nkw;           // # of leading arguments that are actually keyword arguments
-                           // of another method.
+    uint32_t nargs;
+    uint32_t called;        // bit flags: whether each of the first 8 arguments is called
+    uint32_t nospecialize;  // bit flags: which arguments should not be specialized
+    uint32_t nkw;           // # of leading arguments that are actually keyword arguments
+                            // of another method.
     uint8_t isva;
     uint8_t pure;
     uint8_t is_for_opaque_closure;
@@ -708,6 +711,7 @@ extern JL_DLLIMPORT jl_value_t *jl_array_uint8_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_any_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_symbol_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_int32_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_array_uint64_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_expr_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_globalref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_linenumbernode_type JL_GLOBALLY_ROOTED;
@@ -907,7 +911,7 @@ STATIC_INLINE jl_value_t *jl_svecset(
     // TODO: while svec is supposedly immutable, in practice we sometimes publish it first
     // and set the values lazily. Those users should be using jl_atomic_store_release here.
     jl_svec_data(t)[i] = (jl_value_t*)x;
-    if (x) jl_gc_wb(t, x);
+    jl_gc_wb(t, x);
     return (jl_value_t*)x;
 }
 #endif
@@ -1681,7 +1685,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t
 
 // parsing
 JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
-                                      const char *filename, size_t filename_len);
+                                      const char *filename, size_t filename_len, size_t lineno);
 JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
                                          int offset, int greedy);
 // lowering
@@ -1777,7 +1781,7 @@ STATIC_INLINE jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
     return jl_apply_generic(args[0], &args[1], nargs - 1);
 }
 
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t **args, int32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t **args, uint32_t nargs);
 JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED);

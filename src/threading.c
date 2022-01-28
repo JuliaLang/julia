@@ -531,8 +531,7 @@ _Atomic(unsigned) _threadedregion; // HACK: keep track of whether to prioritize 
 
 JL_DLLEXPORT int jl_in_threaded_region(void)
 {
-    return jl_atomic_load_relaxed(&jl_current_task->tid) != 0 ||
-        jl_atomic_load_relaxed(&_threadedregion) != 0;
+    return jl_atomic_load_relaxed(&_threadedregion) != 0;
 }
 
 JL_DLLEXPORT void jl_enter_threaded_region(void)
@@ -542,12 +541,15 @@ JL_DLLEXPORT void jl_enter_threaded_region(void)
 
 JL_DLLEXPORT void jl_exit_threaded_region(void)
 {
-    jl_atomic_fetch_add(&_threadedregion, -1);
-    jl_wake_libuv();
-    // make sure no more callbacks will run while user code continues
-    // outside thread region and might touch an I/O object.
-    JL_UV_LOCK();
-    JL_UV_UNLOCK();
+    if (jl_atomic_fetch_add(&_threadedregion, -1) == 1) {
+        // make sure no more callbacks will run while user code continues
+        // outside thread region and might touch an I/O object.
+        JL_UV_LOCK();
+        JL_UV_UNLOCK();
+        // make sure thread 0 is not using the sleep_lock
+        // so that it may enter the libuv event loop instead
+        jl_wakeup_thread(0);
+    }
 }
 
 

@@ -1531,6 +1531,23 @@ deleteat!(a::Vector, inds::AbstractVector) = _deleteat!(a, to_indices(a, (inds,)
 
 struct Nowhere; end
 push!(::Nowhere, _) = nothing
+_growend!(::Nowhere, _) = nothing
+
+@inline function _push_deleted!(dltd, a::Vector, ind)
+    if @inbounds isassigned(a, ind)
+        push!(dltd, @inbounds a[ind])
+    else
+        _growend!(dltd, 1)
+    end
+end
+
+@inline function _copy_item!(a::Vector, p, q)
+    if @inbounds isassigned(a, q)
+        @inbounds a[p] = a[q]
+    else
+        _unsetindex!(a, p)
+    end
+end
 
 function _deleteat!(a::Vector, inds, dltd=Nowhere())
     n = length(a)
@@ -1538,7 +1555,7 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
     y === nothing && return a
     (p, s) = y
     checkbounds(a, p)
-    push!(dltd, @inbounds a[p])
+    _push_deleted!(dltd, a, p)
     q = p+1
     while true
         y = iterate(inds, s)
@@ -1552,14 +1569,14 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
             end
         end
         while q < i
-            @inbounds a[p] = a[q]
+            _copy_item!(a, p, q)
             p += 1; q += 1
         end
-        push!(dltd, @inbounds a[i])
+        _push_deleted!(dltd, a, i)
         q = i+1
     end
     while q <= n
-        @inbounds a[p] = a[q]
+        _copy_item!(a, p, q)
         p += 1; q += 1
     end
     _deleteend!(a, n-p+1)
@@ -1572,7 +1589,7 @@ function deleteat!(a::Vector, inds::AbstractVector{Bool})
     length(inds) == n || throw(BoundsError(a, inds))
     p = 1
     for (q, i) in enumerate(inds)
-        @inbounds a[p] = a[q]
+        _copy_item!(a, p, q)
         p += !i
     end
     _deleteend!(a, n-p+1)

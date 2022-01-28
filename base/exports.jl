@@ -57,6 +57,7 @@ export
     IOStream,
     LinRange,
     Irrational,
+    LazyString,
     Matrix,
     MergeSort,
     Missing,
@@ -385,6 +386,7 @@ export
     eachindex,
     eachrow,
     eachslice,
+    extrema!,
     extrema,
     fill!,
     fill,
@@ -985,6 +987,7 @@ export
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
+    @lazy_str, # lazy string
 
     # documentation
     @text_str,

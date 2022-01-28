@@ -48,7 +48,7 @@ static int literal_val_id(jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
                 return i;
         }
     }
-    jl_array_ptr_1d_push(rs, v);
+    jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
     return jl_array_len(rs) - 1;
 }
 

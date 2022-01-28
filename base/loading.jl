@@ -813,6 +813,22 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
     return restored
 end
 
+function run_package_callbacks(modkey::PkgId)
+    unlock(require_lock)
+    try
+        for callback in package_callbacks
+            invokelatest(callback, modkey)
+        end
+    catch
+        # Try to continue loading if a callback errors
+        errs = current_exceptions()
+        @error "Error during package callback" exception=errs
+    finally
+        lock(require_lock)
+    end
+    nothing
+end
+
 function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::Union{Nothing, String}, depth::Int = 0)
     if root_module_exists(modkey)
         M = root_module(modkey)
@@ -827,9 +843,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::U
         mod = _require_search_from_serialized(modkey, String(modpath), depth)
         get!(PkgOrigin, pkgorigins, modkey).path = modpath
         if !isa(mod, Bool)
-            for callback in package_callbacks
-                invokelatest(callback, modkey)
-            end
+            run_package_callbacks(modkey)
             for M in mod::Vector{Any}
                 M = M::Module
                 if PkgId(M) == modkey && module_build_id(M) === build_id
@@ -1062,7 +1076,7 @@ function require(into::Module, mod::Symbol)
         if _track_dependencies[]
             push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
         end
-        return require(uuidkey)
+        return _require_prelocked(uuidkey)
     finally
         LOADING_CACHE[] = nothing
     end
@@ -1077,8 +1091,9 @@ end
 PkgOrigin() = PkgOrigin(nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
-function require(uuidkey::PkgId)
-    @lock require_lock begin
+require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
+
+function _require_prelocked(uuidkey::PkgId)
     just_loaded_pkg = false
     if !root_module_exists(uuidkey)
         cachefile = _require(uuidkey)
@@ -1086,9 +1101,7 @@ function require(uuidkey::PkgId)
             get!(PkgOrigin, pkgorigins, uuidkey).cachepath = cachefile
         end
         # After successfully loading, notify downstream consumers
-        for callback in package_callbacks
-            invokelatest(callback, uuidkey)
-        end
+        run_package_callbacks(uuidkey)
         just_loaded_pkg = true
     end
     if just_loaded_pkg && !root_module_exists(uuidkey)
@@ -1096,7 +1109,6 @@ function require(uuidkey::PkgId)
               module `$(uuidkey.name)`, check for typos in package module name")
     end
     return root_module(uuidkey)
-    end
 end
 
 const loaded_modules = Dict{PkgId,Module}()
@@ -1437,7 +1449,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
                        --startup-file=no --history-file=no --warn-overwrite=yes
                        --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                        $trace
-                       --eval 'eval(Meta.parse(read(stdin,String)))'`, stderr = internal_stderr, stdout = internal_stdout),
+                       -`, stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """

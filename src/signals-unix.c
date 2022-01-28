@@ -442,17 +442,18 @@ static void jl_exit_thread0(int state, jl_bt_element_t *bt_data, size_t bt_size)
     if (thread0_exit_count <= 1) {
         unw_context_t *signal_context;
         jl_thread_suspend_and_get_state(0, &signal_context);
-        thread0_exit_state = state;
-        ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
-        memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
-        jl_thread_resume(0, -1);
+        if (signal_context != NULL) {
+            thread0_exit_state = state;
+            ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
+            memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
+            jl_thread_resume(0, -1);
+            return;
+        }
     }
-    else {
-        thread0_exit_state = state;
-        jl_atomic_store_release(&ptls2->signal_request, 3);
-        // This also makes sure `sleep` is aborted.
-        pthread_kill(ptls2->system_id, SIGUSR2);
-    }
+    thread0_exit_state = state;
+    jl_atomic_store_release(&ptls2->signal_request, 3);
+    // This also makes sure `sleep` is aborted.
+    pthread_kill(ptls2->system_id, SIGUSR2);
 }
 
 // request:

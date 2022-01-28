@@ -75,7 +75,7 @@ OBJCONV_JLL_NAME := Objconv
 OBJCONV_JLL_VER  := 2.49.1+0
 
 # blastrampoline
-BLASTRAMPOLINE_VER := 3.0.4
+BLASTRAMPOLINE_VER := 4.0.0
 BLASTRAMPOLINE_JLL_NAME := libblastrampoline
 
 # OpenBLAS
@@ -83,7 +83,7 @@ OPENBLAS_VER := 0.3.17
 OPENBLAS_JLL_NAME := OpenBLAS
 
 # OpenLibm
-OPENLIBM_VER := 0.7.3
+OPENLIBM_VER := 0.8.1
 OPENLIBM_JLL_NAME := OpenLibm
 
 # Patchelf (we don't ship this or even use a JLL, we just always build it)
@@ -102,9 +102,10 @@ LIBSUITESPARSE_VER := 5.10.1
 LIBSUITESPARSE_JLL_NAME := SuiteSparse
 
 # unwind
-UNWIND_VER := 1.3.2
+UNWIND_VER := 1.5.0
+UNWIND_VER_TAG := 1.5
 UNWIND_JLL_NAME := LibUnwind
-UNWIND_JLL_VER  := 1.3.2+6
+UNWIND_JLL_VER  := 1.5.0+1
 
 # zlib
 ZLIB_VER := 1.2.11

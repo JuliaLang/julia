@@ -51,6 +51,7 @@ Compiler/Runtime improvements
   calls ([#43239]).
 * Abstract callsite can now be inlined or statically resolved as far as the callsite has a single
   matching method ([#43113]).
+* Builtin function are now a bit more like generic functions, and can be enumerated with `methods` ([#43865]).
 
 Command-line option changes
 ---------------------------
@@ -101,8 +102,10 @@ Standard library changes
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
   constructing the range. ([#40382])
 * TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
+* `extrema` now supports `init` keyword argument ([#36265], [#43604]).
 * Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
 * `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
+* The `LazyString` and the `lazy"str"` macro were added to support delayed construction of error messages in error paths. ([#33711])
 
 #### InteractiveUtils
 * A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
@@ -140,6 +143,9 @@ Standard library changes
   Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
   each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
   profiling data consumers, but can be included with the `include_meta` kwarg. ([#41742])
+* The new `Profile.Allocs` module allows memory allocations to be profiled. The stack trace, type, and size of each
+  allocation is recorded, and a `sample_rate` argument allows a tunable amount of allocations to be skipped,
+  reducing performance overhead. ([#42768])
 
 #### Random
 
@@ -157,7 +163,7 @@ Standard library changes
 #### SparseArrays
 
 * The code for SparseArrays has been moved from the Julia repo to the external
-  repo at https://github.com/JuliaLang/SparseArrays.jl. This is only a code
+  repo at https://github.com/JuliaSparse/SparseArrays.jl. This is only a code
   movement and does not impact any usage ([#43813]).
 
 * New sparse concatenation functions `sparse_hcat`, `sparse_vcat`, and `sparse_hvcat` return
