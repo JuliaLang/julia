@@ -930,14 +930,6 @@ function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing
     return ccall(:jl_matching_methods, Any, (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
 end
 
-function _method_by_ftype(args...)
-    matches = _methods_by_ftype(args...)
-    if length(matches) != 1
-        error("no unique matching method found for the specified argument types")
-    end
-    return matches[1]
-end
-
 # high-level, more convenient method lookup functions
 
 # type for reflecting and pretty-printing a subset of methods
@@ -973,9 +965,6 @@ See also: [`which`](@ref) and `@which`.
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
     t = to_tuple_type(t)
     world = get_world_counter()
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
@@ -988,15 +977,12 @@ function methods(@nospecialize(f), @nospecialize(t),
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 
-methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
-
 function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
     world = get_world_counter()
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
-    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))
-    isa(ms, Bool) && return ms
+    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector
     return MethodList(Method[(m::Core.MethodMatch).method for m in ms], typeof(f).name.mt)
 end
 
@@ -1213,9 +1199,6 @@ function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
                     debuginfo::Symbol=:default,
                     world = get_world_counter(),
                     interp = Core.Compiler.NativeInterpreter(world))
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
     if isa(f, Core.OpaqueClosure)
         return code_typed_opaque_closure(f; optimize, debuginfo, interp)
     end
@@ -1262,18 +1245,18 @@ function code_typed_by_type(@nospecialize(tt#=::Type=#);
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     tt = to_tuple_type(tt)
-    matches = _methods_by_ftype(tt, -1, world)
-    if matches === false
-        error("signature does not correspond to a generic function")
-    end
+    matches = _methods_by_ftype(tt, -1, world)::Vector
     asts = []
-    for match in matches::Vector
+    for match in matches
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
         (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, optimize)
-        code === nothing && error("inference not successful") # inference disabled?
-        debuginfo === :none && remove_linenums!(code)
-        push!(asts, code => ty)
+        if code === nothing
+            push!(asts, meth => Any)
+        else
+            debuginfo === :none && remove_linenums!(code)
+            push!(asts, code => ty)
+        end
     end
     return asts
 end
@@ -1295,9 +1278,6 @@ end
 
 function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), interp=Core.Compiler.NativeInterpreter())
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
     types = to_tuple_type(types)
     rt = []
     world = get_world_counter()
@@ -1305,8 +1285,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), inte
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
         ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
-        ty === nothing && error("inference not successful") # inference disabled?
-        push!(rt, ty)
+        push!(rt, something(ty, Any))
     end
     return rt
 end
@@ -1318,9 +1297,6 @@ Print type-inferred and optimized code for `f` given argument types `types`,
 prepending each line with its cost as estimated by the compiler's inlining engine.
 """
 function print_statement_costs(io::IO, @nospecialize(f), @nospecialize(t); kwargs...)
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
     tt = signature_type(f, t)
     print_statement_costs(io, tt; kwargs...)
 end
@@ -1328,27 +1304,27 @@ end
 function print_statement_costs(io::IO, @nospecialize(tt#=::Type=#);
                                world = get_world_counter(),
                                interp = Core.Compiler.NativeInterpreter(world))
-    matches = _methods_by_ftype(tt, -1, world)
-    if matches === false
-        error("signature does not correspond to a generic function")
-    end
+    matches = _methods_by_ftype(tt, -1, world)::Vector
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
-    for match in matches::Vector
+    for match in matches
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
-        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
-        code === nothing && error("inference not successful") # inference disabled?
-        empty!(cst)
-        resize!(cst, length(code.code))
-        maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
-        nd = ndigits(maxcost)
         println(io, meth)
-        irshow_config = IRShow.IRShowConfig() do io, linestart, idx
-            print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
-            return ""
+        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
+        if code === nothing
+            println(io, "  inference not successful")
+        else
+            empty!(cst)
+            resize!(cst, length(code.code))
+            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
+            nd = ndigits(maxcost)
+            irshow_config = IRShow.IRShowConfig() do io, linestart, idx
+                print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
+                return ""
+            end
+            IRShow.show_ir(io, code, irshow_config)
         end
-        IRShow.show_ir(io, code, irshow_config)
         println(io)
     end
 end
@@ -1377,9 +1353,6 @@ If `types` is an abstract type, then the method that would be called by `invoke`
 See also: [`parentmodule`](@ref), and `@which` and `@edit` in [`InteractiveUtils`](@ref man-interactive-utils).
 """
 function which(@nospecialize(f), @nospecialize(t))
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
     t = to_tuple_type(t)
     tt = signature_type(f, t)
     return which(tt)

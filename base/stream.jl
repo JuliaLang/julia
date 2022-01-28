@@ -377,7 +377,7 @@ if OS_HANDLE != RawFD
 end
 
 function isopen(x::Union{LibuvStream, LibuvServer})
-    if x.status == StatusUninit || x.status == StatusInit || x.handle === C_NULL
+    if x.status == StatusUninit || x.status == StatusInit
         throw(ArgumentError("$x is not initialized"))
     end
     return x.status != StatusClosed
@@ -496,39 +496,34 @@ end
 
 function close(stream::Union{LibuvStream, LibuvServer})
     iolock_begin()
+    should_wait = false
     if stream.status == StatusInit
-        preserve_handle(stream)
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
         stream.status = StatusClosing
     elseif isopen(stream)
+        should_wait = uv_handle_data(stream) != C_NULL
         if stream.status != StatusClosing
-            preserve_handle(stream)
             ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
             stream.status = StatusClosing
         end
     end
     iolock_end()
-    wait_close(stream)
+    should_wait && wait_close(stream)
     nothing
 end
 
 function uvfinalize(uv::Union{LibuvStream, LibuvServer})
+    uv.handle == C_NULL && return
     iolock_begin()
     if uv.handle != C_NULL
         disassociate_julia_struct(uv.handle) # not going to call the usual close hooks
-        if uv.status == StatusUninit
-            Libc.free(uv.handle)
-        elseif uv.status == StatusInit
-            ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), uv.handle)
-        elseif isopen(uv)
-            if uv.status != StatusClosing
-                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), uv.handle)
-            end
-        elseif uv.status == StatusClosed
+        if uv.status != StatusUninit
+            close(uv)
+        else
             Libc.free(uv.handle)
         end
-        uv.handle = C_NULL
         uv.status = StatusClosed
+        uv.handle = C_NULL
     end
     iolock_end()
     nothing
@@ -672,7 +667,6 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                         notify(stream.cond)
                     else
                         # underlying stream is no longer useful: begin finalization
-                        preserve_handle(stream)
                         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                         stream.status = StatusClosing
                     end
@@ -680,7 +674,6 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
             else
                 stream.readerror = _UVError("read", nread)
                 # This is a fatal connection error
-                preserve_handle(stream)
                 ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                 stream.status = StatusClosing
             end
@@ -718,9 +711,9 @@ function reseteof(x::TTY)
 end
 
 function _uv_hook_close(uv::Union{LibuvStream, LibuvServer})
-    unpreserve_handle(uv)
     lock(uv.cond)
     try
+        uv.handle = C_NULL
         uv.status = StatusClosed
         # notify any listeners that exist on this libuv stream type
         notify(uv.cond)

@@ -1684,12 +1684,12 @@ function detect_ambiguities(mods::Module...;
     end
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
+            m.sig == Tuple && continue # ignore Builtins
             is_in_mods(m.module, recursive, mods) || continue
             world = Base.get_world_counter()
             ambig = Ref{Int32}(0)
-            ms = Base._methods_by_ftype(m.sig, nothing, -1, world, true, Ref(typemin(UInt)), Ref(typemax(UInt)), ambig)
+            ms = Base._methods_by_ftype(m.sig, nothing, -1, world, true, Ref(typemin(UInt)), Ref(typemax(UInt)), ambig)::Vector
             ambig[] == 0 && continue
-            isa(ms, Bool) && continue
             for match2 in ms
                 match2 = match2::Core.MethodMatch
                 m2 = match2.method

@@ -151,6 +151,14 @@ function verify_ir(ir::IRCode, print::Bool=true)
             @assert length(stmt.edges) == length(stmt.values)
             for i = 1:length(stmt.edges)
                 edge = stmt.edges[i]
+                for j = (i+1):length(stmt.edges)
+                    edge′ = stmt.edges[j]
+                    if edge == edge′
+                        # TODO: Move `unique` to Core.Compiler. For now we assume the predecessor list is
+                        @verify_error "Edge list φ node $idx in bb $bb not unique (double edge?)"
+                        error("")
+                    end
+                end
                 if !(edge == 0 && bb == 1) && !(edge in ir.cfg.blocks[bb].preds)
                     #@Base.show ir.argtypes
                     #@Base.show ir

@@ -1110,11 +1110,11 @@ end
 function print_fullname(io::IO, m::Module)
     mp = parentmodule(m)
     if m === Main || m === Base || m === Core || mp === m
-        print(io, nameof(m))
+        show_sym(io, nameof(m))
     else
         print_fullname(io, mp)
         print(io, '.')
-        print(io, nameof(m))
+        show_sym(io, nameof(m))
     end
 end
 

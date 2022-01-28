@@ -4,7 +4,34 @@ using Test
 using Base.Meta
 using Core: PhiNode, SSAValue, GotoNode, PiNode, QuoteNode, ReturnNode, GotoIfNot
 
-# Tests for domsort
+# utilities
+# =========
+
+import Core.Compiler: argextype, singleton_type
+
+argextype(@nospecialize args...) = argextype(args..., Any[])
+code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
+get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
+
+# check if `x` is a statement with a given `head`
+isnew(@nospecialize x) = Meta.isexpr(x, :new)
+
+# check if `x` is a dynamic call of a given function
+iscall(y) = @nospecialize(x) -> iscall(y, x)
+function iscall((src, f)::Tuple{Core.CodeInfo,Base.Callable}, @nospecialize(x))
+    return iscall(x) do @nospecialize x
+        singleton_type(argextype(x, src)) === f
+    end
+end
+iscall(pred::Base.Callable, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
+
+# check if `x` is a statically-resolved call of a function whose name is `sym`
+isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
+isinvoke(sym::Symbol, @nospecialize(x)) = isinvoke(mi->mi.def.name===sym, x)
+isinvoke(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.args[1]::Core.MethodInstance)
+
+# domsort
+# =======
 
 ## Test that domsort doesn't mangle single-argument phis (#29262)
 let m = Meta.@lower 1 + 1
@@ -67,25 +94,8 @@ let m = Meta.@lower 1 + 1
     Core.Compiler.verify_ir(ir)
 end
 
-# Tests for SROA
-
-import Core.Compiler: argextype, singleton_type
-const EMPTY_SPTYPES = Any[]
-
-code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
-get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
-
-# check if `x` is a statement with a given `head`
-isnew(@nospecialize x) = Meta.isexpr(x, :new)
-
-# check if `x` is a dynamic call of a given function
-iscall(y) = @nospecialize(x) -> iscall(y, x)
-function iscall((src, f)::Tuple{Core.CodeInfo,Function}, @nospecialize(x))
-    return iscall(x) do @nospecialize x
-        singleton_type(argextype(x, src, EMPTY_SPTYPES)) === f
-    end
-end
-iscall(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
+# SROA
+# ====
 
 struct ImmutableXYZ; x; y; z; end
 mutable struct MutableXYZ; x; y; z; end
@@ -277,6 +287,38 @@ let src = code_typed1((Any,Any,Any)) do x, y, z
     @test_broken !any(isnew, src.code)
 end
 
+let # should work with constant globals
+    # immutable case
+    # --------------
+    src = @eval Module() begin
+        const REF_FLD = :x
+        struct ImmutableRef{T}
+            x::T
+        end
+
+        code_typed((Int,)) do x
+            r = ImmutableRef{Int}(x) # should be eliminated
+            x = getfield(r, REF_FLD) # should be eliminated
+            return sin(x)
+        end |> only |> first
+    end
+    @test count(iscall((src, getfield)), src.code) == 0
+    @test count(isnew, src.code) == 0
+
+    # mutable case
+    # ------------
+    src = @eval Module() begin
+        const REF_FLD = :x
+        code_typed() do
+            r = Ref{Int}(42) # should be eliminated
+            x = getfield(r, REF_FLD) # should be eliminated
+            return sin(x)
+        end |> only |> first
+    end
+    @test count(iscall((src, getfield)), src.code) == 0
+    @test count(isnew, src.code) == 0
+end
+
 # should work nicely with inlining to optimize away a complicated case
 # adapted from http://wiki.luajit.org/Allocation-Sinking-Optimization#implementation%5B
 struct Point
@@ -294,6 +336,75 @@ function compute_points()
 end
 let src = code_typed1(compute_points)
     @test !any(isnew, src.code)
+end
+
+# comparison lifting
+# ==================
+
+let # lifting `===`
+    src = code_typed1((Bool,Int,)) do c, x
+        y = c ? x : nothing
+        y === nothing # => ϕ(false, true)
+    end
+    @test count(iscall((src, ===)), src.code) == 0
+
+    # should optimize away the iteration protocol
+    src = code_typed1((Int,)) do n
+        s = 0
+        for i in 1:n
+            s += i
+        end
+        s
+    end
+    @test !any(src.code) do @nospecialize x
+        iscall((src, ===), x) && argextype(x.args[2], src) isa Union
+    end
+end
+
+let # lifting `isa`
+    src = code_typed1((Bool,Int,)) do c, x
+        y = c ? x : nothing
+        isa(y, Int) # => ϕ(true, false)
+    end
+    @test count(iscall((src, isa)), src.code) == 0
+
+    src = code_typed1((Int,)) do n
+        s = 0
+        itr = 1:n
+        st = iterate(itr)
+        while !isa(st, Nothing)
+            i, st = itr
+            s += i
+            st = iterate(itr, st)
+        end
+        s
+    end
+    @test !any(src.code) do @nospecialize x
+        iscall((src, isa), x) && argextype(x.args[2], src) isa Union
+    end
+end
+
+let # lifting `isdefined`
+    src = code_typed1((Bool,Some{Int},)) do c, x
+        y = c ? x : nothing
+        isdefined(y, 1) # => ϕ(true, false)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
+
+    src = code_typed1((Int,)) do n
+        s = 0
+        itr = 1:n
+        st = iterate(itr)
+        while isdefined(st, 2)
+            i, st = itr
+            s += i
+            st = iterate(itr, st)
+        end
+        s
+    end
+    @test !any(src.code) do @nospecialize x
+        iscall((src, isdefined), x) && argextype(x.args[2], src) isa Union
+    end
 end
 
 mutable struct Foo30594; x::Float64; end
@@ -611,48 +722,6 @@ exc39508 = ErrorException("expected")
 end
 @test test39508() === exc39508
 
-let # `sroa_pass!` should work with constant globals
-    # immutable pass
-    src = @eval Module() begin
-        const REF_FLD = :x
-        struct ImmutableRef{T}
-            x::T
-        end
-
-        code_typed((Int,)) do x
-            r = ImmutableRef{Int}(x) # should be eliminated
-            x = getfield(r, REF_FLD) # should be eliminated
-            return sin(x)
-        end |> only |> first
-    end
-    @test !any(src.code) do @nospecialize(stmt)
-        Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
-        return Core.Compiler.widenconst(ft) == typeof(getfield)
-    end
-    @test !any(src.code) do @nospecialize(stmt)
-        return Meta.isexpr(stmt, :new)
-    end
-
-    # mutable pass
-    src = @eval Module() begin
-        const REF_FLD = :x
-        code_typed() do
-            r = Ref{Int}(42) # should be eliminated
-            x = getfield(r, REF_FLD) # should be eliminated
-            return sin(x)
-        end |> only |> first
-    end
-    @test !any(src.code) do @nospecialize(stmt)
-        Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
-        return Core.Compiler.widenconst(ft) == typeof(getfield)
-    end
-    @test !any(src.code) do @nospecialize(stmt)
-        return Meta.isexpr(stmt, :new)
-    end
-end
-
 let
     # `typeassert` elimination after SROA
     # NOTE we can remove this optimization once inference is able to reason about memory-effects
@@ -666,11 +735,7 @@ let
         end |> only |> first
     end
     # eliminate `typeassert(x2.x, Foo)`
-    @test all(src.code) do @nospecialize stmt
-        Meta.isexpr(stmt, :call) || return true
-        ft = Core.Compiler.argextype(stmt.args[1], src, EMPTY_SPTYPES)
-        return Core.Compiler.widenconst(ft) !== typeof(typeassert)
-    end
+    @test count(iscall((src, typeassert)), src.code) == 0
 end
 
 let
@@ -772,4 +837,40 @@ let ci = code_typed1(optimize=false) do
     @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 1
     ir = Core.Compiler.compact!(ir, true)
     @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 0
+end
+
+# Test that adce_pass! can drop phi node uses that can be concluded unused
+# from PiNode analysis.
+let src = @eval Module() begin
+        @noinline mkfloat() = rand(Float64)
+        @noinline use(a::Float64) = ccall(:jl_, Cvoid, (Any,), a)
+        dispatch(a::Float64) = use(a)
+        dispatch(a::Tuple) = nothing
+        function foo(b)
+            a = mkfloat()
+            a = b ? (a, 2.0) : a
+            dispatch(a)
+        end
+        code_typed(foo, Tuple{Bool})[1][1]
+    end
+    @test count(iscall((src, Core.tuple)), src.code) == 0
+end
+
+# Test that cfg_simplify can converging control flow through empty blocks
+function foo_cfg_empty(b)
+    if b
+        @goto x
+    end
+    @label x
+    return 1
+end
+let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
+    ir = Core.Compiler.inflate_ir(ci)
+    @test length(ir.stmts) == 3
+    @test length(ir.cfg.blocks) == 3
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) <= 2
+    @test isa(ir.stmts[length(ir.stmts)][:inst], ReturnNode)
 end
