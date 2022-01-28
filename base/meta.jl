@@ -191,11 +191,11 @@ struct ParseError <: Exception
 end
 
 function _parse_string(text::AbstractString, filename::AbstractString,
-                       index::Integer, options)
+                       lineno::Integer, index::Integer, options)
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
-    ex, offset::Int = Core._parse(text, filename, index-1, options)
+    ex, offset::Int = Core._parse(text, filename, lineno, index-1, options)
     ex, offset+1
 end
 
@@ -232,7 +232,7 @@ julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
 """
 function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,
                depwarn::Bool=true)
-    ex, pos = _parse_string(str, "none", pos, greedy ? :statement : :atom)
+    ex, pos = _parse_string(str, "none", 1, pos, greedy ? :statement : :atom)
     if raise && isa(ex,Expr) && ex.head === :error
         throw(ParseError(ex.args[1]))
     end
@@ -276,12 +276,12 @@ function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
     return ex
 end
 
-function parseatom(text::AbstractString, pos::Integer; filename="none")
-    return _parse_string(text, String(filename), pos, :atom)
+function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1)
+    return _parse_string(text, String(filename), lineno, pos, :atom)
 end
 
-function parseall(text::AbstractString; filename="none")
-    ex,_ = _parse_string(text, String(filename), 1, :all)
+function parseall(text::AbstractString; filename="none", lineno=1)
+    ex,_ = _parse_string(text, String(filename), lineno, 1, :all)
     return ex
 end
 

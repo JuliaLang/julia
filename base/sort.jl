@@ -10,7 +10,8 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill, Missing, require_one_based_indexing, keytype
+    length, resize!, fill, Missing, require_one_based_indexing, keytype,
+    UnitRange, max, min
 
 using .Base: >>>, !==
 
@@ -1145,10 +1146,10 @@ isnan(o::Perm, i::Integer) = isnan(o.order,o.data[i])
 
 ismissing(o::DirectOrdering, x::Floats) = false
 ismissing(o::DirectOrdering, x::Missing) = true
-ismissing(o::Perm, i::Int) = ismissing(o.order,o.data[i])
+ismissing(o::Perm, i::Integer) = ismissing(o.order,o.data[i])
 
 allowsmissing(::AbstractVector{T}, ::DirectOrdering) where {T} = T >: Missing
-allowsmissing(::AbstractVector{Int},
+allowsmissing(::AbstractVector{<:Integer},
               ::Perm{<:DirectOrdering,<:AbstractVector{T}}) where {T} =
     T >: Missing
 

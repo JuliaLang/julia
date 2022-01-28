@@ -704,6 +704,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_int8(s->s, m->constprop);
         jl_serialize_value(s, (jl_value_t*)m->slot_syms);
         jl_serialize_value(s, (jl_value_t*)m->roots);
+        jl_serialize_value(s, (jl_value_t*)m->root_blocks);
         jl_serialize_value(s, (jl_value_t*)m->ccallable);
         jl_serialize_value(s, (jl_value_t*)m->source);
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
@@ -1573,6 +1574,9 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->roots);
     if (m->roots)
         jl_gc_wb(m, m->roots);
+    m->root_blocks = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->root_blocks);
+    if (m->root_blocks)
+        jl_gc_wb(m, m->root_blocks);
     m->ccallable = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->ccallable);
     if (m->ccallable) {
         jl_gc_wb(m, m->ccallable);
@@ -2312,6 +2316,8 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     }
     JL_GC_PUSH2(&mod_array, &udeps);
     mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
+    assert(jl_precompile_toplevel_module == NULL);
+    jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
 
     serializer_worklist = worklist;
     write_header(&f);
@@ -2426,6 +2432,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     write_int32(&f, 0); // mark the end of the source text
     ios_close(&f);
     JL_GC_POP();
+    jl_precompile_toplevel_module = NULL;
 
     return 0;
 }

@@ -1386,8 +1386,16 @@ end
         # Runtime version
         @test sqrt(x) === y
         # Interpreter compile-time version
+        @test Base.invokelatest((@eval ()->sqrt(Base.inferencebarrier($x)))) == y
+        # Inference const-prop version
         @test Base.invokelatest((@eval ()->sqrt($x))) == y
         # LLVM constant folding version
-        @test Base.invokelatest((@eval ()->(@force_compile; sqrt($x)))) == y
+        @test Base.invokelatest((@eval ()->(@force_compile; sqrt(Base.inferencebarrier($x))))) == y
     end
 end
+
+# Test inference of x^0.0 (tested here because
+# it requires annotations in the math code. If
+# the compiler ever gets good enough to figure
+# that out by itself, move this to inference).
+@test code_typed(x->Val{x^0.0}(), Tuple{Float64})[1][2] == Val{1.0}

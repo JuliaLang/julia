@@ -110,7 +110,7 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
     JL_TRY {
         const char filename[] = "none";
         jl_value_t *ast = jl_parse_all(str, strlen(str),
-                filename, strlen(filename));
+                filename, strlen(filename), 1);
         JL_GC_PUSH1(&ast);
         r = jl_toplevel_eval_in(jl_main_module, ast);
         JL_GC_POP();
@@ -173,7 +173,7 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s)
     return jl_string_data(s);
 }
 
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
+JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;

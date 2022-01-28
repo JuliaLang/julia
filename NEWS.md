@@ -53,6 +53,7 @@ Compiler/Runtime improvements
   calls ([#43239]).
 * Abstract callsite can now be inlined or statically resolved as far as the callsite has a single
   matching method ([#43113]).
+* Builtin function are now a bit more like generic functions, and can be enumerated with `methods` ([#43865]).
 
 Command-line option changes
 ---------------------------
@@ -106,6 +107,7 @@ Standard library changes
 * `extrema` now supports `init` keyword argument ([#36265], [#43604]).
 * Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
 * `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
+* The `LazyString` and the `lazy"str"` macro were added to support delayed construction of error messages in error paths. ([#33711])
 
 #### InteractiveUtils
 * A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
@@ -163,7 +165,7 @@ Standard library changes
 #### SparseArrays
 
 * The code for SparseArrays has been moved from the Julia repo to the external
-  repo at https://github.com/JuliaLang/SparseArrays.jl. This is only a code
+  repo at https://github.com/JuliaSparse/SparseArrays.jl. This is only a code
   movement and does not impact any usage ([#43813]).
 
 * New sparse concatenation functions `sparse_hcat`, `sparse_vcat`, and `sparse_hvcat` return
