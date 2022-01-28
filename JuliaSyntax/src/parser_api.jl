@@ -70,11 +70,11 @@ compatible with `input`:
 
 * When `input` is a `ParseStream`, the stream itself is returned and the
   `ParseStream` interface can be used to process the output.
-* When `input` is an `IOBuffer`, the output is `(tree, diagnostics)`. The
-  buffer `position` will be set to the next byte of input.
-* When `input` is an `AbstractString, Integer`, the output is
-  `(tree, diagnostics, index)`, where `index` (default 1) is the next byte of
-  input.
+* When `input` is a seekable `IO` subtype, the output is `(tree, diagnostics)`.
+  The buffer `position` will be set to the next byte of input.
+* When `input` is an `AbstractString, Integer`, or `Vector{UInt8}, Integer` the
+  output is `(tree, diagnostics, index)`, where `index` (default 1) is the next
+  byte of input.
 
 `rule` may be any of
 * `toplevel` (default) — parse a whole "file" of top level statements. In this
@@ -104,7 +104,7 @@ function parse(stream::ParseStream; rule::Symbol=:toplevel)
     stream
 end
 
-function parse(::Type{T}, io::Base.GenericIOBuffer;
+function parse(::Type{T}, io::IO;
                rule::Symbol=:toplevel, version=VERSION, kws...) where {T}
     stream = ParseStream(io; version=version)
     parse(stream; rule=rule)
@@ -113,11 +113,14 @@ function parse(::Type{T}, io::Base.GenericIOBuffer;
     tree, stream.diagnostics
 end
 
-function parse(::Type{T}, code::AbstractString, index::Integer=1; kws...) where {T}
-    io = IOBuffer(code)
-    seek(io, index-1)
-    tree, diagnostics = parse(T, io; kws...)
-    tree, diagnostics, position(io)+1
+# Generic version of parse for all other cases where an index must be passed
+# back - ie strings and buffers
+function parse(::Type{T}, input...;
+               rule::Symbol=:toplevel, version=VERSION, kws...) where {T}
+    stream = ParseStream(input...; version=version)
+    parse(stream; rule=rule)
+    tree = build_tree(T, stream; kws...)
+    tree, stream.diagnostics, stream.next_byte
 end
 
 
@@ -137,34 +140,35 @@ A `ParseError` will be thrown if any errors occurred during parsing.
 See [`parse`](@ref) for a more complete and powerful interface to the parser,
 as well as a description of the `version` and `rule` keywords.
 """
-function parseall(::Type{T}, input; rule=:toplevel, version=VERSION,
+function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
                   ignore_trivia=true) where {T}
-    stream = ParseStream(input; version=version)
-    do_skip_trivia = ignore_trivia && rule != :toplevel
-    if do_skip_trivia
+    stream = ParseStream(input...; version=version)
+    if ignore_trivia && rule != :toplevel
         bump_trivia(stream, skip_newlines=true)
+        empty!(stream.ranges)
     end
     parse(stream; rule=rule)
-    if do_skip_trivia
-        bump_trivia(stream, skip_newlines=true)
-    else
-        if peek(stream) != K"EndMarker"
-            throw(ArgumentError("Parsing did not terminate at end of input"))
-        end
+    if (ignore_trivia  && peek(stream, skip_newlines=true) != K"EndMarker") ||
+       (!ignore_trivia && (peek(stream); kind(first(stream.lookahead)) != K"EndMarker"))
+        emit_diagnostic(stream, error="unexpected text after parsing $rule")
     end
     if any_error(stream.diagnostics)
-        throw(ParseError(SourceFile(input), stream.diagnostics))
-    elseif !isempty(stream.diagnostics)
-        # Crudely format any warnings to the logger. TODO: This should be
-        # neatened up to avoid the double-decorations.
-        buf = IOBuffer()
-        show_diagnostics(IOContext(buf, stdout), stream, SourceFile(input))
-        @warn Text(String(take!(buf)))
+        source = SourceFile(sourcetext(stream, steal_textbuf=true))
+        throw(ParseError(source, stream.diagnostics))
     end
     # TODO: Figure out a more satisfying solution to the wrap_toplevel_as_kind
     # mess that we've got here.
-    # * It's required for GreenNode, as GreenNode is useless without
-    # * Dropping it would be ok for SyntaxNode and Expr
-    build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel")
+    # * It's kind of required for GreenNode, as GreenNode only records spans,
+    #   not absolute positions.
+    # * Dropping it would be ok for SyntaxNode and Expr...
+    tree = build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel")
+    if !isempty(stream.diagnostics)
+        # Crudely format any warnings to the current logger.
+        buf = IOBuffer()
+        show_diagnostics(IOContext(buf, stdout), stream,
+                         SourceFile(sourcetext(stream, steal_textbuf=true)))
+        @warn Text(String(take!(buf)))
+    end
+    tree
 end
 

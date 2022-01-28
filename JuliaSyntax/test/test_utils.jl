@@ -67,6 +67,7 @@ end
 # parser produces from the source text of the node.
 function equals_flisp_parse(tree)
     node_text = sourcetext(tree)
+    ex,_,_ = parse(Expr, node_text)
     fl_ex = kind(tree) == K"toplevel" ?
         flisp_parse_all(node_text) :
         Meta.parse(node_text, raise=false)

@@ -1,5 +1,7 @@
 module JuliaSyntax
 
+using Mmap
+
 # Internal utilities which aren't related to JuliaSyntax per se.
 include("utils.jl")
 
