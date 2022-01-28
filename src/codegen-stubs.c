@@ -103,7 +103,7 @@ JL_DLLEXPORT void *jl_get_llvm_function_fallback(void *native_code, uint32_t idx
 
 JL_DLLEXPORT void *jl_get_llvm_module_fallback(void *native_code) UNAVAILABLE
 
-JL_DLLEXPORT void *jl_type_to_llvm_fallback(jl_value_t *jt, bool_t *isboxed) UNAVAILABLE
+JL_DLLEXPORT void *jl_type_to_llvm_fallback(jl_value_t *jt, LLVMContextRef llvmctxt, bool_t *isboxed) UNAVAILABLE
 
 JL_DLLEXPORT jl_value_t *jl_get_libllvm_fallback(void) JL_NOTSAFEPOINT
 {

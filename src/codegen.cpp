@@ -247,7 +247,7 @@ struct jl_typecache_t {
         }
         initialized = true;
         T_ppint8 = PointerType::get(getInt8PtrTy(context), 0);
-        T_sigatomic = Type::getIntNTy(jl_LLVMContext, sizeof(sig_atomic_t) * 8);
+        T_sigatomic = Type::getIntNTy(context, sizeof(sig_atomic_t) * 8);
         T_jlvalue = JuliaType::get_jlvalue_ty(context);
         T_pjlvalue = PointerType::get(T_jlvalue, 0);
         T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
