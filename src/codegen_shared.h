@@ -63,7 +63,7 @@ namespace JuliaType {
         return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
     }
 
-    static inline auto get_pjlvoidfunc_ty(llvm::LLVMContext &C) {
+    static inline auto get_pvoidfunc_ty(llvm::LLVMContext &C) {
         return llvm::FunctionType::get(llvm::Type::getVoidTy(C), /*isVarArg*/false)->getPointerTo();
     }
 }

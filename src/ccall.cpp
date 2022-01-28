@@ -61,7 +61,7 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f
         name += f_name;
         name += "_";
         name += std::to_string(globalUnique++);
-        auto T_pvoidfunc = JuliaType::get_pjlvoidfunc_ty(M->getContext());
+        auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(M->getContext());
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
                                     Constant::getNullValue(T_pvoidfunc), name);
@@ -88,12 +88,12 @@ static Value *runtime_sym_lookup(
     //       *llvmgv = jl_load_and_lookup(f_lib, f_name, libptrgv);
     //   }
     //   return (*llvmgv)
-    auto T_pjlvoidfunc = JuliaType::get_pjlvoidfunc_ty(irbuilder.getContext());
+    auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(irbuilder.getContext());
     BasicBlock *enter_bb = irbuilder.GetInsertBlock();
     BasicBlock *dlsym_lookup = BasicBlock::Create(irbuilder.getContext(), "dlsym");
     BasicBlock *ccall_bb = BasicBlock::Create(irbuilder.getContext(), "ccall");
-    Constant *initnul = ConstantPointerNull::get(T_pjlvoidfunc);
-    LoadInst *llvmf_orig = irbuilder.CreateAlignedLoad(T_pjlvoidfunc, llvmgv, Align(sizeof(void*)));
+    Constant *initnul = ConstantPointerNull::get(T_pvoidfunc);
+    LoadInst *llvmf_orig = irbuilder.CreateAlignedLoad(T_pvoidfunc, llvmgv, Align(sizeof(void*)));
     // This in principle needs a consume ordering so that load from
     // this pointer sees a valid value. However, this is not supported by
     // LLVM (or agreed on in the C/C++ standard FWIW) and should be
@@ -135,7 +135,7 @@ static Value *runtime_sym_lookup(
 
     f->getBasicBlockList().push_back(ccall_bb);
     irbuilder.SetInsertPoint(ccall_bb);
-    PHINode *p = irbuilder.CreatePHI(T_pjlvoidfunc, 2);
+    PHINode *p = irbuilder.CreatePHI(T_pvoidfunc, 2);
     p->addIncoming(llvmf_orig, enter_bb);
     p->addIncoming(llvmf, llvmf->getParent());
     return irbuilder.CreateBitCast(p, funcptype);
@@ -157,7 +157,7 @@ static Value *runtime_sym_lookup(
         PointerType *funcptype, const char *f_lib, jl_value_t *lib_expr,
         const char *f_name, Function *f)
 {
-    auto T_pjlvoidfunc = JuliaType::get_pjlvoidfunc_ty(ctx.builder.getContext());
+    auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(ctx.builder.getContext());
     GlobalVariable *libptrgv;
     GlobalVariable *llvmgv;
     bool runtime_lib;
@@ -170,9 +170,9 @@ static Value *runtime_sym_lookup(
         gvname += f_name;
         gvname += "_";
         gvname += std::to_string(globalUnique++);
-        llvmgv = new GlobalVariable(*jl_Module, T_pjlvoidfunc, false,
+        llvmgv = new GlobalVariable(*jl_Module, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
-                                    Constant::getNullValue(T_pjlvoidfunc), gvname);
+                                    Constant::getNullValue(T_pvoidfunc), gvname);
     }
     else {
         runtime_lib = runtime_sym_gvs(ctx.emission_context, f_lib, f_name, libptrgv, llvmgv);
@@ -204,16 +204,16 @@ static GlobalVariable *emit_plt_thunk(
     if (cc != CallingConv::C)
         plt->setCallingConv(cc);
     fname += "_got";
-    auto T_pjlvoidfunc = JuliaType::get_pjlvoidfunc_ty(M->getContext());
-    GlobalVariable *got = new GlobalVariable(*M, T_pjlvoidfunc, false,
+    auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(M->getContext());
+    GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
                                              GlobalVariable::ExternalLinkage,
-                                             ConstantExpr::getBitCast(plt, T_pjlvoidfunc),
+                                             ConstantExpr::getBitCast(plt, T_pvoidfunc),
                                              fname);
     BasicBlock *b0 = BasicBlock::Create(M->getContext(), "top", plt);
     IRBuilder<> irbuilder(b0);
     Value *ptr = runtime_sym_lookup(emission_context, irbuilder, NULL, funcptype, f_lib, NULL, f_name, plt, libptrgv,
                                     llvmgv, runtime_lib);
-    StoreInst *store = irbuilder.CreateAlignedStore(irbuilder.CreateBitCast(ptr, T_pjlvoidfunc), got, Align(sizeof(void*)));
+    StoreInst *store = irbuilder.CreateAlignedStore(irbuilder.CreateBitCast(ptr, T_pvoidfunc), got, Align(sizeof(void*)));
     store->setAtomic(AtomicOrdering::Release);
     SmallVector<Value*, 16> args;
     for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
