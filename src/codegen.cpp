@@ -8229,11 +8229,6 @@ extern "C" void jl_init_llvm(void)
 
     jl_ExecutionEngine = new JuliaOJIT(new LLVMContext());
 
-    // Mark our address spaces as non-integral
-    auto &jl_data_layout = jl_ExecutionEngine->getDataLayout();
-    std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13";
-    jl_data_layout.reset(DL);
-
     // Register GDB event listener
 #if defined(JL_DEBUG_BUILD)
     jl_using_gdb_jitevents = 1;

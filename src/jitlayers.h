@@ -234,7 +234,7 @@ public:
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
     orc::ThreadSafeContext &getContext();
-    DataLayout& getDataLayout();
+    const DataLayout& getDataLayout() const;
     TargetMachine &getTargetMachine();
     const Triple& getTargetTriple() const;
     size_t getTotalBytes() const;
