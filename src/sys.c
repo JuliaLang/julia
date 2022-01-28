@@ -656,7 +656,7 @@ int jl_effective_threads(void) JL_NOTSAFEPOINT
 {
     int cpu = jl_cpu_threads();
     int masksize = uv_cpumask_size();
-    if (masksize < 0)
+    if (masksize < 0 || jl_running_under_rr(0))
         return cpu;
     uv_thread_t tid = uv_thread_self();
     char *cpumask = (char *)calloc(masksize, sizeof(char));
