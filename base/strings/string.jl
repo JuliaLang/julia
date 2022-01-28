@@ -32,7 +32,7 @@ const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, Fas
 """
     String <: AbstractString
 
-The generic, default string type in Julia, used by e.g. string literals.
+The default string type in Julia, used by e.g. string literals.
 
 `String`s are immutable sequences of `Char`s. A `String` is stored internally as
 a contiguous byte array, and while they are interpreted as being UTF-8 encoded,
