@@ -77,7 +77,10 @@ element type. `dims` is either an integer (for a 1d array) or a tuple of the arr
 calling `free` on the pointer when the array is no longer referenced.
 
 This function is labeled "unsafe" because it will crash if `pointer` is not
-a valid memory address to data of the requested length.
+a valid memory address to data of the requested length. Unlike [`unsafe_load`](@ref)
+and [`unsafe_store!`](@ref), the programmer is responsible also for ensuring that the
+underlying data is not accessed through two arrays of different element type, similar
+to the strict aliasing rule in C.
 """
 function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
                      p::Ptr{T}, dims::NTuple{N,Int}; own::Bool = false) where {T,N}
@@ -99,8 +102,12 @@ Load a value of type `T` from the address of the `i`th element (1-indexed) start
 This is equivalent to the C expression `p[i-1]`.
 
 The `unsafe` prefix on this function indicates that no validation is performed on the
-pointer `p` to ensure that it is valid. Incorrect usage may segfault your program or return
-garbage answers, in the same manner as C.
+pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
+that referenced memory is not freed or garbage collected while invoking this function.
+Incorrect usage may segfault your program or return garbage answers. Unlike C, dereferencing
+memory region allocated as different type may be valid provided that the types are compatible
+(e.g., `p` has the correct alignment, the stored bit pattern is known to be valid as `T`,
+`T` does not contain any GC-managed objects).
 """
 unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
 
@@ -111,8 +118,12 @@ Store a value of type `T` to the address of the `i`th element (1-indexed) starti
 This is equivalent to the C expression `p[i-1] = x`.
 
 The `unsafe` prefix on this function indicates that no validation is performed on the
-pointer `p` to ensure that it is valid. Incorrect usage may corrupt or segfault your
-program, in the same manner as C.
+pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
+that referenced memory is not freed or garbage collected while invoking this function.
+Incorrect usage may segfault your program. Unlike C, storing memory region allocated as
+different type may be valid provided that that the types are compatible (e.g., `p` has the
+correct alignment, the stored bit pattern is valid for later safe and unsafe loads, `T` does
+not contain any GC-managed objects).
 """
 unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
 unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
