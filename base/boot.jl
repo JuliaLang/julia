@@ -254,6 +254,11 @@ TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
 
 UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
+# will be inserted by the frontend for closures
+_typeof_captured_variable(@nospecialize t) = has_free_typevars(t) ? typeof(t) : Typeof(t)
+
+has_free_typevars(@nospecialize t) = ccall(:jl_has_free_typevars, Int32, (Any,), t) === Int32(1)
+
 const Vararg = ccall(:jl_toplevel_eval_in, Any, (Any, Any), Core, _expr(:new, TypeofVararg))
 
 # let the compiler assume that calling Union{} as a constructor does not need

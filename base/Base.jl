@@ -57,10 +57,6 @@ modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
 replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
     (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
-
-# for closures
-_typeof_captured_variable(t) = Core.Compiler.has_free_typevars(t) ? typeof(t) : Core.Typeof(t)
-
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)

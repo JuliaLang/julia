@@ -7,7 +7,7 @@ using Core.Intrinsics, Core.IR
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
              MethodInstance, CodeInstance, MethodMatch, PartialOpaque,
-             TypeofVararg
+             TypeofVararg, _typeof_captured_variable
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
@@ -22,8 +22,6 @@ eval(m, x) = Core.eval(m, x)
 
 include(x) = Core.include(Compiler, x)
 include(mod, x) = Core.include(mod, x)
-
-const _typeof_captured_variable = Core.typeof
 
 # The @inline/@noinline macros that can be applied to a function declaration are not available
 # until after array.jl, and so we will mark them within a function body instead.

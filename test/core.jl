@@ -720,7 +720,7 @@ let f() = (T = Rational{Core.TypeVar(:T)}; () -> T)
     @test length(t.parameters) == 1
     @test t.parameters[1] isa Core.TypeVar
 
-    @test_broken @inferred(f()) isa Function
+    @test @inferred(f()) isa Function
     @test Base.return_types(f()) == Any[DataType]
     @test fieldtype(typeof(f()), 1) === DataType
 end
