@@ -52,7 +52,7 @@ JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT int jl_compile_extern_c_fallback(LLVMModuleRef llvmmod, LLVMContextRef llvmctxt, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+JL_DLLEXPORT int jl_compile_extern_c_fallback(LLVMModuleRef llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     return 0;
 }
@@ -91,6 +91,8 @@ JL_DLLEXPORT void jl_dump_llvm_opt_fallback(void *s)
 JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm_fallback(uint64_t fptr, char raw_mc, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
 
 JL_DLLEXPORT jl_value_t *jl_dump_function_asm_fallback(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
+
+JL_DLLEXPORT LLVMContextRef jl_get_ee_context_fallback(void) UNAVAILABLE
 
 JL_DLLEXPORT void jl_get_function_id_fallback(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx) UNAVAILABLE

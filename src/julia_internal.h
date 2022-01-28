@@ -662,7 +662,7 @@ JL_DLLEXPORT void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
-int jl_compile_extern_c(LLVMModuleRef llvmmod, LLVMContextRef llvmctxt, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
+int jl_compile_extern_c(LLVMModuleRef llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
     jl_value_t *source,  jl_value_t **env, size_t nenv);
@@ -842,6 +842,7 @@ JL_DLLEXPORT void *jl_get_llvmf_defn(jl_method_instance_t *linfo, LLVMContextRef
 JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char raw_mc, const char* asm_variant, const char *debuginfo, char binary);
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo);
 JL_DLLEXPORT jl_value_t *jl_dump_function_asm(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary);
+JL_DLLEXPORT LLVMContextRef jl_get_ee_context(void);
 
 void *jl_create_native(jl_array_t *methods, LLVMContextRef llvmctxt, const jl_cgparams_t *cgparams, int policy);
 void jl_dump_native(void *native_code,

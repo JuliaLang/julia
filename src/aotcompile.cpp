@@ -295,7 +295,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMContextRef llvmctxt, const 
             jl_value_t *item = jl_array_ptr_ref(methods, i);
             if (jl_is_simplevector(item)) {
                 if (worlds == 1)
-                    jl_compile_extern_c(wrap(clone.get()), wrap(&clone->getContext()), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                    jl_compile_extern_c(wrap(clone.get()), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
                 continue;
             }
             mi = (jl_method_instance_t*)item;

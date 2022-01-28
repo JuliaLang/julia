@@ -205,10 +205,9 @@ const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t
 
 // compile a C-callable alias
 extern "C" JL_DLLEXPORT
-int jl_compile_extern_c_impl(LLVMModuleRef llvmmod, LLVMContextRef llvmctxt, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+int jl_compile_extern_c_impl(LLVMModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     JL_LOCK(&jl_codegen_lock);
-    auto &ctxt = llvmctxt ? *unwrap(llvmctxt) : *jl_ExecutionEngine->getContext().getContext();
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -219,7 +218,7 @@ int jl_compile_extern_c_impl(LLVMModuleRef llvmmod, LLVMContextRef llvmctxt, voi
         pparams = &params;
     Module *into = unwrap(llvmmod);
     if (into == NULL)
-        into = jl_create_llvm_module("cextern", ctxt);
+        into = jl_create_llvm_module("cextern", *jl_ExecutionEngine->getContext().getContext());
     const char *name = jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams, into->getContext());
     bool success = true;
     if (!sysimg) {
@@ -281,7 +280,7 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
     JL_GC_POP();
 
     // create the alias in the current runtime environment
-    int success = jl_compile_extern_c(NULL, NULL, NULL, NULL, declrt, (jl_value_t*)sigt);
+    int success = jl_compile_extern_c(NULL, NULL, NULL, declrt, (jl_value_t*)sigt);
     if (!success)
         jl_error("@ccallable was already defined for this method name");
 }
@@ -440,8 +439,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
 
     // whatever, that didn't work - use the assembler output instead
     // just make a new context for this one operation
-    std::unique_ptr<LLVMContext> ctxt = std::make_unique<LLVMContext>();
-    void *F = jl_get_llvmf_defn(mi, wrap(ctxt.get()), world, getwrapper, true, jl_default_cgparams);
+    void *F = jl_get_llvmf_defn(mi, wrap(jl_ExecutionEngine->getContext().getContext()), world, getwrapper, true, jl_default_cgparams);
     if (!F)
         return jl_an_empty_string;
     return jl_dump_function_asm(F, raw_mc, asm_variant, debuginfo, binary);
@@ -1334,4 +1332,9 @@ extern "C" JL_DLLEXPORT
 size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
+}
+
+extern "C" JL_DLLEXPORT
+LLVMContextRef jl_get_ee_context_impl(void) {
+    return wrap(jl_ExecutionEngine->getContext().getContext());
 }
