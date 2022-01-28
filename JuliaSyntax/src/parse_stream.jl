@@ -165,6 +165,17 @@ ParseStream provides an IO interface for the parser. It
   output implicitly (newlines may be significant depending on `skip_newlines`)
 """
 mutable struct ParseStream
+    # `textbuf` is a buffer of UTF-8 encoded text of the source code. This is a
+    # natural representation as we desire random access and zero-copy parsing
+    # of UTF-8 text from various containers, and unsafe_wrap(Vector{UInt8},
+    # ...) allows us to use a Vector here.
+    #
+    # We want `ParseStream` to be concrete so that all `parse_*` functions only
+    # need to be compiled once. Thus `textbuf` must not be parameterized here.
+    textbuf::Vector{UInt8}
+    # GC root for the object which owns the memory in `textbuf`. `nothing` if
+    # the `textbuf` owner was unknown (eg, ptr,length was passed)
+    text_root::Any
     # Lexer, transforming the input bytes into a token stream
     lexer::Tokenize.Lexers.Lexer{IOBuffer,RawToken}
     # Lookahead buffer for already lexed tokens
@@ -180,29 +191,68 @@ mutable struct ParseStream
     # (major,minor) version of Julia we're parsing this code for.
     # May be different from VERSION!
     version::Tuple{Int,Int}
+
+    function ParseStream(text_buf::Vector{UInt8}, text_root, next_byte::Integer,
+                         version::VersionNumber)
+        io = IOBuffer(text_buf)
+        seek(io, next_byte-1)
+        lexer = Tokenize.Lexers.Lexer(io, RawToken)
+        # To avoid keeping track of the exact Julia development version where new
+        # features were added or comparing prerelease strings, we treat prereleases
+        # or dev versons as the release version using only major and minor version
+        # numbers. This means we're inexact for old dev versions but that seems
+        # like an acceptable tradeoff.
+        ver = (version.major, version.minor)
+        new(text_buf, text_root, lexer,
+            Vector{SyntaxToken}(),
+            Vector{TaggedRange}(),
+            Vector{Diagnostic}(),
+            next_byte,
+            0,
+            ver)
+    end
 end
 
+function ParseStream(text::Vector{UInt8}, index::Integer=1; version=VERSION)
+    ParseStream(text, text, index, version)
+end
+
+# Buffer with unknown owner. Not exactly recommended, but good for C interop
+function ParseStream(ptr::Ptr{UInt8}, len::Integer, index::Integer=1; version=VERSION)
+    ParseStream(unsafe_wrap(Vector{UInt8}, ptr, len), nothing, index, version)
+end
+
+# Buffers originating from strings
+function ParseStream(text::String, index::Integer=1; version=VERSION)
+    ParseStream(unsafe_wrap(Vector{UInt8}, text),
+                text, index, version)
+end
+function ParseStream(text::SubString, index::Integer=1; version=VERSION)
+    # See also IOBuffer(SubString("x"))
+    ParseStream(unsafe_wrap(Vector{UInt8}, pointer(text), length(text)),
+                text, index, version)
+end
+function ParseStream(text::AbstractString, index::Integer=1; version=VERSION)
+    ParseStream(String(text), index; version=version)
+end
+
+# IO-based cases
+function ParseStream(io::IOBuffer; version=VERSION)
+    ParseStream(io.data, io, position(io)+1, version)
+end
 function ParseStream(io::Base.GenericIOBuffer; version=VERSION)
-    next_byte = position(io)+1
-    lexer = Tokenize.Lexers.Lexer(io, RawToken)
-    # To avoid keeping track of the exact Julia development version where new
-    # features were added or comparing prerelease strings, we treat prereleases
-    # or dev versons as the release version using only major and minor version
-    # numbers. This means we're inexact for old dev versions but that seems
-    # like an acceptable tradeoff.
-    ver = (version.major, version.minor)
-    ParseStream(lexer,
-                Vector{SyntaxToken}(),
-                Vector{TaggedRange}(),
-                Vector{Diagnostic}(),
-                next_byte,
-                0,
-                ver)
+    textbuf = unsafe_wrap(Vector{UInt8}, pointer(io.data), length(io.data))
+    ParseStream(textbuf, io, position(io)+1, version)
+end
+function ParseStream(io::IOStream; version=VERSION)
+    textbuf = Mmap.mmap(io)
+    ParseStream(textbuf, io, position(io)+1, version)
+end
+function ParseStream(io::IO; version=VERSION)
+    textbuf = read(io)
+    ParseStream(textbuf, textbuf, 1, version)
 end
 
-function ParseStream(code::AbstractString; kws...)
-    ParseStream(IOBuffer(code); kws...)
-end
 
 function Base.show(io::IO, mime::MIME"text/plain", stream::ParseStream)
     println(io, "ParseStream at position $(stream.next_byte)")
@@ -283,17 +333,10 @@ function peek_token(stream::ParseStream, n::Integer=1; skip_newlines=false)
     stream.lookahead[_lookahead_index(stream, n, skip_newlines)]
 end
 
-function _code_buf(stream)
-    # TODO: Peeking at the underlying data buffer inside the lexer is an awful
-    # hack. We should find a better way to do this kind of thing.
-    stream.lexer.io.data
-end
-
 function _peek_equal_to(stream, first_byte, len, str)
-    buf = _code_buf(stream)
     cbuf = codeunits(str)
     for i = 1:len
-        if buf[first_byte + i - 1] != cbuf[i]
+        if stream.textbuf[first_byte + i - 1] != cbuf[i]
             return false
         end
     end
@@ -563,6 +606,8 @@ end
 #-------------------------------------------------------------------------------
 # Tree construction from the list of text ranges held by ParseStream
 
+# API for extracting results from ParseStream
+
 """
     build_tree(::Type{NodeType}, stream::ParseStream;
                wrap_toplevel_as_kind=nothing)
@@ -637,6 +682,38 @@ function build_tree(::Type{NodeType}, stream::ParseStream;
     end
 end
 
+"""
+    sourcetext(stream::ParseStream; steal_textbuf=true)
+
+Return the source text being parsed by this `ParseStream` as a UTF-8 encoded
+string.
+
+If `steal_textbuf==true`, this is permitted to steal the content of the
+stream's text buffer. Note that this leaves the `ParseStream` in an invalid
+state for further parsing.
+"""
+function sourcetext(stream; steal_textbuf=false)
+    if stream.text_root isa AbstractString && codeunit(stream.text_root) == UInt8
+        return stream.text_root
+    elseif steal_textbuf
+        return String(stream.textbuf)
+    else
+        # Safe default for other cases is to copy the buffer. Technically this
+        # could possibly be avoided in some situations, but might have side
+        # effects such as mutating stream.text_root or stealing the storage of
+        # stream.textbuf
+        return String(copy(stream.textbuf))
+    end
+end
+
+"""
+    textbuf(stream)
+
+Return the `Vector{UInt8}` text buffer being parsed by this `ParseStream`.
+"""
+textbuf(stream) = stream.textbuf
+
 first_byte(stream::ParseStream) = first_byte(first(stream.ranges))
 last_byte(stream::ParseStream) = last_byte(last(stream.ranges))
 any_error(stream::ParseStream) = any_error(stream.diagnostics)
+
