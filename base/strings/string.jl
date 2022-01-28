@@ -49,7 +49,7 @@ String
     String(v::AbstractVector{UInt8})
 
 Create a new `String` object using the data buffer from byte vector `v`.
-If `v` is `Vector{UInt8}` it will be truncated to zero length and future
+If `v` is a `Vector{UInt8}` it will be truncated to zero length and future
 modification of `v` cannot affect the contents of the resulting string.
 To avoid truncation of `Vector{UInt8}` data, use `String(copy(v))`; for other
 `AbstractVector` types, `String(v)` already makes a copy.
