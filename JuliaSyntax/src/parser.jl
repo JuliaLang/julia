@@ -61,7 +61,7 @@ end
 
 # Convenient wrappers for ParseStream
 
-function peek(ps::ParseState, n=1; skip_newlines=nothing)
+function Base.peek(ps::ParseState, n=1; skip_newlines=nothing)
     skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
     peek(ps.stream, n; skip_newlines=skip_nl)
 end
