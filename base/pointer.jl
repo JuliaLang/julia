@@ -105,9 +105,7 @@ The `unsafe` prefix on this function indicates that no validation is performed o
 pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
 that referenced memory is not freed or garbage collected while invoking this function.
 Incorrect usage may segfault your program or return garbage answers. Unlike C, dereferencing
-memory region allocated as different type may be valid provided that the types are compatible
-(e.g., `p` has the correct alignment, the stored bit pattern is known to be valid as `T`,
-`T` does not contain any GC-managed objects).
+memory region allocated as different type may be valid provided that the types are compatible.
 """
 unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
 
@@ -121,9 +119,7 @@ The `unsafe` prefix on this function indicates that no validation is performed o
 pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
 that referenced memory is not freed or garbage collected while invoking this function.
 Incorrect usage may segfault your program. Unlike C, storing memory region allocated as
-different type may be valid provided that that the types are compatible (e.g., `p` has the
-correct alignment, the stored bit pattern is valid for later safe and unsafe loads, `T` does
-not contain any GC-managed objects).
+different type may be valid provided that that the types are compatible.
 """
 unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
 unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
