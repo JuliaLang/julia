@@ -83,7 +83,6 @@ function group_roots(iter::RLEIterator)
     return rootsby
 end
 
-
 precompile_test_harness("basic precompile functionality") do dir2
 precompile_test_harness(false) do dir
     Foo_file = joinpath(dir, "$Foo_module.jl")
@@ -625,6 +624,23 @@ precompile_test_harness("code caching") do dir
         m = only(collect(methods(func)))
         @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
     end
+    msize = which(size, (Vector{<:Any},))
+    hasspec = false
+    for i = 1:length(msize.specializations)
+        if isassigned(msize.specializations, i)
+            mi = msize.specializations[i]
+            if isa(mi, Core.MethodInstance)
+                tt = Base.unwrap_unionall(mi.specTypes)
+                if tt.parameters[2] == Vector{Cacheb8321416e8a3e2f1.X}
+                    if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt)
+                        hasspec = true
+                        break
+                    end
+                end
+            end
+        end
+    end
+    @test hasspec
     m = which(setindex!, (Dict{M.X,Any}, Any, M.X))
     @test M.X ∈ m.roots               # requires caching external compilation results
     Base.invokelatest() do
