@@ -49,6 +49,7 @@ end
     end
     @test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
     @test sortperm(OffsetVector([8.0,-2.0,0.5], -4)) == OffsetVector([-2, -1, -3], -4)
+    @test sortperm!(Int32[1,2], [2.0, 1.0]) == Int32[2, 1]
 end
 
 @testset "misc sorting" begin

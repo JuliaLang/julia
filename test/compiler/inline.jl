@@ -891,3 +891,7 @@ let
     ftest(a) = (fcond(a, nothing); a)
     @test fully_eliminated(ftest, Tuple{Bool})
 end
+
+# sqrt not considered volatile
+f_sqrt() = sqrt(2)
+@test fully_eliminated(f_sqrt, Tuple{})

@@ -253,6 +253,10 @@ void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
             ct->gcstack = NULL;
             ct->eh = NULL;
             ct->excstack = NULL;
+            ct->ptls->locks.len = 0;
+            ct->ptls->in_pure_callback = 0;
+            ct->ptls->in_finalizer = 1;
+            ct->world_age = 1;
         }
 #ifndef _OS_WINDOWS_
         sigset_t sset;

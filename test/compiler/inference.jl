@@ -1172,10 +1172,10 @@ end
 
 # issue #22875
 
-typeargs = (Type{Int},)
+typeargs = Tuple{Type{Int},}
 @test Base.Core.Compiler.return_type((args...) -> one(args...), typeargs) === Int
 
-typeargs = (Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int})
+typeargs = Tuple{Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int}}
 @test Base.Core.Compiler.return_type(promote_type, typeargs) === Type{Int}
 
 # demonstrate that inference must converge
