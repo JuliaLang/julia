@@ -414,7 +414,9 @@ function parse_toplevel(ps::ParseState)
         if peek(ps, skip_newlines=true) == K"EndMarker"
             # Allow end of input if there is nothing left but whitespace
             # a \n \n ==> (toplevel a)
-            bump(ps, skip_newlines=true)
+            # Empty files
+            #  ==> (toplevel)
+            bump_trivia(ps, skip_newlines=true)
             break
         else
             parse_stmts(ps)

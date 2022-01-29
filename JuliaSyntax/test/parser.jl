@@ -20,6 +20,7 @@ tests = [
         "a \n b"     =>  "(toplevel a b)"
         "a;b \n c;d" =>  "(toplevel (toplevel a b) (toplevel c d))"
         "a \n \n"    =>  "(toplevel a)"
+        ""           =>  "(toplevel)"
     ],
     JuliaSyntax.parse_block => [
         "a;b;c"   => "(block a b c)"
