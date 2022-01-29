@@ -39,9 +39,10 @@ function remove_all_linenums!(ex)
 end
 
 function parsers_agree_on_file(path)
-    code = read(path, String)
-    JuliaSyntax.remove_linenums!(parseall(Expr, code)) == 
-    JuliaSyntax.remove_linenums!(flisp_parse_all(code))
+    text = read(path, String)
+    ex = parseall(Expr, text)
+    fl_ex = flisp_parse_all(text)
+    JuliaSyntax.remove_linenums!(ex) == JuliaSyntax.remove_linenums!(fl_ex)
 end
 
 function find_source_in_path(basedir)
@@ -67,14 +68,14 @@ end
 # parser produces from the source text of the node.
 function equals_flisp_parse(tree)
     node_text = sourcetext(tree)
+    # Reparse with JuliaSyntax. This is a crude way to ensure we're not missing
+    # some context from the parent node.
     ex,_,_ = parse(Expr, node_text)
-    fl_ex = kind(tree) == K"toplevel" ?
-        flisp_parse_all(node_text) :
-        Meta.parse(node_text, raise=false)
+    fl_ex = flisp_parse_all(node_text)
     if Meta.isexpr(fl_ex, :error)
         return true  # Something went wrong in reduction; ignore these cases 😬
     end
-    remove_all_linenums!(Expr(tree)) == remove_all_linenums!(fl_ex)
+    remove_all_linenums!(ex) == remove_all_linenums!(fl_ex)
 end
 
 """
@@ -94,23 +95,47 @@ function reduce_test(tree)
     if !haschildren(tree)
         return tree
     else
-        subtrees = []
         for child in children(tree)
             if is_trivia(child) || !haschildren(child)
                 continue
             end
             t = reduce_test(child)
             if !isnothing(t)
-                push!(subtrees, t)
+                return t
             end
-        end
-        if length(subtrees) == 1
-            return only(subtrees)
         end
     end
     return tree
 end
 
+function reduce_all_failures_in_path(basedir, outdir)
+    rm(outdir, force=true, recursive=true)
+    mkpath(outdir)
+    for filename in find_source_in_path(basedir)
+        filetext = read(filename, String)
+        if !(try parsers_agree_on_file(filename) catch exc false end)
+            @info "Found failure" filename
+            filetext = read(filename, String)
+            text = nothing
+            try
+                tree, _ = parse(SyntaxNode, filetext)
+                rtree = reduce_test(tree)
+                text = sourcetext(rtree)
+            catch
+                @error "Error reducing file" exception=current_exceptions()
+                text = filetext
+            end
+            bn,_ = splitext(basename(filename))
+            outname = joinpath(outdir, "$bn.jl")
+            i=1
+            while isfile(outname)
+                outname = joinpath(outdir, "$bn-$i.jl")
+                i += 1
+            end
+            write(outname, text)
+        end
+    end
+end
 
 #-------------------------------------------------------------------------------
 """

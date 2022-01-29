@@ -109,7 +109,7 @@ function Base.show(io::IO, ::MIME"text/plain", node::GreenNode)
     _show_green_node(io, node, "", 1, nothing, true)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", node::GreenNode, str::String; show_trivia=true)
+function Base.show(io::IO, ::MIME"text/plain", node::GreenNode, str::AbstractString; show_trivia=true)
     _show_green_node(io, node, "", 1, str, show_trivia)
 end
 

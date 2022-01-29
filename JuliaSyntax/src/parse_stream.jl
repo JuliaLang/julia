@@ -108,7 +108,7 @@ function SyntaxToken(raw::RawToken, had_whitespace, had_newline)
                 had_whitespace, had_newline)
 end
 
-function Base.show(ii::IO, tok::SyntaxToken)
+function Base.show(io::IO, tok::SyntaxToken)
     range = string(lpad(first_byte(tok), 3), ":", rpad(last_byte(tok), 3))
     print(io, rpad(range, 17, " "), rpad(kind(tok), 15, " "))
 end
@@ -229,7 +229,7 @@ function ParseStream(text::String, index::Integer=1; version=VERSION)
 end
 function ParseStream(text::SubString, index::Integer=1; version=VERSION)
     # See also IOBuffer(SubString("x"))
-    ParseStream(unsafe_wrap(Vector{UInt8}, pointer(text), length(text)),
+    ParseStream(unsafe_wrap(Vector{UInt8}, pointer(text), sizeof(text)),
                 text, index, version)
 end
 function ParseStream(text::AbstractString, index::Integer=1; version=VERSION)
@@ -316,7 +316,7 @@ non-newline whitespace are skipped automatically. Whitespace containing a
 single newline is returned as kind `K"NewlineWs"` unless `skip_newlines` is
 true.
 """
-function peek(stream::ParseStream, n::Integer=1; skip_newlines::Bool=false)
+function Base.peek(stream::ParseStream, n::Integer=1; skip_newlines::Bool=false)
     kind(peek_token(stream, n; skip_newlines=skip_newlines))
 end
 

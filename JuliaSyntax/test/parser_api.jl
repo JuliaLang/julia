@@ -23,6 +23,7 @@
         @test parse(Expr, SubString("x+y"), 1, rule=:atom) == (:x, [], 2)
         @test parse(Expr, SubString("x+y"), 3, rule=:atom) == (:y, [], 4)
         @test parse(Expr, SubString("x+y",3,3), 1, rule=:atom) == (:y, [], 2)
+        @test parse(Expr, SubString("α+x"), rule=:statement) == (:(α+x), [], 5)
     end
 
     @testset "IO input" begin
