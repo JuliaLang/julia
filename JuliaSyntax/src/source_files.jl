@@ -22,10 +22,14 @@ function SourceFile(code::AbstractString; filename=nothing)
         # FIXME: \r and \n\r
         code[i] == '\n' && push!(line_starts, i+1)
     end
-    if last(code) != '\n'
+    if isempty(code) || last(code) != '\n'
         push!(line_starts, lastindex(code)+1)
     end
     SourceFile(code, filename, line_starts)
+end
+
+function SourceFile(; filename)
+    SourceFile(read(filename, String); filename=filename)
 end
 
 # Get line number of the given byte within the code
@@ -64,11 +68,17 @@ function source_location(::Type{LineNumberNode}, source::SourceFile, byte_index)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", source::SourceFile)
-    if !isnothing(source.filename)
-        print(io, source.filename, '\n',
-              repeat('-', textwidth(source.filename)), '\n')
+    fn = isnothing(source.filename) ? "" : " $(source.filename)"
+    header = "## SourceFile$fn ##"
+    print(io, header, "\n")
+    heightlim = displaysize(io)[1] ÷ 2
+    if !get(io, :limit, false) || length(source.line_starts) <= heightlim
+        print(io, source.code)
+    else
+        r1 = source_line_range(source, 1, context_lines_after=heightlim-3)
+        print(io, view(source, r1[1]:r1[2]))
+        println(io, "⋮")
     end
-    print(io, source.code)
 end
 
 function Base.getindex(source::SourceFile, rng::AbstractRange)
