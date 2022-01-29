@@ -2960,6 +2960,10 @@ function parse_string(ps::ParseState)
                         emit(ps, m, K"string", prev.flags)
                     end
                 end
+            elseif k == K"var"
+                # var identifiers disabled in strings
+                # "$var"  ==>  (string var)
+                bump(ps, remap_kind=K"Identifier")
             elseif k == K"Identifier" || is_keyword(k) || is_word_operator(k)
                 # "a $foo b"  ==> (string "a " foo " b")
                 # "$outer"    ==> (string outer)

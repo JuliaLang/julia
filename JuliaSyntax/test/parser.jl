@@ -615,6 +615,7 @@ tests = [
         "\"hi\$(\"\"\"ho\"\"\")\""  =>  "(string \"hi\" (string-s \"ho\"))"
         ((v=v"1.5",), "\"hi\$(\"ho\")\"") =>  "(string \"hi\" \"ho\")"
         "\"a \$foo b\""  =>  "(string \"a \" foo \" b\")"
+        "\"\$var\""      =>  "(string var)"
         "\"\$outer\""    =>  "(string outer)"
         "\"\$in\""       =>  "(string in)"
         "\"\""  =>  "\"\""
