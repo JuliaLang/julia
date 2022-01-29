@@ -4133,3 +4133,6 @@ end |> !Core.Compiler.is_concrete_eval_eligible
 @test !fully_eliminated() do
     entry_to_be_invalidated('a')
 end
+@test Base.infer_effects((Int,)) do n
+    for i = 1:n; end
+end |> !Core.Compiler.is_terminates

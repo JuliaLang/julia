@@ -128,6 +128,14 @@ include("compiler/utilities.jl")
 include("compiler/validation.jl")
 include("compiler/methodtable.jl")
 
+function argextype end # imported by EscapeAnalysis
+function stmt_effect_free end # imported by EscapeAnalysis
+function alloc_array_ndims end # imported by EscapeAnalysis
+function try_compute_field end # imported by EscapeAnalysis
+include("compiler/ssair/basicblock.jl")
+include("compiler/ssair/domtree.jl")
+include("compiler/ssair/ir.jl")
+
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
 

@@ -612,15 +612,13 @@ function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
     # and union the set of types stored there
     # to compute a lower bound on the storage required
-    states = sv.stmt_types
     body = sv.src.code::Vector{Any}
     slottypes = sv.slottypes::Vector{Any}
     ssavaluetypes = sv.src.ssavaluetypes::Vector{Any}
     for i = 1:length(body)
         expr = body[i]
-        st_i = states[i]
         # find all reachable assignments to locals
-        if isa(st_i, VarTable) && isa(expr, Expr) && expr.head === :(=)
+        if was_reached(sv, i) && isa(expr, Expr) && expr.head === :(=)
             lhs = expr.args[1]
             rhs = expr.args[2]
             if isa(lhs, SlotNumber)
@@ -643,9 +641,6 @@ end
 
 # annotate types of all symbols in AST
 function type_annotate!(sv::InferenceState, run_optimizer::Bool)
-    # as an optimization, we delete dead statements immediately if we're going to run the optimizer
-    # (otherwise, we'll perhaps run the optimization passes later, outside of inference)
-
     # remove all unused ssa values
     src = sv.src
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
@@ -661,74 +656,6 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     @assert !(sv.bestguess isa LimitedAccuracy)
     sv.src.rettype = sv.bestguess
 
-    # annotate variables load types
-    # remove dead code optimization
-    # and compute which variables may be used undef
-    states = sv.stmt_types
-    nslots = length(states[1]::VarTable)
-    undefs = fill(false, nslots)
-    body = src.code::Array{Any,1}
-    nexpr = length(body)
-
-    # replace GotoIfNot with its condition if the branch target is unreachable
-    for i = 1:nexpr
-        expr = body[i]
-        if isa(expr, GotoIfNot)
-            if !isa(states[expr.dest], VarTable)
-                body[i] = Expr(:call, GlobalRef(Core, :typeassert), expr.cond, GlobalRef(Core, :Bool))
-            end
-        end
-    end
-
-    i = 1
-    oldidx = 0
-    changemap = fill(0, nexpr)
-
-    while i <= nexpr
-        oldidx += 1
-        st_i = states[i]
-        expr = body[i]
-        if isa(st_i, VarTable)
-            # st_i === nothing  =>  unreached statement  (see issue #7836)
-            if isa(expr, Expr)
-                annotate_slot_load!(expr, st_i, sv, undefs)
-            elseif isa(expr, ReturnNode) && isdefined(expr, :val)
-                body[i] = ReturnNode(annotate_slot_load(expr.val, st_i, sv, undefs))
-            elseif isa(expr, GotoIfNot)
-                body[i] = GotoIfNot(annotate_slot_load(expr.cond, st_i, sv, undefs), expr.dest)
-            elseif isa(expr, SlotNumber)
-                body[i] = visit_slot_load!(expr, st_i, sv, undefs)
-            end
-        else
-            if isa(expr, Expr) && is_meta_expr_head(expr.head)
-                # keep any lexically scoped expressions
-            elseif run_optimizer
-                deleteat!(body, i)
-                deleteat!(states, i)
-                deleteat!(ssavaluetypes, i)
-                deleteat!(src.codelocs, i)
-                deleteat!(sv.stmt_info, i)
-                deleteat!(src.ssaflags, i)
-                nexpr -= 1
-                changemap[oldidx] = -1
-                continue
-            else
-                body[i] = Const(expr) # annotate that this statement actually is dead
-            end
-        end
-        i += 1
-    end
-
-    if run_optimizer
-        renumber_ir_elements!(body, changemap)
-    end
-
-    # finish marking used-undef variables
-    for j = 1:nslots
-        if undefs[j]
-            src.slotflags[j] |= SLOT_USEDUNDEF | SLOT_STATICUNDEF
-        end
-    end
     nothing
 end
 
