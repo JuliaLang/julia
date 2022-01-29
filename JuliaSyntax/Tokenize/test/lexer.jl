@@ -227,6 +227,10 @@ end
     @test tok("()'", 3).kind == Tokens.PRIME
     @test tok("{}'", 3).kind == Tokens.PRIME
     @test tok("[]'", 3).kind == Tokens.PRIME
+    @test tok("outer'", 2).kind == Tokens.PRIME
+    @test tok("mutable'", 2).kind == Tokens.PRIME
+    @test tok("as'", 2).kind == Tokens.PRIME
+    @test tok("isa'", 2).kind == Tokens.PRIME
 end
 
 @testset "keywords" begin

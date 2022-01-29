@@ -849,6 +849,8 @@ end
 
 function lex_prime(l, doemit = true)
     if l.last_token == Tokens.IDENTIFIER ||
+        Tokens.iscontexturalkeyword(l.last_token) ||
+        Tokens.iswordoperator(l.last_token) ||
         l.last_token == Tokens.DOT ||
         l.last_token ==  Tokens.RPAREN ||
         l.last_token ==  Tokens.RSQUARE ||
