@@ -500,7 +500,9 @@ JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
         int pool_id = jl_gc_szclass_align8(allocsz);
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
-        s = jl_gc_pool_alloc_inner(ptls, (char*)p - (char*)ptls, osize);
+        // We call `jl_gc_pool_alloc_wrapper` instead of `jl_gc_pool_alloc` to avoid double-counting in
+        // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
+        s = jl_gc_pool_alloc_wrapper(ptls, (char*)p - (char*)ptls, osize);
     }
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"

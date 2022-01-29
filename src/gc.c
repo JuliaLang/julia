@@ -1196,19 +1196,9 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     return fl;
 }
 
-// instrumented version of jl_gc_pool_alloc_inner called into by LLVM-generated code
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
-                                          int osize)
-{
-    jl_value_t *val = jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
-
-    maybe_record_alloc_to_profile(val, osize, jl_gc_unknown_type_tag);
-    return val;
-}
-
 // Size includes the tag and the tag is not cleared!!
-jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset,
-                                   int osize)
+static inline jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset,
+                                          int osize)
 {
     // Use the pool offset instead of the pool address as the argument
     // to workaround a llvm bug.
@@ -1261,6 +1251,23 @@ jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset,
     }
     p->newpages = next;
     return jl_valueof(v);
+}
+
+// instrumented version of jl_gc_pool_alloc_inner called into by LLVM-generated code
+JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
+                                          int osize)
+{
+    jl_value_t *val = jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
+
+    maybe_record_alloc_to_profile(val, osize, jl_gc_unknown_type_tag);
+    return val;
+}
+
+// This wrapper exists only to prevent `jl_gc_pool_alloc_inner` from being inlined into
+// its callers. We provide an external-facing interface for callers, and inline `jl_gc_pool_alloc_inner`
+// into this. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
+jl_value_t *jl_gc_pool_alloc_wrapper(jl_ptls_t ptls, int pool_offset, int osize) {
+    return jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
 }
 
 int jl_gc_classify_pools(size_t sz, int *osize)
