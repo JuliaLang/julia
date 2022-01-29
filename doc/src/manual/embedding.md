@@ -251,7 +251,7 @@ know that we are holding a reference to a Julia value from C. This means the GC 
 out from under you, rendering pointers invalid.
 
 The GC will only run when new Julia objects are being allocated. Calls like `jl_box_float64` perform allocation,
-but allocation might also happen at any point in running Julia code. 
+but allocation might also happen at any point in running Julia code.
 
 When writing code that embeds Julia, it is generally safe to use `jl_value_t*` values in between `jl_...` calls
 (as GC will only get triggered by those calls). But in order to make sure that values can survive
@@ -291,7 +291,7 @@ args[1] = some_other_value;
 JL_GC_POP();
 ```
 
-Each scope must have only one call to `JL_GC_PUSH*`, and should be paired with only a single `JL_GC_POP` call. 
+Each scope must have only one call to `JL_GC_PUSH*`, and should be paired with only a single `JL_GC_POP` call.
 If all necessary variables you want to root cannot be pushed by a one single call to `JL_GC_PUSH*`, or if there are more than 6 variables to be pushed and using an array
 of arguments is not an option, then one can use inner blocks:
 
@@ -577,29 +577,29 @@ where in this example `x` is assumed to be an integer.
 In general, the Julia C API is not fully thread-safe. When embedding Julia in a multi-threaded application care needs to be taken not to violate
 the following restrictions:
 
-* `jl_init()` may only be called once in the application life-time. The same applies to `jl_atexit_hook()`, and it may only be called after `jl_init()`. 
+* `jl_init()` may only be called once in the application life-time. The same applies to `jl_atexit_hook()`, and it may only be called after `jl_init()`.
 * `jl_...()` API functions may only be called from the thread in which `jl_init()` was called, *or from threads started by the Julia runtime*. Calling Julia API functions from user-started threads is not supported, and may lead to undefined behaviour and crashes.
 
 The second condition above implies that you can not safely call `jl_...()` functions from threads that were not started by Julia (the thread calling `jl_init()` being the exception). For example, the following is not supported and will most likely segfault:
 
 ```c
 void *func(void*)
-{       
+{
     // Wrong, jl_eval_string() called from thread that was not started by Julia
-    jl_eval_string("println(Threads.nthreads())");            
+    jl_eval_string("println(Threads.nthreads())");
     return NULL;
 }
 
-int main() 
+int main()
 {
     pthread_t t;
-    
+
     jl_init();
-    
+
     // Start a new thread
     pthread_create(&t, NULL, func, NULL);
     pthread_join(t, NULL);
-    
+
     jl_atexit_hook(0);
 }
 ```
@@ -608,8 +608,8 @@ Instead, performing all Julia calls from the same user-created thread will work:
 
 ```c
 void *func(void*)
-{       
-    // Okay, all jl_...() calls from the same thread, 
+{
+    // Okay, all jl_...() calls from the same thread,
     // even though it is not the main application thread
     jl_init();
     jl_eval_string("println(Threads.nthreads())");
@@ -617,12 +617,12 @@ void *func(void*)
     return NULL;
 }
 
-int main() 
+int main()
 {
     pthread_t t;
     // Create a new thread, which runs func()
     pthread_create(&t, NULL, func, NULL);
-    pthread_join(t, NULL);    
+    pthread_join(t, NULL);
 }
 ```
 
@@ -635,7 +635,7 @@ JULIA_DEFINE_FAST_TLS
 double c_func(int i)
 {
     printf("[C %08x] i = %d\n", pthread_self(), i);
-    
+
     // Call the Julia sqrt() function to compute the square root of i, and return it
     jl_function_t *sqrt = jl_get_function(jl_base_module, "sqrt");
     jl_value_t* arg = jl_box_int32(i);
@@ -644,10 +644,10 @@ double c_func(int i)
     return ret;
 }
 
-int main() 
+int main()
 {
     jl_init();
-    
+
     // Define a Julia function func() that calls our c_func() defined in C above
     jl_eval_string("func(i) = ccall(:c_func, Float64, (Int32,), i)");
 
@@ -656,7 +656,7 @@ int main()
     jl_eval_string("use(i) = println(\"[J $(Threads.threadid())] i = $(i) -> $(func(i))\")");
     jl_eval_string("Threads.@threads for i in 1:5 use(i) end");
 
-    jl_atexit_hook(0);    
+    jl_atexit_hook(0);
 }
 ```
 
