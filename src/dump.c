@@ -528,6 +528,7 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
         jl_serialize_value(s, NULL);
         jl_serialize_value(s, jl_any_type);
     }
+    write_uint8(s->s, codeinst->relocatability);
     jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque);
 }
 
@@ -705,6 +706,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)m->slot_syms);
         jl_serialize_value(s, (jl_value_t*)m->roots);
         jl_serialize_value(s, (jl_value_t*)m->root_blocks);
+        write_int32(s->s, m->nroots_sysimg);
         jl_serialize_value(s, (jl_value_t*)m->ccallable);
         jl_serialize_value(s, (jl_value_t*)m->source);
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
@@ -1577,6 +1579,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->root_blocks = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->root_blocks);
     if (m->root_blocks)
         jl_gc_wb(m, m->root_blocks);
+    m->nroots_sysimg = read_int32(s->s);
     m->ccallable = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->ccallable);
     if (m->ccallable) {
         jl_gc_wb(m, m->ccallable);
@@ -1661,6 +1664,7 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
         codeinst->invoke = jl_fptr_const_return;
     if ((flags >> 3) & 1)
         codeinst->precompile = 1;
+    codeinst->relocatability = read_uint8(s->s);
     codeinst->next = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->next);
     jl_gc_wb(codeinst, codeinst->next);
     if (validate) {

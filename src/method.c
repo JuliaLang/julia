@@ -732,6 +732,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->slot_syms = NULL;
     m->roots = NULL;
     m->root_blocks = NULL;
+    m->nroots_sysimg = 0;
     m->ccallable = NULL;
     m->module = module;
     m->external_mt = NULL;
@@ -1033,6 +1034,34 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
         add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
     jl_array_ptr_1d_push(m->roots, root);
     JL_GC_POP();
+}
+
+// given the absolute index i of a root, retrieve its relocatable reference
+// returns 1 if the root is relocatable
+int get_root_reference(rle_reference *rr, jl_method_t *m, size_t i)
+{
+    if (!m->root_blocks) {
+        rr->key = 0;
+        rr->index = i;
+        return i < m->nroots_sysimg;
+    }
+    rle_index_to_reference(rr, i, (uint64_t*)jl_array_data(m->root_blocks), jl_array_len(m->root_blocks), 0);
+    if (rr->key)
+        return 1;
+    return i < m->nroots_sysimg;
+}
+
+// get a root, given its key and index relative to the key
+// this is the relocatable way to get a root from m->roots
+jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index)
+{
+    if (!m->root_blocks) {
+        assert(key == 0);
+        return jl_array_ptr_ref(m->roots, index);
+    }
+    rle_reference rr = {key, index};
+    size_t i = rle_reference_to_index(&rr, (uint64_t*)jl_array_data(m->root_blocks), jl_array_len(m->root_blocks), 0);
+    return jl_array_ptr_ref(m->roots, i);
 }
 
 #ifdef __cplusplus
