@@ -164,6 +164,12 @@ end
 
 
 in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
+function in(c::Char, s::String)
+    c > '\x7f' && return findfirst(isequal(c),s) !== nothing
+    b = Int8(c)
+    q = GC.@preserve s ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), pointer(s), b, sizeof(s))
+    return q != C_NULL
+end
 
 function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
