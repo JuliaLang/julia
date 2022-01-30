@@ -93,8 +93,10 @@ else
 end
 # Note also that libuv does not support affinity in macOS and it is known to
 # hang in FreeBSD. So, it's tested only in Linux and Windows:
-if Sys.islinux() || Sys.iswindows()
-    if Sys.CPU_THREADS > 1 && !running_under_rr()
+const AFFINITY_SUPPORTED = (Sys.islinux() || Sys.iswindows()) && !running_under_rr()
+
+if AFFINITY_SUPPORTED
+    if Sys.CPU_THREADS > 1
         @test run_with_affinity([2]) == "2"
         @test run_with_affinity([1, 2]) == "1,2"
     end
@@ -111,7 +113,7 @@ function get_nthreads(options = ``; cpus = nothing)
 end
 
 @testset "nthreads determined based on CPU affinity" begin
-    if !Sys.isapple() && !running_under_rr() && Sys.CPU_THREADS ≥ 2
+    if AFFINITY_SUPPORTED && Sys.CPU_THREADS ≥ 2
         @test get_nthreads() ≥ 2
         @test get_nthreads(cpus = [1]) == 1
         @test get_nthreads(cpus = [2]) == 1
