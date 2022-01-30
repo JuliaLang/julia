@@ -347,8 +347,8 @@ end
 
 function load_julia_startup()
     global_file = _global_julia_startup_file()
-    local_file = _local_julia_startup_file()
     (global_file !== nothing) && include(Main, global_file)
+    local_file = _local_julia_startup_file()
     (local_file !== nothing) && include(Main, local_file)
     return nothing
 end
