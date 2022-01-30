@@ -175,7 +175,7 @@ static intptr_t get_anon_hdl(void)
     if (check_fd_or_close(fd))
         return fd;
 #  endif
-    char shm_name[PATH_MAX] = "julia-codegen-0123456789-0123456789/tmp///";
+    char shm_name[JULIA_PATH_MAX] = "julia-codegen-0123456789-0123456789/tmp///";
     pid_t pid = getpid();
     // `shm_open` can't be mapped exec on mac
 #  ifndef _OS_DARWIN_

@@ -7,13 +7,13 @@
 #define PATHSEPSTRING "\\"
 #define PATHLISTSEPSTRING ";"
 #if defined(_COMPILER_CLANG_)
-#define PATH_MAX MAX_PATH
+#define JULIA_PATH_MAX MAX_PATH
 #endif
 #else
 #define PATHSEPSTRING "/"
 #define PATHLISTSEPSTRING ":"
-#ifndef PATH_MAX // many platforms don't have a max path, we define one anyways
-#define PATH_MAX 1024
+#ifndef JULIA_PATH_MAX // many platforms don't have a max path, we define one anyways
+#define JULIA_PATH_MAX 1024
 #endif
 #endif
 

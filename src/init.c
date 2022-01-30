@@ -466,8 +466,8 @@ static char *abspath(const char *in, int nprefix)
             memcpy(out, in, sz + nprefix);
         }
         else {
-            size_t path_size = PATH_MAX;
-            char *path = (char*)malloc_s(PATH_MAX);
+            size_t path_size = JULIA_PATH_MAX;
+            char *path = (char*)malloc_s(JULIA_PATH_MAX);
             if (uv_cwd(path, &path_size)) {
                 jl_error("fatal error: unexpected error while retrieving current working directory");
             }
@@ -502,8 +502,8 @@ static const char *absformat(const char *in)
     if (in[0] == '%' || jl_isabspath(in))
         return in;
     // get an escaped copy of cwd
-    size_t path_size = PATH_MAX;
-    char path[PATH_MAX];
+    size_t path_size = JULIA_PATH_MAX;
+    char path[JULIA_PATH_MAX];
     if (uv_cwd(path, &path_size)) {
         jl_error("fatal error: unexpected error while retrieving current working directory");
     }
@@ -527,17 +527,17 @@ static const char *absformat(const char *in)
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 {   // this function resolves the paths in jl_options to absolute file locations as needed
     // and it replaces the pointers to `julia_bindir`, `julia_bin`, `image_file`, and output file paths
-    // it may fail, print an error, and exit(1) if any of these paths are longer than PATH_MAX
+    // it may fail, print an error, and exit(1) if any of these paths are longer than JULIA_PATH_MAX
     //
     // note: if you care about lost memory, you should call the appropriate `free()` function
     // on the original pointer for each `char*` you've inserted into `jl_options`, after
     // calling `julia_init()`
-    char *free_path = (char*)malloc_s(PATH_MAX);
-    size_t path_size = PATH_MAX;
+    char *free_path = (char*)malloc_s(JULIA_PATH_MAX);
+    size_t path_size = JULIA_PATH_MAX;
     if (uv_exepath(free_path, &path_size)) {
         jl_error("fatal error: unexpected error while retrieving exepath");
     }
-    if (path_size >= PATH_MAX) {
+    if (path_size >= JULIA_PATH_MAX) {
         jl_error("fatal error: jl_options.julia_bin path too long");
     }
     jl_options.julia_bin = (char*)malloc_s(path_size + 1);
@@ -556,10 +556,10 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     if (jl_options.image_file) {
         if (rel == JL_IMAGE_JULIA_HOME && !jl_isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_BINDIR
-            free_path = (char*)malloc_s(PATH_MAX);
-            int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
+            free_path = (char*)malloc_s(JULIA_PATH_MAX);
+            int n = snprintf(free_path, JULIA_PATH_MAX, "%s" PATHSEPSTRING "%s",
                              jl_options.julia_bindir, jl_options.image_file);
-            if (n >= PATH_MAX || n < 0) {
+            if (n >= JULIA_PATH_MAX || n < 0) {
                 jl_error("fatal error: jl_options.image_file path too long");
             }
             jl_options.image_file = free_path;

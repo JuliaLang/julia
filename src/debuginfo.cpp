@@ -865,7 +865,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
             CFRelease(objuuid);
             CFRelease(objurl);
 
-            char objpathcstr[PATH_MAX];
+            char objpathcstr[JULIA_PATH_MAX];
             if (dsympathurl != NULL &&
                 CFURLGetFileSystemRepresentation(
                     dsympathurl, true, (UInt8 *)objpathcstr,
