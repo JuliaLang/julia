@@ -206,9 +206,6 @@ function incomplete_tag(ex::Expr)
     return :other
 end
 
-# call include() on a file, ignoring if not found
-include_ifexists(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
-
 function exec_options(opts)
     if !isempty(ARGS)
         idxs = findall(x -> x == "--", ARGS)
