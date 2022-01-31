@@ -165,10 +165,11 @@ end
 
 in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 function in(c::Char, s::String)
-    c > '\x7f' && return findfirst(isequal(c),s) !== nothing
-    b = Int8(c)
+    b = first_utf8_byte(c)
     q = GC.@preserve s ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), pointer(s), b, sizeof(s))
-    return q != C_NULL
+    q == C_NULL && return false
+    c > '\x7f' && return findnext(isequal(c), s, q) !== nothing
+    return true
 end
 
 function _searchindex(s::Union{AbstractString,ByteArray},
