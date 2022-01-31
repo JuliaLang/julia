@@ -394,7 +394,7 @@ end
 end
 ```
 
-### Module initialization and precompilation
+## Module initialization and precompilation
 
 Large modules can take several seconds to load because executing all of the statements in a module
 often involves compiling a large amount of code.
