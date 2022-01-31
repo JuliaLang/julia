@@ -214,23 +214,20 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
 end
 
-function finish!(interp::AbstractInterpreter, caller::InferenceResult)
-    # If we didn't transform the src for caching, we may have to transform
-    # it anyway for users like typeinf_ext. Do that here.
-    opt = caller.src
-    if opt isa OptimizationState # implies `may_optimize(interp) === true`
-        if opt.ir !== nothing
-            caller.src = ir_to_codeinf!(opt)
-        end
-    end
-    return caller.src
-end
-
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
     isempty(frames) && push!(frames, frame)
+    finish_infstates!(interp, frames)
+    # collect results for the new expanded frame
+    results = infresult_iterator(interp, frames)
+    optimize!(interp, results)
+    cache_results!(interp, results)
+    return true
+end
+
+function finish_infstates!(interp::AbstractInterpreter, frames::Vector{InferenceState})
     valid_worlds = WorldRange()
     for caller in frames
         @assert !(caller.dont_work_on_me)
@@ -244,29 +241,35 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         # finalize and record the linfo result
         caller.inferred = true
     end
-    # collect results for the new expanded frame
-    results = Tuple{InferenceResult, Vector{Any}, Bool}[
-            ( frames[i].result,
-              frames[i].stmt_edges[1]::Vector{Any},
-              frames[i].cached )
-        for i in 1:length(frames) ]
-    empty!(frames)
-    for (caller, _, _) in results
+end
+
+struct InfResultInfo
+    caller::InferenceResult
+    edges::Vector{Any}
+    cached::Bool
+end
+
+# returns iterator on which `optimize!` and `postopt_process!` work on
+function infresult_iterator(_::AbstractInterpreter, frames::Vector{InferenceState})
+    results = InfResultInfo[ InfResultInfo(
+        frames[i].result,
+        frames[i].stmt_edges[1]::Vector{Any},
+        frames[i].cached ) for i in 1:length(frames) ]
+    empty!(frames) # discard `InferenceState` now
+    return results
+end
+
+function optimize!(interp::AbstractInterpreter, results::Vector{InfResultInfo})
+    for (; caller) in results
         opt = caller.src
         if opt isa OptimizationState # implies `may_optimize(interp) === true`
-            analyzed = optimize(interp, opt, OptimizationParams(interp), caller)
-            if isa(analyzed, ConstAPI)
-                # XXX: The work in ir_to_codeinf! is essentially wasted. The only reason
-                # we're doing it is so that code_llvm can return the code
-                # for the `return ...::Const` (which never runs anyway). We should do this
-                # as a post processing step instead.
-                ir_to_codeinf!(opt)
-                caller.src = analyzed
-            end
-            caller.valid_worlds = (opt.inlining.et::EdgeTracker).valid_worlds[]
+            optimize!(interp, opt, caller)
         end
     end
-    for (caller, edges, cached) in results
+end
+
+function cache_results!(interp::AbstractInterpreter, results::Vector{InfResultInfo})
+    for (; caller, edges, cached) in results
         valid_worlds = caller.valid_worlds
         if last(valid_worlds) >= get_world_counter()
             # if we aren't cached, we don't need this edge
@@ -276,9 +279,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         if cached
             cache_result!(interp, caller)
         end
-        finish!(interp, caller)
     end
-    return true
 end
 
 function CodeInstance(
@@ -355,14 +356,9 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
     end
 end
 
-function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodInstance,
-                                    valid_worlds::WorldRange, @nospecialize(inferred_result),
-                                    ipo_effects::Effects)
-    # If we decided not to optimize, drop the OptimizationState now.
-    # External interpreters can override as necessary to cache additional information
-    if inferred_result isa OptimizationState
-        inferred_result = ir_to_codeinf!(inferred_result)
-    end
+function transform_result_for_cache(interp::AbstractInterpreter,
+    linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
+    inferred_result = result.src
     if inferred_result isa CodeInfo
         inferred_result.min_world = first(valid_worlds)
         inferred_result.max_world = last(valid_worlds)
@@ -392,7 +388,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src, result.ipo_effects)
+        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result)
         code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def
