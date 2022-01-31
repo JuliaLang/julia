@@ -708,9 +708,9 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         function split_tags(tagstr)
             tag_fields = split(tagstr, "-"; keepempty=false)
             if isempty(tag_fields)
-                return Pair{String,String}[]
+                return Pair{Symbol,String}[]
             end
-            return map(v -> Symbol(v[1]) => v[2], split.(tag_fields, "+"))
+            return map(v -> Symbol(v[1]) => String(v[2]), split.(tag_fields, "+"))
         end
         tags = split_tags(m["tags"])
 
@@ -1065,6 +1065,35 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
     # rather than a `libgfortran3` tarball)
     p = last(sort(ps, by = p -> triplet(p)))
     return download_info[p]
+end
+
+# precompiles to reduce latency (see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1025692379)
+Dict{Platform,String}()[HostPlatform()] = ""
+Platform("x86_64", "linux"; validate_strict=true, libc="glibc")
+for nt in (
+    (cxxstring_abi="",),
+    (libc="glibc", cxxstring_abi=""),
+    (libc="glibc", cxxstring_abi="", call_abi=""),
+    (                       libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+    (                       libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+    (                       libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+    (                       libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+    (                       libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+    (                       libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+    (validate_strict=false, libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+    (validate_strict=false, libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+    (validate_strict=false, libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+    (validate_strict=false, libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+    (validate_strict=false, libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+    (validate_strict=false, libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+)
+    pairs(nt)
+    iterate(pairs(nt))
+    iterate(pairs(nt), haskey(nt, :libgfortran_version) ? (nt.libgfortran_version === nothing)+1 : 1)
+    merge(nt, NamedTuple())
+    merge(nt, Pair{Symbol,String}[])
+    Base.structdiff(nt, (validate_strict=false, compare_strategies=Dict{String,Function}()))
+    Platform("x86_64", "linux"; nt...)
 end
 
 end # module

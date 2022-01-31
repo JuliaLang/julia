@@ -718,4 +718,8 @@ split_artifact_slash(name::AbstractString) =
 artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString) =
     artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String)
 
+# Precompilation to reduce latency
+precompile(load_artifacts_toml, (String,))
+precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
+
 end # module Artifacts

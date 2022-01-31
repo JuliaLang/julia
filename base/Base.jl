@@ -426,7 +426,7 @@ end_base_include = time_ns()
 const _sysimage_modules = PkgId[]
 in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 
-# Precompiles for Revise
+# Precompiles for Revise and other packages
 # TODO: move these to contrib/generate_precompile.jl
 # The problem is they don't work there
 for match = _methods(+, (Int, Int), -1, get_world_counter())
@@ -460,6 +460,16 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
 
     # Code loading uses this
     sortperm(mtime.(readdir(".")), rev=true)
+    # JLLWrappers uses these
+    Dict{UUID,Set{String}}()[UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
+    get!(Set{String}, Dict{UUID,Set{String}}(), UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
+    eachindex(IndexLinear(), Expr[])
+    push!(Expr[], Expr(:return, false))
+    vcat(String[], String[])
+    k, v = (:hello => nothing)
+    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
+    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+    precompile(Base.record_compiletime_preference, (Base.UUID, String))
 
     break   # only actually need to do this once
 end
