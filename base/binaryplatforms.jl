@@ -115,9 +115,13 @@ function Platform(arch::String, os::String;
                   validate_strict::Bool = false,
                   compare_strategies::Dict{String,<:Function} = Dict{String,Function}(),
                   kwargs...)
-    tags = Dict{String,Any}(String(tag)=>convert(Union{String,VersionNumber,Nothing}, value) for (tag, value) in kwargs)
+    tags = Dict{String,Any}(String(tag)=>tagvalue(value) for (tag, value) in kwargs)
     return Platform(arch, os, tags; validate_strict, compare_strategies)
 end
+
+tagvalue(v::Union{String,VersionNumber,Nothing}) = v
+tagvalue(v::Symbol) = String(v)
+tagvalue(v::AbstractString) = convert(String, v)
 
 # Simple tag insertion that performs a little bit of validation
 function add_tag!(tags::Dict{String,String}, tag::String, value::String)

@@ -2215,7 +2215,7 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
 
 // Restore backedges to external targets
 // `targets` is [callee1, matches1, ...], the global set of non-worklist callees of worklist-owned methods.
-// `edges` = [caller1, targets_indexes1, ...], the list of worklist-owned methods calling external methods.
+// `list` = [caller1, targets_indexes1, ...], the list of worklist-owned methods calling external methods.
 static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
 {
     // map(enable, ((list[i] => targets[list[i + 1] .* 2]) for i in 1:2:length(list) if all(valids[list[i + 1]])))
