@@ -1143,10 +1143,11 @@ function parse_unary_call(ps::ParseState)
 
         mark_before_paren = position(ps)
         bump(ps, TRIVIA_FLAG) # (
+        initial_semi = peek(ps) == K";"
         is_call = false
         is_block = false
         parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
-            is_call = had_commas || had_splat
+            is_call = had_commas || had_splat || initial_semi
             is_block = !is_call && num_semis > 0
             bump_closing_token(ps, K")")
             return (needs_parameters=is_call,
@@ -1169,6 +1170,7 @@ function parse_unary_call(ps::ParseState)
             # +(a=1,)   ==>  (call + (kw a 1))
             # +(a...)   ==>  (call + (... a))
             # +(a;b,c)  ==>  (call + a (parameters b c))
+            # +(;a)     ==>  (call + (parameters a))
             # Prefix calls have higher precedence than ^
             # +(a,b)^2  ==>  (call-i (call + a b) ^ 2)
             # +(a,b)(x)^2  ==>  (call-i (call (call + a b) x) ^ 2)
