@@ -2,8 +2,8 @@
 [![codecov](https://codecov.io/gh/aviatesk/EscapeAnalysis.jl/branch/master/graph/badge.svg?token=ADEKPZRUJH)](https://codecov.io/gh/aviatesk/EscapeAnalysis.jl)
 [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://aviatesk.github.io/EscapeAnalysis.jl/dev/)
 
-`EscapeAnalysis` is a simple module that collects escape information in
-[Julia's SSA optimization IR](@ref Julia-SSA-form-IR) a.k.a. `IRCode`.
+`EscapeAnalysis` is a simple compiler utility module to analyze escape information in
+[Julia's SSA-form IR](@ref Julia-SSA-form-IR) a.k.a. `IRCode`.
 
 You can give a try to the escape analysis with the convenience entries that
 `EscapeAnalysis` exports for testing and debugging purposes:

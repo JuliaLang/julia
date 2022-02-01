@@ -93,6 +93,7 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
 end
 
 function argextype end # imported by EscapeAnalysis
+function stmt_effect_free end # imported by EscapeAnalysis
 function alloc_array_ndims end # imported by EscapeAnalysis
 include("compiler/ssair/driver.jl")
 using .EscapeAnalysis
@@ -509,18 +510,23 @@ end
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState,
                   params::OptimizationParams, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes(opt.src, opt)
+    @timeit "optimizer" ir = run_passes(opt.src, opt, caller)
     return finish(interp, opt, params, ir, caller)
 end
 
-function run_passes(ci::CodeInfo, sv::OptimizationState)
+function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
     @timeit "convert"   ir = convert_to_ircode(ci, sv)
     @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
+    nargs = let def = sv.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
+    @timeit "IPO EA"    state, callinfo = analyze_escapes(ir, nargs, true)
+    cache_escapes!(caller, state, ir)
     @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @timeit "compact 2" ir = compact!(ir)
+    @timeit "Local EA"  state, callinfo = analyze_escapes(ir, nargs, false)
+    @assert callinfo === nothing
     @timeit "SROA"      ir = sroa_pass!(ir)
     @timeit "ADCE"      ir = adce_pass!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)

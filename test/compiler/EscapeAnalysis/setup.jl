@@ -1,30 +1,7 @@
-using Test
-if @isdefined(EA_AS_PKG)
-    import EscapeAnalysis: code_escapes, @code_escapes
-    using EscapeAnalysis
-else
-    using Core.Compiler.EscapeAnalysis
-    import Base: code_escapes
-    import InteractiveUtils: @code_escapes
-end
+include(normpath(@__DIR__, "..", "..", "testhelpers", "EAUtils.jl"))
+using Test, Core.Compiler.EscapeAnalysis, .EAUtils
 import Core: Argument, SSAValue, ReturnNode
-
-@static if isdefined(Core.Compiler, :alloc_array_ndims)
-    import Core.Compiler: alloc_array_ndims
-else
-    function alloc_array_ndims(name::Symbol)
-        if name === :jl_alloc_array_1d
-            return 1
-        elseif name === :jl_alloc_array_2d
-            return 2
-        elseif name === :jl_alloc_array_3d
-            return 3
-        elseif name === :jl_new_array
-            return 0
-        end
-        return nothing
-    end
-end
+const EA = Core.Compiler.EscapeAnalysis
 
 isT(T) = (@nospecialize x) -> x === T
 issubT(T) = (@nospecialize x) -> x <: T
@@ -35,14 +12,14 @@ isϕ(@nospecialize x) = isa(x, Core.PhiNode)
 function with_normalized_name(@nospecialize(f), @nospecialize(x))
     if Meta.isexpr(x, :foreigncall)
         name = x.args[1]
-        nn = EscapeAnalysis.normalize(name)
+        nn = EA.normalize(name)
         return isa(nn, Symbol) && f(nn)
     end
     return false
 end
-isarrayalloc(@nospecialize x) = with_normalized_name(nn->!isnothing(alloc_array_ndims(nn)), x)
-isarrayresize(@nospecialize x) = with_normalized_name(nn->!isnothing(EscapeAnalysis.array_resize_info(nn)), x)
-isarraycopy(@nospecialize x) = with_normalized_name(nn->EscapeAnalysis.is_array_copy(nn), x)
+isarrayalloc(@nospecialize x) = with_normalized_name(nn->!isnothing(Core.Compiler.alloc_array_ndims(nn)), x)
+isarrayresize(@nospecialize x) = with_normalized_name(nn->!isnothing(EA.array_resize_info(nn)), x)
+isarraycopy(@nospecialize x) = with_normalized_name(nn->EA.is_array_copy(nn), x)
 import Core.Compiler: argextype, singleton_type
 const EMPTY_SPTYPES = Any[]
 iscall(y) = @nospecialize(x) -> iscall(y, x)
@@ -63,12 +40,12 @@ isinvoke(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.a
 
 Queries if `x` is elibigle for store-to-load forwarding optimization.
 """
-function is_load_forwardable(x::EscapeAnalysis.EscapeInfo)
+function is_load_forwardable(x::EA.EscapeInfo)
     AliasInfo = x.AliasInfo
     AliasInfo === false && return true # allows this query to work for immutables since we don't impose escape on them
     # NOTE technically we also need to check `!has_thrown_escape(x)` here as well,
     # but we can also do equivalent check during forwarding
-    return isa(AliasInfo, EscapeAnalysis.IndexableFields) || isa(AliasInfo, EscapeAnalysis.IndexableElements)
+    return isa(AliasInfo, EA.IndexableFields) || isa(AliasInfo, EA.IndexableElements)
 end
 
 let setup_ex = quote

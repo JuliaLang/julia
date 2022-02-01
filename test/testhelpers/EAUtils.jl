@@ -1,22 +1,16 @@
-const EA_AS_PKG = Symbol(@__MODULE__) !== :Base # develop EA as an external package
-
 module EAUtils
 
-import ..EA_AS_PKG
-if EA_AS_PKG
-    import ..EscapeAnalysis
-else
-    import Core.Compiler.EscapeAnalysis: EscapeAnalysis
-    Base.getindex(estate::EscapeAnalysis.EscapeState, @nospecialize(x)) =
-        Core.Compiler.getindex(estate, x)
-end
-const EA = EscapeAnalysis
+export code_escapes, @code_escapes
+
 const CC = Core.Compiler
+import .CC: EscapeAnalysis
+const EA = EscapeAnalysis
+
+Base.getindex(estate::EscapeAnalysis.EscapeState, @nospecialize(x)) = CC.getindex(estate, x)
 
 # entries
 # -------
 
-@static if EA_AS_PKG
 import InteractiveUtils: gen_call_with_extracted_types_and_kwargs
 
 @doc """
@@ -30,7 +24,6 @@ as the optional arguments like `@code_escapes debuginfo=:source myfunc(myargs...
 macro code_escapes(ex0...)
     return gen_call_with_extracted_types_and_kwargs(__module__, :code_escapes, ex0)
 end
-end # @static if EA_AS_PKG
 
 """
     code_escapes(f, argtypes=Tuple{}; [world], [interp], [debuginfo]) -> result::EscapeResult
@@ -124,10 +117,11 @@ NoEscape′
 ```
 """
 function code_escapes(@nospecialize(args...);
-                      world = get_world_counter(),
-                      interp = Core.Compiler.NativeInterpreter(world),
-                      debuginfo = :none)
-    interp = EscapeAnalyzer(interp)
+                      world::UInt = get_world_counter(),
+                      interp::Core.Compiler.AbstractInterpreter = Core.Compiler.NativeInterpreter(world),
+                      debuginfo::Symbol = :none,
+                      optimize::Bool = true)
+    interp = EscapeAnalyzer(interp, optimize)
     results = code_typed(args...; optimize=true, world, interp)
     isone(length(results)) || throw(ArgumentError("`code_escapes` only supports single analysis result"))
     return EscapeResult(interp.ir, interp.state, interp.linfo, debuginfo===:source)
@@ -170,16 +164,18 @@ import .CC:
 import Core:
     CodeInstance, MethodInstance, CodeInfo
 import .CC:
-    OptimizationState, IRCode
+    InferenceResult, OptimizationState, IRCode, copy as cccopy
 import .EA:
     analyze_escapes, cache_escapes!
 
 mutable struct EscapeAnalyzer{State} <: AbstractInterpreter
     native::NativeInterpreter
+    optimize::Bool
     ir::IRCode
     state::State
     linfo::MethodInstance
-    EscapeAnalyzer(native::NativeInterpreter) = new{EscapeState}(native)
+    EscapeAnalyzer(native::NativeInterpreter, optimize::Bool) =
+        new{EscapeState}(native, optimize)
 end
 
 CC.InferenceParams(interp::EscapeAnalyzer)    = InferenceParams(interp.native)
@@ -246,35 +242,38 @@ function invalidate_cache!(replaced, max_world, depth = 0)
     return nothing
 end
 
-function CC.optimize(interp::EscapeAnalyzer, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
-    ir = run_passes_with_ea(interp, opt.src, opt)
-    return CC.finish(interp, opt, params, ir, result)
+function CC.optimize(interp::EscapeAnalyzer,
+    opt::OptimizationState, params::OptimizationParams, caller::InferenceResult)
+    ir = run_passes_with_ea(interp, opt.src, opt, caller)
+    return CC.finish(interp, opt, params, ir, caller)
 end
 
-function run_passes_with_ea(interp::EscapeAnalyzer, ci::CodeInfo, sv::OptimizationState)
+function run_passes_with_ea(interp::EscapeAnalyzer, ci::CodeInfo, sv::OptimizationState,
+    caller::InferenceResult)
     @timeit "convert"   ir = convert_to_ircode(ci, sv)
     @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
+    nargs = let def = sv.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
+    @timeit "IPO EA"    state, callinfo = analyze_escapes(ir, nargs, true)
+    cache_escapes!(caller, state, ir)
+    if !interp.optimize
+        # return back the result
+        interp.ir = cccopy(ir)
+        interp.state = state
+        interp.linfo = sv.linfo
+    end
     @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @timeit "compact 2" ir = compact!(ir)
-    nargs = let def = sv.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
-    local state
-    try
-        @timeit "collect escape information" state = analyze_escapes(ir, nargs)
-    catch err
-        @info "error happened within `analyze_escapes`, insepct `Main.ir` and `Main.nargs`"
-        @eval Main (ir = $ir; nargs = $nargs)
-        rethrow(err)
+    @timeit "Local EA"  state, callinfo = analyze_escapes(ir, nargs, false)
+    @assert callinfo === nothing
+    if interp.optimize
+        # return back the result
+        interp.ir = cccopy(ir)
+        interp.state = state
+        interp.linfo = sv.linfo
     end
-    cacheir = Core.Compiler.copy(ir)
-    # cache this result
-    cache_escapes!(sv.linfo, state, cacheir)
-    # return back the result
-    interp.ir = cacheir
-    interp.state = state
-    interp.linfo = sv.linfo
     @timeit "SROA"      ir = sroa_pass!(ir)
     @timeit "ADCE"      ir = adce_pass!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
@@ -354,8 +353,7 @@ Base.show(io::IO, result::EscapeResult) = print_with_info(io, result)
 @eval Base.iterate(res::EscapeResult, state=1) =
     return state > $(fieldcount(EscapeResult)) ? nothing : (getfield(res, state), state+1)
 
-@static if isdefined(EscapeAnalysis, :EscapeCache)
-    import EscapeAnalysis: EscapeCache
+@static if @isdefined(EscapeCache)
     Base.show(io::IO, cached::EscapeCache) =
         show(io, EscapeResult(cached.ir, cached.state, nothing))
 end

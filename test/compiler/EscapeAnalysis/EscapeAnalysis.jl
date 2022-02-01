@@ -1,4 +1,4 @@
-@isdefined(EA_AS_PKG) || include(normpath(@__DIR__, "setup.jl"))
+include(normpath(@__DIR__, "setup.jl"))
 
 @testset "basics" begin
     let # arg return
@@ -1338,6 +1338,45 @@ end
         @test_broken !has_all_escape(result.state[Argument(2)])
     end
 
+    # aliasing between arguments
+    let result = @eval EATModule() begin
+            @noinline setxy!(x, y) = x[] = y
+            $code_escapes((String,)) do y
+                x = SafeRef("init")
+                setxy!(x, y)
+                return x
+            end
+        end
+        i = only(findall(isnew, result.ir.stmts.inst))
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        @test has_return_escape(result.state[SSAValue(i)], r)
+        @test has_return_escape(result.state[Argument(2)], r) # y
+    end
+    let result = @eval EATModule() begin
+            @noinline setxy!(x, y) = x[] = y
+            $code_escapes((String,)) do y
+                x1 = SafeRef("init")
+                x2 = SafeRef(y)
+                setxy!(x1, x2[])
+                return x1
+            end
+        end
+        i1, i2 = findall(isnew, result.ir.stmts.inst)
+        r = only(findall(isreturn, result.ir.stmts.inst))
+        @test has_return_escape(result.state[SSAValue(i1)], r)
+        @test !has_return_escape(result.state[SSAValue(i2)], r)
+        @test has_return_escape(result.state[Argument(2)], r) # y
+    end
+    let result = @eval EATModule() begin
+            @noinline mysetindex!(x, a) = x[1] = a
+            const Ax = Vector{Any}(undef, 1)
+            $code_escapes((String,)) do s
+                mysetindex!(Ax, s)
+            end
+        end
+        @test has_all_escape(result.state[Argument(2)]) # s
+    end
+
     # TODO flow-sensitivity?
     # ----------------------
 
@@ -1484,9 +1523,10 @@ let result = @code_escapes compute(MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75
     end
 end
 let result = @code_escapes compute!(MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.75im))
-    for i in findall(isnew, result.ir.stmts.inst)
-        @test is_load_forwardable(result.state[SSAValue(i)])
-    end
+    # FIXME with a proper interprocedural alias analysis
+    # for i in findall(isnew, result.ir.stmts.inst)
+    #     @test is_load_forwardable(result.state[SSAValue(i)])
+    # end
     for i in findall(isϕ, result.ir.stmts.inst)
         @test is_load_forwardable(result.state[SSAValue(i)])
     end
@@ -2273,7 +2313,138 @@ end
 #     return m
 # end
 
-@static @isdefined(EA_AS_PKG) && @testset "code quality" begin
+# IPO cache
+# =========
+# run EA before inlining
+
+import .EA: ignore_argescape
+const Gx = Ref{Any}()
+noescape(a) = nothing
+noescape(a, b) = nothing
+function global_escape!(x)
+    Gx[] = x
+    return nothing
+end
+union_escape!(x) = global_escape!(x)
+union_escape!(x::SafeRef) = nothing
+union_escape!(x::SafeRefs) = nothing
+Base.@constprop :aggressive function conditional_escape!(cnd, x)
+    cnd && global_escape!(x)
+    return cnd # XXX `cnd` needs to be returned (see https://github.com/JuliaLang/julia/pull/44001)
+end
+
+# MethodMatchInfo -- global cache
+let result = code_escapes((String,); optimize=false) do x
+        return noescape(x)
+    end
+    @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
+end
+let result = code_escapes((String,); optimize=false) do x
+        identity(x)
+        return nothing
+    end
+    @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
+end
+let result = code_escapes((String,); optimize=false) do x
+        return identity(x)
+    end
+    r = only(findall(isreturn, result.ir.stmts.inst))
+    @test has_return_escape(result.state[Argument(2)], r)
+end
+let result = code_escapes((String,); optimize=false) do x
+        return Ref(x)
+    end
+    r = only(findall(isreturn, result.ir.stmts.inst))
+    @test has_return_escape(result.state[Argument(2)], r)
+end
+let result = code_escapes((String,); optimize=false) do x
+        r = Ref{String}()
+        r[] = x
+        return r
+    end
+    r = only(findall(isreturn, result.ir.stmts.inst))
+    @test has_return_escape(result.state[Argument(2)], r)
+end
+let result = code_escapes((String,); optimize=false) do x
+        global_escape!(x)
+    end
+    @test has_all_escape(result.state[Argument(2)])
+end
+# UnionSplitInfo
+let result = code_escapes((Bool,String); optimize=false) do c, s
+        x = c ? s : SafeRef(s)
+        union_escape!(x)
+    end
+    @test has_all_escape(result.state[Argument(3)]) # s
+end
+let result = code_escapes((Bool,String); optimize=false) do c, s
+        x = c ? SafeRef(s) : SafeRefs(s, s)
+        union_escape!(x)
+    end
+    @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
+end
+# ConstCallInfo -- local cache
+let result = code_escapes((String,); optimize=false) do x
+        return conditional_escape!(false, x)
+    end
+    @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
+end
+# InvokeCallInfo
+let result = code_escapes((String,); optimize=false) do x
+        return Base.@invoke noescape(x::Any)
+    end
+    @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
+end
+let result = code_escapes((String,); optimize=false) do x
+        return Base.@invoke conditional_escape!(false::Any, x::Any)
+    end
+    @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
+end
+
+# ThrownEscape via potential MethodError
+identity_if_string(x::String) = nothing
+let result = code_escapes((Any,); optimize=false) do x
+        identity_if_string(x)
+    end
+    i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.inst))
+    r = only(findall(isreturn, result.ir.stmts.inst))
+    @test has_thrown_escape(result.state[Argument(2)], i)
+    @test !has_return_escape(result.state[Argument(2)], r)
+end
+let result = code_escapes((String,); optimize=false) do x
+        identity_if_string(x)
+    end
+    i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.inst))
+    r = only(findall(isreturn, result.ir.stmts.inst))
+    @test !has_thrown_escape(result.state[Argument(2)], i)
+    @test !has_return_escape(result.state[Argument(2)], r)
+end
+let result = code_escapes((String,); optimize=false) do x
+        try
+            identity_if_string(x)
+        catch err
+            global gx = err
+        end
+        return nothing
+    end
+    @test !has_all_escape(result.state[Argument(2)])
+end
+let result = code_escapes((Any,); optimize=false) do x
+        try
+            identity_if_string(x)
+        catch err
+            global gx = err
+        end
+        return nothing
+    end
+    @test has_all_escape(result.state[Argument(2)])
+end
+
+# code quality test
+# =================
+
+# TODO enable me once we port JET into Base
+@static false && @testset "code quality" begin
     using JET
 
     # assert that our main routine are free from (unnecessary) runtime dispatches

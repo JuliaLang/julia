@@ -387,6 +387,11 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
         relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
         code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds, relocatability)
     end
+
+    if isdefined(result, :escapes)
+        EscapeAnalysis.GLOBAL_ESCAPE_CACHE[linfo]= result.escapes
+    end
+
     unlock_mi_inference(interp, linfo)
     nothing
 end

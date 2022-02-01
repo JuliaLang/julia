@@ -397,9 +397,6 @@ include("util.jl")
 
 include("asyncmap.jl")
 
-include("compiler/ssair/EscapeAnalysis/EAUtils.jl")
-using .EAUtils: code_escapes
-
 # deprecated functions
 include("deprecated.jl")
 

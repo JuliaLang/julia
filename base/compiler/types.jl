@@ -23,6 +23,19 @@ struct ArgInfo
 end
 
 """
+    ArgEscapeInfo(x::EscapeInfo) -> x′::ArgEscapeInfo
+
+The data structure for caching `x::EscapeInfo` for interprocedural propagation,
+which is slightly more efficient than the original `x::EscapeInfo` object.
+"""
+struct ArgEscapeInfo
+    AllEscape::Bool
+    ReturnEscape::Bool
+    ThrownEscape::Bool
+    ArgAliasing::Union{Nothing,Vector{Int}}
+end
+
+"""
     InferenceResult
 
 A type that represents the result of running type inference on a chunk of code.
@@ -34,6 +47,7 @@ mutable struct InferenceResult
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     valid_worlds::WorldRange # if inference and optimization is finished
+    escapes::Vector{ArgEscapeInfo} # undefined if not optimized
     function InferenceResult(linfo::MethodInstance,
                              arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing,
                              va_override::Bool = false)

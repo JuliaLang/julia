@@ -351,16 +351,6 @@ See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and
 :@code_native
 
 """
-    @code_escapes [options...] f(args...)
-
-Evaluates the arguments to the function call, determines its types, and then calls
-[`code_escapes`](@ref) on the resulting expression.
-As with `@code_typed` and its family, any of `code_escapes` keyword arguments can be given
-as the optional arguments like `@code_escpase interp=myinterp myfunc(myargs...)`.
-"""
-:@code_escapes
-
-"""
     @time_imports
 
 A macro to execute an expression and produce a report of any time spent importing packages and their

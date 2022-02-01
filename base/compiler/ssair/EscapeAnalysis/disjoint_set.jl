@@ -3,13 +3,13 @@
 # under the MIT license: https://github.com/JuliaCollections/DataStructures.jl/blob/master/License.md
 
 # imports
-import ._TOP_MOD:
+import Core.Compiler:
     length,
     eltype,
     union!,
     push!
 # usings
-import ._TOP_MOD:
+import Core.Compiler:
     OneTo, collect, zero, zeros, one, typemax
 
 # Disjoint-Set
