@@ -627,6 +627,10 @@ xy
 
 ### Other oddities
 
+* Operators with sufficies don't seem to always be parsed consistently as the
+  same operator without a suffix. Unclear whether this is by design or mistake.
+  For example, `[x +y] ==> (hcat x (+ y))`, but `[x +₁y] ==> (hcat (call +₁ x y))`
+
 * `global const x=1` is normalized by the parser into `(const (global (= x 1)))`.
   I suppose this is somewhat useful for AST consumers, but it seems a bit weird
   and unnecessary.
