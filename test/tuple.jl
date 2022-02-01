@@ -150,8 +150,8 @@ end
     @test_throws BoundsError getindex((1,2), 0)
     @test_throws BoundsError getindex((1,2), -1)
 
-    @test getindex((1,), 1.0) === 1
-    @test getindex((1,2), 2.0) === 2
+    @test_deprecated getindex((1,), 1.0) === 1
+    @test_deprecated getindex((1,2), 2.0) === 2
     @test_throws BoundsError getindex((), 1.0)
     @test_throws BoundsError getindex((1,2), 0.0)
     @test_throws BoundsError getindex((1,2), -1.0)
