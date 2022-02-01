@@ -108,7 +108,7 @@ Dict([
 "END_ASSIGNMENTS"    => Ts.end_assignments
 
 "BEGIN_PAIRARROW"  => Ts.begin_pairarrow
-"=>Ts."  =>  Ts.PAIR_ARROW
+"=>"    =>  Ts.PAIR_ARROW
 "END_PAIRARROW"    => Ts.end_pairarrow
 
 # Level 2

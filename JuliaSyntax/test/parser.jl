@@ -47,6 +47,9 @@ tests = [
         "a ~ b"       =>  "(call-i a ~ b)"
         "[a ~ b c]"   =>  "(hcat (call-i a ~ b) c)"
     ],
+    JuliaSyntax.parse_pair => [
+        "a => b"  =>  "(call-i a => b)"
+    ],
     JuliaSyntax.parse_cond => [
         "a ? b : c"   => "(if a b c)"
         "a ?\nb : c"  => "(if a b c)"
@@ -63,6 +66,8 @@ tests = [
         "x → y"     =>  "(call-i x → y)"
         "x <--> y"  =>  "(call-i x <--> y)"
         "x --> y"   =>  "(--> x y)"
+        "x .--> y"  =>  "(call-i x .--> y)"
+        "x -->₁ y"  =>  "(call-i x -->₁ y)"
     ],
     JuliaSyntax.parse_or => [
         "x || y || z" => "(|| x (|| y z))"
@@ -664,24 +669,3 @@ end
     @test test_parse(JuliaSyntax.parse_eq, "a .\u2212= b") == "(.-= a b)"
 end
 
-@testset "Larger code chunks" begin
-    # Something ever-so-slightly nontrivial for fun -
-    # the sum of the even Fibonacci numbers < 4_000_000
-    # https://projecteuler.net/problem=2
-    code = """
-    let
-        s = 0
-        f1 = 1
-        f2 = 2
-        while f1 < 4000000
-            # println(f1)
-            if f1 % 2 == 0
-                s += f1
-            end
-            f1, f2 = f2, f1+f2
-        end
-        s
-    end
-    """
-    @test parseall(Expr, code) == JuliaSyntax.remove_linenums!(JuliaSyntax.flisp_parse_all(code))
-end
