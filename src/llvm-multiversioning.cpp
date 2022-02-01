@@ -44,7 +44,7 @@ extern Optional<bool> always_have_fma(Function&);
 
 namespace {
 constexpr uint32_t clone_mask =
-    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU;
+    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH;
 
 struct MultiVersioning;
 
@@ -348,6 +348,22 @@ CloneCtx::CloneCtx(MultiVersioning *pass, Module &M)
       gvars(consume_gv<Constant>(M, "jl_sysimg_gvars")),
       M(M)
 {
+
+    // append cpu feature flags to the end of fvars
+    for (auto i = 0; i < 3; i++) {
+        const char *const sizes[] = { "16", "32", "64" };
+        std::string Name("jl_sysimg_have_fma");
+        Name += sizes[i];
+        Function *F = Function::Create(FunctionType::get(T_int32, false), GlobalVariable::PrivateLinkage, Name, M);
+        BasicBlock *BB = BasicBlock::Create(ctx, "", F);
+        Name = "julia.cpu.have_fma.f";
+        Name += sizes[i];
+        FunctionCallee intr = M.getOrInsertFunction(Name, Type::getInt1Ty(ctx));
+        Value *julia_cpu_flag = new ZExtInst(CallInst::Create(intr, "", BB), T_int32, "", BB);
+        ReturnInst::Create(ctx, julia_cpu_flag, BB);
+        fvars.push_back(F);
+    }
+
     groups.emplace_back(0, specs[0]);
     uint32_t ntargets = specs.size();
     for (uint32_t i = 1; i < ntargets; i++) {
@@ -472,9 +488,9 @@ uint32_t CloneCtx::collect_func_info(Function &F)
                             // for some platforms we know they always do (or don't) support
                             // FMA. in those cases we don't need to clone the function.
                             if (!always_have_fma(*callee).hasValue())
-                                flag |= JL_TARGET_CLONE_CPU;
+                                flag |= JL_TARGET_CLONE_MATH;
                         } else {
-                            flag |= JL_TARGET_CLONE_CPU;
+                            flag |= JL_TARGET_CLONE_MATH;
                         }
                     }
                 }

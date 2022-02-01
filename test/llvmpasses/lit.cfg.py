@@ -7,7 +7,7 @@ import lit.util
 import lit.formats
 
 config.name = 'Julia'
-config.suffixes = ['.ll','.jl']
+config.suffixes = ['.ll','.mir','.jl']
 config.test_source_root = os.path.dirname(__file__)
 config.test_format = lit.formats.ShTest(True)
 config.substitutions.append(('%shlibext', '.dylib' if platform.system() == 'Darwin' else '.dll' if

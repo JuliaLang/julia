@@ -15,6 +15,7 @@
 
 #include "llvm-version.h"
 
+#include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
@@ -22,8 +23,12 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Support/Debug.h>
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Passes/PassPlugin.h>
+
 
 #include "julia.h"
+extern "C" int32_t (*jl_sysimg_cpuflags[3])(void);
 
 #define DEBUG_TYPE "cpufeatures"
 
@@ -36,6 +41,14 @@ Optional<bool> always_have_fma(Function &intr) {
     auto intr_name = intr.getName();
     auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
 
+    // if we are using a sysimage, return that constant
+    if (typ == "f16" && jl_sysimg_cpuflags[0] != NULL)
+        return jl_sysimg_cpuflags[0]();
+    if (typ == "f32" && jl_sysimg_cpuflags[1] != NULL)
+        return jl_sysimg_cpuflags[1]();
+    if (typ == "f64" && jl_sysimg_cpuflags[2] != NULL)
+        return jl_sysimg_cpuflags[2]();
+
 #if defined(_CPU_AARCH64_)
     return typ == "f32" || typ == "f64";
 #else
@@ -44,7 +57,7 @@ Optional<bool> always_have_fma(Function &intr) {
 #endif
 }
 
-bool have_fma(Function &intr, Function &caller) {
+bool have_fma(const TargetMachine &TM, Function &intr, Function &caller) {
     auto unconditional = always_have_fma(intr);
     if (unconditional.hasValue())
         return unconditional.getValue();
@@ -52,9 +65,10 @@ bool have_fma(Function &intr, Function &caller) {
     auto intr_name = intr.getName();
     auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
 
+    // otherwise, examine the target-features of the compile unit (JIT or AOT)
     Attribute FSAttr = caller.getFnAttribute("target-features");
     StringRef FS =
-        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_TargetMachine->getTargetFeatureString();
+        FSAttr.isValid() ? FSAttr.getValueAsString() : TM.getTargetFeatureString();
 
     SmallVector<StringRef, 6> Features;
     FS.split(Features, ',');
@@ -72,8 +86,8 @@ bool have_fma(Function &intr, Function &caller) {
     return false;
 }
 
-void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) {
-    if (have_fma(intr, caller))
+void lowerHaveFMA(const TargetMachine &TM, Function &intr, Function &caller, CallInst *I) {
+    if (have_fma(TM, intr, caller))
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 1));
     else
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 0));
@@ -81,7 +95,7 @@ void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) {
     return;
 }
 
-bool lowerCPUFeatures(Module &M)
+bool lowerCPUFeatures(const TargetMachine &TM, Module &M)
 {
     SmallVector<Instruction*,6> Materialized;
 
@@ -92,7 +106,7 @@ bool lowerCPUFeatures(Module &M)
             for (Use &U: F.uses()) {
                 User *RU = U.getUser();
                 CallInst *I = cast<CallInst>(RU);
-                lowerHaveFMA(F, *I->getParent()->getParent(), I);
+                lowerHaveFMA(TM, F, *I->getParent()->getParent(), I);
                 Materialized.push_back(I);
             }
         }
@@ -108,15 +122,37 @@ bool lowerCPUFeatures(Module &M)
     }
 }
 
-struct CPUFeatures : PassInfoMixin<CPUFeatures> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+struct CPUFeaturesPass : public PassInfoMixin<CPUFeaturesPass> {
+  static void registerCallbacks(PassBuilder &PB) {
+    PB.registerPipelineParsingCallback(
+        [](StringRef Name, ModulePassManager &PM,
+           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
+          if (Name == "CPUFeatures") {
+            PM.addPass(CPUFeaturesPass());
+            return true;
+          }
+          return false;
+        });
+  }
+
+  PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
 };
 
-PreservedAnalyses CPUFeatures::run(Module &M, ModuleAnalysisManager &AM)
+
+PreservedAnalyses CPUFeaturesPass::run(Module &M, ModuleAnalysisManager &AM)
 {
-    lowerCPUFeatures(M);
+    auto &MMI = AM.getResult<MachineModuleAnalysis>(M);
+    auto &TM = MMI.getTarget();
+    lowerCPUFeatures(TM, M);
     return PreservedAnalyses::all();
 }
+
+extern "C" JL_DLLEXPORT ::llvm::PassPluginLibraryInfo
+llvmGetPassPluginInfo() {
+  return {LLVM_PLUGIN_API_VERSION, "CPUFeatures", "1",
+          CPUFeaturesPass::registerCallbacks};
+}
+
 
 namespace {
 struct CPUFeaturesLegacy : public ModulePass {
@@ -125,7 +161,15 @@ struct CPUFeaturesLegacy : public ModulePass {
 
     bool runOnModule(Module &M)
     {
-        return lowerCPUFeatures(M);
+        auto &MMI = getAnalysis<MachineModuleInfoWrapperPass>().getMMI();
+        auto &TM = MMI.getTarget();
+        return lowerCPUFeatures(TM, M);
+    }
+
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
+        AU.addRequired<MachineModuleInfoWrapperPass>();
+        AU.setPreservesAll();
+        ModulePass::getAnalysisUsage(AU);
     }
 };
 
