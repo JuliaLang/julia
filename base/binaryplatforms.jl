@@ -40,10 +40,9 @@ struct Platform <: AbstractPlatform
     # The "compare strategy" allows selective overriding on how a tag is compared
     compare_strategies::Dict{String,Function}
 
-    function Platform(arch::String, os::String;
+    function Platform(arch::String, os::String, _tags::Dict{String};
                       validate_strict::Bool = false,
-                      compare_strategies::Dict{String,<:Function} = Dict{String,Function}(),
-                      kwargs...)
+                      compare_strategies::Dict{String,<:Function} = Dict{String,Function}())
         # A wee bit of normalization
         os = lowercase(os)
         arch = CPUID.normalize_arch(arch)
@@ -52,8 +51,9 @@ struct Platform <: AbstractPlatform
             "arch" => arch,
             "os" => os,
         )
-        for (tag, value) in kwargs
-            tag = lowercase(string(tag::Symbol))
+        for (tag, value) in _tags
+            value = value::Union{String,VersionNumber,Nothing}
+            tag = lowercase(tag)
             if tag ∈ ("arch", "os")
                 throw(ArgumentError("Cannot double-pass key $(tag)"))
             end
@@ -108,6 +108,15 @@ struct Platform <: AbstractPlatform
 
         return new(tags, compare_strategies)
     end
+end
+
+# Backward-compatibility (prefer to avoid using this, as it compiles a ton of specialized NamedTuple methods)
+function Platform(arch::String, os::String;
+                  validate_strict::Bool = false,
+                  compare_strategies::Dict{String,<:Function} = Dict{String,Function}(),
+                  kwargs...)
+    tags = Dict{String,Any}(String(tag)=>convert(Union{String,VersionNumber,Nothing}, value) for (tag, value) in kwargs)
+    return Platform(arch, os, tags; validate_strict, compare_strategies)
 end
 
 # Simple tag insertion that performs a little bit of validation
@@ -698,21 +707,22 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         end
 
         # Extract the information we're interested in:
+        tags = Dict{String,Any}()
         arch = get_field(m, arch_mapping)
         os = get_field(m, os_mapping)
-        libc = get_field(m, libc_mapping)
-        call_abi = get_field(m, call_abi_mapping)
-        libgfortran_version = get_field(m, libgfortran_version_mapping)
-        libstdcxx_version = get_field(m, libstdcxx_version_mapping)
-        cxxstring_abi = get_field(m, cxxstring_abi_mapping)
+        tags["libc"] = get_field(m, libc_mapping)
+        tags["call_abi"] = get_field(m, call_abi_mapping)
+        tags["libgfortran_version"] = get_field(m, libgfortran_version_mapping)
+        tags["libstdcxx_version"] = get_field(m, libstdcxx_version_mapping)
+        tags["cxxstring_abi"] = get_field(m, cxxstring_abi_mapping)
         function split_tags(tagstr)
             tag_fields = split(tagstr, "-"; keepempty=false)
             if isempty(tag_fields)
-                return Pair{Symbol,String}[]
+                return Pair{String,String}[]
             end
-            return map(v -> Symbol(v[1]) => String(v[2]), split.(tag_fields, "+"))
+            return map(v -> String(v[1]) => String(v[2]), split.(tag_fields, "+"))
         end
-        tags = split_tags(m["tags"])
+        merge!(tags, Dict(split_tags(m["tags"])))
 
         # Special parsing of os version number, if any exists
         function extract_os_version(os_name, pattern)
@@ -729,18 +739,9 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         if os == "freebsd"
             os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)")
         end
+        tags["os_version"] = os_version
 
-        return Platform(
-            arch, os;
-            validate_strict,
-            libc,
-            call_abi,
-            libgfortran_version,
-            cxxstring_abi,
-            libstdcxx_version,
-            os_version,
-            tags...,
-        )
+        return Platform(arch, os, tags; validate_strict)
     end
     throw(ArgumentError("Platform `$(triplet)` is not an officially supported platform"))
 end
@@ -1069,31 +1070,32 @@ end
 
 # precompiles to reduce latency (see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1025692379)
 Dict{Platform,String}()[HostPlatform()] = ""
-Platform("x86_64", "linux"; validate_strict=true, libc="glibc")
-for nt in (
-    (cxxstring_abi="",),
-    (libc="glibc", cxxstring_abi=""),
-    (libc="glibc", cxxstring_abi="", call_abi=""),
-    (                       libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
-    (                       libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
-    (                       libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
-    (                       libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
-    (                       libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
-    (                       libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
-    (validate_strict=false, libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
-    (validate_strict=false, libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
-    (validate_strict=false, libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
-    (validate_strict=false, libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
-    (validate_strict=false, libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
-    (validate_strict=false, libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
-)
-    pairs(nt)
-    iterate(pairs(nt))
-    iterate(pairs(nt), haskey(nt, :libgfortran_version) ? (nt.libgfortran_version === nothing)+1 : 1)
-    merge(nt, NamedTuple())
-    merge(nt, Pair{Symbol,String}[])
-    Base.structdiff(nt, (validate_strict=false, compare_strategies=Dict{String,Function}()))
-    Platform("x86_64", "linux"; nt...)
-end
+Platform("x86_64", "linux", Dict{String,Any}(); validate_strict=true)
+Platform("x86_64", "linux", Dict{String,String}(); validate_strict=false)  # called this way from Artifacts.unpack_platform
+# for nt in (
+#     (cxxstring_abi="",),
+#     (libc="glibc", cxxstring_abi=""),
+#     (libc="glibc", cxxstring_abi="", call_abi=""),
+#     (                       libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+#     (                       libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+#     (                       libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+#     (                       libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+#     (                       libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+#     (                       libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+#     (validate_strict=false, libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+#     (validate_strict=false, libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+#     (validate_strict=false, libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi=nothing, libstdcxx_version=nothing, os_version=nothing),
+#     (validate_strict=false, libc=nothing, call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+#     (validate_strict=false, libc="glibc", call_abi=nothing, libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+#     (validate_strict=false, libc="glibc", call_abi="",      libgfortran_version=nothing, cxxstring_abi="cxx11", libstdcxx_version=nothing, os_version=nothing),
+# )
+#     pairs(nt)
+#     iterate(pairs(nt))
+#     iterate(pairs(nt), haskey(nt, :libgfortran_version) ? (nt.libgfortran_version === nothing)+1 : 1)
+#     merge(nt, NamedTuple())
+#     merge(nt, Pair{Symbol,String}[])
+#     Base.structdiff(nt, (validate_strict=false, compare_strategies=Dict{String,Function}()))
+#     Platform("x86_64", "linux"; nt...)
+# end
 
 end # module

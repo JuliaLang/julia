@@ -469,7 +469,14 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
     k, v = (:hello => nothing)
     precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
     precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
-    precompile(Base.record_compiletime_preference, (Base.UUID, String))
+    # Preferences uses these
+    precompile(get_preferences, (UUID,))
+    precompile(record_compiletime_preference, (UUID, String))
+    get(Dict{String,Any}(), "missing", nothing)
+    delete!(Dict{String,Any}(), "missing")
+    for (k, v) in Dict{String,Any}()
+        println(k)
+    end
 
     break   # only actually need to do this once
 end

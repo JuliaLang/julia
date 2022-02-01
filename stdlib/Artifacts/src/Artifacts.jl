@@ -272,17 +272,17 @@ function unpack_platform(entry::Dict{String,Any}, name::String,
     end
 
     # Collect all String-valued mappings in `entry` and use them as tags
-    tags = Dict{Symbol, String}()
+    tags = Dict{String, String}()
     for (k, v) in entry
         if v isa String
-            tags[Symbol(k)] = v
+            tags[k] = v
         end
     end
     # Removing some known entries that shouldn't be passed through `tags`
-    delete!(tags, :os)
-    delete!(tags, :arch)
-    delete!(tags, Symbol("git-tree-sha1"))
-    return Platform(entry["arch"], entry["os"]; tags...)
+    delete!(tags, "os")
+    delete!(tags, "arch")
+    delete!(tags, "git-tree-sha1")
+    return Platform(entry["arch"], entry["os"], tags)
 end
 
 function pack_platform!(meta::Dict, p::AbstractPlatform)
@@ -720,6 +720,7 @@ artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml:
 
 # Precompilation to reduce latency
 precompile(load_artifacts_toml, (String,))
+precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
 precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
 
 end # module Artifacts
