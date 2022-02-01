@@ -895,3 +895,15 @@ end
 # sqrt not considered volatile
 f_sqrt() = sqrt(2)
 @test fully_eliminated(f_sqrt, Tuple{})
+
+# use constant prop' result even when the return type doesn't get refined
+const Gx = Ref{Any}()
+Base.@constprop :aggressive function conditional_escape!(cnd, x)
+    if cnd
+        Gx[] = x
+    end
+    return nothing
+end
+@test fully_eliminated((String,)) do x
+    Base.@invoke conditional_escape!(false::Any, x::Any)
+end
