@@ -496,6 +496,10 @@ tests = [
         "i ∈ rhs"        =>  "(= i rhs)"
         "i = 1:10"       =>  "(= i (call-i 1 : 10))"
         "(i,j) in iter"  =>  "(= (tuple i j) iter)"
+        "outer = rhs"       =>  "(= outer rhs)"
+        "outer <| x = rhs"  =>  "(= (call-i outer <| x) rhs)"
+        "outer i = rhs"     =>  "(= (outer i) rhs)"
+        "outer (x,y) = rhs" =>  "(= (outer (tuple x y)) rhs)"
     ],
     JuliaSyntax.parse_paren => [
         # Tuple syntax with commas
