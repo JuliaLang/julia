@@ -2407,14 +2407,19 @@ function parse_iteration_spec(ps::ParseState)
     mark = position(ps)
     k = peek(ps)
     # Handle `outer` contextual keyword
-    is_outer_kw = k == K"outer" && !(peek_skip_newline_in_gen(ps, 2) in KSet`= in ∈`)
-    if is_outer_kw
-        # outer i = rhs  ==>  (= (outer i) rhs)
-        bump(ps, TRIVIA_FLAG)
-    end
     with_space_sensitive(parse_pipe_lt, ps)
-    if is_outer_kw
-        emit(ps, mark, K"outer")
+    if peek_behind(ps).orig_kind == K"outer"
+        if peek_skip_newline_in_gen(ps) in KSet`= in ∈`
+            # Not outer keyword
+            # outer = rhs        ==>  (= outer rhs)
+            # outer <| x = rhs   ==>  (= (call-i outer <| x) rhs)
+        else
+            # outer i = rhs      ==>  (= (outer i) rhs)
+            # outer (x,y) = rhs  ==>  (= (outer (tuple x y)) rhs)
+            reset_node!(ps, position(ps), kind=K"outer", flags=TRIVIA_FLAG)
+            parse_pipe_lt(ps)
+            emit(ps, mark, K"outer")
+        end
     end
     if peek_skip_newline_in_gen(ps) in KSet`= in ∈`
         bump(ps, TRIVIA_FLAG)
