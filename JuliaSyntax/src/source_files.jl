@@ -102,6 +102,11 @@ function Base.getindex(source::SourceFile, i::Int)
     source.code[i]
 end
 
+"""
+    sourcetext(source::SourceFile)
+
+Get the full source text of a `SourceFile` as a string.
+"""
 function sourcetext(source::SourceFile)
     return source.code
 end

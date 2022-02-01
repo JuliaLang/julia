@@ -51,12 +51,12 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
 
     p = first_byte(diagnostic)
     q = last_byte(diagnostic)
-    code = source.code
-    if q < p || (p == q && code[p] == '\n')
+    text = sourcetext(source)
+    if q < p || (p == q && source[p] == '\n')
         # An empty or invisible range!  We expand it symmetrically to make it
         # visible.
-        p = max(firstindex(code), prevind(code, p))
-        q = min(lastindex(code), nextind(code, q))
+        p = max(firstindex(text), prevind(text, p))
+        q = min(lastindex(text), nextind(text, q))
     end
 
     # p and q mark the start and end of the diagnostic range. For context,
@@ -66,7 +66,7 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
 
     hicol = (100,40,40)
 
-    print(io, source[a:prevind(code, p)])
+    print(io, source[a:prevind(text, p)])
     # There's two situations, either
     if b >= c
         # The diagnostic range is compact and we show the whole thing
@@ -88,19 +88,19 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
         println(io, "…")
         _printstyled(io, source[c:q]; color=hicol)
     end
-    print(io, source[nextind(code,q):d])
+    print(io, source[nextind(text,q):d])
     println(io)
 end
 
-function show_diagnostics(io::IO, diagnostics::AbstractVector{Diagnostic}, code::SourceFile)
+function show_diagnostics(io::IO, diagnostics::AbstractVector{Diagnostic}, source::SourceFile)
     for d in diagnostics
-        show_diagnostic(io, d, code)
+        show_diagnostic(io, d, source)
     end
 end
 
-function show_diagnostics(io::IO, diagnostics::AbstractVector{Diagnostic}, code)
+function show_diagnostics(io::IO, diagnostics::AbstractVector{Diagnostic}, text::AbstractString)
     if !isempty(diagnostics)
-        show_diagnostics(io, diagnostics, SourceFile(code))
+        show_diagnostics(io, diagnostics, SourceFile(text))
     end
 end
 
