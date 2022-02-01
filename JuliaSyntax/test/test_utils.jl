@@ -126,7 +126,10 @@ end
 Reduced the syntax (a string or SyntaxNode) from `file_content` into the
 minimal failing subtrees of syntax and write the results to `out`.
 """
-function format_reduced_tests(out::IO, file_content)
+function format_reduced_tests(out::IO, file_content; filename=nothing)
+    if !isnothing(filename)
+        println(out, "# $filename")
+    end
     text = nothing
     try
         rtrees = reduce_test(file_content)
@@ -138,9 +141,11 @@ function format_reduced_tests(out::IO, file_content)
             first = false
             print(out, sourcetext(rt))
         end
-    catch
+    catch exc
+        exc isa InterruptException && rethrow()
         @error "Error reducing file" exception=current_exceptions()
-        print(out, sourcetext(file_content))
+        print(out, file_content isa AbstractString ?
+              file_content : sourcetext(file_content))
     end
 end
 
@@ -158,7 +163,7 @@ function reduce_all_failures_in_path(basedir, outdir)
                 i += 1
             end
             open(outname, "w") do io
-                format_reduced_tests(io, read(filename, String))
+                format_reduced_tests(io, read(filename, String), filename=filename)
             end
         end
     end
