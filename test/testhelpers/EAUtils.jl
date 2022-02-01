@@ -13,108 +13,31 @@ Base.getindex(estate::EscapeAnalysis.EscapeState, @nospecialize(x)) = CC.getinde
 
 import InteractiveUtils: gen_call_with_extracted_types_and_kwargs
 
-@doc """
+"""
     @code_escapes [options...] f(args...)
 
 Evaluates the arguments to the function call, determines its types, and then calls
 [`code_escapes`](@ref) on the resulting expression.
 As with `@code_typed` and its family, any of `code_escapes` keyword arguments can be given
-as the optional arguments like `@code_escapes debuginfo=:source myfunc(myargs...)`.
+as the optional arguments like `@code_escapes optimize=false myfunc(myargs...)`.
 """
 macro code_escapes(ex0...)
     return gen_call_with_extracted_types_and_kwargs(__module__, :code_escapes, ex0)
 end
 
 """
-    code_escapes(f, argtypes=Tuple{}; [world], [interp], [debuginfo]) -> result::EscapeResult
-    code_escapes(tt::Type{<:Tuple}; [world], [interp], [debuginfo]) -> result::EscapeResult
+    code_escapes(f, argtypes=Tuple{}; [debuginfo::Symbol = :none], [optimize::Bool = true]) -> result::EscapeResult
+    code_escapes(tt::Type{<:Tuple}; [debuginfo::Symbol = :none], [optimize::Bool = true]) -> result::EscapeResult
 
 Runs the escape analysis on optimized IR of a generic function call with the given type signature.
-Note that the escape analysis runs after inlining, but before any other optimizations.
 
-```julia
-julia> mutable struct SafeRef{T}
-           x::T
-       end
+# Keyword Arguments
 
-julia> Base.getindex(x::SafeRef) = x.x;
-
-julia> Base.isassigned(x::SafeRef) = true;
-
-julia> get′(x) = isassigned(x) ? x[] : throw(x);
-
-julia> result = code_escapes((String,String,String,String)) do s1, s2, s3, s4
-           r1 = Ref(s1)
-           r2 = Ref(s2)
-           r3 = SafeRef(s3)
-           try
-               s1 = get′(r1)
-               ret = sizeof(s1)
-           catch err
-               global g = err # will definitely escape `r1`
-           end
-           s2 = get′(r2)      # still `r2` doesn't escape fully
-           s3 = get′(r3)      # still `r3` doesn't escape fully
-           s4 = sizeof(s4)    # the argument `s4` doesn't escape here
-           return s2, s3, s4
-       end
-#1(X _2::String, ↑ _3::String, ↑ _4::String, ✓ _5::String) in Main at REPL[6]:2
-X  1 ── %1  = %new(Base.RefValue{String}, _2)::Base.RefValue{String}
-*′ │    %2  = %new(Base.RefValue{String}, _3)::Base.RefValue{String}
-✓′ └─── %3  = %new(SafeRef{String}, _4)::SafeRef{String}
-◌  2 ── %4  = \$(Expr(:enter, #8))
-✓′ │    %5  = ϒ (%3)::SafeRef{String}
-*′ │    %6  = ϒ (%2)::Base.RefValue{String}
-✓  └─── %7  = ϒ (_5)::String
-◌  3 ── %8  = Base.isdefined(%1, :x)::Bool
-◌  └───       goto #5 if not %8
-X  4 ──       Base.getfield(%1, :x)::String
-◌  └───       goto #6
-◌  5 ──       Main.throw(%1)::Union{}
-◌  └───       unreachable
-◌  6 ──       nothing::typeof(Core.sizeof)
-◌  │          nothing::Int64
-◌  └───       \$(Expr(:leave, 1))
-◌  7 ──       goto #10
-✓′ 8 ── %18 = φᶜ (%5)::SafeRef{String}
-*′ │    %19 = φᶜ (%6)::Base.RefValue{String}
-✓  │    %20 = φᶜ (%7)::String
-◌  └───       \$(Expr(:leave, 1))
-X  9 ── %22 = \$(Expr(:the_exception))::Any
-◌  │          (Main.g = %22)::Any
-◌  └───       \$(Expr(:pop_exception, :(%4)))::Any
-✓′ 10 ┄ %25 = φ (#7 => %3, #9 => %18)::SafeRef{String}
-*′ │    %26 = φ (#7 => %2, #9 => %19)::Base.RefValue{String}
-✓  │    %27 = φ (#7 => _5, #9 => %20)::String
-◌  │    %28 = Base.isdefined(%26, :x)::Bool
-◌  └───       goto #12 if not %28
-↑  11 ─ %30 = Base.getfield(%26, :x)::String
-◌  └───       goto #13
-◌  12 ─       Main.throw(%26)::Union{}
-◌  └───       unreachable
-↑  13 ─ %34 = Base.getfield(%25, :x)::String
-◌  │    %35 = Core.sizeof::typeof(Core.sizeof)
-◌  │    %36 = (%35)(%27)::Int64
-↑  │    %37 = Core.tuple(%30, %34, %36)::Tuple{String, String, Int64}
-◌  └───       return %37
-```
-
-The symbols in the side of each call argument and SSA statements represents the following meaning:
-- `◌` (plain): this value is not analyzed because escape information of it won't be used anyway (when the object is `isbitstype` for example)
-- `✓` (green or cyan): this value never escapes (`has_no_escape(result.state[x])` holds), colored blue if it has arg escape also (`has_arg_escape(result.state[x])` holds)
-- `↑` (blue or yellow): this value can escape to the caller via return (`has_return_escape(result.state[x])` holds), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
-- `X` (red): this value can escape to somewhere the escape analysis can't reason about like escapes to a global memory (`has_all_escape(result.state[x])` holds)
-- `*` (bold): this value's escape state is between the `ReturnEscape` and `AllEscape` in the partial order of [`EscapeInfo`](@ref), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
-- `′`: this value has additional object field / array element information in its `AliasInfo` property
-
-For testing, escape information of each call argument and SSA value can be inspected programmatically as like:
-```julia
-julia> result.state[Core.Argument(3)]
-ReturnEscape
-
-julia> result.state[Core.SSAValue(3)]
-NoEscape′
-```
+- `optimize::Bool = true`:
+  if `true` returns escape information of post-inlining IR (used for local optimization),
+  otherwise returns escape information of pre-inlining IR (used for interprocedural escape information generation)
+- `debuginfo::Symbol = :none`:
+  controls the amount of code metadata present in the output, possible options are `:none` or `:source`.
 """
 function code_escapes(@nospecialize(args...);
                       world::UInt = get_world_counter(),

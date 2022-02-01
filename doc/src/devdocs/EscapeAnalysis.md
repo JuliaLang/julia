@@ -5,11 +5,50 @@
 `EscapeAnalysis` is a simple compiler utility module to analyze escape information in
 [Julia's SSA-form IR](@ref Julia-SSA-form-IR) a.k.a. `IRCode`.
 
-You can give a try to the escape analysis with the convenience entries that
-`EscapeAnalysis` exports for testing and debugging purposes:
-```@docs
-Base.code_escapes
-InteractiveUtils.@code_escapes
+You can give a try to the escape analysis by loading the `EAUtils.jl` utility script that
+define the convenience entries `code_escapes` and `@code_escapes` for testing and debugging purposes:
+```@repl EAUtils
+include(normpath(Sys.BINDIR::String, "..", "share", "julia", "test", "testhelpers", "EAUtils.jl"))
+using EAUtils
+
+mutable struct SafeRef{T}
+    x::T
+end
+Base.getindex(x::SafeRef) = x.x;
+Base.setindex!(x::SafeRef, v) = x.x = v;
+Base.isassigned(x::SafeRef) = true;
+get′(x) = isassigned(x) ? x[] : throw(x);
+
+result = code_escapes((String,String,String,String)) do s1, s2, s3, s4
+    r1 = Ref(s1)
+    r2 = Ref(s2)
+    r3 = SafeRef(s3)
+    try
+        s1 = get′(r1)
+        ret = sizeof(s1)
+    catch err
+        global g = err # will definitely escape `r1`
+    end
+    s2 = get′(r2)      # still `r2` doesn't escape fully
+    s3 = get′(r3)      # still `r3` doesn't escape fully
+    s4 = sizeof(s4)    # the argument `s4` doesn't escape here
+    return s2, s3, s4
+end
+```
+
+The symbols in the side of each call argument and SSA statements represents the following meaning:
+- `◌` (plain): this value is not analyzed because escape information of it won't be used anyway (when the object is `isbitstype` for example)
+- `✓` (green or cyan): this value never escapes (`has_no_escape(result.state[x])` holds), colored blue if it has arg escape also (`has_arg_escape(result.state[x])` holds)
+- `↑` (blue or yellow): this value can escape to the caller via return (`has_return_escape(result.state[x])` holds), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
+- `X` (red): this value can escape to somewhere the escape analysis can't reason about like escapes to a global memory (`has_all_escape(result.state[x])` holds)
+- `*` (bold): this value's escape state is between the `ReturnEscape` and `AllEscape` in the partial order of [`EscapeInfo`](@ref Core.Compiler.EscapeAnalysis.EscapeInfo), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
+- `′`: this value has additional object field / array element information in its `AliasInfo` property
+
+Escape information of each call argument and SSA value can be inspected programmatically as like:
+```@repl EAUtils
+result.state[Core.Argument(3)] # get EscapeInfo of `s2`
+
+result.state[Core.SSAValue(3)] # get EscapeInfo of `r3`
 ```
 
 ## Analysis Design
@@ -49,14 +88,11 @@ For example, in the code snippet below, EA first analyzes the statement `return 
 imposes `ReturnEscape` on `%1` (corresponding to `obj`), and then it analyzes
 `%1 = %new(Base.RefValue{String, _2}))` and propagates the `ReturnEscape` imposed on `%1`
 to the call argument `_2` (corresponding to `s`):
-```julia
-julia> code_escapes((String,)) do s
-           obj = Ref(s)
-           return obj
-       end
-#1(↑ _2::String) in Main at REPL[2]:2
-↑  1 ─ %1 = %new(Base.RefValue{String}, _2)::Base.RefValue{String}
-◌  └──      return %1
+```@repl EAUtils
+code_escapes((String,)) do s
+    obj = Ref(s)
+    return obj
+end
 ```
 
 The key observation here is that this backward analysis allows escape information to flow
@@ -64,22 +100,15 @@ naturally along the use-def chain rather than control-flow[^BackandForth].
 As a result this scheme enables a simple implementation of escape analysis,
 e.g. `PhiNode` for example can be handled simply by propagating escape information
 imposed on a `PhiNode` to its predecessor values:
-```julia
-julia> code_escapes((Bool, String, String)) do cnd, s, t
-           if cnd
-               obj = Ref(s)
-           else
-               obj = Ref(t)
-           end
-           return obj
-       end
-#3(✓ _2::Bool, ↑ _3::String, ↑ _4::String) in Main at REPL[3]:2
-◌  1 ─      goto #3 if not _2
-↑  2 ─ %2 = %new(Base.RefValue{String}, _3)::Base.RefValue{String}
-◌  └──      goto #4
-↑  3 ─ %4 = %new(Base.RefValue{String}, _4)::Base.RefValue{String}
-↑  4 ┄ %5 = φ (#2 => %2, #3 => %4)::Base.RefValue{String}
-◌  └──      return %5
+```@repl EAUtils
+code_escapes((Bool, String, String)) do cnd, s, t
+    if cnd
+        obj = Ref(s)
+    else
+        obj = Ref(t)
+    end
+    return obj
+end
 ```
 
 ### [Alias Analysis](@id EA-Alias-Analysis)
@@ -91,26 +120,13 @@ It records all possible values that can be aliased to fields of `x` at "usage" s
 and then the escape information of that recorded values are propagated to the actual field values later at "definition" sites.
 More specifically, the analysis records a value that may be aliased to a field of object by analyzing `getfield` call,
 and then it propagates its escape information to the field when analyzing `%new(...)` expression or `setfield!` call[^Dynamism].
-```julia
-julia> mutable struct SafeRef{T}
-           x::T
-       end
-
-julia> Base.getindex(x::SafeRef) = x.x;
-
-julia> Base.setindex!(x::SafeRef, v) = x.x = v;
-
-julia> code_escapes((String,)) do s
-           obj = SafeRef("init")
-           obj[] = s
-           v = obj[]
-           return v
-       end
-#5(↑ _2::String) in Main at REPL[7]:2
-✓′ 1 ─ %1 = %new(SafeRef{String}, "init")::SafeRef{String}
-◌  │        Base.setfield!(%1, :x, _2)::String
-↑  │   %3 = Base.getfield(%1, :x)::String
-◌  └──      return %3
+```@repl EAUtils
+code_escapes((String,)) do s
+    obj = SafeRef("init")
+    obj[] = s
+    v = obj[]
+    return v
+end
 ```
 In the example above, `ReturnEscape` imposed on `%3` (corresponding to `v`) is _not_ directly
 propagated to `%1` (corresponding to `obj`) but rather that `ReturnEscape` is only propagated
@@ -128,27 +144,17 @@ can cause that IR-level aliasing and thus requires escape information imposed on
 aliased values to be shared between them.
 More interestingly, it is also needed for correctly reasoning about mutations on `PhiNode`.
 Let's consider the following example:
-```julia
-julia> code_escapes((Bool, String,)) do cond, x
-           if cond
-               ϕ2 = ϕ1 = SafeRef("foo")
-           else
-               ϕ2 = ϕ1 = SafeRef("bar")
-           end
-           ϕ2[] = x
-           y = ϕ1[]
-           return y
-       end
-#7(✓ _2::Bool, ↑ _3::String) in Main at REPL[8]:2
-◌  1 ─      goto #3 if not _2
-✓′ 2 ─ %2 = %new(SafeRef{String}, "foo")::SafeRef{String}
-◌  └──      goto #4
-✓′ 3 ─ %4 = %new(SafeRef{String}, "bar")::SafeRef{String}
-✓′ 4 ┄ %5 = φ (#2 => %2, #3 => %4)::SafeRef{String}
-✓′ │   %6 = φ (#2 => %2, #3 => %4)::SafeRef{String}
-◌  │        Base.setfield!(%5, :x, _3)::String
-↑  │   %8 = Base.getfield(%6, :x)::String
-◌  └──      return %8
+```@repl EAUtils
+code_escapes((Bool, String,)) do cond, x
+    if cond
+        ϕ2 = ϕ1 = SafeRef("foo")
+    else
+        ϕ2 = ϕ1 = SafeRef("bar")
+    end
+    ϕ2[] = x
+    y = ϕ1[]
+    return y
+end
 ```
 `ϕ1 = %5` and `ϕ2 = %6` are aliased and thus `ReturnEscape` imposed on `%8 = Base.getfield(%6, :x)::String` (corresponding to `y = ϕ1[]`)
 needs to be propagated to `Base.setfield!(%5, :x, _3)::String` (corresponding to `ϕ2[] = x`).
@@ -170,36 +176,12 @@ between them.
 The alias analysis for object fields described above can also be generalized to analyze array operations.
 `EscapeAnalysis` implements handlings for various primitive array operations so that it can propagate
 escapes via `arrayref`-`arrayset` use-def chain and does not escape allocated arrays too conservatively:
-```julia
-julia> code_escapes((String,)) do s
-           ary = Any[]
-           push!(ary, SafeRef(s))
-           return ary[1], length(ary)
-       end
-#9(↑ _2::String) in Main at REPL[9]:2
-*′ 1 ── %1  = $(Expr(:foreigncall, :(:jl_alloc_array_1d), Vector{Any}, svec(Any, Int64), 0, :(:ccall), Vector{Any}, 0, 0))::Vector{Any}
-↑  │    %2  = %new(SafeRef{String}, _2)::SafeRef{String}
-◌  │    %3  = Core.lshr_int(1, 63)::Int64
-◌  │    %4  = Core.trunc_int(Core.UInt8, %3)::UInt8
-◌  │    %5  = Core.eq_int(%4, 0x01)::Bool
-◌  └───       goto #3 if not %5
-◌  2 ──       invoke Core.throw_inexacterror(:check_top_bit::Symbol, UInt64::Type{UInt64}, 1::Int64)::Union{}
-◌  └───       unreachable
-◌  3 ──       goto #4
-◌  4 ── %10 = Core.bitcast(Core.UInt64, 1)::UInt64
-◌  └───       goto #5
-◌  5 ──       goto #6
-◌  6 ──       goto #7
-◌  7 ──       goto #8
-◌  8 ──       $(Expr(:foreigncall, :(:jl_array_grow_end), Nothing, svec(Any, UInt64), 0, :(:ccall), :(%1), :(%10), :(%10)))::Nothing
-◌  └───       goto #9
-◌  9 ── %17 = Base.arraylen(%1)::Int64
-◌  │          Base.arrayset(true, %1, %2, %17)::Vector{Any}
-◌  └───       goto #10
-↑  10 ─ %20 = Base.arrayref(true, %1, 1)::Any
-◌  │    %21 = Base.arraylen(%1)::Int64
-↑  │    %22 = Core.tuple(%20, %21)::Tuple{Any, Int64}
-◌  └───       return %22
+```@repl EAUtils
+code_escapes((String,)) do s
+    ary = Any[]
+    push!(ary, SafeRef(s))
+    return ary[1], length(ary)
+end
 ```
 In the above example `EscapeAnalysis` understands that `%20` and `%2` (corresponding to the allocated object `SafeRef(s)`)
 are aliased via the `arrayset`-`arrayref` chain and imposes `ReturnEscape` on them,
@@ -211,23 +193,13 @@ often be ignored when optimizing the `ary` allocation.
 Furthermore, in cases when array index information as well as array dimensions can be known _precisely_,
 `EscapeAnalysis` is able to even reason about "per-element" aliasing via `arrayref`-`arrayset` chain,
 as `EscapeAnalysis` does "per-field" alias analysis for objects:
-```julia
-julia> code_escapes((String,String)) do s, t
-           ary = Vector{Any}(undef, 2)
-           ary[1] = SafeRef(s)
-           ary[2] = SafeRef(t)
-           return ary[1], length(ary)
-       end
-#11(↑ _2::String, * _3::String) in Main at REPL[10]:2
-*′ 1 ─ %1 = $(Expr(:foreigncall, :(:jl_alloc_array_1d), Vector{Any}, svec(Any, Int64), 0, :(:ccall), Vector{Any}, 2, 2))::Vector{Any}
-↑  │   %2 = %new(SafeRef{String}, _2)::SafeRef{String}
-◌  │        Base.arrayset(true, %1, %2, 1)::Vector{Any}
-*  │   %4 = %new(SafeRef{String}, _3)::SafeRef{String}
-◌  │        Base.arrayset(true, %1, %4, 2)::Vector{Any}
-↑  │   %6 = Base.arrayref(true, %1, 1)::Any
-◌  │   %7 = Base.arraylen(%1)::Int64
-↑  │   %8 = Core.tuple(%6, %7)::Tuple{Any, Int64}
-◌  └──      return %8
+```@repl EAUtils
+code_escapes((String,String)) do s, t
+    ary = Vector{Any}(undef, 2)
+    ary[1] = SafeRef(s)
+    ary[2] = SafeRef(t)
+    return ary[1], length(ary)
+end
 ```
 Note that `ReturnEscape` is only imposed on `%2` (corresponding to `SafeRef(s)`) but not on `%4` (corresponding to `SafeRef(t)`).
 This is because the allocated array's dimension and indices involved with all `arrayref`/`arrayset`
@@ -244,7 +216,7 @@ first does an additional simple linear scan to analyze dimensions of allocated a
 firing up the main analysis routine so that the succeeding escape analysis can precisely
 analyze operations on those arrays.
 
-However, such precise "per-element" alias analyis is often hard.
+However, such precise "per-element" alias analysis is often hard.
 Essentially, the main difficulty inherit to array is that array dimension and index are often non-constant:
 - loop often produces loop-variant, non-constant array indices
 - (specific to vectors) array resizing changes array dimension and invalidates its constant-ness
@@ -257,44 +229,13 @@ Especially `Any[nothing, nothing]` forms a loop and calls that `arrayset` operat
 where `%6` is represented as a ϕ-node value (whose value is control-flow dependent).
 As a result, `ReturnEscape` ends up imposed on both `%23` (corresponding to `SafeRef(s)`) and
 `%25` (corresponding to `SafeRef(t)`), although ideally we want it to be imposed only on `%23` but not on `%25`:
-```julia
-julia> code_escapes((String,String)) do s, t
-           ary = Any[nothing, nothing]
-           ary[1] = SafeRef(s)
-           ary[2] = SafeRef(t)
-           return ary[1], length(ary)
-       end
-#13(↑ _2::String, ↑ _3::String) in Main at REPL[11]:2
-◌  1 ─ %1  = Main.nothing::Core.Const(nothing)
-◌  │   %2  = Main.nothing::Core.Const(nothing)
-◌  │   %3  = Core.tuple(%1, %2)::Core.Const((nothing, nothing))
-*′ │   %4  = $(Expr(:foreigncall, :(:jl_alloc_array_1d), Vector{Any}, svec(Any, Int64), 0, :(:ccall), Vector{Any}, 2, 2))::Vector{Any}
-◌  └──       goto #7 if not true
-◌  2 ┄ %6  = φ (#1 => 1, #6 => %16)::Int64
-◌  │   %7  = φ (#1 => 1, #6 => %17)::Int64
-↑  │   %8  = Base.getfield(%3, %6, false)::Nothing
-◌  │         Base.arrayset(false, %4, %8, %6)::Vector{Any}
-◌  │   %10 = (%7 === 2)::Bool
-◌  └──       goto #4 if not %10
-◌  3 ─       Base.nothing::Nothing
-◌  └──       goto #5
-◌  4 ─ %14 = Base.add_int(%7, 1)::Int64
-◌  └──       goto #5
-◌  5 ┄ %16 = φ (#4 => %14)::Int64
-◌  │   %17 = φ (#4 => %14)::Int64
-◌  │   %18 = φ (#3 => true, #4 => false)::Bool
-◌  │   %19 = Base.not_int(%18)::Bool
-◌  └──       goto #7 if not %19
-◌  6 ─       goto #2
-◌  7 ┄       goto #8
-↑  8 ─ %23 = %new(SafeRef{String}, _2)::SafeRef{String}
-◌  │         Base.arrayset(true, %4, %23, 1)::Vector{Any}
-↑  │   %25 = %new(SafeRef{String}, _3)::SafeRef{String}
-◌  │         Base.arrayset(true, %4, %25, 2)::Vector{Any}
-↑  │   %27 = Base.arrayref(true, %4, 1)::Any
-◌  │   %28 = Base.arraylen(%4)::Int64
-↑  │   %29 = Core.tuple(%27, %28)::Tuple{Any, Int64}
-◌  └──       return %29
+```@repl EAUtils
+code_escapes((String,String)) do s, t
+    ary = Any[nothing, nothing]
+    ary[1] = SafeRef(s)
+    ary[2] = SafeRef(t)
+    return ary[1], length(ary)
+end
 ```
 
 The next example illustrates how vector resizing makes precise alias analysis hard.
@@ -303,59 +244,17 @@ but it changes by the two `:jl_array_grow_end` calls afterwards.
 `EscapeAnalysis` currently simply gives up precise alias analysis whenever it encounters any
 array resizing operations and so `ReturnEscape` is imposed on both `%2` (corresponding to `SafeRef(s)`)
 and `%20` (corresponding to `SafeRef(t)`):
-```julia
-julia> code_escapes((String,String)) do s, t
-           ary = Any[]
-           push!(ary, SafeRef(s))
-           push!(ary, SafeRef(t))
-           ary[1], length(ary)
-       end
-#15(↑ _2::String, ↑ _3::String) in Main at REPL[12]:2
-*′ 1 ── %1  = $(Expr(:foreigncall, :(:jl_alloc_array_1d), Vector{Any}, svec(Any, Int64), 0, :(:ccall), Vector{Any}, 0, 0))::Vector{Any}
-↑  │    %2  = %new(SafeRef{String}, _2)::SafeRef{String}
-◌  │    %3  = Core.lshr_int(1, 63)::Int64
-◌  │    %4  = Core.trunc_int(Core.UInt8, %3)::UInt8
-◌  │    %5  = Core.eq_int(%4, 0x01)::Bool
-◌  └───       goto #3 if not %5
-◌  2 ──       invoke Core.throw_inexacterror(:check_top_bit::Symbol, UInt64::Type{UInt64}, 1::Int64)::Union{}
-◌  └───       unreachable
-◌  3 ──       goto #4
-◌  4 ── %10 = Core.bitcast(Core.UInt64, 1)::UInt64
-◌  └───       goto #5
-◌  5 ──       goto #6
-◌  6 ──       goto #7
-◌  7 ──       goto #8
-◌  8 ──       $(Expr(:foreigncall, :(:jl_array_grow_end), Nothing, svec(Any, UInt64), 0, :(:ccall), :(%1), :(%10), :(%10)))::Nothing
-◌  └───       goto #9
-◌  9 ── %17 = Base.arraylen(%1)::Int64
-◌  │          Base.arrayset(true, %1, %2, %17)::Vector{Any}
-◌  └───       goto #10
-↑  10 ─ %20 = %new(SafeRef{String}, _3)::SafeRef{String}
-◌  │    %21 = Core.lshr_int(1, 63)::Int64
-◌  │    %22 = Core.trunc_int(Core.UInt8, %21)::UInt8
-◌  │    %23 = Core.eq_int(%22, 0x01)::Bool
-◌  └───       goto #12 if not %23
-◌  11 ─       invoke Core.throw_inexacterror(:check_top_bit::Symbol, UInt64::Type{UInt64}, 1::Int64)::Union{}
-◌  └───       unreachable
-◌  12 ─       goto #13
-◌  13 ─ %28 = Core.bitcast(Core.UInt64, 1)::UInt64
-◌  └───       goto #14
-◌  14 ─       goto #15
-◌  15 ─       goto #16
-◌  16 ─       goto #17
-◌  17 ─       $(Expr(:foreigncall, :(:jl_array_grow_end), Nothing, svec(Any, UInt64), 0, :(:ccall), :(%1), :(%28), :(%28)))::Nothing
-◌  └───       goto #18
-◌  18 ─ %35 = Base.arraylen(%1)::Int64
-◌  │          Base.arrayset(true, %1, %20, %35)::Vector{Any}
-◌  └───       goto #19
-↑  19 ─ %38 = Base.arrayref(true, %1, 1)::Any
-◌  │    %39 = Base.arraylen(%1)::Int64
-↑  │    %40 = Core.tuple(%38, %39)::Tuple{Any, Int64}
-◌  └───       return %40
+```@repl EAUtils
+code_escapes((String,String)) do s, t
+    ary = Any[]
+    push!(ary, SafeRef(s))
+    push!(ary, SafeRef(t))
+    ary[1], length(ary)
+end
 ```
 
 In order to address these difficulties, we need inference to be aware of array dimensions
-and propagate array dimenstions in a flow-sensitive way[^ArrayDimension], as well as come
+and propagate array dimensions in a flow-sensitive way[^ArrayDimension], as well as come
 up with nice representation of loop-variant values.
 
 `EscapeAnalysis` at this moment quickly switches to the more imprecise analysis that doesn't
@@ -369,50 +268,30 @@ It would be also worth noting how `EscapeAnalysis` handles possible escapes via 
 Naively it seems enough to propagate escape information imposed on `:the_exception` object to
 all values that may be thrown in a corresponding `try` block.
 But there are actually several other ways to access to the exception object in Julia,
-such as `Base.current_exceptions` and manual catch of `rethrow`n object.
+such as `Base.current_exceptions` and `rethrow`.
 For example, escape analysis needs to account for potential escape of `r` in the example below:
-```julia
-julia> const Gx = Ref{Any}();
+```@repl EAUtils
+const Gx = Ref{Any}();
+@noinline function rethrow_escape!()
+    try
+        rethrow()
+    catch err
+        Gx[] = err
+    end
+end;
+get′(x) = isassigned(x) ? x[] : throw(x);
 
-julia> @noinline function rethrow_escape!()
-           try
-               rethrow()
-           catch err
-               Gx[] = err
-           end
-       end;
-
-julia> get′(x) = isassigned(x) ? x[] : throw(x);
-
-julia> code_escapes() do
-           r = Ref{String}()
-           local t
-           try
-               t = get′(r)
-           catch err
-               t = typeof(err)   # `err` (which `r` aliases to) doesn't escape here
-               rethrow_escape!() # but `r` escapes here
-           end
-           return t
-       end
-#17() in Main at REPL[16]:2
-X  1 ── %1  = %new(Base.RefValue{String})::Base.RefValue{String}
-◌  2 ── %2  = $(Expr(:enter, #8))
-◌  3 ── %3  = Base.isdefined(%1, :x)::Bool
-◌  └───       goto #5 if not %3
-↑  4 ── %5  = Base.getfield(%1, :x)::String
-◌  └───       goto #6
-◌  5 ──       Main.throw(%1)::Union{}
-◌  └───       unreachable
-◌  6 ──       $(Expr(:leave, 1))
-◌  7 ──       goto #10
-◌  8 ──       $(Expr(:leave, 1))
-✓  9 ── %12 = $(Expr(:the_exception))::Any
-↑  │    %13 = Main.typeof(%12)::DataType
-◌  │          invoke Main.rethrow_escape!()::Any
-◌  └───       $(Expr(:pop_exception, :(%2)))::Any
-↑  10 ┄ %16 = φ (#7 => %5, #9 => %13)::Union{DataType, String}
-◌  └───       return %16
+code_escapes() do
+    r = Ref{String}()
+    local t
+    try
+        t = get′(r)
+    catch err
+        t = typeof(err)   # `err` (which `r` aliases to) doesn't escape here
+        rethrow_escape!() # but `r` escapes here
+    end
+    return t
+end
 ```
 
 It requires a global analysis in order to correctly reason about all possible escapes via
@@ -425,48 +304,20 @@ since they are often even "unoptimized" intentionally for latency reasons.
 `x::EscapeInfo`'s `x.ThrownEscape` property records SSA statements where `x` can be thrown as an exception.
 Using this information `EscapeAnalysis` can propagate possible escapes via exceptions limitedly
 to only those may be thrown in each `try` region:
-```julia
-julia> result = code_escapes((String,String)) do s1, s2
-           r1 = Ref(s1)
-           r2 = Ref(s2)
-           local ret
-           try
-               s1 = get′(r1)
-               ret = sizeof(s1)
-           catch err
-               global g = err # will definitely escape `r1`
-           end
-           s2 = get′(r2)      # still `r2` doesn't escape fully
-           return s2
-       end
-#19(X _2::String, ↑ _3::String) in Main at REPL[17]:2
-X  1 ── %1  = %new(Base.RefValue{String}, _2)::Base.RefValue{String}
-*′ └─── %2  = %new(Base.RefValue{String}, _3)::Base.RefValue{String}
-◌  2 ── %3  = $(Expr(:enter, #8))
-*′ └─── %4  = ϒ (%2)::Base.RefValue{String}
-◌  3 ── %5  = Base.isdefined(%1, :x)::Bool
-◌  └───       goto #5 if not %5
-X  4 ──       Base.getfield(%1, :x)::String
-◌  └───       goto #6
-◌  5 ──       Main.throw(%1)::Union{}
-◌  └───       unreachable
-◌  6 ──       nothing::typeof(Core.sizeof)
-◌  │          nothing::Int64
-◌  └───       $(Expr(:leave, 1))
-◌  7 ──       goto #10
-*′ 8 ── %15 = φᶜ (%4)::Base.RefValue{String}
-◌  └───       $(Expr(:leave, 1))
-X  9 ── %17 = $(Expr(:the_exception))::Any
-◌  │          (Main.g = %17)::Any
-◌  └───       $(Expr(:pop_exception, :(%3)))::Any
-*′ 10 ┄ %20 = φ (#7 => %2, #9 => %15)::Base.RefValue{String}
-◌  │    %21 = Base.isdefined(%20, :x)::Bool
-◌  └───       goto #12 if not %21
-↑  11 ─ %23 = Base.getfield(%20, :x)::String
-◌  └───       goto #13
-◌  12 ─       Main.throw(%20)::Union{}
-◌  └───       unreachable
-◌  13 ─       return %23
+```@repl EAUtils
+result = code_escapes((String,String)) do s1, s2
+    r1 = Ref(s1)
+    r2 = Ref(s2)
+    local ret
+    try
+        s1 = get′(r1)
+        ret = sizeof(s1)
+    catch err
+        global g = err # will definitely escape `r1`
+    end
+    s2 = get′(r2)      # still `r2` doesn't escape fully
+    return s2
+end
 ```
 
 ## Analysis Usage
