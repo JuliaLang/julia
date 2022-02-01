@@ -119,6 +119,7 @@ tests = [
         "[x +y]"     =>  "(hcat x (call + y))"
         "[x+y +z]"   =>  "(hcat (call-i x + y) (call + z))"
         # Conversely the following are infix calls
+        "[x +₁y]"    =>  "(vect (call-i x +₁ y))"
         "[x+y+z]"    =>  "(vect (call-i x + y z))"
         "[x+y + z]"  =>  "(vect (call-i x + y z))"
         # Dotted and normal operators
@@ -182,6 +183,7 @@ tests = [
         "±x" => "(call ± x)"
         # Not a unary operator
         "/x"     => "(call (error /) x)"
+        "+₁ x"   => "(call (error +₁) x)"
         ".<: x"  => "(call (error .<:) x)"
     ],
     JuliaSyntax.parse_factor => [

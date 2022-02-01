@@ -267,6 +267,9 @@ end
 
 function is_syntactic_operator(k)
     k = kind(k)
+    # TODO: Do we need to disallow dotted and suffixed forms here?
+    # The lexer itself usually disallows such tokens, so it's not clear whether
+    # we need to handle them. (Though note `.->` is a token...)
     return k in KSet`&& || . ... ->` || (is_prec_assignment(k) && k != K"~")
 end
 
@@ -280,16 +283,20 @@ end
 
 function is_unary_op(t)
     k = kind(t)
-    (k in KSet`<: >:` && !is_dotted(t)) ||
-    k in KSet`+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓` # dotop allowed
+    !is_suffixed(t) && (
+        (k in KSet`<: >:` && !is_dotted(t)) ||
+        k in KSet`+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓` # dotop allowed
+    )
 end
 
-# Operators which are both unary and binary
-function is_both_unary_and_binary(k)
-    k = kind(k)
-    # TODO: Do we need to check dotop as well here?
-    k in KSet`$ & ~`      || # dotop disallowed?
-    k in KSet`+ - ⋆ ± ∓`     # dotop allowed
+# Operators that are both unary and binary
+function is_both_unary_and_binary(t)
+    k = kind(t)
+    # Preventing is_suffixed here makes this consistent with the flisp parser.
+    # But is this by design or happenstance?
+    !is_suffixed(t) && (
+        k in KSet`+ - ⋆ ± ∓` || (k in KSet`$ & ~` && !is_dotted(t))
+    )
 end
 
 # operators handled by parse_unary at the start of an expression
@@ -306,8 +313,6 @@ end
 # flisp: invalid-identifier?
 function is_valid_identifier(k)
     k = kind(k)
-    # TODO: flisp also had K"...." disallowed. But I don't know what that's
-    # for! Tokenize doesn't have an equivalent here.
     !(is_syntactic_operator(k) || k in KSet`? .'`)
 end
 
@@ -879,11 +884,13 @@ function parse_with_chains(ps::ParseState, down, is_op, chain_ops)
     down(ps)
     while (t = peek_token(ps); is_op(kind(t)))
         if ps.space_sensitive && t.had_whitespace &&
-            is_both_unary_and_binary(kind(t)) &&
-            !peek_token(ps, 2).had_whitespace
+                is_both_unary_and_binary(t) &&
+                !peek_token(ps, 2).had_whitespace
             # The following is two elements of a hcat
+            # [x +y]     ==>  (hcat x (call + y))
             # [x+y +z]   ==>  (hcat (call-i x + y) (call + z))
             # Conversely the following are infix calls
+            # [x +₁y]    ==>  (vect (call-i x +₁ y))
             # [x+y+z]    ==>  (vect (call-i x + y z))
             # [x+y + z]  ==>  (vect (call-i x + y z))
             break
@@ -907,7 +914,7 @@ end
 function parse_chain(ps::ParseState, down, op_kind)
     while (t = peek_token(ps); kind(t) == op_kind && !is_decorated(t))
         if ps.space_sensitive && t.had_whitespace &&
-            is_both_unary_and_binary(kind(t)) &&
+            is_both_unary_and_binary(t) &&
             !peek_token(ps, 2).had_whitespace
             # [x +y]  ==>  (hcat x (call + y))
             break
@@ -1210,6 +1217,7 @@ function parse_unary_call(ps::ParseState)
             bump(ps, op_tok_flags)
         else
             # /x     ==>  (call (error /) x)
+            # +₁ x   ==>  (call (error +₁) x)
             # .<: x  ==>  (call (error .<:) x)
             bump(ps, error="not a unary operator")
         end
