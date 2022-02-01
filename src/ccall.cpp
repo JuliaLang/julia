@@ -1240,9 +1240,9 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
     return "";
 }
 
-const int fc_args_start = 7;
+const int fc_args_start = 6;
 
-// Expr(:foreigncall, pointer, rettype, (argtypes...), nreq, cconv, effects, args..., roots...)
+// Expr(:foreigncall, pointer, rettype, (argtypes...), nreq, [cconv | (cconv, effects)], args..., roots...)
 static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 {
     JL_NARGSV(ccall, 5);
@@ -1252,11 +1252,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     size_t nccallargs = jl_svec_len(at);
     size_t nreqargs = jl_unbox_long(args[4]); // if vararg
     assert(jl_is_quotenode(args[5]));
-    jl_sym_t *cc_sym = *(jl_sym_t**)args[5];
-    assert(jl_is_symbol(cc_sym));
-    jl_value_t *effects = args[6];
-    assert(jl_is_nothing(effects) || jl_is_uint8(effects));
-    (void)effects; // currently only used by inference
+    jl_value_t *jlcc = jl_quotenode_value(args[5]);
+    jl_sym_t *cc_sym = NULL;
+    if (jl_is_symbol(jlcc)) {
+        cc_sym = (jl_sym_t*)jlcc;
+    } else if (jl_is_tuple(jlcc)) {
+        cc_sym = (jl_sym_t*)jl_get_nth_field_noalloc(jlcc, 0);
+        assert(jl_is_symbol(cc_sym));
+    }
     native_sym_arg_t symarg = {};
     JL_GC_PUSH3(&rt, &at, &symarg.gcroot);
 
