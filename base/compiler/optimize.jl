@@ -281,12 +281,14 @@ function alloc_array_ndims(name::Symbol)
     return nothing
 end
 
+const FOREIGNCALL_ARG_START = 6
+
 function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ ndims+7 || return false
-    atype = instanceof_tfunc(argextype(args[7], src))[1]
+    length(args) ≥ ndims+FOREIGNCALL_ARG_START || return false
+    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
     dims = Csize_t[]
     for i in 1:ndims
-        dim = argextype(args[i+7], src)
+        dim = argextype(args[i+FOREIGNCALL_ARG_START], src)
         isa(dim, Const) || return false
         dimval = dim.val
         isa(dimval, Int) || return false
@@ -296,9 +298,9 @@ function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,I
 end
 
 function new_array_no_throw(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ 8 || return false
-    atype = instanceof_tfunc(argextype(args[7], src))[1]
-    dims = argextype(args[8], src)
+    length(args) ≥ FOREIGNCALL_ARG_START+1 || return false
+    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
+    dims = argextype(args[FOREIGNCALL_ARG_START+1], src)
     isa(dims, Const) || return dims === Tuple{}
     dimsval = dims.val
     isa(dimsval, Tuple{Vararg{Int}}) || return false

@@ -36,7 +36,7 @@ end
         Core.svec(Ptr{Ptr{Cchar}}, Cstring,
             UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
             Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat),
-            2, :(:cdecl), nothing,
+            2, :(:cdecl),
             :(Base.unsafe_convert(Ptr{Ptr{Cchar}}, strp)), :(Base.unsafe_convert(Cstring, fmt)),
             0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
             Cfloat(1.1), Cfloat(2.2), Cfloat(3.3), Cfloat(4.4), Cfloat(5.5), Cfloat(6.6), Cfloat(7.7), Cfloat(8.8), Cfloat(9.9),
@@ -1676,7 +1676,7 @@ using Base: ccall_macro_parse, ccall_macro_lower
 end
 
 @testset "ensure the base-case of @ccall works, including library name and pointer interpolation" begin
-    call = ccall_macro_lower(:ccall, nothing, ccall_macro_parse( :( libstring.func(
+    call = ccall_macro_lower(:ccall, ccall_macro_parse( :( libstring.func(
         str::Cstring,
         num1::Cint,
         num2::Cint
@@ -1695,12 +1695,11 @@ end
                :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring, Cint, Cint))))),
                0,
                :(:ccall),
-               nothing,
                :arg1, :arg2, :arg3, :arg1root, :arg2root, :arg3root))
         end)
 
     # pointer interpolation
-    call = ccall_macro_lower(:ccall, nothing, ccall_macro_parse(:( $(Expr(:$, :fptr))("bar"::Cstring)::Cvoid ))...)
+    call = ccall_macro_lower(:ccall, ccall_macro_parse(:( $(Expr(:$, :fptr))("bar"::Cstring)::Cvoid ))...)
     @test Base.remove_linenums!(call) == Base.remove_linenums!(
     quote
         func = $(Expr(:escape, :fptr))
@@ -1712,7 +1711,7 @@ end
         end
         local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
         local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
-        $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), nothing, :arg1, :arg1root))
+        $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), :arg1, :arg1root))
     end)
 
 end
