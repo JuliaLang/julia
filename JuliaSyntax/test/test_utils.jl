@@ -79,60 +79,87 @@ function equals_flisp_parse(tree)
 end
 
 """
-Select a subtree of `tree` which is inconsistent between flisp and JuliaSyntax
-parsers. This isn't very precise yet!
+    reduce_test(text::AbstractString)
+    reduce_test(tree::SyntaxNode)
 
-TODO:
-* For some syntax elements (eg, the `x in xs` inside `for x in xs`) the
-  children can't be parsed out of context. Fix this.
-* Replace good siblings of bad nodes with placeholders. For blocks, delete such
-  siblings.
+Select minimal subtrees of `text` or `tree` which are inconsistent between
+flisp and JuliaSyntax parsers.
 """
-function reduce_test(tree)
+function reduce_test(failing_subtrees, tree)
     if equals_flisp_parse(tree)
-        return nothing
+        return false
     end
     if !haschildren(tree)
-        return tree
-    else
+        push!(failing_subtrees, tree)
+        return true
+    end
+    had_failing_subtrees = false
+    if haschildren(tree)
         for child in children(tree)
             if is_trivia(child) || !haschildren(child)
                 continue
             end
-            t = reduce_test(child)
-            if !isnothing(t)
-                return t
-            end
+            had_failing_subtrees |= reduce_test(failing_subtrees, child)
         end
     end
-    return tree
+    if !had_failing_subtrees
+        push!(failing_subtrees, tree)
+    end
+    return true
+end
+
+function reduce_test(tree::SyntaxNode)
+    subtrees = Vector{typeof(tree)}()
+    reduce_test(subtrees, tree)
+    subtrees
+end
+
+function reduce_test(text::AbstractString)
+    tree, _, _ = parse(SyntaxNode, text)
+    reduce_test(tree)
+end
+
+
+"""
+    format_reduced_tests(out::IO, file_content)
+
+Reduced the syntax (a string or SyntaxNode) from `file_content` into the
+minimal failing subtrees of syntax and write the results to `out`.
+"""
+function format_reduced_tests(out::IO, file_content)
+    text = nothing
+    try
+        rtrees = reduce_test(file_content)
+        first = true
+        for rt in rtrees
+            if !first
+                print(out, "\n#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+            end
+            first = false
+            print(out, sourcetext(rt))
+        end
+    catch
+        @error "Error reducing file" exception=current_exceptions()
+        print(out, sourcetext(file_content))
+    end
 end
 
 function reduce_all_failures_in_path(basedir, outdir)
     rm(outdir, force=true, recursive=true)
     mkpath(outdir)
     for filename in find_source_in_path(basedir)
-        filetext = read(filename, String)
         if !(try parsers_agree_on_file(filename) catch exc false end)
             @info "Found failure" filename
-            filetext = read(filename, String)
-            text = nothing
-            try
-                tree, _ = parse(SyntaxNode, filetext)
-                rtree = reduce_test(tree)
-                text = sourcetext(rtree)
-            catch
-                @error "Error reducing file" exception=current_exceptions()
-                text = filetext
-            end
             bn,_ = splitext(basename(filename))
             outname = joinpath(outdir, "$bn.jl")
-            i=1
+            i = 1
             while isfile(outname)
                 outname = joinpath(outdir, "$bn-$i.jl")
                 i += 1
             end
-            write(outname, text)
+            open(outname, "w") do io
+                format_reduced_tests(io, read(filename, String))
+            end
         end
     end
 end

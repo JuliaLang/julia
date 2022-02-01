@@ -91,6 +91,7 @@ function Base.getindex(source::SourceFile, rng::AbstractRange)
     source.code[i:j]
 end
 
+# TODO: Change view() here to `sourcetext` ?
 function Base.view(source::SourceFile, rng::AbstractRange)
     i = first(rng)
     j = prevind(source.code, last(rng)+1)
@@ -101,3 +102,6 @@ function Base.getindex(source::SourceFile, i::Int)
     source.code[i]
 end
 
+function sourcetext(source::SourceFile)
+    return source.code
+end

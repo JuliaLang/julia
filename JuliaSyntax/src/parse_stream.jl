@@ -692,7 +692,7 @@ If `steal_textbuf==true`, this is permitted to steal the content of the
 stream's text buffer. Note that this leaves the `ParseStream` in an invalid
 state for further parsing.
 """
-function sourcetext(stream; steal_textbuf=false)
+function sourcetext(stream::ParseStream; steal_textbuf=false)
     if stream.text_root isa AbstractString && codeunit(stream.text_root) == UInt8
         return stream.text_root
     elseif steal_textbuf
