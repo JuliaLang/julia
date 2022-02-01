@@ -967,10 +967,12 @@ function parse_where_chain(ps0::ParseState, mark)
     ps = ParseState(ps0, where_enabled=false)
     while peek(ps) == K"where"
         bump(ps, TRIVIA_FLAG) # where
+        bump_trivia(ps, skip_newlines=true)
         k = peek(ps)
         if k == K"{"
             m = position(ps)
             bump(ps, TRIVIA_FLAG)
+            # x where \n {T}  ==>  (where x T)
             # x where {T,S}  ==>  (where x T S)
             ckind, cflags = parse_cat(ps, K"}", ps.end_symbol)
             if ckind != K"vect"
@@ -982,6 +984,7 @@ function parse_where_chain(ps0::ParseState, mark)
             emit(ps, mark, K"where")
         else
             # x where T     ==>  (where x T)
+            # x where \n T  ==>  (where x T)
             # x where T<:S  ==>  (where x (<: T S))
             parse_comparison(ps)
             emit(ps, mark, K"where")

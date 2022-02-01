@@ -204,10 +204,12 @@ tests = [
         "<:(x::T)"      =>  "(<: (:: x T))"
         "<: A where B"  =>  "(<: (where A B))"
         # Really for parse_where
+        "x where \n {T}"  =>  "(where x T)"
         "x where {T,S}"  =>  "(where x T S)"
         "x where {T S}"  =>  "(where x (bracescat (row T S)))"
         "x where {y for y in ys}"  =>  "(where x (braces (generator y (= y ys))))"
         "x where T"  =>  "(where x T)"
+        "x where \n T"  =>  "(where x T)"
         "x where T<:S"  =>  "(where x (<: T S))"
     ],
     JuliaSyntax.parse_unary_prefix => [
