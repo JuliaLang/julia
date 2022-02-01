@@ -125,7 +125,7 @@ end
 # Crude recovery heuristic: bump any tokens which aren't block or bracket
 # closing tokens.
 function bump_closing_token(ps, closing_kind)
-    # TODO: Refactor with recover() ?
+    # todo: Refactor with recover() ?
     bump_trivia(ps)
     if peek(ps) == closing_kind
         bump(ps, TRIVIA_FLAG)
@@ -587,10 +587,6 @@ function parse_comma(ps::ParseState, do_emit=true)
     while true
         if peek(ps) != K","
             if do_emit && n_commas >= 1
-                # FIXME: is use of n_commas correct here? flisp comments say:
-                # () => (tuple)
-                # (ex2 ex1) => (tuple ex1 ex2)
-                # (ex1,) => (tuple ex1)
                 emit(ps, mark, K"tuple")
             end
             return n_commas
@@ -1154,7 +1150,7 @@ function parse_unary_call(ps::ParseState)
         # Setup possible whitespace error between operator and (
         ws_mark = position(ps)
         bump_trivia(ps)
-        ws_mark_end = position(ps) # FIXME - 1
+        ws_mark_end = position(ps)
         ws_error_pos = emit(ps, ws_mark, K"TOMBSTONE")
 
         mark_before_paren = position(ps)
@@ -1447,7 +1443,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             end
         elseif k == K"["
             if is_macrocall
-                # a().@x[1]  ==> FIXME
+                # a().@x[1]  ==> (macrocall (ref (error (. (call a) (quote x))) 1))
                 finish_macroname(ps, mark, is_valid_modref, macro_name_position)
             end
             # a [i]  ==>  (ref a (error-t) i)
@@ -1457,8 +1453,11 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                                       K"]", ps.end_symbol)
             # a[i]    ==>  (ref a i)
             # a[i,j]  ==>  (ref a i j)
+            # T[x   y]  ==>  (typed_hcat T x y)
+            # T[x ; y]  ==>  (typed_vcat T x y)
+            # T[a b; c d]  ==>  (typed_vcat T (row a b) (row c d))
             # T[x for x in xs]  ==>  (typed_comprehension T (generator x (= x xs)))
-            # TODO: other test cases
+            #v1.8: T[a ; b ;; c ; d]  ==>  (typed_ncat-2 T (nrow-1 a b) (nrow-1 c d))
             outk = ckind == K"vect"          ? K"ref"                  :
                    ckind == K"hcat"          ? K"typed_hcat"           :
                    ckind == K"vcat"          ? K"typed_vcat"           :
@@ -2437,7 +2436,7 @@ function parse_iteration_spec(ps::ParseState)
         recover(ps, error="invalid iteration spec: expected one of `=` `in` or `∈`") do ps, k
             k in KSet`, NewlineWs` || is_closing_token(ps, k)
         end
-        # TODO: or try parse_pipe_lt ???
+        # Or try parse_pipe_lt ???
     end
     emit(ps, mark, K"=")
 end
@@ -2693,7 +2692,6 @@ function parse_array_separator(ps)
         if n_semis == 2 && peek(ps) == K"NewlineWs"
             # Line continuation
             # [a b ;; \n \n c]
-            # TODO: Should this only consume a single newline?
             while peek(ps) == K"NewlineWs"
                 bump(ps, TRIVIA_FLAG)
             end
@@ -3073,7 +3071,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     bump_trivia(ps)
     mark = position(ps)
     leading_kind = peek(ps)
-    # TODO: Reorder to put most likely tokens first?
+    # todo: Reorder to put most likely tokens first?
     if leading_kind == K":"
         # symbol/expression quote
         # :foo  =>  (quote foo)
