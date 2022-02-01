@@ -4,6 +4,9 @@
         @test parseall(Expr, ":(a)", rule=:atom) == QuoteNode(:a)
         @test parseall(Expr, ":(:a)", rule=:atom) == Expr(:quote, QuoteNode(:a))
         @test parseall(Expr, ":(1+2)", rule=:atom) == Expr(:quote, Expr(:call, :+, 1, 2))
+        # Compatibility hack for VERSION >= v"1.4"
+        # https://github.com/JuliaLang/julia/pull/34077
+        @test parseall(Expr, ":true", rule=:atom) == Expr(:quote, true)
     end
 
     @testset "Short form function line numbers" begin

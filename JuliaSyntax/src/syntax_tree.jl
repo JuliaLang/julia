@@ -404,7 +404,9 @@ function _to_expr(node::SyntaxNode, iteration_spec=false)
         end
     end
     if headsym == :inert || (headsym == :quote && length(args) == 1 &&
-                             !(a1 = only(args); a1 isa Expr || a1 isa QuoteNode))
+                 !(a1 = only(args); a1 isa Expr || a1 isa QuoteNode ||
+                   a1 isa Bool  # <- compat hack, Julia 1.4+
+                  ))
         return QuoteNode(only(args))
     else
         return Expr(headsym, args...)
