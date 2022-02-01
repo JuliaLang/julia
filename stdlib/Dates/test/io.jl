@@ -475,7 +475,7 @@ end
     @test Dates.parse_components(".123", Dates.DateFormat(".s")) == [Dates.Millisecond(123)]
     @test Dates.parse_components(".1230", Dates.DateFormat(".s")) == [Dates.Millisecond(123)]
     # Issue #44003
-    @test_throws AssertionError Dates.parse_components(".1234", Dates.DateFormat(".s"))
+    @test_throws ArgumentError Dates.parse_components(".1234", Dates.DateFormat(".s"))
 
     # Ensure that no overflow occurs when using Int32 literals: Int32(10)^10
     @test Dates.parse_components("." * rpad(999, 10, '0'), Dates.DateFormat(".s")) == [Dates.Millisecond(999)]
