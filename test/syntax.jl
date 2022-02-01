@@ -2758,3 +2758,7 @@ end
 
 @generated g25678(x) = return :x
 @test g25678(7) === 7
+
+let ex = :(const $(esc(:x)) = 1; (::typeof(2))() = $(esc(:x)))
+    @test macroexpand(Main, Expr(:var"hygienic-scope", ex, Main)).args[3].args[1] == :((::$(GlobalRef(Main, :typeof))(2))())
+end
