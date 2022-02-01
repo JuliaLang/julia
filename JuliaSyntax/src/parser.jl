@@ -342,21 +342,14 @@ end
 # produces structures like (= a (= b (= c d)))
 #
 # flisp: parse-RtoL
-function parse_RtoL(ps::ParseState, down, is_op, syntactic, self)
+function parse_RtoL(ps::ParseState, down, is_op, self)
     mark = position(ps)
     down(ps)
-    t = peek_token(ps)
-    k = kind(t)
+    k = peek(ps)
     if is_op(k)
-        if syntactic isa Bool ? syntactic : syntactic(k)
-            bump(ps, TRIVIA_FLAG)
-            self(ps)
-            emit(ps, mark, k, flags(t))
-        else
-            bump(ps)
-            self(ps)
-            emit(ps, mark, K"call", INFIX_FLAG)
-        end
+        bump(ps)
+        self(ps)
+        emit(ps, mark, K"call", INFIX_FLAG)
     end
 end
 
@@ -609,8 +602,9 @@ function parse_comma(ps::ParseState, do_emit=true)
 end
 
 # flisp: parse-pair
+# a => b  ==>  (call-i a => b)
 function parse_pair(ps::ParseState)
-    parse_RtoL(ps, parse_cond, is_prec_pair, false, parse_pair)
+    parse_RtoL(ps, parse_cond, is_prec_pair, parse_pair)
 end
 
 # Parse short form conditional expression
@@ -659,14 +653,30 @@ function parse_cond(ps::ParseState)
     emit(ps, mark, K"if")
 end
 
-# Parse arrows
-# x → y     ==>  (call-i x → y)
-# x <--> y  ==>  (call-i x <--> y)
-# x --> y   ==>  (--> x y)           # The only syntactic arrow
+# Parse arrows.  Like parse_RtoL, but specialized for --> syntactic operator
 #
 # flisp: parse-arrow
 function parse_arrow(ps::ParseState)
-    parse_RtoL(ps, parse_or, is_prec_arrow, ==(K"-->"), parse_arrow)
+    mark = position(ps)
+    parse_or(ps)
+    t = peek_token(ps)
+    k = kind(t)
+    if is_prec_arrow(k)
+        if kind(t) == K"-->" && !is_decorated(t)
+            # x --> y   ==>  (--> x y)           # The only syntactic arrow
+            bump(ps, TRIVIA_FLAG)
+            parse_arrow(ps)
+            emit(ps, mark, k, flags(t))
+        else
+            # x → y     ==>  (call-i x → y)
+            # x <--> y  ==>  (call-i x <--> y)
+            # x .--> y  ==>  (call-i x .--> y)
+            # x -->₁ y  ==>  (call-i x -->₁ y)
+            bump(ps)
+            parse_arrow(ps)
+            emit(ps, mark, K"call", INFIX_FLAG)
+        end
+    end
 end
 
 # Like parse_RtoL, but specialized for the version test of dotted operators.
@@ -684,7 +694,6 @@ function parse_lazy_cond(ps::ParseState, down, is_op, self)
         end
     end
 end
-
 
 # x || y || z   ==>   (|| x (|| y z))
 #v1.6: x .|| y  ==>   (error (.|| x y))
@@ -750,7 +759,7 @@ end
 # x <| y <| z  ==>  (call-i x <| (call-i y <| z))
 # flisp: parse-pipe<
 function parse_pipe_lt(ps::ParseState)
-    parse_RtoL(ps, parse_pipe_gt, is_prec_pipe_lt, false, parse_pipe_lt)
+    parse_RtoL(ps, parse_pipe_gt, is_prec_pipe_lt, parse_pipe_lt)
 end
 
 # x |> y |> z  ==>  (call-i (call-i x |> y) |> z)
@@ -1234,7 +1243,7 @@ end
 
 # flisp: parse-factor-after
 function parse_factor_after(ps::ParseState)
-    parse_RtoL(ps, parse_juxtapose, is_prec_power, false, parse_factor_after)
+    parse_RtoL(ps, parse_juxtapose, is_prec_power, parse_factor_after)
 end
 
 # Parse type declarations and lambda syntax
