@@ -261,10 +261,15 @@ tests = [
         "a().@x y"  =>  "(macrocall (error (. (call a) (quote x))) y)"
         "a().@x{y}" =>  "(macrocall (error (. (call a) (quote x))) (braces y))"
         # array indexing, typed comprehension, etc
+        "a().@x[1]" => "(macrocall (ref (error (. (call a) (quote x))) 1))"
         "a[i]"  =>  "(ref a i)"
         "a [i]"  =>  "(ref a (error-t) i)"
         "a[i,j]"  =>  "(ref a i j)"
+        "T[x   y]"  =>  "(typed_hcat T x y)"
+        "T[x ; y]"  =>  "(typed_vcat T x y)"
+        "T[a b; c d]"  =>  "(typed_vcat T (row a b) (row c d))"
         "T[x for x in xs]"  =>  "(typed_comprehension T (generator x (= x xs)))"
+        ((v=v"1.8",), "T[a ; b ;; c ; d]") => "(typed_ncat-2 T (nrow-1 a b) (nrow-1 c d))"
         # Keyword params always use kw inside tuple in dot calls
         "f.(a,b)"   =>  "(. f (tuple a b))"
         "f.(a=1)"   =>  "(. f (tuple (kw a 1)))"
