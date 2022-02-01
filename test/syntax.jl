@@ -3042,3 +3042,7 @@ end
     @test x == 1
     @test f == 2
 end
+
+let ex = :(const $(esc(:x)) = 1; (::typeof(2))() = $(esc(:x)))
+    @test macroexpand(Main, Expr(:var"hygienic-scope", ex, Main)).args[3].args[1] == :((::$(GlobalRef(Main, :typeof))(2))())
+end
