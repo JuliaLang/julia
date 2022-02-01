@@ -1629,7 +1629,7 @@ end
 
 function bareiss_update!(zero!, M::AbstractMatrix, k, swapto, pivot, prev_pivot)
     V = @view M[k+1:end, k+1:end]
-    V .= @views exactdiv.(V * pivot - M[k+1:end, k] * M[k, k+1:end]', prev_pivot)
+    V .= @views exactdiv.(V .* pivot .- M[k+1:end, k] * M[k, k+1:end]', prev_pivot)
     zero!(M, k+1:size(M, 1), k)
 end
 
