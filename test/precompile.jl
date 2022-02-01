@@ -584,11 +584,11 @@ precompile_test_harness(false) do dir
 end
 end
 
-# method root provenance
-# setindex!(::Dict{K,V}, ::Any, ::K) adds both compression and codegen roots
+# method root provenance & external code caching
 precompile_test_harness("code caching") do dir
     Bid = rootid(Base)
     Cache_module = :Cacheb8321416e8a3e2f1
+    # Note: calling setindex!(::Dict{K,V}, ::Any, ::K) adds both compression and codegen roots
     write(joinpath(dir, "$Cache_module.jl"),
           """
           module $Cache_module
@@ -618,12 +618,15 @@ precompile_test_harness("code caching") do dir
     Base.compilecache(Base.PkgId(string(Cache_module)))
     @eval using $Cache_module
     M = getfield(@__MODULE__, Cache_module)
+    # Test that this cache file "owns" all the roots
     Mid = rootid(M)
     for name in (:f, :fpush, :callboth)
         func = getfield(M, name)
         m = only(collect(methods(func)))
         @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
     end
+    # Check that we can cache external CodeInstances:
+    # size(::Vector) has an inferred specialization for Vector{X}
     msize = which(size, (Vector{<:Any},))
     hasspec = false
     for i = 1:length(msize.specializations)
@@ -632,7 +635,7 @@ precompile_test_harness("code caching") do dir
             if isa(mi, Core.MethodInstance)
                 tt = Base.unwrap_unionall(mi.specTypes)
                 if tt.parameters[2] == Vector{Cacheb8321416e8a3e2f1.X}
-                    if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt)
+                    if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing
                         hasspec = true
                         break
                     end
@@ -641,27 +644,33 @@ precompile_test_harness("code caching") do dir
         end
     end
     @test hasspec
+    # Test that compilation adds to method roots with appropriate provenance
     m = which(setindex!, (Dict{M.X,Any}, Any, M.X))
-    @test M.X ∈ m.roots               # requires caching external compilation results
+    @test M.X ∈ m.roots
+    # Check that roots added outside of incremental builds get attributed to a moduleid of 0
     Base.invokelatest() do
         Dict{M.X2,Any}()[M.X2()] = nothing
     end
     @test M.X2 ∈ m.roots
     groups = group_roots(m)
-    @test M.X ∈ groups[Mid]           # requires caching external compilation results
+    @test M.X ∈ groups[Mid]           # attributed to M
     @test M.X2 ∈ groups[0]            # activate module is not known
     @test !isempty(groups[Bid])
+    # Check that internal methods and their roots are accounted appropriately
     minternal = which(M.getelsize, (Vector,))
     mi = minternal.specializations[1]
+    @test Base.unwrap_unionall(mi.specTypes).parameters[2] == Vector{Int32}
     ci = mi.cache
     @test ci.relocatability == 1
+    @test ci.inferred !== nothing
+    # ...and that we can add "untracked" roots & non-relocatable CodeInstances to them too
     Base.invokelatest() do
         M.getelsize(M.X2[])
     end
     mi = minternal.specializations[2]
     ci = mi.cache
     @test ci.relocatability == 0
-    # PkgA loads PkgB, and both add roots to the same method (both before and after loading B)
+    # PkgA loads PkgB, and both add roots to the same `push!` method (both before and after loading B)
     Cache_module2 = :Cachea1544c83560f0c99
     write(joinpath(dir, "$Cache_module2.jl"),
           """
@@ -693,11 +702,78 @@ precompile_test_harness("code caching") do dir
     end
     mT = which(push!, (Vector{T} where T, Any))
     groups = group_roots(mT)
-    # all below require caching external CodeInstances
     @test M2.Y ∈ groups[M2id]
     @test M2.Z ∈ groups[M2id]
     @test M.X ∈ groups[Mid]
     @test M.X ∉ groups[M2id]
+    # backedges of external MethodInstances
+    # Root gets used by RootA and RootB, and both consumers end up inferring the same MethodInstance from Root
+    # Do both callers get listed as backedges?
+    RootModule = :Root_0xab07d60518763a7e
+    write(joinpath(dir, "$RootModule.jl"),
+          """
+          module $RootModule
+          function f(x)
+              while x < 10
+                  x += oftype(x, 1)
+              end
+              return x
+          end
+          g1() = f(Int16(9))
+          g2() = f(Int16(9))
+          # all deliberately uncompiled
+          end
+          """)
+    RootA = :RootA_0xab07d60518763a7e
+    write(joinpath(dir, "$RootA.jl"),
+          """
+          module $RootA
+          using $RootModule
+          fA() = $RootModule.f(Int8(4))
+          fA()
+          $RootModule.g1()
+          end
+          """)
+    RootB = :RootB_0xab07d60518763a7e
+    write(joinpath(dir, "$RootB.jl"),
+          """
+          module $RootB
+          using $RootModule
+          fB() = $RootModule.f(Int8(4))
+          fB()
+          $RootModule.g2()
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(RootA)))
+    Base.compilecache(Base.PkgId(string(RootB)))
+    @eval using $RootA
+    @eval using $RootB
+    MA = getfield(@__MODULE__, RootA)
+    MB = getfield(@__MODULE__, RootB)
+    M = getfield(MA, RootModule)
+    m = which(M.f, (Any,))
+    for mi in m.specializations
+        mi === nothing && continue
+        if mi.specTypes.parameters[2] === Int8
+            # external callers
+            mods = Module[]
+            for be in mi.backedges
+                push!(mods, be.def.module)
+            end
+            @test MA ∈ mods
+            @test MB ∈ mods
+            @test length(mods) == 2
+        elseif mi.specTypes.parameters[2] === Int16
+            # internal callers
+            meths = Method[]
+            for be in mi.backedges
+                push!(meths, be.def)
+            end
+            @test which(M.g1, ()) ∈ meths
+            @test which(M.g2, ()) ∈ meths
+            @test length(meths) == 2
+        end
+    end
 end
 
 # test --compiled-modules=no command line option

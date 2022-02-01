@@ -2151,7 +2151,50 @@ static void jl_insert_method_instances(jl_array_t *list)
     for (i = 0; i < l; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
         assert(jl_is_method_instance(mi));
-        jl_specializations_get_or_insert(mi);
+        jl_method_instance_t *milive = jl_specializations_get_or_insert(mi);
+        ptrhash_put(&uniquing_table, mi, milive);  // store the association for the 2nd pass
+    }
+    // We may need to fix up the backedges for the ones that didn't "go live"
+    for (i = 0; i < l; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+        jl_method_instance_t *milive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, mi);
+        if (milive != mi) {
+            // A previously-loaded module compiled this method, so the one we deserialized will be dropped.
+            // But make sure the backedges are copied over.
+            if (mi->backedges) {
+                if (!milive->backedges) {
+                    // Copy all the backedges (after looking up the live ones)
+                    size_t j, n = jl_array_len(mi->backedges);
+                    milive->backedges = jl_alloc_vec_any(n);
+                    jl_gc_wb(milive, milive->backedges);
+                    for (j = 0; j < n; j++) {
+                        jl_method_instance_t *be = (jl_method_instance_t*)jl_array_ptr_ref(mi->backedges, j);
+                        jl_method_instance_t *belive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, be);
+                        if (belive == HT_NOTFOUND)
+                            belive = be;
+                        jl_array_ptr_set(milive->backedges, j, belive);
+                    }
+                } else {
+                    // Copy the missing backedges
+                    size_t j, k, n = jl_array_len(mi->backedges), nlive = jl_array_len(milive->backedges);
+                    for (j = 0; j < n; j++) {
+                        jl_method_instance_t *be = (jl_method_instance_t*)jl_array_ptr_ref(mi->backedges, j);
+                        jl_method_instance_t *belive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, be);
+                        if (belive == HT_NOTFOUND)
+                            belive = be;
+                        int found = 0;
+                        for (k = 0; k < nlive; k++) {
+                            if (belive == (jl_method_instance_t*)jl_array_ptr_ref(milive->backedges, k)) {
+                                found = 1;
+                                break;
+                            }
+                        }
+                        if (!found)
+                            jl_array_ptr_1d_push(milive->backedges, (jl_value_t*)belive);
+                    }
+                }
+            }
+        }
     }
 }
 
