@@ -25,6 +25,7 @@ octint(s) = julia_string_to_number(s, K"OctInt")
         @test julia_string_to_number("10e-0", K"Float") === Float64(10)
         @test julia_string_to_number("10f-0", K"Float") === Float32(10)
         @test julia_string_to_number("0x0ap-0", K"Float") === Float64(10)
+        @test julia_string_to_number("0xffp-0", K"Float") === Float64(255)
     end
 
     # HexInt
