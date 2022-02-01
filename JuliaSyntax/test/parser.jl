@@ -155,10 +155,11 @@ tests = [
         "+{T}(x::T)"  =>  "(call (curly + T) (:: x T))"
         "*(x)"        =>  "(call * x)"
         # Prefix function calls for operators which are both binary and unary
-        "+(a,b)"  =>  "(call + a b)"
+        "+(a,b)"   =>  "(call + a b)"
         "+(a=1,)"  =>  "(call + (kw a 1))"
         "+(a...)"  =>  "(call + (... a))"
-        "+(a;b,c)"  =>  "(call + a (parameters b c))"
+        "+(a;b,c)" =>  "(call + a (parameters b c))"
+        "+(;a)"    =>  "(call + (parameters a))"
         # Whitespace not allowed before prefix function call bracket
         "+ (a,b)"  =>  "(call + (error) a b)"
         # Prefix calls have higher precedence than ^
