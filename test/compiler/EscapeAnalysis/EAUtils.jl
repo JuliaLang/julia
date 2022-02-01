@@ -273,6 +273,9 @@ function get_name_color(x::EscapeInfo, symbol::Bool = false)
     elseif EA.has_return_escape(x)
         name = (getname(EA.ReturnEscape), "↑")
         color = EA.has_thrown_escape(x) ? :yellow : :blue
+    elseif EA.has_finalizer_escape(x)
+        name = (getname(EA.FinalizerEscape), "&")
+        color = EA.has_thrown_escape(x) ? :yellow : :blue
     else
         name = (nothing, "*")
         color = EA.has_thrown_escape(x) ? :yellow : :bold
