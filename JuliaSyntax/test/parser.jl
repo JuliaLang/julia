@@ -654,6 +654,36 @@ tests = [
     ],
 ]
 
+# Known bugs
+broken_tests = [
+    JuliaSyntax.parse_atom => [
+        # Triple-quoted string processing
+        "\"\"\"\n\$x\"\"\"" => "(string x)"
+        # Operator-named macros with and without spaces
+        "@! x"  => "(macrocall @! x)"
+        "@.. x" => "(macrocall @.. x)"
+        "@!x"   => "(macrocall @! x)"
+        "@..x"  => "(macrocall @.. x)"
+        "@.x"   => "(macrocall @__dot__ x)"
+        # Invalid numeric literals
+        "0b12" => "(error \"0b12\")"
+        "0xex" => "(error \"0xex\")"
+        # Square brackets without space in macrocall
+        "@S[a,b]"  => "(macrocall S (vect a b))"
+        "@S[a b]"  => "(macrocall S (hcat a b))"
+        "@S[a; b]" => "(macrocall S (vcat a b))"
+        "@S[a; b ;; c; d]" => "(macrocall S (ncat-2 (nrow-1 a b) (nrow-1 c d)))"
+    ]
+    JuliaSyntax.parse_call => [
+        # kw's in ref
+        "x[i=y]" => "(ref x (kw i y))"
+    ]
+    JuliaSyntax.parse_juxtapose => [
+        # Want: "numeric constant \"10.\" cannot be implicitly multiplied because it ends with \".\""
+        "10.x" => "(error (call * 10.0 x))"
+    ]
+]
+
 @testset "Inline test cases" begin
     @testset "$production" for (production, test_specs) in tests
         @testset "$(repr(input))" for (input,output) in test_specs
@@ -663,6 +693,16 @@ tests = [
                 opts = NamedTuple()
             end
             @test test_parse(production, input; opts...) == output
+        end
+    end
+    @testset "Broken $production" for (production, test_specs) in broken_tests
+        @testset "$(repr(input))" for (input,output) in test_specs
+            if !(input isa AbstractString)
+                opts,input = input
+            else
+                opts = NamedTuple()
+            end
+            @test_broken test_parse(production, input; opts...) == output
         end
     end
 end
