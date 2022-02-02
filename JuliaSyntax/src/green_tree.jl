@@ -2,16 +2,17 @@
     GreenNode(head, span)
     GreenNode(head, children...)
 
-A "green tree" is a lossless syntax tree which overlays all the source text and
-where
+A "green tree" in Roslyn (C# compiler) terminology is a lossless syntax tree
+which overlays all the source text. The most basic properties of a green tree
+are that:
 
 * Nodes cover a contiguous span of bytes in the text
-* Node children are ordered in the same order as the text
-* Nodes are immutable and don't know their absolute position, so can be cached
-  and reused
+* Sibling nodes are ordered in the same order as the text
 
 As implementation choices, we choose that:
 
+* Nodes are immutable and don't know their parents or absolute position, so can
+  be cached and reused
 * Nodes are homogenously typed at the language level so they can be stored
   concretely, with the `head` defining the node type. Normally this would
   include a "syntax kind" enumeration, but it can also include flags and record

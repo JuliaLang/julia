@@ -125,13 +125,14 @@ end
 
 
 """
-    parseall(TreeType, input;
+    parseall(TreeType, input...;
              rule=:toplevel,
              version=VERSION,
              ignore_trivia=true)
 
 Experimental convenience interface to parse `input` as Julia code, emitting an
-error if the entire input is not consumed. By default `parseall` will ignore
+error if the entire input is not consumed. `input` can be a string or any other
+valid input to the `ParseStream` constructor. By default `parseall` will ignore
 whitespace and comments before and after valid code but you can turn this off
 by setting `ignore_trivia=false`.
 
@@ -141,7 +142,7 @@ See [`parse`](@ref) for a more complete and powerful interface to the parser,
 as well as a description of the `version` and `rule` keywords.
 """
 function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
-                  ignore_trivia=true) where {T}
+                  ignore_trivia=true, kws...) where {T}
     stream = ParseStream(input...; version=version)
     if ignore_trivia && rule != :toplevel
         bump_trivia(stream, skip_newlines=true)
@@ -161,7 +162,7 @@ function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
     # * It's kind of required for GreenNode, as GreenNode only records spans,
     #   not absolute positions.
     # * Dropping it would be ok for SyntaxNode and Expr...
-    tree = build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel")
+    tree = build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel", kws...)
     if !isempty(stream.diagnostics)
         # Crudely format any warnings to the current logger.
         buf = IOBuffer()
