@@ -4018,3 +4018,13 @@ const op_capture_world = f_mk_opaque()
 f_redefine_me(x) = x+2
 @test op_capture_world() == 1
 @test f_mk_opaque()() == 2
+
+# Test that purity doesn't try to accidentally run unreachable code due to
+# boundscheck elimination
+function f_boundscheck_elim(n)
+    # Inbounds here assumes that this is only ever called with n==0, but of
+    # course the compiler has no way of knowing that, so it must not attempt
+    # to run the @inbounds `getfield(sin, 1)`` that ntuple generates.
+    ntuple(x->(@inbounds getfield(sin, x)), n)
+end
+@test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]

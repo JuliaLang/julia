@@ -701,7 +701,7 @@ function try_compute_fieldidx(typ::DataType, @nospecialize(field))
     return field
 end
 
-function getfield_nothrow(argtypes::Vector{Any})
+function getfield_boundscheck(argtypes::Vector{Any}) # ::Union{Bool, Nothing, Type{Bool}}
     if length(argtypes) == 2
         boundscheck = Bool
     elseif length(argtypes) == 3
@@ -712,11 +712,21 @@ function getfield_nothrow(argtypes::Vector{Any})
     elseif length(argtypes) == 4
         boundscheck = argtypes[4]
     else
-        return false
+        return nothing
     end
-    widenconst(boundscheck) !== Bool && return false
-    bounds_check_disabled = isa(boundscheck, Const) && boundscheck.val === false
-    return getfield_nothrow(argtypes[1], argtypes[2], !bounds_check_disabled)
+    widenconst(boundscheck) !== Bool && return nothing
+    boundscheck = widenconditional(boundscheck)
+    if isa(boundscheck, Const)
+        return boundscheck.val
+    else
+        return Bool
+    end
+end
+
+function getfield_nothrow(argtypes::Vector{Any})
+    boundscheck = getfield_boundscheck(argtypes)
+    boundscheck === nothing && return false
+    return getfield_nothrow(argtypes[1], argtypes[2], !(boundscheck === false))
 end
 function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::Bool)
     # If we don't have boundscheck and don't know the field, don't even bother
@@ -1745,7 +1755,8 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
 
     @assert !contains_is(_SPECIAL_BUILTINS, f)
 
-    if (f === Core.getfield || f === Core.isdefined) && length(argtypes) >= 2
+    nothrow = false
+    if (f === Core.getfield || f === Core.isdefined) && length(argtypes) >= 3
         # consistent if the argtype is immutable
         if isvarargtype(argtypes[2])
             return Effects(TRISTATE_UNKNOWN, ALWAYS_TRUE, TRISTATE_UNKNOWN, ALWAYS_TRUE)
@@ -1756,12 +1767,26 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
         end
         s = s::DataType
         ipo_consistent = !ismutabletype(s)
+        nothrow = false
+        if f === Core.getfield && !isvarargtype(argtypes[end]) &&
+                getfield_boundscheck(argtypes[2:end]) !== true
+            # If we cannot independently prove inboundsness, taint consistency.
+            # The inbounds-ness assertion requires dynamic reachability, while
+            # :consistent needs to be true for all input values.
+            # N.B. We do not taint for `--check-bounds=no` here -that happens in
+            # InferenceState.
+            nothrow = getfield_nothrow(argtypes[2], argtypes[3], true)
+            ipo_consistent &= nothrow
+        end
     else
         ipo_consistent = contains_is(_IDEMPOTENT_BUILTINS, f)
     end
+    # If we computed nothrow above for getfield, no need to repeat the procedure here
+    if !nothrow
+        nothrow = isvarargtype(argtypes[end]) ? false :
+            builtin_nothrow(f, argtypes[2:end], rt)
+    end
     effect_free = contains_is(_PURE_OR_ERROR_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
-    nothrow = isvarargtype(argtypes[end]) ? false :
-        builtin_nothrow(f, argtypes[2:end], rt)
 
     return Effects(
         ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
