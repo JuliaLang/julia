@@ -373,11 +373,15 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     B
 end
 
-function \(D::Diagonal, B::AbstractVecOrMat)
+function \(D::Diagonal, B::AbstractVector)
     j = findfirst(iszero, D.diag)
     isnothing(j) || throw(SingularException(j))
     return D.diag .\ B
 end
+# ugly hack in order to preserve structure like *diagonal, but at the same time allow for
+# eltype conversion of unconvertible types (like units)
+\(D::Diagonal, B::AbstractMatrix) =
+    ldiv!((_ -> zero(promote_op(\, eltype(D), eltype(B)))).(B), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
