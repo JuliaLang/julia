@@ -20,6 +20,11 @@ usdt:usr/lib/libjulia-internal.so:julia:rt__new__task
     printf("Task created: %x (Parent %x)\n", arg1, arg0);
 }
 
+usdt:usr/lib/libjulia-internal.so:julia:rt__start__task
+{
+    printf("Task started: %x\n", arg0);
+}
+
 usdt:usr/lib/libjulia-internal.so:julia:rt__finish__task
 {
     printf("Task finished: %x\n", arg0);

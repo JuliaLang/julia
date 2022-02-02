@@ -99,9 +99,10 @@ the probe handler.
 1. `julia:rt__run__task(task)`: Switching to task `task` on current thread.
 2. `julia:rt__pause__task(task)`: Switching from task `task` on current thread.
 3. `julia:rt__new__task(parent, child)`: Task `parent` created task `child` on current thread.
-4. `julia:rt__finish__task(task)`: Task `task` finished and will no longer execute.
-5. `julia:rt__start__process__events(task)`: Task `task` started processing libuv events.
-6. `julia:rt__finish__process__events(task)`: Task `task` finished processing libuv events.
+4. `julia:rt__start__task(task)`: Task `task` started for the first time with a new stack.
+5. `julia:rt__finish__task(task)`: Task `task` finished and will no longer execute.
+6. `julia:rt__start__process__events(task)`: Task `task` started processing libuv events.
+7. `julia:rt__finish__process__events(task)`: Task `task` finished processing libuv events.
 
 ### Thread sleep/wake probes
 

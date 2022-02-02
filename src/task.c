@@ -914,7 +914,7 @@ CFI_NORETURN
 #endif
 
     ct->started = 1;
-    JL_PROBE_RT_RUN_TASK(ct);
+    JL_PROBE_RT_START_TASK(ct);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
         jl_push_excstack(&ct->excstack, ct->result,
