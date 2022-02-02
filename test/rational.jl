@@ -18,6 +18,7 @@ using Test
     @test -1//0 == -1//0
     @test -7//0 == -1//0
     @test  (-1//2) // (-2//5) == 5//4
+    @test 3/5 == 3//5
 
     @test_throws OverflowError -(0x01//0x0f)
     @test_throws OverflowError -(typemin(Int)//1)
