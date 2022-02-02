@@ -1253,7 +1253,7 @@ static inline jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset
     return jl_valueof(v);
 }
 
-// instrumented version of jl_gc_pool_alloc_inner called into by LLVM-generated code
+// Instrumented version of jl_gc_pool_alloc_inner, called into by LLVM-generated code.
 JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
                                           int osize)
 {
