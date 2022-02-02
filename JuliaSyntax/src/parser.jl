@@ -3038,7 +3038,8 @@ function parse_raw_string(ps::ParseState; remap_kind=K"Nothing")
     if peek(ps) in KSet`String CmdString`
         bump(ps, flags; remap_kind=remap_kind)
     else
-        outk = delim_k in KSet`" """`     ? K"String"    :
+        outk = remap_kind != K"Nothing" ? remap_kind :
+               delim_k in KSet`" """`     ? K"String"    :
                delim_k in KSet`\` \`\`\`` ? K"CmdString" :
                internal_error("unexpected delimiter ", delim_k)
         bump_invisible(ps, outk, flags)
@@ -3134,6 +3135,11 @@ function parse_atom(ps::ParseState, check_identifiers=true)
                                       kind(t) in KSet`" """` && !t.had_whitespace)
             # var"x"     ==> x
             # var"""x""" ==> x
+            # Raw mode unescaping
+            # var""      ==>
+            # var"\""   ==> "
+            # var"\\""  ==> \"
+            # var"\\x"  ==> \\x
             bump(ps, TRIVIA_FLAG)
             parse_raw_string(ps, remap_kind=K"Identifier")
             t = peek_token(ps)

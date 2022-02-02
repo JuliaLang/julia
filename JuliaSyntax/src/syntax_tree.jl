@@ -38,7 +38,12 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif k == K"Char"
             unescape_julia_string(val_str, false, false)[2]
         elseif k == K"Identifier"
-            Symbol(normalize_identifier(val_str))
+            if has_flags(head(raw), RAW_STRING_FLAG)
+                s = unescape_julia_string(val_str, false, true)
+                Symbol(normalize_identifier(s))
+            else
+                Symbol(normalize_identifier(val_str))
+            end
         elseif is_keyword(k)
             # This should only happen for tokens nested inside errors
             Symbol(val_str)

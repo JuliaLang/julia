@@ -553,6 +553,11 @@ tests = [
         """var"x"end"""  =>  "x (error (end))"
         """var"x"1"""  =>  "x (error 1)"
         """var"x"y"""  =>  "x (error y)"
+        # var syntax raw string unescaping
+        "var\"\""          =>  ""
+        "var\"\\\"\""      =>  "\""
+        "var\"\\\\\\\"\""  =>  "\\\""
+        "var\"\\\\x\""     =>  "\\\\x"
         # Syntactic operators
         "+="  =>  "(error +=)"
         ".+="  =>  "(error .+=)"

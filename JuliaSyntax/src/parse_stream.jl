@@ -11,7 +11,7 @@ const INFIX_FLAG  = RawFlags(1<<1)
 const DOTOP_FLAG = RawFlags(1<<2)
 # Set when kind == K"String" was triple-delimited as with """ or ```
 const TRIPLE_STRING_FLAG = RawFlags(1<<3)
-# Set when the string is "raw" and needs minimal unescaping
+# Set when a string or identifier needs "raw string" unescaping
 const RAW_STRING_FLAG = RawFlags(1<<4)
 # try-finally-catch
 const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<5)
