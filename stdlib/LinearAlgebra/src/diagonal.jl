@@ -373,8 +373,11 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     B
 end
 
-\(D::Diagonal, B::AbstractVecOrMat) =
-    ldiv!(promote_op(\, eltype(D), eltype(B)).(B), D, B)
+function \(D::Diagonal, B::AbstractVecOrMat)
+    j = findfirst(iszero, D.diag)
+    isnothing(j) || throw(SingularException(j))
+    return D.diag .\ B
+end
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
