@@ -664,13 +664,14 @@ broken_tests = [
     JuliaSyntax.parse_atom => [
         # Triple-quoted string processing
         "\"\"\"\n\$x\"\"\"" => "(string x)"
+        "\"\"\"\$x\n\"\"\"" => "(string x \"\n\")"
         # Operator-named macros with and without spaces
         "@! x"  => "(macrocall @! x)"
         "@.. x" => "(macrocall @.. x)"
         "@!x"   => "(macrocall @! x)"
         "@..x"  => "(macrocall @.. x)"
         "@.x"   => "(macrocall @__dot__ x)"
-        # Invalid numeric literals
+        # Invalid numeric literals, not juxtaposition
         "0b12" => "(error \"0b12\")"
         "0xex" => "(error \"0xex\")"
         # Square brackets without space in macrocall
