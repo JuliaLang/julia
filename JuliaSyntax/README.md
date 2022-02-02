@@ -16,13 +16,13 @@ A Julia frontend, written in Julia.
 
 ### Design Opinions
 
-* Parser implementation should be independent from tree data structures so
+* Parser implementation should be independent from tree data structures. So
   we have the `ParseStream` interface.
 * Tree data structures should be *layered* to balance losslessness with
   abstraction and generality. So we have `SyntaxNode` (an AST) layered on top
   of `GreenNode` (a lossless parse tree). We might need other tree types later.
-* Fancy parser generators are marginal for production compilers. We use a
-  boring but flexible recursive descent parser.
+* Fancy parser generators still seem marginal for production compilers. We use
+  a boring but flexible recursive descent parser.
 
 # Examples
 
@@ -118,8 +118,9 @@ We use a version of [Tokenize.jl](https://github.com/JuliaLang/Tokenize.jl)
 which has been modified to better match the needs of parsing:
 * Newline-containing whitespace is emitted as a separate kind
 * Tokens inside string interpolations are emitted separately from the string
-* Strings delimiters are separate tokens and the `String` kind
-* Additional contextural keywords (`as`, `var`, `doc`) have been added and
+* Strings delimiters are separate tokens and the actual string always has the
+  `String` kind
+* Additional contextual keywords (`as`, `var`, `doc`) have been added and
   moved to a subcategory of keywords.
 * Nonterminal kinds were added (though these should probably be factored out again)
 * Various bugs fixed and additions for newer Julia versions
@@ -143,9 +144,10 @@ Parsing proceeds by recursive descent;
   examine tokens and `bump()` to consume them.
 * The parser produces a flat list of text spans as *output* using `bump()` to
   transfer tokens to the output and `position()`/`emit()` for nonterminal ranges.
-* Diagnostics are emitted as separate text span
-* Whitespace and comments are automatically `bump()`ed, with the exception of
-  syntactically relevant newlines in space sensitive mode.
+* Diagnostics are emitted as separate text spans
+* Whitespace and comments are automatically `bump()`ed and don't need to be
+  handled explicitly. The exception is syntactically relevant newlines in space
+  sensitive mode.
 * Parser modes are passed down the call tree using `ParseState`.
 
 The output spans track the byte range, a syntax "kind" stored as an integer
@@ -172,7 +174,7 @@ define `build_tree` for the AST type `SyntaxNode` and for normal Julia `Expr`.
 
 ### Error recovery
 
-The goal of the parser is to produce well-formed heirarchical structure from
+The goal of the parser is to produce well-formed hierarchical structure from
 the source text. For interactive tools we need this to work even when the
 source text contains errors; it's the job of the parser to include the recovery
 heuristics to make this work.
@@ -278,7 +280,7 @@ name of compatibility, perhaps with a warning.)
   broken-looking AST like `(macrocall (. A (quote (. B @x))))`.  It should
   probably be rejected.
 * Operator prefix call syntax doesn't work in the cases like `+(a;b,c)` where
-  parameters are separated by commas. A tuple is produced instead. 
+  keyword parameters are separated by commas. A tuple is produced instead. 
 * `const` and `global` allow chained assignment, but the right hand side is not
   constant. `a` const here but not `b`.
   ```
@@ -292,7 +294,7 @@ name of compatibility, perhaps with a warning.)
 * In try-catch-finally, the `finally` clause is allowed before the `catch`, but
   always executes afterward. (Presumably was this a mistake? It seems pretty awful!)
 * When parsing `"[x \n\n ]"` the flisp parser gets confused, but `"[x \n ]"` is
-  correctly parsed as `Expr(:vect)`
+  correctly parsed as `Expr(:vect)` (maybe fixed in 1.7?)
 * `f(x for x in in xs)` is accepted, and parsed very strangely.
 * Octal escape sequences saturate rather than being reported as errors. Eg,
   `"\777"` results in `"\xff"`.  This is inconsistent with
@@ -388,13 +390,13 @@ seems to be to flatten the generators:
 
 ### Other oddities
 
-* Operators with sufficies don't seem to always be parsed consistently as the
+* Operators with suffices don't seem to always be parsed consistently as the
   same operator without a suffix. Unclear whether this is by design or mistake.
   For example, `[x +y] ==> (hcat x (+ y))`, but `[x +₁y] ==> (hcat (call +₁ x y))`
 
 * `global const x=1` is normalized by the parser into `(const (global (= x 1)))`.
-  I suppose this is somewhat useful for AST consumers, but it seems a bit weird
-  and unnecessary.
+  I suppose this is somewhat useful for AST consumers, but reversing the source
+  order is pretty weird and inconvenient when moving to a lossless parser.
 
 * `let` bindings might be stored in a block, or they might not be, depending on
   special cases:
@@ -413,20 +415,38 @@ seems to be to flatten the generators:
   Presumably because of the need to add a line number node in the flisp parser
   `if a xx elseif b yy end   ==>  (if a (block xx) (elseif (block b) (block yy)))`
 
-* Spaces are alloweed between import dots — `import . .A` is allowed, and
+* Spaces are allowed between import dots — `import . .A` is allowed, and
   parsed the same as `import ..A`
 
 * `import A..` produces `(import (. A .))` which is arguably nonsensical, as `.`
   can't be a normal identifier.
 
-* When lexing raw strings, more than two backslashes are treated strangely at
-  the end of the string: `raw"\\\\ "` contains four backslashes, whereas
-  `raw"\\\\"` contains only two.
+* The raw string escaping rules are *super* confusing for backslashes near vs
+  at the end of the string: `raw"\\\\ "` contains four backslashes, whereas
+  `raw"\\\\"` contains only two. It's unclear whether anything can be done
+  about this, however.
 
 * In braces after macrocall, `@S{a b}` is invalid but both `@S{a,b}` and
   `@S {a b}` parse. Conversely, `@S[a b]` parses.
 
 # Resources
+
+## Julia issues
+
+Here's a few links to relevant Julia issues. No doubt there's many more.
+
+#### Macro expansion
+
+* Automatic hygiene for macros https://github.com/JuliaLang/julia/pull/6910 —
+  would be interesting to implement this in a new frontend.
+
+#### Lowering
+
+* A partial implementation of lowering in Julia https://github.com/JuliaLang/julia/pull/32201 —
+  some of this should be ported.
+* The closure capture problem https://github.com/JuliaLang/julia/issues/15276 —
+  would be interesting to see whether we can tackle some of the harder cases in
+  a new implementation.
 
 ## C# Roslyn
 
@@ -437,7 +457,7 @@ seems to be to flatten the generators:
 
 ## Rust-analyzer
 
-`rust-analyzer` seems to be very close to what I'm buildin here, and has come
+`rust-analyzer` seems to be very close to what I'm building here, and has come
 to the same conclusions on green tree layout with explicit trivia nodes.  Their
 document on internals
 [here](https://github.com/rust-analyzer/rust-analyzer/blob/master/docs/dev/syntax.md)
@@ -591,7 +611,7 @@ The simplest idea possible is to have:
 * Children are in source order
 
 
-Call represents a challange for the AST vs Green tree in terms of node
+Call represents a challenge for the AST vs Green tree in terms of node
 placement / iteration for infix operators vs normal prefix function calls.
 
 - The normal problem of `a + 1` vs `+(a, 1)`
@@ -602,7 +622,7 @@ example with something like the normal Julia AST's iteration order.
 
 ### Abstract syntax tree
 
-By pointing to green tree nodes, AST nodes become tracable back to the original
+By pointing to green tree nodes, AST nodes become traceable back to the original
 source.
 
 Unlike most languages, designing a new AST is tricky because the existing
@@ -632,7 +652,7 @@ SourceString <: AbstractString
 ```
 
 Having source location attached to symbols would potentially solve most of the
-hygine problem. There's still the problem of macro helper functions which use
+hygiene problem. There's still the problem of macro helper functions which use
 symbol literals; we can't very well be changing the meaning of `:x`! Perhaps
 the trick there is to try capturing the current module at the location of the
 interpolation syntax. Eg, if you do `:(y + $x)`, lowering expands this to
@@ -695,7 +715,7 @@ function g()
 end
 ```
 
-It seems like ideal error recorvery would need to backtrack in this case. For
+It seems like ideal error recovery would need to backtrack in this case. For
 example:
 
 - Pop back to the frame which was parsing `f()`
@@ -741,10 +761,11 @@ f(a,
 # Fun research questions
 
 * Given source and syntax tree, can we regress/learn a generative model of
-  indentiation from the syntax tree?  Source formatting involves a big pile of
+  indentation from the syntax tree?  Source formatting involves a big pile of
   heuristics to get something which "looks nice"... and ML systems have become
-  very good at heuristics.  Also, we've got huge piles of traininig data — just
+  very good at heuristics.  Also, we've got huge piles of training data — just
   choose some high quality, tastefully hand-formatted libraries.
 
 * Similarly, can we learn fast and reasonably accurate recovery heuristics for
-  when the parser encounters broken syntax rather than hand-coding these?
+  when the parser encounters broken syntax rather than hand-coding these? How
+  do we set the parser up so that training works and inference is nonintrusive?
