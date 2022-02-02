@@ -551,6 +551,17 @@ Here's some behaviors which seem to be bugs:
   dotted operators rather than a relative path. Ie, we have `import .⋆` parsing
   to `(import (. .⋆))` whereas it should be `(import (. . ⋆))` for consistency
   with the parsing of `import .A`.
+* Looking back on the output disregards grouping parentheses which can lead to
+  odd results in some cases. For example, `f(((((x=1)))))` parses as a keyword
+  call to function `f` with the keyword `x=1`, but arguably it should be an
+  assignment.
+* Hexfloat literals can have a trailing `f` for example, `0x1p1f`
+  but this doesn't do anything. In the `flisp` C code such cases are treated as
+  Float32 literals and this was intentional https://github.com/JuliaLang/julia/pull/2925
+  but this has never been officially supported in Julia. It seems this bug
+  arises from `(set! pred char-hex?)` in `parse-number` accepting hex exponent
+  digits, all of which are detected as invalid except for a trailing `f` when
+  processed by `isnumtok_base`.
 
 ## Parsing / AST oddities and warts
 
@@ -661,3 +672,7 @@ xy
 * When lexing raw strings, more than two backslashes are treated strangely at
   the end of the string: `raw"\\\\ "` contains four backslashes, whereas
   `raw"\\\\"` contains only two.
+
+* In braces after macrocall, `@S{a b}` is invalid but both `@S{a,b}` and
+  `@S {a b}` parse. Conversely, `@S[a b]` parses.
+
