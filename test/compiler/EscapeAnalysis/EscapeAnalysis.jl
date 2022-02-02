@@ -233,7 +233,7 @@ end
         end
         i = only(findall(isnew, result.ir.stmts.inst))
         r = only(findall(isreturn, result.ir.stmts.inst))
-        @test !has_return_escape(result.state[SSAValue(i)], r)
+        @test_broken !has_return_escape(result.state[SSAValue(i)], r)
 
         result = @eval M $code_escapes() do
             a = Ref("foo") # still should be "return escape"
@@ -268,7 +268,7 @@ end
         end
         i = only(findall(isnew, result.ir.stmts.inst))
         r = only(findall(isreturn, result.ir.stmts.inst))
-        @test !has_return_escape(result.state[SSAValue(i)], r)
+        @test_broken !has_return_escape(result.state[SSAValue(i)], r)
     end
 end
 
@@ -2337,13 +2337,13 @@ end
 let result = code_escapes((String,); optimize=false) do x
         return noescape(x)
     end
-    @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
+    @test_broken has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end
 let result = code_escapes((String,); optimize=false) do x
         identity(x)
         return nothing
     end
-    @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
+    @test_broken has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end
 let result = code_escapes((String,); optimize=false) do x
         return identity(x)
@@ -2393,7 +2393,7 @@ end
 let result = code_escapes((String,); optimize=false) do x
         return Base.@invoke noescape(x::Any)
     end
-    @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
+    @test_broken has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end
 let result = code_escapes((String,); optimize=false) do x
         return Base.@invoke conditional_escape!(false::Any, x::Any)
@@ -2409,15 +2409,15 @@ let result = code_escapes((Any,); optimize=false) do x
     i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.inst))
     r = only(findall(isreturn, result.ir.stmts.inst))
     @test has_thrown_escape(result.state[Argument(2)], i)
-    @test !has_return_escape(result.state[Argument(2)], r)
+    @test_broken !has_return_escape(result.state[Argument(2)], r)
 end
 let result = code_escapes((String,); optimize=false) do x
         identity_if_string(x)
     end
     i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.inst))
     r = only(findall(isreturn, result.ir.stmts.inst))
-    @test !has_thrown_escape(result.state[Argument(2)], i)
-    @test !has_return_escape(result.state[Argument(2)], r)
+    @test_broken !has_thrown_escape(result.state[Argument(2)], i)
+    @test_broken !has_return_escape(result.state[Argument(2)], r)
 end
 let result = code_escapes((String,); optimize=false) do x
         try
@@ -2427,7 +2427,7 @@ let result = code_escapes((String,); optimize=false) do x
         end
         return nothing
     end
-    @test !has_all_escape(result.state[Argument(2)])
+    @test_broken !has_all_escape(result.state[Argument(2)])
 end
 let result = code_escapes((Any,); optimize=false) do x
         try

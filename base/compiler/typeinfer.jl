@@ -310,7 +310,7 @@ function CodeInstance(result::InferenceResult, @nospecialize(inferred_result),
     end
     return CodeInstance(result.linfo,
         widenconst(result_type), rettype_const, inferred_result,
-        const_flags, first(valid_worlds), last(valid_worlds), relocatability)
+        const_flags, first(valid_worlds), last(valid_worlds), relocatability, nothing)
 end
 
 # For the NativeInterpreter, we don't need to do an actual cache query to know
@@ -389,7 +389,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     end
 
     if isdefined(result, :escapes)
-        EscapeAnalysis.GLOBAL_ESCAPE_CACHE[linfo]= result.escapes
+        code_cache(interp)[linfo].arg_escapes = result.escapes
     end
 
     unlock_mi_inference(interp, linfo)
