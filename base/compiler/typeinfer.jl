@@ -421,7 +421,7 @@ function rt_adjust_effects(@nospecialize(rt), ipo_effects::Effects)
     # Always throwing an error counts or never returning both count as consistent,
     # but we don't currently model idempontency using dataflow, so we don't notice.
     # Fix that up here to improve precision.
-    if rt === Union{}
+    if !ipo_effects.inbounds_taints_consistency && rt === Union{}
         return Effects(ALWAYS_TRUE, ipo_effects.effect_free,
             ipo_effects.nothrow, ipo_effects.terminates)
     end
@@ -799,7 +799,9 @@ function tristate_merge(old::Effects, new::Effects)
         tristate_merge(
             old.nothrow, new.nothrow),
         tristate_merge(
-            old.terminates, new.terminates))
+            old.terminates, new.terminates),
+        old.inbounds_taints_consistency ||
+        new.inbounds_taints_consistency)
 end
 
 function tristate_merge!(caller::InferenceState, callee::Effects)

@@ -32,7 +32,12 @@ struct Effects
     effect_free::TriState
     nothrow::TriState
     terminates::TriState
+    # This effect is currently only tracked in inference and modified
+    # :consistent before caching. We may want to track it in the future.
+    inbounds_taints_consistency::Bool
 end
+Effects(consistent::TriState, effect_free::TriState, nothrow::TriState, terminates::TriState) =
+    Effects(consistent, effect_free, nothrow, terminates, false)
 Effects() = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN)
 
 is_total_or_error(effects::Effects) =
@@ -54,7 +59,7 @@ decode_effects(e::UInt8) =
     Effects(TriState(e & 0x3),
         TriState((e >> 2) & 0x3),
         TriState((e >> 4) & 0x3),
-        TriState((e >> 6) & 0x3))
+        TriState((e >> 6) & 0x3), false)
 
 struct EffectsOverride
     consistent::Bool
