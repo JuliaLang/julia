@@ -73,7 +73,7 @@ function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, selected=In
     end
 
     if !isempty(kwargs)
-        MultiSelectMenu(options, pagesize, pageoffset, _selected, MultiSelectConfig(; kwargs...))
+        MultiSelectMenu(options, pagesize, pageoffset, _selected, false, MultiSelectConfig(; kwargs...))
     else
         warn && Base.depwarn("Legacy `MultiSelectMenu` interface is deprecated, set a configuration option such as `MultiSelectMenu(options; charset=:ascii)` to trigger the new interface.", :MultiSelectMenu)
         MultiSelectMenu(options, pagesize, pageoffset, _selected, false, CONFIG)
