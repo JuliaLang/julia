@@ -2130,10 +2130,8 @@
 (define (expand-property-destruct lhs x)
   (if (not (length= lhs 1))
       (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\"")))
-  (define (in-lhs? x lhss)
-    (any (lambda (l) (eq? l x)) lhss))
   (let* ((lhss (cdar lhs))
-         (xx   (maybe-ssavalue lhss x in-lhs?))
+         (xx   (maybe-ssavalue lhss x memq))
          (ini  (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x))))))
     `(block
        ,@ini
