@@ -2141,7 +2141,7 @@
                                ((and (pair? field) (eq? (car field) '|::|) (symbol? (cadr field)))
                                 (cadr field))
                                (else
-                                (error (string "invalid assignment location \"" (deparse lhs) "\""))))))
+                                (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\""))))))
                (expand-forms `(= ,field (call (top getproperty) ,xx (quote ,prop))))))
            lhss)
        (unnecessary ,xx))))
