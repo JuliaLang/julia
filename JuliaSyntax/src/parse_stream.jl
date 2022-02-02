@@ -34,21 +34,6 @@ end
 # Return true if any of `test_flags` are set
 has_flags(flags::RawFlags, test_flags) = (flags & test_flags) != 0
 
-# Function for combining flags. (Do we want this?)
-function flags(; trivia::Bool=false,
-               infix::Bool=false,
-               dotop::Bool=false,
-               try_catch_after_finally::Bool=false,
-               numeric::Int=0)
-    flags = RawFlags(0)
-    trivia && (flags |= TRIVIA_FLAG)
-    infix  && (flags |= INFIX_FLAG)
-    dotop  && (flags |= DOTOP_FLAG)
-    try_catch_after_finally && (flags |= TRY_CATCH_AFTER_FINALLY_FLAG)
-    numeric != 0 && (flags |= set_numeric_flags(numeric))
-    return flags::RawFlags
-end
-
 #-------------------------------------------------------------------------------
 struct SyntaxHead
     kind::Kind
