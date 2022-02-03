@@ -2118,11 +2118,21 @@
                      `(call ,@hvncat ,dims ,(tf is-row-first) ,@aflat))
                     `(call ,@hvncat ,(tuplize shape) ,(tf is-row-first) ,@aflat))))))))
 
-(define (expand-property-destruct lhss x)
-  (if (not (length= lhss 1))
-      (error (string "invalid assignment location \"" (deparse lhs) "\"")))
-  (let* ((xx (if (symbol-like? x) x (make-ssavalue)))
-         (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x))))))
+(define (maybe-ssavalue lhss x in-lhs?)
+  (cond ((or (and (not (in-lhs? x lhss)) (symbol? x))
+             (ssavalue? x))
+          x)
+        ((and (pair? lhss) (vararg? (last lhss))
+              (eventually-call? (cadr (last lhss))))
+         (gensy))
+        (else (make-ssavalue))))
+
+(define (expand-property-destruct lhs x)
+  (if (not (length= lhs 1))
+      (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\"")))
+  (let* ((lhss (cdar lhs))
+         (xx   (maybe-ssavalue lhss x memq))
+         (ini  (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x))))))
     `(block
        ,@ini
        ,@(map
@@ -2131,9 +2141,9 @@
                                ((and (pair? field) (eq? (car field) '|::|) (symbol? (cadr field)))
                                 (cadr field))
                                (else
-                                (error (string "invalid assignment location \"" (deparse lhs) "\""))))))
+                                (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\""))))))
                (expand-forms `(= ,field (call (top getproperty) ,xx (quote ,prop))))))
-           (cdar lhss))
+           lhss)
        (unnecessary ,xx))))
 
 (define (expand-tuple-destruct lhss x)
@@ -2166,13 +2176,7 @@
                       ((eq? l x) #t)
                       (else (in-lhs? x (cdr lhss)))))))
         ;; in-lhs? also checks for invalid syntax, so always call it first
-        (let* ((xx  (cond ((or (and (not (in-lhs? x lhss)) (symbol? x))
-                               (ssavalue? x))
-                            x)
-                          ((and (pair? lhss) (vararg? (last lhss))
-                                (eventually-call? (cadr (last lhss))))
-                           (gensy))
-                          (else (make-ssavalue))))
+        (let* ((xx  (maybe-ssavalue lhss x in-lhs?))
                (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
                (n   (length lhss))
                ;; skip last assignment if it is an all-underscore vararg
