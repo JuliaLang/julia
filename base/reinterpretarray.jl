@@ -176,6 +176,8 @@ function _checked_strides(stp, N)
     map(first, drs)
 end
 
+_checkcontiguous(::Type{Bool}, A::ReinterpretArray) = _checkcontiguous(Bool, parent(A))
+
 similar(a::ReinterpretArray, T::Type, d::Dims) = similar(a.parent, T, d)
 
 function check_readable(a::ReinterpretArray{T, N, S} where N) where {T,S}
