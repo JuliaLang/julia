@@ -215,7 +215,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
                 M, s = argextype(args[2], src), argextype(args[3], src)
                 return get_binding_type_effect_free(M, s)
             end
-            contains_is(_PURE_OR_ERROR_BUILTINS, f) || return false
+            contains_is(_EFFECT_FREE_BUILTINS, f) || return false
             rt === Bottom && return false
             return _builtin_nothrow(f, Any[argextype(args[i], src) for i = 2:length(args)], rt)
         elseif head === :new

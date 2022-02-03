@@ -1442,7 +1442,7 @@ function early_inline_special_case(
             end
         elseif ispuretopfunction(f) || contains_is(_PURE_BUILTINS, f)
             return SomeCase(quoted(val))
-        elseif contains_is(_PURE_OR_ERROR_BUILTINS, f)
+        elseif contains_is(_EFFECT_FREE_BUILTINS, f)
             if _builtin_nothrow(f, argtypes[2:end], type)
                 return SomeCase(quoted(val))
             end
