@@ -352,7 +352,7 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
 end
 
 _init(op, A::AbstractArray{<:Number}, B::AbstractArray{<:Number}) =
-    (_ -> zero(typeof(op(oneunit(eltype(A)), oneunit(eltype(D)))))
+    (_ -> zero(typeof(op(oneunit(eltype(A)), oneunit(eltype(D))))))
 _init(op, A::AbstractArray, B::AbstractArray) =
     promote_op(op, eltype(A), eltype(B))
 /(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(_init(/, A, D).(A), A, D)
