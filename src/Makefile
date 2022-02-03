@@ -117,12 +117,12 @@ LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG_HOST) --cxxflags)
 
 ifeq ($(JULIACODEGEN),LLVM)
 ifneq ($(USE_SYSTEM_LLVM),0)
-CG_LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)
+CG_LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs -lrt -ldl -lpthread -lz)
 # HACK: llvm-config doesn't correctly point to shared libs on all platforms
 #       https://github.com/JuliaLang/julia/issues/29981
 else
 ifneq ($(USE_LLVM_SHLIB),1)
-CG_LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs $(CG_LLVM_LIBS) --link-static) $($(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
+CG_LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs $(CG_LLVM_LIBS) --link-static) $($(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST)  -lrt -ldl -lpthread -lz 2> /dev/null)
 else
 ifeq ($(OS), Darwin)
 CG_LLVMLINK += $(LLVM_LDFLAGS) -lLLVM
@@ -136,7 +136,7 @@ FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
 endif
 
-RT_LLVM_LINK_ARGS := $(shell $(LLVM_CONFIG_HOST) --libs $(RT_LLVM_LIBS) --link-static)
+RT_LLVM_LINK_ARGS := $(shell $(LLVM_CONFIG_HOST) --libs $(RT_LLVM_LIBS) -lrt -ldl -lpthread -lz --link-static)
 RT_LLVMLINK += $(LLVM_LDFLAGS) $(RT_LLVM_LINK_ARGS)
 ifeq ($(OS), WINNT)
 RT_LLVMLINK += -luuid -lole32
