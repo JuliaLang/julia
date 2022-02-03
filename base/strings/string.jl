@@ -97,7 +97,7 @@ String(s::CodeUnits{UInt8,String}) = s.s
 pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
 pointer(s::String, i::Integer) = pointer(s) + Int(i)::Int - 1
 
-@pure ncodeunits(s::String) = Core.sizeof(s)
+ncodeunits(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)

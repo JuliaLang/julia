@@ -960,3 +960,6 @@ function f_apply_bail(f)
 end
 f_call_apply_bail(f) = f_apply_bail(f)
 @test !fully_eliminated(f_call_apply_bail, Tuple{Function})
+
+# Test that arraysize has proper effect modeling
+@test fully_eliminated(M->(size(M, 2); nothing), Tuple{Matrix{Float64}})

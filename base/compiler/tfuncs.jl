@@ -1712,12 +1712,12 @@ end
 # known to be always effect-free (in particular nothrow)
 const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 
-# known to be effect-free if the are nothrow
-const _PURE_OR_ERROR_BUILTINS = [
+# known to be effect-free (but not necessarily nothrow)
+const _EFFECT_FREE_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
     Core.kwfunc, Core.ifelse, Core._typevar, (<:),
-    typeassert, throw
+    typeassert, throw, arraysize
 ]
 
 const _IDEMPOTENT_BUILTINS = Any[
@@ -1781,7 +1781,7 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
         nothrow = isvarargtype(argtypes[end]) ? false :
             builtin_nothrow(f, argtypes[2:end], rt)
     end
-    effect_free = contains_is(_PURE_OR_ERROR_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
+    effect_free = contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
 
     return Effects(
         ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
