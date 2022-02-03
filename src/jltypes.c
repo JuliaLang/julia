@@ -2393,7 +2393,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(27,
+                        jl_perm_symsvec(28,
                             "name",
                             "module",
                             "file",
@@ -2410,6 +2410,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "generator", // !const
                             "roots", // !const
                             "root_blocks", // !const
+                            "nroots_sysimg",
                             "ccallable", // !const
                             "invokes", // !const
                             "recursion_relation", // !const
@@ -2421,7 +2422,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "pure",
                             "is_for_opaque_closure",
                             "constprop"),
-                        jl_svec(27,
+                        jl_svec(28,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -2438,6 +2439,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_array_any_type,
                             jl_array_uint64_type,
+                            jl_int32_type,
                             jl_simplevector_type,
                             jl_any_type,
                             jl_any_type,
@@ -2483,7 +2485,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(11,
+                        jl_perm_symsvec(12,
                             "def",
                             "next",
                             "min_world",
@@ -2493,8 +2495,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             "inferred",
                             //"edges",
                             //"absolute_max",
-                            "isspecsig", "precompile", "invoke", "specptr"), // function object decls
-                        jl_svec(11,
+                            "isspecsig", "precompile", "invoke", "specptr", // function object decls
+                            "relocatability"),
+                        jl_svec(12,
                             jl_method_instance_type,
                             jl_any_type,
                             jl_ulong_type,
@@ -2506,7 +2509,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             //jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
-                            jl_any_type, jl_any_type), // fptrs
+                            jl_any_type, jl_any_type, // fptrs
+                            jl_uint8_type),
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);

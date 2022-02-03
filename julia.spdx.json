@@ -272,7 +272,7 @@
         {
             "name": "PCRE",
             "SPDXID": "SPDXRef-PCRE",
-            "downloadLocation": "https://ftp.pcre.org/pub/pcre/",
+            "downloadLocation": "git+https://github.com/PhilipHazel/pcre2.git",
             "filesAnalyzed": false,
             "homepage": "https://www.pcre.org",
             "sourceInfo": "The version in use can be found in the file deps/Versions.make",

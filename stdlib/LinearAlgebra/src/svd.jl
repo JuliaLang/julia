@@ -140,10 +140,10 @@ The singular values in `S` are sorted in descending order.
 
 Iterating the decomposition produces the components `U`, `S`, and `V`.
 
-If `full = false` (default), a "thin" SVD is returned. For a ``M
-\\times N`` matrix `A`, in the full factorization `U` is `M \\times M`
-and `V` is `N \\times N`, while in the thin factorization `U` is `M
-\\times K` and `V` is `N \\times K`, where `K = \\min(M,N)` is the
+If `full = false` (default), a "thin" SVD is returned. For an ``M
+\\times N`` matrix `A`, in the full factorization `U` is ``M \\times M``
+and `V` is ``N \\times N``, while in the thin factorization `U` is ``M
+\\times K`` and `V` is ``N \\times K``, where ``K = \\min(M,N)`` is the
 number of singular values.
 
 If `alg = DivideAndConquer()` a divide-and-conquer algorithm is used to calculate the SVD.

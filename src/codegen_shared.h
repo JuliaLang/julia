@@ -37,6 +37,35 @@ namespace JuliaType {
     static inline llvm::PointerType* get_ppjlvalue_ty(llvm::LLVMContext &C) {
         return llvm::PointerType::get(get_pjlvalue_ty(C), 0);
     }
+
+    static inline llvm::PointerType* get_pprjlvalue_ty(llvm::LLVMContext &C) {
+        return llvm::PointerType::get(get_prjlvalue_ty(C), 0);
+    }
+
+    static inline auto get_jlfunc_ty(llvm::LLVMContext &C) {
+        auto T_prjlvalue = get_prjlvalue_ty(C);
+        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        std::vector<llvm::Type*> ftargs(0);
+        ftargs.push_back(T_prjlvalue);  // function
+        ftargs.push_back(T_pprjlvalue); // args[]
+        ftargs.push_back(llvm::Type::getInt32Ty(C));      // nargs
+        return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
+    }
+
+    static inline auto get_jlfuncparams_ty(llvm::LLVMContext &C) {
+        auto T_prjlvalue = get_prjlvalue_ty(C);
+        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        std::vector<llvm::Type*> ftargs(0);
+        ftargs.push_back(T_prjlvalue);  // function
+        ftargs.push_back(T_pprjlvalue); // args[]
+        ftargs.push_back(llvm::Type::getInt32Ty(C));      // nargs
+        ftargs.push_back(T_pprjlvalue); // linfo->sparam_vals
+        return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
+    }
+
+    static inline auto get_pvoidfunc_ty(llvm::LLVMContext &C) {
+        return llvm::FunctionType::get(llvm::Type::getVoidTy(C), /*isVarArg*/false)->getPointerTo();
+    }
 }
 
 // JLCALL with API arguments ([extra], arg0, arg1, arg2, ...) has the following ABI calling conventions defined:

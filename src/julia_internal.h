@@ -10,6 +10,7 @@
 #include "support/ptrhash.h"
 #include "support/strtod.h"
 #include "gc-alloc-profiler.h"
+#include "support/rle.h"
 #include <uv.h>
 #if !defined(_WIN32)
 #include <unistd.h>
@@ -528,6 +529,8 @@ void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *spar
                               int binding_effects);
 
 JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root);
+int get_root_reference(rle_reference *rr, jl_method_t *m, size_t i);
+jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index);
 
 int jl_valid_type_param(jl_value_t *v);
 

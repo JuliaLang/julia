@@ -206,9 +206,6 @@ function incomplete_tag(ex::Expr)
     return :other
 end
 
-# call include() on a file, ignoring if not found
-include_ifexists(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
-
 function exec_options(opts)
     if !isempty(ARGS)
         idxs = findall(x -> x == "--", ARGS)
@@ -323,17 +320,33 @@ function exec_options(opts)
     nothing
 end
 
-function load_julia_startup()
+function _global_julia_startup_file()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
-    #   If it is not found, then continue on to the relative path based on Sys.BINDIR
+    # If it is not found, then continue on to the relative path based on Sys.BINDIR
     BINDIR = Sys.BINDIR::String
     SYSCONFDIR = Base.SYSCONFDIR::String
-    if !isempty(SYSCONFDIR) && isfile(joinpath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
-        include(Main, abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
-    else
-        include_ifexists(Main, abspath(BINDIR, "..", "etc", "julia", "startup.jl"))
+    if !isempty(SYSCONFDIR)
+        p1 = abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl")
+        isfile(p1) && return p1
     end
-    !isempty(DEPOT_PATH) && include_ifexists(Main, abspath(DEPOT_PATH[1], "config", "startup.jl"))
+    p2 = abspath(BINDIR, "..", "etc", "julia", "startup.jl")
+    isfile(p2) && return p2
+    return nothing
+end
+
+function _local_julia_startup_file()
+    if !isempty(DEPOT_PATH)
+        path = abspath(DEPOT_PATH[1], "config", "startup.jl")
+        isfile(path) && return path
+    end
+    return nothing
+end
+
+function load_julia_startup()
+    global_file = _global_julia_startup_file()
+    (global_file !== nothing) && include(Main, global_file)
+    local_file = _local_julia_startup_file()
+    (local_file !== nothing) && include(Main, local_file)
     return nothing
 end
 

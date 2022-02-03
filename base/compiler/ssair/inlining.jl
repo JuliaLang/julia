@@ -6,10 +6,8 @@ struct Signature
     f::Any
     ft::Any
     argtypes::Vector{Any}
-    atype #::Type
-    Signature(f, ft, argtypes, atype = nothing) = new(f, ft, argtypes, atype)
+    Signature(@nospecialize(f), @nospecialize(ft), argtypes::Vector{Any}) = new(f, ft, argtypes)
 end
-with_atype(sig::Signature) = Signature(sig.f, sig.ft, sig.argtypes, argtypes_to_type(sig.argtypes))
 
 struct ResolvedInliningSpec
     # The LineTable and IR of the inlinee
@@ -683,7 +681,7 @@ function rewrite_apply_exprargs!(
                 call = thisarginfo.each[i]
                 new_stmt = Expr(:call, argexprs[2], def, state...)
                 state1 = insert_node!(ir, idx, NewInstruction(new_stmt, call.rt))
-                new_sig = with_atype(call_sig(ir, new_stmt)::Signature)
+                new_sig = call_sig(ir, new_stmt)::Signature
                 new_info = call.info
                 if isa(new_info, ConstCallInfo)
                     handle_const_call!(
@@ -1140,7 +1138,7 @@ end
 function analyze_single_call!(
     ir::IRCode, idx::Int, stmt::Expr, infos::Vector{MethodMatchInfo}, flag::UInt8,
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
-    (; argtypes, atype) = sig
+    argtypes = sig.argtypes
     cases = InliningCase[]
     local signature_union = Bottom
     local only_method = nothing  # keep track of whether there is one matching method
@@ -1174,6 +1172,7 @@ function analyze_single_call!(
 
     # if the signature is fully covered and there is only one applicable method,
     # we can try to inline it even if the signature is not a dispatch tuple
+    atype = argtypes_to_type(argtypes)
     if length(cases) == 0 && only_method isa Method
         if length(infos) > 1
             (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any),
@@ -1191,14 +1190,14 @@ function analyze_single_call!(
         fully_covered &= atype <: signature_union
     end
 
-    handle_cases!(ir, idx, stmt, sig, cases, fully_covered, todo)
+    handle_cases!(ir, idx, stmt, atype, cases, fully_covered, todo)
 end
 
 # similar to `analyze_single_call!`, but with constant results
 function handle_const_call!(
     ir::IRCode, idx::Int, stmt::Expr, cinfo::ConstCallInfo, flag::UInt8,
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
-    (; argtypes, atype) = sig
+    argtypes = sig.argtypes
     (; call, results) = cinfo
     infos = isa(call, MethodMatchInfo) ? MethodMatchInfo[call] : call.matches
     cases = InliningCase[]
@@ -1230,6 +1229,7 @@ function handle_const_call!(
 
     # if the signature is fully covered and there is only one applicable method,
     # we can try to inline it even if the signature is not a dispatch tuple
+    atype = argtypes_to_type(argtypes)
     if length(cases) == 0 && length(results) == 1
         (; mi) = item = InliningTodo(results[1]::InferenceResult, argtypes)
         state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
@@ -1241,7 +1241,7 @@ function handle_const_call!(
         fully_covered &= atype <: signature_union
     end
 
-    handle_cases!(ir, idx, stmt, sig, cases, fully_covered, todo)
+    handle_cases!(ir, idx, stmt, atype, cases, fully_covered, todo)
 end
 
 function handle_match!(
@@ -1269,7 +1269,7 @@ function handle_const_result!(
     return true
 end
 
-function handle_cases!(ir::IRCode, idx::Int, stmt::Expr, sig::Signature,
+function handle_cases!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(atype),
     cases::Vector{InliningCase}, fully_covered::Bool, todo::Vector{Pair{Int, Any}})
     # If we only have one case and that case is fully covered, we may either
     # be able to do the inlining now (for constant cases), or push it directly
@@ -1277,7 +1277,7 @@ function handle_cases!(ir::IRCode, idx::Int, stmt::Expr, sig::Signature,
     if fully_covered && length(cases) == 1
         handle_single_case!(ir, idx, stmt, cases[1].item, todo)
     elseif length(cases) > 0
-        push!(todo, idx=>UnionSplit(fully_covered, sig.atype, cases))
+        push!(todo, idx=>UnionSplit(fully_covered, atype, cases))
     end
     return nothing
 end
@@ -1324,7 +1324,6 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             continue
         end
 
-        sig = with_atype(sig)
         flag = ir.stmts[idx][:flag]
 
         if isa(info, OpaqueClosureCallInfo)
