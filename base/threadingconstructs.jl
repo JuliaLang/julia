@@ -23,7 +23,7 @@ See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
 function threading_run(fun, static)
-    static && ccall(:jl_enter_threaded_region, Cvoid, ())
+    ccall(:jl_enter_threaded_region, Cvoid, ())
     n = nthreads()
     tasks = Vector{Task}(undef, n)
     for i = 1:n
@@ -38,7 +38,7 @@ function threading_run(fun, static)
             wait(tasks[i])
         end
     finally
-        static && ccall(:jl_exit_threaded_region, Cvoid, ())
+        ccall(:jl_exit_threaded_region, Cvoid, ())
     end
 end
 
