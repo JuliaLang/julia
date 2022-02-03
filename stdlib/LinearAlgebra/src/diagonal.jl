@@ -351,10 +351,11 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
     return C
 end
 
-/(A::AbstractVecOrMat, D::Diagonal) =
-    _rdiv!((promote_op(/, eltype(A), eltype(D))).(A), A, D)
-/(A::AbstractVecOrMat{<:Number}, D::Diagonal{<:Number}) =
-    _rdiv!((_ -> zero(typeof(oneunit(eltype(A)) / oneunit(eltype(D))))).(A), A, D)
+_init(op, A::AbstractArray{<:Number}, B::AbstractArray{<:Number}) =
+    (_ -> zero(typeof(op(oneunit(eltype(A)), oneunit(eltype(D)))))
+_init(op, A::AbstractArray, B::AbstractArray) =
+    promote_op(op, eltype(A), eltype(B))
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(_init(/, A, D).(A), A, D)
 
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
@@ -380,12 +381,8 @@ function \(D::Diagonal, B::AbstractVector)
     isnothing(j) || throw(SingularException(j))
     return D.diag .\ B
 end
-\(D::Diagonal, B::AbstractVecOrMat) =
-    ldiv!(promote_op(\, eltype(D), eltype(B)).(B), D, B)
-# ugly hack in order to preserve structure like *diagonal, but at the same time allow for
-# eltype conversion of unconvertible types (like units)
-\(D::Diagonal{<:Number}, B::AbstractMatrix{<:Number}) =
-    ldiv!((_ -> zero(typeof(oneunit(eltype(D)) \ oneunit(eltype(B))))).(B), D, B)
+\(D::Diagonal, B::AbstractMatrix) =
+    ldiv!(_init(\, D, B).(B), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
