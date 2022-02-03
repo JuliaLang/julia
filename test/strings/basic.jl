@@ -1094,3 +1094,10 @@ end
     @test sprint(summary, SubString("foα", 2)) == "3-codeunit SubString{String}"
     @test sprint(summary, "") == "empty String"
 end
+
+@testset "LazyString" begin
+    @test repr(lazy"$(1+2) is 3") == "\"3 is 3\""
+    let d = Dict(lazy"$(1+2) is 3" => 3)
+        @test d["3 is 3"] == 3
+    end
+end

@@ -164,8 +164,9 @@ const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
 const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 
 # for internal use below
-wrapperop(A::Adjoint) = adjoint
-wrapperop(A::Transpose) = transpose
+wrapperop(_) = identity
+wrapperop(::Adjoint) = adjoint
+wrapperop(::Transpose) = transpose
 
 # AbstractArray interface, basic definitions
 length(A::AdjOrTrans) = length(A.parent)
@@ -227,7 +228,7 @@ _adjoint_hcat(avs::Union{Number,AdjointAbsVec}...) = adjoint(vcat(map(adjoint, a
 _transpose_hcat(tvs::Union{Number,TransposeAbsVec}...) = transpose(vcat(map(transpose, tvs)...))
 typed_hcat(::Type{T}, avs::Union{Number,AdjointAbsVec}...) where {T} = adjoint(typed_vcat(T, map(adjoint, avs)...))
 typed_hcat(::Type{T}, tvs::Union{Number,TransposeAbsVec}...) where {T} = transpose(typed_vcat(T, map(transpose, tvs)...))
-# otherwise-redundant definitions necessary to prevent hitting the concat methods in sparse/sparsevector.jl
+# otherwise-redundant definitions necessary to prevent hitting the concat methods in LinearAlgebra/special.jl
 hcat(avs::Adjoint{<:Any,<:Vector}...) = _adjoint_hcat(avs...)
 hcat(tvs::Transpose{<:Any,<:Vector}...) = _transpose_hcat(tvs...)
 hcat(avs::Adjoint{T,Vector{T}}...) where {T} = _adjoint_hcat(avs...)

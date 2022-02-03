@@ -151,12 +151,13 @@ end
 end
 
 function fully_eliminated(f, args)
+    @nospecialize f args
     let code = code_typed(f, args)[1][1].code
         return length(code) == 1 && isa(code[1], ReturnNode)
     end
 end
-
 function fully_eliminated(f, args, retval)
+    @nospecialize f args
     let code = code_typed(f, args)[1][1].code
         return length(code) == 1 && isa(code[1], ReturnNode) && code[1].val == retval
     end
@@ -388,12 +389,12 @@ get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 
 # check if `x` is a dynamic call of a given function
 iscall(y) = @nospecialize(x) -> iscall(y, x)
-function iscall((src, f)::Tuple{Core.CodeInfo,Function}, @nospecialize(x))
+function iscall((src, f)::Tuple{Core.CodeInfo,Base.Callable}, @nospecialize(x))
     return iscall(x) do @nospecialize x
         singleton_type(argextype(x, src, EMPTY_SPTYPES)) === f
     end
 end
-iscall(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
+iscall(pred::Base.Callable, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
 
 # check if `x` is a statically-resolved call of a function whose name is `sym`
 isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
@@ -666,7 +667,7 @@ begin
     end
     @noinline a::Point +ₚ b::Point = Point(a.x + b.x, a.y + b.y)
 
-    function compute(n)
+    function compute_idem_n(n)
         a = Point(1.5, 2.5)
         b = Point(2.25, 4.75)
         for i in 0:(n-1)
@@ -674,11 +675,11 @@ begin
         end
         return a.x, a.y
     end
-    let src = code_typed1(compute, (Int,))
+    let src = code_typed1(compute_idem_n, (Int,))
         @test count(isinvoke(:+ₚ), src.code) == 0 # successful inlining
     end
 
-    function compute(n)
+    function compute_idem_n(n)
         a = Point(1.5, 2.5)
         b = Point(2.25, 4.75)
         for i in 0:(n-1)
@@ -686,13 +687,13 @@ begin
         end
         return a.x, a.y
     end
-    let src = code_typed1(compute, (Int,))
+    let src = code_typed1(compute_idem_n, (Int,))
         @test count(isinvoke(:+ₚ), src.code) == 2 # no inlining
     end
 
-    compute(42) # this execution should discard the cache of `+ₚ` since it's declared as `@noinline`
+    compute_idem_n(42) # this execution should discard the cache of `+ₚ` since it's declared as `@noinline`
 
-    function compute(n)
+    function compute_idem_n(n)
         a = Point(1.5, 2.5)
         b = Point(2.25, 4.75)
         for i in 0:(n-1)
@@ -700,7 +701,7 @@ begin
         end
         return a.x, a.y
     end
-    let src = code_typed1(compute, (Int,))
+    let src = code_typed1(compute_idem_n, (Int,))
         @test count(isinvoke(:+ₚ), src.code) == 0 # no inlining !?
     end
 end
@@ -758,13 +759,18 @@ end
 import Base: @constprop
 
 # test union-split callsite with successful and unsuccessful constant-prop' results
-@constprop :aggressive @inline f42840(xs, a::Int) = xs[a]             # should be successful, and inlined
-@constprop :none @noinline f42840(xs::AbstractVector, a::Int) = xs[a] # should be unsuccessful, but still statically resolved
+# (also for https://github.com/JuliaLang/julia/issues/43287)
+@constprop :aggressive @inline f42840(cond::Bool, xs::Tuple, a::Int) =  # should be successful, and inlined with constant prop' result
+    cond ? xs[a] : @noinline(length(xs))
+@constprop :none @noinline f42840(::Bool, xs::AbstractVector, a::Int) = # should be unsuccessful, but still statically resolved
+    xs[a]
 let src = code_typed((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
-             f42840(xs, 2)
+             f42840(true, xs, 2)
          end |> only |> first
-    # `(xs::Tuple{Int,Int,Int})[a::Const(2)]` => `getfield(xs, 2)`
+    # `f43287(true, xs::Tuple{Int,Int,Int}, 2)` => `getfield(xs, 2)`
+    # `f43287(true, xs::Vector{Int}, 2)` => `:invoke f43287(true, xs, 2)`
     @test count(iscall((src, getfield)), src.code) == 1
+    @test count(isinvoke(:length), src.code) == 0
     @test count(isinvoke(:f42840), src.code) == 1
 end
 # a bit weird, but should handle this kind of case as well
@@ -859,4 +865,45 @@ let # aggressive static dispatch of single, abstract method match
     @test count(isinvoke(:checkBadType!), src.code) == 2
     # `checkBadType!(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
     @test count(iscall((src,checkBadType!)), src.code) == 1
+end
+
+@testset "late_inline_special_case!" begin
+    let src = code_typed((Symbol,Any,Any)) do a, b, c
+            TypeVar(a, b, c)
+        end |> only |> first
+        @test count(iscall((src,TypeVar)), src.code) == 0
+        @test count(iscall((src,Core._typevar)), src.code) == 1
+    end
+    let src = code_typed((TypeVar,Any)) do a, b
+            UnionAll(a, b)
+        end |> only |> first
+        @test count(iscall((src,UnionAll)), src.code) == 0
+    end
+end
+
+# have_fma elimination inside ^
+f_pow() = ^(2.0, -1.0)
+@test fully_eliminated(f_pow, Tuple{})
+
+# bug where Conditional wasn't being properly marked as ConstAPI
+let
+    @noinline fcond(a, b) = a === b
+    ftest(a) = (fcond(a, nothing); a)
+    @test fully_eliminated(ftest, Tuple{Bool})
+end
+
+# sqrt not considered volatile
+f_sqrt() = sqrt(2)
+@test fully_eliminated(f_sqrt, Tuple{})
+
+# use constant prop' result even when the return type doesn't get refined
+const Gx = Ref{Any}()
+Base.@constprop :aggressive function conditional_escape!(cnd, x)
+    if cnd
+        Gx[] = x
+    end
+    return nothing
+end
+@test fully_eliminated((String,)) do x
+    Base.@invoke conditional_escape!(false::Any, x::Any)
 end

@@ -102,6 +102,7 @@ JL_DLLEXPORT jl_sym_t *jl_all_sym;
 JL_DLLEXPORT jl_sym_t *jl_compile_sym;
 JL_DLLEXPORT jl_sym_t *jl_force_compile_sym;
 JL_DLLEXPORT jl_sym_t *jl_infer_sym;
+JL_DLLEXPORT jl_sym_t *jl_max_methods_sym;
 JL_DLLEXPORT jl_sym_t *jl_atomic_sym;
 JL_DLLEXPORT jl_sym_t *jl_not_atomic_sym;
 JL_DLLEXPORT jl_sym_t *jl_unordered_sym;
@@ -336,6 +337,7 @@ void jl_init_common_symbols(void)
     jl_compile_sym = jl_symbol("compile");
     jl_force_compile_sym = jl_symbol("force_compile");
     jl_infer_sym = jl_symbol("infer");
+    jl_max_methods_sym = jl_symbol("max_methods");
     jl_macrocall_sym = jl_symbol("macrocall");
     jl_escape_sym = jl_symbol("escape");
     jl_hygienicscope_sym = jl_symbol("hygienic-scope");
@@ -762,8 +764,8 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_vali
 // Parse `text` starting at 0-based `offset` and attributing the content to
 // `filename`. Return an svec of (parsed_expr, final_offset)
 JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
-                                     jl_value_t *filename, size_t offset,
-                                     jl_value_t *options)
+                                     jl_value_t *filename, size_t lineno,
+                                     size_t offset, jl_value_t *options)
 {
     JL_TIMING(PARSING);
     if (offset > text_len) {
@@ -789,15 +791,15 @@ JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
     value_t fl_expr;
     size_t offset1 = 0;
     if (rule == jl_all_sym) {
-        value_t e = fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-parse-all")),
-                              fl_text, fl_filename);
+        value_t e = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, "jl-parse-all")),
+                              fl_text, fl_filename, fixnum(lineno));
         fl_expr = e;
         offset1 = e == fl_ctx->FL_EOF ? text_len : 0;
     }
     else {
         value_t greedy = rule == jl_statement_sym ? fl_ctx->T : fl_ctx->F;
-        value_t p = fl_applyn(fl_ctx, 4, symbol_value(symbol(fl_ctx, "jl-parse-one")),
-                              fl_text, fl_filename, fixnum(offset), greedy);
+        value_t p = fl_applyn(fl_ctx, 5, symbol_value(symbol(fl_ctx, "jl-parse-one")),
+                              fl_text, fl_filename, fixnum(offset), greedy, fixnum(lineno));
         fl_expr = car_(p);
         offset1 = tosize(fl_ctx, cdr_(p), "parse");
     }
@@ -1241,7 +1243,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
 // `text` is passed as a pointer to allow raw non-String buffers to be used
 // without copying.
 JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                                  size_t offset, jl_value_t *options)
+                                  size_t lineno, size_t offset, jl_value_t *options)
 {
     jl_value_t *core_parse = NULL;
     if (jl_core_module) {
@@ -1249,22 +1251,23 @@ JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t 
     }
     if (!core_parse || core_parse == jl_nothing) {
         // In bootstrap, directly call the builtin parser.
-        jl_value_t *result = jl_fl_parse(text, text_len, filename, offset, options);
+        jl_value_t *result = jl_fl_parse(text, text_len, filename, lineno, offset, options);
         return result;
     }
     jl_value_t **args;
-    JL_GC_PUSHARGS(args, 5);
+    JL_GC_PUSHARGS(args, 6);
     args[0] = core_parse;
     args[1] = (jl_value_t*)jl_alloc_svec(2);
     jl_svecset(args[1], 0, jl_box_uint8pointer((uint8_t*)text));
     jl_svecset(args[1], 1, jl_box_long(text_len));
     args[2] = filename;
-    args[3] = jl_box_ulong(offset);
-    args[4] = options;
+    args[3] = jl_box_ulong(lineno);
+    args[4] = jl_box_ulong(offset);
+    args[5] = options;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *result = jl_apply(args, 5);
+    jl_value_t *result = jl_apply(args, 6);
     ct->world_age = last_age;
     args[0] = result; // root during error checks below
     JL_TYPECHK(parse, simplevector, result);
@@ -1278,11 +1281,11 @@ JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t 
 
 // parse an entire string as a file, reading multiple expressions
 JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
-                                      const char *filename, size_t filename_len)
+                                      const char *filename, size_t filename_len, size_t lineno)
 {
     jl_value_t *fname = jl_pchar_to_string(filename, filename_len);
     JL_GC_PUSH1(&fname);
-    jl_value_t *p = jl_parse(text, text_len, fname, 0, (jl_value_t*)jl_all_sym);
+    jl_value_t *p = jl_parse(text, text_len, fname, lineno, 0, (jl_value_t*)jl_all_sym);
     JL_GC_POP();
     return jl_svecref(p, 0);
 }
@@ -1294,7 +1297,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
 {
     jl_value_t *fname = jl_cstr_to_string("none");
     JL_GC_PUSH1(&fname);
-    jl_value_t *result = jl_parse(text, text_len, fname, offset,
+    jl_value_t *result = jl_parse(text, text_len, fname, 1, offset,
                                   (jl_value_t*)(greedy ? jl_statement_sym : jl_atom_sym));
     JL_GC_POP();
     return result;
@@ -1304,7 +1307,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
 JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *text, size_t text_len,
                                              const char *filename, size_t filename_len)
 {
-    return jl_parse_all(text, text_len, filename, filename_len);
+    return jl_parse_all(text, text_len, filename, filename_len, 1);
 }
 
 #ifdef __cplusplus

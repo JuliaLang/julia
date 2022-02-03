@@ -2981,6 +2981,21 @@ end
 @generated g25678(x) = return :x
 @test g25678(7) === 7
 
+# issue 25678: module of name `Core`
+# https://github.com/JuliaLang/julia/pull/40778/files#r784416018
+@test @eval Module() begin
+    Core = 1
+    @generated f() = 1
+    f() == 1
+end
+
+# issue 25678: argument of name `tmp`
+# https://github.com/JuliaLang/julia/pull/43823#discussion_r785365312
+@test @eval Module() begin
+    @generated f(tmp) = tmp
+    f(1) === Int
+end
+
 # issue #19012
 @test Meta.parse("\U2200", raise=false) == Symbol("∀")
 @test Meta.parse("\U2203", raise=false) == Symbol("∃")
@@ -3088,3 +3103,63 @@ function checkUserAccess(u::User)
 	return false
 end
 """)
+
+@testset "empty nd arrays" begin
+    @test :([])    == Expr(:vect)
+    @test :([;])   == Expr(:ncat, 1)
+    @test :([;;])  == Expr(:ncat, 2)
+    @test :([;;;]) == Expr(:ncat, 3)
+
+    @test []    == Array{Any}(undef, 0)
+    @test [;]   == Array{Any}(undef, 0)
+    @test [;;]  == Array{Any}(undef, 0, 0)
+    @test [;;;] == Array{Any}(undef, 0, 0, 0)
+
+    @test :(T[])    == Expr(:ref, :T)
+    @test :(T[;])   == Expr(:typed_ncat, :T, 1)
+    @test :(T[;;])  == Expr(:typed_ncat, :T, 2)
+    @test :(T[;;;]) == Expr(:typed_ncat, :T, 3)
+
+    @test Int[]    == Array{Int}(undef, 0)
+    @test Int[;]   == Array{Int}(undef, 0)
+    @test Int[;;]  == Array{Int}(undef, 0, 0)
+    @test Int[;;;] == Array{Int}(undef, 0, 0, 0)
+
+    @test :([  ]) == Expr(:vect)
+    @test :([
+            ]) == Expr(:vect)
+    @test :([ ;; ]) == Expr(:ncat, 2)
+    @test :([
+             ;;
+            ]) == Expr(:ncat, 2)
+
+    @test_throws ParseError Meta.parse("[; ;]")
+    @test_throws ParseError Meta.parse("[;; ;]")
+    @test_throws ParseError Meta.parse("[;\n;]")
+end
+
+@test Meta.parseatom("@foo", 1; filename="foo", lineno=7) == (Expr(:macrocall, :var"@foo", LineNumberNode(7, :foo)), 5)
+@test Meta.parseall("@foo"; filename="foo", lineno=3) == Expr(:toplevel, LineNumberNode(3, :foo), Expr(:macrocall, :var"@foo", LineNumberNode(3, :foo)))
+
+let ex = :(const $(esc(:x)) = 1; (::typeof(2))() = $(esc(:x)))
+    @test macroexpand(Main, Expr(:var"hygienic-scope", ex, Main)).args[3].args[1] == :((::$(GlobalRef(Main, :typeof))(2))())
+end
+
+struct Foo44013
+    x
+    f
+end
+
+@testset "issue #44013" begin
+    f = Foo44013(1, 2)
+    res = begin (; x, f) = f end
+    @test res == Foo44013(1, 2)
+    @test x == 1
+    @test f == 2
+
+    f = Foo44013(1, 2)
+    res = begin (; f, x) = f end
+    @test res == Foo44013(1, 2)
+    @test x == 1
+    @test f == 2
+end

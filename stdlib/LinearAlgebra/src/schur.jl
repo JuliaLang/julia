@@ -97,7 +97,7 @@ julia> A
 schur!(A::StridedMatrix{<:BlasFloat}) = Schur(LinearAlgebra.LAPACK.gees!('V', A)...)
 
 """
-    schur(A::StridedMatrix) -> F::Schur
+    schur(A) -> F::Schur
 
 Computes the Schur factorization of the matrix `A`. The (quasi) triangular Schur factor can
 be obtained from the `Schur` object `F` with either `F.Schur` or `F.T` and the
@@ -146,25 +146,20 @@ julia> t == F.T && z == F.Z && vals == F.values
 true
 ```
 """
-schur(A::StridedMatrix{<:BlasFloat}) = schur!(copy(A))
-schur(A::StridedMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
-
-schur(A::AbstractMatrix{T}) where {T} = schur!(copy_to_array(A, eigtype(T)))
+schur(A::AbstractMatrix{T}) where {T} = schur!(copy_similar(A, eigtype(T)))
 function schur(A::RealHermSymComplexHerm)
     F = eigen(A; sortby=nothing)
     return Schur(typeof(F.vectors)(Diagonal(F.values)), F.vectors, F.values)
 end
 function schur(A::Union{UnitUpperTriangular{T},UpperTriangular{T}}) where {T}
     t = eigtype(T)
-    Z = Matrix{t}(undef, size(A)...)
-    copyto!(Z, A)
+    Z = copy_similar(A, t)
     return Schur(Z, Matrix{t}(I, size(A)), convert(Vector{t}, diag(A)))
 end
 function schur(A::Union{UnitLowerTriangular{T},LowerTriangular{T}}) where {T}
     t = eigtype(T)
     # double flip the matrix A
-    Z = Matrix{t}(undef, size(A)...)
-    copyto!(Z, A)
+    Z = copy_similar(A, t)
     reverse!(reshape(Z, :))
     # construct "reverse" identity
     n = size(A, 1)
@@ -338,7 +333,7 @@ schur!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
     GeneralizedSchur(LinearAlgebra.LAPACK.gges!('V', 'V', A, B)...)
 
 """
-    schur(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
+    schur(A, B) -> F::GeneralizedSchur
 
 Computes the Generalized Schur (or QZ) factorization of the matrices `A` and `B`. The
 (quasi) triangular Schur factors can be obtained from the `Schur` object `F` with `F.S`
@@ -350,14 +345,9 @@ generalized eigenvalues of `A` and `B` can be obtained with `F.α./F.β`.
 Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
 `F.α`, and `F.β`.
 """
-schur(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schur!(copy(A),copy(B))
-function schur(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
-    S = promote_type(eigtype(TA), TB)
-    return schur!(copy_oftype(A, S), copy_oftype(B, S))
-end
 function schur(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    return schur!(copy_oftype(A, S), copy_oftype(B, S))
+    return schur!(copy_similar(A, S), copy_similar(B, S))
 end
 
 """

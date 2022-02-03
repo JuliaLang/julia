@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia-internal%shlibext -LowerSIMDLoop -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LowerSIMDLoop -S %s | FileCheck %s
 
 declare void @julia.loopinfo_marker()
 

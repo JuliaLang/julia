@@ -687,29 +687,29 @@ You can search for the index of a particular character using the
 [`findfirst`](@ref) and [`findlast`](@ref) functions:
 
 ```jldoctest
-julia> findfirst(isequal('o'), "xylophone")
+julia> findfirst('o', "xylophone")
 4
 
-julia> findlast(isequal('o'), "xylophone")
+julia> findlast('o', "xylophone")
 7
 
-julia> findfirst(isequal('z'), "xylophone")
+julia> findfirst('z', "xylophone")
 ```
 
 You can start the search for a character at a given offset by using
 the functions [`findnext`](@ref) and [`findprev`](@ref):
 
 ```jldoctest
-julia> findnext(isequal('o'), "xylophone", 1)
+julia> findnext('o', "xylophone", 1)
 4
 
-julia> findnext(isequal('o'), "xylophone", 5)
+julia> findnext('o', "xylophone", 5)
 7
 
-julia> findprev(isequal('o'), "xylophone", 5)
+julia> findprev('o', "xylophone", 5)
 4
 
-julia> findnext(isequal('o'), "xylophone", 8)
+julia> findnext('o', "xylophone", 8)
 ```
 
 You can use the [`occursin`](@ref) function to check if a substring is found within a string:

@@ -357,8 +357,8 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order)
 {
-    JL_TYPECHK(atomic_pointerref, pointer, p);
-    JL_TYPECHK(atomic_pointerref, symbol, order)
+    JL_TYPECHK(atomic_pointermodify, pointer, p);
+    JL_TYPECHK(atomic_pointermodify, symbol, order)
     (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 1);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
@@ -1175,8 +1175,112 @@ bi_fintrinsic(div,div_float)
 bi_fintrinsic(frem,rem_float)
 
 // ternary operators //
+// runtime fma is broken on windows, define julia_fma(f) ourself with fma_emulated as reference.
+#if defined(_OS_WINDOWS_)
+// reinterpret(UInt64, ::Float64)
+uint64_t bitcast_d2u(double d) {
+    uint64_t r;
+    memcpy(&r, &d, 8);
+    return r;
+}
+// reinterpret(Float64, ::UInt64)
+double bitcast_u2d(uint64_t d) {
+    double r;
+    memcpy(&r, &d, 8);
+    return r;
+}
+// Base.splitbits(::Float64)
+void splitbits(double *hi, double *lo, double d) {
+    *hi = bitcast_u2d(bitcast_d2u(d) & 0xfffffffff8000000);
+    *lo = d - *hi;
+}
+// Base.exponent(::Float64)
+int exponent(double a) {
+    int e;
+    frexp(a, &e);
+    return e - 1;
+}
+// Base.fma_emulated(::Float32, ::Float32, ::Float32)
+float julia_fmaf(float a, float b, float c) {
+    double ab, res;
+    ab = (double)a * b;
+    res = ab + (double)c;
+    if ((bitcast_d2u(res) & 0x1fffffff) == 0x10000000){
+        double reslo = fabsf(c) > fabs(ab) ? ab-(res - c) : c-(res - ab);
+        if (reslo != 0)
+            res = nextafter(res, copysign(1.0/0.0, reslo));
+    }
+    return (float)res;
+}
+// Base.twomul(::Float64, ::Float64)
+void two_mul(double *abhi, double *ablo, double a, double b) {
+    double ahi, alo, bhi, blo, blohi, blolo;
+    splitbits(&ahi, &alo, a);
+    splitbits(&bhi, &blo, b);
+    splitbits(&blohi, &blolo, blo);
+    *abhi = a*b;
+    *ablo = alo*blohi - (((*abhi - ahi*bhi) - alo*bhi) - ahi*blo) + blolo*alo;
+}
+// Base.issubnormal(::Float64) (Win32's fpclassify seems broken)
+int issubnormal(double d) {
+    uint64_t y = bitcast_d2u(d);
+    return ((y & 0x7ff0000000000000) == 0) & ((y & 0x000fffffffffffff) != 0);
+}
+#if defined(_WIN32)
+// Win32 needs volatile (avoid over optimization?)
+#define VDOUBLE volatile double
+#else
+#define VDOUBLE double
+#endif
+
+// Base.fma_emulated(::Float64, ::Float64, ::Float64)
+double julia_fma(double a, double b, double c) {
+    double abhi, ablo, r, s;
+    two_mul(&abhi, &ablo, a, b);
+    if (!isfinite(abhi+c) || fabs(abhi) < 2.0041683600089732e-292 ||
+        issubnormal(a) || issubnormal(b)) {
+        int aandbfinite = isfinite(a) && isfinite(b);
+        if (!(aandbfinite && isfinite(c)))
+            return aandbfinite ? c : abhi+c;
+        if (a == 0 || b == 0)
+            return abhi+c;
+        int bias = exponent(a) + exponent(b);
+        VDOUBLE c_denorm = ldexp(c, -bias);
+        if (isfinite(c_denorm)) {
+            if (issubnormal(a))
+                a *= 4.503599627370496e15;
+            if (issubnormal(b))
+                b *= 4.503599627370496e15;
+            a = bitcast_u2d((bitcast_d2u(a) & 0x800fffffffffffff) | 0x3ff0000000000000);
+            b = bitcast_u2d((bitcast_d2u(b) & 0x800fffffffffffff) | 0x3ff0000000000000);
+            c = c_denorm;
+            two_mul(&abhi, &ablo, a, b);
+            r = abhi+c;
+            s = (fabs(abhi) > fabs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo);
+            double sumhi = r+s;
+            if (issubnormal(ldexp(sumhi, bias))) {
+                double sumlo = r-sumhi+s;
+                int bits_lost = -bias-exponent(sumhi)-1022;
+                if ((bits_lost != 1) ^ ((bitcast_d2u(sumhi)&1) == 1))
+                    if (sumlo != 0)
+                        sumhi = nextafter(sumhi, copysign(1.0/0.0, sumlo));
+            }
+            return ldexp(sumhi, bias);
+        }
+        if (isinf(abhi) && signbit(c) == signbit(a*b))
+            return abhi;
+    }
+    r = abhi+c;
+    s = (fabs(abhi) > fabs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo);
+    return r+s;
+}
+#define fma(a, b, c) \
+    sizeof(a) == sizeof(float) ? julia_fmaf(a, b, c) : julia_fma(a, b, c)
+#else // On other systems use fma(f) directly
 #define fma(a, b, c) \
     sizeof(a) == sizeof(float) ? fmaf(a, b, c) : fma(a, b, c)
+#endif
+
 #define muladd(a, b, c) a * b + c
 ter_fintrinsic(fma,fma_float)
 ter_fintrinsic(muladd,muladd_float)

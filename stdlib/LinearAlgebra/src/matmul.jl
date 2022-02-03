@@ -11,7 +11,7 @@ dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVect
 
 function dot(x::Vector{T}, rx::AbstractRange{TI}, y::Vector{T}, ry::AbstractRange{TI}) where {T<:BlasReal,TI<:Integer}
     if length(rx) != length(ry)
-        throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
+        throw(DimensionMismatch(lazy"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
@@ -24,7 +24,7 @@ end
 
 function dot(x::Vector{T}, rx::AbstractRange{TI}, y::Vector{T}, ry::AbstractRange{TI}) where {T<:BlasComplex,TI<:Integer}
     if length(rx) != length(ry)
-        throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
+        throw(DimensionMismatch(lazy"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
@@ -115,6 +115,13 @@ end
 
 # Matrix-matrix multiplication
 
+AdjOrTransStridedMat{T} = Union{Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
+StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
+
+_parent(A) = A
+_parent(A::Adjoint) = parent(A)
+_parent(A::Transpose) = parent(A)
+
 """
     *(A::AbstractMatrix, B::AbstractMatrix)
 
@@ -130,18 +137,22 @@ julia> [1 1; 0 1] * [1 0; 1 1]
 """
 function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))), A, B)
 end
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
 # which is better handled by reinterpreting rather than promotion
-function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasFloat})
+function (*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
     TS = promote_type(eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         wrapperop(A)(convert(AbstractArray{TS}, _parent(A))),
+         wrapperop(B)(convert(AbstractArray{TS}, _parent(B))))
 end
-function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMatrix{<:BlasComplex})
+function (*)(A::StridedMaybeAdjOrTransMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasComplex})
     TS = promote_type(eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         wrapperop(A)(convert(AbstractArray{TS}, _parent(A))),
+         wrapperop(B)(convert(AbstractArray{TS}, _parent(B))))
 end
 
 @inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
@@ -150,6 +161,28 @@ end
 end
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
+function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
+    TS = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         convert(AbstractArray{TS}, A),
+         wrapperop(B)(convert(AbstractArray{real(TS)}, _parent(B))))
+end
+function (*)(A::AdjOrTransStridedMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
+    TS = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         copy_oftype(A, TS), # remove AdjOrTrans to use reinterpret trick below
+         wrapperop(B)(convert(AbstractArray{real(TS)}, _parent(B))))
+end
+# the following case doesn't seem to benefit from the translation A*B = (B' * A')'
+function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasComplex})
+    TS = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         convert(AbstractArray{TS}, A),
+         convert(AbstractArray{TS}, B))
+end
+(*)(A::AdjOrTransStridedMat{<:BlasReal}, B::StridedMatrix{<:BlasComplex}) = copy(transpose(transpose(B) * parent(A)))
+(*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::AdjOrTransStridedMat{<:BlasComplex}) = copy(wrapperop(B)(parent(B) * transpose(A)))
+
 for elty in (Float32,Float64)
     @eval begin
         @inline function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty},
@@ -212,8 +245,6 @@ Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrM
     muladd(A', x', z')'
 Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
     transpose(muladd(transpose(A), transpose(x), transpose(z)))
-
-StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
 
 function Base.muladd(A::StridedMaybeAdjOrTransMat{<:Number}, y::AbstractVector{<:Number}, z::Union{Number, AbstractVector})
     T = promote_type(eltype(A), eltype(y), eltype(z))
@@ -465,7 +496,7 @@ end
             A[i,j] = conjugate ? adjoint(A[j,i]) : transpose(A[j,i])
         end
     else
-        throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
+        throw(ArgumentError(lazy"uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
     end
     A
 end
@@ -474,10 +505,10 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
                α::Number=true, β::Number=false) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     if nA != length(x)
-        throw(DimensionMismatch("second dimension of A, $nA, does not match length of x, $(length(x))"))
+        throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match length of x, $(length(x))"))
     end
     if mA != length(y)
-        throw(DimensionMismatch("first dimension of A, $mA, does not match length of y, $(length(y))"))
+        throw(DimensionMismatch(lazy"first dimension of A, $mA, does not match length of y, $(length(y))"))
     end
     if mA == 0
         return y
@@ -505,7 +536,7 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
         tAt = 'T'
     end
     if nC != mA
-        throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
+        throw(DimensionMismatch(lazy"output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0 || iszero(_add.alpha)
         return _rmul_or_fill!(C, _add.beta)
@@ -543,7 +574,7 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
         tAt = 'C'
     end
     if nC != mA
-        throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
+        throw(DimensionMismatch(lazy"output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0 || iszero(_add.alpha)
         return _rmul_or_fill!(C, _add.beta)
@@ -587,7 +618,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
     mB, nB = lapack_size(tB, B)
 
     if nA != mB
-        throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
+        throw(DimensionMismatch(lazy"A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
     end
 
     if C === A || B === C
@@ -596,7 +627,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
 
     if mA == 0 || nA == 0 || nB == 0 || iszero(_add.alpha)
         if size(C) != (mA, nB)
-            throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
+            throw(DimensionMismatch(lazy"C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
         return _rmul_or_fill!(C, _add.beta)
     end
@@ -657,10 +688,10 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
     mB = length(B)
     mA, nA = lapack_size(tA, A)
     if mB != nA
-        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA), vector B has length $mB"))
+        throw(DimensionMismatch(lazy"matrix A has dimensions ($mA,$nA), vector B has length $mB"))
     end
     if mA != length(C)
-        throw(DimensionMismatch("result C has length $(length(C)), needs length $mA"))
+        throw(DimensionMismatch(lazy"result C has length $(length(C)), needs length $mA"))
     end
 
     Astride = size(A, 1)
@@ -754,10 +785,10 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if mB != nA
-        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA), matrix B has dimensions ($mB,$nB)"))
+        throw(DimensionMismatch(lazy"matrix A has dimensions ($mA,$nA), matrix B has dimensions ($mB,$nB)"))
     end
     if size(C,1) != mA || size(C,2) != nB
-        throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA,$nB)"))
+        throw(DimensionMismatch(lazy"result C has dimensions $(size(C)), needs ($mA,$nB)"))
     end
 
     if iszero(_add.alpha) || isempty(A) || isempty(B)
@@ -930,7 +961,7 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (2,2))
-        throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
+        throw(DimensionMismatch(lazy"A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end
     @inbounds begin
     if tA == 'T'
@@ -973,7 +1004,7 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (3,3))
-        throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
+        throw(DimensionMismatch(lazy"A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end
     @inbounds begin
     if tA == 'T'

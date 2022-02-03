@@ -203,6 +203,15 @@ value_t fl_iolineno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return size_wrap(fl_ctx, s->lineno);
 }
 
+value_t fl_iosetlineno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "io.set-lineno!", nargs, 2);
+    ios_t *s = toiostream(fl_ctx, args[0], "io.set-lineno!");
+    size_t new_lineno = tosize(fl_ctx, args[1], "io.set-lineno!");
+    s->lineno = new_lineno;
+    return args[1];
+}
+
 value_t fl_iocolno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "input-port-column", nargs, 1);
@@ -439,6 +448,7 @@ static const builtinspec_t iostreamfunc_info[] = {
     { "io.tostring!", fl_iotostring },
     { "input-port-line", fl_iolineno },
     { "input-port-column", fl_iocolno },
+    { "io.set-lineno!", fl_iosetlineno },
 
     { NULL, NULL }
 };
