@@ -352,11 +352,10 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
 end
 
 _init(op, A::AbstractArray{<:Number}, B::AbstractArray{<:Number}) =
-    (_ -> zero(typeof(op(oneunit(eltype(A)), oneunit(eltype(D))))))
-_init(op, A::AbstractArray, B::AbstractArray) =
-    promote_op(op, eltype(A), eltype(B))
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(_init(/, A, D).(A), A, D)
+    (_ -> zero(typeof(op(oneunit(eltype(A)), oneunit(eltype(B))))))
+_init(op, A::AbstractArray, B::AbstractArray) = promote_op(op, eltype(A), eltype(B))
 
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(_init(/, A, D).(A), A, D)
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
 function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
