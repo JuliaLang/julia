@@ -952,3 +952,11 @@ let src = code_typed1(f_make_the_ref, ())
     @test count(x->isexpr(x, :new), src.code) == 1
 end
 @test fully_eliminated(f_make_the_ref_but_dont_return_it, Tuple{})
+
+# Test that the Core._apply_iterate bail path taints effects
+function f_apply_bail(f)
+    f(()...)
+    return nothing
+end
+f_call_apply_bail(f) = f_apply_bail(f)
+@test !fully_eliminated(f_call_apply_bail, Tuple{Function})
