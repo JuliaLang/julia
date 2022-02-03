@@ -87,7 +87,7 @@ struct Pass <: Result
     value
     source::Union{Nothing,LineNumberNode}
     message_only::Bool
-    function Pass(test_type::Symbol, orig_expr, data, thrown, source=nothing, message_only=false)
+    function Pass(test_type::Symbol, orig_expr, data, thrown, source::Union{Nothing,LineNumberNode}=nothing, message_only::Bool=false)
         return new(test_type, orig_expr, data, thrown, source, message_only)
     end
 end
@@ -168,7 +168,7 @@ struct Error <: Result
     backtrace::String
     source::LineNumberNode
 
-    function Error(test_type, orig_expr, value, bt, source)
+    function Error(test_type::Symbol, orig_expr, value, bt, source::LineNumberNode)
         if test_type === :test_error
             bt = scrub_exc_stack(bt)
         end
