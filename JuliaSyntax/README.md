@@ -13,6 +13,7 @@ A Julia frontend, written in Julia.
 * "Compilation as an API" to support all sorts of tooling
 * Grow to encompass the rest of the compiler frontend: macro expansion,
   desugaring and other lowering steps.
+* Once mature, replace Julia's flisp-based reference frontend in `Core`
 
 ### Design Opinions
 
@@ -23,6 +24,13 @@ A Julia frontend, written in Julia.
   of `GreenNode` (a lossless parse tree). We might need other tree types later.
 * Fancy parser generators still seem marginal for production compilers. We use
   a boring but flexible recursive descent parser.
+
+### Status
+
+The library is in pre-0.1 stage, but parses all of Base correctly with only a
+handful of failures remaining in the Base tests and standard library.
+The tree data structures should be somewhat usable but will evolve as we try
+out various use cases.
 
 # Examples
 
@@ -325,9 +333,9 @@ DSLs this is fine and good but some such allowed syntaxes don't seem very
 useful, even for DSLs:
 
 * `macro (x) end` is allowed but there are no anonymous macros.
-* `abstract type A < B end` and other subtypes comparisons are allowed, but
+* `abstract type A < B end` and other subtype comparisons are allowed, but
   only `A <: B` makes sense.
-* `x where {S T}` produces `(where x (bracescat (row S T)))`
+* `x where {S T}` produces `(where x (bracescat (row S T)))`. This seems pretty weird!
 
 ### `kw` and `=` inconsistencies
 
@@ -421,19 +429,80 @@ seems to be to flatten the generators:
 * `import A..` produces `(import (. A .))` which is arguably nonsensical, as `.`
   can't be a normal identifier.
 
-* The raw string escaping rules are *super* confusing for backslashes near vs
-  at the end of the string: `raw"\\\\ "` contains four backslashes, whereas
-  `raw"\\\\"` contains only two. It's unclear whether anything can be done
-  about this, however.
+* The raw string escaping rules are *super* confusing for backslashes near
+  the end of the string: `raw"\\\\ "` contains four backslashes, whereas
+  `raw"\\\\"` contains only two. However this was an intentional feature to
+  allow all strings to be represented and it's unclear whether the situation
+  can be improved.
 
 * In braces after macrocall, `@S{a b}` is invalid but both `@S{a,b}` and
   `@S {a b}` parse. Conversely, `@S[a b]` parses.
+
+# Comparisons to other packages
+
+### JuliaParser.jl
+
+[JuliaParser.jl](https://github.com/JuliaLang/JuliaParser.jl)
+was a direct port of Julia's flisp reference parser but was abandoned around
+Julia 0.5 or so. However it doesn't support lossless parsing and doing so would
+amount to a full rewrite. Given the divergence with the flisp reference parser
+since Julia-0.5, it seemed better just to start with the reference parser
+instead.
+
+### Tokenize.jl
+
+[Tokenize.jl](https://github.com/JuliaLang/Tokenize.jl)
+is a fast lexer for Julia code. The code from Tokenize has been
+imported and used in JuliaSyntax, with some major modifications as discussed in
+the lexer implementation section.
+
+### CSTParser.jl
+
+[CSTParser.jl](https://github.com/julia-vscode/CSTParser.jl)
+is a ([mostly?](https://github.com/domluna/JuliaFormatter.jl/issues/52#issuecomment-529945126))
+lossless parser with goals quite similar to JuliaParser and used extensively in
+the VSCode / LanguageServer / JuliaFormatter ecosystem. CSTParser is very useful
+but I do find the implementation hard to understand and I wanted to try a fresh
+approach with a focus on:
+
+* "Production readyness": Good docs, tests, diagnostics and maximum similarity
+  with the flisp parser, with the goal of getting the new parser into `Core`.
+* Learning from the latest ideas about composable parsing and data structures
+  from outside Julia. In particular the implementation of `rust-analyzer` is
+  very clean, well documented, and a great source of inspiration.
+* Composability of tree data structures — I feel like the trees should be
+  layered somehow with a really lightweight green tree at the most basic level,
+  similar to Roslyn or rust-analyzer. In comparison CSTParser uses a more heavy
+  weight non-layered data structure. Alternatively or additionally, have a
+  common tree API with many concrete task-specific implementations.
+
+A big benefit of the JuliaSyntax parser is that it separates the parser code
+from the tree data structures entirely which should give a lot of flexibility
+in experimenting with various tree representations.
+
+I also want JuliaSyntax to tackle macro expansion and other lowering steps, and
+provide APIs for this which can be used by both the core language and the
+editor tooling.
+
+### tree-sitter-julia
+
+Using a modern production-ready parser generator like `tree-sitter` is an
+interesting option and some progress has already been made in
+[tree-sitter-julia](https://github.com/tree-sitter/tree-sitter-julia).
+But I feel like the grammars for parser generators are only marginally more
+expressive than writing the parser by hand after accounting for the effort
+spent on the weird edge cases of a real language and writing the parser's tests
+and "supporting code".
+
+On the other hand a hand-written parser completely flexible and can be mutually
+understood with the reference implementation so I chose that approach for
+JuliaSyntax.
 
 # Resources
 
 ## Julia issues
 
-Here's a few links to relevant Julia issues. No doubt there's many more.
+Here's a few links to relevant Julia issues.
 
 #### Macro expansion
 
@@ -760,12 +829,16 @@ f(a,
 
 # Fun research questions
 
-* Given source and syntax tree, can we regress/learn a generative model of
-  indentation from the syntax tree?  Source formatting involves a big pile of
-  heuristics to get something which "looks nice"... and ML systems have become
-  very good at heuristics.  Also, we've got huge piles of training data — just
-  choose some high quality, tastefully hand-formatted libraries.
+### Formatting
 
-* Similarly, can we learn fast and reasonably accurate recovery heuristics for
-  when the parser encounters broken syntax rather than hand-coding these? How
-  do we set the parser up so that training works and inference is nonintrusive?
+Given source and syntax tree, can we regress/learn a generative model of
+indentation from the syntax tree?  Source formatting involves a big pile of
+heuristics to get something which "looks nice"... and ML systems have become
+very good at heuristics. Also, we've got huge piles of training data — just
+choose some high quality, tastefully hand-formatted libraries.
+
+### Parser Recovery
+
+Similarly, can we learn fast and reasonably accurate recovery heuristics for
+when the parser encounters broken syntax rather than hand-coding these? How
+do we set the parser up so that training works and inference is nonintrusive?
