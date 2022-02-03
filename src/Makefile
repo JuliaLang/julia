@@ -46,7 +46,7 @@ RUNTIME_SRCS := \
 	dlload sys init task array dump staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk \
-  gc gc-debug gc-heap-snapshot gc-alloc-profiler gc-pages gc-stacks
+  gc gc-debug gc-heap-snapshot gc-alloc-profiler gc-pages gc-stacks \
   method jlapi signal-handling safepoint timing subtype \
 	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage
 SRCS := jloptions runtime_ccall rtutils
