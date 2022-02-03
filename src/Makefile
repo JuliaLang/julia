@@ -137,9 +137,11 @@ endif # USE_LLVM_SHLIB == 1
 endif
 
 RT_LLVM_LINK_ARGS := $(shell $(LLVM_CONFIG_HOST) --libs $(RT_LLVM_LIBS) --link-static)
-RT_LLVMLINK += $(LLVM_LDFLAGS) $(RT_LLVM_LINK_ARGS) -lrt -ldl -lpthread -lz
+RT_LLVMLINK += $(LLVM_LDFLAGS) $(RT_LLVM_LINK_ARGS)
 ifeq ($(OS), WINNT)
 RT_LLVMLINK += -luuid -lole32
+else
+RT_LLVMLINK += -lrt -ldl -lpthread -lz
 endif
 
 CLANG_LDFLAGS := $(LLVM_LDFLAGS)
