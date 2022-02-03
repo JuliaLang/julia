@@ -52,6 +52,7 @@ Compiler/Runtime improvements
 * Abstract callsite can now be inlined or statically resolved as far as the callsite has a single
   matching method ([#43113]).
 * Builtin function are now a bit more like generic functions, and can be enumerated with `methods` ([#43865]).
+* Inference now tracks various effects such as sideeffectful-ness and nothrow-ness on a per-specialization basis. Code heavilty dependent on constant propagation should see significant compile-time performance improvements and certain cases (e.g. calls to unlinineable functions that are nevertheless effect free) should see runtime performance improvements. Effects may be overwritten manually with the `@Base.assume_effects` macro. (#43852).
 
 Command-line option changes
 ---------------------------
