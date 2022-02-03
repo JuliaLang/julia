@@ -629,8 +629,10 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info
 
         @assert new_node_inst !== UNDEF # we filtered these out earlier
         show_type = should_print_ssa_type(new_node_inst)
-        with_output_color(:green, io) do io′
-            print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type)
+        let maxlength_idx=maxlength_idx, show_type=show_type
+            with_output_color(:green, io) do io′
+                print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type)
+            end
         end
 
         if new_node_type === UNDEF # try to be robust against errors

@@ -130,9 +130,9 @@ end
 
 function getkey(wkh::WeakKeyDict{K}, kk, default) where K
     k = lock(wkh) do
-        k = getkey(wkh.ht, kk, nothing)
-        k === nothing && return nothing
-        return k.value
+        k_ = getkey(wkh.ht, kk, nothing)
+        k_ === nothing && return nothing
+        return k_.value
     end
     return k === nothing ? default : k::K
 end
