@@ -63,7 +63,7 @@ the inference results with constant information `info.results::Vector{Union{Noth
 """
 struct ConstCallInfo
     call::Union{MethodMatchInfo,UnionSplitInfo}
-    results::Vector{Union{Nothing,InferenceResult,ConstResult,Bool}}
+    results::Vector{Union{Nothing,InferenceResult,ConstResult}}
 end
 
 """
@@ -129,7 +129,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
 struct InvokeCallInfo
     match::MethodMatch
-    result::Union{Nothing,InferenceResult,ConstResult,Bool}
+    result::Union{Nothing,InferenceResult,ConstResult}
 end
 
 """
@@ -141,7 +141,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
 struct OpaqueClosureCallInfo
     match::MethodMatch
-    result::Union{Nothing,InferenceResult,ConstResult,Bool}
+    result::Union{Nothing,InferenceResult,ConstResult}
 end
 
 """

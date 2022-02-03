@@ -785,25 +785,6 @@ end
 
 generating_sysimg() = ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
 
-function tristate_merge(old, new)
-    (old === ALWAYS_FALSE || new === ALWAYS_FALSE) && return ALWAYS_FALSE
-    old === TRISTATE_UNKNOWN && return old
-    return new
-end
-
-function tristate_merge(old::Effects, new::Effects)
-    Effects(tristate_merge(
-            old.consistent, new.consistent),
-        tristate_merge(
-            old.effect_free, new.effect_free),
-        tristate_merge(
-            old.nothrow, new.nothrow),
-        tristate_merge(
-            old.terminates, new.terminates),
-        old.inbounds_taints_consistency ||
-        new.inbounds_taints_consistency)
-end
-
 function tristate_merge!(caller::InferenceState, callee::Effects)
     caller.ipo_effects = tristate_merge(caller.ipo_effects, callee)
 end

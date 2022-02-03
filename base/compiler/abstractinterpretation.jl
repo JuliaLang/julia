@@ -60,7 +60,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     conditionals = nothing # keeps refinement information of call argument types when the return type is boolean
     seen = 0               # number of signatures actually inferred
     any_const_result = false
-    const_results = Union{InferenceResult,Nothing,ConstResult,Bool}[]
+    const_results = Union{InferenceResult,Nothing,ConstResult}[]
     multiple_matches = napplicable > 1
 
     if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
@@ -179,7 +179,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     if seen != napplicable
         tristate_merge!(sv, Effects())
     elseif !(atype <: merged_sig)
-        # Account for the fact that we may encounter a non-covered signature.
+        # Account for the fact that we may encounter a MethodError with a non-covered signature.
         tristate_merge!(sv, Effects(ALWAYS_TRUE, ALWAYS_TRUE, TRISTATE_UNKNOWN, ALWAYS_TRUE))
     end
 
@@ -624,7 +624,8 @@ function is_all_const_arg((; fargs, argtypes)::ArgInfo)
     return true
 end
 
-function pure_eval_call_const_args(interp::AbstractInterpreter,
+function concrete_eval_const_proven_total_or_error(
+        interp::AbstractInterpreter,
         @nospecialize(f), argtypes::Vector{Any})
     args = Any[ (a = widenconditional(argtypes[i]);
         isa(a, Const) ? a.val :
@@ -655,6 +656,10 @@ struct ConstCallResults
     rt::Any
     const_result::Union{InferenceResult, ConstResult}
     effects::Effects
+    ConstCallResults(@nospecialize(rt),
+                     const_result::Union{InferenceResult, ConstResult},
+                     effects::Effects) =
+        new(rt, const_result, effects)
 end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter, result::MethodCallResult,
@@ -664,7 +669,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
         return nothing
     end
     if f !== nothing && result.edge !== nothing && is_total_or_error(result.edge_effects) && is_all_const_arg(arginfo)
-        rt = pure_eval_call_const_args(interp, f, arginfo.argtypes)
+        rt = concrete_eval_const_proven_total_or_error(interp, f, arginfo.argtypes)
         add_backedge!(result.edge, sv)
         rt === nothing && return ConstCallResults(Union{}, ConstResult(result.edge), result.edge_effects) # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
         if is_inlineable_constant(rt.val) || call_result_unused(sv)
@@ -1764,7 +1769,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 if at === Bottom
                     t = Bottom
                     tristate_merge!(sv, Effects(
-                        !ismutabletype(t) ? ALWAYS_TRUE : ALWAYS_FALSE,
+                        ALWAYS_TRUE, # N.B depends on !ismutabletype(t) above
                         ALWAYS_TRUE, ALWAYS_FALSE, ALWAYS_TRUE))
                     @goto t_computed
                 elseif !isa(at, Const)
@@ -2020,9 +2025,10 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
     return widenconst(rt)
 end
 
-function handle_control_backedge!(frame::InferenceState, from, to)
+function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
-        if isa(frame.linfo.def, Method) && decode_effects_override(frame.linfo.def.purity).terminates_locally
+        def = frame.linfo.def
+        if isa(def, Method) && decode_effects_override(def.purity).terminates_locally
             return
         end
         tristate_merge!(frame, Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, TRISTATE_UNKNOWN))
