@@ -157,12 +157,51 @@ let A = collect(reshape(1:20, 5, 4))
     @test reshape(R, :) isa StridedArray
 end
 
-# and ensure a reinterpret array containing a strided array can have strides computed
-let A = view(reinterpret(Int16, collect(reshape(UnitRange{Int64}(1, 20), 5, 4))), :, 1:2)
-    R = reinterpret(Int32, A)
-    @test strides(R) == (1, 10)
-    @test stride(R, 1) == 1
-    @test stride(R, 2) == 10
+function check_strides(A::AbstractArray)
+    # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
+    dims = ntuple(identity, ndims(A))
+    map(i -> stride(A, i), dims) == strides(A) || return false
+    # Test strides via value check.
+    for i in eachindex(IndexLinear(), A)
+        A[i] === Base.unsafe_load(pointer(A, i)) || return false
+    end
+    return true
+end
+
+@testset "strides for NonReshapedReinterpretArray" begin
+    A = Array{Int32}(reshape(1:72, 9, 8))
+    for viewax2 in (1:8, 1:2:6, 7:-1:1, 5:-2:1)
+        # dim1 is contiguous
+        for T in (Int16, Float32)
+            @test check_strides(reinterpret(T, view(A, 1:8, viewax2)))
+        end
+        if mod(step(viewax2), 2) == 0
+            @test check_strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+        end
+        # dim1 is not contiguous
+        for T in (Int16, Int64)
+            @test_throws "Parent must" strides(reinterpret(T, view(A, 8:-1:1, viewax2)))
+        end
+        @test check_strides(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
+    end
+end
+
+@testset "strides for ReshapedReinterpretArray" begin
+    A = Array{Int32}(reshape(1:192, 3, 8, 8))
+    for viewax1 in (1:8, 1:2:8, 8:-1:1, 8:-2:1), viewax2 in (1:2, 4:-1:1)
+        for T in (Int16, Float32)
+            @test check_strides(reinterpret(reshape, T, view(A, 1:2, viewax1, viewax2)))
+            @test check_strides(reinterpret(reshape, T, view(A, 1:2:3, viewax1, viewax2)))
+        end
+        if mod(step(viewax1), 2) == 0
+            @test check_strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
+        end
+        @test_throws "Parent must" strides(reinterpret(reshape, Int64, view(A, 1:2:3, viewax1, viewax2)))
+    end
 end
 
 @testset "strides" begin

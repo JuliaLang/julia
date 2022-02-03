@@ -148,33 +148,33 @@ StridedVector{T} = StridedArray{T,1}
 StridedMatrix{T} = StridedArray{T,2}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
-# the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
-# a tuple containing 1 and a cumulative product of the first N-1 sizes
-# this definition is also used for StridedReshapedArray and StridedReinterpretedArray
-# which have the same memory storage as Array
-stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int) = _stride(a, i)
-
-function stride(a::ReinterpretArray, i::Int)
-    a.parent isa StridedArray || throw(ArgumentError("Parent must be strided."))
-    return _stride(a, i)
-end
-
-function _stride(a, i)
-    if i > ndims(a)
-        return length(a)
-    end
-    s = 1
-    for n = 1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
-
-function strides(a::ReinterpretArray)
-    a.parent isa StridedArray || throw(ArgumentError("Parent must be strided."))
-    size_to_strides(1, size(a)...)
-end
 strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
+
+function strides(a::ReshapedReinterpretArray)
+    ap = parent(a)
+    els, elp = elsize(a), elsize(ap)
+    stp = strides(ap)
+    els == elp && return stp
+    els < elp && return (1, map(Fix2(*, elp ÷ els), stp)...)
+    stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
+    return _checked_strides(stp, els ÷ elp)
+end
+
+function strides(a::NonReshapedReinterpretArray)
+    ap = parent(a)
+    els, elp = elsize(a), elsize(ap)
+    stp = strides(ap)
+    els == elp && return stp
+    stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
+    els < elp && return (1, map(Fix2(*, elp ÷ els), tail(stp))...)
+    return (1, _checked_strides(stp, els ÷ elp)...)
+end
+
+function _checked_strides(stp, N)
+    drs = map(Fix2(divrem, N), tail(stp))
+    all(i->iszero(i[2]), drs) || throw(ArgumentError("Parent's strides could not be exactly divided!"))
+    map(first, drs)
+end
 
 similar(a::ReinterpretArray, T::Type, d::Dims) = similar(a.parent, T, d)
 
