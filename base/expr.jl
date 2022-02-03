@@ -376,7 +376,7 @@ end
     @assume_effects(setting..., ex)
 
 `@assume_effects` overrides the compiler's effect modeling for the given method.
-`ex` must be a method definition.
+`ex` must be a method definition or `@ccall` expression.
 
 WARNING: Improper use of this macro causes undefined behavior (including crashes,
 incorrect answers, or other hard to track bugs). Use with care and only if absolutely
@@ -399,7 +399,7 @@ Note: This in particular implies that the return value of the method must be
       immutable. Multiple allocations of mutable objects (even with identical
       contents) are not egal.
 
-Note: The :consistent-cy assertion is made world-arge wise. More formally, write
+Note: The :consistent-cy assertion is made world-age wise. More formally, write
       fᵢ for the evaluation of `f` in world-age `i`, then we require:
 
           ∀ i, x, y: x === y → fᵢ(x) === fᵢ(y)
@@ -410,7 +410,7 @@ Note: A further implication is that :consistent functions may not make their
       return value dependent on the state of the heap or any other global state
       that is not constant for a given world age.
 
-Note: The :consistent-cy includes all legal rewrites performed by the optimizizer.
+Note: The :consistent-cy includes all legal rewrites performed by the optimizer.
       For example, floating-point fastmath operations are not considered :consistent,
       because the optimizer may rewrite them causing the output to not be :consistent,
       even for the same world age (e.g. because one ran in the interpreter, while

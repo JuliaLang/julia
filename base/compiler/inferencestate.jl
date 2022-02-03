@@ -118,12 +118,12 @@ mutable struct InferenceState
 
         # TODO: Currently, any :inbounds declaration taints consistency,
         #       because we cannot be guaranteed whether or not boundschecks
-        #       will be eliminated and if they are, we cnanot be guaranteed
+        #       will be eliminated and if they are, we cannot be guaranteed
         #       that no undefined behavior will occurr (the effects assumptions
         #       are stronger than the inbounds assumptions, since the latter
         #       requires dynamic reachability, while the former is global).
         inbounds = inbounds_option()
-        inbounds_taints_consistency = !(inbounds == :on || (inbounds == :default && !any_inbounds(code)))
+        inbounds_taints_consistency = !(inbounds === :on || (inbounds === :default && !any_inbounds(code)))
         consistent = inbounds_taints_consistency ? TRISTATE_UNKNOWN : ALWAYS_TRUE
 
         @assert cache === :no || cache === :local || cache === :global

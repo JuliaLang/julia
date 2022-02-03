@@ -52,7 +52,7 @@ struct SomeCase
 end
 
 struct InvokeCase
-    invoke::Union{MethodInstance, Nothing}
+    invoke::MethodInstance
     effects::Effects
 end
 

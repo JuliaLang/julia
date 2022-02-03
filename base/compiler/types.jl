@@ -27,6 +27,12 @@ const ALWAYS_FALSE     = TriState(0x00)
 const ALWAYS_TRUE      = TriState(0x01)
 const TRISTATE_UNKNOWN = TriState(0x02)
 
+function tristate_merge(old::TriState, new::TriState)
+    (old === ALWAYS_FALSE || new === ALWAYS_FALSE) && return ALWAYS_FALSE
+    old === TRISTATE_UNKNOWN && return old
+    return new
+end
+
 struct Effects
     consistent::TriState
     effect_free::TriState
@@ -60,6 +66,19 @@ decode_effects(e::UInt8) =
         TriState((e >> 2) & 0x3),
         TriState((e >> 4) & 0x3),
         TriState((e >> 6) & 0x3), false)
+
+function tristate_merge(old::Effects, new::Effects)
+    Effects(tristate_merge(
+            old.consistent, new.consistent),
+        tristate_merge(
+            old.effect_free, new.effect_free),
+        tristate_merge(
+            old.nothrow, new.nothrow),
+        tristate_merge(
+            old.terminates, new.terminates),
+        old.inbounds_taints_consistency ||
+        new.inbounds_taints_consistency)
+end
 
 struct EffectsOverride
     consistent::Bool
