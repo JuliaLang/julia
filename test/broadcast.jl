@@ -852,6 +852,12 @@ let
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 end
 
+# issue 43847: collect preserves shape of broadcasted
+let
+    bc = Broadcast.broadcasted(*, [1 2; 3 4], 2)
+    @test size(collect(bc)) == size(bc)
+end
+
 # issue #31295
 let a = rand(5), b = rand(5), c = copy(a)
     view(identity(a), 1:3) .+= view(b, 1:3)
