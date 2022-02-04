@@ -115,7 +115,7 @@ The `schedule` argument can be used to request a particular scheduling policy.
 Except for `:static` scheduling, how the iterations are assigned to tasks, and how the tasks
 are assigned to the worker threads is undefined. The exact assignments can be different
 for each execution. The scheduling option shall be considered a hint. The loop body
-code (including any code transitively called from it) must not assume the task and worker
+code (including any code transitively called from it) must not make assumptions about the distribution of iterations to tasks or the worker
 thread in which they are executed. The loop body for each iteration must be able to
 make forward progress independent of other iterations and be free from data races.
 As such, synchronizations across iterations may deadlock.
