@@ -2290,8 +2290,8 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
                 }
                 else {
                     jl_methtable_t *mt = jl_method_table_for(callee);
-                    assert((jl_value_t*)mt != jl_nothing);
-                    jl_method_table_add_backedge(mt, callee, (jl_value_t*)caller);
+                    if ((jl_value_t*)mt != jl_nothing)
+                        jl_method_table_add_backedge(mt, callee, (jl_value_t*)caller);
                 }
             }
             // then enable it
