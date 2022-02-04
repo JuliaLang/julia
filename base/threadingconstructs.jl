@@ -137,7 +137,9 @@ Schedule options are:
 - `:dynamic` will schedule iterations dynamically to available worker threads,
             assuming that the workload for each iteration is uniform.
 
-If no schedule is specified, when called from thread 1 the default is `:static`, or when
+Without the scheduler argument, the exact scheduling is unspecified; i.e., it may be
+different across Julia releases. Currently, the behavior is dependent on the calling thread.
+When called from thread 1 the default is `:static`. When
 called from other threads the loop will be executed without threading.
 
 The default schedule (used when no `schedule` argument is present) is subject to change.
