@@ -228,7 +228,7 @@ extern jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
-jl_value_t *jl_gc_pool_alloc_wrapper(jl_ptls_t ptls, int pool_offset,
+jl_value_t *jl_gc_pool_alloc_noinline(jl_ptls_t ptls, int pool_offset,
                                    int osize);
 JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
 JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize);
@@ -357,9 +357,9 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         int pool_id = jl_gc_szclass(allocsz);
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
-        // We call `jl_gc_pool_alloc_wrapper` instead of `jl_gc_pool_alloc` to avoid double-counting in
+        // We call `jl_gc_pool_alloc_noinline` instead of `jl_gc_pool_alloc` to avoid double-counting in
         // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
-        v = jl_gc_pool_alloc_wrapper(ptls, (char*)p - (char*)ptls, osize);
+        v = jl_gc_pool_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
     }
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"

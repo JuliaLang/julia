@@ -1266,7 +1266,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
 // This wrapper exists only to prevent `jl_gc_pool_alloc_inner` from being inlined into
 // its callers. We provide an external-facing interface for callers, and inline `jl_gc_pool_alloc_inner`
 // into this. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
-jl_value_t *jl_gc_pool_alloc_wrapper(jl_ptls_t ptls, int pool_offset, int osize) {
+jl_value_t *jl_gc_pool_alloc_noinline(jl_ptls_t ptls, int pool_offset, int osize) {
     return jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
 }
 
