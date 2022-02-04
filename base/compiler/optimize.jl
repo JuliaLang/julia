@@ -217,7 +217,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
             typ, isexact = instanceof_tfunc(typ)
             isexact || return false
-            isconcretedispatch(typ) || return false
+            isconcretetype(typ) || return false
             typ = typ::DataType
             fieldcount(typ) >= length(args) - 1 || return false
             for fld_idx in 1:(length(args) - 1)

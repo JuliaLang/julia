@@ -1696,9 +1696,9 @@ end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if isa(e, QuoteNode)
-        return Const((e::QuoteNode).value)
+        return Const(e.value)
     elseif isa(e, SSAValue)
-        return abstract_eval_ssavalue(e::SSAValue, sv.src)
+        return abstract_eval_ssavalue(e, sv)
     elseif isa(e, SlotNumber) || isa(e, Argument)
         return vtypes[slot_id(e)].typ
     elseif isa(e, GlobalRef)
@@ -1755,16 +1755,18 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         end
     elseif ehead === :new
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
-        is_nothrow = false
-        if isconcretetype(t) && !ismutabletype(t)
+        is_nothrow = true
+        if isconcretetype(t)
+            fcount = fieldcount(t)
             nargs = length(e.args) - 1
+            is_nothrow && (is_nothrow = fcount ≥ nargs)
             ats = Vector{Any}(undef, nargs)
             local anyrefine = false
             local allconst = true
-            is_nothrow = isexact && isconcretedispatch(t)
             for i = 2:length(e.args)
                 at = widenconditional(abstract_eval_value(interp, e.args[i], vtypes, sv))
                 ft = fieldtype(t, i-1)
+                is_nothrow && (is_nothrow = at ⊑ ft)
                 at = tmeet(at, ft)
                 if at === Bottom
                     t = Bottom
@@ -1781,8 +1783,10 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 end
                 ats[i-1] = at
             end
-            # For now, don't allow partially initialized Const/PartialStruct
-            if fieldcount(t) == nargs
+            # For now, don't allow:
+            # - Const/PartialStruct of mutables
+            # - partially initialized Const/PartialStruct
+            if !ismutabletype(t) && fcount == nargs
                 if allconst
                     argvals = Vector{Any}(undef, nargs)
                     for j in 1:nargs
@@ -1792,9 +1796,9 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 elseif anyrefine
                     t = PartialStruct(t, ats)
                 end
-            else
-                is_nothrow = false
             end
+        else
+            is_nothrow = false
         end
         tristate_merge!(sv, Effects(
             !ismutabletype(t) ? ALWAYS_TRUE : ALWAYS_FALSE,
@@ -1946,6 +1950,7 @@ function abstract_eval_global(M::Module, s::Symbol, frame::InferenceState)
     return Any
 end
 
+abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.src)
 function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     typ = (src.ssavaluetypes::Vector{Any})[s.id]
     if typ === NOT_FOUND

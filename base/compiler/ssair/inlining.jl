@@ -863,12 +863,13 @@ function handle_single_case!(
     if isa(case, ConstantCase)
         ir[SSAValue(idx)][:inst] = case.val
     elseif isa(case, InvokeCase)
-        if is_total(case.effects)
-            inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
-        end
+        is_total(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
         isinvoke && rewrite_invoke_exprargs!(stmt)
         stmt.head = :invoke
         pushfirst!(stmt.args, case.invoke)
+        if is_removable_if_unused(case.effects)
+            ir[SSAValue(idx)][:flag] |= IR_FLAG_EFFECT_FREE
+        end
     elseif case === nothing
         # Do, well, nothing
     else

@@ -963,3 +963,30 @@ f_call_apply_bail(f) = f_apply_bail(f)
 
 # Test that arraysize has proper effect modeling
 @test fully_eliminated(M->(size(M, 2); nothing), Tuple{Matrix{Float64}})
+
+# DCE of non-inlined callees
+@noinline noninlined_dce_simple(a) = identity(a)
+@test fully_eliminated((String,)) do s
+    noninlined_dce_simple(s)
+    nothing
+end
+@noinline noninlined_dce_new(a::String) = Some(a)
+@test fully_eliminated((String,)) do s
+    noninlined_dce_new(s)
+    nothing
+end
+mutable struct SafeRef{T}
+    x::T
+end
+Base.getindex(s::SafeRef) = getfield(s, 1)
+Base.setindex!(s::SafeRef, x) = setfield!(s, 1, x)
+@noinline noninlined_dce_new(a::Symbol) = SafeRef(a)
+@test fully_eliminated((Symbol,)) do s
+    noninlined_dce_new(s)
+    nothing
+end
+# should be resolved once we merge https://github.com/JuliaLang/julia/pull/43923
+@test_broken fully_eliminated((Union{Symbol,String},)) do s
+    noninlined_dce_new(s)
+    nothing
+end
