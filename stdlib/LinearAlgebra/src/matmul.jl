@@ -65,23 +65,16 @@ end
              alpha::Number, beta::Number) where {T<:BlasFloat} =
     gemv!(y, 'N', A, x, alpha, beta)
 
-# Complex matrix times real vector. Reinterpret the matrix as a real matrix and do real matvec compuation.
-for elty in (Float32, Float64)
-    @eval begin
-        @inline function mul!(y::StridedVector{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, x::StridedVector{$elty},
-                alpha::Real, beta::Real)
-            Afl = reinterpret($elty, A)
-            yfl = reinterpret($elty, y)
-            mul!(yfl, Afl, x, alpha, beta)
-            return y
-        end
-    end
-end
+# Complex matrix times real vector.
+# Reinterpret the matrix as a real matrix and do real matvec compuation.
+@inline mul!(y::StridedVector{Complex{T}}, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
+        alpha::Number, beta::Number) where {T<:BlasReal} =
+    gemv!(y, 'N', A, x, alpha, beta)
 
 # Real matrix times complex vector.
 # Multiply the matrix with the real and imaginary parts separately
 @inline mul!(y::StridedVector{Complex{T}}, A::StridedMaybeAdjOrTransMat{T}, x::StridedVector{Complex{T}},
-        alpha::Number, beta::Number) where {T<:BlasFloat} =
+        alpha::Number, beta::Number) where {T<:BlasReal} =
     gemv!(y, A isa StridedArray ? 'N' : 'T', A isa StridedArray ? A : parent(A), x, alpha, beta)
 
 @inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
@@ -512,22 +505,36 @@ end
 function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{T},
                α::Number=true, β::Number=false) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
-    if nA != length(x)
+    nA != length(x) &&
         throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match length of x, $(length(x))"))
-    end
-    if mA != length(y)
+    mA != length(y) &&
         throw(DimensionMismatch(lazy"first dimension of A, $mA, does not match length of y, $(length(y))"))
-    end
-    if mA == 0
-        return y
-    end
-    if nA == 0
-        return _rmul_or_fill!(y, β)
-    end
-
+    mA == 0 && return y
+    nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
-    if alpha isa Union{Bool,T} && beta isa Union{Bool,T} && stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
+        stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
         return BLAS.gemv!(tA, alpha, A, x, beta, y)
+    else
+        return generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
+    end
+end
+
+function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
+    α::Number = true, β::Number = false) where {T<:BlasReal}
+    mA, nA = lapack_size(tA, A)
+    nA != length(x) &&
+        throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match length of x, $(length(x))"))
+    mA != length(y) &&
+        throw(DimensionMismatch(lazy"first dimension of A, $mA, does not match length of y, $(length(y))"))
+    mA == 0 && return y
+    nA == 0 && return _rmul_or_fill!(y, β)
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
+        stride(A, 1) == 1 && stride(A, 2) >= size(A, 1) &&
+        stride(y, 1) == 1 && tA == 'N' # reinterpret-based optimization is valid only for contiguous `y`
+        BLAS.gemv!(tA, alpha, reinterpret(T, A), x, beta, reinterpret(T, y))
+        return y
     else
         return generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
     end
