@@ -48,6 +48,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     any_const_result = false
     const_results = Union{InferenceResult,Nothing}[]
     multiple_matches = napplicable > 1
+    ft = argtypes[1]
+    inline_propagation = isa(ft, Kwfunc) ? ft.inline : nothing
 
     if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
         val = pure_eval_call(f, argtypes)
@@ -76,14 +78,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
-                result = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
+                result = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv, inline_propagation)
                 rt, edge = result.rt, result.edge
                 if edge !== nothing
                     push!(edges, edge)
                 end
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
                 this_arginfo = ArgInfo(fargs, this_argtypes)
-                const_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv, false)
+                const_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv, false, inline_propagation)
                 if const_result !== nothing
                     rt, const_result = const_result
                 end
@@ -106,12 +108,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     # the use set for the current SSA value.
                     saved_uses = sv.ssavalue_uses[sv.currpc]
                     sv.ssavalue_uses[sv.currpc] = empty_bitset
-                    abstract_call_method(interp, method, csig, match.sparams, multiple_matches, sv)
+                    abstract_call_method(interp, method, csig, match.sparams, multiple_matches, sv, inline_propagation)
                     sv.ssavalue_uses[sv.currpc] = saved_uses
                 end
             end
 
-            result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
+            result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv, inline_propagation)
             this_rt, edge = result.rt, result.edge
             if edge !== nothing
                 push!(edges, edge)
@@ -120,7 +122,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # this is in preparation for inlining, or improving the return result
             this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
             this_arginfo = ArgInfo(fargs, this_argtypes)
-            const_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv, false)
+            const_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv, false, inline_propagation)
             if const_result !== nothing
                 this_rt, const_result = const_result
             end
@@ -399,7 +401,9 @@ end
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
 const RECURSION_MSG = "Bounded recursion detected. Call was widened to force convergence."
 
-function abstract_call_method(interp::AbstractInterpreter, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
+function abstract_call_method(interp::AbstractInterpreter,
+    method::Method, @nospecialize(sig), sparams::SimpleVector,
+    hardlimit::Bool, sv::InferenceState, inline_propagation::Union{Nothing,Bool} = nothing)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
         add_remark!(interp, sv, "Refusing to infer into `depwarn`")
         return MethodCallResult(Any, false, false, nothing)
@@ -558,7 +562,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         sparams = recomputed[2]::SimpleVector
     end
 
-    rt, edge = typeinf_edge(interp, method, sig, sparams, sv)
+    rt, edge = typeinf_edge(interp, method, sig, sparams, sv, inline_propagation)
     if edge === nothing
         edgecycle = edgelimited = true
     end
@@ -579,9 +583,9 @@ struct MethodCallResult
     end
 end
 
-function abstract_call_method_with_const_args(interp::AbstractInterpreter, result::MethodCallResult,
-                                              @nospecialize(f), arginfo::ArgInfo, match::MethodMatch,
-                                              sv::InferenceState, va_override::Bool)
+function abstract_call_method_with_const_args(interp::AbstractInterpreter,
+    result::MethodCallResult, @nospecialize(f), arginfo::ArgInfo, match::MethodMatch,
+    sv::InferenceState, va_override::Bool, inline_propagation::Union{Nothing,Bool} = nothing)
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, match, sv)
     mi === nothing && return nothing
     # try constant prop'
@@ -609,6 +613,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
         end
         frame = InferenceState(inf_result, #=cache=#:local, interp)
         frame === nothing && return nothing # this is probably a bad generated function (unsound), but just ignore it
+        inline_propagation !== nothing && propagate_caller_annotations!(inline_propagation, frame)
         frame.parent = sv
         typeinf(interp, frame) || return nothing
     end
@@ -1395,7 +1400,11 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             if !isvarargtype(aty)
                 ft = widenconst(aty)
                 if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
-                    return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
+                    flag = get_curr_ssaflag(sv)
+                    t = Kwfunc(ft.name.mt.kwsorter,
+                        is_stmt_inline(flag) ? true :
+                        is_stmt_noinline(flag) ? false : nothing)
+                    return CallMeta(t, MethodResultPure())
                 end
             end
         end

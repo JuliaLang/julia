@@ -770,7 +770,9 @@ end
 generating_sysimg() = ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
 
 # compute (and cache) an inferred AST and return the current best estimate of the result type
-function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::InferenceState)
+function typeinf_edge(interp::AbstractInterpreter,
+    method::Method, @nospecialize(atype), sparams::SimpleVector, caller::InferenceState,
+    inline_propagation::Union{Nothing,Bool} = nothing)
     mi = specialize_method(method, atype, sparams)::MethodInstance
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
@@ -821,6 +823,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             unlock_mi_inference(interp, mi)
             return Any, nothing
         end
+        inline_propagation !== nothing && propagate_caller_annotations!(inline_propagation, frame)
         if caller.cached || caller.parent !== nothing # don't involve uncached functions in cycle resolution
             frame.parent = caller
         end
@@ -835,6 +838,14 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     frame = frame::InferenceState
     update_valid_age!(frame, caller)
     return frame.bestguess, nothing
+end
+
+function propagate_caller_annotations!(inline::Bool, callee::InferenceState)
+    ssaflags = callee.src.ssaflags
+    for i = 1:length(ssaflags)
+        ssaflags[i] |= inline ? IR_FLAG_INLINE : IR_FLAG_NOINLINE
+        ssaflags[i] &= ~(inline ? IR_FLAG_NOINLINE : IR_FLAG_INLINE)
+    end
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####

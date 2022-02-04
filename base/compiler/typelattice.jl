@@ -65,6 +65,14 @@ struct PartialTypeVar
     PartialTypeVar(tv::TypeVar, lb_certain::Bool, ub_certain::Bool) = new(tv, lb_certain, ub_certain)
 end
 
+struct Kwfunc
+    kwsorter
+    inline::Union{Nothing,Bool}
+    function Kwfunc(@nospecialize(kwsorter), inline::Union{Nothing,Bool})
+        return new(kwsorter, inline)
+    end
+end
+
 # Wraps a type and represents that the value may also be undef at this point.
 # (only used in optimize, not abstractinterpret)
 # N.B. in the lattice, this is epsilon bigger than `typ` (even Any)
@@ -105,7 +113,7 @@ struct NotFound end
 
 const NOT_FOUND = NotFound()
 
-const CompilerTypes = Union{MaybeUndef, Const, Conditional, NotFound, PartialStruct}
+const CompilerTypes = Union{Const, Conditional, NotFound, PartialStruct, MaybeUndef, Kwfunc}
 ==(x::CompilerTypes, y::CompilerTypes) = x === y
 ==(x::Type, y::CompilerTypes) = false
 ==(x::CompilerTypes, y::Type) = false
@@ -215,6 +223,14 @@ The non-strict partial order over the type inference lattice.
         end
         return widenconst(a) ⊑ b
     end
+    if isa(a, Kwfunc)
+        if isa(b, Kwfunc)
+            return a.kwsorter === b.kwsorter && a.inline === b.inline
+        end
+        a = Const(a.kwsorter)
+    elseif isa(b, Kwfunc)
+        b = Const(b.kwsorter)
+    end
     if isa(a, Const)
         if isa(b, Const)
             return a.val === b.val
@@ -293,6 +309,7 @@ widenconst(c::AnyConditional) = Bool
 widenconst((; val)::Const) = isa(val, Type) ? Type{val} : typeof(val)
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
+widenconst(t::Kwfunc) = typeof(t.kwsorter)
 widenconst(t::PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
 widenconst(t::Type) = t
