@@ -71,10 +71,6 @@ function peek_token(ps::ParseState, n=1; skip_newlines=nothing)
     peek_token(ps.stream, n, skip_newlines=skip_nl)
 end
 
-function peek_behind_str(ps::ParseState, args...)
-    peek_behind_str(ps.stream, args...)
-end
-
 function peek_behind(ps::ParseState, args...)
     peek_behind(ps.stream, args...)
 end
@@ -1395,7 +1391,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # @A.foo a b    ==> (macrocall (. A (quote @foo)) a b)
                 n_args = parse_space_separated_exprs(ps)
                 # TODO: Introduce K"doc" to make this hack less awful.
-                is_doc_macro = peek_behind_str(ps, macro_name_position, "doc")
+                is_doc_macro = peek_behind(ps, macro_name_position).orig_kind == K"doc"
                 if is_doc_macro && n_args == 1
                     # Parse extended @doc args on next line
                     # @doc x\ny      ==>  (macrocall @doc x y)

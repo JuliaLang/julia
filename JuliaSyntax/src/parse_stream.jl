@@ -318,28 +318,6 @@ function peek_token(stream::ParseStream, n::Integer=1; skip_newlines=false)
     stream.lookahead[_lookahead_index(stream, n, skip_newlines)]
 end
 
-function _peek_equal_to(stream, first_byte, len, str)
-    cbuf = codeunits(str)
-    for i = 1:len
-        if stream.textbuf[first_byte + i - 1] != cbuf[i]
-            return false
-        end
-    end
-    return true
-end
-
-"""
-Return true if the node already emitted at `pos` covers the string `str`
-
-This is a hack for edge cases where the parser needs access to interpret normal
-identifiers as contextural keywords. For example, the special parsing rules for
-`@doc` line contination :-(
-"""
-function peek_behind_str(stream::ParseStream, pos::ParseStreamPosition, str::String)
-    s = stream.ranges[pos.output_index]
-    return _peek_equal_to(stream, first_byte(s), span(s), str)
-end
-
 function _peek_behind_fields(ranges, i)
     r = ranges[i]
     return (kind=kind(r),
