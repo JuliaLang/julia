@@ -385,9 +385,9 @@ JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var)
         b = using_resolve_binding(m, var, NULL, 0);
     JL_UNLOCK(&m->lock);
     if (b == NULL)
-        return NULL;
+        return jl_nothing;
     jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
-    return ty;
+    return ty ? ty : jl_nothing;
 }
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)

@@ -1904,7 +1904,7 @@ end
 function get_binding_type_nothrow(@nospecialize(M), @nospecialize(s))
     if M isa Const && widenconst(M) === Module &&
         s isa Const && widenconst(s) === Symbol
-        return ccall(:jl_binding_type, Ptr{Cvoid}, (Any, Any), M.val, s.val) !== C_NULL
+        return ccall(:jl_binding_type, Any, (Any, Any), M.val, s.val) !== nothing
     end
     return false
 end
