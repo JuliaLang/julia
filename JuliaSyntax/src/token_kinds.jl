@@ -1,4 +1,7 @@
 # Mapping from token string identifiers to enumeration values as used in @K_str
+#
+# TODO: Unify Tokenize with this approach so we don't need to write these out
+# in two places.
 
 const _str_to_kind = let Ts = TzTokens
 Dict([
@@ -12,8 +15,6 @@ Dict([
 ";"              =>  Ts.SEMICOLON
 
 "BEGIN_KEYWORDS" => Ts.begin_keywords
-"abstract"    =>  Ts.ABSTRACT
-"as"          =>  Ts.AS
 "baremodule"  =>  Ts.BAREMODULE
 "begin"       =>  Ts.BEGIN
 "break"       =>  Ts.BREAK
@@ -35,18 +36,21 @@ Dict([
 "local"       =>  Ts.LOCAL
 "macro"       =>  Ts.MACRO
 "module"      =>  Ts.MODULE
-"mutable"     =>  Ts.MUTABLE
-"new"         =>  Ts.NEW
-"outer"       =>  Ts.OUTER
-"primitive"   =>  Ts.PRIMITIVE
 "quote"       =>  Ts.QUOTE
 "return"      =>  Ts.RETURN
 "struct"      =>  Ts.STRUCT
 "try"         =>  Ts.TRY
-"type"        =>  Ts.TYPE
 "using"       =>  Ts.USING
-"var"         =>  Ts.VAR
 "while"       =>  Ts.WHILE
+# contextural keywords
+"abstract"    =>  Ts.ABSTRACT
+"as"          =>  Ts.AS
+"doc"         =>  Ts.DOC
+"mutable"     =>  Ts.MUTABLE
+"outer"       =>  Ts.OUTER
+"primitive"   =>  Ts.PRIMITIVE
+"type"        =>  Ts.TYPE
+"var"         =>  Ts.VAR
 "END_KEYWORDS" => Ts.end_keywords
 
 # FIXME: Define precisely what Nothing means; integrate better with other tokens.
@@ -875,11 +879,12 @@ const _kind_to_str_unique =
 for kw in split("""
         ( [ { } ] ) @ , ; " \"\"\" ` ```
 
-        as abstract baremodule begin break catch const
+        baremodule begin break catch const
         continue do else elseif end export finally for
         function global if import let local
-        macro module mutable new outer primitive quote
-        return struct try type using var while
+        macro module quote return struct try type using while
+
+        as abstract doc mutable outer primitive type var
 
         block call comparison curly string inert macrocall kw parameters
         toplevel tuple ref vect braces bracescat hcat
