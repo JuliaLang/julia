@@ -1971,7 +1971,7 @@ function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
     parent = mode(s)
 
     transition(s, p) do
-        pss = state(s, p)
+        local pss = state(s, p)
         pss.parent = parent
         pss.histprompt.parent_prompt = parent
         pss.prefix = String(buf.data[1:position(buf)])
@@ -1979,11 +1979,11 @@ function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
         pss.indent = state(s, parent).indent
         pss.mi = s
     end
-    pss_ = state(s, p)
+    pss = state(s, p)
     if backward
-        history_prev_prefix(pss_, pss_.histprompt.hp, pss_.prefix)
+        history_prev_prefix(pss, pss.histprompt.hp, pss.prefix)
     else
-        history_next_prefix(pss_, pss_.histprompt.hp, pss_.prefix)
+        history_next_prefix(pss, pss.histprompt.hp, pss.prefix)
     end
     nothing
 end
