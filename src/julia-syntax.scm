@@ -3395,7 +3395,9 @@ f(x) = yt(x)
                    (let ((ex (convert-for-type-decl rhs1 ty)))
                      (if (has? globals ref)
                          ex
-                         `(block (set-binding-type ,ref) ,ex)))
+                         `(toplevel-butfirst
+                            ,ex
+                            (call (core set_binding_type!) ,(cadr ref) (inert ,(caddr ref))))))
                    rhs1))
          (ex   `(= ,var ,rhs)))
     (if (eq? rhs1 rhs0)
@@ -3477,40 +3479,23 @@ f(x) = yt(x)
 ;; collect all toplevel-butfirst expressions inside `e`, and return
 ;; (ex . stmts), where `ex` is the expression to evaluated and
 ;; `stmts` is a list of statements to move to the top level.
-;; also expand set-binding-type expressions and handle them similarly
 (define (lift-toplevel e)
-  (let ((top '())
-        (type-decls '()))
+  (let ((top '()))
     (define (lift- e)
       (if (or (atom? e) (quoted? e))
           e
           (let ((e (cons (car e) (map lift- (cdr e)))))
-            (case (car e)
-              ((toplevel-butfirst)
-               (set! top (cons (cddr e) top))
-               (cadr e))
-              ((set-binding-type)
-               ;; set-binding-type expressions w/o the type specified need to be removed
-               ;; if there are other type declarations for the same binding
-               (set! type-decls
-                     (cons (cdr e)
-                           (filter (lambda (decl)
-                                     (not (and (equal? (car decl) (cadr e)) (length= decl 1))))
-                                   type-decls)))
-               '(null))
-              (else e)))))
-    (let* ((e2    (lift- e))
-           (decls (foldl (lambda (x decls) ;; x = ((globalref mod sym)[ type])
-                           (cons `(call (core set_binding_type!) ,(cadar x) (inert ,(caddar x))
-                                        ,@(cdr x))
-                                 decls))
-                         '() type-decls))
-           (stmts (apply append (reverse (cons decls top)))))
+            (if (eq? (car e) 'toplevel-butfirst)
+                (begin (set! top (cons (cddr e) top))
+                       (cadr e))
+                e))))
+    (let ((e2 (lift- e)))
+      (let ((stmts (apply append (reverse top))))
         ;; move all type definitions first
         (receive (structs others)
                  (separate (lambda (x) (and (pair? x) (eq? (car x) 'thunk)))
                            stmts)
-                 (cons e2 (append structs others))))))
+                 (cons e2 (append structs others)))))))
 
 (define (first-non-meta blk)
   (let loop ((xs (cdr blk)))
@@ -4080,7 +4065,9 @@ f(x) = yt(x)
                       (if ref
                           (begin
                             (put! globals ref #t)
-                            `(set-binding-type ,ref ,(caddr e)))
+                            `(block
+                               (toplevel-only set_binding_type!)
+                               (call (core set_binding_type!) ,(cadr ref) (inert ,(caddr ref)) ,(caddr e))))
                           `(call (core typeassert) ,@(cdr e))))
                     fname lam namemap defined toplevel interp opaq globals))))
           ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars

@@ -3157,7 +3157,7 @@ end
     @test Base.return_types(m.f, (Int,)) == [Int]
 
     m = Module()
-    @eval m begin
+    @test_throws ErrorException @eval m begin
         function f()
             global x
             x::Int = 1
@@ -3165,9 +3165,6 @@ end
         end
         g() = x
     end
-    @test m.f() === 2.
-    @test m.x === 2
-    @test Base.return_types(m.g, ()) == [Int]
 
     m = Module()
     @test_throws ErrorException @eval m function f()
