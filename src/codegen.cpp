@@ -473,6 +473,18 @@ static AttributeList get_func_attrs(LLVMContext &C)
             None);
 }
 
+static AttributeList get_donotdelete_func_attrs(LLVMContext &C)
+{
+    AttributeSet FnAttrs = AttributeSet::get(C, makeArrayRef({Attribute::get(C, "thunk")}));
+    FnAttrs.addAttribute(C, Attribute::InaccessibleMemOnly);
+    FnAttrs.addAttribute(C, Attribute::WillReturn);
+    FnAttrs.addAttribute(C, Attribute::NoUnwind);
+    return AttributeList::get(C,
+            FnAttrs,
+            Attributes(C, {Attribute::NonNull}),
+            None);
+}
+
 static AttributeList get_attrs_noreturn(LLVMContext &C)
 {
     return AttributeList::get(C,
@@ -3461,6 +3473,36 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             // fence instructions may only have acquire, release, acq_rel, or seq_cst ordering.
             ctx.builder.CreateFence(get_llvm_atomic_order(order));
         }
+        return true;
+    }
+
+    else if (f == jl_builtin_donotdelete) {
+        // For now we emit this as a vararg call to the builtin
+        // (which doesn't look at the arguments). In the future,
+        // this should be an LLVM builtin.
+        auto it = builtin_func_map.find(jl_f_donotdelete);
+        if (it == builtin_func_map.end()) {
+            return false;
+        }
+
+        *ret = mark_julia_const(ctx, jl_nothing);
+        FunctionType *Fty = FunctionType::get(getVoidTy(ctx.builder.getContext()), true);
+        Function *dnd = prepare_call(it->second);
+        SmallVector<Value*, 1> call_args;
+
+        for (size_t i = 1; i <= nargs; ++i) {
+            const jl_cgval_t &obj = argv[i];
+            if (obj.V) {
+                // TODO is this strong enough to constitute a read of any contained
+                // pointers?
+                Value *V = obj.V;
+                if (obj.isboxed) {
+                    V = emit_pointer_from_objref(ctx, V);
+                }
+                call_args.push_back(V);
+            }
+        }
+        ctx.builder.CreateCall(Fty, dnd, call_args);
         return true;
     }
 
@@ -8133,6 +8175,7 @@ extern "C" void jl_init_llvm(void)
           { jl_f_arrayset_addr,           new JuliaFunction{XSTR(jl_f_arrayset), get_func_sig, get_func_attrs} },
           { jl_f_arraysize_addr,          new JuliaFunction{XSTR(jl_f_arraysize), get_func_sig, get_func_attrs} },
           { jl_f_apply_type_addr,         new JuliaFunction{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
+          { jl_f_donotdelete_addr,        new JuliaFunction{XSTR(jl_f_donotdelete), get_func_sig, get_donotdelete_func_attrs} }
         };
 
     jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;

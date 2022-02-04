@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector
+using Core: CodeInfo, SimpleVector, donotdelete
 
 const Callable = Union{Function,Type}
 
