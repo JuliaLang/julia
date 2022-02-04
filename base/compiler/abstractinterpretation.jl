@@ -85,10 +85,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 this_arginfo = ArgInfo(fargs, this_argtypes)
                 const_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv, false)
                 if const_result !== nothing
-                    const_rt, const_result = const_result
-                    if const_rt !== rt && const_rt ⊑ rt
-                        rt = const_rt
-                    end
+                    rt, const_result = const_result
                 end
                 push!(const_results, const_result)
                 if const_result !== nothing
@@ -125,10 +122,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             this_arginfo = ArgInfo(fargs, this_argtypes)
             const_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv, false)
             if const_result !== nothing
-                const_this_rt, const_result = const_result
-                if const_this_rt !== this_rt && const_this_rt ⊑ this_rt
-                    this_rt = const_this_rt
-                end
+                this_rt, const_result = const_result
             end
             push!(const_results, const_result)
             if const_result !== nothing
@@ -622,7 +616,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
     # if constant inference hits a cycle, just bail out
     isa(result, InferenceState) && return nothing
     add_backedge!(mi, sv)
-    return result, inf_result
+    return Pair{Any,InferenceResult}(result, inf_result)
 end
 
 # if there's a possibility we could get a better result (hopefully without doing too much work)
@@ -1364,12 +1358,9 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     # end
     const_result = abstract_call_method_with_const_args(interp, result, singleton_type(ft′), arginfo, match, sv, false)
     if const_result !== nothing
-        const_rt, const_result = const_result
-        if const_rt !== rt && const_rt ⊑ rt
-            rt, res = const_rt, const_result
-        end
+        rt, const_result = const_result
     end
-    return CallMeta(from_interprocedural!(rt, sv, arginfo, sig), InvokeCallInfo(match, res))
+    return CallMeta(from_interprocedural!(rt, sv, arginfo, sig), InvokeCallInfo(match, const_result))
 end
 
 function invoke_rewrite(xs::Vector{Any})
@@ -1491,18 +1482,15 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
     tt = closure.typ
     sigT = (unwrap_unionall(tt)::DataType).parameters[1]
     match = MethodMatch(sig, Core.svec(), closure.source, sig <: rewrap_unionall(sigT, tt))
-    res = nothing
+    const_result = nothing
     if !result.edgecycle
         const_result = abstract_call_method_with_const_args(interp, result, closure,
             arginfo, match, sv, closure.isva)
         if const_result !== nothing
-            const_rettype, const_result = const_result
-            if const_rettype ⊑ rt
-               rt, res = const_rettype, const_result
-            end
+            rt, const_result = const_result
         end
     end
-    info = OpaqueClosureCallInfo(match, res)
+    info = OpaqueClosureCallInfo(match, const_result)
     return CallMeta(from_interprocedural!(rt, sv, arginfo, match.spec_types), info)
 end
 

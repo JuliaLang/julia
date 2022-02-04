@@ -26,30 +26,37 @@ typedef struct {
     // method we're compressing for
     jl_method_t *method;
     jl_ptls_t ptls;
+    uint8_t relocatability;
 } jl_ircode_state;
 
 // --- encoding ---
 
 #define jl_encode_value(s, v) jl_encode_value_((s), (jl_value_t*)(v), 0)
 
-static int literal_val_id(jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
+static void tagged_root(rle_reference *rr, jl_ircode_state *s, int i)
+{
+    if (!get_root_reference(rr, s->method, i))
+        s->relocatability = 0;
+}
+
+static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
 {
     jl_array_t *rs = s->method->roots;
     int i, l = jl_array_len(rs);
     if (jl_is_symbol(v) || jl_is_concrete_type(v)) {
         for (i = 0; i < l; i++) {
             if (jl_array_ptr_ref(rs, i) == v)
-                return i;
+                return tagged_root(rr, s, i);
         }
     }
     else {
         for (i = 0; i < l; i++) {
             if (jl_egal(jl_array_ptr_ref(rs, i), v))
-                return i;
+                return tagged_root(rr, s, i);
         }
     }
     jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
-    return jl_array_len(rs) - 1;
+    return tagged_root(rr, s, jl_array_len(rs) - 1);
 }
 
 static void jl_encode_int32(jl_ircode_state *s, int32_t x)
@@ -67,6 +74,7 @@ static void jl_encode_int32(jl_ircode_state *s, int32_t x)
 static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
 {
     size_t i;
+    rle_reference rr;
 
     if (v == NULL) {
         write_uint8(s->s, TAG_NULL);
@@ -321,8 +329,13 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         if (!as_literal && !(jl_is_uniontype(v) || jl_is_newvarnode(v) || jl_is_tuple(v) ||
                              jl_is_linenode(v) || jl_is_upsilonnode(v) || jl_is_pinode(v) ||
                              jl_is_slot(v) || jl_is_ssavalue(v))) {
-            int id = literal_val_id(s, v);
+            literal_val_id(&rr, s, v);
+            int id = rr.index;
             assert(id >= 0);
+            if (rr.key) {
+                write_uint8(s->s, TAG_RELOC_METHODROOT);
+                write_int64(s->s, rr.key);
+            }
             if (id < 256) {
                 write_uint8(s->s, TAG_METHODROOT);
                 write_uint8(s->s, id);
@@ -577,6 +590,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
     assert(!ios_eof(s->s));
     jl_value_t *v;
     size_t i, n;
+    uint64_t key;
     uint8_t tag = read_uint8(s->s);
     if (tag > LAST_TAG)
         return jl_deser_tag(tag);
@@ -585,10 +599,15 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
     case 0:
         tag = read_uint8(s->s);
         return jl_deser_tag(tag);
+    case TAG_RELOC_METHODROOT:
+        key = read_uint64(s->s);
+        tag = read_uint8(s->s);
+        assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
+        return lookup_root(s->method, key, tag == TAG_METHODROOT ? read_uint8(s->s) : read_uint16(s->s));
     case TAG_METHODROOT:
-        return jl_array_ptr_ref(s->method->roots, read_uint8(s->s));
+        return lookup_root(s->method, 0, read_uint8(s->s));
     case TAG_LONG_METHODROOT:
-        return jl_array_ptr_ref(s->method->roots, read_uint16(s->s));
+        return lookup_root(s->method, 0, read_uint16(s->s));
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_decode_value_svec(s, tag);
     case TAG_COMMONSYM:
@@ -706,7 +725,8 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     jl_ircode_state s = {
         &dest,
         m,
-        jl_current_task->ptls
+        jl_current_task->ptls,
+        1
     };
 
     jl_code_info_flags_t flags = code_info_flags(code->pure, code->propagate_inbounds, code->inlineable, code->inferred, code->constprop);
@@ -756,6 +776,8 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         ios_write(s.s, (char*)jl_array_data(code->codelocs), nstmt * sizeof(int32_t));
     }
 
+    write_uint8(s.s, s.relocatability);
+
     ios_flush(s.s);
     jl_array_t *v = jl_take_buffer(&dest);
     ios_close(s.s);
@@ -786,7 +808,8 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     jl_ircode_state s = {
         &src,
         m,
-        jl_current_task->ptls
+        jl_current_task->ptls,
+        1
     };
 
     jl_code_info_t *code = jl_new_code_info_uninit();
@@ -830,6 +853,8 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     else {
         ios_readall(s.s, (char*)jl_array_data(code->codelocs), nstmt * sizeof(int32_t));
     }
+
+    (void) read_uint8(s.s);   // relocatability
 
     assert(ios_getc(s.s) == -1);
     ios_close(s.s);

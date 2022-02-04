@@ -295,7 +295,9 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
 end
 
 function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compact::IncrementalCompact)
-    for arg in (isexpr(def, :new) ? def.args : def.args[2:end])
+    args = isexpr(def, :new) ? def.args : def.args[2:end]
+    for i = 1:length(args)
+        arg = args[i]
         if !isbitstype(widenconst(argextype(arg, compact)))
             push!(new_preserves, arg)
         end
@@ -344,7 +346,8 @@ function lift_leaves(compact::IncrementalCompact,
     # For every leaf, the lifted value
     lifted_leaves = LiftedLeaves()
     maybe_undef = false
-    for leaf in leaves
+    for i = 1:length(leaves)
+        leaf = leaves[i]
         cache_key = leaf
         if isa(leaf, AnySSAValue)
             (def, leaf) = walk_to_def(compact, leaf)
@@ -471,11 +474,11 @@ end
 make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
 
 """
-    lift_comparison!(compact::IncrementalCompact, idx::Int, stmt::Expr)
+    lift_comparison!(cmp, compact::IncrementalCompact, idx::Int, stmt::Expr)
 
-Replaces `φ(x, y)::Union{X,Y} === constant` by `φ(x === constant, y === constant)`,
-where `x === constant` and `y === constant` can be replaced with constant `Bool`eans.
-It helps codegen avoid generating expensive code for `===` with `Union` types.
+Replaces `cmp(φ(x, y)::Union{X,Y}, constant)` by `φ(cmp(x, constant), cmp(y, constant))`,
+where `cmp(x, constant)` and `cmp(y, constant)` can be replaced with constant `Bool`eans.
+It helps codegen avoid generating expensive code for `cmp` with `Union` types.
 In particular, this is supposed to improve the performance of the iteration protocol:
 ```julia
 while x !== nothing
@@ -483,47 +486,74 @@ while x !== nothing
 end
 ```
 """
-function lift_comparison!(compact::IncrementalCompact,
+function lift_comparison! end
+
+function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
     args = stmt.args
     length(args) == 3 || return
-
     lhs, rhs = args[2], args[3]
     vl = argextype(lhs, compact)
     vr = argextype(rhs, compact)
     if isa(vl, Const)
         isa(vr, Const) && return
-        cmp = vl
-        typeconstraint = widenconst(vr)
         val = rhs
+        cmp = vl
     elseif isa(vr, Const)
-        cmp = vr
-        typeconstraint = widenconst(vl)
         val = lhs
+        cmp = vr
     else
         return
     end
+    lift_comparison_leaves!(egal_tfunc, compact, val, cmp, lifting_cache, idx)
+end
 
-    valtyp = widenconst(argextype(val, compact))
-    isa(valtyp, Union) || return # bail out if there won't be a good chance for lifting
+function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
+    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
+    args = stmt.args
+    length(args) == 3 || return
+    cmp = argextype(args[3], compact)
+    val = args[2]
+    lift_comparison_leaves!(isa_tfunc, compact, val, cmp, lifting_cache, idx)
+end
 
-    leaves, visited_phinodes = collect_leaves(compact, val, valtyp)
+function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
+    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
+    args = stmt.args
+    length(args) == 3 || return
+    cmp = argextype(args[3], compact)
+    isa(cmp, Const) || return # `isdefined_tfunc` won't return Const
+    val = args[2]
+    lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx)
+end
+
+function lift_comparison_leaves!(@specialize(tfunc),
+    compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
+    lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int)
+    typeconstraint = widenconst(argextype(val, compact))
+    if isa(val, Union{OldSSAValue, SSAValue})
+        val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
+    end
+    isa(typeconstraint, Union) || return # bail out if there won't be a good chance for lifting
+    leaves, visited_phinodes = collect_leaves(compact, val, typeconstraint)
     length(leaves) ≤ 1 && return # bail out if we don't have multiple leaves
 
-    # Let's check if we evaluate the comparison for each one of the leaves
+    # check if we can evaluate the comparison for each one of the leaves
     lifted_leaves = nothing
-    for leaf in leaves
-        r = egal_tfunc(argextype(leaf, compact), cmp)
-        if isa(r, Const)
+    for i = 1:length(leaves)
+        leaf = leaves[i]
+        result = tfunc(argextype(leaf, compact), cmp)
+        if isa(result, Const)
             if lifted_leaves === nothing
                 lifted_leaves = LiftedLeaves()
             end
-            lifted_leaves[leaf] = LiftedValue(r.val)
+            lifted_leaves[leaf] = LiftedValue(result.val)
         else
-            return # TODO In some cases it might be profitable to hoist the === here
+            return # TODO In some cases it might be profitable to hoist the comparison here
         end
     end
 
+    # perform lifting
     lifted_val = perform_lifting!(compact,
         visited_phinodes, cmp, lifting_cache, Bool,
         lifted_leaves::LiftedLeaves, val)::LiftedValue
@@ -552,15 +582,18 @@ function perform_lifting!(compact::IncrementalCompact,
     # Insert PhiNodes
     lifted_phis = LiftedPhi[]
     for item in visited_phinodes
-        # FIXME this cache retrieval is obviously broken
-        if (item, cache_key) in keys(lifting_cache)
-            ssa = lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)]
+        # FIXME this cache is broken somehow
+        # ckey = Pair{AnySSAValue, Any}(item, cache_key)
+        # cached = ckey in keys(lifting_cache)
+        cached = false
+        if cached
+            ssa = lifting_cache[ckey]
             push!(lifted_phis, LiftedPhi(ssa, compact[ssa]::PhiNode, false))
             continue
         end
         n = PhiNode()
         ssa = insert_node!(compact, item, effect_free(NewInstruction(n, result_t)))
-        lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)] = ssa
+        # lifting_cache[ckey] = ssa
         push!(lifted_phis, LiftedPhi(ssa, n, true))
     end
 
@@ -710,16 +743,16 @@ function sroa_pass!(ir::IRCode)
                 compact[idx] = form_new_preserves(stmt, preserved, new_preserves)
             end
             continue
-        # TODO: This isn't the best place to put these
-        elseif is_known_call(stmt, typeassert, compact)
-            canonicalize_typeassert!(compact, idx, stmt)
-            continue
-        elseif is_known_call(stmt, (===), compact)
-            lift_comparison!(compact, idx, stmt, lifting_cache)
-            continue
-        # elseif is_known_call(stmt, isa, compact)
-            # TODO do a similar optimization as `lift_comparison!` for `===`
-        else
+        else # TODO: This isn't the best place to put these
+            if is_known_call(stmt, typeassert, compact)
+                canonicalize_typeassert!(compact, idx, stmt)
+            elseif is_known_call(stmt, (===), compact)
+                lift_comparison!(===, compact, idx, stmt, lifting_cache)
+            elseif is_known_call(stmt, isa, compact)
+                lift_comparison!(isa, compact, idx, stmt, lifting_cache)
+            elseif is_known_call(stmt, isdefined, compact)
+                lift_comparison!(isdefined, compact, idx, stmt, lifting_cache)
+            end
             continue
         end
 
@@ -1032,6 +1065,16 @@ function mark_phi_cycles!(compact::IncrementalCompact, safe_phis::SPCSet, phi::I
     end
 end
 
+function is_some_union(@nospecialize(t))
+    isa(t, MaybeUndef) && (t = t.typ)
+    return isa(t, Union)
+end
+
+function is_union_phi(compact::IncrementalCompact, idx::Int)
+    inst = compact.result[idx]
+    return isa(inst[:inst], PhiNode) && is_some_union(inst[:type])
+end
+
 """
     adce_pass!(ir::IRCode) -> newir::IRCode
 
@@ -1054,21 +1097,92 @@ within `sroa_pass!` which redirects references of `typeassert`ed value to the co
 function adce_pass!(ir::IRCode)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
+    unionphis = Pair{Int,Any}[] # sorted
     compact = IncrementalCompact(ir)
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
-        elseif is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
-            # nullify safe `typeassert` calls
-            ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact))
-            if isexact && argextype(stmt.args[2], compact) ⊑ ty
-                compact[idx] = nothing
+            if is_some_union(compact.result[idx][:type])
+                push!(unionphis, Pair{Int,Any}(idx, Union{}))
+            end
+        elseif isa(stmt, PiNode)
+            val = stmt.val
+            if isa(val, SSAValue) && is_union_phi(compact, val.id)
+                r = searchsorted(unionphis, val.id; by = first)
+                if !isempty(r)
+                    unionphi = unionphis[first(r)]
+                    t = tmerge(unionphi[2], stmt.typ)
+                    unionphis[first(r)] = Pair{Int,Any}(unionphi[1], t)
+                end
+            end
+        else
+            if is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
+                # nullify safe `typeassert` calls
+                ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact))
+                if isexact && argextype(stmt.args[2], compact) ⊑ ty
+                    compact[idx] = nothing
+                    continue
+                end
+            end
+            for ur in userefs(stmt)
+                use = ur[]
+                if isa(use, SSAValue) && is_union_phi(compact, use.id)
+                    r = searchsorted(unionphis, use.id; by = first)
+                    if !isempty(r)
+                        deleteat!(unionphis, first(r))
+                    end
+                end
             end
         end
     end
     non_dce_finish!(compact)
     for phi in all_phis
-        count_uses(compact.result[phi][:inst]::PhiNode, phi_uses)
+        inst = compact.result[phi]
+        for ur in userefs(inst[:inst]::PhiNode)
+            use = ur[]
+            if isa(use, SSAValue)
+                phi_uses[use.id] += 1
+                stmt = compact.result[use.id][:inst]
+                if isa(stmt, PhiNode)
+                    r = searchsorted(unionphis, use.id; by=first)
+                    if !isempty(r)
+                        unionphi = unionphis[first(r)]
+                        unionphis[first(r)] = Pair{Int,Any}(unionphi[1],
+                            tmerge(unionphi[2], inst[:type]))
+                    end
+                end
+            end
+        end
+    end
+    # Narrow any union phi nodes that have unused branches
+    for i = 1:length(unionphis)
+        unionphi = unionphis[i]
+        phi = unionphi[1]
+        t = unionphi[2]
+        if t === Union{}
+            compact.result[phi][:inst] = nothing
+            continue
+        elseif t === Any
+            continue
+        elseif compact.result[phi][:type] ⊑ t
+            continue
+        end
+        to_drop = Int[]
+        stmt = compact[phi]
+        stmt === nothing && continue
+        for i = 1:length(stmt.values)
+            if !isassigned(stmt.values, i)
+                # Should be impossible to have something used only by PiNodes that's undef
+                push!(to_drop, i)
+            elseif !hasintersect(widenconst(argextype(stmt.values[i], compact)),
+                                 widenconst(t))
+                push!(to_drop, i)
+            end
+        end
+        compact.result[phi][:type] = t
+        isempty(to_drop) && continue
+        deleteat!(stmt.values, to_drop)
+        deleteat!(stmt.edges, to_drop)
     end
     # Perform simple DCE for unused values
     extra_worklist = Int[]
@@ -1239,10 +1353,45 @@ function type_lift_pass!(ir::IRCode)
     ir
 end
 
+function is_bb_empty(ir::IRCode, bb::BasicBlock)
+    isempty(bb.stmts) && return true
+    if length(bb.stmts) == 1
+        stmt = ir[SSAValue(first(bb.stmts))][:inst]
+        return stmt === nothing || isa(stmt, GotoNode)
+    end
+    return false
+end
+
+# TODO: This is terrible, we should change the IR for GotoIfNot to gain an else case
+function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
+    # If the block we're going to is the same as the fallthrow, it's always legal to drop
+    # the block.
+    length(bb.stmts) == 0 && return true
+    if length(bb.stmts) == 1
+        stmt = ir[SSAValue(first(bb.stmts))][:inst]
+        stmt === nothing && return true
+        ((stmt::GotoNode).label == bbidx + 1) && return true
+    end
+    # Otherwise make sure we're not the fallthrough case of any predecessor
+    for pred in bb.preds
+        if pred == bbidx - 1
+            terminator = ir[SSAValue(first(bb.stmts)-1)][:inst]
+            if isa(terminator, GotoIfNot)
+                if terminator.dest != bbidx
+                    return false
+                end
+            end
+            break
+        end
+    end
+    return true
+end
+
 function cfg_simplify!(ir::IRCode)
     bbs = ir.cfg.blocks
     merge_into = zeros(Int, length(bbs))
     merged_succ = zeros(Int, length(bbs))
+    dropped_bbs = Vector{Int}() # sorted
     function follow_merge_into(idx::Int)
         while merge_into[idx] != 0
             idx = merge_into[idx]
@@ -1267,6 +1416,27 @@ function cfg_simplify!(ir::IRCode)
                     merge_into[succ] = idx
                     merged_succ[idx] = succ
                 end
+            elseif is_bb_empty(ir, bb) && is_legal_bb_drop(ir, idx, bb)
+                # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
+                # reference our predecessors.
+                found_interference = false
+                for idx in bbs[succ].stmts
+                    stmt = ir[SSAValue(idx)][:inst]
+                    stmt === nothing && continue
+                    isa(stmt, PhiNode) || break
+                    for edge in stmt.edges
+                        for pred in bb.preds
+                            if pred == edge
+                                found_interference = true
+                                @goto done
+                            end
+                        end
+                    end
+                end
+                @label done
+                if !found_interference
+                    push!(dropped_bbs, idx)
+                end
             end
         end
     end
@@ -1282,6 +1452,10 @@ function cfg_simplify!(ir::IRCode)
         # Drop blocks with no predecessors
         if i != 1 && length(ir.cfg.blocks[i].preds) == 0
             bb_rename_succ[i] = -1
+        end
+        # Mark dropped blocks for fixup
+        if !isempty(searchsorted(dropped_bbs, i))
+            bb_rename_succ[i] = -bbs[i].succs[1]
         end
 
         bb_rename_succ[i] != 0 && continue
@@ -1299,6 +1473,30 @@ function cfg_simplify!(ir::IRCode)
                 break
             end
             curr += 1
+            if !isempty(searchsorted(dropped_bbs, curr))
+                break
+            end
+        end
+    end
+
+    # Compute map from new to old blocks
+    result_bbs = Int[findfirst(j->i==j, bb_rename_succ) for i = 1:max_bb_num-1]
+
+    # Fixup dropped BBs
+    resolved_all = false
+    while !resolved_all
+        # TODO: There are faster ways to do this
+        resolved_all = true
+        for bb in dropped_bbs
+            obb = bb_rename_succ[bb]
+            if obb < -1
+                nsucc = bb_rename_succ[-obb]
+                if nsucc == -1
+                    nsucc = -merge_into[-obb]
+                end
+                bb_rename_succ[bb] = nsucc
+                resolved_all = false
+            end
         end
     end
 
@@ -1311,12 +1509,13 @@ function cfg_simplify!(ir::IRCode)
             bb_rename_pred[i] = -1
             continue
         end
-        bbnum = follow_merge_into(i)
+        pred = i
+        while pred !== 1 && !isempty(searchsorted(dropped_bbs, pred))
+            pred = bbs[pred].preds[1]
+        end
+        bbnum = follow_merge_into(pred)
         bb_rename_pred[i] = bb_rename_succ[bbnum]
     end
-
-    # Compute map from new to old blocks
-    result_bbs = Int[findfirst(j->i==j, bb_rename_succ) for i = 1:max_bb_num-1]
 
     # Compute new block lengths
     result_bbs_lengths = zeros(Int, max_bb_num-1)
@@ -1359,6 +1558,25 @@ function cfg_simplify!(ir::IRCode)
                        compute_preds(i),
                        compute_succs(i))
             for i = 1:length(result_bbs)]
+    end
+
+    # Fixup terminators for any blocks that would have caused double edges
+    for (bbidx, (new_bb, old_bb)) in enumerate(zip(cresult_bbs, result_bbs))
+        @assert length(new_bb.succs) <= 2
+        length(new_bb.succs) <= 1 && continue
+        if new_bb.succs[1] == new_bb.succs[2]
+            terminator = ir[SSAValue(last(bbs[old_bb].stmts))]
+            @assert isa(terminator[:inst], GotoIfNot)
+            terminator[:inst] = GotoNode(terminator[:inst].dest)
+            pop!(new_bb.succs)
+            new_succ = cresult_bbs[new_bb.succs[1]]
+            for (i, nsp) in enumerate(new_succ.preds)
+                if nsp == bbidx
+                    deleteat!(new_succ.preds, i)
+                    break
+                end
+            end
+        end
     end
 
     compact = IncrementalCompact(ir, true)

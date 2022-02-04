@@ -384,7 +384,7 @@ end
 
 """
     finish(interp::AbstractInterpreter, opt::OptimizationState,
-           params::OptimizationParams, ir::IRCode, result) -> analyzed::Union{Nothing,ConstAPI}
+           params::OptimizationParams, ir::IRCode, caller::InferenceResult) -> analyzed::Union{Nothing,ConstAPI}
 
 Post process information derived by Julia-level optimizations for later uses:
 - computes "purity", i.e. side-effect-freeness
@@ -394,7 +394,7 @@ In a case when the purity is proven, `finish` can return `ConstAPI` object wrapp
 value so that the runtime system will use the constant calling convention for the method calls.
 """
 function finish(interp::AbstractInterpreter, opt::OptimizationState,
-                params::OptimizationParams, ir::IRCode, @nospecialize(result))
+                params::OptimizationParams, ir::IRCode, caller::InferenceResult)
     (; src, linfo) = opt
     (; def, specTypes) = linfo
 
@@ -402,8 +402,10 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
-    wresult = isa(result, InterConditional) ? widenconditional(result) : result
-    if (isa(wresult, Const) || isconstType(wresult))
+    result = caller.result
+    @assert !(result isa LimitedAccuracy)
+    result = isa(result, InterConditional) ? widenconditional(result) : result
+    if (isa(result, Const) || isconstType(result))
         proven_pure = false
         # must be proven pure to use constant calling convention;
         # otherwise we might skip throwing errors (issue #20704)
@@ -437,14 +439,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
             src.pure = true
-            if isa(wresult, Const)
-                val = wresult.val
+            if isa(result, Const)
+                val = result.val
                 if is_inlineable_constant(val)
                     analyzed = ConstAPI(val)
                 end
             else
-                @assert isconstType(wresult)
-                analyzed = ConstAPI(wresult.parameters[1])
+                @assert isconstType(result)
+                analyzed = ConstAPI(result.parameters[1])
             end
             force_noinline || (src.inlineable = true)
         end
@@ -501,9 +503,10 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
 end
 
 # run the optimization work
-function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
+function optimize(interp::AbstractInterpreter, opt::OptimizationState,
+                  params::OptimizationParams, caller::InferenceResult)
     @timeit "optimizer" ir = run_passes(opt.src, opt)
-    return finish(interp, opt, params, ir, result)
+    return finish(interp, opt, params, ir, caller)
 end
 
 function run_passes(ci::CodeInfo, sv::OptimizationState)

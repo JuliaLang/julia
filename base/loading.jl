@@ -813,6 +813,22 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
     return restored
 end
 
+function run_package_callbacks(modkey::PkgId)
+    unlock(require_lock)
+    try
+        for callback in package_callbacks
+            invokelatest(callback, modkey)
+        end
+    catch
+        # Try to continue loading if a callback errors
+        errs = current_exceptions()
+        @error "Error during package callback" exception=errs
+    finally
+        lock(require_lock)
+    end
+    nothing
+end
+
 function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::Union{Nothing, String}, depth::Int = 0)
     if root_module_exists(modkey)
         M = root_module(modkey)
@@ -827,9 +843,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::U
         mod = _require_search_from_serialized(modkey, String(modpath), depth)
         get!(PkgOrigin, pkgorigins, modkey).path = modpath
         if !isa(mod, Bool)
-            for callback in package_callbacks
-                invokelatest(callback, modkey)
-            end
+            run_package_callbacks(modkey)
             for M in mod::Vector{Any}
                 M = M::Module
                 if PkgId(M) == modkey && module_build_id(M) === build_id
@@ -989,9 +1003,6 @@ end
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
 
-const full_warning_showed = Ref(false)
-const modules_warned_for = Set{PkgId}()
-
 """
     require(into::Module, module::Symbol)
 
@@ -1037,32 +1048,20 @@ function require(into::Module, mod::Symbol)
                     Package $mod not found in current path$hint_message.
                     - $start_sentence `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package."""))
             else
-                s = """
+                throw(ArgumentError("""
                 Package $(where.name) does not have $mod in its dependencies:
-                - If you have $(where.name) checked out for development and have
+                - You may have a partially installed environment. Try `Pkg.instantiate()`
+                  to ensure all packages in the environment are installed.
+                - Or, if you have $(where.name) checked out for development and have
                   added $mod as a dependency but haven't updated your primary
                   environment's manifest file, try `Pkg.resolve()`.
-                - Otherwise you may need to report an issue with $(where.name)"""
-
-                uuidkey = identify_package(PkgId(string(into)), String(mod))
-                uuidkey === nothing && throw(ArgumentError(s))
-
-                # fall back to toplevel loading with a warning
-                if !(where in modules_warned_for)
-                    @warn string(
-                        full_warning_showed[] ? "" : s, "\n",
-                        string("Loading $(mod) into $(where.name) from project dependency, ",
-                               "future warnings for $(where.name) are suppressed.")
-                    ) _module = nothing _file = nothing _group = nothing
-                    push!(modules_warned_for, where)
-                end
-                full_warning_showed[] = true
+                - Otherwise you may need to report an issue with $(where.name)"""))
             end
         end
         if _track_dependencies[]
             push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
         end
-        return require(uuidkey)
+        return _require_prelocked(uuidkey)
     finally
         LOADING_CACHE[] = nothing
     end
@@ -1077,8 +1076,9 @@ end
 PkgOrigin() = PkgOrigin(nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
-function require(uuidkey::PkgId)
-    @lock require_lock begin
+require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
+
+function _require_prelocked(uuidkey::PkgId)
     just_loaded_pkg = false
     if !root_module_exists(uuidkey)
         cachefile = _require(uuidkey)
@@ -1086,9 +1086,7 @@ function require(uuidkey::PkgId)
             get!(PkgOrigin, pkgorigins, uuidkey).cachepath = cachefile
         end
         # After successfully loading, notify downstream consumers
-        for callback in package_callbacks
-            invokelatest(callback, uuidkey)
-        end
+        run_package_callbacks(uuidkey)
         just_loaded_pkg = true
     end
     if just_loaded_pkg && !root_module_exists(uuidkey)
@@ -1096,7 +1094,6 @@ function require(uuidkey::PkgId)
               module `$(uuidkey.name)`, check for typos in package module name")
     end
     return root_module(uuidkey)
-    end
 end
 
 const loaded_modules = Dict{PkgId,Module}()

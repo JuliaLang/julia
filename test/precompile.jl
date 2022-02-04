@@ -242,7 +242,7 @@ precompile_test_harness(false) do dir
 
               # create a backedge that includes Type{Union{}}, to ensure lookup can handle that
               call_bottom() = show(stdout::IO, Union{})
-              Core.Compiler.return_type(call_bottom, ())
+              Core.Compiler.return_type(call_bottom, Tuple{})
 
               # check that @ccallable works from precompiled modules
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
@@ -605,7 +605,15 @@ precompile_test_harness("code caching") do dir
                   fpush(X[])
                   nothing
               end
+              function getelsize(list::Vector{T}) where T
+                  n = 0
+                  for item in list
+                      n += sizeof(T)
+                  end
+                  return n
+              end
               precompile(callboth, ())
+              precompile(getelsize, (Vector{Int32},))
           end
           """)
     Base.compilecache(Base.PkgId(string(Cache_module)))
@@ -627,6 +635,16 @@ precompile_test_harness("code caching") do dir
     @test_broken M.X ∈ groups[Mid]           # requires caching external compilation results
     @test M.X2 ∈ groups[rootid(@__MODULE__)]
     @test !isempty(groups[Bid])
+    minternal = which(M.getelsize, (Vector,))
+    mi = minternal.specializations[1]
+    ci = mi.cache
+    @test ci.relocatability == 1
+    Base.invokelatest() do
+        M.getelsize(M.X2[])
+    end
+    mi = minternal.specializations[2]
+    ci = mi.cache
+    @test ci.relocatability == 0
     # PkgA loads PkgB, and both add roots to the same method (both before and after loading B)
     Cache_module2 = :Cachea1544c83560f0c99
     write(joinpath(dir, "$Cache_module2.jl"),
@@ -764,6 +782,27 @@ precompile_test_harness("package_callbacks") do dir
               """)
         Base.require(Main, Test3_module)
         @test take!(loaded_modules) == Test3_module
+    finally
+        pop!(Base.package_callbacks)
+    end
+    L = ReentrantLock()
+    E = Base.Event()
+    t = errormonitor(@async lock(L) do
+                     wait(E)
+                     Base.root_module_key(Base)
+                     end)
+    Test4_module = :Teste4095a84
+    write(joinpath(dir, "$(Test4_module).jl"),
+          """
+          module $(Test4_module)
+          end
+          """)
+    Base.compilecache(Base.PkgId("$(Test4_module)"))
+    push!(Base.package_callbacks, _->(notify(E); lock(L) do; end))
+    # should not hang here
+    try
+        @eval using $(Symbol(Test4_module))
+        wait(t)
     finally
         pop!(Base.package_callbacks)
     end

@@ -31,7 +31,7 @@ Language changes
 * `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
   i.e. `@time "Evaluating foo" foo()` ([#42431])
 * New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
-* Iterating an `Iterators.Reverse` now falls back on reversing the eachindex interator, if possible ([#43110]).
+* Iterating an `Iterators.Reverse` now falls back on reversing the eachindex iterator, if possible ([#43110]).
 * Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
   to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
 * `Base.ifelse` is now defined as a generic function rather than a builtin one, allowing packages to
@@ -56,6 +56,7 @@ Compiler/Runtime improvements
   calls ([#43239]).
 * Abstract callsite can now be inlined or statically resolved as far as the callsite has a single
   matching method ([#43113]).
+* Builtin function are now a bit more like generic functions, and can be enumerated with `methods` ([#43865]).
 
 Command-line option changes
 ---------------------------

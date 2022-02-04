@@ -349,17 +349,32 @@ function getdict(data::Vector{UInt})
 end
 
 function getdict!(dict::LineInfoDict, data::Vector{UInt})
-    for ip in data
-        # Lookup is expensive, so do it only once per ip.
-        haskey(dict, UInt64(ip)) && continue
-        st = lookup(convert(Ptr{Cvoid}, ip))
-        # To correct line numbers for moving code, put it in the form expected by
-        # Base.update_stackframes_callback[]
-        stn = map(x->(x, 1), st)
-        try Base.invokelatest(Base.update_stackframes_callback[], stn) catch end
-        dict[UInt64(ip)] = map(first, stn)
+    # we don't want metadata here as we're just looking up ips
+    unique_ips = unique(has_meta(data) ? strip_meta(data) : data)
+    n_unique_ips = length(unique_ips)
+    n_unique_ips == 0 && return dict
+    iplookups = similar(unique_ips, Vector{StackFrame})
+    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.nthreads(), RoundUp))
+        Threads.@spawn begin
+            for i in indexes_part
+                iplookups[i] = _lookup_corrected(unique_ips[i])
+            end
+        end
+    end
+    for i in eachindex(unique_ips)
+        dict[unique_ips[i]] = iplookups[i]
     end
     return dict
+end
+
+function _lookup_corrected(ip::UInt)
+    st = lookup(convert(Ptr{Cvoid}, ip))
+    # To correct line numbers for moving code, put it in the form expected by
+    # Base.update_stackframes_callback[]
+    stn = map(x->(x, 1), st)
+    # Note: Base.update_stackframes_callback[] should be data-race free
+    try Base.invokelatest(Base.update_stackframes_callback[], stn) catch end
+    return map(first, stn)
 end
 
 """

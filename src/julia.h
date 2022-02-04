@@ -294,6 +294,7 @@ typedef struct _jl_method_t {
     // Identify roots by module-of-origin. We only track the module for roots added during incremental compilation.
     // May be NULL if no external roots have been added, otherwise it's a Vector{UInt64}
     jl_array_t *root_blocks;   // RLE (build_id, offset) pairs (even/odd indexing)
+    int32_t nroots_sysimg;     // # of roots stored in the system image
     jl_svec_t *ccallable; // svec(rettype, sig) if a ccallable entry point is requested for this
 
     // cache of specializations of this method for invoke(), i.e.
@@ -307,11 +308,11 @@ typedef struct _jl_method_t {
     // the default recusion relation.
     jl_value_t *recursion_relation;
 
-    int32_t nargs;
-    int32_t called;        // bit flags: whether each of the first 8 arguments is called
-    int32_t nospecialize;  // bit flags: which arguments should not be specialized
-    int32_t nkw;           // # of leading arguments that are actually keyword arguments
-                           // of another method.
+    uint32_t nargs;
+    uint32_t called;        // bit flags: whether each of the first 8 arguments is called
+    uint32_t nospecialize;  // bit flags: which arguments should not be specialized
+    uint32_t nkw;           // # of leading arguments that are actually keyword arguments
+                            // of another method.
     uint8_t isva;
     uint8_t pure;
     uint8_t is_for_opaque_closure;
@@ -381,6 +382,7 @@ typedef struct _jl_code_instance_t {
         _Atomic(jl_fptr_sparam_t) fptr3;
         // 4 interpreter
     } specptr; // private data for `jlcall entry point
+    uint8_t relocatability;  // nonzero if all roots are built into sysimg or tagged by module key
 } jl_code_instance_t;
 
 // all values are callable as Functions
@@ -912,7 +914,7 @@ STATIC_INLINE jl_value_t *jl_svecset(
     // TODO: while svec is supposedly immutable, in practice we sometimes publish it first
     // and set the values lazily. Those users should be using jl_atomic_store_release here.
     jl_svec_data(t)[i] = (jl_value_t*)x;
-    if (x) jl_gc_wb(t, x);
+    jl_gc_wb(t, x);
     return (jl_value_t*)x;
 }
 #endif
@@ -1783,7 +1785,7 @@ STATIC_INLINE jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
     return jl_apply_generic(args[0], &args[1], nargs - 1);
 }
 
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t **args, int32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t **args, uint32_t nargs);
 JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED);

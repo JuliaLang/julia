@@ -150,7 +150,7 @@ struct Decimal3 end
     len = ii - i
     if len > 3
         ms, r = divrem(ms0, Int64(10) ^ (len - 3))
-        r == 0 || throw(InexactError(:convert, Decimal3, ms0))
+        r == 0 || return nothing
     else
         ms = ms0 * Int64(10) ^ (3 - len)
     end

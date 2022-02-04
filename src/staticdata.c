@@ -1681,14 +1681,31 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     return 1;
 }
 
-static void strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
+static int strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
 {
-    jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
+    return jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
 }
 
 static void jl_strip_all_codeinfos(void)
 {
     jl_foreach_reachable_mtable(strip_all_codeinfos_, NULL);
+}
+
+static int set_nroots_sysimg__(jl_typemap_entry_t *def, void *_env)
+{
+    jl_method_t *m = def->func.method;
+    m->nroots_sysimg = m->roots ? jl_array_len(m->roots) : 0;
+    return 1;
+}
+
+static void set_nroots_sysimg_(jl_methtable_t *mt, void *_env)
+{
+    jl_typemap_visitor(mt->defs, set_nroots_sysimg__, NULL);
+}
+
+static void jl_set_nroots_sysimg(void)
+{
+    jl_foreach_reachable_mtable(set_nroots_sysimg_, NULL);
 }
 
 // --- entry points ---
@@ -1706,6 +1723,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir)
         jl_strip_all_codeinfos();
+    jl_set_nroots_sysimg();
 
     int en = jl_gc_enable(0);
     jl_init_serializer2(1);
