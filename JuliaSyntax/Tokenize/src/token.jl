@@ -11,7 +11,7 @@ iskeyword(k::Kind) = begin_keywords < k < end_keywords
 isliteral(k::Kind) = begin_literal < k < end_literal
 isoperator(k::Kind) = begin_ops < k < end_ops
 
-iscontexturalkeyword(k::Kind) = begin_contextural_keywords < k < end_contextural_keywords
+iscontextualkeyword(k::Kind) = begin_contextual_keywords < k < end_contextual_keywords
 
 function iswordoperator(k::Kind)
     # Keyword-like operators

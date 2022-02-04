@@ -849,7 +849,7 @@ end
 
 function lex_prime(l, doemit = true)
     if l.last_token == Tokens.IDENTIFIER ||
-        Tokens.iscontexturalkeyword(l.last_token) ||
+        Tokens.iscontextualkeyword(l.last_token) ||
         Tokens.iswordoperator(l.last_token) ||
         l.last_token == Tokens.DOT ||
         l.last_token ==  Tokens.RPAREN ||
@@ -900,7 +900,7 @@ end
 # A '"' has been consumed
 function lex_quote(l::Lexer)
     raw = l.last_token == Tokens.IDENTIFIER ||
-          Tokens.iscontexturalkeyword(l.last_token) ||
+          Tokens.iscontextualkeyword(l.last_token) ||
           Tokens.iswordoperator(l.last_token)
     pc, dpc = dpeekchar(l)
     triplestr = pc == '"' && dpc == '"'
