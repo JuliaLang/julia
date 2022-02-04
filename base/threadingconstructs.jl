@@ -126,8 +126,6 @@ For example, the above conditions imply that:
 - Communicating between iterations using blocking primitives like `Channel`s is incorrect.
 - Write only to locations not shared across iterations (unless a lock or atomic operation is used).
 
-Furthermore, even though `lock` and atomic operations can be useful sometimes, it is often better
-to avoid them for performance.
 
 Schedule options are:
 - `:static` creates one task per thread and divides the iterations equally among
