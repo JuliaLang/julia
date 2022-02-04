@@ -114,11 +114,11 @@ The `schedule` argument can be used to request a particular scheduling policy.
 
 Except for `:static` scheduling, how the iterations are assigned to tasks, and how the tasks
 are assigned to the worker threads is undefined. The exact assignments can be different
-for each execution. The scheduling option is a hint. The loop body
-code (including any code transitively called from it) must not make assumptions about the distribution of iterations to tasks or the worker
-thread in which they are executed. The loop body for each iteration must be able to
-make forward progress independent of other iterations and be free from data races.
-As such, synchronizations across iterations may deadlock.
+for each execution. The scheduling option is a hint. The loop body code (including any code
+transitively called from it) must not make assumptions about the distribution of iterations
+to tasks or the worker thread in which they are executed. The loop body for each iteration
+must be able to make forward progress independent of other iterations and be free from data
+races. As such, synchronizations across iterations may deadlock.
 
 For example, the above conditions imply that:
 
@@ -135,10 +135,10 @@ Schedule options are:
 - `:dynamic` will schedule iterations dynamically to available worker threads,
             assuming that the workload for each iteration is uniform.
 
-Without the scheduler argument, the exact scheduling is unspecified; i.e., it may be
+Without the scheduler argument, the exact scheduling is unspecified; i.e. it may be
 different across Julia releases. Currently, the behavior is dependent on the calling thread.
-When called from thread 1 the default is `:static`. When
-called from other threads the loop will be executed without threading.
+When called from thread 1 the default is `:static`. When called from other threads the loop
+will be executed without threading.
 
 The default schedule (used when no `schedule` argument is present) is subject to change.
 
