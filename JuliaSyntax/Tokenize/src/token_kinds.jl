@@ -37,7 +37,7 @@
         TRY,
         USING,
         WHILE,
-        begin_contextural_keywords,
+        begin_contextual_keywords,
             ABSTRACT,
             AS,
             DOC,
@@ -46,7 +46,7 @@
             PRIMITIVE,
             TYPE,
             VAR,
-        end_contextural_keywords,
+        end_contextual_keywords,
     end_keywords,
 
     begin_cstparser,

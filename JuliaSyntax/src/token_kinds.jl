@@ -42,7 +42,7 @@ Dict([
 "try"         =>  Ts.TRY
 "using"       =>  Ts.USING
 "while"       =>  Ts.WHILE
-# contextural keywords
+# contextual keywords
 "abstract"    =>  Ts.ABSTRACT
 "as"          =>  Ts.AS
 "doc"         =>  Ts.DOC

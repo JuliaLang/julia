@@ -43,7 +43,7 @@ kind(raw::TzTokens.RawToken) = TzTokens.exactkind(raw)
 # Some renaming for naming consistency
 is_literal(k) = TzTokens.isliteral(kind(k))
 is_keyword(k) = TzTokens.iskeyword(kind(k))
-is_contextural_keyword(k) = TzTokens.iscontexturalkeyword(kind(k))
+is_contextual_keyword(k) = TzTokens.iscontextualkeyword(kind(k))
 is_operator(k) = TzTokens.isoperator(kind(k))
 is_word_operator(k) = TzTokens.iswordoperator(kind(k))
 

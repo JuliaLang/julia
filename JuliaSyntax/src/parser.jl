@@ -237,7 +237,7 @@ end
 
 function is_reserved_word(k)
     k = kind(k)
-    is_keyword(k) && !is_contextural_keyword(k)
+    is_keyword(k) && !is_contextual_keyword(k)
 end
 
 # Return true if the next word (or word pair) is reserved, introducing a
@@ -246,7 +246,7 @@ function peek_initial_reserved_words(ps::ParseState)
     k = peek(ps)
     if is_initial_reserved_word(ps, k)
         return true
-    elseif is_contextural_keyword(k)
+    elseif is_contextual_keyword(k)
         k2 = peek(ps,2)
         return (k == K"mutable"   && k2 == K"struct") ||
                (k == K"primitive" && k2 == K"type")   ||
@@ -1636,7 +1636,7 @@ end
 # parse expressions or blocks introduced by syntactic reserved words.
 #
 # The caller should use peek_initial_reserved_words to determine whether
-# to call parse_resword, or whether contextural keywords like `mutable` are
+# to call parse_resword, or whether contextual keywords like `mutable` are
 # simple identifiers.
 #
 # flisp: parse-resword

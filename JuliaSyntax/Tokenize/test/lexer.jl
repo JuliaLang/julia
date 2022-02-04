@@ -333,7 +333,7 @@ end
     @test ts[4] ~ (T.DQUOTE     , "\""       )
     @test ts[5] ~ (T.ENDMARKER  , ""         )
 
-    # Contextural keywords and operators allowed as raw string prefixes
+    # Contextual keywords and operators allowed as raw string prefixes
     ts = collect(tokenize(raw""" var"x $ \ y" """))
     @test ts[2] ~ (T.VAR        , "var")
     @test ts[4] ~ (T.STRING     , "x \$ \\ y")
@@ -782,7 +782,7 @@ const all_kws = Set([
     "try",
     "using",
     "while",
-    # Contextural keywords
+    # Contextual keywords
     "abstract",
     "as",
     "doc",
