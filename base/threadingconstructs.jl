@@ -113,17 +113,17 @@ execution.
 The `schedule` argument can be used to request a particular scheduling policy.
 
 Except for `:static` scheduling, how the iterations are assigned to tasks, and how the tasks
-are assigned to the worker threads are undefined. The exact assignments can be different
-for each execution. The scheduling option should be considered as a hint. The loop body
+are assigned to the worker threads is undefined. The exact assignments can be different
+for each execution. The scheduling option shall be considered a hint. The loop body
 code (including any code transitively called from it) must not assume the task and worker
-thread in which they are executed. The loop body code for each iteration must be able to
-make forward progress and be free from data races independent of the state of other iterations.
-As such, synchronizations across iterations may invoke deadlock.
+thread in which they are executed. The loop body for each iteration must be able to
+make forward progress independent of other iterations and be free from data races.
+As such, synchronizations across iterations may deadlock.
 
 For example, the above conditions imply that:
 
-- The lock taken in an iteration must be released within the same iteration.
-- Avoid communication between iterations using, e.g., `Channel`s.
+- The lock taken in an iteration *must* be released within the same iteration.
+- Communicating between iterations using blocking primitives like `Channel`s is incorrect.
 - Write only to locations not shared across iterations (unless a lock or atomic operation is used).
 
 Furthermore, even though `lock` and atomic operations can be useful sometimes, it is often better
@@ -134,7 +134,7 @@ Schedule options are:
             them, assigning each task specifically to each thread.
             Specifying `:static` is an error if used from inside another `@threads` loop
             or from a thread other than 1.
-- `:dynamic` tries to schedule iterations dynamically to available worker threads,
+- `:dynamic` will schedule iterations dynamically to available worker threads,
             assuming that the workload for each iteration is uniform.
 
 If no schedule is specified, when called from thread 1 the default is `:static`, or when
