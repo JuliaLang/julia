@@ -440,6 +440,31 @@ seems to be to flatten the generators:
 
 # Comparisons to other packages
 
+### Official Julia compiler
+
+The official Julia compiler frontend lives in the Julia source tree. It's
+mostly contained in just a few files:
+* The parser in [src/julia-parser.scm](https://github.com/JuliaLang/julia/blob/9c4b75d7f63d01d12b67aaf7ce8bb4a078825b52/src/julia-parser.scm)
+* Macro expansion in [src/ast.c](https://github.com/JuliaLang/julia/blob/9c4b75d7f63d01d12b67aaf7ce8bb4a078825b52/src/ast.c) and [src/macroexpand.scm](https://github.com/JuliaLang/julia/blob/9c4b75d7f63d01d12b67aaf7ce8bb4a078825b52/src/macroexpand.scm)
+* Syntax lowering in [src/julia-syntax.scm](https://github.com/JuliaLang/julia/blob/9c4b75d7f63d01d12b67aaf7ce8bb4a078825b52/src/julia-syntax.scm)
+* The flisp runtime and C extensions for Julia in [src/flisp](https://github.com/JuliaLang/julia/tree/master/src/flisp)
+* Supporting utility functions in a few other `.scm` and `.c` files.
+
+There's two issues with the official reference frontend which suggest a rewrite.
+
+First, there's no support for precise source locations and the existing data
+structures (bare flisp lists) can't easily be extended to add these. Fixing
+this would require changes to nearly all of the code.
+
+Second, it's written in flisp: an aestheically pleasing, minimal but obscure
+implementation of Scheme. Learning Scheme is actually a good way to appreciate
+some of Julia's design inspiration, but it's quite a barrier for developers of
+Julia language tooling. (Flisp has no user-level documentation but non-schemers
+can refer to the [Racket documentation](https://docs.racket-lang.org) which is
+quite compatible for basic things.) In addition to the social factors, having
+the embedded flisp interpreter and runtime with its own separate data
+structures and FFI is complex and inefficient.
+
 ### JuliaParser.jl
 
 [JuliaParser.jl](https://github.com/JuliaLang/JuliaParser.jl)
