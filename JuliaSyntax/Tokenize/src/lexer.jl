@@ -1142,8 +1142,6 @@ function simple_hash(str)
 end
 
 kws = [
-Tokens.ABSTRACT,
-Tokens.AS,
 Tokens.BAREMODULE,
 Tokens.BEGIN,
 Tokens.BREAK,
@@ -1165,22 +1163,26 @@ Tokens.LET,
 Tokens.LOCAL,
 Tokens.MACRO,
 Tokens.MODULE,
-Tokens.MUTABLE,
-Tokens.OUTER,
-Tokens.PRIMITIVE,
 Tokens.QUOTE,
 Tokens.RETURN,
 Tokens.STRUCT,
 Tokens.TRY,
-Tokens.TYPE,
 Tokens.USING,
-Tokens.VAR,
 Tokens.WHILE,
 Tokens.IN,
 Tokens.ISA,
 Tokens.WHERE,
 Tokens.TRUE,
 Tokens.FALSE,
+
+Tokens.ABSTRACT,
+Tokens.AS,
+Tokens.DOC,
+Tokens.MUTABLE,
+Tokens.OUTER,
+Tokens.PRIMITIVE,
+Tokens.TYPE,
+Tokens.VAR,
 ]
 
 const kw_hash = Dict(simple_hash(lowercase(string(kw))) => kw for kw in kws)
