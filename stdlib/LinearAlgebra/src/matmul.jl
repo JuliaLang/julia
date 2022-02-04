@@ -184,18 +184,6 @@ end
 (*)(A::AdjOrTransStridedMat{<:BlasReal}, B::StridedMatrix{<:BlasComplex}) = copy(transpose(transpose(B) * parent(A)))
 (*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::AdjOrTransStridedMat{<:BlasComplex}) = copy(wrapperop(B)(parent(B) * transpose(A)))
 
-for elty in (Float32,Float64)
-    @eval begin
-        @inline function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty},
-                              alpha::Real, beta::Real)
-            Afl = reinterpret($elty, A)
-            Cfl = reinterpret($elty, C)
-            mul!(Cfl, Afl, B, alpha, beta)
-            return C
-        end
-    end
-end
-
 """
     muladd(A, y, z)
 
@@ -402,18 +390,14 @@ end
         return gemm_wrapper!(C, 'N', 'T', A, B, MulAddMul(alpha, beta))
     end
 end
-# Complex matrix times transposed real matrix. Reinterpret the first matrix to real for efficiency.
-for elty in (Float32,Float64)
-    @eval begin
-        @inline function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, tB::Transpose{<:Any,<:StridedVecOrMat{$elty}},
-                         alpha::Real, beta::Real)
-            Afl = reinterpret($elty, A)
-            Cfl = reinterpret($elty, C)
-            mul!(Cfl, Afl, tB, alpha, beta)
-            return C
-        end
-    end
-end
+# Complex matrix times (transposed) real matrix. Reinterpret the first matrix to real for efficiency.
+@inline mul!(C::StridedMatrix{Complex{T}}, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
+                    alpha::Number, beta::Number) where {T<:BlasReal} =
+    gemm_wrapper!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+@inline mul!(C::StridedMatrix{Complex{T}}, A::StridedVecOrMat{Complex{T}}, tB::Transpose{<:Any,<:StridedVecOrMat{T}},
+                    alpha::Number, beta::Number) where {T<:BlasReal} =
+    gemm_wrapper!(C, 'N', 'T', A, parent(tB), MulAddMul(alpha, beta))
+
 # collapsing the following two defs with C::AbstractVecOrMat yields ambiguities
 @inline mul!(C::AbstractVector, A::AbstractVecOrMat, tB::Transpose{<:Any,<:AbstractVecOrMat},
              alpha::Number, beta::Number) =
@@ -683,6 +667,49 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
         stride(B, 2) >= size(B, 1) &&
         stride(C, 2) >= size(C, 1))
         return BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
+    end
+    generic_matmatmul!(C, tA, tB, A, B, _add)
+end
+
+function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
+                       A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
+                       _add = MulAddMul()) where {T<:BlasReal}
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
+
+    if nA != mB
+        throw(DimensionMismatch(lazy"A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
+    end
+
+    if C === A || B === C
+        throw(ArgumentError("output matrix must not be aliased with input matrix"))
+    end
+
+    if mA == 0 || nA == 0 || nB == 0 || iszero(_add.alpha)
+        if size(C) != (mA, nB)
+            throw(DimensionMismatch(lazy"C has dimensions $(size(C)), should have ($mA,$nB)"))
+        end
+        return _rmul_or_fill!(C, _add.beta)
+    end
+
+    if mA == 2 && nA == 2 && nB == 2
+        return matmul2x2!(C, tA, tB, A, B, _add)
+    end
+    if mA == 3 && nA == 3 && nB == 3
+        return matmul3x3!(C, tA, tB, A, B, _add)
+    end
+
+    alpha, beta = promote(_add.alpha, _add.beta, zero(T))
+
+    # Make-sure reinterpret-based optimization is BLAS-compatible.
+    if (alpha isa Union{Bool,T} &&
+        beta isa Union{Bool,T} &&
+        stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
+        stride(A, 2) >= size(A, 1) &&
+        stride(B, 2) >= size(B, 1) &&
+        stride(C, 2) >= size(C, 1)) && tA == 'N'
+        BLAS.gemm!(tA, tB, alpha, reinterpret(T, A), B, beta, reinterpret(T, C))
+        return C
     end
     generic_matmatmul!(C, tA, tB, A, B, _add)
 end
