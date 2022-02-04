@@ -169,7 +169,7 @@ julia> @time begin
 2.012056 seconds (16.05 k allocations: 883.919 KiB, 0.66% compilation time)
 ```
 
-The `:dynamic` example takes 2 seconds because one of the non-occupied threads is able
+The `:dynamic` example takes 2 seconds since one of the non-occupied threads is able
 to run two of the 1-second iterations to complete the for loop.
 
 !!! compat "Julia 1.5"
