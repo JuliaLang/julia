@@ -234,10 +234,7 @@ end
 end
 
 @testset "keywords" begin
-      for kw in    ["function",
-                    "abstract",
-                    "as",
-                    "baremodule",
+      for kw in    ["baremodule",
                     "begin",
                     "break",
                     "catch",
@@ -248,27 +245,31 @@ end
                     "elseif",
                     "end",
                     "export",
-                    #"false",
                     "finally",
                     "for",
                     "function",
                     "global",
-                    "let",
-                    "local",
                     "if",
                     "import",
+                    "let",
+                    "local",
                     "macro",
                     "module",
-                    "mutable",
-                    "primitive",
                     "quote",
                     "return",
                     "struct",
-                    #"true",
                     "try",
-                    "type",
                     "using",
-                    "while"]
+                    "while",
+
+                    "abstract",
+                    "as",
+                    "doc",
+                    "mutable",
+                    "outer",
+                    "primitive",
+                    "type",
+                    "var"]
 
         @test T.kind(tok(kw)) == T.KEYWORD
     end
@@ -752,8 +753,8 @@ end
     @test all(s->Base.isoperator(Symbol(s)) == Tokens.isoperator(first(collect(tokenize(s))).kind), allops)
 end
 
-const all_kws = Set(["abstract",
-    "as",
+const all_kws = Set([
+    # Keywords
     "baremodule",
     "begin",
     "break",
@@ -775,22 +776,28 @@ const all_kws = Set(["abstract",
     "local",
     "macro",
     "module",
-    "mutable",
-    "outer",
-    "primitive",
     "quote",
     "return",
     "struct",
     "try",
-    "type",
     "using",
     "while",
-    "in",
-    "isa",
+    # Contextural keywords
+    "abstract",
+    "as",
+    "doc",
+    "mutable",
+    "outer",
+    "primitive",
+    "type",
     "var",
-    "where",
+    # Literals
     "true",
     "false",
+    # Word-like operators
+    "in",
+    "isa",
+    "where",
 ])
 
 function check_kw_hashes(iter)
