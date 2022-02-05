@@ -61,9 +61,11 @@ const _g_expected_sampled_allocs = Ref{Float64}(0)
 function _prof_expr(expr, opts)
     quote
         $start(; $(esc(opts)))
-        local res = $(esc(expr))
-        $stop()
-        res
+        try
+            $(esc(expr))
+        finally
+            $stop()
+        end
     end
 end
 
