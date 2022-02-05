@@ -40,8 +40,8 @@ end
 
 function parsers_agree_on_file(path)
     text = read(path, String)
-    ex = parseall(Expr, text)
-    fl_ex = flisp_parse_all(text)
+    ex = parseall(Expr, text, filename=path)
+    fl_ex = flisp_parse_all(text, filename=path)
     JuliaSyntax.remove_linenums!(ex) == JuliaSyntax.remove_linenums!(fl_ex)
 end
 

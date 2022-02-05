@@ -15,7 +15,7 @@
             Expr(:(=),
                  Expr(:call, :f),
                  Expr(:block,
-                      LineNumberNode(1, :none),
+                      LineNumberNode(1),
                       :xs))
         # flisp parser quirk: In a for loop the block is not added, despite
         # this defining a short-form function.
