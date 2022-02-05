@@ -729,9 +729,12 @@ function _atthreads_static_schedule(n)
     end
     return ids
 end
-@test _atthreads_static_schedule(nthreads()) == [1:nthreads();]
+@test _atthreads_static_schedule(nthreads()) == 1:nthreads()
 @test _atthreads_static_schedule(1) == [1;]
-@test_throws TaskFailedException @threads for i = 1:1; _atthreads_static_schedule(nthreads()); end
+@test_throws(
+    "`@threads :static` cannot be used concurrently or nested",
+    @threads for i = 1:1; _atthreads_static_schedule(nthreads()); end,
+)
 
 # dynamic schedule
 function _atthreads_dynamic_schedule(n)
@@ -771,16 +774,16 @@ function _atthreads_static_dynamic_schedule()
     end
     return ids, inc[]
 end
-@test _atthreads_static_dynamic_schedule() == ([1:nthreads();], nthreads() * nthreads())
+@test _atthreads_static_dynamic_schedule() == (1:nthreads(), nthreads() * nthreads())
 
 # errors inside @threads :dynamic
 function _atthreads_dynamic_with_error(a)
     Threads.@threads :dynamic for i in eachindex(a)
-        error("failed")
+        error("user error in the loop body")
     end
     a
 end
-@test_throws TaskFailedException _atthreads_dynamic_with_error(zeros(nthreads()))
+@test_throws "user error in the loop body" _atthreads_dynamic_with_error(zeros(nthreads()))
 
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)

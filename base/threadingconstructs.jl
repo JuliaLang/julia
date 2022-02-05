@@ -137,8 +137,8 @@ Schedule options are:
 
 Without the scheduler argument, the exact scheduling is unspecified; i.e. it may be
 different across Julia releases. Currently, the behavior is dependent on the calling thread.
-When called from thread 1 the default is `:static`. When called from other threads the loop
-will be executed without threading.
+The default is `:static` when called from thread 1. The loop will be executed without threading
+when called from other threads.
 
 The default schedule (used when no `schedule` argument is present) is subject to change.
 
@@ -147,8 +147,8 @@ is a non-yielding timed loop that runs for a number of seconds.
 
 ```julia-repl
 julia> function busywait(seconds)
-            tstart = Base.time()
-            while Base.time() - tstart < seconds
+            tstart = time_ns()
+            while (time_ns() - tstart) / 1e9 < seconds
             end
         end
 
