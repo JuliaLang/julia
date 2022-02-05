@@ -733,7 +733,7 @@ end
 @test _atthreads_static_schedule(1) == [1;]
 @test_throws(
     "`@threads :static` cannot be used concurrently or nested",
-    @threads for i = 1:1; _atthreads_static_schedule(nthreads()); end,
+    @threads(for i = 1:1; _atthreads_static_schedule(nthreads()); end),
 )
 
 # dynamic schedule
