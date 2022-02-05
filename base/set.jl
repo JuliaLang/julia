@@ -115,7 +115,7 @@ as determined by [`isequal`](@ref), in the order that the first of each
 set of equivalent elements originally appears. The element type of the
 input is preserved.
 
-See also: [`unique!`](@ref), [`allunique`](@ref).
+See also: [`unique!`](@ref), [`allunique`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -383,7 +383,7 @@ end
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 
-See also: [`unique`](@ref), [`issorted`](@ref).
+See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -432,7 +432,10 @@ allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
 Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
 
-See also: [`unique`](@ref), [`allunique`](@ref), [`issorted`](@ref).
+See also: [`unique`](@ref), [`allunique`](@ref).
+
+!!! compat "Julia 1.8"
+    The `allequal` function requires at least Julia 1.8.
 
 # Examples
 ```jldoctest
