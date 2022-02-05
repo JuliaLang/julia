@@ -243,9 +243,12 @@ julia> take!(c)
 
 julia> put!(c, 1);
 ERROR: TaskFailedException
-Stacktrace:
+
+    Nested task error: foo
+    Stacktrace:
 [...]
-    nested task error: foo
+
+Stacktrace:
 [...]
 ```
 """
