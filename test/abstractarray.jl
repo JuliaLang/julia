@@ -1563,10 +1563,7 @@ end
 end
 
 @testset "strides for ReshapedArray" begin
-    # Type-based contiguous check
-    a = vec(reinterpret(reshape,Int16,reshape(view(reinterpret(Int32,randn(Float64,100)),2:11),5,:)))
-    @test only(only(code_typed(Base._checkcontiguous, Base.typesof(Bool, a))).first.code).val
-    @test strides(a) == (1,)
+    # Type-based contiguous check is tested in test/compiler/inline.jl
     # General contiguous check
     a = view(rand(10,10), 1:10, 1:10)
     @test strides(vec(a)) == (1,)
