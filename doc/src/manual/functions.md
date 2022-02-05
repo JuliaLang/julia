@@ -993,6 +993,9 @@ julia> f.(A, B)
  33.0
 ```
 
+Keyword arguments are not broadcasted over, but are simply passed through to each call of
+the function.  For example, `round.(x, digits=3)` is equivalent to `broadcast(x -> round(x, digits=3), x)`.
+
 Moreover, *nested* `f.(args...)` calls are *fused* into a single `broadcast` loop. For example,
 `sin.(cos.(X))` is equivalent to `broadcast(x -> sin(cos(x)), X)`, similar to `[sin(cos(x)) for x in X]`:
 there is only a single loop over `X`, and a single array is allocated for the result. [In contrast,
