@@ -155,9 +155,9 @@ function strides(a::ReshapedReinterpretArray)
     els, elp = elsize(a), elsize(ap)
     stp = strides(ap)
     els == elp && return stp
-    els < elp && return (1, map(Fix2(*, elp ÷ els), stp)...)
+    els < elp && return (1, _checked_strides(stp, els, elp)...)
     stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    return _checked_strides(stp, els ÷ elp)
+    return _checked_strides(tail(stp), els, elp)
 end
 
 function strides(a::NonReshapedReinterpretArray)
@@ -166,13 +166,17 @@ function strides(a::NonReshapedReinterpretArray)
     stp = strides(ap)
     els == elp && return stp
     stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    els < elp && return (1, map(Fix2(*, elp ÷ els), tail(stp))...)
-    return (1, _checked_strides(stp, els ÷ elp)...)
+    return (1, _checked_strides(tail(stp), els, elp)...)
 end
 
-function _checked_strides(stp, N)
-    drs = map(Fix2(divrem, N), tail(stp))
-    all(i->iszero(i[2]), drs) || throw(ArgumentError("Parent's strides could not be exactly divided!"))
+@inline function _checked_strides(stp::Tuple, els::Integer, elp::Integer)
+    if elp > els && rem(elp, els) == 0
+        N = div(elp, els)
+        return map(i -> N * i, stp)
+    end
+    drs = map(i -> divrem(elp * i, els), stp)
+    all(i->iszero(i[2]), drs) ||
+        throw(ArgumentError("Parent's strides could not be exactly divided!"))
     map(first, drs)
 end
 

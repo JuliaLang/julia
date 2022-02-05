@@ -169,8 +169,8 @@ function check_strides(A::AbstractArray)
 end
 
 @testset "strides for NonReshapedReinterpretArray" begin
-    A = Array{Int32}(reshape(1:72, 9, 8))
-    for viewax2 in (1:8, 1:2:6, 7:-1:1, 5:-2:1)
+    A = Array{Int32}(reshape(1:88, 11, 8))
+    for viewax2 in (1:8, 1:2:6, 7:-1:1, 5:-2:1, 2:3:8, 7:-6:1, 3:5:11)
         # dim1 is contiguous
         for T in (Int16, Float32)
             @test check_strides(reinterpret(T, view(A, 1:8, viewax2)))
@@ -179,6 +179,17 @@ end
             @test check_strides(reinterpret(Int64, view(A, 1:8, viewax2)))
         else
             @test_throws "Parent's strides" strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+        end
+        # non-integer-multipled classified
+        if mod(step(viewax2), 3) == 0
+            @test check_strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+        end
+        if mod(step(viewax2), 5) == 0
+            @test check_strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
         end
         # dim1 is not contiguous
         for T in (Int16, Int64)
