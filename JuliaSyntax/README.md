@@ -519,9 +519,9 @@ expressive than writing the parser by hand after accounting for the effort
 spent on the weird edge cases of a real language and writing the parser's tests
 and "supporting code".
 
-On the other hand a hand-written parser completely flexible and can be mutually
-understood with the reference implementation so I chose that approach for
-JuliaSyntax.
+On the other hand a hand-written parser is completely flexible and can be
+mutually understood with the reference implementation so I chose that approach
+for JuliaSyntax.
 
 # Resources
 
@@ -673,6 +673,7 @@ work flows:
 * Syntax transformations
   - Choose some macros to implement. This is a basic test of mixing source
     trees from different files while preserving precise source locations.
+    (Done in <test/syntax_interpolation.jl>.)
 * Formatting
   - Re-indent a file. This tests the handling of syntax trivia.
 * Refactoring
@@ -704,7 +705,6 @@ The simplest idea possible is to have:
 * Leaf nodes are a single token
 * Children are in source order
 
-
 Call represents a challenge for the AST vs Green tree in terms of node
 placement / iteration for infix operators vs normal prefix function calls.
 
@@ -730,10 +730,10 @@ There seems to be a few ways forward:
 * We can use the existing `Expr` during macro expansion and try to recover
   source information after macro expansion using heuristics. Likely the
   presence of correct hygiene can help with this.
-* Introducing a new AST would be possible if it were opt-in for new-style
-  macros only. Fixing hygiene should go along with this. Design challenge: How
-  do we make manipulating expressions reasonable when literals need to carry
-  source location?
+* Introducing a new AST would be possible if it were opt-in for some
+  hypothetical "new-style macros" only. Fixing hygiene should go along with
+  this. Design challenge: How do we make manipulating expressions reasonable
+  when literals need to carry source location?
 
 One option which may help bridge between locationless ASTs and something new
 may be to have wrappers for the small number of literal types we need to cover.
@@ -762,11 +762,11 @@ Some disorganized musings about error recovery
 Different types of errors seem to occur...
 
 * Disallowed syntax (such as lack of spaces in conditional expressions)
-  where we can reasonably just continue parsing the production and emit the
-  node with an error flag which is otherwise fully formed. In some cases like
-  parsing infix expressions with a missing tail, emitting a zero width error
-  token can lead to a fully formed parse tree without the productions up the
-  stack needing to participate in recovery.
+  where we can reasonably just continue parsing and emit the node with an error
+  flag which is otherwise fully formed. In some cases like parsing infix
+  expressions with a missing tail, emitting a zero width error token can lead
+  to a fully formed parse tree without the productions up the stack needing to
+  participate in recovery.
 * A token which is disallowed in current context. Eg, `=` in parse_atom, or a
   closing token inside an infix expression. Here we can emit a `K"error"`, but
   we can't descend further into the parse tree; we must pop several recursive
@@ -820,9 +820,6 @@ example:
 - Restart parsing
 - Somehow make sure all of this can't result in infinite recursion 😅
 
-For this kind of recovery it sure would be good if we could reify the program
-stack into a parser state object...
-
 Missing commas or closing brackets in nested structures also present the
 existing parser with a problem.
 
@@ -848,11 +845,24 @@ But not always!
 ```julia
 f(a,
   g(b,
-    c    # -- missing closing `)` ?
-  d)
+    c    # -- missing closing `,` ?
+  d))
 ```
 
+Another particularly difficult problem for diagnostics in the current system is
+broken parentheses or double quotes in string interpolations, especially when
+nested.
+
 # Fun research questions
+
+### Parser Recovery
+
+Can we learn fast and reasonably accurate recovery heuristics for when the
+parser encounters broken syntax, rather than hand-coding these? How would we
+set the parser up so that training works and injecting the model is
+nonintrusive? If the model is embedded in and works together with the parser,
+can it be made compact enough that training is fast and the model itself is
+tiny?
 
 ### Formatting
 
@@ -862,8 +872,3 @@ heuristics to get something which "looks nice"... and ML systems have become
 very good at heuristics. Also, we've got huge piles of training data — just
 choose some high quality, tastefully hand-formatted libraries.
 
-### Parser Recovery
-
-Similarly, can we learn fast and reasonably accurate recovery heuristics for
-when the parser encounters broken syntax rather than hand-coding these? How
-do we set the parser up so that training works and inference is nonintrusive?
