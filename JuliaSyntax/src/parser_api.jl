@@ -47,10 +47,12 @@ struct ParseError <: Exception
 end
 
 function Base.showerror(io::IO, err::ParseError, bt; backtrace=false)
+    println(io, "ParseError:")
     show_diagnostics(io, err.diagnostics, err.source)
 end
 
 function Base.showerror(io::IO, err::ParseError)
+    println(io, "ParseError:")
     show_diagnostics(io, err.diagnostics, err.source)
 end
 
@@ -142,7 +144,7 @@ See [`parse`](@ref) for a more complete and powerful interface to the parser,
 as well as a description of the `version` and `rule` keywords.
 """
 function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
-                  ignore_trivia=true, kws...) where {T}
+                  ignore_trivia=true, filename=nothing) where {T}
     stream = ParseStream(input...; version=version)
     if ignore_trivia && rule != :toplevel
         bump_trivia(stream, skip_newlines=true)
@@ -154,7 +156,7 @@ function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
         emit_diagnostic(stream, error="unexpected text after parsing $rule")
     end
     if any_error(stream.diagnostics)
-        source = SourceFile(sourcetext(stream, steal_textbuf=true))
+        source = SourceFile(sourcetext(stream, steal_textbuf=true), filename=filename)
         throw(ParseError(source, stream.diagnostics))
     end
     # TODO: Figure out a more satisfying solution to the wrap_toplevel_as_kind
@@ -162,12 +164,12 @@ function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
     # * It's kind of required for GreenNode, as GreenNode only records spans,
     #   not absolute positions.
     # * Dropping it would be ok for SyntaxNode and Expr...
-    tree = build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel", kws...)
+    tree = build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel", filename=filename)
     if !isempty(stream.diagnostics)
         # Crudely format any warnings to the current logger.
         buf = IOBuffer()
         show_diagnostics(IOContext(buf, stdout), stream,
-                         SourceFile(sourcetext(stream, steal_textbuf=true)))
+                         SourceFile(sourcetext(stream, steal_textbuf=true), filename=filename))
         @warn Text(String(take!(buf)))
     end
     tree

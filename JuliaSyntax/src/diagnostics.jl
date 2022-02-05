@@ -42,12 +42,26 @@ last_byte(d::Diagnostic)  = d.last_byte
 is_error(d::Diagnostic)   = d.level == :error
 
 function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
-    col,prefix = diagnostic.level == :error   ? (:light_red, "Error")      :
-                 diagnostic.level == :warning ? (:light_yellow, "Warning") :
-                 diagnostic.level == :note    ? (:light_blue, "Note")      :
-                 (:normal, "Info")
-    printstyled(io, "$prefix: ", color=col)
-    print(io, diagnostic.message, ":\n")
+    color,prefix = diagnostic.level == :error   ? (:light_red, "Error")      :
+                   diagnostic.level == :warning ? (:light_yellow, "Warning") :
+                   diagnostic.level == :note    ? (:light_blue, "Note")      :
+                   (:normal, "Info")
+    line, col = source_location(source, first_byte(diagnostic))
+    linecol = "$line:$col"
+    if !isnothing(source.filename)
+        locstr = "$(source.filename):$linecol"
+        if get(io, :color, false)
+            # Also add hyperlinks in color terminals
+            url = "file://$(abspath(source.filename))#$linecol"
+            locstr = "\e]8;;$url\e\\$locstr\e]8;;\e\\"
+        end
+    else
+        locstr = "line $locstr"
+    end
+    print(io, prefix, ": ")
+    printstyled(io, diagnostic.message, color=color)
+    printstyled(io, "\n", "@ $locstr", color=:light_black)
+    print(io, "\n")
 
     p = first_byte(diagnostic)
     q = last_byte(diagnostic)
@@ -65,6 +79,8 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
     c,d = source_line_range(source, q, context_lines_before=1, context_lines_after=2)
 
     hicol = (100,40,40)
+
+    # TODO: show line numbers on left
 
     print(io, source[a:prevind(text, p)])
     # There's two situations, either

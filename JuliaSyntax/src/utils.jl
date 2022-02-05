@@ -26,11 +26,16 @@ function flisp_parse_all(code; filename="none")
 end
 
 # Really remove line numbers, even from Expr(:toplevel)
-function remove_linenums!(ex)
-    ex = Base.remove_linenums!(ex)
-    if Meta.isexpr(ex, :toplevel)
-        filter!(x->!(x isa LineNumberNode), ex.args)
+remove_linenums!(ex) = ex
+function remove_linenums!(ex::Expr)
+    if ex.head === :block || ex.head === :quote || ex.head === :toplevel
+        filter!(ex.args) do x
+            !(isa(x, Expr) && x.head === :line || isa(x, LineNumberNode))
+        end
     end
-    ex
+    for subex in ex.args
+        subex isa Expr && remove_linenums!(subex)
+    end
+    return ex
 end
 

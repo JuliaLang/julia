@@ -423,7 +423,7 @@ Base.Expr(node::SyntaxNode) = _to_expr(node)
 
 #-------------------------------------------------------------------------------
 
-function build_tree(::Type{SyntaxNode}, stream::ParseStream; filename="none", kws...)
+function build_tree(::Type{SyntaxNode}, stream::ParseStream; filename=nothing, kws...)
     green_tree = build_tree(GreenNode, stream; kws...)
     source = SourceFile(sourcetext(stream), filename=filename)
     SyntaxNode(source, green_tree, first_byte(stream))
