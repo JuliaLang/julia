@@ -19,7 +19,7 @@ struct RawAlloc
     type::Ptr{Type}
     backtrace::RawBacktrace
     size::Csize_t
-    task::Task
+    task::Ptr{Cvoid}
     timestamp::UInt64
 end
 
@@ -149,7 +149,7 @@ struct Alloc
     type::Any
     stacktrace::StackTrace
     size::Int
-    task::Task
+    task::Ptr{Cvoid}
     timestamp::UInt64
 end
 
