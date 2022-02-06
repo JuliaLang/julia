@@ -19,6 +19,8 @@ struct RawAlloc
     type::Ptr{Type}
     backtrace::RawBacktrace
     size::Csize_t
+    task::Task
+    timestamp::UInt64
 end
 
 # matches jl_profile_allocs_raw_results_t on the C side
@@ -147,6 +149,8 @@ struct Alloc
     type::Any
     stacktrace::StackTrace
     size::Int
+    task::Task
+    timestamp::UInt64
 end
 
 struct AllocResults
@@ -156,7 +160,7 @@ end
 # Without this, the Alloc's stacktrace prints for lines and lines and lines...
 function Base.show(io::IO, a::Alloc)
     stacktrace_sample = length(a.stacktrace) >= 1 ? "$(a.stacktrace[1]), ..." : ""
-    print(io, "$Alloc($(a.type), $StackFrame[$stacktrace_sample], $(a.size))")
+    print(io, "$Alloc($(a.type), $StackFrame[$stacktrace_sample], $(a.size), $(a.task), $(a.timestamp))")
 end
 
 const BacktraceCache = Dict{BTElement,Vector{StackFrame}}
@@ -180,7 +184,9 @@ function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
     Alloc(
         load_type(raw_alloc.type),
         stacktrace_memoized(cache, load_backtrace(raw_alloc.backtrace)),
-        UInt(raw_alloc.size)
+        UInt(raw_alloc.size),
+        raw_alloc.task,
+        raw_alloc.timestamp
     )
 end
 

@@ -20,6 +20,8 @@ struct jl_raw_alloc_t {
     jl_datatype_t *type_address;
     jl_raw_backtrace_t backtrace;
     size_t size;
+    jl_task_t *task;
+    uint64_t timestamp;
 };
 
 // == These structs define the global singleton profile buffer that will be used by
@@ -133,7 +135,9 @@ void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size) JL_NOTSAFEPOIN
     profile.allocs.emplace_back(jl_raw_alloc_t{
         type,
         get_raw_backtrace(),
-        size
+        size,
+        jl_current_task,
+        cycleclock()
     });
 }
 
