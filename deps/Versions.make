@@ -114,4 +114,4 @@ ZLIB_JLL_NAME := Zlib
 # Specify the version of the Mozilla CA Certificate Store to obtain.
 # The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
 # See https://curl.haxx.se/docs/caextract.html for more details.
-MOZILLA_CACERT_VERSION := 2020-10-14
+MOZILLA_CACERT_VERSION := 2022-02-01
