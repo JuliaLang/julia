@@ -242,7 +242,7 @@ end
 
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
-    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    i = offset_if_vec(_sub2ind(size(A), indices...), axp)
     I = ind2sub_rs(axp, A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
 end
@@ -266,7 +266,7 @@ end
 
 @inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
-    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    i = offset_if_vec(_sub2ind(size(A), indices...), axp)
     @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, i)...] = val
     val
 end
@@ -292,3 +292,16 @@ substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
 unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
+
+
+_checkcontiguous(::Type{Bool}, A::AbstractArray) = size_to_strides(1, size(A)...) == strides(A)
+_checkcontiguous(::Type{Bool}, A::Array) = true
+_checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
+_checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
+
+function strides(a::ReshapedArray)
+    # We can handle non-contiguous parent if it's a StridedVector
+    ndims(parent(a)) == 1 && return size_to_strides(only(strides(parent(a))), size(a)...)
+    _checkcontiguous(Bool, a) || throw(ArgumentError("Parent must be contiguous."))
+    size_to_strides(1, size(a)...)
+end

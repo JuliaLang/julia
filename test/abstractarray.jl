@@ -1561,3 +1561,21 @@ end
     r = Base.IdentityUnitRange(3:4)
     @test reshape(r, :) === reshape(r, (:,)) === r
 end
+
+@testset "strides for ReshapedArray" begin
+    # Type-based contiguous check is tested in test/compiler/inline.jl
+    # General contiguous check
+    a = view(rand(10,10), 1:10, 1:10)
+    @test strides(vec(a)) == (1,)
+    b = view(parent(a), 1:9, 1:10)
+    @test_throws "Parent must be contiguous." strides(vec(b))
+    # StridedVector parent
+    for n in 1:3
+        a = view(collect(1:60n), 1:n:60n)
+        @test strides(reshape(a, 3, 4, 5)) == (n, 3n, 12n)
+        @test strides(reshape(a, 5, 6, 2)) == (n, 5n, 30n)
+        b = view(parent(a), 60n:-n:1)
+        @test strides(reshape(b, 3, 4, 5)) == (-n, -3n, -12n)
+        @test strides(reshape(b, 5, 6, 2)) == (-n, -5n, -30n)
+    end
+end
