@@ -56,7 +56,7 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
             locstr = "\e]8;;$url\e\\$locstr\e]8;;\e\\"
         end
     else
-        locstr = "line $locstr"
+        locstr = "line $linecol"
     end
     print(io, prefix, ": ")
     printstyled(io, diagnostic.message, color=color)
