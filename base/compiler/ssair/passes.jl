@@ -582,7 +582,13 @@ function linear_pass!(ir::IRCode)
                 elseif isexpr(def, :new)
                     typ = unwrap_unionall(widenconst(argextype(SSAValue(defidx), compact)))
                     if typ isa DataType
-                        ismutabletype(typ) && continue # mutable SROA is performed later
+                        if ismutabletype(typ)
+                            if stmt.args[1] isa QuoteNode && stmt.args[1].value == :jl_gc_add_finalizer_th
+                                # Track this for `early_finalize!`
+                                anymutability = true
+                            end
+                            continue # mutable SROA is performed later
+                        end
                         record_immutable_preserve!(new_preserves, def, compact)
                         push!(preserved, preserved_arg.id)
                     end
