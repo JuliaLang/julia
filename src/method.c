@@ -76,7 +76,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         if (e->head == jl_global_sym && binding_effects) {
             // execute the side-effects of "global x" decl immediately:
             // creates uninitialized mutable binding in module for each global
-            jl_toplevel_eval_flex(module, expr, 0, 1);
+            jl_eval_global_expr(module, e, 1);
             expr = jl_nothing;
         }
         if (jl_is_toplevel_only_expr(expr) || e->head == jl_const_sym ||

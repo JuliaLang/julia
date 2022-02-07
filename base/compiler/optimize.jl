@@ -156,7 +156,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 const _PURE_OR_ERROR_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, arraysize, isdefined, Core.sizeof,
-    Core.kwfunc, Core.ifelse, Core._typevar, (<:), Core.get_binding_type,
+    Core.kwfunc, Core.ifelse, Core._typevar, (<:),
 ]
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
@@ -219,6 +219,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
                         Any[argextype(args[i], src) for i = 2:length(args)])
             end
             contains_is(_PURE_BUILTINS, f) && return true
+            f === Core.get_binding_type && return get_binding_type_effect_free(args)
             contains_is(_PURE_OR_ERROR_BUILTINS, f) || return false
             rt === Bottom && return false
             return _builtin_nothrow(f, Any[argextype(args[i], src) for i = 2:length(args)], rt)

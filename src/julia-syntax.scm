@@ -3396,12 +3396,7 @@ f(x) = yt(x)
          (ref   (binding-to-globalref var))
          (ty   `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref))))
          (rhs  (if (get globals ref #t) ;; no type declaration for constants
-                   (let ((ex (convert-for-type-decl rhs1 ty)))
-                     (if (has? globals ref)
-                         ex
-                         `(toplevel-butfirst
-                            ,ex
-                            (call (core set_binding_type!) ,(cadr ref) (inert ,(caddr ref))))))
+                   (convert-for-type-decl rhs1 ty)
                    rhs1))
          (ex   `(= ,var ,rhs)))
     (if (eq? rhs1 rhs0)

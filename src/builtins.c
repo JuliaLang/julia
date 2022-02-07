@@ -1659,12 +1659,19 @@ JL_CALLABLE(jl_f_get_binding_type)
 {
     JL_NARGS(get_binding_type, 2, 2);
     JL_TYPECHK(get_binding_type, module, args[0]);
-    jl_sym_t *sym = (jl_sym_t*)args[1];
     JL_TYPECHK(get_binding_type, symbol, args[1]);
-    jl_value_t *ty = jl_binding_type((jl_module_t*)args[0], sym);
-    if (ty == (jl_value_t*)jl_nothing)
-        jl_errorf("cannot read type of global %s. The binding is uninitialized and a type has not yet been set.",
-                  jl_symbol_name(sym));
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *sym = (jl_sym_t*)args[1];
+    jl_value_t *ty = jl_binding_type(mod, sym);
+    if (ty == (jl_value_t*)jl_nothing) {
+        jl_binding_t *b = jl_get_binding(mod, sym);
+        if (b) {
+            jl_value_t *old_ty = NULL;
+            jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+            return jl_atomic_load_relaxed(&b->ty);
+        }
+        return (jl_value_t*)jl_any_type;
+    }
     return ty;
 }
 

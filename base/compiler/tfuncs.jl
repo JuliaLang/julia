@@ -1696,8 +1696,7 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         end
         return false
     elseif f === Core.get_binding_type
-        length(argtypes) == 2 || return false
-        return get_binding_type_nothrow(argtypes[1], argtypes[2])
+        return length(argtypes) == 2
     end
     return false
 end
@@ -1901,7 +1900,11 @@ function typename_static(@nospecialize(t))
     return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
 end
 
-function get_binding_type_nothrow(@nospecialize(M), @nospecialize(s))
+function get_binding_type_effect_free(args)
+    length(args) == 3 || return false
+    return _get_binding_type_effect_free(args[2], args[3])
+end
+function _get_binding_type_effect_free(@nospecialize(M), @nospecialize(s))
     if M isa Const && widenconst(M) === Module &&
         s isa Const && widenconst(s) === Symbol
         return ccall(:jl_binding_type, Any, (Any, Any), M.val, s.val) !== nothing
@@ -1909,7 +1912,7 @@ function get_binding_type_nothrow(@nospecialize(M), @nospecialize(s))
     return false
 end
 function get_binding_type_tfunc(@nospecialize(M), @nospecialize(s))
-    if get_binding_type_nothrow(M, s)
+    if _get_binding_type_effect_free(M, s)
         @assert M isa Const && s isa Const
         return Const(Core.get_binding_type(M.val, s.val))
     end
