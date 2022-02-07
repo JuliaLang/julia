@@ -21,8 +21,9 @@ JL_DLLEXPORT int jl_generating_output(void)
 }
 
 static void *jl_precompile(int all);
+static void *jl_precompile_worklist(jl_array_t *worklist);
 
-void jl_write_compiler_output(void)
+JL_DLLEXPORT void jl_write_compiler_output(void)
 {
     if (!jl_generating_output()) {
         return;
@@ -60,16 +61,28 @@ void jl_write_compiler_output(void)
         }
     }
 
+
     if (jl_options.incremental) {
         if (jl_options.outputji)
             if (jl_save_incremental(jl_options.outputji, worklist))
                 jl_exit(1);
         if (jl_options.outputbc || jl_options.outputunoptbc)
             jl_printf(JL_STDERR, "WARNING: incremental output to a .bc file is not implemented\n");
-        if (jl_options.outputo)
-            jl_printf(JL_STDERR, "WARNING: incremental output to a .o file is not implemented\n");
+        // if (jl_options.outputo)
+        //     jl_printf(JL_STDERR, "WARNING: incremental output to a .o file is not implemented\n");
         if (jl_options.outputasm)
             jl_printf(JL_STDERR, "WARNING: incremental output to a .s file is not implemented\n");
+        if (jl_options.outputo) {
+            native_code = jl_precompile_worklist(worklist);
+            ios_t *s = jl_create_package_image(native_code, worklist);
+            assert(s);
+            jl_dump_native(native_code,
+                           jl_options.outputbc,
+                           jl_options.outputunoptbc,
+                           jl_options.outputo,
+                           jl_options.outputasm,
+                           (const char*)s->buf, (size_t)s->size);
+        }
     }
     else {
         ios_t *s = NULL;
@@ -400,6 +413,54 @@ static void *jl_precompile(int all)
     }
     m = NULL;
     void *native_code = jl_create_native(m2, NULL, 0);
+    JL_GC_POP();
+    return native_code;
+}
+
+static void *jl_precompile_worklist(jl_array_t *worklist)
+{
+    if (!worklist)
+        return NULL;
+    // this "found" array will contain function
+    // type signatures that were inferred but haven't been compiled
+    jl_array_t *m = jl_alloc_vec_any(0);
+    jl_array_t *m2 = NULL;
+    jl_method_instance_t *mi = NULL;
+    JL_GC_PUSH3(&m, &m2, &mi);
+    size_t i, nw = jl_array_len(worklist);
+    jl_printf(JL_STDOUT, "Queuing modules:\n");
+    for (i = 0; i < nw; i++) {
+        jl_module_t *mod = (jl_module_t*)jl_array_ptr_ref(worklist, i);
+        assert(jl_is_module(mod));
+        jl_(mod);
+        foreach_mtable_in_module(mod, precompile_enq_all_specializations_, m);
+    }
+    jl_printf(JL_STDOUT, "Here's what we got:\n");
+    jl_(m);
+    m2 = jl_alloc_vec_any(0);
+    jl_printf(JL_STDOUT, "Stuff that will be passed to jl_create_native:\n");
+    for (i = 0; i < jl_array_len(m); i++) {
+        jl_value_t *item = jl_array_ptr_ref(m, i);
+        if (jl_is_method_instance(item)) {
+            mi = (jl_method_instance_t*)item;
+            size_t min_world = 0;
+            size_t max_world = ~(size_t)0;
+            if (!jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->def.method))
+                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world, 0);
+            if (mi) {
+                jl_(mi);
+                jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
+            }
+        }
+        else {
+            assert(jl_is_simplevector(item));
+            assert(jl_svec_len(item) == 2);
+            jl_(item);
+            jl_array_ptr_1d_push(m2, item);
+        }
+    }
+    m = NULL;
+    void *native_code = jl_create_native(m2, NULL, 1);
     JL_GC_POP();
     return native_code;
 }

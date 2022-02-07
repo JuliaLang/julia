@@ -321,6 +321,7 @@ static inline std::vector<T*> consume_gv(Module &M, const char *name)
     // Get information about sysimg export functions from the two global variables.
     // Strip them from the Module so that it's easier to handle the uses.
     GlobalVariable *gv = M.getGlobalVariable(name);
+    jl_printf(JL_STDOUT, "global variable %s\n", name);
     assert(gv && gv->hasInitializer());
     auto *ary = cast<ConstantArray>(gv->getInitializer());
     unsigned nele = ary->getNumOperands();

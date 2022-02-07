@@ -254,7 +254,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
-// also be used be extern consumers like GPUCompiler.jl to obtain a module containing
+// also be used by extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions. The `policy` flag switches between the default
 // mode `0`, the extern mode `1`, and imaging mode `2`.
 extern "C" JL_DLLEXPORT
@@ -312,8 +312,13 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
                     jl_compile_result_t result = jl_emit_code(mi, src, codeinst->rettype, params);
-                    if (std::get<0>(result))
+                    if (std::get<0>(result)) {
+                        jl_printf(JL_STDOUT, "Adding ");
                         emitted[codeinst] = std::move(result);
+                    } else {
+                        jl_printf(JL_STDOUT, "Omitting ");
+                    }
+                    jl_(mi);
                 }
             }
         }
@@ -362,6 +367,9 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
         params._shared_module = NULL;
         jl_merge_module(clone.get(), std::move(shared));
     }
+    std::error_code EC;
+    raw_fd_ostream clonestream("/tmp/clone_contents.txt", EC);
+    clone.get()->print(clonestream, nullptr);
 
     // now get references to the globals in the merged module
     // and set them to be internalized and initialized at startup
@@ -404,6 +412,14 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     if (policy == CompilationPolicy::ImagingMode)
         imaging_mode = 0;
+    jl_printf(JL_STDOUT, "Contents of the LLVM module:\ngvars:\n");
+    for (auto &item : data->jl_sysimg_gvars) {
+        jl_printf(JL_STDOUT, "%s\n", item->getName().bytes_begin());
+    }
+    jl_printf(JL_STDOUT, "\n\nfvars:\n");
+    for (auto &item : data->jl_sysimg_fvars) {
+        jl_printf(JL_STDOUT, "%s\n", item->getName().bytes_begin());
+    }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
     return (void*)data;
 }
@@ -521,7 +537,7 @@ void jl_dump_native_impl(void *native_code,
     Type *T_psize = T_size->getPointerTo();
 
     // add metadata information
-    if (imaging_mode) {
+    if (imaging_mode || jl_options.outputo) {
         emit_offset_table(*data->M, data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
         emit_offset_table(*data->M, data->jl_sysimg_fvars, "jl_sysimg_fvars", T_psize);
 

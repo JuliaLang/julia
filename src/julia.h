@@ -1678,13 +1678,18 @@ JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname);
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle);
 JL_DLLEXPORT ios_t *jl_create_system_image(void *);
+JL_DLLEXPORT ios_t *jl_create_package_image(void *_native_data, jl_array_t *worklist);
 JL_DLLEXPORT void jl_save_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
+JL_DLLEXPORT void jl_save_package_image(const char *fname, jl_array_t *worklist);
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred);
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *depmods);
+
+// temporary (for gdb, delete later)
+JL_DLLEXPORT void jl_write_compiler_output(void);
 
 // parsing
 JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
