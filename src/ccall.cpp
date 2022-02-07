@@ -1391,7 +1391,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(retboxed ? lrt == ctx.types().T_prjlvalue : lrt == getSizeTy(ctx.builder.getContext()));
         assert(!isVa && !llvmcall && nccallargs == 1);
         jl_value_t *tti = jl_svecref(at, 0);
-        Value *ary;
         Type *largty;
         bool isboxed;
         if (jl_is_abstract_ref_type(tti)) {
@@ -1402,29 +1401,21 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         else {
             largty = _julia_struct_to_llvm(&ctx.emission_context, ctx.builder.getContext(), tti, &isboxed, llvmcall);
         }
+        Value *retval;
         if (isboxed) {
-            ary = boxed(ctx, argv[0]);
+            retval = boxed(ctx, argv[0]);
+            retval = emit_pointer_from_objref(ctx, emit_bitcast(ctx, retval, ctx.types().T_prjlvalue));
         }
         else {
-            ary = emit_unbox(ctx, largty, argv[0], tti);
+            retval = emit_unbox(ctx, largty, argv[0], tti);
+            retval = emit_inttoptr(ctx, retval, ctx.types().T_pjlvalue);
         }
+        // retval is now an untracked jl_value_t*
+        if (retboxed)
+            // WARNING: this addrspace cast necessarily implies that the value is rooted elsewhere!
+            retval = ctx.builder.CreateAddrSpaceCast(retval, ctx.types().T_prjlvalue);
         JL_GC_POP();
-        if (!retboxed) {
-            return mark_or_box_ccall_result(
-                    ctx,
-                    ctx.builder.CreatePtrToInt(
-                        emit_pointer_from_objref(ctx, emit_bitcast(ctx, ary, ctx.types().T_prjlvalue)),
-                        getSizeTy(ctx.builder.getContext())),
-                    retboxed, rt, unionall, static_rt);
-        }
-        else {
-            return mark_or_box_ccall_result(
-                    ctx,
-                    ctx.builder.CreateAddrSpaceCast(
-                        emit_inttoptr(ctx, ary, ctx.types().T_pjlvalue),
-                        ctx.types().T_prjlvalue), // WARNING: this addrspace cast necessarily implies that the value is rooted elsewhere!
-                    retboxed, rt, unionall, static_rt);
-        }
+        return mark_or_box_ccall_result(ctx, retval, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_cpu_pause)) {
         // Keep in sync with the julia_threads.h version
