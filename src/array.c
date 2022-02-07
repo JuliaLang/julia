@@ -507,7 +507,7 @@ JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"
             jl_throw(jl_memory_exception);
-        s = jl_gc_pool_alloc_noinline(ptls, allocsz);
+        s = jl_gc_big_alloc_noinline(ptls, allocsz);
     }
     jl_set_typeof(s, jl_string_type);
     maybe_record_alloc_to_profile(s, len, jl_string_type);
