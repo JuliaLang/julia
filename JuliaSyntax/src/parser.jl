@@ -2673,13 +2673,13 @@ end
 #   power of 0 for whitespace and negative numbers for other separators.
 #
 # FIXME: Error messages for mixed spaces and ;; delimiters
-function parse_array_separator(ps)
-    t = peek_token(ps)
+function parse_array_separator(ps; skip_newlines=false)
+    t = peek_token(ps; skip_newlines=skip_newlines)
     k = kind(t)
     if k == K";"
         n_semis = 1
         while true
-            bump(ps, TRIVIA_FLAG)
+            bump(ps, TRIVIA_FLAG; skip_newlines=skip_newlines)
             t = peek_token(ps)
             if kind(t) != K";" || t.had_whitespace
                 break
@@ -2722,11 +2722,18 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
                     whitespace_newline=false,
                     for_generator=true)
     k = peek(ps, skip_newlines=true)
+    mark = position(ps)
     if k == closer
         # []  ==>  (vect)
         return parse_vect(ps, closer)
+    elseif k == K";"
+        # [;;]      ==>  (ncat 2)
+        # [;; \n ]  ==>  (ncat 2)
+        n_semis, _ = parse_array_separator(ps; skip_newlines=true)
+        bump_closing_token(ps, closer)
+        min_supported_version(v"1.8", ps, mark, "empty multidimensional array syntax")
+        return (K"ncat", set_numeric_flags(n_semis))
     end
-    mark = position(ps)
     parse_eq_star(ps)
     k = peek(ps, skip_newlines=true)
     if k == K"," || k == closer

@@ -633,6 +633,9 @@ tests = [
         # Column major
         ((v=v"1.7",), "[x ; y ;; z ; w ;;; a ; b ;; c ; d]")  =>
             "(ncat-3 (nrow-2 (nrow-1 x y) (nrow-1 z w)) (nrow-2 (nrow-1 a b) (nrow-1 c d)))"
+        # Empty nd arrays
+        ((v=v"1.8",), "[;;]")  =>  "(ncat-2)"
+        ((v=v"1.8",), "[\n  ;; \n ]")  =>  "(ncat-2)"
     ],
     JuliaSyntax.parse_string => [
         "\"a \$(x + y) b\""  =>  "(string \"a \" (call-i x + y) \" b\")"
