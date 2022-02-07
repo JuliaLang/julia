@@ -231,7 +231,7 @@ JL_DLLEXPORT extern const char *jl_filename;
 
 jl_value_t *jl_gc_pool_alloc_noinline(jl_ptls_t ptls, int pool_offset,
                                    int osize);
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc_noinline(jl_ptls_t ptls, size_t allocsz);
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t allocsz);
 JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize);
 extern uv_mutex_t gc_perm_lock;
 void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
@@ -365,7 +365,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"
             jl_throw(jl_memory_exception);
-        v = jl_gc_pool_alloc_noinline(ptls, allocsz);
+        v = jl_gc_big_alloc_noinline(ptls, allocsz);
     }
     jl_set_typeof(v, ty);
     maybe_record_alloc_to_profile(v, sz, (jl_datatype_t*)ty);
