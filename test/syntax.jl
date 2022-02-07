@@ -1204,6 +1204,14 @@ end
 @test [(0,0)... 1] == [0 0 1]
 @test Float32[(0,0)... 1] == Float32[0 0 1]
 
+# issue #43960, evaluation order of splatting in `ref`
+let a = [], b = [4,3,2,1]
+    f() = (push!(a, 1); 2)
+    g() = (push!(a, 2); ())
+    @test b[f(), g()...] == 3
+    @test a == [1,2]
+end
+
 @testset "raw_str macro" begin
     @test raw"$" == "\$"
     @test raw"\n" == "\\n"
