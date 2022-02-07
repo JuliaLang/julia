@@ -291,8 +291,10 @@ JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void) JL_GLOBALLY_ROOTED
 
 void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
 {
+#ifndef __clang_gcanalyzer__
     if (jl_get_pgcstack_cb == jl_get_pgcstack_init)
         jl_get_pgcstack_init();
+#endif
     // for codegen
     *f = jl_get_pgcstack_cb;
     *k = jl_pgcstack_key;
