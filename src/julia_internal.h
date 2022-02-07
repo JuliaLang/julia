@@ -290,6 +290,9 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 void invalidate_backedges(void (*f)(jl_code_instance_t*), jl_method_instance_t *replaced_mi, size_t max_world, const char *why);
+extern arraylist_t jl_linkage_blobs;                        // external linkage: sysimg/pkgimages
+extern jl_array_t *jl_build_ids JL_GLOBALLY_ROOTED;         // external linkage: corresponding build_ids
+extern uint64_t jl_worklist_key(jl_array_t *worklist);
 
 extern JL_DLLEXPORT size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func;
@@ -617,6 +620,9 @@ int nroots_with_key(jl_method_t *m, uint64_t key);
 
 int jl_valid_type_param(jl_value_t *v);
 
+extern jl_array_t *serializer_worklist;
+int module_in_worklist(jl_module_t *mod);
+
 JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
 
 void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na, size_t world);
@@ -693,6 +699,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st);
 int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), void *env);
+int foreach_mtable_in_module(jl_module_t *m, int (*visit)(jl_methtable_t *mt, void *env), void *env);
 void jl_init_main_module(void);
 JL_DLLEXPORT int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT;
 jl_array_t *jl_get_loaded_modules(void);
@@ -931,11 +938,12 @@ JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char raw_mc, const char
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo);
 JL_DLLEXPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char raw_mc, const char* asm_variant, const char *debuginfo, char binary);
 
-void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy);
+void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy, int imaging_mode);
 void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p) JL_NOTSAFEPOINT;
+void jl_iterate_llvm_gv(void *native_code, void (*callback)(void*, int32_t, void*), void*) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);
 
@@ -1220,6 +1228,7 @@ extern void *jl_ntdll_handle;
 extern void *jl_kernel32_handle;
 extern void *jl_crtdll_handle;
 extern void *jl_winsock_handle;
+void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT;
 #endif
 
 JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err);
@@ -1565,7 +1574,6 @@ void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *
                        jl_method_instance_t **linfos, size_t n);
 void jl_write_coverage_data(const char*);
 void jl_write_malloc_log(void);
-void jl_write_compiler_output(void);
 
 #if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
 #  define jl_unreachable() __builtin_unreachable()

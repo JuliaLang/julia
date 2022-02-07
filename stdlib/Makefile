@@ -27,6 +27,15 @@ JLL_NAMES := MozillaCACerts_jll
 get-MozillaCACerts_jll:
 install-MozillaCACerts_jll:
 
+JLL_NAMES += LLD_jll
+LLD_STDLIB_PATH := $(JULIAHOME)/stdlib/LLD_jll
+LLD_JLL_VER ?= $(shell [ -f $(LLD_STDLIB_PATH)/Project.toml ] && grep "^version" $(LLD_STDLIB_PATH)/Project.toml | sed -E 's/version[[:space:]]*=[[:space:]]*"?([^"]+)"?/\1/')
+
+$(LLD_STDLIB_PATH)/StdlibArtifacts.toml:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaBinaryWrappers/LLVM_jll.jl/raw/LLVM-v$(LLD_JLL_VER)/Artifacts.toml
+get-LLD_jll: $(LLD_STDLIB_PATH)/StdlibArtifacts.toml
+install-LLD_jll: get-LLD_jll
+
 # Define rule to download `StdlibArtifacts.toml` files for each JLL we bundle.
 define download-artifacts-toml
 JLL_NAMES += $$($(1)_JLL_NAME)_jll

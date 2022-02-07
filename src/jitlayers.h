@@ -220,7 +220,6 @@ jl_llvm_functions_t jl_emit_codeinst(
 enum CompilationPolicy {
     Default = 0,
     Extern = 1,
-    ImagingMode = 2
 };
 
 typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_workqueue_t;

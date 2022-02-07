@@ -552,6 +552,7 @@ typedef struct _jl_datatype_t {
     uint8_t zeroinit:1; // if one or more fields requires zero-initialization
     uint8_t has_concrete_subtype:1; // If clear, no value will have this datatype
     uint8_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
+    uint8_t imgcache:1; // true if this type was loaded from sysimg/pkgimg
 } jl_datatype_t;
 
 typedef struct _jl_vararg_t {
@@ -1759,14 +1760,17 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname);
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle);
-JL_DLLEXPORT ios_t *jl_create_system_image(void *);
+JL_DLLEXPORT ios_t *jl_create_system_image(void *, jl_array_t *worklist);
 JL_DLLEXPORT void jl_save_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
-JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
+JL_DLLEXPORT jl_value_t *jl_restore_system_image_data(const char *buf, size_t len);
+JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname);
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred);
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *depmods);
+
+JL_DLLEXPORT void jl_write_compiler_output(void);
 
 // parsing
 JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
