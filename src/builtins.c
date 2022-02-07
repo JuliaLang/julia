@@ -1664,7 +1664,7 @@ JL_CALLABLE(jl_f_get_binding_type)
     jl_sym_t *sym = (jl_sym_t*)args[1];
     jl_value_t *ty = jl_binding_type(mod, sym);
     if (ty == (jl_value_t*)jl_nothing) {
-        jl_binding_t *b = jl_get_binding(mod, sym);
+        jl_binding_t *b = jl_get_binding_wr(mod, sym, 0);
         if (b) {
             jl_value_t *old_ty = NULL;
             jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
