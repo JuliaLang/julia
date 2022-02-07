@@ -758,6 +758,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
 {
     jl_task_t *ct = jl_current_task;
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
+    JL_PROBE_RT_NEW_TASK(ct, t);
     t->copy_stack = 0;
     if (ssize == 0) {
         // stack size unspecified; use default
@@ -818,7 +819,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
 #ifdef _COMPILER_TSAN_ENABLED_
     t->ctx.tsan_state = __tsan_create_fiber(0);
 #endif
-    JL_PROBE_RT_NEW_TASK(ct, t);
     return t;
 }
 
