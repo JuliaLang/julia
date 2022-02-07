@@ -128,19 +128,20 @@ Reduced the syntax (a string or SyntaxNode) from `file_content` into the
 minimal failing subtrees of syntax and write the results to `out`.
 """
 function format_reduced_tests(out::IO, file_content; filename=nothing)
+    println(out, "#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
     if !isnothing(filename)
         println(out, "# $filename")
     end
     text = nothing
     try
         rtrees = reduce_test(file_content)
-        first = true
         for rt in rtrees
-            if !first
-                print(out, "\n#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+            print(out, "\n#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+            t = sourcetext(rt)
+            print(out, t)
+            if !endswith(t, '\n')
+                println(out)
             end
-            first = false
-            print(out, sourcetext(rt))
         end
     catch exc
         exc isa InterruptException && rethrow()
