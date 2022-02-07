@@ -150,7 +150,7 @@ static arraylist_t reinit_list;
 // list of modules being serialized
 // This is not quite globally rooted, but we take care to only
 // ever assigned rooted values here.
-static jl_array_t *serializer_worklist JL_GLOBALLY_ROOTED;
+jl_array_t *serializer_worklist JL_GLOBALLY_ROOTED;
 // The set of external MethodInstances we want to serialize
 // (methods owned by other modules that were first inferred for a
 //  module currently being serialized)
@@ -237,7 +237,7 @@ static void jl_serialize_cnull(jl_serializer_state *s, jl_value_t *t)
     jl_serialize_value(s, t);
 }
 
-static int module_in_worklist(jl_module_t *mod) JL_NOTSAFEPOINT
+int module_in_worklist(jl_module_t *mod) JL_NOTSAFEPOINT
 {
     int i, l = jl_array_len(serializer_worklist);
     for (i = 0; i < l; i++) {
@@ -902,7 +902,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                     rletable = (uint64_t*)jl_array_data(m->root_blocks);
                     nblocks2 = jl_array_len(m->root_blocks);
                 }
-                // this visits every item, if it becomes a bottlneck we could hop blocks
+                // this visits every item, if it becomes a bottleneck we could hop blocks
                 while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2))
                     if (rootiter.key == key)
                         jl_serialize_value(s, jl_array_ptr_ref(m->roots, rootiter.i));

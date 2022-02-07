@@ -85,7 +85,7 @@ DEP_LIBS += dsfmt
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
-DEP_LIBS += llvm
+DEP_LIBS += llvm lld
 endif
 
 ifeq ($(USE_SYSTEM_LLD), 0)

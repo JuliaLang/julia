@@ -1757,14 +1757,6 @@ JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd)
 static void *volatile gc_findval; // for usage from gdb, for finding the gc-root for a value
 #endif
 
-static void *sysimg_base;
-static void *sysimg_end;
-void jl_gc_set_permalloc_region(void *start, void *end)
-{
-    sysimg_base = start;
-    sysimg_end = end;
-}
-
 
 // Handle the case where the stack is only partially copied.
 STATIC_INLINE uintptr_t gc_get_stack_addr(void *_addr, uintptr_t offset,
@@ -2549,7 +2541,7 @@ module_binding: {
             jl_binding_t *b = *begin;
             if (b == (jl_binding_t*)HT_NOTFOUND)
                 continue;
-            if ((void*)b >= sysimg_base && (void*)b < sysimg_end) {
+            if (jl_object_in_image((jl_value_t*)b)) {
                 jl_taggedvalue_t *buf = jl_astaggedvalue(b);
                 uintptr_t tag = buf->header;
                 uint8_t bits;
@@ -2674,7 +2666,7 @@ mark: {
         jl_datatype_t *vt = (jl_datatype_t*)tag;
         int foreign_alloc = 0;
         int update_meta = __likely(!meta_updated && !gc_verifying);
-        if (update_meta && (void*)o >= sysimg_base && (void*)o < sysimg_end) {
+        if (update_meta && jl_object_in_image(new_obj)) {
             foreign_alloc = 1;
             update_meta = 0;
         }
@@ -3019,6 +3011,8 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     }
     if (_jl_debug_method_invalidation != NULL)
         gc_mark_queue_obj(gc_cache, sp, _jl_debug_method_invalidation);
+    if (jl_build_ids != NULL)
+        gc_mark_queue_obj(gc_cache, sp, jl_build_ids);
 
     // constants
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);

@@ -738,6 +738,10 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
         jl_install_default_signal_handlers();
 
     jl_gc_init();
+
+    arraylist_new(&jl_linkage_blobs, 0);
+    arraylist_new(&jl_image_relocs, 0);
+
     jl_ptls_t ptls = jl_init_threadtls(0);
 #pragma GCC diagnostic push
 #if defined(_COMPILER_GCC_) && __GNUC__ >= 12

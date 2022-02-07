@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 original_depot_path = copy(Base.DEPOT_PATH)
+original_load_path = copy(Base.LOAD_PATH)
 
 using Test, Distributed, Random
 
@@ -1554,5 +1555,197 @@ precompile_test_harness("issue #46296") do load_path
     (@eval (using CodeInstancePrecompile))
 end
 
+## Static compilation of external modules
+
+# Currently this is limited to modules that do not trigger compilation
+# of external methods
+
+# Mirror of `Base.create_expr_cache`, with `--output-ji` replaced by `--output-o` and usage of default optimization level
+function create_expr_cache(pkg::Base.PkgId, input::String, output::String, concrete_deps::typeof(Base._concrete_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+    @nospecialize internal_stderr internal_stdout
+    rm(output, force=true)   # Remove file if it exists
+    depot_path = map(abspath, DEPOT_PATH)
+    dl_load_path = map(abspath, Base.DL_LOAD_PATH)
+    load_path = map(abspath, Base.load_path())
+    path_sep = Sys.iswindows() ? ';' : ':'
+    any(path -> path_sep in path, load_path) &&
+        error("LOAD_PATH entries cannot contain $(repr(path_sep))")
+
+    deps_strs = String[]
+    function pkg_str(_pkg::Base.PkgId)
+        if _pkg.uuid === nothing
+            "Base.PkgId($(repr(_pkg.name)))"
+        else
+            "Base.PkgId(Base.UUID(\"$(_pkg.uuid)\"), $(repr(_pkg.name)))"
+        end
+    end
+    for (pkg, build_id) in concrete_deps
+        push!(deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
+    end
+    deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
+    deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
+    trace = ``
+    io = open(pipeline(`$(Base.julia_cmd()::Cmd)
+                       --output-o $output --output-incremental=yes
+                       --startup-file=no --history-file=no --warn-overwrite=yes
+                       --color=$(Base.have_color === nothing ? "auto" : Base.have_color ? "yes" : "no")
+                       $trace
+                       -`, stderr = internal_stderr, stdout = internal_stdout),
+              "w", stdout)
+    # write data over stdin to avoid the (unlikely) case of exceeding max command line size
+    write(io.in, """
+        Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
+            $(repr(load_path)), $deps, $(repr(Base.source_path(nothing))))
+        """)
+    close(io.in)
+    return io
+end
+# A simplified version of `Base.compilecache` that calls our `create_expr_cache` above
+function compilecache(pkg::Base.PkgId, path::String, cachedir::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
+                      ignore_loaded_modules::Bool = true)
+    @nospecialize internal_stderr internal_stdout
+    # decide where to put the resulting cache file
+    cachepath = joinpath(cachedir, pkg.name)
+
+    # build up the list of modules that we want the precompile process to preserve
+    concrete_deps = copy(Base._concrete_dependencies)
+    if ignore_loaded_modules
+        for (key, mod) in Base.loaded_modules
+            if !(mod === Main || mod === Core || mod === Base)
+                push!(concrete_deps, key => Base.module_build_id(mod))
+            end
+        end
+    end
+
+    mkpath(cachepath)
+    tmppath, tmpio = mktemp(cachepath)
+    close(tmpio)
+    return create_expr_cache(pkg, path, tmppath, concrete_deps, internal_stderr, internal_stdout), tmppath
+end
+
+import LLD_jll
+
+function ld()
+    @static if Sys.iswindows()
+        flavor = "link"
+    elseif Sys.isapple()
+        flavor = "darwin"
+    else
+        flavor = "gnu"
+    end
+    `$(LLD_jll.lld()) -flavor $flavor`
+end
+
+is_debug() = ccall(:jl_is_debugbuild, Cint, ()) == 1
+
+function link_jilib(path, out, args=``)
+    LIBDIR = joinpath(Sys.BINDIR, "..", "lib")
+    LIBS = is_debug() ? `-ljulia-debug -ljulia-internal-debug` : `-ljulia -ljulia-internal`
+    WHOLE_ARCHIVE = Sys.isapple() ? `-all_load` : `--whole-archive`
+    NO_WHOLE_ARCHIVE = Sys.isapple() ? `` : `--no-whole-archive`
+
+    run(`$(ld()) --shared --output=$out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE -L$(LIBDIR) $LIBS $args`, stdin, stdout, stderr)
+end
+
+@testset "empty module" begin
+    srcdir   = mktempdir()
+    cachedir = mktempdir()
+    cnpath = joinpath(srcdir, "CacheNativeEmpty.jl")
+    open(cnpath, "w") do io
+        write(io, """
+        module CacheNativeEmpty
+        end
+        """)
+    end
+    p, arfile = compilecache(Base.PkgId("CacheNativeEmpty"), cnpath, cachedir)
+    @test success(p)
+    libfile = arfile * ".so"
+    link_jilib(arfile, libfile)
+    wl = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
+    CNE = wl[1]   # the CacheNativeEmpty module
+end
+
+@testset "static compilation" begin
+    srcdir   = mktempdir()
+    cachedir = mktempdir()
+    cnpath = joinpath(srcdir, "CacheNative1.jl")
+    open(cnpath, "w") do io
+        write(io, """
+        module CacheNative1
+        const data1 = [11, 22, 33]
+        const data2 = [44, 55, 66]
+        @noinline uses_data1() = data1[2]
+        precompile(uses_data1, ())
+        end
+        """)
+    end
+    p, arfile = compilecache(Base.PkgId("CacheNative1"), cnpath, cachedir)
+    @test success(p)
+    libfile = arfile * ".so"
+    link_jilib(arfile, libfile)
+    wl1 = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
+    CN1 = wl1[1]   # the CacheNative1 module
+    f = getfield(CN1, :uses_data1)
+    m = only(methods(f))
+    mi = m.specializations[1]
+    ci = mi.cache
+    @test ci.specptr != C_NULL
+    @test f() == 22
+    # Can we reference this first module from a second?
+    # In particular, test whether we can access `data2` from code.
+    # That's a global variable that wasn't code-referenced in CacheNative1,
+    # and thus wasn't inserted into the .data section of CacheNative1's .o file.
+    # Until this is hooked fully into `using CacheNative1` then it will not be
+    # fully obvious whether the dynamic linker can resolve such references,
+    # because we need to get it by an explicit GlobalRef.
+    push!(LOAD_PATH, srcdir)
+    cnpath = joinpath(srcdir, "CacheNative2.jl")
+    open(cnpath, "w") do io
+        write(io, """
+        module CacheNative2
+        const CacheNative1 = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), $(repr(libfile)))[1]::Module
+        const data = CacheNative1.data1
+        @noinline uses_cn1_data1() = CacheNative1.data1[3]
+        @noinline uses_cn1_data2() = CacheNative1.data2[2]
+        @noinline      calls_cn1() = CacheNative1.uses_data1()       # not precompiled
+        @noinline also_calls_cn1() = CacheNative1.uses_data1()       # precompiled
+        uses_cn2_data() = data[3]
+
+        precompile(uses_cn1_data1, ())
+        precompile(uses_cn1_data2, ())
+        precompile(also_calls_cn1, ())
+        precompile(uses_cn2_data, ())
+        end
+        """)
+    end
+    p, arfile = compilecache(Base.PkgId("CacheNative2"), cnpath, cachedir)
+    @test success(p)
+    libfile = arfile * ".so"
+    link_jilib(arfile, libfile)
+    wl2 = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
+    CN2 = wl2[1]   # the CacheNative2 module
+    @test getfield(CN2, :Base) === Base
+    @test getfield(CN2, :CacheNative1) === CN1
+    f = getfield(CN2, :calls_cn1)
+    @test f() == 22
+    f = getfield(CN2, :also_calls_cn1)
+    @test f() == 22
+    # f1 (aka, uses_cn1_data1) uses an item stored in another package as an LLVM gvar
+    # f2 (aka, uses_cn1_data2) uses an item stored in another package that was never stored as an LLVM gvar
+    f1 = getfield(CN2, :uses_cn1_data1)
+    f2 = getfield(CN2, :uses_cn1_data2)
+    f3 = getfield(CN2, :uses_cn2_data)
+    m1 = only(methods(f1))
+    m2 = only(methods(f2))
+    @test f1() == 33
+    @test f2() == 55
+    @test f3() == f1()
+
+    CN1.data1[3] = 77
+    @test f1() == 77
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
+empty!(Base.LOAD_PATH)
+append!(Base.LOAD_PATH, original_load_path)
