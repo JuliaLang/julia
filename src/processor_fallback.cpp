@@ -96,9 +96,9 @@ get_llvm_target_str(const TargetData<1> &data)
 
 using namespace Fallback;
 
-jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
+jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl, uint8_t sysimg)
 {
-    if (!jit_targets.empty())
+    if (sysimg && !jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
 }

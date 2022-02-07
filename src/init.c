@@ -738,6 +738,10 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
         jl_install_default_signal_handlers();
 
     jl_gc_init();
+
+    arraylist_new(&jl_linkage_blobs, 0);
+    arraylist_new(&jl_image_relocs, 0);
+
     jl_ptls_t ptls = jl_init_threadtls(0);
 #pragma GCC diagnostic push
 #if defined(_COMPILER_GCC_) && __GNUC__ >= 12
@@ -763,7 +767,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_restore_system_image(jl_options.image_file);
     } else {
         jl_init_types();
-        jl_global_roots_table = jl_alloc_vec_any(16);
+        jl_global_roots_table = jl_alloc_vec_any(0);
         jl_init_codegen();
     }
 

@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 original_depot_path = copy(Base.DEPOT_PATH)
+original_load_path = copy(Base.LOAD_PATH)
 
 using Test, Distributed, Random
 
@@ -1556,3 +1557,5 @@ end
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
+empty!(Base.LOAD_PATH)
+append!(Base.LOAD_PATH, original_load_path)

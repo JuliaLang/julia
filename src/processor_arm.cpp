@@ -1781,9 +1781,9 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
     return jl_cstr_to_string(host_cpu_name().c_str());
 }
 
-jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
+jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl, uint8_t sysimg)
 {
-    if (!jit_targets.empty())
+    if (sysimg && !jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
 }
