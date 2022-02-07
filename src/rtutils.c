@@ -708,6 +708,12 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, (jl_value_t*)vt, depth);
         n += jl_printf(out, ">");
     }
+    else if (vt == (jl_datatype_t*)jl_buff_tag) {
+        n += jl_printf(out, "<?#%p::jl_buff_tag marked memory>", (void*)v);
+    }
+    else if (vt == (jl_datatype_t*)(uintptr_t)(0xbabababababababaull & ~15)) {
+        n += jl_printf(out, "<?#%p::baaaaaad>", (void*)v);
+    }
     // These need to be special cased because they
     // exist only by pointer identity in early startup
     else if (v == (jl_value_t*)jl_simplevector_type) {

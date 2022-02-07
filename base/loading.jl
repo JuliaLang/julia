@@ -898,7 +898,7 @@ function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any}
     end
 
     @debug "Loading cache file $path for $pkg"
-    sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+    sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), path, depmods, false)
     if isa(sv, Exception)
         return sv
     end

@@ -1332,7 +1332,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   } else if (name == "JL_GC_PUSH1" || name == "JL_GC_PUSH2" ||
              name == "JL_GC_PUSH3" || name == "JL_GC_PUSH4" ||
              name == "JL_GC_PUSH5" || name == "JL_GC_PUSH6" ||
-             name == "JL_GC_PUSH7") {
+             name == "JL_GC_PUSH7" || name == "JL_GC_PUSH8") {
     ProgramStateRef State = C.getState();
     // Transform slots to roots, transform values to rooted
     unsigned NumArgs = CE->getNumArgs();

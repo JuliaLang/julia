@@ -173,6 +173,7 @@ jl_gc_num_t gc_num = {0};
 static size_t last_long_collect_interval;
 int gc_n_threads;
 jl_ptls_t* gc_all_tls_states;
+const uint64_t _jl_buff_tag[3] = {0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull}; // aka 0xHEADER00
 
 pagetable_t memory_map;
 
@@ -1759,14 +1760,6 @@ JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd)
 static void *volatile gc_findval; // for usage from gdb, for finding the gc-root for a value
 #endif
 
-static void *sysimg_base;
-static void *sysimg_end;
-void jl_gc_set_permalloc_region(void *start, void *end)
-{
-    sysimg_base = start;
-    sysimg_end = end;
-}
-
 
 // Handle the case where the stack is only partially copied.
 STATIC_INLINE uintptr_t gc_get_stack_addr(void *_addr, uintptr_t offset,
@@ -2551,7 +2544,7 @@ module_binding: {
             jl_binding_t *b = *begin;
             if (b == (jl_binding_t*)HT_NOTFOUND)
                 continue;
-            if ((void*)b >= sysimg_base && (void*)b < sysimg_end) {
+            if (jl_object_in_image((jl_value_t*)b)) {
                 jl_taggedvalue_t *buf = jl_astaggedvalue(b);
                 uintptr_t tag = buf->header;
                 uint8_t bits;
@@ -2676,7 +2669,7 @@ mark: {
         jl_datatype_t *vt = (jl_datatype_t*)tag;
         int foreign_alloc = 0;
         int update_meta = __likely(!meta_updated && !gc_verifying);
-        if (update_meta && (void*)o >= sysimg_base && (void*)o < sysimg_end) {
+        if (update_meta && jl_object_in_image(new_obj)) {
             foreign_alloc = 1;
             update_meta = 0;
         }
@@ -3021,6 +3014,8 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     }
     if (_jl_debug_method_invalidation != NULL)
         gc_mark_queue_obj(gc_cache, sp, _jl_debug_method_invalidation);
+    if (jl_build_ids != NULL)
+        gc_mark_queue_obj(gc_cache, sp, jl_build_ids);
 
     // constants
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);
@@ -4072,8 +4067,6 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 
 JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
 {
-    static_assert(jl_buff_tag % GC_PAGE_SZ == 0,
-        "jl_buff_tag must be a multiple of GC_PAGE_SZ");
     if (jl_is_initialized()) {
         int result = jl_atomic_fetch_or(&support_conservative_marking, 1);
         if (!result) {
@@ -4180,8 +4173,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
     valid_object:
         // We have to treat objects with type `jl_buff_tag` differently,
         // as they must not be passed to the usual marking functions.
-        // Note that jl_buff_tag is a multiple of GC_PAGE_SZ, thus it
-        // cannot be a type reference.
+        // Note that jl_buff_tag is real pointer into libjulia,
+        // thus it cannot be a type reference.
         if ((cell->header & ~(uintptr_t) 3) == jl_buff_tag)
             return NULL;
         return jl_valueof(cell);

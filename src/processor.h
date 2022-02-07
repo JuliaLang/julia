@@ -164,6 +164,7 @@ typedef struct _jl_sysimg_fptrs_t {
  * Return the data about the function pointers selected.
  */
 jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl);
+jl_sysimg_fptrs_t jl_init_processor_pkgimg(void *hdl);
 
 // Return the name of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
