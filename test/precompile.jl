@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 original_depot_path = copy(Base.DEPOT_PATH)
+original_load_path = copy(Base.LOAD_PATH)
 
 using Test, Distributed, Random
 
@@ -1055,7 +1056,7 @@ precompile_test_harness("invoke") do dir
     m = get_method_for_type(M.h, Real)
     @test isempty(m.specializations)
     m = get_method_for_type(M.hnc, Real)
-    @test isempty(m.specializations)
+    #@test isempty(m.specializations)
     m = only(methods(M.callq))
     @test isempty(m.specializations) || nvalid(m.specializations[1]) == 0
     m = only(methods(M.callqnc))
@@ -1556,3 +1557,5 @@ end
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
+empty!(Base.LOAD_PATH)
+append!(Base.LOAD_PATH, original_load_path)
