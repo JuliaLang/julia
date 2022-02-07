@@ -680,7 +680,7 @@ endif
 
 ifeq ($(DARWIN_FRAMEWORK),1)
 ifneq ($(OS), Darwin)
-    $(error Darwin framework cannot be enabled for non-Darwin OS)
+	$(error Darwin framework cannot be enabled for non-Darwin OS)
 endif
 endif
 
@@ -1262,7 +1262,7 @@ OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
 OSLIBS += -lgcc_s
 
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
-    $(NO_WHOLE_ARCHIVE)
+	$(NO_WHOLE_ARCHIVE)
 endif
 
 ifeq ($(OS), Darwin)
@@ -1278,7 +1278,7 @@ endif
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
-    $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic
 JLDFLAGS := -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
@@ -1381,7 +1381,7 @@ endif
 
 define dir_target
 $$(abspath $(1)):
-    @mkdir -p $$@
+	@mkdir -p $$@
 endef
 
 ifeq ($(BUILD_OS), WINNT)
@@ -1394,21 +1394,21 @@ define symlink_target # (from, to-dir, to-name)
 CLEAN_TARGETS += clean-$$(abspath $(2)/$(3))
 clean-$$(abspath $(2)/$(3)):
 ifeq ($(BUILD_OS), WINNT)
-    -cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
+	-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
 else
-    -rm -r $$(abspath $(2)/$(3))
+	-rm -r $$(abspath $(2)/$(3))
 endif
 $$(abspath $(2)/$(3)): | $$(abspath $(2))
 ifeq ($$(BUILD_OS), WINNT)
-    @cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&) $$(call mingw_to_dos,$(1),)
+	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&) $$(call mingw_to_dos,$(1),)
 else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
-    @cmd /C mklink /J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
+	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
-    @rm -r $$@
-    @cp -R $$(abspath $(1)) $$@.tmp
-    @mv $$@.tmp $$@
+	@rm -r $$@
+	@cp -R $$(abspath $(1)) $$@.tmp
+	@mv $$@.tmp $$@
 else
-    @ln -sf $$(abspath $(1)) $$@
+	@ln -sf $$(abspath $(1)) $$@
 endif
 endef
 
@@ -1567,4 +1567,4 @@ endif
 # call print-VARIABLE to see the runtime value of any variable
 # (hardened against any special characters appearing in the output)
 print-%:
-    @echo '$*=$(subst ','\'',$(subst $(newline),\n,$($*)))'
+	@echo '$*=$(subst ','\'',$(subst $(newline),\n,$($*)))'
