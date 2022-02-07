@@ -160,7 +160,7 @@ end
 # Without this, the Alloc's stacktrace prints for lines and lines and lines...
 function Base.show(io::IO, a::Alloc)
     stacktrace_sample = length(a.stacktrace) >= 1 ? "$(a.stacktrace[1]), ..." : ""
-    print(io, "$Alloc($(a.type), $StackFrame[$stacktrace_sample], $(a.size), $(a.task), $(a.timestamp))")
+    print(io, "$Alloc($(a.type), $StackFrame[$stacktrace_sample], $(a.size))")
 end
 
 const BacktraceCache = Dict{BTElement,Vector{StackFrame}}
