@@ -627,10 +627,14 @@ static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
 
     // .data base
     char *data_base;
-    jl_dlsym(hdl, "jl_sysimg_gvars_base", (void**)&data_base, 1);
+    if (!jl_dlsym(hdl, "jl_sysimg_gvars_base", (void**)&data_base, 0)) {
+        data_base = NULL;
+    }
     // .text base
     char *text_base;
-    jl_dlsym(hdl, "jl_sysimg_fvars_base", (void**)&text_base, 1);
+    if (!jl_dlsym(hdl, "jl_sysimg_fvars_base", (void**)&text_base, 0)) {
+        text_base = NULL;
+    }
     res.base = text_base;
 
     int32_t *offsets;

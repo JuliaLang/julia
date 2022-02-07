@@ -21,8 +21,9 @@ JL_DLLEXPORT int jl_generating_output(void)
 }
 
 static void *jl_precompile(int all);
+static void *jl_precompile_worklist(jl_array_t *worklist);
 
-void jl_write_compiler_output(void)
+JL_DLLEXPORT void jl_write_compiler_output(void)
 {
     if (!jl_generating_output()) {
         return;
@@ -60,21 +61,34 @@ void jl_write_compiler_output(void)
         }
     }
 
+
     if (jl_options.incremental) {
         if (jl_options.outputji)
             if (jl_save_incremental(jl_options.outputji, worklist))
                 jl_exit(1);
         if (jl_options.outputbc || jl_options.outputunoptbc)
             jl_printf(JL_STDERR, "WARNING: incremental output to a .bc file is not implemented\n");
-        if (jl_options.outputo)
-            jl_printf(JL_STDERR, "WARNING: incremental output to a .o file is not implemented\n");
         if (jl_options.outputasm)
             jl_printf(JL_STDERR, "WARNING: incremental output to a .s file is not implemented\n");
+        if (jl_options.outputo) {
+            assert(jl_precompile_toplevel_module == NULL);
+            jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
+            native_code = jl_precompile_worklist(worklist);
+            ios_t *s = jl_create_system_image(native_code, worklist);
+            assert(s);
+            jl_dump_native(native_code,
+                           jl_options.outputbc,
+                           jl_options.outputunoptbc,
+                           jl_options.outputo,
+                           jl_options.outputasm,
+                           (const char*)s->buf, (size_t)s->size);
+            jl_precompile_toplevel_module = NULL;
+        }
     }
     else {
         ios_t *s = NULL;
         if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm)
-            s = jl_create_system_image(native_code);
+            s = jl_create_system_image(native_code, NULL);
 
         if (jl_options.outputji) {
             if (s == NULL) {
@@ -340,16 +354,11 @@ static int precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
     return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), precompile_enq_all_specializations__, env);
 }
 
-static void *jl_precompile(int all)
+static void *jl_precompile_(jl_array_t *m)
 {
-    // array of MethodInstances and ccallable aliases to include in the output
-    jl_array_t *m = jl_alloc_vec_any(0);
     jl_array_t *m2 = NULL;
     jl_method_instance_t *mi = NULL;
-    JL_GC_PUSH3(&m, &m2, &mi);
-    if (all)
-        jl_compile_all_defs(m);
-    jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
+    JL_GC_PUSH2(&m2, &mi);
     m2 = jl_alloc_vec_any(0);
     for (size_t i = 0; i < jl_array_len(m); i++) {
         jl_value_t *item = jl_array_ptr_ref(m, i);
@@ -368,8 +377,39 @@ static void *jl_precompile(int all)
             jl_array_ptr_1d_push(m2, item);
         }
     }
-    m = NULL;
-    void *native_code = jl_create_native(m2, NULL, NULL, 0);
+    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1);
+    JL_GC_POP();
+    return native_code;
+}
+
+static void *jl_precompile(int all)
+{
+    // array of MethodInstances and ccallable aliases to include in the output
+    jl_array_t *m = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&m);
+    if (all)
+        jl_compile_all_defs(m);
+    jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
+    void *native_code = jl_precompile_(m);
+    JL_GC_POP();
+    return native_code;
+}
+
+static void *jl_precompile_worklist(jl_array_t *worklist)
+{
+    if (!worklist)
+        return NULL;
+    // this "found" array will contain function
+    // type signatures that were inferred but haven't been compiled
+    jl_array_t *m = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&m);
+    size_t i, nw = jl_array_len(worklist);
+    for (i = 0; i < nw; i++) {
+        jl_module_t *mod = (jl_module_t*)jl_array_ptr_ref(worklist, i);
+        assert(jl_is_module(mod));
+        foreach_mtable_in_module(mod, precompile_enq_all_specializations_, m);
+    }
+    void *native_code = jl_precompile_(m);
     JL_GC_POP();
     return native_code;
 }

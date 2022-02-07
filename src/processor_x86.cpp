@@ -1013,8 +1013,9 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
 
 jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
 {
-    if (!jit_targets.empty())
-        jl_error("JIT targets already initialized");
+    // FIXME: Load package image corresponding to sysimage
+    // if (!jit_targets.empty())
+        // jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
 }
 

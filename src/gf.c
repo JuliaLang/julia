@@ -460,7 +460,7 @@ static int get_method_unspec_list(jl_typemap_entry_t *def, void *closure)
     return 1;
 }
 
-static int foreach_mtable_in_module(
+int foreach_mtable_in_module(
         jl_module_t *m,
         int (*visit)(jl_methtable_t *mt, void *env),
         void *env)
