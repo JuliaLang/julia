@@ -200,6 +200,16 @@ Foo Tests     |    3     1      4  0.0s
 ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
 ```
 
+## Testing Log Statements
+
+One can use the [`@test_logs`](@ref) macro to test log statements, or use a [`TestLogger`](@ref).
+
+```@docs
+Test.@test_logs
+Test.TestLogger
+Test.LogRecord
+```
+
 ## Other Test Macros
 
 As calculations on floating-point values can be imprecise, you can perform approximate equality
@@ -226,7 +236,6 @@ Note that this is not a specific feature of the `≈` but rather a general featu
 
 ```@docs
 Test.@inferred
-Test.@test_logs
 Test.@test_deprecated
 Test.@test_warn
 Test.@test_nowarn

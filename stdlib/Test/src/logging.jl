@@ -4,7 +4,20 @@ using Logging: Logging, AbstractLogger, LogLevel, Info, with_logger
 import Base: occursin
 
 #-------------------------------------------------------------------------------
-# Log records
+"""
+    LogRecord
+
+Stores the results of a single log event. Fields:
+
+* `level`: the [`LogLevel`](@ref) of the log message
+* `message`: the textual content of the log message
+* `_module`: the module of the log event
+* `group`: the logging group (by default, the name of the file containing the log event)
+* `id`: the ID of the log event
+* `file`: the file containing the log event
+* `line`: the line within the file of the log event
+* `kwargs`: any keyword arguments passed to the log event
+"""
 struct LogRecord
     level
     message
@@ -30,6 +43,42 @@ mutable struct TestLogger <: AbstractLogger
     respect_maxlog::Bool
 end
 
+"""
+    TestLogger(; min_level=Info, catch_exceptions=false)
+
+Create a `TestLogger` which captures logged messages in its `logs::Vector{LogRecord}` field.
+
+Set `min_level` to control the `LogLevel`, `catch_exceptions` for whether or not exceptions
+thrown as part of log event generation should be caught, and `respect_maxlog` for whether
+or not to follow the convention of logging messages with `maxlog=n` for some integer `n` at
+most `n` times.
+
+See also: [`LogRecord`](@ref).
+
+## Example
+
+```jldoctest
+julia> using Test, Logging
+
+julia> f() = @info "Hi" number=5;
+
+julia> test_logger = TestLogger();
+
+julia> with_logger(test_logger) do
+           f()
+           @info "Bye!"
+       end
+
+julia> @test test_logger.logs[1].message == "Hi"
+Test Passed
+
+julia> @test test_logger.logs[1].kwargs[:number] == 5
+Test Passed
+
+julia> @test test_logger.logs[2].message == "Bye!"
+Test Passed
+```
+"""
 TestLogger(; min_level=Info, catch_exceptions=false, respect_maxlog=true) =
     TestLogger(LogRecord[], min_level, catch_exceptions, nothing, Dict{Any, Int}(), respect_maxlog)
 Logging.min_enabled_level(logger::TestLogger) = logger.min_level
