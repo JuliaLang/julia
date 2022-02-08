@@ -198,7 +198,6 @@ eof(io::IO) = Base.eof(io)
 eof(c::Char) = c === EOF_CHAR
 
 readchar(io::IO) = eof(io) ? EOF_CHAR : read(io, Char)
-takechar(io::IO) = (readchar(io); io)
 
 # Checks whether a Char is an operator, which can not be juxtaposed with another
 # Char to be an operator (i.e <=), and can be prefixed by a dot (.)

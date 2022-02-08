@@ -76,19 +76,16 @@ Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN, false, false)
 struct RawToken <: AbstractToken
     kind::Kind
     # Offsets into a string or buffer
-    startpos::Tuple{Int, Int} # row, col where token starts /end, col is a string index
-    endpos::Tuple{Int, Int}
     startbyte::Int # The byte where the token start in the buffer
     endbyte::Int # The byte where the token ended in the buffer
     token_error::TokenError
     dotop::Bool
     suffix::Bool
 end
-function RawToken(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
-    startbyte::Int, endbyte::Int)
-RawToken(kind, startposition, endposition, startbyte, endbyte, NO_ERR, false, false)
+function RawToken(kind::Kind, startbyte::Int, endbyte::Int)
+    RawToken(kind, startbyte, endbyte, NO_ERR, false, false)
 end
-RawToken() = RawToken(ERROR, (0,0), (0,0), 0, 0, UNKNOWN, false, false)
+RawToken() = RawToken(ERROR, 0, 0, UNKNOWN, false, false)
 
 
 const _EMPTY_TOKEN = Token()
@@ -177,9 +174,7 @@ end
 Base.print(io::IO, t::Token) = print(io, untokenize(t))
 
 function Base.show(io::IO, t::RawToken)
-    start_r, start_c = startpos(t)
-    end_r, end_c = endpos(t)
-    print(io, rpad(string(start_r, ",", start_c, "-", end_r, ",", end_c), 17, " "))
+    print(io, rpad(string(startbyte(t), "-", endbyte(t)), 11, " "))
     print(io, rpad(kind(t), 15, " "))
 end
 

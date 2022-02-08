@@ -221,6 +221,13 @@ function readchar(l::Lexer{I}) where {I <: IO}
     return l.chars[1]
 end
 
+function readchar(l::Lexer{I,RawToken}) where {I <: IO}
+    c = readchar(l.io)
+    l.chars = (l.chars[2], l.chars[3], l.chars[4], c)
+    l.charspos = (l.charspos[2], l.charspos[3], l.charspos[4], position(l.io))
+    return l.chars[1]
+end
+
 readon(l::Lexer{I,RawToken}) where {I <: IO} = l.chars[1]
 function readon(l::Lexer{I,Token}) where {I <: IO}
     if l.charstore.size != 0
@@ -308,9 +315,7 @@ function emit(l::Lexer{IO_t,RawToken}, kind::Kind, err::TokenError = Tokens.NO_E
         end
     end
 
-    tok = RawToken(kind, (l.token_start_row, l.token_start_col),
-                  (l.current_row, l.current_col - 1),
-                  startpos(l), position(l) - 1, err, l.dotop, suffix)
+    tok = RawToken(kind, startpos(l), position(l) - 1, err, l.dotop, suffix)
 
     l.dotop = false
     l.last_token = kind
