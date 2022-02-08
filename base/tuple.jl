@@ -521,6 +521,35 @@ any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
+# Specialized versions of any(f, ::Tuple) and all(f, ::Tuple).
+# These avoid type instabilities for tuples containing mixed types.
+_any(f, itr::Tuple, ::Colon) = _any_tuple(f, false, itr...)
+@inline function _any_tuple(f, anymissing, x, rest...)
+    v = f(x)
+    if ismissing(v)
+        anymissing = true
+    elseif v
+        return true
+    end
+    return _any_tuple(f, anymissing, rest...)
+end
+@inline _any_tuple(f, anymissing) = anymissing ? missing : false
+
+_all(f, itr::Tuple, ::Colon) = _all_tuple(f, false, itr...)
+@inline function _all_tuple(f, anymissing, x, rest...)
+    v = f(x)
+    if ismissing(v)
+        anymissing = true
+    # this syntax allows throwing a TypeError for non-Bool, for consistency with any
+    elseif v
+        nothing
+    else
+        return false
+    end
+    return _all_tuple(f, anymissing, rest...)
+end
+@inline _all_tuple(f, anymissing) = anymissing ? missing : true
+
 # equivalent to any(f, t), to be used only in bootstrap
 _tuple_any(f::Function, t::Tuple) = _tuple_any(f, false, t...)
 function _tuple_any(f::Function, tf::Bool, a, b...)
