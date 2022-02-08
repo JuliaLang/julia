@@ -917,13 +917,13 @@ end
 
 @testset "elimination of `get_binding_type`" begin
     m = Module()
-    @eval m global x::Int
+    @eval m begin
+        global x::Int
+        f() = Core.get_binding_type($m, :x)
+        g() = Core.get_binding_type($m, :y)
+    end
 
-    f() = Core.get_binding_type(m, :x)
-    @test fully_eliminated(f, Tuple{})
-    @test f() === Int
-
-    g() = Core.get_binding_type(m, :y)
-    @test !fully_eliminated(g, Tuple{})
-    @test g() === Any
+    @test fully_eliminated(m.f, Tuple{}, Int)
+    @test !fully_eliminated(m.g, Tuple{})
+    @test m.g() === Any
 end
