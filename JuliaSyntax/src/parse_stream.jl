@@ -79,8 +79,8 @@ Information about preceding whitespace is added for use by the parser.
 """
 struct SyntaxToken
     kind::Kind
-    first_byte::Int
-    last_byte::Int
+    first_byte::UInt32
+    last_byte::UInt32
     # Flags for leading whitespace
     is_dotted::Bool
     is_suffixed::Bool
@@ -122,9 +122,9 @@ TODO: Optimize this data structure?  It's very large at the moment.
 struct TaggedRange
     head::SyntaxHead # Kind,flags
     orig_kind::Kind  # Kind of the original token for leaf tokens, or K"Nothing"
-    first_byte::Int  # First byte in the input text
-    last_byte::Int   # Last byte in the input text
-    start_mark::Int  # Index of first emitted range which this range covers
+    first_byte::UInt32  # First byte in the input text
+    last_byte::UInt32   # Last byte in the input text
+    start_mark::UInt32  # Index of first emitted range which this range covers
 end
 
 head(range::TaggedRange)       = range.head
@@ -132,7 +132,7 @@ kind(range::TaggedRange)       = kind(range.head)
 flags(range::TaggedRange)      = flags(range.head)
 first_byte(range::TaggedRange) = range.first_byte
 last_byte(range::TaggedRange)  = range.last_byte
-span(range::TaggedRange)       = last_byte(range) - first_byte(range) + 1
+span(range::TaggedRange)       = 1 + last_byte(range) - first_byte(range)
 
 #-------------------------------------------------------------------------------
 struct ParseStreamPosition
