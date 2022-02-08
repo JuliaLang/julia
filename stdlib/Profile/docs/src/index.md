@@ -20,14 +20,6 @@ Profile.clear_malloc_data
 
 ## Memory profiling
 
-Note: The current implementation of the Allocations Profiler _does not
-capture types for all allocations._ Allocations for which the profiler
-could not capture the type are represented as having type
-`Profile.Allocs.UnknownType`.
-
-You can read more about the missing types and the plan to improve this, here:
-https://github.com/JuliaLang/julia/issues/43688.
-
 ```@docs
 Profile.Allocs.@profile
 ```
