@@ -57,7 +57,7 @@ modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
 replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
     (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
-
+convert(::Type{Any}, Core.@nospecialize x) = x
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)
@@ -122,6 +122,9 @@ include("refvalue.jl")
 include("refpointer.jl")
 include("checked.jl")
 using .Checked
+
+# Lazy strings
+include("strings/lazy.jl")
 
 # array structures
 include("indices.jl")
@@ -200,6 +203,7 @@ include("dict.jl")
 include("abstractset.jl")
 include("set.jl")
 
+# Strings
 include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
@@ -289,6 +293,9 @@ include("cmd.jl")
 include("process.jl")
 include("ttyhascolor.jl")
 include("secretbuffer.jl")
+
+# RandomDevice support
+include("randomdevice.jl")
 
 # core math functions
 include("floatfuncs.jl")

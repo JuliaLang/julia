@@ -11,9 +11,9 @@ The use of functions is not only important for performance: functions are more r
 
 The functions should take arguments, instead of operating directly on global variables, see the next point.
 
-## Avoid global variables
+## Avoid untyped global variables
 
-A global variable might have its value, and therefore possibly its type, changed at any point. This makes
+An untyped global variable might have its value, and therefore possibly its type, changed at any point. This makes
 it difficult for the compiler to optimize code using global variables. This also applies to type-valued variables,
 i.e. type aliases on the global level. Variables should be local, or passed as arguments to functions, whenever possible.
 
@@ -24,7 +24,9 @@ performance:
 const DEFAULT_VAL = 0
 ```
 
-Uses of non-constant globals can be optimized by annotating their types at the point of use:
+If a global is known to always be of the same type, [the type should be annotated](@ref man-typed-globals).
+
+Uses of untyped globals can be optimized by annotating their types at the point of use:
 
 ```julia
 global x = rand(1000)
@@ -1024,7 +1026,7 @@ consider the two functions:
 ```jldoctest dotfuse
 julia> f(x) = 3x.^2 + 4x + 7x.^3;
 
-julia> fdot(x) = @. 3x^2 + 4x + 7x^3 # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3;
+julia> fdot(x) = @. 3x^2 + 4x + 7x^3; # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3
 ```
 
 Both `f` and `fdot` compute the same thing. However, `fdot`

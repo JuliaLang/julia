@@ -24,7 +24,7 @@ julia> Unicode.julia_chartransform('x')
 
 `julia_chartransform` is mainly useful for passing to the [`Unicode.normalize`](@ref)
 function in order to mimic the normalization used by the Julia parser:
-```jl
+```jldoctest
 julia> s = "\u00B5o\u0308"
 "µö"
 

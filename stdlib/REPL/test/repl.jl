@@ -913,16 +913,29 @@ end
 let ends_with_semicolon = REPL.ends_with_semicolon
     @test !ends_with_semicolon("")
     @test ends_with_semicolon(";")
-    @test !ends_with_semicolon("a")
+    @test !ends_with_semicolon("ä")
+    @test !ends_with_semicolon("ä # äsdf ;")
+    @test ends_with_semicolon("""a * "#ä" ;""")
+    @test ends_with_semicolon("a; #=#=# =# =#\n")
     @test ends_with_semicolon("1;")
     @test ends_with_semicolon("1;\n")
     @test ends_with_semicolon("1;\r")
     @test ends_with_semicolon("1;\r\n   \t\f")
-    @test ends_with_semicolon("1;#text\n")
-    @test ends_with_semicolon("a; #=#=# =# =#\n")
+    @test ends_with_semicolon("1;#äsdf\n")
+    @test ends_with_semicolon("""1;\n#äsdf\n""")
+    @test !ends_with_semicolon("\"\\\";\"#\"")
+    @test ends_with_semicolon("\"\\\\\";#\"")
     @test !ends_with_semicolon("begin\na;\nb;\nend")
     @test !ends_with_semicolon("begin\na; #=#=#\n=#b=#\nend")
     @test ends_with_semicolon("\na; #=#=#\n=#b=#\n# test\n#=\nfoobar\n=##bazbax\n")
+    @test ends_with_semicolon("f()= 1; # é ; 2")
+    @test ends_with_semicolon("f()= 1; # é")
+    @test !ends_with_semicolon("f()= 1; \"é\"")
+    @test !ends_with_semicolon("""("f()= 1; # é")""")
+    @test !ends_with_semicolon(""" "f()= 1; # é" """)
+    @test ends_with_semicolon("f()= 1;")
+    # the next result does not matter because this is not legal syntax
+    @test_nowarn ends_with_semicolon("1; #=# 2")
 end
 
 # PR #20794, TTYTerminal with other kinds of streams
@@ -1364,6 +1377,15 @@ end
 
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
         @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("@eval using Foo"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; @eval using Bar end"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Core.eval(Main,\"using Foo\")"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; Core.eval(Main,\"using Foo\") end"))
+        @test mods == [:Foo]
     end
 end
 

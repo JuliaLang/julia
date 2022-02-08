@@ -2,8 +2,12 @@
 
 module TestDiagonal
 
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, BlasComplex
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
 
 n=12 #Size of matrix problem to test
 Random.seed!(1)
@@ -147,7 +151,6 @@ Random.seed!(1)
                 @test_throws DimensionMismatch ldiv!(D, fill(elty(1), n + 1))
                 @test_throws SingularException ldiv!(Diagonal(zeros(relty, n)), copy(v))
                 b = rand(elty, n, n)
-                b = sparse(b)
                 @test ldiv!(D, copy(b)) ≈ Array(D)\Array(b)
                 @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), copy(b))
                 b = view(rand(elty, n), Vector(1:n))
@@ -157,7 +160,6 @@ Random.seed!(1)
                 @test c ≈ d
                 @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), b)
                 b = rand(elty, n+1, n+1)
-                b = sparse(b)
                 @test_throws DimensionMismatch ldiv!(D, copy(b))
                 b = view(rand(elty, n+1), Vector(1:n+1))
                 @test_throws DimensionMismatch ldiv!(D, b)
@@ -190,7 +192,7 @@ Random.seed!(1)
         end
 
         if relty <: BlasFloat
-            for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+            for b in (rand(elty,n,n), rand(elty,n))
                 @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
                 @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
                 @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
@@ -346,8 +348,12 @@ Random.seed!(1)
 
     @testset "Eigensystem" begin
         eigD = eigen(D)
-        @test Diagonal(eigD.values) ≈ D
+        @test Diagonal(eigD.values) == D
         @test eigD.vectors == Matrix(I, size(D))
+        eigsortD = eigen(D, sortby=LinearAlgebra.eigsortby)
+        @test eigsortD.values !== D.diag
+        @test eigsortD.values == sort(D.diag, by=LinearAlgebra.eigsortby)
+        @test Matrix(eigsortD) == D
     end
 
     @testset "ldiv" begin
@@ -388,8 +394,8 @@ Random.seed!(1)
     @testset "similar" begin
         @test isa(similar(D), Diagonal{elty})
         @test isa(similar(D, Int), Diagonal{Int})
-        @test isa(similar(D, (3,2)), SparseMatrixCSC{elty})
-        @test isa(similar(D, Int, (3,2)), SparseMatrixCSC{Int})
+        @test isa(similar(D, (3,2)), Matrix{elty})
+        @test isa(similar(D, Int, (3,2)), Matrix{Int})
     end
 
     # Issue number 10036
@@ -413,6 +419,22 @@ Random.seed!(1)
         @test svd(D).V == V
     end
 
+    @testset "svd/eigen with Diagonal{Furlong}" begin
+        Du = Furlong.(D)
+        @test Du isa Diagonal{<:Furlong{1}}
+        F = svd(Du)
+        U, s, V = F
+        @test map(x -> x.val, Matrix(F)) ≈ map(x -> x.val, Du)
+        @test svdvals(Du) == s
+        @test U isa AbstractMatrix{<:Furlong{0}}
+        @test V isa AbstractMatrix{<:Furlong{0}}
+        @test s isa AbstractVector{<:Furlong{1}}
+        E = eigen(Du)
+        vals, vecs = E
+        @test Matrix(E) == Du
+        @test vals isa AbstractVector{<:Furlong{1}}
+        @test vecs isa AbstractMatrix{<:Furlong{0}}
+    end
 end
 
 @testset "rdiv! (#40887)" begin
@@ -605,10 +627,10 @@ end
     mul!(D2, D, D)
     @test D2 == D * D
 
-    D2[diagind(D2)] .= D[diagind(D)]
+    copyto!(D2, D)
     lmul!(D, D2)
     @test D2 == D * D
-    D2[diagind(D2)] .= D[diagind(D)]
+    copyto!(D2, D)
     rmul!(D2, D)
     @test D2 == D * D
 end
@@ -651,13 +673,6 @@ end
 
     @test tr(D) == 10
     @test det(D) == 4
-
-    # sparse matrix block diagonals
-    s = SparseArrays.sparse([1 2; 3 4])
-    D = Diagonal([s, s])
-    @test D[1, 1] == s
-    @test D[1, 2] == zero(s)
-    @test isa(D[2, 1], SparseMatrixCSC)
 end
 
 @testset "linear solve for block diagonal matrices" begin
@@ -816,6 +831,10 @@ end
             DS = D \ M
             @test DS isa Tridiagonal
             DM = D \ Mm
+            for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
+            DS = M / D
+            @test DS isa Tridiagonal
+            DM = Mm / D
             for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
         end
     end

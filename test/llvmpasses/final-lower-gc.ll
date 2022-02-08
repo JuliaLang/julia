@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia-internal%shlibext -FinalLowerGC -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -FinalLowerGC -S %s | FileCheck %s
 
 @tag = external addrspace(10) global {}
 

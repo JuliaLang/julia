@@ -877,6 +877,8 @@ static void ensure_jit_target(bool imaging)
         auto &t = jit_targets[i];
         if (t.en.flags & JL_TARGET_CLONE_ALL)
             continue;
+        // Always clone when code checks CPU features
+        t.en.flags |= JL_TARGET_CLONE_CPU;
         // The most useful one in general...
         t.en.flags |= JL_TARGET_CLONE_LOOP;
         auto &features0 = jit_targets[t.base].en.features;

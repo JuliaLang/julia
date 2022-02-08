@@ -944,7 +944,7 @@ static void sweep_weak_refs(void)
 // big value list
 
 // Size includes the tag and the tag is not cleared!!
-JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
+static inline jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz)
 {
     maybe_collect(ptls);
     size_t offs = offsetof(bigval_t, header);
@@ -970,6 +970,22 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
     v->age = 0;
     gc_big_object_link(v, &ptls->heap.big_objects);
     return jl_valueof(&v->header);
+}
+
+// Instrumented version of jl_gc_big_alloc_inner, called into by LLVM-generated code.
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
+{
+    jl_value_t *val = jl_gc_big_alloc_inner(ptls, sz);
+
+    maybe_record_alloc_to_profile(val, sz, jl_gc_unknown_type_tag);
+    return val;
+}
+
+// This wrapper exists only to prevent `jl_gc_big_alloc_inner` from being inlined into
+// its callers. We provide an external-facing interface for callers, and inline `jl_gc_big_alloc_inner`
+// into this. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
+jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t sz) {
+    return jl_gc_big_alloc_inner(ptls, sz);
 }
 
 // Sweep list rooted at *pv, removing and freeing any unmarked objects.
@@ -1197,7 +1213,7 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
 }
 
 // Size includes the tag and the tag is not cleared!!
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
+static inline jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset,
                                           int osize)
 {
     // Use the pool offset instead of the pool address as the argument
@@ -1251,6 +1267,23 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
     }
     p->newpages = next;
     return jl_valueof(v);
+}
+
+// Instrumented version of jl_gc_pool_alloc_inner, called into by LLVM-generated code.
+JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
+                                          int osize)
+{
+    jl_value_t *val = jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
+
+    maybe_record_alloc_to_profile(val, osize, jl_gc_unknown_type_tag);
+    return val;
+}
+
+// This wrapper exists only to prevent `jl_gc_pool_alloc_inner` from being inlined into
+// its callers. We provide an external-facing interface for callers, and inline `jl_gc_pool_alloc_inner`
+// into this. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
+jl_value_t *jl_gc_pool_alloc_noinline(jl_ptls_t ptls, int pool_offset, int osize) {
+    return jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
 }
 
 int jl_gc_classify_pools(size_t sz, int *osize)
@@ -3205,6 +3238,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     uint64_t gc_end_t = jl_hrtime();
     uint64_t pause = gc_end_t - t0;
+
+    _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
+
     gc_final_pause_end(t0, gc_end_t);
     gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
@@ -3537,6 +3573,8 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     SetLastError(last_error);
 #endif
     errno = last_errno;
+    // jl_gc_managed_malloc is currently always used for allocating array buffers.
+    maybe_record_alloc_to_profile(b, sz, (jl_datatype_t*)jl_buff_tag);
     return b;
 }
 
@@ -3578,7 +3616,7 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
     SetLastError(last_error);
 #endif
     errno = last_errno;
-
+    maybe_record_alloc_to_profile(b, sz, jl_gc_unknown_type_tag);
     return b;
 }
 

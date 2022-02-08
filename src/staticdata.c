@@ -26,7 +26,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    151
+#define NUM_TAGS    152
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -106,6 +106,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_array_symbol_type);
         INSERT_TAG(jl_array_uint8_type);
         INSERT_TAG(jl_array_int32_type);
+        INSERT_TAG(jl_array_uint64_type);
         INSERT_TAG(jl_int32_type);
         INSERT_TAG(jl_int64_type);
         INSERT_TAG(jl_bool_type);
@@ -220,6 +221,7 @@ static arraylist_t deser_sym;
 static htable_t backref_table;
 static int backref_table_numel;
 static arraylist_t layout_table;
+static arraylist_t object_worklist;
 
 // list of (size_t pos, (void *f)(jl_value_t*)) entries
 // for the serializer to mark values in need of rework by function f
@@ -249,7 +251,8 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
-    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_opaque_closure_call,
+    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
+    &jl_f_set_binding_type, &jl_f_opaque_closure_call,
     NULL };
 
 typedef struct {
@@ -410,6 +413,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
                 jl_serialize_value(s, jl_atomic_load_relaxed(&b->value));
             jl_serialize_value(s, jl_atomic_load_relaxed(&b->globalref));
             jl_serialize_value(s, b->owner);
+            jl_serialize_value(s, jl_atomic_load_relaxed(&b->ty));
         }
     }
 
@@ -453,7 +457,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int recur
     else if (jl_typeis(v, jl_uint8_type)) {
         return;
     }
+    arraylist_push(&object_worklist, (void*)((uintptr_t)v | recursive));
+}
 
+static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recursive)
+{
     void **bp = ptrhash_bp(&backref_table, v);
     if (*bp != HT_NOTFOUND) {
         return;
@@ -528,6 +536,29 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int recur
             jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr]);
             jl_serialize_value(s, fld);
         }
+    }
+}
+
+// Do a pre-order traversal of the to-serialize worklist, in the identical order
+// to the calls to jl_serialize_value would occur in a purely recursive
+// implementation, but without potentially running out of stack.
+static void jl_serialize_reachable(jl_serializer_state *s)
+{
+    size_t i, prevlen = 0;
+    while (object_worklist.len) {
+        // reverse!(object_worklist.items, prevlen:end);
+        // prevlen is the index of the first new object
+        for (i = prevlen; i < object_worklist.len; i++) {
+            size_t j = object_worklist.len - i + prevlen - 1;
+            void *tmp = object_worklist.items[i];
+            object_worklist.items[i] = object_worklist.items[j];
+            object_worklist.items[j] = tmp;
+        }
+        prevlen = --object_worklist.len;
+        uintptr_t v = (uintptr_t)object_worklist.items[prevlen];
+        int recursive = v & 1;
+        v &= ~(uintptr_t)1; // untag v
+        jl_serialize_value__(s, (jl_value_t*)v, recursive);
     }
 }
 
@@ -672,7 +703,8 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
                 write_pointerfield(s, jl_atomic_load_relaxed(&b->value));
             write_pointerfield(s, jl_atomic_load_relaxed(&b->globalref));
             write_pointerfield(s, (jl_value_t*)b->owner);
-            size_t flag_offset = offsetof(jl_binding_t, owner) + sizeof(b->owner);
+            write_pointerfield(s, jl_atomic_load_relaxed(&b->ty));
+            size_t flag_offset = offsetof(jl_binding_t, ty) + sizeof(b->ty);
             ios_write(s->s, (char*)b + flag_offset, sizeof(*b) - flag_offset);
             tot += sizeof(jl_binding_t);
             count += 1;
@@ -1063,6 +1095,16 @@ static void jl_write_values(jl_serializer_state *s)
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_typename_t, atomicfields))); // relocation location
                     arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
                     ios_write(s->const_data, (char*)tn->atomicfields, nb);
+                }
+                if (tn->constfields != NULL) {
+                    size_t nb = (jl_svec_len(tn->names) + 31) / 32 * sizeof(uint32_t);
+                    uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
+                    write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
+                    newtn->constfields = NULL; // relocation offset
+                    layout /= sizeof(void*);
+                    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_typename_t, constfields))); // relocation location
+                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
+                    ios_write(s->const_data, (char*)tn->constfields, nb);
                 }
             }
             else if (((jl_datatype_t*)(jl_typeof(v)))->name == jl_idtable_typename) {
@@ -1639,14 +1681,31 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     return 1;
 }
 
-static void strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
+static int strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
 {
-    jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
+    return jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
 }
 
 static void jl_strip_all_codeinfos(void)
 {
     jl_foreach_reachable_mtable(strip_all_codeinfos_, NULL);
+}
+
+static int set_nroots_sysimg__(jl_typemap_entry_t *def, void *_env)
+{
+    jl_method_t *m = def->func.method;
+    m->nroots_sysimg = m->roots ? jl_array_len(m->roots) : 0;
+    return 1;
+}
+
+static void set_nroots_sysimg_(jl_methtable_t *mt, void *_env)
+{
+    jl_typemap_visitor(mt->defs, set_nroots_sysimg__, NULL);
+}
+
+static void jl_set_nroots_sysimg(void)
+{
+    jl_foreach_reachable_mtable(set_nroots_sysimg_, NULL);
 }
 
 // --- entry points ---
@@ -1664,12 +1723,14 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir)
         jl_strip_all_codeinfos();
+    jl_set_nroots_sysimg();
 
     int en = jl_gc_enable(0);
     jl_init_serializer2(1);
     htable_reset(&backref_table, 250000);
     arraylist_new(&reinit_list, 0);
     arraylist_new(&ccallable_list, 0);
+    arraylist_new(&object_worklist, 0);
     backref_table_numel = 0;
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
     ios_mem(&sysimg,     1000000);
@@ -1718,6 +1779,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
             jl_value_t *tag = *tags[i];
             jl_serialize_value(&s, tag);
         }
+        jl_serialize_reachable(&s);
         // step 1.1: check for values only found in the generated code
         arraylist_t typenames;
         arraylist_new(&typenames, 0);
@@ -1732,6 +1794,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
             jl_scan_type_cache_gv(&s, tn->cache);
             jl_scan_type_cache_gv(&s, tn->linearcache);
         }
+        jl_serialize_reachable(&s);
         // step 1.2: prune (garbage collect) some special weak references from
         // built-in type caches
         for (i = 0; i < typenames.len; i++) {
@@ -1804,6 +1867,8 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
         jl_finalize_serializer(&s, &ccallable_list);
     }
 
+    assert(object_worklist.len == 0);
+    arraylist_free(&object_worklist);
     arraylist_free(&layout_table);
     arraylist_free(&reinit_list);
     arraylist_free(&ccallable_list);

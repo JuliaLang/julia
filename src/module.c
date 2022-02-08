@@ -32,6 +32,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, uint8_t default_names)
     m->optlevel = -1;
     m->compile = -1;
     m->infer = -1;
+    m->max_methods = -1;
     JL_MUTEX_INIT(&m->lock);
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -125,6 +126,21 @@ JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m)
     return value;
 }
 
+JL_DLLEXPORT void jl_set_module_max_methods(jl_module_t *self, int value)
+{
+    self->max_methods = value;
+}
+
+JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m)
+{
+    int value = m->max_methods;
+    while (value == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        value = m->max_methods;
+    }
+    return value;
+}
+
 JL_DLLEXPORT void jl_set_istopmod(jl_module_t *self, uint8_t isprimary)
 {
     self->istopmod = 1;
@@ -146,6 +162,7 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     b->name = name;
     b->value = NULL;
     b->owner = NULL;
+    b->ty = NULL;
     b->globalref = NULL;
     b->constp = 0;
     b->exportp = 0;
@@ -357,6 +374,20 @@ JL_DLLEXPORT jl_value_t *jl_binding_owner(jl_module_t *m, jl_sym_t *var)
     if (b == NULL || b->owner == NULL)
         return jl_nothing;
     return (jl_value_t*)b->owner;
+}
+
+// get type of binding m.var, without resolving the binding
+JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var)
+{
+    JL_LOCK(&m->lock);
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    if (b == HT_NOTFOUND || b->owner == NULL)
+        b = using_resolve_binding(m, var, NULL, 0);
+    JL_UNLOCK(&m->lock);
+    if (b == NULL)
+        return jl_nothing;
+    jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
+    return ty ? ty : jl_nothing;
 }
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
@@ -655,6 +686,8 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
                 return;
             }
         }
+	jl_value_t *old_ty = NULL;
+        jl_atomic_cmpswap_relaxed(&bp->ty, &old_ty, (jl_value_t*)jl_any_type);
     }
     jl_errorf("invalid redefinition of constant %s",
               jl_symbol_name(bp->name));
@@ -771,8 +804,13 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
     }
 }
 
-JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
+    jl_value_t *old_ty = NULL;
+    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type) && !jl_isa(rhs, old_ty)) {
+        jl_errorf("cannot set type for global %s. It already has a value of a different type.",
+                  jl_symbol_name(b->name));
+    }
     if (b->constp) {
         jl_value_t *old = NULL;
         if (jl_atomic_cmpswap(&b->value, &old, rhs)) {

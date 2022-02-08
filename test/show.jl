@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra, SparseArrays
+using LinearAlgebra
 
 # For curmod_*
 include("testenv.jl")
@@ -524,6 +524,10 @@ end
 module M1 var"#foo#"() = 2 end
 @test occursin("M1.var\"#foo#\"", sprint(show, M1.var"#foo#", context = :module=>@__MODULE__))
 
+# PR #43932
+module var"#43932#" end
+@test endswith(sprint(show, var"#43932#"), ".var\"#43932#\"")
+
 # issue #12477
 @test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
 
@@ -728,28 +732,6 @@ let filename = tempname()
 
     @test occursin("WARNING: hello", ret)
     rm(filename)
-end
-
-# issue #12960
-mutable struct T12960 end
-import Base.zero
-Base.zero(::Type{T12960}) = T12960()
-Base.zero(x::T12960) = T12960()
-let
-    A = sparse(1.0I, 3, 3)
-    B = similar(A, T12960)
-    @test repr(B) == "sparse([1, 2, 3], [1, 2, 3], $T12960[#undef, #undef, #undef], 3, 3)"
-    @test occursin(
-        "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
-        repr(MIME("text/plain"), B),
-    )
-
-    B[1,2] = T12960()
-    @test repr(B)  == "sparse([1, 1, 2, 3], [1, 2, 2, 3], $T12960[#undef, $T12960(), #undef, #undef], 3, 3)"
-    @test occursin(
-        "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
-        repr(MIME("text/plain"), B),
-    )
 end
 
 # issue #13127
@@ -1877,11 +1859,10 @@ end
 
 @testset "#14684: `display` should print associative types in full" begin
     d = Dict(1 => 2, 3 => 45)
-    buf = IOBuffer()
-    td = TextDisplay(buf)
+    td = TextDisplay(PipeBuffer())
 
     display(td, d)
-    result = String(take!(td.io))
+    result = read(td.io, String)
     @test occursin(summary(d), result)
 
     # Is every pair in the string?
@@ -1890,30 +1871,41 @@ end
     end
 end
 
-function _methodsstr(f)
+@testset "#43766: `display` trailing newline" begin
+    td = TextDisplay(PipeBuffer())
+    display(td, 1)
+    @test read(td.io, String) == "1\n"
+    show(td.io, 1)
+    @test read(td.io, String) == "1"
+end
+
+function _methodsstr(@nospecialize f)
     buf = IOBuffer()
     show(buf, methods(f))
-    String(take!(buf))
+    return String(take!(buf))
 end
 
 @testset "show function methods" begin
-    @test occursin("methods for generic function \"sin\":", _methodsstr(sin))
+    @test occursin("methods for generic function \"sin\":\n", _methodsstr(sin))
 end
 @testset "show macro methods" begin
-    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\":")
+    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\":\n")
 end
 @testset "show constructor methods" begin
-    @test occursin("methods for type constructor:\n", _methodsstr(Vector))
+    @test occursin(" methods for type constructor:\n", _methodsstr(Vector))
 end
 @testset "show builtin methods" begin
-    @test startswith(_methodsstr(typeof), "# built-in function; no methods")
+    @test startswith(_methodsstr(typeof), "# 1 method for builtin function \"typeof\":\n")
 end
 @testset "show callable object methods" begin
-    @test occursin("methods:", _methodsstr(:))
+    @test occursin("methods for callable object:\n", _methodsstr(:))
 end
 @testset "#20111 show for function" begin
     K20111(x) = y -> x
     @test startswith(_methodsstr(K20111(1)), "# 1 method for anonymous function")
+end
+@testset "show non-callable object" begin
+    @test "# 0 methods for callable object" == _methodsstr(1.0f0)
 end
 
 @generated f22798(x::Integer, y) = :x
@@ -2014,7 +2006,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             "three"
         end
     return y
-end""", "a"^80, 1, :statement)[1]) # use parse to control the line numbers
+end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
@@ -2354,4 +2346,12 @@ end
     @test_repr "T[1;;; 2]"
     @test_repr "T[1;;; 2 3;;; 4]"
     @test_repr "T[1;;; 2;;;; 3;;; 4]"
+end
+
+@testset "Cmd" begin
+    @test sprint(show, `true`) == "`true`"
+    @test sprint(show, setenv(`true`, "A" => "B")) == """setenv(`true`,["A=B"])"""
+    @test sprint(show, setcpuaffinity(`true`, [1, 2])) == "setcpuaffinity(`true`, [1, 2])"
+    @test sprint(show, setenv(setcpuaffinity(`true`, [1, 2]), "A" => "B")) ==
+          """setenv(setcpuaffinity(`true`, [1, 2]),["A=B"])"""
 end

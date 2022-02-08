@@ -99,7 +99,7 @@ endif
 $(BUILDDIR)/version_git.jl.phony: $(SRCDIR)/version_git.sh
 ifneq ($(NO_GIT), 1)
 	sh $< $(SRCDIR) > $@
-	@# This to avoid touching git_version.jl when it is not modified,
+	@# This to avoid touching version_git.jl when it is not modified,
 	@# so that the system image does not need to be rebuilt.
 	@if ! cmp -s $@ version_git.jl; then \
 	    $(call PRINT_PERL,) \

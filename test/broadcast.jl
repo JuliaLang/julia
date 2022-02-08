@@ -516,7 +516,7 @@ Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
     @test a .+ 1 .* 2  == @inferred(fadd2(aa))
     @test a .* a' == @inferred(fprod(aa))
     @test isequal(a .+ [missing; 1:9], fadd3(aa))
-    @test Core.Compiler.return_type(fadd3, (typeof(aa),)) <: Array19745{<:Union{Float64, Missing}}
+    @test Core.Compiler.return_type(fadd3, Tuple{typeof(aa),}) <: Array19745{<:Union{Float64, Missing}}
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .+ 1 .* 2, Array19745)
     @test isa(aa .* aa', Array19745)
@@ -1069,4 +1069,13 @@ end
     arr = rand(1000)
     @allocated test(arr)
     @test (@allocated test(arr)) == 0
+end
+
+@testset "Fix type unstable .&& #43470" begin
+    function test(x, y)
+        return (x .> 0.0) .&& (y .> 0.0)
+    end
+    x = randn(2)
+    y = randn(2)
+    @inferred(test(x, y)) == [0, 0]
 end

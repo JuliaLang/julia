@@ -269,3 +269,16 @@ If you need to build Julia from source with a Git checkout of a stdlib, then use
 For example, if you need to build Julia from source with a Git checkout of Pkg, then use `make DEPS_GIT=Pkg` when building Julia. The `Pkg` repo is in `stdlib/Pkg`, and created initially with a detached `HEAD`. If you're doing this from a pre-existing Julia repository, you may need to `make clean` beforehand.
 
 If you need to build Julia from source with Git checkouts of more than one stdlib, then `DEPS_GIT` should be a space-separated list of the stdlib names. For example, if you need to build Julia from source with a Git checkout of Pkg, Tar, and Downloads, then use `make DEPS_GIT='Pkg Tar Downloads'` when building Julia.
+
+## Building an "assert build" of Julia
+
+An "assert build" of Julia is a build that was built with both `FORCE_ASSERTIONS=1` and
+`LLVM_ASSERTIONS=1`. To build an assert build, define both of the following variables
+in your `Make.user` file:
+
+```
+FORCE_ASSERTIONS=1
+LLVM_ASSERTIONS=1
+```
+
+Please note that assert builds of Julia will be slower than regular (non-assert) builds.

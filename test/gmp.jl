@@ -278,10 +278,23 @@ end
     @test (|)(a, b, c, d) == parse(BigInt,"-1396834561")
     @test (|)(a, b, c, d, f) == parse(BigInt,"-1358954753")
     @test (|)(a, b, c, d, f, g) == parse(BigInt,"-1")
+end
 
-    @test trailing_ones(a) == 8
-    @test trailing_zeros(b) == 2
-    @test count_ones(a) == 14
+@testset "bit operations" begin
+    for x in (315135, 12412, 3426495623485904783478347)
+        @test trailing_ones(big(x)) == trailing_ones(x)
+        @test trailing_zeros(big(x)) == trailing_zeros(x)
+        @test count_ones(big(x)) == count_ones(x)
+        @test count_zeros(-big(x)) == count_zeros(-x)
+    end
+
+    @test_throws DomainError trailing_zeros(big(0))
+    @test_throws DomainError trailing_ones(big(-1)) # -1 is all ones
+
+    @test_throws DomainError count_zeros(big(0))
+    @test_throws DomainError count_zeros(big(rand(UInt)))
+    @test_throws DomainError count_ones(big(-1))
+    @test_throws DomainError count_ones(-big(rand(UInt))-1)
 end
 
 # Large Fibonacci to exercise BigInt

@@ -6,8 +6,8 @@ export BigInt
 
 import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
              binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
-             ndigits, promote_rule, rem, show, isqrt, string, powermod,
-             sum, prod, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
+             ndigits, promote_rule, rem, show, isqrt, string, powermod, sum, prod,
+             trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              sign, hastypemax, isodd, iseven, digits!, hash, hash_integer
@@ -178,7 +178,9 @@ ui_sub!(x::BigInt, a, b::BigInt) = (ccall((:__gmpz_ui_sub, :libgmp), Cvoid, (mpz
 ui_sub(a, b::BigInt) = ui_sub!(BigInt(), a, b)
 
 for op in (:scan1, :scan0)
-    @eval $op(a::BigInt, b) = Int(ccall($(gmpz(op)), Culong, (mpz_t, Culong), a, b))
+    # when there is no meaningful answer, ccall returns typemax(Culong), where Culong can
+    # be UInt32 (Windows) or UInt64; we return -1 in this case for all architectures
+    @eval $op(a::BigInt, b) = Int(signed(ccall($(gmpz(op)), Culong, (mpz_t, Culong), a, b)))
 end
 
 mul_si!(x::BigInt, a::BigInt, b) = (ccall((:__gmpz_mul_si, :libgmp), Cvoid, (mpz_t, mpz_t, Clong), x, a, b); x)
@@ -203,7 +205,7 @@ for (op, T) in ((:fac_ui, Culong), (:set_ui, Culong), (:set_si, Clong), (:set_d,
     end
 end
 
-popcount(a::BigInt) = Int(ccall((:__gmpz_popcount, :libgmp), Culong, (mpz_t,), a))
+popcount(a::BigInt) = Int(signed(ccall((:__gmpz_popcount, :libgmp), Culong, (mpz_t,), a)))
 
 mpn_popcount(d::Ptr{Limb}, s::Integer) = Int(ccall((:__gmpn_popcount, :libgmp), Culong, (Ptr{Limb}, Csize_t), d, s))
 mpn_popcount(a::BigInt) = mpn_popcount(a.d, abs(a.size))
@@ -552,10 +554,30 @@ end
 >>(x::BigInt, c::UInt) = c == 0 ? x : MPZ.fdiv_q_2exp(x, c)
 >>>(x::BigInt, c::UInt) = x >> c
 
-trailing_zeros(x::BigInt) = MPZ.scan1(x, 0)
-trailing_ones(x::BigInt) = MPZ.scan0(x, 0)
+function trailing_zeros(x::BigInt)
+    c = MPZ.scan1(x, 0)
+    c == -1 && throw(DomainError(x, "`x` must be non-zero"))
+    c
+end
 
-count_ones(x::BigInt) = MPZ.popcount(x)
+function trailing_ones(x::BigInt)
+    c = MPZ.scan0(x, 0)
+    c == -1 && throw(DomainError(x, "`x` must not be equal to -1"))
+    c
+end
+
+function count_ones(x::BigInt)
+    c = MPZ.popcount(x)
+    c == -1 && throw(DomainError(x, "`x` cannot be negative"))
+    c
+end
+
+# generic definition is not used to provide a better error message
+function count_zeros(x::BigInt)
+    c = MPZ.popcount(~x)
+    c == -1 && throw(DomainError(x, "`x` must be negative"))
+    c
+end
 
 """
     count_ones_abs(x::BigInt)

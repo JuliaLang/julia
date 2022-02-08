@@ -61,6 +61,7 @@ LLVM_LIB_FILE := libLLVMCodeGen.a
 
 # Figure out which targets to build
 LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly;BPF
+LLVM_EXPERIMENTAL_TARGETS :=
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
@@ -83,6 +84,7 @@ LLVM_CXXFLAGS += $(CXXFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
+LLVM_CMAKE += -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD:STRING="$(LLVM_EXPERIMENTAL_TARGETS)"
 LLVM_CMAKE += -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
 LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=ON -DZLIB_LIBRARY="$(build_prefix)/lib"
 LLVM_CMAKE += -DCOMPILER_RT_ENABLE_IOS=OFF -DCOMPILER_RT_ENABLE_WATCHOS=OFF -DCOMPILER_RT_ENABLE_TVOS=OFF
@@ -175,10 +177,6 @@ ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
 endif
 
-# disable ABI breaking checks: by default only enabled for asserts build, in which case
-# it is then impossible to call non-asserts LLVM libraries (like out-of-tree backends)
-LLVM_CMAKE += -DLLVM_ABI_BREAKING_CHECKS=FORCE_OFF
-
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
 	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)"
 ifeq ($(OS),Darwin)
@@ -233,48 +231,6 @@ $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/so
 $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
-
-ifeq ($(LLVM_VER_SHORT),11.0)
-ifeq ($(LLVM_VER_PATCH), 0)
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1)) # remove for LLVM 12
-endif # LLVM_VER 11.0.0
-$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # replaced by D90969 for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS)) # Needs upstreaming
-$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm7-revert-D44485)) # Needs upstreaming
-$(eval $(call LLVM_PATCH,llvm-11-D75072-SCEV-add-type))
-$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
-$(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
-ifeq ($(LLVM_VER_PATCH), 0)
-$(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
-endif # LLVM_VER 11.0.0
-$(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa)) # Needs upstreaming
-ifeq ($(BUILD_LLVM_CLANG),1)
-$(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
-endif
-ifeq ($(LLVM_VER_PATCH), 0)
-$(eval $(call LLVM_PATCH,llvm-11-D85313-debuginfo-empty-arange)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-11-D90722-rtdyld-absolute-relocs)) # remove for LLVM 12
-endif # LLVM_VER 11.0.0
-$(eval $(call LLVM_PATCH,llvm-invalid-addrspacecast-sink)) # Still being upstreamed as D92210
-$(eval $(call LLVM_PATCH,llvm-11-D92906-ppc-setjmp)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-11-PR48458-X86ISelDAGToDAG)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-11-D93092-ppc-knownbits)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-11-D93154-globalisel-as))
-$(eval $(call LLVM_PATCH,llvm-11-ppc-half-ctr)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-11-ppc-sp-from-bp)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-rGb498303066a6-gcc11-header-fix)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-11-D94813-mergeicmps))
-$(eval $(call LLVM_PATCH,llvm-11-D94980-CTR-half)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-11-D94058-sext-atomic-ops)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-11-D96283-dagcombine-half)) # remove for LLVM 12
-$(eval $(call LLVM_PROJ_PATCH,llvm-11-AArch64-FastIsel-bug))
-$(eval $(call LLVM_PROJ_PATCH,llvm-11-D97435-AArch64-movaddrreg))
-$(eval $(call LLVM_PROJ_PATCH,llvm-11-D97571-AArch64-loh)) # remove for LLVM 13
-$(eval $(call LLVM_PROJ_PATCH,llvm-11-aarch64-addrspace)) # remove for LLVM 13
-endif # LLVM_VER 11.0
 
 # NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
 

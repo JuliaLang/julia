@@ -39,6 +39,7 @@ Base.methods
 Base.@show
 ans
 Base.active_project
+Base.set_active_project
 ```
 
 ## [Keywords](@id Keywords)
@@ -179,7 +180,12 @@ Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
+Core.fieldtype
+Base.fieldtypes
+Base.fieldcount
 Base.hasfield
+Core.nfields
+Base.isconst
 ```
 
 ### Memory layout
@@ -189,9 +195,6 @@ Base.sizeof(::Type)
 Base.isconcretetype
 Base.isbits
 Base.isbitstype
-Core.fieldtype
-Base.fieldtypes
-Base.fieldcount
 Base.fieldoffset
 Base.datatype_alignment
 Base.datatype_haspadding
@@ -313,6 +316,7 @@ Base.Cmd
 Base.setenv
 Base.addenv
 Base.withenv
+Base.setcpuaffinity
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
 Base.Libc.gethostname
@@ -417,8 +421,6 @@ Base.@__DIR__
 Base.@__LINE__
 Base.fullname
 Base.names
-Core.nfields
-Base.isconst
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
@@ -432,6 +434,7 @@ Base.GC.gc
 Base.GC.enable
 Base.GC.@preserve
 Base.GC.safepoint
+Base.GC.enable_logging
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)
