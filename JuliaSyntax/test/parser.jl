@@ -229,14 +229,13 @@ tests = [
         "f(a).g(b)" => "(call (. (call f a) (quote g)) b)"
         "\$A.@x"    =>  "(macrocall (. (\$ A) (quote @x)))"
         # do
-        "f() do x, y\n body end"  =>  "(do (call f) (-> (tuple x y) (block body)))"
         "f() do\nend"         =>  "(do (call f) (-> (tuple) (block)))"
         "f() do ; body end"   =>  "(do (call f) (-> (tuple) (block body)))"
-        "f(x) do y,z body end"  =>  "(do (call f x) (-> (tuple y z) (block body)))"
+        "f() do x, y\n body end"  =>  "(do (call f) (-> (tuple x y) (block body)))"
+        "f(x) do y body end"  =>  "(do (call f x) (-> (tuple y) (block body)))"
         # Keyword arguments depend on call vs macrocall
         "foo(a=1)"  =>  "(call foo (kw a 1))"
         "@foo(a=1)" =>  "(macrocall @foo (= a 1))"
-        # f(x) do y body end  ==>  (do (call f x) (-> (tuple y) (block body)))
         "@foo a b"     =>  "(macrocall @foo a b)"
         "@foo (x)"     =>  "(macrocall @foo x)"
         "@foo (x,y)"   =>  "(macrocall @foo (tuple x y))"
@@ -245,6 +244,10 @@ tests = [
         "[@foo \"x\"]"   =>  "(vect (macrocall @foo \"x\"))"
         "[f (x)]"     =>  "(hcat f x)"
         "[f \"x\"]"   =>  "(hcat f \"x\")"
+        # Macro names
+        "@! x"  => "(macrocall @! x)"
+        "@.. x" => "(macrocall @.. x)"
+        "@\$ y"  => "(macrocall @\$ y)"
         # Special @doc parsing rules
         "@doc x\ny"    =>  "(macrocall @doc x y)"
         "A.@doc x\ny"  =>  "(macrocall (. A (quote @doc)) x y)"
@@ -670,9 +673,7 @@ broken_tests = [
         # Triple-quoted string processing
         "\"\"\"\n\$x\"\"\"" => "(string x)"
         "\"\"\"\$x\n\"\"\"" => "(string x \"\n\")"
-        # Operator-named macros with and without spaces
-        "@! x"  => "(macrocall @! x)"
-        "@.. x" => "(macrocall @.. x)"
+        # Operator-named macros without spaces
         "@!x"   => "(macrocall @! x)"
         "@..x"  => "(macrocall @.. x)"
         "@.x"   => "(macrocall @__dot__ x)"

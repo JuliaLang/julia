@@ -365,7 +365,8 @@ parsing `key=val` pairs inside parentheses.
 Flattened generators are uniquely problematic because the Julia AST doesn't
 respect a key rule we normally expect: that the children of an AST node are a
 *contiguous* range in the source text. This is because the `for`s in
-`[xy for x in xs for y in ys]` are parsed in the normal order of a for loop as
+`[xy for x in xs for y in ys]` are parsed in the normal order of a for loop to
+mean
 
 ```
 for x in xs
@@ -373,7 +374,8 @@ for y in ys
   push!(xy, collection)
 ```
 
-and the standard Julia AST is like this:
+so the `xy` prefix is in the *body* of the innermost for loop. Following this,
+the standard Julia AST is like so:
 
 ```
 (flatten
@@ -384,10 +386,13 @@ and the standard Julia AST is like this:
     (= x xs)))
 ```
 
-however, note that if this tree were flattened, the order of tokens would be
-`(xy) (y in ys) (x in xs)` which is *not* the source order.  So in this case
-our green tree must deviate from the Julia AST. The natural representation
-seems to be to flatten the generators:
+however, note that if this tree were flattened, the order would be
+`(xy) (y in ys) (x in xs)` and the `x` and `y` iterations are *opposite* of the
+source order.
+
+However, our green tree is strictly source-ordered, so we must deviate from the
+Julia AST. The natural representation seems to be to remove the generators and
+use a flattened structure:
 
 ```
 (flatten
@@ -437,6 +442,21 @@ seems to be to flatten the generators:
 
 * In braces after macrocall, `@S{a b}` is invalid but both `@S{a,b}` and
   `@S {a b}` parse. Conversely, `@S[a b]` parses.
+
+* Macro names and invocations are post-processed from the output of
+  `parse-atom` / `parse-call`, which leads to some surprising and questionable
+  constructs which "work":
+  - Absurdities like `@(((((a))))) x ==> (macrocall @a x)`
+  - Infix macros!? `@(x + y)  ==>  (macrocall @+ x y)` (ok, kinda cute and has
+    some weird logic to it... but what?)
+  - Similarly additional parentheses are allowed `@(f(x)) ==> (macrocall @f x)`
+
+* Allowing `@` first in macro module paths (eg `@A.B.x` instead of `A.B.@x`)
+  seems like unnecessary variation in syntax. It makes parsing valid macro
+  module paths more complex and leads to oddities like `@$.x y ==> (macrocall
+  ($ (quote x)) y` where the `$` is first parsed as a macro name, but turns out
+  to be the module name after the `.` is parsed. But `$` can never be a valid
+  module name in normal Julia code so this makes no sense.
 
 # Comparisons to other packages
 
