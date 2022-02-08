@@ -854,3 +854,12 @@ function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
     r += dot(adjoint(du[nx-1])*x₀ + adjoint(d[nx])*x₊, y[nx])
     return r
 end
+
+function cholesky(S::SymTridiagonal, ::NoPivot = NoPivot(); check::Bool = true)
+    if !ishermitian(S)
+        check && checkpositivedefinite(-1)
+        return Cholesky(S, 'U', convert(BlasInt, -1))
+    end
+    T = choltype(eltype(S))
+    cholesky!(Hermitian(Bidiagonal{T}(diag(S, 0), diag(S, 1), :U)), NoPivot(); check = check)
+end

@@ -755,7 +755,9 @@ end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 
 cholesky(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true) =
-    cholesky!(cholcopy(A), NoPivot(); check = check)
+    cholesky!(copy_oftype(A, choltype(eltype(A))), NoPivot(); check = check)
+cholesky(A::RealHermSymComplexHerm{<:Any,<:Diagonal}, ::NoPivot = NoPivot(); check::Bool = true) =
+    cholesky!(copy_oftype(A, choltype(eltype(A))), NoPivot(); check = check)
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
 
 function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)

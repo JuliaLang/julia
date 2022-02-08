@@ -124,8 +124,17 @@ end
         end
 
         # test cholesky of 2x2 Strang matrix
-        S = Matrix{eltya}(SymTridiagonal([2, 2], [-1]))
+        S = SymTridiagonal{eltya}([2, 2], [-1])
+        for uplo in (:U, :L)
+            @test (@inferred cholesky(Hermitian(S, uplo))) isa Cholesky{eltya,<:Bidiagonal}
+            @test Matrix(cholesky(Hermitian(S, uplo))) ≈ S
+            if eltya <: Real
+                @test (@inferred cholesky(Symmetric(S, uplo))) isa Cholesky{eltya,<:Bidiagonal}
+                @test Matrix(cholesky(Symmetric(S, uplo))) ≈ S
+            end
+        end
         @test Matrix(cholesky(S).U) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
+        @test Matrix(cholesky(S)) ≈ S
 
         # test extraction of factor and re-creating original matrix
         if eltya <: Real
@@ -370,6 +379,10 @@ end
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
+
+    F = cholesky(Hermitian(I(3)))
+    @test F isa Cholesky{Float64,<:Diagonal}
+    @test Matrix(F) ≈ I(3)
 
     # real, failing
     @test_throws PosDefException cholesky(Diagonal([1.0, -2.0]))

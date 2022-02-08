@@ -179,7 +179,7 @@ Base.iterate(C::CholeskyPivoted, ::Val{:done}) = nothing
 
 # make a copy that allow inplace Cholesky factorization
 @inline choltype(A) = promote_type(typeof(sqrt(oneunit(eltype(A)))), Float32)
-@inline cholcopy(A) = copy_oftype(A, choltype(A))
+@inline cholcopy(A) = copy_similar(A, choltype(A))
 
 # _chol!. Internal methods for calling unpivoted Cholesky
 ## BLAS/LAPACK element types
@@ -350,7 +350,7 @@ end
 
 Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
 and return a [`Cholesky`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref) or [`Hermitian`](@ref)
-[`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
+[`AbstractMatrix`](@ref) or a *perfectly* symmetric or Hermitian `AbstractMatrix`.
 
 The triangular Cholesky factor can be obtained from the factorization `F` via `F.L` and `F.U`,
 where `A ≈ F.U' * F.U ≈ F.L * F.L'`.
@@ -397,11 +397,11 @@ julia> C.L * C.U == A
 true
 ```
 """
-cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
+cholesky(A::Union{AbstractMatrix,RealHermSymComplexHerm},
     ::NoPivot=NoPivot(); check::Bool = true) = cholesky!(cholcopy(A); check = check)
 @deprecate cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{false}; check::Bool = true) cholesky(A, NoPivot(); check) false
 
-function cholesky(A::Union{StridedMatrix{Float16},RealHermSymComplexHerm{Float16,<:StridedMatrix}}, ::NoPivot=NoPivot(); check::Bool = true)
+function cholesky(A::Union{AbstractMatrix{Float16},RealHermSymComplexHerm{Float16}}, ::NoPivot=NoPivot(); check::Bool = true)
     X = cholesky!(cholcopy(A); check = check)
     return Cholesky{Float16}(X)
 end
@@ -413,7 +413,7 @@ end
 
 Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
 and return a [`CholeskyPivoted`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref)
-or [`Hermitian`](@ref) [`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
+or [`Hermitian`](@ref) [`AbstractMatrix`](@ref) or a *perfectly* symmetric or Hermitian `AbstractMatrix`.
 
 The triangular Cholesky factor can be obtained from the factorization `F` via `F.L` and `F.U`,
 and the permutation via `F.p`, where `A[F.p, F.p] ≈ Ur' * Ur ≈ Lr * Lr'` with `Ur = F.U[1:F.rank, :]`
@@ -463,7 +463,7 @@ julia> l == C.L && u == C.U
 true
 ```
 """
-cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
+cholesky(A::Union{AbstractMatrix,RealHermSymComplexHerm},
     ::RowMaximum; tol = 0.0, check::Bool = true) =
     cholesky!(cholcopy(A), RowMaximum(); tol = tol, check = check)
 @deprecate cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0, check::Bool = true) cholesky(A, RowMaximum(); tol, check) false
