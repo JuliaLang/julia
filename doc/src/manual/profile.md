@@ -356,10 +356,12 @@ Passing `sample_rate=1.0` will make it record everything (which is slow);
 !!! note
 
     The current implementation of the Allocations Profiler _does not
-    capture all allocations._ You can read more about the missing allocations
-    and the plan to improve this, here: https://github.com/JuliaLang/julia/issues/43688.
-    Calling `Profile.Allocs.fetch()` will print a log line reporting the percentage
-    of missed allocations, so you can understand the accuracy of your profile.
+    capture types for all allocations._ Allocations for which the profiler
+    could not capture the type are represented as having type
+    `Profile.Allocs.UnknownType`.
+
+    You can read more about the missing types and the plan to improve this, here:
+    https://github.com/JuliaLang/julia/issues/43688.
 
 ## External Profiling
 
