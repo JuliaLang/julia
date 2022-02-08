@@ -889,7 +889,7 @@ end
 function lex_amper(l::Lexer)
     if accept(l, '&')
         return emit(l, Tokens.LAZY_AND)
-    elseif accept(l, "=")
+    elseif accept(l, '=')
         return emit(l, Tokens.AND_EQ)
     else
         return emit(l, Tokens.AND)
@@ -964,13 +964,13 @@ end
 # Parse a token starting with a forward slash.
 # A '/' has been consumed
 function lex_forwardslash(l::Lexer)
-    if accept(l, "/") # //
-        if accept(l, "=") # //=
+    if accept(l, '/') # //
+        if accept(l, '=') # //=
             return emit(l, Tokens.FWDFWD_SLASH_EQ)
         else
             return emit(l, Tokens.FWDFWD_SLASH)
         end
-    elseif accept(l, "=") # /=
+    elseif accept(l, '=') # /=
         return emit(l, Tokens.FWD_SLASH_EQ)
     else
         return emit(l, Tokens.FWD_SLASH)
@@ -1038,10 +1038,10 @@ function lex_dot(l::Lexer)
         elseif pc =='&'
             l.dotop = true
             readchar(l)
-            if accept(l, "=")
+            if accept(l, '=')
                 return emit(l, Tokens.AND_EQ)
             else
-                if accept(l, "&")
+                if accept(l, '&')
                     return emit(l, Tokens.LAZY_AND)
                 end
                 return emit(l, Tokens.AND)
@@ -1057,7 +1057,7 @@ function lex_dot(l::Lexer)
         elseif pc == '|'
             l.dotop = true
             readchar(l)
-            if accept(l, "|")
+            if accept(l, '|')
                 return emit(l, Tokens.LAZY_OR)
             end
             return lex_bar(l)
