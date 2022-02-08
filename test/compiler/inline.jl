@@ -924,6 +924,7 @@ end
     end
 
     @test fully_eliminated(m.f, Tuple{}, Int)
-    @test !fully_eliminated(m.g, Tuple{})
+    src = code_typed(m.g, ())[][1]
+    @test count(iscall((src, Core.get_binding_type)), src.code) == 1
     @test m.g() === Any
 end
