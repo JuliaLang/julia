@@ -892,7 +892,7 @@ OPENBLAS_TARGET_ARCH:=ARMV7
 endif
 
 # on x86 make sure not to use 80 bit math when we want 64 bit math.
-ifeq ($(BUILD_ARCH),i386)
+ifeq (1,$(ISX86))
 JCFLAGS += -mfpmath=sse
 endif
 # If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
