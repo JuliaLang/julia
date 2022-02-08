@@ -40,6 +40,16 @@ usdt:usr/lib/libjulia-internal.so:julia:rt__finish__process__events
     printf("Task processed libuv events: %x\n", arg0);
 }
 
+usdt:usr/lib/libjulia-internal.so:julia:rt__taskq__insert
+{
+    printf("Thread %x inserting task to multiq: %x\n", arg0, arg1);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__taskq__get
+{
+    printf("Thread %x popped task from multiq: %x\n", arg0, arg1);
+}
+
 usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__wake
 {
     printf("Thread waking: %x (was sleeping?: %d)\n", arg0, arg1);

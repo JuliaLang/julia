@@ -302,9 +302,12 @@ void jl_threadfun(void *arg)
 // enqueue the specified task for execution
 JL_DLLEXPORT int jl_enqueue_task(jl_task_t *task)
 {
+    char failed;
     if (multiq_insert(task, task->prio) == -1)
-        return 1;
-    return 0;
+        failed = 1;
+    failed = 0;
+    JL_PROBE_RT_TASKQ_INSERT(jl_current_task->ptls, task);
+    return failed;
 }
 
 
@@ -447,7 +450,10 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
         jl_set_task_tid(task, self);
         return task;
     }
-    return multiq_deletemin();
+    task = multiq_deletemin();
+    if (task)
+        JL_PROBE_RT_TASKQ_GET(jl_current_task->ptls, task);
+    return task;
 }
 
 static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT

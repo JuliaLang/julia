@@ -17,6 +17,8 @@ provider julia {
     probe rt__finish__task(jl_task_t *task);
     probe rt__start__process__events(jl_task_t *task);
     probe rt__finish__process__events(jl_task_t *task);
+    probe rt__taskq__insert(jl_ptls_t ptls, jl_task_t *task);
+    probe rt__taskq__get(jl_ptls_t ptls, jl_task_t *task);
     probe rt__sleep__check__wake(jl_ptls_t other, int8_t old_state);
     probe rt__sleep__check__wakeup(jl_ptls_t ptls);
     probe rt__sleep__check__sleep(jl_ptls_t ptls);

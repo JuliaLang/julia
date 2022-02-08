@@ -104,6 +104,11 @@ the probe handler.
 6. `julia:rt__start__process__events(task)`: Task `task` started processing libuv events.
 7. `julia:rt__finish__process__events(task)`: Task `task` finished processing libuv events.
 
+### Task queue probes
+
+1. `julia:rt__taskq__insert(ptls, task)`: Thread `ptls` attempted to insert `task` into a PARTR multiq.
+2. `julia:rt__taskq__get(ptls, task)`: Thread `ptls` popped `task` from a PARTR multiq.
+
 ### Thread sleep/wake probes
 
 1. `julia:rt__sleep__check__wake(ptls, old_state)`: Thread (PTLS `ptls`) waking up, previously in state `old_state`.
