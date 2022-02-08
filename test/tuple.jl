@@ -428,6 +428,8 @@ end
         @test all((false, missing)) === false
         @test all((missing, true, false)) === false
         @test_throws TypeError all((missing, 3.2, true))
+        ts = (missing, true, false)
+        @test @allocated(all(ts)) == 0  # PR #44063
     end
 
     @testset "any" begin
@@ -452,6 +454,8 @@ end
         @test any((missing, true, false)) === true
         @test any((missing, false, false)) === missing
         @test_throws TypeError any((missing, 3.2, true))
+        ts = (missing, true, false)
+        @test @allocated(any(ts)) == 0  # PR #44063
     end
 end
 
