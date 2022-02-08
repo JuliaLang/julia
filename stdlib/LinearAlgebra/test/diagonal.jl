@@ -808,6 +808,10 @@ end
             @test DS isa Tridiagonal
             DM = D \ Mm
             for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
+            DS = M / D
+            @test DS isa Tridiagonal
+            DM = Mm / D
+            for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
         end
     end
     # eltype promotion case

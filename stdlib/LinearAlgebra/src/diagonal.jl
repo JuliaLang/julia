@@ -351,9 +351,11 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
     return C
 end
 
-/(A::AbstractVecOrMat, D::Diagonal) =
-    _rdiv!((promote_op(/, eltype(A), eltype(D))).(A), A, D)
+_init(op, A::AbstractArray{<:Number}, B::AbstractArray{<:Number}) =
+    (_ -> zero(typeof(op(oneunit(eltype(A)), oneunit(eltype(B))))))
+_init(op, A::AbstractArray, B::AbstractArray) = promote_op(op, eltype(A), eltype(B))
 
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(_init(/, A, D).(A), A, D)
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
 function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
@@ -373,8 +375,13 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     B
 end
 
-\(D::Diagonal, B::AbstractVecOrMat) =
-    ldiv!(promote_op(\, eltype(D), eltype(B)).(B), D, B)
+function \(D::Diagonal, B::AbstractVector)
+    j = findfirst(iszero, D.diag)
+    isnothing(j) || throw(SingularException(j))
+    return D.diag .\ B
+end
+\(D::Diagonal, B::AbstractMatrix) =
+    ldiv!(_init(\, D, B).(B), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
