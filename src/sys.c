@@ -622,22 +622,20 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
     char buf[7];
     len = 7;
     sysctlbyname("kern.osrelease", buf, &len, NULL, 0);
-    if (buf[0] > 1 && buf[1] > 0)
-    {
+    if (buf[0] > 1 && buf[1] > 0){
         len = 4;
         sysctlbyname("hw.perflevel0.physicalcpu", &count, &len, NULL, 0);
     }
-    else
-    {
-    int32_t family = 0;
-    len = 4;
-    sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
-    if (family >= 1 && count > 1) {
-        if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
-            // We know the Apple M1 has 4 efficiency cores, so subtract them out.
-            count -= 4;
+    else {
+        int32_t family = 0;
+        len = 4;
+        sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
+        if (family >= 1 && count > 1) {
+            if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
+                // We know the Apple M1 has 4 efficiency cores, so subtract them out.
+                count -= 4;
+            }
         }
-    }
     }
 #endif
     return count;
