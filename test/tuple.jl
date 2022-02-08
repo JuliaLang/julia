@@ -422,6 +422,12 @@ end
         @test all((true, true)) === true
         @test all((true, false)) === false
         @test all((false, false)) === false
+        @test all((missing, true)) === missing
+        @test all((true, missing)) === missing
+        @test all((missing, false)) === false
+        @test all((false, missing)) === false
+        @test all((missing, true, false)) === false
+        @test_throws TypeError all((missing, 3.2, true))
     end
 
     @testset "any" begin
@@ -439,6 +445,13 @@ end
         @test any((true,false,true)) === true
         @test any((true,true,false)) === true
         @test any((true,true,true)) === true
+        @test any((missing, true)) === true
+        @test any((true, missing)) === true
+        @test any((missing, false)) === missing
+        @test any((false, missing)) === missing
+        @test any((missing, true, false)) === true
+        @test any((missing, false, false)) === missing
+        @test_throws TypeError any((missing, 3.2, true))
     end
 end
 
