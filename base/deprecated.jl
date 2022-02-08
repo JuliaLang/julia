@@ -268,6 +268,6 @@ end
 
 @deprecate var"@_inline_meta"   var"@inline"   false
 @deprecate var"@_noinline_meta" var"@noinline" false
-@deprecate getindex(@nospecialize(t::Tuple), i::Real) getfield(t, convert(Int, i), $(Expr(:boundscheck)))
+@deprecate getindex(@nospecialize(t::Tuple), i::Real) getfield(t, convert(Int, i))
 
 # END 1.8 deprecations
