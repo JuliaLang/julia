@@ -672,4 +672,36 @@ end
 @test LinearAlgebra.BLAS.libblas == "libblastrampoline"
 @test LinearAlgebra.BLAS.liblapack == "libblastrampoline"
 
+@testset "test for 0-strides" for elty in (Float32, Float64, ComplexF32, ComplexF64)
+    A = randn(elty, 10, 10);
+    a = view([randn(elty)], 1 .+ 0(1:10))
+    b = view([randn(elty)], 1 .+ 0(1:10))
+    α, β = randn(elty), randn(elty)
+    @testset "dot/dotc/dotu" begin
+        if elty <: Real
+            @test BLAS.dot(a,b) ≈ sum(a.*b)
+        else
+            @test BLAS.dotc(a,b) ≈ sum(conj(a).*b)
+            @test BLAS.dotu(a,b) ≈ sum(a.*b)
+        end
+    end
+    @testset "axp(b)y!" begin
+        @test BLAS.axpy!(α,a,copy(b)) ≈ α*a + b
+        @test BLAS.axpby!(α,a,β,copy(b)) ≈ α*a + β*b
+        @test_throws "dest" BLAS.axpy!(α,a,b)
+        @test_throws "dest" BLAS.axpby!(α,a,β,b)
+    end
+    @test BLAS.iamax(a) == 0
+    @test_throws "dest" BLAS.scal!(b[1], a)
+    @testset "nrm2/asum" begin # OpenBLAS allways return 0.0
+        @test_throws "input" BLAS.nrm2(a)
+        @test_throws "input" BLAS.asum(a)
+    end
+    # All level2 reject 0-stride array.
+    @testset "gemv!" begin
+        @test_throws "input" BLAS.gemv!('N', true, A, a, false, copy(b))
+        @test_throws "dest" BLAS.gemv!('N', true, A, copy(a), false, b)
+    end
+end
+
 end # module TestBLAS
