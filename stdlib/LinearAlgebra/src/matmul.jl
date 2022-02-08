@@ -174,8 +174,13 @@ function (*)(A::AdjOrTransStridedMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMa
          wrapperop(B)(convert(AbstractArray{real(TS)}, _parent(B))))
 end
 # the following case doesn't seem to benefit from the translation A*B = (B' * A')'
-(*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasComplex}) =
-    Complex.(A * real(B), A * imag(B))
+function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasComplex})
+    temp = real(B)
+    R = A * temp
+    temp .= imag.(B)
+    I = A * temp
+    Complex.(R, I)
+end
 (*)(A::AdjOrTransStridedMat{<:BlasReal}, B::StridedMatrix{<:BlasComplex}) = copy(transpose(transpose(B) * parent(A)))
 (*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::AdjOrTransStridedMat{<:BlasComplex}) = copy(wrapperop(B)(parent(B) * transpose(A)))
 
