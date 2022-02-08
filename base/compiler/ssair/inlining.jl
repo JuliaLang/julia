@@ -1404,6 +1404,11 @@ function early_inline_special_case(
             if _builtin_nothrow(f, argtypes[2:end], type)
                 return SomeCase(quoted(val))
             end
+        elseif f === Core.get_binding_type
+            length(argtypes) == 3 || return nothing
+            if get_binding_type_effect_free(argtypes[2], argtypes[3])
+                return SomeCase(quoted(val))
+            end
         end
     end
     return nothing

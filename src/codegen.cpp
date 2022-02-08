@@ -2385,7 +2385,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
         LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
         v->setOrdering(AtomicOrdering::Unordered);
         tbaa_decorate(ctx.tbaa().tbaa_binding, v);
-        return mark_julia_type(ctx, v, true, (jl_value_t*)jl_any_type);
+        return mark_julia_type(ctx, v, true, bnd->ty);
     }
     // todo: use type info to avoid undef check
     return emit_checked_var(ctx, bp, name, false, ctx.tbaa().tbaa_binding);

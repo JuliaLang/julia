@@ -1655,6 +1655,44 @@ JL_CALLABLE(jl_f__equiv_typedef)
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
 }
 
+JL_CALLABLE(jl_f_get_binding_type)
+{
+    JL_NARGS(get_binding_type, 2, 2);
+    JL_TYPECHK(get_binding_type, module, args[0]);
+    JL_TYPECHK(get_binding_type, symbol, args[1]);
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *sym = (jl_sym_t*)args[1];
+    jl_value_t *ty = jl_binding_type(mod, sym);
+    if (ty == (jl_value_t*)jl_nothing) {
+        jl_binding_t *b = jl_get_binding_wr(mod, sym, 0);
+        if (b) {
+            jl_value_t *old_ty = NULL;
+            jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+            return jl_atomic_load_relaxed(&b->ty);
+        }
+        return (jl_value_t*)jl_any_type;
+    }
+    return ty;
+}
+
+JL_CALLABLE(jl_f_set_binding_type)
+{
+    JL_NARGS(set_binding_type!, 2, 3);
+    JL_TYPECHK(set_binding_type!, module, args[0]);
+    JL_TYPECHK(set_binding_type!, symbol, args[1]);
+    jl_value_t *ty = nargs == 2 ? (jl_value_t*)jl_any_type : args[2];
+    JL_TYPECHK(set_binding_type!, type, ty);
+    jl_binding_t *b = jl_get_binding_wr((jl_module_t*)args[0], (jl_sym_t*)args[1], 1);
+    jl_value_t *old_ty = NULL;
+    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty) && ty != old_ty) {
+        if (nargs == 2)
+            return jl_nothing;
+        jl_errorf("cannot set type for global %s. It already has a value or is already set to a different type.",
+                  jl_symbol_name(b->name));
+    }
+    return jl_nothing;
+}
+
 // IntrinsicFunctions ---------------------------------------------------------
 
 static void (*runtime_fp[num_intrinsics])(void);
@@ -1834,6 +1872,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_setsuper!", jl_f__setsuper);
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
+    add_builtin_func("get_binding_type", jl_f_get_binding_type);
+    add_builtin_func("set_binding_type!", jl_f_set_binding_type);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

@@ -1793,7 +1793,9 @@ function abstract_eval_global(M::Module, s::Symbol)
     if isdefined(M,s) && isconst(M,s)
         return Const(getfield(M,s))
     end
-    return Any
+    ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
+    ty === nothing && return Any
+    return ty
 end
 
 function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
