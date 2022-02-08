@@ -907,3 +907,16 @@ end
 @test fully_eliminated((String,)) do x
     Base.@invoke conditional_escape!(false::Any, x::Any)
 end
+
+@testset "elimination of `get_binding_type`" begin
+    m = Module()
+    @eval m global x::Int
+
+    f() = Core.get_binding_type(m, :x)
+    @test fully_eliminated(f, Tuple{})
+    @test f() === Int
+
+    g() = Core.get_binding_type(m, :y)
+    @test !fully_eliminated(g, Tuple{})
+    @test g() === Any
+end

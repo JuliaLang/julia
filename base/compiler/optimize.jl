@@ -219,7 +219,12 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
                         Any[argextype(args[i], src) for i = 2:length(args)])
             end
             contains_is(_PURE_BUILTINS, f) && return true
-            f === Core.get_binding_type && return get_binding_type_effect_free(args)
+            # `get_binding_type` sets the type to Any if the binding doesn't exist yet
+            if f === Core.get_binding_type
+                length(args) == 3 || return false
+                M, s = argextype(args[2], src), argextype(args[3], src)
+                return get_binding_type_effect_free(M, s)
+            end
             contains_is(_PURE_OR_ERROR_BUILTINS, f) || return false
             rt === Bottom && return false
             return _builtin_nothrow(f, Any[argextype(args[i], src) for i = 2:length(args)], rt)
