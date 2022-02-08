@@ -43,7 +43,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         if N != 0 && sizeof(S) != sizeof(T)
             ax1 = axes(a)[1]
             dim = length(ax1)
-            if Base.issingletontype(T)
+            if issingletontype(T)
                 dim == 0 || throwsingleton(S, T, "a non-empty")
             else
                 rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
@@ -75,15 +75,15 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         if sizeof(S) == sizeof(T)
             N = ndims(a)
         elseif sizeof(S) > sizeof(T)
-            Base.issingletontype(T) && throwsingleton(S, T, "with reshape a")
+            issingletontype(T) && throwsingleton(S, T, "with reshape a")
             rem(sizeof(S), sizeof(T)) == 0 || throwintmult(S, T)
             N = ndims(a) + 1
         else
-            Base.issingletontype(S) && throwfromsingleton(S, T)
+            issingletontype(S) && throwfromsingleton(S, T)
             rem(sizeof(T), sizeof(S)) == 0 || throwintmult(S, T)
             N = ndims(a) - 1
             N > -1 || throwsize0(S, T, "larger")
-            axes(a, 1) == Base.OneTo(sizeof(T) ÷ sizeof(S)) || throwsize1(a, T)
+            axes(a, 1) == OneTo(sizeof(T) ÷ sizeof(S)) || throwsize1(a, T)
         end
         readable = array_subpadding(T, S)
         writable = array_subpadding(S, T)
@@ -148,33 +148,39 @@ StridedVector{T} = StridedArray{T,1}
 StridedMatrix{T} = StridedArray{T,2}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
-# the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
-# a tuple containing 1 and a cumulative product of the first N-1 sizes
-# this definition is also used for StridedReshapedArray and StridedReinterpretedArray
-# which have the same memory storage as Array
-stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int) = _stride(a, i)
-
-function stride(a::ReinterpretArray, i::Int)
-    a.parent isa StridedArray || throw(ArgumentError("Parent must be strided."))
-    return _stride(a, i)
-end
-
-function _stride(a, i)
-    if i > ndims(a)
-        return length(a)
-    end
-    s = 1
-    for n = 1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
-
-function strides(a::ReinterpretArray)
-    a.parent isa StridedArray || throw(ArgumentError("Parent must be strided."))
-    size_to_strides(1, size(a)...)
-end
 strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
+
+function strides(a::ReshapedReinterpretArray)
+    ap = parent(a)
+    els, elp = elsize(a), elsize(ap)
+    stp = strides(ap)
+    els == elp && return stp
+    els < elp && return (1, _checked_strides(stp, els, elp)...)
+    stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
+    return _checked_strides(tail(stp), els, elp)
+end
+
+function strides(a::NonReshapedReinterpretArray)
+    ap = parent(a)
+    els, elp = elsize(a), elsize(ap)
+    stp = strides(ap)
+    els == elp && return stp
+    stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
+    return (1, _checked_strides(tail(stp), els, elp)...)
+end
+
+@inline function _checked_strides(stp::Tuple, els::Integer, elp::Integer)
+    if elp > els && rem(elp, els) == 0
+        N = div(elp, els)
+        return map(i -> N * i, stp)
+    end
+    drs = map(i -> divrem(elp * i, els), stp)
+    all(i->iszero(i[2]), drs) ||
+        throw(ArgumentError("Parent's strides could not be exactly divided!"))
+    map(first, drs)
+end
+
+_checkcontiguous(::Type{Bool}, A::ReinterpretArray) = _checkcontiguous(Bool, parent(A))
 
 similar(a::ReinterpretArray, T::Type, d::Dims) = similar(a.parent, T, d)
 
@@ -227,12 +233,12 @@ SCartesianIndices2{K}(indices2::AbstractUnitRange{Int}) where {K} = (@assert K::
 eachindex(::IndexSCartesian2{K}, A::ReshapedReinterpretArray) where {K} = SCartesianIndices2{K}(eachindex(IndexLinear(), parent(A)))
 @inline function eachindex(style::IndexSCartesian2{K}, A::AbstractArray, B::AbstractArray...) where {K}
     iter = eachindex(style, A)
-    Base._all_match_first(C->eachindex(style, C), iter, B...) || Base.throw_eachindex_mismatch_indices(IndexSCartesian2{K}(), axes(A), axes.(B)...)
+    _all_match_first(C->eachindex(style, C), iter, B...) || throw_eachindex_mismatch_indices(IndexSCartesian2{K}(), axes(A), axes.(B)...)
     return iter
 end
 
 size(iter::SCartesianIndices2{K}) where K = (K, length(iter.indices2))
-axes(iter::SCartesianIndices2{K}) where K = (Base.OneTo(K), iter.indices2)
+axes(iter::SCartesianIndices2{K}) where K = (OneTo(K), iter.indices2)
 
 first(iter::SCartesianIndices2{K}) where {K} = SCartesianIndex2{K}(1, first(iter.indices2))
 last(iter::SCartesianIndices2{K}) where {K}  = SCartesianIndex2{K}(K, last(iter.indices2))
@@ -300,13 +306,13 @@ unaliascopy(a::ReshapedReinterpretArray{T}) where {T} = reinterpret(reshape, T, 
 
 function size(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
-    size1 = Base.issingletontype(T) ? psize[1] : div(psize[1]*sizeof(S), sizeof(T))
+    size1 = issingletontype(T) ? psize[1] : div(psize[1]*sizeof(S), sizeof(T))
     tuple(size1, tail(psize)...)
 end
 function size(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
     sizeof(S) > sizeof(T) && return (div(sizeof(S), sizeof(T)), psize...)
-    sizeof(S) < sizeof(T) && return Base.tail(psize)
+    sizeof(S) < sizeof(T) && return tail(psize)
     return psize
 end
 size(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
@@ -314,13 +320,13 @@ size(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 function axes(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
     f, l = first(paxs[1]), length(paxs[1])
-    size1 = Base.issingletontype(T) ? l : div(l*sizeof(S), sizeof(T))
+    size1 = issingletontype(T) ? l : div(l*sizeof(S), sizeof(T))
     tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
 end
 function axes(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
-    sizeof(S) > sizeof(T) && return (Base.OneTo(div(sizeof(S), sizeof(T))), paxs...)
-    sizeof(S) < sizeof(T) && return Base.tail(paxs)
+    sizeof(S) > sizeof(T) && return (OneTo(div(sizeof(S), sizeof(T))), paxs...)
+    sizeof(S) < sizeof(T) && return tail(paxs)
     return paxs
 end
 axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
@@ -372,7 +378,7 @@ end
 @inline @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if Base.issingletontype(T) # singleton types
+        if issingletontype(T) # singleton types
             @boundscheck checkbounds(a, i1, tailinds...)
             return T.instance
         end
@@ -420,7 +426,7 @@ end
 @inline @propagate_inbounds function _getindex_ra(a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if Base.issingletontype(T) # singleton types
+        if issingletontype(T) # singleton types
             @boundscheck checkbounds(a, i1, tailinds...)
             return T.instance
         end
@@ -511,7 +517,7 @@ end
     v = convert(T, v)::T
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if Base.issingletontype(T) # singleton types
+        if issingletontype(T) # singleton types
             @boundscheck checkbounds(a, i1, tailinds...)
             # setindex! is a noop except for the index check
         else
@@ -577,7 +583,7 @@ end
     v = convert(T, v)::T
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if Base.issingletontype(T) # singleton types
+        if issingletontype(T) # singleton types
             @boundscheck checkbounds(a, i1, tailinds...)
             # setindex! is a noop except for the index check
         else

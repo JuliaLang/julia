@@ -61,9 +61,11 @@ const _g_expected_sampled_allocs = Ref{Float64}(0)
 function _prof_expr(expr, opts)
     quote
         $start(; $(esc(opts)))
-        local res = $(esc(expr))
-        $stop()
-        res
+        try
+            $(esc(expr))
+        finally
+            $stop()
+        end
     end
 end
 
@@ -161,15 +163,19 @@ const BacktraceCache = Dict{BTElement,Vector{StackFrame}}
 
 # copied from julia_internal.h
 const JL_BUFF_TAG = UInt(0x4eadc000)
+const JL_GC_UNKNOWN_TYPE_TAG = UInt(0xdeadaa03)
 
 struct CorruptType end
 struct BufferType end
+struct UnknownType end
 
 function load_type(ptr::Ptr{Type})
     if UInt(ptr) < UInt(4096)
         return CorruptType
     elseif UInt(ptr) == JL_BUFF_TAG
         return BufferType
+    elseif UInt(ptr) == JL_GC_UNKNOWN_TYPE_TAG
+        return UnknownType
     end
     return unsafe_pointer_to_objref(ptr)
 end
