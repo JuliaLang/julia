@@ -118,3 +118,12 @@ if Sys.iswindows()
         end
     end
 end
+
+# Test for #44054
+let key = "KARPINSKI", value = "STEFAN"
+    @test !haskey(ENV, key)
+    ENV[key] = value
+    ret_value = ccall(:getenv, Cstring, (Cstring,), key)
+    @test ret_value != C_NULL && unsafe_string(ret_value) == value
+    delete!(ENV, key)
+end
