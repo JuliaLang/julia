@@ -1168,7 +1168,6 @@ function analyze_single_call!(
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
     argtypes = sig.argtypes
     cases = InliningCase[]
-    local signature_union = Bottom
     local only_method = nothing  # keep track of whether there is one matching method
     local meth::MethodLookupResult
     local fully_covered = true
@@ -1180,6 +1179,7 @@ function analyze_single_call!(
             return nothing
         elseif length(meth) == 0
             # No applicable methods; try next union split
+            fully_covered = false
             continue
         else
             if length(meth) == 1 && only_method !== false
@@ -1193,8 +1193,8 @@ function analyze_single_call!(
             end
         end
         for match in meth
-            signature_union = Union{signature_union, match.spec_types}
             fully_covered &= handle_match!(match, argtypes, flag, state, cases)
+            fully_covered &= match.fully_covers
         end
     end
 
@@ -1214,8 +1214,6 @@ function analyze_single_call!(
         item === nothing && return nothing
         push!(cases, InliningCase(match.spec_types, item))
         fully_covered = match.fully_covers
-    else
-        fully_covered &= atype <: signature_union
     end
 
     handle_cases!(ir, idx, stmt, atype, cases, fully_covered, todo, state.params)
@@ -1230,7 +1228,6 @@ function handle_const_call!(
     infos = isa(call, MethodMatchInfo) ? MethodMatchInfo[call] : call.matches
     cases = InliningCase[]
     local fully_covered = true
-    local signature_union = Bottom
     local j = 0
     for i in 1:length(infos)
         meth = infos[i].results
@@ -1240,6 +1237,7 @@ function handle_const_call!(
             return nothing
         elseif length(meth) == 0
             # No applicable methods; try next union split
+            fully_covered = false
             continue
         end
         for match in meth
@@ -1247,17 +1245,14 @@ function handle_const_call!(
             result = results[j]
             if isa(result, ConstResult)
                 case = const_result_item(result, state)
-                signature_union = Union{signature_union, result.mi.specTypes}
                 push!(cases, InliningCase(result.mi.specTypes, case))
-                continue
             elseif isa(result, InferenceResult)
-                signature_union = Union{signature_union, result.linfo.specTypes}
                 fully_covered &= handle_inf_result!(result, argtypes, flag, state, cases)
             else
                 @assert result === nothing
-                signature_union = Union{signature_union, match.spec_types}
                 fully_covered &= handle_match!(match, argtypes, flag, state, cases)
             end
+            fully_covered &= match.fully_covers
         end
     end
 
@@ -1271,8 +1266,6 @@ function handle_const_call!(
         item === nothing && return nothing
         push!(cases, InliningCase(mi.specTypes, item))
         fully_covered = atype <: mi.specTypes
-    else
-        fully_covered &= atype <: signature_union
     end
 
     handle_cases!(ir, idx, stmt, atype, cases, fully_covered, todo, state.params)
