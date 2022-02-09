@@ -126,11 +126,9 @@ end
         # test cholesky of 2x2 Strang matrix
         S = SymTridiagonal{eltya}([2, 2], [-1])
         for uplo in (:U, :L)
-            @test (@inferred cholesky(Hermitian(S, uplo))) isa Cholesky{eltya,<:Bidiagonal}
-            @test Matrix(cholesky(Hermitian(S, uplo))) ≈ S
+            @test Matrix(@inferred cholesky(Hermitian(S, uplo))) ≈ S
             if eltya <: Real
-                @test (@inferred cholesky(Symmetric(S, uplo))) isa Cholesky{eltya,<:Bidiagonal}
-                @test Matrix(cholesky(Symmetric(S, uplo))) ≈ S
+                @test Matrix(@inferred cholesky(Symmetric(S, uplo))) ≈ S
             end
         end
         @test Matrix(cholesky(S).U) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
@@ -515,6 +513,15 @@ end
     @test B.U ≈ B32.U
     @test B.L ≈ B32.L
     @test B.UL ≈ B32.UL
+    @test Matrix(B) ≈ A
+    B = cholesky(A, RowMaximum())
+    B32 = cholesky(Float32.(A), RowMaximum())
+    @test B isa CholeskyPivoted{Float16,Matrix{Float16}}
+    @test B.U isa UpperTriangular{Float16, Matrix{Float16}}
+    @test B.L isa LowerTriangular{Float16, Matrix{Float16}}
+    @test B.U ≈ B32.U
+    @test B.L ≈ B32.L
+    @test Matrix(B) ≈ A
 end
 
 @testset "det and logdet" begin

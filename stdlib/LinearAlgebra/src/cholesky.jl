@@ -179,7 +179,9 @@ Base.iterate(C::CholeskyPivoted, ::Val{:done}) = nothing
 
 # make a copy that allow inplace Cholesky factorization
 @inline choltype(A) = promote_type(typeof(sqrt(oneunit(eltype(A)))), Float32)
-@inline cholcopy(A) = copy_similar(A, choltype(A))
+@inline cholcopy(A::StridedMatrix) = copy_oftype(A, choltype(A))
+@inline cholcopy(A::RealHermSymComplexHerm) = copy_oftype(A, choltype(A))
+@inline cholcopy(A::AbstractMatrix) = copy_similar(A, choltype(A))
 
 # _chol!. Internal methods for calling unpivoted Cholesky
 ## BLAS/LAPACK element types
@@ -397,11 +399,11 @@ julia> C.L * C.U == A
 true
 ```
 """
-cholesky(A::Union{AbstractMatrix,RealHermSymComplexHerm},
-    ::NoPivot=NoPivot(); check::Bool = true) = cholesky!(cholcopy(A); check = check)
+cholesky(A::AbstractMatrix, ::NoPivot=NoPivot(); check::Bool = true) =
+    cholesky!(cholcopy(A); check)
 @deprecate cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{false}; check::Bool = true) cholesky(A, NoPivot(); check) false
 
-function cholesky(A::Union{AbstractMatrix{Float16},RealHermSymComplexHerm{Float16}}, ::NoPivot=NoPivot(); check::Bool = true)
+function cholesky(A::AbstractMatrix{Float16}, ::NoPivot=NoPivot(); check::Bool = true)
     X = cholesky!(cholcopy(A); check = check)
     return Cholesky{Float16}(X)
 end
@@ -463,10 +465,14 @@ julia> l == C.L && u == C.U
 true
 ```
 """
-cholesky(A::Union{AbstractMatrix,RealHermSymComplexHerm},
-    ::RowMaximum; tol = 0.0, check::Bool = true) =
-    cholesky!(cholcopy(A), RowMaximum(); tol = tol, check = check)
+cholesky(A::AbstractMatrix, ::RowMaximum; tol = 0.0, check::Bool = true) =
+    cholesky!(cholcopy(A), RowMaximum(); tol, check)
 @deprecate cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0, check::Bool = true) cholesky(A, RowMaximum(); tol, check) false
+
+function cholesky(A::AbstractMatrix{Float16}, ::RowMaximum; tol = 0.0, check::Bool = true)
+    X = cholesky!(cholcopy(A), RowMaximum(); tol, check)
+    return CholeskyPivoted{Float16}(X)
+end
 
 ## Number
 function cholesky(x::Number, uplo::Symbol=:U)
@@ -524,7 +530,7 @@ end
 Base.propertynames(F::Cholesky, private::Bool=false) =
     (:U, :L, :UL, (private ? fieldnames(typeof(F)) : ())...)
 
-function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
+function getproperty(C::CholeskyPivoted{T}, d::Symbol) where {T}
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d === :U
