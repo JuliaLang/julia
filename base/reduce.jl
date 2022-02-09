@@ -1203,9 +1203,16 @@ function _any(f, itr, ::Colon)
     return anymissing ? missing : false
 end
 
-# Specialized version of any(f, ::Tuple), avoiding type instabilities for tuples containing
-# mixed types.
-_any(f, itr::Tuple, ::Colon) = _any_tuple(f, false, itr...)
+# Specialized versions of any(f, ::Tuple), avoiding type instabilities for small tuples
+# containing mixed types.
+# We fall back to the for loop implementation all elements have the same type or
+# if the tuple is too large.
+any(f, itr::NTuple) = _any(f, itr, :)  # case of homogeneous tuple
+function any(f, itr::Tuple)            # case of tuple with mixed types
+    length(itr) > 32 && return _any(f, itr, :)
+    _any_tuple(f, false, itr...)
+end
+
 @inline function _any_tuple(f, anymissing, x, rest...)
     v = f(x)
     if ismissing(v)
@@ -1267,9 +1274,14 @@ function _all(f, itr, ::Colon)
     return anymissing ? missing : true
 end
 
-# Specialized version of all(f, ::Tuple), avoiding type instabilities for tuples containing
-# mixed types.
-_all(f, itr::Tuple, ::Colon) = _all_tuple(f, false, itr...)
+# Specialized versions of all(f, ::Tuple), avoiding type instabilities for small tuples
+# containing mixed types. This is similar to any(f, ::Tuple) defined above.
+all(f, itr::NTuple) = _all(f, itr, :)
+function all(f, itr::Tuple)
+    length(itr) > 32 && return _all(f, itr, :)
+    _all_tuple(f, false, itr...)
+end
+
 @inline function _all_tuple(f, anymissing, x, rest...)
     v = f(x)
     if ismissing(v)
