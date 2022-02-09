@@ -297,7 +297,7 @@ end
     end
 end
 
-@testset "matrix x vector with negtive lda or 0 stride" for T in (Float32, Float64)
+@testset "matrix x vector with negative lda or 0 stride" for T in (Float32, Float64)
     for TA in (T, complex(T)), TB in (T, complex(T))
         A = view(randn(TA, 10, 10), 1:10, 10:-1:1) # negative lda
         v = view([randn(TB)], 1 .+ 0(1:10)) # 0 stride
