@@ -27,10 +27,11 @@ mutable struct TestLogger <: AbstractLogger
     catch_exceptions::Bool
     shouldlog_args
     message_limits::Dict{Any,Int}
+    respect_maxlog::Bool
 end
 
-TestLogger(; min_level=Info, catch_exceptions=false) =
-    TestLogger(LogRecord[], min_level, catch_exceptions, nothing, Dict{Any, Int}())
+TestLogger(; min_level=Info, catch_exceptions=false, respect_maxlog=true) =
+    TestLogger(LogRecord[], min_level, catch_exceptions, nothing, Dict{Any, Int}(), respect_maxlog)
 Logging.min_enabled_level(logger::TestLogger) = logger.min_level
 
 function Logging.shouldlog(logger::TestLogger, level, _module, group, id)
@@ -45,11 +46,13 @@ end
 function Logging.handle_message(logger::TestLogger, level, msg, _module,
                                 group, id, file, line; kwargs...)
     @nospecialize
-    maxlog = get(kwargs, :maxlog, nothing)
-    if maxlog isa Core.BuiltinInts
-        remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
-        logger.message_limits[id] = remaining - 1
-        remaining > 0 || return
+    if logger.respect_maxlog
+        maxlog = get(kwargs, :maxlog, nothing)
+        if maxlog isa Core.BuiltinInts
+            remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
+            logger.message_limits[id] = remaining - 1
+            remaining > 0 || return
+        end
     end
     push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, kwargs))
 end
