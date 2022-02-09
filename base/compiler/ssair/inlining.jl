@@ -1465,14 +1465,11 @@ function late_inline_special_case!(
     params::OptimizationParams)
     params.inlining || return nothing
     (; f, ft, argtypes) = sig
-    isinlining = params.inlining
     if length(argtypes) == 3 && istopfunction(f, :!==)
         # special-case inliner for !== that precedes _methods_by_ftype union splitting
         # and that works, even though inference generally avoids inferring the `!==` Method
         if isa(type, Const)
             return SomeCase(quoted(type.val))
-        elseif !isinlining
-            return nothing
         end
         cmp_call = Expr(:call, GlobalRef(Core, :(===)), stmt.args[2], stmt.args[3])
         cmp_call_ssa = insert_node!(ir, idx, effect_free(NewInstruction(cmp_call, Bool)))
@@ -1483,8 +1480,6 @@ function late_inline_special_case!(
         # that works, even though inference generally avoids inferring the `>:` Method
         if isa(type, Const) && _builtin_nothrow(<:, Any[argtypes[3], argtypes[2]], type)
             return SomeCase(quoted(type.val))
-        elseif !isinlining
-            return nothing
         end
         subtype_call = Expr(:call, GlobalRef(Core, :(<:)), stmt.args[3], stmt.args[2])
         return SomeCase(subtype_call)

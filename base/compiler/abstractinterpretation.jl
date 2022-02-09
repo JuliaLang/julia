@@ -1756,7 +1756,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     elseif ehead === :new
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         is_nothrow = true
-        if isconcretetype(t)
+        if isconcretedispatch(t)
             fcount = fieldcount(t)
             nargs = length(e.args) - 1
             is_nothrow && (is_nothrow = fcount ≥ nargs)
