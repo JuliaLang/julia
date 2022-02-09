@@ -124,7 +124,8 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         end
     else
         cpu = Sys.cpu_info()
-        println(io, "  CPU: ", cpu[1].model)
+        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model)
+                        
     end
 
     if verbose
