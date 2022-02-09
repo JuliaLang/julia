@@ -803,7 +803,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs) JL_NOT
                       jl_symbol_name(b->name));
 #endif
         }
-        jl_safe_printf("WARNING: redefinition of constant %s. This may cause previously defined functions using it to fail or produce incorrect answers.\n",
+        jl_safe_printf("WARNING: redefinition of constant %s. This may cause previously defined modules using it to fail or produce incorrect answers.\n",
                        jl_symbol_name(b->name));
     }
     jl_atomic_store_relaxed(&b->value, rhs);
