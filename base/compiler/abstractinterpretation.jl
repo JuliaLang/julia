@@ -1937,8 +1937,10 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
 end
 
 function abstract_eval_global(M::Module, s::Symbol)
-    if isdefined(M,s) && isconst(M,s)
-        return Const(getfield(M,s))
+    if isdefined(M,s)
+        if isconst(M,s)
+            return Const(getfield(M,s))
+        end
     end
     ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
     ty === nothing && return Any
@@ -1946,16 +1948,14 @@ function abstract_eval_global(M::Module, s::Symbol)
 end
 
 function abstract_eval_global(M::Module, s::Symbol, frame::InferenceState)
+    ty = abstract_eval_global(M, s)
+    isa(ty, Const) && return ty
     if isdefined(M,s)
-        if isconst(M,s)
-            return Const(getfield(M,s))
-        else
-            tristate_merge!(frame, Effects(EFFECTS_TOTAL, consistent=ALWAYS_FALSE))
-        end
+        tristate_merge!(frame, Effects(EFFECTS_TOTAL, consistent=ALWAYS_FALSE))
     else
         tristate_merge!(frame, Effects(EFFECTS_TOTAL, consistent=ALWAYS_FALSE, nothrow=ALWAYS_FALSE))
     end
-    return Any
+    return ty
 end
 
 abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.src)
