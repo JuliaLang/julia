@@ -3480,7 +3480,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         // For now we emit this as a vararg call to the builtin
         // (which doesn't look at the arguments). In the future,
         // this should be an LLVM builtin.
-        auto it = builtin_func_map.find(jl_f_donotdelete);
+        auto it = builtin_func_map.find(jl_f_donotdelete_addr);
         if (it == builtin_func_map.end()) {
             return false;
         }
@@ -3494,7 +3494,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             const jl_cgval_t &obj = argv[i];
             if (obj.V) {
                 // TODO is this strong enough to constitute a read of any contained
-                // pointers?
+                // pointers?W
                 Value *V = obj.V;
                 if (obj.isboxed) {
                     V = emit_pointer_from_objref(ctx, V);
