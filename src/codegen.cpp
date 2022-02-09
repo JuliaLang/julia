@@ -476,9 +476,9 @@ static AttributeList get_func_attrs(LLVMContext &C)
 static AttributeList get_donotdelete_func_attrs(LLVMContext &C)
 {
     AttributeSet FnAttrs = AttributeSet::get(C, makeArrayRef({Attribute::get(C, "thunk")}));
-    FnAttrs.addAttribute(C, Attribute::InaccessibleMemOnly);
-    FnAttrs.addAttribute(C, Attribute::WillReturn);
-    FnAttrs.addAttribute(C, Attribute::NoUnwind);
+    FnAttrs = FnAttrs.addAttribute(C, Attribute::InaccessibleMemOnly);
+    FnAttrs = FnAttrs.addAttribute(C, Attribute::WillReturn);
+    FnAttrs = FnAttrs.addAttribute(C, Attribute::NoUnwind);
     return AttributeList::get(C,
             FnAttrs,
             Attributes(C, {Attribute::NonNull}),
