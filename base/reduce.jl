@@ -1203,6 +1203,20 @@ function _any(f, itr, ::Colon)
     return anymissing ? missing : false
 end
 
+# Specialized version of any(f, ::Tuple), avoiding type instabilities for tuples containing
+# mixed types.
+_any(f, itr::Tuple, ::Colon) = _any_tuple(f, false, itr...)
+@inline function _any_tuple(f, anymissing, x, rest...)
+    v = f(x)
+    if ismissing(v)
+        anymissing = true
+    elseif v
+        return true
+    end
+    return _any_tuple(f, anymissing, rest...)
+end
+@inline _any_tuple(f, anymissing) = anymissing ? missing : false
+
 """
     all(p, itr) -> Bool
 
@@ -1252,6 +1266,23 @@ function _all(f, itr, ::Colon)
     end
     return anymissing ? missing : true
 end
+
+# Specialized version of all(f, ::Tuple), avoiding type instabilities for tuples containing
+# mixed types.
+_all(f, itr::Tuple, ::Colon) = _all_tuple(f, false, itr...)
+@inline function _all_tuple(f, anymissing, x, rest...)
+    v = f(x)
+    if ismissing(v)
+        anymissing = true
+    # this syntax allows throwing a TypeError for non-Bool, for consistency with any
+    elseif v
+        nothing
+    else
+        return false
+    end
+    return _all_tuple(f, anymissing, rest...)
+end
+@inline _all_tuple(f, anymissing) = anymissing ? missing : true
 
 ## count
 
