@@ -268,6 +268,9 @@ end
 
 @deprecate var"@_inline_meta"   var"@inline"   false
 @deprecate var"@_noinline_meta" var"@noinline" false
-@eval (@deprecate getindex(@nospecialize(t::Tuple), i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck))))
+@eval function getindex(@nospecialize(t::Tuple), i::Real)
+  Base.depwarn("`getindex(t::Tuple, i::Real)` is deprecated, use `t[convert(Int, i)]` instead.", ((Base.Core).Typeof(getindex)).name.mt.name)
+  getfield(t, convert(Int, i), $(Expr(:boundscheck)))
+end
 
 # END 1.8 deprecations
