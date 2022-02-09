@@ -152,9 +152,9 @@ end
 
     @test_deprecated getindex((1,), 1.0) === 1
     @test_deprecated getindex((1,2), 2.0) === 2
-    @test_throws getindex((), 1.0)
-    @test_throws getindex((1,2), 0.0)
-    @test_throws getindex((1,2), -1.0)
+    @test_throws Exception getindex((), 1.0)
+    @test_throws Exception getindex((1,2), 0.0)
+    @test_throws Exception getindex((1,2), -1.0)
 
     @test getindex((5,6,7,8), [1,2,3]) === (5,6,7)
     @test_throws BoundsError getindex((1,2), [3,4])
