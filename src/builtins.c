@@ -78,20 +78,18 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
 // See comment above for an explanation of NOINLINE.
 static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
-    size_t f, nf = jl_datatype_nfields(dt);
-    for (f = 0; f < nf; f++) {
+    size_t nf = jl_datatype_nfields(dt);
+    // npointers is used at end, but fetched here for locality with nfields.
+    int npointers = ((jl_datatype_t*)dt)->layout->npointers;
+    for (size_t f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *ao = (char*)a + offs;
         char *bo = (char*)b + offs;
         if (jl_field_isptr(dt, f)) {
-            jl_value_t *af = *(jl_value_t**)ao;
-            jl_value_t *bf = *(jl_value_t**)bo;
-            if (af != bf) {
-                if (af == NULL || bf == NULL)
-                    return 0;
-                if (!jl_egal(af, bf))
-                    return 0;
-            }
+            // Save ptr recursion until the end -- only recurse if otherwise equal
+            // Note that we also skip comparing the pointers for null here, because
+            // null fields are rare so it can save CPU to delay this read too.
+            continue;
         }
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(dt, f);
@@ -121,6 +119,20 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                 if (!compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft))
                     return 0;
             }
+        }
+    }
+    // If we've gotten here, the objects are bitwise equal, besides their pointer fields.
+    // Now, we will recurse into jl_egal for the pointed-to elements, which might be
+    // arbitrarily expensive.
+    for (size_t p = 0; p < npointers; p++) {
+        size_t offs = jl_ptr_offset(dt, p);
+        jl_value_t *af = ((jl_value_t**)a)[offs];
+        jl_value_t *bf = ((jl_value_t**)b)[offs];
+        if (af != bf) {
+            if (af == NULL || bf == NULL)
+                return 0;
+            if (!jl_egal(af, bf))
+                return 0;
         }
     }
     return 1;
@@ -1655,6 +1667,44 @@ JL_CALLABLE(jl_f__equiv_typedef)
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
 }
 
+JL_CALLABLE(jl_f_get_binding_type)
+{
+    JL_NARGS(get_binding_type, 2, 2);
+    JL_TYPECHK(get_binding_type, module, args[0]);
+    JL_TYPECHK(get_binding_type, symbol, args[1]);
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *sym = (jl_sym_t*)args[1];
+    jl_value_t *ty = jl_binding_type(mod, sym);
+    if (ty == (jl_value_t*)jl_nothing) {
+        jl_binding_t *b = jl_get_binding_wr(mod, sym, 0);
+        if (b) {
+            jl_value_t *old_ty = NULL;
+            jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+            return jl_atomic_load_relaxed(&b->ty);
+        }
+        return (jl_value_t*)jl_any_type;
+    }
+    return ty;
+}
+
+JL_CALLABLE(jl_f_set_binding_type)
+{
+    JL_NARGS(set_binding_type!, 2, 3);
+    JL_TYPECHK(set_binding_type!, module, args[0]);
+    JL_TYPECHK(set_binding_type!, symbol, args[1]);
+    jl_value_t *ty = nargs == 2 ? (jl_value_t*)jl_any_type : args[2];
+    JL_TYPECHK(set_binding_type!, type, ty);
+    jl_binding_t *b = jl_get_binding_wr((jl_module_t*)args[0], (jl_sym_t*)args[1], 1);
+    jl_value_t *old_ty = NULL;
+    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty) && ty != old_ty) {
+        if (nargs == 2)
+            return jl_nothing;
+        jl_errorf("cannot set type for global %s. It already has a value or is already set to a different type.",
+                  jl_symbol_name(b->name));
+    }
+    return jl_nothing;
+}
+
 // IntrinsicFunctions ---------------------------------------------------------
 
 static void (*runtime_fp[num_intrinsics])(void);
@@ -1834,6 +1884,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_setsuper!", jl_f__setsuper);
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
+    add_builtin_func("get_binding_type", jl_f_get_binding_type);
+    add_builtin_func("set_binding_type!", jl_f_set_binding_type);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

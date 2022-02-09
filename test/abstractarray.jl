@@ -1579,3 +1579,12 @@ end
         @test strides(reshape(b, 5, 6, 2)) == (-n, -5n, -30n)
     end
 end
+
+@testset "to_indices inference (issue #42001 #44059)" begin
+    @test (@inferred to_indices([], ntuple(Returns(CartesianIndex(1)), 32))) == ntuple(Returns(1), 32)
+    @test (@inferred to_indices([], ntuple(Returns(CartesianIndices(1:1)), 32))) == ntuple(Returns(Base.OneTo(1)), 32)
+    @test (@inferred to_indices([], (CartesianIndex(),1,CartesianIndex(1,1,1)))) == ntuple(Returns(1), 4)
+    A = randn(2,2,2,2,2,2);
+    i = CartesianIndex((1,1))
+    @test (@inferred A[i,i,i]) === A[1]
+end

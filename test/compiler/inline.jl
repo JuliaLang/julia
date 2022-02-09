@@ -914,3 +914,17 @@ end
     f(a) = only(strides(a));
     @test fully_eliminated(f, Tuple{typeof(a)}) && f(a) == 1
 end
+
+@testset "elimination of `get_binding_type`" begin
+    m = Module()
+    @eval m begin
+        global x::Int
+        f() = Core.get_binding_type($m, :x)
+        g() = Core.get_binding_type($m, :y)
+    end
+
+    @test fully_eliminated(m.f, Tuple{}, Int)
+    src = code_typed(m.g, ())[][1]
+    @test count(iscall((src, Core.get_binding_type)), src.code) == 1
+    @test m.g() === Any
+end

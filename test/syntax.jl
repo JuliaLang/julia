@@ -3171,3 +3171,80 @@ end
     @test x == 1
     @test f == 2
 end
+
+@testset "typed globals" begin
+    m = Module()
+    @eval m begin
+        x::Int = 1
+        f(y) = x + y
+    end
+    @test Base.return_types(m.f, (Int,)) == [Int]
+
+    m = Module()
+    @eval m begin
+        global x::Int
+        f(y) = x + y
+    end
+    @test Base.return_types(m.f, (Int,)) == [Int]
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        function f()
+            global x
+            x::Int = 1
+            x = 2.
+        end
+        g() = x
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m function f()
+        global x
+        x::Int = 1
+        x::Float64 = 2.
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x::Int = 1
+        x::Float64 = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x::Int = 1
+        const x = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        const x = 1
+        x::Int = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x = 1
+        global x::Float64
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x = 1
+        global x::Int
+    end
+
+    m = Module()
+    @eval m module Foo
+        export bar
+        bar = 1
+    end
+    @eval m begin
+        using .Foo
+        bar::Float64 = 2
+    end
+    @test m.bar === 2.0
+    @test Core.get_binding_type(m, :bar) == Float64
+    @test m.Foo.bar === 1
+    @test Core.get_binding_type(m.Foo, :bar) == Any
+end

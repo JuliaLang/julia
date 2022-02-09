@@ -251,7 +251,8 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
-    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_opaque_closure_call,
+    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
+    &jl_f_set_binding_type, &jl_f_opaque_closure_call,
     NULL };
 
 typedef struct {
@@ -412,6 +413,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
                 jl_serialize_value(s, jl_atomic_load_relaxed(&b->value));
             jl_serialize_value(s, jl_atomic_load_relaxed(&b->globalref));
             jl_serialize_value(s, b->owner);
+            jl_serialize_value(s, jl_atomic_load_relaxed(&b->ty));
         }
     }
 
@@ -701,7 +703,8 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
                 write_pointerfield(s, jl_atomic_load_relaxed(&b->value));
             write_pointerfield(s, jl_atomic_load_relaxed(&b->globalref));
             write_pointerfield(s, (jl_value_t*)b->owner);
-            size_t flag_offset = offsetof(jl_binding_t, owner) + sizeof(b->owner);
+            write_pointerfield(s, jl_atomic_load_relaxed(&b->ty));
+            size_t flag_offset = offsetof(jl_binding_t, ty) + sizeof(b->ty);
             ios_write(s->s, (char*)b + flag_offset, sizeof(*b) - flag_offset);
             tot += sizeof(jl_binding_t);
             count += 1;

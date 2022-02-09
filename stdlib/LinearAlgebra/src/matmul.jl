@@ -183,10 +183,11 @@ function (*)(A::AdjOrTransStridedMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMa
 end
 # the following case doesn't seem to benefit from the translation A*B = (B' * A')'
 function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasComplex})
-    TS = promote_type(eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
-         convert(AbstractArray{TS}, A),
-         convert(AbstractArray{TS}, B))
+    temp = real(B)
+    R = A * temp
+    temp .= imag.(B)
+    I = A * temp
+    Complex.(R, I)
 end
 (*)(A::AdjOrTransStridedMat{<:BlasReal}, B::StridedMatrix{<:BlasComplex}) = copy(transpose(transpose(B) * parent(A)))
 (*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::AdjOrTransStridedMat{<:BlasComplex}) = copy(wrapperop(B)(parent(B) * transpose(A)))
