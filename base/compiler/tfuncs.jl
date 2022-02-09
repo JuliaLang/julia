@@ -1725,7 +1725,7 @@ const _EFFECT_FREE_BUILTINS = [
     typeassert, throw, arraysize
 ]
 
-const _IDEMPOTENT_BUILTINS = Any[
+const _CONSISTENT_BUILTINS = Any[
     tuple, # tuple is immutable, thus tuples of egal arguments are egal
     ===,
     typeof,
@@ -1734,11 +1734,9 @@ const _IDEMPOTENT_BUILTINS = Any[
     apply_type,
     isa,
     UnionAll,
-    isdefined,
     Core.sizeof,
     Core.kwfunc,
     Core.ifelse,
-    Core._typevar,
     (<:),
     typeassert,
     throw
@@ -1759,11 +1757,11 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
     if (f === Core.getfield || f === Core.isdefined) && length(argtypes) >= 3
         # consistent if the argtype is immutable
         if isvarargtype(argtypes[2])
-            return Effects(TRISTATE_UNKNOWN, ALWAYS_TRUE, TRISTATE_UNKNOWN, ALWAYS_TRUE)
+            return Effects(Effects(), effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE)
         end
         s = widenconst(argtypes[2])
         if isType(s) || !isa(s, DataType) || isabstracttype(s)
-            return Effects(TRISTATE_UNKNOWN, ALWAYS_TRUE, TRISTATE_UNKNOWN, ALWAYS_TRUE)
+            return Effects(Effects(), effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE)
         end
         s = s::DataType
         ipo_consistent = !ismutabletype(s)
@@ -1779,7 +1777,7 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
             ipo_consistent &= nothrow
         end
     else
-        ipo_consistent = contains_is(_IDEMPOTENT_BUILTINS, f)
+        ipo_consistent = contains_is(_CONSISTENT_BUILTINS, f)
     end
     # If we computed nothrow above for getfield, no need to repeat the procedure here
     if !nothrow
@@ -1955,8 +1953,7 @@ intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref ||
 function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
     if f === Intrinsics.llvmcall
         # llvmcall can do arbitrary things
-        return Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN,
-            TRISTATE_UNKNOWN, TRISTATE_UNKNOWN)
+        return Effects()
     end
 
     ipo_consistent = !(f === Intrinsics.pointerref || # this one is volatile

@@ -46,6 +46,11 @@ Effects(consistent::TriState, effect_free::TriState, nothrow::TriState, terminat
     Effects(consistent, effect_free, nothrow, terminates, false)
 Effects() = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN)
 
+Effects(e::Effects; consistent::TriState=e.consistent,
+    effect_free::TriState = e.effect_free, nothrow::TriState=e.nothrow, terminates::TriState=e.terminates,
+    inbounds_taints_consistency::Bool = e.inbounds_taints_consistency) =
+        Effects(consistent, effect_free, nothrow, terminates, inbounds_taints_consistency)
+
 is_total_or_error(effects::Effects) =
     effects.consistent === ALWAYS_TRUE && effects.effect_free === ALWAYS_TRUE &&
     effects.terminates === ALWAYS_TRUE
@@ -100,11 +105,11 @@ end
 
 decode_effects_override(e::UInt8) =
     EffectsOverride(
-        e & 0x01 != 0x00,
-        (e >> 1) & 0x01 != 0x00,
-        (e >> 2) & 0x01 != 0x00,
-        (e >> 3) & 0x01 != 0x00,
-        (e >> 4) & 0x01 != 0x00)
+        (e & 0x01) != 0x00,
+        (e & 0x02) != 0x00,
+        (e & 0x04) != 0x00,
+        (e & 0x08) != 0x00,
+        (e & 0x10) != 0x00)
 
 """
     InferenceResult

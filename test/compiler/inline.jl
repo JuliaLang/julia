@@ -1011,3 +1011,20 @@ end
     noninlined_dce_new(s)
     nothing
 end
+
+# Test that ambigous calls don't accidentally get nothrow effect
+ambig_effect_test(a::Int, b) = 1
+ambig_effect_test(a, b::Int) = 1
+ambig_effect_test(a, b) = 1
+global ambig_unknown_type_global=1
+@noinline function conditionally_call_ambig(b::Bool, a)
+	if b
+		ambig_effect_test(a, ambig_unknown_type_global)
+	end
+	return 0
+end
+function call_call_ambig(b::Bool)
+	conditionally_call_ambig(b, 1)
+	return 1
+end
+@test !fully_eliminated(call_call_ambig, Tuple{Bool})

@@ -39,8 +39,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # function has not seen any side effects, we would like to make sure there
         # aren't any in the throw block either to enable other optimizations.
         add_remark!(interp, sv, "Skipped call in throw block")
-        tristate_merge!(sv, Effects(ALWAYS_TRUE, TRISTATE_UNKNOWN,
-            TRISTATE_UNKNOWN, TRISTATE_UNKNOWN))
+        # At this point we are guaranteed to end up throwing on this path,
+        # which is all that's required for :consistent-cy. Of course, we don't
+        # know anything else about this statement.
+        tristate_merge!(sv, Effects(Effects(), consistent=ALWAYS_TRUE))
         return CallMeta(Any, false)
     end
 
@@ -72,7 +74,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     fargs = arginfo.fargs
-    merged_sig = Union{}
     for i in 1:napplicable
         match = applicable[i]::MethodMatch
         method = match.method
@@ -153,7 +154,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         this_rt = widenwrappedconditional(this_rt)
         @assert !(this_conditional isa Conditional) "invalid lattice element returned from inter-procedural context"
         seen += 1
-        merged_sig = Union{merged_sig, sig}
         rettype = tmerge(rettype, this_rt)
         if this_conditional !== Bottom && is_lattice_bool(rettype) && fargs !== nothing
             if conditionals === nothing
@@ -178,9 +178,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
 
     if seen != napplicable
         tristate_merge!(sv, Effects())
-    elseif !(atype <: merged_sig)
-        # Account for the fact that we may encounter a MethodError with a non-covered signature.
-        tristate_merge!(sv, Effects(ALWAYS_TRUE, ALWAYS_TRUE, TRISTATE_UNKNOWN, ALWAYS_TRUE))
+    elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
+            (!_all(b->b, matches.fullmatches) || any_ambig(matches))
+        # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+        tristate_merge!(sv, Effects(EFFECTS_TOTAL, nothrow=TRISTATE_UNKNOWN))
     end
 
     rettype = from_interprocedural!(rettype, sv, arginfo, conditionals)
@@ -216,6 +217,8 @@ struct MethodMatches
     mt::Core.MethodTable
     fullmatch::Bool
 end
+any_ambig(info::MethodMatchInfo) = info.results.ambig
+any_ambig(m::MethodMatches) = any_ambig(m.info)
 
 struct UnionSplitMethodMatches
     applicable::Vector{Any}
@@ -225,6 +228,7 @@ struct UnionSplitMethodMatches
     mts::Vector{Core.MethodTable}
     fullmatches::Vector{Bool}
 end
+any_ambig(m::UnionSplitMethodMatches) = _any(any_ambig, m.info.matches)
 
 function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
                                union_split::Int, max_methods::Int)
@@ -594,7 +598,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         # Some sort of recursion was detected. Even if we did not limit types,
         # we cannot guarantee that the call will terminate.
         edge_effects = tristate_merge(edge_effects,
-            Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, TRISTATE_UNKNOWN))
+            Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
     end
     return MethodCallResult(rt, edgecycle, edgelimited, edge, edge_effects)
 end
@@ -632,7 +636,7 @@ function concrete_eval_const_proven_total_or_error(
         isconstType(a) ? (a::DataType).parameters[1] :
                          (a::DataType).instance) for i in 2:length(argtypes) ]
     try
-        value = Core._call_in_world_nonpure(get_world_counter(interp), f, args...)
+        value = Core._call_in_world_total(get_world_counter(interp), f, args...)
         return Const(value)
     catch e
         return nothing
@@ -671,7 +675,10 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
     if f !== nothing && result.edge !== nothing && is_total_or_error(result.edge_effects) && is_all_const_arg(arginfo)
         rt = concrete_eval_const_proven_total_or_error(interp, f, arginfo.argtypes)
         add_backedge!(result.edge, sv)
-        rt === nothing && return ConstCallResults(Union{}, ConstResult(result.edge), result.edge_effects) # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
+        if rt === nothing
+            # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
+            return ConstCallResults(Union{}, ConstResult(result.edge), result.edge_effects)
+        end
         if is_inlineable_constant(rt.val) || call_result_unused(sv)
             # If the constant is not inlineable, still do the const-prop, since the
             # code that led to the creation of the Const may be inlineable in the same
@@ -1800,9 +1807,9 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         else
             is_nothrow = false
         end
-        tristate_merge!(sv, Effects(
-            !ismutabletype(t) ? ALWAYS_TRUE : ALWAYS_FALSE,
-            ALWAYS_TRUE, is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE, ALWAYS_TRUE))
+        tristate_merge!(sv, Effects(EFFECTS_TOTAL,
+            consistent = !ismutabletype(t) ? ALWAYS_TRUE : ALWAYS_FALSE,
+            nothrow = is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE))
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         is_nothrow = false # TODO: More precision
@@ -1819,10 +1826,9 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 t = PartialStruct(t, at.fields::Vector{Any})
             end
         end
-        tristate_merge!(sv, Effects(
-            ismutabletype(t) ? ALWAYS_FALSE : ALWAYS_TRUE,
-            ALWAYS_TRUE, is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE,
-            ALWAYS_TRUE))
+        tristate_merge!(sv, Effects(EFFECTS_TOTAL,
+            consistent = ismutabletype(t) ? ALWAYS_FALSE : ALWAYS_TRUE,
+            nothrow = is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE))
     elseif ehead === :new_opaque_closure
         tristate_merge!(sv, Effects()) # TODO
         t = Union{}
@@ -1944,10 +1950,10 @@ function abstract_eval_global(M::Module, s::Symbol, frame::InferenceState)
         if isconst(M,s)
             return Const(getfield(M,s))
         else
-            tristate_merge!(frame, Effects(ALWAYS_FALSE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE))
+            tristate_merge!(frame, Effects(EFFECTS_TOTAL, consistent=ALWAYS_FALSE))
         end
     else
-        tristate_merge!(frame, Effects(ALWAYS_FALSE, ALWAYS_TRUE, ALWAYS_FALSE, ALWAYS_TRUE))
+        tristate_merge!(frame, Effects(EFFECTS_TOTAL, consistent=ALWAYS_FALSE, nothrow=ALWAYS_FALSE))
     end
     return Any
 end
@@ -2036,10 +2042,11 @@ function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
         def = frame.linfo.def
         if isa(def, Method) && decode_effects_override(def.purity).terminates_locally
-            return
+            return nothing
         end
-        tristate_merge!(frame, Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, TRISTATE_UNKNOWN))
+        tristate_merge!(frame, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
     end
+    return nothing
 end
 
 # make as much progress on `frame` as possible (without handling cycles)
@@ -2194,7 +2201,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if isa(lhs, SlotNumber)
                         changes = StateUpdate(lhs, VarState(t, false), changes, false)
                     elseif isa(lhs, GlobalRef)
-                        tristate_merge!(frame, Effects(ALWAYS_TRUE, ALWAYS_FALSE, TRISTATE_UNKNOWN, ALWAYS_TRUE))
+                        tristate_merge!(frame, Effects(EFFECTS_TOTAL,
+                            effect_free=ALWAYS_FALSE,
+                            nothrow=TRISTATE_UNKNOWN))
                     elseif !isa(lhs, SSAValue)
                         tristate_merge!(frame, Effects())
                     end

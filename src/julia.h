@@ -232,7 +232,7 @@ typedef struct _jl_line_info_node_t {
     intptr_t inlined_at;
 } jl_line_info_node_t;
 
-typedef union {
+typedef union __jl_purity_overrides_t {
     struct {
         uint8_t ipo_consistent  : 1;
         uint8_t ipo_effect_free : 1;

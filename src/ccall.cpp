@@ -1256,10 +1256,11 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     jl_sym_t *cc_sym = NULL;
     if (jl_is_symbol(jlcc)) {
         cc_sym = (jl_sym_t*)jlcc;
-    } else if (jl_is_tuple(jlcc)) {
-        cc_sym = (jl_sym_t*)jl_get_nth_field_noalloc(jlcc, 0);
-        assert(jl_is_symbol(cc_sym));
     }
+    else if (jl_is_tuple(jlcc)) {
+        cc_sym = (jl_sym_t*)jl_get_nth_field_noalloc(jlcc, 0);
+    }
+    assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
     JL_GC_PUSH3(&rt, &at, &symarg.gcroot);
 

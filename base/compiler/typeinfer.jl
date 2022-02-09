@@ -422,8 +422,7 @@ function rt_adjust_effects(@nospecialize(rt), ipo_effects::Effects)
     # but we don't currently model idempontency using dataflow, so we don't notice.
     # Fix that up here to improve precision.
     if !ipo_effects.inbounds_taints_consistency && rt === Union{}
-        return Effects(ALWAYS_TRUE, ipo_effects.effect_free,
-            ipo_effects.nothrow, ipo_effects.terminates)
+        return Effects(ipo_effects, consistent=ALWAYS_TRUE)
     end
     return ipo_effects
 end
@@ -727,9 +726,13 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     # then add all backedges of parent <- parent.parent
     # and merge all of the callers into ancestor.callers_in_cycle
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
+    # Also taint the termination effect, because we can no longer guarantee the absence
+    # of recursion.
+    tristate_merge!(parent, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
     while true
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
+        tristate_merge!(child, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
         child = parent
         child === ancestor && break
         parent = child.parent::InferenceState
