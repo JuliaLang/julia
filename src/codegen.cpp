@@ -3494,7 +3494,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             const jl_cgval_t &obj = argv[i];
             if (obj.V) {
                 // TODO is this strong enough to constitute a read of any contained
-                // pointers?W
+                // pointers?
                 Value *V = obj.V;
                 if (obj.isboxed) {
                     V = emit_pointer_from_objref(ctx, V);
