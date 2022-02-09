@@ -1207,16 +1207,17 @@ end
 
     # failures
     @test_broken @inferred(mapslices(tuple, [1 2; 3 4], dims=1)) == [([1, 3],)  ([2, 4],)]
+    @test_broken @inferred(mapslices(transpose, r, dims=(1,3))) == permutedims(r, (3,2,1))
     # ERROR: fatal error in type inference (type bound), https://github.com/JuliaLang/julia/issues/43064
     @test_broken @inferred(mapslices(x -> tuple(x), [1 2; 3 4], dims=1)) == [([1, 3],)  ([2, 4],)]
-    @test_broken @inferred(mapslices(transpose, r, dims=(1,3))) == permutedims(r, (3,2,1))
 
     # re-write, #40996
     @test_throws ArgumentError mapslices(identity, rand(2,3), dims=0) # previously BoundsError
     @test_throws ArgumentError mapslices(identity, rand(2,3), dims=(1,3)) # previously BoundsError
     @test_throws DimensionMismatch mapslices(x -> x * x', rand(2,3), dims=1) # explicitly caught
     @test @inferred(mapslices(hcat, [1 2; 3 4], dims=1)) == [1 2; 3 4] # previously an error, now allowed
-    @test @inferred(mapslices(identity, [1 2; 3 4], dims=(2,2))) == [1 2; 3 4] # previously an error
+    @test mapslices(identity, [1 2; 3 4], dims=(2,2)) == [1 2; 3 4] # previously an error
+    @test_broken @inferred(mapslices(identity, [1 2; 3 4], dims=(2,2))) == [1 2; 3 4]
 end
 
 @testset "single multidimensional index" begin
