@@ -242,14 +242,17 @@ int jl_has_fixed_layout(jl_datatype_t *dt)
 int jl_type_mappable_to_c(jl_value_t *ty)
 {
     assert(!jl_is_typevar(ty) && jl_is_type(ty));
-    if (jl_is_structtype(ty)) {
-        jl_datatype_t *jst = (jl_datatype_t*)ty;
-        return jl_has_fixed_layout(jst);
-    }
-    ty = jl_unwrap_unionall(ty);
-    if (jl_is_tuple_type(ty) || jl_is_namedtuple_type(ty))
-        return 0; // TODO: relax some?
-    return 1; // as boxed or primitive
+    if (jl_is_structtype(ty))
+        return jl_has_fixed_layout((jl_datatype_t*)ty) && ((jl_datatype_t*)ty)->name->atomicfields == NULL;
+    if (jl_is_primitivetype(ty))
+        return 1;
+    if (ty == (jl_value_t*)jl_any_type || ty == (jl_value_t*)jl_bottom_type)
+        return 1; // as boxed
+    if (jl_is_abstract_ref_type(ty) || jl_is_array_type(ty) ||
+        (jl_is_datatype(ty) && ((jl_datatype_t*)ty)->layout != NULL &&
+            jl_is_layout_opaque(((jl_datatype_t*)ty)->layout)))
+        return 1; // as boxed
+    return 0; // refuse to map Union and UnionAll to C
 }
 
 // Return true for any type (Integer or Unsigned) that can fit in a
