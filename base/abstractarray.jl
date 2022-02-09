@@ -2844,8 +2844,8 @@ function mapslices(f, A::AbstractArray; dims)
     isempty(dims) && return map(f, A)
 
     for d in dims
-        d isa Integer || throw(ArgumentError("dimension must be integers, got $d"))
-        d >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $d"))
+        d isa Integer || throw(ArgumentError("mapslices: dimension must be an integer, got dims = $d"))
+        d >= 1 || throw(ArgumentError("mapslices: dimension must be ≥ 1, got dims = $d"))
         # Indexing a matrix M[:,1,:] produces a 1-column matrix, but dims=(1,3) here
         # would otherwise ignore 3, and slice M[:,i]. Previously this gave error:
         # BoundsError: attempt to access 2-element Vector{Any} at index [3]
@@ -2862,7 +2862,7 @@ function mapslices(f, A::AbstractArray; dims)
         n = sum(dim_mask)
         if ndims(r1) > n && any(ntuple(d -> size(r1,d+n)>1, ndims(r1)-n))
             s = size(r1)[1:n]
-            throw(DimensionMismatch("cannot assign slice f(x) of size $(size(r1)) into output of size $s"))
+            throw(DimensionMismatch("mapslices cannot assign slice f(x) of size $(size(r1)) into output of size $s"))
         end
         r1
     else
