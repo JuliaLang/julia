@@ -24,7 +24,7 @@ if Sys.iswindows()
         var = cwstring(svar)
         val = cwstring(sval)
         if overwrite || !_hasenv(var)
-            ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,val)
+            ret = ccall(:_wputenv_s, stdcall, Int32, (Ptr{UInt16}, Ptr{UInt16}), var, val)
             windowserror(:setenv, ret == 0)
         end
     end
