@@ -1420,7 +1420,7 @@ julia> Meta.ispostfixoperator(Symbol("'")), Meta.ispostfixoperator(Symbol("'ᵀ"
 ```
 """
 function ispostfixoperator(s::Union{Symbol,AbstractString})
-    s = String(s)
+    s = String(s)::String
     return startswith(s, '\'') && all(is_op_suffix_char, SubString(s, 2))
 end
 
@@ -1542,7 +1542,7 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::In
             (first && prec >= prec_power &&
              ((item isa Expr && item.head === :call && (callee = item.args[1]; isa(callee, Symbol) && callee in uni_ops)) ||
               (item isa Real && item < 0))) ||
-            (enclose_operators && item isa Symbol && isoperator(item) && is_valid_identifier(item))
+            (enclose_operators && item isa Symbol && isoperator(item::Symbol) && is_valid_identifier(item::Symbol))
         parens && print(io, '(')
         if kw && is_expr(item, :kw, 2)
             item = item::Expr
@@ -1778,13 +1778,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && (nargs != 2 || !is_expr(args[2], :tuple))
         # standalone .op
-        if nargs == 1 && args[1] isa Symbol && isoperator(args[1])
+        if nargs == 1 && args[1] isa Symbol && isoperator(args[1]::Symbol)
             print(io, "(.", args[1], ")")
         elseif nargs == 2 && is_quoted(args[2])
             item = args[1]
             # field
             field = unquoted(args[2])
-            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item)) && !is_expr(item, :(.))
+            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item::Symbol)) && !is_expr(item, :(.))
             parens && print(io, '(')
             show_unquoted(io, item, indent, 0, quote_level)
             parens && print(io, ')')
@@ -1867,10 +1867,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif (head === Symbol("'") && nargs == 1) || (
         # ' with unicode suffix is a call expression
         head === :call && nargs == 2 && args[1] isa Symbol &&
-        ispostfixoperator(args[1]) && args[1] !== Symbol("'")
+        ispostfixoperator(args[1]::Symbol) && args[1]::Symbol !== Symbol("'")
     )
         op, arg1 = head === Symbol("'") ? (head, args[1]) : (args[1], args[2])
-        if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1))
+        if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1::Symbol))
             show_enclosed_list(io, '(', [arg1::Union{Expr, Symbol}], ", ", ')', indent, 0)
         else
             show_unquoted(io, arg1, indent, 0, quote_level)
@@ -1918,7 +1918,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
             if (na == 2 || (na > 2 && isa(func, Symbol) && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
-                    all(!isa(a, Expr) || a.head !== :... for a in func_args)
+                    all(a -> !isa(a, Expr) || a.head !== :..., func_args)
                 sep = func === :(:) ? "$func" : " $func "
 
                 if func_prec <= prec
