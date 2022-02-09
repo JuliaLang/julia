@@ -271,9 +271,9 @@ function cholesky!(A::RealHermSymComplexHerm, ::NoPivot = NoPivot(); check::Bool
     return Cholesky(C.data, A.uplo, info)
 end
 
-### for StridedMatrices, check that matrix is symmetric/Hermitian
+### for AbstractMatrix, check that matrix is symmetric/Hermitian
 """
-    cholesky!(A::StridedMatrix, NoPivot(); check = true) -> Cholesky
+    cholesky!(A::AbstractMatrix, NoPivot(); check = true) -> Cholesky
 
 The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if
@@ -293,7 +293,7 @@ Stacktrace:
 [...]
 ```
 """
-function cholesky!(A::StridedMatrix, ::NoPivot = NoPivot(); check::Bool = true)
+function cholesky!(A::AbstractMatrix, ::NoPivot = NoPivot(); check::Bool = true)
     checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         check && checkpositivedefinite(-1)
@@ -322,16 +322,16 @@ cholesky!(A::RealHermSymComplexHerm{<:Real}, ::RowMaximum; tol = 0.0, check::Boo
     throw(ArgumentError("generic pivoted Cholesky factorization is not implemented yet"))
 @deprecate cholesky!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; kwargs...) cholesky!(A, RowMaximum(); kwargs...) false
 
-### for StridedMatrices, check that matrix is symmetric/Hermitian
+### for AbstractMatrix, check that matrix is symmetric/Hermitian
 """
-    cholesky!(A::StridedMatrix, RowMaximum(); tol = 0.0, check = true) -> CholeskyPivoted
+    cholesky!(A::AbstractMatrix, RowMaximum(); tol = 0.0, check = true) -> CholeskyPivoted
 
 The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if the
 factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
-function cholesky!(A::StridedMatrix, ::RowMaximum; tol = 0.0, check::Bool = true)
+function cholesky!(A::AbstractMatrix, ::RowMaximum; tol = 0.0, check::Bool = true)
     checksquare(A)
     if !ishermitian(A)
         C = CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
@@ -601,7 +601,7 @@ function ldiv!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
     B
 end
 
-function ldiv!(C::CholeskyPivoted, B::StridedVector)
+function ldiv!(C::CholeskyPivoted, B::AbstractVector)
     if C.uplo == 'L'
         ldiv!(adjoint(LowerTriangular(C.factors)),
             ldiv!(LowerTriangular(C.factors), permute!(B, C.piv)))
@@ -612,7 +612,7 @@ function ldiv!(C::CholeskyPivoted, B::StridedVector)
     invpermute!(B, C.piv)
 end
 
-function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
+function ldiv!(C::CholeskyPivoted, B::AbstractMatrix)
     n = size(C, 1)
     for i in 1:size(B, 2)
         permute!(view(B, 1:n, i), C.piv)
@@ -630,7 +630,7 @@ function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
     B
 end
 
-function rdiv!(B::StridedMatrix, C::Cholesky{<:Any,<:AbstractMatrix})
+function rdiv!(B::AbstractMatrix, C::Cholesky{<:Any,<:AbstractMatrix})
     if C.uplo == 'L'
         return rdiv!(rdiv!(B, adjoint(LowerTriangular(C.factors))), LowerTriangular(C.factors))
     else
@@ -638,7 +638,7 @@ function rdiv!(B::StridedMatrix, C::Cholesky{<:Any,<:AbstractMatrix})
     end
 end
 
-function LinearAlgebra.rdiv!(B::StridedMatrix, C::CholeskyPivoted)
+function LinearAlgebra.rdiv!(B::AbstractMatrix, C::CholeskyPivoted)
     n = size(C, 2)
     for i in 1:size(B, 1)
         permute!(view(B, i, 1:n), C.piv)
