@@ -604,7 +604,7 @@ end
     read!(io, @view y[4:7])
     @test y[4:7] == v
     seekstart(io)
-    @test_throws ErrorException read!(io, @view z[4:6])
+    @test_throws Base.CanonicalIndexError read!(io, @view z[4:6])
 end
 
 # Bulk read from pipe

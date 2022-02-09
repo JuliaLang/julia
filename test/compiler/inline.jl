@@ -928,3 +928,103 @@ end
     @test count(iscall((src, Core.get_binding_type)), src.code) == 1
     @test m.g() === Any
 end
+
+# have_fma elimination inside ^
+f_pow() = ^(2.0, -1.0)
+@test fully_eliminated(f_pow, Tuple{})
+
+# unused total, noinline function
+@noinline function f_total_noinline(x)
+    return x + 1.0
+end
+@noinline function f_voltatile_escape(ptr)
+    unsafe_store!(ptr, 0)
+end
+function f_call_total_noinline_unused(x)
+    f_total_noinline(x)
+    return x
+end
+function f_call_volatile_escape(ptr)
+    f_voltatile_escape(ptr)
+    return ptr
+end
+
+@test fully_eliminated(f_call_total_noinline_unused, Tuple{Float64})
+@test !fully_eliminated(f_call_volatile_escape, Tuple{Ptr{Int}})
+
+let b = Expr(:block, (:(y += sin($x)) for x in randn(1000))...)
+    @eval function f_sin_perf()
+        y = 0.0
+        $b
+        y
+    end
+end
+@test fully_eliminated(f_sin_perf, Tuple{})
+
+# Test that we inline the constructor of something that is not const-inlineable
+const THE_REF = Ref{Int}(0)
+struct FooTheRef
+    x::Ref
+    FooTheRef() = new(THE_REF)
+end
+f_make_the_ref() = FooTheRef()
+f_make_the_ref_but_dont_return_it() = (FooTheRef(); nothing)
+let src = code_typed1(f_make_the_ref, ())
+    @test count(x->isexpr(x, :new), src.code) == 1
+end
+@test fully_eliminated(f_make_the_ref_but_dont_return_it, Tuple{})
+
+# Test that the Core._apply_iterate bail path taints effects
+function f_apply_bail(f)
+    f(()...)
+    return nothing
+end
+f_call_apply_bail(f) = f_apply_bail(f)
+@test !fully_eliminated(f_call_apply_bail, Tuple{Function})
+
+# Test that arraysize has proper effect modeling
+@test fully_eliminated(M->(size(M, 2); nothing), Tuple{Matrix{Float64}})
+
+# DCE of non-inlined callees
+@noinline noninlined_dce_simple(a) = identity(a)
+@test fully_eliminated((String,)) do s
+    noninlined_dce_simple(s)
+    nothing
+end
+@noinline noninlined_dce_new(a::String) = Some(a)
+@test fully_eliminated((String,)) do s
+    noninlined_dce_new(s)
+    nothing
+end
+mutable struct SafeRef{T}
+    x::T
+end
+Base.getindex(s::SafeRef) = getfield(s, 1)
+Base.setindex!(s::SafeRef, x) = setfield!(s, 1, x)
+@noinline noninlined_dce_new(a::Symbol) = SafeRef(a)
+@test fully_eliminated((Symbol,)) do s
+    noninlined_dce_new(s)
+    nothing
+end
+# should be resolved once we merge https://github.com/JuliaLang/julia/pull/43923
+@test_broken fully_eliminated((Union{Symbol,String},)) do s
+    noninlined_dce_new(s)
+    nothing
+end
+
+# Test that ambigous calls don't accidentally get nothrow effect
+ambig_effect_test(a::Int, b) = 1
+ambig_effect_test(a, b::Int) = 1
+ambig_effect_test(a, b) = 1
+global ambig_unknown_type_global=1
+@noinline function conditionally_call_ambig(b::Bool, a)
+	if b
+		ambig_effect_test(a, ambig_unknown_type_global)
+	end
+	return 0
+end
+function call_call_ambig(b::Bool)
+	conditionally_call_ambig(b, 1)
+	return 1
+end
+@test !fully_eliminated(call_call_ambig, Tuple{Bool})
