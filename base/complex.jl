@@ -366,7 +366,7 @@ function /(a::Complex{T}, b::Complex{T}) where T<:Real
     end
 end
 
-function (z::Complex{<:Union{Float16,Float32}}) =
+function inv(z::Complex{<:Union{Float16,Float32}})
     c, d = reim(widen(z))
     mag = inv(muladd(c, c, d^2))
     return oftype(z, Complex(c*mag, d*mag))
