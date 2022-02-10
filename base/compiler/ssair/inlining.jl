@@ -1034,18 +1034,22 @@ function inline_invoke!(
         # TODO: We could union split out the signature check and continue on
         return nothing
     end
-    argtypes = invoke_rewrite(sig.argtypes)
     result = info.result
-    if isa(result, InferenceResult)
-        (; mi) = item = InliningTodo(result, argtypes)
-        validate_sparams(mi.sparam_vals) || return nothing
-        if argtypes_to_type(argtypes) <: mi.def.sig
-            state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
-            handle_single_case!(ir, idx, stmt, item, todo, state.params, true)
-            return nothing
+    if isa(result, ConstResult)
+        item = const_result_item(result, state)
+    else
+        argtypes = invoke_rewrite(sig.argtypes)
+        if isa(result, InferenceResult)
+            (; mi) = item = InliningTodo(result, argtypes)
+            validate_sparams(mi.sparam_vals) || return nothing
+            if argtypes_to_type(argtypes) <: mi.def.sig
+                state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
+                handle_single_case!(ir, idx, stmt, item, todo, state.params, true)
+                return nothing
+            end
         end
+        item = analyze_method!(match, argtypes, flag, state)
     end
-    item = analyze_method!(match, argtypes, flag, state)
     handle_single_case!(ir, idx, stmt, item, todo, state.params, true)
     return nothing
 end
@@ -1241,28 +1245,18 @@ function handle_const_call!(
         for match in meth
             j += 1
             result = results[j]
-            if result === false
-                # Inference determined that this call is guaranteed to throw.
-                # Do not inline.
-                fully_covered = false
-                continue
-            end
             if isa(result, ConstResult)
-                if !isdefined(result, :result) || !is_inlineable_constant(result.result)
-                    case = compileable_specialization(state.et, result.mi, EFFECTS_TOTAL)
-                else
-                    case = ConstantCase(quoted(result.result))
-                end
+                case = const_result_item(result, state)
                 signature_union = Union{signature_union, result.mi.specTypes}
                 push!(cases, InliningCase(result.mi.specTypes, case))
                 continue
-            end
-            if result === nothing
+            elseif isa(result, InferenceResult)
+                signature_union = Union{signature_union, result.linfo.specTypes}
+                fully_covered &= handle_inf_result!(result, argtypes, flag, state, cases)
+            else
+                @assert result === nothing
                 signature_union = Union{signature_union, match.spec_types}
                 fully_covered &= handle_match!(match, argtypes, flag, state, cases)
-            else
-                signature_union = Union{signature_union, result.linfo.specTypes}
-                fully_covered &= handle_const_result!(result, argtypes, flag, state, cases)
             end
         end
     end
@@ -1296,7 +1290,7 @@ function handle_match!(
     return true
 end
 
-function handle_const_result!(
+function handle_inf_result!(
     result::InferenceResult, argtypes::Vector{Any}, flag::UInt8, state::InliningState,
     cases::Vector{InliningCase})
     (; mi) = item = InliningTodo(result, argtypes)
@@ -1307,6 +1301,14 @@ function handle_const_result!(
     item === nothing && return false
     push!(cases, InliningCase(spec_types, item))
     return true
+end
+
+function const_result_item(result::ConstResult, state::InliningState)
+    if !isdefined(result, :result) || !is_inlineable_constant(result.result)
+        return compileable_specialization(state.et, result.mi, EFFECTS_TOTAL)
+    else
+        return ConstantCase(quoted(result.result))
+    end
 end
 
 function handle_cases!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(atype),
@@ -1375,7 +1377,11 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
                     ir, idx, stmt, result, flag,
                     sig, state, todo)
             else
-                item = analyze_method!(info.match, sig.argtypes, flag, state)
+                if isa(result, ConstResult)
+                    item = const_result_item(result, state)
+                else
+                    item = analyze_method!(info.match, sig.argtypes, flag, state)
+                end
                 handle_single_case!(ir, idx, stmt, item, todo, state.params)
             end
             continue
