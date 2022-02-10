@@ -453,7 +453,7 @@ function robust_cdiv2(a::Float64, b::Float64, c::Float64, d::Float64, r::Float64
     end
 end
 
-function inv(z::T) where T<:Complex{<:Union{Float16,Float32}}
+function inv(z::Complex{T}) where T<:Union{Float16,Float32}
     c, d = reim(widen(z))
     (isinf(c) | isinf(d)) && return complex(copysign(zero(T), c), flipsign(-zero(T), d))
     mag = inv(muladd(c, c, d^2))
