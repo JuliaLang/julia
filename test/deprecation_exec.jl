@@ -120,3 +120,11 @@ global_logger(prev_logger)
 end
 
 # END 0.7 deprecations
+
+@testset "tuple indexed by float deprecation" begin
+    @test_deprecated getindex((1,), 1.0) === 1
+    @test_deprecated getindex((1,2), 2.0) === 2
+    @test_throws Exception getindex((), 1.0)
+    @test_throws Exception getindex((1,2), 0.0)
+    @test_throws Exception getindex((1,2), -1.0)
+end
