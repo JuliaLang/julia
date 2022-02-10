@@ -1541,9 +1541,9 @@ end
 function rcond(A::StridedMatrix{<:BlasFloat}, p::Real=2)
     checksquare(A)
     if p == 1
-        return LAPACK.gecon!('O', LAPACK.getrf!(A)[1], norm(A, 1))
+        return LAPACK.gecon!('O', LAPACK.getrf!(copy(A))[1], opnorm(A, 1))
     elseif p == Inf
-        return LAPACK.gecon!('I', LAPACK.getrf!(A)[1], norm(A, Inf))
+        return LAPACK.gecon!('I', LAPACK.getrf!(copy(A))[1], opnorm(A, Inf))
     else # use fallback
         return inv(cond(A, p))
     end
