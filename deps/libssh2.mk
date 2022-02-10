@@ -28,6 +28,12 @@ ifeq ($(LIBSSH2_ENABLE_TESTS), 0)
 LIBSSH2_OPTS += -DBUILD_TESTING=OFF
 endif
 
+
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/deps/patches/libssh2-userauth-check.patch-applied: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted
+	cd $(LIBSSH2_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-userauth-check.patch
+	echo 1 > $@
+
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
