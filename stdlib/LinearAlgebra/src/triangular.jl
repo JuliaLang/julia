@@ -752,6 +752,17 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                 return cond(copyto!(similar(parent(A)), A), p)
             end
         end
+
+        function rcond(A::$t{<:BlasFloat}, p::Real=2)
+            checksquare(A)
+            if p == 1
+                return LAPACK.trcon!('O', $uploc, $isunitc, A.data)
+            elseif p == Inf
+                return LAPACK.trcon!('I', $uploc, $isunitc, A.data)
+            else # use fallback
+                return inv(cond(copyto!(similar(parent(A)), A), p))
+            end
+        end
     end
 end
 

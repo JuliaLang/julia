@@ -1538,6 +1538,17 @@ function cond(A::AbstractMatrix, p::Real=2)
     throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
 
+function rcond(A::StridedMatrix{<:BlasFloat}, p::Real=2)
+    checksquare(A)
+    if p == 1
+        return LAPACK.gecon!('O', LAPACK.getrf!(A)[1], norm(A, 1))
+    elseif p == Inf
+        return LAPACK.gecon!('I', LAPACK.getrf!(A)[1], norm(A, Inf))
+    else # use fallback
+        return inv(cond(A, p))
+    end
+end
+
 ## Lyapunov and Sylvester equation
 
 # AX + XB + C = 0
