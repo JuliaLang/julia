@@ -476,9 +476,9 @@ static AttributeList get_func_attrs(LLVMContext &C)
 static AttributeList get_donotdelete_func_attrs(LLVMContext &C)
 {
     AttributeSet FnAttrs = AttributeSet::get(C, makeArrayRef({Attribute::get(C, "thunk")}));
-    FnAttrs.addAttribute(C, Attribute::InaccessibleMemOnly);
-    FnAttrs.addAttribute(C, Attribute::WillReturn);
-    FnAttrs.addAttribute(C, Attribute::NoUnwind);
+    FnAttrs = FnAttrs.addAttribute(C, Attribute::InaccessibleMemOnly);
+    FnAttrs = FnAttrs.addAttribute(C, Attribute::WillReturn);
+    FnAttrs = FnAttrs.addAttribute(C, Attribute::NoUnwind);
     return AttributeList::get(C,
             FnAttrs,
             Attributes(C, {Attribute::NonNull}),
@@ -3480,7 +3480,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         // For now we emit this as a vararg call to the builtin
         // (which doesn't look at the arguments). In the future,
         // this should be an LLVM builtin.
-        auto it = builtin_func_map.find(jl_f_donotdelete);
+        auto it = builtin_func_map.find(jl_f_donotdelete_addr);
         if (it == builtin_func_map.end()) {
             return false;
         }
