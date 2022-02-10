@@ -378,9 +378,10 @@ end
 `@assume_effects` overrides the compiler's effect modeling for the given method.
 `ex` must be a method definition or `@ccall` expression.
 
-WARNING: Improper use of this macro causes undefined behavior (including crashes,
-incorrect answers, or other hard to track bugs). Use with care and only if absolutely
-required.
+!!! warning
+    Improper use of this macro causes undefined behavior (including crashes,
+    incorrect answers, or other hard to track bugs). Use with care and only if
+    absolutely required.
 
 In general, each `setting` value makes an assertion about the behavior of the
 function, without requiring the compiler to prove that this behavior is indeed

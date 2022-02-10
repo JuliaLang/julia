@@ -619,7 +619,7 @@ struct MethodCallResult
     end
 end
 
-function is_all_const_arg((; fargs, argtypes)::ArgInfo)
+function is_all_const_arg((; argtypes)::ArgInfo)
     for a in argtypes
         if !isa(a, Const) && !isconstType(a) && !issingletontype(a)
             return false
@@ -628,9 +628,8 @@ function is_all_const_arg((; fargs, argtypes)::ArgInfo)
     return true
 end
 
-function concrete_eval_const_proven_total_or_error(
-        interp::AbstractInterpreter,
-        @nospecialize(f), argtypes::Vector{Any})
+function concrete_eval_const_proven_total_or_error(interp::AbstractInterpreter,
+    @nospecialize(f), (; argtypes)::ArgInfo, _::InferenceState)
     args = Any[ (a = widenconditional(argtypes[i]);
         isa(a, Const) ? a.val :
         isconstType(a) ? (a::DataType).parameters[1] :
@@ -673,7 +672,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
         return nothing
     end
     if f !== nothing && result.edge !== nothing && is_total_or_error(result.edge_effects) && is_all_const_arg(arginfo)
-        rt = concrete_eval_const_proven_total_or_error(interp, f, arginfo.argtypes)
+        rt = concrete_eval_const_proven_total_or_error(interp, f, arginfo, sv)
         add_backedge!(result.edge, sv)
         if rt === nothing
             # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
