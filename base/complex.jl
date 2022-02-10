@@ -367,8 +367,9 @@ function /(a::Complex{T}, b::Complex{T}) where T<:Real
 end
 
 function /(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}}
-    a, b = reim(widen(z))
     c, d = reim(widen(w))
+    a, b = reim(widen(z))
+    (isinf(c) | isinf(d)) && return complex(copysign(0f0, c), flipsign(0f0, d)) * z
     mag = inv(muladd(c, c, d^2))
     re_part = muladd(a, c, b*d)
     im_part = muladd(b, c, -a*d)
