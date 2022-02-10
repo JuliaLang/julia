@@ -426,7 +426,7 @@ There is much more to say about how instances of composite types are created, bu
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
 to be addressed in its own section: [Constructors](@ref man-constructors).
 
-For most user-defined types `X`, you will want to define a method [`Base.broadcastable(x::X) = Ref(x)`](@ref man-interfaces-broadcasting)
+For many user-defined types `X`, you may want to define a method [`Base.broadcastable(x::X) = Ref(x)`](@ref man-interfaces-broadcasting)
 so that instances of that type act as 0-dimensional "scalars" for [broadcasting](@ref Broadcasting).
 
 ## Mutable Composite Types
