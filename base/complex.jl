@@ -366,11 +366,19 @@ function /(a::Complex{T}, b::Complex{T}) where T<:Real
     end
 end
 
-inv(z::Complex{<:Union{Float16,Float32}}) =
-    oftype(z, inv(widen(z)))
+function (z::Complex{<:Union{Float16,Float32}}) =
+    c, d = reim(widen(z))
+    mag = inv(muladd(c, c, d^2))
+    return oftype(z, Complex(c*mag, d*mag))
+end
 
-/(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}} =
-    oftype(z, widen(z)*inv(widen(w)))
+function /(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}}
+    c, d = reim(widen(z))
+    mag = inv(muladd(c, c, d^2))
+    re_part = muladd(a, c, b*d)
+    im_part = muladd(b, c, -a*d)
+    return oftype(z, Complex(re_part*mag, im_part*mag))
+end
 
 # robust complex division for double precision
 # variables are scaled & unscaled to avoid over/underflow, if necessary
