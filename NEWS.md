@@ -206,6 +206,9 @@ Standard library changes
   function is provided to reproduce the mapping used in identifier normalization
   by the Julia parser ([#42561]).
 
+#### Test
+* `TestLogger` and `LogRecord` are now exported from the Test stdlib.  ([#44080])
+
 
 Deprecated or removed
 ---------------------
