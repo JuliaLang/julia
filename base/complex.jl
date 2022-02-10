@@ -369,7 +369,7 @@ end
 function /(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}}
     c, d = reim(widen(w))
     a, b = reim(widen(z))
-    (isinf(c) | isinf(d)) && return complex(copysign(zero(T), c), flipsign(zero(T), d)) * z
+    (isinf(c) | isinf(d)) && return complex(copysign(zero(z), c), flipsign(zero(z), d)) * z
     mag = inv(muladd(c, c, d^2))
     re_part = muladd(a, c, b*d)
     im_part = muladd(b, c, -a*d)
@@ -455,7 +455,7 @@ end
 
 function inv(z::Complex{<:Union{Float16,Float32}})
     c, d = reim(widen(z))
-    (isinf(c) | isinf(d)) && return complex(copysign(zero(T), c), flipsign(-zero(T), d))
+    (isinf(c) | isinf(d)) && return complex(copysign(zero(z), c), flipsign(-zero(z), d))
     mag = inv(muladd(c, c, d^2))
     return oftype(z, Complex(c*mag, -d*mag))
 end
