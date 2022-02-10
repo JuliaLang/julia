@@ -50,12 +50,10 @@ jl_combined_results g_combined_results; // Will live forever.
 
 jl_raw_backtrace_t get_raw_backtrace() JL_NOTSAFEPOINT {
     // We first record the backtrace onto a MAX-sized buffer, so that we don't have to
-    // allocate the buffer until we know the size. To ensure thread-safety, we *re-use the
-    // per-thread backtrace buffer*, which is shared with Julia's exception throwing
-    // mechanism. This sharing is safe, because this function cannot be interleaved with
-    // exception throwing.
+    // allocate the buffer until we know the size. To ensure thread-safety, we use a
+    // per-thread backtrace buffer.
     jl_ptls_t ptls = jl_current_task->ptls;
-    jl_bt_element_t *shared_bt_data_buffer = ptls->bt_data;
+    jl_bt_element_t *shared_bt_data_buffer = ptls->profiling_bt_buffer;
 
     size_t bt_size = rec_backtrace(shared_bt_data_buffer, JL_MAX_BT_SIZE, 2);
 
