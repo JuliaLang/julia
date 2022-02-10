@@ -1623,6 +1623,20 @@ end
     # Trivial, because numbers are iterable:
     @test stack(abs2, 1:3) == [1, 4, 9] == collect(Iterators.flatten(abs2(x) for x in 1:3))
 
+    # Allocation tests
+    xv = [rand(10) for _ in 1:100]
+    xt = Tuple.(xv)
+    for dims in (1, 2, :)
+        @test stack(xv; dims) == stack(xt; dims)
+        @test 9000 > @allocated stack(xv; dims)
+        @test 9000 > @allocated stack(xt; dims)
+    end
+    xr = (reshape(1:1000,10,10,10) for _ = 1:1000)
+    for dims in (1, 2, 3, :)
+        stack(xr; dims)
+        @test 8.1e6 > @allocated stack(xr; dims)
+    end
+
     # Mismatched sizes
     @test_throws DimensionMismatch stack([1:2, 1:3])
     @test_throws DimensionMismatch stack([1:2, 1:3]; dims=1)
