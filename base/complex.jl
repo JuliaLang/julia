@@ -373,7 +373,8 @@ function inv(z::Complex{<:Union{Float16,Float32}})
 end
 
 function /(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}}
-    c, d = reim(widen(z))
+    a, b = reim(widen(z))
+    c, d = reim(widen(w))
     mag = inv(muladd(c, c, d^2))
     re_part = muladd(a, c, b*d)
     im_part = muladd(b, c, -a*d)
