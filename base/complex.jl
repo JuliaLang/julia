@@ -366,12 +366,6 @@ function /(a::Complex{T}, b::Complex{T}) where T<:Real
     end
 end
 
-function inv(z::Complex{<:Union{Float16,Float32}})
-    c, d = reim(widen(z))
-    mag = inv(muladd(c, c, d^2))
-    return oftype(z, Complex(c*mag, d*mag))
-end
-
 function /(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}}
     a, b = reim(widen(z))
     c, d = reim(widen(w))
@@ -458,6 +452,12 @@ function robust_cdiv2(a::Float64, b::Float64, c::Float64, d::Float64, r::Float64
     end
 end
 
+function inv(z::Complex{<:Union{Float16,Float32}})
+    c, d = reim(widen(z))
+    (isinf(c) | isinf(d)) && return complex(copysign(0f0, c), flipsign(-0f0, d))
+    mag = inv(muladd(c, c, d^2))
+    return oftype(z, Complex(c*mag, -d*mag))
+end
 function inv(w::ComplexF64)
     c, d = reim(w)
     (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
