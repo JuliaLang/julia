@@ -1,4 +1,4 @@
-# [Command-line Options](@id command-line-options)
+# Command-line Interface
 
 ## Using arguments inside scripts
 
@@ -79,7 +79,7 @@ end
 ```
 
 
-## Command-line switches for Julia
+## [Command-line switches for Julia](@id command-line-options)
 
 There are various ways to run Julia code and provide options, similar to those available for the
 `perl` and `ruby` programs:
