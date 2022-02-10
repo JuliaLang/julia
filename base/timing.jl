@@ -115,7 +115,7 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false, _lpad=true)
+function time_print_string(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false, _lpad=true)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
         _lpad && print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
@@ -144,8 +144,14 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, ne
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
         end
         parens && print(io, ")")
+        newline && println(io)
     end
-    newline ? println(str) : print(str)
+    return str
+end
+
+function time_print(args...)
+    str = time_print_str(args...)
+    print(str)
     nothing
 end
 
